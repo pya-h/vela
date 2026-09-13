@@ -1,25 +1,72 @@
 use std::collections::HashMap;
-use std::fmt::Write;
 
 use crate::ast::*;
 use crate::error::{Error, Result};
 
+/// Accumulates C source line by line and tracks indentation. Appending to a
+/// `String` cannot fail, so no method returns a `Result`.
+#[derive(Default)]
+struct CWriter {
+    out: String,
+    depth: usize,
+}
+
+impl CWriter {
+    /// Writes `text` as a full line at the current indentation.
+    fn line(&mut self, text: &str) {
+        for _ in 0..self.depth {
+            self.out.push_str("    ");
+        }
+        self.out.push_str(text);
+        self.out.push('\n');
+    }
+
+    fn blank(&mut self) {
+        self.out.push('\n');
+    }
+
+    /// Writes `header {` (or just `{` for an empty header) and indents the
+    /// lines that follow.
+    fn open(&mut self, header: &str) {
+        if header.is_empty() {
+            self.line("{");
+        } else {
+            self.line(&format!("{} {{", header));
+        }
+        self.depth += 1;
+    }
+
+    /// Ends the innermost block with `}` followed by `trailer`, as in `} Point;`.
+    fn close_with(&mut self, trailer: &str) {
+        self.depth = self.depth.saturating_sub(1);
+        self.line(&format!("}}{}", trailer));
+    }
+
+    fn close(&mut self) {
+        self.close_with("");
+    }
+
+    /// Ends the innermost block and opens the next one, as in `} else {`.
+    fn reopen(&mut self, keyword: &str) {
+        self.close_with(&format!(" {} {{", keyword));
+        self.depth += 1;
+    }
+}
+
 /// Generates C from a program that has already been checked by
 /// `check::Checker`. Types come from the checker's annotations; the generator
-/// does no type inference of its own.
+/// does no type inference of its own. A missing annotation or other broken
+/// checker guarantee is reported as an internal compiler error.
+#[derive(Default)]
 pub struct Generator {
-    out: String,
+    w: CWriter,
     temp_counter: u64,
     kinds: HashMap<String, KindDef>,
 }
 
 impl Generator {
     pub fn new() -> Self {
-        Generator {
-            out: String::new(),
-            temp_counter: 0,
-            kinds: HashMap::new(),
-        }
+        Self::default()
     }
 
     pub fn generate(&mut self, items: &[Item]) -> Result<String> {
@@ -30,28 +77,27 @@ impl Generator {
             }
         }
 
-        self.out.clear();
-        writeln!(self.out, "#include \"vela_rt.h\"").unwrap();
-        writeln!(self.out).unwrap();
+        self.w = CWriter::default();
+        self.w.line("#include \"vela_rt.h\"");
+        self.w.blank();
 
         // Type definitions first
         for item in items {
             match item {
                 Item::Shape(s) => self.gen_shape(s),
                 Item::Kind(k) => self.gen_kind(k),
-                _ => {}
+                Item::Task(_) => {}
             }
         }
-        writeln!(self.out).unwrap();
+        self.w.blank();
 
         // Forward declarations for tasks
         for item in items {
             if let Item::Task(t) = item {
-                self.gen_signature(t);
-                writeln!(self.out, ";").unwrap();
+                self.w.line(&format!("{};", signature(t)));
             }
         }
-        writeln!(self.out).unwrap();
+        self.w.blank();
 
         // Task definitions
         let mut has_main = false;
@@ -65,14 +111,14 @@ impl Generator {
         }
 
         if has_main {
-            writeln!(self.out).unwrap();
-            writeln!(self.out, "int main(void) {{").unwrap();
-            writeln!(self.out, "    vela_main();").unwrap();
-            writeln!(self.out, "    return 0;").unwrap();
-            writeln!(self.out, "}}").unwrap();
+            self.w.blank();
+            self.w.open("int main(void)");
+            self.w.line("vela_main();");
+            self.w.line("return 0;");
+            self.w.close();
         }
 
-        Ok(self.out.clone())
+        Ok(std::mem::take(&mut self.w.out))
     }
 
     fn fresh_temp(&mut self, prefix: &str) -> String {
@@ -82,98 +128,89 @@ impl Generator {
     }
 
     fn gen_shape(&mut self, s: &ShapeDef) {
-        writeln!(self.out, "typedef struct {} {{", mangle(&s.name)).unwrap();
+        self.w.open(&format!("typedef struct {}", mangle(&s.name)));
         for field in &s.fields {
-            writeln!(self.out, "    {} {};", c_type(&field.ty), field.name).unwrap();
+            self.w.line(&format!("{} {};", c_type(&field.ty), field.name));
         }
-        writeln!(self.out, "}} {};", mangle(&s.name)).unwrap();
+        self.w.close_with(&format!(" {};", mangle(&s.name)));
     }
 
     fn gen_kind(&mut self, k: &KindDef) {
         let tag_name = format!("{}_Tag", mangle(&k.name));
-        writeln!(self.out, "typedef enum {0} {{", tag_name).unwrap();
+        self.w.open(&format!("typedef enum {}", tag_name));
         for v in &k.variants {
-            writeln!(self.out, "    {}_{},", tag_name, v.tag).unwrap();
+            self.w.line(&format!("{}_{},", tag_name, v.tag));
         }
-        writeln!(self.out, "}} {0};", tag_name).unwrap();
+        self.w.close_with(&format!(" {};", tag_name));
 
-        writeln!(self.out, "typedef struct {} {{", mangle(&k.name)).unwrap();
-        writeln!(self.out, "    {} tag;", tag_name).unwrap();
-        writeln!(self.out, "    union {{").unwrap();
+        self.w.open(&format!("typedef struct {}", mangle(&k.name)));
+        self.w.line(&format!("{} tag;", tag_name));
+        self.w.open("union");
         for v in &k.variants {
             if !v.payload.is_empty() {
-                writeln!(self.out, "        struct {{").unwrap();
+                self.w.open("struct");
                 for field in &v.payload {
-                    writeln!(self.out, "            {} {};", c_type(&field.ty), field.name).unwrap();
+                    self.w.line(&format!("{} {};", c_type(&field.ty), field.name));
                 }
-                writeln!(self.out, "        }} {};", v.tag).unwrap();
+                self.w.close_with(&format!(" {};", v.tag));
             }
         }
-        writeln!(self.out, "    }} data;").unwrap();
-        writeln!(self.out, "}} {};", mangle(&k.name)).unwrap();
-    }
-
-    fn gen_signature(&mut self, t: &TaskDef) {
-        write!(self.out, "{} {}(", c_type(&t.ret), mangle(&t.name)).unwrap();
-        for (i, param) in t.params.iter().enumerate() {
-            if i > 0 { write!(self.out, ", ").unwrap(); }
-            write!(self.out, "{} {}", c_type(&param.ty), param.name).unwrap();
-        }
-        write!(self.out, ")").unwrap();
+        self.w.close_with(" data;");
+        self.w.close_with(&format!(" {};", mangle(&k.name)));
     }
 
     fn gen_task(&mut self, t: &TaskDef) -> Result<()> {
-        self.gen_signature(t);
-        writeln!(self.out, " {{").unwrap();
-        self.gen_block(&t.body, 1)?;
+        self.w.open(&signature(t));
+        self.gen_block(&t.body)?;
         if t.ret == Type::Unit {
-            writeln!(self.out, "    return;").unwrap();
+            self.w.line("return;");
         }
-        writeln!(self.out, "}}").unwrap();
+        self.w.close();
         Ok(())
     }
 
-    fn gen_block(&mut self, block: &Block, indent: usize) -> Result<()> {
+    fn gen_block(&mut self, block: &Block) -> Result<()> {
         for stmt in block {
-            self.gen_stmt(stmt, indent)?;
+            self.gen_stmt(stmt)?;
         }
         Ok(())
     }
 
-    fn gen_stmt(&mut self, stmt: &Stmt, indent: usize) -> Result<()> {
-        let pad = "    ".repeat(indent);
+    fn gen_stmt(&mut self, stmt: &Stmt) -> Result<()> {
         match &stmt.kind {
             StmtKind::Expr(e) => {
                 let expr = self.gen_expr(e)?;
-                writeln!(self.out, "{}{};", pad, expr).unwrap();
+                self.w.line(&format!("{};", expr));
             }
             StmtKind::Binding { name, ty, init, .. } => {
-                let ty = ty.as_ref().expect("binding type is filled in by the checker");
+                let ty = ty
+                    .as_ref()
+                    .ok_or_else(|| Error::internal_at(stmt.span, format!("binding '{}' has no type", name)))?;
                 let expr = self.gen_expr(init)?;
-                writeln!(self.out, "{}{} {} = {};", pad, c_type(ty), name, expr).unwrap();
+                self.w.line(&format!("{} {} = {};", c_type(ty), name, expr));
             }
             StmtKind::Assign(lhs, rhs) => {
                 // The checker guarantees `lhs` is a variable, field, or deref,
                 // all of which generate valid C lvalues.
                 let l = self.gen_expr(lhs)?;
                 let r = self.gen_expr(rhs)?;
-                writeln!(self.out, "{}{} = {};", pad, l, r).unwrap();
+                self.w.line(&format!("{} = {};", l, r));
             }
             StmtKind::When(cond, then_b, else_b) => {
                 let c = self.gen_expr(cond)?;
-                writeln!(self.out, "{}if ({}) {{", pad, c).unwrap();
-                self.gen_block(then_b, indent + 1)?;
+                self.w.open(&format!("if ({})", c));
+                self.gen_block(then_b)?;
                 if let Some(else_b) = else_b {
-                    writeln!(self.out, "{}}} else {{", pad).unwrap();
-                    self.gen_block(else_b, indent + 1)?;
+                    self.w.reopen("else");
+                    self.gen_block(else_b)?;
                 }
-                writeln!(self.out, "{}}}", pad).unwrap();
+                self.w.close();
             }
             StmtKind::Loop(cond, body) => {
                 let c = self.gen_expr(cond)?;
-                writeln!(self.out, "{}while ({}) {{", pad, c).unwrap();
-                self.gen_block(body, indent + 1)?;
-                writeln!(self.out, "{}}}", pad).unwrap();
+                self.w.open(&format!("while ({})", c));
+                self.gen_block(body)?;
+                self.w.close();
             }
             StmtKind::Each(name, range, body) => {
                 let (a, b) = self.gen_range(range)?;
@@ -181,21 +218,22 @@ impl Generator {
                 // iteration. (The checker forbids shadowing, so `b` cannot
                 // refer to a different variable called `name`.)
                 let end = self.fresh_temp("end");
-                writeln!(self.out, "{}for (int64_t {} = {}, {} = {}; {} < {}; {}++) {{", pad, name, a, end, b, name, end, name).unwrap();
-                self.gen_block(body, indent + 1)?;
-                writeln!(self.out, "{}}}", pad).unwrap();
+                self.w.open(&format!(
+                    "for (int64_t {} = {}, {} = {}; {} < {}; {}++)",
+                    name, a, end, b, name, end, name
+                ));
+                self.gen_block(body)?;
+                self.w.close();
             }
-            StmtKind::Match(expr, cases) => self.gen_match(expr, cases, indent)?,
-            StmtKind::Send(None) => {
-                writeln!(self.out, "{}return;", pad).unwrap();
-            }
+            StmtKind::Match(expr, cases) => self.gen_match(expr, cases)?,
+            StmtKind::Send(None) => self.w.line("return;"),
             StmtKind::Send(Some(e)) => {
                 let expr = self.gen_expr(e)?;
-                writeln!(self.out, "{}return {};", pad, expr).unwrap();
+                self.w.line(&format!("return {};", expr));
             }
             StmtKind::Free(e) => {
                 let expr = self.gen_expr(e)?;
-                writeln!(self.out, "{}vela_free((void*){});", pad, expr).unwrap();
+                self.w.line(&format!("vela_free((void*){});", expr));
             }
         }
         Ok(())
@@ -205,48 +243,59 @@ impl Generator {
     /// block, so different cases may bind the same names. The matched value
     /// is evaluated exactly once: a plain variable is used directly, anything
     /// else is first stored in a temporary.
-    fn gen_match(&mut self, expr: &Expr, cases: &[Case], indent: usize) -> Result<()> {
-        let kind_name = match expr.ty() {
+    fn gen_match(&mut self, expr: &Expr, cases: &[Case]) -> Result<()> {
+        let kind_name = match expr.ty()? {
             Type::Named(n) => n.clone(),
-            _ => return err(expr.span, "match on non-kind"),
+            other => return Err(Error::internal_at(expr.span, format!("match on non-kind type {}", other))),
         };
-        let kind = self.kinds.get(&kind_name)
-            .ok_or_else(|| Error::at(expr.span, format!("unknown kind '{}'", kind_name)))?
+        let kind = self
+            .kinds
+            .get(&kind_name)
+            .ok_or_else(|| Error::internal_at(expr.span, format!("match on unknown kind '{}'", kind_name)))?
             .clone();
         let tag_name = format!("{}_Tag", mangle(&kind_name));
 
         let value = self.gen_expr(expr)?;
-        let mut indent = indent;
         let needs_temp = !matches!(expr.kind, ExprKind::Var(_));
         let subject = if needs_temp {
             let tmp = self.fresh_temp("match");
-            let pad = "    ".repeat(indent);
-            writeln!(self.out, "{}{{", pad).unwrap();
-            writeln!(self.out, "{}    {} {} = {};", pad, mangle(&kind_name), tmp, value).unwrap();
-            indent += 1;
+            self.w.open("");
+            self.w.line(&format!("{} {} = {};", mangle(&kind_name), tmp, value));
             tmp
         } else {
             value
         };
 
-        let pad = "    ".repeat(indent);
-        let body_pad = "    ".repeat(indent + 1);
-        writeln!(self.out, "{}switch ({}.tag) {{", pad, subject).unwrap();
+        // Case labels line up with their `switch`, so the switch's own braces
+        // do not indent.
+        self.w.line(&format!("switch ({}.tag) {{", subject));
         for case in cases {
-            let variant = kind.variants.iter().find(|v| v.tag == case.tag)
-                .ok_or_else(|| Error::at(case.span, format!("unknown variant '{}'", case.tag)))?;
-            writeln!(self.out, "{}case {}_{}: {{", pad, tag_name, case.tag).unwrap();
-            for ((bind, _), field) in case.binds.iter().zip(variant.payload.iter()) {
-                writeln!(self.out, "{}{} {} = {}.data.{}.{};", body_pad, c_type(&field.ty), bind, subject, case.tag, field.name).unwrap();
+            let variant = kind
+                .variants
+                .iter()
+                .find(|v| v.tag == case.tag)
+                .ok_or_else(|| Error::internal_at(case.span, format!("unknown variant '{}'", case.tag)))?;
+            if case.binds.len() != variant.payload.len() {
+                return Err(Error::internal_at(
+                    case.span,
+                    format!("case '{}' has {} bindings (expected {})", case.tag, case.binds.len(), variant.payload.len()),
+                ));
             }
-            self.gen_block(&case.body, indent + 1)?;
-            writeln!(self.out, "{}break;", body_pad).unwrap();
-            writeln!(self.out, "{}}}", pad).unwrap();
+            self.w.open(&format!("case {}_{}:", tag_name, case.tag));
+            for ((bind, _), field) in case.binds.iter().zip(&variant.payload) {
+                self.w.line(&format!(
+                    "{} {} = {}.data.{}.{};",
+                    c_type(&field.ty), bind, subject, case.tag, field.name
+                ));
+            }
+            self.gen_block(&case.body)?;
+            self.w.line("break;");
+            self.w.close();
         }
-        writeln!(self.out, "{}}}", pad).unwrap();
+        self.w.line("}");
 
         if needs_temp {
-            writeln!(self.out, "{}}}", "    ".repeat(indent - 1)).unwrap();
+            self.w.close();
         }
         Ok(())
     }
@@ -264,18 +313,21 @@ impl Generator {
                 let b = self.gen_expr(base)?;
                 Ok(format!("({}).{}", b, field))
             }
-            ExprKind::Index(_base, _index) => err(span, "indexing not supported"),
+            ExprKind::Index(_base, _index) => Err(Error::internal_at(span, "indexing reached code generation")),
             ExprKind::Call(name, args) => {
                 if name == "show" {
-                    let arg = self.gen_expr(&args[0])?;
-                    let helper = match args[0].ty() {
+                    let [arg] = args.as_slice() else {
+                        return Err(Error::internal_at(span, format!("show called with {} arguments", args.len())));
+                    };
+                    let helper = match arg.ty()? {
                         Type::Int => "vela_show_int",
                         Type::Float => "vela_show_float",
                         Type::Bool => "vela_show_bool",
                         Type::Text => "vela_show_text",
-                        _ => return err(span, "show unsupported for this type"),
+                        other => return Err(Error::internal_at(span, format!("show called with type {}", other))),
                     };
-                    return Ok(format!("{}({})", helper, arg));
+                    let value = self.gen_expr(arg)?;
+                    return Ok(format!("{}({})", helper, value));
                 }
                 // Kind variant constructor?
                 let mut found = None;
@@ -286,22 +338,24 @@ impl Generator {
                     }
                 }
                 if let Some((kind_name, variant)) = found {
-                    let tag_name = format!("{}_Tag", mangle(&kind_name));
-                    let mut s = format!("(({}){{ .tag = {}_{}, .data = {{ .{} = {{ ", mangle(&kind_name), tag_name, variant.tag, variant.tag);
-                    for (i, field) in variant.payload.iter().enumerate() {
-                        if i > 0 { s.push_str(", "); }
-                        s.push_str(&format!(".{0} = {1}", field.name, self.gen_expr(&args[i])?));
+                    if args.len() != variant.payload.len() {
+                        return Err(Error::internal_at(
+                            span,
+                            format!("variant '{}' called with {} arguments (expected {})", name, args.len(), variant.payload.len()),
+                        ));
                     }
-                    s.push_str(" } } })");
-                    return Ok(s);
+                    let mut fields = Vec::new();
+                    for (field, arg) in variant.payload.iter().zip(args) {
+                        fields.push(format!(".{} = {}", field.name, self.gen_expr(arg)?));
+                    }
+                    let tag_name = format!("{}_Tag", mangle(&kind_name));
+                    return Ok(format!(
+                        "(({}){{ .tag = {}_{}, .data = {{ .{} = {{ {} }} }} }})",
+                        mangle(&kind_name), tag_name, variant.tag, variant.tag, fields.join(", ")
+                    ));
                 }
-                let mut s = format!("{}(", mangle(name));
-                for (i, arg) in args.iter().enumerate() {
-                    if i > 0 { s.push_str(", "); }
-                    s.push_str(&self.gen_expr(arg)?);
-                }
-                s.push(')');
-                Ok(s)
+                let values = args.iter().map(|arg| self.gen_expr(arg)).collect::<Result<Vec<_>>>()?;
+                Ok(format!("{}({})", mangle(name), values.join(", ")))
             }
             ExprKind::Unary(op, operand) => {
                 let expr = self.gen_expr(operand)?;
@@ -314,7 +368,7 @@ impl Generator {
             ExprKind::Binary(op, l, r) => {
                 let left = self.gen_expr(l)?;
                 let right = self.gen_expr(r)?;
-                if *op == BinaryOp::Mod && *e.ty() == Type::Float {
+                if *op == BinaryOp::Mod && *e.ty()? == Type::Float {
                     // C's `%` is integer-only.
                     return Ok(format!("vela_fmod({}, {})", left, right));
                 }
@@ -346,15 +400,13 @@ impl Generator {
                 Ok(format!("(*({}))", expr))
             }
             ExprKind::StructInit(name, fields) => {
-                let mut s = format!("((struct {}){{ ", mangle(name));
-                for (i, (fname, fexpr)) in fields.iter().enumerate() {
-                    if i > 0 { s.push_str(", "); }
-                    s.push_str(&format!(".{0} = {1}", fname, self.gen_expr(fexpr)?));
+                let mut values = Vec::new();
+                for (fname, fexpr) in fields {
+                    values.push(format!(".{} = {}", fname, self.gen_expr(fexpr)?));
                 }
-                s.push_str(" })");
-                Ok(s)
+                Ok(format!("((struct {}){{ {} }})", mangle(name), values.join(", ")))
             }
-            ExprKind::Range(_, _) => err(span, "range cannot be used as a value"),
+            ExprKind::Range(_, _) => Err(Error::at(span, "range cannot be used as a value")),
         }
     }
 
@@ -365,9 +417,19 @@ impl Generator {
                 let bv = self.gen_expr(b)?;
                 Ok((av, bv))
             }
-            _ => err(e.span, "expected range expression"),
+            _ => Err(Error::internal_at(e.span, "each over a non-range expression")),
         }
     }
+}
+
+/// The C declarator of a task, e.g. `int64_t vela_add(int64_t a, int64_t b)`.
+fn signature(t: &TaskDef) -> String {
+    let params: Vec<String> = t
+        .params
+        .iter()
+        .map(|p| format!("{} {}", c_type(&p.ty), p.name))
+        .collect();
+    format!("{} {}({})", c_type(&t.ret), mangle(&t.name), params.join(", "))
 }
 
 fn mangle(name: &str) -> String {
@@ -410,8 +472,4 @@ fn escape_c_string(s: &str) -> String {
         }
     }
     out
-}
-
-fn err<T>(span: Span, msg: impl Into<String>) -> Result<T> {
-    Err(Error::at(span, msg))
 }

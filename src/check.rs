@@ -14,6 +14,7 @@ struct VarInfo {
 /// Type-checks a program and annotates it for code generation: every
 /// expression gets its `ty`, and every binding without an annotation gets its
 /// inferred type. Code generation relies on these annotations.
+#[derive(Default)]
 pub struct Checker {
     shapes: HashMap<String, ShapeDef>,
     kinds: HashMap<String, KindDef>,
@@ -24,13 +25,7 @@ pub struct Checker {
 
 impl Checker {
     pub fn new() -> Self {
-        Checker {
-            shapes: HashMap::new(),
-            kinds: HashMap::new(),
-            tasks: HashMap::new(),
-            scopes: Vec::new(),
-            current_ret: None,
-        }
+        Self::default()
     }
 
     pub fn check_file(&mut self, items: &mut [Item]) -> Result<()> {
@@ -103,7 +98,9 @@ impl Checker {
             let at = existing.span;
             return err(span, format!("'{}' is already defined at {}:{}", name, at.line, at.col));
         }
-        let scope = self.scopes.last_mut().expect("define outside of a task");
+        let Some(scope) = self.scopes.last_mut() else {
+            return Err(Error::internal(format!("'{}' defined outside of a task", name)));
+        };
         scope.insert(name.to_string(), VarInfo { ty, mutable, span });
         Ok(())
     }
@@ -135,12 +132,12 @@ impl Checker {
             StmtKind::Expr(e) => { self.check_expr(e)?; Ok(()) }
             StmtKind::Binding { name, mutable, ty, init } => {
                 let init_ty = self.check_expr(init)?;
-                match ty {
-                    Some(annotated) => self.expect_type(&init_ty, annotated, init.span)?,
-                    None => *ty = Some(init_ty.clone()),
+                if let Some(annotated) = ty {
+                    self.expect_type(&init_ty, annotated, init.span)?;
                 }
-                let final_ty = ty.clone().unwrap();
-                self.define(name, final_ty, *mutable, span)
+                // Equal to the annotation, if there is one.
+                *ty = Some(init_ty.clone());
+                self.define(name, init_ty, *mutable, span)
             }
             StmtKind::Assign(lhs, rhs) => {
                 let lhs_ty = self.check_assign_target(lhs)?;
@@ -305,12 +302,12 @@ impl Checker {
             }
             ExprKind::Call(name, args) => {
                 if name == "show" {
-                    if args.len() != 1 {
+                    let [arg] = args.as_mut_slice() else {
                         return err(span, "show expects 1 argument");
-                    }
-                    let ty = self.check_expr(&mut args[0])?;
+                    };
+                    let ty = self.check_expr(arg)?;
                     if !matches!(ty, Type::Int | Type::Float | Type::Bool | Type::Text) {
-                        return err(args[0].span, "show expects int, float, bool, or text");
+                        return err(arg.span, "show expects int, float, bool, or text");
                     }
                     return Ok(Type::Unit);
                 }

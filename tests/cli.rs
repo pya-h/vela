@@ -1,5 +1,8 @@
 //! Command-line interface behavior of the `vela` binary.
 
+// A panic in a test is a test failure, so these lints do not apply here.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
+
 use std::process::{Command, Output};
 
 const VELA: &str = env!("CARGO_BIN_EXE_vela");

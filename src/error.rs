@@ -18,12 +18,20 @@ impl Error {
         }
     }
 
-    /// An error with no meaningful source position.
-    pub fn general(message: impl Into<String>) -> Self {
+    /// A broken invariant between compiler passes, such as code generation
+    /// finding an expression the checker never typed. This is a bug in the
+    /// compiler, not in the program being compiled, so it has no position.
+    pub fn internal(message: impl AsRef<str>) -> Self {
         Error {
             span: None,
-            message: message.into(),
+            message: format!("internal compiler error: {}", message.as_ref()),
         }
+    }
+
+    /// An internal error about the code at `span`. The position is part of
+    /// the message, for bug reports, rather than a diagnostic location.
+    pub fn internal_at(span: Span, message: impl AsRef<str>) -> Self {
+        Error::internal(format!("{} (at {}:{})", message.as_ref(), span.line, span.col))
     }
 }
 

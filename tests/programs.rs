@@ -9,6 +9,9 @@
 //! - `examples/NAME.vela` must compile and run; its stdout must equal
 //!   `tests/examples/NAME.out`.
 
+// A panic in a test is a test failure, so these lints do not apply here.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;

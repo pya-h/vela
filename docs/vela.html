@@ -306,6 +306,14 @@ p^ = 43                    <span class="comment"># writing through a pointer is 
         <code>tests/fail/</code> holds programs the compiler must reject, and every file in
         <code>examples/</code> is checked against <code>tests/examples/</code>.
       </p>
+      <p>To lint the compiler:</p>
+      <pre>cargo clippy --all-targets</pre>
+      <p>
+        The compiler's own code may not use <code>unwrap()</code>, <code>expect()</code>, <code>panic!</code>, or
+        unchecked indexing (enforced by lints in <code>Cargo.toml</code>), so problems are reported as errors
+        instead of crashes. An error starting with <code>internal compiler error</code> means a bug in the compiler
+        itself, not in your program.
+      </p>
     </section>
 
     <section>

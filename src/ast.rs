@@ -1,5 +1,7 @@
 use std::fmt;
 
+use crate::error::{Error, Result};
+
 /// A position in the source file (1-based line and column).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Span {
@@ -101,9 +103,12 @@ impl Expr {
         Expr { kind, span, ty: None }
     }
 
-    /// The type assigned by the checker. Only valid on checked expressions.
-    pub fn ty(&self) -> &Type {
-        self.ty.as_ref().expect("expression has not been type-checked")
+    /// The type assigned by the checker. An internal error if the expression
+    /// was never checked.
+    pub fn ty(&self) -> Result<&Type> {
+        self.ty
+            .as_ref()
+            .ok_or_else(|| Error::internal_at(self.span, "expression has not been type-checked"))
     }
 }
 
