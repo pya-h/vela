@@ -257,8 +257,13 @@ impl Checker {
     }
 
     fn lookup_or_err(&self, name: &str, span: Span) -> Result<&VarInfo> {
-        self.lookup(name)
-            .ok_or_else(|| Error::at(span, format!("unknown variable '{}'", name)))
+        self.lookup(name).ok_or_else(|| {
+            if self.variants.contains_key(name) {
+                Error::at(span, format!("'{}' is a variant, not a variable", name))
+            } else {
+                Error::at(span, format!("unknown variable '{}'", name))
+            }
+        })
     }
 
     fn check_block(&mut self, block: &mut Block) -> Result<()> {
@@ -271,7 +276,15 @@ impl Checker {
     fn check_stmt(&mut self, stmt: &mut Stmt) -> Result<()> {
         let span = stmt.span;
         match &mut stmt.kind {
-            StmtKind::Expr(e) => { self.check_expr(e)?; Ok(()) }
+            StmtKind::Expr(e) => {
+                self.check_expr(e)?;
+                // Of all expressions, only a call can have an effect.
+                match &e.kind {
+                    ExprKind::Call(..) => Ok(()),
+                    ExprKind::Binary(BinaryOp::Eq, ..) => err(e.span, "the result of '==' is unused; use '=' to assign"),
+                    _ => err(e.span, "this value is unused; only a task call can be used as a statement"),
+                }
+            }
             StmtKind::Binding { name, mutable, ty, ty_span, init } => {
                 if let Some(annotated) = ty {
                     self.check_type(annotated, ty_span.unwrap_or(span))?;
@@ -532,6 +545,9 @@ impl Checker {
                     .ok_or_else(|| Error::at(span, "cannot dereference non-pointer"))
             }
             ExprKind::StructInit(name, fields) => {
+                if self.kinds.contains_key(name.as_str()) {
+                    return err(span, format!("'{}' is a kind, not a shape; create its values with its variants", name));
+                }
                 let shape = self.shapes.get(name.as_str())
                     .ok_or_else(|| Error::at(span, format!("unknown shape '{}'", name)))?
                     .clone();
@@ -619,8 +635,9 @@ impl Checker {
     fn field_type(&self, base: &Type, field: &str, span: Span) -> Result<Type> {
         match base {
             Type::Named(name) => {
-                let shape = self.shapes.get(name)
-                    .ok_or_else(|| Error::at(span, format!("unknown shape '{}'", name)))?;
+                let Some(shape) = self.shapes.get(name) else {
+                    return err(span, format!("'{}' is a kind and has no fields; use match to read its values", name));
+                };
                 for f in &shape.fields {
                     if f.name == field {
                         return Ok(f.ty.clone());
@@ -628,7 +645,8 @@ impl Checker {
                 }
                 err(span, format!("shape '{}' has no field '{}'", name, field))
             }
-            _ => err(span, "field access on non-shape"),
+            Type::Ptr(_) => err(span, format!("type {} has no fields; dereference it first, as in 'p^.{}'", base, field)),
+            _ => err(span, format!("type {} has no fields", base)),
         }
     }
 

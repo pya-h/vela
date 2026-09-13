@@ -166,6 +166,11 @@
         Every block — a task, shape, kind, <code>when</code>, <code>loop</code>, <code>each</code>, or
         <code>match</code> — closes with <code>fi</code>. Each statement goes on its own line; there are no semicolons.
       </p>
+      <p>
+        A statement is a binding, an assignment, a block, <code>send</code>, <code>free</code>, or a task call. Any
+        other expression on its own line would do nothing, so it is an error: <code>x == 1</code> alone reports
+        <code>the result of '==' is unused; use '=' to assign</code>.
+      </p>
 
       <h3>Tasks</h3>
       <p>Functions are called <em>tasks</em>. The return arrow is required only when returning a value.</p>
@@ -217,6 +222,8 @@ show(label)                <span class="comment"># error: unknown variable 'labe
         <code>float</code>, the result is a <code>float</code>; two <code>int</code>s give an <code>int</code>, with
         division truncating toward zero. <code>%</code> on floats keeps the sign of the dividend.
         Comparisons (<code>&lt; &lt;= &gt; &gt;=</code>) require both sides to have the same type.
+        Number literals are decimal digits with an optional fraction (<code>42</code>, <code>3.14</code>); there
+        are no exponent or hex forms, so <code>1e5</code> is an invalid number.
       </p>
       <pre>show(7 / 2)       <span class="comment"># 3</span>
 show(7 / 2.0)     <span class="comment"># 3.5</span>
@@ -275,6 +282,8 @@ p.x = 5                    <span class="comment"># error: p is a bind</span></pr
       <p>
         Kinds are tagged unions with exhaustive pattern matching. Each <code>case</code> binds the variant's payload
         fields in order; the bindings are visible only inside that case, so different cases may reuse names.
+        A kind value has no fields of its own (<code>s.radius</code> is an error): <code>match</code> is the way to
+        read a payload.
       </p>
       <pre><span class="keyword">kind</span> Shape
     Circle(radius: float)
@@ -381,7 +390,8 @@ p^ = 43                    <span class="comment"># writing through a pointer is 
       <h2>Building the Compiler</h2>
       <p>
         The Vela compiler is written in Rust and generates standard, portable C11, which it compiles with the C
-        compiler named by the <code>CC</code> environment variable (<code>cc</code> by default).
+        compiler named by the <code>CC</code> environment variable (<code>cc</code> by default). <code>CC</code> may
+        include arguments, as in <code>CC="ccache gcc"</code>.
       </p>
       <pre>cargo build
 ./target/debug/vela program.vela -o program

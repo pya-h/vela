@@ -1,0 +1,9 @@
+# error: 8:12: 'Shape' is a kind and has no fields; use match to read its values
+kind Shape
+    Circle(radius: float)
+fi
+
+task main()
+    bind s = Circle(1.0)
+    show(s.radius)
+fi

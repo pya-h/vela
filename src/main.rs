@@ -84,6 +84,9 @@ fn run(opts: &Options) -> std::result::Result<(), String> {
         return Ok(());
     }
 
+    if same_file(&opts.input, &opts.output) {
+        return Err(format!("error: output '{}' would overwrite the input file", opts.output));
+    }
     compile_c(&c_code, &opts.input, &opts.output)?;
     println!("compiled: {}", opts.output);
     Ok(())
@@ -123,6 +126,14 @@ fn render_error(path: &str, source: &str, e: &Error) -> String {
     out
 }
 
+/// Whether two paths name the same existing file.
+fn same_file(a: &str, b: &str) -> bool {
+    match (fs::canonicalize(a), fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
 fn compile_c(c_code: &str, input_path: &str, output: &str) -> std::result::Result<(), String> {
     let base = Path::new(input_path).file_stem().unwrap_or("vela_out".as_ref());
     // A per-process build directory keeps concurrent compilations from
@@ -138,9 +149,13 @@ fn compile_c(c_code: &str, input_path: &str, output: &str) -> std::result::Resul
     fs::write(&h_path, RUNTIME_H)
         .map_err(|e| format!("error: cannot write runtime header: {}", e))?;
 
-    // Like make and cargo, honor $CC to pick the C compiler.
-    let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
-    let result = Command::new(&cc)
+    // Like make and cargo, honor $CC to pick the C compiler. It may include
+    // arguments, as in `CC="ccache gcc"`; an empty $CC means the default.
+    let cc_var = std::env::var("CC").unwrap_or_default();
+    let mut cc_words = cc_var.split_whitespace();
+    let cc = cc_words.next().unwrap_or("cc");
+    let result = Command::new(cc)
+        .args(cc_words)
         .arg("-std=c11")
         .arg("-O2")
         .arg("-I")

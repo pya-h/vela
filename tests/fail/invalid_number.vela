@@ -1,0 +1,4 @@
+# error: 3:14: invalid number '12abc'
+task main()
+    bind x = 12abc
+fi

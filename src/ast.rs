@@ -29,7 +29,6 @@ pub enum Type {
     Range(Box<Type>),
 }
 
-
 impl fmt::Display for Type {
     /// Formats the type as it is written in Vela source.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

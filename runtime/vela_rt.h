@@ -43,6 +43,7 @@ static inline double vela__rt__fmod(double a, double b) {
 static inline void* vela__rt__box(const void* value, size_t size) {
     void* p = malloc(size);
     if (p == NULL) {
+        fflush(stdout);
         fputs("vela: out of memory\n", stderr);
         abort();
     }

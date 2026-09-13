@@ -1,0 +1,8 @@
+# error: 7:5: 'Red' is a variant, not a variable
+kind Color
+    Red
+fi
+
+task main()
+    Red = 1
+fi

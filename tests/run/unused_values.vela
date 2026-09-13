@@ -1,0 +1,50 @@
+# Variables, parameters, and case bindings that are never read are valid Vela,
+# and their generated C must not trigger unused-variable warnings.
+shape Point
+    x: int
+    y: int
+fi
+
+kind Reading
+    Sample(value: int, weight: int)
+    Missing
+fi
+
+task first(a: int, b: int) -> int
+    send a
+fi
+
+task ignore(p: Point)
+    show("ignored")
+fi
+
+task value(r: Reading) -> int
+    match r
+    case Sample v w
+        send v
+    case Missing
+        send 0
+    fi
+fi
+
+task main()
+    bind unused = 1
+    hold overwritten = 2
+    overwritten = 3
+    hold moved = Point { x: 1, y: 2 }
+    moved.x = 10
+    bind boxed = new int(4)
+    boxed^ = 5
+    bind later = 6
+    when true
+        show(later)
+        bind inner = 7
+    else
+        bind inner = 8
+        show(inner)
+    fi
+    ignore(Point { x: 0, y: 0 })
+    show(first(1, 2))
+    show(value(Sample(9, 1)))
+    show(value(Missing))
+fi

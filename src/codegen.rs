@@ -183,6 +183,9 @@ impl Generator {
 
     fn gen_task(&mut self, t: &TaskDef) -> Result<()> {
         self.w.open(&signature(t));
+        for param in &t.params {
+            self.use_if_unread(&param.name, &t.body);
+        }
         self.gen_block(&t.body)?;
         if t.ret == Type::Unit {
             self.w.line("return;");
@@ -194,10 +197,23 @@ impl Generator {
     }
 
     fn gen_block(&mut self, block: &Block) -> Result<()> {
-        for stmt in block {
+        for (i, stmt) in block.iter().enumerate() {
             self.gen_stmt(stmt)?;
+            if let StmtKind::Binding { name, .. } = &stmt.kind {
+                self.use_if_unread(name, block.get(i + 1..).unwrap_or_default());
+            }
         }
         Ok(())
+    }
+
+    /// Vela allows variables that are never read, but C compilers warn about
+    /// them (`-Wunused-variable`, `-Wunused-but-set-variable`,
+    /// `-Wunused-parameter`). If nothing in `scope` reads `name`, this writes
+    /// `(void)name;`, which counts as a use in C.
+    fn use_if_unread(&mut self, name: &str, scope: &[Stmt]) {
+        if !block_reads(scope, name) {
+            self.w.line(&format!("(void){};", c_ident(name)));
+        }
     }
 
     fn gen_stmt(&mut self, stmt: &Stmt) -> Result<()> {
@@ -307,13 +323,12 @@ impl Generator {
             }
             self.w.open(&format!("case {}:", tag_value(&kind_name, &case.tag)));
             for ((bind, _), field) in case.binds.iter().zip(&variant.payload) {
-                let bind = c_ident(bind);
                 self.w.line(&format!(
                     "{} {} = {}.data.{}.{};",
-                    c_type(&field.ty), bind, subject, c_ident(&case.tag), c_ident(&field.name)
+                    c_type(&field.ty), c_ident(bind), subject, c_ident(&case.tag), c_ident(&field.name)
                 ));
-                // A case must bind every field, used or not; don't let C warn.
-                self.w.line(&format!("(void){};", bind));
+                // A case must bind every field, even ones its body never reads.
+                self.use_if_unread(bind, &case.body);
             }
             self.gen_block(&case.body)?;
             self.w.line("break;");
@@ -472,6 +487,54 @@ impl Generator {
             }
             _ => Err(Error::internal_at(e.span, "each over a non-range expression")),
         }
+    }
+}
+
+/// Whether any statement in `block` reads the variable `name`, as C's
+/// unused-variable warnings see it: assigning to the variable or to one of its
+/// fields is not a read. (Vela has no shadowing, so every `name` in the
+/// variable's scope refers to it.)
+fn block_reads(block: &[Stmt], name: &str) -> bool {
+    block.iter().any(|stmt| stmt_reads(stmt, name))
+}
+
+fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
+    let expr = |e: &Expr| expr_reads(e, name);
+    let body = |b: &Block| block_reads(b, name);
+    match &stmt.kind {
+        StmtKind::Expr(e) | StmtKind::Free(e) | StmtKind::Send(Some(e)) => expr(e),
+        StmtKind::Send(None) => false,
+        StmtKind::Binding { init, .. } => expr(init),
+        StmtKind::Assign(target, value) => target_reads(target, name) || expr(value),
+        StmtKind::When(cond, then_b, else_b) => expr(cond) || body(then_b) || else_b.as_ref().is_some_and(body),
+        StmtKind::Loop(cond, b) => expr(cond) || body(b),
+        StmtKind::Each(_, range, b) => expr(range) || body(b),
+        StmtKind::Match(subject, cases) => expr(subject) || cases.iter().any(|case| body(&case.body)),
+    }
+}
+
+/// Whether assigning to `target` reads `name`. Writing to a variable or its
+/// fields doesn't read it; writing through a pointer (`p^ = …`) reads `p`.
+fn target_reads(target: &Expr, name: &str) -> bool {
+    match &target.kind {
+        ExprKind::Var(_) => false,
+        ExprKind::Field(base, _) => target_reads(base, name),
+        _ => expr_reads(target, name),
+    }
+}
+
+fn expr_reads(e: &Expr, name: &str) -> bool {
+    match &e.kind {
+        ExprKind::Var(var) => var == name,
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit => false,
+        ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. } => {
+            expr_reads(inner, name)
+        }
+        ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => {
+            expr_reads(a, name) || expr_reads(b, name)
+        }
+        ExprKind::Call(_, args) | ExprKind::Construct { args, .. } => args.iter().any(|arg| expr_reads(arg, name)),
+        ExprKind::StructInit(_, fields) => fields.iter().any(|field| expr_reads(&field.value, name)),
     }
 }
 

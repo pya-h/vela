@@ -5,8 +5,9 @@
 //!   `tests/run/NAME.out`. Its generated C must also compile as strict ISO C11
 //!   with no warnings (see `STRICT_C_FLAGS`).
 //! - `tests/fail/NAME.vela` must be rejected by the Vela compiler itself (not by
-//!   the C compiler). Its first line is `# error: LINE:COL: MESSAGE`, and the
-//!   compiler must report exactly that message at that position.
+//!   the C compiler). Its first line is `# error: LINE:COL: MESSAGE` (or
+//!   `# error: MESSAGE` for an error without a position), and the compiler's
+//!   first line of output must be exactly that diagnostic.
 //! - `examples/NAME.vela` must compile and run, with strict C, and its stdout
 //!   must equal `tests/examples/NAME.out`.
 
@@ -20,19 +21,16 @@ use std::process::Command;
 const VELA: &str = env!("CARGO_BIN_EXE_vela");
 
 /// Flags for checking that generated C is portable, warning-free ISO C11.
-/// Unused parameters are allowed because they are valid Vela.
-const STRICT_C_FLAGS: &[&str] = &[
-    "-std=c11",
-    "-pedantic-errors",
-    "-Wall",
-    "-Wextra",
-    "-Werror",
-    "-Wno-unused-parameter",
-];
+const STRICT_C_FLAGS: &[&str] = &["-std=c11", "-pedantic-errors", "-Wall", "-Wextra", "-Werror"];
 
-/// The C compiler, as the `vela` binary chooses it.
-fn c_compiler() -> String {
-    std::env::var("CC").unwrap_or_else(|_| "cc".to_string())
+/// A command running the C compiler, chosen like the `vela` binary does: `$CC`,
+/// which may include arguments, or `cc`.
+fn c_compiler() -> Command {
+    let cc = std::env::var("CC").unwrap_or_default();
+    let mut words = cc.split_whitespace();
+    let mut command = Command::new(words.next().unwrap_or("cc"));
+    command.args(words);
+    command
 }
 
 fn project_root() -> PathBuf {
@@ -103,7 +101,7 @@ fn check_strict_c(source: &Path, scratch: &Path) -> Option<String> {
     }
     let c_path = scratch.join(format!("{}.c", name));
     fs::write(&c_path, &emit.stdout).unwrap();
-    let cc = Command::new(c_compiler())
+    let cc = c_compiler()
         .args(STRICT_C_FLAGS)
         .arg("-I")
         .arg(project_root().join("runtime"))
@@ -123,8 +121,8 @@ fn check_strict_c(source: &Path, scratch: &Path) -> Option<String> {
     None
 }
 
-/// Compiles `source`, expecting a Vela diagnostic that contains the text given
-/// on the file's first line (`# error: TEXT`).
+/// Compiles `source`, expecting the Vela diagnostic given on the file's first
+/// line (`# error: TEXT`) as the first line the compiler prints.
 fn check_fail(source: &Path, scratch: &Path) -> Option<String> {
     let name = stem(source);
     let text = fs::read_to_string(source).unwrap();
@@ -141,16 +139,17 @@ fn check_fail(source: &Path, scratch: &Path) -> Option<String> {
     if stderr.contains("C compilation failed") {
         return Some(format!("{}: rejected by the C compiler, not by Vela\n{}", name, stderr));
     }
-    let needle = diagnostic_needle(expected);
-    if !stderr.contains(&needle) {
-        return Some(format!("{}: expected error containing '{}', got:\n{}", name, needle, stderr));
+    let wanted = diagnostic_line(source, expected);
+    if stderr.lines().next() != Some(wanted.as_str()) {
+        return Some(format!("{}: expected the error\n{}\ngot:\n{}", name, wanted, stderr));
     }
     None
 }
 
-/// Turns a fixture's `LINE:COL: message` into the text the compiler prints
-/// (`:LINE:COL: error: message`). Text without a location is matched as-is.
-fn diagnostic_needle(expected: &str) -> String {
+/// The diagnostic line the compiler prints for a fixture's expected error:
+/// `LINE:COL: message` becomes `PATH:LINE:COL: error: message`, and a message
+/// without a location becomes `PATH: error: message`.
+fn diagnostic_line(source: &Path, expected: &str) -> String {
     if let Some((location, message)) = expected.split_once(": ") {
         let is_location = location
             .split_once(':')
@@ -160,10 +159,10 @@ fn diagnostic_needle(expected: &str) -> String {
                     && c.chars().all(|ch| ch.is_ascii_digit())
             });
         if is_location {
-            return format!(":{}: error: {}", location, message);
+            return format!("{}:{}: error: {}", source.display(), location, message);
         }
     }
-    expected.to_string()
+    format!("{}: error: {}", source.display(), expected)
 }
 
 fn report(suite: &str, failures: Vec<String>) {

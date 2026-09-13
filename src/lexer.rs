@@ -152,6 +152,12 @@ impl Lexer {
         Ok((tokens, spans))
     }
 
+    /// Whether the whole source has been read. (`peek` returns `'\0'` there,
+    /// but a NUL character can also appear in the source itself.)
+    fn at_end(&self) -> bool {
+        self.pos >= self.source.len()
+    }
+
     fn peek(&self) -> char {
         self.source.get(self.pos).copied().unwrap_or('\0')
     }
@@ -187,7 +193,7 @@ impl Lexer {
         let loc = self.location();
         let c = self.peek();
 
-        if c == '\0' {
+        if self.at_end() {
             return Ok((Token::Eof, loc));
         }
 
@@ -197,7 +203,7 @@ impl Lexer {
         }
 
         if c == '#' {
-            while self.peek() != '\n' && self.peek() != '\0' {
+            while self.peek() != '\n' && !self.at_end() {
                 self.advance();
             }
             return self.next_token();
@@ -286,7 +292,8 @@ impl Lexer {
                     Token::Gt
                 }
             }
-            _ => return Err(Error::at(loc, format!("unexpected character '{}'", c))),
+            // `escape_debug` keeps control characters such as NUL readable.
+            _ => return Err(Error::at(loc, format!("unexpected character '{}'", c.escape_debug()))),
         };
         Ok((tok, loc))
     }
@@ -343,41 +350,58 @@ impl Lexer {
             while self.peek().is_ascii_digit() {
                 s.push(self.advance());
             }
+            self.reject_number_suffix(loc, &mut s)?;
             let val = s.parse::<f64>().map_err(|_| Error::at(loc, "invalid float"))?;
             if !val.is_finite() {
                 return Err(Error::at(loc, format!("float literal '{}' is too large", s)));
             }
             Ok((Token::Float(val), loc))
         } else {
+            self.reject_number_suffix(loc, &mut s)?;
             let val = s.parse::<i64>().map_err(|_| Error::at(loc, format!("integer literal '{}' is too large", s)))?;
             Ok((Token::Int(val), loc))
         }
+    }
+
+    /// Rejects letters, digits, or `_` right after a number, as in `12abc`,
+    /// `1e5`, or `0x1F`, instead of reading them as a separate name.
+    fn reject_number_suffix(&mut self, loc: Span, s: &mut String) -> Result<()> {
+        if !self.peek().is_ascii_alphabetic() && self.peek() != '_' {
+            return Ok(());
+        }
+        while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
+            s.push(self.advance());
+        }
+        Err(Error::at(loc, format!("invalid number '{}'", s)))
     }
 
     fn string(&mut self) -> Result<(Token, Span)> {
         let loc = self.location();
         self.advance(); // opening "
         let mut s = String::new();
-        while self.peek() != '"' && self.peek() != '\0' {
+        while self.peek() != '"' && !self.at_end() {
             if self.peek() == '\\' {
                 let escape_loc = self.location();
                 self.advance();
+                if self.at_end() {
+                    break; // backslash at end of file: unterminated
+                }
                 let c = self.advance();
                 match c {
-                    '\0' => break, // backslash at end of file: unterminated
                     'n' => s.push('\n'),
                     't' => s.push('\t'),
                     'r' => s.push('\r'),
                     '\\' => s.push('\\'),
                     '"' => s.push('"'),
                     '0' => s.push('\0'),
-                    _ => return Err(Error::at(escape_loc, format!("invalid escape '\\{}'", c))),
+                    '\n' => return Err(Error::at(escape_loc, "invalid escape: '\\' at the end of a line")),
+                    _ => return Err(Error::at(escape_loc, format!("invalid escape '\\{}'", c.escape_debug()))),
                 }
             } else {
                 s.push(self.advance());
             }
         }
-        if self.peek() != '"' {
+        if self.at_end() {
             return Err(Error::at(loc, "unterminated string"));
         }
         self.advance(); // closing "
