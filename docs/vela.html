@@ -410,7 +410,14 @@ CC=clang cargo test</pre>
         <code>tests/fail/</code> holds programs the compiler must reject, and every file in
         <code>examples/</code> is checked against <code>tests/examples/</code>. The C generated for run tests and
         examples must also compile as strict ISO C11 with no warnings (<code>-std=c11 -pedantic-errors -Wall
-        -Wextra -Werror</code>).
+        -Wextra -Werror</code>). Rust tests in <code>tests/*.rs</code> cover the command line, the library's build
+        pipeline, and the lexer.
+      </p>
+      <p>
+        The compiler is also a Rust library, <code>vela</code>, so tools can use the language without copying it:
+        <code>vela::driver</code> checks and builds programs exactly as the <code>vela</code> command does,
+        <code>vela::lexer::highlight</code> splits source into tokens without stopping at errors (for editors), and
+        <code>lexer::KEYWORDS</code> and <code>ast::BUILTIN_TYPES</code> list the language's reserved words and types.
       </p>
       <p>To lint the compiler:</p>
       <pre>cargo clippy --all-targets</pre>

@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::ast::Span;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error {
     /// Where the error was found, if it relates to a source position.
     pub span: Option<Span>,

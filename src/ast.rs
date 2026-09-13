@@ -29,6 +29,19 @@ pub enum Type {
     Range(Box<Type>),
 }
 
+/// The builtin types by name: the one list the parser, the checker, and tools
+/// such as editors use.
+pub const BUILTIN_TYPES: &[(&str, Type)] = &[
+    ("int", Type::Int),
+    ("float", Type::Float),
+    ("bool", Type::Bool),
+    ("text", Type::Text),
+    ("unit", Type::Unit),
+];
+
+/// The builtin tasks, which user code calls like its own tasks.
+pub const BUILTIN_TASKS: &[&str] = &["show"];
+
 impl fmt::Display for Type {
     /// Formats the type as it is written in Vela source.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -47,6 +60,11 @@ impl fmt::Display for Type {
 }
 
 impl Type {
+    /// The builtin type called `name`, if there is one.
+    pub fn builtin(name: &str) -> Option<Type> {
+        BUILTIN_TYPES.iter().find(|(builtin, _)| *builtin == name).map(|(_, ty)| ty.clone())
+    }
+
     pub fn is_numeric(&self) -> bool {
         matches!(self, Type::Int | Type::Float)
     }

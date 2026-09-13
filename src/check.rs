@@ -3,10 +3,6 @@ use std::collections::{HashMap, HashSet};
 use crate::ast::*;
 use crate::error::{Error, Result};
 
-/// Names no declaration may take: the builtin types and the builtin task.
-const BUILTIN_TYPES: &[&str] = &["int", "float", "bool", "text", "unit"];
-const BUILTIN_TASKS: &[&str] = &["show"];
-
 #[derive(Clone)]
 struct VariantInfo {
     /// The kind the variant belongs to.
@@ -58,7 +54,8 @@ impl Checker {
     fn collect_declarations(&mut self, items: &[Item]) -> Result<()> {
         let mut names: HashMap<String, Span> = HashMap::new();
         let mut declare = |name: &str, span: Span| -> Result<()> {
-            if BUILTIN_TYPES.contains(&name) {
+            // No declaration may take the name of a builtin type or task.
+            if Type::builtin(name).is_some() {
                 return err(span, format!("'{}' is a builtin type and cannot be redefined", name));
             }
             if BUILTIN_TASKS.contains(&name) {

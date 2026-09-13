@@ -196,14 +196,7 @@ impl Parser {
             return Ok(Type::Ptr(Box::new(inner)));
         }
         let name = self.expect_ident()?;
-        Ok(match name.as_str() {
-            "int" => Type::Int,
-            "float" => Type::Float,
-            "bool" => Type::Bool,
-            "text" => Type::Text,
-            "unit" => Type::Unit,
-            _ => Type::Named(name),
-        })
+        Ok(Type::builtin(&name).unwrap_or(Type::Named(name)))
     }
 
     fn parse_block(&mut self) -> Result<Block> {
