@@ -1,0 +1,8 @@
+# error: 7:22: expected type ^Point, got ^int
+shape Point
+    x: int
+end
+
+task main()
+    bind p: ^Point = new int(1)
+end

@@ -4,13 +4,13 @@ use std::fmt::Write;
 use crate::ast::*;
 use crate::error::{Error, Result};
 
+/// Generates C from a program that has already been checked by
+/// `check::Checker`. Types come from the checker's annotations; the generator
+/// does no type inference of its own.
 pub struct Generator {
     out: String,
     temp_counter: u64,
-    shapes: HashMap<String, ShapeDef>,
     kinds: HashMap<String, KindDef>,
-    tasks: HashMap<String, (Vec<Type>, Type)>,
-    scopes: Vec<HashMap<String, Type>>,
 }
 
 impl Generator {
@@ -18,25 +18,15 @@ impl Generator {
         Generator {
             out: String::new(),
             temp_counter: 0,
-            shapes: HashMap::new(),
             kinds: HashMap::new(),
-            tasks: HashMap::new(),
-            scopes: Vec::new(),
         }
     }
 
     pub fn generate(&mut self, items: &[Item]) -> Result<String> {
-        self.shapes.clear();
         self.kinds.clear();
-        self.tasks.clear();
         for item in items {
-            match item {
-                Item::Shape(s) => { self.shapes.insert(s.name.clone(), s.clone()); }
-                Item::Kind(k) => { self.kinds.insert(k.name.clone(), k.clone()); }
-                Item::Task(t) => {
-                    let ptypes: Vec<Type> = t.params.iter().map(|p| p.ty.clone()).collect();
-                    self.tasks.insert(t.name.clone(), (ptypes, t.ret.clone()));
-                }
+            if let Item::Kind(k) = item {
+                self.kinds.insert(k.name.clone(), k.clone());
             }
         }
 
@@ -47,8 +37,8 @@ impl Generator {
         // Type definitions first
         for item in items {
             match item {
-                Item::Shape(s) => self.gen_shape(s)?,
-                Item::Kind(k) => self.gen_kind(k)?,
+                Item::Shape(s) => self.gen_shape(s),
+                Item::Kind(k) => self.gen_kind(k),
                 _ => {}
             }
         }
@@ -57,12 +47,8 @@ impl Generator {
         // Forward declarations for tasks
         for item in items {
             if let Item::Task(t) = item {
-                write!(self.out, "{} {}(", c_type(&t.ret), mangle(&t.name)).unwrap();
-                for (i, param) in t.params.iter().enumerate() {
-                    if i > 0 { write!(self.out, ", ").unwrap(); }
-                    write!(self.out, "{} {}", c_type(&param.ty), param.name).unwrap();
-                }
-                writeln!(self.out, ");").unwrap();
+                self.gen_signature(t);
+                writeln!(self.out, ";").unwrap();
             }
         }
         writeln!(self.out).unwrap();
@@ -95,39 +81,15 @@ impl Generator {
         format!("{}__{}", prefix, n)
     }
 
-    fn push_scope(&mut self) {
-        self.scopes.push(HashMap::new());
-    }
-
-    fn pop_scope(&mut self) {
-        self.scopes.pop();
-    }
-
-    fn define_var(&mut self, name: String, ty: Type) {
-        if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name, ty);
-        }
-    }
-
-    fn lookup_var(&self, name: &str) -> Option<&Type> {
-        for scope in self.scopes.iter().rev() {
-            if let Some(ty) = scope.get(name) {
-                return Some(ty);
-            }
-        }
-        None
-    }
-
-    fn gen_shape(&mut self, s: &ShapeDef) -> Result<()> {
+    fn gen_shape(&mut self, s: &ShapeDef) {
         writeln!(self.out, "typedef struct {} {{", mangle(&s.name)).unwrap();
         for field in &s.fields {
             writeln!(self.out, "    {} {};", c_type(&field.ty), field.name).unwrap();
         }
         writeln!(self.out, "}} {};", mangle(&s.name)).unwrap();
-        Ok(())
     }
 
-    fn gen_kind(&mut self, k: &KindDef) -> Result<()> {
+    fn gen_kind(&mut self, k: &KindDef) {
         let tag_name = format!("{}_Tag", mangle(&k.name));
         writeln!(self.out, "typedef enum {0} {{", tag_name).unwrap();
         for v in &k.variants {
@@ -149,22 +111,21 @@ impl Generator {
         }
         writeln!(self.out, "    }} data;").unwrap();
         writeln!(self.out, "}} {};", mangle(&k.name)).unwrap();
-        Ok(())
     }
 
-    fn gen_task(&mut self, t: &TaskDef) -> Result<()> {
+    fn gen_signature(&mut self, t: &TaskDef) {
         write!(self.out, "{} {}(", c_type(&t.ret), mangle(&t.name)).unwrap();
         for (i, param) in t.params.iter().enumerate() {
             if i > 0 { write!(self.out, ", ").unwrap(); }
             write!(self.out, "{} {}", c_type(&param.ty), param.name).unwrap();
         }
-        writeln!(self.out, ") {{").unwrap();
-        self.push_scope();
-        for param in &t.params {
-            self.define_var(param.name.clone(), param.ty.clone());
-        }
+        write!(self.out, ")").unwrap();
+    }
+
+    fn gen_task(&mut self, t: &TaskDef) -> Result<()> {
+        self.gen_signature(t);
+        writeln!(self.out, " {{").unwrap();
         self.gen_block(&t.body, 1)?;
-        self.pop_scope();
         if t.ret == Type::Unit {
             writeln!(self.out, "    return;").unwrap();
         }
@@ -173,88 +134,75 @@ impl Generator {
     }
 
     fn gen_block(&mut self, block: &Block, indent: usize) -> Result<()> {
-        let pad = "    ".repeat(indent);
         for stmt in block {
-            self.gen_stmt(stmt, &pad)?;
+            self.gen_stmt(stmt, indent)?;
         }
         Ok(())
     }
 
-    fn gen_stmt(&mut self, stmt: &Stmt, pad: &str) -> Result<()> {
+    fn gen_stmt(&mut self, stmt: &Stmt, indent: usize) -> Result<()> {
+        let pad = "    ".repeat(indent);
         match &stmt.kind {
             StmtKind::Expr(e) => {
                 let expr = self.gen_expr(e)?;
-                if !expr.is_empty() {
-                    writeln!(self.out, "{}{};", pad, expr).unwrap();
-                }
+                writeln!(self.out, "{}{};", pad, expr).unwrap();
             }
-            StmtKind::Bind(name, ty_hint, Some(e)) | StmtKind::Hold(name, ty_hint, Some(e)) => {
-                let ty = if ty_hint == &Type::Unit {
-                    self.expr_type(e).map_err(|_| Error::at(stmt.span, "cannot infer type; add ': type' annotation"))?
-                } else {
-                    ty_hint.clone()
-                };
-                let expr = self.gen_expr(e)?;
-                self.define_var(name.clone(), ty.clone());
-                writeln!(self.out, "{}{} {} = {};", pad, c_type(&ty), name, expr).unwrap();
-            }
-            StmtKind::Bind(_, _, None) | StmtKind::Hold(_, _, None) => {
-                return err(stmt.span, "bind/hold without initializer");
+            StmtKind::Binding { name, ty, init, .. } => {
+                let ty = ty.as_ref().expect("binding type is filled in by the checker");
+                let expr = self.gen_expr(init)?;
+                writeln!(self.out, "{}{} {} = {};", pad, c_type(ty), name, expr).unwrap();
             }
             StmtKind::Assign(lhs, rhs) => {
-                let l = self.gen_lvalue(lhs)?;
+                // The checker guarantees `lhs` is a variable, field, or deref,
+                // all of which generate valid C lvalues.
+                let l = self.gen_expr(lhs)?;
                 let r = self.gen_expr(rhs)?;
                 writeln!(self.out, "{}{} = {};", pad, l, r).unwrap();
             }
             StmtKind::When(cond, then_b, else_b) => {
                 let c = self.gen_expr(cond)?;
                 writeln!(self.out, "{}if ({}) {{", pad, c).unwrap();
-                self.gen_block(then_b, indent_level(pad) + 1)?;
+                self.gen_block(then_b, indent + 1)?;
                 if let Some(else_b) = else_b {
                     writeln!(self.out, "{}}} else {{", pad).unwrap();
-                    self.gen_block(else_b, indent_level(pad) + 1)?;
+                    self.gen_block(else_b, indent + 1)?;
                 }
                 writeln!(self.out, "{}}}", pad).unwrap();
             }
             StmtKind::Loop(cond, body) => {
                 let c = self.gen_expr(cond)?;
                 writeln!(self.out, "{}while ({}) {{", pad, c).unwrap();
-                self.gen_block(body, indent_level(pad) + 1)?;
+                self.gen_block(body, indent + 1)?;
                 writeln!(self.out, "{}}}", pad).unwrap();
             }
             StmtKind::Each(name, range, body) => {
                 let (a, b) = self.gen_range(range)?;
                 writeln!(self.out, "{}for (int64_t {} = {}; {} < {}; {}++) {{", pad, name, a, name, b, name).unwrap();
-                self.push_scope();
-                self.define_var(name.clone(), Type::Int);
-                self.gen_block(body, indent_level(pad) + 1)?;
-                self.pop_scope();
+                self.gen_block(body, indent + 1)?;
                 writeln!(self.out, "{}}}", pad).unwrap();
             }
             StmtKind::Match(expr, cases) => {
                 let e = self.gen_expr(expr)?;
-                let ty = self.expr_type(expr)?;
-                let kind_name = match &ty {
+                let kind_name = match expr.ty() {
                     Type::Named(n) => n.clone(),
                     _ => return err(expr.span, "match on non-kind"),
                 };
-                let kind = self.kinds.get(&kind_name).ok_or_else(|| Error::at(expr.span, format!("unknown kind '{}'", kind_name)))?.clone();
+                let kind = self.kinds.get(&kind_name)
+                    .ok_or_else(|| Error::at(expr.span, format!("unknown kind '{}'", kind_name)))?
+                    .clone();
                 let tag_name = format!("{}_Tag", mangle(&kind_name));
                 writeln!(self.out, "{}switch ({}.tag) {{", pad, e).unwrap();
-                self.push_scope();
+                let inner_pad = "    ".repeat(indent + 1);
                 for case in cases {
                     let variant = kind.variants.iter().find(|v| v.tag == case.tag)
                         .ok_or_else(|| Error::at(case.span, format!("unknown variant '{}'", case.tag)))?;
                     writeln!(self.out, "{}case {}_{}:", pad, tag_name, case.tag).unwrap();
-                    let inner_pad = "    ".repeat(indent_level(pad) + 1);
                     for (bind, field) in case.binds.iter().zip(variant.payload.iter()) {
-                        self.define_var(bind.clone(), field.ty.clone());
                         writeln!(self.out, "{}{} {} = {}.data.{}.{};", inner_pad, c_type(&field.ty), bind, e, case.tag, field.name).unwrap();
                     }
-                    self.gen_block(&case.body, indent_level(pad) + 1)?;
-                    writeln!(self.out, "{}    break;", pad).unwrap();
+                    self.gen_block(&case.body, indent + 1)?;
+                    writeln!(self.out, "{}break;", inner_pad).unwrap();
                 }
-                self.pop_scope();
                 writeln!(self.out, "{}}}", pad).unwrap();
             }
             StmtKind::Send(None) => {
@@ -276,7 +224,7 @@ impl Generator {
         let span = e.span;
         match &e.kind {
             ExprKind::IntLit(n) => Ok(n.to_string()),
-            ExprKind::FloatLit(n) => Ok(n.to_string()),
+            ExprKind::FloatLit(n) => Ok(c_float_literal(*n)),
             ExprKind::BoolLit(b) => Ok(if *b { "true".to_string() } else { "false".to_string() }),
             ExprKind::TextLit(s) => Ok(format!("\"{}\"", escape_c_string(s))),
             ExprKind::NoneLit => Ok("NULL".to_string()),
@@ -289,8 +237,7 @@ impl Generator {
             ExprKind::Call(name, args) => {
                 if name == "show" {
                     let arg = self.gen_expr(&args[0])?;
-                    let ty = self.expr_type(&args[0])?;
-                    let helper = match ty {
+                    let helper = match args[0].ty() {
                         Type::Int => "vela_show_int",
                         Type::Float => "vela_show_float",
                         Type::Bool => "vela_show_bool",
@@ -325,8 +272,8 @@ impl Generator {
                 s.push(')');
                 Ok(s)
             }
-            ExprKind::Unary(op, e) => {
-                let expr = self.gen_expr(e)?;
+            ExprKind::Unary(op, operand) => {
+                let expr = self.gen_expr(operand)?;
                 let op_s = match op {
                     UnaryOp::Neg => "-",
                     UnaryOp::Not => "!",
@@ -336,6 +283,10 @@ impl Generator {
             ExprKind::Binary(op, l, r) => {
                 let left = self.gen_expr(l)?;
                 let right = self.gen_expr(r)?;
+                if *op == BinaryOp::Mod && *e.ty() == Type::Float {
+                    // C's `%` is integer-only.
+                    return Ok(format!("vela_fmod({}, {})", left, right));
+                }
                 let op_s = match op {
                     BinaryOp::Add => "+",
                     BinaryOp::Sub => "-",
@@ -353,14 +304,14 @@ impl Generator {
                 };
                 Ok(format!("({} {} {})", left, op_s, right))
             }
-            ExprKind::New(ty, e) => {
-                let val = self.gen_expr(e)?;
+            ExprKind::New(ty, value) => {
+                let val = self.gen_expr(value)?;
                 let tmp = self.fresh_temp("p");
                 let ctype = c_type(ty);
                 Ok(format!("({{ {}* {} = ({}*)vela_new(sizeof({})); *{} = {}; {}; }})", ctype, tmp, ctype, ctype, tmp, val, tmp))
             }
-            ExprKind::Deref(e) => {
-                let expr = self.gen_expr(e)?;
+            ExprKind::Deref(inner) => {
+                let expr = self.gen_expr(inner)?;
                 Ok(format!("(*({}))", expr))
             }
             ExprKind::StructInit(name, fields) => {
@@ -376,105 +327,14 @@ impl Generator {
         }
     }
 
-    fn gen_lvalue(&mut self, e: &Expr) -> Result<String> {
-        let span = e.span;
-        match &e.kind {
-            ExprKind::Var(name) => Ok(name.clone()),
-            ExprKind::Field(base, field) => {
-                let b = self.gen_expr(base)?;
-                Ok(format!("({}).{}", b, field))
-            }
-            ExprKind::Deref(e) => {
-                let expr = self.gen_expr(e)?;
-                Ok(format!("(*({}))", expr))
-            }
-            _ => err(span, "invalid assignment target"),
-        }
-    }
-
     fn gen_range(&mut self, e: &Expr) -> Result<(String, String)> {
-        let span = e.span;
         match &e.kind {
             ExprKind::Range(a, b) => {
                 let av = self.gen_expr(a)?;
                 let bv = self.gen_expr(b)?;
                 Ok((av, bv))
             }
-            _ => err(span, "expected range expression"),
-        }
-    }
-
-    fn expr_type(&self, e: &Expr) -> Result<Type> {
-        let span = e.span;
-        match &e.kind {
-            ExprKind::IntLit(_) => Ok(Type::Int),
-            ExprKind::FloatLit(_) => Ok(Type::Float),
-            ExprKind::BoolLit(_) => Ok(Type::Bool),
-            ExprKind::TextLit(_) => Ok(Type::Text),
-            ExprKind::NoneLit => Ok(Type::Ptr(Box::new(Type::Unit))),
-            ExprKind::New(ty, _) => Ok(Type::Ptr(Box::new((**ty).clone()))),
-            ExprKind::StructInit(name, _) => Ok(Type::Named(name.clone())),
-            ExprKind::Call(name, args) if name == "show" => {
-                if args.is_empty() {
-                    return err(span, "show expects 1 argument");
-                }
-                Ok(Type::Unit)
-            }
-            ExprKind::Call(name, args) => {
-                // Kind variant constructor?
-                for kind in self.kinds.values() {
-                    if let Some(variant) = kind.variants.iter().find(|v| v.tag == *name) {
-                        let _ = variant;
-                        if args.len() != variant.payload.len() {
-                            return err(span, "wrong number of arguments");
-                        }
-                        return Ok(Type::Named(kind.name.clone()));
-                    }
-                }
-                let (params, ret) = self.tasks.get(name)
-                    .ok_or_else(|| Error::at(span, format!("unknown task '{}'", name)))?
-                    .clone();
-                if args.len() != params.len() {
-                    return err(span, "wrong number of arguments");
-                }
-                Ok(ret)
-            }
-            ExprKind::Field(base, field) => {
-                let base_ty = self.expr_type(base)?;
-                let shape_name = match &base_ty {
-                    Type::Named(n) => n.clone(),
-                    _ => return err(span, "field access on non-shape"),
-                };
-                let shape = self.shapes.get(&shape_name).ok_or_else(|| Error::at(span, format!("unknown shape '{}'", shape_name)))?;
-                for f in &shape.fields {
-                    if f.name == *field {
-                        return Ok(f.ty.clone());
-                    }
-                }
-                err(span, format!("shape '{}' has no field '{}'", shape_name, field))
-            }
-            ExprKind::Deref(e) => {
-                let ty = self.expr_type(e)?;
-                ty.ptr_inner().cloned().ok_or_else(|| Error::at(span, "cannot dereference non-pointer"))
-            }
-            ExprKind::Unary(op, e) => {
-                let ty = self.expr_type(e)?;
-                match op {
-                    UnaryOp::Neg => Ok(ty),
-                    UnaryOp::Not => Ok(Type::Bool),
-                }
-            }
-            ExprKind::Binary(op, l, _r) => {
-                let lt = self.expr_type(l)?;
-                match op {
-                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => Ok(lt),
-                    BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge | BinaryOp::And | BinaryOp::Or => Ok(Type::Bool),
-                }
-            }
-            ExprKind::Var(name) => {
-                self.lookup_var(name).cloned().ok_or_else(|| Error::at(span, format!("unknown variable '{}'", name)))
-            }
-            _ => err(span, "cannot infer expression type for codegen"),
+            _ => err(e.span, "expected range expression"),
         }
     }
 }
@@ -497,8 +357,13 @@ fn c_type(ty: &Type) -> String {
     }
 }
 
-fn indent_level(pad: &str) -> usize {
-    pad.len() / 4
+/// Formats a float so C always reads it as a `double` literal: `3.0` rather
+/// than `3` (which C would treat as an integer), and exponent form such as
+/// `1e300` for very large or small magnitudes. The lexer rejects non-finite
+/// literals, so `inf`/`NaN` never reach here.
+fn c_float_literal(n: f64) -> String {
+    // Debug formatting always includes a decimal point or an exponent.
+    format!("{:?}", n)
 }
 
 fn escape_c_string(s: &str) -> String {

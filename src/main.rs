@@ -88,8 +88,8 @@ fn run(opts: &Options) -> std::result::Result<(), String> {
 /// Lexes, parses, and type-checks a source file.
 fn front_end(source: &str) -> Result<Vec<Item>> {
     let (tokens, spans) = Lexer::new(source).tokenize()?;
-    let items = Parser::new(tokens, spans).parse_file()?;
-    Checker::new().check_file(&items)?;
+    let mut items = Parser::new(tokens, spans).parse_file()?;
+    Checker::new().check_file(&mut items)?;
     Ok(items)
 }
 
@@ -142,6 +142,7 @@ fn compile_c(c_code: &str, input_path: &str, output: &str) -> std::result::Resul
         .arg(&c_path)
         .arg("-o")
         .arg(output)
+        .arg("-lm") // math library, for vela_fmod
         .status()
         .map_err(|e| format!("error: failed to invoke C compiler 'cc': {}", e))?;
 

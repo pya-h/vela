@@ -237,17 +237,13 @@ impl Parser {
         let span = self.peek_span();
         let name = self.expect_ident()?;
         let ty = if self.match_token(Token::Colon) {
-            self.parse_type()?
+            Some(self.parse_type()?)
         } else {
-            Type::Unit // placeholder, inferred later
+            None
         };
         self.expect(Token::Assign)?;
-        let expr = self.parse_expr()?;
-        let kind = if immutable {
-            StmtKind::Bind(name, ty, Some(expr))
-        } else {
-            StmtKind::Hold(name, ty, Some(expr))
-        };
+        let init = self.parse_expr()?;
+        let kind = StmtKind::Binding { name, mutable: !immutable, ty, init };
         Ok(Stmt::new(kind, span))
     }
 

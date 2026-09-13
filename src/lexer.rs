@@ -329,6 +329,9 @@ impl Lexer {
                 s.push(self.advance());
             }
             let val = s.parse::<f64>().map_err(|_| Error::at(loc, "invalid float"))?;
+            if !val.is_finite() {
+                return Err(Error::at(loc, format!("float literal '{}' is too large", s)));
+            }
             Ok((Token::Float(val), loc))
         } else {
             let val = s.parse::<i64>().map_err(|_| Error::at(loc, format!("integer literal '{}' is too large", s)))?;

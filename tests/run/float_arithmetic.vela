@@ -1,0 +1,34 @@
+# Float literals, mixed int/float arithmetic, and float remainder
+
+shape Vec1
+    x: float
+end
+
+task half(n: int) -> float
+    send n / 2.0
+end
+
+task main()
+    show(3.0 / 2.0)
+    show(1 + 2.5)
+    bind x = 1 + 2.5
+    show(x)
+    bind y = 7 / 2.0
+    show(y)
+    show(7 / 2)
+    show(5.5 % 2.0)
+    show(7 % 2.5)
+    show(-7.5 % 2.0)
+    show(7 % 3)
+    show(0.1 + 0.2)
+    show(1000000000000000000000.0)
+    show(-2.5 * 2)
+
+    hold f = 0.0
+    f = f + 1
+    show(f)
+
+    bind v = Vec1 { x: 2.0 }
+    show(v.x * 2)
+    show(half(3))
+end

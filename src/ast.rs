@@ -1,3 +1,5 @@
+use std::fmt;
+
 /// A position in the source file (1-based line and column).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Span {
@@ -23,6 +25,22 @@ pub enum Type {
     Range(Box<Type>),
 }
 
+
+impl fmt::Display for Type {
+    /// Formats the type as it is written in Vela source.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Type::Int => write!(f, "int"),
+            Type::Float => write!(f, "float"),
+            Type::Bool => write!(f, "bool"),
+            Type::Text => write!(f, "text"),
+            Type::Unit => write!(f, "unit"),
+            Type::Ptr(inner) => write!(f, "^{}", inner),
+            Type::Named(name) => write!(f, "{}", name),
+            Type::Range(inner) => write!(f, "range of {}", inner),
+        }
+    }
+}
 
 impl Type {
     pub fn is_numeric(&self) -> bool {
@@ -74,11 +92,18 @@ pub enum BinaryOp {
 pub struct Expr {
     pub kind: ExprKind,
     pub span: Span,
+    /// The expression's type, filled in by the checker.
+    pub ty: Option<Type>,
 }
 
 impl Expr {
     pub fn new(kind: ExprKind, span: Span) -> Self {
-        Expr { kind, span }
+        Expr { kind, span, ty: None }
+    }
+
+    /// The type assigned by the checker. Only valid on checked expressions.
+    pub fn ty(&self) -> &Type {
+        self.ty.as_ref().expect("expression has not been type-checked")
     }
 }
 
@@ -120,8 +145,14 @@ impl Stmt {
 #[derive(Debug, Clone)]
 pub enum StmtKind {
     Expr(Expr),
-    Bind(String, Type, Option<Expr>),
-    Hold(String, Type, Option<Expr>),
+    /// `bind` (immutable) or `hold` (mutable). `ty` is the annotation, if
+    /// any; the checker fills it in with the inferred type otherwise.
+    Binding {
+        name: String,
+        mutable: bool,
+        ty: Option<Type>,
+        init: Expr,
+    },
     Assign(Expr, Expr),
     When(Expr, Block, Option<Block>),
     Loop(Expr, Block),

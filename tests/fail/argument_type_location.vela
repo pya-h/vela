@@ -1,4 +1,4 @@
-# error: 7:16: expected type Int, got Text
+# error: 7:16: expected type int, got text
 task twice(n: int) -> int
     send n * 2
 end

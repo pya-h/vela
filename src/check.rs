@@ -9,6 +9,9 @@ struct VarInfo {
     mutable: bool,
 }
 
+/// Type-checks a program and annotates it for code generation: every
+/// expression gets its `ty`, and every binding without an annotation gets its
+/// inferred type. Code generation relies on these annotations.
 pub struct Checker {
     shapes: HashMap<String, ShapeDef>,
     kinds: HashMap<String, KindDef>,
@@ -28,8 +31,8 @@ impl Checker {
         }
     }
 
-    pub fn check_file(&mut self, items: &[Item]) -> Result<()> {
-        for item in items {
+    pub fn check_file(&mut self, items: &mut [Item]) -> Result<()> {
+        for item in items.iter() {
             match item {
                 Item::Shape(s) => {
                     if self.shapes.contains_key(&s.name) {
@@ -53,7 +56,7 @@ impl Checker {
             }
         }
 
-        for item in items {
+        for item in items.iter_mut() {
             if let Item::Task(t) = item {
                 self.check_task(t)?;
             }
@@ -61,13 +64,13 @@ impl Checker {
         Ok(())
     }
 
-    fn check_task(&mut self, task: &TaskDef) -> Result<()> {
+    fn check_task(&mut self, task: &mut TaskDef) -> Result<()> {
         self.current_ret = Some(task.ret.clone());
         self.push_scope();
         for param in &task.params {
             self.define(param.name.clone(), param.ty.clone(), false);
         }
-        self.check_block(&task.body)?;
+        self.check_block(&mut task.body)?;
         self.pop_scope();
         self.current_ret = None;
         Ok(())
@@ -100,27 +103,25 @@ impl Checker {
             .ok_or_else(|| Error::at(span, format!("unknown variable '{}'", name)))
     }
 
-    fn check_block(&mut self, block: &Block) -> Result<()> {
+    fn check_block(&mut self, block: &mut Block) -> Result<()> {
         for stmt in block {
             self.check_stmt(stmt)?;
         }
         Ok(())
     }
 
-    fn check_stmt(&mut self, stmt: &Stmt) -> Result<()> {
-        match &stmt.kind {
+    fn check_stmt(&mut self, stmt: &mut Stmt) -> Result<()> {
+        let span = stmt.span;
+        match &mut stmt.kind {
             StmtKind::Expr(e) => { self.check_expr(e)?; Ok(()) }
-            StmtKind::Bind(name, ty_hint, expr) | StmtKind::Hold(name, ty_hint, expr) => {
-                let expr = expr.as_ref().unwrap();
-                let expr_ty = self.check_expr(expr)?;
-                let final_ty = if ty_hint == &Type::Unit {
-                    expr_ty
-                } else {
-                    self.expect_type(&expr_ty, ty_hint, expr.span)?;
-                    ty_hint.clone()
-                };
-                let mutable = matches!(stmt.kind, StmtKind::Hold(..));
-                self.define(name.clone(), final_ty, mutable);
+            StmtKind::Binding { name, mutable, ty, init } => {
+                let init_ty = self.check_expr(init)?;
+                match ty {
+                    Some(annotated) => self.expect_type(&init_ty, annotated, init.span)?,
+                    None => *ty = Some(init_ty.clone()),
+                }
+                let final_ty = ty.clone().unwrap();
+                self.define(name.clone(), final_ty, *mutable);
                 Ok(())
             }
             StmtKind::Assign(lhs, rhs) => {
@@ -155,14 +156,14 @@ impl Checker {
                 self.pop_scope();
                 Ok(())
             }
-            StmtKind::Match(expr, cases) => self.check_match(stmt.span, expr, cases),
+            StmtKind::Match(expr, cases) => self.check_match(span, expr, cases),
             StmtKind::Send(expr) => {
                 let ret = self.current_ret.clone().unwrap_or(Type::Unit);
                 if let Some(e) = expr {
                     let ety = self.check_expr(e)?;
                     self.expect_type(&ety, &ret, e.span)?;
                 } else if ret != Type::Unit {
-                    return err(stmt.span, "expected a value after send");
+                    return err(span, "expected a value after send");
                 }
                 Ok(())
             }
@@ -176,29 +177,32 @@ impl Checker {
         }
     }
 
-    fn check_lvalue(&mut self, expr: &Expr) -> Result<Type> {
-        match &expr.kind {
+    fn check_lvalue(&mut self, expr: &mut Expr) -> Result<Type> {
+        let span = expr.span;
+        let ty = match &mut expr.kind {
             ExprKind::Var(name) => {
-                let info = self.lookup_or_err(name, expr.span)?;
+                let info = self.lookup_or_err(name, span)?;
                 if !info.mutable {
-                    return err(expr.span, format!("cannot assign to immutable variable '{}'", name));
+                    return err(span, format!("cannot assign to immutable variable '{}'", name));
                 }
-                Ok(info.ty.clone())
+                info.ty.clone()
             }
             ExprKind::Field(base, field) => {
                 let base_ty = self.check_expr(base)?;
-                self.field_type(&base_ty, field, expr.span)
+                self.field_type(&base_ty, field, span)?
             }
             ExprKind::Deref(base) => {
                 let base_ty = self.check_expr(base)?;
                 base_ty.ptr_inner().cloned()
-                    .ok_or_else(|| Error::at(expr.span, "cannot deref non-pointer"))
+                    .ok_or_else(|| Error::at(span, "cannot deref non-pointer"))?
             }
-            _ => err(expr.span, "invalid assignment target"),
-        }
+            _ => return err(span, "invalid assignment target"),
+        };
+        expr.ty = Some(ty.clone());
+        Ok(ty)
     }
 
-    fn check_match(&mut self, span: Span, expr: &Expr, cases: &[Case]) -> Result<()> {
+    fn check_match(&mut self, span: Span, expr: &mut Expr, cases: &mut [Case]) -> Result<()> {
         let ety = self.check_expr(expr)?;
         let kind_name = match &ety {
             Type::Named(n) => n.clone(),
@@ -222,7 +226,7 @@ impl Checker {
             for (bind, field) in case.binds.iter().zip(variant.payload.iter()) {
                 self.define(bind.clone(), field.ty.clone(), false);
             }
-            self.check_block(&case.body)?;
+            self.check_block(&mut case.body)?;
             self.pop_scope();
         }
         for variant in &kind.variants {
@@ -233,9 +237,16 @@ impl Checker {
         Ok(())
     }
 
-    fn check_expr(&mut self, expr: &Expr) -> Result<Type> {
+    /// Checks an expression, records its type on the node, and returns it.
+    fn check_expr(&mut self, expr: &mut Expr) -> Result<Type> {
+        let ty = self.infer_expr(expr)?;
+        expr.ty = Some(ty.clone());
+        Ok(ty)
+    }
+
+    fn infer_expr(&mut self, expr: &mut Expr) -> Result<Type> {
         let span = expr.span;
-        match &expr.kind {
+        match &mut expr.kind {
             ExprKind::IntLit(_) => Ok(Type::Int),
             ExprKind::FloatLit(_) => Ok(Type::Float),
             ExprKind::BoolLit(_) => Ok(Type::Bool),
@@ -255,7 +266,7 @@ impl Checker {
                     if args.len() != 1 {
                         return err(span, "show expects 1 argument");
                     }
-                    let ty = self.check_expr(&args[0])?;
+                    let ty = self.check_expr(&mut args[0])?;
                     if !matches!(ty, Type::Int | Type::Float | Type::Bool | Type::Text) {
                         return err(args[0].span, "show expects int, float, bool, or text");
                     }
@@ -273,19 +284,19 @@ impl Checker {
                     if args.len() != variant.payload.len() {
                         return err(span, format!("variant '{}' expects {} args, got {}", name, variant.payload.len(), args.len()));
                     }
-                    for (arg, field) in args.iter().zip(variant.payload.iter()) {
+                    for (arg, field) in args.iter_mut().zip(variant.payload.iter()) {
                         let aty = self.check_expr(arg)?;
                         self.expect_type(&aty, &field.ty, arg.span)?;
                     }
                     return Ok(Type::Named(kind_name));
                 }
-                let (params, ret) = self.tasks.get(name)
+                let (params, ret) = self.tasks.get(name.as_str())
                     .ok_or_else(|| Error::at(span, format!("unknown task '{}'", name)))?
                     .clone();
                 if args.len() != params.len() {
                     return err(span, format!("task '{}' expects {} args, got {}", name, params.len(), args.len()));
                 }
-                for (arg, param) in args.iter().zip(params.iter()) {
+                for (arg, param) in args.iter_mut().zip(params.iter()) {
                     let aty = self.check_expr(arg)?;
                     self.expect_type(&aty, param, arg.span)?;
                 }
@@ -304,13 +315,13 @@ impl Checker {
                     .ok_or_else(|| Error::at(span, "cannot dereference non-pointer"))
             }
             ExprKind::StructInit(name, fields) => {
-                let shape = self.shapes.get(name)
+                let shape = self.shapes.get(name.as_str())
                     .ok_or_else(|| Error::at(span, format!("unknown shape '{}'", name)))?
                     .clone();
                 if fields.len() != shape.fields.len() {
                     return err(span, format!("shape '{}' expects {} fields, got {}", name, shape.fields.len(), fields.len()));
                 }
-                for ((fname, fexpr), sfield) in fields.iter().zip(shape.fields.iter()) {
+                for ((fname, fexpr), sfield) in fields.iter_mut().zip(shape.fields.iter()) {
                     if *fname != sfield.name {
                         return err(fexpr.span, format!("expected field '{}', got '{}'", sfield.name, fname));
                     }
@@ -329,7 +340,7 @@ impl Checker {
         }
     }
 
-    fn check_unary(&mut self, op: UnaryOp, e: &Expr, span: Span) -> Result<Type> {
+    fn check_unary(&mut self, op: UnaryOp, e: &mut Expr, span: Span) -> Result<Type> {
         let ty = self.check_expr(e)?;
         match op {
             UnaryOp::Neg => {
@@ -345,7 +356,7 @@ impl Checker {
         }
     }
 
-    fn check_binary(&mut self, op: BinaryOp, l: &Expr, r: &Expr, span: Span) -> Result<Type> {
+    fn check_binary(&mut self, op: BinaryOp, l: &mut Expr, r: &mut Expr, span: Span) -> Result<Type> {
         let lt = self.check_expr(l)?;
         let rt = self.check_expr(r)?;
         match op {
@@ -353,6 +364,7 @@ impl Checker {
                 if !lt.is_numeric() || !rt.is_numeric() {
                     return err(span, "arithmetic requires numeric operands");
                 }
+                // Mixing int and float promotes the result to float.
                 if lt == Type::Float || rt == Type::Float {
                     Ok(Type::Float)
                 } else {
@@ -399,7 +411,7 @@ impl Checker {
 
     fn expect_type(&self, actual: &Type, expected: &Type, span: Span) -> Result<()> {
         if actual != expected {
-            err(span, format!("expected type {:?}, got {:?}", expected, actual))
+            err(span, format!("expected type {}, got {}", expected, actual))
         } else {
             Ok(())
         }

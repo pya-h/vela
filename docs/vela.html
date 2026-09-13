@@ -178,6 +178,17 @@
 <span class="keyword">hold</span> count = 0
 count = count + 1</pre>
 
+      <h3>Numbers</h3>
+      <p>
+        Arithmetic (<code>+ - * / %</code>) works on <code>int</code> and <code>float</code>. If either operand is a
+        <code>float</code>, the result is a <code>float</code>; two <code>int</code>s give an <code>int</code>, with
+        division truncating toward zero. <code>%</code> on floats keeps the sign of the dividend.
+        Comparisons (<code>&lt; &lt;= &gt; &gt;=</code>) require both sides to have the same type.
+      </p>
+      <pre>show(7 / 2)       <span class="comment"># 3</span>
+show(7 / 2.0)     <span class="comment"># 3.5</span>
+show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
+
       <h3>Shapes</h3>
       <p>Shapes are Vela's only composite data type — like structs, but the only one.</p>
       <pre><span class="keyword">shape</span> Point
