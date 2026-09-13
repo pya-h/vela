@@ -1,0 +1,5 @@
+# error: 3:13: names must use ASCII letters, digits, and '_', found 'é'
+task main()
+    bind café = 1
+    show(1)
+fi

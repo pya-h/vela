@@ -134,7 +134,9 @@ fn compile_c(c_code: &str, input_path: &str, output: &str) -> std::result::Resul
     fs::write(&h_path, RUNTIME_H)
         .map_err(|e| format!("error: cannot write runtime header: {}", e))?;
 
-    let status = Command::new("cc")
+    // Like make and cargo, honor $CC to pick the C compiler.
+    let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
+    let result = Command::new(&cc)
         .arg("-std=c11")
         .arg("-O2")
         .arg("-I")
@@ -142,13 +144,17 @@ fn compile_c(c_code: &str, input_path: &str, output: &str) -> std::result::Resul
         .arg(&c_path)
         .arg("-o")
         .arg(output)
-        .arg("-lm") // math library, for vela_fmod
-        .status()
-        .map_err(|e| format!("error: failed to invoke C compiler 'cc': {}", e))?;
+        .arg("-lm") // math library, for vela__rt__fmod
+        .output()
+        .map_err(|e| format!("error: failed to invoke C compiler '{}': {}", cc, e))?;
 
-    if !status.success() {
+    // The C compiler's messages are about generated code, so they are shown
+    // only when compilation fails; warnings on success would just be noise.
+    if !result.status.success() {
         return Err(format!(
-            "error: C compilation failed (generated C kept in {})",
+            "{}{}error: C compilation failed (generated C kept in {})",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr),
             build_dir.display()
         ));
     }

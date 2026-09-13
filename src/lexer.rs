@@ -203,8 +203,16 @@ impl Lexer {
             return self.next_token();
         }
 
-        if c.is_alphabetic() || c == '_' {
+        if c.is_ascii_alphabetic() {
             return self.identifier();
+        }
+
+        if c == '_' {
+            return Err(Error::at(loc, "names must start with a letter"));
+        }
+
+        if !c.is_ascii() && c.is_alphanumeric() {
+            return Err(non_ascii_name(loc, c));
         }
 
         if c.is_ascii_digit() {
@@ -286,8 +294,15 @@ impl Lexer {
     fn identifier(&mut self) -> Result<(Token, Span)> {
         let loc = self.location();
         let mut s = String::new();
-        while self.peek().is_alphanumeric() || self.peek() == '_' {
+        while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
             s.push(self.advance());
+        }
+        if !self.peek().is_ascii() && self.peek().is_alphanumeric() {
+            return Err(non_ascii_name(self.location(), self.peek()));
+        }
+        // Keeps Vela names apart from the compiler's C names (see codegen.rs).
+        if s.contains("__") {
+            return Err(Error::at(loc, format!("'{}': names cannot contain '__'", s)));
         }
         let tok = match s.as_str() {
             "task" => Token::Task,
@@ -368,4 +383,9 @@ impl Lexer {
         self.advance(); // closing "
         Ok((Token::Text(s), loc))
     }
+}
+
+/// Names are ASCII so they map directly to portable C identifiers.
+fn non_ascii_name(span: Span, c: char) -> Error {
+    Error::at(span, format!("names must use ASCII letters, digits, and '_', found '{}'", c))
 }

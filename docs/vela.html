@@ -175,6 +175,10 @@
 <span class="keyword">task</span> greet(name: text)
     show(name)
 <span class="keyword">fi</span></pre>
+      <p>
+        A task that returns a value must <code>send</code> one. If it finishes without sending, the program stops
+        with <code>vela: task 'add' finished without sending a value</code>.
+      </p>
 
       <h3>Bindings</h3>
       <p><code>bind</code> creates an immutable binding. <code>hold</code> creates a mutable variable.</p>
@@ -270,6 +274,12 @@ p.x = 5                    <span class="comment"># error: p is a bind</span></pr
 
       <h3>Names</h3>
       <p>
+        A name starts with an ASCII letter and continues with ASCII letters, digits, and <code>_</code>, but cannot
+        contain <code>__</code> (two underscores), which the compiler keeps for its own C names. Words that mean
+        something in C, such as <code>int</code>, <code>default</code>, or <code>stdout</code>, are ordinary names
+        in Vela.
+      </p>
+      <p>
         Tasks, shapes, kinds, and variants share one namespace: no two of them can have the same name, even across
         different kinds, and none can be named like a builtin (<code>int</code>, <code>float</code>,
         <code>bool</code>, <code>text</code>, <code>unit</code>, <code>show</code>). Every type you write must be a
@@ -328,21 +338,28 @@ p^ = 43                    <span class="comment"># writing through a pointer is 
 
     <section>
       <h2>Building the Compiler</h2>
-      <p>The Vela compiler is written in Rust and targets C.</p>
+      <p>
+        The Vela compiler is written in Rust and generates standard, portable C11, which it compiles with the C
+        compiler named by the <code>CC</code> environment variable (<code>cc</code> by default).
+      </p>
       <pre>cargo build
-./target/debug/vela program.vela -o program</pre>
+./target/debug/vela program.vela -o program
+CC=clang ./target/debug/vela program.vela -o program</pre>
       <p>To see the generated C code:</p>
       <pre>./target/debug/vela program.vela --emit-c</pre>
       <p>Errors point at the exact place in your source:</p>
       <pre>program.vela:3:10: error: unknown variable 'missing'
  3 |     show(missing)
    |          ^</pre>
-      <p>To run the test suite (requires a C compiler available as <code>cc</code>):</p>
-      <pre>cargo test</pre>
+      <p>To run the test suite (requires a C compiler, <code>$CC</code> or <code>cc</code>):</p>
+      <pre>cargo test
+CC=clang cargo test</pre>
       <p>
         Tests are plain Vela programs: <code>tests/run/</code> holds programs with their expected output,
         <code>tests/fail/</code> holds programs the compiler must reject, and every file in
-        <code>examples/</code> is checked against <code>tests/examples/</code>.
+        <code>examples/</code> is checked against <code>tests/examples/</code>. The C generated for run tests and
+        examples must also compile as strict ISO C11 with no warnings (<code>-std=c11 -pedantic-errors -Wall
+        -Wextra -Werror</code>).
       </p>
       <p>To lint the compiler:</p>
       <pre>cargo clippy --all-targets</pre>

@@ -1,0 +1,15 @@
+# Text reaches C exactly as written: no trigraphs, raw control bytes, or
+# escapes that swallow the characters after them.
+task main()
+    show("what??!")
+    show("a??/b")
+    show("??=??(??)??<??>??'??-")
+    show("tab\tseparated")
+    show("quote \" and backslash \\")
+    show("ab")
+    show("é1")
+    show("héllo, wörld ✓7")
+    show("100% sure")
+    # Text is a C string, so it ends at a NUL (a known limitation).
+    show("ab\0cd")
+fi

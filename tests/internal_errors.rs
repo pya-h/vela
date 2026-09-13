@@ -30,7 +30,7 @@ fn checked_program_generates_c() {
     let mut items = parse("task main()\n    show(1)\nfi\n");
     Checker::new().check_file(&mut items).unwrap();
     let c = Generator::new().generate(&items).unwrap();
-    assert!(c.contains("vela_show_int(1);"), "{}", c);
+    assert!(c.contains("vela__rt__show_int(1);"), "{}", c);
 }
 
 #[test]

@@ -1,0 +1,62 @@
+# Names that mean something in C (keywords, macros, the runtime's helpers) are
+# ordinary names in Vela.
+
+shape Record
+    default: int
+    int: float
+    stdout: text
+    size_t: bool
+fi
+
+kind Jump
+    goto(target: int)
+    register
+    EOF
+fi
+
+task show_int(static: int) -> int
+    send static + 1
+fi
+
+task fmod(a: float) -> float
+    send a
+fi
+
+task describe(j: Jump)
+    match j
+    case goto while
+        show(while)
+    case register
+        show("register")
+    case EOF
+        show("EOF")
+    fi
+fi
+
+task main()
+    bind char = 1
+    hold unsigned = char + 1
+    unsigned = unsigned * 10
+    show(unsigned)
+    bind r = Record { default: 3, int: 1.5, stdout: "out", size_t: true }
+    show(r.default)
+    show(r.int)
+    show(r.stdout)
+    show(r.size_t)
+    show(show_int(41))
+    show(fmod(2.5))
+    describe(goto(7))
+    describe(register)
+    describe(EOF)
+    each NULL in 0..2
+        show(NULL)
+    fi
+    bind vela_x = 5
+    show(vela_x)
+    bind boxed = new Record(r)
+    show(boxed^.stdout)
+    free(boxed)
+    bind message = new text("boxed text")
+    show(message^)
+    free(message)
+fi

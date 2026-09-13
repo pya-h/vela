@@ -136,33 +136,33 @@ impl Generator {
     fn fresh_temp(&mut self, prefix: &str) -> String {
         let n = self.temp_counter;
         self.temp_counter += 1;
-        format!("{}__{}", prefix, n)
+        format!("vela__{}__{}", prefix, n)
     }
 
     fn gen_shape(&mut self, s: &ShapeDef) {
         self.w.open(&format!("struct {}", mangle(&s.name)));
         if s.fields.is_empty() {
             // ISO C has no empty structs.
-            self.w.line("char vela__empty;");
+            self.w.line("char vela__empty__;");
         }
         for field in &s.fields {
-            self.w.line(&format!("{} {};", c_type(&field.ty), field.name));
+            self.w.line(&format!("{} {};", c_type(&field.ty), c_ident(&field.name)));
         }
         self.w.close_with(";");
     }
 
     fn gen_tag_enum(&mut self, k: &KindDef) {
-        let tag_name = format!("{}_Tag", mangle(&k.name));
-        self.w.open(&format!("typedef enum {}", tag_name));
+        let tag_type = tag_type(&k.name);
+        self.w.open(&format!("typedef enum {}", tag_type));
         for v in &k.variants {
-            self.w.line(&format!("{}_{},", tag_name, v.tag));
+            self.w.line(&format!("{},", tag_value(&k.name, &v.tag)));
         }
-        self.w.close_with(&format!(" {};", tag_name));
+        self.w.close_with(&format!(" {};", tag_type));
     }
 
     fn gen_kind(&mut self, k: &KindDef) {
         self.w.open(&format!("struct {}", mangle(&k.name)));
-        self.w.line(&format!("{}_Tag tag;", mangle(&k.name)));
+        self.w.line(&format!("{} tag;", tag_type(&k.name)));
         // Variants without a payload have no union member, and a kind with no
         // payloads at all has no union (ISO C has no empty unions).
         if k.variants.iter().any(|v| !v.payload.is_empty()) {
@@ -171,9 +171,9 @@ impl Generator {
                 if !v.payload.is_empty() {
                     self.w.open("struct");
                     for field in &v.payload {
-                        self.w.line(&format!("{} {};", c_type(&field.ty), field.name));
+                        self.w.line(&format!("{} {};", c_type(&field.ty), c_ident(&field.name)));
                     }
-                    self.w.close_with(&format!(" {};", v.tag));
+                    self.w.close_with(&format!(" {};", c_ident(&v.tag)));
                 }
             }
             self.w.close_with(" data;");
@@ -186,6 +186,8 @@ impl Generator {
         self.gen_block(&t.body)?;
         if t.ret == Type::Unit {
             self.w.line("return;");
+        } else {
+            self.w.line(&format!("vela__rt__missing_send(\"{}\");", t.name));
         }
         self.w.close();
         Ok(())
@@ -209,7 +211,7 @@ impl Generator {
                     .as_ref()
                     .ok_or_else(|| Error::internal_at(stmt.span, format!("binding '{}' has no type", name)))?;
                 let expr = self.gen_expr(init)?;
-                self.w.line(&format!("{} {} = {};", c_type(ty), name, expr));
+                self.w.line(&format!("{} {} = {};", c_type(ty), c_ident(name), expr));
             }
             StmtKind::Assign(lhs, rhs) => {
                 // The checker guarantees `lhs` is a variable, field, or deref,
@@ -219,7 +221,7 @@ impl Generator {
                 self.w.line(&format!("{} = {};", l, r));
             }
             StmtKind::When(cond, then_b, else_b) => {
-                let c = self.gen_expr(cond)?;
+                let c = self.gen_condition(cond)?;
                 self.w.open(&format!("if ({})", c));
                 self.gen_block(then_b)?;
                 if let Some(else_b) = else_b {
@@ -229,7 +231,7 @@ impl Generator {
                 self.w.close();
             }
             StmtKind::Loop(cond, body) => {
-                let c = self.gen_expr(cond)?;
+                let c = self.gen_condition(cond)?;
                 self.w.open(&format!("while ({})", c));
                 self.gen_block(body)?;
                 self.w.close();
@@ -240,6 +242,7 @@ impl Generator {
                 // iteration. (The checker forbids shadowing, so `b` cannot
                 // refer to a different variable called `name`.)
                 let end = self.fresh_temp("end");
+                let name = c_ident(name);
                 self.w.open(&format!(
                     "for (int64_t {} = {}, {} = {}; {} < {}; {}++)",
                     name, a, end, b, name, end, name
@@ -255,7 +258,7 @@ impl Generator {
             }
             StmtKind::Free(e) => {
                 let expr = self.gen_expr(e)?;
-                self.w.line(&format!("vela_free((void*){});", expr));
+                self.w.line(&format!("vela__rt__free((void*){});", expr));
             }
         }
         Ok(())
@@ -275,7 +278,6 @@ impl Generator {
             .get(&kind_name)
             .ok_or_else(|| Error::internal_at(expr.span, format!("match on unknown kind '{}'", kind_name)))?
             .clone();
-        let tag_name = format!("{}_Tag", mangle(&kind_name));
 
         let value = self.gen_expr(expr)?;
         let needs_temp = !matches!(expr.kind, ExprKind::Var(_));
@@ -303,12 +305,15 @@ impl Generator {
                     format!("case '{}' has {} bindings (expected {})", case.tag, case.binds.len(), variant.payload.len()),
                 ));
             }
-            self.w.open(&format!("case {}_{}:", tag_name, case.tag));
+            self.w.open(&format!("case {}:", tag_value(&kind_name, &case.tag)));
             for ((bind, _), field) in case.binds.iter().zip(&variant.payload) {
+                let bind = c_ident(bind);
                 self.w.line(&format!(
                     "{} {} = {}.data.{}.{};",
-                    c_type(&field.ty), bind, subject, case.tag, field.name
+                    c_type(&field.ty), bind, subject, c_ident(&case.tag), c_ident(&field.name)
                 ));
+                // A case must bind every field, used or not; don't let C warn.
+                self.w.line(&format!("(void){};", bind));
             }
             self.gen_block(&case.body)?;
             self.w.line("break;");
@@ -322,6 +327,15 @@ impl Generator {
         Ok(())
     }
 
+    /// An `if`/`while` condition. The statement supplies the parentheses, so a
+    /// binary operation drops its own (C compilers warn about `if ((a == b))`).
+    fn gen_condition(&mut self, e: &Expr) -> Result<String> {
+        match &e.kind {
+            ExprKind::Binary(op, l, r) => self.gen_binary(e, *op, l, r),
+            _ => self.gen_expr(e),
+        }
+    }
+
     fn gen_expr(&mut self, e: &Expr) -> Result<String> {
         let span = e.span;
         match &e.kind {
@@ -330,10 +344,10 @@ impl Generator {
             ExprKind::BoolLit(b) => Ok(if *b { "true".to_string() } else { "false".to_string() }),
             ExprKind::TextLit(s) => Ok(format!("\"{}\"", escape_c_string(s))),
             ExprKind::NoneLit => Ok("NULL".to_string()),
-            ExprKind::Var(name) => Ok(name.clone()),
+            ExprKind::Var(name) => Ok(c_ident(name)),
             ExprKind::Field(base, field) => {
                 let b = self.gen_expr(base)?;
-                Ok(format!("({}).{}", b, field))
+                Ok(format!("({}).{}", b, c_ident(field)))
             }
             ExprKind::Index(_base, _index) => Err(Error::internal_at(span, "indexing reached code generation")),
             ExprKind::Call(name, args) => {
@@ -342,10 +356,10 @@ impl Generator {
                         return Err(Error::internal_at(span, format!("show called with {} arguments", args.len())));
                     };
                     let helper = match arg.ty()? {
-                        Type::Int => "vela_show_int",
-                        Type::Float => "vela_show_float",
-                        Type::Bool => "vela_show_bool",
-                        Type::Text => "vela_show_text",
+                        Type::Int => "vela__rt__show_int",
+                        Type::Float => "vela__rt__show_float",
+                        Type::Bool => "vela__rt__show_bool",
+                        Type::Text => "vela__rt__show_text",
                         other => return Err(Error::internal_at(span, format!("show called with type {}", other))),
                     };
                     let value = self.gen_expr(arg)?;
@@ -363,28 +377,8 @@ impl Generator {
                 Ok(format!("({}{})", op_s, expr))
             }
             ExprKind::Binary(op, l, r) => {
-                let left = self.gen_expr(l)?;
-                let right = self.gen_expr(r)?;
-                if *op == BinaryOp::Mod && *e.ty()? == Type::Float {
-                    // C's `%` is integer-only.
-                    return Ok(format!("vela_fmod({}, {})", left, right));
-                }
-                let op_s = match op {
-                    BinaryOp::Add => "+",
-                    BinaryOp::Sub => "-",
-                    BinaryOp::Mul => "*",
-                    BinaryOp::Div => "/",
-                    BinaryOp::Mod => "%",
-                    BinaryOp::Eq => "==",
-                    BinaryOp::Ne => "!=",
-                    BinaryOp::Lt => "<",
-                    BinaryOp::Gt => ">",
-                    BinaryOp::Le => "<=",
-                    BinaryOp::Ge => ">=",
-                    BinaryOp::And => "&&",
-                    BinaryOp::Or => "||",
-                };
-                Ok(format!("({} {} {})", left, op_s, right))
+                let binary = self.gen_binary(e, *op, l, r)?;
+                Ok(format!("({})", binary))
             }
             ExprKind::Construct { kind, tag, args } => {
                 let variant = self
@@ -399,24 +393,25 @@ impl Generator {
                         format!("variant '{}' called with {} arguments (expected {})", tag, args.len(), variant.payload.len()),
                     ));
                 }
-                let tag_value = format!("{}_Tag_{}", mangle(kind), tag);
+                let tag_value = tag_value(kind, tag);
                 if variant.payload.is_empty() {
                     return Ok(format!("(({}){{ .tag = {} }})", mangle(kind), tag_value));
                 }
                 let mut fields = Vec::new();
                 for (field, arg) in variant.payload.iter().zip(args) {
-                    fields.push(format!(".{} = {}", field.name, self.gen_expr(arg)?));
+                    fields.push(format!(".{} = {}", c_ident(&field.name), self.gen_expr(arg)?));
                 }
                 Ok(format!(
                     "(({}){{ .tag = {}, .data = {{ .{} = {{ {} }} }} }})",
-                    mangle(kind), tag_value, tag, fields.join(", ")
+                    mangle(kind), tag_value, c_ident(tag), fields.join(", ")
                 ))
             }
             ExprKind::New { ty, value, .. } => {
+                // Copies the value out of a one-element array compound literal,
+                // which works for every type in standard C.
                 let val = self.gen_expr(value)?;
-                let tmp = self.fresh_temp("p");
                 let ctype = c_type(ty);
-                Ok(format!("({{ {}* {} = ({}*)vela_new(sizeof({})); *{} = {}; {}; }})", ctype, tmp, ctype, ctype, tmp, val, tmp))
+                Ok(format!("(({0}*)vela__rt__box(({0}[1]){{ {1} }}, sizeof({0})))", ctype, val))
             }
             ExprKind::Deref(inner) => {
                 let expr = self.gen_expr(inner)?;
@@ -425,16 +420,42 @@ impl Generator {
             ExprKind::StructInit(name, fields) => {
                 if fields.is_empty() {
                     // Initializes the placeholder member of an empty shape.
-                    return Ok(format!("((struct {}){{ 0 }})", mangle(name)));
+                    return Ok(format!("(({}){{ 0 }})", mangle(name)));
                 }
                 let mut values = Vec::new();
                 for field in fields {
-                    values.push(format!(".{} = {}", field.name, self.gen_expr(&field.value)?));
+                    values.push(format!(".{} = {}", c_ident(&field.name), self.gen_expr(&field.value)?));
                 }
-                Ok(format!("((struct {}){{ {} }})", mangle(name), values.join(", ")))
+                Ok(format!("(({}){{ {} }})", mangle(name), values.join(", ")))
             }
             ExprKind::Range(_, _) => Err(Error::at(span, "range cannot be used as a value")),
         }
+    }
+
+    /// A binary operation without surrounding parentheses.
+    fn gen_binary(&mut self, e: &Expr, op: BinaryOp, l: &Expr, r: &Expr) -> Result<String> {
+        let left = self.gen_expr(l)?;
+        let right = self.gen_expr(r)?;
+        if op == BinaryOp::Mod && *e.ty()? == Type::Float {
+            // C's `%` is integer-only.
+            return Ok(format!("vela__rt__fmod({}, {})", left, right));
+        }
+        let op_s = match op {
+            BinaryOp::Add => "+",
+            BinaryOp::Sub => "-",
+            BinaryOp::Mul => "*",
+            BinaryOp::Div => "/",
+            BinaryOp::Mod => "%",
+            BinaryOp::Eq => "==",
+            BinaryOp::Ne => "!=",
+            BinaryOp::Lt => "<",
+            BinaryOp::Gt => ">",
+            BinaryOp::Le => "<=",
+            BinaryOp::Ge => ">=",
+            BinaryOp::And => "&&",
+            BinaryOp::Or => "||",
+        };
+        Ok(format!("{} {} {}", left, op_s, right))
     }
 
     fn gen_range(&mut self, e: &Expr) -> Result<(String, String)> {
@@ -513,15 +534,67 @@ fn signature(t: &TaskDef) -> String {
     let params: Vec<String> = t
         .params
         .iter()
-        .map(|p| format!("{} {}", c_type(&p.ty), p.name))
+        .map(|p| format!("{} {}", c_type(&p.ty), c_ident(&p.name)))
         .collect();
-    format!("{} {}({})", c_type(&t.ret), mangle(&t.name), params.join(", "))
+    // `()` in C declares a function with unspecified parameters; `(void)` means none.
+    let params = if params.is_empty() { "void".to_string() } else { params.join(", ") };
+    format!("{} {}({})", c_type(&t.ret), mangle(&t.name), params)
 }
 
+// C names. Vela names start with an ASCII letter and never contain `__`, so
+// the generated C names below have distinct shapes and can't collide with each
+// other, with the runtime (`vela__rt__*`), or with C:
+//
+//   vela_Point, vela_area         tasks, shapes, kinds          (`mangle`)
+//   vela_Shape__Tag               a kind's tag enum type        (`tag_type`)
+//   vela_Shape__tag_Circle        a variant's tag value         (`tag_value`)
+//   vela__int                     a local or field named like C (`c_ident`)
+//   vela__end__0, vela__empty__   compiler temporaries and members
+
+/// The C name of a task, shape, or kind.
 fn mangle(name: &str) -> String {
-    // Prefix to avoid collisions with C keywords/runtime
     format!("vela_{}", name)
 }
+
+fn tag_type(kind: &str) -> String {
+    format!("vela_{}__Tag", kind)
+}
+
+fn tag_value(kind: &str, tag: &str) -> String {
+    format!("vela_{}__tag_{}", kind, tag)
+}
+
+/// The C name of a local, parameter, field, or variant union member: the Vela
+/// name itself, unless C could read it as something else, such as a keyword
+/// or a macro from a standard header.
+fn c_ident(name: &str) -> String {
+    if collides_with_c(name) {
+        format!("vela__{}", name)
+    } else {
+        name.to_string()
+    }
+}
+
+fn collides_with_c(name: &str) -> bool {
+    C_RESERVED.contains(&name)
+        // Our own prefix, and POSIX's reserved `_t` type suffix.
+        || name.starts_with("vela_")
+        || name.ends_with("_t")
+        // Object-like macros such as EOF, NULL, and INT64_MAX.
+        || name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+}
+
+/// C11 and C23 keywords, and lowercase object-like macros that the runtime's
+/// headers (or common compilers) may define.
+const C_RESERVED: &[&str] = &[
+    "alignas", "alignof", "auto", "bool", "break", "case", "char", "const", "constexpr",
+    "continue", "default", "do", "double", "else", "enum", "extern", "false", "float", "for",
+    "goto", "if", "inline", "int", "long", "nullptr", "register", "restrict", "return", "short",
+    "signed", "sizeof", "static", "static_assert", "struct", "switch", "thread_local", "true",
+    "typedef", "typeof", "typeof_unqual", "union", "unsigned", "void", "volatile", "while",
+    "asm", "complex", "errno", "imaginary", "linux", "math_errhandling", "noreturn", "stderr",
+    "stdin", "stdout", "unix", "L_tmpnam",
+];
 
 fn c_type(ty: &Type) -> String {
     match ty {
@@ -545,16 +618,22 @@ fn c_float_literal(n: f64) -> String {
     format!("{:?}", n)
 }
 
+/// Escapes text for a C string literal. Everything outside printable ASCII
+/// (control characters, NUL, and each byte of a non-ASCII character) becomes a
+/// three-digit octal escape, which, unlike `\x`, can't absorb the characters
+/// after it; `?` is escaped so C never sees a trigraph such as `??!`.
 fn escape_c_string(s: &str) -> String {
     let mut out = String::new();
-    for c in s.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '"' => out.push_str("\\\""),
-            '\n' => out.push_str("\\n"),
-            '\t' => out.push_str("\\t"),
-            '\r' => out.push_str("\\r"),
-            c => out.push(c),
+    for byte in s.bytes() {
+        match byte {
+            b'\\' => out.push_str("\\\\"),
+            b'"' => out.push_str("\\\""),
+            b'?' => out.push_str("\\?"),
+            b'\n' => out.push_str("\\n"),
+            b'\t' => out.push_str("\\t"),
+            b'\r' => out.push_str("\\r"),
+            b' '..=b'~' => out.push(char::from(byte)),
+            _ => out.push_str(&format!("\\{:03o}", byte)),
         }
     }
     out
