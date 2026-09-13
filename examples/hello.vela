@@ -1,0 +1,5 @@
+# Hello world in Vela
+
+task main() ->
+    show("Hello, Vela!")
+end

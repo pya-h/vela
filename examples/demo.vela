@@ -1,0 +1,42 @@
+# Vela demo: functions, shapes, pointers, control flow
+
+shape Point
+    x: int
+    y: int
+end
+
+task add(a: int, b: int) -> int
+    send a + b
+end
+
+task dist(p: Point) -> float
+    send 0.0
+end
+
+task main()
+    bind sum = add(3, 4)
+    show(sum)
+
+    bind p = Point { x: 10, y: 20 }
+    show(p.x)
+
+    hold i = 0
+    loop i < 5
+        show(i)
+        i = i + 1
+    end
+
+    each n in 0..3
+        show(n)
+    end
+
+    when sum > 5
+        show("big")
+    else
+        show("small")
+    end
+
+    bind ptr: ^int = new int(42)
+    show(ptr^)
+    free(ptr)
+end

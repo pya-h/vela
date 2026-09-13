@@ -1,0 +1,25 @@
+# Kinds and pattern matching
+
+kind Shape
+    Circle(radius: float)
+    Rectangle(width: float, height: float)
+end
+
+task describe(s: Shape)
+    match s
+    case Circle r
+        show("circle")
+        show(r)
+    case Rectangle w h
+        show("rectangle")
+        show(w)
+        show(h)
+    end
+end
+
+task main()
+    bind c = Circle(5.0)
+    bind r = Rectangle(3.0, 4.0)
+    describe(c)
+    describe(r)
+end

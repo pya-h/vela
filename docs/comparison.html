@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela vs. Other Languages</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --fg: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --code-bg: #1e293b;
+      --border: #334155;
+      --row-alt: #1e293b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+    }
+    header {
+      padding: 4rem 1rem 3rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(167,139,250,0.1) 0%, transparent 100%);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+    h1 span {
+      color: var(--accent-2);
+    }
+    .tagline {
+      margin-top: 0.75rem;
+      font-size: 1.2rem;
+      color: var(--muted);
+    }
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 3rem;
+      font-size: 1.75rem;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    h3 {
+      margin-top: 2rem;
+      color: var(--accent-2);
+    }
+    p { margin: 1rem 0; }
+    code {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      background: var(--code-bg);
+      padding: 0.15rem 0.4rem;
+      border-radius: 0.25rem;
+      color: var(--accent);
+      font-size: 0.9rem;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1.5rem 0;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      min-width: 900px;
+    }
+    th, td {
+      padding: 0.85rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      background: rgba(56,189,248,0.08);
+      color: var(--accent);
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+    }
+    tr:nth-child(even) td {
+      background: var(--row-alt);
+    }
+    tr:hover td {
+      background: rgba(56,189,248,0.06);
+    }
+    .lang {
+      font-weight: 700;
+      color: var(--accent-2);
+      white-space: nowrap;
+    }
+    .vela {
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .note {
+      background: rgba(56,189,248,0.08);
+      border-left: 4px solid var(--accent);
+      padding: 1rem 1.25rem;
+      border-radius: 0 0.5rem 0.5rem 0;
+      margin: 1.5rem 0;
+    }
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .legend-item {
+      background: var(--code-bg);
+      padding: 1rem;
+      border-radius: 0.5rem;
+      border: 1px solid var(--border);
+    }
+    .legend-item strong {
+      color: var(--accent);
+    }
+    ul { padding-left: 1.5rem; }
+    li { margin: 0.5rem 0; }
+    footer {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-left: 0.5rem;
+    }
+    .badge-fast { background: rgba(34,197,94,0.15); color: #86efac; }
+    .badge-mid { background: rgba(250,204,21,0.15); color: #facc15; }
+    .badge-slow { background: rgba(248,113,113,0.15); color: #fca5a5; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Vela <span>vs.</span> The Landscape</h1>
+    <p class="tagline">A practical comparison across the programming-language spectrum.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>At a Glance</h2>
+      <p>
+        Vela sits in the systems-language zone: it is compiled, statically typed, and manually managed.
+        This page compares it with representatives from every level of abstraction, from bare-metal C to
+        dynamic high-level languages like Python and JavaScript.
+      </p>
+      <div class="legend">
+        <div class="legend-item">
+          <strong>Performance</strong>
+          <p>Raw execution speed and predictable machine-code output.</p>
+        </div>
+        <div class="legend-item">
+          <strong>Memory</strong>
+          <p>Manual, GC, reference counting, or ownership-based memory management.</p>
+        </div>
+        <div class="legend-item">
+          <strong>Build</strong>
+          <p>Compile-time speed, dependency complexity, and distribution size.</p>
+        </div>
+        <div class="legend-item">
+          <strong>Safety</strong>
+          <p>Type/memory safety guarantees and runtime crash prevention.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Comparison Table</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Language</th>
+              <th>Level</th>
+              <th>Performance</th>
+              <th>Memory Model</th>
+              <th>Build Speed</th>
+              <th>Safety</th>
+              <th>Best For</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="lang">C</td>
+              <td>Low</td>
+              <td><span class="badge badge-fast">Excellent</span></td>
+              <td>Manual</td>
+              <td><span class="badge badge-fast">Very Fast</span></td>
+              <td>Unsafe by default</td>
+              <td>OS kernels, embedded, drivers</td>
+            </tr>
+            <tr>
+              <td class="lang">Rust</td>
+              <td>Low–Mid</td>
+              <td><span class="badge badge-fast">Excellent</span></td>
+              <td>Ownership + borrow checker</td>
+              <td><span class="badge badge-mid">Moderate</span></td>
+              <td><span class="badge badge-fast">Very Safe</span></td>
+              <td>Systems, WebAssembly, infrastructure</td>
+            </tr>
+            <tr>
+              <td class="lang">Zig</td>
+              <td>Low–Mid</td>
+              <td><span class="badge badge-fast">Excellent</span></td>
+              <td>Manual, explicit allocators</td>
+              <td><span class="badge badge-fast">Fast</span></td>
+              <td>Safer C, opt-in safety</td>
+              <td>Systems, cross-compilation, games</td>
+            </tr>
+            <tr>
+              <td class="lang vela">Vela</td>
+              <td>Low–Mid</td>
+              <td><span class="badge badge-fast">Excellent</span></td>
+              <td>Manual (new/free)</td>
+              <td><span class="badge badge-fast">Fast</span></td>
+              <td>Type-safe, no borrow checker</td>
+              <td>Learning, small systems tools</td>
+            </tr>
+            <tr>
+              <td class="lang">C++</td>
+              <td>Mid</td>
+              <td><span class="badge badge-fast">Excellent</span></td>
+              <td>Manual + RAII + smart pointers</td>
+              <td><span class="badge badge-slow">Slow</span></td>
+              <td>Unsafe by default, opt-in safety</td>
+              <td>Games, engines, high-performance apps</td>
+            </tr>
+            <tr>
+              <td class="lang">Go</td>
+              <td>Mid</td>
+              <td><span class="badge badge-mid">Good</span></td>
+              <td>Garbage collected</td>
+              <td><span class="badge badge-fast">Very Fast</span></td>
+              <td>Memory-safe, type-safe</td>
+              <td>Cloud services, networking, tooling</td>
+            </tr>
+            <tr>
+              <td class="lang">Swift</td>
+              <td>Mid</td>
+              <td><span class="badge badge-mid">Good</span></td>
+              <td>ARC + ownership</td>
+              <td><span class="badge badge-mid">Moderate</span></td>
+              <td><span class="badge badge-fast">Very Safe</span></td>
+              <td>Apple platforms, server-side</td>
+            </tr>
+            <tr>
+              <td class="lang">Java</td>
+              <td>Mid–High</td>
+              <td><span class="badge badge-mid">Good</span></td>
+              <td>Garbage collected (JVM)</td>
+              <td><span class="badge badge-mid">Moderate</span></td>
+              <td>Memory-safe, type-safe</td>
+              <td>Enterprise backends, Android</td>
+            </tr>
+            <tr>
+              <td class="lang">C#</td>
+              <td>Mid–High</td>
+              <td><span class="badge badge-mid">Good</span></td>
+              <td>Garbage collected (.NET)</td>
+              <td><span class="badge badge-mid">Moderate</span></td>
+              <td>Memory-safe, type-safe</td>
+              <td>Enterprise, games (Unity), desktop</td>
+            </tr>
+            <tr>
+              <td class="lang">Haskell</td>
+              <td>High</td>
+              <td><span class="badge badge-mid">Good</span></td>
+              <td>Garbage collected + lazy</td>
+              <td><span class="badge badge-slow">Slow</span></td>
+              <td><span class="badge badge-fast">Very Safe</span></td>
+              <td>Compilers, research, finance</td>
+            </tr>
+            <tr>
+              <td class="lang">OCaml</td>
+              <td>High</td>
+              <td><span class="badge badge-mid">Good</span></td>
+              <td>Garbage collected</td>
+              <td><span class="badge badge-fast">Fast</span></td>
+              <td><span class="badge badge-fast">Very Safe</span></td>
+              <td>Compilers, theorem provers, Jane Street</td>
+            </tr>
+            <tr>
+              <td class="lang">JavaScript</td>
+              <td>High</td>
+              <td><span class="badge badge-slow">Moderate</span></td>
+              <td>Garbage collected</td>
+              <td><span class="badge badge-fast">Instant</span></td>
+              <td>Dynamic, runtime errors common</td>
+              <td>Web frontends, Node.js services</td>
+            </tr>
+            <tr>
+              <td class="lang">Python</td>
+              <td>High</td>
+              <td><span class="badge badge-slow">Moderate</span></td>
+              <td>Garbage collected</td>
+              <td><span class="badge badge-fast">Instant</span></td>
+              <td>Dynamic, runtime errors common</td>
+              <td>Scripting, data science, ML, web</td>
+            </tr>
+            <tr>
+              <td class="lang">Ruby</td>
+              <td>High</td>
+              <td><span class="badge badge-slow">Moderate</span></td>
+              <td>Garbage collected</td>
+              <td><span class="badge badge-fast">Instant</span></td>
+              <td>Dynamic, runtime errors common</td>
+              <td>Web backends, scripting, DevOps</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Performance</h2>
+      <p>
+        Vela generates plain C, so its theoretical performance ceiling is essentially the same as C, C++, Zig, and Rust.
+        There is no runtime, no interpreter, and no garbage collector adding overhead.
+      </p>
+      <p>
+        Rust and C can still edge ahead in some micro-benchmarks because they offer finer control over
+        aliasing and layout, but for typical programs the difference is negligible. Go, Java, and C# are
+        fast but carry GC pauses and runtime weight. Python, Ruby, and JavaScript are orders of magnitude
+        slower for CPU-bound work because they are interpreted or JIT-compiled with dynamic types.
+      </p>
+    </section>
+
+    <section>
+      <h2>Memory</h2>
+      <p>
+        Vela uses <strong>manual memory management</strong> via owned pointers: <code>new int(42)</code>, dereference <code>p^</code>,
+        and <code>free(p)</code>. This is the simplest model to implement and gives the programmer full control,
+        but it also means memory leaks and use-after-free are possible — just like C.
+      </p>
+      <ul>
+        <li><strong>Rust</strong> is the safest here: its borrow checker prevents data races and use-after-free at compile time.</li>
+        <li><strong>Zig</strong> makes allocators explicit and adds optional safety checks, sitting between C and Rust.</li>
+        <li><strong>Go, Java, C#, Python, JS, Ruby</strong> use garbage collectors, trading memory overhead and latency for convenience.</li>
+        <li><strong>C++</strong> offers RAII and smart pointers, but safety is opt-in and easy to bypass.</li>
+      </ul>
+      <div class="note">
+        Vela intentionally chose manual management to keep the compiler small. A future version could add
+        linear/ownership checking or arena allocators without changing the surface syntax.
+      </div>
+    </section>
+
+    <section>
+      <h2>Build Speed</h2>
+      <p>
+        Vela's compiler is tiny and emits C quickly. The total build time is dominated by the C compiler,
+        which is still very fast for small programs. This makes Vela competitive with C, Zig, and Go for
+        iterative development.
+      </p>
+      <ul>
+        <li><strong>Fast:</strong> C, Go, Zig, OCaml, Vela, Python/JS/Ruby (no compile step).</li>
+        <li><strong>Moderate:</strong> Rust, Java, C#, Swift.</li>
+        <li><strong>Slow:</strong> C++ and Haskell, due to templates, headers, or aggressive optimization.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Safety</h2>
+      <p>
+        Vela provides static type safety and exhaustive pattern matching on kinds, which catches many bugs
+        at compile time. However, it does <em>not</em> prevent memory errors like Rust does. It is safer than C
+        because shapes and kinds are checked, but less safe than Rust, Swift, Haskell, OCaml, or GC'd languages.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Language</th><th>Type Safety</th><th>Memory Safety</th><th>Null Safety</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="lang">C</td><td>Weak</td><td>Unsafe</td><td>No</td></tr>
+            <tr><td class="lang">C++</td><td>Moderate</td><td>Unsafe by default</td><td>No</td></tr>
+            <tr><td class="lang vela">Vela</td><td>Strong</td><td>Manual, type-checked</td><td>No</td></tr>
+            <tr><td class="lang">Zig</td><td>Strong</td><td>Manual + checks</td><td>Optional</td></tr>
+            <tr><td class="lang">Go</td><td>Strong</td><td>GC-safe</td><td>Nil exists</td></tr>
+            <tr><td class="lang">Rust</td><td>Strong</td><td>Compile-time proven</td><td>Option&lt;T&gt;</td></tr>
+            <tr><td class="lang">Swift</td><td>Strong</td><td>ARC + compile-time</td><td>Optional</td></tr>
+            <tr><td class="lang">Java / C#</td><td>Strong</td><td>GC-safe</td><td>Null exists</td></tr>
+            <tr><td class="lang">Haskell / OCaml</td><td>Very Strong</td><td>GC-safe</td><td>Option types</td></tr>
+            <tr><td class="lang">Python / JS / Ruby</td><td>Dynamic</td><td>GC-safe</td><td>Null/None common</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Syntax & Complexity</h2>
+      <p>
+        Vela aims for Go-like minimalism: one way to define functions, one way to define records, one way to
+        define unions. It avoids the dualities that plague other languages (structs vs classes, interfaces vs
+        traits, references vs pointers).
+      </p>
+      <ul>
+        <li><strong>Minimal:</strong> Go, Vela.</li>
+        <li><strong>Moderate:</strong> C, Python, Ruby, JavaScript.</li>
+        <li><strong>Complex:</strong> C++ (templates, headers), Rust (lifetimes, traits), Haskell (type classes, laziness).</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Where Vela Fits</h2>
+      <p>
+        Vela is best understood as an <strong>experimental, teaching-friendly systems language</strong>. It is not
+        trying to dethrone Rust or C. Instead, it demonstrates that you can have a small, fast, compiled
+        language with modern features — pattern matching, sum types, and clean syntax — while staying close to
+        the metal.
+      </p>
+      <div class="note">
+        <strong>When to choose Vela:</strong> tiny tools, learning about compilers, embedded scripts, or
+        prototypes where you want C performance without C syntax.
+        <br><br>
+        <strong>When to avoid Vela:</strong> production systems requiring memory safety guarantees, large
+        teams, rich standard libraries, or concurrency support.
+      </div>
+    </section>
+
+    <section>
+      <h2>Summary</h2>
+      <p>
+        Vela borrows the best ideas from the systems world — C's simplicity and speed, Rust's static safety
+        mindset, Go's minimalism, and Zig's explicit memory philosophy — while keeping the implementation
+        small enough to understand in one sitting. It trades absolute safety for simplicity, and rich
+        ecosystems for a clean slate. For what it is, that is exactly the point.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Vela — a minimal systems language experiment.</p>
+  </footer>
+</body>
+</html>

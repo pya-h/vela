@@ -1,0 +1,15 @@
+# Fibonacci in Vela
+
+task fib(n: int) -> int
+    when n < 2
+        send n
+    else
+        send fib(n - 1) + fib(n - 2)
+    end
+end
+
+task main()
+    each i in 0..10
+        show(fib(i))
+    end
+end

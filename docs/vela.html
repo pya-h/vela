@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela Programming Language</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --fg: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --code-bg: #1e293b;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+    }
+    header {
+      padding: 4rem 1rem 3rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(56,189,248,0.1) 0%, transparent 100%);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+    h1 span {
+      color: var(--accent);
+    }
+    .tagline {
+      margin-top: 0.75rem;
+      font-size: 1.25rem;
+      color: var(--muted);
+    }
+    main {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 3rem;
+      font-size: 1.75rem;
+      color: var(--accent-2);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    h3 {
+      margin-top: 2rem;
+      color: var(--accent);
+    }
+    p { margin: 1rem 0; }
+    code, pre {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      font-size: 0.95rem;
+    }
+    code {
+      background: var(--code-bg);
+      padding: 0.15rem 0.4rem;
+      border-radius: 0.25rem;
+      color: var(--accent);
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1.25rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      line-height: 1.5;
+    }
+    .keyword { color: #c084fc; }
+    .type { color: #38bdf8; }
+    .string { color: #86efac; }
+    .comment { color: #64748b; font-style: italic; }
+    .number { color: #fbbf24; }
+    ul {
+      padding-left: 1.5rem;
+    }
+    li {
+      margin: 0.5rem 0;
+    }
+    .note {
+      background: rgba(56,189,248,0.08);
+      border-left: 4px solid var(--accent);
+      padding: 1rem 1.25rem;
+      border-radius: 0 0.5rem 0.5rem 0;
+      margin: 1.5rem 0;
+    }
+    footer {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Vela<span>.</span></h1>
+    <p class="tagline">A minimal, safe, fast systems language with a fresh face.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>What is Vela?</h2>
+      <p>
+        <strong>Vela</strong> is a small systems programming language designed to be minimal like Go,
+        safe like Rust, and expressive like modern functional languages — without the bloat.
+        It has one clear way to do things: one kind of function, one kind of record, one kind of sum type,
+        and explicit memory management without a garbage collector.
+      </p>
+      <p>
+        Vela compiles to C through a Rust-based compiler, so it runs anywhere C runs and inherits
+        its performance while keeping the source language tidy and opinionated.
+      </p>
+    </section>
+
+    <section>
+      <h2>Philosophy</h2>
+      <ul>
+        <li><strong>Minimal surface.</strong> No classes <em>and</em> structs. No interfaces <em>and</em> traits. Just shapes, kinds, and tasks.</li>
+        <li><strong>One way to do it.</strong> Immutability by default with <code>bind</code>; mutation explicitly opt-in with <code>hold</code>.</li>
+        <li><strong>Safe by design.</strong> Static typing, exhaustive pattern matching, and explicit ownership via owned pointers.</li>
+        <li><strong>Beautiful syntax.</strong> Words over symbols, clean blocks with <code>end</code>, and no semicolons.</li>
+        <li><strong>No GC.</strong> Manual memory management with <code>new</code> and <code>free</code>, or stack allocation where possible.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Hello, Vela</h2>
+      <pre><span class="comment"># A tiny Vela program</span>
+<span class="keyword">task</span> main()
+    show(<span class="string">"Hello, Vela!"</span>)
+<span class="keyword">end</span></pre>
+      <p>Compile and run with:</p>
+      <pre>cargo run -- examples/hello.vela -o hello
+./hello</pre>
+    </section>
+
+    <section>
+      <h2>Types</h2>
+      <ul>
+        <li><code class="type">int</code> — 64-bit signed integer</li>
+        <li><code class="type">float</code> — 64-bit floating point</li>
+        <li><code class="type">bool</code> — true or false</li>
+        <li><code class="type">text</code> — UTF-8 string</li>
+        <li><code class="type">unit</code> — the empty return type</li>
+        <li><code class="type">^T</code> — owned pointer to T</li>
+        <li>User-defined shapes and kinds</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Syntax Overview</h2>
+
+      <h3>Tasks</h3>
+      <p>Functions are called <em>tasks</em>. The return arrow is required only when returning a value.</p>
+      <pre><span class="keyword">task</span> add(a: int, b: int) -> int
+    <span class="keyword">send</span> a + b
+<span class="keyword">end</span>
+
+<span class="keyword">task</span> greet(name: text)
+    show(name)
+<span class="keyword">end</span></pre>
+
+      <h3>Bindings</h3>
+      <p><code>bind</code> creates an immutable binding. <code>hold</code> creates a mutable variable.</p>
+      <pre><span class="keyword">bind</span> pi = 3.14
+<span class="keyword">hold</span> count = 0
+count = count + 1</pre>
+
+      <h3>Shapes</h3>
+      <p>Shapes are Vela's only composite data type — like structs, but the only one.</p>
+      <pre><span class="keyword">shape</span> Point
+    x: int
+    y: int
+<span class="keyword">end</span>
+
+<span class="keyword">bind</span> p = Point { x: 10, y: 20 }
+show(p.x)</pre>
+
+      <h3>Kinds</h3>
+      <p>Kinds are tagged unions with exhaustive pattern matching.</p>
+      <pre><span class="keyword">kind</span> Shape
+    Circle(radius: float)
+    Rectangle(width: float, height: float)
+<span class="keyword">end</span>
+
+<span class="keyword">task</span> area(s: Shape) -> float
+    <span class="keyword">match</span> s
+    <span class="keyword">case</span> Circle r
+        <span class="keyword">send</span> 3.14 * r * r
+    <span class="keyword">case</span> Rectangle w h
+        <span class="keyword">send</span> w * h
+    <span class="keyword">end</span>
+<span class="keyword">end</span></pre>
+
+      <h3>Control Flow</h3>
+      <pre><span class="keyword">when</span> x > 0
+    show(<span class="string">"positive"</span>)
+<span class="keyword">else</span>
+    show(<span class="string">"non-positive"</span>)
+<span class="keyword">end</span>
+
+<span class="keyword">loop</span> count < 10
+    show(count)
+    count = count + 1
+<span class="keyword">end</span>
+
+<span class="keyword">each</span> i <span class="keyword">in</span> 0..5
+    show(i)
+<span class="keyword">end</span></pre>
+
+      <h3>Memory</h3>
+      <p>Owned pointers are explicit and manually freed. No garbage collector.</p>
+      <pre><span class="keyword">bind</span> p: ^int = <span class="keyword">new</span> int(42)
+show(p^)
+<span class="keyword">free</span>(p)</pre>
+      <div class="note">
+        <strong>Note:</strong> Vela intentionally keeps memory management simple. There is no borrow checker;
+        ownership is manual, like C but with clearer syntax. Use <code>new</code>/<code>free</code> with care.
+      </div>
+    </section>
+
+    <section>
+      <h2>Complete Example</h2>
+      <pre><span class="keyword">task</span> fib(n: int) -> int
+    <span class="keyword">when</span> n < 2
+        <span class="keyword">send</span> n
+    <span class="keyword">else</span>
+        <span class="keyword">send</span> fib(n - 1) + fib(n - 2)
+    <span class="keyword">end</span>
+<span class="keyword">end</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">each</span> i <span class="keyword">in</span> 0..10
+        show(fib(i))
+    <span class="keyword">end</span>
+<span class="keyword">end</span></pre>
+    </section>
+
+    <section>
+      <h2>Building the Compiler</h2>
+      <p>The Vela compiler is written in Rust and targets C.</p>
+      <pre>cargo build
+./target/debug/vela program.vela -o program</pre>
+      <p>To see the generated C code:</p>
+      <pre>./target/debug/vela program.vela --emit-c</pre>
+    </section>
+
+    <section>
+      <h2>Design Notes</h2>
+      <ul>
+        <li>Vela is intentionally small. It is not meant to replace Rust or C, but to explore how little syntax is needed for a safe, compiled systems language.</li>
+        <li>Memory is manually managed to avoid GC complexity while keeping the implementation approachable.</li>
+        <li>The compiler generates readable C, making it easy to debug and interoperate with existing C code.</li>
+        <li>Syntax uses keywords over punctuation to keep source code friendly and self-documenting.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <p>Vela — designed and implemented as a minimal systems language experiment.</p>
+  </footer>
+</body>
+</html>
