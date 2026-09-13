@@ -1,0 +1,10 @@
+# error: 5:5: field 'x' is already defined at 3:5
+shape Point
+    x: int
+    y: int
+    x: float
+fi
+
+task main()
+    show(1)
+fi

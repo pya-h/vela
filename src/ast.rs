@@ -125,10 +125,31 @@ pub enum ExprKind {
     Call(String, Vec<Expr>),
     Unary(UnaryOp, Box<Expr>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
-    New(Box<Type>, Box<Expr>),
+    /// `new T(value)`; `ty_span` is the position of `T`.
+    New {
+        ty: Type,
+        ty_span: Span,
+        value: Box<Expr>,
+    },
     Deref(Box<Expr>),
-    StructInit(String, Vec<(String, Expr)>),
+    StructInit(String, Vec<FieldInit>),
+    /// A variant constructor, `Circle(1.0)` or `Empty`. The parser produces
+    /// `Call` or `Var` for these; the checker rewrites them into `Construct`.
+    Construct {
+        kind: String,
+        tag: String,
+        args: Vec<Expr>,
+    },
     Range(Box<Expr>, Box<Expr>),
+}
+
+/// One `name: value` in a shape literal.
+#[derive(Debug, Clone)]
+pub struct FieldInit {
+    pub name: String,
+    /// Position of the field name.
+    pub span: Span,
+    pub value: Expr,
 }
 
 pub type Block = Vec<Stmt>;
@@ -151,11 +172,13 @@ impl Stmt {
 pub enum StmtKind {
     Expr(Expr),
     /// `bind` (immutable) or `hold` (mutable). `ty` is the annotation, if
-    /// any; the checker fills it in with the inferred type otherwise.
+    /// any, at `ty_span`; the checker fills it in with the inferred type
+    /// otherwise.
     Binding {
         name: String,
         mutable: bool,
         ty: Option<Type>,
+        ty_span: Option<Span>,
         init: Expr,
     },
     Assign(Expr, Expr),
@@ -182,7 +205,10 @@ pub struct Case {
 pub struct Field {
     pub name: String,
     pub ty: Type,
+    /// Position of the name.
     pub span: Span,
+    /// Position of the type.
+    pub ty_span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -197,6 +223,8 @@ pub struct TaskDef {
     pub name: String,
     pub params: Vec<Field>,
     pub ret: Type,
+    /// Position of the return type, or of the task name when there is none.
+    pub ret_span: Span,
     pub body: Block,
     /// Position of the task name.
     pub span: Span,

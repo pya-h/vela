@@ -1,0 +1,9 @@
+# error: 8:14: variant 'Circle' expects 1 args, got 0
+kind Shape
+    Circle(radius: float)
+    Dot
+fi
+
+task main()
+    bind s = Circle
+fi

@@ -1,0 +1,51 @@
+# Types may be used before they are declared, and may point to themselves.
+
+shape Segment
+    from: Point
+    to: Point
+fi
+
+kind List
+    Nil
+    Cons(head: Point, tail: ^List)
+fi
+
+shape Point
+    x: int
+    y: int
+fi
+
+shape Node
+    value: int
+    next: ^Node
+fi
+
+task length(l: List) -> int
+    match l
+    case Nil
+        send 0
+    case Cons head tail
+        send 1 + length(tail^)
+    fi
+fi
+
+task sum_x(l: List) -> int
+    match l
+    case Nil
+        send 0
+    case Cons head tail
+        send head.x + sum_x(tail^)
+    fi
+fi
+
+task main()
+    bind s = Segment { from: Point { x: 1, y: 2 }, to: Point { x: 3, y: 4 } }
+    show(s.to.y - s.from.y)
+    bind empty: ^List = new List(Nil)
+    bind one: ^List = new List(Cons(Point { x: 5, y: 0 }, empty))
+    bind two = Cons(Point { x: 7, y: 0 }, one)
+    show(length(two))
+    show(sum_x(two))
+    free(one)
+    free(empty)
+fi

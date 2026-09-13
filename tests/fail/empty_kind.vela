@@ -1,0 +1,7 @@
+# error: 2:6: kind 'Nothing' has no variants
+kind Nothing
+fi
+
+task main()
+    show(1)
+fi

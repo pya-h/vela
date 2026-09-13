@@ -1,0 +1,9 @@
+# error: 3:17: unknown type 'Thing'
+kind Maybe
+    Just(value: Thing)
+    Nothing
+fi
+
+task main()
+    show(1)
+fi

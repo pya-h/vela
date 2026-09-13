@@ -1,0 +1,5 @@
+# error: 3:13: unknown type 'Count'
+task main()
+    bind x: Count = 3
+    show(x)
+fi

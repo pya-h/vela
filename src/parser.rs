@@ -107,10 +107,12 @@ impl Parser {
         let span = self.peek_span();
         let name = self.expect_ident()?;
         let params = self.parse_field_list()?;
+        let mut ret_span = span;
         let ret = if self.match_token(Token::Arrow) {
             if self.check(Token::Newline) || self.check(Token::Fi) {
                 Type::Unit
             } else {
+                ret_span = self.peek_span();
                 self.parse_type()?
             }
         } else {
@@ -119,7 +121,7 @@ impl Parser {
         self.skip_newlines();
         let body = self.parse_block()?;
         self.expect(Token::Fi)?;
-        Ok(TaskDef { name, params, ret, body, span })
+        Ok(TaskDef { name, params, ret, ret_span, body, span })
     }
 
     fn parse_shape(&mut self) -> Result<ShapeDef> {
@@ -168,8 +170,9 @@ impl Parser {
         let span = self.peek_span();
         let name = self.expect_ident()?;
         self.expect(Token::Colon)?;
+        let ty_span = self.peek_span();
         let ty = self.parse_type()?;
-        Ok(Field { name, ty, span })
+        Ok(Field { name, ty, span, ty_span })
     }
 
     /// `(name: type, ...)`
@@ -251,14 +254,15 @@ impl Parser {
         self.advance(); // bind / hold
         let span = self.peek_span();
         let name = self.expect_ident()?;
-        let ty = if self.match_token(Token::Colon) {
-            Some(self.parse_type()?)
+        let (ty, ty_span) = if self.match_token(Token::Colon) {
+            let ty_span = self.peek_span();
+            (Some(self.parse_type()?), Some(ty_span))
         } else {
-            None
+            (None, None)
         };
         self.expect(Token::Assign)?;
         let init = self.parse_expr()?;
-        let kind = StmtKind::Binding { name, mutable: !immutable, ty, init };
+        let kind = StmtKind::Binding { name, mutable: !immutable, ty, ty_span, init };
         Ok(Stmt::new(kind, span))
     }
 
@@ -501,11 +505,12 @@ impl Parser {
     fn parse_new(&mut self) -> Result<Expr> {
         let span = self.peek_span();
         self.advance(); // new
+        let ty_span = self.peek_span();
         let ty = self.parse_type()?;
         self.expect(Token::LParen)?;
-        let expr = self.parse_expr()?;
+        let value = self.parse_expr()?;
         self.expect(Token::RParen)?;
-        Ok(Expr::new(ExprKind::New(Box::new(ty), Box::new(expr)), span))
+        Ok(Expr::new(ExprKind::New { ty, ty_span, value: Box::new(value) }, span))
     }
 
     fn parse_struct_init(&mut self, name: String) -> Result<ExprKind> {
@@ -513,10 +518,11 @@ impl Parser {
         let mut fields = Vec::new();
         if !self.check(Token::RBrace) {
             loop {
-                let field_name = self.expect_ident()?;
+                let span = self.peek_span();
+                let name = self.expect_ident()?;
                 self.expect(Token::Colon)?;
-                let expr = self.parse_expr()?;
-                fields.push((field_name, expr));
+                let value = self.parse_expr()?;
+                fields.push(FieldInit { name, span, value });
                 if !self.match_token(Token::Comma) {
                     break;
                 }

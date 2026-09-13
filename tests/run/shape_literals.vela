@@ -1,0 +1,23 @@
+# Shape literal fields may be given in any order, and a shape may be empty.
+
+shape Point
+    x: int
+    y: int
+fi
+
+shape Marker
+fi
+
+task describe(m: Marker, p: Point)
+    show(p.x)
+    show(p.y)
+fi
+
+task main()
+    bind p = Point { y: 2, x: 1 }
+    describe(Marker {}, p)
+    hold q = Point { x: 10, y: 20 }
+    q = Point { y: q.x, x: q.y }
+    show(q.x)
+    show(q.y)
+fi

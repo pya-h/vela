@@ -1,0 +1,5 @@
+# error: 3:18: unknown type 'Box'
+task main()
+    bind p = new Box(1)
+    free(p)
+fi

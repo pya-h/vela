@@ -1,0 +1,9 @@
+# error: 4:11: 'Node' contains itself by value (Node -> Node); use a pointer such as '^Node'
+shape Node
+    value: int
+    next: Node
+fi
+
+task main()
+    show(1)
+fi

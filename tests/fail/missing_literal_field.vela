@@ -1,0 +1,10 @@
+# error: 8:14: missing field 'x' in 'Point'
+shape Point
+    x: int
+    y: int
+fi
+
+task main()
+    bind p = Point { y: 2 }
+    show(p.y)
+fi

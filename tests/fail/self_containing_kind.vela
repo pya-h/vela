@@ -1,0 +1,9 @@
+# error: 4:27: 'List' contains itself by value (List -> List); use a pointer such as '^List'
+kind List
+    Nil
+    Cons(head: int, tail: List)
+fi
+
+task main()
+    show(1)
+fi

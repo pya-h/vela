@@ -1,0 +1,12 @@
+# error: 7:11: 'Left' contains itself by value (Left -> Right -> Left); use a pointer such as '^Left'
+shape Left
+    right: Right
+fi
+
+shape Right
+    left: Left
+fi
+
+task main()
+    show(1)
+fi

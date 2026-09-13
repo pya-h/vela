@@ -1,0 +1,44 @@
+# Variants without a payload can be written with or without parentheses.
+
+kind Light
+    Red
+    Amber
+    Green
+fi
+
+kind Reading
+    Missing
+    Value(amount: int)
+fi
+
+task name(l: Light) -> text
+    match l
+    case Red
+        send "red"
+    case Amber
+        send "amber"
+    case Green
+        send "green"
+    fi
+fi
+
+task report(r: Reading)
+    match r
+    case Missing
+        show("missing")
+    case Value amount
+        show(amount)
+    fi
+fi
+
+task main()
+    show(name(Red))
+    show(name(Amber()))
+    hold light = Green
+    show(name(light))
+    light = Red
+    show(name(light))
+    report(Missing)
+    report(Missing())
+    report(Value(42))
+fi

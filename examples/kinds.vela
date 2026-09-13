@@ -3,6 +3,7 @@
 kind Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)
+    Dot
 fi
 
 task describe(s: Shape)
@@ -14,6 +15,8 @@ task describe(s: Shape)
         show("rectangle")
         show(w)
         show(h)
+    case Dot
+        show("dot")
     fi
 fi
 
@@ -22,4 +25,5 @@ task main()
     bind r = Rectangle(3.0, 4.0)
     describe(c)
     describe(r)
+    describe(Dot)
 fi

@@ -3,6 +3,17 @@ use std::collections::{HashMap, HashSet};
 use crate::ast::*;
 use crate::error::{Error, Result};
 
+/// Names no declaration may take: the builtin types and the builtin task.
+const BUILTIN_TYPES: &[&str] = &["int", "float", "bool", "text", "unit"];
+const BUILTIN_TASKS: &[&str] = &["show"];
+
+#[derive(Clone)]
+struct VariantInfo {
+    /// The kind the variant belongs to.
+    kind: String,
+    variant: Variant,
+}
+
 #[derive(Clone)]
 struct VarInfo {
     ty: Type,
@@ -19,6 +30,8 @@ pub struct Checker {
     shapes: HashMap<String, ShapeDef>,
     kinds: HashMap<String, KindDef>,
     tasks: HashMap<String, (Vec<Type>, Type)>,
+    /// Every variant, by tag. Tags are unique across all kinds.
+    variants: HashMap<String, VariantInfo>,
     scopes: Vec<HashMap<String, VarInfo>>,
     current_ret: Option<Type>,
 }
@@ -29,35 +42,144 @@ impl Checker {
     }
 
     pub fn check_file(&mut self, items: &mut [Item]) -> Result<()> {
-        for item in items.iter() {
-            match item {
-                Item::Shape(s) => {
-                    if self.shapes.contains_key(&s.name) {
-                        return err(s.span, format!("shape '{}' defined twice", s.name));
-                    }
-                    self.shapes.insert(s.name.clone(), s.clone());
-                }
-                Item::Kind(k) => {
-                    if self.kinds.contains_key(&k.name) {
-                        return err(k.span, format!("kind '{}' defined twice", k.name));
-                    }
-                    self.kinds.insert(k.name.clone(), k.clone());
-                }
-                Item::Task(t) => {
-                    if self.tasks.contains_key(&t.name) {
-                        return err(t.span, format!("task '{}' defined twice", t.name));
-                    }
-                    let ptypes: Vec<Type> = t.params.iter().map(|p| p.ty.clone()).collect();
-                    self.tasks.insert(t.name.clone(), (ptypes, t.ret.clone()));
-                }
-            }
-        }
-
+        self.collect_declarations(items)?;
+        self.check_declarations(items)?;
         for item in items.iter_mut() {
             if let Item::Task(t) = item {
                 self.check_task(t)?;
             }
         }
+        Ok(())
+    }
+
+    /// Registers every task, shape, kind, and variant. They share one
+    /// namespace: no two may have the same name, and none may use the name of
+    /// a builtin type or task.
+    fn collect_declarations(&mut self, items: &[Item]) -> Result<()> {
+        let mut names: HashMap<String, Span> = HashMap::new();
+        let mut declare = |name: &str, span: Span| -> Result<()> {
+            if BUILTIN_TYPES.contains(&name) {
+                return err(span, format!("'{}' is a builtin type and cannot be redefined", name));
+            }
+            if BUILTIN_TASKS.contains(&name) {
+                return err(span, format!("'{}' is a builtin task and cannot be redefined", name));
+            }
+            if let Some(at) = names.get(name) {
+                return err(span, format!("'{}' is already defined at {}:{}", name, at.line, at.col));
+            }
+            names.insert(name.to_string(), span);
+            Ok(())
+        };
+        for item in items {
+            match item {
+                Item::Shape(s) => {
+                    declare(&s.name, s.span)?;
+                    self.shapes.insert(s.name.clone(), s.clone());
+                }
+                Item::Kind(k) => {
+                    declare(&k.name, k.span)?;
+                    for v in &k.variants {
+                        declare(&v.tag, v.span)?;
+                        let info = VariantInfo { kind: k.name.clone(), variant: v.clone() };
+                        self.variants.insert(v.tag.clone(), info);
+                    }
+                    self.kinds.insert(k.name.clone(), k.clone());
+                }
+                Item::Task(t) => {
+                    declare(&t.name, t.span)?;
+                    let ptypes: Vec<Type> = t.params.iter().map(|p| p.ty.clone()).collect();
+                    self.tasks.insert(t.name.clone(), (ptypes, t.ret.clone()));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Checks the declarations themselves: every written type exists, field
+    /// names are distinct, kinds have variants, and no type contains itself.
+    fn check_declarations(&self, items: &[Item]) -> Result<()> {
+        for item in items {
+            match item {
+                Item::Shape(s) => self.check_fields(&s.fields)?,
+                Item::Kind(k) => {
+                    if k.variants.is_empty() {
+                        return err(k.span, format!("kind '{}' has no variants", k.name));
+                    }
+                    for v in &k.variants {
+                        self.check_fields(&v.payload)?;
+                    }
+                }
+                Item::Task(t) => {
+                    for param in &t.params {
+                        self.check_type(&param.ty, param.ty_span)?;
+                    }
+                    self.check_type(&t.ret, t.ret_span)?;
+                }
+            }
+        }
+        let mut acyclic = HashSet::new();
+        for item in items {
+            let name = match item {
+                Item::Shape(s) => &s.name,
+                Item::Kind(k) => &k.name,
+                Item::Task(_) => continue,
+            };
+            self.check_value_cycle(name, &mut Vec::new(), &mut acyclic)?;
+        }
+        Ok(())
+    }
+
+    /// Checks a shape's fields or a variant's payload.
+    fn check_fields(&self, fields: &[Field]) -> Result<()> {
+        let mut seen: HashMap<&str, Span> = HashMap::new();
+        for field in fields {
+            if let Some(at) = seen.get(field.name.as_str()) {
+                return err(field.span, format!("field '{}' is already defined at {}:{}", field.name, at.line, at.col));
+            }
+            seen.insert(&field.name, field.span);
+            self.check_type(&field.ty, field.ty_span)?;
+        }
+        Ok(())
+    }
+
+    /// A type written in the source must be a builtin type, a shape, or a kind.
+    fn check_type(&self, ty: &Type, span: Span) -> Result<()> {
+        match ty {
+            Type::Ptr(inner) => self.check_type(inner, span),
+            Type::Named(name) if !self.shapes.contains_key(name) && !self.kinds.contains_key(name) => {
+                err(span, format!("unknown type '{}'", name))
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// Rejects a shape or kind that contains itself by value, directly or
+    /// through other types: its values would have infinite size. Containing a
+    /// pointer to itself (`^T`) is fine. `path` holds the types being entered;
+    /// `acyclic` the types already known to be free of cycles.
+    fn check_value_cycle(&self, name: &str, path: &mut Vec<String>, acyclic: &mut HashSet<String>) -> Result<()> {
+        if acyclic.contains(name) {
+            return Ok(());
+        }
+        path.push(name.to_string());
+        let fields: Vec<&Field> = match (self.shapes.get(name), self.kinds.get(name)) {
+            (Some(shape), _) => shape.fields.iter().collect(),
+            (None, Some(kind)) => kind.variants.iter().flat_map(|v| &v.payload).collect(),
+            (None, None) => Vec::new(),
+        };
+        for field in fields {
+            let Type::Named(target) = &field.ty else { continue };
+            if let Some(start) = path.iter().position(|n| n == target) {
+                let chain: Vec<&str> = path.iter().skip(start).map(String::as_str).chain([target.as_str()]).collect();
+                return err(
+                    field.ty_span,
+                    format!("'{}' contains itself by value ({}); use a pointer such as '^{}'", target, chain.join(" -> "), target),
+                );
+            }
+            self.check_value_cycle(target, path, acyclic)?;
+        }
+        path.pop();
+        acyclic.insert(name.to_string());
         Ok(())
     }
 
@@ -94,6 +216,11 @@ impl Checker {
     /// name cannot be declared while another variable of that name is visible.
     /// (Sibling blocks may reuse names, since neither is visible to the other.)
     fn define(&mut self, name: &str, ty: Type, mutable: bool, span: Span) -> Result<()> {
+        // A variable named like a variant would make a bare `Empty` ambiguous.
+        if let Some(info) = self.variants.get(name) {
+            let at = info.variant.span;
+            return err(span, format!("'{}' is already defined at {}:{}", name, at.line, at.col));
+        }
         if let Some(existing) = self.lookup(name) {
             let at = existing.span;
             return err(span, format!("'{}' is already defined at {}:{}", name, at.line, at.col));
@@ -130,7 +257,10 @@ impl Checker {
         let span = stmt.span;
         match &mut stmt.kind {
             StmtKind::Expr(e) => { self.check_expr(e)?; Ok(()) }
-            StmtKind::Binding { name, mutable, ty, init } => {
+            StmtKind::Binding { name, mutable, ty, ty_span, init } => {
+                if let Some(annotated) = ty {
+                    self.check_type(annotated, ty_span.unwrap_or(span))?;
+                }
                 let init_ty = self.check_expr(init)?;
                 if let Some(annotated) = ty {
                     self.expect_type(&init_ty, annotated, init.span)?;
@@ -278,9 +408,29 @@ impl Checker {
 
     /// Checks an expression, records its type on the node, and returns it.
     fn check_expr(&mut self, expr: &mut Expr) -> Result<Type> {
+        self.resolve_constructor(expr);
         let ty = self.infer_expr(expr)?;
         expr.ty = Some(ty.clone());
         Ok(ty)
+    }
+
+    /// Rewrites a variant used as a value, `Empty`, or called, `Circle(1.0)`,
+    /// into a `Construct` node. Variables can't share a variant's name, so a
+    /// bare name is never ambiguous.
+    fn resolve_constructor(&self, expr: &mut Expr) {
+        let variant_kind = |tag: &str| self.variants.get(tag).map(|info| info.kind.clone());
+        let resolved = match &mut expr.kind {
+            ExprKind::Var(name) if self.lookup(name).is_none() => {
+                variant_kind(name).map(|kind| (kind, std::mem::take(name), Vec::new()))
+            }
+            ExprKind::Call(name, args) => {
+                variant_kind(name).map(|kind| (kind, std::mem::take(name), std::mem::take(args)))
+            }
+            _ => None,
+        };
+        if let Some((kind, tag, args)) = resolved {
+            expr.kind = ExprKind::Construct { kind, tag, args };
+        }
     }
 
     fn infer_expr(&mut self, expr: &mut Expr) -> Result<Type> {
@@ -311,24 +461,6 @@ impl Checker {
                     }
                     return Ok(Type::Unit);
                 }
-                // Check if it's a kind variant constructor
-                let mut found_kind = None;
-                for kind in self.kinds.values() {
-                    if let Some(variant) = kind.variants.iter().find(|v| v.tag == *name) {
-                        found_kind = Some((kind.name.clone(), variant.clone()));
-                        break;
-                    }
-                }
-                if let Some((kind_name, variant)) = found_kind {
-                    if args.len() != variant.payload.len() {
-                        return err(span, format!("variant '{}' expects {} args, got {}", name, variant.payload.len(), args.len()));
-                    }
-                    for (arg, field) in args.iter_mut().zip(variant.payload.iter()) {
-                        let aty = self.check_expr(arg)?;
-                        self.expect_type(&aty, &field.ty, arg.span)?;
-                    }
-                    return Ok(Type::Named(kind_name));
-                }
                 let (params, ret) = self.tasks.get(name.as_str())
                     .ok_or_else(|| Error::at(span, format!("unknown task '{}'", name)))?
                     .clone();
@@ -343,10 +475,24 @@ impl Checker {
             }
             ExprKind::Unary(op, e) => self.check_unary(*op, e, span),
             ExprKind::Binary(op, l, r) => self.check_binary(*op, l, r, span),
-            ExprKind::New(ty, e) => {
-                let val_ty = self.check_expr(e)?;
-                self.expect_type(&val_ty, ty, e.span)?;
-                Ok(Type::Ptr(Box::new((**ty).clone())))
+            ExprKind::Construct { kind, tag, args } => {
+                let variant = self.variants.get(tag.as_str())
+                    .map(|info| info.variant.clone())
+                    .ok_or_else(|| Error::internal_at(span, format!("unknown variant '{}'", tag)))?;
+                if args.len() != variant.payload.len() {
+                    return err(span, format!("variant '{}' expects {} args, got {}", tag, variant.payload.len(), args.len()));
+                }
+                for (arg, field) in args.iter_mut().zip(variant.payload.iter()) {
+                    let aty = self.check_expr(arg)?;
+                    self.expect_type(&aty, &field.ty, arg.span)?;
+                }
+                Ok(Type::Named(kind.clone()))
+            }
+            ExprKind::New { ty, ty_span, value } => {
+                self.check_type(ty, *ty_span)?;
+                let val_ty = self.check_expr(value)?;
+                self.expect_type(&val_ty, ty, value.span)?;
+                Ok(Type::Ptr(Box::new(ty.clone())))
             }
             ExprKind::Deref(e) => {
                 let ty = self.check_expr(e)?;
@@ -357,15 +503,21 @@ impl Checker {
                 let shape = self.shapes.get(name.as_str())
                     .ok_or_else(|| Error::at(span, format!("unknown shape '{}'", name)))?
                     .clone();
-                if fields.len() != shape.fields.len() {
-                    return err(span, format!("shape '{}' expects {} fields, got {}", name, shape.fields.len(), fields.len()));
-                }
-                for ((fname, fexpr), sfield) in fields.iter_mut().zip(shape.fields.iter()) {
-                    if *fname != sfield.name {
-                        return err(fexpr.span, format!("expected field '{}', got '{}'", sfield.name, fname));
+                // Fields may be given in any order, each exactly once.
+                let mut given: HashMap<String, Span> = HashMap::new();
+                for field in fields.iter_mut() {
+                    let Some(declared) = shape.fields.iter().find(|f| f.name == field.name) else {
+                        return err(field.span, format!("shape '{}' has no field '{}'", name, field.name));
+                    };
+                    if let Some(at) = given.get(&field.name) {
+                        return err(field.span, format!("field '{}' is already given at {}:{}", field.name, at.line, at.col));
                     }
-                    let fty = self.check_expr(fexpr)?;
-                    self.expect_type(&fty, &sfield.ty, fexpr.span)?;
+                    given.insert(field.name.clone(), field.span);
+                    let fty = self.check_expr(&mut field.value)?;
+                    self.expect_type(&fty, &declared.ty, field.value.span)?;
+                }
+                if let Some(missing) = shape.fields.iter().find(|f| !given.contains_key(&f.name)) {
+                    return err(span, format!("missing field '{}' in '{}'", missing.name, name));
                 }
                 Ok(Type::Named(name.clone()))
             }

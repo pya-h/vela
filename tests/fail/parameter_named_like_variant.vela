@@ -1,0 +1,13 @@
+# error: 7:17: 'Green' is already defined at 4:5
+kind Light
+    Red
+    Green
+fi
+
+task brightness(Green: int) -> int
+    send Green
+fi
+
+task main()
+    show(brightness(1))
+fi

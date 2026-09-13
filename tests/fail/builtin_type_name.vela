@@ -1,0 +1,8 @@
+# error: 2:7: 'int' is a builtin type and cannot be redefined
+shape int
+    value: float
+fi
+
+task main()
+    show(1)
+fi

@@ -1,0 +1,8 @@
+# error: 3:22: field 'value' is already defined at 3:10
+kind Pair
+    Both(value: int, value: int)
+fi
+
+task main()
+    show(1)
+fi

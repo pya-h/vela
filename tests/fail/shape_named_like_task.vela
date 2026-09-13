@@ -1,0 +1,12 @@
+# error: 6:7: 'Point' is already defined at 2:6
+task Point()
+    show(1)
+fi
+
+shape Point
+    x: int
+fi
+
+task main()
+    Point()
+fi

@@ -6,7 +6,7 @@
 // A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
-use vela::ast::Item;
+use vela::ast::{ExprKind, Item, StmtKind};
 use vela::check::Checker;
 use vela::codegen::Generator;
 use vela::lexer::Lexer;
@@ -59,9 +59,20 @@ fn show_with_wrong_argument_count() {
 
 #[test]
 fn variant_with_wrong_argument_count() {
-    assert_internal_error(
-        "kind Shape\n    Circle(radius: float)\nfi\n\ntask main()\n    Circle(1.0, 2.0)\nfi\n",
-        "variant 'Circle' called with 2 arguments (expected 1) (at 6:5)",
+    // The checker resolves `Circle(1.0)` into a constructor; give that node an
+    // extra argument afterwards, as a checker bug would.
+    let mut items = parse("kind Shape\n    Circle(radius: float)\nfi\n\ntask main()\n    Circle(1.0)\nfi\n");
+    Checker::new().check_file(&mut items).unwrap();
+    let Item::Task(main) = &mut items[1] else { panic!("expected task main") };
+    let StmtKind::Expr(expr) = &mut main.body[0].kind else { panic!("expected an expression statement") };
+    let ExprKind::Construct { args, .. } = &mut expr.kind else { panic!("expected a constructor, got {:?}", expr.kind) };
+    args.push(args[0].clone());
+
+    let err = Generator::new().generate(&items).unwrap_err();
+    assert_eq!(err.span, None);
+    assert_eq!(
+        err.message,
+        "internal compiler error: variant 'Circle' called with 2 arguments (expected 1) (at 6:5)"
     );
 }
 

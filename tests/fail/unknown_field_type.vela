@@ -1,0 +1,8 @@
+# error: 3:12: unknown type 'Pointt'
+shape Line
+    start: ^Pointt
+fi
+
+task main()
+    show(1)
+fi

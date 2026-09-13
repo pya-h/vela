@@ -1,0 +1,8 @@
+# error: 2:16: unknown type 'Pointt'
+task make() -> Pointt
+    send 0
+fi
+
+task main()
+    show(1)
+fi

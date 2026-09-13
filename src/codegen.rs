@@ -81,8 +81,20 @@ impl Generator {
         self.w.line("#include \"vela_rt.h\"");
         self.w.blank();
 
-        // Type definitions first
+        // Types. A typedef for every shape and kind comes first, so any type can
+        // point to any other (or to itself); then the kinds' tag enums; then the
+        // struct bodies, each after the types it contains by value.
         for item in items {
+            if let Some(name) = type_name(item) {
+                self.w.line(&format!("typedef struct {0} {0};", mangle(name)));
+            }
+        }
+        for item in items {
+            if let Item::Kind(k) = item {
+                self.gen_tag_enum(k);
+            }
+        }
+        for item in type_order(items)? {
             match item {
                 Item::Shape(s) => self.gen_shape(s),
                 Item::Kind(k) => self.gen_kind(k),
@@ -128,35 +140,45 @@ impl Generator {
     }
 
     fn gen_shape(&mut self, s: &ShapeDef) {
-        self.w.open(&format!("typedef struct {}", mangle(&s.name)));
+        self.w.open(&format!("struct {}", mangle(&s.name)));
+        if s.fields.is_empty() {
+            // ISO C has no empty structs.
+            self.w.line("char vela__empty;");
+        }
         for field in &s.fields {
             self.w.line(&format!("{} {};", c_type(&field.ty), field.name));
         }
-        self.w.close_with(&format!(" {};", mangle(&s.name)));
+        self.w.close_with(";");
     }
 
-    fn gen_kind(&mut self, k: &KindDef) {
+    fn gen_tag_enum(&mut self, k: &KindDef) {
         let tag_name = format!("{}_Tag", mangle(&k.name));
         self.w.open(&format!("typedef enum {}", tag_name));
         for v in &k.variants {
             self.w.line(&format!("{}_{},", tag_name, v.tag));
         }
         self.w.close_with(&format!(" {};", tag_name));
+    }
 
-        self.w.open(&format!("typedef struct {}", mangle(&k.name)));
-        self.w.line(&format!("{} tag;", tag_name));
-        self.w.open("union");
-        for v in &k.variants {
-            if !v.payload.is_empty() {
-                self.w.open("struct");
-                for field in &v.payload {
-                    self.w.line(&format!("{} {};", c_type(&field.ty), field.name));
+    fn gen_kind(&mut self, k: &KindDef) {
+        self.w.open(&format!("struct {}", mangle(&k.name)));
+        self.w.line(&format!("{}_Tag tag;", mangle(&k.name)));
+        // Variants without a payload have no union member, and a kind with no
+        // payloads at all has no union (ISO C has no empty unions).
+        if k.variants.iter().any(|v| !v.payload.is_empty()) {
+            self.w.open("union");
+            for v in &k.variants {
+                if !v.payload.is_empty() {
+                    self.w.open("struct");
+                    for field in &v.payload {
+                        self.w.line(&format!("{} {};", c_type(&field.ty), field.name));
+                    }
+                    self.w.close_with(&format!(" {};", v.tag));
                 }
-                self.w.close_with(&format!(" {};", v.tag));
             }
+            self.w.close_with(" data;");
         }
-        self.w.close_with(" data;");
-        self.w.close_with(&format!(" {};", mangle(&k.name)));
+        self.w.close_with(";");
     }
 
     fn gen_task(&mut self, t: &TaskDef) -> Result<()> {
@@ -329,31 +351,6 @@ impl Generator {
                     let value = self.gen_expr(arg)?;
                     return Ok(format!("{}({})", helper, value));
                 }
-                // Kind variant constructor?
-                let mut found = None;
-                for kind in self.kinds.values() {
-                    if let Some(variant) = kind.variants.iter().find(|v| v.tag == *name) {
-                        found = Some((kind.name.clone(), variant.clone()));
-                        break;
-                    }
-                }
-                if let Some((kind_name, variant)) = found {
-                    if args.len() != variant.payload.len() {
-                        return Err(Error::internal_at(
-                            span,
-                            format!("variant '{}' called with {} arguments (expected {})", name, args.len(), variant.payload.len()),
-                        ));
-                    }
-                    let mut fields = Vec::new();
-                    for (field, arg) in variant.payload.iter().zip(args) {
-                        fields.push(format!(".{} = {}", field.name, self.gen_expr(arg)?));
-                    }
-                    let tag_name = format!("{}_Tag", mangle(&kind_name));
-                    return Ok(format!(
-                        "(({}){{ .tag = {}_{}, .data = {{ .{} = {{ {} }} }} }})",
-                        mangle(&kind_name), tag_name, variant.tag, variant.tag, fields.join(", ")
-                    ));
-                }
                 let values = args.iter().map(|arg| self.gen_expr(arg)).collect::<Result<Vec<_>>>()?;
                 Ok(format!("{}({})", mangle(name), values.join(", ")))
             }
@@ -389,7 +386,33 @@ impl Generator {
                 };
                 Ok(format!("({} {} {})", left, op_s, right))
             }
-            ExprKind::New(ty, value) => {
+            ExprKind::Construct { kind, tag, args } => {
+                let variant = self
+                    .kinds
+                    .get(kind)
+                    .and_then(|k| k.variants.iter().find(|v| v.tag == *tag))
+                    .cloned()
+                    .ok_or_else(|| Error::internal_at(span, format!("unknown variant '{}'", tag)))?;
+                if args.len() != variant.payload.len() {
+                    return Err(Error::internal_at(
+                        span,
+                        format!("variant '{}' called with {} arguments (expected {})", tag, args.len(), variant.payload.len()),
+                    ));
+                }
+                let tag_value = format!("{}_Tag_{}", mangle(kind), tag);
+                if variant.payload.is_empty() {
+                    return Ok(format!("(({}){{ .tag = {} }})", mangle(kind), tag_value));
+                }
+                let mut fields = Vec::new();
+                for (field, arg) in variant.payload.iter().zip(args) {
+                    fields.push(format!(".{} = {}", field.name, self.gen_expr(arg)?));
+                }
+                Ok(format!(
+                    "(({}){{ .tag = {}, .data = {{ .{} = {{ {} }} }} }})",
+                    mangle(kind), tag_value, tag, fields.join(", ")
+                ))
+            }
+            ExprKind::New { ty, value, .. } => {
                 let val = self.gen_expr(value)?;
                 let tmp = self.fresh_temp("p");
                 let ctype = c_type(ty);
@@ -400,9 +423,13 @@ impl Generator {
                 Ok(format!("(*({}))", expr))
             }
             ExprKind::StructInit(name, fields) => {
+                if fields.is_empty() {
+                    // Initializes the placeholder member of an empty shape.
+                    return Ok(format!("((struct {}){{ 0 }})", mangle(name)));
+                }
                 let mut values = Vec::new();
-                for (fname, fexpr) in fields {
-                    values.push(format!(".{} = {}", fname, self.gen_expr(fexpr)?));
+                for field in fields {
+                    values.push(format!(".{} = {}", field.name, self.gen_expr(&field.value)?));
                 }
                 Ok(format!("((struct {}){{ {} }})", mangle(name), values.join(", ")))
             }
@@ -420,6 +447,65 @@ impl Generator {
             _ => Err(Error::internal_at(e.span, "each over a non-range expression")),
         }
     }
+}
+
+fn type_name(item: &Item) -> Option<&str> {
+    match item {
+        Item::Shape(s) => Some(&s.name),
+        Item::Kind(k) => Some(&k.name),
+        Item::Task(_) => None,
+    }
+}
+
+/// Shapes and kinds in source order, except that each comes after every type
+/// it contains by value, since C needs a struct's complete definition before
+/// it can be embedded. (The checker has rejected types that contain
+/// themselves by value.)
+fn type_order(items: &[Item]) -> Result<Vec<&Item>> {
+    let by_name: HashMap<&str, &Item> = items
+        .iter()
+        .filter_map(|item| type_name(item).map(|name| (name, item)))
+        .collect();
+    let mut finished = HashMap::new();
+    let mut order = Vec::new();
+    for item in items {
+        if let Some(name) = type_name(item) {
+            visit_type(name, &by_name, &mut finished, &mut order)?;
+        }
+    }
+    Ok(order)
+}
+
+/// Depth-first step of `type_order`. `finished` maps a type to `false` while
+/// its dependencies are being emitted and `true` once it is in `order`.
+fn visit_type<'a>(
+    name: &'a str,
+    by_name: &HashMap<&'a str, &'a Item>,
+    finished: &mut HashMap<&'a str, bool>,
+    order: &mut Vec<&'a Item>,
+) -> Result<()> {
+    match finished.get(name) {
+        Some(true) => return Ok(()),
+        Some(false) => return Err(Error::internal(format!("type '{}' contains itself by value", name))),
+        None => {}
+    }
+    let Some(&item) = by_name.get(name) else {
+        return Ok(()); // a builtin type
+    };
+    finished.insert(name, false);
+    let fields: Vec<&Field> = match item {
+        Item::Shape(s) => s.fields.iter().collect(),
+        Item::Kind(k) => k.variants.iter().flat_map(|v| &v.payload).collect(),
+        Item::Task(_) => Vec::new(),
+    };
+    for field in fields {
+        if let Type::Named(dep) = &field.ty {
+            visit_type(dep, by_name, finished, order)?;
+        }
+    }
+    finished.insert(name, true);
+    order.push(item);
+    Ok(())
 }
 
 /// The C declarator of a task, e.g. `int64_t vela_add(int64_t a, int64_t b)`.

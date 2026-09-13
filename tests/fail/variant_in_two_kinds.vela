@@ -1,0 +1,14 @@
+# error: 8:5: 'Red' is already defined at 3:5
+kind Light
+    Red
+    Green
+fi
+
+kind Apple
+    Red
+    Yellow
+fi
+
+task main()
+    show(1)
+fi

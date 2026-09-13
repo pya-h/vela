@@ -215,6 +215,22 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
 
 <span class="keyword">bind</span> p = Point { x: 10, y: 20 }
 show(p.x)</pre>
+      <p>
+        A shape literal must give every field exactly once, in any order: <code>Point { y: 20, x: 10 }</code> is the
+        same value. A shape may also have no fields (<code>Marker {}</code>).
+      </p>
+      <p>
+        Shapes and kinds can be used before they are declared. A type cannot contain itself by value, since its
+        values would be infinitely large, but it can point to itself:
+      </p>
+      <pre><span class="keyword">shape</span> Node
+    value: int
+    next: ^Node            <span class="comment"># ok: a pointer</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">shape</span> Loop
+    inner: Loop            <span class="comment"># error: 'Loop' contains itself by value</span>
+<span class="keyword">fi</span></pre>
       <p>Assigning to a field requires the variable to be a <code>hold</code>; task parameters are immutable.</p>
       <pre><span class="keyword">hold</span> q = Point { x: 1, y: 2 }
 q.x = 5                    <span class="comment"># ok</span>
@@ -238,6 +254,28 @@ p.x = 5                    <span class="comment"># error: p is a bind</span></pr
         <span class="keyword">send</span> w * h
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></pre>
+      <p>
+        A variant can have no payload. Write its value as just its name, with or without parentheses; its
+        <code>case</code> binds nothing.
+      </p>
+      <pre><span class="keyword">kind</span> Light
+    Red
+    Green
+    Dimmed(level: int)
+<span class="keyword">fi</span>
+
+<span class="keyword">bind</span> a = Red
+<span class="keyword">bind</span> b = Green()          <span class="comment"># same as Green</span>
+<span class="keyword">bind</span> c = Dimmed(3)</pre>
+
+      <h3>Names</h3>
+      <p>
+        Tasks, shapes, kinds, and variants share one namespace: no two of them can have the same name, even across
+        different kinds, and none can be named like a builtin (<code>int</code>, <code>float</code>,
+        <code>bool</code>, <code>text</code>, <code>unit</code>, <code>show</code>). Every type you write must be a
+        builtin, a shape, or a kind. A variable can't take a variant's name, so a bare <code>Red</code> always
+        means the variant.
+      </p>
 
       <h3>Control Flow</h3>
       <pre><span class="keyword">when</span> x > 0
