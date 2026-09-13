@@ -1,0 +1,5 @@
+# error: 3:19: expected type int, got none
+task main()
+    bind n: int = none
+    show(n)
+fi

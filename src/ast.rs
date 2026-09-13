@@ -22,6 +22,8 @@ pub enum Type {
     Bool,
     Text,
     Unit,
+    /// The type of the `none` literal: fits any pointer type.
+    None,
     Ptr(Box<Type>),
     Named(String),
     Range(Box<Type>),
@@ -37,6 +39,7 @@ impl fmt::Display for Type {
             Type::Bool => write!(f, "bool"),
             Type::Text => write!(f, "text"),
             Type::Unit => write!(f, "unit"),
+            Type::None => write!(f, "none"),
             Type::Ptr(inner) => write!(f, "^{}", inner),
             Type::Named(name) => write!(f, "{}", name),
             Type::Range(inner) => write!(f, "range of {}", inner),
@@ -52,13 +55,6 @@ impl Type {
     pub fn ptr_inner(&self) -> Option<&Type> {
         match self {
             Type::Ptr(t) => Some(t),
-            _ => None,
-        }
-    }
-
-    pub fn range_inner(&self) -> Option<&Type> {
-        match self {
-            Type::Range(t) => Some(t),
             _ => None,
         }
     }

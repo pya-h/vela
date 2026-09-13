@@ -1,5 +1,5 @@
 # Hello world in Vela
 
-task main() ->
+task main()
     show("Hello, Vela!")
 fi

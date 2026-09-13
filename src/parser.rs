@@ -109,12 +109,11 @@ impl Parser {
         let params = self.parse_field_list()?;
         let mut ret_span = span;
         let ret = if self.match_token(Token::Arrow) {
-            if self.check(Token::Newline) || self.check(Token::Fi) {
-                Type::Unit
-            } else {
-                ret_span = self.peek_span();
-                self.parse_type()?
+            if self.check(Token::Newline) || self.check(Token::Fi) || self.is_at_end() {
+                return Err(Error::at(self.peek_span(), "expected a return type after '->'"));
             }
+            ret_span = self.peek_span();
+            self.parse_type()?
         } else {
             Type::Unit
         };

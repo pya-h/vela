@@ -113,7 +113,17 @@ impl Checker {
                     for param in &t.params {
                         self.check_type(&param.ty, param.ty_span)?;
                     }
-                    self.check_type(&t.ret, t.ret_span)?;
+                    if t.ret != Type::Unit {
+                        self.check_type(&t.ret, t.ret_span)?;
+                    }
+                    if t.name == "main" {
+                        if let Some(param) = t.params.first() {
+                            return err(param.span, "task 'main' cannot take parameters");
+                        }
+                        if t.ret != Type::Unit {
+                            return err(t.ret_span, "task 'main' cannot return a value");
+                        }
+                    }
                 }
             }
         }
@@ -143,8 +153,10 @@ impl Checker {
     }
 
     /// A type written in the source must be a builtin type, a shape, or a kind.
+    /// `unit` is only valid as a return type, which is checked separately.
     fn check_type(&self, ty: &Type, span: Span) -> Result<()> {
         match ty {
+            Type::Unit => err(span, "unit is only allowed as a return type"),
             Type::Ptr(inner) => self.check_type(inner, span),
             Type::Named(name) if !self.shapes.contains_key(name) && !self.kinds.contains_key(name) => {
                 err(span, format!("unknown type '{}'", name))
@@ -193,6 +205,9 @@ impl Checker {
         self.check_block(&mut task.body)?;
         self.scopes.clear();
         self.current_ret = None;
+        if task.ret != Type::Unit && !always_sends(&task.body) {
+            return err(task.span, format!("task '{}' can finish without sending a value", task.name));
+        }
         Ok(())
     }
 
@@ -262,12 +277,21 @@ impl Checker {
                     self.check_type(annotated, ty_span.unwrap_or(span))?;
                 }
                 let init_ty = self.check_expr(init)?;
-                if let Some(annotated) = ty {
-                    self.expect_type(&init_ty, annotated, init.span)?;
-                }
-                // Equal to the annotation, if there is one.
-                *ty = Some(init_ty.clone());
-                self.define(name, init_ty, *mutable, span)
+                let binding_ty = match ty {
+                    Some(annotated) => {
+                        self.expect_type(&init_ty, annotated, init.span)?;
+                        annotated.clone()
+                    }
+                    None => match init_ty {
+                        Type::None => {
+                            return err(init.span, format!("cannot infer the type of '{}' from none; give it a pointer type, such as '{}: ^int'", name, name));
+                        }
+                        Type::Unit => return err(init.span, "this expression has no value (its type is unit)"),
+                        other => other,
+                    },
+                };
+                *ty = Some(binding_ty.clone());
+                self.define(name, binding_ty, *mutable, span)
             }
             StmtKind::Assign(lhs, rhs) => {
                 let lhs_ty = self.check_assign_target(lhs)?;
@@ -290,13 +314,19 @@ impl Checker {
                 self.check_scoped_block(body)
             }
             StmtKind::Each(name, range, body) => {
-                let rty = self.check_expr(range)?;
-                let inner = rty.range_inner()
-                    .ok_or_else(|| Error::at(range.span, "each requires a range"))?
-                    .clone();
+                // A range is only valid here, so it is checked here rather than
+                // as an ordinary expression.
+                let ExprKind::Range(start, end) = &mut range.kind else {
+                    return err(range.span, "each requires a range, such as 0..n");
+                };
+                for bound in [start, end] {
+                    let bty = self.check_expr(bound)?;
+                    self.expect_type(&bty, &Type::Int, bound.span)?;
+                }
+                range.ty = Some(Type::Range(Box::new(Type::Int)));
                 // The loop variable and the body share one scope.
                 self.push_scope();
-                let result = self.define(name, inner, false, span)
+                let result = self.define(name, Type::Int, false, span)
                     .and_then(|()| self.check_block(body));
                 self.pop_scope();
                 result
@@ -304,13 +334,15 @@ impl Checker {
             StmtKind::Match(expr, cases) => self.check_match(span, expr, cases),
             StmtKind::Send(expr) => {
                 let ret = self.current_ret.clone().unwrap_or(Type::Unit);
-                if let Some(e) = expr {
-                    let ety = self.check_expr(e)?;
-                    self.expect_type(&ety, &ret, e.span)?;
-                } else if ret != Type::Unit {
-                    return err(span, "expected a value after send");
+                match expr {
+                    Some(e) if ret == Type::Unit => err(e.span, "this task has no return type, so send cannot take a value"),
+                    Some(e) => {
+                        let ety = self.check_expr(e)?;
+                        self.expect_type(&ety, &ret, e.span)
+                    }
+                    None if ret != Type::Unit => err(span, "expected a value after send"),
+                    None => Ok(()),
                 }
-                Ok(())
             }
             StmtKind::Free(e) => {
                 let ety = self.check_expr(e)?;
@@ -440,7 +472,7 @@ impl Checker {
             ExprKind::FloatLit(_) => Ok(Type::Float),
             ExprKind::BoolLit(_) => Ok(Type::Bool),
             ExprKind::TextLit(_) => Ok(Type::Text),
-            ExprKind::NoneLit => Ok(Type::Ptr(Box::new(Type::Unit))),
+            ExprKind::NoneLit => Ok(Type::None),
             ExprKind::Var(name) => Ok(self.lookup_or_err(name, span)?.ty.clone()),
             ExprKind::Field(base, field) => {
                 let base_ty = self.check_expr(base)?;
@@ -521,13 +553,7 @@ impl Checker {
                 }
                 Ok(Type::Named(name.clone()))
             }
-            ExprKind::Range(a, b) => {
-                let aty = self.check_expr(a)?;
-                let bty = self.check_expr(b)?;
-                self.expect_type(&aty, &Type::Int, a.span)?;
-                self.expect_type(&bty, &Type::Int, b.span)?;
-                Ok(Type::Range(Box::new(Type::Int)))
-            }
+            ExprKind::Range(..) => err(span, "a range can only be used in 'each'"),
         }
     }
 
@@ -563,8 +589,14 @@ impl Checker {
                 }
             }
             BinaryOp::Eq | BinaryOp::Ne => {
-                self.expect_type(&rt, &lt, r.span)?;
-                if !lt.is_numeric() && !matches!(lt, Type::Bool | Type::Text | Type::Ptr(_)) {
+                let none_and_pointer = matches!(
+                    (&lt, &rt),
+                    (Type::None, Type::Ptr(_) | Type::None) | (Type::Ptr(_), Type::None)
+                );
+                if !none_and_pointer {
+                    self.expect_type(&rt, &lt, r.span)?;
+                }
+                if !lt.is_numeric() && !matches!(lt, Type::Bool | Type::Text | Type::Ptr(_) | Type::None) {
                     return err(span, "cannot compare this type");
                 }
                 Ok(Type::Bool)
@@ -600,13 +632,28 @@ impl Checker {
         }
     }
 
+    /// Checks that a value of type `actual` fits where `expected` is required:
+    /// the types are equal, or the value is `none` and a pointer is expected.
     fn expect_type(&self, actual: &Type, expected: &Type, span: Span) -> Result<()> {
-        if actual != expected {
+        let none_for_pointer = *actual == Type::None && matches!(expected, Type::Ptr(_));
+        if actual != expected && !none_for_pointer {
             err(span, format!("expected type {}, got {}", expected, actual))
         } else {
             Ok(())
         }
     }
+}
+
+/// Whether running `block` always ends in `send`: it contains a `send`, a
+/// `when` whose two branches both always send, or a `match` whose cases all do.
+/// Loops don't count, since their bodies might not run.
+fn always_sends(block: &Block) -> bool {
+    block.iter().any(|stmt| match &stmt.kind {
+        StmtKind::Send(_) => true,
+        StmtKind::When(_, then_block, Some(else_block)) => always_sends(then_block) && always_sends(else_block),
+        StmtKind::Match(_, cases) => cases.iter().all(|case| always_sends(&case.body)),
+        _ => false,
+    })
 }
 
 fn err<T>(span: Span, msg: impl Into<String>) -> Result<T> {

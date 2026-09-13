@@ -1,0 +1,5 @@
+# error: 3:13: unit is only allowed as a return type
+task main()
+    bind p: ^unit = none
+    show(1)
+fi

@@ -197,27 +197,6 @@ fn failing_programs() {
 }
 
 #[test]
-fn task_without_send_aborts() {
-    // A value-returning task that finishes without `send` must stop the
-    // program with a message, not return garbage.
-    let scratch = scratch_dir("missing-send");
-    let source = scratch.join("missing_send.vela");
-    fs::write(&source, "task answer() -> int\n    show(1)\nfi\n\ntask main()\n    show(answer())\nfi\n").unwrap();
-    let exe = scratch.join("missing_send");
-    let compile = Command::new(VELA).arg(&source).arg("-o").arg(&exe).output().unwrap();
-    assert!(compile.status.success(), "{}", String::from_utf8_lossy(&compile.stderr));
-    let run = Command::new(&exe).output().unwrap();
-    let _ = fs::remove_dir_all(&scratch);
-
-    assert!(!run.status.success(), "program should abort");
-    assert_eq!(String::from_utf8_lossy(&run.stdout), "1\n");
-    assert_eq!(
-        String::from_utf8_lossy(&run.stderr),
-        "vela: task 'answer' finished without sending a value\n"
-    );
-}
-
-#[test]
 fn examples() {
     let root = project_root();
     let scratch = scratch_dir("examples");

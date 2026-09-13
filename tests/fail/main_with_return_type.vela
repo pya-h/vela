@@ -1,0 +1,4 @@
+# error: 2:16: task 'main' cannot return a value
+task main() -> int
+    send 0
+fi

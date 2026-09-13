@@ -1,0 +1,18 @@
+# error: 7:6: task 'code' can finish without sending a value
+kind Light
+    Red
+    Green
+fi
+
+task code(l: Light) -> int
+    match l
+    case Red
+        send 1
+    case Green
+        show("green")
+    fi
+fi
+
+task main()
+    show(code(Red))
+fi

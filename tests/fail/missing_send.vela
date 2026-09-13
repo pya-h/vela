@@ -1,0 +1,8 @@
+# error: 2:6: task 'answer' can finish without sending a value
+task answer() -> int
+    show(1)
+fi
+
+task main()
+    show(answer())
+fi

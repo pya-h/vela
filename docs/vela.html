@@ -152,9 +152,10 @@
         <li><code class="type">int</code> — 64-bit signed integer</li>
         <li><code class="type">float</code> — 64-bit floating point</li>
         <li><code class="type">bool</code> — true or false</li>
-        <li><code class="type">text</code> — UTF-8 string</li>
-        <li><code class="type">unit</code> — the empty return type</li>
-        <li><code class="type">^T</code> — owned pointer to T</li>
+        <li><code class="type">text</code> — UTF-8 string; <code>==</code> compares contents</li>
+        <li><code class="type">unit</code> — the return type of a task that returns nothing; it has no values, so it
+          can't be the type of a variable, parameter, or field</li>
+        <li><code class="type">^T</code> — owned pointer to T; <code>none</code> is the empty pointer</li>
         <li>User-defined shapes and kinds</li>
       </ul>
     </section>
@@ -176,8 +177,19 @@
     show(name)
 <span class="keyword">fi</span></pre>
       <p>
-        A task that returns a value must <code>send</code> one. If it finishes without sending, the program stops
-        with <code>vela: task 'add' finished without sending a value</code>.
+        A task that returns a value must <code>send</code> one on every path: the compiler rejects a task that could
+        reach its end without sending. A <code>when</code> counts only if both branches send, a <code>match</code> only
+        if every case does, and a loop never counts, since its body might not run. A task without a return type
+        uses a bare <code>send</code> to return early.
+      </p>
+      <pre><span class="keyword">task</span> sign(x: int) -> int
+    <span class="keyword">when</span> x < 0
+        <span class="keyword">send</span> -1
+    <span class="keyword">fi</span>
+    <span class="keyword">send</span> 1               <span class="comment"># without this line: task 'sign' can finish without sending a value</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        Every program starts at <code>task main()</code>, which takes no parameters and returns nothing.
       </p>
 
       <h3>Bindings</h3>
@@ -304,7 +316,8 @@ p.x = 5                    <span class="comment"># error: p is a bind</span></pr
 <span class="keyword">fi</span></pre>
       <p>
         <code>each</code> counts from the start of the range up to, but not including, the end. Both ends are
-        evaluated once, before the first iteration; the loop variable is immutable.
+        evaluated once, before the first iteration; the loop variable is immutable. A range such as
+        <code>0..5</code> is not a value: it can only appear in <code>each</code>.
       </p>
 
       <h3>Memory</h3>
@@ -313,6 +326,15 @@ p.x = 5                    <span class="comment"># error: p is a bind</span></pr
 show(p^)
 p^ = 43                    <span class="comment"># writing through a pointer is allowed, even from a bind</span>
 <span class="keyword">free</span>(p)</pre>
+      <p>
+        <code>none</code> is the empty pointer. It fits any pointer type and can be compared with any pointer, but
+        on its own it has no pointer type, so a binding initialized with <code>none</code> needs one written out.
+      </p>
+      <pre><span class="keyword">hold</span> next: ^int = <span class="keyword">none</span>
+<span class="keyword">when</span> next == <span class="keyword">none</span>
+    next = <span class="keyword">new</span> int(1)
+<span class="keyword">fi</span>
+<span class="keyword">bind</span> q = <span class="keyword">none</span>             <span class="comment"># error: cannot infer the type of 'q' from none</span></pre>
       <div class="note">
         <strong>Note:</strong> Vela intentionally keeps memory management simple. There is no borrow checker;
         ownership is manual, like C but with clearer syntax. Use <code>new</code>/<code>free</code> with care.

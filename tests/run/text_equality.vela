@@ -1,0 +1,15 @@
+# `==` on text compares contents, not addresses.
+
+task same(a: text, b: text) -> bool
+    send a == b
+fi
+
+task main()
+    show("apple" == "apple")
+    show("apple" == "apples")
+    show("apple" != "pear")
+    # Equal contents at different addresses (text ends at the NUL).
+    show(same("ab\0x", "ab\0y"))
+    bind word = "hello"
+    show(word == "hello")
+fi

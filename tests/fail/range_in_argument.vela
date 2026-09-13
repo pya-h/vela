@@ -1,0 +1,8 @@
+# error: 7:12: a range can only be used in 'each'
+task count(n: int)
+    show(n)
+fi
+
+task main()
+    count(0..5)
+fi

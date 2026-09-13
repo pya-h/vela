@@ -1,0 +1,7 @@
+# error: 4:15: each requires a range, such as 0..n
+task main()
+    bind n = 5
+    each i in n
+        show(i)
+    fi
+fi

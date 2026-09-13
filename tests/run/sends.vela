@@ -1,0 +1,42 @@
+# Every path of a value-returning task must send; each of these tasks does.
+
+kind Light
+    Red
+    Green
+fi
+
+task sign(x: int) -> int
+    when x > 0
+        send 1
+    else
+        when x < 0
+            send -1
+        fi
+        send 0
+    fi
+fi
+
+task code(l: Light) -> text
+    match l
+    case Red
+        send "stop"
+    case Green
+        send "go"
+    fi
+fi
+
+task after_loop(x: int) -> int
+    each i in 0..1
+        show(i)
+    fi
+    send x
+fi
+
+task main()
+    show(sign(5))
+    show(sign(-5))
+    show(sign(0))
+    show(code(Red))
+    show(code(Green))
+    show(after_loop(4))
+fi

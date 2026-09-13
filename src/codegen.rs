@@ -428,7 +428,7 @@ impl Generator {
                 }
                 Ok(format!("(({}){{ {} }})", mangle(name), values.join(", ")))
             }
-            ExprKind::Range(_, _) => Err(Error::at(span, "range cannot be used as a value")),
+            ExprKind::Range(_, _) => Err(Error::internal_at(span, "range outside 'each' reached code generation")),
         }
     }
 
@@ -436,6 +436,11 @@ impl Generator {
     fn gen_binary(&mut self, e: &Expr, op: BinaryOp, l: &Expr, r: &Expr) -> Result<String> {
         let left = self.gen_expr(l)?;
         let right = self.gen_expr(r)?;
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && *l.ty()? == Type::Text {
+            // Text compares by contents, not by address.
+            let not = if op == BinaryOp::Ne { "!" } else { "" };
+            return Ok(format!("{}vela__rt__text_eq({}, {})", not, left, right));
+        }
         if op == BinaryOp::Mod && *e.ty()? == Type::Float {
             // C's `%` is integer-only.
             return Ok(format!("vela__rt__fmod({}, {})", left, right));
@@ -603,6 +608,7 @@ fn c_type(ty: &Type) -> String {
         Type::Bool => "bool".to_string(),
         Type::Text => "const char*".to_string(),
         Type::Unit => "void".to_string(),
+        Type::None => "void*".to_string(),
         Type::Ptr(t) => format!("{}*", c_type(t)),
         Type::Named(n) => mangle(n),
         Type::Range(t) => format!("/*range<{}>*/", c_type(t)),

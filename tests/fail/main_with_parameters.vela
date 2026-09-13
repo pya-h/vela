@@ -1,0 +1,4 @@
+# error: 2:11: task 'main' cannot take parameters
+task main(args: text)
+    show(args)
+fi

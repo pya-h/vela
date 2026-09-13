@@ -29,6 +29,11 @@ static inline void vela__rt__show_text(const char* x) {
     printf("%s\n", x);
 }
 
+/* `==` on text compares contents. */
+static inline bool vela__rt__text_eq(const char* a, const char* b) {
+    return strcmp(a, b) == 0;
+}
+
 /* Float remainder (Vela's `%` on floats); the result has the dividend's sign. */
 static inline double vela__rt__fmod(double a, double b) {
     return fmod(a, b);
@@ -49,9 +54,9 @@ static inline void vela__rt__free(void* p) {
     free(p);
 }
 
-/* Placed at the end of every task that returns a value. Reaching it means the
- * task finished without `send`; aborting keeps that defined, where falling off
- * the end of a C function would be undefined behavior. */
+/* Placed at the end of every task that returns a value. The checker ensures
+ * every path sends, so this is never reached; it keeps C compilers from
+ * treating the end of the function as reachable (undefined behavior). */
 static inline _Noreturn void vela__rt__missing_send(const char* task) {
     fflush(stdout);
     fprintf(stderr, "vela: task '%s' finished without sending a value\n", task);

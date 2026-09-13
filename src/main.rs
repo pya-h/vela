@@ -73,6 +73,10 @@ fn run(opts: &Options) -> std::result::Result<(), String> {
     let report = |e: Error| render_error(&opts.input, &source, &e);
 
     let items = front_end(&source).map_err(report)?;
+    let has_main = items.iter().any(|item| matches!(item, Item::Task(t) if t.name == "main"));
+    if !has_main && !opts.emit_c {
+        return Err(format!("{}: error: program has no 'main' task", opts.input));
+    }
     let c_code = Generator::new().generate(&items).map_err(report)?;
 
     if opts.emit_c {

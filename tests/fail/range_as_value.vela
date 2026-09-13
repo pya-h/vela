@@ -1,0 +1,5 @@
+# error: 3:15: a range can only be used in 'each'
+task main()
+    bind r = 0..5
+    show(1)
+fi
