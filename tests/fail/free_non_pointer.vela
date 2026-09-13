@@ -1,0 +1,5 @@
+# error: free requires a pointer
+task main()
+    bind x = 1
+    free(x)
+end

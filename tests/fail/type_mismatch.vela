@@ -1,0 +1,4 @@
+# error: expected type Int, got Bool
+task main()
+    bind x: int = true
+end

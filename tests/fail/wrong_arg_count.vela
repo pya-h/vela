@@ -1,0 +1,8 @@
+# error: task 'add' expects 2 args, got 1
+task add(a: int, b: int) -> int
+    send a + b
+end
+
+task main()
+    show(add(1))
+end

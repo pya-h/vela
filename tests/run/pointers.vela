@@ -1,0 +1,18 @@
+# Owned pointers: new, dereference, write through, free
+
+shape Point
+    x: int
+    y: int
+end
+
+task main()
+    bind n: ^int = new int(42)
+    show(n^)
+    n^ = n^ + 1
+    show(n^)
+    free(n)
+
+    bind p = new Point(Point { x: 3, y: 4 })
+    show(p^.x * p^.y)
+    free(p)
+end

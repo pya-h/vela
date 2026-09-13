@@ -1,0 +1,17 @@
+# error: duplicate case 'Circle'
+kind Shape
+    Circle(radius: float)
+    Rectangle(width: float, height: float)
+end
+
+task main()
+    bind s = Circle(1.0)
+    match s
+    case Circle r
+        show(r)
+    case Circle q
+        show(q)
+    case Rectangle w h
+        show(w)
+    end
+end

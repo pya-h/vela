@@ -1,0 +1,3 @@
+# error: expected End, got Eof
+task main()
+    show(1)

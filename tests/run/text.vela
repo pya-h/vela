@@ -1,0 +1,8 @@
+# Text literals and escapes
+
+task main()
+    show("plain")
+    show("tab\there")
+    show("quote \" and backslash \\")
+    show("two\nlines")
+end

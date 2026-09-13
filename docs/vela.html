@@ -255,6 +255,13 @@ show(p^)
 ./target/debug/vela program.vela -o program</pre>
       <p>To see the generated C code:</p>
       <pre>./target/debug/vela program.vela --emit-c</pre>
+      <p>To run the test suite (requires a C compiler available as <code>cc</code>):</p>
+      <pre>cargo test</pre>
+      <p>
+        Tests are plain Vela programs: <code>tests/run/</code> holds programs with their expected output,
+        <code>tests/fail/</code> holds programs the compiler must reject, and every file in
+        <code>examples/</code> is checked against <code>tests/examples/</code>.
+      </p>
     </section>
 
     <section>

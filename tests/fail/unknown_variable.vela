@@ -1,0 +1,4 @@
+# error: unknown variable 'missing'
+task main()
+    show(missing)
+end

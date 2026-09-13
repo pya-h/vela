@@ -1,0 +1,4 @@
+# error: unexpected character '@'
+task main()
+    show(@)
+end

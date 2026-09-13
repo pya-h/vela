@@ -1,0 +1,5 @@
+# error: cannot assign to immutable variable 'x'
+task main()
+    bind x = 1
+    x = 2
+end

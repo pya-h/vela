@@ -1,0 +1,20 @@
+# The kinds example from docs/vela.html
+
+kind Shape
+    Circle(radius: float)
+    Rectangle(width: float, height: float)
+end
+
+task area(s: Shape) -> float
+    match s
+    case Circle r
+        send 3.14 * r * r
+    case Rectangle w h
+        send w * h
+    end
+end
+
+task main()
+    show(area(Circle(2.5)))
+    show(area(Rectangle(1.5, 4.5)))
+end

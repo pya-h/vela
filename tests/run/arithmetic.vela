@@ -1,0 +1,18 @@
+# Integer arithmetic, precedence, unary operators and boolean logic
+
+task main()
+    show(1 + 2 * 3)
+    show((1 + 2) * 3)
+    show(17 / 5)
+    show(17 % 5)
+    show(-4 + 10)
+    show(10 - 3 - 2)
+    show(not true)
+    show(true and false)
+    show(true or false)
+    show(3 < 4)
+    show(3 >= 4)
+    show(2 == 2)
+    show(2 != 2)
+    show(1 < 2 and 2 < 3)
+end

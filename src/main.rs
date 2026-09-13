@@ -59,9 +59,13 @@ fn generate_c(items: &[Item]) -> Result<String> {
 
 fn compile_to_executable(items: &[Item], input_path: &str, output: &str) -> Result<()> {
     let base = Path::new(input_path).file_stem().unwrap_or("vela_out".as_ref());
-    let tmp_dir = std::env::temp_dir();
-    let c_path = tmp_dir.join(format!("{}.c", base.to_string_lossy()));
-    let h_path = tmp_dir.join("vela_rt.h");
+    // A per-process build directory keeps concurrent compilations from
+    // overwriting each other's generated files.
+    let build_dir = std::env::temp_dir().join(format!("vela-build-{}", std::process::id()));
+    fs::create_dir_all(&build_dir)
+        .map_err(|e| Error::new(0, 0, format!("cannot create build directory: {}", e)))?;
+    let c_path = build_dir.join(format!("{}.c", base.to_string_lossy()));
+    let h_path = build_dir.join("vela_rt.h");
 
     let c_code = generate_c(items)?;
     fs::write(&c_path, c_code)
@@ -73,7 +77,7 @@ fn compile_to_executable(items: &[Item], input_path: &str, output: &str) -> Resu
         .arg("-std=c11")
         .arg("-O2")
         .arg("-I")
-        .arg(&tmp_dir)
+        .arg(&build_dir)
         .arg(&c_path)
         .arg("-o")
         .arg(output)
@@ -81,7 +85,9 @@ fn compile_to_executable(items: &[Item], input_path: &str, output: &str) -> Resu
         .map_err(|e| Error::new(0, 0, format!("failed to invoke C compiler: {}", e)))?;
 
     if !status.success() {
-        return Err(Error::new(0, 0, "C compilation failed"));
+        return Err(Error::new(0, 0, format!(
+            "C compilation failed (generated C kept in {})", build_dir.display())));
     }
+    let _ = fs::remove_dir_all(&build_dir);
     Ok(())
 }

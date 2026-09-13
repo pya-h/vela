@@ -1,0 +1,17 @@
+# Shapes: literals, field access, field assignment, passing by value
+
+shape Point
+    x: int
+    y: int
+end
+
+task sum(p: Point) -> int
+    send p.x + p.y
+end
+
+task main()
+    hold p = Point { x: 1, y: 2 }
+    show(p.x)
+    p.y = 40
+    show(sum(p))
+end
