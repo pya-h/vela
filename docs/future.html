@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela — Future Directions & Design Notebook</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-2: #111827;
+      --fg: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --accent-3: #34d399;
+      --accent-4: #f472b6;
+      --code-bg: #1e293b;
+      --card-bg: #151c2c;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.65;
+    }
+    header {
+      padding: 5rem 1rem 4rem;
+      text-align: center;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(56,189,248,0.12) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(167,139,250,0.12) 0%, transparent 40%),
+        var(--bg-2);
+      border-bottom: 1px solid var(--border);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .tagline {
+      margin-top: 1rem;
+      font-size: 1.25rem;
+      color: var(--muted);
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 4rem;
+      font-size: 2rem;
+      color: var(--fg);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    h2 .icon {
+      width: 2rem;
+      height: 2rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 0.5rem;
+      background: rgba(56,189,248,0.1);
+      color: var(--accent);
+      font-size: 1.1rem;
+    }
+    h3 {
+      margin-top: 2.5rem;
+      color: var(--accent-2);
+      font-size: 1.35rem;
+    }
+    p { margin: 1rem 0; }
+    code {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      background: var(--code-bg);
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.35rem;
+      color: var(--accent);
+      font-size: 0.9rem;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1.25rem;
+      border-radius: 0.75rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      line-height: 1.55;
+    }
+    .intro {
+      font-size: 1.15rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+
+    /* Cards */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.25rem;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .card:hover {
+      transform: translateY(-3px);
+      border-color: var(--accent);
+    }
+    .card h4 {
+      margin: 0 0 0.5rem;
+      color: var(--fg);
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .card .badge {
+      margin-left: auto;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .b-high { background: rgba(248,113,113,0.15); color: #fca5a5; }
+    .b-med { background: rgba(250,204,21,0.15); color: #fde047; }
+    .b-low { background: rgba(52,211,153,0.15); color: #6ee7b7; }
+    .b-idea { background: rgba(56,189,248,0.15); color: #7dd3fc; }
+    .b-rec { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+
+    /* Memory option blocks */
+    .memory-option {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin: 1.25rem 0;
+    }
+    .memory-option h4 {
+      margin: 0 0 0.75rem;
+      font-size: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .memory-option .pros-cons {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .memory-option .pros, .memory-option .cons {
+      background: var(--bg-2);
+      padding: 1rem;
+      border-radius: 0.5rem;
+    }
+    .memory-option .pros strong { color: var(--accent-3); }
+    .memory-option .cons strong { color: var(--accent-4); }
+    .memory-option ul {
+      margin: 0.5rem 0 0;
+      padding-left: 1.25rem;
+      color: var(--muted);
+    }
+    .memory-option li { margin: 0.35rem 0; }
+
+    /* Roadmap */
+    .roadmap {
+      display: grid;
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .roadmap-phase {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.25rem;
+      border-left: 5px solid;
+    }
+    .roadmap-phase.now { border-left-color: var(--accent-3); }
+    .roadmap-phase.next { border-left-color: var(--accent); }
+    .roadmap-phase.later { border-left-color: var(--accent-2); }
+    .roadmap-phase h4 {
+      margin: 0 0 0.5rem;
+      font-size: 1.15rem;
+    }
+    .roadmap-phase ul {
+      margin: 0;
+      padding-left: 1.25rem;
+      color: var(--muted);
+    }
+
+    /* Quote / note */
+    .note {
+      background: linear-gradient(90deg, rgba(56,189,248,0.1), transparent);
+      border-left: 4px solid var(--accent);
+      padding: 1.25rem 1.5rem;
+      border-radius: 0 0.75rem 0.75rem 0;
+      margin: 1.5rem 0;
+    }
+    .note strong { color: var(--accent); }
+
+    /* Recommendation box */
+    .recommendation {
+      background: linear-gradient(135deg, rgba(167,139,250,0.12), rgba(56,189,248,0.08));
+      border: 1px solid var(--accent-2);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    .recommendation h4 {
+      margin: 0 0 0.75rem;
+      color: var(--accent-2);
+      font-size: 1.25rem;
+    }
+
+    ul { padding-left: 1.5rem; }
+    li { margin: 0.6rem 0; }
+    footer {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      background: var(--bg-2);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Vela Future Directions</h1>
+    <p class="tagline">A design notebook of weak points, safe improvements, and bold ideas for where Vela could go next.</p>
+  </header>
+
+  <main>
+    <p class="intro">
+      Vela is intentionally small today, but every small language has a horizon. This document collects
+      honest weak points, practical improvements, and deeper design questions — especially around memory
+      safety — that could shape the next version of Vela.
+    </p>
+
+    <section>
+      <h2><span class="icon">⚠️</span> Current Weak Points</h2>
+      <p>These are not failures; they are the natural limits of a first compiler. Naming them is the first step toward fixing them.</p>
+      <div class="cards">
+        <div class="card">
+          <h4>Poor error locations <span class="badge b-high">High</span></h4>
+          <p>Type checker and codegen errors often report line 1, column 1. Real source spans are needed for usable diagnostics.</p>
+        </div>
+        <div class="card">
+          <h4>Manual memory risks <span class="badge b-high">High</span></h4>
+          <p><code>new</code>/<code>free</code> gives control but allows leaks and use-after-free, just like C.</p>
+        </div>
+        <div class="card">
+          <h4>No standard library <span class="badge b-high">High</span></h4>
+          <p>Only <code>show</code> exists. No arrays, strings, files, networking, or math utilities.</p>
+        </div>
+        <div class="card">
+          <h4>No module system <span class="badge b-med">Medium</span></h4>
+          <p>All code must live in one file. There is no way to split projects or share packages.</p>
+        </div>
+        <div class="card">
+          <h4>Limited types <span class="badge b-med">Medium</span></h4>
+          <p>No generics, arrays, slices, tuples, or optional/error types. This limits expressiveness.</p>
+        </div>
+        <div class="card">
+          <h4>No concurrency <span class="badge b-med">Medium</span></h4>
+          <p>No threads, channels, async, or actors. Vela is strictly single-threaded today.</p>
+        </div>
+        <div class="card">
+          <h4>Text is a C string <span class="badge b-med">Medium</span></h4>
+          <p><code>text</code> is currently <code>const char*</code>. No length, no safe concatenation, no UTF-8 guarantees.</p>
+        </div>
+        <div class="card">
+          <h4>C backend dependency <span class="badge b-low">Low</span></h4>
+          <p>Generating C is simple but requires a C compiler. An LLVM or native backend would be cleaner long-term.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon">✅</span> Safe & High-Impact Improvements</h2>
+      <p>These changes improve Vela without radically changing its character. They are the lowest-risk next steps.</p>
+      <div class="cards">
+        <div class="card">
+          <h4>Source spans <span class="badge b-idea">Idea</span></h4>
+          <p>Attach line/column info to every AST node so errors point to the real problem.</p>
+        </div>
+        <div class="card">
+          <h4>Built-in arrays & slices <span class="badge b-idea">Idea</span></h4>
+          <p>Add <code>[T; n]</code> fixed arrays and <code>[]T</code> slices with bounds checking.</p>
+        </div>
+        <div class="card">
+          <h4>Real string type <span class="badge b-idea">Idea</span></h4>
+          <p>Replace C strings with a <code>(ptr, len)</code> struct and safe operations.</p>
+        </div>
+        <div class="card">
+          <h4>Option & Result <span class="badge b-idea">Idea</span></h4>
+          <p>Introduce sum types for nullable values and error handling without exceptions.</p>
+        </div>
+        <div class="card">
+          <h4>Pattern match expressions <span class="badge b-idea">Idea</span></h4>
+          <p>Let <code>match</code> produce a value, not just execute statements.</p>
+        </div>
+        <div class="card">
+          <h4>Module system <span class="badge b-idea">Idea</span></h4>
+          <p>Simple file-based modules with explicit imports and exports.</p>
+        </div>
+        <div class="card">
+          <h4>Built-in testing <span class="badge b-idea">Idea</span></h4>
+          <p>A lightweight <code>test</code> block or assertion syntax for confidence.</p>
+        </div>
+        <div class="card">
+          <h4>Move-only pointers <span class="badge b-idea">Idea</span></h4>
+          <p>Prevent accidental aliasing of <code>^T</code> by making them move-only by default.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon">🧠</span> Memory Management: The Big Question</h2>
+      <p>
+        Vela's biggest open question is memory safety. There are several credible paths, each with trade-offs.
+        Below are the main candidates, ranked from most to least conservative.
+      </p>
+
+      <div class="memory-option">
+        <h4><span>🔒</span> Option A: Rust-Style Borrow Checker</h4>
+        <p>
+          Track ownership, lifetimes, and borrows at compile time. Values have one owner; references are
+          temporary and cannot outlive the data they point to.
+        </p>
+        <div class="pros-cons">
+          <div class="pros">
+            <strong>Pros</strong>
+            <ul>
+              <li>Eliminates use-after-free, double-free, and data races</li>
+              <li>Zero runtime overhead</li>
+              <li>Proven at scale (Rust)</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <strong>Cons</strong>
+            <ul>
+              <li>Massive implementation complexity</li>
+              <li>Steep learning curve for users</li>
+              <li>Fights against Vela's minimalism</li>
+            </ul>
+          </div>
+        </div>
+        <div class="note">
+          <strong>Verdict:</strong> Probably too heavy for Vela. A full borrow checker would double or triple the
+          compiler's size and change the language's feel.
+        </div>
+      </div>
+
+      <div class="memory-option">
+        <h4><span>📦</span> Option B: Region / Arena Allocation</h4>
+        <p>
+          Allocate everything into a region (arena) and free the whole region at once. Objects never outlive
+          their region. The compiler checks that references never escape their region.
+        </p>
+        <div class="pros-cons">
+          <div class="pros">
+            <strong>Pros</strong>
+            <ul>
+              <li>Very fast allocation and deallocation</li>
+              <li>Simpler than borrowing: just region scoping</li>
+              <li>Excellent for compilers, games, and request handlers</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <strong>Cons</strong>
+            <ul>
+              <li>Objects cannot live longer than their region</li>
+              <li>Requires discipline about region boundaries</li>
+              <li>Long-lived data needs special treatment</li>
+            </ul>
+          </div>
+        </div>
+        <div class="note">
+          <strong>Verdict:</strong> A strong fit for Vela. It is simpler than full borrowing and aligns with the
+          language's explicit, minimal philosophy.
+        </div>
+      </div>
+
+      <div class="memory-option">
+        <h4><span>🔄</span> Option C: Automatic Reference Counting (ARC)</h4>
+        <p>
+          Every shared object carries a reference count. The compiler inserts retain/release calls, or the
+          runtime does it. Swift uses this model successfully.
+        </p>
+        <div class="pros-cons">
+          <div class="pros">
+            <strong>Pros</strong>
+            <ul>
+              <li>Easier to reason about than borrowing</li>
+              <li>Handles shared ownership naturally</li>
+              <li>Deterministic destruction</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <strong>Cons</strong>
+            <ul>
+              <li>Runtime overhead from counting</li>
+              <li>Reference cycles need weak references</li>
+              <li>Not as zero-cost as borrowing or arenas</li>
+            </ul>
+          </div>
+        </div>
+        <div class="note">
+          <strong>Verdict:</strong> Viable, but it adds runtime complexity. Less "systems-y" than arenas or
+          ownership.
+        </div>
+      </div>
+
+      <div class="memory-option">
+        <h4><span>➡️</span> Option D: Linear / Move-Only Ownership</h4>
+        <p>
+          Every value has exactly one owner. You can move it, but you cannot copy or alias it unless you
+          explicitly clone. There are no borrows at all — only moves.
+        </p>
+        <div class="pros-cons">
+          <div class="pros">
+            <strong>Pros</strong>
+            <ul>
+              <li>Much simpler than a borrow checker</li>
+              <li>No aliasing means no use-after-free or double-free</li>
+              <li>Easy to implement and explain</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <strong>Cons</strong>
+            <ul>
+              <li>Can be awkward: reading a field consumes the whole value</li>
+              <li>Need explicit clone for shared read access</li>
+              <li>Limited compared to full borrowing</li>
+            </ul>
+          </div>
+        </div>
+        <div class="note">
+          <strong>Verdict:</strong> An excellent stepping stone. Start here, then add limited borrowing later if
+          needed.
+        </div>
+      </div>
+
+      <div class="recommendation">
+        <h4>💡 Recommended Path for Vela</h4>
+        <p>
+          Adopt a <strong>hybrid of linear ownership and regions</strong>:
+        </p>
+        <ul>
+          <li><strong>Owned pointers <code>^T</code></strong> are move-only. You cannot copy them; you can only move or free them.</li>
+          <li><strong>Borrowed references <code>&T</code></strong> are temporary and cannot be stored. They are valid only within the current scope/region.</li>
+          <li><strong>Regions</strong> (explicit arenas) group allocations and free them in bulk. References cannot escape their region.</li>
+          <li><strong>No shared mutable state</strong> by default: either you own it mutably, or you borrow it immutably.</li>
+        </ul>
+        <p>
+          This gives Vela a memory model that is <strong>simpler than Rust</strong>, <strong>safer than C</strong>,
+          and <strong>more flexible than pure arenas</strong>. It also keeps the compiler small and the syntax
+          minimal.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon">🚀</span> Other Design Directions</h2>
+      <p>Memory is not the only place Vela can grow. Here are ideas across the whole language.</p>
+
+      <h3>Syntax & Ergonomics</h3>
+      <ul>
+        <li><strong>Match expressions:</strong> <code>bind area = match s case Circle r -> 3.14 * r * r ... end</code></li>
+        <li><strong>Guards in patterns:</strong> <code>case Point x y when x > 0</code></li>
+        <li><strong>Else-if chains:</strong> <code>when ... else when ... else ... end</code></li>
+        <li><strong>Inclusive ranges:</strong> <code>0..=10</code> or <code>0...10</code></li>
+        <li><strong>Tuples:</strong> <code>(int, text)</code> for lightweight grouping</li>
+        <li><strong>Named arguments:</strong> <code>Point(x: 1, y: 2)</code> always, not just struct init</li>
+      </ul>
+
+      <h3>Type System</h3>
+      <ul>
+        <li><strong>Generics:</strong> parameterize shapes, kinds, and tasks over types</li>
+        <li><strong>Type inference:</strong> let the compiler infer more types without annotations</li>
+        <li><strong>Sum-type exhaustiveness:</strong> already present; keep it mandatory</li>
+        <li><strong>Compile-time constants:</strong> <code>const MaxSize: int = 1024</code></li>
+        <li><strong>Type aliases:</strong> <code>alias UserId = int</code></li>
+      </ul>
+
+      <h3>Tooling & Ecosystem</h3>
+      <ul>
+        <li><strong>Package manager:</strong> simple dependency fetching and project builds</li>
+        <li><strong>Formatter:</strong> consistent, opinionated code formatting</li>
+        <li><strong>LSP:</strong> IDE support with go-to-definition and type hints</li>
+        <li><strong>Docs generator:</strong> extract docs from comments automatically</li>
+        <li><strong>Test runner:</strong> built into the compiler</li>
+      </ul>
+
+      <h3>Concurrency</h3>
+      <ul>
+        <li><strong>Message-passing actors:</strong> no shared mutable state by default</li>
+        <li><strong>Channels:</strong> <code>send</code> and <code>recv</code> between tasks</li>
+        <li><strong>Async/await:</strong> only if it fits the minimal philosophy</li>
+        <li><strong>Data-race freedom:</strong> enforce through ownership rules from day one</li>
+      </ul>
+
+      <h3>Compilation Targets</h3>
+      <ul>
+        <li><strong>LLVM IR:</strong> better optimization and error messages than C</li>
+        <li><strong>WebAssembly:</strong> run Vela in browsers and edge environments</li>
+        <li><strong>Embedded targets:</strong> bare-metal output with no runtime</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="icon">🗺️</span> Suggested Roadmap</h2>
+      <div class="roadmap">
+        <div class="roadmap-phase now">
+          <h4>Now — Foundations <span class="badge b-low">Low Risk</span></h4>
+          <ul>
+            <li>Source spans and good error messages</li>
+            <li>Fixed-size arrays and a real <code>text</code> type</li>
+            <li>Move-only owned pointers</li>
+            <li>Basic standard library (math, strings, files)</li>
+          </ul>
+        </div>
+        <div class="roadmap-phase next">
+          <h4>Next — Growth <span class="badge b-med">Medium Risk</span></h4>
+          <ul>
+            <li>Module system and package manager</li>
+            <li>Generics</li>
+            <li>Result/Option types and error handling</li>
+            <li>Pattern-match expressions</li>
+            <li>Region-based allocation</li>
+          </ul>
+        </div>
+        <div class="roadmap-phase later">
+          <h4>Later — Ambition <span class="badge b-high">High Risk</span></h4>
+          <ul>
+            <li>Limited borrow checking on top of regions</li>
+            <li>Concurrency model (actors or channels)</li>
+            <li>LLVM or native backend</li>
+            <li>WebAssembly target</li>
+            <li>Self-hosting compiler</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon">🎯</span> Conclusion</h2>
+      <p>
+        Vela's strength is its smallness. The best next steps preserve that smallness while filling the
+        obvious gaps: better diagnostics, a real string type, arrays, and a safer memory model. The
+        recommended memory direction — <strong>move-only ownership + scoped regions + optional temporary borrows</strong>
+        — keeps Vela fast, simple, and far safer than C without becoming Rust.
+      </p>
+      <p>
+        Beyond memory, Vela should grow carefully: generics, modules, and lightweight error handling before
+        concurrency or a self-hosted compiler. The goal is not to be everything; it is to be a small,
+        beautiful, fast language that proves you do not need a massive toolchain to write safe systems code.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Vela — designed small, with room to grow.</p>
+  </footer>
+</body>
+</html>
