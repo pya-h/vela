@@ -1,0 +1,9 @@
+# error: 8:12: shape 'Point' has no field 'z'
+shape Point
+    x: int
+end
+
+task main()
+    bind p = Point { x: 1 }
+    show(p.z)
+end

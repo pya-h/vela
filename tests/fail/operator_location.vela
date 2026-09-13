@@ -1,0 +1,4 @@
+# error: 3:12: arithmetic requires numeric operands
+task main()
+    show(1 + (true))
+end

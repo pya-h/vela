@@ -1,4 +1,4 @@
-# error: duplicate case 'Circle'
+# error: 12:10: duplicate case 'Circle'
 kind Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)

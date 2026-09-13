@@ -1,0 +1,8 @@
+# error: 6:6: task 'main' defined twice
+task main()
+    show(1)
+end
+
+task main()
+    show(2)
+end

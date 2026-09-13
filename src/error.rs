@@ -1,17 +1,27 @@
 use std::fmt;
 
+use crate::ast::Span;
+
 #[derive(Debug, Clone)]
 pub struct Error {
-    pub line: usize,
-    pub col: usize,
+    /// Where the error was found, if it relates to a source position.
+    pub span: Option<Span>,
     pub message: String,
 }
 
 impl Error {
-    pub fn new(line: usize, col: usize, message: impl Into<String>) -> Self {
+    /// An error at a specific source position.
+    pub fn at(span: Span, message: impl Into<String>) -> Self {
         Error {
-            line,
-            col,
+            span: Some(span),
+            message: message.into(),
+        }
+    }
+
+    /// An error with no meaningful source position.
+    pub fn general(message: impl Into<String>) -> Self {
+        Error {
+            span: None,
             message: message.into(),
         }
     }
@@ -19,7 +29,10 @@ impl Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{}:{}] {}", self.line, self.col, self.message)
+        match self.span {
+            Some(span) => write!(f, "{}:{}: {}", span.line, span.col, self.message),
+            None => write!(f, "{}", self.message),
+        }
     }
 }
 

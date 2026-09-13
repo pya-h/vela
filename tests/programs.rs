@@ -4,8 +4,8 @@
 //! - `tests/run/NAME.vela` must compile and run; its stdout must equal
 //!   `tests/run/NAME.out`.
 //! - `tests/fail/NAME.vela` must be rejected by the Vela compiler itself (not by
-//!   the C compiler). Its first line is `# error: TEXT`, and TEXT must appear in
-//!   the compiler's error output.
+//!   the C compiler). Its first line is `# error: LINE:COL: MESSAGE`, and the
+//!   compiler must report exactly that message at that position.
 //! - `examples/NAME.vela` must compile and run; its stdout must equal
 //!   `tests/examples/NAME.out`.
 
@@ -89,10 +89,29 @@ fn check_fail(source: &Path, scratch: &Path) -> Option<String> {
     if stderr.contains("C compilation failed") {
         return Some(format!("{}: rejected by the C compiler, not by Vela\n{}", name, stderr));
     }
-    if !stderr.contains(expected) {
-        return Some(format!("{}: expected error containing '{}', got:\n{}", name, expected, stderr));
+    let needle = diagnostic_needle(expected);
+    if !stderr.contains(&needle) {
+        return Some(format!("{}: expected error containing '{}', got:\n{}", name, needle, stderr));
     }
     None
+}
+
+/// Turns a fixture's `LINE:COL: message` into the text the compiler prints
+/// (`:LINE:COL: error: message`). Text without a location is matched as-is.
+fn diagnostic_needle(expected: &str) -> String {
+    if let Some((location, message)) = expected.split_once(": ") {
+        let is_location = location
+            .split_once(':')
+            .is_some_and(|(l, c)| {
+                !l.is_empty() && !c.is_empty()
+                    && l.chars().all(|ch| ch.is_ascii_digit())
+                    && c.chars().all(|ch| ch.is_ascii_digit())
+            });
+        if is_location {
+            return format!(":{}: error: {}", location, message);
+        }
+    }
+    expected.to_string()
 }
 
 fn report(suite: &str, failures: Vec<String>) {

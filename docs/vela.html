@@ -255,6 +255,10 @@ show(p^)
 ./target/debug/vela program.vela -o program</pre>
       <p>To see the generated C code:</p>
       <pre>./target/debug/vela program.vela --emit-c</pre>
+      <p>Errors point at the exact place in your source:</p>
+      <pre>program.vela:3:10: error: unknown variable 'missing'
+ 3 |     show(missing)
+   |          ^</pre>
       <p>To run the test suite (requires a C compiler available as <code>cc</code>):</p>
       <pre>cargo test</pre>
       <p>

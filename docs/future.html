@@ -154,6 +154,7 @@
     .b-low { background: rgba(52,211,153,0.15); color: #6ee7b7; }
     .b-idea { background: rgba(56,189,248,0.15); color: #7dd3fc; }
     .b-rec { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+    .b-done { background: rgba(148,163,184,0.15); color: #cbd5e1; }
 
     /* Memory option blocks */
     .memory-option {
@@ -269,8 +270,8 @@
       <p>These are not failures; they are the natural limits of a first compiler. Naming them is the first step toward fixing them.</p>
       <div class="cards">
         <div class="card">
-          <h4>Poor error locations <span class="badge b-high">High</span></h4>
-          <p>Type checker and codegen errors often report line 1, column 1. Real source spans are needed for usable diagnostics.</p>
+          <h4>Poor error locations <span class="badge b-done">Done</span></h4>
+          <p>Fixed: every syntax node now carries a source span, and errors are reported as <code>file:line:col</code> with the offending line and a caret.</p>
         </div>
         <div class="card">
           <h4>Manual memory risks <span class="badge b-high">High</span></h4>
@@ -308,7 +309,7 @@
       <p>These changes improve Vela without radically changing its character. They are the lowest-risk next steps.</p>
       <div class="cards">
         <div class="card">
-          <h4>Source spans <span class="badge b-idea">Idea</span></h4>
+          <h4>Source spans <span class="badge b-done">Done</span></h4>
           <p>Attach line/column info to every AST node so errors point to the real problem.</p>
         </div>
         <div class="card">
@@ -542,7 +543,7 @@
         <div class="roadmap-phase now">
           <h4>Now — Foundations <span class="badge b-low">Low Risk</span></h4>
           <ul>
-            <li>Source spans and good error messages</li>
+            <li><s>Source spans and good error messages</s> (done)</li>
             <li>Fixed-size arrays and a real <code>text</code> type</li>
             <li>Move-only owned pointers</li>
             <li>Basic standard library (math, strings, files)</li>

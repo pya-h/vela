@@ -1,4 +1,4 @@
-# error: unexpected character '@'
+# error: 3:10: unexpected character '@'
 task main()
     show(@)
 end

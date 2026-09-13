@@ -1,4 +1,4 @@
-# error: missing case 'Rectangle' in match
+# error: 9:5: missing case 'Rectangle' in match
 kind Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)

@@ -1,3 +1,4 @@
+use crate::ast::Span;
 use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -56,6 +57,68 @@ pub enum Token {
     Eof,
 }
 
+impl Token {
+    /// A human-readable description for diagnostics, e.g. `'end'` or
+    /// `identifier 'x'`.
+    pub fn describe(&self) -> String {
+        let symbol = match self {
+            Token::Int(n) => return format!("integer {}", n),
+            Token::Float(n) => return format!("float {:?}", n),
+            Token::Text(_) => return "text literal".to_string(),
+            Token::Ident(s) => return format!("identifier '{}'", s),
+            Token::Newline => return "end of line".to_string(),
+            Token::Eof => return "end of file".to_string(),
+            Token::True => "true",
+            Token::False => "false",
+            Token::None => "none",
+            Token::Task => "task",
+            Token::Bind => "bind",
+            Token::Hold => "hold",
+            Token::Send => "send",
+            Token::Shape => "shape",
+            Token::Kind => "kind",
+            Token::When => "when",
+            Token::Else => "else",
+            Token::Loop => "loop",
+            Token::Each => "each",
+            Token::In => "in",
+            Token::Match => "match",
+            Token::Case => "case",
+            Token::New => "new",
+            Token::Free => "free",
+            Token::And => "and",
+            Token::Or => "or",
+            Token::Not => "not",
+            Token::End => "end",
+            Token::LParen => "(",
+            Token::RParen => ")",
+            Token::LBrace => "{",
+            Token::RBrace => "}",
+            Token::LBracket => "[",
+            Token::RBracket => "]",
+            Token::Colon => ":",
+            Token::Comma => ",",
+            Token::Dot => ".",
+            Token::Arrow => "->",
+            Token::Range => "..",
+            Token::Plus => "+",
+            Token::Minus => "-",
+            Token::Star => "*",
+            Token::Slash => "/",
+            Token::Percent => "%",
+            Token::Eq => "==",
+            Token::Ne => "!=",
+            Token::Lt => "<",
+            Token::Gt => ">",
+            Token::Le => "<=",
+            Token::Ge => ">=",
+            Token::Assign => "=",
+            Token::Caret => "^",
+        };
+        format!("'{}'", symbol)
+    }
+}
+
 pub struct Lexer {
     source: Vec<char>,
     pos: usize,
@@ -73,21 +136,20 @@ impl Lexer {
         }
     }
 
-    pub fn tokenize(mut self) -> Result<(Vec<Token>, Vec<usize>, Vec<usize>)> {
+    /// Returns every token (ending with `Eof`) and, in parallel, its position.
+    pub fn tokenize(mut self) -> Result<(Vec<Token>, Vec<Span>)> {
         let mut tokens = Vec::new();
-        let mut lines = Vec::new();
-        let mut cols = Vec::new();
+        let mut spans = Vec::new();
         loop {
-            let (tok, (line, col)) = self.next_token()?;
+            let (tok, span) = self.next_token()?;
             let is_eof = tok == Token::Eof;
             tokens.push(tok);
-            lines.push(line);
-            cols.push(col);
+            spans.push(span);
             if is_eof {
                 break;
             }
         }
-        Ok((tokens, lines, cols))
+        Ok((tokens, spans))
     }
 
     fn peek(&self) -> char {
@@ -116,11 +178,11 @@ impl Lexer {
         }
     }
 
-    fn location(&self) -> (usize, usize) {
-        (self.line, self.col)
+    fn location(&self) -> Span {
+        Span::new(self.line, self.col)
     }
 
-    pub fn next_token(&mut self) -> Result<(Token, (usize, usize))> {
+    pub fn next_token(&mut self) -> Result<(Token, Span)> {
         self.skip_whitespace();
         let loc = self.location();
         let c = self.peek();
@@ -197,7 +259,7 @@ impl Lexer {
                     self.advance();
                     Token::Ne
                 } else {
-                    return Err(Error::new(loc.0, loc.1, "unexpected '!'"));
+                    return Err(Error::at(loc, "unexpected '!'"));
                 }
             }
             '<' => {
@@ -216,12 +278,12 @@ impl Lexer {
                     Token::Gt
                 }
             }
-            _ => return Err(Error::new(loc.0, loc.1, format!("unexpected character '{}'", c))),
+            _ => return Err(Error::at(loc, format!("unexpected character '{}'", c))),
         };
         Ok((tok, loc))
     }
 
-    fn identifier(&mut self) -> Result<(Token, (usize, usize))> {
+    fn identifier(&mut self) -> Result<(Token, Span)> {
         let loc = self.location();
         let mut s = String::new();
         while self.peek().is_alphanumeric() || self.peek() == '_' {
@@ -255,7 +317,7 @@ impl Lexer {
         Ok((tok, loc))
     }
 
-    fn number(&mut self) -> Result<(Token, (usize, usize))> {
+    fn number(&mut self) -> Result<(Token, Span)> {
         let loc = self.location();
         let mut s = String::new();
         while self.peek().is_ascii_digit() {
@@ -266,37 +328,39 @@ impl Lexer {
             while self.peek().is_ascii_digit() {
                 s.push(self.advance());
             }
-            let val = s.parse::<f64>().map_err(|_| Error::new(loc.0, loc.1, "invalid float"))?;
+            let val = s.parse::<f64>().map_err(|_| Error::at(loc, "invalid float"))?;
             Ok((Token::Float(val), loc))
         } else {
-            let val = s.parse::<i64>().map_err(|_| Error::new(loc.0, loc.1, "invalid integer"))?;
+            let val = s.parse::<i64>().map_err(|_| Error::at(loc, format!("integer literal '{}' is too large", s)))?;
             Ok((Token::Int(val), loc))
         }
     }
 
-    fn string(&mut self) -> Result<(Token, (usize, usize))> {
+    fn string(&mut self) -> Result<(Token, Span)> {
         let loc = self.location();
         self.advance(); // opening "
         let mut s = String::new();
         while self.peek() != '"' && self.peek() != '\0' {
             if self.peek() == '\\' {
+                let escape_loc = self.location();
                 self.advance();
                 let c = self.advance();
                 match c {
+                    '\0' => break, // backslash at end of file: unterminated
                     'n' => s.push('\n'),
                     't' => s.push('\t'),
                     'r' => s.push('\r'),
                     '\\' => s.push('\\'),
                     '"' => s.push('"'),
                     '0' => s.push('\0'),
-                    _ => return Err(Error::new(self.line, self.col, format!("invalid escape '\\{}'", c))),
+                    _ => return Err(Error::at(escape_loc, format!("invalid escape '\\{}'", c))),
                 }
             } else {
                 s.push(self.advance());
             }
         }
         if self.peek() != '"' {
-            return Err(Error::new(loc.0, loc.1, "unterminated string"));
+            return Err(Error::at(loc, "unterminated string"));
         }
         self.advance(); // closing "
         Ok((Token::Text(s), loc))
