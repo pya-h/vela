@@ -495,9 +495,9 @@
 
       <h3>Syntax & Ergonomics</h3>
       <ul>
-        <li><strong>Match expressions:</strong> <code>bind area = match s case Circle r -> 3.14 * r * r ... end</code></li>
+        <li><strong>Match expressions:</strong> <code>bind area = match s case Circle r -> 3.14 * r * r ... fi</code></li>
         <li><strong>Guards in patterns:</strong> <code>case Point x y when x > 0</code></li>
-        <li><strong>Else-if chains:</strong> <code>when ... else when ... else ... end</code></li>
+        <li><strong>Else-if chains:</strong> <code>when ... else when ... else ... fi</code></li>
         <li><strong>Inclusive ranges:</strong> <code>0..=10</code> or <code>0...10</code></li>
         <li><strong>Tuples:</strong> <code>(int, text)</code> for lightweight grouping</li>
         <li><strong>Named arguments:</strong> <code>Point(x: 1, y: 2)</code> always, not just struct init</li>

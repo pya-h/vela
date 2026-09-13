@@ -27,7 +27,7 @@ pub enum Token {
     And,
     Or,
     Not,
-    End,
+    Fi,
     Ident(String),
     LParen,
     RParen,
@@ -58,7 +58,7 @@ pub enum Token {
 }
 
 impl Token {
-    /// A human-readable description for diagnostics, e.g. `'end'` or
+    /// A human-readable description for diagnostics, e.g. `'fi'` or
     /// `identifier 'x'`.
     pub fn describe(&self) -> String {
         let symbol = match self {
@@ -89,7 +89,7 @@ impl Token {
             Token::And => "and",
             Token::Or => "or",
             Token::Not => "not",
-            Token::End => "end",
+            Token::Fi => "fi",
             Token::LParen => "(",
             Token::RParen => ")",
             Token::LBrace => "{",
@@ -311,7 +311,7 @@ impl Lexer {
             "true" => Token::True,
             "false" => Token::False,
             "none" => Token::None,
-            "end" => Token::End,
+            "fi" => Token::Fi,
             _ => Token::Ident(s),
         };
         Ok((tok, loc))

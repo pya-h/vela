@@ -3,7 +3,7 @@
 shape Point
     x: int
     y: int
-end
+fi
 
 task main()
     bind n: ^int = new int(42)
@@ -15,4 +15,4 @@ task main()
     bind p = new Point(Point { x: 3, y: 4 })
     show(p^.x * p^.y)
     free(p)
-end
+fi

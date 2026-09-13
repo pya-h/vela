@@ -1,13 +1,13 @@
 # error: 12:5: cannot assign to a field of immutable variable 'line'
 shape Point
     x: int
-end
+fi
 
 shape Line
     from: Point
-end
+fi
 
 task main()
     bind line = Line { from: Point { x: 1 } }
     line.from.x = 5
-end
+fi

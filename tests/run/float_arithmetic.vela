@@ -2,11 +2,11 @@
 
 shape Vec1
     x: float
-end
+fi
 
 task half(n: int) -> float
     send n / 2.0
-end
+fi
 
 task main()
     show(3.0 / 2.0)
@@ -31,4 +31,4 @@ task main()
     bind v = Vec1 { x: 2.0 }
     show(v.x * 2)
     show(half(3))
-end
+fi

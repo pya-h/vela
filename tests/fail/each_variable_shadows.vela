@@ -3,5 +3,5 @@ task main()
     bind i = 10
     each i in 0..3
         show(i)
-    end
-end
+    fi
+fi

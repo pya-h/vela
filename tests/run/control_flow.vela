@@ -3,12 +3,12 @@
 task sign(n: int) -> int
     when n < 0
         send -1
-    end
+    fi
     when n == 0
         send 0
-    end
+    fi
     send 1
-end
+fi
 
 task main()
     each i in 0..3
@@ -16,18 +16,18 @@ task main()
             show("one")
         else
             show(i)
-        end
-    end
+        fi
+    fi
 
     hold total = 0
     hold k = 1
     loop k <= 4
         total = total + k
         k = k + 1
-    end
+    fi
     show(total)
 
     show(sign(-5))
     show(sign(0))
     show(sign(9))
-end
+fi

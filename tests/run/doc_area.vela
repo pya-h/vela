@@ -3,7 +3,7 @@
 kind Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)
-end
+fi
 
 task area(s: Shape) -> float
     match s
@@ -11,10 +11,10 @@ task area(s: Shape) -> float
         send 3.14 * r * r
     case Rectangle w h
         send w * h
-    end
-end
+    fi
+fi
 
 task main()
     show(area(Circle(2.5)))
     show(area(Rectangle(1.5, 4.5)))
-end
+fi

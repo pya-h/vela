@@ -3,15 +3,15 @@
 shape Point
     x: int
     y: int
-end
+fi
 
 task add(a: int, b: int) -> int
     send a + b
-end
+fi
 
 task dist(p: Point) -> float
     send 0.0
-end
+fi
 
 task main()
     bind sum = add(3, 4)
@@ -24,19 +24,19 @@ task main()
     loop i < 5
         show(i)
         i = i + 1
-    end
+    fi
 
     each n in 0..3
         show(n)
-    end
+    fi
 
     when sum > 5
         show("big")
     else
         show("small")
-    end
+    fi
 
     bind ptr: ^int = new int(42)
     show(ptr^)
     free(ptr)
-end
+fi

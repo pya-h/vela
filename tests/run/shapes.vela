@@ -3,15 +3,15 @@
 shape Point
     x: int
     y: int
-end
+fi
 
 task sum(p: Point) -> int
     send p.x + p.y
-end
+fi
 
 task main()
     hold p = Point { x: 1, y: 2 }
     show(p.x)
     p.y = 40
     show(sum(p))
-end
+fi

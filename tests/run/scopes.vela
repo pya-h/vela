@@ -8,7 +8,7 @@ task main()
     else
         bind y = 2
         show(y)
-    end
+    fi
 
     when false
         bind y = "unused"
@@ -16,20 +16,20 @@ task main()
     else
         bind y = 3
         show(y)
-    end
+    fi
 
     each i in 0..3
         bind square = i * i
         show(square)
-    end
+    fi
     each i in 0..1
         show(i)
-    end
+    fi
 
     hold n = 0
     loop n < 2
         bind step = 1
         n = n + step
-    end
+    fi
     show(n)
-end
+fi

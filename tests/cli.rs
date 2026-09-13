@@ -65,7 +65,7 @@ fn diagnostics_show_the_source_line_and_caret() {
     let dir = std::env::temp_dir().join(format!("vela-cli-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let src = dir.join("bad.vela");
-    std::fs::write(&src, "task main()\n\tshow(missing)\nend\n").unwrap();
+    std::fs::write(&src, "task main()\n\tshow(missing)\nfi\n").unwrap();
     let out = vela(&[src.to_str().unwrap()]);
     let _ = std::fs::remove_dir_all(&dir);
 

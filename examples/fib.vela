@@ -5,11 +5,11 @@ task fib(n: int) -> int
         send n
     else
         send fib(n - 1) + fib(n - 2)
-    end
-end
+    fi
+fi
 
 task main()
     each i in 0..10
         show(fib(i))
-    end
-end
+    fi
+fi

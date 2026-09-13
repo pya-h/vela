@@ -4,6 +4,6 @@ task main()
     loop n < 1
         hold step = 1
         n = n + step
-    end
+    fi
     show(step)
-end
+fi

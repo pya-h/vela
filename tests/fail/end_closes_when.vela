@@ -1,0 +1,15 @@
+# error: 13:9: blocks close with 'fi', not 'end'
+kind Light
+    Red(level: int)
+    Green(level: int)
+fi
+
+task main()
+    match Red(1)
+    case Red a
+        show(a)
+    case Green b
+        when b > 0
+        end
+    fi
+fi

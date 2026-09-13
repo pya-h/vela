@@ -80,6 +80,18 @@ impl Parser {
         self.peek() == &tok
     }
 
+    /// Rejects a line holding just `end`, where a block could close. Blocks
+    /// close with `fi`; `end` is an ordinary name, but alone on a line it is
+    /// never meaningful code, so it is almost certainly the old keyword.
+    fn reject_stray_end(&self) -> Result<()> {
+        let is_end = matches!(self.peek(), Token::Ident(name) if name == "end");
+        let next = self.tokens.get(self.pos + 1).unwrap_or(&Token::Eof);
+        if is_end && matches!(next, Token::Newline | Token::Eof) {
+            return Err(Error::at(self.peek_span(), "blocks close with 'fi', not 'end'"));
+        }
+        Ok(())
+    }
+
     fn parse_item(&mut self) -> Result<Item> {
         self.skip_newlines();
         match self.peek() {
@@ -96,7 +108,7 @@ impl Parser {
         let name = self.expect_ident()?;
         let params = self.parse_field_list()?;
         let ret = if self.match_token(Token::Arrow) {
-            if self.check(Token::Newline) || self.check(Token::End) {
+            if self.check(Token::Newline) || self.check(Token::Fi) {
                 Type::Unit
             } else {
                 self.parse_type()?
@@ -106,7 +118,7 @@ impl Parser {
         };
         self.skip_newlines();
         let body = self.parse_block()?;
-        self.expect(Token::End)?;
+        self.expect(Token::Fi)?;
         Ok(TaskDef { name, params, ret, body, span })
     }
 
@@ -116,13 +128,14 @@ impl Parser {
         let name = self.expect_ident()?;
         self.skip_newlines();
         let mut fields = Vec::new();
-        while !self.check(Token::End) && !self.is_at_end() {
+        while !self.check(Token::Fi) && !self.is_at_end() {
             self.skip_newlines();
-            if self.check(Token::End) { break; }
+            if self.check(Token::Fi) { break; }
+            self.reject_stray_end()?;
             fields.push(self.parse_field()?);
             self.skip_newlines();
         }
-        self.expect(Token::End)?;
+        self.expect(Token::Fi)?;
         Ok(ShapeDef { name, fields, span })
     }
 
@@ -132,9 +145,10 @@ impl Parser {
         let name = self.expect_ident()?;
         self.skip_newlines();
         let mut variants = Vec::new();
-        while !self.check(Token::End) && !self.is_at_end() {
+        while !self.check(Token::Fi) && !self.is_at_end() {
             self.skip_newlines();
-            if self.check(Token::End) { break; }
+            if self.check(Token::Fi) { break; }
+            self.reject_stray_end()?;
             let variant_span = self.peek_span();
             let tag = self.expect_ident()?;
             let payload = if self.check(Token::LParen) {
@@ -145,7 +159,7 @@ impl Parser {
             variants.push(Variant { tag, payload, span: variant_span });
             self.skip_newlines();
         }
-        self.expect(Token::End)?;
+        self.expect(Token::Fi)?;
         Ok(KindDef { name, variants, span })
     }
 
@@ -191,7 +205,7 @@ impl Parser {
     }
 
     fn parse_block(&mut self) -> Result<Block> {
-        self.parse_block_until(&[Token::End])
+        self.parse_block_until(&[Token::Fi])
     }
 
     fn parse_block_until(&mut self, stops: &[Token]) -> Result<Block> {
@@ -201,6 +215,7 @@ impl Parser {
             if self.is_at_end() || stops.iter().any(|t| self.check(t.clone())) {
                 break;
             }
+            self.reject_stray_end()?;
             stmts.push(self.parse_stmt()?);
             self.skip_newlines();
         }
@@ -252,14 +267,14 @@ impl Parser {
         self.advance(); // when
         let cond = self.parse_expr()?;
         self.skip_newlines();
-        let then_block = self.parse_block_until(&[Token::Else, Token::End])?;
+        let then_block = self.parse_block_until(&[Token::Else, Token::Fi])?;
         let else_block = if self.match_token(Token::Else) {
             self.skip_newlines();
-            Some(self.parse_block_until(&[Token::End])?)
+            Some(self.parse_block_until(&[Token::Fi])?)
         } else {
             None
         };
-        self.expect(Token::End)?;
+        self.expect(Token::Fi)?;
         Ok(Stmt::new(StmtKind::When(cond, then_block, else_block), span))
     }
 
@@ -269,7 +284,7 @@ impl Parser {
         let cond = self.parse_expr()?;
         self.skip_newlines();
         let body = self.parse_block()?;
-        self.expect(Token::End)?;
+        self.expect(Token::Fi)?;
         Ok(Stmt::new(StmtKind::Loop(cond, body), span))
     }
 
@@ -281,7 +296,7 @@ impl Parser {
         let range = self.parse_expr()?;
         self.skip_newlines();
         let body = self.parse_block()?;
-        self.expect(Token::End)?;
+        self.expect(Token::Fi)?;
         Ok(Stmt::new(StmtKind::Each(name, range, body), span))
     }
 
@@ -291,29 +306,30 @@ impl Parser {
         let expr = self.parse_expr()?;
         self.skip_newlines();
         let mut cases = Vec::new();
-        while !self.check(Token::End) && !self.is_at_end() {
+        while !self.check(Token::Fi) && !self.is_at_end() {
             self.skip_newlines();
-            if self.check(Token::End) { break; }
+            if self.check(Token::Fi) { break; }
+            self.reject_stray_end()?;
             self.expect(Token::Case)?;
             let case_span = self.peek_span();
             let tag = self.expect_ident()?;
             let mut binds = Vec::new();
-            while !self.check(Token::Newline) && !self.check(Token::End) && !self.check(Token::Case) && !self.is_at_end() {
+            while !self.check(Token::Newline) && !self.check(Token::Fi) && !self.check(Token::Case) && !self.is_at_end() {
                 let bind_span = self.peek_span();
                 binds.push((self.expect_ident()?, bind_span));
             }
             self.skip_newlines();
-            let body = self.parse_block_until(&[Token::Case, Token::End])?;
+            let body = self.parse_block_until(&[Token::Case, Token::Fi])?;
             cases.push(Case { tag, binds, body, span: case_span });
         }
-        self.expect(Token::End)?;
+        self.expect(Token::Fi)?;
         Ok(Stmt::new(StmtKind::Match(expr, cases), span))
     }
 
     fn parse_send(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
         self.advance(); // send
-        if self.check(Token::Newline) || self.check(Token::End) || self.is_at_end() {
+        if self.check(Token::Newline) || self.check(Token::Fi) || self.is_at_end() {
             Ok(Stmt::new(StmtKind::Send(None), span))
         } else {
             let expr = self.parse_expr()?;

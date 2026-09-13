@@ -1,12 +1,12 @@
 # error: 11:5: cannot assign to a field of a temporary value
 shape Point
     x: int
-end
+fi
 
 task origin() -> Point
     send Point { x: 0 }
-end
+fi
 
 task main()
     origin().x = 5
-end
+fi

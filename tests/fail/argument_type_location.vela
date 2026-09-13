@@ -1,8 +1,8 @@
 # error: 7:16: expected type int, got text
 task twice(n: int) -> int
     send n * 2
-end
+fi
 
 task main()
     show(twice("two"))
-end
+fi

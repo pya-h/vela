@@ -3,17 +3,17 @@
 task limit() -> int
     show("limit")
     send 3
-end
+fi
 
 task main()
     hold count = 3
     each i in 0..count
         count = count - 1
         show(i)
-    end
+    fi
     show(count)
 
     each i in 0..limit()
         show(i)
-    end
-end
+    fi
+fi

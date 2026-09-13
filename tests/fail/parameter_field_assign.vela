@@ -1,11 +1,11 @@
 # error: 6:5: cannot assign to a field of immutable variable 'p'
 shape Point
     x: int
-end
+fi
 task reset(p: Point)
     p.x = 0
-end
+fi
 
 task main()
     reset(Point { x: 1 })
-end
+fi

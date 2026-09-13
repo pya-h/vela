@@ -1,0 +1,11 @@
+# `end` is not a keyword: blocks close with `fi`, so `end` is an ordinary name.
+task last(end: int) -> int
+    send end - 1
+fi
+
+task main()
+    hold end = 5
+    end = end + 1
+    show(end)
+    show(last(end))
+fi

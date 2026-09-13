@@ -2,7 +2,7 @@
 kind Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)
-end
+fi
 
 task main()
     bind s = Circle(1.0)
@@ -13,5 +13,5 @@ task main()
         show(q)
     case Rectangle w h
         show(w)
-    end
-end
+    fi
+fi

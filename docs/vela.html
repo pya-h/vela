@@ -130,7 +130,7 @@
         <li><strong>Minimal surface.</strong> No classes <em>and</em> structs. No interfaces <em>and</em> traits. Just shapes, kinds, and tasks.</li>
         <li><strong>One way to do it.</strong> Immutability by default with <code>bind</code>; mutation explicitly opt-in with <code>hold</code>.</li>
         <li><strong>Safe by design.</strong> Static typing, exhaustive pattern matching, and explicit ownership via owned pointers.</li>
-        <li><strong>Beautiful syntax.</strong> Words over symbols, clean blocks with <code>end</code>, and no semicolons.</li>
+        <li><strong>Beautiful syntax.</strong> Words over symbols, clean blocks closed with <code>fi</code>, and no semicolons.</li>
         <li><strong>No GC.</strong> Manual memory management with <code>new</code> and <code>free</code>, or stack allocation where possible.</li>
       </ul>
     </section>
@@ -140,7 +140,7 @@
       <pre><span class="comment"># A tiny Vela program</span>
 <span class="keyword">task</span> main()
     show(<span class="string">"Hello, Vela!"</span>)
-<span class="keyword">end</span></pre>
+<span class="keyword">fi</span></pre>
       <p>Compile and run with:</p>
       <pre>cargo run -- examples/hello.vela -o hello
 ./hello</pre>
@@ -161,16 +161,20 @@
 
     <section>
       <h2>Syntax Overview</h2>
+      <p>
+        Every block — a task, shape, kind, <code>when</code>, <code>loop</code>, <code>each</code>, or
+        <code>match</code> — closes with <code>fi</code>. Each statement goes on its own line; there are no semicolons.
+      </p>
 
       <h3>Tasks</h3>
       <p>Functions are called <em>tasks</em>. The return arrow is required only when returning a value.</p>
       <pre><span class="keyword">task</span> add(a: int, b: int) -> int
     <span class="keyword">send</span> a + b
-<span class="keyword">end</span>
+<span class="keyword">fi</span>
 
 <span class="keyword">task</span> greet(name: text)
     show(name)
-<span class="keyword">end</span></pre>
+<span class="keyword">fi</span></pre>
 
       <h3>Bindings</h3>
       <p><code>bind</code> creates an immutable binding. <code>hold</code> creates a mutable variable.</p>
@@ -178,7 +182,7 @@
 <span class="keyword">hold</span> count = 0
 count = count + 1</pre>
       <p>
-        A variable lives until the <code>end</code> of the block that declares it. Vela has no shadowing: inside a
+        A variable lives until the block that declares it closes. Vela has no shadowing: inside a
         task, a name cannot be declared again while another variable with that name is visible (including
         parameters). Separate blocks, such as the two branches of a <code>when</code>, may reuse a name.
       </p>
@@ -188,7 +192,7 @@ count = count + 1</pre>
 <span class="keyword">else</span>
     <span class="keyword">bind</span> label = <span class="string">"wait"</span>   <span class="comment"># fine: a different block</span>
     show(label)
-<span class="keyword">end</span>
+<span class="keyword">fi</span>
 show(label)                <span class="comment"># error: unknown variable 'label'</span></pre>
 
       <h3>Numbers</h3>
@@ -207,7 +211,7 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
       <pre><span class="keyword">shape</span> Point
     x: int
     y: int
-<span class="keyword">end</span>
+<span class="keyword">fi</span>
 
 <span class="keyword">bind</span> p = Point { x: 10, y: 20 }
 show(p.x)</pre>
@@ -224,7 +228,7 @@ p.x = 5                    <span class="comment"># error: p is a bind</span></pr
       <pre><span class="keyword">kind</span> Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)
-<span class="keyword">end</span>
+<span class="keyword">fi</span>
 
 <span class="keyword">task</span> area(s: Shape) -> float
     <span class="keyword">match</span> s
@@ -232,24 +236,24 @@ p.x = 5                    <span class="comment"># error: p is a bind</span></pr
         <span class="keyword">send</span> 3.14 * r * r
     <span class="keyword">case</span> Rectangle w h
         <span class="keyword">send</span> w * h
-    <span class="keyword">end</span>
-<span class="keyword">end</span></pre>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
 
       <h3>Control Flow</h3>
       <pre><span class="keyword">when</span> x > 0
     show(<span class="string">"positive"</span>)
 <span class="keyword">else</span>
     show(<span class="string">"non-positive"</span>)
-<span class="keyword">end</span>
+<span class="keyword">fi</span>
 
 <span class="keyword">loop</span> count < 10
     show(count)
     count = count + 1
-<span class="keyword">end</span>
+<span class="keyword">fi</span>
 
 <span class="keyword">each</span> i <span class="keyword">in</span> 0..5
     show(i)
-<span class="keyword">end</span></pre>
+<span class="keyword">fi</span></pre>
       <p>
         <code>each</code> counts from the start of the range up to, but not including, the end. Both ends are
         evaluated once, before the first iteration; the loop variable is immutable.
@@ -274,14 +278,14 @@ p^ = 43                    <span class="comment"># writing through a pointer is 
         <span class="keyword">send</span> n
     <span class="keyword">else</span>
         <span class="keyword">send</span> fib(n - 1) + fib(n - 2)
-    <span class="keyword">end</span>
-<span class="keyword">end</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
 
 <span class="keyword">task</span> main()
     <span class="keyword">each</span> i <span class="keyword">in</span> 0..10
         show(fib(i))
-    <span class="keyword">end</span>
-<span class="keyword">end</span></pre>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
     </section>
 
     <section>

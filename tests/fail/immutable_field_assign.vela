@@ -1,9 +1,9 @@
 # error: 8:5: cannot assign to a field of immutable variable 'p'
 shape Point
     x: int
-end
+fi
 
 task main()
     bind p = Point { x: 1 }
     p.x = 5
-end
+fi

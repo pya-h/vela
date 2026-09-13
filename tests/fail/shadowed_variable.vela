@@ -4,5 +4,5 @@ task main()
     when true
         bind x = x + 1
         show(x)
-    end
-end
+    fi
+fi

@@ -3,7 +3,7 @@
 kind Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)
-end
+fi
 
 task describe(s: Shape)
     match s
@@ -14,12 +14,12 @@ task describe(s: Shape)
         show("rectangle")
         show(w)
         show(h)
-    end
-end
+    fi
+fi
 
 task main()
     bind c = Circle(5.0)
     bind r = Rectangle(3.0, 4.0)
     describe(c)
     describe(r)
-end
+fi

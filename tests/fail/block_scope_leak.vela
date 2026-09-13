@@ -2,6 +2,6 @@
 task main()
     when true
         bind y = 1
-    end
+    fi
     show(y)
-end
+fi

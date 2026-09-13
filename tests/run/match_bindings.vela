@@ -5,15 +5,15 @@ kind Pair
     Ints(a: int, b: int)
     Floats(a: float, b: float)
     Nothing(ok: bool)
-end
+fi
 
 task make(n: int) -> Pair
     show("make")
     when n == 0
         send Ints(1, 2)
-    end
+    fi
     send Floats(1.5, 2.5)
-end
+fi
 
 task describe(p: Pair)
     match p
@@ -23,8 +23,8 @@ task describe(p: Pair)
         show(x + y)
     case Nothing x
         show(x)
-    end
-end
+    fi
+fi
 
 task main()
     match make(0)
@@ -34,7 +34,7 @@ task main()
         show(x * y)
     case Nothing x
         show(x)
-    end
+    fi
     describe(make(1))
     describe(Nothing(true))
-end
+fi

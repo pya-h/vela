@@ -3,12 +3,12 @@
 shape Point
     x: int
     y: int
-end
+fi
 
 shape Line
     from: Point
     to: Point
-end
+fi
 
 task main()
     hold line = Line { from: Point { x: 0, y: 0 }, to: Point { x: 1, y: 1 } }
@@ -25,4 +25,4 @@ task main()
     lp^.from.y = 7
     show(lp^.from.y)
     free(lp)
-end
+fi

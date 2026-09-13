@@ -2,8 +2,8 @@
 task show_twice(n: int)
     bind n = n * 2
     show(n)
-end
+fi
 
 task main()
     show_twice(1)
-end
+fi

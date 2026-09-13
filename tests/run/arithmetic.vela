@@ -15,4 +15,4 @@ task main()
     show(2 == 2)
     show(2 != 2)
     show(1 < 2 and 2 < 3)
-end
+fi

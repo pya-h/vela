@@ -5,4 +5,4 @@ task main()
     show("tab\there")
     show("quote \" and backslash \\")
     show("two\nlines")
-end
+fi

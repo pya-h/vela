@@ -1,4 +1,4 @@
 # error: 3:10: expected a name, got '='
 task main()
     bind = 5
-end
+fi

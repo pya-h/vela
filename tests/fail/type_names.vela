@@ -1,8 +1,8 @@
 # error: 7:22: expected type ^Point, got ^int
 shape Point
     x: int
-end
+fi
 
 task main()
     bind p: ^Point = new int(1)
-end
+fi

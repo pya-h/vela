@@ -1,8 +1,8 @@
 # error: 2:18: 'a' is already defined at 2:10
 task add(a: int, a: int) -> int
     send a
-end
+fi
 
 task main()
     show(add(1, 2))
-end
+fi
