@@ -9,8 +9,8 @@ task add(a: int, b: int) -> int
     send a + b
 fi
 
-task dist(p: Point) -> float
-    send 0.0
+task manhattan(p: Point) -> int
+    send p.x + p.y
 fi
 
 task main()
@@ -19,6 +19,7 @@ task main()
 
     bind p = Point { x: 10, y: 20 }
     show(p.x)
+    show(manhattan(p))
 
     hold i = 0
     loop i < 5

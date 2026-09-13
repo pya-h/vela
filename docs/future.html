@@ -287,7 +287,7 @@
         </div>
         <div class="card">
           <h4>Limited types <span class="badge b-med">Medium</span></h4>
-          <p>No generics, arrays, slices, tuples, or optional/error types. This limits expressiveness.</p>
+          <p>No generics, arrays, slices, tuples, or optional/error types. Pointers have <code>none</code>, but nothing stops dereferencing it.</p>
         </div>
         <div class="card">
           <h4>No concurrency <span class="badge b-med">Medium</span></h4>
@@ -295,7 +295,15 @@
         </div>
         <div class="card">
           <h4>Text is a C string <span class="badge b-med">Medium</span></h4>
-          <p><code>text</code> is currently <code>const char*</code>. No length, no safe concatenation, no UTF-8 guarantees.</p>
+          <p><code>text</code> is currently <code>const char*</code>. <code>==</code> compares contents, but there is no length, no safe concatenation, no UTF-8 guarantee, and a <code>\0</code> ends the text early.</p>
+        </div>
+        <div class="card">
+          <h4>Undefined integer edge cases <span class="badge b-med">Medium</span></h4>
+          <p>Integer overflow and division by zero behave as in C: undefined. Vela should trap or define them.</p>
+        </div>
+        <div class="card">
+          <h4>One error at a time <span class="badge b-low">Low</span></h4>
+          <p>The compiler stops at the first error, so fixing a file can take several rounds.</p>
         </div>
         <div class="card">
           <h4>C backend dependency <span class="badge b-low">Low</span></h4>
@@ -311,6 +319,18 @@
         <div class="card">
           <h4>Source spans <span class="badge b-done">Done</span></h4>
           <p>Attach line/column info to every AST node so errors point to the real problem.</p>
+        </div>
+        <div class="card">
+          <h4>A complete checker <span class="badge b-done">Done</span></h4>
+          <p>Block scopes, declaration order, unknown types, <code>none</code>, <code>unit</code>, and a send on every path are all checked by Vela, so mistakes no longer surface as C compiler errors.</p>
+        </div>
+        <div class="card">
+          <h4>Portable C output <span class="badge b-done">Done</span></h4>
+          <p>Generated C is warning-free ISO C11, tested with gcc and clang, and any name that means something in C still works in Vela.</p>
+        </div>
+        <div class="card">
+          <h4>Vela Studio <span class="badge b-idea">Planned</span></h4>
+          <p>A small editor for Vela with highlighting, completion, live errors, one-key run, and a terminal, built on the compiler itself.</p>
         </div>
         <div class="card">
           <h4>Built-in arrays & slices <span class="badge b-idea">Idea</span></h4>
@@ -544,6 +564,9 @@
           <h4>Now — Foundations <span class="badge b-low">Low Risk</span></h4>
           <ul>
             <li><s>Source spans and good error messages</s> (done)</li>
+            <li><s>Complete type checking and portable C output</s> (done)</li>
+            <li>Vela Studio: an editor with language support and a terminal</li>
+            <li>Defined integer overflow and division by zero</li>
             <li>Fixed-size arrays and a real <code>text</code> type</li>
             <li>Move-only owned pointers</li>
             <li>Basic standard library (math, strings, files)</li>
@@ -576,7 +599,7 @@
       <h2><span class="icon">🎯</span> Conclusion</h2>
       <p>
         Vela's strength is its smallness. The best next steps preserve that smallness while filling the
-        obvious gaps: better diagnostics, a real string type, arrays, and a safer memory model. The
+        obvious gaps: a real string type, arrays, defined integer arithmetic, and a safer memory model. The
         recommended memory direction — <strong>move-only ownership + scoped regions + optional temporary borrows</strong>
         — keeps Vela fast, simple, and far safer than C without becoming Rust.
       </p>

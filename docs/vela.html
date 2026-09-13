@@ -222,6 +222,25 @@ show(label)                <span class="comment"># error: unknown variable 'labe
 show(7 / 2.0)     <span class="comment"># 3.5</span>
 show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
 
+      <h3>Text, Output, and Logic</h3>
+      <p>
+        Text literals use double quotes and support the escapes <code>\n</code>, <code>\t</code>, <code>\r</code>,
+        <code>\\</code>, <code>\"</code>, and <code>\0</code>. A <code>#</code> starts a comment that runs to the end
+        of the line. <code>show</code> is the only builtin task: it prints an <code>int</code>, <code>float</code>,
+        <code>bool</code>, or <code>text</code> followed by a newline (floats with up to 6 significant digits).
+      </p>
+      <p>
+        Logic uses words: <code>and</code>, <code>or</code>, and <code>not</code> work on <code>bool</code>, and
+        <code>and</code>/<code>or</code> skip the right side when the left side decides the result.
+        <code>==</code> and <code>!=</code> work on numbers, <code>bool</code>, <code>text</code> (by contents), and
+        pointers; both sides must have the same type, except that <code>none</code> compares with any pointer.
+      </p>
+      <pre><span class="comment"># greet the user</span>
+show(<span class="string">"say \"hi\""</span>)       <span class="comment"># say "hi"</span>
+show(2.0 / 3.0)            <span class="comment"># 0.666667</span>
+show(1 < 2 <span class="keyword">and not</span> false)  <span class="comment"># true</span>
+show(1 == 1.0)             <span class="comment"># error: expected type int, got float</span></pre>
+
       <h3>Shapes</h3>
       <p>Shapes are Vela's only composite data type — like structs, but the only one.</p>
       <pre><span class="keyword">shape</span> Point

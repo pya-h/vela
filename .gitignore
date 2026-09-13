@@ -1,5 +1,4 @@
 /target
-/examples/hello
-/examples/demo
-/examples/fib
-/examples/kinds
+# Binaries built from the examples (everything except the sources)
+/examples/*
+!/examples/*.vela

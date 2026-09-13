@@ -1,0 +1,88 @@
+# A tiny to-do list: a linked list of shapes that point to themselves,
+# `none` for the end of the list, variants with and without a payload,
+# and text compared by contents.
+
+kind Status
+    Todo
+    Done
+    Blocked(reason: text)
+fi
+
+shape Item
+    title: text
+    status: Status
+    next: ^Item
+fi
+
+task describe(s: Status) -> text
+    match s
+    case Todo
+        send "todo"
+    case Done
+        send "done"
+    case Blocked reason
+        send reason
+    fi
+fi
+
+task is_done(s: Status) -> bool
+    match s
+    case Done
+        send true
+    case Todo
+        send false
+    case Blocked reason
+        send false
+    fi
+fi
+
+task print_list(first: ^Item)
+    hold current = first
+    loop current != none
+        show(current^.title)
+        show(describe(current^.status))
+        current = current^.next
+    fi
+fi
+
+task count_done(first: ^Item) -> int
+    hold count = 0
+    hold current = first
+    loop current != none
+        when is_done(current^.status)
+            count = count + 1
+        fi
+        current = current^.next
+    fi
+    send count
+fi
+
+task find(first: ^Item, title: text) -> ^Item
+    hold current = first
+    loop current != none
+        when current^.title == title
+            send current
+        fi
+        current = current^.next
+    fi
+    send none
+fi
+
+task main()
+    bind third = new Item(Item { title: "ship it", status: Blocked("waiting for review"), next: none })
+    bind second = new Item(Item { title: "write tests", status: Done, next: third })
+    bind first = new Item(Item { title: "fix the parser", status: Todo, next: second })
+    print_list(first)
+    show(count_done(first))
+
+    bind tests = find(first, "write tests")
+    when tests != none
+        tests^.status = Todo
+    fi
+    show(count_done(first))
+    show(find(first, "celebrate") == none)
+
+    free(third)
+    free(second)
+    free(first)
+fi
