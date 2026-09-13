@@ -1,0 +1,9 @@
+# error: 3:10: 'n' is already defined at 2:17
+task show_twice(n: int)
+    bind n = n * 2
+    show(n)
+end
+
+task main()
+    show_twice(1)
+end

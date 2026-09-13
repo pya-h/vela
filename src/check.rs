@@ -7,6 +7,8 @@ use crate::error::{Error, Result};
 struct VarInfo {
     ty: Type,
     mutable: bool,
+    /// Where the variable was declared.
+    span: Span,
 }
 
 /// Type-checks a program and annotates it for code generation: every
@@ -66,12 +68,13 @@ impl Checker {
 
     fn check_task(&mut self, task: &mut TaskDef) -> Result<()> {
         self.current_ret = Some(task.ret.clone());
-        self.push_scope();
+        // Parameters and the task body share one scope, as in C.
+        self.scopes = vec![HashMap::new()];
         for param in &task.params {
-            self.define(param.name.clone(), param.ty.clone(), false);
+            self.define(&param.name, param.ty.clone(), false, param.span)?;
         }
         self.check_block(&mut task.body)?;
-        self.pop_scope();
+        self.scopes.clear();
         self.current_ret = None;
         Ok(())
     }
@@ -84,9 +87,25 @@ impl Checker {
         self.scopes.pop();
     }
 
-    fn define(&mut self, name: String, ty: Type, mutable: bool) {
-        let scope = self.scopes.last_mut().unwrap();
-        scope.insert(name, VarInfo { ty, mutable });
+    /// Checks `block` in a new nested scope.
+    fn check_scoped_block(&mut self, block: &mut Block) -> Result<()> {
+        self.push_scope();
+        let result = self.check_block(block);
+        self.pop_scope();
+        result
+    }
+
+    /// Declares a variable in the innermost scope. Vela has no shadowing: a
+    /// name cannot be declared while another variable of that name is visible.
+    /// (Sibling blocks may reuse names, since neither is visible to the other.)
+    fn define(&mut self, name: &str, ty: Type, mutable: bool, span: Span) -> Result<()> {
+        if let Some(existing) = self.lookup(name) {
+            let at = existing.span;
+            return err(span, format!("'{}' is already defined at {}:{}", name, at.line, at.col));
+        }
+        let scope = self.scopes.last_mut().expect("define outside of a task");
+        scope.insert(name.to_string(), VarInfo { ty, mutable, span });
+        Ok(())
     }
 
     fn lookup(&self, name: &str) -> Option<&VarInfo> {
@@ -121,11 +140,10 @@ impl Checker {
                     None => *ty = Some(init_ty.clone()),
                 }
                 let final_ty = ty.clone().unwrap();
-                self.define(name.clone(), final_ty, *mutable);
-                Ok(())
+                self.define(name, final_ty, *mutable, span)
             }
             StmtKind::Assign(lhs, rhs) => {
-                let lhs_ty = self.check_lvalue(lhs)?;
+                let lhs_ty = self.check_assign_target(lhs)?;
                 let rhs_ty = self.check_expr(rhs)?;
                 self.expect_type(&rhs_ty, &lhs_ty, rhs.span)?;
                 Ok(())
@@ -133,28 +151,28 @@ impl Checker {
             StmtKind::When(cond, then_block, else_block) => {
                 let cty = self.check_expr(cond)?;
                 self.expect_type(&cty, &Type::Bool, cond.span)?;
-                self.check_block(then_block)?;
+                self.check_scoped_block(then_block)?;
                 if let Some(else_b) = else_block {
-                    self.check_block(else_b)?;
+                    self.check_scoped_block(else_b)?;
                 }
                 Ok(())
             }
             StmtKind::Loop(cond, body) => {
                 let cty = self.check_expr(cond)?;
                 self.expect_type(&cty, &Type::Bool, cond.span)?;
-                self.check_block(body)?;
-                Ok(())
+                self.check_scoped_block(body)
             }
             StmtKind::Each(name, range, body) => {
                 let rty = self.check_expr(range)?;
                 let inner = rty.range_inner()
                     .ok_or_else(|| Error::at(range.span, "each requires a range"))?
                     .clone();
+                // The loop variable and the body share one scope.
                 self.push_scope();
-                self.define(name.clone(), inner, false);
-                self.check_block(body)?;
+                let result = self.define(name, inner, false, span)
+                    .and_then(|()| self.check_block(body));
                 self.pop_scope();
-                Ok(())
+                result
             }
             StmtKind::Match(expr, cases) => self.check_match(span, expr, cases),
             StmtKind::Send(expr) => {
@@ -177,29 +195,50 @@ impl Checker {
         }
     }
 
-    fn check_lvalue(&mut self, expr: &mut Expr) -> Result<Type> {
+    /// Checks the left side of an assignment and returns its type.
+    ///
+    /// Assignable places are: a `hold` variable, a field of an assignable
+    /// place, and anything behind a pointer (`p^`, `p^.x`). Writing through a
+    /// pointer is allowed even when the pointer itself is a `bind`, because
+    /// the binding holds the address, not the pointed-to value.
+    fn check_assign_target(&mut self, expr: &mut Expr) -> Result<Type> {
         let span = expr.span;
-        let ty = match &mut expr.kind {
+        match &mut expr.kind {
             ExprKind::Var(name) => {
                 let info = self.lookup_or_err(name, span)?;
                 if !info.mutable {
                     return err(span, format!("cannot assign to immutable variable '{}'", name));
                 }
-                info.ty.clone()
+                let ty = info.ty.clone();
+                expr.ty = Some(ty.clone());
+                Ok(ty)
             }
             ExprKind::Field(base, field) => {
-                let base_ty = self.check_expr(base)?;
-                self.field_type(&base_ty, field, span)?
+                let base_ty = self.check_field_base(base)?;
+                let ty = self.field_type(&base_ty, field, span)?;
+                expr.ty = Some(ty.clone());
+                Ok(ty)
             }
-            ExprKind::Deref(base) => {
-                let base_ty = self.check_expr(base)?;
-                base_ty.ptr_inner().cloned()
-                    .ok_or_else(|| Error::at(span, "cannot deref non-pointer"))?
+            ExprKind::Deref(_) => self.check_expr(expr),
+            _ => err(span, "invalid assignment target"),
+        }
+    }
+
+    /// Checks the base of an assigned field, which must itself be an
+    /// assignable place.
+    fn check_field_base(&mut self, base: &mut Expr) -> Result<Type> {
+        let span = base.span;
+        match &base.kind {
+            ExprKind::Var(name) => {
+                let info = self.lookup_or_err(name, span)?;
+                if !info.mutable {
+                    return err(span, format!("cannot assign to a field of immutable variable '{}'", name));
+                }
+                self.check_expr(base)
             }
-            _ => return err(span, "invalid assignment target"),
-        };
-        expr.ty = Some(ty.clone());
-        Ok(ty)
+            ExprKind::Field(..) | ExprKind::Deref(_) => self.check_assign_target(base),
+            _ => err(span, "cannot assign to a field of a temporary value"),
+        }
     }
 
     fn check_match(&mut self, span: Span, expr: &mut Expr, cases: &mut [Case]) -> Result<()> {
@@ -222,12 +261,15 @@ impl Checker {
                 return err(case.span, format!("duplicate case '{}'", case.tag));
             }
             seen.insert(case.tag.clone());
+            // The case's bindings and its body share one scope.
             self.push_scope();
-            for (bind, field) in case.binds.iter().zip(variant.payload.iter()) {
-                self.define(bind.clone(), field.ty.clone(), false);
-            }
-            self.check_block(&mut case.body)?;
+            let result = case.binds.iter().zip(variant.payload.iter())
+                .try_for_each(|((bind, bind_span), field)| {
+                    self.define(bind, field.ty.clone(), false, *bind_span)
+                })
+                .and_then(|()| self.check_block(&mut case.body));
             self.pop_scope();
+            result?;
         }
         for variant in &kind.variants {
             if !seen.contains(&variant.tag) {

@@ -128,8 +128,8 @@ pub enum ExprKind {
 
 pub type Block = Vec<Stmt>;
 
-/// A statement. `span` points at the bound name for `bind`/`hold`, and at the
-/// first token otherwise.
+/// A statement. `span` points at the declared name for `bind`/`hold` and
+/// `each`, and at the first token otherwise.
 #[derive(Debug, Clone)]
 pub struct Stmt {
     pub kind: StmtKind,
@@ -165,7 +165,8 @@ pub enum StmtKind {
 #[derive(Debug, Clone)]
 pub struct Case {
     pub tag: String,
-    pub binds: Vec<String>,
+    /// Names bound to the variant's payload fields, with their positions.
+    pub binds: Vec<(String, Span)>,
     pub body: Block,
     /// Position of the variant tag.
     pub span: Span,

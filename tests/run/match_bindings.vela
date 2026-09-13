@@ -1,0 +1,40 @@
+# Different cases may bind the same names, and the matched value is
+# evaluated exactly once.
+
+kind Pair
+    Ints(a: int, b: int)
+    Floats(a: float, b: float)
+    Nothing(ok: bool)
+end
+
+task make(n: int) -> Pair
+    show("make")
+    when n == 0
+        send Ints(1, 2)
+    end
+    send Floats(1.5, 2.5)
+end
+
+task describe(p: Pair)
+    match p
+    case Ints x y
+        show(x + y)
+    case Floats x y
+        show(x + y)
+    case Nothing x
+        show(x)
+    end
+end
+
+task main()
+    match make(0)
+    case Ints x y
+        show(x * y)
+    case Floats x y
+        show(x * y)
+    case Nothing x
+        show(x)
+    end
+    describe(make(1))
+    describe(Nothing(true))
+end

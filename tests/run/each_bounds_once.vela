@@ -1,0 +1,19 @@
+# The end of an each range is evaluated once, before the loop starts.
+
+task limit() -> int
+    show("limit")
+    send 3
+end
+
+task main()
+    hold count = 3
+    each i in 0..count
+        count = count - 1
+        show(i)
+    end
+    show(count)
+
+    each i in 0..limit()
+        show(i)
+    end
+end

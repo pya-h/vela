@@ -274,8 +274,8 @@ impl Parser {
     }
 
     fn parse_each(&mut self) -> Result<Stmt> {
-        let span = self.peek_span();
         self.advance(); // each
+        let span = self.peek_span();
         let name = self.expect_ident()?;
         self.expect(Token::In)?;
         let range = self.parse_expr()?;
@@ -299,7 +299,8 @@ impl Parser {
             let tag = self.expect_ident()?;
             let mut binds = Vec::new();
             while !self.check(Token::Newline) && !self.check(Token::End) && !self.check(Token::Case) && !self.is_at_end() {
-                binds.push(self.expect_ident()?);
+                let bind_span = self.peek_span();
+                binds.push((self.expect_ident()?, bind_span));
             }
             self.skip_newlines();
             let body = self.parse_block_until(&[Token::Case, Token::End])?;

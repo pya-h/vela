@@ -177,34 +177,15 @@ impl Generator {
             }
             StmtKind::Each(name, range, body) => {
                 let (a, b) = self.gen_range(range)?;
-                writeln!(self.out, "{}for (int64_t {} = {}; {} < {}; {}++) {{", pad, name, a, name, b, name).unwrap();
+                // The end of the range is evaluated once, before the first
+                // iteration. (The checker forbids shadowing, so `b` cannot
+                // refer to a different variable called `name`.)
+                let end = self.fresh_temp("end");
+                writeln!(self.out, "{}for (int64_t {} = {}, {} = {}; {} < {}; {}++) {{", pad, name, a, end, b, name, end, name).unwrap();
                 self.gen_block(body, indent + 1)?;
                 writeln!(self.out, "{}}}", pad).unwrap();
             }
-            StmtKind::Match(expr, cases) => {
-                let e = self.gen_expr(expr)?;
-                let kind_name = match expr.ty() {
-                    Type::Named(n) => n.clone(),
-                    _ => return err(expr.span, "match on non-kind"),
-                };
-                let kind = self.kinds.get(&kind_name)
-                    .ok_or_else(|| Error::at(expr.span, format!("unknown kind '{}'", kind_name)))?
-                    .clone();
-                let tag_name = format!("{}_Tag", mangle(&kind_name));
-                writeln!(self.out, "{}switch ({}.tag) {{", pad, e).unwrap();
-                let inner_pad = "    ".repeat(indent + 1);
-                for case in cases {
-                    let variant = kind.variants.iter().find(|v| v.tag == case.tag)
-                        .ok_or_else(|| Error::at(case.span, format!("unknown variant '{}'", case.tag)))?;
-                    writeln!(self.out, "{}case {}_{}:", pad, tag_name, case.tag).unwrap();
-                    for (bind, field) in case.binds.iter().zip(variant.payload.iter()) {
-                        writeln!(self.out, "{}{} {} = {}.data.{}.{};", inner_pad, c_type(&field.ty), bind, e, case.tag, field.name).unwrap();
-                    }
-                    self.gen_block(&case.body, indent + 1)?;
-                    writeln!(self.out, "{}break;", inner_pad).unwrap();
-                }
-                writeln!(self.out, "{}}}", pad).unwrap();
-            }
+            StmtKind::Match(expr, cases) => self.gen_match(expr, cases, indent)?,
             StmtKind::Send(None) => {
                 writeln!(self.out, "{}return;", pad).unwrap();
             }
@@ -216,6 +197,56 @@ impl Generator {
                 let expr = self.gen_expr(e)?;
                 writeln!(self.out, "{}vela_free((void*){});", pad, expr).unwrap();
             }
+        }
+        Ok(())
+    }
+
+    /// Generates a `switch` on the kind's tag. Each case body gets its own C
+    /// block, so different cases may bind the same names. The matched value
+    /// is evaluated exactly once: a plain variable is used directly, anything
+    /// else is first stored in a temporary.
+    fn gen_match(&mut self, expr: &Expr, cases: &[Case], indent: usize) -> Result<()> {
+        let kind_name = match expr.ty() {
+            Type::Named(n) => n.clone(),
+            _ => return err(expr.span, "match on non-kind"),
+        };
+        let kind = self.kinds.get(&kind_name)
+            .ok_or_else(|| Error::at(expr.span, format!("unknown kind '{}'", kind_name)))?
+            .clone();
+        let tag_name = format!("{}_Tag", mangle(&kind_name));
+
+        let value = self.gen_expr(expr)?;
+        let mut indent = indent;
+        let needs_temp = !matches!(expr.kind, ExprKind::Var(_));
+        let subject = if needs_temp {
+            let tmp = self.fresh_temp("match");
+            let pad = "    ".repeat(indent);
+            writeln!(self.out, "{}{{", pad).unwrap();
+            writeln!(self.out, "{}    {} {} = {};", pad, mangle(&kind_name), tmp, value).unwrap();
+            indent += 1;
+            tmp
+        } else {
+            value
+        };
+
+        let pad = "    ".repeat(indent);
+        let body_pad = "    ".repeat(indent + 1);
+        writeln!(self.out, "{}switch ({}.tag) {{", pad, subject).unwrap();
+        for case in cases {
+            let variant = kind.variants.iter().find(|v| v.tag == case.tag)
+                .ok_or_else(|| Error::at(case.span, format!("unknown variant '{}'", case.tag)))?;
+            writeln!(self.out, "{}case {}_{}: {{", pad, tag_name, case.tag).unwrap();
+            for ((bind, _), field) in case.binds.iter().zip(variant.payload.iter()) {
+                writeln!(self.out, "{}{} {} = {}.data.{}.{};", body_pad, c_type(&field.ty), bind, subject, case.tag, field.name).unwrap();
+            }
+            self.gen_block(&case.body, indent + 1)?;
+            writeln!(self.out, "{}break;", body_pad).unwrap();
+            writeln!(self.out, "{}}}", pad).unwrap();
+        }
+        writeln!(self.out, "{}}}", pad).unwrap();
+
+        if needs_temp {
+            writeln!(self.out, "{}}}", "    ".repeat(indent - 1)).unwrap();
         }
         Ok(())
     }

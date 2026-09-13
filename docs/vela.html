@@ -177,6 +177,19 @@
       <pre><span class="keyword">bind</span> pi = 3.14
 <span class="keyword">hold</span> count = 0
 count = count + 1</pre>
+      <p>
+        A variable lives until the <code>end</code> of the block that declares it. Vela has no shadowing: inside a
+        task, a name cannot be declared again while another variable with that name is visible (including
+        parameters). Separate blocks, such as the two branches of a <code>when</code>, may reuse a name.
+      </p>
+      <pre><span class="keyword">when</span> ready
+    <span class="keyword">bind</span> label = <span class="string">"go"</span>
+    show(label)
+<span class="keyword">else</span>
+    <span class="keyword">bind</span> label = <span class="string">"wait"</span>   <span class="comment"># fine: a different block</span>
+    show(label)
+<span class="keyword">end</span>
+show(label)                <span class="comment"># error: unknown variable 'label'</span></pre>
 
       <h3>Numbers</h3>
       <p>
@@ -198,9 +211,16 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
 
 <span class="keyword">bind</span> p = Point { x: 10, y: 20 }
 show(p.x)</pre>
+      <p>Assigning to a field requires the variable to be a <code>hold</code>; task parameters are immutable.</p>
+      <pre><span class="keyword">hold</span> q = Point { x: 1, y: 2 }
+q.x = 5                    <span class="comment"># ok</span>
+p.x = 5                    <span class="comment"># error: p is a bind</span></pre>
 
       <h3>Kinds</h3>
-      <p>Kinds are tagged unions with exhaustive pattern matching.</p>
+      <p>
+        Kinds are tagged unions with exhaustive pattern matching. Each <code>case</code> binds the variant's payload
+        fields in order; the bindings are visible only inside that case, so different cases may reuse names.
+      </p>
       <pre><span class="keyword">kind</span> Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)
@@ -230,11 +250,16 @@ show(p.x)</pre>
 <span class="keyword">each</span> i <span class="keyword">in</span> 0..5
     show(i)
 <span class="keyword">end</span></pre>
+      <p>
+        <code>each</code> counts from the start of the range up to, but not including, the end. Both ends are
+        evaluated once, before the first iteration; the loop variable is immutable.
+      </p>
 
       <h3>Memory</h3>
       <p>Owned pointers are explicit and manually freed. No garbage collector.</p>
       <pre><span class="keyword">bind</span> p: ^int = <span class="keyword">new</span> int(42)
 show(p^)
+p^ = 43                    <span class="comment"># writing through a pointer is allowed, even from a bind</span>
 <span class="keyword">free</span>(p)</pre>
       <div class="note">
         <strong>Note:</strong> Vela intentionally keeps memory management simple. There is no borrow checker;

@@ -1,0 +1,35 @@
+# Block scoping: variables live until the end of their block, and sibling
+# blocks may reuse names.
+
+task main()
+    when true
+        bind y = 1
+        show(y)
+    else
+        bind y = 2
+        show(y)
+    end
+
+    when false
+        bind y = "unused"
+        show(y)
+    else
+        bind y = 3
+        show(y)
+    end
+
+    each i in 0..3
+        bind square = i * i
+        show(square)
+    end
+    each i in 0..1
+        show(i)
+    end
+
+    hold n = 0
+    loop n < 2
+        bind step = 1
+        n = n + step
+    end
+    show(n)
+end

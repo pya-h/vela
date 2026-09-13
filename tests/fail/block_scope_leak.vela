@@ -1,0 +1,7 @@
+# error: 6:10: unknown variable 'y'
+task main()
+    when true
+        bind y = 1
+    end
+    show(y)
+end
