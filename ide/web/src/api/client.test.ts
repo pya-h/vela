@@ -44,6 +44,21 @@ describe("StudioApi", () => {
     expect([apiError.status, apiError.message, apiError.conflict, apiError.body["hash"]]).toEqual([409, "the file changed on disk", true, "new"]);
   });
 
+  it("starts runs and terminals with the terminal size", async () => {
+    const { api, calls } = fakeServer(200, JSON.stringify({ ok: true, session: "s1" }));
+    expect(await api.run("lib/main.vela", { cols: 100, rows: 30 })).toEqual({ ok: true, session: "s1" });
+    await api.terminal({ cols: 80, rows: 24 });
+    await api.build("main.vela");
+    const [run, terminal, build] = calls;
+    expect([run?.url, JSON.parse(String(run?.init.body))]).toEqual(["/api/run", { path: "lib/main.vela", cols: 100, rows: 30 }]);
+    expect([terminal?.url, JSON.parse(String(terminal?.init.body))]).toEqual(["/api/terminal", { cols: 80, rows: 24 }]);
+    expect([build?.url, JSON.parse(String(build?.init.body))]).toEqual(["/api/build", { path: "main.vela" }]);
+
+    const stopped = fakeServer(204, "");
+    await stopped.api.stop("a/b");
+    expect([stopped.calls[0]?.url, stopped.calls[0]?.init.method, stopped.calls[0]?.init.body]).toEqual(["/api/session/a%2Fb/stop", "POST", undefined]);
+  });
+
   it("handles empty and non-JSON replies", async () => {
     expect(await fakeServer(204, "").api.remove("x.vela")).toBeUndefined();
     const error = (await fakeServer(422, "Failed to deserialize").api.files().catch((e: unknown) => e)) as ApiError;

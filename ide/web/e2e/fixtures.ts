@@ -31,7 +31,9 @@ export interface Studio {
 
 function start(workspace: string): Promise<{ server: ChildProcess; url: string }> {
   return new Promise((resolve, reject) => {
-    const server = spawn(binary, [workspace, "--no-open"], { stdio: ["ignore", "pipe", "pipe"] });
+    // Terminals run a plain shell, whatever the user's shell and its setup are.
+    const env = { ...process.env, SHELL: "/bin/sh" };
+    const server = spawn(binary, [workspace, "--no-open"], { stdio: ["ignore", "pipe", "pipe"], env });
     let output = "";
     const timer = setTimeout(() => reject(new Error(`vela-studio didn't start:\n${output}`)), 10_000);
     const onData = (data: Buffer) => {
@@ -110,6 +112,11 @@ export async function openFile(page: Page, path: string): Promise<void> {
 export async function cursorAtEndOf(page: Page, line: number): Promise<void> {
   await page.locator(".cm-line").nth(line - 1).click();
   await page.keyboard.press("End");
+}
+
+/** The text a panel terminal ("output" or "terminal") shows. */
+export function terminal(page: Page, view: "output" | "terminal"): Locator {
+  return page.locator(`#panel-view-${view} .xterm-rows`);
 }
 
 export function lineText(page: Page, line: number): Promise<string> {

@@ -1,0 +1,476 @@
+/* The panel below the editor (problems, output, terminal), the run button in
+   the title bar, and the status bar. */
+
+/* Terminal colors, read by src/panel/terminal.ts. */
+:root,
+:root[data-theme="dark"] {
+  --terminal-bg: #0f172a;
+  --terminal-fg: #e2e8f0;
+  --terminal-cursor: #38bdf8;
+  --terminal-selection: rgba(56, 189, 248, 0.3);
+  --terminal-black: #1e293b;
+  --terminal-red: #f87171;
+  --terminal-green: #34d399;
+  --terminal-yellow: #fbbf24;
+  --terminal-blue: #60a5fa;
+  --terminal-magenta: #c084fc;
+  --terminal-cyan: #22d3ee;
+  --terminal-white: #cbd5e1;
+  --terminal-bright-black: #64748b;
+  --terminal-bright-red: #fca5a5;
+  --terminal-bright-green: #6ee7b7;
+  --terminal-bright-yellow: #fde68a;
+  --terminal-bright-blue: #93c5fd;
+  --terminal-bright-magenta: #d8b4fe;
+  --terminal-bright-cyan: #67e8f9;
+  --terminal-bright-white: #f8fafc;
+  --terminal-scrollbar: rgba(148, 163, 184, 0.18);
+  --terminal-scrollbar-hover: rgba(148, 163, 184, 0.32);
+}
+
+:root[data-theme="light"] {
+  --terminal-bg: #ffffff;
+  --terminal-fg: #0f172a;
+  --terminal-cursor: #0284c7;
+  --terminal-selection: rgba(2, 132, 199, 0.22);
+  --terminal-black: #0f172a;
+  --terminal-red: #dc2626;
+  --terminal-green: #059669;
+  --terminal-yellow: #b45309;
+  --terminal-blue: #2563eb;
+  --terminal-magenta: #7c3aed;
+  --terminal-cyan: #0e7490;
+  --terminal-white: #64748b;
+  --terminal-bright-black: #475569;
+  --terminal-bright-red: #ef4444;
+  --terminal-bright-green: #10b981;
+  --terminal-bright-yellow: #d97706;
+  --terminal-bright-blue: #3b82f6;
+  --terminal-bright-magenta: #8b5cf6;
+  --terminal-bright-cyan: #0891b2;
+  --terminal-bright-white: #94a3b8;
+  --terminal-scrollbar: rgba(15, 23, 42, 0.14);
+  --terminal-scrollbar-hover: rgba(15, 23, 42, 0.26);
+}
+
+/* Editor above, panel below --------------------------------------------------------- */
+
+.main-column {
+  --panel-height: 260px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 5px var(--panel-height);
+  min-width: 0;
+  min-height: 0;
+  transition: grid-template-rows var(--normal) var(--ease);
+}
+
+.main-column.panel-hidden {
+  grid-template-rows: minmax(0, 1fr) 0 0;
+}
+
+.main-column.resizing {
+  transition: none;
+  cursor: row-resize;
+  user-select: none;
+}
+
+.main-column.panel-hidden .panel,
+.main-column.panel-hidden .panel-resizer {
+  visibility: hidden;
+}
+
+.panel-resizer {
+  position: relative;
+  cursor: row-resize;
+  background: var(--editor-bg);
+}
+
+.panel-resizer::after {
+  position: absolute;
+  inset: 2px 0;
+  content: "";
+  background: var(--border);
+  transition: background var(--fast) var(--ease);
+}
+
+.panel-resizer:hover::after,
+.panel-resizer:focus-visible::after,
+.main-column.resizing .panel-resizer::after {
+  inset: 1px 0;
+  background: var(--accent);
+}
+
+.panel {
+  display: grid;
+  grid-template-rows: 34px minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+  background: var(--terminal-bg);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px 0 4px;
+}
+
+.panel-tabs {
+  display: flex;
+  height: 100%;
+}
+
+.panel-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: color var(--fast) var(--ease);
+}
+
+.panel-tab:hover,
+.panel-tab.active {
+  color: var(--fg);
+}
+
+.panel-tab::after {
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
+  left: 10px;
+  height: 2px;
+  border-radius: 1px;
+  content: "";
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: transform var(--normal) var(--ease);
+}
+
+.panel-tab.active::after {
+  transform: scaleX(1);
+}
+
+.panel-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--danger-muted);
+  color: var(--danger);
+  font: 600 11px/1 var(--font-ui);
+  letter-spacing: 0;
+}
+
+/* A count that changed draws the eye once. */
+.panel-badge.pulse {
+  animation: badge-pulse 600ms var(--ease);
+}
+
+.panel-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.panel-body {
+  display: grid;
+  min-height: 0;
+}
+
+.panel-view {
+  min-height: 0;
+}
+
+.panel-empty {
+  margin: 10px 16px;
+  color: var(--faint);
+}
+
+/* Terminals ------------------------------------------------------------------------------ */
+
+.terminal-host {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The padding is on xterm's element, which its fit addon subtracts; padding
+   on the host would count as room for rows and cut off the last one. */
+.terminal-host .xterm {
+  height: 100%;
+  padding: 4px 0 6px 14px;
+}
+
+/* xterm.css paints the viewport, which spans the padding, black. */
+.terminal-host .xterm .xterm-viewport {
+  background-color: var(--terminal-bg);
+}
+
+/* Problems ---------------------------------------------------------------------------------- */
+
+.problems {
+  overflow: auto;
+  padding: 2px 8px 8px;
+}
+
+.problem-file {
+  animation: fade-in var(--normal) var(--ease);
+}
+
+.problem-file-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  margin: 0;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.problem-file-name .icon {
+  color: var(--accent);
+}
+
+.problem-folder {
+  color: var(--faint);
+  font-weight: 400;
+}
+
+.problem-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.problem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 26px;
+  padding: 0 8px 0 28px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.problem:hover,
+.problem:focus-visible {
+  background: var(--surface-hover);
+}
+
+.problem-icon {
+  color: var(--danger);
+}
+
+.problem-message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.problem-source,
+.problem-place {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.problem-place {
+  font-family: var(--font-code);
+  font-size: 11px;
+}
+
+/* Run button: ▶ Run, a spinner while building, ■ Stop while running ------------------------- */
+
+.titlebar-separator {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--border-strong);
+}
+
+.run-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px 0 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--accent-muted);
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 600;
+  transition:
+    background var(--normal) var(--ease),
+    color var(--normal) var(--ease),
+    border-color var(--normal) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.run-button:hover {
+  border-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+
+.run-button:active {
+  transform: translateY(1px);
+}
+
+.run-button[data-state="building"] {
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: progress;
+}
+
+.run-button[data-state="running"] {
+  background: var(--danger-muted);
+  color: var(--danger);
+}
+
+.run-icons {
+  display: grid;
+  width: 16px;
+  height: 16px;
+}
+
+.run-icons > * {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transform: scale(0.4) rotate(-90deg);
+  transition:
+    opacity var(--normal) var(--ease),
+    transform var(--normal) var(--ease);
+}
+
+.run-button[data-state="idle"] .run-play,
+.run-button[data-state="building"] .run-spinner,
+.run-button[data-state="running"] .run-stop {
+  opacity: 1;
+  transform: none;
+}
+
+.icon.filled {
+  fill: currentColor;
+  stroke-width: 1.2;
+}
+
+.run-spinner,
+.status-spinner {
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 1px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+}
+
+.run-button[data-state="building"] .run-spinner,
+.status-spinner {
+  animation: spin 700ms linear infinite;
+}
+
+.run-label {
+  animation: fade-in var(--normal) var(--ease);
+}
+
+/* Status bar ------------------------------------------------------------------------------------ */
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+}
+
+button.status-item {
+  cursor: pointer;
+}
+
+button.status-item:hover {
+  background: var(--surface-hover);
+  color: var(--fg);
+}
+
+.status-item .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.status-item.has-problems {
+  color: var(--danger);
+}
+
+.status-run {
+  overflow: hidden;
+  animation: fade-in var(--normal) var(--ease);
+}
+
+.status-run.running .icon {
+  color: var(--success);
+  animation: pulse 1.6s var(--ease) infinite;
+}
+
+.status-run.ok .icon {
+  color: var(--success);
+}
+
+.status-run.failed .icon {
+  color: var(--danger);
+}
+
+.status-run .status-spinner {
+  width: 12px;
+  height: 12px;
+  border-width: 1.5px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes badge-pulse {
+  30% {
+    transform: scale(1.3);
+    box-shadow: 0 0 0 4px var(--danger-muted);
+  }
+}

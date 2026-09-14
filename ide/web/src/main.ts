@@ -9,9 +9,11 @@ import "@fontsource/jetbrains-mono/600.css";
 import "./styles/base.css";
 import "./styles/workbench.css";
 import "./styles/editor.css";
+import "./styles/panel.css";
 
 import { VelaAnalysis } from "./analysis/bridge";
 import { ApiError, StudioApi } from "./api/client";
+import { nonceStyleElements } from "./csp";
 import { takeToken } from "./api/session";
 import { Analyzer } from "./editor/vela";
 import { h } from "./workbench/dom";
@@ -51,6 +53,7 @@ function needsToken(): void {
 async function start(): Promise<void> {
   // Before the first screen, so it doesn't flash in the other theme.
   applyInitialTheme();
+  nonceStyleElements(cspNonce());
   // Anything blocked by the page's security policy is a bug worth seeing.
   document.addEventListener("securitypolicyviolation", (event) => {
     console.error(`Content-Security-Policy blocked ${event.blockedURI || "inline code"} (${event.violatedDirective})`);

@@ -1,6 +1,6 @@
 // Calls the vela-studio server's JSON API with the session token.
 
-import type { EntryKind, FileContent, Info, Tree } from "./types";
+import type { BuildResult, EntryKind, FileContent, Info, RunResult, TerminalSize, Tree } from "./types";
 
 /** A request the server refused, with its status and `{error, …}` body. */
 export class ApiError extends Error {
@@ -31,7 +31,7 @@ export class StudioApi {
   private readonly fetch: Fetch;
 
   constructor(
-    private readonly token: string,
+    readonly token: string,
     fetch: Fetch = (input, init) => globalThis.fetch(input, init),
   ) {
     this.fetch = fetch;
@@ -67,6 +67,25 @@ export class StudioApi {
 
   remove(path: string): Promise<void> {
     return this.call("POST", "/api/file/delete", { path });
+  }
+
+  /** Builds a file without running it; a failed build is a normal answer. */
+  build(path: string): Promise<BuildResult> {
+    return this.call("POST", "/api/build", { path });
+  }
+
+  /** Builds a file and runs it in a new session, stopping the previous run. */
+  run(path: string, size: TerminalSize): Promise<RunResult> {
+    return this.call("POST", "/api/run", { path, ...size });
+  }
+
+  /** Opens a shell in the workspace folder. */
+  terminal(size: TerminalSize): Promise<{ session: string }> {
+    return this.call("POST", "/api/terminal", size);
+  }
+
+  stop(session: string): Promise<void> {
+    return this.call("POST", `/api/session/${encodeURIComponent(session)}/stop`);
   }
 
   private async call<T>(method: string, url: string, body?: unknown): Promise<T> {

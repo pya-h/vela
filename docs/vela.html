@@ -434,7 +434,9 @@ CC=clang cargo test</pre>
         The editor page needs Node.js and the <code>wasm32-unknown-unknown</code> Rust target
         (<code>rustup target add wasm32-unknown-unknown</code>). Build it, then start <code>vela-studio</code> on a
         folder. It serves that folder on <code>127.0.0.1</code> only, prints an address with a secret token, and
-        opens it in the browser (<code>--no-open</code> just prints it).
+        opens it in the browser (<code>--no-open</code> just prints it). <kbd>F5</kbd> saves and runs the open
+        file in the Output panel, compiler errors are listed under Problems, and <kbd>Ctrl</kbd>+<kbd>`</kbd>
+        opens a terminal in the folder.
       </p>
       <pre>npm --prefix ide/web install
 npm --prefix ide/web run build         # the analysis module and the page

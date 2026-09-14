@@ -1,5 +1,6 @@
-// The IDE window: title bar, sidebar (explorer and outline), tabs, and the
-// editor, and the file operations that connect them to the server.
+// The IDE window: title bar, sidebar (explorer and outline), tabs, the editor,
+// the panel (problems, output, terminal), and the status bar, and the file and
+// run operations that connect them to the server.
 
 import { isolateHistory } from "@codemirror/commands";
 import { EditorState, type Text } from "@codemirror/state";
@@ -10,6 +11,11 @@ import { ApiError, type StudioApi } from "../api/client";
 import type { Entry, Info, Tree } from "../api/types";
 import { editorExtensions } from "../editor/setup";
 import type { Analyzer } from "../editor/vela";
+import { Panel } from "../panel/panel";
+import { type Problem, collectProblems, problemCount } from "../panel/problems";
+import { ProblemsView } from "../panel/problems-view";
+import { type RunStatus, Runner } from "../panel/runner";
+import { Shell } from "../panel/shell";
 import { choose, confirm, prompt } from "./dialogs";
 import { Documents, type OpenDocument, fileName, isDirty, isWithin, nameProblem, parentFolder, textChange } from "./documents";
 import { h, iconButton, shortcutLabel } from "./dom";
@@ -17,6 +23,7 @@ import { Explorer, allFiles, hasEntry } from "./explorer";
 import { icon } from "./icons";
 import { Outline, SYMBOL_BADGES, flattenOutline } from "./outline";
 import { pick } from "./palette";
+import { StatusBar } from "./statusbar";
 import { isBoolean, isNumber, isStringArray, load, save } from "./storage";
 import { Tabs } from "./tabs";
 import { ThemeSwitch } from "./theme";
@@ -27,6 +34,8 @@ const SIDEBAR = { min: 180, max: 560, initial: 260 };
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 export class Workbench {
   readonly element: HTMLElement;
@@ -45,6 +54,14 @@ export class Workbench {
   private readonly opening = new Map<string, Promise<void>>();
   /** Saves in progress: a document's next save waits for the one before. */
   private readonly saving = new Map<OpenDocument, Promise<boolean>>();
+  private readonly panel: Panel;
+  private readonly runner: Runner;
+  private readonly shell: Shell;
+  private readonly problems: ProblemsView;
+  private readonly statusBar: StatusBar;
+  private readonly runButton: HTMLButtonElement;
+  private readonly buildButton: HTMLButtonElement;
+  private problemsTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly api: StudioApi,
@@ -69,6 +86,56 @@ export class Workbench {
     this.view = new EditorView({ state: EditorState.create({ extensions: EditorView.cspNonce.of(nonce) }) });
     this.editorHost = h("div", { class: "editor-host" }, this.view.dom);
     this.welcome = this.buildWelcome();
+
+    this.runner = new Runner(api, { status: (status) => this.onRunStatus(status), failures: () => this.scheduleProblems() });
+    this.shell = new Shell(api);
+    this.problems = new ProblemsView((problem) => void this.openProblem(problem));
+    const small = (name: Parameters<typeof icon>[0], label: string, action: () => void) => iconButton(icon(name), label, action, "icon-button small");
+    this.panel = new Panel({
+      problems: {
+        element: this.problems.element,
+        actions: [],
+        shown: (focus) => {
+          if (focus) this.problems.element.querySelector<HTMLElement>(".problem")?.focus();
+        },
+      },
+      output: {
+        element: this.runner.output.element,
+        actions: [small("clear", "Clear the output", () => this.runner.clear())],
+        shown: (focus) =>
+          void this.runner.output.open().then(() => {
+            this.runner.output.fit();
+            if (focus) this.runner.output.focus();
+          }),
+      },
+      terminal: {
+        element: this.shell.view.element,
+        actions: [
+          small("refresh", "Restart the terminal", () => void this.shell.restart()),
+          small("stop", "Stop the terminal's shell", () => this.shell.kill()),
+          small("clear", "Clear the terminal", () => this.shell.clear()),
+        ],
+        shown: (focus) =>
+          void this.shell.view.open().then(() => {
+            this.shell.view.fit();
+            // Focused before the shell starts: what's typed meanwhile is sent once it has.
+            if (focus) this.shell.view.focus();
+            return this.shell.show();
+          }),
+      },
+    });
+    this.statusBar = new StatusBar({ problems: () => this.panel.show("problems"), output: () => this.panel.show("output") });
+    this.runButton = h(
+      "button",
+      {
+        class: "run-button",
+        attrs: { type: "button", "data-state": "idle" },
+        on: { click: () => (this.runner.status.kind === "running" ? this.runner.stop() : void this.runActive()) },
+      },
+      h("span", { class: "run-icons", attrs: { "aria-hidden": "true" } }, icon("play", "icon filled run-play"), h("span", { class: "run-spinner" }), icon("stop", "icon filled run-stop")),
+      h("span", { class: "run-label", text: "Run" }),
+    );
+    this.buildButton = iconButton(icon("hammer"), `Build (${shortcutLabel("Mod-Shift-b")})`, () => void this.buildActive());
 
     const theme = new ThemeSwitch();
     const resizer = h("div", {
@@ -97,6 +164,9 @@ export class Workbench {
               icon("warning"),
               h("span", { text: "No C compiler" }),
             ),
+        this.buildButton,
+        this.runButton,
+        h("span", { class: "titlebar-separator", attrs: { "aria-hidden": "true" } }),
         iconButton(icon("search"), `Open file (${shortcutLabel("Mod-p")})`, () => void this.quickOpen()),
         theme.button,
       ),
@@ -105,15 +175,32 @@ export class Workbench {
         { class: "workspace" },
         h("aside", { class: "sidebar", attrs: { "aria-label": "Sidebar" } }, this.explorer.element, this.outline.element),
         resizer,
-        h("main", { class: "editor-area" }, tabs.element, this.editorHost, this.welcome),
+        h(
+          "div",
+          { class: "main-column" },
+          h("main", { class: "editor-area" }, tabs.element, this.editorHost, this.welcome),
+          this.panel.resizer,
+          this.panel.element,
+        ),
       ),
+      this.statusBar.element,
     );
+    const column = this.element.querySelector<HTMLElement>(".main-column");
+    if (column) this.panel.mount(column);
+    this.onRunStatus(this.runner.status);
     this.setupResizer(resizer);
     this.applySidebar();
-    this.documents.subscribe(() => this.showEditorOrWelcome());
+    this.documents.subscribe(() => {
+      this.showEditorOrWelcome();
+      this.scheduleProblems();
+    });
     this.showEditorOrWelcome();
     this.outline.update(null, 0);
+    this.updateProblems();
 
+    // Run keys are handled before the editor and terminals see them (the
+    // editor binds Ctrl+Enter, and F5 would reload the page).
+    window.addEventListener("keydown", (event) => this.onRunKey(event), true);
     window.addEventListener("keydown", (event) => this.onGlobalKey(event));
     window.addEventListener("focus", () => void this.checkDisk());
     document.addEventListener("visibilitychange", () => {
@@ -144,7 +231,10 @@ export class Workbench {
     if (!doc || update.view !== this.view) return;
     doc.state = update.state;
     if (update.docChanged) this.documents.changed();
-    if (update.docChanged || update.selectionSet) this.scheduleOutline();
+    if (update.docChanged || update.selectionSet) {
+      this.scheduleOutline();
+      this.updateCursor();
+    }
   }
 
   async openFile(path: string): Promise<void> {
@@ -191,6 +281,7 @@ export class Workbench {
     this.documents.changed();
     this.explorer.setActive(path);
     this.updateOutline();
+    this.updateCursor();
     this.persistTabs();
     this.view.focus();
   }
@@ -225,6 +316,7 @@ export class Workbench {
     else if (next === null) {
       this.explorer.setActive(null);
       this.updateOutline();
+      this.updateCursor();
     }
     this.persistTabs();
   }
@@ -472,6 +564,7 @@ export class Workbench {
         }
       }
       this.explorer.renamed(entry.path, to);
+      this.runner.renamed(entry.path, to);
       await this.refreshTree();
       if (this.documents.active) this.explorer.setActive(this.documents.active);
       this.persistTabs();
@@ -488,10 +581,169 @@ export class Workbench {
     try {
       await this.api.remove(entry.path);
       for (const doc of this.documents.within(entry.path)) this.discard(doc.path);
+      this.runner.deleted(entry.path);
       await this.refreshTree();
     } catch (error) {
       toast(`Couldn't delete ${entry.path}: ${message(error)}`, "error");
     }
+  }
+
+  // Running, problems, and the status bar -------------------------------------------------
+
+  /** Saves the active Vela file and runs it, showing Output. */
+  async runActive(): Promise<void> {
+    const doc = this.runnableDocument("run");
+    if (!doc || this.runner.busy) return;
+    // A program is one file, so only that file needs saving.
+    if (isDirty(doc) && !(await this.save(doc))) return;
+    this.panel.show("output", false);
+    await nextFrame();
+    await this.runner.run(doc.path);
+  }
+
+  /** Saves the active Vela file and builds it without running it. */
+  async buildActive(): Promise<void> {
+    const doc = this.runnableDocument("build");
+    if (!doc || this.runner.busy) return;
+    if (isDirty(doc) && !(await this.save(doc))) return;
+    const built = await this.runner.build(doc.path);
+    if (built) toast(`${fileName(doc.path)} built without errors.`, "success");
+    // While a program runs, a failed build doesn't take over Output.
+    else if (built === false && this.runner.status.kind !== "failed") this.panel.show("problems", false);
+  }
+
+  private runnableDocument(verb: string): OpenDocument | null {
+    const doc = this.documents.current;
+    if (!doc || !doc.path.endsWith(".vela")) {
+      toast(`Open a .vela file to ${verb} it.`);
+      return null;
+    }
+    return doc;
+  }
+
+  private onRunStatus(status: RunStatus): void {
+    this.statusBar.setRun(status);
+    const state = status.kind === "building" ? "building" : status.kind === "running" ? "running" : "idle";
+    if (this.runButton.dataset["state"] !== state) {
+      this.runButton.dataset["state"] = state;
+      const [label, title] =
+        state === "building" ? ["Building", "Building…"] : state === "running" ? ["Stop", `Stop (${shortcutLabel("Shift-F5")})`] : ["Run", `Run (${shortcutLabel("F5")})`];
+      const labelElement = this.runButton.querySelector(".run-label");
+      if (labelElement) labelElement.textContent = label;
+      this.runButton.title = title;
+      this.runButton.setAttribute("aria-label", title);
+    }
+    this.runButton.setAttribute("aria-busy", String(state === "building"));
+    this.buildButton.disabled = state === "building";
+    if (status.kind === "failed") {
+      // Vela errors and a missing main point into the file; a C compiler's
+      // failure is best read in Output.
+      const inFile = status.failure.kind === "vela" || status.failure.kind === "no-main";
+      this.panel.show(inFile ? "problems" : "output", false);
+    }
+  }
+
+  private onRunKey(event: KeyboardEvent): void {
+    if (event.altKey) return;
+    if (document.querySelector("dialog[open]")) {
+      // Not while a dialog asks something, but F5 mustn't reload the page either.
+      if (event.key === "F5") event.preventDefault();
+      return;
+    }
+    const mod = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+    let action: (() => void) | null = null;
+    if (event.key === "F5" && !mod) {
+      action = event.shiftKey ? () => this.runner.stop() : () => void this.runActive();
+    } else if (mod && !event.shiftKey && event.key === "Enter" && !(event.target instanceof HTMLInputElement)) {
+      // Text fields keep theirs (such as replace all in the search panel).
+      action = () => void this.runActive();
+    } else if (mod && event.shiftKey && key === "b") {
+      action = () => void this.buildActive();
+    } else if (mod && !event.shiftKey && key === "j") {
+      action = () => this.togglePanel();
+    } else if (mod && event.shiftKey && key === "m") {
+      action = () => this.panel.show("problems");
+    } else if (event.ctrlKey && !event.metaKey && !event.shiftKey && event.code === "Backquote") {
+      action = () => this.toggleTerminal();
+    }
+    if (!action) return;
+    event.preventDefault();
+    event.stopPropagation();
+    action();
+  }
+
+  private togglePanel(): void {
+    this.panel.toggle();
+    if (!this.panel.isVisible) this.focusEditor();
+  }
+
+  private toggleTerminal(): void {
+    const focused = this.shell.view.element.contains(document.activeElement);
+    if (this.panel.isVisible && this.panel.activeTab === "terminal" && focused) {
+      this.panel.hide();
+      this.focusEditor();
+    } else {
+      this.panel.show("terminal");
+    }
+  }
+
+  private focusEditor(): void {
+    if (this.documents.current) this.view.focus();
+  }
+
+  private scheduleProblems(): void {
+    clearTimeout(this.problemsTimer);
+    // A little after typing pauses, so errors that come and go mid-word don't flicker.
+    this.problemsTimer = setTimeout(() => this.updateProblems(), 300);
+  }
+
+  private updateProblems(): void {
+    const live = this.documents.all
+      .filter((doc) => doc.path.endsWith(".vela"))
+      .map((doc) => ({ path: doc.path, diagnostics: this.analyzer.file(this.latest(doc).doc).diagnostics }));
+    const files = collectProblems(live, this.runner.failures);
+    this.problems.update(files);
+    const count = problemCount(files);
+    this.panel.setCount(count);
+    this.statusBar.setProblems(count);
+  }
+
+  /** Opens a problem's file with the problem selected. */
+  private async openProblem(problem: Problem): Promise<void> {
+    await this.openFile(problem.path);
+    if (this.documents.current?.path !== problem.path) return;
+    const text = this.view.state.doc;
+    let from = 0;
+    let to = 0;
+    if (problem.from !== null && problem.to !== null) {
+      from = Math.min(problem.from, text.length);
+      to = Math.min(Math.max(problem.to, from), text.length);
+    } else if (problem.line !== null) {
+      const line = text.line(Math.max(1, Math.min(problem.line, text.lines)));
+      from = to = line.from + Math.max(0, Math.min((problem.col ?? 1) - 1, line.length));
+    }
+    this.view.dispatch({
+      selection: { anchor: from, head: to },
+      effects: EditorView.scrollIntoView(from, { y: "center" }),
+      userEvent: "select.problem",
+    });
+    this.view.focus();
+  }
+
+  private updateCursor(): void {
+    const doc = this.documents.current;
+    if (!doc) {
+      this.statusBar.setCursor(null);
+      return;
+    }
+    const { state } = this.view;
+    const head = state.selection.main.head;
+    const line = state.doc.lineAt(head);
+    const selected = state.selection.ranges.reduce((total, range) => total + range.to - range.from, 0);
+    // Columns count characters, as the compiler's do.
+    const col = [...line.text.slice(0, head - line.from)].length + 1;
+    this.statusBar.setCursor({ line: line.number, col, selected }, doc.path.endsWith(".vela") ? "Vela" : "Plain Text");
   }
 
   // Pickers, outline, and navigation ----------------------------------------------------
@@ -608,12 +860,15 @@ export class Workbench {
       .slice(0, 6);
     const shortcuts: [string, string][] = [
       ["Mod-p", "Open a file"],
+      ["F5", "Run the file"],
       ["Mod-s", "Save"],
       ["Ctrl-Space", "Complete"],
       ["F12", "Go to definition"],
       ["Mod-Shift-o", "Go to a declaration"],
       ["Mod-/", "Toggle comment"],
       ["Mod-f", "Find and replace"],
+      ["Ctrl-`", "Terminal"],
+      ["Mod-j", "Toggle the panel"],
       ["Mod-b", "Toggle the sidebar"],
     ];
     return h(

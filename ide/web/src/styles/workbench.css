@@ -1,10 +1,10 @@
 /* The window layout: title bar, sidebar with explorer and outline, tabs,
-   editor, and the welcome screen. */
+   editor, and the welcome screen (the panel and status bar are in panel.css). */
 
 .app {
   --sidebar-width: 260px;
   display: grid;
-  grid-template-rows: 40px minmax(0, 1fr);
+  grid-template-rows: 40px minmax(0, 1fr) 24px;
   height: 100%;
 }
 

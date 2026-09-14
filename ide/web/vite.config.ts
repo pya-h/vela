@@ -14,6 +14,18 @@ export default defineConfig({
     // Content-Security-Policy doesn't allow data: URLs for them.
     assetsInlineLimit: 0,
     sourcemap: true,
+    rolldownOptions: {
+      output: {
+        // The editor and the terminal libraries in chunks of their own, which
+        // browsers keep cached while the page's own code changes.
+        codeSplitting: {
+          groups: [
+            { name: "codemirror", test: /node_modules[\\/](@codemirror|@lezer|@marijn|style-mod|w3c-keyname|crelt)[\\/]/ },
+            { name: "xterm", test: /node_modules[\\/]@xterm[\\/]/ },
+          ],
+        },
+      },
+    },
   },
   server: {
     proxy: {

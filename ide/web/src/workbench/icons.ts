@@ -16,6 +16,14 @@ const PATHS = {
   pencil: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
   trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
   search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4",
+  play: "M8 5.5v13l10.5-6.5z",
+  stop: "M7 7h10v10H7z",
+  hammer: "M14.5 4.5l5 5-2 2-5-5zM12.5 6.5L4 15l3 3 8.5-8.5M10 3h5l2 2",
+  terminal: "M4 5h16v14H4zM8 10l3 2-3 2M13 15h3",
+  chevronDown: "M6 9l6 6 6-6",
+  error: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM15 9l-6 6M9 9l6 6",
+  check: "M5 12.5l4.5 4.5L19 7.5",
+  clear: "M5 19h14M8 15l9-9M13 6l5 5",
 } as const;
 
 export type IconName = keyof typeof PATHS;
