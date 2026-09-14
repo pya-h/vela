@@ -12,7 +12,7 @@ workspace = true
 # under ide/; plain `cargo build` and `cargo test` still cover only the
 # compiler, and `--workspace` includes the IDE.
 [workspace]
-members = [".", "ide/analysis"]
+members = [".", "ide/analysis", "ide/wasm"]
 default-members = ["."]
 resolver = "3"
 
@@ -21,3 +21,7 @@ unwrap_used = "deny"
 expect_used = "deny"
 indexing_slicing = "deny"
 panic = "deny"
+
+# The editor's WebAssembly module: small and fast to load.
+[profile.release.package.vela-analysis-wasm]
+opt-level = "s"

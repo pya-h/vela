@@ -12,6 +12,7 @@
 mod complete;
 mod hover;
 mod infer;
+mod language;
 mod position;
 mod scan;
 mod types;
@@ -21,6 +22,7 @@ use vela::lexer::{LexKind, Token as LexedToken};
 
 pub use complete::{CompletionItem, CompletionKind, Completions};
 pub use hover::Hover;
+pub use language::{BLOCK_CLOSER, BLOCK_OPENERS, BRANCH_KEYWORDS, Language, language};
 pub use position::LineIndex;
 pub use scan::{SymbolKind, TokenClass};
 

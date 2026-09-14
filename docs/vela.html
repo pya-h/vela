@@ -421,12 +421,22 @@ CC=clang cargo test</pre>
         <code>lexer::KEYWORDS</code> and <code>ast::BUILTIN_TYPES</code> list the language's reserved words and types.
       </p>
       <p>
-        The repository is a Cargo workspace: the compiler is the default member, and Vela Studio's crates live under
-        <code>ide/</code> (so far <code>ide/analysis</code>, the engine behind highlighting, diagnostics, outline,
-        go-to-definition, completion, and hover, built on the compiler). Plain <code>cargo build</code> and <code>cargo test</code>
-        cover only the compiler, which has no dependencies; add <code>--workspace</code> to include the IDE crates.
+        The repository is a Cargo workspace: the compiler is the default member, and Vela Studio's code lives under
+        <code>ide/</code>: <code>ide/analysis</code> is the engine behind highlighting, diagnostics, outline,
+        go-to-definition, completion, and hover, built on the compiler; <code>ide/wasm</code> compiles it to
+        WebAssembly so it runs in the editor page; and <code>ide/web</code> is the browser side, so far the
+        TypeScript bridge to that module. Plain <code>cargo build</code> and <code>cargo test</code> cover only the
+        compiler, which has no dependencies; add <code>--workspace</code> to include the IDE crates.
       </p>
       <pre>cargo test --workspace</pre>
+      <p>
+        The browser side needs Node.js and the <code>wasm32-unknown-unknown</code> Rust target
+        (<code>rustup target add wasm32-unknown-unknown</code>):
+      </p>
+      <pre>npm --prefix ide/web install
+npm --prefix ide/web run build:wasm    # build the analysis module
+npm --prefix ide/web test
+npm --prefix ide/web run typecheck</pre>
       <p>To lint the compiler (or everything, with <code>--workspace</code>):</p>
       <pre>cargo clippy --all-targets</pre>
       <p>

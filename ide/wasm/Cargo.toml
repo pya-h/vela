@@ -1,0 +1,18 @@
+[package]
+name = "vela-analysis-wasm"
+version = "0.1.0"
+edition = "2024"
+description = "WebAssembly build of vela-analysis for Vela Studio: JSON in, JSON out"
+publish = false
+
+[lib]
+# cdylib for the .wasm module; rlib so the request handling can be tested natively.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+vela-analysis = { path = "../analysis" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints]
+workspace = true

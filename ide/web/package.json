@@ -1,0 +1,17 @@
+{
+  "name": "vela-studio-web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Vela Studio's browser UI",
+  "type": "module",
+  "scripts": {
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "26.5.1",
+    "typescript": "7.0.2",
+    "vitest": "5.0.0"
+  }
+}
