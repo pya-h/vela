@@ -1,0 +1,38 @@
+  1 | # Tasks send their result with `<-`, so `send` is an ordinary name; and a
+    | comment:# Tasks send their result with `<-`, so `send` is an ordinary name; and a
+  2 | # comparison with a negative number keeps working when written with a space.
+    | comment:# comparison with a negative number keeps working when written with a space.
+  3 | task send(n: int) -> int
+    | keyword:task  task:send  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  4 |     <- n + 1
+    | keyword:<-  parameter:n  operator:+  number:1
+  5 | fi
+    | keyword:fi
+  7 | task report(n: int)
+    | keyword:task  task:report  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)
+  8 |     when n < -1
+    | keyword:when  parameter:n  operator:<  operator:-  number:1
+  9 |         show("far below")
+    | builtin-fn:show  punctuation:(  string:"far below"  punctuation:)
+ 10 |         <-
+    | keyword:<-
+ 11 |     fi
+    | keyword:fi
+ 12 |     show(n)
+    | builtin-fn:show  punctuation:(  parameter:n  punctuation:)
+ 13 | fi
+    | keyword:fi
+ 15 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 16 |     hold sent = send(1)
+    | keyword:hold  variable:sent  operator:=  task:send  punctuation:(  number:1  punctuation:)
+ 17 |     bind send_count = sent
+    | keyword:bind  variable:send_count  operator:=  variable:sent
+ 18 |     show(send_count)
+    | builtin-fn:show  punctuation:(  variable:send_count  punctuation:)
+ 19 |     report(-5)
+    | task:report  punctuation:(  operator:-  number:5  punctuation:)
+ 20 |     report(3)
+    | task:report  punctuation:(  number:3  punctuation:)
+ 21 | fi
+    | keyword:fi

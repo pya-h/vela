@@ -1,6 +1,6 @@
 # `end` is not a keyword: blocks close with `fi`, so `end` is an ordinary name.
 task last(end: int) -> int
-    send end - 1
+    <- end - 1
 fi
 
 task main()

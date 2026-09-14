@@ -1,7 +1,7 @@
 # error: 2:6: task 'sign' can finish without sending a value
 task sign(x: int) -> int
     when x > 0
-        send 1
+        <- 1
     else
         show("negative")
     fi

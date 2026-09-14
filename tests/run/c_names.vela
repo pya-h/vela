@@ -15,11 +15,11 @@ kind Jump
 fi
 
 task show_int(static: int) -> int
-    send static + 1
+    <- static + 1
 fi
 
 task fmod(a: float) -> float
-    send a
+    <- a
 fi
 
 task describe(j: Jump)

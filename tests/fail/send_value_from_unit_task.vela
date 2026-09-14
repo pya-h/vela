@@ -1,6 +1,6 @@
-# error: 3:10: this task has no return type, so send cannot take a value
+# error: 3:8: this task has no return type, so '<-' cannot take a value
 task log(x: int)
-    send x
+    <- x
 fi
 
 task main()

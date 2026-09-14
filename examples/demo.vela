@@ -6,11 +6,11 @@ shape Point
 fi
 
 task add(a: int, b: int) -> int
-    send a + b
+    <- a + b
 fi
 
 task manhattan(p: Point) -> int
-    send p.x + p.y
+    <- p.x + p.y
 fi
 
 task main()

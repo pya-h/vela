@@ -4,8 +4,8 @@
     | keyword:task  task:limit  punctuation:(  punctuation:)  operator:->  type-builtin:int
   4 |     show("limit")
     | builtin-fn:show  punctuation:(  string:"limit"  punctuation:)
-  5 |     send 3
-    | keyword:send  number:3
+  5 |     <- 3
+    | keyword:<-  number:3
   6 | fi
     | keyword:fi
   8 | task main()

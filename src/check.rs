@@ -345,12 +345,12 @@ impl Checker {
             StmtKind::Send(expr) => {
                 let ret = self.current_ret.clone().unwrap_or(Type::Unit);
                 match expr {
-                    Some(e) if ret == Type::Unit => err(e.span, "this task has no return type, so send cannot take a value"),
+                    Some(e) if ret == Type::Unit => err(e.span, "this task has no return type, so '<-' cannot take a value"),
                     Some(e) => {
                         let ety = self.check_expr(e)?;
                         self.expect_type(&ety, &ret, e.span)
                     }
-                    None if ret != Type::Unit => err(span, "expected a value after send"),
+                    None if ret != Type::Unit => err(span, "expected a value after '<-'"),
                     None => Ok(()),
                 }
             }
@@ -504,7 +504,11 @@ impl Checker {
                     return Ok(Type::Unit);
                 }
                 let (params, ret) = self.tasks.get(name.as_str())
-                    .ok_or_else(|| Error::at(span, format!("unknown task '{}'", name)))?
+                    .ok_or_else(|| {
+                        // `send (x)` written the old way reads as a call.
+                        let hint = if name == "send" { "; a task sends its result with '<-'" } else { "" };
+                        Error::at(span, format!("unknown task '{}'{}", name, hint))
+                    })?
                     .clone();
                 if args.len() != params.len() {
                     return err(span, format!("task '{}' expects {} args, got {}", name, params.len(), args.len()));

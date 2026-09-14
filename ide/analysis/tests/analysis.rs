@@ -66,7 +66,7 @@ task main()
 fi
 
 task total(q: Point) -> int
-    send q.x + q.y
+    <- q.x + q.y
 fi
 ";
 
@@ -148,7 +148,7 @@ fn half_typed_code_still_resolves_and_highlights() {
 task first(n: int) -> int
     bind twice = n * 2
     show(\"not done
-    send twice
+    <- twice
 
 task second()
     show(first(1) @)
@@ -159,7 +159,7 @@ fi
     assert_definition(source, ("n * 2", 0), ("n:", 0));
     assert_definition(source, ("first(1)", 0), ("first(n", 0));
     assert_eq!(class_at(source, "\"not done", 0), TokenClass::String);
-    assert_eq!(class_at(source, "send", 0), TokenClass::Keyword);
+    assert_eq!(class_at(source, "<- twice", 0), TokenClass::Keyword);
     assert_eq!(class_at(source, "second", 0), TokenClass::Task);
     assert_eq!(class_at(source, "@", 0), TokenClass::Invalid);
     let outline: Vec<(String, usize)> = analysis.outline().into_iter().map(|item| (item.name, item.to)).collect();

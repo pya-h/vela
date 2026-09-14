@@ -14,12 +14,12 @@
     | keyword:match  parameter:s
  10 |     case Circle r
     | keyword:case  variant:Circle  variable:r
- 11 |         send 3.14 * r * r
-    | keyword:send  number:3.14  operator:*  variable:r  operator:*  variable:r
+ 11 |         <- 3.14 * r * r
+    | keyword:<-  number:3.14  operator:*  variable:r  operator:*  variable:r
  12 |     case Rectangle w h
     | keyword:case  variant:Rectangle  variable:w  variable:h
- 13 |         send w * h
-    | keyword:send  variable:w  operator:*  variable:h
+ 13 |         <- w * h
+    | keyword:<-  variable:w  operator:*  variable:h
  14 |     fi
     | keyword:fi
  15 | fi

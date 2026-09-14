@@ -7,7 +7,7 @@ fi
 task code(l: Light) -> int
     match l
     case Red
-        send 1
+        <- 1
     case Green
         show("green")
     fi

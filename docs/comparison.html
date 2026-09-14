@@ -149,12 +149,31 @@
     .badge-fast { background: rgba(34,197,94,0.15); color: #86efac; }
     .badge-mid { background: rgba(250,204,21,0.15); color: #facc15; }
     .badge-slow { background: rgba(248,113,113,0.15); color: #fca5a5; }
+    .doc-nav {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .doc-nav a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"] {
+      color: var(--accent);
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Vela <span>vs.</span> The Landscape</h1>
     <p class="tagline">A practical comparison across the programming-language spectrum.</p>
+    <nav class="doc-nav" aria-label="Vela documentation">
+      <a href="vela.html">Language</a>
+      <a href="comparison.html" aria-current="page">Comparison</a>
+      <a href="future.html">Future</a>
+    </nav>
   </header>
 
   <main>
@@ -384,8 +403,8 @@
       <p>
         Vela provides static type safety and exhaustive pattern matching on kinds, which catches many bugs
         at compile time: there are no implicit conversions (except that mixing <code>int</code> and
-        <code>float</code> in arithmetic gives a <code>float</code>), every value-returning task must send a value on
-        every path, and <code>none</code> only fits pointer types. However, it does <em>not</em> prevent memory
+        <code>float</code> in arithmetic gives a <code>float</code>), every value-returning task must send a value
+        (<code>&lt;- value</code>) on every path, and <code>none</code> only fits pointer types. However, it does <em>not</em> prevent memory
         errors like Rust does: dereferencing <code>none</code> or a freed pointer is not caught, and integer overflow
         and division by zero are undefined, as in C. It is safer than C because shapes, kinds, and pointers are
         checked, but less safe than Rust, Swift, Haskell, OCaml, or GC'd languages.

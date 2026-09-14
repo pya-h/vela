@@ -25,11 +25,11 @@ kind Shape
 fi
 
 task area(s: Shape) -> float
-    send 0.0
+    <- 0.0
 fi
 
 task origin() -> Point
-    send Point { x: 0, y: 0 }
+    <- Point { x: 0, y: 0 }
 fi
 
 task main()
@@ -85,14 +85,16 @@ fn item_level_offers_declarations() {
     assert_offers(&PROGRAM.replace("    @@\n", "").replace("fi\n", "fi\n@@\n"), &["task", "kind"], &["when"]);
     let task = complete("@@").0.items.into_iter().find(|i| i.kind == CompletionKind::Snippet && i.label == "task").unwrap();
     assert_eq!(task.snippet.as_deref(), Some("task ${name}(${})\n\t${0}\nfi"));
+    let sending = complete("@@").0.items.into_iter().find(|i| i.label == "task -> type").unwrap();
+    assert_eq!(sending.snippet.as_deref(), Some("task ${name}(${}) -> ${type}\n\t<- ${value}\nfi"));
 }
 
 #[test]
 fn statements_offer_keywords_snippets_and_visible_names() {
     assert_offers(
         PROGRAM,
-        &["bind", "hold", "when", "each", "match", "send", "fi", "p", "line", "figure", "total", "area", "origin", "show", "match figure"],
-        &["task", "else", "case", "Circle", "x", "hidden", "true"],
+        &["bind", "hold", "when", "each", "match", "fi", "p", "line", "figure", "total", "area", "origin", "show", "match figure"],
+        &["task", "else", "case", "Circle", "x", "hidden", "true", "send"],
     );
     // The word being typed is replaced.
     let (completions, source) = complete(&in_main("ma@@"));

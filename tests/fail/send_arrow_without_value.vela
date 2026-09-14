@@ -1,0 +1,8 @@
+# error: 3:5: expected a value after '<-'
+task answer() -> int
+    <-
+fi
+
+task main()
+    show(answer())
+fi

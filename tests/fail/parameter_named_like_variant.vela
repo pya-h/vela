@@ -5,7 +5,7 @@ kind Light
 fi
 
 task brightness(Green: int) -> int
-    send Green
+    <- Green
 fi
 
 task main()

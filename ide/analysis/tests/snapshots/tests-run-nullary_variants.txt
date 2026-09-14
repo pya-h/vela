@@ -24,16 +24,16 @@
     | keyword:match  parameter:l
  16 |     case Red
     | keyword:case  variant:Red
- 17 |         send "red"
-    | keyword:send  string:"red"
+ 17 |         <- "red"
+    | keyword:<-  string:"red"
  18 |     case Amber
     | keyword:case  variant:Amber
- 19 |         send "amber"
-    | keyword:send  string:"amber"
+ 19 |         <- "amber"
+    | keyword:<-  string:"amber"
  20 |     case Green
     | keyword:case  variant:Green
- 21 |         send "green"
-    | keyword:send  string:"green"
+ 21 |         <- "green"
+    | keyword:<-  string:"green"
  22 |     fi
     | keyword:fi
  23 | fi

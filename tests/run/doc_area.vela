@@ -8,9 +8,9 @@ fi
 task area(s: Shape) -> float
     match s
     case Circle r
-        send 3.14 * r * r
+        <- 3.14 * r * r
     case Rectangle w h
-        send w * h
+        <- w * h
     fi
 fi
 

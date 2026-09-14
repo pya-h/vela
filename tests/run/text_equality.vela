@@ -1,7 +1,7 @@
 # `==` on text compares contents, not addresses.
 
 task same(a: text, b: text) -> bool
-    send a == b
+    <- a == b
 fi
 
 task main()

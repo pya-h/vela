@@ -177,6 +177,20 @@ fn every_keyword_lexes_to_its_token() {
 }
 
 #[test]
+fn the_send_arrow_is_one_token() {
+    let lt = || token(Token::Lt);
+    let minus = || token(Token::Minus);
+    assert_eq!(kinds("<-"), [token(Token::Send), token(Token::Eof)]);
+    assert_eq!(Token::Send.describe(), "'<-'");
+    // Written without a space, `<-` is always the arrow, never `<` then `-`.
+    assert_eq!(kinds("a<-1")[1], token(Token::Send));
+    assert_eq!(kinds("a < -1")[1..3], [lt(), minus()]);
+    assert_eq!(kinds("<=")[0], token(Token::Le));
+    // `send` is an ordinary name.
+    assert_eq!(kinds("send"), [token(Token::Ident("send".into())), token(Token::Eof)]);
+}
+
+#[test]
 fn every_escape_is_accepted() {
     for (escape, value) in lexer::ESCAPES {
         let source = format!("\"\\{}\"", escape);

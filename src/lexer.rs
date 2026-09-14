@@ -14,6 +14,7 @@ pub enum Token {
     Task,
     Bind,
     Hold,
+    /// `<-`, which sends a task's result (the counterpart of `->` in its header).
     Send,
     Shape,
     Kind,
@@ -65,7 +66,6 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("task", Token::Task),
     ("bind", Token::Bind),
     ("hold", Token::Hold),
-    ("send", Token::Send),
     ("shape", Token::Shape),
     ("kind", Token::Kind),
     ("when", Token::When),
@@ -121,6 +121,7 @@ impl Token {
             Token::Comma => ",",
             Token::Dot => ".",
             Token::Arrow => "->",
+            Token::Send => "<-",
             Token::Range => "..",
             Token::Plus => "+",
             Token::Minus => "-",
@@ -386,6 +387,11 @@ impl Lexer {
                 if self.peek() == '=' {
                     self.advance();
                     Token::Le
+                } else if self.peek() == '-' {
+                    // Always one token, so `a <-1` never quietly means `a < -1`
+                    // (the parser explains; see `Parser::parse_send`).
+                    self.advance();
+                    Token::Send
                 } else {
                     Token::Lt
                 }

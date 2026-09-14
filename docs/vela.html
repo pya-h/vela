@@ -95,6 +95,35 @@
       border-radius: 0 0.5rem 0.5rem 0;
       margin: 1.5rem 0;
     }
+    .doc-nav {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .doc-nav a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"] {
+      color: var(--accent);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+    }
+    th, td {
+      padding: 0.45rem 0.6rem;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+    }
     footer {
       text-align: center;
       padding: 3rem 1rem;
@@ -107,6 +136,11 @@
   <header>
     <h1>Vela<span>.</span></h1>
     <p class="tagline">A minimal, safe, fast systems language with a fresh face.</p>
+    <nav class="doc-nav" aria-label="Vela documentation">
+      <a href="vela.html" aria-current="page">Language</a>
+      <a href="comparison.html">Comparison</a>
+      <a href="future.html">Future</a>
+    </nav>
   </header>
 
   <main>
@@ -130,7 +164,7 @@
         <li><strong>Minimal surface.</strong> No classes <em>and</em> structs. No interfaces <em>and</em> traits. Just shapes, kinds, and tasks.</li>
         <li><strong>One way to do it.</strong> Immutability by default with <code>bind</code>; mutation explicitly opt-in with <code>hold</code>.</li>
         <li><strong>Safe by design.</strong> Static typing, exhaustive pattern matching, and explicit ownership via owned pointers.</li>
-        <li><strong>Beautiful syntax.</strong> Words over symbols, clean blocks closed with <code>fi</code>, and no semicolons.</li>
+        <li><strong>Beautiful syntax.</strong> Words for control flow and logic (<code>when</code>, <code>and</code>, <code>not</code>), blocks closed with <code>fi</code>, no semicolons, and a symbol only where it reads as a picture: <code>-&gt;</code> names what a task gives back, and <code>&lt;-</code> gives it back.</li>
         <li><strong>No GC.</strong> Manual memory management with <code>new</code> and <code>free</code>, or stack allocation where possible.</li>
       </ul>
     </section>
@@ -141,9 +175,17 @@
 <span class="keyword">task</span> main()
     show(<span class="string">"Hello, Vela!"</span>)
 <span class="keyword">fi</span></pre>
-      <p>Compile and run with:</p>
+      <p>
+        A program is one <code>.vela</code> file. Compile and run it with (the output is <code>a.out</code> unless
+        <code>-o</code> names it):
+      </p>
       <pre>cargo run -- examples/hello.vela -o hello
 ./hello</pre>
+      <p>
+        More programs are in <code>examples/</code>: <code>fib.vela</code> (recursion), <code>kinds.vela</code>
+        (kinds and <code>match</code>), <code>todo.vela</code> (a linked list with pointers and
+        <code>none</code>), and <code>demo.vela</code> (tasks, shapes, pointers, and control flow).
+      </p>
     </section>
 
     <section>
@@ -167,32 +209,74 @@
         <code>match</code> — closes with <code>fi</code>. Each statement goes on its own line; there are no semicolons.
       </p>
       <p>
-        A statement is a binding, an assignment, a block, <code>send</code>, <code>free</code>, or a task call. Any
-        other expression on its own line would do nothing, so it is an error: <code>x == 1</code> alone reports
-        <code>the result of '==' is unused; use '=' to assign</code>.
+        A statement is a binding, an assignment, a block, a send (<code>&lt;-</code>), <code>free</code>, or a task
+        call. Any other expression on its own line would do nothing, so it is an error: <code>x == 1</code> alone
+        reports <code>the result of '==' is unused; use '=' to assign</code>. Comments start with <code>#</code>.
       </p>
 
+      <h3>Reserved Words and Symbols</h3>
+      <p>These words can't be used as names:</p>
+      <pre>task  shape  kind  bind  hold  when  else  loop  each  in  match  case
+new   free   and   or    not   true  false none  fi</pre>
+      <p>
+        <code>show</code> and the builtin types (<code>int</code>, <code>float</code>, <code>bool</code>,
+        <code>text</code>, <code>unit</code>) aren't reserved words, but nothing else can take their names either
+        (see <a href="#names">Names</a>). The symbols:
+      </p>
+      <table>
+        <tr><th>Symbol</th><th>Meaning</th></tr>
+        <tr><td><code>-&gt; T</code></td><td>the type a task sends back, in its header</td></tr>
+        <tr><td><code>&lt;- value</code></td><td>sends that value back (starts a line)</td></tr>
+        <tr><td><code>name: T</code></td><td>a parameter's, field's, or binding's type</td></tr>
+        <tr><td><code>^T</code>, <code>p^</code></td><td>a pointer type; the value a pointer points to</td></tr>
+        <tr><td><code>a.x</code></td><td>a field of a shape value</td></tr>
+        <tr><td><code>Name { x: 1 }</code></td><td>a shape literal</td></tr>
+        <tr><td><code>0..5</code></td><td>a range, in <code>each</code></td></tr>
+        <tr><td><code>=</code></td><td>assignment, and the value of a binding</td></tr>
+        <tr><td><code>+ - * / %</code>, <code>== != &lt; &lt;= &gt; &gt;=</code></td><td>arithmetic and comparison</td></tr>
+      </table>
+
       <h3>Tasks</h3>
-      <p>Functions are called <em>tasks</em>. The return arrow is required only when returning a value.</p>
-      <pre><span class="keyword">task</span> add(a: int, b: int) -> int
-    <span class="keyword">send</span> a + b
+      <p>
+        Functions are called <em>tasks</em>. <code>-&gt; T</code> in the header says a task sends back a value of
+        type <code>T</code>, and <code>&lt;-</code> sends it: one arrow points out of the header to the result, the
+        other brings the result back. A task that sends nothing back has no arrow in its header.
+      </p>
+      <pre><span class="keyword">task</span> add(a: int, b: int) -&gt; int
+    <span class="keyword">&lt;-</span> a + b
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> greet(name: text)
     show(name)
 <span class="keyword">fi</span></pre>
       <p>
-        A task that returns a value must <code>send</code> one on every path: the compiler rejects a task that could
-        reach its end without sending. A <code>when</code> counts only if both branches send, a <code>match</code> only
-        if every case does, and a loop never counts, since its body might not run. A task without a return type
-        uses a bare <code>send</code> to return early.
+        A task that returns a value must send one on every path: the compiler rejects a task that could reach its
+        end without sending. A <code>when</code> counts only if both branches send, a <code>match</code> only if every
+        case does, and a loop never counts, since its body might not run. A task without a return type uses a bare
+        <code>&lt;-</code> to return early.
       </p>
-      <pre><span class="keyword">task</span> sign(x: int) -> int
-    <span class="keyword">when</span> x < 0
-        <span class="keyword">send</span> -1
+      <pre><span class="keyword">task</span> sign(x: int) -&gt; int
+    <span class="keyword">when</span> x &lt; 0
+        <span class="keyword">&lt;-</span> -1
     <span class="keyword">fi</span>
-    <span class="keyword">send</span> 1               <span class="comment"># without this line: task 'sign' can finish without sending a value</span>
+    <span class="keyword">&lt;-</span> 1                 <span class="comment"># without this line: task 'sign' can finish without sending a value</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> report(x: int)
+    <span class="keyword">when</span> x == 0
+        <span class="keyword">&lt;-</span>                  <span class="comment"># nothing to send: just leave</span>
+    <span class="keyword">fi</span>
+    show(x)
 <span class="keyword">fi</span></pre>
+      <p>
+        A send starts its line. <code>&lt;-</code> is always one symbol, so a comparison with a negative number needs
+        a space: <code>a &lt;-1</code> is an error that says so, and <code>a &lt; -1</code> compares.
+      </p>
+      <p>
+        Tasks can be called before they are declared, and can call themselves. Parameters are immutable, and
+        arguments are copies: a task that changes a shape it was given changes its own copy (pass a pointer to
+        share one value).
+      </p>
       <p>
         Every program starts at <code>task main()</code>, which takes no parameters and returns nothing.
       </p>
@@ -201,7 +285,12 @@
       <p><code>bind</code> creates an immutable binding. <code>hold</code> creates a mutable variable.</p>
       <pre><span class="keyword">bind</span> pi = 3.14
 <span class="keyword">hold</span> count = 0
-count = count + 1</pre>
+count = count + 1
+<span class="keyword">hold</span> total: float = 0.0     <span class="comment"># the type can be written out</span></pre>
+      <p>
+        Assigning copies the value. Shapes are copied whole, so after <code>hold b = a</code>, changing
+        <code>b.x</code> leaves <code>a</code> alone.
+      </p>
       <p>
         A variable lives until the block that declares it closes. Vela has no shadowing: inside a
         task, a name cannot be declared again while another variable with that name is visible (including
@@ -221,31 +310,48 @@ show(label)                <span class="comment"># error: unknown variable 'labe
         Arithmetic (<code>+ - * / %</code>) works on <code>int</code> and <code>float</code>. If either operand is a
         <code>float</code>, the result is a <code>float</code>; two <code>int</code>s give an <code>int</code>, with
         division truncating toward zero. <code>%</code> on floats keeps the sign of the dividend.
-        Comparisons (<code>&lt; &lt;= &gt; &gt;=</code>) require both sides to have the same type.
+        On <code>int</code>s too, <code>%</code> keeps the sign of the dividend (<code>-7 % 3</code> is
+        <code>-1</code>). Comparisons (<code>&lt; &lt;= &gt; &gt;=</code>) work on numbers of the same type.
         Number literals are decimal digits with an optional fraction (<code>42</code>, <code>3.14</code>); there
-        are no exponent or hex forms, so <code>1e5</code> is an invalid number.
+        are no exponent or hex forms, so <code>1e5</code> is an invalid number. Integer overflow and division by
+        zero are not checked yet (see <a href="#limits">Current Limits</a>).
       </p>
       <pre>show(7 / 2)       <span class="comment"># 3</span>
 show(7 / 2.0)     <span class="comment"># 3.5</span>
 show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
+      <p>Operators bind from loosest to tightest as follows; operators on the same row group from the left.</p>
+      <table>
+        <tr><th>Operators</th><th>Example</th></tr>
+        <tr><td><code>or</code></td><td><code>a or b and c</code> is <code>a or (b and c)</code></td></tr>
+        <tr><td><code>and</code></td><td></td></tr>
+        <tr><td><code>== !=</code></td><td></td></tr>
+        <tr><td><code>&lt; &lt;= &gt; &gt;=</code></td><td><code>1 &lt; 2 &lt; 3</code> is an error: <code>1 &lt; 2</code> is a <code>bool</code></td></tr>
+        <tr><td><code>..</code></td><td><code>0..n + 1</code> is <code>0..(n + 1)</code></td></tr>
+        <tr><td><code>+ -</code></td><td></td></tr>
+        <tr><td><code>* / %</code></td><td><code>2 + 3 * 4</code> is <code>14</code></td></tr>
+        <tr><td><code>-x</code>, <code>not x</code></td><td><code>not a == b</code> is <code>(not a) == b</code>; write <code>not (a == b)</code></td></tr>
+        <tr><td><code>a.x</code>, <code>p^</code>, <code>f(x)</code></td><td><code>p^.x</code> reads a field through a pointer</td></tr>
+      </table>
 
       <h3>Text, Output, and Logic</h3>
       <p>
         Text literals use double quotes and support the escapes <code>\n</code>, <code>\t</code>, <code>\r</code>,
         <code>\\</code>, <code>\"</code>, and <code>\0</code>. A <code>#</code> starts a comment that runs to the end
-        of the line. <code>show</code> is the only builtin task: it prints an <code>int</code>, <code>float</code>,
+        of the line. Text holds any UTF-8, but a <code>\0</code> ends it early (<code>"ab\0cd"</code> shows as
+        <code>ab</code>). <code>show</code> is the only builtin task: it prints an <code>int</code>, <code>float</code>,
         <code>bool</code>, or <code>text</code> followed by a newline (floats with up to 6 significant digits).
       </p>
       <p>
         Logic uses words: <code>and</code>, <code>or</code>, and <code>not</code> work on <code>bool</code>, and
-        <code>and</code>/<code>or</code> skip the right side when the left side decides the result.
+        <code>and</code>/<code>or</code> skip the right side when the left side decides the result. Conditions in
+        <code>when</code> and <code>loop</code> must be <code>bool</code>: <code>when count</code> is an error.
         <code>==</code> and <code>!=</code> work on numbers, <code>bool</code>, <code>text</code> (by contents), and
         pointers; both sides must have the same type, except that <code>none</code> compares with any pointer.
       </p>
       <pre><span class="comment"># greet the user</span>
 show(<span class="string">"say \"hi\""</span>)       <span class="comment"># say "hi"</span>
 show(2.0 / 3.0)            <span class="comment"># 0.666667</span>
-show(1 < 2 <span class="keyword">and not</span> false)  <span class="comment"># true</span>
+show(1 &lt; 2 <span class="keyword">and not</span> false)  <span class="comment"># true</span>
 show(1 == 1.0)             <span class="comment"># error: expected type int, got float</span></pre>
 
       <h3>Shapes</h3>
@@ -290,14 +396,18 @@ p.x = 5                    <span class="comment"># error: p is a bind</span></pr
     Rectangle(width: float, height: float)
 <span class="keyword">fi</span>
 
-<span class="keyword">task</span> area(s: Shape) -> float
+<span class="keyword">task</span> area(s: Shape) -&gt; float
     <span class="keyword">match</span> s
     <span class="keyword">case</span> Circle r
-        <span class="keyword">send</span> 3.14 * r * r
+        <span class="keyword">&lt;-</span> 3.14 * r * r
     <span class="keyword">case</span> Rectangle w h
-        <span class="keyword">send</span> w * h
+        <span class="keyword">&lt;-</span> w * h
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></pre>
+      <p>
+        A <code>match</code> must have a <code>case</code> for every variant, each once; leaving one out is an error
+        that names it.
+      </p>
       <p>
         A variant can have no payload. Write its value as just its name, with or without parentheses; its
         <code>case</code> binds nothing.
@@ -312,7 +422,7 @@ p.x = 5                    <span class="comment"># error: p is a bind</span></pr
 <span class="keyword">bind</span> b = Green()          <span class="comment"># same as Green</span>
 <span class="keyword">bind</span> c = Dimmed(3)</pre>
 
-      <h3>Names</h3>
+      <h3 id="names">Names</h3>
       <p>
         A name starts with an ASCII letter and continues with ASCII letters, digits, and <code>_</code>, but cannot
         contain <code>__</code> (two underscores), which the compiler keeps for its own C names. Words that mean
@@ -328,13 +438,13 @@ p.x = 5                    <span class="comment"># error: p is a bind</span></pr
       </p>
 
       <h3>Control Flow</h3>
-      <pre><span class="keyword">when</span> x > 0
+      <pre><span class="keyword">when</span> x &gt; 0
     show(<span class="string">"positive"</span>)
 <span class="keyword">else</span>
     show(<span class="string">"non-positive"</span>)
 <span class="keyword">fi</span>
 
-<span class="keyword">loop</span> count < 10
+<span class="keyword">loop</span> count &lt; 10
     show(count)
     count = count + 1
 <span class="keyword">fi</span>
@@ -347,6 +457,11 @@ p.x = 5                    <span class="comment"># error: p is a bind</span></pr
         evaluated once, before the first iteration; the loop variable is immutable. A range such as
         <code>0..5</code> is not a value: it can only appear in <code>each</code>.
       </p>
+      <p>
+        <code>loop</code> repeats while its condition holds. There is no <code>break</code> or
+        <code>continue</code>: end a loop through its condition, or leave the task with <code>&lt;-</code>. There is
+        no <code>else when</code> either; put a <code>when</code> inside the <code>else</code>.
+      </p>
 
       <h3>Memory</h3>
       <p>Owned pointers are explicit and manually freed. No garbage collector.</p>
@@ -354,6 +469,15 @@ p.x = 5                    <span class="comment"># error: p is a bind</span></pr
 show(p^)
 p^ = 43                    <span class="comment"># writing through a pointer is allowed, even from a bind</span>
 <span class="keyword">free</span>(p)</pre>
+      <p>
+        <code>new T(value)</code> copies a value to the heap and gives back a <code>^T</code>. A pointer to a shape
+        has no fields of its own: read and write them through <code>^</code>.
+      </p>
+      <pre><span class="keyword">bind</span> origin = <span class="keyword">new</span> Point(Point { x: 0, y: 0 })
+origin^.x = 5
+show(origin^.x)            <span class="comment"># 5</span>
+show(origin.x)             <span class="comment"># error: type ^Point has no fields; dereference it first, as in 'p^.x'</span>
+<span class="keyword">free</span>(origin)</pre>
       <p>
         <code>none</code> is the empty pointer. It fits any pointer type and can be compared with any pointer, but
         on its own it has no pointer type, so a binding initialized with <code>none</code> needs one written out.
@@ -365,17 +489,18 @@ p^ = 43                    <span class="comment"># writing through a pointer is 
 <span class="keyword">bind</span> q = <span class="keyword">none</span>             <span class="comment"># error: cannot infer the type of 'q' from none</span></pre>
       <div class="note">
         <strong>Note:</strong> Vela intentionally keeps memory management simple. There is no borrow checker;
-        ownership is manual, like C but with clearer syntax. Use <code>new</code>/<code>free</code> with care.
+        ownership is manual, like C but with clearer syntax. Use <code>new</code>/<code>free</code> with care:
+        reading through <code>none</code> or a freed pointer is not caught.
       </div>
     </section>
 
     <section>
       <h2>Complete Example</h2>
-      <pre><span class="keyword">task</span> fib(n: int) -> int
-    <span class="keyword">when</span> n < 2
-        <span class="keyword">send</span> n
+      <pre><span class="keyword">task</span> fib(n: int) -&gt; int
+    <span class="keyword">when</span> n &lt; 2
+        <span class="keyword">&lt;-</span> n
     <span class="keyword">else</span>
-        <span class="keyword">send</span> fib(n - 1) + fib(n - 2)
+        <span class="keyword">&lt;-</span> fib(n - 1) + fib(n - 2)
     <span class="keyword">fi</span>
 <span class="keyword">fi</span>
 
@@ -384,6 +509,20 @@ p^ = 43                    <span class="comment"># writing through a pointer is 
         show(fib(i))
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></pre>
+    </section>
+
+    <section>
+      <h2 id="limits">Current Limits</h2>
+      <p>Vela is young. These are known, and planned for (see <a href="future.html">Future Directions</a>):</p>
+      <ul>
+        <li>The compiler reports the first error in a program, not all of them.</li>
+        <li>Integer overflow and division by zero are not checked: they behave as in C, where they are undefined.</li>
+        <li>Reading through <code>none</code> or a freed pointer is not caught.</li>
+        <li><code>text</code> is a C string, so a <code>\0</code> ends it; there are no text operations besides
+          <code>==</code>, <code>!=</code>, and <code>show</code>.</li>
+        <li>There are no arrays, no modules (a program is one file), and no way to read input.</li>
+        <li><code>show</code> prints floats with 6 significant digits.</li>
+      </ul>
     </section>
 
     <section>
@@ -396,7 +535,12 @@ p^ = 43                    <span class="comment"># writing through a pointer is 
       <pre>cargo build
 ./target/debug/vela program.vela -o program
 CC=clang ./target/debug/vela program.vela -o program</pre>
-      <p>To see the generated C code:</p>
+      <p>
+        <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c]</code>: <code>-o</code> names the executable
+        (<code>a.out</code> by default), <code>--emit-c</code> prints the generated C instead of compiling it, and
+        <code>--help</code> prints the usage. The exit status is 0 on success, 1 when the program doesn't compile,
+        and 2 for wrong arguments.
+      </p>
       <pre>./target/debug/vela program.vela --emit-c</pre>
       <p>Errors point at the exact place in your source:</p>
       <pre>program.vela:3:10: error: unknown variable 'missing'
@@ -461,7 +605,7 @@ npm --prefix ide/web run e2e           # set CHROMIUM if it isn't /usr/bin/chrom
         <li>Vela is intentionally small. It is not meant to replace Rust or C, but to explore how little syntax is needed for a safe, compiled systems language.</li>
         <li>Memory is manually managed to avoid GC complexity while keeping the implementation approachable.</li>
         <li>The compiler generates readable C, making it easy to debug and interoperate with existing C code.</li>
-        <li>Syntax uses keywords over punctuation to keep source code friendly and self-documenting.</li>
+        <li>Syntax uses keywords over punctuation to keep source code friendly and self-documenting; the few symbols (<code>-&gt;</code>, <code>&lt;-</code>, <code>^</code>) each stand for one idea.</li>
       </ul>
     </section>
   </main>

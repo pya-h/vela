@@ -258,12 +258,31 @@
       border-top: 1px solid var(--border);
       background: var(--bg-2);
     }
+    .doc-nav {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .doc-nav a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"] {
+      color: var(--accent);
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Vela Future Directions</h1>
     <p class="tagline">A design notebook of weak points, safe improvements, and bold ideas for where Vela could go next.</p>
+    <nav class="doc-nav" aria-label="Vela documentation">
+      <a href="vela.html">Language</a>
+      <a href="comparison.html">Comparison</a>
+      <a href="future.html" aria-current="page">Future</a>
+    </nav>
   </header>
 
   <main>
@@ -551,7 +570,7 @@
           A pointer receiver lets the method change the value.
         </p>
         <pre>task (p: Point) length_squared() -> float
-    send p.x * p.x + p.y * p.y
+    &lt;- p.x * p.x + p.y * p.y
 fi
 
 task (p: ^Point) shift(dx: float)
@@ -591,11 +610,11 @@ bind size = p.length_squared()</pre>
         </p>
         <pre>extend Point
     task origin() -> Point
-        send Point { x: 0.0, y: 0.0 }
+        &lt;- Point { x: 0.0, y: 0.0 }
     fi
 
     task length_squared(self) -> float
-        send self.x * self.x + self.y * self.y
+        &lt;- self.x * self.x + self.y * self.y
     fi
 
     task shift(hold self, dx: float)
@@ -637,7 +656,7 @@ fi</pre>
     y: float
 
     task length_squared() -> float
-        send x * x + y * y
+        &lt;- x * x + y * y
     fi
 fi</pre>
         <div class="pros-cons">
@@ -670,7 +689,7 @@ fi</pre>
           as in D and Nim. Every existing task becomes callable with a dot.
         </p>
         <pre>task length_squared(p: Point) -> float
-    send p.x * p.x + p.y * p.y
+    &lt;- p.x * p.x + p.y * p.y
 fi
 
 bind a = length_squared(p)
@@ -705,11 +724,11 @@ bind b = p.length_squared()     # the same call</pre>
           reads exactly like the call, needs no new keyword or block, and takes Rust's explicit receiver modes.
         </p>
         <pre>task Point.origin() -> Point
-    send Point { x: 0.0, y: 0.0 }
+    &lt;- Point { x: 0.0, y: 0.0 }
 fi
 
 task Point.length_squared(self) -> float
-    send self.x * self.x + self.y * self.y
+    &lt;- self.x * self.x + self.y * self.y
 fi
 
 task Point.shift(hold self, dx: float)
@@ -824,7 +843,7 @@ show(p.length_squared())</pre>
       <h3>Concurrency</h3>
       <ul>
         <li><strong>Message-passing actors:</strong> no shared mutable state by default</li>
-        <li><strong>Channels:</strong> <code>send</code> and <code>recv</code> between tasks</li>
+        <li><strong>Channels:</strong> pass values between tasks (<code>&lt;-</code> already sends a task's result, so channel operations would need a spelling that can't be confused with it)</li>
         <li><strong>Async/await:</strong> only if it fits the minimal philosophy</li>
         <li><strong>Data-race freedom:</strong> enforce through ownership rules from day one</li>
       </ul>

@@ -2,8 +2,8 @@
     | comment:# `==` on text compares contents, not addresses.
   3 | task same(a: text, b: text) -> bool
     | keyword:task  task:same  punctuation:(  parameter:a  punctuation::  type-builtin:text  punctuation:,  parameter:b  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:bool
-  4 |     send a == b
-    | keyword:send  parameter:a  operator:==  parameter:b
+  4 |     <- a == b
+    | keyword:<-  parameter:a  operator:==  parameter:b
   5 | fi
     | keyword:fi
   7 | task main()

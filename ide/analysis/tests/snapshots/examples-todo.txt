@@ -30,16 +30,16 @@
     | keyword:match  parameter:s
  19 |     case Todo
     | keyword:case  variant:Todo
- 20 |         send "todo"
-    | keyword:send  string:"todo"
+ 20 |         <- "todo"
+    | keyword:<-  string:"todo"
  21 |     case Done
     | keyword:case  variant:Done
- 22 |         send "done"
-    | keyword:send  string:"done"
+ 22 |         <- "done"
+    | keyword:<-  string:"done"
  23 |     case Blocked reason
     | keyword:case  variant:Blocked  variable:reason
- 24 |         send reason
-    | keyword:send  variable:reason
+ 24 |         <- reason
+    | keyword:<-  variable:reason
  25 |     fi
     | keyword:fi
  26 | fi
@@ -50,16 +50,16 @@
     | keyword:match  parameter:s
  30 |     case Done
     | keyword:case  variant:Done
- 31 |         send true
-    | keyword:send  keyword:true
+ 31 |         <- true
+    | keyword:<-  keyword:true
  32 |     case Todo
     | keyword:case  variant:Todo
- 33 |         send false
-    | keyword:send  keyword:false
+ 33 |         <- false
+    | keyword:<-  keyword:false
  34 |     case Blocked reason
     | keyword:case  variant:Blocked  variable:reason
- 35 |         send false
-    | keyword:send  keyword:false
+ 35 |         <- false
+    | keyword:<-  keyword:false
  36 |     fi
     | keyword:fi
  37 | fi
@@ -98,8 +98,8 @@
     | variable:current  operator:=  variable:current  operator:^  punctuation:.  field:next
  56 |     fi
     | keyword:fi
- 57 |     send count
-    | keyword:send  variable:count
+ 57 |     <- count
+    | keyword:<-  variable:count
  58 | fi
     | keyword:fi
  60 | task find(first: ^Item, title: text) -> ^Item
@@ -110,16 +110,16 @@
     | keyword:loop  variable:current  operator:!=  keyword:none
  63 |         when current^.title == title
     | keyword:when  variable:current  operator:^  punctuation:.  field:title  operator:==  parameter:title
- 64 |             send current
-    | keyword:send  variable:current
+ 64 |             <- current
+    | keyword:<-  variable:current
  65 |         fi
     | keyword:fi
  66 |         current = current^.next
     | variable:current  operator:=  variable:current  operator:^  punctuation:.  field:next
  67 |     fi
     | keyword:fi
- 68 |     send none
-    | keyword:send  keyword:none
+ 68 |     <- none
+    | keyword:<-  keyword:none
  69 | fi
     | keyword:fi
  71 | task main()

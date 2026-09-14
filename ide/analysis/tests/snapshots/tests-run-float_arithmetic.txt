@@ -8,8 +8,8 @@
     | keyword:fi
   7 | task half(n: int) -> float
     | keyword:task  task:half  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:float
-  8 |     send n / 2.0
-    | keyword:send  parameter:n  operator:/  number:2.0
+  8 |     <- n / 2.0
+    | keyword:<-  parameter:n  operator:/  number:2.0
   9 | fi
     | keyword:fi
  11 | task main()

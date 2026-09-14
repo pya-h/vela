@@ -1,6 +1,6 @@
 # error: 2:14: unknown type 'Pointt'
 task area(p: Pointt) -> int
-    send 0
+    <- 0
 fi
 
 task main()

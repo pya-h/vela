@@ -4,12 +4,12 @@
     | keyword:task  task:fib  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
   4 |     when n < 2
     | keyword:when  parameter:n  operator:<  number:2
-  5 |         send n
-    | keyword:send  parameter:n
+  5 |         <- n
+    | keyword:<-  parameter:n
   6 |     else
     | keyword:else
-  7 |         send fib(n - 1) + fib(n - 2)
-    | keyword:send  task:fib  punctuation:(  parameter:n  operator:-  number:1  punctuation:)  operator:+  task:fib  punctuation:(  parameter:n  operator:-  number:2  punctuation:)
+  7 |         <- fib(n - 1) + fib(n - 2)
+    | keyword:<-  task:fib  punctuation:(  parameter:n  operator:-  number:1  punctuation:)  operator:+  task:fib  punctuation:(  parameter:n  operator:-  number:2  punctuation:)
   8 |     fi
     | keyword:fi
   9 | fi

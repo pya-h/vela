@@ -10,9 +10,9 @@ fi
 task make(n: int) -> Pair
     show("make")
     when n == 0
-        send Ints(1, 2)
+        <- Ints(1, 2)
     fi
-    send Floats(1.5, 2.5)
+    <- Floats(1.5, 2.5)
 fi
 
 task describe(p: Pair)

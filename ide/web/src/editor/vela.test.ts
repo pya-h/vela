@@ -187,7 +187,7 @@ describe("completion", () => {
   });
 
   it("re-indents a line dedented for fi when a completion makes it another word", () => {
-    const source = "task fib(n: int) -> int\n    send n\nfi\ntask main()\n    when true\n    fi|\n    fi\nfi\n";
+    const source = "task fib(n: int) -> int\n    <- n\nfi\ntask main()\n    when true\n    fi|\n    fi\nfi\n";
     const result = complete(source);
     const fib = result?.options.find((o) => o.label === "fib");
     const view = fakeView(stateFor(source));

@@ -20,8 +20,8 @@
     | keyword:fi
  13 | task first(a: int, b: int) -> int
     | keyword:task  task:first  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 14 |     send a
-    | keyword:send  parameter:a
+ 14 |     <- a
+    | keyword:<-  parameter:a
  15 | fi
     | keyword:fi
  17 | task ignore(p: Point)
@@ -36,12 +36,12 @@
     | keyword:match  parameter:r
  23 |     case Sample v w
     | keyword:case  variant:Sample  variable:v  variable:w
- 24 |         send v
-    | keyword:send  variable:v
+ 24 |         <- v
+    | keyword:<-  variable:v
  25 |     case Missing
     | keyword:case  variant:Missing
- 26 |         send 0
-    | keyword:send  number:0
+ 26 |         <- 0
+    | keyword:<-  number:0
  27 |     fi
     | keyword:fi
  28 | fi

@@ -1,6 +1,6 @@
 # error: 7:10: task 'add' expects 2 args, got 1
 task add(a: int, b: int) -> int
-    send a + b
+    <- a + b
 fi
 
 task main()

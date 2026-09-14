@@ -10,14 +10,14 @@
     | keyword:fi
   8 | task add(a: int, b: int) -> int
     | keyword:task  task:add  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
-  9 |     send a + b
-    | keyword:send  parameter:a  operator:+  parameter:b
+  9 |     <- a + b
+    | keyword:<-  parameter:a  operator:+  parameter:b
  10 | fi
     | keyword:fi
  12 | task manhattan(p: Point) -> int
     | keyword:task  task:manhattan  punctuation:(  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:int
- 13 |     send p.x + p.y
-    | keyword:send  parameter:p  punctuation:.  field:x  operator:+  parameter:p  punctuation:.  field:y
+ 13 |     <- p.x + p.y
+    | keyword:<-  parameter:p  punctuation:.  field:x  operator:+  parameter:p  punctuation:.  field:y
  14 | fi
     | keyword:fi
  16 | task main()

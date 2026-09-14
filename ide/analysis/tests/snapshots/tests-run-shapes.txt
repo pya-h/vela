@@ -10,8 +10,8 @@
     | keyword:fi
   8 | task sum(p: Point) -> int
     | keyword:task  task:sum  punctuation:(  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:int
-  9 |     send p.x + p.y
-    | keyword:send  parameter:p  punctuation:.  field:x  operator:+  parameter:p  punctuation:.  field:y
+  9 |     <- p.x + p.y
+    | keyword:<-  parameter:p  punctuation:.  field:x  operator:+  parameter:p  punctuation:.  field:y
  10 | fi
     | keyword:fi
  12 | task main()

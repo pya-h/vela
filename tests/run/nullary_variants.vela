@@ -14,11 +14,11 @@ fi
 task name(l: Light) -> text
     match l
     case Red
-        send "red"
+        <- "red"
     case Amber
-        send "amber"
+        <- "amber"
     case Green
-        send "green"
+        <- "green"
     fi
 fi
 

@@ -2,12 +2,12 @@
 
 task sign(n: int) -> int
     when n < 0
-        send -1
+        <- -1
     fi
     when n == 0
-        send 0
+        <- 0
     fi
-    send 1
+    <- 1
 fi
 
 task main()

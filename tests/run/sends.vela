@@ -7,21 +7,21 @@ fi
 
 task sign(x: int) -> int
     when x > 0
-        send 1
+        <- 1
     else
         when x < 0
-            send -1
+            <- -1
         fi
-        send 0
+        <- 0
     fi
 fi
 
 task code(l: Light) -> text
     match l
     case Red
-        send "stop"
+        <- "stop"
     case Green
-        send "go"
+        <- "go"
     fi
 fi
 
@@ -29,7 +29,7 @@ task after_loop(x: int) -> int
     each i in 0..1
         show(i)
     fi
-    send x
+    <- x
 fi
 
 task main()

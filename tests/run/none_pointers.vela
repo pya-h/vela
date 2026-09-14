@@ -13,18 +13,18 @@ task sum(list: ^Node) -> int
         total = total + current^.value
         current = current^.next
     fi
-    send total
+    <- total
 fi
 
 task find(list: ^Node, wanted: int) -> ^Node
     hold current = list
     loop current != none
         when current^.value == wanted
-            send current
+            <- current
         fi
         current = current^.next
     fi
-    send none
+    <- none
 fi
 
 task main()

@@ -4,7 +4,7 @@ shape Point
 fi
 
 task origin() -> Point
-    send Point { x: 0 }
+    <- Point { x: 0 }
 fi
 
 task main()

@@ -63,7 +63,7 @@ const GLOBAL: i32 = 2;
 const SNIPPET: i32 = 1;
 const KEYWORD: i32 = 0;
 
-const STATEMENT_KEYWORDS: &[&str] = &["bind", "hold", "when", "loop", "each", "match", "send", "free"];
+const STATEMENT_KEYWORDS: &[&str] = &["bind", "hold", "when", "loop", "each", "match", "free"];
 const VALUE_KEYWORDS: &[&str] = &["true", "false", "none", "not", "new"];
 
 /// Completions at byte `byte` of `source`. Returns the items and the byte
@@ -484,7 +484,7 @@ fn item_level_items() -> Vec<CompletionItem> {
         keyword("shape"),
         keyword("kind"),
         snippet("task", "a task", "task ${name}(${})\n\t${0}\nfi"),
-        snippet("task -> type", "a task that sends a value", "task ${name}(${}) -> ${type}\n\tsend ${value}\nfi"),
+        snippet("task -> type", "a task that sends a value", "task ${name}(${}) -> ${type}\n\t<- ${value}\nfi"),
         snippet("shape", "a shape with a field", "shape ${Name}\n\t${field}: ${type}\nfi"),
         snippet("kind", "a kind with a variant", "kind ${Name}\n\t${Variant}\nfi"),
     ]

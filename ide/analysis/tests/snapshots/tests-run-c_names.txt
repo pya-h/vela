@@ -26,14 +26,14 @@
     | keyword:fi
  17 | task show_int(static: int) -> int
     | keyword:task  task:show_int  punctuation:(  parameter:static  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 18 |     send static + 1
-    | keyword:send  parameter:static  operator:+  number:1
+ 18 |     <- static + 1
+    | keyword:<-  parameter:static  operator:+  number:1
  19 | fi
     | keyword:fi
  21 | task fmod(a: float) -> float
     | keyword:task  task:fmod  punctuation:(  parameter:a  punctuation::  type-builtin:float  punctuation:)  operator:->  type-builtin:float
- 22 |     send a
-    | keyword:send  parameter:a
+ 22 |     <- a
+    | keyword:<-  parameter:a
  23 | fi
     | keyword:fi
  25 | task describe(j: Jump)

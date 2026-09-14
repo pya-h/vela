@@ -11,7 +11,7 @@ kind Reading
 fi
 
 task first(a: int, b: int) -> int
-    send a
+    <- a
 fi
 
 task ignore(p: Point)
@@ -21,9 +21,9 @@ fi
 task value(r: Reading) -> int
     match r
     case Sample v w
-        send v
+        <- v
     case Missing
-        send 0
+        <- 0
     fi
 fi
 

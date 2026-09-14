@@ -2,9 +2,9 @@
 
 task fib(n: int) -> int
     when n < 2
-        send n
+        <- n
     else
-        send fib(n - 1) + fib(n - 2)
+        <- fib(n - 1) + fib(n - 2)
     fi
 fi
 

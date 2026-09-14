@@ -17,22 +17,22 @@ fi
 task describe(s: Status) -> text
     match s
     case Todo
-        send "todo"
+        <- "todo"
     case Done
-        send "done"
+        <- "done"
     case Blocked reason
-        send reason
+        <- reason
     fi
 fi
 
 task is_done(s: Status) -> bool
     match s
     case Done
-        send true
+        <- true
     case Todo
-        send false
+        <- false
     case Blocked reason
-        send false
+        <- false
     fi
 fi
 
@@ -54,18 +54,18 @@ task count_done(first: ^Item) -> int
         fi
         current = current^.next
     fi
-    send count
+    <- count
 fi
 
 task find(first: ^Item, title: text) -> ^Item
     hold current = first
     loop current != none
         when current^.title == title
-            send current
+            <- current
         fi
         current = current^.next
     fi
-    send none
+    <- none
 fi
 
 task main()

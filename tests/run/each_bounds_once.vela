@@ -2,7 +2,7 @@
 
 task limit() -> int
     show("limit")
-    send 3
+    <- 3
 fi
 
 task main()

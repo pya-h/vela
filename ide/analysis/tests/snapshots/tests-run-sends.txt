@@ -12,18 +12,18 @@
     | keyword:task  task:sign  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
   9 |     when x > 0
     | keyword:when  parameter:x  operator:>  number:0
- 10 |         send 1
-    | keyword:send  number:1
+ 10 |         <- 1
+    | keyword:<-  number:1
  11 |     else
     | keyword:else
  12 |         when x < 0
     | keyword:when  parameter:x  operator:<  number:0
- 13 |             send -1
-    | keyword:send  operator:-  number:1
+ 13 |             <- -1
+    | keyword:<-  operator:-  number:1
  14 |         fi
     | keyword:fi
- 15 |         send 0
-    | keyword:send  number:0
+ 15 |         <- 0
+    | keyword:<-  number:0
  16 |     fi
     | keyword:fi
  17 | fi
@@ -34,12 +34,12 @@
     | keyword:match  parameter:l
  21 |     case Red
     | keyword:case  variant:Red
- 22 |         send "stop"
-    | keyword:send  string:"stop"
+ 22 |         <- "stop"
+    | keyword:<-  string:"stop"
  23 |     case Green
     | keyword:case  variant:Green
- 24 |         send "go"
-    | keyword:send  string:"go"
+ 24 |         <- "go"
+    | keyword:<-  string:"go"
  25 |     fi
     | keyword:fi
  26 | fi
@@ -52,8 +52,8 @@
     | builtin-fn:show  punctuation:(  variable:i  punctuation:)
  31 |     fi
     | keyword:fi
- 32 |     send x
-    | keyword:send  parameter:x
+ 32 |     <- x
+    | keyword:<-  parameter:x
  33 | fi
     | keyword:fi
  35 | task main()

@@ -1,0 +1,11 @@
+# error: 4:9: a task sends its result with '<-', not 'send'
+task report(n: int)
+    when n < 0
+        send
+    fi
+    show(n)
+fi
+
+task main()
+    report(1)
+fi

@@ -228,17 +228,51 @@ impl Parser {
             Token::Each => self.parse_each(),
             Token::Match => self.parse_match(),
             Token::Send => self.parse_send(),
-            Token::Free => self.parse_free(),
-            _ => {
-                let expr = self.parse_expr()?;
-                if self.match_token(Token::Assign) {
-                    let rhs = self.parse_expr()?;
-                    Ok(Stmt::new(StmtKind::Assign(expr, rhs), span))
-                } else {
-                    Ok(Stmt::new(StmtKind::Expr(expr), span))
-                }
+            Token::Ident(name) if name == "send" => {
+                self.reject_old_send()?;
+                self.parse_simple_stmt(span)
             }
+            Token::Free => self.parse_free(),
+            _ => self.parse_simple_stmt(span),
         }
+    }
+
+    /// An assignment, or an expression used as a statement.
+    fn parse_simple_stmt(&mut self, span: Span) -> Result<Stmt> {
+        let expr = self.parse_expr()?;
+        if self.match_token(Token::Assign) {
+            let rhs = self.parse_expr()?;
+            Ok(Stmt::new(StmtKind::Assign(expr, rhs), span))
+        } else {
+            Ok(Stmt::new(StmtKind::Expr(expr), span))
+        }
+    }
+
+    /// Rejects `send` used as the old keyword: alone on its line, or followed
+    /// by a value on the same line. `send` is an ordinary name, but neither is
+    /// meaningful code with it (a value can't follow a name), so it is almost
+    /// certainly a send written the old way.
+    fn reject_old_send(&self) -> Result<()> {
+        let next = self.tokens.get(self.pos + 1).unwrap_or(&Token::Eof);
+        let old_keyword = matches!(
+            next,
+            Token::Newline
+                | Token::Eof
+                | Token::Fi
+                | Token::Int(_)
+                | Token::Float(_)
+                | Token::Text(_)
+                | Token::Ident(_)
+                | Token::True
+                | Token::False
+                | Token::None
+                | Token::New
+                | Token::Not
+        );
+        if old_keyword {
+            return Err(Error::at(self.peek_span(), "a task sends its result with '<-', not 'send'"));
+        }
+        Ok(())
     }
 
     /// `bind name [: type] = expr` or `hold name [: type] = expr`
@@ -322,9 +356,19 @@ impl Parser {
         Ok(Stmt::new(StmtKind::Match(expr, cases), span))
     }
 
+    /// `<-` or `<- value`. A send starts its line: `<-` after something else
+    /// is almost always a comparison with a negative number written without a
+    /// space (`a <-1`), which would otherwise end the statement and send.
     fn parse_send(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
-        self.advance(); // send
+        let starts_line = self.pos == 0 || matches!(self.tokens.get(self.pos - 1), Some(Token::Newline));
+        if !starts_line {
+            return Err(Error::at(
+                span,
+                "'<-' sends a value and must start a line; to compare with a negative number, write '< -'",
+            ));
+        }
+        self.advance(); // <-
         if self.check(Token::Newline) || self.check(Token::Fi) || self.is_at_end() {
             Ok(Stmt::new(StmtKind::Send(None), span))
         } else {

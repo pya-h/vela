@@ -4,18 +4,18 @@
     | keyword:task  task:sign  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
   4 |     when n < 0
     | keyword:when  parameter:n  operator:<  number:0
-  5 |         send -1
-    | keyword:send  operator:-  number:1
+  5 |         <- -1
+    | keyword:<-  operator:-  number:1
   6 |     fi
     | keyword:fi
   7 |     when n == 0
     | keyword:when  parameter:n  operator:==  number:0
-  8 |         send 0
-    | keyword:send  number:0
+  8 |         <- 0
+    | keyword:<-  number:0
   9 |     fi
     | keyword:fi
- 10 |     send 1
-    | keyword:send  number:1
+ 10 |     <- 1
+    | keyword:<-  number:1
  11 | fi
     | keyword:fi
  13 | task main()

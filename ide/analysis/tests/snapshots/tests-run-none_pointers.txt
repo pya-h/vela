@@ -24,8 +24,8 @@
     | variable:current  operator:=  variable:current  operator:^  punctuation:.  field:next
  15 |     fi
     | keyword:fi
- 16 |     send total
-    | keyword:send  variable:total
+ 16 |     <- total
+    | keyword:<-  variable:total
  17 | fi
     | keyword:fi
  19 | task find(list: ^Node, wanted: int) -> ^Node
@@ -36,16 +36,16 @@
     | keyword:loop  variable:current  operator:!=  keyword:none
  22 |         when current^.value == wanted
     | keyword:when  variable:current  operator:^  punctuation:.  field:value  operator:==  parameter:wanted
- 23 |             send current
-    | keyword:send  variable:current
+ 23 |             <- current
+    | keyword:<-  variable:current
  24 |         fi
     | keyword:fi
  25 |         current = current^.next
     | variable:current  operator:=  variable:current  operator:^  punctuation:.  field:next
  26 |     fi
     | keyword:fi
- 27 |     send none
-    | keyword:send  keyword:none
+ 27 |     <- none
+    | keyword:<-  keyword:none
  28 | fi
     | keyword:fi
  30 | task main()

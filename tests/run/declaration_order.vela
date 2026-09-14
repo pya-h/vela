@@ -23,18 +23,18 @@ fi
 task length(l: List) -> int
     match l
     case Nil
-        send 0
+        <- 0
     case Cons head tail
-        send 1 + length(tail^)
+        <- 1 + length(tail^)
     fi
 fi
 
 task sum_x(l: List) -> int
     match l
     case Nil
-        send 0
+        <- 0
     case Cons head tail
-        send head.x + sum_x(tail^)
+        <- head.x + sum_x(tail^)
     fi
 fi
 

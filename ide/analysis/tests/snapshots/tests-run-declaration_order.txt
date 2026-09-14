@@ -38,12 +38,12 @@
     | keyword:match  parameter:l
  25 |     case Nil
     | keyword:case  variant:Nil
- 26 |         send 0
-    | keyword:send  number:0
+ 26 |         <- 0
+    | keyword:<-  number:0
  27 |     case Cons head tail
     | keyword:case  variant:Cons  variable:head  variable:tail
- 28 |         send 1 + length(tail^)
-    | keyword:send  number:1  operator:+  task:length  punctuation:(  variable:tail  operator:^  punctuation:)
+ 28 |         <- 1 + length(tail^)
+    | keyword:<-  number:1  operator:+  task:length  punctuation:(  variable:tail  operator:^  punctuation:)
  29 |     fi
     | keyword:fi
  30 | fi
@@ -54,12 +54,12 @@
     | keyword:match  parameter:l
  34 |     case Nil
     | keyword:case  variant:Nil
- 35 |         send 0
-    | keyword:send  number:0
+ 35 |         <- 0
+    | keyword:<-  number:0
  36 |     case Cons head tail
     | keyword:case  variant:Cons  variable:head  variable:tail
- 37 |         send head.x + sum_x(tail^)
-    | keyword:send  variable:head  punctuation:.  field:x  operator:+  task:sum_x  punctuation:(  variable:tail  operator:^  punctuation:)
+ 37 |         <- head.x + sum_x(tail^)
+    | keyword:<-  variable:head  punctuation:.  field:x  operator:+  task:sum_x  punctuation:(  variable:tail  operator:^  punctuation:)
  38 |     fi
     | keyword:fi
  39 | fi

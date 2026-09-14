@@ -6,7 +6,7 @@ shape Point
 fi
 
 task sum(p: Point) -> int
-    send p.x + p.y
+    <- p.x + p.y
 fi
 
 task main()

@@ -18,12 +18,12 @@
     | builtin-fn:show  punctuation:(  string:"make"  punctuation:)
  12 |     when n == 0
     | keyword:when  parameter:n  operator:==  number:0
- 13 |         send Ints(1, 2)
-    | keyword:send  variant:Ints  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+ 13 |         <- Ints(1, 2)
+    | keyword:<-  variant:Ints  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
  14 |     fi
     | keyword:fi
- 15 |     send Floats(1.5, 2.5)
-    | keyword:send  variant:Floats  punctuation:(  number:1.5  punctuation:,  number:2.5  punctuation:)
+ 15 |     <- Floats(1.5, 2.5)
+    | keyword:<-  variant:Floats  punctuation:(  number:1.5  punctuation:,  number:2.5  punctuation:)
  16 | fi
     | keyword:fi
  18 | task describe(p: Pair)

@@ -1,0 +1,21 @@
+# Tasks send their result with `<-`, so `send` is an ordinary name; and a
+# comparison with a negative number keeps working when written with a space.
+task send(n: int) -> int
+    <- n + 1
+fi
+
+task report(n: int)
+    when n < -1
+        show("far below")
+        <-
+    fi
+    show(n)
+fi
+
+task main()
+    hold sent = send(1)
+    bind send_count = sent
+    show(send_count)
+    report(-5)
+    report(3)
+fi

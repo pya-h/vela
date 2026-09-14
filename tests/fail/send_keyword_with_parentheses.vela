@@ -1,0 +1,8 @@
+# error: 3:5: unknown task 'send'; a task sends its result with '<-'
+task double(n: int) -> int
+    send(n * 2)
+fi
+
+task main()
+    show(double(2))
+fi

@@ -1,6 +1,6 @@
 # error: 7:16: expected type int, got text
 task twice(n: int) -> int
-    send n * 2
+    <- n * 2
 fi
 
 task main()
