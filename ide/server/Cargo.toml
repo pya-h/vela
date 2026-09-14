@@ -1,0 +1,28 @@
+[package]
+name = "vela-studio"
+version = "0.1.0"
+edition = "2024"
+description = "Vela Studio: a local IDE for Vela (server for files, builds, runs, and terminals)"
+publish = false
+
+[dependencies]
+vela = { path = "../.." }
+axum = { version = "0.8.9", features = ["ws"] }
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
+portable-pty = "0.9.0"
+rust-embed = "8.12.0"
+getrandom = "0.4.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tower = { version = "0.5.3", features = ["util"] }
+http-body-util = "0.1.5"
+tokio-tungstenite = "0.30.0"
+futures-util = "0.3.34"
+
+[lints]
+workspace = true

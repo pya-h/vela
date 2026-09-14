@@ -12,7 +12,7 @@ workspace = true
 # under ide/; plain `cargo build` and `cargo test` still cover only the
 # compiler, and `--workspace` includes the IDE.
 [workspace]
-members = [".", "ide/analysis", "ide/wasm"]
+members = [".", "ide/analysis", "ide/wasm", "ide/server"]
 default-members = ["."]
 resolver = "3"
 
