@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use vela::ast::Span;
+use vela::ast::{Item, Span, StmtKind, Type};
 use vela::driver::{self, BuildError};
 
 /// A fresh directory for one test; removed when the test passes.
@@ -109,4 +109,24 @@ fn c_compiler_failures_keep_the_generated_c() {
     assert!(build_dir.join("hello.c").is_file() && build_dir.join("vela_rt.h").is_file());
     assert!(err.render("hello.vela", HELLO).ends_with(&format!("error: C compilation failed (generated C kept in {})", build_dir.display())));
     fs::remove_dir_all(build_dir).unwrap();
+}
+
+#[test]
+fn partial_front_end_keeps_the_types_found_before_an_error() {
+    let source = "task main()\n    bind x = 1.5\n    show(missing)\n    bind y = true\nfi\n";
+    let partial = driver::front_end_partial(source);
+    assert_eq!(partial.error, driver::front_end(source).err());
+    let items = partial.items.unwrap();
+    let Item::Task(main) = &items[0] else { panic!("expected a task") };
+    let binding_type = |i: usize| match &main.body[i].kind {
+        StmtKind::Binding { ty, .. } => ty.clone(),
+        other => panic!("expected a binding, got {:?}", other),
+    };
+    // Checked before the error, and not after it.
+    assert_eq!(binding_type(0), Some(Type::Float));
+    assert_eq!(binding_type(2), None);
+
+    // A program that doesn't parse has no items.
+    let broken = driver::front_end_partial("task main(\n");
+    assert!(broken.items.is_none() && broken.error.is_some());
 }

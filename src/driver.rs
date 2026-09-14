@@ -23,10 +23,35 @@ pub const RUNTIME_H: &str = include_str!("../runtime/vela_rt.h");
 
 /// Lexes, parses, and type-checks `source`, returning the checked program.
 pub fn front_end(source: &str) -> Result<Vec<Item>> {
-    let (tokens, spans) = Lexer::new(source).tokenize()?;
-    let mut items = Parser::new(tokens, spans).parse_file()?;
-    Checker::new().check_file(&mut items)?;
-    Ok(items)
+    match front_end_partial(source) {
+        Partial { error: Some(error), .. } => Err(error),
+        Partial { items: Some(items), error: None } => Ok(items),
+        Partial { items: None, error: None } => Err(Error::internal("the front end produced neither a program nor an error")),
+    }
+}
+
+/// What `front_end_partial` found.
+#[derive(Debug)]
+pub struct Partial {
+    /// The program, if it lexes and parses. When checking fails, the checker's
+    /// annotations (expression types, inferred binding types) are filled in
+    /// for the code it checked before the error, and missing after it.
+    pub items: Option<Vec<Item>>,
+    /// The first error, exactly as `front_end` reports it.
+    pub error: Option<Error>,
+}
+
+/// Like `front_end`, but keeps the program when checking fails, for tools
+/// such as editors that want the types found before the first error.
+pub fn front_end_partial(source: &str) -> Partial {
+    let parsed = Lexer::new(source).tokenize().and_then(|(tokens, spans)| Parser::new(tokens, spans).parse_file());
+    match parsed {
+        Err(error) => Partial { items: None, error: Some(error) },
+        Ok(mut items) => {
+            let error = Checker::new().check_file(&mut items).err();
+            Partial { items: Some(items), error }
+        }
+    }
 }
 
 /// Checks `source` and generates its C code. A program without `main` is

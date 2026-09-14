@@ -156,40 +156,48 @@
     .b-rec { background: rgba(167,139,250,0.15); color: #c4b5fd; }
     .b-done { background: rgba(148,163,184,0.15); color: #cbd5e1; }
 
-    /* Memory option blocks */
-    .memory-option {
+    /* Design option blocks (memory, methods) */
+    .option {
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 1rem;
       padding: 1.5rem;
       margin: 1.25rem 0;
     }
-    .memory-option h4 {
+    .option h4 {
       margin: 0 0 0.75rem;
       font-size: 1.25rem;
       display: flex;
       align-items: center;
       gap: 0.75rem;
     }
-    .memory-option .pros-cons {
+    .option .pros-cons {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 1rem;
       margin-top: 1rem;
     }
-    .memory-option .pros, .memory-option .cons {
+    .option .pros, .option .cons {
       background: var(--bg-2);
       padding: 1rem;
       border-radius: 0.5rem;
     }
-    .memory-option .pros strong { color: var(--accent-3); }
-    .memory-option .cons strong { color: var(--accent-4); }
-    .memory-option ul {
+    .option .pros strong { color: var(--accent-3); }
+    .option .cons strong { color: var(--accent-4); }
+    .option ul {
       margin: 0.5rem 0 0;
       padding-left: 1.25rem;
       color: var(--muted);
     }
-    .memory-option li { margin: 0.35rem 0; }
+    .option li { margin: 0.35rem 0; }
+
+    /* Comparison table */
+    .table-wrap { overflow-x: auto; margin: 1.5rem 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--accent-2); font-weight: 700; }
+    td { color: var(--muted); }
+    td:first-child { color: var(--fg); white-space: nowrap; }
 
     /* Roadmap */
     .roadmap {
@@ -290,6 +298,10 @@
           <p>No generics, arrays, slices, tuples, or optional/error types. Pointers have <code>none</code>, but nothing stops dereferencing it.</p>
         </div>
         <div class="card">
+          <h4>No methods <span class="badge b-med">Medium</span></h4>
+          <p>Behavior lives in free tasks such as <code>area(s)</code>. All tasks share one namespace, so two shapes can't both have an <code>area</code>, and a task can only change a shape through a <code>^</code> pointer.</p>
+        </div>
+        <div class="card">
           <h4>No concurrency <span class="badge b-med">Medium</span></h4>
           <p>No threads, channels, async, or actors. Vela is strictly single-threaded today.</p>
         </div>
@@ -329,7 +341,7 @@
           <p>Generated C is warning-free ISO C11, tested with gcc and clang, and any name that means something in C still works in Vela.</p>
         </div>
         <div class="card">
-          <h4>Vela Studio <span class="badge b-idea">Planned</span></h4>
+          <h4>Vela Studio <span class="badge b-idea">In progress</span></h4>
           <p>A small editor for Vela with highlighting, completion, live errors, one-key run, and a terminal, built on the compiler itself.</p>
         </div>
         <div class="card">
@@ -370,7 +382,7 @@
         Below are the main candidates, ranked from most to least conservative.
       </p>
 
-      <div class="memory-option">
+      <div class="option">
         <h4><span>🔒</span> Option A: Rust-Style Borrow Checker</h4>
         <p>
           Track ownership, lifetimes, and borrows at compile time. Values have one owner; references are
@@ -400,7 +412,7 @@
         </div>
       </div>
 
-      <div class="memory-option">
+      <div class="option">
         <h4><span>📦</span> Option B: Region / Arena Allocation</h4>
         <p>
           Allocate everything into a region (arena) and free the whole region at once. Objects never outlive
@@ -430,7 +442,7 @@
         </div>
       </div>
 
-      <div class="memory-option">
+      <div class="option">
         <h4><span>🔄</span> Option C: Automatic Reference Counting (ARC)</h4>
         <p>
           Every shared object carries a reference count. The compiler inserts retain/release calls, or the
@@ -460,7 +472,7 @@
         </div>
       </div>
 
-      <div class="memory-option">
+      <div class="option">
         <h4><span>➡️</span> Option D: Linear / Move-Only Ownership</h4>
         <p>
           Every value has exactly one owner. You can move it, but you cannot copy or alias it unless you
@@ -505,6 +517,273 @@
           This gives Vela a memory model that is <strong>simpler than Rust</strong>, <strong>safer than C</strong>,
           and <strong>more flexible than pure arenas</strong>. It also keeps the compiler small and the syntax
           minimal.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon">🧩</span> Methods: Behavior for Shapes and Kinds</h2>
+      <p>
+        Vela keeps data and behavior apart: shapes and kinds hold data, and tasks act on it. That separation is a
+        good default, but today it has real costs:
+      </p>
+      <ul>
+        <li><strong>One namespace for every task.</strong> A <code>Circle</code> and a <code>Rect</code> can't both
+          have a task called <code>area</code>; programs end up with <code>circle_area</code> and
+          <code>rect_area</code>, and the second <code>area</code> is rejected with
+          <code>'area' is already defined</code>.</li>
+        <li><strong>No way to change a value in place.</strong> Vela has no address-of operator, so a task can only
+          modify a shape that was allocated with <code>new</code> and passed as <code>^Point</code>. A
+          <code>hold</code> variable on the stack can't be updated by a helper task.</li>
+        <li><strong>Nothing to discover.</strong> After <code>p.</code>, an editor can offer fields but not the
+          operations that belong to <code>Point</code>.</li>
+      </ul>
+      <p>
+        Whatever design Vela picks has to answer the same questions: where methods are declared, how they are
+        called, how a method changes its receiver, how names are scoped, whether kinds get methods too, and how
+        this leaves room for interfaces later. Below are the main candidates, each shown with the same example.
+      </p>
+
+      <div class="option">
+        <h4><span>🐹</span> Option A: Go-Style Receiver Tasks</h4>
+        <p>
+          A task names its receiver before its own name. Methods can be declared anywhere, next to any other task.
+          A pointer receiver lets the method change the value.
+        </p>
+        <pre>task (p: Point) length_squared() -> float
+    send p.x * p.x + p.y * p.y
+fi
+
+task (p: ^Point) shift(dx: float)
+    p^.x = p^.x + dx
+fi
+
+bind size = p.length_squared()</pre>
+        <div class="pros-cons">
+          <div class="pros">
+            <strong>Pros</strong>
+            <ul>
+              <li>No new block or keyword: methods are still just tasks</li>
+              <li>Methods can live anywhere, and later in other modules</li>
+              <li>Proven and easy to explain (Go)</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <strong>Cons</strong>
+            <ul>
+              <li>The receiver syntax <code>task (p: Point) length_squared()</code> is the most punctuation-heavy option</li>
+              <li>Pointer receivers need <code>^</code> values, or a new address-of operator that Vela avoids</li>
+              <li>A type's methods can be scattered across a file</li>
+            </ul>
+          </div>
+        </div>
+        <div class="note">
+          <strong>Verdict:</strong> The right idea (methods are ordinary tasks attached to a type) with a syntax
+          and a receiver model that fit Go better than Vela.
+        </div>
+      </div>
+
+      <div class="option">
+        <h4><span>🦀</span> Option B: Rust-Style Implementation Blocks</h4>
+        <p>
+          A separate block gathers a type's tasks, with an explicit <code>self</code> whose mode says whether the
+          method can change it. In Vela's words-first style the block could be <code>extend Point</code>.
+        </p>
+        <pre>extend Point
+    task origin() -> Point
+        send Point { x: 0.0, y: 0.0 }
+    fi
+
+    task length_squared(self) -> float
+        send self.x * self.x + self.y * self.y
+    fi
+
+    task shift(hold self, dx: float)
+        self.x = self.x + dx
+    fi
+fi</pre>
+        <div class="pros-cons">
+          <div class="pros">
+            <strong>Pros</strong>
+            <ul>
+              <li>All of a type's behavior is in one place</li>
+              <li>A natural home for tasks without <code>self</code>, such as constructors (<code>Point.origin()</code>)</li>
+              <li>Extends cleanly to interfaces later (<code>extend Point as Printable</code>)</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <strong>Cons</strong>
+            <ul>
+              <li>A new keyword and block kind, and one more level of <code>fi</code> nesting</li>
+              <li>A type is now described in two places: its <code>shape</code> and its <code>extend</code></li>
+              <li>More machinery than a small language strictly needs</li>
+            </ul>
+          </div>
+        </div>
+        <div class="note">
+          <strong>Verdict:</strong> Well organized and future-proof, but heavier than Vela needs today. Its
+          <code>self</code> / <code>hold self</code> receiver modes are worth keeping whichever syntax wins.
+        </div>
+      </div>
+
+      <div class="option">
+        <h4><span>🏛️</span> Option C: Methods Inside the Shape</h4>
+        <p>
+          Tasks are declared in the shape's own block, as in Swift structs, Kotlin, or C++ classes. Fields are in
+          scope inside them.
+        </p>
+        <pre>shape Point
+    x: float
+    y: float
+
+    task length_squared() -> float
+        send x * x + y * y
+    fi
+fi</pre>
+        <div class="pros-cons">
+          <div class="pros">
+            <strong>Pros</strong>
+            <ul>
+              <li>Maximum discoverability: data and behavior side by side</li>
+              <li>Short method bodies, with fields in scope</li>
+              <li>Familiar to most programmers</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <strong>Cons</strong>
+            <ul>
+              <li>Shapes become classes, against Vela's "no classes <em>and</em> structs" philosophy</li>
+              <li>Implicit field scope makes it unclear whether <code>x</code> is a field or a variable</li>
+              <li>Types can't gain methods from elsewhere, such as another module</li>
+            </ul>
+          </div>
+        </div>
+        <div class="note">
+          <strong>Verdict:</strong> Convenient, but it changes what a shape is. Not a good fit.
+        </div>
+      </div>
+
+      <div class="option">
+        <h4><span>🔗</span> Option D: Uniform Call Syntax</h4>
+        <p>
+          No new declarations at all: <code>p.length_squared()</code> is simply another way to write <code>length_squared(p)</code>,
+          as in D and Nim. Every existing task becomes callable with a dot.
+        </p>
+        <pre>task length_squared(p: Point) -> float
+    send p.x * p.x + p.y * p.y
+fi
+
+bind a = length_squared(p)
+bind b = p.length_squared()     # the same call</pre>
+        <div class="pros-cons">
+          <div class="pros">
+            <strong>Pros</strong>
+            <ul>
+              <li>The smallest change: only the checker learns to rewrite the call</li>
+              <li>Existing programs gain dot calls for free</li>
+              <li>Chains read left to right: <code>list.first().title</code></li>
+            </ul>
+          </div>
+          <div class="cons">
+            <strong>Cons</strong>
+            <ul>
+              <li>Doesn't solve the shared namespace: there is still only one <code>area</code></li>
+              <li>Solving that requires overloading by first parameter, which complicates name lookup</li>
+              <li>Doesn't solve changing a value in place</li>
+            </ul>
+          </div>
+        </div>
+        <div class="note">
+          <strong>Verdict:</strong> Nice sugar, but it fixes the least important of the three problems.
+        </div>
+      </div>
+
+      <div class="option">
+        <h4><span>🎯</span> Option E: Qualified Tasks</h4>
+        <p>
+          A task declared with its type's name in front, <code>task Point.length_squared</code>, belongs to that type. It
+          reads exactly like the call, needs no new keyword or block, and takes Rust's explicit receiver modes.
+        </p>
+        <pre>task Point.origin() -> Point
+    send Point { x: 0.0, y: 0.0 }
+fi
+
+task Point.length_squared(self) -> float
+    send self.x * self.x + self.y * self.y
+fi
+
+task Point.shift(hold self, dx: float)
+    self.x = self.x + dx
+fi
+
+hold p = Point.origin()
+p.shift(2.5)
+show(p.length_squared())</pre>
+        <div class="pros-cons">
+          <div class="pros">
+            <strong>Pros</strong>
+            <ul>
+              <li>Methods stay ordinary tasks; the only new syntax is <code>Type.</code> before the name</li>
+              <li>Each type gets its own namespace: <code>Circle.area</code> and <code>Rect.area</code> coexist</li>
+              <li><code>hold self</code> changes a <code>hold</code> variable in place without an address-of operator</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <strong>Cons</strong>
+            <ul>
+              <li>Like Go, a type's methods can be spread across a file (a formatter or outline can group them)</li>
+              <li>No block to hang interface implementations on; those need their own design</li>
+              <li>Needs a rule for a method and a field with the same name</li>
+            </ul>
+          </div>
+        </div>
+        <div class="note">
+          <strong>Verdict:</strong> The best fit. It keeps Go's "methods are just tasks", borrows Rust's receiver
+          modes, and reads the way it is called.
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Option</th><th>New syntax</th><th>Per-type names</th><th>Change in place</th><th>Fits Vela</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>A. Receiver tasks</td><td>Receiver before the name</td><td>Yes</td><td>Only through <code>^</code></td><td>Partly</td></tr>
+            <tr><td>B. <code>extend</code> blocks</td><td>Keyword + block + <code>self</code></td><td>Yes</td><td><code>hold self</code></td><td>Heavy</td></tr>
+            <tr><td>C. Inside the shape</td><td>Tasks in shapes</td><td>Yes</td><td>Implicit</td><td>No</td></tr>
+            <tr><td>D. Uniform calls</td><td>None</td><td>No</td><td>Only through <code>^</code></td><td>Partly</td></tr>
+            <tr><td>E. Qualified tasks</td><td><code>Type.</code> + <code>self</code></td><td>Yes</td><td><code>hold self</code></td><td>Best</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="recommendation">
+        <h4>💡 Recommended Path for Vela</h4>
+        <p>Adopt <strong>qualified tasks</strong> (option E), with these rules:</p>
+        <ul>
+          <li><strong>Receivers are explicit.</strong> <code>self</code> is an immutable copy, like any parameter;
+            <code>hold self</code> may change the receiver, and its call must be on something assignable (a
+            <code>hold</code> variable, one of its fields, or <code>p^</code>). The compiler passes that place's
+            address in the generated C, but Vela code never sees a pointer, so it can't dangle.</li>
+          <li><strong>No <code>self</code> means a type-level task</strong>, called as <code>Point.origin()</code>:
+            constructors without a new concept.</li>
+          <li><strong>Kinds get methods too</strong>: <code>task Shape.area(self) -> float</code> with
+            <code>match self</code> inside, which replaces today's free <code>area(s)</code>.</li>
+          <li><strong>Names:</strong> a type's methods and fields share its namespace, so a method can't reuse a field
+            name; method names don't clash with top-level tasks or with other types' methods.</li>
+          <li><strong>No automatic dereference</strong>, as with fields: a method on a pointer's target is called as
+            <code>p^.length_squared()</code>.</li>
+          <li><strong>Generated C</strong> stays collision-free: <code>vela_Point__method_length_squared(vela_Point self)</code>
+            and <code>vela_Point__method_shift(vela_Point* self, double dx)</code>.</li>
+          <li><strong>Later, interfaces</strong> can be satisfied implicitly, as in Go: a type that has the right
+            qualified tasks fits a <code>contract</code>, with no extra declaration.</li>
+        </ul>
+        <p>
+          The work is contained: the parser accepts <code>task Type.name</code> and <code>value.name(…)</code> calls,
+          the checker keeps a method table per type and checks receiver modes, and codegen mangles names and passes
+          <code>hold self</code> by address. In Vela Studio, completion after <code>p.</code> would list fields and
+          methods together.
         </p>
       </div>
     </section>
@@ -576,6 +855,7 @@
           <h4>Next — Growth <span class="badge b-med">Medium Risk</span></h4>
           <ul>
             <li>Module system and package manager</li>
+            <li>Methods on shapes and kinds (qualified tasks with <code>self</code> / <code>hold self</code>)</li>
             <li>Generics</li>
             <li>Result/Option types and error handling</li>
             <li>Pattern-match expressions</li>
@@ -604,7 +884,7 @@
         — keeps Vela fast, simple, and far safer than C without becoming Rust.
       </p>
       <p>
-        Beyond memory, Vela should grow carefully: generics, modules, and lightweight error handling before
+        Beyond memory, Vela should grow carefully: methods as qualified tasks, generics, modules, and lightweight error handling before
         concurrency or a self-hosted compiler. The goal is not to be everything; it is to be a small,
         beautiful, fast language that proves you do not need a massive toolchain to write safe systems code.
       </p>

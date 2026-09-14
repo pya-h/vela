@@ -99,14 +99,20 @@ fn field_definitions_use_the_type_of_the_value() {
 }
 
 #[test]
-fn field_definitions_fall_back_to_unique_names_when_the_file_has_errors() {
-    let source = format!("{}task broken()\n    bind q = Point {{ x: 1, y: 2 }}\n    show(q.y)\n    show(q.x)\n    show(missing)\nfi\n", SHAPES);
+fn field_definitions_before_an_error_are_exact_and_after_it_fall_back_to_unique_names() {
+    let source = format!(
+        "{}task broken()\n    bind q = Point {{ x: 1, y: 2 }}\n    show(q.x)\n    show(missing)\n    show(q.y)\n    show(q.x)\nfi\n",
+        SHAPES
+    );
     let analysis = Analysis::new(&source);
     assert_eq!(analysis.diagnostics().len(), 1);
-    // Only `Point` has `y`; both shapes have `x`, so that one is unknown.
-    let y_use = at(&source, "q.y", 0) + 2;
-    assert_eq!(analysis.definition(y_use).map(|l| l.from), Some(at(&source, "y: int", 0)));
-    assert_eq!(analysis.definition(at(&source, "q.x", 0) + 2), None);
+    let go = |nth: usize, needle: &str| analysis.definition(at(&source, needle, nth) + 2).map(|l| l.from);
+    // `SHAPES` itself uses `q.x` and `q.y` once, in `total`.
+    // Checked before the error: the checker's type picks `Point.x`.
+    assert_eq!(go(1, "q.x"), Some(at(&source, "x: int", 0)));
+    // After it, only `Point` has `y`; both shapes have `x`, so that one is unknown.
+    assert_eq!(go(1, "q.y"), Some(at(&source, "y: int", 0)));
+    assert_eq!(go(2, "q.x"), None);
 }
 
 #[test]
@@ -239,8 +245,34 @@ fn vela_files(dir: &str) -> Vec<PathBuf> {
     files
 }
 
-/// Runs every request on `source` and checks the results are well formed.
-fn check_well_formed(source: &str, what: &str) {
+/// Whether every `${` in a snippet template is closed by a `}`.
+fn balanced_snippet(template: &str) -> bool {
+    let mut rest = template;
+    while let Some(open) = rest.find("${") {
+        match rest[open..].find('}') {
+            Some(close) => rest = &rest[open + close + 1..],
+            None => return false,
+        }
+    }
+    true
+}
+
+/// Runs completion and hover at `offset` and checks the results.
+fn check_cursor(analysis: &Analysis, offset: usize, length: usize, what: &str) {
+    let completions = analysis.complete(offset);
+    assert!(completions.from <= completions.to && completions.to == offset, "{} at {}: {:?}", what, offset, (completions.from, completions.to));
+    for item in &completions.items {
+        assert!(!item.label.is_empty(), "{} at {}: {:?}", what, offset, item);
+        assert!(item.snippet.as_deref().is_none_or(balanced_snippet), "{} at {}: {:?}", what, offset, item);
+    }
+    if let Some(hover) = analysis.hover(offset) {
+        assert!(hover.from <= offset && offset <= hover.to && hover.to <= length && !hover.code.is_empty(), "{} at {}: {:?}", what, offset, hover);
+    }
+}
+
+/// Runs every request on `source` and checks the results are well formed:
+/// completion and hover at the end, or, if `everywhere`, at every token.
+fn check_well_formed(source: &str, what: &str, everywhere: bool) {
     let analysis = Analysis::new(source);
     let length = source.encode_utf16().count();
     let tokens = analysis.tokens();
@@ -259,6 +291,13 @@ fn check_well_formed(source: &str, what: &str) {
         }
     }
     check_outline(&analysis.outline(), length, what);
+    check_cursor(&analysis, length, length, what);
+    if everywhere {
+        for token in &tokens {
+            check_cursor(&analysis, token.from, length, what);
+            check_cursor(&analysis, token.to, length, what);
+        }
+    }
     // A definition always names the same identifier as the name it came from.
     let names = [TokenClass::Task, TokenClass::Type, TokenClass::Variant, TokenClass::Field, TokenClass::Parameter, TokenClass::Variable];
     for token in tokens.iter().filter(|t| names.contains(&t.class)) {
@@ -277,12 +316,13 @@ fn every_request_works_on_every_prefix_of_the_examples() {
         let mut cuts: Vec<usize> = vela::lexer::highlight(&source).iter().flat_map(|t| [t.range.start, t.range.end]).collect();
         cuts.dedup();
         for offset in cuts {
-            check_well_formed(&source[..offset], &format!("{} cut at byte {}", file.display(), offset));
+            check_well_formed(&source[..offset], &format!("{} cut at byte {}", file.display(), offset), false);
         }
+        check_well_formed(&source, &file.display().to_string(), true);
     }
     for dir in ["tests/run", "tests/fail"] {
         for file in vela_files(dir) {
-            check_well_formed(&fs::read_to_string(&file).unwrap(), &file.display().to_string());
+            check_well_formed(&fs::read_to_string(&file).unwrap(), &file.display().to_string(), true);
         }
     }
 }

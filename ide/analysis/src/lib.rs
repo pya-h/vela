@@ -1,5 +1,5 @@
-//! Language analysis for Vela Studio: highlighting, diagnostics, outline, and
-//! go-to-definition for one Vela source file.
+//! Language analysis for Vela Studio: highlighting, diagnostics, outline,
+//! go-to-definition, completion, and hover for one Vela source file.
 //!
 //! Everything is computed from the compiler itself: tokens come from
 //! `vela::lexer::highlight`, errors from `vela::driver::front_end`, and names
@@ -9,15 +9,18 @@
 //! All offsets in the results are UTF-16 offsets into the source, as
 //! JavaScript strings and CodeMirror count them.
 
-mod fields;
+mod complete;
+mod hover;
+mod infer;
 mod position;
 mod scan;
+mod types;
 
 use serde::Serialize;
-use vela::driver;
-use vela::error::Error;
 use vela::lexer::{LexKind, Token as LexedToken};
 
+pub use complete::{CompletionItem, CompletionKind, Completions};
+pub use hover::Hover;
 pub use position::LineIndex;
 pub use scan::{SymbolKind, TokenClass};
 
@@ -80,17 +83,15 @@ pub struct Analysis<'a> {
     source: &'a str,
     index: LineIndex<'a>,
     scan: scan::Scan,
-    /// The compiler's first error, if the file doesn't check.
-    error: Option<Error>,
+    /// What the compiler found: its first error and the checked types.
+    checked: types::Checked,
 }
 
 impl<'a> Analysis<'a> {
     pub fn new(source: &'a str) -> Self {
-        let (error, accesses) = match driver::front_end(source) {
-            Ok(items) => (None, fields::field_accesses(&items)),
-            Err(error) => (Some(error), Default::default()),
-        };
-        Analysis { source, index: LineIndex::new(source), scan: scan::scan(source, &accesses), error }
+        let checked = types::Checked::new(source);
+        let scan = scan::scan(source, &checked.field_accesses);
+        Analysis { source, index: LineIndex::new(source), scan, checked }
     }
 
     /// Every piece of source to highlight, in order and without overlaps.
@@ -110,7 +111,7 @@ impl<'a> Analysis<'a> {
     /// the token the error points at, or one character when the error points
     /// inside a token, or is empty at the end of a line.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
-        let Some(error) = &self.error else { return Vec::new() };
+        let Some(error) = &self.checked.error else { return Vec::new() };
         let Some(span) = error.span else {
             return vec![Diagnostic {
                 from: 0,
@@ -188,5 +189,22 @@ impl<'a> Analysis<'a> {
             .or_else(|| tokens.iter().filter(|t| t.range.end == byte).find_map(|t| t.symbol))?;
         let range = self.index.utf16_range(&self.scan.symbols.get(symbol)?.name_range);
         Some(Location { from: range.start, to: range.end })
+    }
+
+    /// What may be typed at `offset`: keywords, snippets, names, fields, or
+    /// types, depending on where the cursor is.
+    pub fn complete(&self, offset: usize) -> Completions {
+        let byte = self.index.byte_of_utf16(offset);
+        let (items, from, to) = complete::complete(self.source, &self.scan, &self.checked, byte);
+        Completions { from: self.index.utf16_of(from), to: self.index.utf16_of(to), items }
+    }
+
+    /// A description of the name at `offset`: its declaration, type, or
+    /// signature.
+    pub fn hover(&self, offset: usize) -> Option<Hover> {
+        let knowledge = infer::Knowledge::new(self.source, &self.scan, &self.checked);
+        let ((code, doc), range) = hover::hover(&knowledge, self.index.byte_of_utf16(offset))?;
+        let range = self.index.utf16_range(&range);
+        Some(Hover { from: range.start, to: range.end, code, doc })
     }
 }

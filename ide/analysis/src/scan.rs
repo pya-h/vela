@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 
 use serde::Serialize;
-use vela::ast::{BUILTIN_TASKS, Type};
+use vela::ast::{BUILTIN_TASKS, Span, Type};
 use vela::lexer::{ESCAPES, LexKind, LexToken, Token, highlight};
 
 /// What a highlighted piece of source is.
@@ -79,6 +79,14 @@ pub(crate) struct Symbol {
     pub kind: SymbolKind,
     /// Bytes of the name where it is declared.
     pub name_range: Range<usize>,
+    /// The compiler's position of the name.
+    pub start: Span,
+    /// For a variable or parameter, the bytes where it can be used: from the
+    /// end of its declaring line to the end of its block. Everything else is
+    /// visible everywhere.
+    pub visible: Range<usize>,
+    /// The keyword that declared a variable: `bind`, `hold`, `each`, or `case`.
+    pub intro: Option<&'static str>,
     /// Bytes of the whole declaration: from `task`/`shape`/`kind` to its
     /// `fi` for those, and just the name for everything else.
     pub range: Range<usize>,
@@ -226,7 +234,9 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>) {
     let mut declare = |symbols: &mut Vec<Symbol>, p: usize, kind: SymbolKind, detail: String, parent: Option<usize>| {
         let name = tokens.ident(p).unwrap_or_default().to_string();
         let range = tokens.range(p);
-        symbols.push(Symbol { name, kind, name_range: range.clone(), range, detail, parent });
+        let start = tokens.get(p).map(|t| t.start).unwrap_or_default();
+        let visible = 0..tokens.source.len();
+        symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro: None, detail, parent });
         declared_at.insert(p, symbols.len() - 1);
         symbols.len() - 1
     };
@@ -355,7 +365,8 @@ impl<'a> Classifier<'a> {
         let tokens = self.tokens;
         // Context carried from one token to the next.
         let mut in_type = false;
-        let mut declaring: Option<SymbolKind> = None;
+        // The keyword declaring the next name as a variable.
+        let mut declaring: Option<&'static str> = None;
         let mut in_task_header = false;
         let mut in_case_header = false;
         // For each open `{`, the shape it builds, if known.
@@ -364,6 +375,7 @@ impl<'a> Classifier<'a> {
         let mut p = 0;
         for lexed in tokens.all {
             let range = lexed.range.clone();
+            let at = range.start;
             let token = match &lexed.kind {
                 LexKind::Comment => {
                     self.push(range, TokenClass::Comment, None);
@@ -429,7 +441,9 @@ impl<'a> Classifier<'a> {
                     self.push(range, TokenClass::Keyword, None);
                     match keyword {
                         Token::Task | Token::Shape | Token::Kind => {
-                            self.scopes.clear();
+                            while !self.scopes.is_empty() {
+                                self.close_scope(at);
+                            }
                             self.open(ScopeKind::Item);
                             in_task_header = *keyword == Token::Task;
                             braces.clear();
@@ -438,28 +452,30 @@ impl<'a> Classifier<'a> {
                         Token::Loop => self.open(ScopeKind::Other),
                         Token::Each => {
                             self.open(ScopeKind::Other);
-                            declaring = Some(SymbolKind::Variable);
+                            declaring = Some("each");
                         }
                         Token::Match => self.open(ScopeKind::Match),
-                        Token::Bind | Token::Hold => declaring = Some(SymbolKind::Variable),
+                        Token::Bind => declaring = Some("bind"),
+                        Token::Hold => declaring = Some("hold"),
                         Token::Else => {
                             // The `else` branch can't see the `when` branch's variables.
-                            if let Some(scope) = self.scopes.last_mut().filter(|s| s.kind == ScopeKind::When) {
-                                scope.variables.clear();
+                            if self.scopes.last().is_some_and(|s| s.kind == ScopeKind::When) {
+                                self.close_scope(at);
+                                self.open(ScopeKind::When);
                             }
                         }
                         Token::Case => {
                             if self.scopes.last().is_some_and(|s| s.kind == ScopeKind::Case) {
-                                self.scopes.pop();
+                                self.close_scope(at);
                             }
                             self.open(ScopeKind::Case);
                             in_case_header = true;
                         }
                         Token::Fi => {
                             if self.scopes.last().is_some_and(|s| s.kind == ScopeKind::Case) {
-                                self.scopes.pop();
+                                self.close_scope(at);
                             }
-                            self.scopes.pop();
+                            self.close_scope(at);
                         }
                         Token::New => in_type = true,
                         _ => {}
@@ -477,7 +493,7 @@ impl<'a> Classifier<'a> {
         p: usize,
         name: &str,
         in_type: bool,
-        declaring: Option<SymbolKind>,
+        declaring: Option<&'static str>,
         in_task_header: bool,
         in_case_header: bool,
         braces: &[Option<String>],
@@ -496,19 +512,19 @@ impl<'a> Classifier<'a> {
             }
             return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind]));
         }
-        if let Some(kind) = declaring {
+        if let Some(intro) = declaring {
             let detail = if after == Some(&Token::Colon) { tokens.text_after(p + 1, |t| *t == Token::Assign) } else { String::new() };
-            return (kind.class(), Some(self.declare_local(p, kind, detail)));
+            return (TokenClass::Variable, Some(self.declare_local(p, SymbolKind::Variable, Some(intro), detail)));
         }
         if in_task_header && after == Some(&Token::Colon) && matches!(before, Some(Token::LParen | Token::Comma)) {
             let detail = tokens.text_after(p + 1, ends_field);
-            return (TokenClass::Parameter, Some(self.declare_local(p, SymbolKind::Parameter, detail)));
+            return (TokenClass::Parameter, Some(self.declare_local(p, SymbolKind::Parameter, None, detail)));
         }
         if in_case_header {
             if before == Some(&Token::Case) {
                 return (TokenClass::Variant, self.global(name, &[SymbolKind::Variant]));
             }
-            return (TokenClass::Variable, Some(self.declare_local(p, SymbolKind::Variable, String::new())));
+            return (TokenClass::Variable, Some(self.declare_local(p, SymbolKind::Variable, Some("case"), String::new())));
         }
         if before == Some(&Token::Dot) {
             let start = tokens.get(p).map(|t| (t.start.line, t.start.col));
@@ -546,10 +562,28 @@ impl<'a> Classifier<'a> {
         self.scopes.push(Scope { kind, variables: Vec::new() });
     }
 
-    fn declare_local(&mut self, p: usize, kind: SymbolKind, detail: String) -> usize {
-        let name = self.tokens.ident(p).unwrap_or_default().to_string();
-        let range = self.tokens.range(p);
-        self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, detail, parent: None });
+    /// Closes the innermost scope at byte `at`, where its variables stop being
+    /// visible.
+    fn close_scope(&mut self, at: usize) {
+        let Some(scope) = self.scopes.pop() else { return };
+        for id in scope.variables {
+            if let Some(symbol) = self.symbols.get_mut(id) {
+                symbol.visible.end = at.max(symbol.visible.start);
+            }
+        }
+    }
+
+    fn declare_local(&mut self, p: usize, kind: SymbolKind, intro: Option<&'static str>, detail: String) -> usize {
+        let tokens = self.tokens;
+        let name = tokens.ident(p).unwrap_or_default().to_string();
+        let range = tokens.range(p);
+        let start = tokens.get(p).map(|t| t.start).unwrap_or_default();
+        // Usable from the next line: not in its own initializer, range, or header.
+        let line_end = (p..tokens.len())
+            .find(|&q| matches!(tokens.token(q), Some(Token::Newline | Token::Eof)))
+            .map_or(tokens.source.len(), |q| tokens.range(q).end);
+        let visible = line_end..tokens.source.len();
+        self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None });
         let id = self.symbols.len() - 1;
         if let Some(scope) = self.scopes.last_mut() {
             scope.variables.push(id);

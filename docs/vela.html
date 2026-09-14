@@ -415,14 +415,15 @@ CC=clang cargo test</pre>
       </p>
       <p>
         The compiler is also a Rust library, <code>vela</code>, so tools can use the language without copying it:
-        <code>vela::driver</code> checks and builds programs exactly as the <code>vela</code> command does,
+        <code>vela::driver</code> checks and builds programs exactly as the <code>vela</code> command does (and can
+        keep a partly checked program for editors),
         <code>vela::lexer::highlight</code> splits source into tokens without stopping at errors (for editors), and
         <code>lexer::KEYWORDS</code> and <code>ast::BUILTIN_TYPES</code> list the language's reserved words and types.
       </p>
       <p>
         The repository is a Cargo workspace: the compiler is the default member, and Vela Studio's crates live under
-        <code>ide/</code> (so far <code>ide/analysis</code>, the highlighting, diagnostics, outline, and
-        go-to-definition engine built on the compiler). Plain <code>cargo build</code> and <code>cargo test</code>
+        <code>ide/</code> (so far <code>ide/analysis</code>, the engine behind highlighting, diagnostics, outline,
+        go-to-definition, completion, and hover, built on the compiler). Plain <code>cargo build</code> and <code>cargo test</code>
         cover only the compiler, which has no dependencies; add <code>--workspace</code> to include the IDE crates.
       </p>
       <pre>cargo test --workspace</pre>
