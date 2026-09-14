@@ -8,10 +8,17 @@ export type ThemeName = "dark" | "light";
 
 const isTheme = (value: unknown): value is ThemeName | null => value === "dark" || value === "light" || value === null;
 
+const systemTheme = () => window.matchMedia("(prefers-color-scheme: light)");
+
+/** The theme the user chose, or the system's; set on the page before anything is shown. */
+export function applyInitialTheme(): void {
+  document.documentElement.dataset["theme"] = load("theme", null, isTheme) ?? (systemTheme().matches ? "light" : "dark");
+}
+
 export class ThemeSwitch {
   readonly button: HTMLButtonElement;
   private chosen: ThemeName | null = load("theme", null, isTheme);
-  private readonly system = window.matchMedia("(prefers-color-scheme: light)");
+  private readonly system = systemTheme();
 
   constructor() {
     this.button = iconButton(icon("sun"), "Toggle theme", () => this.toggle());

@@ -50,6 +50,20 @@ export function nameProblem(name: string): string | null {
   return null;
 }
 
+/**
+ * The smallest single change turning `before` into `after` (the differing
+ * middle, between their common start and end), or null if they are equal.
+ */
+export function textChange(before: string, after: string): { from: number; to: number; insert: string } | null {
+  if (before === after) return null;
+  const shorter = Math.min(before.length, after.length);
+  let start = 0;
+  while (start < shorter && before.charCodeAt(start) === after.charCodeAt(start)) start++;
+  let end = 0;
+  while (end < shorter - start && before.charCodeAt(before.length - 1 - end) === after.charCodeAt(after.length - 1 - end)) end++;
+  return { from: start, to: before.length - end, insert: after.slice(start, after.length - end) };
+}
+
 export class Documents {
   private readonly open = new Map<string, OpenDocument>();
   /** Tab order. */

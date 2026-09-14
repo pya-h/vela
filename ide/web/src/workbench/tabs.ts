@@ -1,5 +1,6 @@
 // The tab strip: one tab per open document, with a dot for unsaved changes
-// that turns into a close button on hover. Middle-click closes.
+// that turns into a close button on hover. Middle-click closes. Keyboard:
+// arrows move between tabs, Enter opens, Delete closes.
 
 import { type Documents, fileName, isDirty, parentFolder } from "./documents";
 import { h } from "./dom";
@@ -57,7 +58,17 @@ export class Tabs {
                 if (event.button === 1) this.actions.close(doc.path);
               },
               keydown: (event) => {
-                if (event.key === "Enter" || event.key === " ") this.actions.activate(doc.path);
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  this.actions.activate(doc.path);
+                } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                  // Arrows move between tabs, as in any tab list.
+                  event.preventDefault();
+                  const index = docs.indexOf(doc) + (event.key === "ArrowRight" ? 1 : -1);
+                  this.focusTab(docs[(index + docs.length) % docs.length]?.path);
+                } else if (event.key === "Delete") {
+                  this.actions.close(doc.path);
+                }
               },
             },
           },
@@ -84,5 +95,11 @@ export class Tabs {
       }),
     );
     this.element.querySelector(".tab.active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+
+  private focusTab(path: string | undefined): void {
+    const tabs = [...this.element.querySelectorAll<HTMLElement>(".tab")];
+    for (const tab of tabs) tab.tabIndex = tab.dataset["path"] === path ? 0 : -1;
+    tabs.find((tab) => tab.dataset["path"] === path)?.focus();
   }
 }

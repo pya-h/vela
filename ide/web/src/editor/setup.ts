@@ -101,8 +101,9 @@ export function editorExtensions(options: EditorOptions): Extension {
       ...completionKeymap,
       ...lintKeymap,
       indentWithTab,
-      // Find and replace share one panel (Mod-f opens it too).
-      { key: "Mod-h", run: openSearchPanel, preventDefault: true },
+      // Find and replace share one panel (Mod-f opens it too). ⌘H hides the
+      // app on a Mac, so replace is ⌘⌥F there.
+      { key: "Mod-h", mac: "Mod-Alt-f", run: openSearchPanel, preventDefault: true },
     ]),
     theme,
     options.analyzer ? vela(options.analyzer) : [],

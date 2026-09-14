@@ -1,13 +1,29 @@
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 
-import { Documents, type OpenDocument, fileName, isDirty, isWithin, nameProblem, parentFolder } from "./documents";
+import { Documents, type OpenDocument, fileName, isDirty, isWithin, nameProblem, parentFolder, textChange } from "./documents";
 import { fuzzyFilter, fuzzyMatch } from "./fuzzy";
 
 function doc(path: string, content = "text"): OpenDocument {
   const state = EditorState.create({ doc: content });
   return { path, state, saved: state.doc, hash: "h0", disk: "in-sync", scrollTop: 0 };
 }
+
+describe("reloading", () => {
+  it("changes only the part of the text that differs", () => {
+    expect(textChange("same", "same")).toBeNull();
+    expect(textChange("a\nb\nc\n", "a\nB!\nc\n")).toEqual({ from: 2, to: 3, insert: "B!" });
+    expect(textChange("abc", "abcabc")).toEqual({ from: 3, to: 3, insert: "abc" });
+    expect(textChange("abcabc", "abc")).toEqual({ from: 3, to: 6, insert: "" });
+    expect(textChange("", "x")).toEqual({ from: 0, to: 0, insert: "x" });
+    // Repeated text around the change doesn't overlap the start and the end.
+    expect(textChange("aaa", "aa")).toEqual({ from: 2, to: 3, insert: "" });
+    for (const [before, after] of [["hello world", "hello there world"], ["x😀y", "x😁y"], ["abba", "aba"]] as const) {
+      const change = textChange(before, after)!;
+      expect(before.slice(0, change.from) + change.insert + before.slice(change.to)).toBe(after);
+    }
+  });
+});
 
 describe("paths", () => {
   it("splits and compares workspace paths", () => {
@@ -77,6 +93,9 @@ describe("fuzzy matching", () => {
     expect(fuzzyMatch("fb", "fib.vela")?.positions).toEqual([0, 2]);
     expect(fuzzyMatch("bf", "fib.vela")).toBeNull();
     expect(fuzzyMatch("", "anything")).toEqual({ score: 0, positions: [] });
+    // Indices stay those of the text, even where lowercasing would lengthen it.
+    expect(fuzzyMatch("x", "İx")?.positions).toEqual([1]);
+    expect(fuzzyMatch("b", "😀b")?.positions).toEqual([2]);
   });
 
   it("prefers names, word starts, and runs", () => {

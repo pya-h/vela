@@ -9,10 +9,18 @@ export interface Match {
 
 const SEPARATORS = new Set(["/", "_", "-", ".", " "]);
 
+/** Lowercase, keeping every character's length, so indices still match `text`. */
+function lower(text: string): string {
+  return text.replace(/[\s\S]/gu, (char) => {
+    const lowered = char.toLowerCase();
+    return lowered.length === char.length ? lowered : char;
+  });
+}
+
 export function fuzzyMatch(query: string, text: string): Match | null {
   if (query === "") return { score: 0, positions: [] };
-  const q = query.toLowerCase();
-  const t = text.toLowerCase();
+  const q = lower(query);
+  const t = lower(text);
   const positions: number[] = [];
   let score = 0;
   let from = 0;

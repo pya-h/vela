@@ -64,6 +64,11 @@ async fn connect(studio: Arc<Studio>, id: String, mut socket: WebSocket) {
         return close(socket, CLOSE_NO_SESSION, "no such session").await;
     };
 
+    // Keystrokes the process isn't reading yet. While they wait, output keeps
+    // flowing (the process may be writing rather than reading), but no more
+    // messages are read, which slows a client that sends too much.
+    let input = session.input();
+    let mut pending: Option<Vec<u8>> = None;
     loop {
         tokio::select! {
             event = events.recv() => match event {
@@ -82,8 +87,13 @@ async fn connect(studio: Arc<Studio>, id: String, mut socket: WebSocket) {
                 // The session ended or another connection replaced this one.
                 None => return close(socket, CLOSE_REPLACED, "session closed or opened elsewhere").await,
             },
-            message = socket.recv() => match message {
-                Some(Ok(Message::Binary(bytes))) => session.input(bytes.to_vec()).await,
+            permit = input.reserve(), if pending.is_some() => match permit {
+                Ok(permit) => permit.send(pending.take().unwrap_or_default()),
+                // The terminal takes no more input; drop what was typed.
+                Err(_) => pending = None,
+            },
+            message = socket.recv(), if pending.is_none() => match message {
+                Some(Ok(Message::Binary(bytes))) => pending = Some(bytes.to_vec()),
                 Some(Ok(Message::Text(text))) => {
                     if let Ok(ClientMessage::Resize { cols, rows }) = serde_json::from_str(&text) {
                         session.resize(cols, rows);

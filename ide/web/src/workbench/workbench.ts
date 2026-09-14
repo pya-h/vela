@@ -11,7 +11,7 @@ import type { Entry, Info, Tree } from "../api/types";
 import { editorExtensions } from "../editor/setup";
 import type { Analyzer } from "../editor/vela";
 import { choose, confirm, prompt } from "./dialogs";
-import { Documents, type OpenDocument, fileName, isDirty, nameProblem, parentFolder } from "./documents";
+import { Documents, type OpenDocument, fileName, isDirty, isWithin, nameProblem, parentFolder, textChange } from "./documents";
 import { h, iconButton, shortcutLabel } from "./dom";
 import { Explorer, allFiles, hasEntry } from "./explorer";
 import { icon } from "./icons";
@@ -43,6 +43,8 @@ export class Workbench {
   private lastDiskCheck = 0;
   /** Guards against opening the same file twice while it loads. */
   private readonly opening = new Map<string, Promise<void>>();
+  /** Saves in progress: a document's next save waits for the one before. */
+  private readonly saving = new Map<OpenDocument, Promise<boolean>>();
 
   constructor(
     private readonly api: StudioApi,
@@ -251,11 +253,30 @@ export class Workbench {
     }
   }
 
-  /** Saves a document; resolves to whether it was saved. */
-  async save(doc: OpenDocument, overwrite = false): Promise<boolean> {
+  /**
+   * Saves a document; resolves to whether it was saved. Saves of one document
+   * run one after another: each sends the hash the one before received.
+   */
+  save(doc: OpenDocument): Promise<boolean> {
+    const previous = this.saving.get(doc);
+    const next = previous
+      ? // Saved already by the save before, unless edited since.
+        previous.then(() => (doc.disk === "in-sync" && !isDirty(doc) ? true : this.write(doc)))
+      : this.write(doc);
+    this.saving.set(doc, next);
+    const done = () => {
+      if (this.saving.get(doc) === next) this.saving.delete(doc);
+    };
+    next.then(done, done);
+    return next;
+  }
+
+  private async write(doc: OpenDocument, overwrite = false): Promise<boolean> {
     const text = this.latest(doc).doc;
     try {
       if (doc.disk === "deleted") {
+        await this.refreshTree();
+        await this.createFolders(parentFolder(doc.path));
         await this.api.create(doc.path, "file").catch((error: unknown) => {
           if (!(error instanceof ApiError && error.conflict)) throw error;
         });
@@ -274,7 +295,7 @@ export class Workbench {
         doc.disk = "deleted";
         this.documents.changed();
         const recreate = await confirm("File deleted", `${doc.path} no longer exists on disk. Save it to create it again?`, "Save");
-        return recreate ? this.save(doc) : false;
+        return recreate ? this.write(doc) : false;
       }
       toast(`Couldn't save ${doc.path}: ${message(error)}`, "error");
       return false;
@@ -292,7 +313,7 @@ export class Workbench {
       ],
       "cancel",
     );
-    if (answer === "overwrite") return this.save(doc, true);
+    if (answer === "overwrite") return this.write(doc, true);
     if (answer === "reload") await this.reload(doc);
     return false;
   }
@@ -319,7 +340,9 @@ export class Workbench {
 
   private replaceText(doc: OpenDocument, content: string, hash: string): void {
     const current = this.latest(doc);
-    const spec = { changes: { from: 0, to: current.doc.length, insert: content } };
+    // Only the part that differs, so the cursor, scroll position, and folds
+    // elsewhere stay put.
+    const spec = { changes: textChange(current.doc.toString(), content) ?? [] };
     let text: Text;
     if (doc === this.documents.current) {
       this.view.dispatch(spec);
@@ -340,7 +363,11 @@ export class Workbench {
     void this.refreshTree();
     for (const doc of this.documents.all) {
       try {
+        // A save in progress changes the file and then the hash; comparing
+        // in between would look like a change by another program.
+        if (this.saving.has(doc)) continue;
         const file = await this.api.readFile(doc.path);
+        if (this.saving.has(doc) || this.documents.get(doc.path) !== doc) continue;
         if (file.hash === doc.hash) {
           if (doc.disk !== "in-sync") {
             doc.disk = "in-sync";
@@ -387,17 +414,26 @@ export class Workbench {
     const path = folder ? `${folder}/${name}` : name;
     try {
       // Create any folders in the name first.
-      const parts = path.split("/");
-      for (let i = folder ? folder.split("/").length + 1 : 1; i < parts.length; i++) {
-        const parent = parts.slice(0, i).join("/");
-        if (!hasEntry(this.tree.entries, parent)) await this.api.create(parent, "folder");
-      }
+      await this.createFolders(parentFolder(path));
       await this.api.create(path, kind);
       this.explorer.expand(kind === "folder" ? path : parentFolder(path));
       await this.refreshTree();
       if (kind === "file") await this.openFile(path);
     } catch (error) {
       toast(`Couldn't create ${path}: ${message(error)}`, "error");
+    }
+  }
+
+  /** Creates `folder` and the folders around it that the tree doesn't have. */
+  private async createFolders(folder: string): Promise<void> {
+    const parts = folder === "" ? [] : folder.split("/");
+    for (let i = 1; i <= parts.length; i++) {
+      const path = parts.slice(0, i).join("/");
+      if (hasEntry(this.tree.entries, path)) continue;
+      await this.api.create(path, "folder").catch((error: unknown) => {
+        // Created by another program since the tree was read.
+        if (!(error instanceof ApiError && error.conflict)) throw error;
+      });
     }
   }
 
@@ -410,13 +446,17 @@ export class Workbench {
       entry.name,
       (value) => {
         if (value === entry.name) return null;
-        return nameProblem(value) ?? (hasEntry(this.tree.entries, folder ? `${folder}/${value}` : value) ? "That name is taken." : null);
+        const to = folder ? `${folder}/${value}` : value;
+        if (entry.kind === "folder" && isWithin(to, entry.path)) return "A folder can't be moved into itself.";
+        return nameProblem(value) ?? (hasEntry(this.tree.entries, to) ? "That name is taken." : null);
       },
       [0, entry.kind === "file" && dot > 0 ? dot : entry.name.length],
     );
     if (name === null || name === entry.name) return;
     const to = folder ? `${folder}/${name}` : name;
     try {
+      // A name with folders moves the entry there, creating them as needed.
+      await this.createFolders(parentFolder(to));
       await this.api.rename(entry.path, to);
       const active = this.documents.current;
       if (active) active.state = this.view.state;
@@ -569,7 +609,7 @@ export class Workbench {
     const shortcuts: [string, string][] = [
       ["Mod-p", "Open a file"],
       ["Mod-s", "Save"],
-      ["Mod-Space", "Complete"],
+      ["Ctrl-Space", "Complete"],
       ["F12", "Go to definition"],
       ["Mod-Shift-o", "Go to a declaration"],
       ["Mod-/", "Toggle comment"],

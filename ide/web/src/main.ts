@@ -15,6 +15,7 @@ import { ApiError, StudioApi } from "./api/client";
 import { takeToken } from "./api/session";
 import { Analyzer } from "./editor/vela";
 import { h } from "./workbench/dom";
+import { applyInitialTheme } from "./workbench/theme";
 import { toast } from "./workbench/toast";
 import { Workbench } from "./workbench/workbench";
 
@@ -48,6 +49,8 @@ function needsToken(): void {
 }
 
 async function start(): Promise<void> {
+  // Before the first screen, so it doesn't flash in the other theme.
+  applyInitialTheme();
   // Anything blocked by the page's security policy is a bug worth seeing.
   document.addEventListener("securitypolicyviolation", (event) => {
     console.error(`Content-Security-Policy blocked ${event.blockedURI || "inline code"} (${event.violatedDirective})`);

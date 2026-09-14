@@ -3,7 +3,7 @@
 // violations, which the page reports as errors).
 
 import { type ChildProcess, spawn } from "node:child_process";
-import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,7 +18,11 @@ export interface Studio {
   url: string;
   workspace: string;
   read(name: string): string;
+  /** Writes a file in the workspace, creating its folders. */
   write(name: string, content: string): void;
+  /** Deletes a file or folder in the workspace. */
+  remove(name: string): void;
+  exists(name: string): boolean;
   /** Errors the page logged; checked empty after each test. */
   errors: string[];
   /** Declares an error the test expects, such as a refused request's log line. */
@@ -64,7 +68,12 @@ export const test = base.extend<{ studio: Studio }>({
       errors,
       allowError: (pattern) => void allowed.push(pattern),
       read: (name) => readFileSync(join(workspace, name), "utf8"),
-      write: (name, content) => writeFileSync(join(workspace, name), content),
+      write: (name, content) => {
+        mkdirSync(dirname(join(workspace, name)), { recursive: true });
+        writeFileSync(join(workspace, name), content);
+      },
+      remove: (name) => rmSync(join(workspace, name), { recursive: true, force: true }),
+      exists: (name) => existsSync(join(workspace, name)),
     });
     server.kill("SIGINT");
     rmSync(workspace, { recursive: true, force: true });

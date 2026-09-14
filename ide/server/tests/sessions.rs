@@ -211,6 +211,45 @@ async fn a_terminal_runs_a_shell_in_the_workspace() {
 }
 
 #[tokio::test]
+async fn output_keeps_flowing_while_a_big_paste_waits() {
+    let server = server("paste", &[], |_| {}).await;
+    let id = server.terminal().await;
+    let mut socket = server.connect(&id).await;
+    // A program that writes forever and never reads its input, in raw mode
+    // (as full-screen programs use), where input waits instead of being dropped.
+    socket.send(Message::binary(b"stty raw -echo; exec yes\n".to_vec())).await.unwrap();
+    // Raw mode also stops turning newlines into CR LF.
+    receive(&mut socket, |output| output.contains("y\ny\n")).await;
+
+    let (mut sink, mut stream) = socket.split();
+    // Far more input than the terminal and the server buffer (32 MiB).
+    let paste = tokio::spawn(async move {
+        for _ in 0..512 {
+            if sink.send(Message::binary(vec![b'x'; 64 * 1024])).await.is_err() {
+                return;
+            }
+        }
+    });
+    sleep(Duration::from_millis(300)).await;
+    // While the paste is stuck, the program's output still arrives: more
+    // than every buffer on the way holds.
+    let mut bytes = 0;
+    let reading = async {
+        while let Some(Ok(message)) = stream.next().await {
+            if let Message::Binary(chunk) = message {
+                bytes += chunk.len();
+                if bytes > 32 * 1024 * 1024 {
+                    return;
+                }
+            }
+        }
+    };
+    let flowed = timeout(Duration::from_secs(10), reading).await.is_ok();
+    paste.abort();
+    assert!(flowed, "output stopped after {} bytes", bytes);
+}
+
+#[tokio::test]
 async fn websockets_require_the_token_and_a_known_session() {
     let server = server("ws-auth", &[], |_| {}).await;
     let id = server.terminal().await;

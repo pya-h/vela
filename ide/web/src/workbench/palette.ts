@@ -22,14 +22,15 @@ function highlighted(text: string, positions: Set<number>, offset: number): Node
     nodes.push(runMatched ? h("mark", { text: run }) : document.createTextNode(run));
     run = "";
   };
-  [...text].forEach((char, i) => {
+  // Positions are string indices (UTF-16 code units), as the matcher counts.
+  for (let i = 0; i < text.length; i++) {
     const matched = positions.has(i + offset);
     if (matched !== runMatched) {
       flush();
       runMatched = matched;
     }
-    run += char;
-  });
+    run += text[i];
+  }
   flush();
   return nodes;
 }

@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use axum::body::Bytes;
-use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
+use portable_pty::{Child, ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use serde::Serialize;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{sleep, sleep_until};
@@ -93,9 +93,10 @@ impl Session {
         self.control.send(Control::Attach(events)).is_ok()
     }
 
-    /// Sends keystrokes to the process, waiting while its input is backed up.
-    pub async fn input(&self, bytes: Vec<u8>) {
-        let _ = self.input.send(bytes).await;
+    /// Where keystrokes for the process go. Sending waits while its input is
+    /// backed up; the channel closes when the terminal stops taking input.
+    pub fn input(&self) -> mpsc::Sender<Vec<u8>> {
+        self.input.clone()
     }
 
     pub fn resize(&self, cols: u16, rows: u16) {
@@ -202,15 +203,31 @@ impl Sessions {
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
 
-        let spawn_error = |error: &dyn std::fmt::Display| SessionError::Spawn(error.to_string());
-        let pair = native_pty_system().openpty(size).map_err(|e| spawn_error(&e))?;
-        let child = pair.slave.spawn_command(command).map_err(|e| spawn_error(&e))?;
+        let pair = native_pty_system().openpty(size).map_err(spawn_error)?;
+        let child = pair.slave.spawn_command(command).map_err(spawn_error)?;
         // The terminal's other end now belongs to the child; keeping it open
         // here would hide the end of its output.
         drop(pair.slave);
-        let reader = pair.master.try_clone_reader().map_err(|e| spawn_error(&e))?;
-        let writer = pair.master.take_writer().map_err(|e| spawn_error(&e))?;
-        let id = random_hex(16).map_err(|e| spawn_error(&e))?;
+        let mut orphan = child.clone_killer();
+        let started = self.start(kind, child, pair.master, scratch);
+        if started.is_err() {
+            // Nothing would ever stop or wait for it.
+            let _ = orphan.kill();
+        }
+        started
+    }
+
+    /// Sets up the helpers and the pump for a spawned process.
+    fn start(
+        self: &Arc<Self>,
+        kind: SessionKind,
+        mut child: Box<dyn Child + Send + Sync>,
+        master: Box<dyn MasterPty + Send>,
+        scratch: Option<ScratchDir>,
+    ) -> Result<String, SessionError> {
+        let reader = master.try_clone_reader().map_err(spawn_error)?;
+        let writer = master.take_writer().map_err(spawn_error)?;
+        let id = random_hex(16).map_err(spawn_error)?;
         let started = Instant::now();
 
         let alive = Arc::new(AtomicBool::new(true));
@@ -224,7 +241,6 @@ impl Sessions {
         spawn_thread("vela-studio-pty-read", move || read_output(reader, output_tx))?;
         spawn_thread("vela-studio-pty-write", move || write_input(writer, input_rx))?;
         let waiting = alive.clone();
-        let mut child = child;
         spawn_thread("vela-studio-wait", move || {
             let status = child.wait();
             waiting.store(false, Ordering::SeqCst);
@@ -241,7 +257,7 @@ impl Sessions {
             pid,
             alive,
             killer: Mutex::new(killer),
-            master: Mutex::new(pair.master),
+            master: Mutex::new(master),
             input: input_tx,
             control: control_tx,
         });
@@ -276,12 +292,16 @@ impl Sessions {
     }
 }
 
+fn spawn_error(error: impl std::fmt::Display) -> SessionError {
+    SessionError::Spawn(error.to_string())
+}
+
 fn spawn_thread(name: &str, f: impl FnOnce() + Send + 'static) -> Result<(), SessionError> {
     std::thread::Builder::new()
         .name(name.to_string())
         .spawn(f)
         .map(drop)
-        .map_err(|error| SessionError::Spawn(error.to_string()))
+        .map_err(spawn_error)
 }
 
 fn read_output(mut reader: Box<dyn Read + Send>, output: mpsc::Sender<Vec<u8>>) {

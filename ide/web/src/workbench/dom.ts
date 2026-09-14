@@ -36,13 +36,15 @@ export function iconButton(icon: SVGSVGElement, label: string, onClick: (event: 
 /** Whether the platform uses ⌘ rather than Ctrl for shortcuts. */
 export const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
-/** A shortcut as shown to the user: `Mod-s` → `Ctrl+S` or `⌘S`. */
+/** A shortcut as shown to the user: `Mod-s` → `Ctrl+S` or `⌘S` (`Ctrl` stays Ctrl, `⌃` on a Mac). */
 export function shortcutLabel(key: string): string {
   const parts = key.split("-");
   const names = parts.map((part) => {
     switch (part) {
       case "Mod":
         return isMac ? "⌘" : "Ctrl";
+      case "Ctrl":
+        return isMac ? "⌃" : "Ctrl";
       case "Shift":
         return isMac ? "⇧" : "Shift";
       case "Alt":
