@@ -38,8 +38,10 @@ pub struct CompletionItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub apply: Option<String>,
     /// A CodeMirror snippet template to insert instead of the label:
-    /// `${name}` marks a field to fill in, `${}` the final cursor position,
-    /// and `\t` one level of indentation.
+    /// `${name}` marks a field to fill in (fields with the same name are
+    /// edited together), `${}` an unnamed field, `${0}` where the cursor
+    /// ends, and `\t` one level of indentation. Tab visits the fields in
+    /// order; reaching the last one ends the snippet.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snippet: Option<String>,
     /// How much to prefer this item among equally good matches.
@@ -481,7 +483,7 @@ fn item_level_items() -> Vec<CompletionItem> {
         keyword("task"),
         keyword("shape"),
         keyword("kind"),
-        snippet("task", "a task", "task ${name}(${})\n\t\nfi"),
+        snippet("task", "a task", "task ${name}(${})\n\t${0}\nfi"),
         snippet("task -> type", "a task that sends a value", "task ${name}(${}) -> ${type}\n\tsend ${value}\nfi"),
         snippet("shape", "a shape with a field", "shape ${Name}\n\t${field}: ${type}\nfi"),
         snippet("kind", "a kind with a variant", "kind ${Name}\n\t${Variant}\nfi"),

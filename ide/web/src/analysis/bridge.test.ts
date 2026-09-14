@@ -1,22 +1,11 @@
 import { readFileSync, readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { AnalysisError, VelaAnalysis } from "./bridge";
-
-const web = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const examples = join(web, "..", "..", "examples");
+import { examplesFolder as examples, wasmBytes } from "./test-module";
 
 let analysis: VelaAnalysis;
-
-function wasmBytes(): Uint8Array<ArrayBuffer> {
-  try {
-    return new Uint8Array(readFileSync(join(web, "wasm", "vela_analysis.wasm")));
-  } catch {
-    throw new Error("wasm/vela_analysis.wasm is missing: run `npm run build:wasm` first");
-  }
-}
 
 beforeAll(async () => {
   analysis = await VelaAnalysis.load(wasmBytes());

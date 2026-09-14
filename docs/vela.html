@@ -425,25 +425,24 @@ CC=clang cargo test</pre>
         <code>ide/</code>: <code>ide/analysis</code> is the engine behind highlighting, diagnostics, outline,
         go-to-definition, completion, and hover, built on the compiler; <code>ide/wasm</code> compiles it to
         WebAssembly so it runs in the editor page; <code>ide/server</code> is the <code>vela-studio</code> program,
-        a local server for files, builds, runs, and terminals; and <code>ide/web</code> is the browser side, so far
-        the TypeScript bridge to the analysis module. Plain <code>cargo build</code> and <code>cargo test</code>
-        cover only the compiler, which has no dependencies; add <code>--workspace</code> to include the IDE crates.
+        a local server for files, builds, runs, and terminals; and <code>ide/web</code> is the editor page
+        (TypeScript, CodeMirror). Plain <code>cargo build</code> and <code>cargo test</code> cover only the
+        compiler, which has no dependencies; add <code>--workspace</code> to include the IDE crates.
       </p>
       <pre>cargo test --workspace</pre>
       <p>
-        <code>vela-studio</code> serves one workspace folder on <code>127.0.0.1</code> only, and prints an address
-        with a secret token that only the page it opens can use. Until the editor page is built, that page explains
-        how to build it.
-      </p>
-      <pre>cargo run -p vela-studio -- examples --no-open</pre>
-      <p>
-        The browser side needs Node.js and the <code>wasm32-unknown-unknown</code> Rust target
-        (<code>rustup target add wasm32-unknown-unknown</code>):
+        The editor page needs Node.js and the <code>wasm32-unknown-unknown</code> Rust target
+        (<code>rustup target add wasm32-unknown-unknown</code>). Build it, then start <code>vela-studio</code> on a
+        folder. It serves that folder on <code>127.0.0.1</code> only, prints an address with a secret token, and
+        opens it in the browser (<code>--no-open</code> just prints it).
       </p>
       <pre>npm --prefix ide/web install
-npm --prefix ide/web run build:wasm    # build the analysis module
-npm --prefix ide/web test
-npm --prefix ide/web run typecheck</pre>
+npm --prefix ide/web run build         # the analysis module and the page
+cargo run -p vela-studio -- examples</pre>
+      <p>The page's own checks: unit tests, type checking, and end-to-end tests in Chromium against a real server.</p>
+      <pre>npm --prefix ide/web test
+npm --prefix ide/web run typecheck
+npm --prefix ide/web run e2e           # set CHROMIUM if it isn't /usr/bin/chromium</pre>
       <p>To lint the compiler (or everything, with <code>--workspace</code>):</p>
       <pre>cargo clippy --all-targets</pre>
       <p>

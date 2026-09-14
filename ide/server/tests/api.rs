@@ -117,6 +117,19 @@ async fn the_page_is_served_with_a_strict_policy() {
         assert!(policy.contains(part), "{:?} in {:?}", part, policy);
     }
     assert!(!policy.contains("unsafe-inline"));
+    // Each page gets its own nonce for the editor's style elements, in the
+    // policy and in the page's meta tag.
+    let nonce_in = |page: &common::Reply| {
+        let policy = page.header("content-security-policy").unwrap();
+        let nonce = policy.split("'nonce-").nth(1).unwrap().split('\'').next().unwrap().to_string();
+        assert_eq!(nonce.len(), 32);
+        let meta = format!("name=\"csp-nonce\" content=\"{}\"", nonce);
+        assert!(String::from_utf8_lossy(&page.body).contains(&meta), "{}", meta);
+        nonce
+    };
+    let again = send(&app, Request::get("/").header("host", "127.0.0.1:4000").body(Body::empty()).unwrap()).await;
+    assert_ne!(nonce_in(&page), nonce_in(&again));
+    assert!(!String::from_utf8_lossy(&page.body).contains("__VELA_CSP_NONCE__"));
     assert_eq!(page.header("x-frame-options"), Some("DENY"));
     assert_eq!(page.header("x-content-type-options"), Some("nosniff"));
     assert_eq!(page.header("referrer-policy"), Some("no-referrer"));

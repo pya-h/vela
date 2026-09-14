@@ -12,7 +12,7 @@ use rust_embed::RustEmbed;
 
 use crate::Studio;
 use crate::api::ApiError;
-use crate::security::content_security_policy;
+use crate::security::{content_security_policy, random_hex};
 
 #[derive(RustEmbed)]
 #[folder = "../web/dist"]
@@ -23,6 +23,8 @@ struct Frontend;
 const NOT_BUILT_PAGE: &str = include_str!("not-built.html");
 const NOT_BUILT_STYLE: &str = include_str!("not-built.css");
 const NOT_BUILT_STYLE_PATH: &str = "vela-studio-not-built.css";
+/// Replaced in HTML pages by a fresh nonce for each response.
+const NONCE_PLACEHOLDER: &str = "__VELA_CSP_NONCE__";
 
 pub async fn serve(State(studio): State<Arc<Studio>>, method: Method, uri: Uri) -> Response {
     let path = uri.path().trim_start_matches('/');
@@ -43,13 +45,24 @@ pub async fn serve(State(studio): State<Arc<Studio>>, method: Method, uri: Uri) 
         None if path == NOT_BUILT_STYLE_PATH => (NOT_BUILT_STYLE.as_bytes().to_vec(), content_type(path), "no-cache"),
         None => return (StatusCode::NOT_FOUND, "not found").into_response(),
     };
+    let (body, policy) = if content_type.starts_with("text/html") {
+        // Each page gets its own nonce, in its policy and its meta tag.
+        let Ok(nonce) = random_hex(16) else {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        };
+        let page = String::from_utf8_lossy(&body).replace(NONCE_PLACEHOLDER, &nonce);
+        let Ok(policy) = HeaderValue::from_str(&content_security_policy(studio.config.port, &nonce)) else {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        };
+        (page.into_bytes(), Some(policy))
+    } else {
+        (body, None)
+    };
     let mut response = (StatusCode::OK, body).into_response();
     let headers = response.headers_mut();
     headers.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static(cache));
-    if content_type.starts_with("text/html")
-        && let Ok(policy) = HeaderValue::from_str(&content_security_policy(studio.config.port))
-    {
+    if let Some(policy) = policy {
         headers.insert(header::CONTENT_SECURITY_POLICY, policy);
     }
     response

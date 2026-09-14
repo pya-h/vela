@@ -1,0 +1,510 @@
+/* The window layout: title bar, sidebar with explorer and outline, tabs,
+   editor, and the welcome screen. */
+
+.app {
+  --sidebar-width: 260px;
+  display: grid;
+  grid-template-rows: 40px minmax(0, 1fr);
+  height: 100%;
+}
+
+/* Title bar ------------------------------------------------------------------- */
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.brand-mark {
+  color: var(--accent);
+}
+
+.titlebar-workspace {
+  overflow: hidden;
+  padding-left: 10px;
+  border-left: 1px solid var(--border-strong);
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titlebar-spacer {
+  flex: 1;
+}
+
+/* Workspace grid --------------------------------------------------------------- */
+
+.workspace {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 5px minmax(0, 1fr);
+  min-height: 0;
+  transition: grid-template-columns var(--normal) var(--ease);
+}
+
+.app.resizing .workspace {
+  transition: none;
+  cursor: col-resize;
+  user-select: none;
+}
+
+.app.sidebar-hidden .workspace {
+  grid-template-columns: 0 0 minmax(0, 1fr);
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.app.sidebar-hidden .sidebar,
+.app.sidebar-hidden .resizer {
+  visibility: hidden;
+}
+
+.resizer {
+  position: relative;
+  cursor: col-resize;
+  background: var(--bg);
+}
+
+.resizer::after {
+  position: absolute;
+  inset: 0 2px;
+  content: "";
+  background: var(--border);
+  transition: background var(--fast) var(--ease);
+}
+
+.resizer:hover::after,
+.resizer:focus-visible::after,
+.app.resizing .resizer::after {
+  inset: 0 1px;
+  background: var(--accent);
+}
+
+/* Sidebar sections -------------------------------------------------------------------- */
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sidebar-section.explorer {
+  flex: 3 1 0;
+}
+
+.sidebar-section.outline {
+  flex: 2 1 0;
+  border-top: 1px solid var(--border);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 6px 0 16px;
+  flex: none;
+}
+
+.section-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.section-actions {
+  display: flex;
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.sidebar-section:hover .section-actions,
+.section-actions:focus-within {
+  opacity: 1;
+}
+
+.section-actions .icon-button {
+  width: 24px;
+  height: 24px;
+}
+
+/* File tree --------------------------------------------------------------------------- */
+
+.tree,
+.outline-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 6px 8px;
+}
+
+.tree-row {
+  --depth: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding-left: calc(6px + var(--depth) * 14px);
+  padding-right: 8px;
+  border-radius: var(--radius);
+  color: var(--fg);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.tree-row:hover {
+  background: var(--surface-hover);
+}
+
+.tree-row.selected {
+  background: var(--surface-2);
+}
+
+.tree-row.active {
+  background: var(--accent-muted);
+}
+
+.tree-row .chevron {
+  width: 14px;
+  height: 14px;
+  color: var(--faint);
+  transition: transform var(--fast) var(--ease);
+}
+
+.tree-row.open .chevron {
+  transform: rotate(90deg);
+}
+
+.chevron-space {
+  width: 14px;
+  flex: none;
+}
+
+.entry-icon {
+  color: var(--faint);
+}
+
+.tree-row.folder .entry-icon {
+  color: var(--secondary);
+}
+
+.tree-row.vela .entry-icon {
+  color: var(--accent);
+}
+
+.tree-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-empty,
+.outline-empty {
+  margin: 6px 10px;
+  color: var(--faint);
+}
+
+/* Outline ------------------------------------------------------------------------------- */
+
+.outline-row {
+  --depth: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 26px;
+  padding: 0 8px 0 calc(8px + var(--depth) * 16px);
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.outline-row:hover {
+  background: var(--surface-hover);
+}
+
+.outline-row.current {
+  background: var(--surface-2);
+}
+
+.outline-name {
+  font-family: var(--font-code);
+  font-size: 12px;
+}
+
+.outline-detail {
+  overflow: hidden;
+  color: var(--faint);
+  font-family: var(--font-code);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+/* Tabs and editor -------------------------------------------------------------------------- */
+
+.editor-area {
+  display: grid;
+  grid-template-rows: 38px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  background: var(--editor-bg);
+}
+
+.tabs {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  scrollbar-width: none;
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  padding: 0 6px 0 14px;
+  border-right: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition:
+    background var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.tab.opening {
+  animation: tab-open var(--slow) var(--ease);
+}
+
+.tab:hover {
+  background: var(--surface-hover);
+  color: var(--fg);
+}
+
+.tab.active {
+  background: var(--editor-bg);
+  color: var(--fg);
+}
+
+/* The accent line under the active tab. */
+.tab::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  content: "";
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: transform var(--normal) var(--ease);
+}
+
+.tab.active::after {
+  transform: scaleX(1);
+}
+
+.tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab.deleted .tab-name {
+  color: var(--danger);
+  text-decoration: line-through;
+}
+
+.tab.changed .tab-name {
+  color: var(--warning);
+}
+
+.tab-detail {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.tab-close {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.tab-close:hover {
+  background: var(--surface-hover);
+  color: var(--fg);
+}
+
+.tab-close .tab-x {
+  width: 14px;
+  height: 14px;
+  visibility: hidden;
+}
+
+.tab-close .tab-dot {
+  display: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.tab.active .tab-x,
+.tab:hover .tab-x {
+  visibility: visible;
+}
+
+/* Unsaved: a dot, which becomes the close button on hover. */
+.tab.dirty .tab-dot {
+  display: block;
+  grid-area: 1 / 1;
+}
+
+.tab.dirty .tab-x {
+  grid-area: 1 / 1;
+  visibility: hidden;
+}
+
+.tab.dirty .tab-close:hover .tab-dot {
+  display: none;
+}
+
+.tab.dirty .tab-close:hover .tab-x {
+  visibility: visible;
+}
+
+.editor-host {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Welcome ----------------------------------------------------------------------------------- */
+
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 0;
+  padding: 10vh 24px 24px;
+  overflow: auto;
+  animation: fade-in var(--slow) var(--ease);
+}
+
+.welcome-mark {
+  color: var(--accent);
+  font-size: 48px;
+  line-height: 1;
+  text-shadow: 0 0 32px var(--accent-muted);
+}
+
+.welcome-title {
+  margin: 12px 0 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.welcome-subtitle {
+  margin: 0 0 16px;
+  color: var(--faint);
+  font-family: var(--font-code);
+  font-size: 12px;
+}
+
+.welcome-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.welcome-files {
+  display: flex;
+  flex-direction: column;
+  width: min(360px, 100%);
+  margin-bottom: 24px;
+}
+
+.welcome-files h2 {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.welcome-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-family: var(--font-code);
+  font-size: 12px;
+  text-align: left;
+}
+
+.welcome-file:hover {
+  background: var(--surface-hover);
+}
+
+.welcome-shortcuts {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 8px 16px;
+  margin: 0;
+  color: var(--muted);
+}
+
+.welcome-shortcuts dt {
+  text-align: right;
+}
+
+.welcome-shortcuts dd {
+  margin: 0;
+}
+
+@keyframes tab-open {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}

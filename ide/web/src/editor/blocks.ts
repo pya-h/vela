@@ -1,0 +1,93 @@
+// Vela's block structure, read line by line for indentation and folding.
+// Blocks open with a keyword at the start of a line (`task`, `when`, …),
+// may have branches (`else`, `case`), and close with `fi`. The words come from
+// the compiler (see `language()` in ide/analysis), so nothing here is a grammar.
+
+export interface BlockWords {
+  blockOpeners: readonly string[];
+  branchKeywords: readonly string[];
+  blockCloser: string;
+}
+
+/** The keyword a line starts with, if it starts with a word at all. */
+export function firstWord(line: string): string | null {
+  return /^\s*([A-Za-z_][A-Za-z0-9_]*)/.exec(line)?.[1] ?? null;
+}
+
+/** The width of a line's leading whitespace, with tabs to the next stop. */
+export function indentWidth(line: string, tabSize: number): number {
+  let width = 0;
+  for (const char of line) {
+    if (char === " ") width++;
+    else if (char === "\t") width += tabSize - (width % tabSize);
+    else break;
+  }
+  return width;
+}
+
+const isBlank = (line: string) => line.trim() === "";
+
+/**
+ * The indentation for a line starting with `current`, given the lines above
+ * it, nearest first:
+ *
+ * - `fi`, `else`, and `case` line up with the keyword that opened their block
+ *   (`case` with its `match`, as cases are written at the match's level);
+ * - after a block opener or a branch, one level deeper, except after `match`,
+ *   whose cases come next at its own level;
+ * - otherwise, the same as the line above.
+ */
+export function indentation(current: string, above: Iterable<string>, words: BlockWords, unit: number, tabSize: number): number {
+  const word = firstWord(current);
+  const closesOrBranches = word !== null && (word === words.blockCloser || words.branchKeywords.includes(word));
+
+  if (closesOrBranches) {
+    let depth = 0;
+    for (const line of above) {
+      const w = firstWord(line);
+      if (w === null) continue;
+      if (w === words.blockCloser) {
+        depth++;
+      } else if (words.blockOpeners.includes(w)) {
+        if (depth === 0) return indentWidth(line, tabSize);
+        depth--;
+      } else if (depth === 0 && w === word && word !== words.blockCloser) {
+        // Another branch of the same block, such as the case before.
+        return indentWidth(line, tabSize);
+      }
+    }
+    return 0;
+  }
+
+  for (const line of above) {
+    if (isBlank(line)) continue;
+    const base = indentWidth(line, tabSize);
+    const w = firstWord(line);
+    if (w === "match") return base;
+    if (w !== null && (words.blockOpeners.includes(w) || words.branchKeywords.includes(w))) return base + unit;
+    return base;
+  }
+  return 0;
+}
+
+/**
+ * The line of the `fi` closing the block opened on line `open` (0-based), or
+ * null if that line opens no block or the block is unclosed.
+ */
+export function closingLine(lines: readonly string[] | ((index: number) => string), count: number, open: number, words: BlockWords): number | null {
+  const line = (i: number) => (typeof lines === "function" ? lines(i) : (lines[i] ?? ""));
+  const opener = firstWord(line(open));
+  if (opener === null || !words.blockOpeners.includes(opener)) return null;
+  let depth = 0;
+  for (let i = open + 1; i < count; i++) {
+    const w = firstWord(line(i));
+    if (w === null) continue;
+    if (words.blockOpeners.includes(w)) {
+      depth++;
+    } else if (w === words.blockCloser) {
+      if (depth === 0) return i;
+      depth--;
+    }
+  }
+  return null;
+}

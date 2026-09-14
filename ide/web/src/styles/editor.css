@@ -1,0 +1,140 @@
+/* Semantic highlighting (classes from the analysis's token classes), hover
+   cards, and completion icons. */
+
+.tok-keyword {
+  color: var(--syn-keyword);
+}
+.tok-type {
+  color: var(--syn-type);
+}
+.tok-type-builtin {
+  color: var(--syn-type-builtin);
+}
+.tok-variant {
+  color: var(--syn-variant);
+}
+.tok-task {
+  color: var(--syn-task);
+}
+.tok-builtin-fn {
+  color: var(--syn-builtin-fn);
+}
+.tok-parameter {
+  color: var(--syn-parameter);
+  font-style: italic;
+}
+.tok-variable {
+  color: var(--syn-variable);
+}
+.tok-field {
+  color: var(--syn-field);
+}
+.tok-number {
+  color: var(--syn-number);
+}
+.tok-string {
+  color: var(--syn-string);
+}
+.tok-escape {
+  color: var(--syn-escape);
+  font-weight: 600;
+}
+.tok-comment {
+  color: var(--syn-comment);
+  font-style: italic;
+}
+.tok-operator {
+  color: var(--syn-operator);
+}
+.tok-punctuation {
+  color: var(--syn-punctuation);
+}
+.tok-invalid {
+  color: var(--syn-invalid);
+  text-decoration: underline wavy var(--syn-invalid);
+  text-underline-offset: 3px;
+}
+
+/* Hover cards ----------------------------------------------------------------- */
+
+.cm-tooltip-hover {
+  animation: fade-in var(--fast) var(--ease);
+}
+
+.vs-hover {
+  max-width: 520px;
+  padding: 8px 12px;
+}
+
+.vs-hover-code {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.vs-hover-doc {
+  margin: 6px 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--font-ui);
+}
+
+.cm-tooltip-lint {
+  animation: fade-in var(--fast) var(--ease);
+}
+
+.cm-lintRange-error {
+  animation: fade-in var(--normal) var(--ease);
+}
+
+/* Completion ----------------------------------------------------------------------- */
+
+.cm-tooltip-autocomplete {
+  animation: pop-in var(--fast) var(--ease);
+}
+
+.cm-completionIcon {
+  width: 18px;
+  padding-right: 6px;
+  opacity: 1;
+  font-family: var(--font-code);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.cm-completionIcon-keyword::after {
+  content: "k";
+  color: var(--syn-keyword);
+}
+.cm-completionIcon-snippet::after {
+  content: "{}";
+  color: var(--secondary);
+}
+.cm-completionIcon-task::after,
+.cm-completionIcon-builtin-fn::after {
+  content: "ƒ";
+  color: var(--syn-task);
+}
+.cm-completionIcon-variable::after {
+  content: "x";
+  color: var(--syn-variable);
+}
+.cm-completionIcon-parameter::after {
+  content: "p";
+  color: var(--syn-parameter);
+}
+.cm-completionIcon-field::after {
+  content: ".";
+  color: var(--syn-field);
+}
+.cm-completionIcon-variant::after {
+  content: "V";
+  color: var(--syn-variant);
+}
+.cm-completionIcon-type::after {
+  content: "T";
+  color: var(--syn-type);
+}

@@ -69,9 +69,12 @@ pub fn origin_allowed(origin: &str, port: u16) -> bool {
 
 /// The `Content-Security-Policy` for the page: only the server's own
 /// scripts, styles, fonts, and connections, plus compiling WebAssembly.
-pub fn content_security_policy(port: u16) -> String {
+/// `nonce` allows the `<style>` elements the editor creates at run time
+/// (CodeMirror adds its styles that way); the page reads it from its
+/// `csp-nonce` meta tag.
+pub fn content_security_policy(port: u16, nonce: &str) -> String {
     format!(
-        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; \
+        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'nonce-{nonce}'; img-src 'self' data:; \
          font-src 'self'; connect-src 'self' ws://127.0.0.1:{port} ws://localhost:{port}; object-src 'none'; \
          base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     )

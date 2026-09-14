@@ -84,7 +84,7 @@ fn item_level_offers_declarations() {
     assert_offers("@@", &["task", "shape", "kind", "task -> type"], &["bind", "show", "Point"]);
     assert_offers(&PROGRAM.replace("    @@\n", "").replace("fi\n", "fi\n@@\n"), &["task", "kind"], &["when"]);
     let task = complete("@@").0.items.into_iter().find(|i| i.kind == CompletionKind::Snippet && i.label == "task").unwrap();
-    assert_eq!(task.snippet.as_deref(), Some("task ${name}(${})\n\t\nfi"));
+    assert_eq!(task.snippet.as_deref(), Some("task ${name}(${})\n\t${0}\nfi"));
 }
 
 #[test]

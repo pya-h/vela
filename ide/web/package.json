@@ -5,13 +5,29 @@
   "description": "Vela Studio's browser UI",
   "type": "module",
   "scripts": {
+    "dev": "vite",
     "build:wasm": "node scripts/build-wasm.mjs",
+    "build": "npm run build:wasm && tsc --noEmit && vite build",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "e2e": "npm run build && cargo build -p vela-studio && playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@types/node": "26.5.1",
     "typescript": "7.0.2",
+    "vite": "8.3.0",
     "vitest": "5.0.0"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "6.20.3",
+    "@codemirror/commands": "6.11.0",
+    "@codemirror/language": "6.12.4",
+    "@codemirror/lint": "6.9.7",
+    "@codemirror/search": "6.7.2",
+    "@codemirror/state": "6.7.4",
+    "@codemirror/view": "6.43.11",
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0"
   }
 }

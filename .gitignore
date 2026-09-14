@@ -6,3 +6,5 @@
 /ide/web/node_modules
 /ide/web/wasm
 /ide/web/dist
+/ide/web/test-results
+/ide/web/playwright-report
