@@ -171,6 +171,21 @@ fn case_offers_the_variants_not_yet_matched() {
 }
 
 #[test]
+fn case_snippets_never_link_fields_of_different_variants() {
+    // Snippet fields with the same name are edited together, so a payload
+    // field name shared by two variants must get two field names.
+    let source = "kind Reading\n    Exact(value: int)\n    Between(value: int, high: int)\n    Missing\nfi\ntask main()\n    bind r = Exact(1)\n    @@\nfi\n";
+    assert_eq!(
+        item(source, "match r").snippet.as_deref(),
+        Some("match r\ncase Exact ${value}\n\t\ncase Between ${value2} ${high}\n\t\ncase Missing\n\t${}\nfi")
+    );
+    let marked = source.replace("    @@\n", "    match r\n    case @@\n    fi\n");
+    assert_eq!(item(&marked, "all remaining cases").snippet.as_deref(), Some("Exact ${value}\n\t\ncase Between ${value2} ${high}\n\t\ncase Missing\n\t${}"));
+    // A single case needs no renaming.
+    assert_eq!(item(&marked, "Between").snippet.as_deref(), Some("Between ${value} ${high}"));
+}
+
+#[test]
 fn shape_literals_offer_the_missing_fields() {
     assert_offers(&in_main("bind q = Point { x: 1, @@ }"), &["y"], &["x", "p"]);
     assert_eq!(item(&in_main("bind q = Point { @@"), "x").snippet.as_deref(), Some("x: ${}"));
@@ -242,6 +257,27 @@ fn hover_reads_declared_types_when_the_file_doesnt_check() {
     assert_eq!(hover(&source, "far", 0).code, "bind far: ^Point");
     assert_eq!(hover(&source, "made", 0).code, "bind made: Point");
     assert_eq!(hover(&source, "c =", 0).code, "bind c: Shape");
+}
+
+#[test]
+fn hover_reads_operators_in_initializers_when_the_file_doesnt_check() {
+    let source = PROGRAM.replace(
+        "    @@\n",
+        "    show(missing)\n    bind less = total < 2\n    bind wrapped = (total == 1)\n    bind both = not less and wrapped\n    \
+         bind mixed = 1 + 2.5\n    bind whole = 2 * total - -(total % 3)\n    bind inner = (total)\n    bind unknown = total + missing\n",
+    );
+    for (needle, code) in [
+        ("less =", "bind less: bool"),
+        ("wrapped =", "bind wrapped: bool"),
+        ("both =", "bind both: bool"),
+        ("mixed =", "bind mixed: float"),
+        ("whole =", "bind whole: int"),
+        ("inner =", "bind inner: int"),
+        // An operand of unknown type leaves the arithmetic's type unknown.
+        ("unknown =", "bind unknown"),
+    ] {
+        assert_eq!(hover(&source, needle, 0).code, code, "at {:?}", needle);
+    }
 }
 
 #[test]

@@ -13,7 +13,11 @@ execFileSync("cargo", ["build", "-p", "vela-analysis-wasm", "--target", "wasm32-
   stdio: "inherit",
 });
 
-const built = join(root, "target", "wasm32-unknown-unknown", "release", "vela_analysis_wasm.wasm");
+// Cargo's target directory may be moved (CARGO_TARGET_DIR, .cargo/config.toml).
+const metadata = JSON.parse(
+  execFileSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], { cwd: root, encoding: "utf8" }),
+);
+const built = join(metadata.target_directory, "wasm32-unknown-unknown", "release", "vela_analysis_wasm.wasm");
 const target = join(web, "wasm", "vela_analysis.wasm");
 mkdirSync(dirname(target), { recursive: true });
 copyFileSync(built, target);

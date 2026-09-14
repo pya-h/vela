@@ -139,7 +139,7 @@ impl<'a> Knowledge<'a> {
             (SymbolKind::Variable, Some("case")) => self.case_binding_type(id),
             (SymbolKind::Variable, _) if !symbol.detail.is_empty() => parse_type(&symbol.detail),
             (SymbolKind::Variable, _) => {
-                // The initializer's type, judged by how it ends: `bind x = Point { … }`.
+                // The initializer's type: `bind x = Point { … }`, `bind ok = a < b`.
                 let name = self.at_byte(symbol.name_range.start)?;
                 if self.token(name + 1) != Some(&Token::Assign) {
                     return None;
@@ -148,7 +148,7 @@ impl<'a> Knowledge<'a> {
                 if last <= name + 1 {
                     return None;
                 }
-                self.expression_type(last, depth + 1)
+                self.span_type(name + 2, last, depth + 1)
             }
             _ => None,
         }
@@ -201,7 +201,7 @@ impl<'a> Knowledge<'a> {
                 let open = self.matching_open(q, &Token::LParen, &Token::RParen)?;
                 let Some(callee) = open.checked_sub(1).and_then(|p| self.ident(p).map(|name| (p, name))) else {
                     // A parenthesized expression.
-                    return self.expression_type(q.checked_sub(1)?, depth + 1);
+                    return self.span_type(open + 1, q.checked_sub(1)?, depth + 1);
                 };
                 let (p, name) = callee;
                 if self.token_before(p) == Some(&Token::New) {
@@ -231,6 +231,56 @@ impl<'a> Knowledge<'a> {
             }
             _ => None,
         }
+    }
+
+    /// The type of the whole expression from position `first` to `last`. Its
+    /// operators outside brackets decide: a comparison or `and`/`or`/`not`
+    /// gives `bool`, and arithmetic gives `float` if any operand is a float
+    /// (as the checker promotes it) and `int` if all are ints. Without
+    /// operators, it is the type of the expression ending at `last`.
+    fn span_type(&self, first: usize, last: usize, depth: usize) -> Option<Type> {
+        if first > last || depth > MAX_DEPTH {
+            return None;
+        }
+        let mut brackets = 0usize;
+        // The end of each operand of the arithmetic, if there is any.
+        let mut operand_ends = Vec::new();
+        // Whether an operand comes next, so that a `-` there is unary minus.
+        let mut expect_operand = true;
+        for p in first..=last {
+            let token = self.token(p)?;
+            match token {
+                Token::LParen | Token::LBrace | Token::LBracket => brackets += 1,
+                Token::RParen | Token::RBrace | Token::RBracket => brackets = brackets.saturating_sub(1),
+                _ if brackets > 0 => {}
+                Token::Eq | Token::Ne | Token::Lt | Token::Gt | Token::Le | Token::Ge | Token::And | Token::Or | Token::Not => {
+                    return Some(Type::Bool);
+                }
+                Token::Range => return None,
+                Token::Plus | Token::Minus | Token::Star | Token::Slash | Token::Percent => {
+                    if !expect_operand {
+                        operand_ends.push(p.checked_sub(1)?);
+                    }
+                    expect_operand = true;
+                    continue;
+                }
+                _ => {}
+            }
+            expect_operand = false;
+        }
+        if operand_ends.is_empty() {
+            return self.expression_type(last, depth);
+        }
+        operand_ends.push(last);
+        let mut all_int = true;
+        for end in operand_ends {
+            match self.expression_type(end, depth + 1) {
+                Some(Type::Float) => return Some(Type::Float),
+                Some(Type::Int) => {}
+                _ => all_int = false,
+            }
+        }
+        all_int.then_some(Type::Int)
     }
 
     /// The position of the bracket that `close` at `q` closes, on the same line.

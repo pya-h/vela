@@ -368,7 +368,7 @@ fn case_items(source: &str, scan: &Scan, k: &Knowledge, case: usize) -> Vec<Comp
         .iter()
         .filter_map(|&id| {
             let variant = k.symbol(id)?;
-            let template = case_template(k, id);
+            let template = case_template(k, id, &mut Vec::new());
             Some(CompletionItem {
                 label: variant.name.clone(),
                 kind: CompletionKind::Variant,
@@ -381,7 +381,8 @@ fn case_items(source: &str, scan: &Scan, k: &Knowledge, case: usize) -> Vec<Comp
         .collect();
     if kind.is_some() && uncovered.len() > 1 {
         let names: Vec<&str> = uncovered.iter().filter_map(|&id| k.symbol(id).map(|v| v.name.as_str())).collect();
-        let cases: Vec<String> = uncovered.iter().map(|&id| case_template(k, id)).collect();
+        let mut used = Vec::new();
+        let cases: Vec<String> = uncovered.iter().map(|&id| case_template(k, id, &mut used)).collect();
         items.push(CompletionItem {
             label: "all remaining cases".to_string(),
             kind: CompletionKind::Snippet,
@@ -395,12 +396,13 @@ fn case_items(source: &str, scan: &Scan, k: &Knowledge, case: usize) -> Vec<Comp
 }
 
 /// `Rectangle ${width} ${height}`: a variant with a field for each binding,
-/// named after its payload fields.
-fn case_template(k: &Knowledge, variant: usize) -> String {
-    let mut names = Vec::new();
+/// named after its payload fields. `used` holds the field names already in
+/// the snippet, so that cases of variants sharing a payload field name get
+/// separate fields.
+fn case_template(k: &Knowledge, variant: usize, used: &mut Vec<String>) -> String {
     let mut text = k.symbol(variant).map(|v| v.name.clone()).unwrap_or_default();
     for (_, field) in k.children(variant) {
-        text.push_str(&format!(" ${{{}}}", unique(&mut names, &field.name)));
+        text.push_str(&format!(" ${{{}}}", unique(used, &field.name)));
     }
     text
 }
@@ -505,7 +507,8 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize) -> Vec<Completi
     for (id, symbol) in visible_locals(k, byte) {
         let Some(Type::Named(kind_name)) = k.type_of_symbol(id) else { continue };
         let Some(kind) = k.global(&kind_name, SymbolKind::Kind) else { continue };
-        let cases: Vec<String> = k.children(kind).map(|(variant, _)| case_template(k, variant)).collect();
+        let mut used = Vec::new();
+        let cases: Vec<String> = k.children(kind).map(|(variant, _)| case_template(k, variant, &mut used)).collect();
         if cases.is_empty() {
             continue;
         }
