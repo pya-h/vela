@@ -1,0 +1,8 @@
+  1 | # Hello world in Vela
+    | comment:# Hello world in Vela
+  3 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  4 |     show("Hello, Vela!")
+    | builtin-fn:show  punctuation:(  string:"Hello, Vela!"  punctuation:)
+  5 | fi
+    | keyword:fi

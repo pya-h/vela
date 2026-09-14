@@ -1,0 +1,26 @@
+  1 | # Fibonacci in Vela
+    | comment:# Fibonacci in Vela
+  3 | task fib(n: int) -> int
+    | keyword:task  task:fib  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  4 |     when n < 2
+    | keyword:when  parameter:n  operator:<  number:2
+  5 |         send n
+    | keyword:send  parameter:n
+  6 |     else
+    | keyword:else
+  7 |         send fib(n - 1) + fib(n - 2)
+    | keyword:send  task:fib  punctuation:(  parameter:n  operator:-  number:1  punctuation:)  operator:+  task:fib  punctuation:(  parameter:n  operator:-  number:2  punctuation:)
+  8 |     fi
+    | keyword:fi
+  9 | fi
+    | keyword:fi
+ 11 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 12 |     each i in 0..10
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:10
+ 13 |         show(fib(i))
+    | builtin-fn:show  punctuation:(  task:fib  punctuation:(  variable:i  punctuation:)  punctuation:)
+ 14 |     fi
+    | keyword:fi
+ 15 | fi
+    | keyword:fi

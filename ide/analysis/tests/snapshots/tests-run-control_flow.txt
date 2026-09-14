@@ -1,0 +1,58 @@
+  1 | # when/else, loop, each, and early send
+    | comment:# when/else, loop, each, and early send
+  3 | task sign(n: int) -> int
+    | keyword:task  task:sign  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  4 |     when n < 0
+    | keyword:when  parameter:n  operator:<  number:0
+  5 |         send -1
+    | keyword:send  operator:-  number:1
+  6 |     fi
+    | keyword:fi
+  7 |     when n == 0
+    | keyword:when  parameter:n  operator:==  number:0
+  8 |         send 0
+    | keyword:send  number:0
+  9 |     fi
+    | keyword:fi
+ 10 |     send 1
+    | keyword:send  number:1
+ 11 | fi
+    | keyword:fi
+ 13 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 14 |     each i in 0..3
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:3
+ 15 |         when i == 1
+    | keyword:when  variable:i  operator:==  number:1
+ 16 |             show("one")
+    | builtin-fn:show  punctuation:(  string:"one"  punctuation:)
+ 17 |         else
+    | keyword:else
+ 18 |             show(i)
+    | builtin-fn:show  punctuation:(  variable:i  punctuation:)
+ 19 |         fi
+    | keyword:fi
+ 20 |     fi
+    | keyword:fi
+ 22 |     hold total = 0
+    | keyword:hold  variable:total  operator:=  number:0
+ 23 |     hold k = 1
+    | keyword:hold  variable:k  operator:=  number:1
+ 24 |     loop k <= 4
+    | keyword:loop  variable:k  operator:<=  number:4
+ 25 |         total = total + k
+    | variable:total  operator:=  variable:total  operator:+  variable:k
+ 26 |         k = k + 1
+    | variable:k  operator:=  variable:k  operator:+  number:1
+ 27 |     fi
+    | keyword:fi
+ 28 |     show(total)
+    | builtin-fn:show  punctuation:(  variable:total  punctuation:)
+ 30 |     show(sign(-5))
+    | builtin-fn:show  punctuation:(  task:sign  punctuation:(  operator:-  number:5  punctuation:)  punctuation:)
+ 31 |     show(sign(0))
+    | builtin-fn:show  punctuation:(  task:sign  punctuation:(  number:0  punctuation:)  punctuation:)
+ 32 |     show(sign(9))
+    | builtin-fn:show  punctuation:(  task:sign  punctuation:(  number:9  punctuation:)  punctuation:)
+ 33 | fi
+    | keyword:fi

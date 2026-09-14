@@ -1,0 +1,34 @@
+  1 | # The kinds example from docs/vela.html
+    | comment:# The kinds example from docs/vela.html
+  3 | kind Shape
+    | keyword:kind  type:Shape
+  4 |     Circle(radius: float)
+    | variant:Circle  punctuation:(  field:radius  punctuation::  type-builtin:float  punctuation:)
+  5 |     Rectangle(width: float, height: float)
+    | variant:Rectangle  punctuation:(  field:width  punctuation::  type-builtin:float  punctuation:,  field:height  punctuation::  type-builtin:float  punctuation:)
+  6 | fi
+    | keyword:fi
+  8 | task area(s: Shape) -> float
+    | keyword:task  task:area  punctuation:(  parameter:s  punctuation::  type:Shape  punctuation:)  operator:->  type-builtin:float
+  9 |     match s
+    | keyword:match  parameter:s
+ 10 |     case Circle r
+    | keyword:case  variant:Circle  variable:r
+ 11 |         send 3.14 * r * r
+    | keyword:send  number:3.14  operator:*  variable:r  operator:*  variable:r
+ 12 |     case Rectangle w h
+    | keyword:case  variant:Rectangle  variable:w  variable:h
+ 13 |         send w * h
+    | keyword:send  variable:w  operator:*  variable:h
+ 14 |     fi
+    | keyword:fi
+ 15 | fi
+    | keyword:fi
+ 17 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 18 |     show(area(Circle(2.5)))
+    | builtin-fn:show  punctuation:(  task:area  punctuation:(  variant:Circle  punctuation:(  number:2.5  punctuation:)  punctuation:)  punctuation:)
+ 19 |     show(area(Rectangle(1.5, 4.5)))
+    | builtin-fn:show  punctuation:(  task:area  punctuation:(  variant:Rectangle  punctuation:(  number:1.5  punctuation:,  number:4.5  punctuation:)  punctuation:)  punctuation:)
+ 20 | fi
+    | keyword:fi

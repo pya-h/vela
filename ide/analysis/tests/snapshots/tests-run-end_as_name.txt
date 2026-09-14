@@ -1,0 +1,20 @@
+  1 | # `end` is not a keyword: blocks close with `fi`, so `end` is an ordinary name.
+    | comment:# `end` is not a keyword: blocks close with `fi`, so `end` is an ordinary name.
+  2 | task last(end: int) -> int
+    | keyword:task  task:last  punctuation:(  parameter:end  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  3 |     send end - 1
+    | keyword:send  parameter:end  operator:-  number:1
+  4 | fi
+    | keyword:fi
+  6 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  7 |     hold end = 5
+    | keyword:hold  variable:end  operator:=  number:5
+  8 |     end = end + 1
+    | variable:end  operator:=  variable:end  operator:+  number:1
+  9 |     show(end)
+    | builtin-fn:show  punctuation:(  variable:end  punctuation:)
+ 10 |     show(last(end))
+    | builtin-fn:show  punctuation:(  task:last  punctuation:(  variable:end  punctuation:)  punctuation:)
+ 11 | fi
+    | keyword:fi

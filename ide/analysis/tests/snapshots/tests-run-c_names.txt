@@ -1,0 +1,112 @@
+  1 | # Names that mean something in C (keywords, macros, the runtime's helpers) are
+    | comment:# Names that mean something in C (keywords, macros, the runtime's helpers) are
+  2 | # ordinary names in Vela.
+    | comment:# ordinary names in Vela.
+  4 | shape Record
+    | keyword:shape  type:Record
+  5 |     default: int
+    | field:default  punctuation::  type-builtin:int
+  6 |     int: float
+    | field:int  punctuation::  type-builtin:float
+  7 |     stdout: text
+    | field:stdout  punctuation::  type-builtin:text
+  8 |     size_t: bool
+    | field:size_t  punctuation::  type-builtin:bool
+  9 | fi
+    | keyword:fi
+ 11 | kind Jump
+    | keyword:kind  type:Jump
+ 12 |     goto(target: int)
+    | variant:goto  punctuation:(  field:target  punctuation::  type-builtin:int  punctuation:)
+ 13 |     register
+    | variant:register
+ 14 |     EOF
+    | variant:EOF
+ 15 | fi
+    | keyword:fi
+ 17 | task show_int(static: int) -> int
+    | keyword:task  task:show_int  punctuation:(  parameter:static  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 18 |     send static + 1
+    | keyword:send  parameter:static  operator:+  number:1
+ 19 | fi
+    | keyword:fi
+ 21 | task fmod(a: float) -> float
+    | keyword:task  task:fmod  punctuation:(  parameter:a  punctuation::  type-builtin:float  punctuation:)  operator:->  type-builtin:float
+ 22 |     send a
+    | keyword:send  parameter:a
+ 23 | fi
+    | keyword:fi
+ 25 | task describe(j: Jump)
+    | keyword:task  task:describe  punctuation:(  parameter:j  punctuation::  type:Jump  punctuation:)
+ 26 |     match j
+    | keyword:match  parameter:j
+ 27 |     case goto while
+    | keyword:case  variant:goto  variable:while
+ 28 |         show(while)
+    | builtin-fn:show  punctuation:(  variable:while  punctuation:)
+ 29 |     case register
+    | keyword:case  variant:register
+ 30 |         show("register")
+    | builtin-fn:show  punctuation:(  string:"register"  punctuation:)
+ 31 |     case EOF
+    | keyword:case  variant:EOF
+ 32 |         show("EOF")
+    | builtin-fn:show  punctuation:(  string:"EOF"  punctuation:)
+ 33 |     fi
+    | keyword:fi
+ 34 | fi
+    | keyword:fi
+ 36 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 37 |     bind char = 1
+    | keyword:bind  variable:char  operator:=  number:1
+ 38 |     hold unsigned = char + 1
+    | keyword:hold  variable:unsigned  operator:=  variable:char  operator:+  number:1
+ 39 |     unsigned = unsigned * 10
+    | variable:unsigned  operator:=  variable:unsigned  operator:*  number:10
+ 40 |     show(unsigned)
+    | builtin-fn:show  punctuation:(  variable:unsigned  punctuation:)
+ 41 |     bind r = Record { default: 3, int: 1.5, stdout: "out", size_t: true }
+    | keyword:bind  variable:r  operator:=  type:Record  punctuation:{  field:default  punctuation::  number:3  punctuation:,  field:int  punctuation::  number:1.5  punctuation:,  field:stdout  punctuation::  string:"out"  punctuation:,  field:size_t  punctuation::  keyword:true  punctuation:}
+ 42 |     show(r.default)
+    | builtin-fn:show  punctuation:(  variable:r  punctuation:.  field:default  punctuation:)
+ 43 |     show(r.int)
+    | builtin-fn:show  punctuation:(  variable:r  punctuation:.  field:int  punctuation:)
+ 44 |     show(r.stdout)
+    | builtin-fn:show  punctuation:(  variable:r  punctuation:.  field:stdout  punctuation:)
+ 45 |     show(r.size_t)
+    | builtin-fn:show  punctuation:(  variable:r  punctuation:.  field:size_t  punctuation:)
+ 46 |     show(show_int(41))
+    | builtin-fn:show  punctuation:(  task:show_int  punctuation:(  number:41  punctuation:)  punctuation:)
+ 47 |     show(fmod(2.5))
+    | builtin-fn:show  punctuation:(  task:fmod  punctuation:(  number:2.5  punctuation:)  punctuation:)
+ 48 |     describe(goto(7))
+    | task:describe  punctuation:(  variant:goto  punctuation:(  number:7  punctuation:)  punctuation:)
+ 49 |     describe(register)
+    | task:describe  punctuation:(  variant:register  punctuation:)
+ 50 |     describe(EOF)
+    | task:describe  punctuation:(  variant:EOF  punctuation:)
+ 51 |     each NULL in 0..2
+    | keyword:each  variable:NULL  keyword:in  number:0  operator:..  number:2
+ 52 |         show(NULL)
+    | builtin-fn:show  punctuation:(  variable:NULL  punctuation:)
+ 53 |     fi
+    | keyword:fi
+ 54 |     bind vela_x = 5
+    | keyword:bind  variable:vela_x  operator:=  number:5
+ 55 |     show(vela_x)
+    | builtin-fn:show  punctuation:(  variable:vela_x  punctuation:)
+ 56 |     bind boxed = new Record(r)
+    | keyword:bind  variable:boxed  operator:=  keyword:new  type:Record  punctuation:(  variable:r  punctuation:)
+ 57 |     show(boxed^.stdout)
+    | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:.  field:stdout  punctuation:)
+ 58 |     free(boxed)
+    | keyword:free  punctuation:(  variable:boxed  punctuation:)
+ 59 |     bind message = new text("boxed text")
+    | keyword:bind  variable:message  operator:=  keyword:new  type-builtin:text  punctuation:(  string:"boxed text"  punctuation:)
+ 60 |     show(message^)
+    | builtin-fn:show  punctuation:(  variable:message  operator:^  punctuation:)
+ 61 |     free(message)
+    | keyword:free  punctuation:(  variable:message  punctuation:)
+ 62 | fi
+    | keyword:fi

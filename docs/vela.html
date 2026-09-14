@@ -419,7 +419,14 @@ CC=clang cargo test</pre>
         <code>vela::lexer::highlight</code> splits source into tokens without stopping at errors (for editors), and
         <code>lexer::KEYWORDS</code> and <code>ast::BUILTIN_TYPES</code> list the language's reserved words and types.
       </p>
-      <p>To lint the compiler:</p>
+      <p>
+        The repository is a Cargo workspace: the compiler is the default member, and Vela Studio's crates live under
+        <code>ide/</code> (so far <code>ide/analysis</code>, the highlighting, diagnostics, outline, and
+        go-to-definition engine built on the compiler). Plain <code>cargo build</code> and <code>cargo test</code>
+        cover only the compiler, which has no dependencies; add <code>--workspace</code> to include the IDE crates.
+      </p>
+      <pre>cargo test --workspace</pre>
+      <p>To lint the compiler (or everything, with <code>--workspace</code>):</p>
       <pre>cargo clippy --all-targets</pre>
       <p>
         The compiler's own code may not use <code>unwrap()</code>, <code>expect()</code>, <code>panic!</code>, or

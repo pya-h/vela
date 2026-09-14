@@ -1,0 +1,72 @@
+  1 | # Different cases may bind the same names, and the matched value is
+    | comment:# Different cases may bind the same names, and the matched value is
+  2 | # evaluated exactly once.
+    | comment:# evaluated exactly once.
+  4 | kind Pair
+    | keyword:kind  type:Pair
+  5 |     Ints(a: int, b: int)
+    | variant:Ints  punctuation:(  field:a  punctuation::  type-builtin:int  punctuation:,  field:b  punctuation::  type-builtin:int  punctuation:)
+  6 |     Floats(a: float, b: float)
+    | variant:Floats  punctuation:(  field:a  punctuation::  type-builtin:float  punctuation:,  field:b  punctuation::  type-builtin:float  punctuation:)
+  7 |     Nothing(ok: bool)
+    | variant:Nothing  punctuation:(  field:ok  punctuation::  type-builtin:bool  punctuation:)
+  8 | fi
+    | keyword:fi
+ 10 | task make(n: int) -> Pair
+    | keyword:task  task:make  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Pair
+ 11 |     show("make")
+    | builtin-fn:show  punctuation:(  string:"make"  punctuation:)
+ 12 |     when n == 0
+    | keyword:when  parameter:n  operator:==  number:0
+ 13 |         send Ints(1, 2)
+    | keyword:send  variant:Ints  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+ 14 |     fi
+    | keyword:fi
+ 15 |     send Floats(1.5, 2.5)
+    | keyword:send  variant:Floats  punctuation:(  number:1.5  punctuation:,  number:2.5  punctuation:)
+ 16 | fi
+    | keyword:fi
+ 18 | task describe(p: Pair)
+    | keyword:task  task:describe  punctuation:(  parameter:p  punctuation::  type:Pair  punctuation:)
+ 19 |     match p
+    | keyword:match  parameter:p
+ 20 |     case Ints x y
+    | keyword:case  variant:Ints  variable:x  variable:y
+ 21 |         show(x + y)
+    | builtin-fn:show  punctuation:(  variable:x  operator:+  variable:y  punctuation:)
+ 22 |     case Floats x y
+    | keyword:case  variant:Floats  variable:x  variable:y
+ 23 |         show(x + y)
+    | builtin-fn:show  punctuation:(  variable:x  operator:+  variable:y  punctuation:)
+ 24 |     case Nothing x
+    | keyword:case  variant:Nothing  variable:x
+ 25 |         show(x)
+    | builtin-fn:show  punctuation:(  variable:x  punctuation:)
+ 26 |     fi
+    | keyword:fi
+ 27 | fi
+    | keyword:fi
+ 29 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 30 |     match make(0)
+    | keyword:match  task:make  punctuation:(  number:0  punctuation:)
+ 31 |     case Ints x y
+    | keyword:case  variant:Ints  variable:x  variable:y
+ 32 |         show(x * y)
+    | builtin-fn:show  punctuation:(  variable:x  operator:*  variable:y  punctuation:)
+ 33 |     case Floats x y
+    | keyword:case  variant:Floats  variable:x  variable:y
+ 34 |         show(x * y)
+    | builtin-fn:show  punctuation:(  variable:x  operator:*  variable:y  punctuation:)
+ 35 |     case Nothing x
+    | keyword:case  variant:Nothing  variable:x
+ 36 |         show(x)
+    | builtin-fn:show  punctuation:(  variable:x  punctuation:)
+ 37 |     fi
+    | keyword:fi
+ 38 |     describe(make(1))
+    | task:describe  punctuation:(  task:make  punctuation:(  number:1  punctuation:)  punctuation:)
+ 39 |     describe(Nothing(true))
+    | task:describe  punctuation:(  variant:Nothing  punctuation:(  keyword:true  punctuation:)  punctuation:)
+ 40 | fi
+    | keyword:fi

@@ -1,0 +1,288 @@
+//! Diagnostics, outline, go-to-definition, and highlighting of half-typed
+//! code, plus a tolerance test that runs every request on every prefix of the
+//! example programs.
+
+// A panic in a test is a test failure, so these lints do not apply here.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use vela_analysis::{Analysis, Diagnostic, LineIndex, Location, OutlineItem, Severity, SymbolKind, TokenClass};
+
+/// The UTF-16 offset of the `nth` (0-based) occurrence of `needle`.
+fn at(source: &str, needle: &str, nth: usize) -> usize {
+    let byte = source.match_indices(needle).nth(nth).unwrap_or_else(|| panic!("no {:?} #{}", needle, nth)).0;
+    LineIndex::new(source).utf16_of(byte)
+}
+
+/// The text of a UTF-16 location.
+fn text(source: &str, location: Location) -> String {
+    let index = LineIndex::new(source);
+    source[index.byte_of_utf16(location.from)..index.byte_of_utf16(location.to)].to_string()
+}
+
+/// Asserts that the name starting at `(needle, nth)` (the `nth` occurrence
+/// of `needle`) is declared at the name starting at `declaration`.
+fn assert_definition(source: &str, name_use: (&str, usize), declaration: (&str, usize)) {
+    let name: String = declaration.0.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+    let found = Analysis::new(source).definition(at(source, name_use.0, name_use.1));
+    let expected = at(source, declaration.0, declaration.1);
+    let expected = Location { from: expected, to: expected + name.len() };
+    assert_eq!(found, Some(expected), "{:?} should go to {:?}", name_use, declaration);
+}
+
+fn class_at(source: &str, needle: &str, nth: usize) -> TokenClass {
+    let offset = at(source, needle, nth);
+    Analysis::new(source).tokens().into_iter().find(|t| t.from == offset).unwrap_or_else(|| panic!("no token at {:?}", needle)).class
+}
+
+const SHAPES: &str = "\
+shape Point
+    x: int
+    y: int
+fi
+
+shape Size
+    x: int
+fi
+
+kind Light
+    Red
+    Dimmed(level: int)
+fi
+
+task main()
+    bind p = Point { y: 2, x: 1 }
+    bind s = Size { x: 3 }
+    show(p.x + s.x)
+    show(total(p))
+    match Dimmed(4)
+    case Dimmed level
+        show(level)
+    case Red
+        show(0)
+    fi
+fi
+
+task total(q: Point) -> int
+    send q.x + q.y
+fi
+";
+
+#[test]
+fn definitions_of_declarations_and_uses() {
+    // A task used before its declaration.
+    assert_definition(SHAPES, ("total", 0), ("total", 1));
+    // A declaration goes to itself.
+    assert_definition(SHAPES, ("total", 1), ("total", 1));
+    // Variables, parameters, variants, types, and case bindings.
+    assert_definition(SHAPES, ("p.x", 0), ("p =", 0));
+    assert_definition(SHAPES, ("q.x", 0), ("q:", 0));
+    assert_definition(SHAPES, ("Dimmed(4)", 0), ("Dimmed(level", 0));
+    assert_definition(SHAPES, ("Point {", 0), ("Point\n", 0));
+    assert_definition(SHAPES, ("level)", 0), ("level\n", 0));
+}
+
+#[test]
+fn field_definitions_use_the_type_of_the_value() {
+    // Two shapes have a field `x`: the checker's types pick the right one.
+    let analysis = Analysis::new(SHAPES);
+    let point_x = at(SHAPES, "x: int", 0);
+    let size_x = at(SHAPES, "x: int", 1);
+    let go = |needle: &str| analysis.definition(at(SHAPES, needle, 0) + needle.len() - 1).map(|l| l.from);
+    assert_eq!(go("p.x"), Some(point_x));
+    assert_eq!(go("s.x"), Some(size_x));
+    // Shape literal fields, in any order.
+    assert_eq!(go("{ y"), Some(at(SHAPES, "y: int", 0)));
+    assert_eq!(go("Size { x"), Some(size_x));
+}
+
+#[test]
+fn field_definitions_fall_back_to_unique_names_when_the_file_has_errors() {
+    let source = format!("{}task broken()\n    bind q = Point {{ x: 1, y: 2 }}\n    show(q.y)\n    show(q.x)\n    show(missing)\nfi\n", SHAPES);
+    let analysis = Analysis::new(&source);
+    assert_eq!(analysis.diagnostics().len(), 1);
+    // Only `Point` has `y`; both shapes have `x`, so that one is unknown.
+    let y_use = at(&source, "q.y", 0) + 2;
+    assert_eq!(analysis.definition(y_use).map(|l| l.from), Some(at(&source, "y: int", 0)));
+    assert_eq!(analysis.definition(at(&source, "q.x", 0) + 2), None);
+}
+
+#[test]
+fn variables_are_scoped_to_their_blocks() {
+    let source = "\
+task main()
+    when true
+        bind label = 1
+        show(label)
+    else
+        show(label)
+        bind label = 2
+        show(label)
+    fi
+    each i in 0..3
+        show(i)
+    fi
+fi
+";
+    assert_definition(source, ("label", 1), ("label", 0));
+    // The `else` branch doesn't see the `when` branch's variable...
+    assert_eq!(Analysis::new(source).definition(at(source, "label", 2) + 1), None);
+    assert_eq!(class_at(source, "label", 2), TokenClass::Variable);
+    // ...and has its own.
+    assert_definition(source, ("label", 4), ("label", 3));
+    assert_definition(source, ("i)", 0), ("i in", 0));
+}
+
+#[test]
+fn half_typed_code_still_resolves_and_highlights() {
+    // The first task is never closed and a string is unterminated.
+    let source = "\
+task first(n: int) -> int
+    bind twice = n * 2
+    show(\"not done
+    send twice
+
+task second()
+    show(first(1) @)
+fi
+";
+    let analysis = Analysis::new(source);
+    assert_definition(source, ("twice", 1), ("twice", 0));
+    assert_definition(source, ("n * 2", 0), ("n:", 0));
+    assert_definition(source, ("first(1)", 0), ("first(n", 0));
+    assert_eq!(class_at(source, "\"not done", 0), TokenClass::String);
+    assert_eq!(class_at(source, "send", 0), TokenClass::Keyword);
+    assert_eq!(class_at(source, "second", 0), TokenClass::Task);
+    assert_eq!(class_at(source, "@", 0), TokenClass::Invalid);
+    let outline: Vec<(String, usize)> = analysis.outline().into_iter().map(|item| (item.name, item.to)).collect();
+    // The unclosed task ends at its last token.
+    let first_end = at(source, "twice\n\ntask", 0) + "twice".len();
+    assert_eq!(outline, [("first".to_string(), first_end), ("second".to_string(), at(source, "\nfi", 0) + 3)]);
+}
+
+#[test]
+fn diagnostics_cover_the_token_the_error_points_at() {
+    assert_eq!(Analysis::new(SHAPES).diagnostics(), []);
+
+    // Non-ASCII text before the error: offsets are UTF-16.
+    let source = "task main()\n    show(\"é𝄞\")\n    show(missing)\nfi\n";
+    let from = at(source, "missing", 0);
+    assert_eq!(
+        Analysis::new(source).diagnostics(),
+        [Diagnostic {
+            from,
+            to: from + 7,
+            line: Some(3),
+            col: Some(10),
+            message: "unknown variable 'missing'".to_string(),
+            severity: Severity::Error,
+        }]
+    );
+
+    // An error inside a token covers one character; one at the end of a line covers nothing.
+    let escape = "task main()\n    show(\"a\\qb\")\nfi\n";
+    let d = &Analysis::new(escape).diagnostics()[0];
+    assert_eq!((d.from, d.to), (at(escape, "\\q", 0), at(escape, "\\q", 0) + 1));
+    let eol = "task main()\n    bind x =\nfi\n";
+    let d = &Analysis::new(eol).diagnostics()[0];
+    assert_eq!((d.from, d.to, d.message.as_str()), (at(eol, "=\n", 0) + 1, at(eol, "=\n", 0) + 1, "expected an expression, got end of line"));
+}
+
+#[test]
+fn outline_lists_items_with_their_members() {
+    let analysis = Analysis::new(SHAPES);
+    let summary = |item: &OutlineItem| {
+        let children: Vec<String> = item.children.iter().map(|c| format!("{} {}", c.name, c.detail)).collect();
+        (item.name.clone(), item.kind, item.detail.clone(), children)
+    };
+    let outline: Vec<_> = analysis.outline().iter().map(summary).collect();
+    assert_eq!(
+        outline,
+        [
+            ("Point".into(), SymbolKind::Shape, "".into(), vec!["x int".to_string(), "y int".to_string()]),
+            ("Size".into(), SymbolKind::Shape, "".into(), vec!["x int".to_string()]),
+            ("Light".into(), SymbolKind::Kind, "".into(), vec!["Red ".to_string(), "Dimmed (level: int)".to_string()]),
+            ("main".into(), SymbolKind::Task, "()".into(), vec![]),
+            ("total".into(), SymbolKind::Task, "(q: Point) -> int".into(), vec![]),
+        ]
+    );
+    let light = &analysis.outline()[2];
+    assert_eq!(light.children[1].children[0].name, "level");
+    assert_eq!(text(SHAPES, Location { from: light.from, to: light.to }), "kind Light\n    Red\n    Dimmed(level: int)\nfi");
+    assert_eq!(text(SHAPES, Location { from: light.name_from, to: light.name_to }), "Light");
+}
+
+#[test]
+fn results_serialize_to_the_json_the_editor_reads() {
+    let source = "task main()\n    show(x)\nfi\n";
+    let analysis = Analysis::new(source);
+    let json = serde_json::to_value((analysis.tokens()[0].clone(), &analysis.diagnostics(), &analysis.outline())).unwrap();
+    assert_eq!(
+        json,
+        serde_json::json!([
+            { "from": 0, "to": 4, "class": "keyword" },
+            [{ "from": 21, "to": 22, "line": 2, "col": 10, "message": "unknown variable 'x'", "severity": "error" }],
+            [{ "name": "main", "kind": "task", "detail": "()", "from": 0, "to": 26, "nameFrom": 5, "nameTo": 9, "children": [] }]
+        ])
+    );
+}
+
+fn vela_files(dir: &str) -> Vec<PathBuf> {
+    let mut files: Vec<PathBuf> = fs::read_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(dir))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|ext| ext == "vela"))
+        .collect();
+    files.sort();
+    files
+}
+
+/// Runs every request on `source` and checks the results are well formed.
+fn check_well_formed(source: &str, what: &str) {
+    let analysis = Analysis::new(source);
+    let length = source.encode_utf16().count();
+    let tokens = analysis.tokens();
+    let mut end = 0;
+    for token in &tokens {
+        assert!(token.from >= end && token.from < token.to && token.to <= length, "{}: {:?}", what, token);
+        end = token.to;
+    }
+    for d in analysis.diagnostics() {
+        assert!(d.from <= d.to && d.to <= length, "{}: {:?}", what, d);
+    }
+    fn check_outline(items: &[OutlineItem], length: usize, what: &str) {
+        for item in items {
+            assert!(item.from <= item.name_from && item.name_to <= item.to && item.to <= length, "{}: {:?}", what, item);
+            check_outline(&item.children, length, what);
+        }
+    }
+    check_outline(&analysis.outline(), length, what);
+    // A definition always names the same identifier as the name it came from.
+    let names = [TokenClass::Task, TokenClass::Type, TokenClass::Variant, TokenClass::Field, TokenClass::Parameter, TokenClass::Variable];
+    for token in tokens.iter().filter(|t| names.contains(&t.class)) {
+        if let Some(target) = analysis.definition(token.from) {
+            let name = text(source, Location { from: token.from, to: token.to });
+            assert_eq!(text(source, target), name, "{}: definition of {:?}", what, name);
+        }
+    }
+}
+
+#[test]
+fn every_request_works_on_every_prefix_of_the_examples() {
+    // Every half-typed state of a real program, cut at each token boundary.
+    for file in vela_files("examples") {
+        let source = fs::read_to_string(&file).unwrap();
+        let mut cuts: Vec<usize> = vela::lexer::highlight(&source).iter().flat_map(|t| [t.range.start, t.range.end]).collect();
+        cuts.dedup();
+        for offset in cuts {
+            check_well_formed(&source[..offset], &format!("{} cut at byte {}", file.display(), offset));
+        }
+    }
+    for dir in ["tests/run", "tests/fail"] {
+        for file in vela_files(dir) {
+            check_well_formed(&fs::read_to_string(&file).unwrap(), &file.display().to_string());
+        }
+    }
+}

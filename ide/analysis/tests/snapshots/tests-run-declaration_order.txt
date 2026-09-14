@@ -1,0 +1,88 @@
+  1 | # Types may be used before they are declared, and may point to themselves.
+    | comment:# Types may be used before they are declared, and may point to themselves.
+  3 | shape Segment
+    | keyword:shape  type:Segment
+  4 |     from: Point
+    | field:from  punctuation::  type:Point
+  5 |     to: Point
+    | field:to  punctuation::  type:Point
+  6 | fi
+    | keyword:fi
+  8 | kind List
+    | keyword:kind  type:List
+  9 |     Nil
+    | variant:Nil
+ 10 |     Cons(head: Point, tail: ^List)
+    | variant:Cons  punctuation:(  field:head  punctuation::  type:Point  punctuation:,  field:tail  punctuation::  operator:^  type:List  punctuation:)
+ 11 | fi
+    | keyword:fi
+ 13 | shape Point
+    | keyword:shape  type:Point
+ 14 |     x: int
+    | field:x  punctuation::  type-builtin:int
+ 15 |     y: int
+    | field:y  punctuation::  type-builtin:int
+ 16 | fi
+    | keyword:fi
+ 18 | shape Node
+    | keyword:shape  type:Node
+ 19 |     value: int
+    | field:value  punctuation::  type-builtin:int
+ 20 |     next: ^Node
+    | field:next  punctuation::  operator:^  type:Node
+ 21 | fi
+    | keyword:fi
+ 23 | task length(l: List) -> int
+    | keyword:task  task:length  punctuation:(  parameter:l  punctuation::  type:List  punctuation:)  operator:->  type-builtin:int
+ 24 |     match l
+    | keyword:match  parameter:l
+ 25 |     case Nil
+    | keyword:case  variant:Nil
+ 26 |         send 0
+    | keyword:send  number:0
+ 27 |     case Cons head tail
+    | keyword:case  variant:Cons  variable:head  variable:tail
+ 28 |         send 1 + length(tail^)
+    | keyword:send  number:1  operator:+  task:length  punctuation:(  variable:tail  operator:^  punctuation:)
+ 29 |     fi
+    | keyword:fi
+ 30 | fi
+    | keyword:fi
+ 32 | task sum_x(l: List) -> int
+    | keyword:task  task:sum_x  punctuation:(  parameter:l  punctuation::  type:List  punctuation:)  operator:->  type-builtin:int
+ 33 |     match l
+    | keyword:match  parameter:l
+ 34 |     case Nil
+    | keyword:case  variant:Nil
+ 35 |         send 0
+    | keyword:send  number:0
+ 36 |     case Cons head tail
+    | keyword:case  variant:Cons  variable:head  variable:tail
+ 37 |         send head.x + sum_x(tail^)
+    | keyword:send  variable:head  punctuation:.  field:x  operator:+  task:sum_x  punctuation:(  variable:tail  operator:^  punctuation:)
+ 38 |     fi
+    | keyword:fi
+ 39 | fi
+    | keyword:fi
+ 41 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 42 |     bind s = Segment { from: Point { x: 1, y: 2 }, to: Point { x: 3, y: 4 } }
+    | keyword:bind  variable:s  operator:=  type:Segment  punctuation:{  field:from  punctuation::  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:,  field:to  punctuation::  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:}
+ 43 |     show(s.to.y - s.from.y)
+    | builtin-fn:show  punctuation:(  variable:s  punctuation:.  field:to  punctuation:.  field:y  operator:-  variable:s  punctuation:.  field:from  punctuation:.  field:y  punctuation:)
+ 44 |     bind empty: ^List = new List(Nil)
+    | keyword:bind  variable:empty  punctuation::  operator:^  type:List  operator:=  keyword:new  type:List  punctuation:(  variant:Nil  punctuation:)
+ 45 |     bind one: ^List = new List(Cons(Point { x: 5, y: 0 }, empty))
+    | keyword:bind  variable:one  punctuation::  operator:^  type:List  operator:=  keyword:new  type:List  punctuation:(  variant:Cons  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:5  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:,  variable:empty  punctuation:)  punctuation:)
+ 46 |     bind two = Cons(Point { x: 7, y: 0 }, one)
+    | keyword:bind  variable:two  operator:=  variant:Cons  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:7  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:,  variable:one  punctuation:)
+ 47 |     show(length(two))
+    | builtin-fn:show  punctuation:(  task:length  punctuation:(  variable:two  punctuation:)  punctuation:)
+ 48 |     show(sum_x(two))
+    | builtin-fn:show  punctuation:(  task:sum_x  punctuation:(  variable:two  punctuation:)  punctuation:)
+ 49 |     free(one)
+    | keyword:free  punctuation:(  variable:one  punctuation:)
+ 50 |     free(empty)
+    | keyword:free  punctuation:(  variable:empty  punctuation:)
+ 51 | fi
+    | keyword:fi

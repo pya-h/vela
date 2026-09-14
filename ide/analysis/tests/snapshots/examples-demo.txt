@@ -1,0 +1,68 @@
+  1 | # Vela demo: functions, shapes, pointers, control flow
+    | comment:# Vela demo: functions, shapes, pointers, control flow
+  3 | shape Point
+    | keyword:shape  type:Point
+  4 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  5 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  6 | fi
+    | keyword:fi
+  8 | task add(a: int, b: int) -> int
+    | keyword:task  task:add  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  9 |     send a + b
+    | keyword:send  parameter:a  operator:+  parameter:b
+ 10 | fi
+    | keyword:fi
+ 12 | task manhattan(p: Point) -> int
+    | keyword:task  task:manhattan  punctuation:(  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:int
+ 13 |     send p.x + p.y
+    | keyword:send  parameter:p  punctuation:.  field:x  operator:+  parameter:p  punctuation:.  field:y
+ 14 | fi
+    | keyword:fi
+ 16 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 17 |     bind sum = add(3, 4)
+    | keyword:bind  variable:sum  operator:=  task:add  punctuation:(  number:3  punctuation:,  number:4  punctuation:)
+ 18 |     show(sum)
+    | builtin-fn:show  punctuation:(  variable:sum  punctuation:)
+ 20 |     bind p = Point { x: 10, y: 20 }
+    | keyword:bind  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:10  punctuation:,  field:y  punctuation::  number:20  punctuation:}
+ 21 |     show(p.x)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:x  punctuation:)
+ 22 |     show(manhattan(p))
+    | builtin-fn:show  punctuation:(  task:manhattan  punctuation:(  variable:p  punctuation:)  punctuation:)
+ 24 |     hold i = 0
+    | keyword:hold  variable:i  operator:=  number:0
+ 25 |     loop i < 5
+    | keyword:loop  variable:i  operator:<  number:5
+ 26 |         show(i)
+    | builtin-fn:show  punctuation:(  variable:i  punctuation:)
+ 27 |         i = i + 1
+    | variable:i  operator:=  variable:i  operator:+  number:1
+ 28 |     fi
+    | keyword:fi
+ 30 |     each n in 0..3
+    | keyword:each  variable:n  keyword:in  number:0  operator:..  number:3
+ 31 |         show(n)
+    | builtin-fn:show  punctuation:(  variable:n  punctuation:)
+ 32 |     fi
+    | keyword:fi
+ 34 |     when sum > 5
+    | keyword:when  variable:sum  operator:>  number:5
+ 35 |         show("big")
+    | builtin-fn:show  punctuation:(  string:"big"  punctuation:)
+ 36 |     else
+    | keyword:else
+ 37 |         show("small")
+    | builtin-fn:show  punctuation:(  string:"small"  punctuation:)
+ 38 |     fi
+    | keyword:fi
+ 40 |     bind ptr: ^int = new int(42)
+    | keyword:bind  variable:ptr  punctuation::  operator:^  type-builtin:int  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)
+ 41 |     show(ptr^)
+    | builtin-fn:show  punctuation:(  variable:ptr  operator:^  punctuation:)
+ 42 |     free(ptr)
+    | keyword:free  punctuation:(  variable:ptr  punctuation:)
+ 43 | fi
+    | keyword:fi

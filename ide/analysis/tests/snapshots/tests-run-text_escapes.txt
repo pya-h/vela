@@ -1,0 +1,30 @@
+  1 | # Text reaches C exactly as written: no trigraphs, raw control bytes, or
+    | comment:# Text reaches C exactly as written: no trigraphs, raw control bytes, or
+  2 | # escapes that swallow the characters after them.
+    | comment:# escapes that swallow the characters after them.
+  3 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  4 |     show("what??!")
+    | builtin-fn:show  punctuation:(  string:"what??!"  punctuation:)
+  5 |     show("a??/b")
+    | builtin-fn:show  punctuation:(  string:"a??/b"  punctuation:)
+  6 |     show("??=??(??)??<??>??'??-")
+    | builtin-fn:show  punctuation:(  string:"??=??(??)??<??>??'??-"  punctuation:)
+  7 |     show("tab\tseparated")
+    | builtin-fn:show  punctuation:(  string:"tab  escape:\t  string:separated"  punctuation:)
+  8 |     show("quote \" and backslash \\")
+    | builtin-fn:show  punctuation:(  string:"quote   escape:\"  string: and backslash   escape:\\  string:"  punctuation:)
+  9 |     show("ab")
+    | builtin-fn:show  punctuation:(  string:"ab"  punctuation:)
+ 10 |     show("é1")
+    | builtin-fn:show  punctuation:(  string:"é1"  punctuation:)
+ 11 |     show("héllo, wörld ✓7")
+    | builtin-fn:show  punctuation:(  string:"héllo, wörld ✓7"  punctuation:)
+ 12 |     show("100% sure")
+    | builtin-fn:show  punctuation:(  string:"100% sure"  punctuation:)
+ 13 |     # Text is a C string, so it ends at a NUL (a known limitation).
+    | comment:# Text is a C string, so it ends at a NUL (a known limitation).
+ 14 |     show("ab\0cd")
+    | builtin-fn:show  punctuation:(  string:"ab  escape:\0  string:cd"  punctuation:)
+ 15 | fi
+    | keyword:fi

@@ -1,0 +1,90 @@
+  1 | # Variables, parameters, and case bindings that are never read are valid Vela,
+    | comment:# Variables, parameters, and case bindings that are never read are valid Vela,
+  2 | # and their generated C must not trigger unused-variable warnings.
+    | comment:# and their generated C must not trigger unused-variable warnings.
+  3 | shape Point
+    | keyword:shape  type:Point
+  4 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  5 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  6 | fi
+    | keyword:fi
+  8 | kind Reading
+    | keyword:kind  type:Reading
+  9 |     Sample(value: int, weight: int)
+    | variant:Sample  punctuation:(  field:value  punctuation::  type-builtin:int  punctuation:,  field:weight  punctuation::  type-builtin:int  punctuation:)
+ 10 |     Missing
+    | variant:Missing
+ 11 | fi
+    | keyword:fi
+ 13 | task first(a: int, b: int) -> int
+    | keyword:task  task:first  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 14 |     send a
+    | keyword:send  parameter:a
+ 15 | fi
+    | keyword:fi
+ 17 | task ignore(p: Point)
+    | keyword:task  task:ignore  punctuation:(  parameter:p  punctuation::  type:Point  punctuation:)
+ 18 |     show("ignored")
+    | builtin-fn:show  punctuation:(  string:"ignored"  punctuation:)
+ 19 | fi
+    | keyword:fi
+ 21 | task value(r: Reading) -> int
+    | keyword:task  task:value  punctuation:(  parameter:r  punctuation::  type:Reading  punctuation:)  operator:->  type-builtin:int
+ 22 |     match r
+    | keyword:match  parameter:r
+ 23 |     case Sample v w
+    | keyword:case  variant:Sample  variable:v  variable:w
+ 24 |         send v
+    | keyword:send  variable:v
+ 25 |     case Missing
+    | keyword:case  variant:Missing
+ 26 |         send 0
+    | keyword:send  number:0
+ 27 |     fi
+    | keyword:fi
+ 28 | fi
+    | keyword:fi
+ 30 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 31 |     bind unused = 1
+    | keyword:bind  variable:unused  operator:=  number:1
+ 32 |     hold overwritten = 2
+    | keyword:hold  variable:overwritten  operator:=  number:2
+ 33 |     overwritten = 3
+    | variable:overwritten  operator:=  number:3
+ 34 |     hold moved = Point { x: 1, y: 2 }
+    | keyword:hold  variable:moved  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+ 35 |     moved.x = 10
+    | variable:moved  punctuation:.  field:x  operator:=  number:10
+ 36 |     bind boxed = new int(4)
+    | keyword:bind  variable:boxed  operator:=  keyword:new  type-builtin:int  punctuation:(  number:4  punctuation:)
+ 37 |     boxed^ = 5
+    | variable:boxed  operator:^  operator:=  number:5
+ 38 |     bind later = 6
+    | keyword:bind  variable:later  operator:=  number:6
+ 39 |     when true
+    | keyword:when  keyword:true
+ 40 |         show(later)
+    | builtin-fn:show  punctuation:(  variable:later  punctuation:)
+ 41 |         bind inner = 7
+    | keyword:bind  variable:inner  operator:=  number:7
+ 42 |     else
+    | keyword:else
+ 43 |         bind inner = 8
+    | keyword:bind  variable:inner  operator:=  number:8
+ 44 |         show(inner)
+    | builtin-fn:show  punctuation:(  variable:inner  punctuation:)
+ 45 |     fi
+    | keyword:fi
+ 46 |     ignore(Point { x: 0, y: 0 })
+    | task:ignore  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:)
+ 47 |     show(first(1, 2))
+    | builtin-fn:show  punctuation:(  task:first  punctuation:(  number:1  punctuation:,  number:2  punctuation:)  punctuation:)
+ 48 |     show(value(Sample(9, 1)))
+    | builtin-fn:show  punctuation:(  task:value  punctuation:(  variant:Sample  punctuation:(  number:9  punctuation:,  number:1  punctuation:)  punctuation:)  punctuation:)
+ 49 |     show(value(Missing))
+    | builtin-fn:show  punctuation:(  task:value  punctuation:(  variant:Missing  punctuation:)  punctuation:)
+ 50 | fi
+    | keyword:fi

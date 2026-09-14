@@ -1,0 +1,52 @@
+  1 | # Kinds and pattern matching
+    | comment:# Kinds and pattern matching
+  3 | kind Shape
+    | keyword:kind  type:Shape
+  4 |     Circle(radius: float)
+    | variant:Circle  punctuation:(  field:radius  punctuation::  type-builtin:float  punctuation:)
+  5 |     Rectangle(width: float, height: float)
+    | variant:Rectangle  punctuation:(  field:width  punctuation::  type-builtin:float  punctuation:,  field:height  punctuation::  type-builtin:float  punctuation:)
+  6 |     Dot
+    | variant:Dot
+  7 | fi
+    | keyword:fi
+  9 | task describe(s: Shape)
+    | keyword:task  task:describe  punctuation:(  parameter:s  punctuation::  type:Shape  punctuation:)
+ 10 |     match s
+    | keyword:match  parameter:s
+ 11 |     case Circle r
+    | keyword:case  variant:Circle  variable:r
+ 12 |         show("circle")
+    | builtin-fn:show  punctuation:(  string:"circle"  punctuation:)
+ 13 |         show(r)
+    | builtin-fn:show  punctuation:(  variable:r  punctuation:)
+ 14 |     case Rectangle w h
+    | keyword:case  variant:Rectangle  variable:w  variable:h
+ 15 |         show("rectangle")
+    | builtin-fn:show  punctuation:(  string:"rectangle"  punctuation:)
+ 16 |         show(w)
+    | builtin-fn:show  punctuation:(  variable:w  punctuation:)
+ 17 |         show(h)
+    | builtin-fn:show  punctuation:(  variable:h  punctuation:)
+ 18 |     case Dot
+    | keyword:case  variant:Dot
+ 19 |         show("dot")
+    | builtin-fn:show  punctuation:(  string:"dot"  punctuation:)
+ 20 |     fi
+    | keyword:fi
+ 21 | fi
+    | keyword:fi
+ 23 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 24 |     bind c = Circle(5.0)
+    | keyword:bind  variable:c  operator:=  variant:Circle  punctuation:(  number:5.0  punctuation:)
+ 25 |     bind r = Rectangle(3.0, 4.0)
+    | keyword:bind  variable:r  operator:=  variant:Rectangle  punctuation:(  number:3.0  punctuation:,  number:4.0  punctuation:)
+ 26 |     describe(c)
+    | task:describe  punctuation:(  variable:c  punctuation:)
+ 27 |     describe(r)
+    | task:describe  punctuation:(  variable:r  punctuation:)
+ 28 |     describe(Dot)
+    | task:describe  punctuation:(  variant:Dot  punctuation:)
+ 29 | fi
+    | keyword:fi

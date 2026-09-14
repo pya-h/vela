@@ -1,0 +1,26 @@
+  1 | # `==` on text compares contents, not addresses.
+    | comment:# `==` on text compares contents, not addresses.
+  3 | task same(a: text, b: text) -> bool
+    | keyword:task  task:same  punctuation:(  parameter:a  punctuation::  type-builtin:text  punctuation:,  parameter:b  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:bool
+  4 |     send a == b
+    | keyword:send  parameter:a  operator:==  parameter:b
+  5 | fi
+    | keyword:fi
+  7 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  8 |     show("apple" == "apple")
+    | builtin-fn:show  punctuation:(  string:"apple"  operator:==  string:"apple"  punctuation:)
+  9 |     show("apple" == "apples")
+    | builtin-fn:show  punctuation:(  string:"apple"  operator:==  string:"apples"  punctuation:)
+ 10 |     show("apple" != "pear")
+    | builtin-fn:show  punctuation:(  string:"apple"  operator:!=  string:"pear"  punctuation:)
+ 11 |     # Equal contents at different addresses (text ends at the NUL).
+    | comment:# Equal contents at different addresses (text ends at the NUL).
+ 12 |     show(same("ab\0x", "ab\0y"))
+    | builtin-fn:show  punctuation:(  task:same  punctuation:(  string:"ab  escape:\0  string:x"  punctuation:,  string:"ab  escape:\0  string:y"  punctuation:)  punctuation:)
+ 13 |     bind word = "hello"
+    | keyword:bind  variable:word  operator:=  string:"hello"
+ 14 |     show(word == "hello")
+    | builtin-fn:show  punctuation:(  variable:word  operator:==  string:"hello"  punctuation:)
+ 15 | fi
+    | keyword:fi

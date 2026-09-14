@@ -1,0 +1,16 @@
+[package]
+name = "vela-analysis"
+version = "0.1.0"
+edition = "2024"
+description = "Language analysis for Vela Studio: highlighting, diagnostics, outline, and definitions"
+publish = false
+
+[dependencies]
+vela = { path = "../.." }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"
+
+[lints]
+workspace = true

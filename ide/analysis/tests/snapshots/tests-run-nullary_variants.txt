@@ -1,0 +1,78 @@
+  1 | # Variants without a payload can be written with or without parentheses.
+    | comment:# Variants without a payload can be written with or without parentheses.
+  3 | kind Light
+    | keyword:kind  type:Light
+  4 |     Red
+    | variant:Red
+  5 |     Amber
+    | variant:Amber
+  6 |     Green
+    | variant:Green
+  7 | fi
+    | keyword:fi
+  9 | kind Reading
+    | keyword:kind  type:Reading
+ 10 |     Missing
+    | variant:Missing
+ 11 |     Value(amount: int)
+    | variant:Value  punctuation:(  field:amount  punctuation::  type-builtin:int  punctuation:)
+ 12 | fi
+    | keyword:fi
+ 14 | task name(l: Light) -> text
+    | keyword:task  task:name  punctuation:(  parameter:l  punctuation::  type:Light  punctuation:)  operator:->  type-builtin:text
+ 15 |     match l
+    | keyword:match  parameter:l
+ 16 |     case Red
+    | keyword:case  variant:Red
+ 17 |         send "red"
+    | keyword:send  string:"red"
+ 18 |     case Amber
+    | keyword:case  variant:Amber
+ 19 |         send "amber"
+    | keyword:send  string:"amber"
+ 20 |     case Green
+    | keyword:case  variant:Green
+ 21 |         send "green"
+    | keyword:send  string:"green"
+ 22 |     fi
+    | keyword:fi
+ 23 | fi
+    | keyword:fi
+ 25 | task report(r: Reading)
+    | keyword:task  task:report  punctuation:(  parameter:r  punctuation::  type:Reading  punctuation:)
+ 26 |     match r
+    | keyword:match  parameter:r
+ 27 |     case Missing
+    | keyword:case  variant:Missing
+ 28 |         show("missing")
+    | builtin-fn:show  punctuation:(  string:"missing"  punctuation:)
+ 29 |     case Value amount
+    | keyword:case  variant:Value  variable:amount
+ 30 |         show(amount)
+    | builtin-fn:show  punctuation:(  variable:amount  punctuation:)
+ 31 |     fi
+    | keyword:fi
+ 32 | fi
+    | keyword:fi
+ 34 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 35 |     show(name(Red))
+    | builtin-fn:show  punctuation:(  task:name  punctuation:(  variant:Red  punctuation:)  punctuation:)
+ 36 |     show(name(Amber()))
+    | builtin-fn:show  punctuation:(  task:name  punctuation:(  variant:Amber  punctuation:(  punctuation:)  punctuation:)  punctuation:)
+ 37 |     hold light = Green
+    | keyword:hold  variable:light  operator:=  variant:Green
+ 38 |     show(name(light))
+    | builtin-fn:show  punctuation:(  task:name  punctuation:(  variable:light  punctuation:)  punctuation:)
+ 39 |     light = Red
+    | variable:light  operator:=  variant:Red
+ 40 |     show(name(light))
+    | builtin-fn:show  punctuation:(  task:name  punctuation:(  variable:light  punctuation:)  punctuation:)
+ 41 |     report(Missing)
+    | task:report  punctuation:(  variant:Missing  punctuation:)
+ 42 |     report(Missing())
+    | task:report  punctuation:(  variant:Missing  punctuation:(  punctuation:)  punctuation:)
+ 43 |     report(Value(42))
+    | task:report  punctuation:(  variant:Value  punctuation:(  number:42  punctuation:)  punctuation:)
+ 44 | fi
+    | keyword:fi

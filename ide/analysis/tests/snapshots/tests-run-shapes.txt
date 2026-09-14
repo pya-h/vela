@@ -1,0 +1,28 @@
+  1 | # Shapes: literals, field access, field assignment, passing by value
+    | comment:# Shapes: literals, field access, field assignment, passing by value
+  3 | shape Point
+    | keyword:shape  type:Point
+  4 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  5 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  6 | fi
+    | keyword:fi
+  8 | task sum(p: Point) -> int
+    | keyword:task  task:sum  punctuation:(  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:int
+  9 |     send p.x + p.y
+    | keyword:send  parameter:p  punctuation:.  field:x  operator:+  parameter:p  punctuation:.  field:y
+ 10 | fi
+    | keyword:fi
+ 12 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 13 |     hold p = Point { x: 1, y: 2 }
+    | keyword:hold  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+ 14 |     show(p.x)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:x  punctuation:)
+ 15 |     p.y = 40
+    | variable:p  punctuation:.  field:y  operator:=  number:40
+ 16 |     show(sum(p))
+    | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:p  punctuation:)  punctuation:)
+ 17 | fi
+    | keyword:fi

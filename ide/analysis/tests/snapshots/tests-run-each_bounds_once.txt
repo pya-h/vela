@@ -1,0 +1,32 @@
+  1 | # The end of an each range is evaluated once, before the loop starts.
+    | comment:# The end of an each range is evaluated once, before the loop starts.
+  3 | task limit() -> int
+    | keyword:task  task:limit  punctuation:(  punctuation:)  operator:->  type-builtin:int
+  4 |     show("limit")
+    | builtin-fn:show  punctuation:(  string:"limit"  punctuation:)
+  5 |     send 3
+    | keyword:send  number:3
+  6 | fi
+    | keyword:fi
+  8 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  9 |     hold count = 3
+    | keyword:hold  variable:count  operator:=  number:3
+ 10 |     each i in 0..count
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  variable:count
+ 11 |         count = count - 1
+    | variable:count  operator:=  variable:count  operator:-  number:1
+ 12 |         show(i)
+    | builtin-fn:show  punctuation:(  variable:i  punctuation:)
+ 13 |     fi
+    | keyword:fi
+ 14 |     show(count)
+    | builtin-fn:show  punctuation:(  variable:count  punctuation:)
+ 16 |     each i in 0..limit()
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  task:limit  punctuation:(  punctuation:)
+ 17 |         show(i)
+    | builtin-fn:show  punctuation:(  variable:i  punctuation:)
+ 18 |     fi
+    | keyword:fi
+ 19 | fi
+    | keyword:fi

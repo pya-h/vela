@@ -1,0 +1,14 @@
+  1 | # Text literals and escapes
+    | comment:# Text literals and escapes
+  3 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  4 |     show("plain")
+    | builtin-fn:show  punctuation:(  string:"plain"  punctuation:)
+  5 |     show("tab\there")
+    | builtin-fn:show  punctuation:(  string:"tab  escape:\t  string:here"  punctuation:)
+  6 |     show("quote \" and backslash \\")
+    | builtin-fn:show  punctuation:(  string:"quote   escape:\"  string: and backslash   escape:\\  string:"  punctuation:)
+  7 |     show("two\nlines")
+    | builtin-fn:show  punctuation:(  string:"two  escape:\n  string:lines"  punctuation:)
+  8 | fi
+    | keyword:fi
