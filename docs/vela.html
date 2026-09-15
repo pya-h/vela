@@ -364,7 +364,8 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         <code>and</code>/<code>or</code> skip the right side when the left side decides the result. Conditions in
         <code>when</code> and <code>loop</code> must be <code>bool</code>: <code>when count</code> is an error.
         <code>==</code> and <code>!=</code> work on numbers, <code>bool</code>, <code>text</code> (by contents), and
-        pointers (by address); both sides must have the same type. A <code>maybe</code> compares only with
+        pointers (by address); both sides must have the same type, except that pointers into different regions can
+        be compared (they are never equal). A <code>maybe</code> compares only with
         <code>none</code>.
       </p>
       <pre><span class="comment"># greet the user</span>
@@ -799,8 +800,10 @@ show(next^)                                <span class="comment"># error: this p
 <span class="keyword">fi</span></pre>
       <p>
         A value built without any pointers, such as <code>Leaf(5)</code> or <code>Node { value: 1, next: none }</code>,
-        takes the region of the place it goes: an argument, a field, or a variable with a written type. A binding
-        without a type can't tell which region such a value should be in, so it asks for one:
+        takes the region of the place it goes: an argument, a field, or a variable with a written type. (So does the
+        result of a task given only such values, as in <code>sum(none)</code>, and a plan B on such a result takes the
+        region of its fallback.) A binding without a type can't tell which region such a value should be in, so it asks for
+        one:
       </p>
       <pre><span class="keyword">hold</span> head = Node { value: 1, next: <span class="keyword">none</span> }     <span class="comment"># error: cannot tell which region 'head' lives in, ...;</span>
                                               <span class="comment">#   give it a type, such as 'head: Node@r'</span>

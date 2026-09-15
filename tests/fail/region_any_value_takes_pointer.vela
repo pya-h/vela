@@ -1,10 +1,17 @@
-# error: 9:56: expected type ^Node@_, got ^Node@r; the value this belongs to was built without pointers, so it lives in no region and can't take one
+# error: 15:19: expected type maybe ^Node@_, got ^Node@a; this place holds a value without pointers (of no region), so it can't take a pointer into one
 shape Node
     value: int
     next: maybe ^Node
 fi
+
+task first(list: maybe ^Node@r) -> maybe ^Node@r
+    <- list
+fi
+
 task main()
-    region r
-    bind q = new Node(Node { value: 1, next: none }) in r
-    bind leaked = Node { value: 1, next: none }.next { q }
+    region a
+    bind q = new Node(Node { value: 1, next: none }) in a
+    when first(none) is {n}
+        n^.next = q
+    fi
 fi

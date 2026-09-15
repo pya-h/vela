@@ -1015,15 +1015,18 @@ impl Checker {
             .try_for_each(|(name, at, ty)| self.define(&name, ty, false, at))
             .and_then(|()| self.check_plan_b_body(span, &extracted, body));
         self.pop_scope();
-        result?;
-        Ok(extracted)
+        Ok(result?.unwrap_or(extracted))
     }
 
     /// Checks a plan B's statements: the last line gives the value, unless every
     /// path through the block sends, or there is no value to give (`unit or E`).
-    fn check_plan_b_body(&mut self, span: Span, extracted: &Type, body: &mut Block) -> Result<()> {
+    ///
+    /// Returns the plan B's type when the last line settles it: a value holding
+    /// no pointers (of `ANY_REGION`, such as `first(none)`) has nothing to
+    /// extract that lives anywhere, so the plan B takes the fallback's regions.
+    fn check_plan_b_body(&mut self, span: Span, extracted: &Type, body: &mut Block) -> Result<Option<Type>> {
         if *extracted == Type::Unit {
-            return self.check_block(body);
+            return self.check_block(body).map(|()| None);
         }
         let Some((last, rest)) = body.split_last_mut() else {
             return err(span, format!("a plan B needs a value of type {} on its last line, or a '<-'", extracted));
@@ -1034,13 +1037,16 @@ impl Checker {
             if ty == Type::Unit {
                 return err(e.span, format!("the last line of a plan B gives its value, but this has none; expected a value of type {}", extracted));
             }
-            return self.coerce(e, extracted);
+            if !fits_regions(&ty, extracted) && fits_regions(extracted, &ty) {
+                return Ok(Some(ty));
+            }
+            return self.coerce(e, extracted).map(|()| None);
         }
         self.check_stmt(last)?;
         if !always_sends(body) {
             return err(span, format!("a plan B must end with a value of type {}, or send with '<-' on every path", extracted));
         }
-        Ok(())
+        Ok(None)
     }
 
     fn check_unary(&mut self, op: UnaryOp, e: &mut Expr, span: Span) -> Result<Type> {
@@ -1085,7 +1091,12 @@ impl Checker {
                 if let Some(maybe) = [&lt, &rt].into_iter().find(|t| matches!(t, Type::Maybe(_))) {
                     return err(span, format!("a {} can only be compared with none; extract its value first, as in 'x {{ … }}'", maybe));
                 }
-                self.expect_type(&rt, &lt, r.span)?;
+                // Comparing addresses stores nothing, so pointers into
+                // different regions compare (and are never equal).
+                let pointers = matches!((&lt, &rt), (Type::Ptr(..), Type::Ptr(..))) && lt.without_regions() == rt.without_regions();
+                if !pointers {
+                    self.expect_type(&rt, &lt, r.span)?;
+                }
                 if !lt.is_numeric() && !matches!(lt, Type::Bool | Type::Text | Type::Ptr(..)) {
                     return err(span, "cannot compare this type");
                 }
@@ -1239,11 +1250,12 @@ impl Checker {
             (Type::Maybe(inner) | Type::Or(inner, _), _) if fits_regions(inner, expected) => {
                 "; extract its value first, as in 'x { … }' or 'when x is {value}'".to_string()
             }
-            _ if expected.regions().contains(&ANY_REGION) => {
-                "; the value this belongs to was built without pointers, so it lives in no region and can't take one".to_string()
-            }
             _ if [Some(expected), expected.extracted()].into_iter().flatten().any(|e| actual.without_regions() == e.without_regions()) => {
-                "; a value can't move to another region: a pointer into one region is never stored in another".to_string()
+                if expected.regions().contains(&ANY_REGION) {
+                    "; this place holds a value without pointers (of no region), so it can't take a pointer into one".to_string()
+                } else {
+                    "; a value can't move to another region: a pointer into one region is never stored in another".to_string()
+                }
             }
             _ => String::new(),
         };

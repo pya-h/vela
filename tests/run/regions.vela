@@ -76,6 +76,10 @@ task early(n: int) -> int
     <- 0
 fi
 
+task first(list: maybe ^Node@r) -> maybe ^Node@r
+    <- list
+fi
+
 task checked(r: region, n: int) -> ^Node@r or text
     region scratch
     bind temporary = new int(n) in scratch
@@ -159,6 +163,12 @@ task main()
     when maybe_pair is {p}
         show(p.first^)
     fi
+
+    # `first(none)` holds no pointer, so its plan B takes the fallback's region.
+    bind fallback: ^Node@lists = first(none) { good }
+    show(fallback^.value)
+    # Pointers into different regions compare, and are never equal.
+    show(good == new Node(Node { value: 7, next: none }) in trees)
 
     # A pointer to a pointer lives in one region too.
     bind inner = new int(8) in trees
