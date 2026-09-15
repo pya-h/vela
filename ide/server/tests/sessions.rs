@@ -307,6 +307,73 @@ async fn terminals_are_limited() {
 }
 
 #[tokio::test]
+async fn a_terminal_that_exited_frees_its_place() {
+    let server = server("limit-exit", &[], |config| config.max_terminals = 1).await;
+    let first = server.terminal().await;
+    let mut socket = server.connect(&first).await;
+    socket.send(Message::binary(b"exit\n".to_vec())).await.unwrap();
+    assert!(receive(&mut socket, never).await.exit.is_some());
+    // Its session lingers for the page, but a new terminal can start.
+    server.terminal().await;
+}
+
+#[tokio::test]
+async fn nothing_starts_once_shutdown_has_begun() {
+    let server = server("closing", &[], |_| {}).await;
+    server.studio.sessions.shutdown().await;
+    let refused = server.post("/api/terminal", json!({})).await;
+    assert_eq!(refused.status, StatusCode::SERVICE_UNAVAILABLE);
+}
+
+#[tokio::test]
+async fn concurrent_runs_leave_one_program_running() {
+    let server = server("concurrent-runs", &[("spin.vela", LOOP_FOREVER)], |_| {}).await;
+    let runs = (0..4).map(|_| server.post("/api/run", json!({ "path": "spin.vela" })));
+    let replies = futures_util::future::join_all(runs).await;
+    assert!(replies.iter().all(|reply| reply.json()["ok"] == true));
+    server
+        .eventually("all but one run to stop", |studio| {
+            replies
+                .iter()
+                .filter_map(|reply| studio.sessions.get(reply.json()["session"].as_str().unwrap()))
+                .filter(|session| session.is_alive())
+                .count()
+                == 1
+        })
+        .await;
+}
+
+#[tokio::test]
+async fn a_client_that_stops_reading_doesnt_block_others() {
+    let server = server("stalled", &[], |_| {}).await;
+    let id = server.terminal().await;
+    // A client that never reads, while the shell writes without end.
+    let mut stalled = server.connect(&id).await;
+    stalled.send(Message::binary(b"yes\n".to_vec())).await.unwrap();
+    sleep(Duration::from_millis(500)).await;
+    // A new connection still gets the output, and replaces the stalled one.
+    let mut second = server.connect(&id).await;
+    let received = receive(&mut second, |output| output.contains("y\r\ny")).await;
+    assert!(received.output.contains('y'));
+    drop(stalled);
+}
+
+#[tokio::test]
+async fn a_closed_page_is_noticed_while_typed_input_waits() {
+    let server = server("pending-close", &[], |config| config.idle_timeout = Duration::from_millis(300)).await;
+    let id = server.terminal().await;
+    let mut socket = server.connect(&id).await;
+    // A program that reads nothing, in raw mode, where input waits.
+    socket.send(Message::binary(b"stty raw -echo; exec sleep 1000\n".to_vec())).await.unwrap();
+    sleep(Duration::from_millis(300)).await;
+    for _ in 0..64 {
+        socket.send(Message::binary(vec![b'x'; 64 * 1024])).await.unwrap();
+    }
+    drop(socket);
+    server.eventually("the session to end after its page closed", |studio| studio.sessions.get(&id).is_none()).await;
+}
+
+#[tokio::test]
 async fn shutdown_stops_every_session() {
     let server = server("shutdown", &[("shutdown_forever.vela", LOOP_FOREVER)], |_| {}).await;
     let run = server.run("shutdown_forever.vela").await;

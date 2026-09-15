@@ -1,0 +1,34 @@
+  1 | # `end` is an ordinary name, so a kind may have a variant called `end`.
+    | comment:# `end` is an ordinary name, so a kind may have a variant called `end`.
+  2 | kind Step
+    | keyword:kind  type:Step
+  3 |     start
+    | variant:start
+  4 |     end
+    | variant:end
+  5 | fi
+    | keyword:fi
+  7 | task describe(step: Step) -> text
+    | keyword:task  task:describe  punctuation:(  parameter:step  punctuation::  type:Step  punctuation:)  operator:->  type-builtin:text
+  8 |     match step
+    | keyword:match  parameter:step
+  9 |         case start
+    | keyword:case  variant:start
+ 10 |             <- "start"
+    | keyword:<-  string:"start"
+ 11 |         case end
+    | keyword:case  variant:end
+ 12 |             <- "end"
+    | keyword:<-  string:"end"
+ 13 |     fi
+    | keyword:fi
+ 14 | fi
+    | keyword:fi
+ 16 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 17 |     show(describe(start))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variant:start  punctuation:)  punctuation:)
+ 18 |     show(describe(end))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variant:end  punctuation:)  punctuation:)
+ 19 | fi
+    | keyword:fi

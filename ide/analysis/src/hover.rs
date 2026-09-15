@@ -31,10 +31,14 @@ const BUILTIN_TYPE_DOCS: &[(&str, &str)] = &[
 /// the token's byte range.
 pub(crate) fn hover(k: &Knowledge, byte: usize) -> Option<((String, String), std::ops::Range<usize>)> {
     let tokens = &k.scan.tokens;
-    let token = tokens
-        .iter()
-        .find(|t| t.range.start <= byte && byte < t.range.end)
-        .or_else(|| tokens.iter().find(|t| t.range.end == byte && t.symbol.is_some()))?;
+    // The token under `byte`, or else the one ending there: at the boundary of
+    // `n)`, the name is what a hover means.
+    let under = tokens.iter().find(|t| t.range.start <= byte && byte < t.range.end);
+    let ending = tokens.iter().find(|t| t.range.end == byte);
+    [under, ending].into_iter().flatten().find_map(|token| hover_token(k, token))
+}
+
+fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((String, String), std::ops::Range<usize>)> {
     let text = k.source.get(token.range.clone()).unwrap_or_default();
     let info = match (token.class, token.symbol) {
         (TokenClass::TypeBuiltin, _) => {

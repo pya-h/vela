@@ -31,6 +31,9 @@ use crate::session::Event;
 const AUTH_TIMEOUT: Duration = Duration::from_secs(10);
 /// The largest message a client may send (a big paste).
 const MAX_MESSAGE_BYTES: usize = 1024 * 1024;
+/// Keystrokes kept while the process isn't reading its input. Past this,
+/// more is dropped, as a terminal drops input its full buffer can't take.
+const MAX_PENDING_INPUT: usize = 4 * 1024 * 1024;
 
 pub const CLOSE_UNAUTHORIZED: u16 = 4401;
 pub const CLOSE_NO_SESSION: u16 = 4404;
@@ -65,10 +68,11 @@ async fn connect(studio: Arc<Studio>, id: String, mut socket: WebSocket) {
     };
 
     // Keystrokes the process isn't reading yet. While they wait, output keeps
-    // flowing (the process may be writing rather than reading), but no more
-    // messages are read, which slows a client that sends too much.
+    // flowing (the process may be writing rather than reading), and messages
+    // are still read, so a closed page or a resize is noticed at once.
     let input = session.input();
-    let mut pending: Option<Vec<u8>> = None;
+    let mut pending: Vec<u8> = Vec::new();
+    let mut input_closed = false;
     loop {
         tokio::select! {
             event = events.recv() => match event {
@@ -87,13 +91,20 @@ async fn connect(studio: Arc<Studio>, id: String, mut socket: WebSocket) {
                 // The session ended or another connection replaced this one.
                 None => return close(socket, CLOSE_REPLACED, "session closed or opened elsewhere").await,
             },
-            permit = input.reserve(), if pending.is_some() => match permit {
-                Ok(permit) => permit.send(pending.take().unwrap_or_default()),
+            permit = input.reserve(), if !pending.is_empty() && !input_closed => match permit {
+                Ok(permit) => permit.send(std::mem::take(&mut pending)),
                 // The terminal takes no more input; drop what was typed.
-                Err(_) => pending = None,
+                Err(_) => {
+                    input_closed = true;
+                    pending = Vec::new();
+                }
             },
-            message = socket.recv(), if pending.is_none() => match message {
-                Some(Ok(Message::Binary(bytes))) => pending = Some(bytes.to_vec()),
+            message = socket.recv() => match message {
+                Some(Ok(Message::Binary(bytes))) => {
+                    if !input_closed && pending.len() + bytes.len() <= MAX_PENDING_INPUT {
+                        pending.extend_from_slice(&bytes);
+                    }
+                }
                 Some(Ok(Message::Text(text))) => {
                     if let Ok(ClientMessage::Resize { cols, rows }) = serde_json::from_str(&text) {
                         session.resize(cols, rows);

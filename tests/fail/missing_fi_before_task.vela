@@ -1,0 +1,7 @@
+# error: 5:1: expected 'fi' to close the 'task' at 2:1, got 'task'
+task helper()
+    show(1)
+
+task main()
+    helper()
+fi

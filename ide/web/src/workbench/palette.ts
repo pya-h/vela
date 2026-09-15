@@ -35,6 +35,8 @@ function highlighted(text: string, positions: Set<number>, offset: number): Node
   return nodes;
 }
 
+let pickers = 0;
+
 /** Shows the picker; resolves to the chosen item, or null if dismissed. */
 export function pick<T extends PickItem>(placeholder: string, items: readonly T[], empty = "No matches"): Promise<T | null> {
   return new Promise((resolve) => {
@@ -42,12 +44,14 @@ export function pick<T extends PickItem>(placeholder: string, items: readonly T[
     let results: { item: T; match: Match }[] = [];
     let selected = 0;
 
+    // Unique ids: a closed picker stays in the page for a moment.
+    const id = `palette-${++pickers}`;
     const input = h("input", {
       class: "palette-input",
-      attrs: { type: "text", placeholder, spellcheck: "false", role: "combobox", "aria-expanded": "true", "aria-controls": "palette-list" },
+      attrs: { type: "text", placeholder, spellcheck: "false", role: "combobox", "aria-expanded": "true", "aria-controls": `${id}-list`, "aria-label": placeholder },
     });
-    const list = h("ul", { class: "palette-list", attrs: { role: "listbox", id: "palette-list" } });
-    const dialog = h("dialog", { class: "palette" }, input, list);
+    const list = h("ul", { class: "palette-list", attrs: { role: "listbox", id: `${id}-list` } });
+    const dialog = h("dialog", { class: "palette", attrs: { "aria-label": placeholder } }, input, list);
 
     const render = () => {
       const text = (item: T) => (item.detail ? `${item.label} ${item.detail}` : item.label);
@@ -62,7 +66,7 @@ export function pick<T extends PickItem>(placeholder: string, items: readonly T[
                 "li",
                 {
                   class: `palette-item${index === selected ? " selected" : ""}`,
-                  attrs: { role: "option", "aria-selected": String(index === selected), id: `palette-option-${index}` },
+                  attrs: { role: "option", "aria-selected": String(index === selected), id: `${id}-option-${index}` },
                   on: {
                     mousedown: (event) => event.preventDefault(),
                     click: () => choose(index),
@@ -81,7 +85,7 @@ export function pick<T extends PickItem>(placeholder: string, items: readonly T[
               return row;
             })),
       );
-      input.setAttribute("aria-activedescendant", results.length ? `palette-option-${selected}` : "");
+      input.setAttribute("aria-activedescendant", results.length ? `${id}-option-${selected}` : "");
       list.querySelector(".selected")?.scrollIntoView({ block: "nearest" });
     };
 

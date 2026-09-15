@@ -1,0 +1,16 @@
+  1 | # NaN and infinity print the same way under every C compiler.
+    | comment:# NaN and infinity print the same way under every C compiler.
+  2 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  3 |     bind zero = 0.0
+    | keyword:bind  variable:zero  operator:=  number:0.0
+  4 |     show(zero / zero)
+    | builtin-fn:show  punctuation:(  variable:zero  operator:/  variable:zero  punctuation:)
+  5 |     show(1.0 / zero)
+    | builtin-fn:show  punctuation:(  number:1.0  operator:/  variable:zero  punctuation:)
+  6 |     show(-1.0 / zero)
+    | builtin-fn:show  punctuation:(  operator:-  number:1.0  operator:/  variable:zero  punctuation:)
+  7 |     show(5.5 % zero)
+    | builtin-fn:show  punctuation:(  number:5.5  operator:%  variable:zero  punctuation:)
+  8 | fi
+    | keyword:fi

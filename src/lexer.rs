@@ -106,7 +106,7 @@ impl Token {
         }
         let symbol = match self {
             Token::Int(n) => return format!("integer {}", n),
-            Token::Float(n) => return format!("float {:?}", n),
+            Token::Float(n) => return format!("float {}", float_text(*n)),
             Token::Text(_) => return "text literal".to_string(),
             Token::Ident(s) => return format!("identifier '{}'", s),
             Token::Newline => return "end of line".to_string(),
@@ -141,6 +141,12 @@ impl Token {
         };
         format!("'{}'", symbol)
     }
+}
+
+/// A float as Vela writes it: digits with a `.`, never an exponent.
+fn float_text(value: f64) -> String {
+    let text = value.to_string();
+    if text.contains('.') || !value.is_finite() { text } else { format!("{}.0", text) }
 }
 
 /// A token from `highlight`, with its exact extent in the source.
@@ -204,10 +210,14 @@ struct Mark {
 
 impl Lexer {
     pub fn new(source: &str) -> Self {
+        let source: Vec<char> = source.chars().collect();
+        // A byte order mark (which some Windows editors write) is skipped
+        // without taking a column; byte offsets still count it.
+        let bom = source.first() == Some(&'\u{feff}');
         Lexer {
-            source: source.chars().collect(),
-            pos: 0,
-            byte: 0,
+            source,
+            pos: usize::from(bom),
+            byte: if bom { '\u{feff}'.len_utf8() } else { 0 },
             line: 1,
             col: 1,
         }
@@ -235,6 +245,11 @@ impl Lexer {
         }
     }
 
+    /// Whether the next characters end a line: `\n`, or the `\r\n` of a CRLF file.
+    fn at_line_end(&self) -> bool {
+        self.peek() == '\n' || (self.peek() == '\r' && self.peek2() == '\n')
+    }
+
     /// Whether the whole source has been read. (`peek` returns `'\0'` there,
     /// but a NUL character can also appear in the source itself.)
     fn at_end(&self) -> bool {
@@ -260,7 +275,8 @@ impl Lexer {
         if c == '\n' {
             self.line += 1;
             self.col = 1;
-        } else {
+        } else if !(c == '\r' && self.peek() == '\n') {
+            // The `\r` of a CRLF line end takes no column, so positions match LF files.
             self.col += 1;
         }
         c
@@ -308,7 +324,7 @@ impl Lexer {
         }
 
         if c == '#' {
-            while self.peek() != '\n' && !self.at_end() {
+            while !self.at_line_end() && !self.at_end() {
                 self.advance();
             }
             return LexKind::Comment;
@@ -380,8 +396,16 @@ impl Lexer {
                     self.advance();
                     Token::Ne
                 } else {
-                    return invalid(loc, "unexpected '!'");
+                    return invalid(loc, "unexpected '!'; Vela negates with 'not'");
                 }
+            }
+            '&' | '|' => {
+                let word = if c == '&' { "and" } else { "or" };
+                if self.peek() == c {
+                    self.advance();
+                    return invalid(loc, format!("unexpected '{}{}'; Vela writes '{}'", c, c, word));
+                }
+                return invalid(loc, format!("unexpected character '{}'", c));
             }
             '<' => {
                 if self.peek() == '=' {
@@ -446,6 +470,11 @@ impl Lexer {
             s.push(self.advance());
         }
         let is_float = self.peek() == '.' && self.peek2().is_ascii_digit();
+        // `1.` is not a float (and `1..5` is a range).
+        if self.peek() == '.' && !self.peek2().is_ascii_digit() && self.peek2() != '.' && !self.peek2().is_ascii_alphabetic() {
+            self.advance();
+            return invalid(loc, format!("invalid number '{}.': write '{}.0'", s, s));
+        }
         if is_float {
             s.push(self.advance());
             while self.peek().is_ascii_digit() {
@@ -499,6 +528,9 @@ impl Lexer {
                     if self.at_end() {
                         break; // backslash at end of file: unterminated
                     }
+                    if self.at_line_end() && self.peek() == '\r' {
+                        self.advance(); // a CRLF line end reads like LF
+                    }
                     if self.peek() == '\n' {
                         line_end.get_or_insert(self.mark());
                     }
@@ -515,10 +547,14 @@ impl Lexer {
                     }
                 }
                 c => {
-                    if c == '\n' {
+                    if c == '\n' || self.at_line_end() {
                         line_end.get_or_insert(self.mark());
                     }
-                    s.push(self.advance());
+                    let c = self.advance();
+                    // Text keeps `\n` for a line break in a CRLF file too.
+                    if !(c == '\r' && self.peek() == '\n') {
+                        s.push(c);
+                    }
                 }
             }
         }

@@ -1,0 +1,19 @@
+# `end` is an ordinary name, so a kind may have a variant called `end`.
+kind Step
+    start
+    end
+fi
+
+task describe(step: Step) -> text
+    match step
+        case start
+            <- "start"
+        case end
+            <- "end"
+    fi
+fi
+
+task main()
+    show(describe(start))
+    show(describe(end))
+fi

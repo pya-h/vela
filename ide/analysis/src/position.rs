@@ -38,6 +38,8 @@ impl<'a> LineIndex<'a> {
         let Some(&start) = span.line.checked_sub(1).and_then(|i| self.starts.get(i)) else {
             return self.source.len();
         };
+        // The compiler's columns start after a byte order mark.
+        let start = if start == 0 && self.source.starts_with('\u{feff}') { '\u{feff}'.len_utf8() } else { start };
         let line = self.source.get(start..).unwrap_or_default();
         let mut offset = start;
         for c in line.chars().take(span.col.saturating_sub(1)) {
@@ -125,6 +127,13 @@ mod tests {
         assert_eq!(index.byte_of_utf16(6), y - 4);
         // Inside the bytes of 'é'.
         assert_eq!(index.utf16_of(1), 0);
+    }
+
+    #[test]
+    fn columns_start_after_a_byte_order_mark() {
+        let index = LineIndex::new("\u{feff}fi\nx");
+        assert_eq!(index.byte_of(Span::new(1, 1)), 3);
+        assert_eq!(index.byte_of(Span::new(2, 1)), 6);
     }
 
     #[test]

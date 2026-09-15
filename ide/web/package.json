@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "description": "Vela Studio's browser UI",
   "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "vite",
     "build:wasm": "node scripts/build-wasm.mjs",

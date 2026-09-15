@@ -129,7 +129,27 @@ pub fn build(source: &str, input: &Path, output: &Path, cc: &str) -> std::result
     if same_file(input, output) {
         return Err(BuildError::OutputIsInput(output.to_path_buf()));
     }
+    check_output(output)?;
     compile_c(&c_code, input, output, cc)
+}
+
+/// Rejects an output path the C compiler couldn't write, before compiling, so
+/// the problem isn't reported as a failure of the generated C.
+fn check_output(output: &Path) -> std::result::Result<(), BuildError> {
+    let problem = if output.is_dir() {
+        Some(format!("'{}' is a folder", output.display()))
+    } else {
+        match output.parent() {
+            Some(folder) if !folder.as_os_str().is_empty() && !folder.is_dir() => {
+                Some(format!("the folder '{}' doesn't exist", folder.display()))
+            }
+            _ => None,
+        }
+    };
+    match problem {
+        Some(problem) => Err(BuildError::Io { action: "write the executable", error: io::Error::other(problem) }),
+        None => Ok(()),
+    }
 }
 
 /// Formats a diagnostic as `path:line:col: error: message`, followed by the
@@ -171,15 +191,22 @@ fn compile_c(c_code: &str, input: &Path, output: &Path, cc: &str) -> std::result
 
     let mut words = cc.split_whitespace();
     let program = words.next().unwrap_or("cc");
+    // A relative output starting with `-` would read as an option.
+    let output = if output.is_relative() && output.to_string_lossy().starts_with('-') {
+        Path::new(".").join(output)
+    } else {
+        output.to_path_buf()
+    };
     let result = Command::new(program)
-        .args(words)
         .arg("-std=c11")
         .arg("-O2")
+        // After the defaults, so `CC="gcc -O0 -g"` can override them.
+        .args(words)
         .arg("-I")
         .arg(&build_dir.path)
         .arg(&c_path)
         .arg("-o")
-        .arg(output)
+        .arg(&output)
         .arg("-lm") // math library, for vela__rt__fmod
         .output()
         .map_err(|error| BuildError::CompilerNotStarted { cc: program.to_string(), error })?;

@@ -1,0 +1,8 @@
+# error: 6:1: expected 'fi' to close the 'shape' at 2:1, got 'task'
+shape Point
+    x: int
+    y: int
+
+task main()
+    show(1)
+fi

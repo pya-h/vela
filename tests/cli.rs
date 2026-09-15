@@ -131,3 +131,57 @@ fn nul_character_is_reported() {
     let first = stderr(&out).lines().next().unwrap_or_default().to_string();
     assert_eq!(first, format!("{}:2:12: error: unexpected character '\\0'", src.display()));
 }
+
+#[test]
+fn emit_c_writes_to_the_output_file() {
+    let dir = temp_dir("emit-c-file");
+    let c_file = dir.join("hello.c");
+    let out = vela(&[&example("hello"), "--emit-c", "-o", c_file.to_str().unwrap()]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(out.stdout.is_empty());
+    assert!(std::fs::read_to_string(&c_file).unwrap().contains("int main(void)"));
+
+    // It never overwrites the input.
+    let input = dir.join("hello.vela");
+    std::fs::copy(example("hello"), &input).unwrap();
+    let out = vela(&[input.to_str().unwrap(), "--emit-c", "-o", input.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains("would overwrite the input file"), "{}", stderr(&out));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_file_named_like_an_option_follows_a_double_dash() {
+    let dir = temp_dir("double-dash");
+    std::fs::copy(example("hello"), dir.join("-x.vela")).unwrap();
+    let out = Command::new(VELA).current_dir(&dir).args(["--emit-c", "--", "-x.vela"]).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    // An output starting with `-` isn't read as a C compiler option.
+    let out = Command::new(VELA).current_dir(&dir).args(["-o", "-lm", "--", "-x.vela"]).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(dir.join("-lm").is_file());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_output_in_a_missing_folder_is_reported_before_compiling() {
+    let dir = temp_dir("missing-folder");
+    let output = dir.join("nowhere").join("hello");
+    let out = vela(&[&example("hello"), "-o", output.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(1));
+    let err = stderr(&out);
+    assert!(err.starts_with("error: cannot write the executable: the folder"), "{}", err);
+    assert!(!err.contains("C compilation failed"), "{}", err);
+    let out = vela(&[&example("hello"), "-o", dir.to_str().unwrap()]);
+    assert!(stderr(&out).contains("is a folder"), "{}", stderr(&out));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_failed_write_to_standard_output_is_an_error_not_a_crash() {
+    let full = std::fs::OpenOptions::new().write(true).open("/dev/full").unwrap();
+    let out = Command::new(VELA).args([&example("hello"), "--emit-c"]).stdout(full).output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).starts_with("error: cannot write output:"), "{}", stderr(&out));
+}

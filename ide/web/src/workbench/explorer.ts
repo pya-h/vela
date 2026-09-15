@@ -187,6 +187,12 @@ export class Explorer {
     }
   }
 
+  /** Focuses a row: the active file's, or else the first. */
+  focus(): void {
+    const rows = [...this.list.querySelectorAll<HTMLElement>(".tree-row")];
+    (rows.find((row) => row.tabIndex === 0) ?? rows[0])?.focus();
+  }
+
   private focusRow(path: string | null): void {
     if (path === null) return;
     const row = [...this.list.querySelectorAll<HTMLElement>(".tree-row")].find((r) => r.dataset["path"] === path);
@@ -222,7 +228,7 @@ export class Explorer {
         break;
       case "ArrowLeft":
         if (row?.entry.kind === "folder" && this.expanded.has(row.entry.path)) this.activate(row.entry);
-        else if (row) select(this.rows.findIndex((r) => r.entry.path === parentFolder(row.entry.path)));
+        else if (row && parentFolder(row.entry.path) !== "") select(this.rows.findIndex((r) => r.entry.path === parentFolder(row.entry.path)));
         break;
       case "Enter":
       case " ":

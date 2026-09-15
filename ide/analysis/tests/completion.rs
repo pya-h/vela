@@ -84,7 +84,7 @@ fn item_level_offers_declarations() {
     assert_offers("@@", &["task", "shape", "kind", "task -> type"], &["bind", "show", "Point"]);
     assert_offers(&PROGRAM.replace("    @@\n", "").replace("fi\n", "fi\n@@\n"), &["task", "kind"], &["when"]);
     let task = complete("@@").0.items.into_iter().find(|i| i.kind == CompletionKind::Snippet && i.label == "task").unwrap();
-    assert_eq!(task.snippet.as_deref(), Some("task ${name}(${})\n\t${0}\nfi"));
+    assert_eq!(task.snippet.as_deref(), Some("task ${name}(${})\n\t${}\nfi"));
     let sending = complete("@@").0.items.into_iter().find(|i| i.label == "task -> type").unwrap();
     assert_eq!(sending.snippet.as_deref(), Some("task ${name}(${}) -> ${type}\n\t<- ${value}\nfi"));
 }
@@ -123,6 +123,19 @@ fn expressions_offer_values() {
     assert_eq!(item(&in_main("bind q = @@"), "Rectangle").detail, "Shape (width: float, height: float)");
     // A variable is not visible in its own initializer.
     assert_offers(&in_main("bind q = 1\n    bind r = @@"), &["q"], &["r"]);
+    // A shape is offered as a literal with its fields.
+    assert_eq!(item(&in_main("bind q = @@"), "Point").snippet.as_deref(), Some("Point { x: ${x}, y: ${y} }"));
+}
+
+#[test]
+fn nothing_is_offered_inside_text_ending_in_an_escaped_quote() {
+    assert_offers(&in_main("show(\"say \\\"@@"), &[], &["bind", "when", "p"]);
+    assert_offers(&in_main("show(\"say \\\"hi@@"), &[], &["bind", "when", "p"]);
+}
+
+#[test]
+fn statement_items_start_a_line_even_after_invalid_text() {
+    assert_offers(&in_main("bind s = 1 @ @@"), &[], &["bind", "when"]);
 }
 
 #[test]

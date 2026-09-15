@@ -5,8 +5,8 @@
 //! exit. A task, the pump, gathers their events. It keeps the recent output,
 //! so a WebSocket that connects late (or reconnects) sees everything, and
 //! forwards output to the one connected WebSocket, if any. When the client is
-//! slow, the pump waits, and so does the program writing output, as in a
-//! real terminal.
+//! slow, the pump holds back reading output, and so the program writing it
+//! waits, as in a real terminal; it still handles its other events meanwhile.
 //!
 //! A session without a WebSocket for `idle_timeout` is stopped and removed.
 //! Stopping sends SIGHUP to the process group (the process leads a new
@@ -16,6 +16,8 @@
 use std::collections::{HashMap, VecDeque};
 use std::io::{self, Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
+
+use tokio::sync::mpsc::error::TrySendError;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -67,6 +69,8 @@ pub enum Event {
 #[derive(Debug)]
 pub enum SessionError {
     TooManyTerminals,
+    /// The server is shutting down.
+    Closing,
     Spawn(String),
 }
 
@@ -163,23 +167,34 @@ fn lock<T: ?Sized>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 /// The open sessions.
 pub struct Sessions {
     open: Mutex<HashMap<String, Arc<Session>>>,
-    /// The run session, if one is open: starting another run stops it.
+    /// The run session, if one is open: starting another run stops it. Held
+    /// while a run starts, so concurrent runs can't both survive.
     run: Mutex<Option<String>>,
     idle_timeout: Duration,
     max_terminals: usize,
+    /// Set by `shutdown`: no new sessions start.
+    closing: AtomicBool,
 }
 
 impl Sessions {
     pub fn new(idle_timeout: Duration, max_terminals: usize) -> Arc<Sessions> {
-        Arc::new(Sessions { open: Mutex::new(HashMap::new()), run: Mutex::new(None), idle_timeout, max_terminals })
+        Arc::new(Sessions {
+            open: Mutex::new(HashMap::new()),
+            run: Mutex::new(None),
+            idle_timeout,
+            max_terminals,
+            closing: AtomicBool::new(false),
+        })
     }
 
     pub fn get(&self, id: &str) -> Option<Arc<Session>> {
         lock(&self.open).get(id).cloned()
     }
 
+    /// The sessions of `kind` whose process is still running. (One that has
+    /// exited lingers until its page disconnects, but doesn't count.)
     pub fn count(&self, kind: SessionKind) -> usize {
-        lock(&self.open).values().filter(|session| session.kind == kind).count()
+        lock(&self.open).values().filter(|session| session.kind == kind && session.is_alive()).count()
     }
 
     /// Starts `command` in a new terminal of `size`, returning the session id.
@@ -191,14 +206,18 @@ impl Sessions {
         size: PtySize,
         scratch: Option<ScratchDir>,
     ) -> Result<String, SessionError> {
+        if self.closing.load(Ordering::SeqCst) {
+            return Err(SessionError::Closing);
+        }
         if kind == SessionKind::Terminal && self.count(SessionKind::Terminal) >= self.max_terminals {
             return Err(SessionError::TooManyTerminals);
         }
-        if kind == SessionKind::Run {
-            let previous = lock(&self.run).take();
-            if let Some(session) = previous.and_then(|id| self.get(&id)) {
-                session.stop();
-            }
+        // For a run, the lock is held until the new run is registered.
+        let mut run = (kind == SessionKind::Run).then(|| lock(&self.run));
+        if let Some(previous) = run.as_mut().and_then(|run| run.take())
+            && let Some(session) = self.get(&previous)
+        {
+            session.stop();
         }
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
@@ -210,9 +229,11 @@ impl Sessions {
         drop(pair.slave);
         let mut orphan = child.clone_killer();
         let started = self.start(kind, child, pair.master, scratch);
-        if started.is_err() {
+        match (&started, run.as_mut()) {
+            (Ok(id), Some(run)) => **run = Some(id.clone()),
             // Nothing would ever stop or wait for it.
-            let _ = orphan.kill();
+            (Err(_), _) => drop(orphan.kill()),
+            _ => {}
         }
         started
     }
@@ -262,9 +283,6 @@ impl Sessions {
             control: control_tx,
         });
         lock(&self.open).insert(id.clone(), session.clone());
-        if kind == SessionKind::Run {
-            *lock(&self.run) = Some(id.clone());
-        }
         let pump = Pump { sessions: self.clone(), id: id.clone(), session, idle_timeout: self.idle_timeout, _scratch: scratch };
         tokio::spawn(pump.run(output_rx, exit_rx, control_rx));
         Ok(id)
@@ -273,6 +291,7 @@ impl Sessions {
     /// Ends every session, waiting briefly for their processes to exit and
     /// their built programs to be removed (for server shutdown).
     pub async fn shutdown(&self) {
+        self.closing.store(true, Ordering::SeqCst);
         let sessions: Vec<Arc<Session>> = lock(&self.open).values().cloned().collect();
         for session in &sessions {
             let _ = session.control.send(Control::End);
@@ -285,8 +304,10 @@ impl Sessions {
 
     fn remove(&self, id: &str) {
         lock(&self.open).remove(id);
-        let mut run = lock(&self.run);
-        if run.as_deref() == Some(id) {
+        // `try_lock`: a run that is starting holds this lock, and will replace the id anyway.
+        if let Ok(mut run) = self.run.try_lock()
+            && run.as_deref() == Some(id)
+        {
             *run = None;
         }
     }
@@ -361,6 +382,9 @@ impl Pump {
     ) {
         let mut scrollback = Scrollback { bytes: VecDeque::new() };
         let mut subscriber: Option<mpsc::Sender<Event>> = None;
+        // An event the subscriber had no room for. While one waits, no more
+        // output is read, which holds back the program; everything else goes on.
+        let mut held: Option<Event> = None;
         let mut idle_since = Some(tokio::time::Instant::now());
         let mut output_done = false;
         // The exit, once the process has ended, and when that was noticed.
@@ -372,15 +396,11 @@ impl Pump {
         loop {
             if let Some((info, at)) = &exited
                 && !reported
+                && held.is_none()
                 && (output_done || at.elapsed() >= OUTPUT_GRACE)
             {
                 reported = true;
-                if let Some(events) = &subscriber
-                    && events.send(Event::Exit(info.clone())).await.is_err()
-                {
-                    subscriber = None;
-                    idle_since = Some(tokio::time::Instant::now());
-                }
+                deliver(Event::Exit(info.clone()), &mut held, &mut subscriber, &mut idle_since);
                 if ending {
                     break;
                 }
@@ -388,19 +408,28 @@ impl Pump {
             let idle_deadline = idle_since.map(|since| since + self.idle_timeout);
             let grace_deadline = exited.as_ref().filter(|_| !reported).map(|(_, at)| *at + OUTPUT_GRACE);
             let watched = subscriber.clone();
+            let waiting = held.is_some();
 
             tokio::select! {
-                chunk = output.recv(), if !output_done => match chunk {
+                chunk = output.recv(), if !output_done && !waiting => match chunk {
                     Some(chunk) => {
                         scrollback.push(&chunk);
-                        if let Some(events) = &subscriber
-                            && events.send(Event::Output(Bytes::from(chunk))).await.is_err()
-                        {
-                            subscriber = None;
-                            idle_since = Some(tokio::time::Instant::now());
-                        }
+                        deliver(Event::Output(Bytes::from(chunk)), &mut held, &mut subscriber, &mut idle_since);
                     }
                     None => output_done = true,
+                },
+                // Room for the held event.
+                permit = async { match &watched { Some(events) => events.reserve().await, None => std::future::pending().await } }, if waiting && watched.is_some() => match permit {
+                    Ok(permit) => {
+                        if let Some(event) = held.take() {
+                            permit.send(event);
+                        }
+                    }
+                    Err(_) => {
+                        held = None;
+                        subscriber = None;
+                        idle_since = Some(tokio::time::Instant::now());
+                    }
                 },
                 status = &mut exit, if exited.is_none() => {
                     // The waiter thread always sends; without it, report a failure.
@@ -409,10 +438,13 @@ impl Pump {
                 },
                 Some(message) = control.recv() => match message {
                     Control::Attach(events) => {
+                        // The replay includes anything held for the previous subscriber.
+                        held = None;
                         let replay: Vec<u8> = scrollback.bytes.iter().copied().collect();
-                        let mut connected = replay.is_empty() || events.send(Event::Output(Bytes::from(replay))).await.is_ok();
+                        // A new channel has room for both messages.
+                        let mut connected = replay.is_empty() || events.try_send(Event::Output(Bytes::from(replay))).is_ok();
                         if connected && reported && let Some((info, _)) = &exited {
-                            connected = events.send(Event::Exit(info.clone())).await.is_ok();
+                            connected = events.try_send(Event::Exit(info.clone())).is_ok();
                         }
                         // Dropping the previous sender closes that WebSocket.
                         subscriber = connected.then_some(events);
@@ -427,7 +459,7 @@ impl Pump {
                     }
                 },
                 // A closed WebSocket starts the idle clock.
-                () = async { if let Some(events) = &watched { events.closed().await } }, if watched.is_some() => {
+                () = async { if let Some(events) = &watched { events.closed().await } }, if watched.is_some() && !waiting => {
                     subscriber = None;
                     idle_since = Some(tokio::time::Instant::now());
                 },
@@ -443,8 +475,32 @@ impl Pump {
                     self.session.stop();
                 },
             }
+            // A stopped session doesn't wait for a subscriber that stopped reading.
+            if ending && held.is_some() && exited.is_some() {
+                held = None;
+            }
         }
         self.sessions.remove(&self.id);
+    }
+}
+
+/// Sends `event` to the subscriber, if any, without waiting: with no room, it
+/// is held for later; with the subscriber gone, it is dropped and the idle
+/// clock starts.
+fn deliver(
+    event: Event,
+    held: &mut Option<Event>,
+    subscriber: &mut Option<mpsc::Sender<Event>>,
+    idle_since: &mut Option<tokio::time::Instant>,
+) {
+    let Some(events) = subscriber.as_ref() else { return };
+    match events.try_send(event) {
+        Ok(()) => {}
+        Err(TrySendError::Full(event)) => *held = Some(event),
+        Err(TrySendError::Closed(_)) => {
+            *subscriber = None;
+            *idle_since = Some(tokio::time::Instant::now());
+        }
     }
 }
 

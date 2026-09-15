@@ -29,6 +29,7 @@ export interface SocketLike {
   close(code?: number, reason?: string): void;
 }
 
+const CONNECTING = 0;
 const OPEN = 1;
 
 /** The WebSocket address of a session, on the page's own server. */
@@ -98,7 +99,12 @@ export class SessionSocket {
   /** Disconnects without reporting anything (the session keeps running until stopped or idle). */
   dispose(): void {
     this.ended = true;
-    this.socket.close(1000, "closed by the page");
+    // Closing a socket that is still connecting logs an error in browsers; close it once open.
+    if (this.socket.readyState === CONNECTING) {
+      this.socket.onopen = () => this.socket.close(1000, "closed by the page");
+    } else {
+      this.socket.close(1000, "closed by the page");
+    }
   }
 
   private sendResize(size: TerminalSize): void {

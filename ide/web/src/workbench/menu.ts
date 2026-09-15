@@ -10,14 +10,20 @@ export interface MenuItem {
 }
 
 let openMenu: HTMLElement | null = null;
+/** Removes the open menu's window listeners. */
+let cleanup: (() => void) | null = null;
 
 export function closeMenu(): void {
   openMenu?.remove();
   openMenu = null;
+  cleanup?.();
+  cleanup = null;
 }
 
 export function showMenu(x: number, y: number, items: (MenuItem | "separator")[]): void {
   closeMenu();
+  // Focus goes back where it was when the menu is dismissed with Escape.
+  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const buttons: HTMLButtonElement[] = [];
   const menu = h(
     "div",
@@ -47,6 +53,7 @@ export function showMenu(x: number, y: number, items: (MenuItem | "separator")[]
     const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
     if (event.key === "Escape") {
       closeMenu();
+      opener?.focus();
     } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       const step = event.key === "ArrowDown" ? 1 : buttons.length - 1;
@@ -63,9 +70,11 @@ export function showMenu(x: number, y: number, items: (MenuItem | "separator")[]
   const dismiss = (event: Event) => {
     if (event instanceof MouseEvent && menu.contains(event.target as Node)) return;
     closeMenu();
-    window.removeEventListener("mousedown", dismiss, true);
-    window.removeEventListener("blur", dismiss);
   };
   window.addEventListener("mousedown", dismiss, true);
   window.addEventListener("blur", dismiss);
+  cleanup = () => {
+    window.removeEventListener("mousedown", dismiss, true);
+    window.removeEventListener("blur", dismiss);
+  };
 }

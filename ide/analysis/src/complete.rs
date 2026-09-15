@@ -39,9 +39,10 @@ pub struct CompletionItem {
     pub apply: Option<String>,
     /// A CodeMirror snippet template to insert instead of the label:
     /// `${name}` marks a field to fill in (fields with the same name are
-    /// edited together), `${}` an unnamed field, `${0}` where the cursor
-    /// ends, and `\t` one level of indentation. Tab visits the fields in
-    /// order; reaching the last one ends the snippet.
+    /// edited together), `${}` an unnamed field, and `\t` one level of
+    /// indentation. Tab visits the fields in order; reaching the last one ends
+    /// the snippet. (`${0}` isn't used: CodeMirror visits it first when unnumbered
+    /// fields come before it.)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snippet: Option<String>,
     /// How much to prefer this item among equally good matches.
@@ -164,7 +165,8 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
         return (type_items(&k, after_arrow), word_start, byte);
     }
 
-    let at_line_start = matches!(prev_token, None | Some(Token::Newline));
+    // (`prev_token` is also `None` after invalid text, which isn't a line start.)
+    let at_line_start = prev.is_none() || prev_token == Some(&Token::Newline);
     if at_line_start {
         let items = match blocks.first() {
             None => item_level_items(),
@@ -200,10 +202,17 @@ fn in_comment_or_text(source: &str, scan: &Scan, byte: usize) -> bool {
             LexKind::Comment => inside || at_end,
             LexKind::Token(Token::Text(_)) => inside,
             // A rejected literal; an unterminated one runs to the cursor.
-            LexKind::Invalid(_) if text.starts_with('"') => inside || (at_end && !(text.len() > 1 && text.ends_with('"'))),
+            LexKind::Invalid(_) if text.starts_with('"') => inside || (at_end && !closes_text(text)),
             _ => false,
         }
     })
+}
+
+/// Whether a text literal's last `"` closes it, rather than being its opening
+/// quote or an escaped `\"`.
+fn closes_text(text: &str) -> bool {
+    let Some(body) = text.strip_prefix('"').and_then(|rest| rest.strip_suffix('"')) else { return false };
+    body.chars().rev().take_while(|c| *c == '\\').count() % 2 == 0
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -483,7 +492,7 @@ fn item_level_items() -> Vec<CompletionItem> {
         keyword("task"),
         keyword("shape"),
         keyword("kind"),
-        snippet("task", "a task", "task ${name}(${})\n\t${0}\nfi"),
+        snippet("task", "a task", "task ${name}(${})\n\t${}\nfi"),
         snippet("task -> type", "a task that sends a value", "task ${name}(${}) -> ${type}\n\t<- ${value}\nfi"),
         snippet("shape", "a shape with a field", "shape ${Name}\n\t${field}: ${type}\nfi"),
         snippet("kind", "a kind with a variant", "kind ${Name}\n\t${Variant}\nfi"),
@@ -544,6 +553,23 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
             detail: format!("{} {}", kind, variant.detail).trim().to_string(),
             apply: None,
             snippet,
+            boost: GLOBAL,
+        });
+    }
+    // A shape's value is a literal with every field: `Point { x: ${x}, y: ${y} }`.
+    for (id, shape) in k.symbols().iter().enumerate().filter(|(_, s)| s.kind == SymbolKind::Shape) {
+        let mut used = Vec::new();
+        let fields: Vec<String> = k
+            .children(id)
+            .map(|(_, field)| format!("{}: ${{{}}}", field.name, unique(&mut used, &field.name)))
+            .collect();
+        let body = if fields.is_empty() { "{}".to_string() } else { format!("{{ {} }}", fields.join(", ")) };
+        items.push(CompletionItem {
+            label: shape.name.clone(),
+            kind: CompletionKind::Type,
+            detail: "shape".to_string(),
+            apply: None,
+            snippet: Some(format!("{} {}", shape.name, body)),
             boost: GLOBAL,
         });
     }

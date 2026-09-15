@@ -125,6 +125,9 @@ impl Generator {
         if has_main {
             self.w.blank();
             self.w.open("int main(void)");
+            // Line by line even into a pipe, so output isn't lost if the
+            // program then crashes (on `none`, say).
+            self.w.line("setvbuf(stdout, NULL, _IOLBF, BUFSIZ);");
             self.w.line("vela_main();");
             self.w.line("return 0;");
             self.w.close();

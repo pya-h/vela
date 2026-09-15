@@ -78,7 +78,10 @@ fn check_run(source: &Path, expected_path: &Path, scratch: &Path) -> Option<Stri
     if let Some(failure) = check_strict_c(source, scratch) {
         return Some(failure);
     }
-    let run = Command::new(&exe).output().unwrap();
+    let run = match run_with_timeout(&exe) {
+        Some(run) => run,
+        None => return Some(format!("{}: still running after {} seconds", name, RUN_TIMEOUT.as_secs())),
+    };
     if !run.status.success() {
         return Some(format!("{}: program exited with {}", name, run.status));
     }
@@ -90,6 +93,40 @@ fn check_run(source: &Path, expected_path: &Path, scratch: &Path) -> Option<Stri
         ));
     }
     None
+}
+
+/// How long a test program may run: a program that loops forever fails its
+/// test instead of hanging the suite.
+const RUN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Runs `exe`, capturing its output; `None` (after killing it) if it runs too long.
+fn run_with_timeout(exe: &Path) -> Option<std::process::Output> {
+    use std::process::Stdio;
+    let mut child = Command::new(exe).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    // Read the output on threads, so a program writing a lot doesn't block on a full pipe.
+    let mut stdout = child.stdout.take().unwrap();
+    let mut stderr = child.stderr.take().unwrap();
+    let out = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut stdout, &mut bytes).map(|_| bytes).unwrap_or_default()
+    });
+    let err = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut stderr, &mut bytes).map(|_| bytes).unwrap_or_default()
+    });
+    let started = std::time::Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if started.elapsed() > RUN_TIMEOUT {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    Some(std::process::Output { status, stdout: out.join().unwrap(), stderr: err.join().unwrap() })
 }
 
 /// Compiles the C generated for `source` with `STRICT_C_FLAGS`.

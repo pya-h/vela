@@ -45,6 +45,10 @@ pub enum FsError {
     NotText,
     /// The file changed since the editor read it; `hash` is its current hash.
     Changed { hash: String },
+    /// The file is read-only.
+    ReadOnly,
+    /// The operating system refused access.
+    Denied,
     Io(io::Error),
 }
 
@@ -53,6 +57,7 @@ impl From<io::Error> for FsError {
         match error.kind() {
             io::ErrorKind::NotFound => FsError::NotFound,
             io::ErrorKind::AlreadyExists => FsError::AlreadyExists,
+            io::ErrorKind::PermissionDenied | io::ErrorKind::ReadOnlyFilesystem => FsError::Denied,
             _ => FsError::Io(error),
         }
     }
@@ -178,8 +183,11 @@ impl Workspace {
                     continue;
                 }
                 EntryKind::Folder
-            } else {
+            } else if metadata.is_file() {
                 EntryKind::File
+            } else {
+                // Pipes, sockets, and devices: reading one could block forever.
+                continue;
             };
             found.push((name, path, kind));
         }
@@ -230,6 +238,9 @@ impl Workspace {
         if !metadata.is_file() {
             return Err(FsError::NotAFile);
         }
+        if metadata.permissions().readonly() {
+            return Err(FsError::ReadOnly);
+        }
         if let Some(base) = base_hash {
             let current = content_hash(&fs::read(&resolved)?);
             if current != base {
@@ -237,10 +248,22 @@ impl Workspace {
             }
         }
         let folder = resolved.parent().ok_or(FsError::NotAFile)?;
-        let name = resolved.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let temporary = folder.join(format!(".{}.{}.vela-studio-tmp", name, random_hex(6)?));
+        // A short name, so a file whose name is near the length limit still saves.
+        let temporary = folder.join(format!(".vela-studio-{}.tmp", random_hex(6)?));
+        let created = OpenOptions::new().write(true).create_new(true).open(&temporary);
+        let mut file = match created {
+            Ok(file) => file,
+            // The folder can't take a new file, but the file itself may be
+            // writable: write it in place instead.
+            Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {
+                let mut file = OpenOptions::new().write(true).truncate(true).open(&resolved)?;
+                file.write_all(content.as_bytes())?;
+                file.sync_all()?;
+                return Ok(content_hash(content.as_bytes()));
+            }
+            Err(error) => return Err(error.into()),
+        };
         let written = (|| {
-            let mut file = OpenOptions::new().write(true).create_new(true).open(&temporary)?;
             file.write_all(content.as_bytes())?;
             file.sync_all()?;
             fs::set_permissions(&temporary, metadata.permissions())?;
@@ -319,6 +342,10 @@ fn valid_segment(segment: &str) -> bool {
 
 /// A file's bytes, refusing folders and files over the size limit.
 fn read_limited(path: &Path) -> Result<Vec<u8>> {
+    // Checked before opening: opening a pipe blocks until something writes to it.
+    if !fs::metadata(path)?.is_file() {
+        return Err(FsError::NotAFile);
+    }
     let file = fs::File::open(path)?;
     if !file.metadata()?.is_file() {
         return Err(FsError::NotAFile);

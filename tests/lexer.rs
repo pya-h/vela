@@ -67,7 +67,13 @@ fn check_agreement(source: &str, what: &str) {
 fn position(source: &str, offset: usize) -> Span {
     let before = &source[..offset];
     let line = before.matches('\n').count() + 1;
-    let col = before.rsplit('\n').next().unwrap().chars().count() + 1;
+    // The `\r` of a CRLF line end takes no column.
+    let last = before.rsplit('\n').next().unwrap();
+    let mut col = last.chars().count() + 1 - usize::from(last.ends_with('\r') && source[offset..].starts_with('\n'));
+    // A byte order mark at the start takes no column either.
+    if line == 1 && source.starts_with('\u{feff}') && offset > 0 {
+        col -= 1;
+    }
     Span::new(line, col)
 }
 
@@ -111,6 +117,7 @@ fn agrees_with_the_compiler_on_malformed_input() {
         "", "\"", "\"abc", "\"a\\", "\"a\\q\" x", "\"a\\q\nb", "\"line one\nline two\"", "_x", "a__b", "café",
         "élan", "12abc", "1.5e3", "99999999999999999999", "x @ y", "a ! b", "\0", "\"\0\"", "# only a comment",
         "task main()\n    show(\"unterminated)\nfi\n", "\"bad \\q then\nunterminated",
+        "x\r\ny", "# comment\r\nfi", "\"a\\\r\nb\"", "\u{feff}task", "1.", "1..5", "a && b", "!x",
     ];
     for source in cases {
         check_agreement(source, &format!("{:?}", source));
@@ -205,4 +212,40 @@ fn builtin_types_are_named_as_written() {
         assert_eq!(Type::builtin(name).as_ref(), Some(ty));
     }
     assert_eq!(Type::builtin("Point"), None);
+}
+
+#[test]
+fn crlf_line_ends_read_like_lf() {
+    // Positions don't count the `\r`, so errors point where they would in an LF file.
+    let tokens = highlight("bind x =\r\nfi # done\r\n");
+    let newline = &tokens[3];
+    assert_eq!((newline.kind.clone(), newline.start), (token(Token::Newline), Span::new(1, 9)));
+    assert_eq!(tokens[4].start, Span::new(2, 1));
+    // A comment stops before the `\r`.
+    assert_eq!(tokens[5].kind, LexKind::Comment);
+    assert_eq!(tokens[5].range, 13..19);
+    // A backslash at the end of a CRLF line is reported like one at the end of an LF line.
+    assert_eq!(kinds("\"a\\\r\nb\"")[0], invalid(1, 3, "invalid escape: '\\' at the end of a line"));
+    // A line break inside text is `\n` either way.
+    assert_eq!(kinds("\"a\r\nb\"")[0], token(Token::Text("a\nb".into())));
+}
+
+#[test]
+fn a_byte_order_mark_is_skipped() {
+    let tokens = highlight("\u{feff}fi");
+    assert_eq!(tokens[0].kind, token(Token::Fi));
+    // Columns start after it; byte ranges still count it.
+    assert_eq!((tokens[0].start, tokens[0].range.clone()), (Span::new(1, 1), 3..5));
+}
+
+#[test]
+fn common_mistakes_get_hints() {
+    assert_eq!(kinds("1.")[0], invalid(1, 1, "invalid number '1.': write '1.0'"));
+    assert_eq!(kinds("1..5")[1], token(Token::Range));
+    assert_eq!(kinds("a && b")[1], invalid(1, 3, "unexpected '&&'; Vela writes 'and'"));
+    assert_eq!(kinds("a || b")[1], invalid(1, 3, "unexpected '||'; Vela writes 'or'"));
+    assert_eq!(kinds("!x")[0], invalid(1, 1, "unexpected '!'; Vela negates with 'not'"));
+    // Floats are described as Vela writes them.
+    assert_eq!(Token::Float(1e20).describe(), "float 100000000000000000000.0");
+    assert_eq!(Token::Float(2.5).describe(), "float 2.5");
 }

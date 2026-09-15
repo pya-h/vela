@@ -12,11 +12,25 @@ export interface Choice<T> {
   danger?: boolean;
 }
 
+let dialogs = 0;
+
 function open(content: HTMLElement[], className = ""): HTMLDialogElement {
   const dialog = h("dialog", { class: `dialog ${className}`.trim() }, ...content);
+  // Screen readers announce the dialog by its title and message.
+  const id = `dialog-${++dialogs}`;
+  const title = dialog.querySelector(".dialog-title");
+  const message = dialog.querySelector(".dialog-message");
+  if (title) {
+    title.id = `${id}-title`;
+    dialog.setAttribute("aria-labelledby", title.id);
+  }
+  if (message) {
+    message.id = `${id}-message`;
+    dialog.setAttribute("aria-describedby", message.id);
+  }
   document.body.append(dialog);
   dialog.addEventListener("close", () => {
-    // Let the closing animation finish before removing it.
+    // Removed a little later, so the answer's handlers still find it.
     setTimeout(() => dialog.remove(), 200);
   });
   dialog.showModal();

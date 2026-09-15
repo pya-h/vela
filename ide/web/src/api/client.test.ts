@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ApiError, StudioApi } from "./client";
-import { takeToken } from "./session";
+import { obtainToken, takeToken } from "./session";
 
 interface Call {
   url: string;
@@ -92,5 +92,40 @@ describe("takeToken", () => {
     expect(takeToken({ hash: "", pathname: "/", search: "" }, history, storage({ "vela-studio:token": "kept" }))).toBe("kept");
     expect(takeToken({ hash: "#other=1", pathname: "/", search: "" }, history, storage())).toBeNull();
     expect(takeToken({ hash: "", pathname: "/", search: "" }, history, null)).toBeNull();
+  });
+});
+
+describe("obtainToken", () => {
+  function storage() {
+    const data = new Map<string, string>();
+    return { data, getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+  }
+
+  it("exchanges a launch code for the token, once", async () => {
+    const store = storage();
+    const replaced: string[] = [];
+    const history = { replaceState: (_: unknown, __: string, url: string) => void replaced.push(url) };
+    const bodies: unknown[] = [];
+    const fetch = async (url: string, init: RequestInit) => {
+      expect(url).toBe("/api/launch");
+      bodies.push(JSON.parse(String(init.body)));
+      return bodies.length === 1 ? Response.json({ token: "real" }) : Response.json({ error: "used" }, { status: 403 });
+    };
+    const place = { hash: "#launch=code1", pathname: "/", search: "" };
+    expect(await obtainToken(place, history, store, fetch)).toBe("real");
+    expect(bodies).toEqual([{ code: "code1" }]);
+    expect(replaced).toEqual(["/"]);
+    expect(store.data.get("vela-studio:token")).toBe("real");
+    // A used code falls back to the token kept earlier in the tab.
+    expect(await obtainToken(place, history, store, fetch)).toBe("real");
+    expect(await obtainToken(place, history, null, fetch)).toBeNull();
+  });
+
+  it("reads a token from the address without calling the server", async () => {
+    const fetch = async () => {
+      throw new Error("no call expected");
+    };
+    const history = { replaceState: () => {} };
+    expect(await obtainToken({ hash: "#token=abc", pathname: "/", search: "" }, history, null, fetch)).toBe("abc");
   });
 });

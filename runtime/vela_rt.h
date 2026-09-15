@@ -18,6 +18,11 @@ static inline void vela__rt__show_int(int64_t x) {
 }
 
 static inline void vela__rt__show_float(double x) {
+    /* C libraries print a NaN's sign inconsistently (`-nan` or `nan`). */
+    if (isnan(x)) {
+        puts("nan");
+        return;
+    }
     printf("%g\n", x);
 }
 

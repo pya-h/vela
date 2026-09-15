@@ -20,8 +20,8 @@ mod ws;
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
@@ -74,7 +74,12 @@ pub struct Studio {
     pub sessions: Arc<Sessions>,
     /// Whether the C compiler could be started when the server launched.
     cc_available: bool,
+    /// The outstanding launch code (see `launch_code`) and when it was made.
+    launch: Mutex<Option<(Token, Instant)>>,
 }
+
+/// How long a launch code can be exchanged for the token.
+const LAUNCH_CODE_LIFETIME: Duration = Duration::from_secs(300);
 
 impl Studio {
     /// Opens the workspace (which must be an existing folder) and checks the
@@ -83,7 +88,29 @@ impl Studio {
         let workspace = workspace::Workspace::open(&config.workspace)?;
         let cc_available = c_compiler_starts(&config.cc);
         let sessions = Sessions::new(config.idle_timeout, config.max_terminals);
-        Ok(Arc::new(Studio { config, workspace, sessions, cc_available }))
+        Ok(Arc::new(Studio { config, workspace, sessions, cc_available, launch: Mutex::new(None) }))
+    }
+
+    /// A new one-time code that the page exchanges for the token
+    /// (`POST /api/launch`), replacing any earlier one. The browser is opened
+    /// with the code rather than the token, because a program's command line
+    /// is visible to other users of the machine; a code that has been used,
+    /// or is a few minutes old, is worthless.
+    pub fn launch_code(&self) -> std::io::Result<String> {
+        let code = Token::generate()?;
+        let text = code.as_str().to_string();
+        *self.launch.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some((code, Instant::now()));
+        Ok(text)
+    }
+
+    /// Takes the launch code if `candidate` is it and it hasn't expired.
+    fn redeem_launch_code(&self, candidate: &str) -> bool {
+        let mut launch = self.launch.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let valid = launch.as_ref().is_some_and(|(code, made)| code.matches(candidate) && made.elapsed() < LAUNCH_CODE_LIFETIME);
+        if valid {
+            *launch = None;
+        }
+        valid
     }
 
     /// The workspace folder, with symlinks resolved.
@@ -124,6 +151,7 @@ pub fn router(studio: Arc<Studio>) -> Router {
         .route_layer(middleware::from_fn_with_state(studio.clone(), security::require_token));
     Router::new()
         .merge(api)
+        .route("/api/launch", post(api::launch))
         .route("/api/session/{id}/ws", get(ws::session_socket))
         .fallback(web::serve)
         .layer(middleware::from_fn_with_state(studio.clone(), security::guard))

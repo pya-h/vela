@@ -42,7 +42,7 @@ export class Workbench {
   private readonly documents = new Documents();
   private readonly view: EditorView;
   private readonly editorHost: HTMLElement;
-  private readonly welcome: HTMLElement;
+  private welcome: HTMLElement;
   private readonly explorer: Explorer;
   private readonly outline: Outline;
   private tree: Tree;
@@ -81,7 +81,7 @@ export class Workbench {
     });
     this.explorer.setTree(tree);
     this.outline = new Outline((item) => this.jumpTo(item));
-    const tabs = new Tabs(this.documents, { activate: (path) => this.activate(path), close: (path) => void this.close(path) });
+    const tabs = new Tabs(this.documents, { activate: (path) => this.activate(path), close: (path) => this.close(path) });
 
     this.view = new EditorView({ state: EditorState.create({ extensions: EditorView.cspNonce.of(nonce) }) });
     this.editorHost = h("div", { class: "editor-host" }, this.view.dom);
@@ -187,6 +187,7 @@ export class Workbench {
     );
     const column = this.element.querySelector<HTMLElement>(".main-column");
     if (column) this.panel.mount(column);
+    this.panel.onHidden = () => this.focusEditor();
     this.onRunStatus(this.runner.status);
     this.setupResizer(resizer);
     this.applySidebar();
@@ -488,6 +489,11 @@ export class Workbench {
     try {
       this.tree = await this.api.files();
       this.explorer.setTree(this.tree);
+      // The welcome screen lists the workspace's programs.
+      const welcome = this.buildWelcome();
+      welcome.hidden = this.welcome.hidden;
+      this.welcome.replaceWith(welcome);
+      this.welcome = welcome;
     } catch (error) {
       toast(`Couldn't list the files: ${message(error)}`, "error");
     }
@@ -565,6 +571,8 @@ export class Workbench {
       }
       this.explorer.renamed(entry.path, to);
       this.runner.renamed(entry.path, to);
+      this.updateOutline();
+      this.updateCursor();
       await this.refreshTree();
       if (this.documents.active) this.explorer.setActive(this.documents.active);
       this.persistTabs();
@@ -583,6 +591,8 @@ export class Workbench {
       for (const doc of this.documents.within(entry.path)) this.discard(doc.path);
       this.runner.deleted(entry.path);
       await this.refreshTree();
+      // The deleted row had focus; keep it in the explorer.
+      if (document.activeElement === document.body) this.explorer.focus();
     } catch (error) {
       toast(`Couldn't delete ${entry.path}: ${message(error)}`, "error");
     }
@@ -645,11 +655,6 @@ export class Workbench {
 
   private onRunKey(event: KeyboardEvent): void {
     if (event.altKey) return;
-    if (document.querySelector("dialog[open]")) {
-      // Not while a dialog asks something, but F5 mustn't reload the page either.
-      if (event.key === "F5") event.preventDefault();
-      return;
-    }
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
     let action: (() => void) | null = null;
@@ -669,6 +674,9 @@ export class Workbench {
     }
     if (!action) return;
     event.preventDefault();
+    // Not while a dialog asks something, but the browser's own action (F5
+    // reloads, Ctrl+J opens downloads) mustn't happen either.
+    if (document.querySelector("dialog[open]")) return;
     event.stopPropagation();
     action();
   }
@@ -721,7 +729,9 @@ export class Workbench {
       to = Math.min(Math.max(problem.to, from), text.length);
     } else if (problem.line !== null) {
       const line = text.line(Math.max(1, Math.min(problem.line, text.lines)));
-      from = to = line.from + Math.max(0, Math.min((problem.col ?? 1) - 1, line.length));
+      // The compiler counts columns in characters; the editor in UTF-16 units.
+      const before = [...line.text].slice(0, Math.max(0, (problem.col ?? 1) - 1)).join("");
+      from = to = line.from + before.length;
     }
     this.view.dispatch({
       selection: { anchor: from, head: to },
@@ -740,7 +750,7 @@ export class Workbench {
     const { state } = this.view;
     const head = state.selection.main.head;
     const line = state.doc.lineAt(head);
-    const selected = state.selection.ranges.reduce((total, range) => total + range.to - range.from, 0);
+    const selected = state.selection.ranges.reduce((total, range) => total + [...state.sliceDoc(range.from, range.to)].length, 0);
     // Columns count characters, as the compiler's do.
     const col = [...line.text.slice(0, head - line.from)].length + 1;
     this.statusBar.setCursor({ line: line.number, col, selected }, doc.path.endsWith(".vela") ? "Vela" : "Plain Text");
@@ -773,9 +783,13 @@ export class Workbench {
   }
 
   private jumpTo(item: OutlineItem): void {
+    // The outline updates a moment after typing, so it may be behind the text.
+    const length = this.view.state.doc.length;
+    const from = Math.min(item.nameFrom, length);
+    const to = Math.min(Math.max(item.nameTo, from), length);
     this.view.dispatch({
-      selection: { anchor: item.nameFrom, head: item.nameTo },
-      effects: EditorView.scrollIntoView(item.nameFrom, { y: "center" }),
+      selection: { anchor: from, head: to },
+      effects: EditorView.scrollIntoView(from, { y: "center" }),
       userEvent: "select.outline",
     });
     this.view.focus();
@@ -796,13 +810,14 @@ export class Workbench {
   }
 
   private onGlobalKey(event: KeyboardEvent): void {
-    if (document.querySelector("dialog[open]")) return;
     const mod = event.ctrlKey || event.metaKey;
     if (!mod || event.altKey) return;
     const key = event.key.toLowerCase();
+    const dialogOpen = document.querySelector("dialog[open]") !== null;
     const run = (action: () => void) => {
+      // Inside a dialog the shortcut does nothing, rather than print or save the page.
       event.preventDefault();
-      action();
+      if (!dialogOpen) action();
     };
     if (key === "s" && event.shiftKey) run(() => void this.saveAll());
     else if (key === "s") run(() => void this.saveActive());

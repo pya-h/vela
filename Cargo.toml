@@ -2,6 +2,9 @@
 name = "vela"
 version = "0.1.0"
 edition = "2024"
+# Let chains (`if let … && …`), used across the workspace, need Rust 1.88.
+rust-version = "1.88"
+description = "A small systems language with a compiler to C11"
 
 [dependencies]
 

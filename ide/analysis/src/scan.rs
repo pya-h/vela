@@ -401,6 +401,8 @@ impl<'a> Classifier<'a> {
                 Token::Newline => {
                     in_task_header = false;
                     in_case_header = false;
+                    // Shape literals are on one line, so an unclosed `{` ends with it.
+                    braces.clear();
                 }
                 Token::Eof => {}
                 Token::Int(_) | Token::Float(_) => self.push(range, TokenClass::Number, None),
@@ -541,7 +543,14 @@ impl<'a> Classifier<'a> {
         if after == Some(&Token::LBrace) {
             return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind]));
         }
-        if let Some(id) = self.local(name) {
+        // A call always names a task or a variant, even when a variable has the same name.
+        if after == Some(&Token::LParen)
+            && let Some(id) = self.global(name, &[SymbolKind::Task, SymbolKind::Variant])
+        {
+            let kind = self.symbols.get(id).map_or(SymbolKind::Task, |s| s.kind);
+            return (kind.class(), Some(id));
+        }
+        if let Some(id) = self.local(name, tokens.range(p).start) {
             let kind = self.symbols.get(id).map_or(SymbolKind::Variable, |s| s.kind);
             return (kind.class(), Some(id));
         }
@@ -591,14 +600,15 @@ impl<'a> Classifier<'a> {
         id
     }
 
-    /// The visible variable or parameter called `name`, innermost first.
-    fn local(&self, name: &str) -> Option<usize> {
+    /// The variable or parameter called `name` visible at byte `at`, innermost
+    /// first. (A variable isn't visible in its own initializer: `bind y = y + 1`.)
+    fn local(&self, name: &str, at: usize) -> Option<usize> {
         self.scopes
             .iter()
             .rev()
             .flat_map(|scope| scope.variables.iter().rev())
             .copied()
-            .find(|&id| self.symbols.get(id).is_some_and(|s| s.name == name))
+            .find(|&id| self.symbols.get(id).is_some_and(|s| s.name == name && s.visible.start <= at))
     }
 
     /// The top-level declaration called `name`, if it is one of `kinds`.

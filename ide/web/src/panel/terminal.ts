@@ -51,6 +51,13 @@ function currentTheme(): ITheme {
   return Object.fromEntries(entries) as ITheme;
 }
 
+/** Ctrl/⌘+S, Ctrl/⌘+Shift+S, Ctrl/⌘+P, and Ctrl/⌘+Shift+O, which the workbench handles. */
+export function isWorkbenchShortcut(event: KeyboardEvent): boolean {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return false;
+  const key = event.key.toLowerCase();
+  return key === "s" || (key === "p" && !event.shiftKey) || (key === "o" && event.shiftKey);
+}
+
 export interface TerminalViewOptions {
   /** The accessible name, such as "Terminal". */
   label: string;
@@ -86,6 +93,9 @@ export class TerminalView {
         if (event.ctrlKey || event.metaKey) window.open(uri, "_blank", "noopener,noreferrer");
       }),
     );
+    // Saving and the pickers work from a terminal too: xterm.js would send
+    // these keys to the program (Ctrl+S would even pause its output).
+    this.terminal.attachCustomKeyEventHandler((event) => !isWorkbenchShortcut(event));
     this.terminal.onData((data) => this.options.onData(data));
     new MutationObserver(() => {
       this.terminal.options.theme = currentTheme();

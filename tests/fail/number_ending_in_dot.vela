@@ -1,0 +1,4 @@
+# error: 3:10: invalid number '1.': write '1.0'
+task main()
+    show(1.)
+fi

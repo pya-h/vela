@@ -373,3 +373,75 @@ async fn a_missing_c_compiler_is_reported() {
     let build = call(&app, &studio, Method::POST, "/api/build", Some(json!({ "path": "hello.vela" }))).await.json();
     assert_eq!(build["error"]["kind"], "compiler-missing");
 }
+
+#[tokio::test]
+async fn a_launch_code_gives_the_token_once() {
+    let dir = TempDir::new("launch");
+    let (app, studio) = app(config(&dir.workspace(), PORT));
+    let redeem = |code: String| {
+        Request::post("/api/launch")
+            .header("host", "127.0.0.1:4000")
+            .header("origin", "http://127.0.0.1:4000")
+            .header("content-type", "application/json")
+            .body(Body::from(json!({ "code": code }).to_string()))
+            .unwrap()
+    };
+    // No code has been made yet, and a guess is refused.
+    assert_eq!(send(&app, redeem("0".repeat(64))).await.status, StatusCode::FORBIDDEN);
+    let code = studio.launch_code().unwrap();
+    let first = send(&app, redeem(code.clone())).await;
+    assert_eq!(first.status, StatusCode::OK);
+    assert_eq!(first.json()["token"], studio.config.token.as_str());
+    assert_eq!(first.header("cache-control"), Some("no-store"));
+    let again = send(&app, redeem(code)).await;
+    assert_eq!(again.status, StatusCode::FORBIDDEN);
+    assert_eq!(again.json()["error"], "this link has already been used or has expired");
+}
+
+#[tokio::test]
+async fn malformed_requests_get_json_errors() {
+    let dir = TempDir::new("malformed");
+    let (app, studio) = app(config(&dir.workspace(), PORT));
+    let missing_query = call(&app, &studio, Method::GET, "/api/file", None).await;
+    assert_eq!(missing_query.status, StatusCode::BAD_REQUEST);
+    assert!(missing_query.json()["error"].is_string());
+    let wrong_shape = call(&app, &studio, Method::POST, "/api/file/new", Some(json!({ "name": "x" }))).await;
+    assert_eq!(wrong_shape.status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(wrong_shape.json()["error"].is_string());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn special_files_are_not_listed_or_read() {
+    let dir = TempDir::new("fifo");
+    dir.write("hello.vela", HELLO);
+    let fifo = dir.workspace().join("pipe");
+    assert!(std::process::Command::new("mkfifo").arg(&fifo).status().unwrap().success());
+    let (app, studio) = app(config(&dir.workspace(), PORT));
+    let tree = call(&app, &studio, Method::GET, "/api/files", None).await.json();
+    assert_eq!(tree["entries"].as_array().unwrap().len(), 1, "{}", tree);
+    // Reading a pipe would block until something writes to it.
+    let read = tokio::time::timeout(std::time::Duration::from_secs(5), call(&app, &studio, Method::GET, "/api/file?path=pipe", None)).await;
+    assert_eq!(read.expect("reading a pipe must not block").status, StatusCode::BAD_REQUEST);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn saving_respects_read_only_files_and_long_names() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = TempDir::new("save-limits");
+    let locked = dir.write("locked.vela", HELLO);
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o444)).unwrap();
+    let long = format!("{}.vela", "n".repeat(240));
+    dir.write(&long, HELLO);
+    let (app, studio) = app(config(&dir.workspace(), PORT));
+
+    let refused = call(&app, &studio, Method::PUT, "/api/file", Some(json!({ "path": "locked.vela", "content": "x" }))).await;
+    assert_eq!(refused.status, StatusCode::FORBIDDEN);
+    assert_eq!(refused.json()["error"], "the file is read-only");
+    assert_eq!(dir.read("locked.vela"), HELLO);
+
+    let saved = call(&app, &studio, Method::PUT, "/api/file", Some(json!({ "path": long, "content": "x" }))).await;
+    assert_eq!(saved.status, StatusCode::OK, "{:?}", String::from_utf8_lossy(&saved.body));
+    assert_eq!(dir.read(&long), "x");
+}

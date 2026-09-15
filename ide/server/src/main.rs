@@ -36,7 +36,11 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match runtime.block_on(run(options)) {
+    let result = runtime.block_on(run(options));
+    // Don't wait on blocking work that may never finish (a read stuck on a
+    // file another program holds).
+    runtime.shutdown_timeout(std::time::Duration::from_secs(2));
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
             eprintln!("error: {}", message);
@@ -50,9 +54,14 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Option<Options>, Str
     let mut workspace = None;
     let mut port = 0;
     let mut open = true;
+    let mut only_folders = false;
     let mut args = args;
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            // After `--`, an argument is the folder even if it starts with `-`.
+            "--" if !only_folders => only_folders = true,
+            _ if only_folders && workspace.is_some() => return Err("only one workspace folder can be given".to_string()),
+            _ if only_folders => workspace = Some(PathBuf::from(arg)),
             "-h" | "--help" => return Ok(None),
             "--no-open" => open = false,
             "--port" => {
@@ -82,8 +91,15 @@ async fn run(options: Options) -> Result<(), String> {
     println!("Vela Studio is running for {}", studio.workspace_root().display());
     println!("  {}", url);
     println!("Press Ctrl+C to stop.");
-    if options.open && !open_browser(&url) {
-        println!("(Couldn't open a browser; open the address above.)");
+    if options.open {
+        // The browser gets a one-time code instead of the token: its command
+        // line can be read by other users of this machine.
+        let opened = studio
+            .launch_code()
+            .is_ok_and(|code| open_browser(&format!("http://127.0.0.1:{}/#launch={}", port, code)));
+        if !opened {
+            println!("(Couldn't open a browser; open the address above.)");
+        }
     }
 
     let sessions = studio.sessions.clone();
@@ -122,7 +138,14 @@ fn open_browser(url: &str) -> bool {
     } else {
         Command::new("xdg-open")
     };
-    command.arg(url).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_ok()
+    match command.arg(url).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
+        Ok(mut child) => {
+            // Waited for, so it doesn't linger as a zombie while the server runs.
+            std::thread::spawn(move || child.wait());
+            true
+        }
+        Err(_) => false,
+    }
 }
 
 #[cfg(test)]
@@ -142,6 +165,8 @@ mod tests {
         let given = parse(&["examples", "--port", "4000", "--no-open"]).unwrap().unwrap();
         assert_eq!((given.workspace, given.port, given.open), (PathBuf::from("examples"), 4000, false));
         assert!(parse(&["--help"]).unwrap().is_none());
+        let dashed = parse(&["--no-open", "--", "-folder"]).unwrap().unwrap();
+        assert_eq!((dashed.workspace, dashed.open), (PathBuf::from("-folder"), false));
     }
 
     #[test]

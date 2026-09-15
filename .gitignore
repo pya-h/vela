@@ -2,6 +2,9 @@
 # Binaries built from the examples (everything except the sources)
 /examples/*
 !/examples/*.vela
+!/examples/*.md
+# The `vela` command's default output
+a.out
 # Vela Studio frontend: dependencies and build outputs
 /ide/web/node_modules
 /ide/web/wasm

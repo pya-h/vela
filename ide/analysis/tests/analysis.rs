@@ -326,3 +326,28 @@ fn every_request_works_on_every_prefix_of_the_examples() {
         }
     }
 }
+
+#[test]
+fn a_call_names_a_task_even_when_a_variable_has_its_name() {
+    let source = "task double(n: int) -> int\n    <- n * 2\nfi\n\ntask main()\n    bind double = double(4)\n    show(double)\nfi\n";
+    assert_eq!(class_at(source, "double(4)", 0), TokenClass::Task);
+    assert_definition(source, ("double(4)", 0), ("double(n", 0));
+    assert_definition(source, ("double)", 0), ("double =", 0));
+    // A variable isn't visible in its own initializer.
+    let source = "task main()\n    bind y = y + 1\nfi\n";
+    assert_eq!(Analysis::new(source).definition(at(source, "y + 1", 0)), None);
+}
+
+#[test]
+fn hover_works_at_the_end_of_a_name() {
+    let source = "task main()\n    bind t = 1\n    show(t)\nfi\n";
+    let end_of_t = at(source, "t)", 0) + 1;
+    let hover = Analysis::new(source).hover(end_of_t).expect("a hover for t");
+    assert!(hover.code.contains("t: int"), "{}", hover.code);
+}
+
+#[test]
+fn an_unclosed_brace_ends_with_its_line() {
+    let source = "shape P\n    x: int\nfi\n\ntask main()\n    bind p = P { x: 1\n    bind q: int = 2\nfi\n";
+    assert_eq!(class_at(source, "int = 2", 0), TokenClass::TypeBuiltin);
+}

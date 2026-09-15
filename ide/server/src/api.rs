@@ -4,7 +4,9 @@
 use std::sync::Arc;
 
 use axum::Json;
-use axum::extract::{Path, Query, State};
+use axum::extract::rejection::JsonRejection;
+use axum::extract::{FromRequest, FromRequestParts, Path, Query, Request, State};
+use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use portable_pty::{CommandBuilder, PtySize};
@@ -51,6 +53,8 @@ impl From<FsError> for ApiError {
                 status: StatusCode::CONFLICT,
                 body: json!({ "error": "the file changed on disk", "hash": hash }),
             },
+            FsError::ReadOnly => ApiError::new(StatusCode::FORBIDDEN, "the file is read-only"),
+            FsError::Denied => ApiError::new(StatusCode::FORBIDDEN, "permission denied"),
             FsError::Io(error) => ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
         }
     }
@@ -64,11 +68,58 @@ impl From<std::io::Error> for ApiError {
 
 type ApiResult = Result<Response, ApiError>;
 
+/// `Json`, with a malformed body answered as `{"error": …}` like every other error.
+pub struct ApiJson<T>(pub T);
+
+impl<S: Send + Sync, T> FromRequest<S> for ApiJson<T>
+where
+    Json<T>: FromRequest<S, Rejection = JsonRejection>,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(request: Request, state: &S) -> Result<Self, ApiError> {
+        match Json::<T>::from_request(request, state).await {
+            Ok(Json(value)) => Ok(ApiJson(value)),
+            Err(rejection) => Err(ApiError::new(rejection.status(), rejection.body_text())),
+        }
+    }
+}
+
+/// `Query`, with a malformed query answered as `{"error": …}`.
+pub struct ApiQuery<T>(pub T);
+
+impl<S: Send + Sync, T: serde::de::DeserializeOwned> FromRequestParts<S> for ApiQuery<T> {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, ApiError> {
+        match Query::<T>::from_request_parts(parts, state).await {
+            Ok(Query(value)) => Ok(ApiQuery(value)),
+            Err(rejection) => Err(ApiError::new(rejection.status(), rejection.body_text())),
+        }
+    }
+}
+
 /// Runs blocking file-system or compiler work off the async threads.
 async fn blocking<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> Result<T, ApiError> {
     tokio::task::spawn_blocking(work)
         .await
         .map_err(|error| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))
+}
+
+#[derive(Deserialize)]
+pub struct LaunchRequest {
+    code: String,
+}
+
+/// Exchanges the one-time launch code for the token: `{"token": …}`. This is
+/// the one endpoint without the token (it's how the page gets it).
+pub async fn launch(State(studio): State<Arc<Studio>>, ApiJson(request): ApiJson<LaunchRequest>) -> ApiResult {
+    if !studio.redeem_launch_code(&request.code) {
+        return Err(ApiError::new(StatusCode::FORBIDDEN, "this link has already been used or has expired"));
+    }
+    let mut response = Json(json!({ "token": studio.config.token.as_str() })).into_response();
+    response.headers_mut().insert(axum::http::header::CACHE_CONTROL, axum::http::HeaderValue::from_static("no-store"));
+    Ok(response)
 }
 
 pub async fn info(State(studio): State<Arc<Studio>>) -> ApiResult {
@@ -92,7 +143,7 @@ pub struct PathQuery {
     path: String,
 }
 
-pub async fn read_file(State(studio): State<Arc<Studio>>, Query(query): Query<PathQuery>) -> ApiResult {
+pub async fn read_file(State(studio): State<Arc<Studio>>, ApiQuery(query): ApiQuery<PathQuery>) -> ApiResult {
     let path = query.path;
     let file = blocking({
         let path = path.clone();
@@ -112,7 +163,7 @@ pub struct WriteRequest {
     base_hash: Option<String>,
 }
 
-pub async fn write_file(State(studio): State<Arc<Studio>>, Json(request): Json<WriteRequest>) -> ApiResult {
+pub async fn write_file(State(studio): State<Arc<Studio>>, ApiJson(request): ApiJson<WriteRequest>) -> ApiResult {
     let hash = blocking(move || studio.workspace.write(&request.path, &request.content, request.base_hash.as_deref())).await??;
     Ok(Json(json!({ "hash": hash })).into_response())
 }
@@ -123,7 +174,7 @@ pub struct CreateRequest {
     kind: EntryKind,
 }
 
-pub async fn create_file(State(studio): State<Arc<Studio>>, Json(request): Json<CreateRequest>) -> ApiResult {
+pub async fn create_file(State(studio): State<Arc<Studio>>, ApiJson(request): ApiJson<CreateRequest>) -> ApiResult {
     let path = blocking(move || studio.workspace.create(&request.path, request.kind)).await??;
     Ok((StatusCode::CREATED, Json(json!({ "path": path }))).into_response())
 }
@@ -134,12 +185,12 @@ pub struct RenameRequest {
     to: String,
 }
 
-pub async fn rename_file(State(studio): State<Arc<Studio>>, Json(request): Json<RenameRequest>) -> ApiResult {
+pub async fn rename_file(State(studio): State<Arc<Studio>>, ApiJson(request): ApiJson<RenameRequest>) -> ApiResult {
     let path = blocking(move || studio.workspace.rename(&request.from, &request.to)).await??;
     Ok(Json(json!({ "path": path })).into_response())
 }
 
-pub async fn delete_file(State(studio): State<Arc<Studio>>, Json(request): Json<PathQuery>) -> ApiResult {
+pub async fn delete_file(State(studio): State<Arc<Studio>>, ApiJson(request): ApiJson<PathQuery>) -> ApiResult {
     blocking(move || studio.workspace.delete(&request.path)).await??;
     Ok(StatusCode::NO_CONTENT.into_response())
 }
@@ -151,7 +202,7 @@ pub struct BuildRequest {
 
 /// Builds a file. A failed build is a normal answer: `{"ok": false,
 /// "error": {kind, message, line, col, rendered}}`.
-pub async fn build(State(studio): State<Arc<Studio>>, Json(request): Json<BuildRequest>) -> ApiResult {
+pub async fn build(State(studio): State<Arc<Studio>>, ApiJson(request): ApiJson<BuildRequest>) -> ApiResult {
     let built = blocking(move || compile::build(&studio.workspace, &request.path, &studio.config.cc)).await??;
     Ok(match built {
         // The program is removed with its folder here; only running keeps it.
@@ -187,7 +238,7 @@ pub struct RunRequest {
 
 /// Builds a file and runs it in a new session (stopping the previous run):
 /// `{"ok": true, "session": id}`, or the build failure as from `build`.
-pub async fn run(State(studio): State<Arc<Studio>>, Json(request): Json<RunRequest>) -> ApiResult {
+pub async fn run(State(studio): State<Arc<Studio>>, ApiJson(request): ApiJson<RunRequest>) -> ApiResult {
     let built = blocking({
         let studio = studio.clone();
         let path = request.path.clone();
@@ -205,7 +256,7 @@ pub async fn run(State(studio): State<Arc<Studio>>, Json(request): Json<RunReque
 }
 
 /// Opens a shell in the workspace folder: `{"session": id}`.
-pub async fn terminal(State(studio): State<Arc<Studio>>, Json(size): Json<TerminalSize>) -> ApiResult {
+pub async fn terminal(State(studio): State<Arc<Studio>>, ApiJson(size): ApiJson<TerminalSize>) -> ApiResult {
     let mut command = match &studio.config.shell {
         Some(shell) => CommandBuilder::new(shell),
         None => CommandBuilder::new_default_prog(),
@@ -224,6 +275,7 @@ pub async fn stop(State(studio): State<Arc<Studio>>, Path(id): Path<String>) -> 
 fn session_error(error: SessionError) -> ApiError {
     match error {
         SessionError::TooManyTerminals => ApiError::new(StatusCode::TOO_MANY_REQUESTS, "too many terminals are open"),
+        SessionError::Closing => ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "Vela Studio is stopping"),
         SessionError::Spawn(message) => ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, format!("couldn't start the process: {}", message)),
     }
 }

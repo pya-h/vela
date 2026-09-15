@@ -130,3 +130,29 @@ fn partial_front_end_keeps_the_types_found_before_an_error() {
     let broken = driver::front_end_partial("task main(\n");
     assert!(broken.items.is_none() && broken.error.is_some());
 }
+
+#[test]
+fn deep_nesting_is_an_error_not_a_crash() {
+    // Test threads have small stacks (2 MiB), like the threads Vela Studio
+    // compiles on, so a missing limit shows up here as a crash.
+    let limit = vela::parser::MAX_NESTING;
+    let program = |expr: String| format!("task main()\n    show({})\nfi\n", expr);
+    let deep = limit + 10;
+    let cases = [
+        ("parentheses", program(format!("{}1{}", "(".repeat(deep), ")".repeat(deep)))),
+        ("an operator chain", program(vec!["1"; deep].join(" + "))),
+        ("unary operators", program(format!("{}1", "-".repeat(deep)))),
+        ("calls", format!("task id(n: int) -> int\n    <- n\nfi\n{}", program(format!("{}1{}", "id(".repeat(deep), ")".repeat(deep))))),
+        ("blocks", format!("task main()\n{}fi\n", "when true\n".repeat(deep) + &"fi\n".repeat(deep))),
+        ("pointer types", format!("task f(p: {}int)\nfi\n", "^".repeat(deep))),
+    ];
+    for (what, source) in cases {
+        let error = driver::generate_c(&source).expect_err(what);
+        assert!(error.message.contains("nested too deeply"), "{}: {}", what, error.message);
+    }
+    // Just below the limit still compiles.
+    let near = limit - 5;
+    let ok = program(format!("{}1{}", "(".repeat(near), ")".repeat(near)));
+    driver::generate_c(&ok).unwrap();
+    driver::generate_c(&program(vec!["1"; near].join(" + "))).unwrap();
+}

@@ -78,7 +78,8 @@ export class Shell {
           this.end(`\r\n${ansi.red("The connection to the terminal was lost.")} ${ansi.dim("Press any key to start a new one.")}\r\n`);
         },
       });
-      this.socket.resize(size);
+      // The size now, not when the request started: the panel may have changed meanwhile.
+      this.socket.resize(this.view.fit());
       for (const data of this.typed.splice(0)) this.socket.send(data);
     } catch (error) {
       const reason = error instanceof ApiError || error instanceof Error ? error.message : String(error);

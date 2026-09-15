@@ -8,7 +8,8 @@ import { icon } from "./icons";
 
 export interface TabActions {
   activate(path: string): void;
-  close(path: string): void;
+  /** Closes a tab, resolving once it is closed (or the user kept it). */
+  close(path: string): Promise<unknown>;
 }
 
 export class Tabs {
@@ -67,7 +68,8 @@ export class Tabs {
                   const index = docs.indexOf(doc) + (event.key === "ArrowRight" ? 1 : -1);
                   this.focusTab(docs[(index + docs.length) % docs.length]?.path);
                 } else if (event.key === "Delete") {
-                  this.actions.close(doc.path);
+                  // Focus stays in the tab list, on the tab that is now active.
+                  void this.actions.close(doc.path).then(() => this.focusTab(this.documents.active ?? undefined));
                 }
               },
             },

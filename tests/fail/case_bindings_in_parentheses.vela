@@ -1,0 +1,11 @@
+# error: 8:20: a case names its bindings without parentheses, as in 'case Circle value'
+kind Shape
+    Circle(radius: float)
+fi
+
+task main()
+    match Circle(1.0)
+        case Circle(r)
+            show(r)
+    fi
+fi

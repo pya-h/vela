@@ -400,7 +400,10 @@ impl Checker {
         match &base.kind {
             ExprKind::Var(name) => {
                 let info = self.lookup_or_err(name, span)?;
-                if !info.mutable {
+                // Only a shape has fields to assign; for anything else (a pointer,
+                // a kind) the field error from `field_type` is the useful one.
+                let is_shape = matches!(&info.ty, Type::Named(ty) if self.shapes.contains_key(ty));
+                if is_shape && !info.mutable {
                     return err(span, format!("cannot assign to a field of immutable variable '{}'", name));
                 }
                 self.check_expr(base)
@@ -424,7 +427,7 @@ impl Checker {
             let variant = kind.variants.iter().find(|v| v.tag == case.tag)
                 .ok_or_else(|| Error::at(case.span, format!("kind '{}' has no variant '{}'", kind_name, case.tag)))?;
             if case.binds.len() != variant.payload.len() {
-                return err(case.span, format!("case '{}' expects {} bindings, got {}", case.tag, variant.payload.len(), case.binds.len()));
+                return err(case.span, format!("case '{}' expects {}, got {}", case.tag, count(variant.payload.len(), "binding"), case.binds.len()));
             }
             if seen.contains(&case.tag) {
                 return err(case.span, format!("duplicate case '{}'", case.tag));
@@ -511,7 +514,7 @@ impl Checker {
                     })?
                     .clone();
                 if args.len() != params.len() {
-                    return err(span, format!("task '{}' expects {} args, got {}", name, params.len(), args.len()));
+                    return err(span, format!("task '{}' expects {}, got {}", name, count(params.len(), "argument"), args.len()));
                 }
                 for (arg, param) in args.iter_mut().zip(params.iter()) {
                     let aty = self.check_expr(arg)?;
@@ -526,7 +529,7 @@ impl Checker {
                     .map(|info| info.variant.clone())
                     .ok_or_else(|| Error::internal_at(span, format!("unknown variant '{}'", tag)))?;
                 if args.len() != variant.payload.len() {
-                    return err(span, format!("variant '{}' expects {} args, got {}", tag, variant.payload.len(), args.len()));
+                    return err(span, format!("variant '{}' expects {}, got {}", tag, count(variant.payload.len(), "argument"), args.len()));
                 }
                 for (arg, field) in args.iter_mut().zip(variant.payload.iter()) {
                     let aty = self.check_expr(arg)?;
@@ -610,6 +613,9 @@ impl Checker {
                     (&lt, &rt),
                     (Type::None, Type::Ptr(_) | Type::None) | (Type::Ptr(_), Type::None)
                 );
+                if !none_and_pointer && (lt == Type::None || rt == Type::None) {
+                    return err(span, "'none' can only be compared with a pointer");
+                }
                 if !none_and_pointer {
                     self.expect_type(&rt, &lt, r.span)?;
                 }
@@ -663,7 +669,7 @@ impl Checker {
     }
 }
 
-/// Whether running `block` always ends in `send`: it contains a `send`, a
+/// Whether running `block` always ends in `<-`: it contains a `<-`, a
 /// `when` whose two branches both always send, or a `match` whose cases all do.
 /// Loops don't count, since their bodies might not run.
 fn always_sends(block: &Block) -> bool {
@@ -673,6 +679,11 @@ fn always_sends(block: &Block) -> bool {
         StmtKind::Match(_, cases) => cases.iter().all(|case| always_sends(&case.body)),
         _ => false,
     })
+}
+
+/// `1 argument`, `2 arguments`.
+fn count(n: usize, noun: &str) -> String {
+    if n == 1 { format!("1 {}", noun) } else { format!("{} {}s", n, noun) }
 }
 
 fn err<T>(span: Span, msg: impl Into<String>) -> Result<T> {

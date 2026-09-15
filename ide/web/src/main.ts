@@ -14,7 +14,7 @@ import "./styles/panel.css";
 import { VelaAnalysis } from "./analysis/bridge";
 import { ApiError, StudioApi } from "./api/client";
 import { nonceStyleElements } from "./csp";
-import { takeToken } from "./api/session";
+import { obtainToken } from "./api/session";
 import { Analyzer } from "./editor/vela";
 import { h } from "./workbench/dom";
 import { applyInitialTheme } from "./workbench/theme";
@@ -50,6 +50,15 @@ function needsToken(): void {
   );
 }
 
+/** This tab's session storage, or null where storage is blocked (reading it throws). */
+function sessionStore(): Storage | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
 async function start(): Promise<void> {
   // Before the first screen, so it doesn't flash in the other theme.
   applyInitialTheme();
@@ -63,7 +72,7 @@ async function start(): Promise<void> {
     toast(`Something went wrong: ${event.reason instanceof Error ? event.reason.message : String(event.reason)}`, "error");
   });
 
-  const token = takeToken(window.location, window.history, window.sessionStorage);
+  const token = await obtainToken(window.location, window.history, sessionStore(), (input, init) => fetch(input, init));
   if (!token) {
     needsToken();
     return;

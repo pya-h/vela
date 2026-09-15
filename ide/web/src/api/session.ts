@@ -1,6 +1,9 @@
-// The session token: vela-studio opens the page as `/#token=…`. The token is
-// kept in sessionStorage (so reloading the tab works) and removed from the
-// address bar, so it doesn't end up in bookmarks or screenshots.
+// The session token. vela-studio prints the page's address as `/#token=…`, and
+// opens the browser with `/#launch=…`, a one-time code the page exchanges for
+// the token (a browser's command line is visible to other users of the
+// machine, and a used code is worthless). The token is kept in sessionStorage
+// (so reloading the tab works) and removed from the address bar, so it doesn't
+// end up in bookmarks or screenshots.
 
 const KEY = "vela-studio:token";
 
@@ -19,21 +22,58 @@ interface Store {
   setItem(key: string, value: string): void;
 }
 
-/** The token from the address or, failing that, from earlier in this tab. */
-export function takeToken(place: Place, history: History, store: Store | null): string | null {
-  const fromAddress = new URLSearchParams(place.hash.replace(/^#/, "")).get("token");
-  if (fromAddress) {
-    history.replaceState(null, "", place.pathname + place.search);
-    try {
-      store?.setItem(KEY, fromAddress);
-    } catch {
-      // Storage may be unavailable (private mode); the token still works until reload.
+type Fetch = (input: string, init: RequestInit) => Promise<Response>;
+
+/**
+ * The token, from a launch code in the address, the token in the address, or
+ * earlier in this tab, in that order.
+ */
+export async function obtainToken(place: Place, history: History, store: Store | null, fetch: Fetch): Promise<string | null> {
+  const code = new URLSearchParams(place.hash.replace(/^#/, "")).get("launch");
+  if (!code) return takeToken(place, history, store);
+  history.replaceState(null, "", place.pathname + place.search);
+  try {
+    const response = await fetch("/api/launch", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    const body: unknown = response.ok ? await response.json() : null;
+    const token = typeof body === "object" && body !== null && "token" in body ? body.token : null;
+    if (typeof token === "string") {
+      keep(store, token);
+      return token;
     }
-    return fromAddress;
+  } catch {
+    // The server isn't answering; fall back to a token from earlier.
   }
+  // A used or expired code (a reloaded launch tab): an earlier token may still work.
+  return stored(store);
+}
+
+function keep(store: Store | null, token: string): void {
+  try {
+    store?.setItem(KEY, token);
+  } catch {
+    // Storage may be unavailable (private mode); the token still works until reload.
+  }
+}
+
+function stored(store: Store | null): string | null {
   try {
     return store?.getItem(KEY) ?? null;
   } catch {
     return null;
   }
+}
+
+/** The token from the address or, failing that, from earlier in this tab. */
+export function takeToken(place: Place, history: History, store: Store | null): string | null {
+  const fromAddress = new URLSearchParams(place.hash.replace(/^#/, "")).get("token");
+  if (fromAddress) {
+    history.replaceState(null, "", place.pathname + place.search);
+    keep(store, fromAddress);
+    return fromAddress;
+  }
+  return stored(store);
 }

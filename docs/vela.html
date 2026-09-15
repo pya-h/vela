@@ -80,7 +80,7 @@
     .keyword { color: #c084fc; }
     .type { color: #38bdf8; }
     .string { color: #86efac; }
-    .comment { color: #64748b; font-style: italic; }
+    .comment { color: #8b9ab0; font-style: italic; }
     .number { color: #fbbf24; }
     ul {
       padding-left: 1.5rem;
@@ -148,8 +148,8 @@
     <section>
       <h2>What is Vela?</h2>
       <p>
-        <strong>Vela</strong> is a small systems programming language designed to be minimal like Go,
-        safe like Rust, and expressive like modern functional languages — without the bloat.
+        <strong>Vela</strong> is a small systems programming language designed to be minimal like Go, strictly
+        typed with exhaustive matching, and expressive like modern functional languages — without the bloat.
         It has one clear way to do things: one kind of function, one kind of record, one kind of sum type,
         and explicit memory management without a garbage collector.
       </p>
@@ -164,7 +164,7 @@
       <ul>
         <li><strong>Minimal surface.</strong> No classes <em>and</em> structs. No interfaces <em>and</em> traits. Just shapes, kinds, and tasks.</li>
         <li><strong>One way to do it.</strong> Immutability by default with <code>bind</code>; mutation explicitly opt-in with <code>hold</code>.</li>
-        <li><strong>Safe by design.</strong> Static typing, exhaustive pattern matching, and explicit ownership via owned pointers.</li>
+        <li><strong>Safe by design.</strong> Static typing, exhaustive pattern matching, no uninitialized variables, and explicit (for now unchecked) ownership through owned pointers.</li>
         <li><strong>Beautiful syntax.</strong> Words for control flow and logic (<code>when</code>, <code>and</code>, <code>not</code>), blocks closed with <code>fi</code>, no semicolons, and a symbol only where it reads as a picture: <code>-&gt;</code> names what a task gives back, and <code>&lt;-</code> gives it back.</li>
         <li><strong>No GC.</strong> Manual memory management with <code>new</code> and <code>free</code>, or stack allocation where possible.</li>
       </ul>
@@ -180,8 +180,8 @@
         A program is one <code>.vela</code> file. Compile and run it with (the output is <code>a.out</code> unless
         <code>-o</code> names it):
       </p>
-      <pre>cargo run -- examples/hello.vela -o hello
-./hello</pre>
+      <pre>cargo run -- examples/hello.vela -o examples/hello
+./examples/hello</pre>
       <p>
         More programs are in <code>examples/</code>: <code>fib.vela</code> (recursion), <code>kinds.vela</code>
         (kinds and <code>match</code>), <code>todo.vela</code> (a linked list with pointers and
@@ -211,7 +211,9 @@
       <h2>Syntax Overview</h2>
       <p>
         Every block — a task, shape, kind, <code>when</code>, <code>loop</code>, <code>each</code>, or
-        <code>match</code> — closes with <code>fi</code>. Each statement goes on its own line; there are no semicolons.
+        <code>match</code> — closes with <code>fi</code>. Write each statement on its own line; there are no
+        semicolons. (The compiler doesn't insist on the line break yet; see <a href="#limits">Current Limits</a>.)
+        Files may use LF or CRLF line endings.
       </p>
       <p>
         A statement is a binding, an assignment, a block, a send (<code>&lt;-</code>), <code>free</code>, or a task
@@ -225,8 +227,8 @@
 new   free   and   or    not   true  false none  fi</pre>
       <p>
         <code>show</code> and the builtin types (<code>int</code>, <code>float</code>, <code>bool</code>,
-        <code>text</code>, <code>unit</code>) aren't reserved words, but nothing else can take their names either
-        (see <a href="#names">Names</a>). The symbols:
+        <code>text</code>, <code>unit</code>) aren't reserved words: no task, shape, kind, or variant can take their
+        names, but a variable, parameter, or field can (see <a href="#names">Names</a>). The symbols:
       </p>
       <table>
         <tr><th>Symbol</th><th>Meaning</th></tr>
@@ -275,7 +277,7 @@ new   free   and   or    not   true  false none  fi</pre>
 <span class="keyword">fi</span></pre>
       <p>
         A send starts its line. <code>&lt;-</code> is always one symbol, so a comparison with a negative number needs
-        a space: <code>a &lt;-1</code> is an error that says so, and <code>a &lt; -1</code> compares.
+        a space: <code>a &lt;-1</code> is an error that says so, wherever it appears, and <code>a &lt; -1</code> compares.
       </p>
       <p>
         Tasks can be called before they are declared, and can call themselves. Parameters are immutable, and
@@ -344,7 +346,10 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         <code>\\</code>, <code>\"</code>, and <code>\0</code>. A <code>#</code> starts a comment that runs to the end
         of the line. Text holds any UTF-8, but a <code>\0</code> ends it early (<code>"ab\0cd"</code> shows as
         <code>ab</code>). <code>show</code> is the only builtin task: it prints an <code>int</code>, <code>float</code>,
-        <code>bool</code>, or <code>text</code> followed by a newline (floats with up to 6 significant digits).
+        <code>bool</code>, or <code>text</code> followed by a newline. Floats print with up to 6 significant digits,
+        switching to exponent form for very large or small values (<code>123456789.0</code> shows as
+        <code>1.23457e+08</code>), and <code>0.0 / 0.0</code> and <code>1.0 / 0.0</code> show as <code>nan</code> and
+        <code>inf</code>.
       </p>
       <p>
         Logic uses words: <code>and</code>, <code>or</code>, and <code>not</code> work on <code>bool</code>, and
@@ -387,7 +392,7 @@ show(p.x)</pre>
       <p>Assigning to a field requires the variable to be a <code>hold</code>; task parameters are immutable.</p>
       <pre><span class="keyword">hold</span> q = Point { x: 1, y: 2 }
 q.x = 5                    <span class="comment"># ok</span>
-p.x = 5                    <span class="comment"># error: p is a bind</span></pre>
+p.x = 5                    <span class="comment"># error: cannot assign to a field of immutable variable 'p'</span></pre>
 
       <h3>Kinds</h3>
       <p>
@@ -528,6 +533,12 @@ show(origin.x)             <span class="comment"># error: type ^Point has no fie
         <li>There are no arrays, no modules (a program is one file), and no way to read input.</li>
         <li>A task sends at most one value; to report two, declare a shape that holds both and send that.</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
+        <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which
+          matters only when they call tasks that print.</li>
+        <li>Statements aren't yet required to end at a line break (<code>show(1) show(2)</code> on one line is
+          accepted), and a text literal may contain a raw line break.</li>
+        <li>Code may nest at most 100 levels deep (parentheses, operators in a row, blocks inside blocks); deeper code
+          is an error rather than a crash.</li>
       </ul>
     </section>
 
@@ -543,11 +554,13 @@ show(origin.x)             <span class="comment"># error: type ^Point has no fie
 CC=clang ./target/debug/vela program.vela -o program</pre>
       <p>
         <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c]</code>: <code>-o</code> names the executable
-        (<code>a.out</code> by default), <code>--emit-c</code> prints the generated C instead of compiling it, and
-        <code>--help</code> prints the usage. The exit status is 0 on success, 1 when the program doesn't compile,
-        and 2 for wrong arguments.
+        (<code>a.out</code> by default), <code>--emit-c</code> prints the generated C instead of compiling it (or,
+        with <code>-o</code>, writes it to that file), and <code>-h</code>/<code>--help</code> prints the usage. A
+        file name starting with <code>-</code> goes after <code>--</code>. The exit status is 0 on success, 1 when
+        the program can't be read or doesn't compile (in Vela or in C), and 2 for wrong arguments.
       </p>
-      <pre>./target/debug/vela program.vela --emit-c</pre>
+      <pre>./target/debug/vela program.vela --emit-c -o program.c
+cc -std=c11 -I runtime program.c -o program -lm   # the C includes runtime/vela_rt.h</pre>
       <p>Errors point at the exact place in your source:</p>
       <pre>program.vela:3:10: error: unknown variable 'missing'
  3 |     show(missing)
@@ -560,8 +573,9 @@ CC=clang cargo test</pre>
         <code>tests/fail/</code> holds programs the compiler must reject, and every file in
         <code>examples/</code> is checked against <code>tests/examples/</code>. The C generated for run tests and
         examples must also compile as strict ISO C11 with no warnings (<code>-std=c11 -pedantic-errors -Wall
-        -Wextra -Werror</code>). Rust tests in <code>tests/*.rs</code> cover the command line, the library's build
-        pipeline, and the lexer.
+        -Wextra -Werror</code>). Rust tests in <code>tests/*.rs</code> run those programs
+        (<code>programs.rs</code>) and cover the command line, the library's build pipeline, the lexer, and
+        internal compiler errors.
       </p>
       <p>
         The compiler is also a Rust library, <code>vela</code>, so tools can use the language without copying it:

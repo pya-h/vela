@@ -11,7 +11,7 @@ export class ProblemsView {
   private rendered = "";
 
   constructor(private readonly open: (problem: Problem) => void) {
-    this.element = h("div", { class: "problems", attrs: { role: "list", "aria-label": "Problems" } });
+    this.element = h("div", { class: "problems", attrs: { role: "group", "aria-label": "Problems" } });
     this.update([]);
   }
 
@@ -42,7 +42,7 @@ export class ProblemsView {
               {
                 class: "problem",
                 title: problem.source === "build" ? "Reported by the last build" : "Reported while editing",
-                attrs: { type: "button", role: "listitem" },
+                attrs: { type: "button" },
                 on: { click: () => this.open(problem) },
               },
               icon("error", "icon problem-icon"),

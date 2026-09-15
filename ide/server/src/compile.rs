@@ -69,7 +69,13 @@ fn failure(error: &BuildError, path: &str, source: &str) -> Failure {
         BuildError::CompilerNotStarted { cc, error } => {
             (FailureKind::CompilerMissing, format!("failed to invoke C compiler '{}': {}", cc, error), None)
         }
-        BuildError::CFailed { .. } => (FailureKind::CFailed, "C compilation failed".to_string(), None),
+        BuildError::CFailed { messages, build_dir } => {
+            // The `vela` command keeps the generated C for inspection; here
+            // nobody would find it, so it is removed like every build folder.
+            let _ = std::fs::remove_dir_all(build_dir);
+            let rendered = format!("{}error: C compilation failed", messages);
+            return Failure { kind: FailureKind::CFailed, message: "C compilation failed".to_string(), line: None, col: None, rendered };
+        }
         BuildError::OutputIsInput(_) | BuildError::Io { .. } => (FailureKind::Io, rendered.clone(), None),
     };
     Failure { kind, message, line: span.map(|s| s.line), col: span.map(|s| s.col), rendered }

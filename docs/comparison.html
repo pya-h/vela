@@ -245,7 +245,7 @@
               <td><span class="badge badge-fast">Excellent</span></td>
               <td>Manual, explicit allocators</td>
               <td><span class="badge badge-fast">Fast</span></td>
-              <td>Safer C, opt-in safety</td>
+              <td>Safer C, runtime checks in debug builds</td>
               <td>Systems, cross-compilation, games</td>
             </tr>
             <tr>
@@ -323,7 +323,7 @@
             <tr>
               <td class="lang">JavaScript</td>
               <td>High</td>
-              <td><span class="badge badge-slow">Moderate</span></td>
+              <td><span class="badge badge-mid">Moderate</span></td>
               <td>Garbage collected</td>
               <td><span class="badge badge-fast">Instant</span></td>
               <td>Dynamic, runtime errors common</td>
@@ -332,8 +332,8 @@
             <tr>
               <td class="lang">Python</td>
               <td>High</td>
-              <td><span class="badge badge-slow">Moderate</span></td>
-              <td>Garbage collected</td>
+              <td><span class="badge badge-mid">Moderate</span></td>
+              <td>Reference counting + cycle collector</td>
               <td><span class="badge badge-fast">Instant</span></td>
               <td>Dynamic, runtime errors common</td>
               <td>Scripting, data science, ML, web</td>
@@ -341,7 +341,7 @@
             <tr>
               <td class="lang">Ruby</td>
               <td>High</td>
-              <td><span class="badge badge-slow">Moderate</span></td>
+              <td><span class="badge badge-mid">Moderate</span></td>
               <td>Garbage collected</td>
               <td><span class="badge badge-fast">Instant</span></td>
               <td>Dynamic, runtime errors common</td>
@@ -356,13 +356,15 @@
       <h2>Performance</h2>
       <p>
         Vela generates plain C, so its theoretical performance ceiling is essentially the same as C, C++, Zig, and Rust.
-        There is no runtime, no interpreter, and no garbage collector adding overhead.
+        There is no interpreter and no garbage collector adding overhead; the runtime is a small C header of
+        helpers (printing, allocation).
       </p>
       <p>
         Rust and C can still edge ahead in some micro-benchmarks because they offer finer control over
         aliasing and layout, but for typical programs the difference is negligible. Go, Java, and C# are
-        fast but carry GC pauses and runtime weight. Python, Ruby, and JavaScript are orders of magnitude
-        slower for CPU-bound work because they are interpreted or JIT-compiled with dynamic types.
+        fast but carry GC pauses and runtime weight. CPython and Ruby are often one or two orders of magnitude
+        slower for CPU-bound work because they interpret dynamically typed code; JavaScript's JIT compilers narrow
+        that gap to a small multiple of C for many workloads.
       </p>
     </section>
 
@@ -375,13 +377,15 @@
       </p>
       <ul>
         <li><strong>Rust</strong> is the safest here: its borrow checker prevents data races and use-after-free at compile time.</li>
-        <li><strong>Zig</strong> makes allocators explicit and adds optional safety checks, sitting between C and Rust.</li>
+        <li><strong>Zig</strong> makes allocators explicit and checks bounds, overflow, and more at run time in debug and
+          safe release builds (checks that fast release builds drop), sitting between C and Rust.</li>
         <li><strong>Go, Java, C#, Python, JS, Ruby</strong> use garbage collectors, trading memory overhead and latency for convenience.</li>
         <li><strong>C++</strong> offers RAII and smart pointers, but safety is opt-in and easy to bypass.</li>
       </ul>
       <div class="note">
         Vela intentionally chose manual management to keep the compiler small. A future version could add
-        linear/ownership checking or arena allocators without changing the surface syntax.
+        ownership checking or arena allocators; the design notes in <a href="future.html">Future Directions</a>
+        suggest move-only pointers, borrowed references, and explicit regions, which would add a little syntax.
       </div>
     </section>
 
@@ -454,8 +458,9 @@
         the metal.
       </p>
       <div class="note">
-        <strong>When to choose Vela:</strong> tiny tools, learning about compilers, embedded scripts, or
-        prototypes where you want C performance without C syntax.
+        <strong>When to choose Vela:</strong> learning about compilers and language design, experiments, and
+        small demos where you want C performance without C syntax. (Vela can't yet read input or hold arrays; see
+        <a href="vela.html#limits">Current Limits</a>.)
         <br><br>
         <strong>When to avoid Vela:</strong> production systems requiring memory safety guarantees, large
         teams, rich standard libraries, or concurrency support.

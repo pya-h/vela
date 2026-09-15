@@ -1,0 +1,8 @@
+# error: 3:5: a task sends its result with '<-', not 'send'
+task minus_one() -> int
+    send -1
+fi
+
+task main()
+    show(minus_one())
+fi

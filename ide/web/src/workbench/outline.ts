@@ -27,7 +27,7 @@ export class Outline {
   private rendered = "";
 
   constructor(private readonly jump: (item: OutlineItem) => void) {
-    this.list = h("div", { class: "outline-list", attrs: { role: "list" } });
+    this.list = h("div", { class: "outline-list" });
     this.element = h(
       "section",
       { class: "sidebar-section outline" },
@@ -70,7 +70,7 @@ export class Outline {
           {
             class: `outline-row${item === current ? " current" : ""}`,
             title: `${item.name}${item.detail ? ` ${item.detail}` : ""}`,
-            attrs: { type: "button", role: "listitem" },
+            attrs: { type: "button" },
             on: { click: () => this.jump(item) },
           },
           h("span", { class: `badge ${badge.className}`, text: badge.text }),

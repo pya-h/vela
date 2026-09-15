@@ -24,16 +24,19 @@ export function fuzzyMatch(query: string, text: string): Match | null {
   const positions: number[] = [];
   let score = 0;
   let from = 0;
+  // By code point, so a character outside the BMP (an emoji) is one match.
+  let queryIndex = 0;
   for (const char of q) {
     const at = t.indexOf(char, from);
     if (at < 0) return null;
     const previous = positions[positions.length - 1];
     if (previous !== undefined && at === previous + 1) score += 5;
     if (at === 0 || SEPARATORS.has(t[at - 1] ?? "")) score += 8;
-    if (text[at] === query[positions.length]) score += 1;
+    if (text.startsWith(query.slice(queryIndex, queryIndex + char.length), at)) score += 1;
     score -= Math.min(at - from, 10) * 0.5;
-    positions.push(at);
-    from = at + 1;
+    for (let unit = 0; unit < char.length; unit++) positions.push(at + unit);
+    from = at + char.length;
+    queryIndex += char.length;
   }
   // Prefer shorter texts, and matches in the last path segment (the name).
   score -= text.length * 0.05;

@@ -8,7 +8,8 @@ export type ToastKind = "info" | "success" | "error";
 let container: HTMLElement | null = null;
 
 export function toast(message: string, kind: ToastKind = "info", timeout = kind === "error" ? 8000 : 4000): void {
-  if (!container) {
+  // A screen that replaced the page's content may have taken the container with it.
+  if (!container?.isConnected) {
     container = h("div", { class: "toasts", attrs: { role: "status", "aria-live": "polite" } });
     document.body.append(container);
   }

@@ -43,12 +43,12 @@
   --terminal-white: #64748b;
   --terminal-bright-black: #475569;
   --terminal-bright-red: #ef4444;
-  --terminal-bright-green: #10b981;
+  --terminal-bright-green: #047857;
   --terminal-bright-yellow: #d97706;
   --terminal-bright-blue: #3b82f6;
   --terminal-bright-magenta: #8b5cf6;
   --terminal-bright-cyan: #0891b2;
-  --terminal-bright-white: #94a3b8;
+  --terminal-bright-white: #64748b;
   --terminal-scrollbar: rgba(15, 23, 42, 0.14);
   --terminal-scrollbar-hover: rgba(15, 23, 42, 0.26);
 }

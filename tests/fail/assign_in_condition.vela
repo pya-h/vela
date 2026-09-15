@@ -1,0 +1,7 @@
+# error: 4:12: '=' assigns; to compare, write '=='
+task main()
+    hold x = 1
+    when x = 1
+        show(x)
+    fi
+fi

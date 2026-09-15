@@ -15,6 +15,8 @@ const TABS: { id: PanelTab; label: string }[] = [
 ];
 
 const HEIGHT = { min: 100, initial: 260 };
+/** The editor's smallest height beside the panel. */
+const EDITOR_MIN = 120;
 
 export interface PanelContent {
   element: HTMLElement;
@@ -38,6 +40,9 @@ export class Panel {
   private visible = load("panel-visible", false, isBoolean);
   private height = load("panel-height", HEIGHT.initial, isHeight);
   private count = 0;
+
+  /** Called after the panel's own hide button hid it (so focus can go somewhere useful). */
+  onHidden: () => void = () => {};
 
   constructor(private readonly contents: Record<PanelTab, PanelContent>) {
     this.badge = h("span", { class: "panel-badge", attrs: { "aria-hidden": "true" } });
@@ -76,7 +81,15 @@ export class Panel {
         tabs,
         h("div", { class: "titlebar-spacer" }),
         this.actions,
-        iconButton(icon("chevronDown"), `Hide the panel (${shortcutLabel("Mod-j")})`, () => this.hide(), "icon-button small"),
+        iconButton(
+          icon("chevronDown"),
+          `Hide the panel (${shortcutLabel("Mod-j")})`,
+          () => {
+            this.hide();
+            this.onHidden();
+          },
+          "icon-button small",
+        ),
       ),
       h("div", { class: "panel-body" }, ...TABS.map(({ id }) => contents[id].element)),
     );
@@ -100,6 +113,8 @@ export class Panel {
   /** Attaches the panel to the column holding the editor above it, and restores it. */
   mount(column: HTMLElement): void {
     this.column = column;
+    // A remembered height may not fit a smaller window.
+    window.addEventListener("resize", () => this.apply());
     this.apply();
     if (this.visible) requestAnimationFrame(() => this.show(this.tab, false));
   }
@@ -144,7 +159,7 @@ export class Panel {
   private apply(): void {
     if (!this.column) return;
     this.column.classList.toggle("panel-hidden", !this.visible);
-    this.column.style.setProperty("--panel-height", `${this.height}px`);
+    this.column.style.setProperty("--panel-height", `${this.fittedHeight()}px`);
     for (const { id } of TABS) {
       const active = id === this.tab;
       const button = this.buttons.get(id);
@@ -154,6 +169,12 @@ export class Panel {
       this.contents[id].element.hidden = !active;
     }
     this.actions.replaceChildren(...this.contents[this.tab].actions);
+  }
+
+  /** The height, leaving the editor above at least a few lines. */
+  private fittedHeight(): number {
+    const room = (this.column?.clientHeight ?? 0) - EDITOR_MIN;
+    return room > HEIGHT.min ? Math.min(this.height, room) : HEIGHT.min;
   }
 
   private onTabKey(event: KeyboardEvent, id: PanelTab): void {

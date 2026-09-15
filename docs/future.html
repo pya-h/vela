@@ -123,7 +123,10 @@
       transform: translateY(-3px);
       border-color: var(--accent);
     }
-    .card h4 {
+    @media (prefers-reduced-motion: reduce) {
+      .card, .card:hover { transition: none; transform: none; }
+    }
+    .card h3 {
       margin: 0 0 0.5rem;
       color: var(--fg);
       font-size: 1.1rem;
@@ -165,7 +168,7 @@
       padding: 1.5rem;
       margin: 1.25rem 0;
     }
-    .option h4 {
+    .option h3 {
       margin: 0 0 0.75rem;
       font-size: 1.25rem;
       display: flex;
@@ -216,7 +219,7 @@
     .roadmap-phase.now { border-left-color: var(--accent-3); }
     .roadmap-phase.next { border-left-color: var(--accent); }
     .roadmap-phase.later { border-left-color: var(--accent-2); }
-    .roadmap-phase h4 {
+    .roadmap-phase h3 {
       margin: 0 0 0.5rem;
       font-size: 1.15rem;
     }
@@ -244,7 +247,7 @@
       padding: 1.5rem;
       margin: 1.5rem 0;
     }
-    .recommendation h4 {
+    .recommendation h3 {
       margin: 0 0 0.75rem;
       color: var(--accent-2);
       font-size: 1.25rem;
@@ -296,117 +299,117 @@
     </p>
 
     <section>
-      <h2><span class="icon">⚠️</span> Current Weak Points</h2>
+      <h2><span class="icon" aria-hidden="true">⚠️</span> Current Weak Points</h2>
       <p>These are not failures; they are the natural limits of a first compiler. Naming them is the first step toward fixing them.</p>
       <div class="cards">
         <div class="card">
-          <h4>Poor error locations <span class="badge b-done">Done</span></h4>
+          <h3>Poor error locations <span class="badge b-done">Done</span></h3>
           <p>Fixed: every syntax node now carries a source span, and errors are reported as <code>file:line:col</code> with the offending line and a caret.</p>
         </div>
         <div class="card">
-          <h4>Manual memory risks <span class="badge b-high">High</span></h4>
+          <h3>Manual memory risks <span class="badge b-high">High</span></h3>
           <p><code>new</code>/<code>free</code> gives control but allows leaks and use-after-free, just like C.</p>
         </div>
         <div class="card">
-          <h4>No standard library <span class="badge b-high">High</span></h4>
+          <h3>No standard library <span class="badge b-high">High</span></h3>
           <p>Only <code>show</code> exists. No arrays, strings, files, networking, or math utilities.</p>
         </div>
         <div class="card">
-          <h4>No module system <span class="badge b-med">Medium</span></h4>
+          <h3>No module system <span class="badge b-med">Medium</span></h3>
           <p>All code must live in one file. There is no way to split projects or share packages.</p>
         </div>
         <div class="card">
-          <h4>Limited types <span class="badge b-med">Medium</span></h4>
+          <h3>Limited types <span class="badge b-med">Medium</span></h3>
           <p>No generics, arrays, slices, tuples, or optional/error types. Pointers have <code>none</code>, but nothing stops dereferencing it.</p>
         </div>
         <div class="card">
-          <h4>No methods <span class="badge b-med">Medium</span></h4>
+          <h3>No methods <span class="badge b-med">Medium</span></h3>
           <p>Behavior lives in free tasks such as <code>area(s)</code>. All tasks share one namespace, so two shapes can't both have an <code>area</code>, and a task can only change a shape through a <code>^</code> pointer.</p>
         </div>
         <div class="card">
-          <h4>No concurrency <span class="badge b-med">Medium</span></h4>
+          <h3>No concurrency <span class="badge b-med">Medium</span></h3>
           <p>No threads, channels, async, or actors. Vela is strictly single-threaded today.</p>
         </div>
         <div class="card">
-          <h4>Text is a C string <span class="badge b-med">Medium</span></h4>
-          <p><code>text</code> is currently <code>const char*</code>. <code>==</code> compares contents, but there is no length, no safe concatenation, no UTF-8 guarantee, and a <code>\0</code> ends the text early.</p>
+          <h3>Text is a C string <span class="badge b-med">Medium</span></h3>
+          <p><code>text</code> is currently <code>const char*</code>. <code>==</code> compares contents, but there is no length, no safe concatenation, and a <code>\0</code> ends the text early.</p>
         </div>
         <div class="card">
-          <h4>Undefined integer edge cases <span class="badge b-med">Medium</span></h4>
+          <h3>Undefined integer edge cases <span class="badge b-med">Medium</span></h3>
           <p>Integer overflow and division by zero behave as in C: undefined. Vela should trap or define them.</p>
         </div>
         <div class="card">
-          <h4>One error at a time <span class="badge b-low">Low</span></h4>
+          <h3>One error at a time <span class="badge b-low">Low</span></h3>
           <p>The compiler stops at the first error, so fixing a file can take several rounds.</p>
         </div>
         <div class="card">
-          <h4>C backend dependency <span class="badge b-low">Low</span></h4>
+          <h3>C backend dependency <span class="badge b-low">Low</span></h3>
           <p>Generating C is simple but requires a C compiler. An LLVM or native backend would be cleaner long-term.</p>
         </div>
       </div>
     </section>
 
     <section>
-      <h2><span class="icon">✅</span> Safe & High-Impact Improvements</h2>
+      <h2><span class="icon" aria-hidden="true">✅</span> Safe & High-Impact Improvements</h2>
       <p>These changes improve Vela without radically changing its character. They are the lowest-risk next steps.</p>
       <div class="cards">
         <div class="card">
-          <h4>Source spans <span class="badge b-done">Done</span></h4>
+          <h3>Source spans <span class="badge b-done">Done</span></h3>
           <p>Attach line/column info to every AST node so errors point to the real problem.</p>
         </div>
         <div class="card">
-          <h4>A complete checker <span class="badge b-done">Done</span></h4>
+          <h3>A complete checker <span class="badge b-done">Done</span></h3>
           <p>Block scopes, declaration order, unknown types, <code>none</code>, <code>unit</code>, and a send on every path are all checked by Vela, so mistakes no longer surface as C compiler errors.</p>
         </div>
         <div class="card">
-          <h4>Portable C output <span class="badge b-done">Done</span></h4>
+          <h3>Portable C output <span class="badge b-done">Done</span></h3>
           <p>Generated C is warning-free ISO C11, tested with gcc and clang, and any name that means something in C still works in Vela.</p>
         </div>
         <div class="card">
-          <h4>Vela Studio <span class="badge b-done">Done</span></h4>
+          <h3>Vela Studio <span class="badge b-done">Done</span></h3>
           <p>A small editor for Vela with highlighting, completion, live errors, one-key run, and a terminal, built on the compiler itself. <a href="ide.html">See Vela Studio.</a></p>
         </div>
         <div class="card">
-          <h4>Multiple results <span class="badge b-rec">Up next</span></h4>
+          <h3>Multiple results <span class="badge b-rec">Up next</span></h3>
           <p>A task sends several values, <code>-&gt; int, int</code> and <code>&lt;- a / b, a % b</code>, received with <code>bind q, r = divmod(17, 5)</code>. <a href="#results">Details below.</a></p>
         </div>
         <div class="card">
-          <h4>Named results <span class="badge b-rec">Up next</span></h4>
+          <h3>Named results <span class="badge b-rec">Up next</span></h3>
           <p>Results with names, <code>-&gt; total: int</code>, set along the way with <code>total &lt;- value</code>; a bare <code>&lt;-</code> or the end of the task sends them. <a href="#named-results">Details below.</a></p>
         </div>
         <div class="card">
-          <h4>Built-in arrays & slices <span class="badge b-idea">Idea</span></h4>
+          <h3>Built-in arrays & slices <span class="badge b-idea">Idea</span></h3>
           <p>Add <code>[T; n]</code> fixed arrays and <code>[]T</code> slices with bounds checking.</p>
         </div>
         <div class="card">
-          <h4>Real string type <span class="badge b-idea">Idea</span></h4>
+          <h3>Real string type <span class="badge b-idea">Idea</span></h3>
           <p>Replace C strings with a <code>(ptr, len)</code> struct and safe operations.</p>
         </div>
         <div class="card">
-          <h4>Option & Result <span class="badge b-idea">Idea</span></h4>
+          <h3>Option & Result <span class="badge b-idea">Idea</span></h3>
           <p>Introduce sum types for nullable values and error handling without exceptions.</p>
         </div>
         <div class="card">
-          <h4>Pattern match expressions <span class="badge b-idea">Idea</span></h4>
+          <h3>Pattern match expressions <span class="badge b-idea">Idea</span></h3>
           <p>Let <code>match</code> produce a value, not just execute statements.</p>
         </div>
         <div class="card">
-          <h4>Module system <span class="badge b-idea">Idea</span></h4>
+          <h3>Module system <span class="badge b-idea">Idea</span></h3>
           <p>Simple file-based modules with explicit imports and exports.</p>
         </div>
         <div class="card">
-          <h4>Built-in testing <span class="badge b-idea">Idea</span></h4>
+          <h3>Built-in testing <span class="badge b-idea">Idea</span></h3>
           <p>A lightweight <code>test</code> block or assertion syntax for confidence.</p>
         </div>
         <div class="card">
-          <h4>Move-only pointers <span class="badge b-idea">Idea</span></h4>
+          <h3>Move-only pointers <span class="badge b-idea">Idea</span></h3>
           <p>Prevent accidental aliasing of <code>^T</code> by making them move-only by default.</p>
         </div>
       </div>
     </section>
 
     <section>
-      <h2 id="results"><span class="icon">🎁</span> Multiple and Named Results</h2>
+      <h2 id="results"><span class="icon" aria-hidden="true">🎁</span> Multiple and Named Results</h2>
       <p>
         Today a task sends at most one value. A task that has two things to report, such as a quotient and a
         remainder, or a value and whether it was found, has to declare a shape only to carry them, or be split
@@ -547,7 +550,7 @@ fi</pre>
       </ul>
 
       <div class="recommendation">
-        <h4>💡 Why the arrow, and what it costs</h4>
+        <h3>💡 Why the arrow, and what it costs</h3>
         <p>
           Setting a result with <code>=</code> would work too, but <code>total &lt;- value</code> keeps one symbol
           for "this is what the task sends", with the name telling whether it stops there. It also costs the parser
@@ -576,14 +579,14 @@ fi</pre>
     </section>
 
     <section>
-      <h2><span class="icon">🧠</span> Memory Management: The Big Question</h2>
+      <h2><span class="icon" aria-hidden="true">🧠</span> Memory Management: The Big Question</h2>
       <p>
         Vela's biggest open question is memory safety. There are several credible paths, each with trade-offs.
-        Below are the main candidates, ranked from most to least conservative.
+        Below are the main candidates.
       </p>
 
       <div class="option">
-        <h4><span>🔒</span> Option A: Rust-Style Borrow Checker</h4>
+        <h3><span aria-hidden="true">🔒</span> Option A: Rust-Style Borrow Checker</h3>
         <p>
           Track ownership, lifetimes, and borrows at compile time. Values have one owner; references are
           temporary and cannot outlive the data they point to.
@@ -613,7 +616,7 @@ fi</pre>
       </div>
 
       <div class="option">
-        <h4><span>📦</span> Option B: Region / Arena Allocation</h4>
+        <h3><span aria-hidden="true">📦</span> Option B: Region / Arena Allocation</h3>
         <p>
           Allocate everything into a region (arena) and free the whole region at once. Objects never outlive
           their region. The compiler checks that references never escape their region.
@@ -643,7 +646,7 @@ fi</pre>
       </div>
 
       <div class="option">
-        <h4><span>🔄</span> Option C: Automatic Reference Counting (ARC)</h4>
+        <h3><span aria-hidden="true">🔄</span> Option C: Automatic Reference Counting (ARC)</h3>
         <p>
           Every shared object carries a reference count. The compiler inserts retain/release calls, or the
           runtime does it. Swift uses this model successfully.
@@ -673,7 +676,7 @@ fi</pre>
       </div>
 
       <div class="option">
-        <h4><span>➡️</span> Option D: Linear / Move-Only Ownership</h4>
+        <h3><span aria-hidden="true">➡️</span> Option D: Linear / Move-Only Ownership</h3>
         <p>
           Every value has exactly one owner. You can move it, but you cannot copy or alias it unless you
           explicitly clone. There are no borrows at all — only moves.
@@ -703,7 +706,7 @@ fi</pre>
       </div>
 
       <div class="recommendation">
-        <h4>💡 Recommended Path for Vela</h4>
+        <h3>💡 Recommended Path for Vela</h3>
         <p>
           Adopt a <strong>hybrid of linear ownership and regions</strong>:
         </p>
@@ -722,7 +725,7 @@ fi</pre>
     </section>
 
     <section>
-      <h2><span class="icon">🧩</span> Methods: Behavior for Shapes and Kinds</h2>
+      <h2><span class="icon" aria-hidden="true">🧩</span> Methods: Behavior for Shapes and Kinds</h2>
       <p>
         Vela keeps data and behavior apart: shapes and kinds hold data, and tasks act on it. That separation is a
         good default, but today it has real costs:
@@ -745,7 +748,7 @@ fi</pre>
       </p>
 
       <div class="option">
-        <h4><span>🐹</span> Option A: Go-Style Receiver Tasks</h4>
+        <h3><span aria-hidden="true">🐹</span> Option A: Go-Style Receiver Tasks</h3>
         <p>
           A task names its receiver before its own name. Methods can be declared anywhere, next to any other task.
           A pointer receiver lets the method change the value.
@@ -784,7 +787,7 @@ bind size = p.length_squared()</pre>
       </div>
 
       <div class="option">
-        <h4><span>🦀</span> Option B: Rust-Style Implementation Blocks</h4>
+        <h3><span aria-hidden="true">🦀</span> Option B: Rust-Style Implementation Blocks</h3>
         <p>
           A separate block gathers a type's tasks, with an explicit <code>self</code> whose mode says whether the
           method can change it. In Vela's words-first style the block could be <code>extend Point</code>.
@@ -827,7 +830,7 @@ fi</pre>
       </div>
 
       <div class="option">
-        <h4><span>🏛️</span> Option C: Methods Inside the Shape</h4>
+        <h3><span aria-hidden="true">🏛️</span> Option C: Methods Inside the Shape</h3>
         <p>
           Tasks are declared in the shape's own block, as in Swift structs, Kotlin, or C++ classes. Fields are in
           scope inside them.
@@ -864,7 +867,7 @@ fi</pre>
       </div>
 
       <div class="option">
-        <h4><span>🔗</span> Option D: Uniform Call Syntax</h4>
+        <h3><span aria-hidden="true">🔗</span> Option D: Uniform Call Syntax</h3>
         <p>
           No new declarations at all: <code>p.length_squared()</code> is simply another way to write <code>length_squared(p)</code>,
           as in D and Nim. Every existing task becomes callable with a dot.
@@ -899,7 +902,7 @@ bind b = p.length_squared()     # the same call</pre>
       </div>
 
       <div class="option">
-        <h4><span>🎯</span> Option E: Qualified Tasks</h4>
+        <h3><span aria-hidden="true">🎯</span> Option E: Qualified Tasks</h3>
         <p>
           A task declared with its type's name in front, <code>task Point.length_squared</code>, belongs to that type. It
           reads exactly like the call, needs no new keyword or block, and takes Rust's explicit receiver modes.
@@ -959,7 +962,7 @@ show(p.length_squared())</pre>
       </div>
 
       <div class="recommendation">
-        <h4>💡 Recommended Path for Vela</h4>
+        <h3>💡 Recommended Path for Vela</h3>
         <p>Adopt <strong>qualified tasks</strong> (option E), with these rules:</p>
         <ul>
           <li><strong>Receivers are explicit.</strong> <code>self</code> is an immutable copy, like any parameter;
@@ -989,17 +992,34 @@ show(p.length_squared())</pre>
     </section>
 
     <section>
-      <h2><span class="icon">🚀</span> Other Design Directions</h2>
+      <h2><span class="icon" aria-hidden="true">🚀</span> Other Design Directions</h2>
       <p>Memory is not the only place Vela can grow. Here are ideas across the whole language.</p>
 
       <h3>Syntax & Ergonomics</h3>
       <ul>
-        <li><strong>Match expressions:</strong> <code>bind area = match s case Circle r -> 3.14 * r * r ... fi</code></li>
-        <li><strong>Guards in patterns:</strong> <code>case Point x y when x > 0</code></li>
+        <li><strong>Match expressions:</strong> <code>bind area = match s case Circle r = 3.14 * r * r … fi</code>
+          (not <code>-&gt;</code>, which names a task's result type)</li>
+        <li><strong>Guards in patterns:</strong> <code>case Circle r when r &gt; 0.0</code></li>
         <li><strong>Else-if chains:</strong> <code>when ... else when ... else ... fi</code></li>
         <li><strong>Inclusive ranges:</strong> <code>0..=10</code> or <code>0...10</code></li>
         <li><strong>Tuples:</strong> <code>(int, text)</code> as values that can be stored and passed, beyond <a href="#results">multiple results</a></li>
-        <li><strong>Named arguments:</strong> <code>Point(x: 1, y: 2)</code> always, not just struct init</li>
+        <li><strong>Named arguments:</strong> <code>resize(width: 2.0, height: 3.0)</code> for task calls, as shape
+          literals already name their fields (<code>Point { x: 1, y: 2 }</code>)</li>
+        <li><strong>Statements end at a line break:</strong> today <code>show(1) show(2)</code> on one line is accepted;
+          requiring the break, and allowing one inside <code>( )</code> and
+          <code>{ }</code>, would make long calls and literals splittable</li>
+      </ul>
+
+      <h3>Defined Behavior</h3>
+      <ul>
+        <li><strong>Integer traps:</strong> overflow and division by zero stop the program with a message instead of
+          being C's undefined behavior, identical under every C compiler</li>
+        <li><strong>A null check on <code>p^</code>:</strong> the cheapest first memory-safety step, sharing the
+          "stop with a message" runtime helper with the integer traps</li>
+        <li><strong>Left-to-right evaluation:</strong> arguments and operands that call tasks are evaluated in order
+          (codegen stores them in temporaries first), so output never depends on the C compiler</li>
+        <li><strong>Lints:</strong> warn about code that can't run (after a <code>&lt;-</code> in the same block), a
+          value compared with itself, and <code>x = x</code>; these fit naturally with reporting many errors at once</li>
       </ul>
 
       <h3>Type System</h3>
@@ -1008,6 +1028,9 @@ show(p.length_squared())</pre>
         <li><strong>Type inference:</strong> let the compiler infer more types without annotations</li>
         <li><strong>Sum-type exhaustiveness:</strong> already present; keep it mandatory</li>
         <li><strong>Compile-time constants:</strong> <code>const MaxSize: int = 1024</code></li>
+        <li><strong>Conversions instead of promotion:</strong> <code>float(n)</code> and <code>int(x)</code>, so
+          <code>1 + 2.5</code> stops being the one place an <code>int</code> quietly becomes a <code>float</code> (and
+          comparisons and arithmetic follow the same rule)</li>
         <li><strong>Type aliases:</strong> <code>alias UserId = int</code></li>
       </ul>
 
@@ -1019,6 +1042,14 @@ show(p.length_squared())</pre>
         <li><strong>Playground:</strong> the compiler's front end already runs in the browser as WebAssembly; with an interpreter or a WebAssembly back end, the docs could run every example in the page</li>
         <li><strong>Docs generator:</strong> extract docs from comments automatically</li>
         <li><strong>Test runner:</strong> built into the compiler</li>
+        <li><strong><code>vela run file.vela</code>:</strong> build into a temporary folder and run, with no
+          <code>-o</code> and no stray executables</li>
+        <li><strong>Standalone C output:</strong> <code>--emit-c -o out.c</code> could write <code>vela_rt.h</code>
+          beside it, and <code>VELA_CFLAGS</code> could pass options such as <code>-O0 -g</code> for debugging</li>
+        <li><strong>Source mapping:</strong> <code>#line</code> directives in the generated C, so C compiler errors and
+          debuggers point at Vela lines, and Vela Studio could show the C a line produced</li>
+        <li><strong>A stability promise:</strong> a short page saying which syntax is settled (<code>&lt;-</code>,
+          <code>fi</code>, <code>bind</code>/<code>hold</code>) and which may still change before 1.0</li>
       </ul>
 
       <h3>Concurrency</h3>
@@ -1031,17 +1062,17 @@ show(p.length_squared())</pre>
 
       <h3>Compilation Targets</h3>
       <ul>
-        <li><strong>LLVM IR:</strong> better optimization and error messages than C</li>
+        <li><strong>LLVM IR:</strong> finer control over optimization and more targets, without a C compiler</li>
         <li><strong>WebAssembly:</strong> run Vela in browsers and edge environments</li>
         <li><strong>Embedded targets:</strong> bare-metal output with no runtime</li>
       </ul>
     </section>
 
     <section>
-      <h2><span class="icon">🗺️</span> Suggested Roadmap</h2>
+      <h2><span class="icon" aria-hidden="true">🗺️</span> Suggested Roadmap</h2>
       <div class="roadmap">
         <div class="roadmap-phase now">
-          <h4>Now — Foundations <span class="badge b-low">Low Risk</span></h4>
+          <h3>Now — Foundations <span class="badge b-low">Low Risk</span></h3>
           <ul>
             <li><s>Source spans and good error messages</s> (done)</li>
             <li><s>Complete type checking and portable C output</s> (done)</li>
@@ -1054,7 +1085,7 @@ show(p.length_squared())</pre>
           </ul>
         </div>
         <div class="roadmap-phase next">
-          <h4>Next — Growth <span class="badge b-med">Medium Risk</span></h4>
+          <h3>Next — Growth <span class="badge b-med">Medium Risk</span></h3>
           <ul>
             <li>Module system and package manager</li>
             <li>Methods on shapes and kinds (qualified tasks with <code>self</code> / <code>hold self</code>)</li>
@@ -1065,7 +1096,7 @@ show(p.length_squared())</pre>
           </ul>
         </div>
         <div class="roadmap-phase later">
-          <h4>Later — Ambition <span class="badge b-high">High Risk</span></h4>
+          <h3>Later — Ambition <span class="badge b-high">High Risk</span></h3>
           <ul>
             <li>Limited borrow checking on top of regions</li>
             <li>Concurrency model (actors or channels)</li>
@@ -1078,7 +1109,7 @@ show(p.length_squared())</pre>
     </section>
 
     <section>
-      <h2><span class="icon">🎯</span> Conclusion</h2>
+      <h2><span class="icon" aria-hidden="true">🎯</span> Conclusion</h2>
       <p>
         Vela's strength is its smallness. The best next steps preserve that smallness while filling the
         obvious gaps: multiple and named results, a real string type, arrays, defined integer arithmetic, and a safer memory model. The

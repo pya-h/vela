@@ -235,7 +235,7 @@
       <ul>
         <li><strong>Rust</strong>, a recent stable release (tested with 1.97), with the WebAssembly target:
           <code>rustup target add wasm32-unknown-unknown</code>.</li>
-        <li><strong>Node.js</strong> 20.19 or later (22.12 or later on the 22 line), with npm, to build the page.</li>
+        <li><strong>Node.js</strong> 22.12 or later, with npm, to build the page and run its tests.</li>
         <li><strong>A C compiler</strong> to run programs: <code>cc</code>, or the one named by <code>CC</code>, exactly
           as for the <code>vela</code> command. Editing works without one.</li>
         <li><strong>A browser.</strong> Vela Studio is tested in Chromium; current Firefox and Safari are expected to
@@ -292,7 +292,7 @@ Press Ctrl+C to stop.</pre>
 
     <section>
       <h2 id="tour">A Tour</h2>
-      <pre class="layout" aria-label="The Vela Studio window">┌──────────────────────────────────────────────────────────────────────────────┐
+      <pre class="layout" role="img" aria-label="The Vela Studio window: the title bar, the explorer and outline on the left, tabs and the editor in the middle, the panel below, and the status bar">┌──────────────────────────────────────────────────────────────────────────────┐
 │ ≡  ◆ Vela Studio   examples              [Build]  [▶ Run]   [Open]  [Theme]  │ title bar
 ├─────────────┬────────────────────────────────────────────────────────────────┤
 │ EXPLORER    │  fib.vela ●   kinds.vela   hello.vela                          │ tabs
@@ -413,7 +413,7 @@ Press Ctrl+C to stop.</pre>
 
       <h3>Look and feel</h3>
       <ul>
-        <li>Dark and light themes that match these docs; the first follows your system, until you choose one.</li>
+        <li>Dark and light themes (the dark one in these docs' colors); the first follows your system, until you choose one.</li>
         <li>Short animations for panels, tabs, completion, the Run button, and toasts, turned off when your system
           asks for reduced motion.</li>
         <li>Everything is keyboard-reachable: the explorer, tabs, panel tabs, and resize handles all work with arrow
@@ -426,7 +426,9 @@ Press Ctrl+C to stop.</pre>
       <p>
         On a Mac, <kbd>⌘</kbd> replaces <kbd>Ctrl</kbd> except where the table says otherwise; completion stays
         <kbd>⌃</kbd>+<kbd>Space</kbd> and the terminal <kbd>⌃</kbd>+<kbd>`</kbd>. Browser shortcuts such as
-        <kbd>Ctrl</kbd>+<kbd>W</kbd> still belong to the browser.
+        <kbd>Ctrl</kbd>+<kbd>W</kbd> still belong to the browser. In the Terminal and Output tabs, keys go to the
+        program, except saving, opening a file, going to a declaration, and the running and panel shortcuts; so
+        <kbd>Ctrl</kbd>+<kbd>B</kbd>, for example, reaches the shell.
       </p>
       <div class="table-wrap">
         <table>
@@ -470,8 +472,8 @@ Press Ctrl+C to stop.</pre>
 
             <tr><td class="group" colspan="3">Explorer, tabs, and panels</td></tr>
             <tr><td>Move in the explorer; open or close folders</td><td colspan="2"><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Home</kbd> <kbd>End</kbd>; <kbd>→</kbd> opens a folder, <kbd>←</kbd> closes it or goes to its parent</td></tr>
-            <tr><td>Open, rename, delete in the explorer</td><td colspan="2"><kbd>Enter</kbd>, <kbd>F2</kbd>, <kbd>Delete</kbd> (or right-click for the menu)</td></tr>
-            <tr><td>Switch tabs; close a tab</td><td colspan="2"><kbd>←</kbd> <kbd>→</kbd> on the tabs; <kbd>Delete</kbd> or a middle-click</td></tr>
+            <tr><td>Open, rename, delete in the explorer</td><td colspan="2"><kbd>Enter</kbd>, <kbd>F2</kbd>, <kbd>Delete</kbd> (<kbd>fn</kbd>+<kbd>Delete</kbd> on a Mac laptop; or right-click for the menu)</td></tr>
+            <tr><td>Move between tabs; open or close one</td><td colspan="2"><kbd>←</kbd> <kbd>→</kbd> on the tabs, then <kbd>Enter</kbd> to open; <kbd>Delete</kbd> or a middle-click to close</td></tr>
             <tr><td>Resize the sidebar or panel</td><td colspan="2">Arrow keys on its edge; double-click the edge to reset</td></tr>
           </tbody>
         </table>
@@ -491,6 +493,9 @@ Press Ctrl+C to stop.</pre>
           <code>#</code>, a part that browsers never send to a server. The page moves it into the tab's session
           storage and removes it from the address bar. Every request needs it; when Vela Studio stops, the token stops
           working.</li>
+        <li><strong>The browser never sees the token on its command line.</strong> Other users of a computer can read
+          the command lines of your programs, so Vela Studio opens the browser with a one-time launch code instead,
+          which the page exchanges for the token. A code works once, for five minutes.</li>
         <li><strong>Other websites can't use it.</strong> A site open in another tab doesn't have the token; besides,
           requests from another origin, or addressed to any host but <code>127.0.0.1</code> or
           <code>localhost</code> on its port (which stops DNS rebinding), are refused, and no cross-origin headers
@@ -502,7 +507,9 @@ Press Ctrl+C to stop.</pre>
           and styles, and the page can't be framed. Fonts and the WebAssembly module are served by Vela Studio
           itself: nothing is loaded from the internet, and nothing is sent anywhere.</li>
         <li><strong>Nothing left running.</strong> A program or shell whose page has been closed for 30 seconds is
-          stopped with its child processes, and stopping Vela Studio stops them all.</li>
+          stopped along with the processes in its group, and stopping Vela Studio stops them all. (A background job
+          that a shell started in a group of its own, and that ignores hangups, can outlive it; on Windows only the
+          program itself is stopped.)</li>
       </ul>
       <div class="note warning">
         <p><strong>What it can't protect you from</strong></p>
@@ -549,7 +556,15 @@ Press Ctrl+C to stop.</pre>
             </tr>
             <tr>
               <td>A file won't open</td>
-              <td>Only UTF-8 text files up to 1 MiB can be edited.</td>
+              <td>Only UTF-8 text files up to 1 MiB can be edited. Pipes and devices aren't listed at all.</td>
+            </tr>
+            <tr>
+              <td>“the file is read-only” when saving</td>
+              <td>Vela Studio doesn't change read-only files; make the file writable (<code>chmod u+w</code>) and save again.</td>
+            </tr>
+            <tr>
+              <td>“this link has already been used or has expired”</td>
+              <td>The browser's launch link works once. Open the address <code>vela-studio</code> printed instead.</td>
             </tr>
             <tr>
               <td>A file changed by another program still shows the old text</td>
