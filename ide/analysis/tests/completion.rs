@@ -446,8 +446,16 @@ fn regions_are_offered_where_a_region_is_named() {
     assert_offers("task make(r: @@", &["region", "int"], &[]);
     assert_offers(&in_main("bind x: @@"), &["int"], &["region"]);
     assert_offers(&in_main("@@"), &["region"], &["nodes", "free", "new … in"]);
-    // A region is a value only as an argument.
-    assert_offers(&in_main("show(sum(push(@@"), &["nodes"], &[]);
+    // A region is a value only as the argument for a region parameter, and there
+    // only the regions the caller can allocate in are offered.
+    assert_offers(&in_main("show(sum(push(@@"), &["nodes"], &["first"]);
+    assert_offers(&in_main("show(sum(push(nod@@"), &["nodes"], &["first"]);
+    assert_offers(&in_main("show(sum(push(nodes, @@"), &["first"], &["nodes"]);
+    assert_offers(&in_main("show(@@"), &["first"], &["nodes"]);
+    assert_offers(&in_main("show(sum(@@"), &["first"], &["nodes"]);
+    assert_offers(&in_sum("bind p = push(@@"), &[], &["s", "list"]);
+    // A task the file doesn't declare may take one.
+    assert_offers(&in_main("later(@@"), &["first", "nodes"], &[]);
     assert_offers(&in_main("bind y = @@"), &["first", "new … in"], &["nodes"]);
     assert_eq!(item(&in_main("bind y = @@"), "new … in").snippet.as_deref(), Some("new ${T}(${value}) in ${r}"));
     assert_eq!(labels(&in_main("region @@")), Vec::<String>::new());
@@ -469,6 +477,50 @@ fn hover_describes_regions() {
     assert_eq!(hover(&broken, "first:", 0).code, "bind first: maybe ^Node@nodes");
     assert_eq!(hover(&broken, "two =", 0).code, "bind two: ^int@nodes");
     assert_eq!(hover(&broken, "list: maybe", 1).code, "list: maybe ^Node@s");
+    // `in` has a description in both of its places.
+    assert!(hover(&source, "in r", 0).doc.contains("allocates in region r"));
+}
+
+#[test]
+fn call_results_are_in_the_callers_regions() {
+    let source = "\
+shape Node
+    value: int
+    next: maybe ^Node
+fi
+
+task push(r: region, list: maybe ^Node@r) -> ^Node@r
+    <- new Node(Node { value: 1, next: list }) in r
+fi
+
+task first(list: maybe ^Node@q) -> maybe ^Node@q
+    <- list
+fi
+
+task main()
+    region nodes
+    bind a = push(nodes, none)
+    bind b = push(nodes, first(a) { a })
+    bind c = first(none) { a }
+    when first(none) is {n}
+        show(n^.value)
+    fi
+    @@
+fi
+";
+    let checks = source.replace("    @@\n", "");
+    let broken = source.replace("    @@\n", "    show(missing)\n");
+    for source in [&checks, &broken] {
+        // The task's `r` and `q` are the caller's `nodes`: from the region
+        // argument, from an argument's type, or from a plan B's fallback.
+        assert_eq!(hover(source, "a =", 0).code, "bind a: ^Node@nodes");
+        assert_eq!(hover(source, "b =", 0).code, "bind b: ^Node@nodes");
+        assert_eq!(hover(source, "c =", 0).code, "bind c: ^Node@nodes");
+        // A result no argument gives a region to is in none, which hover explains.
+        let n = hover(source, "n}", 0);
+        assert_eq!(n.code, "n: ^Node@_");
+        assert!(n.doc.contains("@_ means no region"), "{:?}", n.doc);
+    }
 }
 
 #[test]

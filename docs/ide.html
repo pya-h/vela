@@ -197,6 +197,7 @@
     <p class="tagline">The editor for Vela: write, check, and run programs, with a terminal beside them.</p>
     <nav class="doc-nav" aria-label="Vela documentation">
       <a href="vela.html">Language</a>
+      <a href="regions.html">Regions</a>
       <a href="ide.html" aria-current="page">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html">Future</a>
@@ -351,7 +352,9 @@ Press Ctrl+C to stop.</pre>
             <code>.</code>; the cases still missing after <code>case</code>, including <code>{value}</code>,
             <code>none</code>, and <code>fail e</code>; the patterns that fit after <code>is</code>; the regions
             visible after <code>@</code>, and the ones <code>new</code> can allocate in after <code>new@</code> and a
-            <code>new</code>'s <code>in</code>; and <code>region</code> as a statement or a parameter's type.</p>
+            <code>new</code>'s <code>in</code>, or as the argument for a task's <code>region</code> parameter; and
+            <code>region</code> as a statement or a parameter's type. A call's result shows the caller's regions
+            (<code>push(nodes, list)</code> gives a <code>^Node@nodes</code>), even while the file has an error.</p>
         </div>
         <div class="card">
           <h4>Snippets</h4>
@@ -362,9 +365,10 @@ Press Ctrl+C to stop.</pre>
         </div>
         <div class="card">
           <h4>Hover and go to definition</h4>
-          <p>Hover a name to see its type or signature (a region says whether the task can allocate in it), or
-            <code>maybe</code>, <code>is</code>, <code>fail</code>, <code>none</code>, <code>_</code>, <code>region</code>,
-            and <code>new</code> for a reminder of what they do. <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it
+          <p>Hover a name to see its type or signature (a region says whether the task can allocate in it, and a
+            type with <code>@_</code> explains it), or <code>maybe</code>, <code>is</code>, <code>fail</code>,
+            <code>none</code>, <code>_</code>, <code>region</code>, <code>new</code>, and <code>in</code> for a reminder
+            of what they do. <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it
             is declared; <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> finds a declaration by name.</p>
         </div>
         <div class="card">

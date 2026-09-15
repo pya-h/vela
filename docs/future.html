@@ -285,6 +285,7 @@
     <p class="tagline">A design notebook of weak points, safe improvements, and bold ideas for where Vela could go next.</p>
     <nav class="doc-nav" aria-label="Vela documentation">
       <a href="vela.html">Language</a>
+      <a href="regions.html">Regions</a>
       <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html" aria-current="page">Future</a>
@@ -308,7 +309,7 @@
         </div>
         <div class="card">
           <h3>Manual memory risks <span class="badge b-done">Done</span></h3>
-          <p>Fixed: <code>new</code>/<code>free</code> allowed leaks and use-after-free, just like C. Regions replaced them: memory is freed a region at a time, and pointer types name their region, so no pointer outlives its memory. <a href="#memory">Details below.</a></p>
+          <p>Fixed: <code>new</code>/<code>free</code> allowed leaks and use-after-free, just like C. Regions replaced them: memory is freed a region at a time, and pointer types name their region, so no pointer outlives its memory. <a href="#memory">Details below</a>, and the full guide in <a href="regions.html">Vela Regions</a>.</p>
         </div>
         <div class="card">
           <h3>No standard library <span class="badge b-high">High</span></h3>
@@ -388,7 +389,8 @@
         <div class="card">
           <h3>Regions <span class="badge b-done">Done</span></h3>
           <p><code>region r</code>, <code>new T(v) in r</code>, and pointer types <code>^T@r</code> that can't
-            outlive their region, instead of <code>free</code>. <a href="#memory">Details below.</a></p>
+            outlive their region, instead of <code>free</code>. <a href="#memory">Details below</a>; ideas for making them
+            easier to use are in <a href="regions.html#ideas">Vela Regions</a>.</p>
         </div>
         <div class="card">
           <h3>Maybe & errors <span class="badge b-done">Done</span></h3>
@@ -409,7 +411,7 @@
         </div>
         <div class="card">
           <h3>Move-only pointers <span class="badge b-idea">Idea</span></h3>
-          <p>Prevent accidental aliasing of <code>^T</code> by making them move-only by default.</p>
+          <p>An <code>own ^T@r</code> that moves instead of being copied, so a single value can be dropped from its region early. <a href="regions.html#ideas-free">Details.</a></p>
         </div>
       </div>
     </section>
@@ -449,6 +451,8 @@ fi</pre>
           <code>bind pair = divmod(17, 5)</code> are errors: <em>'divmod' sends 2 values; receive them with
           'bind a, b = …'</em>. A task with several results can only be called as the whole right side of a list.
           First-class tuples are a separate, larger idea.</li>
+        <li><strong>Regions:</strong> each result type follows today's rule, so <code>-&gt; ^Node@r, int</code> needs a
+          parameter that names <code>r</code>, and the results' regions are inferred at the call like a single result's.</li>
         <li><strong>Plain lists too:</strong> the same form works with ordinary values, and the right side is
           evaluated completely before anything is assigned, so <code>a, b = b, a</code> swaps two variables.</li>
         <li><strong>Generated C:</strong> each task with several results gets a result shape,
@@ -600,7 +604,7 @@ fi</pre>
         <code>maybe</code> is expected (a typed binding, an assignment, an argument, a field, a send), and
         <code>none</code> is the empty one. There is no <code>Some(…)</code> to write.
       </p>
-      <pre>task find(names: ^Names, wanted: text) -&gt; maybe int
+      <pre>task find(names: ^Names@r, wanted: text) -&gt; maybe int
     …
     &lt;- index                  # found: the int becomes a maybe int
     …
@@ -612,8 +616,8 @@ hold y: maybe float = none</pre>
       <ul>
         <li>The word is <code>maybe</code>, never <code>Option</code>: the type reads as what it is, a value that is
           maybe there.</li>
-        <li>The type is a prefix, like <code>^</code>: <code>maybe int</code>, <code>maybe ^Node</code>,
-          <code>^maybe int</code>. A brace form (<code>maybe{int}</code>) was considered and rejected: braces would
+        <li>The type is a prefix, like <code>^</code>: <code>maybe int</code>, <code>maybe ^Node@r</code>,
+          <code>^maybe int@r</code>. A brace form (<code>maybe{int}</code>) was considered and rejected: braces would
           mean a type argument, a pattern, a plan B, and a shape literal at once, and generics written with braces
           would collide with plan B in expressions.</li>
         <li>A <code>maybe</code> can't hold another <code>maybe</code>, or <code>unit</code>.</li>
@@ -798,9 +802,10 @@ fi</pre>
         <code>region r</code> declares an arena freed when its block closes, <code>new T(v) in r</code> (or
         <code>new@r T(v)</code>) allocates in it, a task allocates only in a <code>r: region</code> parameter and can
         name any region its parameters' types show, and a shape holding pointers lives in one region
-        (<code>Node@r</code>). The checker keeps every pointer from outliving its region. The full description is in
-        <a href="vela.html#regions">the language reference</a>. The other options stay below: parts of them, such as
-        borrowed references or move-only pointers, may still grow the model later.
+        (<code>Node@r</code>). The checker keeps every pointer from outliving its region. The reference is in
+        <a href="vela.html#regions">Memory and Regions</a>, and the long guide, with the model's limitations, workarounds,
+        and ideas, in <a href="regions.html">Vela Regions</a>. The other options stay below, each with a note on how it
+        could still grow the region model.
       </div>
 
       <div class="option">
@@ -830,6 +835,11 @@ fi</pre>
         <div class="note">
           <strong>Verdict:</strong> Probably too heavy for Vela. A full borrow checker would double or triple the
           compiler's size and change the language's feel.
+        </div>
+        <div class="note">
+          <strong>With regions:</strong> a small part of it still fits. Read-only borrowed references would let younger data
+          point at data in an older region, which regions alone can't allow (writing through such a pointer would not be
+          safe), and let a task take a view it can't change. See <a href="regions.html#ideas-limits">Lifting today's limitations</a>.
         </div>
       </div>
 
@@ -892,6 +902,10 @@ fi</pre>
           <strong>Verdict:</strong> Viable, but it adds runtime complexity. Less "systems-y" than arenas or
           ownership.
         </div>
+        <div class="note">
+          <strong>With regions:</strong> counting could be kept for the few values shared across a whole program, in a region
+          of their own, so ordinary pointers never pay for it.
+        </div>
       </div>
 
       <div class="option">
@@ -922,6 +936,11 @@ fi</pre>
           <strong>Verdict:</strong> An excellent stepping stone. Start here, then add limited borrowing later if
           needed.
         </div>
+        <div class="note">
+          <strong>With regions:</strong> the most natural next step. A move-only <code>own ^T@r</code> can be dropped early,
+          which is the one thing regions can't do, and could move between threads. See
+          <a href="regions.html#ideas-free">Freeing one value early</a>.
+        </div>
       </div>
 
       <div class="recommendation">
@@ -933,7 +952,7 @@ fi</pre>
         <ul>
           <li><strong>Owned pointers <code>^T</code></strong> could be move-only, letting a single value be freed early without dangling copies.</li>
           <li><strong>Borrowed references <code>&T</code></strong> are temporary and cannot be stored. They are valid only within the current scope/region.</li>
-          <li><strong>Regions</strong> (explicit arenas) group allocations and free them in bulk. References cannot escape their region. <em>(Done.)</em> Next for them: regions known to outlive others, so a shape could point into two regions, and copying a value into another region.</li>
+          <li><strong>Regions</strong> (explicit arenas) group allocations and free them in bulk. References cannot escape their region. <em>(Done.)</em> Next for them, from <a href="regions.html#ideas">Vela Regions</a>: easier region passing (<code>push[nodes](…)</code>, with inferred region arguments), shapes with several regions, generated copies into another region, and fixes for the cases the rules reject today.</li>
           <li><strong>No shared mutable state</strong> by default: either you own it mutably, or you borrow it immutably.</li>
         </ul>
         <p>
@@ -956,7 +975,7 @@ fi</pre>
           <code>rect_area</code>, and the second <code>area</code> is rejected with
           <code>'area' is already defined</code>.</li>
         <li><strong>No way to change a value in place.</strong> Vela has no address-of operator, so a task can only
-          modify a shape that was allocated with <code>new</code> and passed as <code>^Point</code>. A
+          modify a shape that was allocated with <code>new</code> in a region and passed as <code>^Point@r</code>. A
           <code>hold</code> variable on the stack can't be updated by a helper task.</li>
         <li><strong>Nothing to discover.</strong> After <code>p.</code>, an editor can offer fields but not the
           operations that belong to <code>Point</code>.</li>
@@ -977,7 +996,7 @@ fi</pre>
     &lt;- p.x * p.x + p.y * p.y
 fi
 
-task (p: ^Point) shift(dx: float)
+task (p: ^Point@r) shift(dx: float)
     p^.x = p^.x + dx
 fi
 
@@ -1197,6 +1216,11 @@ show(p.length_squared())</pre>
             name; method names don't clash with top-level tasks or with other types' methods.</li>
           <li><strong>No automatic dereference</strong>, as with fields: a method on a pointer's target is called as
             <code>p^.length_squared()</code>.</li>
+          <li><strong>Regions:</strong> a method of a shape that holds pointers is generic over its receiver's region, as tasks
+            are today: <code>task Node.length(self) -&gt; int</code> works on a <code>Node@r</code> in any region, and a method
+            that allocates takes a region parameter. Settle this design before any region shortcut that uses a dot, such
+            as <code>nodes.push(list, 1)</code> (see <a href="regions.html#ideas-passing">Easier region passing</a>), since both
+            would give meaning to <code>value.name(…)</code>.</li>
           <li><strong>Generated C</strong> stays collision-free: <code>vela_Point__method_length_squared(vela_Point self)</code>
             and <code>vela_Point__method_shift(vela_Point* self, double dx)</code>.</li>
           <li><strong>Later, interfaces</strong> can be satisfied implicitly, as in Go: a type that has the right
@@ -1244,7 +1268,9 @@ show(p.length_squared())</pre>
 
       <h3>Type System</h3>
       <ul>
-        <li><strong>Generics:</strong> parameterize shapes, kinds, and tasks over types</li>
+        <li><strong>Generics:</strong> parameterize shapes, kinds, and tasks over types. Tasks are already generic over
+          regions (<code>list: maybe ^Node@r</code>); a bracket syntax could hold both, <code>task find[T, r](…)</code> (see
+          <a href="regions.html#ideas-passing">region brackets</a>)</li>
         <li><strong>Type inference:</strong> let the compiler infer more types without annotations</li>
         <li><strong>Sum-type exhaustiveness:</strong> already present; keep it mandatory</li>
         <li><strong>Compile-time constants:</strong> <code>const MaxSize: int = 1024</code></li>
@@ -1278,6 +1304,8 @@ show(p.length_squared())</pre>
         <li><strong>Channels:</strong> pass values between tasks (<code>&lt;-</code> already sends a task's result, so channel operations would need a spelling that can't be confused with it)</li>
         <li><strong>Async/await:</strong> only if it fits the minimal philosophy</li>
         <li><strong>Data-race freedom:</strong> enforce through ownership rules from day one</li>
+        <li><strong>Regions per thread:</strong> a region belongs to the thread that declared it, and handing a whole region to
+          another thread is safe, since every pointer into it names it</li>
       </ul>
 
       <h3>Compilation Targets</h3>
@@ -1300,6 +1328,8 @@ show(p.length_squared())</pre>
             <li>Multiple results, then named results (<code>-&gt; total: int</code>, set with <code>total &lt;- value</code>)</li>
             <li>Defined integer overflow and division by zero</li>
             <li>Fixed-size arrays and a real <code>text</code> type</li>
+            <li>Small region improvements: result-only regions, typed patterns, a lint for regions that grow in loops, and a
+              chunk cache (<a href="regions.html#ideas">ideas</a>)</li>
             <li>Move-only owned pointers, on top of regions</li>
             <li>Basic standard library (math, strings, files)</li>
           </ul>
@@ -1312,7 +1342,8 @@ show(p.length_squared())</pre>
             <li>Generics</li>
             <li><s>Missing values and error handling</s> (done: <a href="#maybe"><code>maybe T</code>, plan B, <code>T or E</code></a>)</li>
             <li>Pattern-match expressions</li>
-            <li><s>Region-based allocation</s> (done: <a href="vela.html#regions">regions</a>)</li>
+            <li><s>Region-based allocation</s> (done: <a href="regions.html">regions</a>)</li>
+            <li>Region brackets with inferred region arguments, and generated copies between regions</li>
           </ul>
         </div>
         <div class="roadmap-phase later">
@@ -1333,7 +1364,7 @@ show(p.length_squared())</pre>
       <p>
         Vela's strength is its smallness. The best next steps preserve that smallness while filling the
         obvious gaps: multiple and named results, a real string type, arrays, and defined integer arithmetic. The memory
-        model's first step, <strong>scoped regions</strong>, is in place; <strong>move-only ownership and optional
+        model's first step, <strong>scoped regions</strong>, is in place (<a href="regions.html">Vela Regions</a>); <strong>move-only ownership and optional
         temporary borrows</strong> can grow it while keeping Vela fast, simple, and far safer than C without becoming
         Rust.
       </p>

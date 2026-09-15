@@ -118,6 +118,18 @@ test("regions: highlighting, hover, and completion of region names", async ({ pa
   await nodesOption.click();
   expect(await lineText(page, 14)).toBe("    bind two = new int(2) in nodes");
   await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
+
+  // In a call, a region parameter's argument offers only regions.
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("bind three = push(");
+  await page.keyboard.press("Control+Space");
+  await expect(nodesOption).toBeVisible();
+  await expect(popup.getByRole("option").filter({ has: page.locator(".cm-completionLabel", { hasText: /^first$/ }) })).toHaveCount(0);
+  await nodesOption.click();
+  await page.keyboard.type(", none");
+  expect(await lineText(page, 15)).toBe("    bind three = push(nodes, none)");
+  await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
 });
 
 const MAYBE = "task find(n: int) -> maybe int\n    when n > 0\n        <- n\n    fi\n    <- none\nfi\n\ntask main()\n    bind m = find(2)\n    show(m)\nfi\n";

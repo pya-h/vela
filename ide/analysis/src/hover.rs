@@ -35,6 +35,7 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
         "Memory new allocates in r lives until the block declaring r closes. As a parameter's type, r: region lets a task allocate in the caller's region.",
     ),
     ("new", "new T(value) in r", "Copies the value into region r and gives a ^T@r. Also written new@r T(value)."),
+    ("in", "in", "each i in a..b counts from a up to b; new T(value) in r allocates in region r."),
     ("maybe", "maybe T", "A T, or none. Read it with match, is, or a plan B: x { fallback }."),
     ("none", "none", "The empty maybe. A pointer can't be none; use maybe ^T."),
     ("is", "value is pattern", "The condition holds when the pattern matches; its names are visible in the block."),
@@ -68,7 +69,15 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
             let (_, code, doc) = KEYWORD_DOCS.iter().find(|(word, _, _)| *word == text)?;
             (code.to_string(), doc.to_string())
         }
-        (_, Some(id)) => describe(k, id)?,
+        (_, Some(id)) => {
+            let (code, doc) = describe(k, id)?;
+            if code.contains(&format!("@{}", vela::ast::ANY_REGION)) {
+                let note = "@_ means no region: the value was made without a pointer into one, so it fits in any region, but can't be given a pointer.";
+                (code, if doc.is_empty() { note.to_string() } else { format!("{} {}", doc, note) })
+            } else {
+                (code, doc)
+            }
+        }
         _ => return None,
     };
     Some((info, token.range.clone()))

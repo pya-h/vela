@@ -274,6 +274,7 @@
     <p class="tagline">A Kimi-edition design notebook: bolder memory models, zero-cost abstractions, and ideas that push Vela's power without losing its smallness.</p>
     <nav class="doc-nav" aria-label="Vela documentation">
       <a href="vela.html">Language</a>
+      <a href="regions.html">Regions</a>
       <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html">Future</a>
@@ -289,7 +290,7 @@
     <section>
       <h2><span class="icon" aria-hidden="true">🧠</span> Memory Safety: Beyond Manual <code>new</code> and <code>free</code></h2>
       <p>
-        Vela's memory model was explicit but unsafe: a missing <code>free</code> leaked, a double <code>free</code> corrupted, and a freed pointer could still be read. Named regions, below, have since replaced <code>new</code>/<code>free</code> (see <a href="vela.html#regions">Memory and Regions</a>). (Null is already gone: a <code>^T</code> always points to something, and a pointer that can be missing is a <a href="future.html#maybe"><code>maybe ^T</code></a>.) The ideas below aim to keep the explicit feel while making common mistakes impossible — or at least caught at compile time.
+        Vela's memory model was explicit but unsafe: a missing <code>free</code> leaked, a double <code>free</code> corrupted, and a freed pointer could still be read. Named regions, below, have since replaced <code>new</code>/<code>free</code> (see <a href="vela.html#regions">Memory and Regions</a>, and the guide <a href="regions.html">Vela Regions</a>). The other ideas here stay: several of them can still make regions more flexible, or cover resources other than memory. (Null is already gone: a <code>^T</code> always points to something, and a pointer that can be missing is a <a href="future.html#maybe"><code>maybe ^T</code></a>.) The ideas below aim to keep the explicit feel while making common mistakes impossible — or at least caught at compile time.
       </p>
 
       <div class="option">
@@ -307,7 +308,7 @@ task print_name(read name: text)
     show(name)
 fi
 
-task reset(hold write counter: ^int)
+task reset(hold write counter: ^int@r)
     # `write` means mutable access to memory owned by someone else.
     counter^ = 0
 fi</pre>
@@ -331,6 +332,12 @@ fi</pre>
         </div>
         <div class="note">
           <strong>Why it's cool:</strong> it is Rust's ownership model distilled to three words. Vela could implement it as an opt-in layer: keep <code>^T</code> for unsafe escape hatches, but make <code>own</code>/<code>read</code>/<code>write</code> the default for new code.
+        </div>
+        <div class="note">
+          <strong>With regions:</strong> capabilities would sit on top of region pointers rather than replace them. A
+          <code>read ^Node@r</code> parameter would promise the task doesn't change the list, and read-only pointers are what
+          would let younger data point into an older region safely; an <code>own ^T@r</code> could be dropped from its region
+          early. See <a href="regions.html#ideas">Ideas for regions</a>.
         </div>
       </div>
 
@@ -381,7 +388,8 @@ fi</pre>
           <code>-&gt; ^T@arena</code>; a task that only reads names the region in its types
           (<code>list: maybe ^Node@r</code>) without taking it; and a shape holding pointers lives in one region,
           <code>Node@arena</code>. There is no <code>free</code>, and there is no region subtyping yet: a pointer is never
-          stored in another region. Details: <a href="vela.html#regions">Memory and Regions</a>.
+          stored in another region. Details: <a href="vela.html#regions">Memory and Regions</a>; the tutorial, the limitations
+          with their workarounds, and ideas such as shapes with several regions are in <a href="regions.html">Vela Regions</a>.
         </div>
       </div>
 
@@ -419,6 +427,11 @@ fi</pre>
         <div class="note">
           <strong>Why it's cool:</strong> <code>defer</code> is the missing half of manual memory management. It lets Vela keep explicit ownership while removing the tedium and bug surface of matching every acquisition with a release.
         </div>
+        <div class="note">
+          <strong>With regions:</strong> memory no longer needs it, since a region is already released on every way out of its
+          block. <code>defer</code> is still the right tool for everything else a block acquires, such as files, locks, and
+          sockets, and the generated C would run deferred code at the same exits where regions are freed.
+        </div>
       </div>
 
       <div class="option">
@@ -444,14 +457,17 @@ fi
         <p>
           The compiler could require every resource-acquiring expression to have a matching release on every control-flow path. This is like a borrow checker but only for resources, and only forward-propagating.
         </p>
-        <pre>task leaky() -> int
-    bind p = new int(5)
-    show(p^)
-    # Error: `p` is owned but never freed.
+        <pre>task leaky(path: text) -> int
+    bind f = open(path)
+    show(read_line(f))
+    # Error: `f` is owned but never closed.
     <- 0
 fi</pre>
         <p>
-          With <code>defer</code>, this becomes trivial to satisfy; without it, the checker demands explicit <code>free</code> on every path. The rule is simple: <em>every <code>own</code> value must be consumed exactly once by the end of its scope</em>.
+          With <code>defer</code>, this becomes trivial to satisfy; without it, the checker demands an explicit <code>close</code> on every path. The rule is simple: <em>every <code>own</code> value must be consumed exactly once by the end of its scope</em>.
+        </p>
+        <p>
+          (This example allocated memory with <code>new</code> before regions existed. Regions already rule out memory leaks past a block, so the idea now matters for other resources, and for owned pointers dropped from a region early.)
         </p>
         <div class="note">
           <strong>Why it's cool:</strong> this is the safety benefit of Rust's <code>Drop</code> without the complexity of lifetimes. It catches the most common memory bug — forgetting to free — at compile time.
@@ -705,6 +721,9 @@ fi</pre>
         <p>
           Because ownership moves, there can be no data races on the carried values. The runtime only needs to synchronize the channel itself, not the data.
         </p>
+        <p>
+          With regions, a message could also carry a whole region: every pointer into it names it, so once it is sent, the sender has nothing left that points there.
+        </p>
         <div class="note">
           <strong>Why it's cool:</strong> this is Go's channels plus Rust's ownership guarantees. It keeps the friendly syntax of channels while eliminating an entire class of concurrency bugs.
         </div>
@@ -783,6 +802,7 @@ end</pre>
           <li><strong>Integer literal underscores:</strong> numbers like <code>1_000_000</code> and <code>1_000.000_001</code> are accepted, with underscores ignored for readability. Malformed forms such as <code>1__000</code> or <code>1_</code> are rejected.</li>
         </ul>
         <p>These are non-breaking additions: existing programs compile unchanged, and the CLI flags follow the same style as <code>--emit-c</code>.</p>
+        <p>Since then, a larger idea from this notebook has landed too, as a breaking change: <strong>named regions</strong>. <code>region r</code>, <code>^T@r</code>, and <code>new T(v) in r</code> replaced <code>new</code>/<code>free</code>; see <a href="regions.html">Vela Regions</a>.</p>
       </div>
     </section>
 
@@ -794,7 +814,7 @@ end</pre>
             <tr><th>Phase</th><th>Focus</th><th>Why first?</th></tr>
           </thead>
           <tbody>
-            <tr><td>1. Safety foundation</td><td><code>defer</code>, static leak checking, null checks on <code>p^</code></td><td>Catches the most common bugs with the smallest compiler change</td></tr>
+            <tr><td>1. Safety foundation</td><td><code>defer</code>, static leak checking for resources (null pointers are already gone: <code>maybe ^T</code>)</td><td>Catches the most common bugs with the smallest compiler change</td></tr>
             <tr><td>2. Borrowed views</td><td><code>[]T</code> slices, <code>read</code> capabilities</td><td>Adds power without changing ownership semantics</td></tr>
             <tr><td>3. Regions (done)</td><td>Named arenas and <code>T@region</code></td><td>Bulk allocation + safety, a big win for real programs</td></tr>
             <tr><td>4. Compile time</td><td><code>comptime</code> tasks</td><td>Unlocks generics, derives, and metaprogramming</td></tr>
@@ -806,7 +826,7 @@ end</pre>
       <div class="recommendation">
         <h3>💡 The Kimi Take</h3>
         <p>
-          Vela's biggest opportunity is to become a <strong>safer C that still feels like C</strong> — not a smaller Rust. That means keeping explicit memory and explicit control, but adding just enough compile-time proof to eliminate leaks, use-after-free, and data races. <code>defer</code>, static leak checking, borrowed slices, and named regions would give Vela a memory story that is both innovative and practical.
+          Vela's biggest opportunity is to become a <strong>safer C that still feels like C</strong> — not a smaller Rust. That means keeping explicit memory and explicit control, but adding just enough compile-time proof to eliminate leaks, use-after-free, and data races. Named regions are now in place; <code>defer</code>, static leak checking for resources, borrowed slices, and the region ideas in <a href="regions.html#ideas">Vela Regions</a> would complete a memory story that is both innovative and practical.
         </p>
         <p>
           For performance, <code>comptime</code> and SIMD are the high-leverage bets: they make Vela competitive with C++ and Zig without adding complexity to the everyday syntax. And for expressiveness, match expressions and derive keep Vela small while removing the boilerplate that currently forces helper tasks and hand-written equality.

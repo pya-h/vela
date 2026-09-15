@@ -171,6 +171,7 @@
     <p class="tagline">A practical comparison across the programming-language spectrum.</p>
     <nav class="doc-nav" aria-label="Vela documentation">
       <a href="vela.html">Language</a>
+      <a href="regions.html">Regions</a>
       <a href="ide.html">Studio</a>
       <a href="comparison.html" aria-current="page">Comparison</a>
       <a href="future.html">Future</a>
@@ -181,7 +182,8 @@
     <section>
       <h2>At a Glance</h2>
       <p>
-        Vela sits in the systems-language zone: it is compiled, statically typed, and manually managed.
+        Vela sits in the systems-language zone: it is compiled and statically typed, and it manages memory with
+        regions that the compiler checks, with no garbage collector.
         This page compares it with representatives from every level of abstraction, from bare-metal C to
         dynamic high-level languages like Python and JavaScript.
       </p>
@@ -192,7 +194,7 @@
         </div>
         <div class="legend-item">
           <strong>Memory</strong>
-          <p>Manual, GC, reference counting, or ownership-based memory management.</p>
+          <p>Manual, regions, GC, reference counting, or ownership-based memory management.</p>
         </div>
         <div class="legend-item">
           <strong>Build</strong>
@@ -357,7 +359,7 @@
       <p>
         Vela generates plain C, so its theoretical performance ceiling is essentially the same as C, C++, Zig, and Rust.
         There is no interpreter and no garbage collector adding overhead; the runtime is a small C header of
-        helpers (printing, allocation).
+        helpers (printing, and the region allocator).
       </p>
       <p>
         Rust and C can still edge ahead in some micro-benchmarks because they offer finer control over
@@ -377,14 +379,34 @@
         (<code>^int@r</code>), and the checker keeps pointers from being stored anywhere that outlives their region,
         so use-after-free and double free can't happen, with no garbage collector, reference counts, or borrow
         checker. The costs: memory is freed a whole region at a time, and one value's pointers all live in one
-        region (see <a href="vela.html#regions">Memory and Regions</a>).
+        region (see <a href="vela.html#regions">Memory and Regions</a>, and <a href="regions.html">Vela Regions</a> for the
+        full guide, its limitations, and their workarounds).
       </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Language</th><th>Memory is freed</th><th>Use after free</th><th>Double free</th><th>Leaks</th><th>Cost at run time</th><th>What you write</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="lang">C</td><td>By hand, with <code>free</code></td><td>Possible</td><td>Possible</td><td>Possible</td><td>None</td><td>Every <code>malloc</code> and <code>free</code></td></tr>
+            <tr><td class="lang">C++</td><td>By destructors and smart pointers</td><td>Possible (raw pointers, references)</td><td>Possible with raw pointers</td><td>Rare; <code>shared_ptr</code> cycles leak</td><td>Counts for shared pointers</td><td>Ownership types</td></tr>
+            <tr><td class="lang">Zig</td><td>By hand, through explicit allocators (often arenas)</td><td>Possible; often caught by the debug allocator</td><td>Caught by the debug allocator</td><td>Reported by the debug allocator</td><td>None in fast release builds</td><td>Allocator parameters, <code>defer</code></td></tr>
+            <tr><td class="lang vela">Vela</td><td>A whole region, when its block ends</td><td>Ruled out at compile time</td><td>Impossible: no <code>free</code></td><td>Not past the region's block; a long-lived region can grow</td><td>None</td><td>Region names in pointer types, region parameters</td></tr>
+            <tr><td class="lang">Rust</td><td>When the owner goes out of scope</td><td>Ruled out at compile time (safe Rust)</td><td>Ruled out</td><td>Rare (reference cycles, <code>mem::forget</code>)</td><td>None (counts only for <code>Rc</code>/<code>Arc</code>)</td><td>Ownership, borrows, lifetimes (mostly inferred)</td></tr>
+            <tr><td class="lang">Swift</td><td>When a reference count reaches zero</td><td>Ruled out</td><td>Ruled out</td><td>Cycles, unless broken with <code>weak</code></td><td>Count updates</td><td><code>weak</code>/<code>unowned</code> for cycles</td></tr>
+            <tr><td class="lang">Go, Java, C#</td><td>By a garbage collector, later</td><td>Ruled out</td><td>Ruled out</td><td>Only through data kept reachable</td><td>Collector time and memory</td><td>Nothing</td></tr>
+          </tbody>
+        </table>
+      </div>
       <ul>
         <li><strong>Rust</strong> is the safest here: its borrow checker prevents data races and use-after-free at compile time.</li>
         <li><strong>Zig</strong> makes allocators explicit and checks bounds, overflow, and more at run time in debug and
           safe release builds (checks that fast release builds drop), sitting between C and Rust.</li>
         <li><strong>Go, Java, C#, Python, JS, Ruby</strong> use garbage collectors, trading memory overhead and latency for convenience.</li>
         <li><strong>C++</strong> offers RAII and smart pointers, but safety is opt-in and easy to bypass.</li>
+        <li><strong>Vela's region names</strong> are a lightweight cousin of Rust's lifetimes: always one name the programmer
+          writes, tied to a block, and never inferred across tasks. That keeps the rules few, at the price of rejecting some
+          safe programs that Rust accepts, such as a value pointing into two regions.</li>
       </ul>
       <div class="note">
         Regions are the closest match to how Zig programs use arena allocators, and to the region systems of
@@ -454,6 +476,11 @@
         <li><strong>Moderate:</strong> C, Python, Ruby, JavaScript.</li>
         <li><strong>Complex:</strong> C++ (templates, headers), Rust (lifetimes, traits), Haskell (type classes, laziness).</li>
       </ul>
+      <p>
+        Regions add the most to Vela's syntax of any feature: a <code>region</code> statement, <code>@r</code> in pointer types,
+        and <code>r: region</code> parameters. That is still far less than lifetimes and borrowing, and code that doesn't use
+        pointers never sees it.
+      </p>
     </section>
 
     <section>
@@ -470,7 +497,8 @@
         <a href="vela.html#limits">Current Limits</a>.)
         <br><br>
         <strong>When to avoid Vela:</strong> production systems, large teams, programs that need arrays, rich
-        standard libraries, or concurrency support.
+        standard libraries, or concurrency support, and long-running programs whose data changes piece by piece, since
+        regions free memory in bulk (see <a href="regions.html#limits">the workarounds</a>).
       </div>
     </section>
 
@@ -478,7 +506,7 @@
       <h2>Summary</h2>
       <p>
         Vela borrows the best ideas from the systems world — C's simplicity and speed, Rust's static safety
-        mindset, Go's minimalism, and Zig's explicit memory philosophy — while keeping the implementation
+        mindset, Go's minimalism, Zig's explicit memory philosophy, and Cyclone's checked regions — while keeping the implementation
         small enough to understand in one sitting. It trades absolute safety for simplicity, and rich
         ecosystems for a clean slate. For what it is, that is exactly the point.
       </p>

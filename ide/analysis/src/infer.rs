@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
-use vela::ast::{Span, Type};
+use vela::ast::{ANY_REGION, Span, Type};
 use vela::lexer::{LexKind, LexToken, Token};
 
 use crate::scan::{Scan, Symbol, SymbolKind};
@@ -270,7 +270,15 @@ impl<'a> Knowledge<'a> {
                 if !literal {
                     // A plan B, whose type the checker records at its `{`:
                     // the value it extracts.
-                    return exact(open).or_else(|| self.expression_type(open.checked_sub(1)?, depth + 1)?.extracted().cloned());
+                    return exact(open).or_else(|| {
+                        let extracted = self.expression_type(open.checked_sub(1)?, depth + 1)?.extracted().cloned()?;
+                        // A value without pointers takes its fallback's region.
+                        let fallback = || self.expression_type(q.checked_sub(1)?, depth + 1).filter(|f| f.without_regions() == extracted.without_regions());
+                        match extracted.regions().contains(&ANY_REGION).then(fallback).flatten() {
+                            Some(fallback) => Some(fallback),
+                            None => Some(extracted),
+                        }
+                    });
                 }
                 let shape = self.ident(open.checked_sub(1)?)?;
                 Some(Type::named(shape))
@@ -301,7 +309,7 @@ impl<'a> Knowledge<'a> {
                         return self.variant_kind(variant).map(|kind| Type::named(&kind));
                     }
                     let task = self.global(name, SymbolKind::Task)?;
-                    Some(return_type(&self.symbol(task)?.detail))
+                    Some(self.call_type(&self.symbol(task)?.detail, open, q, depth))
                 })
             }
             _ => None,
@@ -356,6 +364,47 @@ impl<'a> Knowledge<'a> {
             }
         }
         all_int.then_some(Type::Int)
+    }
+
+    /// The type a call of the task with signature `detail` gives, where its
+    /// parentheses are at positions `open` and `close`. As the checker does, the
+    /// task's regions become the caller's: a region parameter's argument, or the
+    /// region an argument's type shows, and `_` for one no argument shows.
+    fn call_type(&self, detail: &str, open: usize, close: usize, depth: usize) -> Type {
+        // Each argument's first and last position.
+        let mut args = Vec::new();
+        let mut first = open + 1;
+        let mut brackets = 0usize;
+        for p in open + 1..close {
+            match self.token(p) {
+                Some(Token::LParen | Token::LBrace | Token::LBracket) => brackets += 1,
+                Some(Token::RParen | Token::RBrace | Token::RBracket) => brackets = brackets.saturating_sub(1),
+                Some(Token::Comma) if brackets == 0 => {
+                    args.push((first, p - 1));
+                    first = p + 1;
+                }
+                _ => {}
+            }
+        }
+        args.push((first, close - 1));
+        let mut regions = HashMap::new();
+        for ((first, last), (name, ty)) in args.into_iter().zip(parameters(detail)) {
+            match ty {
+                _ if first > last => {}
+                Some(Type::Region) => {
+                    if let (true, Some(region)) = (first == last, self.ident(first)) {
+                        regions.insert(name, region.to_string());
+                    }
+                }
+                Some(ty) => {
+                    if let Some(actual) = self.span_type(first, last, depth + 1) {
+                        vela::check::unify_regions(&ty, &actual, &mut regions);
+                    }
+                }
+                None => {}
+            }
+        }
+        return_type(detail).map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| ANY_REGION.to_string())))
     }
 
     /// The position of the bracket that `close` at `q` closes, on the same line.
@@ -510,10 +559,15 @@ pub(crate) fn return_type(detail: &str) -> Type {
 
 /// The parameter names in a task's detail, `(a: int, b: int) -> int`.
 pub(crate) fn parameter_names(detail: &str) -> Vec<String> {
+    parameters(detail).into_iter().map(|(name, _)| name).collect()
+}
+
+/// The parameters in a task's detail, with their types where they parse.
+pub(crate) fn parameters(detail: &str) -> Vec<(String, Option<Type>)> {
     let inside = detail.strip_prefix('(').and_then(|rest| rest.split_once(')')).map_or("", |(params, _)| params);
     inside
         .split(',')
-        .filter_map(|param| param.split_once(':').map(|(name, _)| name.trim().to_string()))
-        .filter(|name| !name.is_empty())
+        .filter_map(|param| param.split_once(':').map(|(name, ty)| (name.trim().to_string(), parse_type(ty))))
+        .filter(|(name, _)| !name.is_empty())
         .collect()
 }

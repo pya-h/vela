@@ -1355,7 +1355,7 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
 /// (`maybe`, `T or E`, `fail`). A region already recorded, or one `actual`
 /// doesn't show, is left as it is; checking the value against the settled type
 /// then reports any mismatch.
-fn unify_regions(pattern: &Type, actual: &Type, regions: &mut HashMap<String, String>) {
+pub fn unify_regions(pattern: &Type, actual: &Type, regions: &mut HashMap<String, String>) {
     let mut record = |p: &Option<String>, a: &Option<String>| {
         if let (Some(p), Some(a)) = (p, a)
             && a != ANY_REGION

@@ -75,12 +75,13 @@ See [docs/ide.html](docs/ide.html) for features, shortcuts, and security notes.
 | `runtime/vela_rt.h` | The small C runtime the generated code includes |
 | `examples/` | Example programs |
 | `tests/` | Program tests (`run/`, `fail/`, `examples/`) and Rust tests |
-| `docs/` | The language reference, a comparison with other languages, design notes, and the Vela Studio guide |
+| `docs/` | The language reference, the regions guide, a comparison with other languages, design notes, and the Vela Studio guide |
 | `ide/` | Vela Studio: `analysis` (language support), `wasm` (it, for the browser), `server` (`vela-studio`), `web` (the page) |
 
 ## Documentation
 
 - [The language](docs/vela.html)
+- [Regions: memory in Vela](docs/regions.html), a guide and tutorial
 - [Vela Studio](docs/ide.html)
 - [Vela and other languages](docs/comparison.html)
 - [Future directions](docs/future.html)

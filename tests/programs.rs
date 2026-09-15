@@ -232,6 +232,58 @@ fn failing_programs() {
     report("tests/fail", failures);
 }
 
+/// The text of an HTML element's contents: tags removed, entities decoded.
+fn html_text(html: &str) -> String {
+    let mut text = String::new();
+    let mut rest = html;
+    while let Some(open) = rest.find('<') {
+        text.push_str(&rest[..open]);
+        rest = rest[open..].split_once('>').map_or("", |(_, after)| after);
+    }
+    text.push_str(rest);
+    text.replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#x27;", "'").replace("&amp;", "&")
+}
+
+/// The complete programs in a docs page, `<pre class="program" data-file="NAME">`,
+/// each with the output in the `<pre class="output">` right after it.
+fn doc_programs(page: &str) -> Vec<(String, String, String)> {
+    const PROGRAM: &str = "<pre class=\"program\" data-file=\"";
+    const OUTPUT: &str = "<pre class=\"output\" aria-label=\"Output\">";
+    let mut programs = Vec::new();
+    let mut rest = page;
+    while let Some(start) = rest.find(PROGRAM) {
+        rest = &rest[start + PROGRAM.len()..];
+        let (name, after) = rest.split_once("\">").unwrap();
+        let (code, after) = after.split_once("</pre>").unwrap();
+        let output = after.trim_start().strip_prefix(OUTPUT).map(|o| o.split_once("</pre>").unwrap().0).unwrap_or("");
+        programs.push((name.to_string(), html_text(code) + "\n", html_text(output) + "\n"));
+        rest = after;
+    }
+    programs
+}
+
+/// Every complete program in `docs/regions.html` compiles, with strict C, and
+/// prints the output the page shows for it.
+#[test]
+fn docs_programs() {
+    let page = fs::read_to_string(project_root().join("docs/regions.html")).unwrap();
+    let programs = doc_programs(&page);
+    assert!(programs.len() >= 10, "found only {} programs in docs/regions.html", programs.len());
+    let scratch = scratch_dir("docs");
+    let failures = programs
+        .iter()
+        .filter_map(|(name, code, output)| {
+            let source = scratch.join(name);
+            let expected = source.with_extension("out");
+            fs::write(&source, code).unwrap();
+            fs::write(&expected, output).unwrap();
+            check_run(&source, &expected, &scratch).map(|failure| format!("docs/regions.html, {}", failure))
+        })
+        .collect();
+    let _ = fs::remove_dir_all(&scratch);
+    report("docs/regions.html", failures);
+}
+
 #[test]
 fn examples() {
     let root = project_root();

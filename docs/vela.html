@@ -138,6 +138,7 @@
     <p class="tagline">A minimal, safe, fast systems language with a fresh face.</p>
     <nav class="doc-nav" aria-label="Vela documentation">
       <a href="vela.html" aria-current="page">Language</a>
+      <a href="regions.html">Regions</a>
       <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html">Future</a>
@@ -633,6 +634,11 @@ save(500) {
         twice, or leak memory past the block that owns it, and the compiler does this with a handful of rules
         rather than a borrow checker.
       </p>
+      <p>
+        This section is the reference. <a href="regions.html">Vela Regions</a> is the longer guide: why Vela has regions,
+        their pros and cons, a step-by-step tutorial, the current limitations with a workaround for each, and ideas for
+        where regions could go next.
+      </p>
       <div class="note">
         <strong>The rules in short.</strong>
         <ul>
@@ -829,8 +835,14 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         <li>Everything one value holds lives in one region: a shape can't hold pointers into two different regions,
           and a pointer can't be copied into a longer-lived region (copy the value it points to instead).</li>
         <li>A task that only names a region in its header can't allocate in it, and a region can't be returned.</li>
-        <li>Ideas for going further, such as borrowed references, regions that outlive others, and move-only
-          pointers, are in <a href="future.html">Future Directions</a>.</li>
+        <li>A value holding pointers can't be copied into another region whole, even when its pointers are
+          <code>none</code>: rebuild it field by field.</li>
+        <li>A task without a region parameter can't send a pointer-free value of a type that holds pointers
+          (<code>-&gt; Tree@r</code> sending <code>Leaf(1)</code>), and a name bound from a value in no region
+          (<code>@_</code>, as <code>when first(none) is {n}</code>) can't be given a pointer.</li>
+        <li>Each of these has a workaround in <a href="regions.html#limits">Vela Regions</a>, which also collects ideas for
+          going further: easier region passing, freeing one value early, shapes with several regions, and more. The other
+          memory models (borrowed references, move-only pointers) are in <a href="future.html#memory">Future Directions</a>.</li>
       </ul>
     </section>
 
@@ -905,7 +917,8 @@ CC=clang cargo test</pre>
       <p>
         Tests are plain Vela programs: <code>tests/run/</code> holds programs with their expected output,
         <code>tests/fail/</code> holds programs the compiler must reject, and every file in
-        <code>examples/</code> is checked against <code>tests/examples/</code>. The C generated for run tests and
+        <code>examples/</code> is checked against <code>tests/examples/</code>, as is every complete program in
+        <code>docs/regions.html</code> against the output the page shows. The C generated for run tests and
         examples must also compile as strict ISO C11 with no warnings (<code>-std=c11 -pedantic-errors -Wall
         -Wextra -Werror</code>). Rust tests in <code>tests/*.rs</code> run those programs
         (<code>programs.rs</code>) and cover the command line, the library's build pipeline, the lexer, and

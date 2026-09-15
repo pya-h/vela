@@ -10,7 +10,7 @@ use serde::Serialize;
 use vela::ast::{BUILTIN_TASKS, BUILTIN_TYPES, Type};
 use vela::lexer::{LexKind, Token};
 
-use crate::infer::{Knowledge, parameter_names};
+use crate::infer::{Knowledge, parameter_names, parameters};
 use crate::scan::{Scan, SymbolKind};
 use crate::types::Checked;
 
@@ -225,12 +225,44 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     if blocks.is_empty() || matches!(blocks.first(), Some(Block::Shape | Block::Kind)) {
         return (Vec::new(), word_start, byte);
     }
+    // A region is a value only as the argument for a task's region parameter,
+    // which must be a region the caller can allocate in.
+    let parameter = prev.filter(|_| inside_parens).and_then(|q| argument_parameter(&k, q));
+    if parameter == Some(Some(Type::Region)) {
+        return (region_items(&k, word_start, true), word_start, byte);
+    }
     let mut items = expression_items(&k, word_start);
-    // A region is a value only as a call's argument.
-    if !inside_parens {
+    if !inside_parens || parameter.is_some() {
         items.retain(|item| item.kind != CompletionKind::Region);
     }
     (items, word_start, byte)
+}
+
+/// The parameter whose argument is being typed after position `q`, inside a
+/// call's parentheses on the same line: `None` when the call isn't of a known
+/// task, and `Some(None)` when the task has no such parameter, it is `show`,
+/// or the parameter's type doesn't parse.
+fn argument_parameter(k: &Knowledge, q: usize) -> Option<Option<Type>> {
+    let mut depth = 0usize;
+    let mut index = 0;
+    for p in (k.line_start(q)..=q).rev() {
+        match k.token(p) {
+            Some(Token::RParen | Token::RBrace | Token::RBracket) => depth += 1,
+            Some(Token::LBrace | Token::LBracket) if depth == 0 => return None,
+            Some(Token::LParen) if depth == 0 => {
+                let name = k.ident(p.checked_sub(1)?)?;
+                if BUILTIN_TASKS.contains(&name) {
+                    return Some(None);
+                }
+                let task = k.symbol(k.global(name, SymbolKind::Task)?)?;
+                return Some(parameters(&task.detail).into_iter().nth(index).and_then(|(_, ty)| ty));
+            }
+            Some(Token::LParen | Token::LBrace | Token::LBracket) => depth -= 1,
+            Some(Token::Comma) if depth == 0 => index += 1,
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Whether the type-starting token at position `q` (a name, `^`, or `maybe`)
