@@ -1,4 +1,6 @@
-# Owned pointers: new, dereference, write through, free
+# Pointers live in regions: `new` allocates in one (written `new T(v) in r`
+# or `new@r T(v)`), `^` reads and writes through the pointer, and the region
+# frees everything in it when its block closes.
 
 shape Point
     x: int
@@ -6,13 +8,12 @@ shape Point
 fi
 
 task main()
-    bind n: ^int = new int(42)
+    region r
+    bind n: ^int@r = new int(42) in r
     show(n^)
     n^ = n^ + 1
     show(n^)
-    free(n)
 
-    bind p = new Point(Point { x: 3, y: 4 })
+    bind p = new@r Point(Point { x: 3, y: 4 })
     show(p^.x * p^.y)
-    free(p)
 fi

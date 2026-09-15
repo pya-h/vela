@@ -1,0 +1,8 @@
+# error: 7:27: expected type ^int@x, got ^int@y; a value can't move to another region: a pointer into one region is never stored in another
+task link(a: ^int@r, b: ^int@r)
+fi
+task main()
+    region x
+    region y
+    link(new int(1) in x, new int(2) in y)
+fi

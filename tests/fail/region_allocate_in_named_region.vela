@@ -1,0 +1,6 @@
+# error: 3:12: this task can't allocate in 'r', which it only names in its types; take it as a parameter, 'r: region'
+task grow(list: maybe ^int@r) -> ^int@r
+    <- new@r int(1)
+fi
+task main()
+fi

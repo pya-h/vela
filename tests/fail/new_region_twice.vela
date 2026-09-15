@@ -1,0 +1,5 @@
+# error: 4:27: the region is already named after 'new@'; write one of 'new@r T(v)' or 'new T(v) in r'
+task main()
+    region r
+    bind p = new@r int(1) in r
+fi

@@ -1,0 +1,6 @@
+# error: 3:11: a field lives in the region of the value holding it, so its type names no region; remove '@r'
+shape Node
+    next: maybe ^Node@r
+fi
+task main()
+fi

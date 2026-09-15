@@ -1,0 +1,10 @@
+# error: 9:56: expected type ^Node@_, got ^Node@r; the value this belongs to was built without pointers, so it lives in no region and can't take one
+shape Node
+    value: int
+    next: maybe ^Node
+fi
+task main()
+    region r
+    bind q = new Node(Node { value: 1, next: none }) in r
+    bind leaked = Node { value: 1, next: none }.next { q }
+fi

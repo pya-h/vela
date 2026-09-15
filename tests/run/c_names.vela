@@ -1,5 +1,5 @@
-# Names that mean something in C (keywords, macros, the runtime's helpers) are
-# ordinary names in Vela.
+# Names that mean something in C (keywords, macros, the runtime's helpers, and
+# the C library's `free`) are ordinary names in Vela.
 
 shape Record
     default: int
@@ -53,10 +53,10 @@ task main()
     fi
     bind vela_x = 5
     show(vela_x)
-    bind boxed = new Record(r)
+    region free
+    bind boxed = new Record(r) in free
     show(boxed^.stdout)
-    free(boxed)
-    bind message = new text("boxed text")
+    region static
+    bind message = new@static text("boxed text")
     show(message^)
-    free(message)
 fi

@@ -298,8 +298,9 @@ impl Parser {
         Ok(fields)
     }
 
-    /// A type, with an optional error type: `int`, `^Node`, `maybe int`,
-    /// `int or ParseError`. `^` and `maybe` bind tighter than `or`.
+    /// A type, with an optional error type: `int`, `^Node@r`, `maybe int`,
+    /// `int or ParseError`. `^` and `maybe` bind tighter than `@`, and `@`
+    /// tighter than `or`.
     fn parse_type(&mut self) -> Result<Type> {
         let value = self.parse_simple_type()?;
         if !self.match_token(Token::Or) {
@@ -312,8 +313,34 @@ impl Parser {
         Ok(Type::Or(Box::new(value), Box::new(error)))
     }
 
-    /// A type without `or`.
+    /// A type without `or`, and the region it lives in: `maybe ^Node@r` is
+    /// `(maybe ^Node)@r`, whose pointer and `Node` both live in `r`.
     fn parse_simple_type(&mut self) -> Result<Type> {
+        let span = self.peek_span();
+        let ty = self.parse_prefixed_type()?;
+        if !self.match_token(Token::At) {
+            return Ok(ty);
+        }
+        let region = self.expect_ident()?;
+        if ty == Type::Region {
+            return Err(Error::at(span, "a region doesn't live in another region"));
+        }
+        let mut named = false;
+        let ty = ty.map_regions_of_names(&mut |_| {
+            named = true;
+            Some(region.clone())
+        });
+        if !named {
+            return Err(Error::at(span, format!("{} holds no pointers, so it lives in no region", ty)));
+        }
+        Ok(ty)
+    }
+
+    /// A type without `or` or `@`: a name, after any `^` and `maybe`.
+    fn parse_prefixed_type(&mut self) -> Result<Type> {
+        if self.match_token(Token::Region) {
+            return Ok(Type::Region);
+        }
         let prefix = if self.match_token(Token::Caret) {
             Some(Token::Caret)
         } else if self.match_token(Token::Maybe) {
@@ -323,12 +350,12 @@ impl Parser {
         };
         if let Some(prefix) = prefix {
             self.enter()?;
-            let inner = Box::new(self.parse_simple_type()?);
+            let inner = Box::new(self.parse_prefixed_type()?);
             self.leave(1);
-            return Ok(if prefix == Token::Caret { Type::Ptr(inner) } else { Type::Maybe(inner) });
+            return Ok(if prefix == Token::Caret { Type::Ptr(inner, None) } else { Type::Maybe(inner) });
         }
         let name = self.expect_ident()?;
-        Ok(Type::builtin(&name).unwrap_or(Type::Named(name)))
+        Ok(Type::builtin(&name).unwrap_or(Type::Named(name, None)))
     }
 
     fn parse_block(&mut self) -> Result<Block> {
@@ -366,7 +393,10 @@ impl Parser {
                 self.reject_old_send()?;
                 self.parse_simple_stmt(span)
             }
-            Token::Free => self.parse_free(),
+            Token::Region => self.parse_region(),
+            Token::Ident(name) if name == "free" && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) => Err(
+                Error::at(span, "Vela has no 'free': memory in a region is freed when the block declaring the region closes"),
+            ),
             _ => self.parse_simple_stmt(span),
         }
     }
@@ -563,11 +593,12 @@ impl Parser {
         }
     }
 
-    fn parse_free(&mut self) -> Result<Stmt> {
+    /// `region name`
+    fn parse_region(&mut self) -> Result<Stmt> {
+        self.advance(); // region
         let span = self.peek_span();
-        self.advance(); // free
-        let expr = self.parse_expr()?;
-        Ok(Stmt::new(StmtKind::Free(expr), span))
+        let name = self.expect_ident()?;
+        Ok(Stmt::new(StmtKind::Region(name), span))
     }
 
     fn parse_expr(&mut self) -> Result<Expr> {
@@ -792,15 +823,40 @@ impl Parser {
         Ok(Expr::new(ExprKind::PlanB { value: Box::new(value), error, body }, opened))
     }
 
+    /// `new T(value) in r` or `new@r T(value)`.
     fn parse_new(&mut self) -> Result<Expr> {
         let span = self.peek_span();
         self.advance(); // new
+        let before = if self.match_token(Token::At) {
+            let region_span = self.peek_span();
+            Some((self.expect_ident()?, region_span))
+        } else {
+            None
+        };
         let ty_span = self.peek_span();
         let ty = self.parse_type()?;
         self.expect(Token::LParen)?;
         let value = self.parse_expr()?;
         self.expect(Token::RParen)?;
-        Ok(Expr::new(ExprKind::New { ty, ty_span, value: Box::new(value) }, span))
+        let after = if self.check(Token::In) {
+            let in_span = self.peek_span();
+            self.advance();
+            let region_span = self.peek_span();
+            let region = self.expect_ident()?;
+            if before.is_some() {
+                return Err(Error::at(in_span, "the region is already named after 'new@'; write one of 'new@r T(v)' or 'new T(v) in r'"));
+            }
+            Some((region, region_span))
+        } else {
+            None
+        };
+        let Some((region, region_span)) = before.or(after) else {
+            return Err(Error::at(
+                self.peek_span(),
+                format!("'new' needs a region to allocate in, as in 'new {}(…) in r' or 'new@r {}(…)'", ty, ty),
+            ));
+        };
+        Ok(Expr::new(ExprKind::New { ty, ty_span, value: Box::new(value), region, region_span }, span))
     }
 
     fn parse_struct_init(&mut self, name: String) -> Result<ExprKind> {

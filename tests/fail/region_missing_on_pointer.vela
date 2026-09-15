@@ -1,0 +1,5 @@
+# error: 2:11: a pointer lives in a region, so its type names one, as in '^int@r'
+task f(p: ^int)
+fi
+task main()
+fi

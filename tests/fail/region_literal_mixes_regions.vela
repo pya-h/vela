@@ -1,0 +1,11 @@
+# error: 10:28: expected type Node@b, got Node@a; a value can't move to another region: a pointer into one region is never stored in another
+shape Node
+    value: int
+    next: maybe ^Node
+fi
+task main()
+    region a
+    region b
+    bind first = new Node(Node { value: 1, next: none }) in a
+    bind second = new Node(Node { value: 2, next: first }) in b
+fi

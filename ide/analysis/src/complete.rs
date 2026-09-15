@@ -26,6 +26,7 @@ pub enum CompletionKind {
     Field,
     Variant,
     Type,
+    Region,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -64,7 +65,7 @@ const GLOBAL: i32 = 2;
 const SNIPPET: i32 = 1;
 const KEYWORD: i32 = 0;
 
-const STATEMENT_KEYWORDS: &[&str] = &["bind", "hold", "when", "loop", "each", "match", "free"];
+const STATEMENT_KEYWORDS: &[&str] = &["bind", "hold", "when", "loop", "each", "match", "region"];
 const VALUE_KEYWORDS: &[&str] = &["true", "false", "none", "not", "new", "fail"];
 
 /// Completions at byte `byte` of `source`. Returns the items and the byte
@@ -90,9 +91,9 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
         let exact = Knowledge::new(source, scan, &probe);
         let base = dot.checked_sub(1).and_then(|q| exact.type_ending_at(q));
         let (shape, through_pointer) = match base {
-            Some(Type::Named(shape)) => (shape, false),
-            Some(Type::Ptr(inner)) => match *inner {
-                Type::Named(shape) => (shape, true),
+            Some(Type::Named(shape, _)) => (shape, false),
+            Some(Type::Ptr(inner, _)) => match *inner {
+                Type::Named(shape, _) => (shape, true),
                 _ => return (Vec::new(), word_start, byte),
             },
             _ => return (Vec::new(), word_start, byte),
@@ -118,8 +119,16 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     let first_token = line_first.and_then(|q| k.token(q));
 
     // Names being declared get no suggestions.
-    if matches!(prev_token, Some(Token::Task | Token::Shape | Token::Kind | Token::Bind | Token::Hold | Token::Each)) {
+    if matches!(prev_token, Some(Token::Task | Token::Shape | Token::Kind | Token::Bind | Token::Hold | Token::Each | Token::Region)) {
         return (Vec::new(), word_start, byte);
+    }
+    // A region: after `@` in a type or `new@`, or after the `in` of `new T(v) in`.
+    // `new` allocates, so it takes only a region the task can allocate in.
+    if let Some(q) = prev
+        && (prev_token == Some(&Token::At) || (prev_token == Some(&Token::In) && k.token_before(q) == Some(&Token::RParen)))
+    {
+        let allocating = prev_token == Some(&Token::In) || k.token_before(q) == Some(&Token::New);
+        return (region_items(&k, word_start, allocating), word_start, byte);
     }
     // After `is`: patterns. Names a pattern or plan B declares (`is {v}`,
     // `is fail e`, `{ fail e`) get no suggestions.
@@ -182,7 +191,19 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
         let after_arrow = prev_token == Some(&Token::Arrow);
         // A maybe can't hold a maybe, and an error type can't be one.
         let offer_maybe = !matches!(prev_token, Some(Token::Maybe | Token::Or));
-        return (type_items(&k, after_arrow, offer_maybe), word_start, byte);
+        let mut items = type_items(&k, after_arrow, offer_maybe);
+        // A parameter can be a region the task allocates in.
+        if prev_token == Some(&Token::Colon) && first_token == Some(&Token::Task) {
+            items.push(CompletionItem {
+                label: "region".to_string(),
+                kind: CompletionKind::Keyword,
+                detail: "a region to allocate in".to_string(),
+                apply: None,
+                snippet: None,
+                boost: SNIPPET,
+            });
+        }
+        return (items, word_start, byte);
     }
 
     // (`prev_token` is also `None` after invalid text, which isn't a line start.)
@@ -204,7 +225,12 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     if blocks.is_empty() || matches!(blocks.first(), Some(Block::Shape | Block::Kind)) {
         return (Vec::new(), word_start, byte);
     }
-    (expression_items(&k, word_start), word_start, byte)
+    let mut items = expression_items(&k, word_start);
+    // A region is a value only as a call's argument.
+    if !inside_parens {
+        items.retain(|item| item.kind != CompletionKind::Region);
+    }
+    (items, word_start, byte)
 }
 
 /// Whether the type-starting token at position `q` (a name, `^`, or `maybe`)
@@ -392,7 +418,7 @@ fn case_items(source: &str, scan: &Scan, k: &Knowledge, case: usize) -> Vec<Comp
     let subject_end = k.line_end(match_q).checked_sub(1).filter(|&q| q > match_q);
     let subject = subject_end.and_then(|q| exact.type_ending_at(q));
     let kind = match &subject {
-        Some(Type::Named(name)) => k.global(name, SymbolKind::Kind),
+        Some(Type::Named(name, _)) => k.global(name, SymbolKind::Kind),
         _ => None,
     };
 
@@ -525,7 +551,7 @@ fn is_pattern_items(source: &str, scan: &Scan, k: &Knowledge, is: usize) -> Vec<
             .collect();
     }
     let kind = match &subject {
-        Some(Type::Named(name)) => k.global(name, SymbolKind::Kind),
+        Some(Type::Named(name, _)) => k.global(name, SymbolKind::Kind),
         _ => None,
     };
     let variants: Vec<usize> = match kind {
@@ -686,7 +712,7 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bo
             items.push(item);
             continue;
         }
-        let Some(Type::Named(kind_name)) = ty else { continue };
+        let Some(Type::Named(kind_name, _)) = ty else { continue };
         let Some(kind) = k.global(&kind_name, SymbolKind::Kind) else { continue };
         let mut used = Vec::new();
         let cases: Vec<String> = k.children(kind).map(|(variant, _)| case_template(k, variant, &mut used)).collect();
@@ -701,7 +727,8 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bo
         item.boost = GLOBAL;
         items.push(item);
     }
-    items.extend(local_items(k, byte));
+    // A region is only an argument, never a statement.
+    items.extend(local_items(k, byte).into_iter().filter(|item| item.kind != CompletionKind::Region));
     items.extend(task_items(k));
     items
 }
@@ -744,13 +771,41 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
         });
     }
     items.extend(VALUE_KEYWORDS.iter().map(|word| keyword(word)));
+    items.push(snippet("new … in", "allocate a value in a region", "new ${T}(${value}) in ${r}"));
     items
 }
 
-/// The variables and parameters visible at `byte`, innermost last.
+/// The regions that can be named at `byte`. `allocating` leaves out regions a
+/// task only names in its types, which `new` can't allocate in. In a task's
+/// header, the regions its parameters already name on that line.
+fn region_items(k: &Knowledge, byte: usize, allocating: bool) -> Vec<CompletionItem> {
+    let same_line = |from: usize| k.source.get(from..byte).is_some_and(|text| !text.contains('\n'));
+    let mut seen: Vec<&str> = Vec::new();
+    let mut items = Vec::new();
+    for symbol in k.symbols().iter().rev().filter(|s| s.kind == SymbolKind::Region) {
+        let visible = symbol.visible.start <= byte && byte <= symbol.visible.end;
+        let in_header = symbol.name_range.end <= byte && same_line(symbol.name_range.start);
+        if !(visible || in_header) || seen.contains(&symbol.name.as_str()) || (allocating && symbol.intro == Some("@")) {
+            continue;
+        }
+        seen.push(&symbol.name);
+        let detail = if symbol.intro == Some("@") { "region, named in the task's types" } else { "region" };
+        items.push(CompletionItem {
+            label: symbol.name.clone(),
+            kind: CompletionKind::Region,
+            detail: detail.to_string(),
+            apply: None,
+            snippet: None,
+            boost: LOCAL,
+        });
+    }
+    items
+}
+
+/// The variables, parameters, and regions visible at `byte`, innermost last.
 fn visible_locals<'k>(k: &'k Knowledge, byte: usize) -> impl Iterator<Item = (usize, &'k crate::scan::Symbol)> {
     k.symbols().iter().enumerate().filter(move |(_, s)| {
-        matches!(s.kind, SymbolKind::Variable | SymbolKind::Parameter) && s.visible.start <= byte && byte <= s.visible.end
+        matches!(s.kind, SymbolKind::Variable | SymbolKind::Parameter | SymbolKind::Region) && s.visible.start <= byte && byte <= s.visible.end
     })
 }
 
@@ -764,10 +819,10 @@ fn local_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
             continue;
         }
         seen.push(&symbol.name);
-        let (kind, fallback) = if symbol.kind == SymbolKind::Parameter {
-            (CompletionKind::Parameter, "parameter")
-        } else {
-            (CompletionKind::Variable, symbol.intro.unwrap_or("variable"))
+        let (kind, fallback) = match symbol.kind {
+            SymbolKind::Parameter => (CompletionKind::Parameter, "parameter"),
+            SymbolKind::Region => (CompletionKind::Region, "region"),
+            _ => (CompletionKind::Variable, symbol.intro.unwrap_or("variable")),
         };
         items.push(CompletionItem {
             label: symbol.name.clone(),

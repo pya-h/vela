@@ -252,9 +252,9 @@
               <td class="lang vela">Vela</td>
               <td>Low–Mid</td>
               <td><span class="badge badge-fast">Excellent</span></td>
-              <td>Manual (new/free)</td>
+              <td>Regions (arenas)</td>
               <td><span class="badge badge-fast">Fast</span></td>
-              <td>Type-safe, no borrow checker</td>
+              <td>Type-safe, region-checked pointers, no borrow checker</td>
               <td>Learning, small systems tools</td>
             </tr>
             <tr>
@@ -371,9 +371,13 @@
     <section>
       <h2>Memory</h2>
       <p>
-        Vela uses <strong>manual memory management</strong> via owned pointers: <code>new int(42)</code>, dereference <code>p^</code>,
-        and <code>free(p)</code>. This is the simplest model to implement and gives the programmer full control,
-        but it also means memory leaks and use-after-free are possible — just like C.
+        Vela manages memory with <strong>regions</strong>: <code>region r</code> declares an arena,
+        <code>new int(42) in r</code> allocates in it, and everything in <code>r</code> is freed at once when the
+        block declaring it closes. There is no <code>free</code>. A pointer's type names its region
+        (<code>^int@r</code>), and the checker keeps pointers from being stored anywhere that outlives their region,
+        so use-after-free and double free can't happen, with no garbage collector, reference counts, or borrow
+        checker. The costs: memory is freed a whole region at a time, and one value's pointers all live in one
+        region (see <a href="vela.html#regions">Memory and Regions</a>).
       </p>
       <ul>
         <li><strong>Rust</strong> is the safest here: its borrow checker prevents data races and use-after-free at compile time.</li>
@@ -383,9 +387,10 @@
         <li><strong>C++</strong> offers RAII and smart pointers, but safety is opt-in and easy to bypass.</li>
       </ul>
       <div class="note">
-        Vela intentionally chose manual management to keep the compiler small. A future version could add
-        ownership checking or arena allocators; the design notes in <a href="future.html">Future Directions</a>
-        suggest move-only pointers, borrowed references, and explicit regions, which would add a little syntax.
+        Regions are the closest match to how Zig programs use arena allocators, and to the region systems of
+        languages such as Cyclone, with the checking kept to a few rules. Allocation is a pointer bump, and freeing
+        a region costs one call per chunk. <a href="future.html#memory">Future Directions</a> keeps the other options,
+        such as move-only pointers and borrowed references, as ways to grow the model.
       </div>
     </section>
 
@@ -411,9 +416,10 @@
         <code>float</code> in arithmetic gives a <code>float</code>), every value-returning task must send a value
         (<code>&lt;- value</code>) on every path, a missing value is a <code>maybe T</code> that must be checked
         before use (pointers can't be null), and a failure is a <code>T or E</code> whose error can't be ignored by
-        accident. However, it does <em>not</em> prevent memory errors like Rust does: using a freed pointer, or
-        freeing one twice, is not caught, and integer overflow and division by zero are undefined, as in C. It is safer than C because shapes, kinds, and pointers are
-        checked, but less safe than Rust, Swift, Haskell, OCaml, or GC'd languages.
+        accident. Memory is freed through regions, whose pointers the checker keeps from outliving them, so freed
+        memory can't be used or freed again. However, integer overflow and division by zero are undefined, as in C,
+        and there are no arrays or bounds checks yet. It is much safer than C, but its guarantees are narrower than
+        Rust's (which also rules out data races) or those of GC'd languages.
       </p>
       <div class="table-wrap">
         <table>
@@ -423,7 +429,7 @@
           <tbody>
             <tr><td class="lang">C</td><td>Weak</td><td>Unsafe</td><td>No</td></tr>
             <tr><td class="lang">C++</td><td>Moderate</td><td>Unsafe by default</td><td>No</td></tr>
-            <tr><td class="lang vela">Vela</td><td>Strong</td><td>Manual, type-checked</td><td><code>maybe T</code>; no null pointers</td></tr>
+            <tr><td class="lang vela">Vela</td><td>Strong</td><td>Regions, compile-time checked</td><td><code>maybe T</code>; no null pointers</td></tr>
             <tr><td class="lang">Zig</td><td>Strong</td><td>Manual + checks</td><td>Optional</td></tr>
             <tr><td class="lang">Go</td><td>Strong</td><td>GC-safe</td><td>Nil exists</td></tr>
             <tr><td class="lang">Rust</td><td>Strong</td><td>Compile-time proven</td><td>Option&lt;T&gt;</td></tr>
@@ -456,15 +462,15 @@
         Vela is best understood as an <strong>experimental, teaching-friendly systems language</strong>. It is not
         trying to dethrone Rust or C. Instead, it demonstrates that you can have a small, fast, compiled
         language with modern features — pattern matching, sum types, <code>maybe</code> values instead of null,
-        errors as types, and clean syntax — while staying close to the metal.
+        errors as types, memory in checked regions, and clean syntax — while staying close to the metal.
       </p>
       <div class="note">
         <strong>When to choose Vela:</strong> learning about compilers and language design, experiments, and
         small demos where you want C performance without C syntax. (Vela can't yet read input or hold arrays; see
         <a href="vela.html#limits">Current Limits</a>.)
         <br><br>
-        <strong>When to avoid Vela:</strong> production systems requiring memory safety guarantees, large
-        teams, rich standard libraries, or concurrency support.
+        <strong>When to avoid Vela:</strong> production systems, large teams, programs that need arrays, rich
+        standard libraries, or concurrency support.
       </div>
     </section>
 

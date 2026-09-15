@@ -58,11 +58,11 @@
     | builtin-fn:show  punctuation:(  string:"small"  punctuation:)
  38 |     fi
     | keyword:fi
- 40 |     bind ptr: ^int = new int(42)
-    | keyword:bind  variable:ptr  punctuation::  operator:^  type-builtin:int  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)
- 41 |     show(ptr^)
+ 40 |     region numbers
+    | keyword:region  region:numbers
+ 41 |     bind ptr: ^int@numbers = new int(42) in numbers
+    | keyword:bind  variable:ptr  punctuation::  operator:^  type-builtin:int  operator:@  region:numbers  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)  keyword:in  region:numbers
+ 42 |     show(ptr^)
     | builtin-fn:show  punctuation:(  variable:ptr  operator:^  punctuation:)
- 42 |     free(ptr)
-    | keyword:free  punctuation:(  variable:ptr  punctuation:)
  43 | fi
     | keyword:fi

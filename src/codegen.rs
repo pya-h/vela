@@ -61,17 +61,24 @@ impl CWriter {
 /// An expression is normally one C expression. One that contains a plan B
 /// (`x { … }`) needs statements, so generating it writes those statements
 /// ("the prelude") before the line that uses its value; see `gen_operands`.
+///
+/// A `region r` is an arena, `vela__rt__region r[1]`: as an array, `r` is a
+/// pointer to it, like a region parameter. Every block frees the regions it
+/// declared when it closes, and a `<-` frees every region the task declared
+/// before it returns.
 pub struct Generator {
     w: CWriter,
     temp_counter: u64,
     kinds: HashMap<String, KindDef>,
     /// The return type of the task being generated.
     ret: Type,
+    /// The regions declared in each block being generated, outermost first.
+    regions: Vec<Vec<String>>,
 }
 
 impl Default for Generator {
     fn default() -> Self {
-        Generator { w: CWriter::default(), temp_counter: 0, kinds: HashMap::new(), ret: Type::Unit }
+        Generator { w: CWriter::default(), temp_counter: 0, kinds: HashMap::new(), ret: Type::Unit, regions: Vec::new() }
     }
 }
 
@@ -241,6 +248,7 @@ impl Generator {
 
     fn gen_task(&mut self, t: &TaskDef) -> Result<()> {
         self.ret = t.ret.clone();
+        self.regions.clear();
         self.w.open(&signature(t));
         for param in &t.params {
             self.use_if_unread(&param.name, &t.body);
@@ -258,7 +266,37 @@ impl Generator {
     }
 
     fn gen_block(&mut self, block: &[Stmt]) -> Result<()> {
-        self.gen_statements(block, block)
+        self.enter_block();
+        self.gen_statements(block, block)?;
+        self.leave_block(block);
+        Ok(())
+    }
+
+    /// Starts a block that may declare regions.
+    fn enter_block(&mut self) {
+        self.regions.push(Vec::new());
+    }
+
+    /// Ends the block `block`, freeing the regions it declared, newest first.
+    /// (After a final `<-`, which frees them itself, nothing more runs.)
+    fn leave_block(&mut self, block: &[Stmt]) {
+        let declared = self.regions.pop().unwrap_or_default();
+        if matches!(block.last().map(|stmt| &stmt.kind), Some(StmtKind::Send(_))) {
+            return;
+        }
+        for region in declared.iter().rev() {
+            self.w.line(&format!("vela__rt__region_free({});", c_ident(region)));
+        }
+    }
+
+    /// Frees every region the task has declared so far, newest first, before
+    /// a `<-` leaves it. Whether any exist.
+    fn free_all_regions(&mut self) -> bool {
+        let all: Vec<String> = self.regions.iter().flatten().cloned().collect();
+        for region in all.iter().rev() {
+            self.w.line(&format!("vela__rt__region_free({});", c_ident(region)));
+        }
+        !all.is_empty()
     }
 
     /// Generates `stmts`, the first statements of `scope`: a variable declared
@@ -384,17 +422,31 @@ impl Generator {
                 self.w.close();
             }
             StmtKind::Match(expr, cases) => self.gen_match(expr, cases)?,
-            StmtKind::Send(None) => match &self.ret {
-                Type::Or(..) => self.w.line(&format!("return {};", success(&self.ret))),
-                _ => self.w.line("return;"),
-            },
+            StmtKind::Send(None) => {
+                self.free_all_regions();
+                match &self.ret {
+                    Type::Or(..) => self.w.line(&format!("return {};", success(&self.ret))),
+                    _ => self.w.line("return;"),
+                }
+            }
             StmtKind::Send(Some(e)) => {
                 let expr = self.gen_expr(e)?;
-                self.w.line(&format!("return {};", expr));
+                if self.regions.iter().all(Vec::is_empty) {
+                    self.w.line(&format!("return {};", expr));
+                } else {
+                    // The value may read memory in the regions, so it is
+                    // computed before they are freed.
+                    let result = self.fresh_temp("result");
+                    self.w.line(&format!("{} {} = {};", c_type(&self.ret), result, expr));
+                    self.free_all_regions();
+                    self.w.line(&format!("return {};", result));
+                }
             }
-            StmtKind::Free(e) => {
-                let expr = self.gen_expr(e)?;
-                self.w.line(&format!("vela__rt__free((void*){});", expr));
+            StmtKind::Region(name) => {
+                self.w.line(&format!("vela__rt__region {}[1] = {{ VELA__RT__REGION_EMPTY }};", c_ident(name)));
+                if let Some(block) = self.regions.last_mut() {
+                    block.push(name.clone());
+                }
             }
         }
         Ok(())
@@ -423,7 +475,7 @@ impl Generator {
             (PatternKind::None, Type::Maybe(_)) => format!("!{}.has", subject),
             (PatternKind::Value(_), Type::Or(..)) => format!("{}.ok", subject),
             (PatternKind::Fail(_), Type::Or(..)) => format!("!{}.ok", subject),
-            (PatternKind::Variant { tag, .. }, Type::Named(kind)) => format!("{}.tag == {}", subject, tag_value(kind, tag)),
+            (PatternKind::Variant { tag, .. }, Type::Named(kind, _)) => format!("{}.tag == {}", subject, tag_value(kind, tag)),
             _ => return Err(Error::internal_at(pattern.span, format!("pattern '{}' on type {}", pattern.label(), ty))),
         };
         Ok(test)
@@ -443,7 +495,7 @@ impl Generator {
             (PatternKind::Fail((name, _)), Type::Or(_, error)) => {
                 bindings.push((name, (**error).clone(), format!("{}.error", subject)));
             }
-            (PatternKind::Variant { tag, binds }, Type::Named(kind_name)) => {
+            (PatternKind::Variant { tag, binds }, Type::Named(kind_name, _)) => {
                 let variant = self
                     .kinds
                     .get(kind_name)
@@ -490,7 +542,7 @@ impl Generator {
             self.gen_expr(expr)?
         };
 
-        if let Type::Named(kind_name) = &ty {
+        if let Type::Named(kind_name, _) = &ty {
             if !self.kinds.contains_key(kind_name) {
                 return Err(Error::internal_at(expr.span, format!("match on unknown kind '{}'", kind_name)));
             }
@@ -647,12 +699,17 @@ impl Generator {
                     mangle(kind), tag_value, c_ident(tag), fields.join(", ")
                 ))
             }
-            ExprKind::New { ty, value, .. } => {
+            ExprKind::New { ty, value, region, .. } => {
                 // Copies the value out of a one-element array compound literal,
                 // which works for every type in standard C.
                 let val = self.gen_expr(value)?;
                 let ctype = c_type(ty);
-                Ok(format!("(({0}*)vela__rt__box(({0}[1]){{ {1} }}, sizeof({0})))", ctype, val))
+                Ok(format!(
+                    "(({0}*)vela__rt__new({1}, ({0}[1]){{ {2} }}, sizeof({0}), _Alignof({0})))",
+                    ctype,
+                    c_ident(region),
+                    val
+                ))
             }
             ExprKind::Deref(inner) => {
                 let expr = self.gen_expr(inner)?;
@@ -737,11 +794,14 @@ impl Generator {
         }
         match body.split_last() {
             Some((last, rest)) if !result.is_empty() && matches!(last.kind, StmtKind::Expr(_)) => {
+                // The value is stored before the block's regions are freed.
+                self.enter_block();
                 self.gen_statements(rest, body)?;
                 if let StmtKind::Expr(fallback) = &last.kind {
                     let fallback = self.gen_expr(fallback)?;
                     self.w.line(&format!("{} = {};", result, fallback));
                 }
+                self.leave_block(body);
             }
             _ => self.gen_block(body)?,
         }
@@ -830,7 +890,7 @@ fn parenthesized(text: &str) -> String {
 }
 
 fn is_pointer(ty: &Type) -> bool {
-    matches!(ty, Type::Ptr(_))
+    matches!(ty, Type::Ptr(..))
 }
 
 /// The success of a `unit or E` task, as a C compound literal.
@@ -892,10 +952,12 @@ impl UsedTypes {
         used
     }
 
-    /// Records `ty` and every type inside it.
+    /// Records `ty` and every type inside it. Regions don't change a type's C
+    /// struct, so they are left out.
     fn add(&mut self, ty: &Type) {
+        let ty = &ty.without_regions();
         match ty {
-            Type::Ptr(inner) | Type::Range(inner) | Type::Fail(inner) => self.add(inner),
+            Type::Ptr(inner, _) | Type::Range(inner) | Type::Fail(inner) => self.add(inner),
             Type::Maybe(inner) => {
                 self.add(inner);
                 if !is_pointer(inner) && !self.compounds.contains(ty) {
@@ -916,8 +978,8 @@ impl UsedTypes {
     fn block(&mut self, block: &[Stmt]) {
         for stmt in block {
             match &stmt.kind {
-                StmtKind::Expr(e) | StmtKind::Free(e) | StmtKind::Send(Some(e)) => self.expr(e),
-                StmtKind::Send(None) => {}
+                StmtKind::Expr(e) | StmtKind::Send(Some(e)) => self.expr(e),
+                StmtKind::Send(None) | StmtKind::Region(_) => {}
                 StmtKind::Binding { ty, init, .. } => {
                     if let Some(ty) = ty {
                         self.add(ty);
@@ -970,6 +1032,7 @@ impl UsedTypes {
                     && let Some(ty @ Type::Maybe(_)) = &arg.ty
                     && !self.shown.contains(ty)
                 {
+                    // `show` takes no pointers, so a shown maybe has no regions.
                     self.shown.push(ty.clone());
                 }
                 args.iter().for_each(|arg| self.expr(arg));
@@ -996,8 +1059,8 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
     let expr = |e: &Expr| expr_reads(e, name);
     let body = |b: &Block| block_reads(b, name);
     match &stmt.kind {
-        StmtKind::Expr(e) | StmtKind::Free(e) | StmtKind::Send(Some(e)) => expr(e),
-        StmtKind::Send(None) => false,
+        StmtKind::Expr(e) | StmtKind::Send(Some(e)) => expr(e),
+        StmtKind::Send(None) | StmtKind::Region(_) => false,
         StmtKind::Binding { init, .. } => expr(init),
         StmtKind::Assign(target, value) => target_reads(target, name) || expr(value),
         StmtKind::When(cond, then_b, else_b) => expr(&cond.value) || body(then_b) || else_b.as_ref().is_some_and(body),
@@ -1021,7 +1084,9 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
     match &e.kind {
         ExprKind::Var(var) => var == name,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit => false,
-        ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. }
+        // `new` reads the region it allocates in.
+        ExprKind::New { value, region, .. } => region == name || expr_reads(value, name),
+        ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner)
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => expr_reads(inner, name),
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => {
             expr_reads(a, name) || expr_reads(b, name)
@@ -1050,7 +1115,7 @@ enum TypeDef<'a> {
 /// value, which must come before any struct embedding it.
 fn value_dependencies(ty: &Type) -> Vec<String> {
     match ty {
-        Type::Named(name) => vec![mangle(name)],
+        Type::Named(name, _) => vec![mangle(name)],
         Type::Maybe(inner) if is_pointer(inner) => Vec::new(),
         Type::Maybe(_) | Type::Or(..) => vec![c_type(ty)],
         _ => Vec::new(),
@@ -1160,6 +1225,9 @@ fn signature(t: &TaskDef) -> String {
 //   vela__or__int__n_ParseError   an `or` struct                (`c_type`)
 //   vela__show__maybe__int        `show` for a `maybe`          (`show_maybe_helper`)
 //   vela__end__0, vela__empty__   compiler temporaries and members
+//
+// A region is a local or parameter like any other (`c_ident`); regions don't
+// change C types, so `^int@a` and `^int@b` are both `int64_t*`.
 
 /// The C name of a task, shape, or kind.
 fn mangle(name: &str) -> String {
@@ -1214,8 +1282,9 @@ fn c_type(ty: &Type) -> String {
         Type::Text => "const char*".to_string(),
         Type::Unit => "void".to_string(),
         Type::None => "void*".to_string(),
-        Type::Ptr(t) => format!("{}*", c_type(t)),
-        Type::Named(n) => mangle(n),
+        Type::Ptr(t, _) => format!("{}*", c_type(t)),
+        Type::Named(n, _) => mangle(n),
+        Type::Region => "vela__rt__region*".to_string(),
         Type::Range(t) => format!("/*range<{}>*/", c_type(t)),
         // A `maybe` pointer is the pointer itself, with `NULL` for none.
         Type::Maybe(inner) if is_pointer(inner) => c_type(inner),
@@ -1236,8 +1305,9 @@ fn type_key(ty: &Type) -> String {
         Type::Text => "text".to_string(),
         Type::Unit => "unit".to_string(),
         Type::None => "none".to_string(),
-        Type::Named(name) => format!("n_{}", name),
-        Type::Ptr(inner) => format!("ptr__{}", type_key(inner)),
+        Type::Named(name, _) => format!("n_{}", name),
+        Type::Region => "region".to_string(),
+        Type::Ptr(inner, _) => format!("ptr__{}", type_key(inner)),
         Type::Range(inner) => format!("range__{}", type_key(inner)),
         Type::Maybe(inner) => format!("maybe__{}", type_key(inner)),
         Type::Or(value, error) => format!("or__{}__{}", type_key(value), type_key(error)),

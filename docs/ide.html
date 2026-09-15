@@ -336,8 +336,8 @@ Press Ctrl+C to stop.</pre>
       <div class="cards">
         <div class="card">
           <h4>Highlighting that knows names</h4>
-          <p>Tasks, shapes and kinds, variants, parameters, variables, and fields each get their own color, even in a
-            half-typed line.</p>
+          <p>Tasks, shapes and kinds, variants, parameters, variables, fields, and regions each get their own color,
+            even in a half-typed line.</p>
         </div>
         <div class="card">
           <h4>Errors as you type</h4>
@@ -349,19 +349,22 @@ Press Ctrl+C to stop.</pre>
           <p>Only what fits: types after <code>:</code>, <code>-&gt;</code>, <code>^</code>, <code>maybe</code>,
             <code>new</code>, and a type's <code>or</code>; variables declared above the cursor; fields after
             <code>.</code>; the cases still missing after <code>case</code>, including <code>{value}</code>,
-            <code>none</code>, and <code>fail e</code>; and the patterns that fit after <code>is</code>.</p>
+            <code>none</code>, and <code>fail e</code>; the patterns that fit after <code>is</code>; the regions
+            visible after <code>@</code>, and the ones <code>new</code> can allocate in after <code>new@</code> and a
+            <code>new</code>'s <code>in</code>; and <code>region</code> as a statement or a parameter's type.</p>
         </div>
         <div class="card">
           <h4>Snippets</h4>
           <p><code>task</code>, <code>shape</code>, <code>kind</code>, <code>when</code>, <code>loop</code>,
-            <code>each</code>, <code>when … is</code>, <code>loop … is</code>, and <code>match</code>, which expands to
+            <code>each</code>, <code>when … is</code>, <code>loop … is</code>, <code>new … in</code>, and <code>match</code>, which expands to
             one <code>case</code> per variant (or <code>{value}</code> and <code>none</code> for a maybe), with its
             bindings. <kbd>Tab</kbd> moves between the fields.</p>
         </div>
         <div class="card">
           <h4>Hover and go to definition</h4>
-          <p>Hover a name to see its type or signature, or <code>maybe</code>, <code>is</code>, <code>fail</code>,
-            <code>none</code>, and <code>_</code> for a reminder of what they do. <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it
+          <p>Hover a name to see its type or signature (a region says whether the task can allocate in it), or
+            <code>maybe</code>, <code>is</code>, <code>fail</code>, <code>none</code>, <code>_</code>, <code>region</code>,
+            and <code>new</code> for a reminder of what they do. <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it
             is declared; <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> finds a declaration by name.</p>
         </div>
         <div class="card">

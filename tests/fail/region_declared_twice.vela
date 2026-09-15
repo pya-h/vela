@@ -1,0 +1,7 @@
+# error: 5:16: 'r' is already defined at 3:12
+task main()
+    region r
+    when true
+        region r
+    fi
+fi

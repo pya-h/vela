@@ -1,9 +1,10 @@
-# error: 8:7: type ^Point has no fields; dereference it first, as in 'p^.x'
+# error: 9:7: type ^Point@r has no fields; dereference it first, as in 'p^.x'
 shape Point
     x: int
 fi
 
 task main()
-    bind p = new Point(Point { x: 1 })
+    region r
+    bind p = new Point(Point { x: 1 }) in r
     p.x = 5
 fi

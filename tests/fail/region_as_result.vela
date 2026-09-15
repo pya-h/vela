@@ -1,0 +1,5 @@
+# error: 2:13: a task can't send a region; regions are only parameters, as in 'task build(r: region)'
+task f() -> region
+fi
+task main()
+fi

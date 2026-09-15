@@ -1,7 +1,7 @@
-  1 | # Names that mean something in C (keywords, macros, the runtime's helpers) are
-    | comment:# Names that mean something in C (keywords, macros, the runtime's helpers) are
-  2 | # ordinary names in Vela.
-    | comment:# ordinary names in Vela.
+  1 | # Names that mean something in C (keywords, macros, the runtime's helpers, and
+    | comment:# Names that mean something in C (keywords, macros, the runtime's helpers, and
+  2 | # the C library's `free`) are ordinary names in Vela.
+    | comment:# the C library's `free`) are ordinary names in Vela.
   4 | shape Record
     | keyword:shape  type:Record
   5 |     default: int
@@ -96,17 +96,17 @@
     | keyword:bind  variable:vela_x  operator:=  number:5
  55 |     show(vela_x)
     | builtin-fn:show  punctuation:(  variable:vela_x  punctuation:)
- 56 |     bind boxed = new Record(r)
-    | keyword:bind  variable:boxed  operator:=  keyword:new  type:Record  punctuation:(  variable:r  punctuation:)
- 57 |     show(boxed^.stdout)
+ 56 |     region free
+    | keyword:region  region:free
+ 57 |     bind boxed = new Record(r) in free
+    | keyword:bind  variable:boxed  operator:=  keyword:new  type:Record  punctuation:(  variable:r  punctuation:)  keyword:in  region:free
+ 58 |     show(boxed^.stdout)
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:.  field:stdout  punctuation:)
- 58 |     free(boxed)
-    | keyword:free  punctuation:(  variable:boxed  punctuation:)
- 59 |     bind message = new text("boxed text")
-    | keyword:bind  variable:message  operator:=  keyword:new  type-builtin:text  punctuation:(  string:"boxed text"  punctuation:)
- 60 |     show(message^)
+ 59 |     region static
+    | keyword:region  region:static
+ 60 |     bind message = new@static text("boxed text")
+    | keyword:bind  variable:message  operator:=  keyword:new  operator:@  region:static  type-builtin:text  punctuation:(  string:"boxed text"  punctuation:)
+ 61 |     show(message^)
     | builtin-fn:show  punctuation:(  variable:message  operator:^  punctuation:)
- 61 |     free(message)
-    | keyword:free  punctuation:(  variable:message  punctuation:)
  62 | fi
     | keyword:fi

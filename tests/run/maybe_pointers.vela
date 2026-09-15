@@ -1,13 +1,13 @@
 # A pointer always points to something; `maybe ^T` is the one that can be
-# `none`. `is` walks a list, a plan B supplies a missing pointer, and `free`
-# accepts a maybe pointer.
+# `none`. `is` walks a list, and a plan B supplies a missing pointer. The tasks
+# name the list's region `r` without allocating in it.
 
 shape Node
     value: int
     next: maybe ^Node
 fi
 
-task sum(list: maybe ^Node) -> int
+task sum(list: maybe ^Node@r) -> int
     hold total = 0
     hold current = list
     loop current is {node}
@@ -17,7 +17,7 @@ task sum(list: maybe ^Node) -> int
     <- total
 fi
 
-task find(list: maybe ^Node, wanted: int) -> maybe ^Node
+task find(list: maybe ^Node@r, wanted: int) -> maybe ^Node@r
     hold current = list
     loop current is {node}
         when node^.value == wanted
@@ -28,7 +28,7 @@ task find(list: maybe ^Node, wanted: int) -> maybe ^Node
     <- none
 fi
 
-task last(list: ^Node) -> ^Node
+task last(list: ^Node@r) -> ^Node@r
     hold current = list
     loop current^.next is {next}
         current = next
@@ -37,12 +37,13 @@ task last(list: ^Node) -> ^Node
 fi
 
 task main()
-    bind empty: maybe ^Node = none
+    region nodes
+    bind empty: maybe ^Node@nodes = none
     show(empty == none)
     show(sum(empty))
-    bind third = new Node(Node { value: 3, next: none })
-    bind second = new Node(Node { value: 2, next: third })
-    bind first = new Node(Node { value: 1, next: second })
+    bind third = new Node(Node { value: 3, next: none }) in nodes
+    bind second = new Node(Node { value: 2, next: third }) in nodes
+    bind first = new Node(Node { value: 1, next: second }) in nodes
     show(sum(first))
     show(last(first)^.value)
 
@@ -62,14 +63,9 @@ task main()
     bind fallback = find(first, 9) { third }
     show(fallback^.value)
 
-    hold spare: maybe ^int = none
-    free(spare)
-    spare = new int(7)
+    hold spare: maybe ^int@nodes = none
+    spare = new int(7) in nodes
     when spare is {p}
         show(p^)
     fi
-    free(spare)
-    free(third)
-    free(second)
-    free(first)
 fi

@@ -1,0 +1,6 @@
+# error: 5:5: unknown task 'free'; Vela has no 'free': memory in a region is freed when the block declaring the region closes
+task main()
+    region r
+    bind p = new int(1) in r
+    free(p)
+fi

@@ -26,7 +26,8 @@ pub enum Token {
     Match,
     Case,
     New,
-    Free,
+    /// `region`: declares a region, or is the type of a region parameter.
+    Region,
     And,
     Or,
     Not,
@@ -59,6 +60,8 @@ pub enum Token {
     Ge,
     Assign,
     Caret,
+    /// `@`, which names the region a type lives in (`^Node@r`) or `new` allocates in.
+    At,
     /// `_`, which matches or binds a value without naming it.
     Underscore,
     Newline,
@@ -81,7 +84,7 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("match", Token::Match),
     ("case", Token::Case),
     ("new", Token::New),
-    ("free", Token::Free),
+    ("region", Token::Region),
     ("and", Token::And),
     ("or", Token::Or),
     ("not", Token::Not),
@@ -144,6 +147,7 @@ impl Token {
             Token::Ge => ">=",
             Token::Assign => "=",
             Token::Caret => "^",
+            Token::At => "@",
             Token::Underscore => "_",
             // Keywords are found in `KEYWORDS` above.
             _ => return format!("{:?}", self),
@@ -397,6 +401,7 @@ impl Lexer {
             '/' => Token::Slash,
             '%' => Token::Percent,
             '^' => Token::Caret,
+            '@' => Token::At,
             '=' => {
                 if self.peek() == '=' {
                     self.advance();

@@ -116,15 +116,15 @@
     | task:first_word  punctuation:(  variable:word  punctuation:)
  67 |     first_word(none)
     | task:first_word  punctuation:(  keyword:none  punctuation:)
- 69 |     bind boxed = new maybe int(3)
-    | keyword:bind  variable:boxed  operator:=  keyword:new  keyword:maybe  type-builtin:int  punctuation:(  number:3  punctuation:)
- 70 |     show(boxed^)
+ 69 |     region cells
+    | keyword:region  region:cells
+ 70 |     bind boxed = new maybe int(3) in cells
+    | keyword:bind  variable:boxed  operator:=  keyword:new  keyword:maybe  type-builtin:int  punctuation:(  number:3  punctuation:)  keyword:in  region:cells
+ 71 |     show(boxed^)
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:)
- 71 |     boxed^ = none
+ 72 |     boxed^ = none
     | variable:boxed  operator:^  operator:=  keyword:none
- 72 |     show(boxed^)
+ 73 |     show(boxed^)
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:)
- 73 |     free(boxed)
-    | keyword:free  punctuation:(  variable:boxed  punctuation:)
  74 | fi
     | keyword:fi

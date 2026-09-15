@@ -1,30 +1,32 @@
-  1 | # Owned pointers: new, dereference, write through, free
-    | comment:# Owned pointers: new, dereference, write through, free
-  3 | shape Point
+  1 | # Pointers live in regions: `new` allocates in one (written `new T(v) in r`
+    | comment:# Pointers live in regions: `new` allocates in one (written `new T(v) in r`
+  2 | # or `new@r T(v)`), `^` reads and writes through the pointer, and the region
+    | comment:# or `new@r T(v)`), `^` reads and writes through the pointer, and the region
+  3 | # frees everything in it when its block closes.
+    | comment:# frees everything in it when its block closes.
+  5 | shape Point
     | keyword:shape  type:Point
-  4 |     x: int
+  6 |     x: int
     | field:x  punctuation::  type-builtin:int
-  5 |     y: int
+  7 |     y: int
     | field:y  punctuation::  type-builtin:int
-  6 | fi
+  8 | fi
     | keyword:fi
-  8 | task main()
+ 10 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
-  9 |     bind n: ^int = new int(42)
-    | keyword:bind  variable:n  punctuation::  operator:^  type-builtin:int  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)
- 10 |     show(n^)
+ 11 |     region r
+    | keyword:region  region:r
+ 12 |     bind n: ^int@r = new int(42) in r
+    | keyword:bind  variable:n  punctuation::  operator:^  type-builtin:int  operator:@  region:r  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)  keyword:in  region:r
+ 13 |     show(n^)
     | builtin-fn:show  punctuation:(  variable:n  operator:^  punctuation:)
- 11 |     n^ = n^ + 1
+ 14 |     n^ = n^ + 1
     | variable:n  operator:^  operator:=  variable:n  operator:^  operator:+  number:1
- 12 |     show(n^)
+ 15 |     show(n^)
     | builtin-fn:show  punctuation:(  variable:n  operator:^  punctuation:)
- 13 |     free(n)
-    | keyword:free  punctuation:(  variable:n  punctuation:)
- 15 |     bind p = new Point(Point { x: 3, y: 4 })
-    | keyword:bind  variable:p  operator:=  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:)
- 16 |     show(p^.x * p^.y)
+ 17 |     bind p = new@r Point(Point { x: 3, y: 4 })
+    | keyword:bind  variable:p  operator:=  keyword:new  operator:@  region:r  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:)
+ 18 |     show(p^.x * p^.y)
     | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:x  operator:*  variable:p  operator:^  punctuation:.  field:y  punctuation:)
- 17 |     free(p)
-    | keyword:free  punctuation:(  variable:p  punctuation:)
- 18 | fi
+ 19 | fi
     | keyword:fi

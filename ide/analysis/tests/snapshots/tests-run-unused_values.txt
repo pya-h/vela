@@ -30,61 +30,73 @@
     | builtin-fn:show  punctuation:(  string:"ignored"  punctuation:)
  19 | fi
     | keyword:fi
- 21 | task value(r: Reading) -> int
+ 21 | task unused_region(r: region, p: ^int@r, s: region)
+    | keyword:task  task:unused_region  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:p  punctuation::  operator:^  type-builtin:int  operator:@  region:r  punctuation:,  region:s  punctuation::  keyword:region  punctuation:)
+ 22 |     region spare
+    | keyword:region  region:spare
+ 23 |     show("regions unused")
+    | builtin-fn:show  punctuation:(  string:"regions unused"  punctuation:)
+ 24 | fi
+    | keyword:fi
+ 26 | task value(r: Reading) -> int
     | keyword:task  task:value  punctuation:(  parameter:r  punctuation::  type:Reading  punctuation:)  operator:->  type-builtin:int
- 22 |     match r
+ 27 |     match r
     | keyword:match  parameter:r
- 23 |     case Sample v w
+ 28 |     case Sample v w
     | keyword:case  variant:Sample  variable:v  variable:w
- 24 |         <- v
+ 29 |         <- v
     | keyword:<-  variable:v
- 25 |     case Missing
+ 30 |     case Missing
     | keyword:case  variant:Missing
- 26 |         <- 0
+ 31 |         <- 0
     | keyword:<-  number:0
- 27 |     fi
+ 32 |     fi
     | keyword:fi
- 28 | fi
+ 33 | fi
     | keyword:fi
- 30 | task main()
+ 35 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 31 |     bind unused = 1
+ 36 |     bind unused = 1
     | keyword:bind  variable:unused  operator:=  number:1
- 32 |     hold overwritten = 2
+ 37 |     hold overwritten = 2
     | keyword:hold  variable:overwritten  operator:=  number:2
- 33 |     overwritten = 3
+ 38 |     overwritten = 3
     | variable:overwritten  operator:=  number:3
- 34 |     hold moved = Point { x: 1, y: 2 }
+ 39 |     hold moved = Point { x: 1, y: 2 }
     | keyword:hold  variable:moved  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
- 35 |     moved.x = 10
+ 40 |     moved.x = 10
     | variable:moved  punctuation:.  field:x  operator:=  number:10
- 36 |     bind boxed = new int(4)
-    | keyword:bind  variable:boxed  operator:=  keyword:new  type-builtin:int  punctuation:(  number:4  punctuation:)
- 37 |     boxed^ = 5
+ 41 |     region scratch
+    | keyword:region  region:scratch
+ 42 |     bind boxed = new int(4) in scratch
+    | keyword:bind  variable:boxed  operator:=  keyword:new  type-builtin:int  punctuation:(  number:4  punctuation:)  keyword:in  region:scratch
+ 43 |     boxed^ = 5
     | variable:boxed  operator:^  operator:=  number:5
- 38 |     bind later = 6
+ 44 |     unused_region(scratch, boxed, scratch)
+    | task:unused_region  punctuation:(  region:scratch  punctuation:,  variable:boxed  punctuation:,  region:scratch  punctuation:)
+ 45 |     bind later = 6
     | keyword:bind  variable:later  operator:=  number:6
- 39 |     when true
+ 46 |     when true
     | keyword:when  keyword:true
- 40 |         show(later)
+ 47 |         show(later)
     | builtin-fn:show  punctuation:(  variable:later  punctuation:)
- 41 |         bind inner = 7
+ 48 |         bind inner = 7
     | keyword:bind  variable:inner  operator:=  number:7
- 42 |     else
+ 49 |     else
     | keyword:else
- 43 |         bind inner = 8
+ 50 |         bind inner = 8
     | keyword:bind  variable:inner  operator:=  number:8
- 44 |         show(inner)
+ 51 |         show(inner)
     | builtin-fn:show  punctuation:(  variable:inner  punctuation:)
- 45 |     fi
+ 52 |     fi
     | keyword:fi
- 46 |     ignore(Point { x: 0, y: 0 })
+ 53 |     ignore(Point { x: 0, y: 0 })
     | task:ignore  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:)
- 47 |     show(first(1, 2))
+ 54 |     show(first(1, 2))
     | builtin-fn:show  punctuation:(  task:first  punctuation:(  number:1  punctuation:,  number:2  punctuation:)  punctuation:)
- 48 |     show(value(Sample(9, 1)))
+ 55 |     show(value(Sample(9, 1)))
     | builtin-fn:show  punctuation:(  task:value  punctuation:(  variant:Sample  punctuation:(  number:9  punctuation:,  number:1  punctuation:)  punctuation:)  punctuation:)
- 49 |     show(value(Missing))
+ 56 |     show(value(Missing))
     | builtin-fn:show  punctuation:(  task:value  punctuation:(  variant:Missing  punctuation:)  punctuation:)
- 50 | fi
+ 57 | fi
     | keyword:fi

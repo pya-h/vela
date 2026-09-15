@@ -1,0 +1,5 @@
+# error: 2:11: int holds no pointers, so it lives in no region
+task f(p: int@r)
+fi
+task main()
+fi

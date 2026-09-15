@@ -7,8 +7,8 @@
 //! shapes and their fields, kinds and their variants), which may be used
 //! before they are declared. The second walks the tokens in order, tracking
 //! blocks and the variables declared in them (parameters, `bind`/`hold`,
-//! `each`, the names `case` and `is` patterns bind, and the error a plan B
-//! names), which are only visible after their declaration.
+//! `each`, the names `case` and `is` patterns bind, the error a plan B names,
+//! and regions), which are only visible after their declaration.
 
 use std::collections::HashMap;
 use std::ops::Range;
@@ -32,6 +32,8 @@ pub enum TokenClass {
     BuiltinFn,
     Parameter,
     Variable,
+    /// A region's name: `region r`, `r: region`, or `@r` in a type.
+    Region,
     Field,
     Number,
     String,
@@ -57,6 +59,9 @@ pub enum SymbolKind {
     Parameter,
     /// A `bind`, `hold`, `each`, `case`, `is`, or plan B (`fail e`) binding.
     Variable,
+    /// A region: declared by `region r`, taken as a parameter `r: region`, or
+    /// only named in a task header's types (`@r`).
+    Region,
 }
 
 impl SymbolKind {
@@ -68,6 +73,7 @@ impl SymbolKind {
             SymbolKind::Field => TokenClass::Field,
             SymbolKind::Parameter => TokenClass::Parameter,
             SymbolKind::Variable => TokenClass::Variable,
+            SymbolKind::Region => TokenClass::Region,
         }
     }
 }
@@ -86,7 +92,8 @@ pub(crate) struct Symbol {
     /// visible everywhere.
     pub visible: Range<usize>,
     /// The keyword that declared a variable: `bind`, `hold`, `each`, `case`,
-    /// `is`, or `fail` (the error a plan B names).
+    /// `is`, or `fail` (the error a plan B names); for a region, `region` (a
+    /// region statement) or `@` (a region a task header only names).
     pub intro: Option<&'static str>,
     /// Bytes of the whole declaration: from `task`/`shape`/`kind` to its
     /// `fi` for those, and just the name for everything else.
@@ -386,6 +393,9 @@ impl<'a> Classifier<'a> {
         let mut plan_b_head = false;
         // Just after a type's name, where `or` starts the error type.
         let mut after_type = false;
+        // After `@` or a `new …(…)`'s `in`, where a region is named; whether a
+        // type follows it (as after `new@r`).
+        let mut region_next: Option<bool> = None;
         let mut braces: Vec<Brace> = Vec::new();
 
         let mut p = 0;
@@ -413,6 +423,7 @@ impl<'a> Classifier<'a> {
             let was_type = std::mem::take(&mut in_type);
             let was_after_type = std::mem::take(&mut after_type);
             let declaring_now = declaring.take();
+            let region_now = region_next.take();
             if !matches!(token, Token::Newline | Token::Fail) {
                 plan_b_head = false;
             }
@@ -429,9 +440,20 @@ impl<'a> Classifier<'a> {
                 Token::Int(_) | Token::Float(_) => self.push(range, TokenClass::Number, None),
                 Token::Text(_) => self.string(range),
                 Token::Ident(name) => {
-                    let (class, symbol) = self.identifier(p, name, was_type, declaring_now, in_task_header, in_pattern, &braces);
-                    self.push(range, class, symbol);
-                    after_type = was_type;
+                    if let Some(type_follows) = region_now {
+                        let symbol = self.region(p, name, in_task_header);
+                        self.push(range, TokenClass::Region, symbol);
+                        in_type = type_follows;
+                        after_type = !type_follows;
+                    } else {
+                        let (class, symbol) = self.identifier(p, name, was_type, declaring_now, in_task_header, in_pattern, &braces);
+                        self.push(range, class, symbol);
+                        after_type = was_type;
+                    }
+                }
+                Token::At => {
+                    self.push(range, TokenClass::Operator, None);
+                    region_next = Some(was_type);
                 }
                 Token::Colon => {
                     self.push(range, TokenClass::Punctuation, None);
@@ -531,6 +553,10 @@ impl<'a> Classifier<'a> {
                             }
                         }
                         Token::New => in_type = true,
+                        // `new T(v) in r`; an `each`'s `in` follows its name.
+                        Token::In if tokens.before(p) == Some(&Token::RParen) => region_next = Some(false),
+                        // `region r` declares a region; `r: region` is a parameter's type.
+                        Token::Region if !was_type => declaring = Some("region"),
                         _ => {}
                     }
                 }
@@ -566,12 +592,16 @@ impl<'a> Classifier<'a> {
             return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind]));
         }
         if let Some(intro) = declaring {
+            if intro == "region" {
+                return (TokenClass::Region, Some(self.declare_local(p, SymbolKind::Region, Some(intro), String::new())));
+            }
             let detail = if after == Some(&Token::Colon) { tokens.text_after(p + 1, |t| *t == Token::Assign) } else { String::new() };
             return (TokenClass::Variable, Some(self.declare_local(p, SymbolKind::Variable, Some(intro), detail)));
         }
         if in_task_header && after == Some(&Token::Colon) && matches!(before, Some(Token::LParen | Token::Comma)) {
             let detail = tokens.text_after(p + 1, ends_field);
-            return (TokenClass::Parameter, Some(self.declare_local(p, SymbolKind::Parameter, None, detail)));
+            let kind = if detail == "region" { SymbolKind::Region } else { SymbolKind::Parameter };
+            return (kind.class(), Some(self.declare_local(p, kind, None, detail)));
         }
         if in_pattern {
             if matches!(before, Some(Token::Case | Token::Is)) {
@@ -620,6 +650,18 @@ impl<'a> Classifier<'a> {
             return (TokenClass::Task, None);
         }
         (TokenClass::Variable, None)
+    }
+
+    /// The region named at `p` (after `@`, or `in` after `new`). In a task's
+    /// header, a name no parameter declares is a region the task only names in
+    /// its types, declared where it first appears.
+    fn region(&mut self, p: usize, name: &str, in_task_header: bool) -> Option<usize> {
+        if !in_task_header {
+            return self.local(name, self.tokens.range(p).start);
+        }
+        let header = self.scopes.last().map(|scope| scope.variables.clone()).unwrap_or_default();
+        let known = header.into_iter().find(|&id| self.symbols.get(id).is_some_and(|s| s.name == name && s.kind == SymbolKind::Region));
+        known.or_else(|| Some(self.declare_local(p, SymbolKind::Region, Some("@"), String::new())))
     }
 
     fn open(&mut self, kind: ScopeKind) {

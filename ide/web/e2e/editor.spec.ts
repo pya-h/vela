@@ -94,6 +94,32 @@ test("quick open and go to a declaration", async ({ page, studio }) => {
   await expect(page.locator(".cm-activeLine")).toContainText("Rectangle(width: float, height: float)");
 });
 
+const REGIONS =
+  "shape Node\n    value: int\n    next: maybe ^Node\nfi\n\ntask push(r: region, list: maybe ^Node@r) -> ^Node@r\n    <- new Node(Node { value: 1, next: list }) in r\nfi\n\ntask main()\n    region nodes\n    bind first = push(nodes, none)\n    show(first^.value)\nfi\n";
+
+test("regions: highlighting, hover, and completion of region names", async ({ page, studio }) => {
+  studio.write("regions.vela", REGIONS);
+  await launch(page, studio);
+  await openFile(page, "regions.vela");
+  const content = page.locator(".cm-content");
+  const nodes = content.locator(".tok-region", { hasText: /^nodes$/ });
+  await expect(nodes).toHaveCount(2);
+  await nodes.first().hover();
+  await expect(page.locator(".vs-hover .vs-hover-code")).toHaveText("region nodes");
+
+  // After the `in` of a `new`, the regions it can allocate in.
+  await cursorAtEndOf(page, 13);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("bind two = new int(2) in ");
+  await page.keyboard.press("Control+Space");
+  const popup = page.locator(".cm-tooltip-autocomplete");
+  const nodesOption = popup.getByRole("option").filter({ has: page.locator(".cm-completionLabel", { hasText: /^nodes$/ }) });
+  await expect(nodesOption).toBeVisible();
+  await nodesOption.click();
+  expect(await lineText(page, 14)).toBe("    bind two = new int(2) in nodes");
+  await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
+});
+
 const MAYBE = "task find(n: int) -> maybe int\n    when n > 0\n        <- n\n    fi\n    <- none\nfi\n\ntask main()\n    bind m = find(2)\n    show(m)\nfi\n";
 
 test("maybe values: highlighting, hover, patterns, and plan B blocks", async ({ page, studio }) => {

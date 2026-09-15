@@ -37,7 +37,7 @@ task main()
         show("small")
     fi
 
-    bind ptr: ^int = new int(42)
+    region numbers
+    bind ptr: ^int@numbers = new int(42) in numbers
     show(ptr^)
-    free(ptr)
 fi

@@ -26,6 +26,10 @@
 .tok-variable {
   color: var(--syn-variable);
 }
+.tok-region {
+  color: var(--syn-region);
+  font-weight: 600;
+}
 .tok-field {
   color: var(--syn-field);
 }
@@ -137,4 +141,8 @@
 .cm-completionIcon-type::after {
   content: "T";
   color: var(--syn-type);
+}
+.cm-completionIcon-region::after {
+  content: "@";
+  color: var(--syn-region);
 }

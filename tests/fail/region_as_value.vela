@@ -1,0 +1,5 @@
+# error: 4:14: 'r' is a region, not a value; allocate in it with 'new T(…) in r'
+task main()
+    region r
+    bind x = r
+fi

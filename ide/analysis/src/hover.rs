@@ -27,8 +27,14 @@ const BUILTIN_TYPE_DOCS: &[(&str, &str)] = &[
     ("unit", "The return type of a task that sends no value."),
 ];
 
-/// The words of `maybe` and error results, which are easy to forget.
+/// The words of `maybe`, error results, and regions, which are easy to forget.
 const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
+    (
+        "region",
+        "region r",
+        "Memory new allocates in r lives until the block declaring r closes. As a parameter's type, r: region lets a task allocate in the caller's region.",
+    ),
+    ("new", "new T(value) in r", "Copies the value into region r and gives a ^T@r. Also written new@r T(value)."),
     ("maybe", "maybe T", "A T, or none. Read it with match, is, or a plan B: x { fallback }."),
     ("none", "none", "The empty maybe. A pointer can't be none; use maybe ^T."),
     ("is", "value is pattern", "The condition holds when the pattern matches; its names are visible in the block."),
@@ -106,6 +112,27 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 .find(|s| s.kind == SymbolKind::Task && s.range.start <= symbol.name_range.start && symbol.name_range.end <= s.range.end);
             let doc = task.map(|t| format!("A parameter of task {}.", t.name)).unwrap_or_default();
             (typed(&symbol.name), doc)
+        }
+        SymbolKind::Region => {
+            let task = k
+                .symbols()
+                .iter()
+                .find(|s| s.kind == SymbolKind::Task && s.range.start <= symbol.name_range.start && symbol.name_range.end <= s.range.end);
+            let task = task.map_or("this task".to_string(), |t| format!("task {}", t.name));
+            match symbol.intro {
+                Some("region") => (
+                    format!("region {}", symbol.name),
+                    "A region: memory allocated in it lives until the block declaring it closes.".to_string(),
+                ),
+                Some(_) => (
+                    format!("region {}", symbol.name),
+                    format!("A region of the caller's that {} names in its types; it reads and links pointers there, but can't allocate in it.", task),
+                ),
+                None => (
+                    format!("{}: region", symbol.name),
+                    format!("A region parameter of {}, which it can allocate in.", task),
+                ),
+            }
         }
         SymbolKind::Variable => match symbol.intro {
             Some("case") => {

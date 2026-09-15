@@ -11,6 +11,7 @@ export type TokenClass =
   | "builtin-fn"
   | "parameter"
   | "variable"
+  | "region"
   | "field"
   | "number"
   | "string"
@@ -36,7 +37,7 @@ export interface Diagnostic {
   severity: "error";
 }
 
-export type SymbolKind = "task" | "shape" | "kind" | "variant" | "field" | "parameter" | "variable";
+export type SymbolKind = "task" | "shape" | "kind" | "variant" | "field" | "parameter" | "variable" | "region";
 
 export interface OutlineItem {
   name: string;
@@ -63,7 +64,8 @@ export type CompletionKind =
   | "parameter"
   | "field"
   | "variant"
-  | "type";
+  | "type"
+  | "region";
 
 export interface CompletionItem {
   label: string;

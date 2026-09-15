@@ -55,7 +55,8 @@ const PROGRAM = `shape Point
 fi
 
 task main()
-    bind p = new Point(Point { x: 1, y: 2 })
+    region r
+    bind p = new Point(Point { x: 1, y: 2 }) in r
     |
 fi
 `;

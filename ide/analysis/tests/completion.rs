@@ -408,6 +408,69 @@ fn hover_reads_maybe_and_error_names_when_the_file_doesnt_check() {
     }
 }
 
+const REGIONS: &str = "\
+shape Node
+    value: int
+    next: maybe ^Node
+fi
+
+task push(r: region, list: maybe ^Node@r) -> ^Node@r
+    <- new Node(Node { value: 1, next: list }) in r
+fi
+
+task sum(list: maybe ^Node@s) -> int
+    @@
+fi
+
+task main()
+    region nodes
+    bind first = push(nodes, none)
+fi
+";
+
+#[test]
+fn regions_are_offered_where_a_region_is_named() {
+    let in_main = |code: &str| REGIONS.replace("    @@\n", "    <- 0\n").replace("    bind first = push(nodes, none)\n", &format!("    bind first = push(nodes, none)\n    {}\n", code));
+    // After `@` in a type, every visible region.
+    assert_offers(&in_main("hold later: maybe ^Node@ @@"), &["nodes"], &["first", "int"]);
+    // `new` allocates, so a region a task only names in its types isn't offered.
+    assert_offers(&in_main("bind two = new int(2) in @@"), &["nodes"], &["first"]);
+    assert_offers(&in_main("bind two = new@ @@"), &["nodes"], &["first"]);
+    let in_sum = |code: &str| REGIONS.replace("    @@\n", &format!("    {}\n", code));
+    assert_offers(&in_sum("bind p: maybe ^int@ @@"), &["s"], &[]);
+    assert_offers(&in_sum("bind p = new int(1) in @@"), &[], &["s"]);
+    assert_eq!(item(&in_sum("bind p: maybe ^int@ @@"), "s").detail, "region, named in the task's types");
+    // In a header, the regions named so far on its line.
+    assert_offers("task link(a: ^int@left, b: ^int@ @@", &["left"], &[]);
+    // A parameter's type can be `region`; a statement can declare one.
+    assert_offers("task make(r: @@", &["region", "int"], &[]);
+    assert_offers(&in_main("bind x: @@"), &["int"], &["region"]);
+    assert_offers(&in_main("@@"), &["region"], &["nodes", "free", "new … in"]);
+    // A region is a value only as an argument.
+    assert_offers(&in_main("show(sum(push(@@"), &["nodes"], &[]);
+    assert_offers(&in_main("bind y = @@"), &["first", "new … in"], &["nodes"]);
+    assert_eq!(item(&in_main("bind y = @@"), "new … in").snippet.as_deref(), Some("new ${T}(${value}) in ${r}"));
+    assert_eq!(labels(&in_main("region @@")), Vec::<String>::new());
+}
+
+#[test]
+fn hover_describes_regions() {
+    let source = REGIONS.replace("    @@\n", "    <- 0\n");
+    assert_eq!(code_and_doc(hover(&source, "r: region", 0)).0, "r: region");
+    assert!(hover(&source, "r: region", 0).doc.contains("can allocate in"));
+    assert_eq!(hover(&source, "s) -> int", 0).code, "region s");
+    assert!(hover(&source, "s) -> int", 0).doc.contains("can't allocate in it"));
+    assert_eq!(hover(&source, "nodes\n", 0).code, "region nodes");
+    assert_eq!(hover(&source, "region nodes", 0).code, "region r");
+    assert_eq!(hover(&source, "new Node", 0).code, "new T(value) in r");
+    assert_eq!(hover(&source, "first =", 0).code, "bind first: ^Node@nodes");
+    // While the file doesn't check, written types still show their regions.
+    let broken = source.replace("    <- 0\n", "    <- missing\n").replace("bind first = push(nodes, none)", "bind first: maybe ^Node@nodes = none\n    bind two = new@nodes int(2)");
+    assert_eq!(hover(&broken, "first:", 0).code, "bind first: maybe ^Node@nodes");
+    assert_eq!(hover(&broken, "two =", 0).code, "bind two: ^int@nodes");
+    assert_eq!(hover(&broken, "list: maybe", 1).code, "list: maybe ^Node@s");
+}
+
 #[test]
 fn results_serialize_to_the_json_the_editor_reads() {
     let marked = in_main("show(line.finish.@@)");

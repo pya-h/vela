@@ -1,6 +1,7 @@
 # A tiny to-do list: a linked list of shapes, each pointing to the next one
-# (a `maybe ^Item`, since the last item has none), variants with and without
-# a payload, `is` and plan B to read maybe values, and text compared by contents.
+# (a `maybe ^Item`, since the last item has none), all in one region that
+# frees them together; variants with and without a payload, `is` and plan B to
+# read maybe values, and text compared by contents.
 
 kind Status
     Todo
@@ -25,7 +26,7 @@ task describe(s: Status) -> text
     fi
 fi
 
-task print_list(first: maybe ^Item)
+task print_list(first: maybe ^Item@r)
     hold current = first
     loop current is {item}
         show(item^.title)
@@ -34,7 +35,7 @@ task print_list(first: maybe ^Item)
     fi
 fi
 
-task count_done(first: maybe ^Item) -> int
+task count_done(first: maybe ^Item@r) -> int
     hold count = 0
     hold current = first
     loop current is {item}
@@ -46,7 +47,7 @@ task count_done(first: maybe ^Item) -> int
     <- count
 fi
 
-task find(first: maybe ^Item, title: text) -> maybe ^Item
+task find(first: maybe ^Item@r, title: text) -> maybe ^Item@r
     hold current = first
     loop current is {item}
         when item^.title == title
@@ -57,10 +58,17 @@ task find(first: maybe ^Item, title: text) -> maybe ^Item
     <- none
 fi
 
+# Adding allocates, so `add` takes the region to allocate in.
+task add(r: region, title: text, status: Status, next: maybe ^Item@r) -> ^Item@r
+    <- new Item(Item { title: title, status: status, next: next }) in r
+fi
+
 task main()
-    bind third = new Item(Item { title: "ship it", status: Blocked("waiting for review"), next: none })
-    bind second = new Item(Item { title: "write tests", status: Done, next: third })
-    bind first = new Item(Item { title: "fix the parser", status: Todo, next: second })
+    # Every item lives in `todos`, which frees them all when main ends.
+    region todos
+    bind third = add(todos, "ship it", Blocked("waiting for review"), none)
+    bind second = add(todos, "write tests", Done, third)
+    bind first = add(todos, "fix the parser", Todo, second)
     print_list(first)
     show(count_done(first))
 
@@ -73,8 +81,4 @@ task main()
     # A plan B gives a value to use when there is nothing to extract.
     bind start = find(first, "celebrate") { first }
     show(start^.title)
-
-    free(third)
-    free(second)
-    free(first)
 fi

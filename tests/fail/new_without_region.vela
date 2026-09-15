@@ -1,0 +1,4 @@
+# error: 3:24: 'new' needs a region to allocate in, as in 'new int(…) in r' or 'new@r int(…)'
+task main()
+    bind p = new int(1)
+fi

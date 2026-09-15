@@ -4,6 +4,7 @@
 //! variable's annotation or initializer, a `case` binding's payload field,
 //! and so on.
 
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 use vela::ast::{Span, Type};
@@ -134,6 +135,7 @@ impl<'a> Knowledge<'a> {
             return Some(ty.clone());
         }
         match (symbol.kind, symbol.intro) {
+            (SymbolKind::Region, _) => Some(Type::Region),
             (SymbolKind::Parameter, _) | (SymbolKind::Field, _) => parse_type(&symbol.detail),
             (SymbolKind::Variable, Some("each")) => Some(Type::Int),
             (SymbolKind::Variable, Some("case" | "is")) => self.case_binding_type(id, depth + 1),
@@ -240,13 +242,23 @@ impl<'a> Knowledge<'a> {
             Token::True | Token::False => Some(Type::Bool),
             Token::Ident(name) => exact(q).or_else(|| {
                 if self.token_before(q) == Some(&Token::Dot) {
-                    let Type::Named(shape) = self.expression_type(q.checked_sub(2)?, depth + 1)? else { return None };
-                    return self.field_type(&shape, name);
+                    let Type::Named(shape, region) = self.expression_type(q.checked_sub(2)?, depth + 1)? else { return None };
+                    let ty = self.field_type(&shape, name)?;
+                    return Some(match region {
+                        Some(region) => self.in_region(&ty, &region),
+                        None => ty,
+                    });
+                }
+                // `new T(v) in r`: a pointer into `r`.
+                if self.token_before(q) == Some(&Token::In) && q >= 2 && self.token(q - 2) == Some(&Token::RParen) {
+                    let pointer = self.expression_type(q - 2, depth + 1)?;
+                    let Type::Ptr(pointee, _) = pointer else { return None };
+                    return Some(Type::Ptr(Box::new(self.in_region(&pointee, name)), Some(name.to_string())));
                 }
                 let id = self.symbol_at(q)?;
                 match self.symbol(id)?.kind {
-                    SymbolKind::Parameter | SymbolKind::Variable => self.symbol_type(id, depth + 1),
-                    SymbolKind::Variant => self.variant_kind(id).map(Type::Named),
+                    SymbolKind::Parameter | SymbolKind::Variable | SymbolKind::Region => self.symbol_type(id, depth + 1),
+                    SymbolKind::Variant => self.variant_kind(id).map(|kind| Type::named(&kind)),
                     _ => None,
                 }
             }),
@@ -261,7 +273,7 @@ impl<'a> Knowledge<'a> {
                     return exact(open).or_else(|| self.expression_type(open.checked_sub(1)?, depth + 1)?.extracted().cloned());
                 }
                 let shape = self.ident(open.checked_sub(1)?)?;
-                Some(Type::Named(shape.to_string()))
+                Some(Type::named(shape))
             }
             Token::RParen => {
                 let open = self.matching_open(q, &Token::LParen, &Token::RParen)?;
@@ -270,26 +282,23 @@ impl<'a> Knowledge<'a> {
                     return self.span_type(open + 1, q.checked_sub(1)?, depth + 1);
                 };
                 let (p, name) = callee;
-                if self.token_before(p) == Some(&Token::New) {
-                    let new = p.checked_sub(1)?;
+                // `new T(…)`, `new ^T(…)`, `new@r T(…)`: the type is everything
+                // between `new` (and its region) and `(`.
+                let new = (0..p).rev().take_while(|&r| matches!(self.token(r), Some(Token::Caret | Token::Maybe | Token::New | Token::At | Token::Ident(_)))).find(|&r| self.token(r) == Some(&Token::New));
+                if let Some(new) = new.filter(|&new| (new + 1..p).all(|r| self.token(r) != Some(&Token::New))) {
                     return exact(new).or_else(|| {
-                        let text = self.source.get(self.range(new).end..self.range(open).start)?;
-                        Some(Type::Ptr(Box::new(parse_type(text)?)))
+                        let region = (self.token(new + 1) == Some(&Token::At)).then(|| self.ident(new + 2)).flatten();
+                        let from = if region.is_some() { self.range(new + 2).end } else { self.range(new).end };
+                        let pointee = parse_type(self.source.get(from..self.range(open).start)?)?;
+                        Some(match region {
+                            Some(region) => Type::Ptr(Box::new(self.in_region(&pointee, region)), Some(region.to_string())),
+                            None => Type::Ptr(Box::new(pointee), None),
+                        })
                     });
-                }
-                if self.token_before(p) == Some(&Token::Caret) {
-                    // `new ^T(…)`: the type is everything between `new` and `(`.
-                    let new = (0..p).rev().find(|&r| self.token(r) != Some(&Token::Caret))?;
-                    if self.token(new) == Some(&Token::New) {
-                        return exact(new).or_else(|| {
-                            let text = self.source.get(self.range(new).end..self.range(open).start)?;
-                            Some(Type::Ptr(Box::new(parse_type(text)?)))
-                        });
-                    }
                 }
                 exact(p).or_else(|| {
                     if let Some(variant) = self.global(name, SymbolKind::Variant) {
-                        return self.variant_kind(variant).map(Type::Named);
+                        return self.variant_kind(variant).map(|kind| Type::named(&kind));
                     }
                     let task = self.global(name, SymbolKind::Task)?;
                     Some(return_type(&self.symbol(task)?.detail))
@@ -374,6 +383,51 @@ impl<'a> Knowledge<'a> {
         Some(self.symbol(kind)?.name.clone())
     }
 
+    /// `ty`, a field's type or the type after `new`, in a value of region
+    /// `region`, as the checker settles it (see `vela::check::in_region`).
+    fn in_region(&self, ty: &Type, region: &str) -> Type {
+        vela::check::in_region(ty, region, &self.regional())
+    }
+
+    /// The shapes and kinds whose fields, as written, hold pointers, found as
+    /// the checker finds them (see `vela::check::regional_types`).
+    fn regional(&self) -> HashSet<String> {
+        let symbols = self.symbols();
+        // Each shape's or kind's field types (a kind's are its variants' payloads).
+        let mut fields: HashMap<usize, Vec<Type>> = HashMap::new();
+        for field in symbols.iter().filter(|s| s.kind == SymbolKind::Field) {
+            let parent = field.parent.and_then(|p| symbols.get(p).map(|s| (p, s)));
+            let owner = match parent {
+                Some((_, variant)) if variant.kind == SymbolKind::Variant => variant.parent,
+                Some((p, _)) => Some(p),
+                None => None,
+            };
+            if let (Some(owner), Some(ty)) = (owner, parse_type(&field.detail)) {
+                fields.entry(owner).or_default().push(ty);
+            }
+        }
+        // The owners whose fields name each type, to look at again when it
+        // turns out to be regional.
+        let mut users: HashMap<String, Vec<usize>> = HashMap::new();
+        for (&owner, types) in &fields {
+            for ty in types {
+                for name in named_types(ty) {
+                    users.entry(name).or_default().push(owner);
+                }
+            }
+        }
+        let mut regional = HashSet::new();
+        let mut pending: Vec<usize> = fields.keys().copied().collect();
+        while let Some(owner) = pending.pop() {
+            let Some(symbol) = symbols.get(owner) else { continue };
+            let holds = fields.get(&owner).is_some_and(|types| types.iter().any(|ty| holds_pointers(ty, &regional)));
+            if holds && regional.insert(symbol.name.clone()) {
+                pending.extend(users.get(&symbol.name).into_iter().flatten().copied());
+            }
+        }
+        regional
+    }
+
     /// The type of a shape's field.
     pub fn field_type(&self, shape: &str, field: &str) -> Option<Type> {
         let shape = self.global(shape, SymbolKind::Shape)?;
@@ -382,8 +436,30 @@ impl<'a> Knowledge<'a> {
     }
 }
 
-/// A type written in source, such as `int`, `^Point`, `maybe ^Node`, or
-/// `int or ParseError`.
+/// The shape and kind names a type mentions.
+fn named_types(ty: &Type) -> Vec<String> {
+    match ty {
+        Type::Named(name, _) => vec![name.clone()],
+        Type::Ptr(inner, _) | Type::Maybe(inner) => named_types(inner),
+        Type::Or(value, error) => named_types(value).into_iter().chain(named_types(error)).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Whether a value of type `ty` holds a pointer, given the shapes and kinds in
+/// `regional` that do.
+fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
+    match ty {
+        Type::Ptr(..) => true,
+        Type::Named(name, _) => regional.contains(name),
+        Type::Maybe(inner) => holds_pointers(inner, regional),
+        Type::Or(value, error) => holds_pointers(value, regional) || holds_pointers(error, regional),
+        _ => false,
+    }
+}
+
+/// A type written in source, such as `int`, `^Point@r`, `maybe ^Node@r`,
+/// `region`, or `int or ParseError`. Written regions are kept as written.
 pub(crate) fn parse_type(text: &str) -> Option<Type> {
     let text = text.trim();
     if let Some((value, error)) = text.split_once(" or ") {
@@ -392,20 +468,36 @@ pub(crate) fn parse_type(text: &str) -> Option<Type> {
     parse_simple_type(text)
 }
 
-/// A type without `or`.
+/// A type without `or`: after any `^` and `maybe`, a name, and its region.
 fn parse_simple_type(text: &str) -> Option<Type> {
     let text = text.trim();
-    if let Some(inner) = text.strip_prefix('^') {
-        return parse_simple_type(inner).map(|ty| Type::Ptr(Box::new(ty)));
-    }
-    if let Some(inner) = text.strip_prefix("maybe ") {
-        return parse_simple_type(inner).map(|ty| Type::Maybe(Box::new(ty)));
-    }
-    let is_name = text.starts_with(|c: char| c.is_ascii_alphabetic()) && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
-    if !is_name {
+    let Some((ty, region)) = text.rsplit_once('@') else { return parse_prefixed_type(text) };
+    let region = region.trim();
+    if !is_name(region) {
         return None;
     }
-    Some(Type::builtin(text).unwrap_or_else(|| Type::Named(text.to_string())))
+    Some(parse_prefixed_type(ty)?.map_regions_of_names(&mut |_| Some(region.to_string())))
+}
+
+fn parse_prefixed_type(text: &str) -> Option<Type> {
+    let text = text.trim();
+    if let Some(inner) = text.strip_prefix('^') {
+        return parse_prefixed_type(inner).map(|ty| Type::Ptr(Box::new(ty), None));
+    }
+    if let Some(inner) = text.strip_prefix("maybe ") {
+        return parse_prefixed_type(inner).map(|ty| Type::Maybe(Box::new(ty)));
+    }
+    if text == "region" {
+        return Some(Type::Region);
+    }
+    if !is_name(text) {
+        return None;
+    }
+    Some(Type::builtin(text).unwrap_or_else(|| Type::named(text)))
+}
+
+fn is_name(text: &str) -> bool {
+    text.starts_with(|c: char| c.is_ascii_alphabetic()) && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 /// The return type in a task's detail, `(n: int) -> int`.

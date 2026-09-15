@@ -12,6 +12,7 @@ export const SYMBOL_BADGES: Record<SymbolKind, { text: string; className: string
   field: { text: "F", className: "kind-field" },
   parameter: { text: "P", className: "kind-parameter" },
   variable: { text: "B", className: "kind-variable" },
+  region: { text: "R", className: "kind-region" },
 };
 
 /** Every item with its depth, parents before children. */

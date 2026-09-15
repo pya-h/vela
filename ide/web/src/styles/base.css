@@ -54,6 +54,7 @@
   --syn-builtin-fn: #fb923c;
   --syn-parameter: #fda4af;
   --syn-variable: #e2e8f0;
+  --syn-region: #2dd4bf;
   --syn-field: #93c5fd;
   --syn-number: #a3e635;
   --syn-string: #86efac;
@@ -104,6 +105,7 @@
   --syn-builtin-fn: #c2410c;
   --syn-parameter: #be123c;
   --syn-variable: #0f172a;
+  --syn-region: #0f766e;
   --syn-field: #1d4ed8;
   --syn-number: #4d7c0f;
   --syn-string: #15803d;
@@ -324,6 +326,10 @@ kbd {
 .kind-variable {
   background: var(--surface-2);
   color: var(--muted);
+}
+.kind-region {
+  background: color-mix(in srgb, var(--syn-region) 16%, transparent);
+  color: var(--syn-region);
 }
 
 /* Dialogs ------------------------------------------------------------------- */

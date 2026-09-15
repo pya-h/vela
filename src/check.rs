@@ -12,10 +12,28 @@ struct VariantInfo {
 
 #[derive(Clone)]
 struct VarInfo {
+    /// `Type::Region` for a region.
     ty: Type,
     mutable: bool,
     /// Where the variable was declared.
     span: Span,
+    /// For a region: whether `new` can allocate in it. A region a task only
+    /// names in its header's types (`p: ^int@r`) can't be.
+    allocates: bool,
+}
+
+/// Where a type is written, which decides the regions it may name.
+#[derive(Clone, Copy, PartialEq)]
+enum TypePlace {
+    /// A shape's field or a variant's payload: no regions, since fields live in
+    /// the region of the value holding them.
+    Field,
+    /// The type after `new`, which lives in the region `new` allocates in.
+    New,
+    /// A task's header: any region names, which the task is given.
+    Header,
+    /// Inside a task: only regions visible there.
+    Body,
 }
 
 /// Type-checks a program and annotates it for code generation: every
@@ -25,7 +43,11 @@ struct VarInfo {
 pub struct Checker {
     shapes: HashMap<String, ShapeDef>,
     kinds: HashMap<String, KindDef>,
-    tasks: HashMap<String, (Vec<Type>, Type)>,
+    /// Every task's parameters (names and types) and return type.
+    tasks: HashMap<String, (Vec<(String, Type)>, Type)>,
+    /// The shapes and kinds that hold pointers, directly or in other shapes and
+    /// kinds, so their values live in a region.
+    regional: HashSet<String>,
     /// Every variant, by tag. Tags are unique across all kinds.
     variants: HashMap<String, VariantInfo>,
     scopes: Vec<HashMap<String, VarInfo>>,
@@ -39,6 +61,7 @@ impl Checker {
 
     pub fn check_file(&mut self, items: &mut [Item]) -> Result<()> {
         self.collect_declarations(items)?;
+        self.regional = regional_types(items);
         self.check_declarations(items)?;
         for item in items.iter_mut() {
             if let Item::Task(t) = item {
@@ -84,8 +107,8 @@ impl Checker {
                 }
                 Item::Task(t) => {
                     declare(&t.name, t.span)?;
-                    let ptypes: Vec<Type> = t.params.iter().map(|p| p.ty.clone()).collect();
-                    self.tasks.insert(t.name.clone(), (ptypes, t.ret.clone()));
+                    let params = t.params.iter().map(|p| (p.name.clone(), p.ty.clone())).collect();
+                    self.tasks.insert(t.name.clone(), (params, t.ret.clone()));
                 }
             }
         }
@@ -94,8 +117,9 @@ impl Checker {
 
     /// Checks the declarations themselves: every written type exists, field
     /// names are distinct, kinds have variants, and no type contains itself.
-    fn check_declarations(&self, items: &[Item]) -> Result<()> {
-        for item in items {
+    /// A task's header gets its types with regions settled (see `resolve_type`).
+    fn check_declarations(&mut self, items: &mut [Item]) -> Result<()> {
+        for item in items.iter_mut() {
             match item {
                 Item::Shape(s) => self.check_fields(&s.fields)?,
                 Item::Kind(k) => {
@@ -107,12 +131,7 @@ impl Checker {
                     }
                 }
                 Item::Task(t) => {
-                    for param in &t.params {
-                        self.check_type(&param.ty, param.ty_span)?;
-                    }
-                    if t.ret != Type::Unit {
-                        self.check_type(&t.ret, t.ret_span)?;
-                    }
+                    self.check_header(t)?;
                     if t.name == "main" {
                         if let Some(param) = t.params.first() {
                             return err(param.span, "task 'main' cannot take parameters");
@@ -125,7 +144,7 @@ impl Checker {
             }
         }
         let mut acyclic = HashSet::new();
-        for item in items {
+        for item in items.iter() {
             let name = match item {
                 Item::Shape(s) => &s.name,
                 Item::Kind(k) => &k.name,
@@ -144,9 +163,143 @@ impl Checker {
                 return err(field.span, format!("field '{}' is already defined at {}:{}", field.name, at.line, at.col));
             }
             seen.insert(&field.name, field.span);
-            self.check_type(&field.ty, field.ty_span)?;
+            self.resolve_type(&field.ty, field.ty_span, TypePlace::Field)?;
         }
         Ok(())
+    }
+
+    /// Checks a task's parameters and return type, and settles their regions.
+    /// A region the header names without a `region` parameter is one the task
+    /// only reads or links pointers in (it can't allocate there), and the
+    /// result's regions must be regions the task is given.
+    fn check_header(&mut self, t: &mut TaskDef) -> Result<()> {
+        let region_params: Vec<&str> = t.params.iter().filter(|p| p.ty == Type::Region).map(|p| p.name.as_str()).collect();
+        let mut named: Vec<String> = region_params.iter().map(|name| name.to_string()).collect();
+        let mut resolved = Vec::new();
+        for param in &t.params {
+            if param.ty == Type::Region {
+                resolved.push(Type::Region);
+                continue;
+            }
+            let ty = self.resolve_type(&param.ty, param.ty_span, TypePlace::Header)?;
+            for region in ty.regions() {
+                if let Some(other) = t.params.iter().find(|p| p.name == region && p.ty != Type::Region) {
+                    return err(param.ty_span, format!("'{}' is a parameter, not a region", other.name));
+                }
+                if !named.iter().any(|n| n == region) {
+                    named.push(region.to_string());
+                }
+            }
+            resolved.push(ty);
+        }
+        if t.ret == Type::Region {
+            return err(t.ret_span, "a task can't send a region; regions are only parameters, as in 'task build(r: region)'");
+        }
+        if t.ret != Type::Unit {
+            let ret = self.resolve_type(&t.ret, t.ret_span, TypePlace::Header)?;
+            if let Some(region) = ret.regions().into_iter().find(|r| !named.iter().any(|n| n == r)) {
+                return err(
+                    t.ret_span,
+                    format!(
+                        "the result lives in region '{0}', which the task isn't given; take it as a parameter, as in '{0}: region'",
+                        region
+                    ),
+                );
+            }
+            t.ret = ret;
+        }
+        for (param, ty) in t.params.iter_mut().zip(resolved) {
+            param.ty = ty;
+        }
+        let params = t.params.iter().map(|p| (p.name.clone(), p.ty.clone())).collect();
+        self.tasks.insert(t.name.clone(), (params, t.ret.clone()));
+        Ok(())
+    }
+
+    /// Checks a written type and settles its regions for `place`:
+    /// - in a field or after `new`, no type names a region;
+    /// - elsewhere, every pointer and every regional shape or kind names one,
+    ///   which inside a task must be a region visible there;
+    /// - a shape or kind without pointers lives in no region, so `Point@r` is
+    ///   an error, while the `Point` in `^Point@r` just has its region dropped.
+    fn resolve_type(&self, ty: &Type, span: Span, place: TypePlace) -> Result<Type> {
+        self.check_type(ty, span)?;
+        self.resolve_regions(ty, span, place, None)
+    }
+
+    /// `resolve_type` for `ty` inside a pointer of region `inside`.
+    fn resolve_regions(&self, ty: &Type, span: Span, place: TypePlace, inside: Option<&str>) -> Result<Type> {
+        let given = |region: &Option<String>| -> Result<()> {
+            match (place, region) {
+                (TypePlace::Field, Some(region)) => err(
+                    span,
+                    format!("a field lives in the region of the value holding it, so its type names no region; remove '@{}'", region),
+                ),
+                (TypePlace::New, Some(region)) => err(
+                    span,
+                    format!("the value 'new' makes lives in the region it allocates in, so its type names no region; remove '@{}'", region),
+                ),
+                (TypePlace::Body, Some(region)) => self.visible_region(region, span, false),
+                _ => Ok(()),
+            }
+        };
+        let needs_region = matches!(place, TypePlace::Header | TypePlace::Body);
+        match ty {
+            Type::Ptr(inner, region) => {
+                given(region)?;
+                if needs_region && region.is_none() {
+                    return err(span, format!("a pointer lives in a region, so its type names one, as in '{}@r'", ty));
+                }
+                let inner = self.resolve_regions(inner, span, place, region.as_deref())?;
+                Ok(Type::Ptr(Box::new(inner), region.clone()))
+            }
+            Type::Named(name, region) => {
+                given(region)?;
+                if !self.regional.contains(name) {
+                    if let Some(region) = region
+                        && inside != Some(region.as_str())
+                    {
+                        return err(span, format!("'{}' holds no pointers, so it lives in no region; remove '@{}'", name, region));
+                    }
+                    return Ok(Type::named(name));
+                }
+                if needs_region && region.is_none() {
+                    return err(span, format!("'{0}' holds pointers, so it lives in a region; name it, as in '{0}@r'", name));
+                }
+                Ok(ty.clone())
+            }
+            Type::Maybe(inner) => Ok(Type::Maybe(Box::new(self.resolve_regions(inner, span, place, inside)?))),
+            Type::Or(value, error) => Ok(Type::Or(
+                Box::new(self.resolve_regions(value, span, place, inside)?),
+                Box::new(self.resolve_regions(error, span, place, inside)?),
+            )),
+            other => Ok(other.clone()),
+        }
+    }
+
+    /// Checks that `name` is a region visible here; `allocating` also requires
+    /// that `new` can allocate in it.
+    fn visible_region(&self, name: &str, span: Span, allocating: bool) -> Result<()> {
+        match self.lookup(name) {
+            Some(info) if info.ty == Type::Region => {
+                if allocating && !info.allocates {
+                    return err(
+                        span,
+                        format!("this task can't allocate in '{0}', which it only names in its types; take it as a parameter, '{0}: region'", name),
+                    );
+                }
+                Ok(())
+            }
+            Some(_) => err(span, format!("'{}' is a variable, not a region", name)),
+            None => err(span, format!("unknown region '{0}'; declare it with 'region {0}'", name)),
+        }
+    }
+
+    /// `ty`, whose regions are unsettled (a field's type, or the type after
+    /// `new`), as it is in a value of region `region`: its pointers and
+    /// regional shapes and kinds get `region`.
+    fn in_region(&self, ty: &Type, region: &str) -> Type {
+        in_region(ty, region, &self.regional)
     }
 
     /// A type written in the source must be a builtin type, a shape, or a kind.
@@ -155,7 +308,8 @@ impl Checker {
     fn check_type(&self, ty: &Type, span: Span) -> Result<()> {
         match ty {
             Type::Unit => err(span, "unit is only allowed as a return type"),
-            Type::Ptr(inner) => self.check_type(inner, span),
+            Type::Region => err(span, "'region' is only the type of a task's parameter, as in 'task build(r: region)'"),
+            Type::Ptr(inner, _) => self.check_type(inner, span),
             Type::Maybe(inner) => match inner.as_ref() {
                 Type::Maybe(_) => err(span, "a maybe can't hold another maybe"),
                 Type::Unit => err(span, "a maybe can't hold unit, which has no value"),
@@ -175,7 +329,7 @@ impl Checker {
                 }
                 Ok(())
             }
-            Type::Named(name) if !self.shapes.contains_key(name) && !self.kinds.contains_key(name) => {
+            Type::Named(name, _) if !self.shapes.contains_key(name) && !self.kinds.contains_key(name) => {
                 err(span, format!("unknown type '{}'", name))
             }
             _ => Ok(()),
@@ -291,7 +445,19 @@ impl Checker {
         // Parameters and the task body share one scope, as in C.
         self.scopes = vec![HashMap::new()];
         for param in &task.params {
-            self.define(&param.name, param.ty.clone(), false, param.span)?;
+            if param.ty == Type::Region {
+                self.define_region(&param.name, param.span, true)?;
+            } else {
+                self.define(&param.name, param.ty.clone(), false, param.span)?;
+            }
+        }
+        // The regions the header only names in its types.
+        for param in &task.params {
+            for region in param.ty.regions() {
+                if self.lookup(region).is_none() {
+                    self.define_region(region, param.ty_span, false)?;
+                }
+            }
         }
         self.check_block(&mut task.body)?;
         self.scopes.clear();
@@ -347,7 +513,18 @@ impl Checker {
         let Some(scope) = self.scopes.last_mut() else {
             return Err(Error::internal(format!("'{}' defined outside of a task", name)));
         };
-        scope.insert(name.to_string(), VarInfo { ty, mutable, span });
+        let allocates = ty == Type::Region;
+        scope.insert(name.to_string(), VarInfo { ty, mutable, span, allocates });
+        Ok(())
+    }
+
+    /// Declares a region in the innermost scope; `allocates` tells whether
+    /// `new` can allocate in it.
+    fn define_region(&mut self, name: &str, span: Span, allocates: bool) -> Result<()> {
+        self.define(name, Type::Region, false, span)?;
+        if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.get_mut(name)) {
+            info.allocates = allocates;
+        }
         Ok(())
     }
 
@@ -360,7 +537,13 @@ impl Checker {
         None
     }
 
+    /// The variable called `name`, which must not be a region.
     fn lookup_or_err(&self, name: &str, span: Span) -> Result<&VarInfo> {
+        if let Some(info) = self.lookup(name)
+            && info.ty == Type::Region
+        {
+            return err(span, format!("'{0}' is a region, not a value; allocate in it with 'new T(…) in {0}'", name));
+        }
         self.lookup(name).ok_or_else(|| {
             if self.variants.contains_key(name) {
                 Error::at(span, format!("'{}' is a variant, not a variable", name))
@@ -404,7 +587,7 @@ impl Checker {
             }
             StmtKind::Binding { name, mutable, ty, ty_span, init } => {
                 if let Some(annotated) = ty {
-                    self.check_type(annotated, ty_span.unwrap_or(span))?;
+                    *annotated = self.resolve_type(annotated, ty_span.unwrap_or(span), TypePlace::Body)?;
                 }
                 let init_ty = self.check_expr(init)?;
                 let binding_ty = match ty {
@@ -420,6 +603,16 @@ impl Checker {
                             return err(init.span, format!("cannot infer the type of '{}' from 'fail …'; give it a type, such as '{}: int or {}'", name, name, error));
                         }
                         Type::Unit => return err(init.span, "this expression has no value (its type is unit)"),
+                        other if other.regions().contains(&ANY_REGION) => {
+                            let example = other.map_regions(&mut |region| Some(if region == ANY_REGION { "r" } else { region }.to_string()));
+                            return err(
+                                init.span,
+                                format!(
+                                    "cannot tell which region '{0}' lives in, since its value holds no pointers yet; give it a type, such as '{0}: {1}'",
+                                    name, example
+                                ),
+                            );
+                        }
                         other => other,
                     },
                 };
@@ -473,17 +666,7 @@ impl Checker {
                     None => Ok(()),
                 }
             }
-            StmtKind::Free(e) => {
-                let ety = self.check_expr(e)?;
-                let pointer = match &ety {
-                    Type::Maybe(inner) => inner.as_ref(),
-                    other => other,
-                };
-                if pointer.ptr_inner().is_none() {
-                    return err(e.span, "free requires a pointer");
-                }
-                Ok(())
-            }
+            StmtKind::Region(name) => self.define_region(name, span, true),
         }
     }
 
@@ -518,7 +701,7 @@ impl Checker {
         match (&pattern.kind, subject) {
             (PatternKind::Any | PatternKind::None, Type::Maybe(_)) => Ok(Vec::new()),
             (PatternKind::Any, _) => Ok(Vec::new()),
-            (PatternKind::Variant { tag, binds }, Type::Named(kind_name)) if self.kinds.contains_key(kind_name) => {
+            (PatternKind::Variant { tag, binds }, Type::Named(kind_name, region)) if self.kinds.contains_key(kind_name) => {
                 let variant = self.kinds.get(kind_name)
                     .and_then(|kind| kind.variants.iter().find(|v| v.tag == *tag))
                     .ok_or_else(|| Error::at(span, format!("kind '{}' has no variant '{}'", kind_name, tag)))?;
@@ -526,7 +709,7 @@ impl Checker {
                     let what = if in_case { format!("case '{}'", tag) } else { format!("'{}'", tag) };
                     return err(span, format!("{} expects {}, got {}", what, count(variant.payload.len(), "binding"), binds.len()));
                 }
-                Ok(binds.iter().zip(&variant.payload).map(|((name, at), field)| (name.clone(), *at, field.ty.clone())).collect())
+                Ok(binds.iter().zip(&variant.payload).map(|((name, at), field)| (name.clone(), *at, self.field_in(&field.ty, region))).collect())
             }
             (PatternKind::Variant { tag, .. }, other) => {
                 if self.variants.contains_key(tag) {
@@ -591,7 +774,7 @@ impl Checker {
                 let info = self.lookup_or_err(name, span)?;
                 // Only a shape has fields to assign; for anything else (a pointer,
                 // a kind) the field error from `field_type` is the useful one.
-                let is_shape = matches!(&info.ty, Type::Named(ty) if self.shapes.contains_key(ty));
+                let is_shape = matches!(&info.ty, Type::Named(ty, _) if self.shapes.contains_key(ty));
                 if is_shape && !info.mutable {
                     return err(span, format!("cannot assign to a field of immutable variable '{}'", name));
                 }
@@ -606,7 +789,7 @@ impl Checker {
         let ety = self.check_expr(expr)?;
         // The cases that together cover every value.
         let needed: Vec<String> = match &ety {
-            Type::Named(name) => match self.kinds.get(name) {
+            Type::Named(name, _) => match self.kinds.get(name) {
                 Some(kind) => kind.variants.iter().map(|v| v.tag.clone()).collect(),
                 None => return err(expr.span, format!("'{}' is not a kind", name)),
             },
@@ -715,18 +898,18 @@ impl Checker {
                 let (params, ret) = self.tasks.get(name.as_str())
                     .ok_or_else(|| {
                         // `send (x)` written the old way reads as a call.
-                        let hint = if name == "send" { "; a task sends its result with '<-'" } else { "" };
+                        let hint = match name.as_str() {
+                            "send" => "; a task sends its result with '<-'",
+                            "free" => "; Vela has no 'free': memory in a region is freed when the block declaring the region closes",
+                            _ => "",
+                        };
                         Error::at(span, format!("unknown task '{}'{}", name, hint))
                     })?
                     .clone();
                 if args.len() != params.len() {
                     return err(span, format!("task '{}' expects {}, got {}", name, count(params.len(), "argument"), args.len()));
                 }
-                for (arg, param) in args.iter_mut().zip(params.iter()) {
-                    self.check_expr(arg)?;
-                    self.coerce(arg, param)?;
-                }
-                Ok(ret)
+                self.check_call_args(name, args, &params, &ret)
             }
             ExprKind::Unary(op, e) => self.check_unary(*op, e, span),
             ExprKind::Binary(op, l, r) => self.check_binary(*op, l, r, span),
@@ -737,21 +920,21 @@ impl Checker {
                 if args.len() != variant.payload.len() {
                     return err(span, format!("variant '{}' expects {}, got {}", tag, count(variant.payload.len(), "argument"), args.len()));
                 }
-                for (arg, field) in args.iter_mut().zip(variant.payload.iter()) {
-                    self.check_expr(arg)?;
-                    self.coerce(arg, &field.ty)?;
-                }
-                Ok(Type::Named(kind.clone()))
+                let mut values: Vec<&mut Expr> = args.iter_mut().collect();
+                let region = self.check_fields_of_value(&mut values, &variant.payload)?;
+                Ok(Type::Named(kind.clone(), self.regional.contains(kind.as_str()).then_some(region)))
             }
-            ExprKind::New { ty, ty_span, value } => {
-                self.check_type(ty, *ty_span)?;
+            ExprKind::New { ty, ty_span, value, region, region_span } => {
+                *ty = self.resolve_type(ty, *ty_span, TypePlace::New)?;
                 // `^int or E` means `(^int) or E`, so no written type could hold the pointer.
                 if matches!(ty, Type::Or(..)) {
                     return err(*ty_span, format!("'new' can't make a pointer to '{}'; extract the value first, or keep it in a shape's field", ty));
                 }
+                self.visible_region(region, *region_span, true)?;
+                let pointee = self.in_region(ty, region);
                 self.check_expr(value)?;
-                self.coerce(value, ty)?;
-                Ok(Type::Ptr(Box::new(ty.clone())))
+                self.coerce(value, &pointee)?;
+                Ok(Type::Ptr(Box::new(pointee), Some(region.clone())))
             }
             ExprKind::Deref(e) => {
                 let ty = self.check_expr(e)?;
@@ -772,21 +955,23 @@ impl Checker {
                     .clone();
                 // Fields may be given in any order, each exactly once.
                 let mut given: HashMap<String, Span> = HashMap::new();
-                for field in fields.iter_mut() {
-                    let Some(declared) = shape.fields.iter().find(|f| f.name == field.name) else {
+                let mut declared = Vec::new();
+                for field in fields.iter() {
+                    let Some(field_def) = shape.fields.iter().find(|f| f.name == field.name) else {
                         return err(field.span, format!("shape '{}' has no field '{}'", name, field.name));
                     };
                     if let Some(at) = given.get(&field.name) {
                         return err(field.span, format!("field '{}' is already given at {}:{}", field.name, at.line, at.col));
                     }
                     given.insert(field.name.clone(), field.span);
-                    self.check_expr(&mut field.value)?;
-                    self.coerce(&mut field.value, &declared.ty)?;
+                    declared.push(field_def.clone());
                 }
                 if let Some(missing) = shape.fields.iter().find(|f| !given.contains_key(&f.name)) {
                     return err(span, format!("missing field '{}' in '{}'", missing.name, name));
                 }
-                Ok(Type::Named(name.clone()))
+                let mut values: Vec<&mut Expr> = fields.iter_mut().map(|field| &mut field.value).collect();
+                let region = self.check_fields_of_value(&mut values, &declared)?;
+                Ok(Type::Named(name.clone(), self.regional.contains(name.as_str()).then_some(region)))
             }
             ExprKind::Range(..) => err(span, "a range can only be used in 'each'"),
             ExprKind::Fail(error) => {
@@ -901,7 +1086,7 @@ impl Checker {
                     return err(span, format!("a {} can only be compared with none; extract its value first, as in 'x {{ … }}'", maybe));
                 }
                 self.expect_type(&rt, &lt, r.span)?;
-                if !lt.is_numeric() && !matches!(lt, Type::Bool | Type::Text | Type::Ptr(_)) {
+                if !lt.is_numeric() && !matches!(lt, Type::Bool | Type::Text | Type::Ptr(..)) {
                     return err(span, "cannot compare this type");
                 }
                 Ok(Type::Bool)
@@ -923,18 +1108,18 @@ impl Checker {
 
     fn field_type(&self, base: &Type, field: &str, span: Span) -> Result<Type> {
         match base {
-            Type::Named(name) => {
+            Type::Named(name, region) => {
                 let Some(shape) = self.shapes.get(name) else {
                     return err(span, format!("'{}' is a kind and has no fields; use match to read its values", name));
                 };
                 for f in &shape.fields {
                     if f.name == field {
-                        return Ok(f.ty.clone());
+                        return Ok(self.field_in(&f.ty, region));
                     }
                 }
                 err(span, format!("shape '{}' has no field '{}'", name, field))
             }
-            Type::Ptr(_) => err(span, format!("type {} has no fields; dereference it first, as in 'p^.{}'", base, field)),
+            Type::Ptr(..) => err(span, format!("type {} has no fields; dereference it first, as in 'p^.{}'", base, field)),
             Type::Maybe(_) | Type::Or(..) => {
                 err(span, format!("type {} has no fields; extract its value first, as in 'when x is {{value}}'", base))
             }
@@ -942,31 +1127,99 @@ impl Checker {
         }
     }
 
+    /// A field's or payload's declared type `ty`, in a value of region `region`
+    /// (none for a value that holds no pointers).
+    fn field_in(&self, ty: &Type, region: &Option<String>) -> Type {
+        match region {
+            Some(region) => self.in_region(ty, region),
+            None => ty.clone(),
+        }
+    }
+
+    /// Checks the values given for a shape's fields or a variant's payload,
+    /// `declared` in the same order, and returns the region of the value they
+    /// make: the region of the pointers among them, or `ANY_REGION` when they
+    /// hold none. Every value must then fit its field in that region.
+    fn check_fields_of_value(&mut self, values: &mut [&mut Expr], declared: &[Field]) -> Result<String> {
+        const OWN: &str = "";
+        let mut regions = HashMap::new();
+        for (value, field) in values.iter_mut().zip(declared) {
+            let ty = self.check_expr(value)?;
+            unify_regions(&self.in_region(&field.ty, OWN), &ty, &mut regions);
+        }
+        let region = regions.remove(OWN).unwrap_or_else(|| ANY_REGION.to_string());
+        for (value, field) in values.iter_mut().zip(declared) {
+            self.coerce(value, &self.in_region(&field.ty, &region))?;
+        }
+        Ok(region)
+    }
+
+    /// Checks a call's arguments against the task's `params`, and returns the
+    /// type the call gives. A region argument must be a region the caller can
+    /// allocate in. The task's other regions stand for the caller's regions
+    /// that the arguments' types show; one that no argument shows (as for
+    /// `none`) becomes `ANY_REGION`.
+    fn check_call_args(&mut self, task: &str, args: &mut [Expr], params: &[(String, Type)], ret: &Type) -> Result<Type> {
+        let mut regions: HashMap<String, String> = HashMap::new();
+        for (arg, (param, ty)) in args.iter_mut().zip(params) {
+            if *ty != Type::Region {
+                let actual = self.check_expr(arg)?;
+                unify_regions(ty, &actual, &mut regions);
+                continue;
+            }
+            let ExprKind::Var(region) = &arg.kind else {
+                return err(arg.span, format!("task '{}' takes a region as '{}', such as a 'region r' declared before the call", task, param));
+            };
+            self.visible_region(region, arg.span, true)?;
+            if let Some(bound) = regions.get(param)
+                && bound != region
+            {
+                return err(arg.span, format!("expected region '{}', got '{}'", bound, region));
+            }
+            regions.insert(param.clone(), region.clone());
+            arg.ty = Some(Type::Region);
+        }
+        let substitute = |ty: &Type| {
+            ty.map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| ANY_REGION.to_string())))
+        };
+        for (arg, (_, ty)) in args.iter_mut().zip(params) {
+            if *ty != Type::Region {
+                self.coerce(arg, &substitute(ty))?;
+            }
+        }
+        Ok(substitute(ret))
+    }
+
     /// Checks that the value of `expr` fits where `expected` is required, and
     /// marks where it becomes part of a `maybe` or `T or E` with a `Wrap` node:
     /// a plain value or `none` in a `maybe`, a plain value or `fail e` in a
     /// `T or E`.
+    ///
+    /// A value built without pointers (of `ANY_REGION`) fits the same type in
+    /// any region, and takes that region; any other value must be of exactly
+    /// the expected regions.
     fn coerce(&self, expr: &mut Expr, expected: &Type) -> Result<()> {
         let actual = expr.ty()?.clone();
-        if actual == *expected {
+        if fits_regions(&actual, expected) {
+            expr.ty = Some(expected.clone());
             return Ok(());
         }
         match expected {
-            Type::Maybe(inner) if actual == Type::None || actual == **inner => {
+            Type::Maybe(inner) if actual == Type::None || fits_regions(&actual, inner) => {
                 wrap(expr, expected);
                 return Ok(());
             }
             Type::Or(value, error) => {
                 if let Type::Fail(given) = &actual {
-                    if given != error {
+                    if !fits_regions(given, error) {
                         return err(expr.span, format!("expected an error of type {}, got {}", error, given));
                     }
                     wrap(expr, expected);
                     return Ok(());
                 }
                 if **value != Type::Unit {
-                    let fits_value = actual == **value
-                        || matches!(value.as_ref(), Type::Maybe(inner) if actual == Type::None || actual == **inner);
+                    let fits_value = fits_regions(&actual, value)
+                        || matches!(value.as_ref(), Type::Maybe(inner) if actual == Type::None || fits_regions(&actual, inner));
                     if fits_value {
                         self.coerce(expr, value)?;
                         wrap(expr, expected);
@@ -977,14 +1230,20 @@ impl Checker {
             _ => {}
         }
         let hint = match (&actual, expected) {
-            (Type::None, Type::Ptr(_)) => format!("; a pointer can't be none, so use 'maybe {}'", expected),
+            (Type::None, Type::Ptr(..)) => format!("; a pointer can't be none, so use 'maybe {}'", expected),
             (Type::None, Type::Or(value, _)) if value.ptr_inner().is_some() => {
                 format!("; a pointer can't be none, so use 'maybe {}'", value)
             }
-            (_, Type::Or(_, error)) if actual == **error => "; an error is given with 'fail', as in '<- fail e'".to_string(),
+            (_, Type::Or(_, error)) if fits_regions(&actual, error) => "; an error is given with 'fail', as in '<- fail e'".to_string(),
             (Type::Fail(_), _) => "; 'fail …' is an error, which only a 'T or E' can hold".to_string(),
-            (Type::Maybe(inner) | Type::Or(inner, _), _) if **inner == *expected => {
+            (Type::Maybe(inner) | Type::Or(inner, _), _) if fits_regions(inner, expected) => {
                 "; extract its value first, as in 'x { … }' or 'when x is {value}'".to_string()
+            }
+            _ if expected.regions().contains(&ANY_REGION) => {
+                "; the value this belongs to was built without pointers, so it lives in no region and can't take one".to_string()
+            }
+            _ if [Some(expected), expected.extracted()].into_iter().flatten().any(|e| actual.without_regions() == e.without_regions()) => {
+                "; a value can't move to another region: a pointer into one region is never stored in another".to_string()
             }
             _ => String::new(),
         };
@@ -1022,6 +1281,106 @@ fn extract_hint(types: &[&Type]) -> String {
     }
 }
 
+/// The shapes and kinds that hold pointers, directly or in other shapes and
+/// kinds by value, so their values live in a region.
+pub fn regional_types(items: &[Item]) -> HashSet<String> {
+    let fields_of = |item: &Item| -> Vec<Type> {
+        match item {
+            Item::Shape(s) => s.fields.iter().map(|f| f.ty.clone()).collect(),
+            Item::Kind(k) => k.variants.iter().flat_map(|v| &v.payload).map(|f| f.ty.clone()).collect(),
+            Item::Task(_) => Vec::new(),
+        }
+    };
+    // The items whose fields name each type, to look at again when it turns
+    // out to be regional.
+    let mut users: HashMap<String, Vec<usize>> = HashMap::new();
+    for (i, item) in items.iter().enumerate() {
+        for ty in fields_of(item) {
+            for name in named_types(&ty) {
+                users.entry(name.to_string()).or_default().push(i);
+            }
+        }
+    }
+    let mut regional = HashSet::new();
+    let mut pending: Vec<usize> = (0..items.len()).collect();
+    while let Some(i) = pending.pop() {
+        let name = match items.get(i) {
+            Some(Item::Shape(s)) => &s.name,
+            Some(Item::Kind(k)) => &k.name,
+            _ => continue,
+        };
+        if !regional.contains(name) && items.get(i).map(fields_of).unwrap_or_default().iter().any(|ty| holds_pointers(ty, &regional)) {
+            regional.insert(name.clone());
+            pending.extend(users.get(name).into_iter().flatten().copied());
+        }
+    }
+    regional
+}
+
+/// A field's type, or the type after `new`, whose regions are unsettled, as it
+/// is in a value of region `region`: its pointers and its shapes and kinds in
+/// `regional` get `region`.
+pub fn in_region(ty: &Type, region: &str, regional: &HashSet<String>) -> Type {
+    ty.map_regions_of_names(&mut |name| (name.is_empty() || regional.contains(name)).then(|| region.to_string()))
+}
+
+/// Whether a value of type `actual` fits where `expected` is required without
+/// changing: the same type, where `actual` may be of `ANY_REGION` wherever
+/// `expected` names a region.
+fn fits_regions(actual: &Type, expected: &Type) -> bool {
+    let region = |a: &Option<String>, e: &Option<String>| a == e || a.as_deref() == Some(ANY_REGION);
+    match (actual, expected) {
+        (Type::Ptr(a, ar), Type::Ptr(e, er)) => region(ar, er) && fits_regions(a, e),
+        (Type::Named(a, ar), Type::Named(e, er)) => a == e && region(ar, er),
+        (Type::Range(a), Type::Range(e)) | (Type::Maybe(a), Type::Maybe(e)) | (Type::Fail(a), Type::Fail(e)) => fits_regions(a, e),
+        (Type::Or(av, ae), Type::Or(ev, ee)) => fits_regions(av, ev) && fits_regions(ae, ee),
+        _ => actual == expected,
+    }
+}
+
+/// Records in `regions` what each region of `pattern` stands for in `actual`,
+/// following `actual` into the places a value can become part of `pattern`
+/// (`maybe`, `T or E`, `fail`). A region already recorded, or one `actual`
+/// doesn't show, is left as it is; checking the value against the settled type
+/// then reports any mismatch.
+fn unify_regions(pattern: &Type, actual: &Type, regions: &mut HashMap<String, String>) {
+    let mut record = |p: &Option<String>, a: &Option<String>| {
+        if let (Some(p), Some(a)) = (p, a)
+            && a != ANY_REGION
+        {
+            regions.entry(p.clone()).or_insert_with(|| a.clone());
+        }
+    };
+    match (pattern, actual) {
+        (Type::Ptr(p, pr), Type::Ptr(a, ar)) => {
+            record(pr, ar);
+            unify_regions(p, a, regions);
+        }
+        (Type::Named(p, pr), Type::Named(a, ar)) if p == a => record(pr, ar),
+        (Type::Maybe(p), Type::Maybe(a)) | (Type::Range(p), Type::Range(a)) | (Type::Fail(p), Type::Fail(a)) => unify_regions(p, a, regions),
+        (Type::Or(pv, pe), Type::Or(av, ae)) => {
+            unify_regions(pv, av, regions);
+            unify_regions(pe, ae, regions);
+        }
+        (Type::Or(_, pe), Type::Fail(a)) => unify_regions(pe, a, regions),
+        (Type::Or(pv, _), a) => unify_regions(pv, a, regions),
+        (Type::Maybe(p), a) => unify_regions(p, a, regions),
+        _ => {}
+    }
+}
+
+/// Whether a value of type `ty` holds a pointer, given the shapes and kinds
+/// in `regional` that do.
+fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
+    match ty {
+        Type::Ptr(..) => true,
+        Type::Named(name, _) => regional.contains(name),
+        Type::Maybe(inner) => holds_pointers(inner, regional),
+        Type::Or(value, error) => holds_pointers(value, regional) || holds_pointers(error, regional),
+        _ => false,
+    }
+}
+
 /// Whether a task with return type `ret` must send a value: every return type
 /// except `unit` and `unit or E`, which succeed by reaching their end.
 fn sends_value(ret: &Type) -> bool {
@@ -1032,7 +1391,7 @@ fn sends_value(ret: &Type) -> bool {
 /// pointer).
 fn contained_by_value(ty: &Type) -> Vec<&str> {
     match ty {
-        Type::Named(name) => vec![name.as_str()],
+        Type::Named(name, _) => vec![name.as_str()],
         Type::Maybe(inner) => contained_by_value(inner),
         Type::Or(value, error) => {
             let mut names = contained_by_value(value);
@@ -1046,8 +1405,8 @@ fn contained_by_value(ty: &Type) -> Vec<&str> {
 /// Every shape or kind a type names, by value or through pointers.
 fn named_types(ty: &Type) -> Vec<&str> {
     match ty {
-        Type::Named(name) => vec![name.as_str()],
-        Type::Ptr(inner) | Type::Maybe(inner) | Type::Fail(inner) => named_types(inner),
+        Type::Named(name, _) => vec![name.as_str()],
+        Type::Ptr(inner, _) | Type::Maybe(inner) | Type::Fail(inner) => named_types(inner),
         Type::Or(value, error) => {
             let mut names = named_types(value);
             names.extend(named_types(error));
@@ -1061,8 +1420,8 @@ fn named_types(ty: &Type) -> Vec<&str> {
 /// `can` that can be.
 fn constructible(ty: &Type, can: &HashSet<&str>) -> bool {
     match ty {
-        Type::Named(name) => can.contains(name.as_str()),
-        Type::Ptr(inner) => constructible(inner, can),
+        Type::Named(name, _) => can.contains(name.as_str()),
+        Type::Ptr(inner, _) => constructible(inner, can),
         Type::Or(value, error) => **value == Type::Unit || constructible(value, can) || constructible(error, can),
         _ => true,
     }

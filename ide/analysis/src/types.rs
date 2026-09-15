@@ -3,11 +3,19 @@
 //! place; when it stops at an error, the tables still hold everything it
 //! checked before that error.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use vela::ast::{Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, Span, Stmt, StmtKind, Type};
+use vela::check::{in_region, regional_types};
 use vela::driver;
 use vela::error::Error;
+
+/// What recording types needs to know about the program's declarations.
+struct Context<'a> {
+    kinds: HashMap<&'a str, &'a KindDef>,
+    /// The shapes and kinds that hold pointers.
+    regional: HashSet<String>,
+}
 
 /// A (line, column) position, as the compiler reports it.
 pub(crate) type Pos = (usize, usize);
@@ -25,7 +33,8 @@ pub(crate) struct Checked {
     /// operator of a unary or binary operation or of `^`; `new`; or a shape
     /// literal's shape name.
     pub exprs: HashMap<Pos, Type>,
-    /// The type of each parameter and variable, by the position of its name.
+    /// The type of each parameter, variable, and region (`Type::Region`), by
+    /// the position of its name.
     pub decls: HashMap<Pos, Type>,
     /// For each field access `a.b`, the shape of `a`, by the position of `b`.
     pub field_accesses: HashMap<Pos, String>,
@@ -43,27 +52,31 @@ impl Checked {
                 _ => None,
             })
             .collect();
+        let context = Context { kinds, regional: regional_types(&items) };
         for item in &items {
             if let Item::Task(task) = item {
                 for param in &task.params {
                     checked.decls.insert(pos(param.span), param.ty.clone());
                 }
-                checked.block(&task.body, &kinds);
+                checked.block(&task.body, &context);
             }
         }
         checked
     }
 
-    fn block(&mut self, stmts: &Block, kinds: &HashMap<&str, &KindDef>) {
+    fn block(&mut self, stmts: &Block, kinds: &Context) {
         for stmt in stmts {
             self.statement(stmt, kinds);
         }
     }
 
-    fn statement(&mut self, stmt: &Stmt, kinds: &HashMap<&str, &KindDef>) {
+    fn statement(&mut self, stmt: &Stmt, kinds: &Context) {
         match &stmt.kind {
-            StmtKind::Expr(e) | StmtKind::Free(e) | StmtKind::Send(Some(e)) => self.expr(e, kinds),
+            StmtKind::Expr(e) | StmtKind::Send(Some(e)) => self.expr(e, kinds),
             StmtKind::Send(None) => {}
+            StmtKind::Region(_) => {
+                self.decls.insert(pos(stmt.span), Type::Region);
+            }
             StmtKind::Binding { ty, init, .. } => {
                 if let Some(ty) = ty {
                     self.decls.insert(pos(stmt.span), ty.clone());
@@ -108,13 +121,17 @@ impl Checked {
 
     /// Records the types of the names `pattern` binds from a value of type
     /// `subject`.
-    fn pattern(&mut self, subject: Option<&Type>, pattern: &Pattern, kinds: &HashMap<&str, &KindDef>) {
+    fn pattern(&mut self, subject: Option<&Type>, pattern: &Pattern, kinds: &Context) {
         let Some(subject) = subject else { return };
         match (&pattern.kind, subject) {
-            (PatternKind::Variant { tag, binds }, Type::Named(name)) => {
-                let payload = kinds.get(name.as_str()).and_then(|k| k.variants.iter().find(|v| v.tag == *tag)).map(|v| &v.payload);
+            (PatternKind::Variant { tag, binds }, Type::Named(name, region)) => {
+                let payload = kinds.kinds.get(name.as_str()).and_then(|k| k.variants.iter().find(|v| v.tag == *tag)).map(|v| &v.payload);
                 for ((_, span), field) in binds.iter().zip(payload.into_iter().flatten()) {
-                    self.decls.insert(pos(*span), field.ty.clone());
+                    let ty = match region {
+                        Some(region) => in_region(&field.ty, region, &kinds.regional),
+                        None => field.ty.clone(),
+                    };
+                    self.decls.insert(pos(*span), ty);
                 }
             }
             (PatternKind::Value((_, span)), Type::Maybe(inner) | Type::Or(inner, _)) => {
@@ -127,7 +144,7 @@ impl Checked {
         }
     }
 
-    fn expr(&mut self, e: &Expr, kinds: &HashMap<&str, &KindDef>) {
+    fn expr(&mut self, e: &Expr, kinds: &Context) {
         // A wrapped value keeps its own type at its position.
         if let ExprKind::Wrap(inner) = &e.kind {
             return self.expr(inner, kinds);
@@ -137,7 +154,7 @@ impl Checked {
         }
         match &e.kind {
             ExprKind::Field(base, _) => {
-                if let Some(Type::Named(shape)) = &base.ty {
+                if let Some(Type::Named(shape, _)) = &base.ty {
                     self.field_accesses.insert(pos(e.span), shape.clone());
                 }
                 self.expr(base, kinds);

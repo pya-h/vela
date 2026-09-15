@@ -219,6 +219,53 @@ fi
 }
 
 #[test]
+fn regions_resolve_to_their_declarations() {
+    let source = "\
+shape Node
+    value: int
+    next: maybe ^Node
+fi
+
+task push(r: region, list: maybe ^Node@r) -> ^Node@r
+    <- new Node(Node { value: 1, next: list }) in r
+fi
+
+task sum(list: maybe ^Node@s) -> int
+    <- 0
+fi
+
+task main()
+    region nodes
+    bind first = push(nodes, none)
+    bind second = new@nodes int(2)
+    when true
+        region inner
+        show(sum(first))
+    fi
+    show(sum(push(nodes, first)))
+fi
+";
+    assert_eq!(class_at(source, "r: region", 0), TokenClass::Region);
+    assert_eq!(class_at(source, "region,", 0), TokenClass::Keyword);
+    assert_eq!(class_at(source, "r)", 0), TokenClass::Region);
+    // A header's `@r` names the region parameter; `in r` refers to it.
+    assert_definition(source, ("r) ->", 0), ("r: region", 0));
+    assert_definition(source, ("r\n", 0), ("r: region", 0));
+    // A region the header only names is declared where it first appears.
+    assert_definition(source, ("s) -> int", 0), ("s) -> int", 0));
+    assert_eq!(class_at(source, "s) -> int", 0), TokenClass::Region);
+    // Region statements, used as arguments and after `new@`.
+    assert_definition(source, ("nodes, none", 0), ("nodes\n", 0));
+    assert_definition(source, ("nodes int", 0), ("nodes\n", 0));
+    assert_eq!(class_at(source, "nodes, first", 0), TokenClass::Region);
+    // A region declared in a block ends with it.
+    assert_definition(source, ("inner", 0), ("inner", 0));
+    let analysis = Analysis::new(source);
+    assert_eq!(analysis.diagnostics(), []);
+    assert_eq!(class_at(source, "int(2)", 0), TokenClass::TypeBuiltin);
+}
+
+#[test]
 fn half_typed_code_still_resolves_and_highlights() {
     // The first task is never closed and a string is unterminated.
     let source = "\
@@ -228,7 +275,7 @@ task first(n: int) -> int
     <- twice
 
 task second()
-    show(first(1) @)
+    show(first(1) $)
 fi
 ";
     let analysis = Analysis::new(source);
@@ -238,7 +285,7 @@ fi
     assert_eq!(class_at(source, "\"not done", 0), TokenClass::String);
     assert_eq!(class_at(source, "<- twice", 0), TokenClass::Keyword);
     assert_eq!(class_at(source, "second", 0), TokenClass::Task);
-    assert_eq!(class_at(source, "@", 0), TokenClass::Invalid);
+    assert_eq!(class_at(source, "$", 0), TokenClass::Invalid);
     let outline: Vec<(String, usize)> = analysis.outline().into_iter().map(|item| (item.name, item.to)).collect();
     // The unclosed task ends at its last token.
     let first_end = at(source, "twice\n\ntask", 0) + "twice".len();

@@ -1,0 +1,168 @@
+# Regions: memory `new` allocates lives until the block that declared its
+# region closes, on every way out of that block. Tasks take a region to
+# allocate in (`r: region`), or only name one in their types (`@r`) to read and
+# link pointers there. A value built without pointers takes the region of the
+# place it goes. (tests/runtime.rs also runs this under sanitizers, which fail
+# on a leak or a use after free.)
+
+shape Node
+    value: int
+    next: maybe ^Node
+fi
+
+kind Tree
+    Leaf(value: int)
+    Branch(left: ^Tree, right: ^Tree)
+fi
+
+shape Pair
+    first: ^int
+    second: ^int
+fi
+
+# Allocates, so it takes the region.
+task push(r: region, list: maybe ^Node@r, value: int) -> ^Node@r
+    <- new Node(Node { value: value, next: list }) in r
+fi
+
+# Only reads, so it names the region without taking it.
+task sum(list: maybe ^Node@r) -> int
+    hold total = 0
+    hold current = list
+    loop current is {node}
+        total = total + node^.value
+        current = node^.next
+    fi
+    <- total
+fi
+
+# Recursion builds a tree in the caller's region.
+task build(r: region, depth: int) -> Tree@r
+    when depth == 0
+        <- Leaf(1)
+    fi
+    <- Branch(new Tree(build(r, depth - 1)) in r, new@r Tree(build(r, depth - 1)))
+fi
+
+task count(t: Tree@r) -> int
+    match t
+    case Leaf value
+        <- value
+    case Branch left right
+        <- count(left^) + count(right^)
+    fi
+fi
+
+# A region passed on under another name.
+task twice(outer: region, value: int) -> Pair@outer
+    <- Pair { first: new int(value) in outer, second: make(outer, value * 2) }
+fi
+
+task make(inner: region, value: int) -> ^int@inner
+    <- new int(value) in inner
+fi
+
+# A `<-` from inside nested blocks frees the task's regions first.
+task early(n: int) -> int
+    region outer
+    bind a = new int(n) in outer
+    each i in 0..3
+        region inner
+        bind b = new int(i) in inner
+        when b^ == 1
+            <- a^ + b^
+        fi
+    fi
+    <- 0
+fi
+
+task checked(r: region, n: int) -> ^Node@r or text
+    region scratch
+    bind temporary = new int(n) in scratch
+    when temporary^ < 0
+        <- fail "negative"
+    fi
+    <- push(r, none, temporary^)
+fi
+
+task save(n: int) -> unit or text
+    region scratch
+    bind copy = new int(n) in scratch
+    when copy^ > 9
+        <- fail "too big"
+    fi
+    show(copy^)
+fi
+
+task main()
+    region lists
+    hold list: maybe ^Node@lists = none
+    each i in 0..200000
+        list = push(lists, list, i)
+    fi
+    show(sum(list))
+    show(sum(none))
+
+    # A region inside a loop is new, and freed, on every pass.
+    hold total = 0
+    each round in 0..1000
+        region pass
+        hold pieces: maybe ^Node@pass = none
+        each j in 0..100
+            pieces = push(pass, pieces, 1)
+        fi
+        total = total + sum(pieces)
+    fi
+    show(total)
+
+    region trees
+    show(count(build(trees, 10)))
+    show(count(Leaf(5)))
+
+    bind pair = twice(lists, 21)
+    show(pair.first^ + pair.second^)
+
+    show(early(40))
+
+    # A plan B's block can use its own region, and give a value from it.
+    bind missing: maybe int = none
+    bind rescued = missing {
+        region rescue
+        bind spare = new int(99) in rescue
+        spare^
+    }
+    show(rescued)
+
+    match checked(lists, -1)
+    case {node}
+        show(node^.value)
+    case fail reason
+        region report
+        bind message = new text(reason) in report
+        show(message^)
+    fi
+    bind good = checked(lists, 7) { <- }
+    show(good^.value)
+    save(3) { fail e
+        show(e)
+    }
+    save(30) { fail e
+        show(e)
+    }
+
+    # A literal without pointers takes the region of the binding's type, and
+    # can then hold pointers into it.
+    hold head: Node@lists = Node { value: 1, next: none }
+    head.next = push(lists, none, 2)
+    show(sum(head.next) + head.value)
+    bind maybe_pair: maybe Pair@lists = pair
+    when maybe_pair is {p}
+        show(p.first^)
+    fi
+
+    # A pointer to a pointer lives in one region too.
+    bind inner = new int(8) in trees
+    bind outer = new ^int(inner) in trees
+    outer^^ = outer^^ + 1
+    show(inner^)
+fi

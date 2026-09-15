@@ -1,0 +1,7 @@
+# error: 2:16: the result lives in region 'r', which the task isn't given; take it as a parameter, as in 'r: region'
+task make() -> ^int@r
+    region r
+    <- new int(1) in r
+fi
+task main()
+fi

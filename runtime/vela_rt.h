@@ -5,6 +5,7 @@
  * starts with `vela__rt__`, a shape no C name generated from a Vela program can
  * take (see the naming notes in `src/codegen.rs`). */
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -49,20 +50,100 @@ static inline double vela__rt__fmod(double a, double b) {
     return fmod(a, b);
 }
 
-/* `new T(value)`: copies `size` bytes from `value` into a fresh allocation. */
-static inline void* vela__rt__box(const void* value, size_t size) {
-    void* p = malloc(size);
-    if (p == NULL) {
-        fflush(stdout);
-        fputs("vela: out of memory\n", stderr);
-        abort();
+/* Regions. A region is an arena: a list of chunks of memory, each handed out
+ * front to back, all freed at once when the block that declared the region
+ * closes. Allocating is a pointer bump in the newest chunk; see
+ * `vela__rt__region_grow` for how chunks are added. */
+
+typedef struct vela__rt__chunk {
+    struct vela__rt__chunk* previous;
+    size_t size;
+    size_t used;
+    /* Aligned for any type, so the first allocation needs no padding. */
+    _Alignas(max_align_t) unsigned char data[];
+} vela__rt__chunk;
+
+typedef struct vela__rt__region {
+    vela__rt__chunk* newest;
+} vela__rt__region;
+
+/* The initializer of an empty region: `vela__rt__region r[1] = { VELA__RT__REGION_EMPTY };`. */
+#define VELA__RT__REGION_EMPTY { NULL }
+
+/* Total sizes of ordinary chunks, header included. */
+enum { VELA__RT__CHUNK_FIRST = 4096, VELA__RT__CHUNK_MAX = 1 << 20 };
+
+static inline _Noreturn void vela__rt__out_of_memory(void) {
+    fflush(stdout);
+    fputs("vela: out of memory\n", stderr);
+    abort();
+}
+
+/* A new chunk of at least `size` bytes, whose first `size` bytes are taken.
+ * Ordinary chunks double in total size (header included, so each malloc is a
+ * round size) from 4 KB up to 1 MB. An allocation larger than half the next
+ * ordinary chunk gets a chunk of exactly its size instead, placed behind the
+ * newest chunk, which keeps serving small allocations. */
+static inline void* vela__rt__region_grow(vela__rt__region* r, size_t size) {
+    size_t header = sizeof(vela__rt__chunk);
+    size_t total = VELA__RT__CHUNK_FIRST;
+    if (r->newest != NULL) {
+        size_t previous = r->newest->size + header;
+        total = previous >= VELA__RT__CHUNK_MAX / 2 ? VELA__RT__CHUNK_MAX : previous * 2;
     }
+    size_t capacity = total - header;
+    bool own = size > capacity / 2;
+    if (own) {
+        capacity = size;
+    }
+    if (capacity > SIZE_MAX - header) {
+        vela__rt__out_of_memory();
+    }
+    vela__rt__chunk* chunk = malloc(header + capacity);
+    if (chunk == NULL) {
+        vela__rt__out_of_memory();
+    }
+    chunk->size = capacity;
+    chunk->used = size;
+    if (own && r->newest != NULL) {
+        chunk->previous = r->newest->previous;
+        r->newest->previous = chunk;
+    } else {
+        chunk->previous = r->newest;
+        r->newest = chunk;
+    }
+    return chunk->data;
+}
+
+/* `size` bytes aligned to `align` (a power of two) in region `r`. */
+static inline void* vela__rt__region_alloc(vela__rt__region* r, size_t size, size_t align) {
+    vela__rt__chunk* chunk = r->newest;
+    if (chunk != NULL) {
+        size_t start = (chunk->used + (align - 1)) & ~(align - 1);
+        if (start <= chunk->size && size <= chunk->size - start) {
+            chunk->used = start + size;
+            return chunk->data + start;
+        }
+    }
+    return vela__rt__region_grow(r, size);
+}
+
+/* `new T(value) in r`: copies `size` bytes from `value` into region `r`. */
+static inline void* vela__rt__new(vela__rt__region* r, const void* value, size_t size, size_t align) {
+    void* p = vela__rt__region_alloc(r, size, align);
     memcpy(p, value, size);
     return p;
 }
 
-static inline void vela__rt__free(void* p) {
-    free(p);
+/* Frees everything allocated in `r`, which is then empty again. */
+static inline void vela__rt__region_free(vela__rt__region* r) {
+    vela__rt__chunk* chunk = r->newest;
+    while (chunk != NULL) {
+        vela__rt__chunk* previous = chunk->previous;
+        free(chunk);
+        chunk = previous;
+    }
+    r->newest = NULL;
 }
 
 /* Placed at the end of every task that returns a value. The checker ensures

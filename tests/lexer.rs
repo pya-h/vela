@@ -118,7 +118,7 @@ fn agrees_with_the_compiler_on_malformed_input() {
         "élan", "12abc", "1.5e3", "99999999999999999999", "x @ y", "a ! b", "\0", "\"\0\"", "# only a comment",
         "task main()\n    show(\"unterminated)\nfi\n", "\"bad \\q then\nunterminated",
         "x\r\ny", "# comment\r\nfi", "\"a\\\r\nb\"", "\u{feff}task", "1.", "1..5", "a && b", "!x",
-        "1__000", "1_", "1_000abc", "_", "a _ b", "{_}", "_é", "__", "case _\n",
+        "1__000", "1_", "1_000abc", "_", "a _ b", "{_}", "_é", "__", "case _\n", "^Node@r", "new@r int(1) in r", "@", "region",
     ];
     for source in cases {
         check_agreement(source, &format!("{:?}", source));
@@ -128,10 +128,10 @@ fn agrees_with_the_compiler_on_malformed_input() {
 #[test]
 fn invalid_text_becomes_a_token_and_lexing_continues() {
     assert_eq!(
-        kinds("x @ y"),
+        kinds("x $ y"),
         [
             token(Token::Ident("x".into())),
-            invalid(1, 3, "unexpected character '@'"),
+            invalid(1, 3, "unexpected character '$'"),
             token(Token::Ident("y".into())),
             token(Token::Eof),
         ]
@@ -210,6 +210,18 @@ fn the_underscore_alone_is_a_symbol() {
     // `maybe`, `is`, and `fail` are keywords; longer words are names.
     assert_eq!(kinds("maybe int")[0], token(Token::Maybe));
     assert_eq!(kinds("issue")[0], token(Token::Ident("issue".into())));
+}
+
+#[test]
+fn regions_are_named_with_a_keyword_and_an_at_sign() {
+    let ident = |name: &str| token(Token::Ident(name.into()));
+    assert_eq!(kinds("region r"), [token(Token::Region), ident("r"), token(Token::Eof)]);
+    assert_eq!(kinds("^Node@r")[1..4], [ident("Node"), token(Token::At), ident("r")]);
+    assert_eq!(kinds("new@r")[..3], [token(Token::New), token(Token::At), ident("r")]);
+    assert_eq!(Token::At.describe(), "'@'");
+    // `free` is an ordinary name now that regions free memory.
+    assert_eq!(kinds("free"), [ident("free"), token(Token::Eof)]);
+    assert_eq!(kinds("regions")[0], ident("regions"));
 }
 
 #[test]

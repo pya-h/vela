@@ -151,7 +151,7 @@
         <strong>Vela</strong> is a small systems programming language designed to be minimal like Go, strictly
         typed with exhaustive matching, and expressive like modern functional languages — without the bloat.
         It has one clear way to do things: one kind of function, one kind of record, one kind of sum type,
-        and explicit memory management without a garbage collector.
+        and memory managed through regions, without a garbage collector.
       </p>
       <p>
         Vela compiles to C through a Rust-based compiler, so it runs anywhere C runs and inherits
@@ -164,9 +164,9 @@
       <ul>
         <li><strong>Minimal surface.</strong> No classes <em>and</em> structs. No interfaces <em>and</em> traits. Just shapes, kinds, and tasks.</li>
         <li><strong>One way to do it.</strong> Immutability by default with <code>bind</code>; mutation explicitly opt-in with <code>hold</code>.</li>
-        <li><strong>Safe by design.</strong> Static typing, exhaustive pattern matching, no uninitialized variables, and explicit (for now unchecked) ownership through owned pointers.</li>
+        <li><strong>Safe by design.</strong> Static typing, exhaustive pattern matching, no uninitialized variables, no null pointers, and pointers that can never outlive their memory.</li>
         <li><strong>Beautiful syntax.</strong> Words for control flow and logic (<code>when</code>, <code>and</code>, <code>not</code>), blocks closed with <code>fi</code>, no semicolons, and a symbol only where it reads as a picture: <code>-&gt;</code> names what a task gives back, and <code>&lt;-</code> gives it back.</li>
-        <li><strong>No GC.</strong> Manual memory management with <code>new</code> and <code>free</code>, or stack allocation where possible.</li>
+        <li><strong>No GC, no free.</strong> Values live on the stack, and <code>new</code> allocates in a <em>region</em>, which frees everything in it at once when its block closes (see <a href="#regions">Memory and Regions</a>).</li>
       </ul>
     </section>
 
@@ -184,8 +184,8 @@
 ./examples/hello</pre>
       <p>
         More programs are in <code>examples/</code>: <code>fib.vela</code> (recursion), <code>kinds.vela</code>
-        (kinds and <code>match</code>), <code>todo.vela</code> (a linked list with <code>maybe</code> pointers,
-        <code>is</code>, and a plan B), and <code>demo.vela</code> (tasks, shapes, pointers, and control flow).
+        (kinds and <code>match</code>), <code>todo.vela</code> (a linked list in a region, with <code>maybe</code>
+        pointers, <code>is</code>, and a plan B), and <code>demo.vela</code> (tasks, shapes, pointers, and control flow).
       </p>
       <div class="note">
         Prefer an editor? <a href="ide.html">Vela Studio</a> highlights Vela, shows errors as you type, completes
@@ -202,9 +202,10 @@
         <li><code class="type">text</code> — UTF-8 string; <code>==</code> compares contents</li>
         <li><code class="type">unit</code> — the return type of a task that returns nothing; it has no values, so it
           can't be the type of a variable, parameter, or field</li>
-        <li><code class="type">^T</code> — owned pointer to T; it always points to something</li>
+        <li><code class="type">^T@r</code> — pointer to a T in region <code>r</code>; it always points to something (see <a href="#regions">Memory and Regions</a>)</li>
         <li><code class="type">maybe T</code> — a T, or <code>none</code> (see <a href="#maybe">Maybe and Errors</a>)</li>
         <li><code class="type">T or E</code> — a T, or an error E, sent by a task that can fail</li>
+        <li><code class="type">region</code> — the type of a task's region parameter, <code>r: region</code></li>
         <li>User-defined shapes and kinds</li>
       </ul>
     </section>
@@ -218,7 +219,7 @@
         Files may use LF or CRLF line endings.
       </p>
       <p>
-        A statement is a binding, an assignment, a block, a send (<code>&lt;-</code>), <code>free</code>, or a task
+        A statement is a binding, an assignment, a block, a send (<code>&lt;-</code>), a <code>region</code>, or a task
         call, which may have a plan B (see <a href="#maybe">Maybe and Errors</a>). Any other expression on its own line would do nothing, so it is an error: <code>x == 1</code> alone
         reports <code>the result of '==' is unused; use '=' to assign</code>. Comments start with <code>#</code>.
       </p>
@@ -226,7 +227,7 @@
       <h3>Reserved Words and Symbols</h3>
       <p>These words can't be used as names:</p>
       <pre>task  shape  kind  bind  hold  when  else  loop  each  in    match  case
-new   free   and   or    not   true  false none  fi    maybe is     fail</pre>
+new   region and   or    not   true  false none  fi    maybe is     fail</pre>
       <p>
         <code>show</code> and the builtin types (<code>int</code>, <code>float</code>, <code>bool</code>,
         <code>text</code>, <code>unit</code>) aren't reserved words: no task, shape, kind, or variant can take their
@@ -238,6 +239,7 @@ new   free   and   or    not   true  false none  fi    maybe is     fail</pre>
         <tr><td><code>&lt;- value</code></td><td>sends that value back (starts a line)</td></tr>
         <tr><td><code>name: T</code></td><td>a parameter's, field's, or binding's type</td></tr>
         <tr><td><code>^T</code>, <code>p^</code></td><td>a pointer type; the value a pointer points to</td></tr>
+        <tr><td><code>T@r</code>, <code>new@r</code></td><td>the region a type's pointers live in; the region <code>new</code> allocates in (also <code>new T(v) in r</code>)</td></tr>
         <tr><td><code>value { … }</code></td><td>a plan B: the value inside a <code>maybe</code> or <code>T or E</code>, or else what the block gives</td></tr>
         <tr><td><code>{v}</code>, <code>_</code></td><td>in a <code>case</code> or <code>is</code>: the value inside, and anything (or a value left unnamed)</td></tr>
         <tr><td><code>a.x</code></td><td>a field of a shape value</td></tr>
@@ -387,7 +389,9 @@ show(p.x)</pre>
       <p>
         Shapes and kinds can be used before they are declared. A type cannot contain itself by value, since its
         values would be infinitely large, but it can point to itself. A pointer always points to something, so
-        the pointer to the next one must be a <code>maybe</code>: the last node has none.
+        the pointer to the next one must be a <code>maybe</code>: the last node has none. (A field's pointer names no
+        region: a shape that holds pointers lives in one, written <code>Node@r</code>; see
+        <a href="#shapes-in-regions">Memory and Regions</a>.)
       </p>
       <pre><span class="keyword">shape</span> Node
     value: int
@@ -615,42 +619,216 @@ save(500) {
     show(reason)           <span class="comment"># too big</span>
 }</pre>
 
-      <h3>Memory</h3>
-      <p>Owned pointers are explicit and manually freed. No garbage collector.</p>
-      <pre><span class="keyword">bind</span> p: ^int = <span class="keyword">new</span> int(42)
-show(p^)
-p^ = 43                    <span class="comment"># writing through a pointer is allowed, even from a bind</span>
-<span class="keyword">free</span>(p)</pre>
+    </section>
+
+    <section>
+      <h2 id="regions">Memory and Regions</h2>
       <p>
-        <code>new T(value)</code> copies a value to the heap and gives back a <code>^T</code>. A pointer to a shape
-        has no fields of its own: read and write them through <code>^</code>.
+        Vela has no garbage collector and no <code>free</code>. Values are copied and live where they are declared;
+        a value that needs to be shared or linked, like the nodes of a list, is allocated with <code>new</code> in a
+        <em>region</em>: an arena that gives out memory until the block declaring it closes, and then frees
+        everything in it at once. Every pointer's type names its region, and the compiler makes sure no pointer is
+        ever stored where it could outlive that region. So a Vela program can't use freed memory, free anything
+        twice, or leak memory past the block that owns it, and the compiler does this with a handful of rules
+        rather than a borrow checker.
       </p>
-      <pre><span class="keyword">bind</span> origin = <span class="keyword">new</span> Point(Point { x: 0, y: 0 })
-origin^.x = 5
-show(origin^.x)            <span class="comment"># 5</span>
-show(origin.x)             <span class="comment"># error: type ^Point has no fields; dereference it first, as in 'p^.x'</span>
-<span class="keyword">free</span>(origin)</pre>
+      <div class="note">
+        <strong>The rules in short.</strong>
+        <ul>
+          <li><code>region r</code> declares a region; <code>new T(v) in r</code> (or <code>new@r T(v)</code>) copies a value into it.</li>
+          <li>A pointer into <code>r</code> has type <code>^T@r</code>, and a type can only name regions visible where it is written.</li>
+          <li>When the block declaring <code>r</code> closes, however it closes, everything in <code>r</code> is freed.</li>
+          <li>A task allocates only in a region it is given as a parameter, <code>r: region</code>; it can read and link pointers in any region its parameters' types name.</li>
+          <li>A pointer is never stored in a different region than the one its type names.</li>
+        </ul>
+      </div>
+
+      <h3>Allocating in a region</h3>
+      <pre><span class="keyword">shape</span> Point
+    x: int
+    y: int
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> scratch                          <span class="comment"># a new, empty region</span>
+    <span class="keyword">bind</span> n = <span class="keyword">new</span> int(42) <span class="keyword">in</span> scratch         <span class="comment"># n is a ^int@scratch</span>
+    <span class="keyword">bind</span> p = <span class="keyword">new</span>@scratch Point(Point { x: 1, y: 2 })
+    n^ = n^ + 1                             <span class="comment"># read and write through ^</span>
+    p^.x = 5
+    show(n^ + p^.x)                         <span class="comment"># 48</span>
+<span class="keyword">fi</span>                                          <span class="comment"># scratch, and all in it, is freed here</span></pre>
       <p>
-        A pointer always points to something: there is no null pointer. A pointer that may be missing is a
-        <code>maybe ^T</code>, which must be checked before it is used (see <a href="#maybe">Maybe and
-        Errors</a>); it costs nothing extra, since the C it becomes is a plain pointer. <code>free</code> accepts a
-        <code>maybe ^T</code> and does nothing for <code>none</code>.
+        <code>new T(value) in r</code> and <code>new@r T(value)</code> are the same: both copy the value into region
+        <code>r</code> and give back a <code>^T@r</code>. The type after <code>new</code> names no region, since what
+        it makes lives in the region it allocates in. A pointer to a shape has no fields of its own: read and write
+        them through <code>^</code>, as in <code>p^.x</code> (<code>p.x</code> is an error that says so). Writing
+        through a pointer is allowed even from a <code>bind</code>, which holds the address, not the value.
       </p>
-      <pre><span class="keyword">hold</span> next: <span class="keyword">maybe</span> ^int = <span class="keyword">none</span>
+
+      <h3>Pointer types name their region</h3>
+      <p>
+        A pointer type is written <code>^T@r</code>. The <code>@r</code> comes after <code>^</code> and
+        <code>maybe</code> and before <code>or</code>, so <code>maybe ^Node@r</code> is a maybe pointer into
+        <code>r</code>, and <code>^Node@r or text</code> is such a pointer or a text error. A type without pointers
+        lives in no region: <code>int@r</code> and <code>Point@r</code> are errors. A pointer always points to
+        something: one that may be missing is a <code>maybe ^T@r</code>, which must be checked before it is used (see
+        <a href="#maybe">Maybe and Errors</a>), and costs nothing extra, since the C it becomes is a plain pointer.
+      </p>
+      <pre><span class="keyword">region</span> r
+<span class="keyword">hold</span> next: <span class="keyword">maybe</span> ^int@r = <span class="keyword">none</span>
 <span class="keyword">when</span> next == <span class="keyword">none</span>
-    next = <span class="keyword">new</span> int(1)
+    next = <span class="keyword">new</span> int(1) <span class="keyword">in</span> r
 <span class="keyword">fi</span>
 <span class="keyword">when</span> next <span class="keyword">is</span> {p}
-    show(p^)                <span class="comment"># 1</span>
+    show(p^)                               <span class="comment"># 1</span>
 <span class="keyword">fi</span>
-show(next^)                <span class="comment"># error: this pointer is a maybe ^int, which may be none</span>
-<span class="keyword">bind</span> bad: ^int = <span class="keyword">none</span>     <span class="comment"># error: a pointer can't be none, so use 'maybe ^int'</span>
-<span class="keyword">free</span>(next)</pre>
-      <div class="note">
-        <strong>Note:</strong> Vela intentionally keeps memory management simple. There is no borrow checker;
-        ownership is manual, like C but with clearer syntax. Use <code>new</code>/<code>free</code> with care:
-        using a freed pointer, or freeing one twice, is not caught.
-      </div>
+show(next^)                                <span class="comment"># error: this pointer is a maybe ^int@r, which may be none</span>
+<span class="keyword">bind</span> bad: ^int@r = <span class="keyword">none</span>                    <span class="comment"># error: a pointer can't be none, so use 'maybe ^int@r'</span>
+<span class="keyword">bind</span> lost: ^int = <span class="keyword">new</span> int(2) <span class="keyword">in</span> r         <span class="comment"># error: a pointer lives in a region, so its type names one</span></pre>
+
+      <h3>A region lives until its block closes</h3>
+      <p>
+        A region can be used from its <code>region</code> statement to the end of the block that declares it, like a
+        variable, and shares the variables' names (no shadowing). Since a type can only name a region visible where
+        the type is written, no variable, field, or result outside the block can hold a pointer into the region, so
+        nothing is left pointing into it when it is freed. And a pointer is never stored in another region, which
+        might live longer:
+      </p>
+      <pre><span class="keyword">hold</span> saved: <span class="keyword">maybe</span> ^int@inner = <span class="keyword">none</span>     <span class="comment"># error: unknown region 'inner'; declare it with 'region inner'</span>
+
+<span class="keyword">region</span> outer
+<span class="keyword">hold</span> p = <span class="keyword">new</span> int(0) <span class="keyword">in</span> outer
+<span class="keyword">when</span> ready
+    <span class="keyword">region</span> inner
+    p = <span class="keyword">new</span> int(1) <span class="keyword">in</span> inner                <span class="comment"># error: expected type ^int@outer, got ^int@inner;</span>
+<span class="keyword">fi</span>                                         <span class="comment">#   a value can't move to another region</span></pre>
+      <p>
+        The region is freed however the block ends: at its <code>fi</code>, at the end of a plan B's block (after its
+        last line has given its value), or by a <code>&lt;-</code> from anywhere inside it, which frees every region the
+        task has declared before it returns (after computing the value it sends). A <code>region</code> in a loop's body
+        is a new region on every pass, freed at the end of the pass, which is how a loop allocates without growing:
+      </p>
+      <pre><span class="keyword">each</span> line <span class="keyword">in</span> 0..1000
+    <span class="keyword">region</span> work                            <span class="comment"># empty again on every pass</span>
+    <span class="keyword">bind</span> temporary = <span class="keyword">new</span> int(line) <span class="keyword">in</span> work
+    show(temporary^)
+<span class="keyword">fi</span></pre>
+      <p>
+        There is no way to free one value early: <code>free p</code> is an error that explains this. Memory a
+        region hands out stays in use until the region is freed, so a value replaced in a long-lived region (a
+        <code>hold</code> pointer given a new <code>new</code>) keeps the old one's memory until then.
+      </p>
+
+      <h3>Tasks and regions</h3>
+      <p>
+        A task that allocates takes the region to allocate in as a parameter of type <code>region</code>, and the
+        caller passes one of its regions by name. Its result can be a pointer into that region:
+      </p>
+      <pre><span class="keyword">shape</span> Node
+    value: int
+    next: <span class="keyword">maybe</span> ^Node
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> push(r: <span class="keyword">region</span>, list: <span class="keyword">maybe</span> ^Node@r, value: int) -&gt; ^Node@r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">in</span> r
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> sum(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int         <span class="comment"># only reads, so r is just a name</span>
+    <span class="keyword">hold</span> total = 0
+    <span class="keyword">hold</span> current = list
+    <span class="keyword">loop</span> current <span class="keyword">is</span> {node}
+        total = total + node^.value
+        current = node^.next
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> total
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> nodes
+    <span class="keyword">hold</span> list: <span class="keyword">maybe</span> ^Node@nodes = <span class="keyword">none</span>
+    <span class="keyword">each</span> i <span class="keyword">in</span> 1..4
+        list = push(nodes, list, i)
+    <span class="keyword">fi</span>
+    show(sum(list))                        <span class="comment"># 6</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        A region named in a task's header without a <code>region</code> parameter, like <code>r</code> in
+        <code>sum</code>, stands for whichever region the caller's arguments are in: <code>sum(list)</code> reads a
+        list in <code>nodes</code>, and the same task reads lists in any other region. It costs nothing at run time,
+        but the task can't allocate there (<code>new … in r</code> is an error that suggests the parameter). Two
+        parameters with the same region name must be in the same region, and a result can only name regions the
+        header's parameters name:
+      </p>
+      <pre><span class="keyword">task</span> make() -&gt; ^int@r                     <span class="comment"># error: the result lives in region 'r', which the task isn't given</span>
+    <span class="keyword">region</span> r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> int(1) <span class="keyword">in</span> r
+<span class="keyword">fi</span></pre>
+      <p>
+        Regions aren't values: a region is only a <code>region</code> statement, a <code>region</code> parameter,
+        an argument for one, or a name after <code>@</code> or <code>in</code>. It can't be stored in a variable or a
+        field, or sent from a task.
+      </p>
+
+      <h3 id="shapes-in-regions">Shapes and kinds that hold pointers</h3>
+      <p>
+        A shape or kind whose fields hold pointers (directly, or in other shapes and kinds they hold by value) lives
+        in a region too. Its declaration writes its pointers without a region, since they are in whatever region
+        its value is, and a use names that region: <code>Node@r</code>. Everything one value holds lives in that one
+        region, so reading a field of a <code>Node@r</code> gives a <code>maybe ^Node@r</code>.
+      </p>
+      <pre><span class="keyword">kind</span> Tree
+    Leaf(value: int)
+    Branch(left: ^Tree, right: ^Tree)          <span class="comment"># no region here: '^Tree@r' is an error</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> count(t: Tree@r) -&gt; int
+    <span class="keyword">match</span> t
+    <span class="keyword">case</span> Leaf value
+        <span class="keyword">&lt;-</span> value
+    <span class="keyword">case</span> Branch left right
+        <span class="keyword">&lt;-</span> count(left^) + count(right^)
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> trees
+    <span class="keyword">bind</span> one = <span class="keyword">new</span> Tree(Leaf(1)) <span class="keyword">in</span> trees
+    <span class="keyword">bind</span> two = <span class="keyword">new</span> Tree(Leaf(2)) <span class="keyword">in</span> trees
+    show(count(Branch(one, two)))          <span class="comment"># 3</span>
+    show(count(Leaf(5)))                   <span class="comment"># 5</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        A value built without any pointers, such as <code>Leaf(5)</code> or <code>Node { value: 1, next: none }</code>,
+        takes the region of the place it goes: an argument, a field, or a variable with a written type. A binding
+        without a type can't tell which region such a value should be in, so it asks for one:
+      </p>
+      <pre><span class="keyword">hold</span> head = Node { value: 1, next: <span class="keyword">none</span> }     <span class="comment"># error: cannot tell which region 'head' lives in, ...;</span>
+                                              <span class="comment">#   give it a type, such as 'head: Node@r'</span>
+<span class="keyword">hold</span> first: Node@nodes = Node { value: 1, next: <span class="keyword">none</span> }
+first.next = push(nodes, <span class="keyword">none</span>, 2)                <span class="comment"># fine: first is in nodes</span></pre>
+
+      <h3>How it runs</h3>
+      <p>
+        A region is a list of chunks of memory. <code>new</code> takes the next bytes of the newest chunk (aligned for
+        the type), so allocating is a few instructions; when a chunk is full, the next is twice as large, starting at
+        4 KB and growing up to 1 MB, and an allocation too big for that gets a chunk of its own. Freeing a region
+        frees its chunks, however many values they hold. A region that never allocates costs nothing. In the
+        generated C, a region is a local <code>vela__rt__region r[1]</code> (so <code>r</code> is a pointer to it,
+        like a region parameter) and a <code>vela__rt__region_free(r)</code> on every way out of its block; the
+        allocator is in <code>runtime/vela_rt.h</code>. If the system runs out of memory, the program prints
+        <code>vela: out of memory</code> and stops.
+      </p>
+
+      <h3>What regions don't do (yet)</h3>
+      <ul>
+        <li>One value can't be freed on its own: memory is released a whole region at a time. For data that changes a
+          lot over a long run, use a region per iteration, or copy what survives into a fresh region yourself.</li>
+        <li>Everything one value holds lives in one region: a shape can't hold pointers into two different regions,
+          and a pointer can't be copied into a longer-lived region (copy the value it points to instead).</li>
+        <li>A task that only names a region in its header can't allocate in it, and a region can't be returned.</li>
+        <li>Ideas for going further, such as borrowed references, regions that outlive others, and move-only
+          pointers, are in <a href="future.html">Future Directions</a>.</li>
+      </ul>
     </section>
 
     <section>
@@ -676,7 +854,8 @@ show(next^)                <span class="comment"># error: this pointer is a mayb
       <ul>
         <li>The compiler reports the first error in a program, not all of them.</li>
         <li>Integer overflow and division by zero are not checked: they behave as in C, where they are undefined.</li>
-        <li>Using a freed pointer, or freeing one twice, is not caught.</li>
+        <li>Memory is freed a whole region at a time, and a value holds pointers into one region only (see
+          <a href="#regions">Memory and Regions</a>).</li>
         <li><code>text</code> is a C string, so a <code>\0</code> ends it; there are no text operations besides
           <code>==</code>, <code>!=</code>, and <code>show</code>.</li>
         <li>There are no arrays, no modules (a program is one file), and no way to read input.</li>
@@ -758,9 +937,9 @@ CC=clang cargo test</pre>
       <h2>Design Notes</h2>
       <ul>
         <li>Vela is intentionally small. It is not meant to replace Rust or C, but to explore how little syntax is needed for a safe, compiled systems language.</li>
-        <li>Memory is manually managed to avoid GC complexity while keeping the implementation approachable.</li>
+        <li>Memory is managed with regions rather than a garbage collector or a borrow checker: lifetimes are blocks, visible in the source, and a few type rules keep every pointer valid.</li>
         <li>The compiler generates readable C, making it easy to debug and interoperate with existing C code.</li>
-        <li>Syntax uses keywords over punctuation to keep source code friendly and self-documenting; the few symbols (<code>-&gt;</code>, <code>&lt;-</code>, <code>^</code>) each stand for one idea.</li>
+        <li>Syntax uses keywords over punctuation to keep source code friendly and self-documenting; the few symbols (<code>-&gt;</code>, <code>&lt;-</code>, <code>^</code>, <code>@</code>) each stand for one idea.</li>
         <li>Missing values and failures are types (<code>maybe T</code>, <code>T or E</code>) rather than conventions such as null pointers or error codes, so the checker makes sure they are handled.</li>
       </ul>
     </section>

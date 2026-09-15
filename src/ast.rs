@@ -24,8 +24,14 @@ pub enum Type {
     Unit,
     /// The type of the `none` literal: fits any `maybe` type.
     None,
-    Ptr(Box<Type>),
-    Named(String),
+    /// `^T@r`: a pointer into the region `r`. Everything a type holds lives in
+    /// one region, so the checker gives `T`'s own pointers and shapes the same
+    /// region. A shape's or kind's fields have no region: theirs is the region
+    /// of the value holding them.
+    Ptr(Box<Type>, Option<String>),
+    /// A shape or kind, with the region its pointers point into when it holds
+    /// any (`Node@r`).
+    Named(String, Option<String>),
     Range(Box<Type>),
     /// `maybe T`: a `T`, or `none`.
     Maybe(Box<Type>),
@@ -33,7 +39,13 @@ pub enum Type {
     Or(Box<Type>, Box<Type>),
     /// The type of `fail e` before it becomes part of a `T or E`: the error's type.
     Fail(Box<Type>),
+    /// `region`: the type of a region parameter, which a task allocates in.
+    Region,
 }
+
+/// The region of a value built without pointers, such as `Node { next: none }`:
+/// it fits a value of any region, and is never a variable's region.
+pub const ANY_REGION: &str = "_";
 
 /// The builtin types by name: the one list the parser, the checker, and tools
 /// such as editors use.
@@ -49,8 +61,20 @@ pub const BUILTIN_TYPES: &[(&str, Type)] = &[
 pub const BUILTIN_TASKS: &[&str] = &["show"];
 
 impl fmt::Display for Type {
-    /// Formats the type as it is written in Vela source.
+    /// Formats the type as it is written in Vela source, naming each region
+    /// once: `^Node@r`, not `^Node@r@r`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.write(f, None)
+    }
+}
+
+impl Type {
+    /// Writes the type inside a pointer or shape of region `outer`.
+    fn write(&self, f: &mut fmt::Formatter<'_>, outer: Option<&str>) -> fmt::Result {
+        let suffix = |f: &mut fmt::Formatter<'_>, region: &Option<String>| match region {
+            Some(region) if Some(region.as_str()) != outer => write!(f, "@{}", region),
+            _ => Ok(()),
+        };
         match self {
             Type::Int => write!(f, "int"),
             Type::Float => write!(f, "float"),
@@ -58,12 +82,33 @@ impl fmt::Display for Type {
             Type::Text => write!(f, "text"),
             Type::Unit => write!(f, "unit"),
             Type::None => write!(f, "none"),
-            Type::Ptr(inner) => write!(f, "^{}", inner),
-            Type::Named(name) => write!(f, "{}", name),
-            Type::Range(inner) => write!(f, "range of {}", inner),
-            Type::Maybe(inner) => write!(f, "maybe {}", inner),
-            Type::Or(value, error) => write!(f, "{} or {}", value, error),
-            Type::Fail(error) => write!(f, "fail {}", error),
+            Type::Region => write!(f, "region"),
+            Type::Ptr(inner, region) => {
+                write!(f, "^")?;
+                inner.write(f, region.as_deref().or(outer))?;
+                suffix(f, region)
+            }
+            Type::Named(name, region) => {
+                write!(f, "{}", name)?;
+                suffix(f, region)
+            }
+            Type::Range(inner) => {
+                write!(f, "range of ")?;
+                inner.write(f, outer)
+            }
+            Type::Maybe(inner) => {
+                write!(f, "maybe ")?;
+                inner.write(f, outer)
+            }
+            Type::Or(value, error) => {
+                value.write(f, outer)?;
+                write!(f, " or ")?;
+                error.write(f, outer)
+            }
+            Type::Fail(error) => {
+                write!(f, "fail ")?;
+                error.write(f, outer)
+            }
         }
     }
 }
@@ -80,8 +125,74 @@ impl Type {
 
     pub fn ptr_inner(&self) -> Option<&Type> {
         match self {
-            Type::Ptr(t) => Some(t),
+            Type::Ptr(t, _) => Some(t),
             _ => None,
+        }
+    }
+
+    /// A shape or kind called `name`, outside any region.
+    pub fn named(name: &str) -> Type {
+        Type::Named(name.to_string(), None)
+    }
+
+    /// The type with every region removed, as C sees it.
+    pub fn without_regions(&self) -> Type {
+        self.map_regions(&mut |_| None)
+    }
+
+    /// The type with each region replaced by what `f` gives for it.
+    pub fn map_regions(&self, f: &mut dyn FnMut(&str) -> Option<String>) -> Type {
+        let boxed = |t: &Type, f: &mut dyn FnMut(&str) -> Option<String>| Box::new(t.map_regions(f));
+        match self {
+            Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.as_deref().and_then(&mut *f)),
+            Type::Named(name, region) => Type::Named(name.clone(), region.as_deref().and_then(f)),
+            Type::Range(inner) => Type::Range(boxed(inner, f)),
+            Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
+            Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
+            Type::Fail(error) => Type::Fail(boxed(error, f)),
+            other => other.clone(),
+        }
+    }
+
+    /// The type with a region given to each pointer and shape or kind name
+    /// that has none, by `f` (which also sees builtin-free types, and decides
+    /// nothing about whether a shape holds pointers).
+    pub fn map_regions_of_names(&self, f: &mut dyn FnMut(&str) -> Option<String>) -> Type {
+        match self {
+            Type::Ptr(inner, None) => {
+                let region = f("");
+                Type::Ptr(Box::new(inner.map_regions_of_names(f)), region)
+            }
+            Type::Named(name, None) => Type::Named(name.clone(), f(name)),
+            Type::Ptr(inner, region) => Type::Ptr(Box::new(inner.map_regions_of_names(f)), region.clone()),
+            Type::Range(inner) => Type::Range(Box::new(inner.map_regions_of_names(f))),
+            Type::Maybe(inner) => Type::Maybe(Box::new(inner.map_regions_of_names(f))),
+            Type::Or(value, error) => Type::Or(Box::new(value.map_regions_of_names(f)), Box::new(error.map_regions_of_names(f))),
+            Type::Fail(error) => Type::Fail(Box::new(error.map_regions_of_names(f))),
+            other => other.clone(),
+        }
+    }
+
+    /// Every region the type names, in order, with repeats.
+    pub fn regions(&self) -> Vec<&str> {
+        let mut regions = Vec::new();
+        self.collect_regions(&mut regions);
+        regions
+    }
+
+    fn collect_regions<'a>(&'a self, regions: &mut Vec<&'a str>) {
+        match self {
+            Type::Ptr(inner, region) => {
+                regions.extend(region.as_deref());
+                inner.collect_regions(regions);
+            }
+            Type::Named(_, region) => regions.extend(region.as_deref()),
+            Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => inner.collect_regions(regions),
+            Type::Or(value, error) => {
+                value.collect_regions(regions);
+                error.collect_regions(regions);
+            }
+            _ => {}
         }
     }
 
@@ -159,11 +270,14 @@ pub enum ExprKind {
     Call(String, Vec<Expr>),
     Unary(UnaryOp, Box<Expr>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
-    /// `new T(value)`; `ty_span` is the position of `T`.
+    /// `new T(value) in r` or `new@r T(value)`; `ty_span` is the position of
+    /// `T`, and `region_span` of `r`.
     New {
         ty: Type,
         ty_span: Span,
         value: Box<Expr>,
+        region: String,
+        region_span: Span,
     },
     Deref(Box<Expr>),
     StructInit(String, Vec<FieldInit>),
@@ -235,7 +349,8 @@ pub enum StmtKind {
     Each(String, Expr, Block),
     Match(Expr, Vec<Case>),
     Send(Option<Expr>),
-    Free(Expr),
+    /// `region r`: memory that `new` allocates in `r` until the block closes.
+    Region(String),
 }
 
 /// The condition of a `when` or `loop`: a `bool`, or `value is pattern`.

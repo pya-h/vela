@@ -1,9 +1,9 @@
   1 | # A pointer always points to something; `maybe ^T` is the one that can be
     | comment:# A pointer always points to something; `maybe ^T` is the one that can be
-  2 | # `none`. `is` walks a list, a plan B supplies a missing pointer, and `free`
-    | comment:# `none`. `is` walks a list, a plan B supplies a missing pointer, and `free`
-  3 | # accepts a maybe pointer.
-    | comment:# accepts a maybe pointer.
+  2 | # `none`. `is` walks a list, and a plan B supplies a missing pointer. The tasks
+    | comment:# `none`. `is` walks a list, and a plan B supplies a missing pointer. The tasks
+  3 | # name the list's region `r` without allocating in it.
+    | comment:# name the list's region `r` without allocating in it.
   5 | shape Node
     | keyword:shape  type:Node
   6 |     value: int
@@ -12,8 +12,8 @@
     | field:next  punctuation::  keyword:maybe  operator:^  type:Node
   8 | fi
     | keyword:fi
- 10 | task sum(list: maybe ^Node) -> int
-    | keyword:task  task:sum  punctuation:(  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  punctuation:)  operator:->  type-builtin:int
+ 10 | task sum(list: maybe ^Node@r) -> int
+    | keyword:task  task:sum  punctuation:(  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
  11 |     hold total = 0
     | keyword:hold  variable:total  operator:=  number:0
  12 |     hold current = list
@@ -30,8 +30,8 @@
     | keyword:<-  variable:total
  18 | fi
     | keyword:fi
- 20 | task find(list: maybe ^Node, wanted: int) -> maybe ^Node
-    | keyword:task  task:find  punctuation:(  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  punctuation:,  parameter:wanted  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  operator:^  type:Node
+ 20 | task find(list: maybe ^Node@r, wanted: int) -> maybe ^Node@r
+    | keyword:task  task:find  punctuation:(  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:,  parameter:wanted  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  operator:^  type:Node  operator:@  region:r
  21 |     hold current = list
     | keyword:hold  variable:current  operator:=  parameter:list
  22 |     loop current is {node}
@@ -50,8 +50,8 @@
     | keyword:<-  keyword:none
  29 | fi
     | keyword:fi
- 31 | task last(list: ^Node) -> ^Node
-    | keyword:task  task:last  punctuation:(  parameter:list  punctuation::  operator:^  type:Node  punctuation:)  operator:->  operator:^  type:Node
+ 31 | task last(list: ^Node@r) -> ^Node@r
+    | keyword:task  task:last  punctuation:(  parameter:list  punctuation::  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  operator:^  type:Node  operator:@  region:r
  32 |     hold current = list
     | keyword:hold  variable:current  operator:=  parameter:list
  33 |     loop current^.next is {next}
@@ -66,67 +66,59 @@
     | keyword:fi
  39 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 40 |     bind empty: maybe ^Node = none
-    | keyword:bind  variable:empty  punctuation::  keyword:maybe  operator:^  type:Node  operator:=  keyword:none
- 41 |     show(empty == none)
+ 40 |     region nodes
+    | keyword:region  region:nodes
+ 41 |     bind empty: maybe ^Node@nodes = none
+    | keyword:bind  variable:empty  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:nodes  operator:=  keyword:none
+ 42 |     show(empty == none)
     | builtin-fn:show  punctuation:(  variable:empty  operator:==  keyword:none  punctuation:)
- 42 |     show(sum(empty))
+ 43 |     show(sum(empty))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:empty  punctuation:)  punctuation:)
- 43 |     bind third = new Node(Node { value: 3, next: none })
-    | keyword:bind  variable:third  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:3  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)
- 44 |     bind second = new Node(Node { value: 2, next: third })
-    | keyword:bind  variable:second  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:2  punctuation:,  field:next  punctuation::  variable:third  punctuation:}  punctuation:)
- 45 |     bind first = new Node(Node { value: 1, next: second })
-    | keyword:bind  variable:first  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  variable:second  punctuation:}  punctuation:)
- 46 |     show(sum(first))
+ 44 |     bind third = new Node(Node { value: 3, next: none }) in nodes
+    | keyword:bind  variable:third  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:3  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:in  region:nodes
+ 45 |     bind second = new Node(Node { value: 2, next: third }) in nodes
+    | keyword:bind  variable:second  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:2  punctuation:,  field:next  punctuation::  variable:third  punctuation:}  punctuation:)  keyword:in  region:nodes
+ 46 |     bind first = new Node(Node { value: 1, next: second }) in nodes
+    | keyword:bind  variable:first  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  variable:second  punctuation:}  punctuation:)  keyword:in  region:nodes
+ 47 |     show(sum(first))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:first  punctuation:)  punctuation:)
- 47 |     show(last(first)^.value)
+ 48 |     show(last(first)^.value)
     | builtin-fn:show  punctuation:(  task:last  punctuation:(  variable:first  punctuation:)  operator:^  punctuation:.  field:value  punctuation:)
- 49 |     when find(first, 2) is {found}
+ 50 |     when find(first, 2) is {found}
     | keyword:when  task:find  punctuation:(  variable:first  punctuation:,  number:2  punctuation:)  keyword:is  punctuation:{  variable:found  punctuation:}
- 50 |         show(found == second)
+ 51 |         show(found == second)
     | builtin-fn:show  punctuation:(  variable:found  operator:==  variable:second  punctuation:)
- 51 |         found^.value = 20
+ 52 |         found^.value = 20
     | variable:found  operator:^  punctuation:.  field:value  operator:=  number:20
- 52 |     fi
+ 53 |     fi
     | keyword:fi
- 53 |     show(sum(first))
+ 54 |     show(sum(first))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:first  punctuation:)  punctuation:)
- 54 |     show(find(first, 9) == none)
+ 55 |     show(find(first, 9) == none)
     | builtin-fn:show  punctuation:(  task:find  punctuation:(  variable:first  punctuation:,  number:9  punctuation:)  operator:==  keyword:none  punctuation:)
- 56 |     when find(first, 9) is {found}
+ 57 |     when find(first, 9) is {found}
     | keyword:when  task:find  punctuation:(  variable:first  punctuation:,  number:9  punctuation:)  keyword:is  punctuation:{  variable:found  punctuation:}
- 57 |         show(found^.value)
+ 58 |         show(found^.value)
     | builtin-fn:show  punctuation:(  variable:found  operator:^  punctuation:.  field:value  punctuation:)
- 58 |     else
+ 59 |     else
     | keyword:else
- 59 |         show("not found")
+ 60 |         show("not found")
     | builtin-fn:show  punctuation:(  string:"not found"  punctuation:)
- 60 |     fi
+ 61 |     fi
     | keyword:fi
- 62 |     bind fallback = find(first, 9) { third }
+ 63 |     bind fallback = find(first, 9) { third }
     | keyword:bind  variable:fallback  operator:=  task:find  punctuation:(  variable:first  punctuation:,  number:9  punctuation:)  punctuation:{  variable:third  punctuation:}
- 63 |     show(fallback^.value)
+ 64 |     show(fallback^.value)
     | builtin-fn:show  punctuation:(  variable:fallback  operator:^  punctuation:.  field:value  punctuation:)
- 65 |     hold spare: maybe ^int = none
-    | keyword:hold  variable:spare  punctuation::  keyword:maybe  operator:^  type-builtin:int  operator:=  keyword:none
- 66 |     free(spare)
-    | keyword:free  punctuation:(  variable:spare  punctuation:)
- 67 |     spare = new int(7)
-    | variable:spare  operator:=  keyword:new  type-builtin:int  punctuation:(  number:7  punctuation:)
+ 66 |     hold spare: maybe ^int@nodes = none
+    | keyword:hold  variable:spare  punctuation::  keyword:maybe  operator:^  type-builtin:int  operator:@  region:nodes  operator:=  keyword:none
+ 67 |     spare = new int(7) in nodes
+    | variable:spare  operator:=  keyword:new  type-builtin:int  punctuation:(  number:7  punctuation:)  keyword:in  region:nodes
  68 |     when spare is {p}
     | keyword:when  variable:spare  keyword:is  punctuation:{  variable:p  punctuation:}
  69 |         show(p^)
     | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:)
  70 |     fi
     | keyword:fi
- 71 |     free(spare)
-    | keyword:free  punctuation:(  variable:spare  punctuation:)
- 72 |     free(third)
-    | keyword:free  punctuation:(  variable:third  punctuation:)
- 73 |     free(second)
-    | keyword:free  punctuation:(  variable:second  punctuation:)
- 74 |     free(first)
-    | keyword:free  punctuation:(  variable:first  punctuation:)
- 75 | fi
+ 71 | fi
     | keyword:fi

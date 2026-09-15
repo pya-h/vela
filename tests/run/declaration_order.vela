@@ -1,4 +1,5 @@
-# Types may be used before they are declared, and may point to themselves.
+# Types may be used before they are declared, and may point to themselves. A
+# kind holding pointers lives in a region, like the pointers it holds.
 
 shape Segment
     from: Point
@@ -20,7 +21,7 @@ shape Node
     next: maybe ^Node
 fi
 
-task length(l: List) -> int
+task length(l: List@r) -> int
     match l
     case Nil
         <- 0
@@ -29,7 +30,7 @@ task length(l: List) -> int
     fi
 fi
 
-task sum_x(l: List) -> int
+task sum_x(l: List@r) -> int
     match l
     case Nil
         <- 0
@@ -41,11 +42,10 @@ fi
 task main()
     bind s = Segment { from: Point { x: 1, y: 2 }, to: Point { x: 3, y: 4 } }
     show(s.to.y - s.from.y)
-    bind empty: ^List = new List(Nil)
-    bind one: ^List = new List(Cons(Point { x: 5, y: 0 }, empty))
+    region lists
+    bind empty: ^List@lists = new List(Nil) in lists
+    bind one: ^List@lists = new List(Cons(Point { x: 5, y: 0 }, empty)) in lists
     bind two = Cons(Point { x: 7, y: 0 }, one)
     show(length(two))
     show(sum_x(two))
-    free(one)
-    free(empty)
 fi

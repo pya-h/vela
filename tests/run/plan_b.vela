@@ -108,10 +108,10 @@ task main()
     hold cell = Pair { left: 0, right: 0 }
     cell.left = noisy("assign", none) { 11 }
     show(cell.left)
-    bind boxed = new int(1)
+    region r
+    bind boxed = new int(1) in r
     boxed^ = noisy("through", 12) { 0 }
     show(boxed^)
-    free(boxed)
 
     stop_on_none(5)
     stop_on_none(none)

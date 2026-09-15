@@ -1,140 +1,148 @@
   1 | # A tiny to-do list: a linked list of shapes, each pointing to the next one
     | comment:# A tiny to-do list: a linked list of shapes, each pointing to the next one
-  2 | # (a `maybe ^Item`, since the last item has none), variants with and without
-    | comment:# (a `maybe ^Item`, since the last item has none), variants with and without
-  3 | # a payload, `is` and plan B to read maybe values, and text compared by contents.
-    | comment:# a payload, `is` and plan B to read maybe values, and text compared by contents.
-  5 | kind Status
+  2 | # (a `maybe ^Item`, since the last item has none), all in one region that
+    | comment:# (a `maybe ^Item`, since the last item has none), all in one region that
+  3 | # frees them together; variants with and without a payload, `is` and plan B to
+    | comment:# frees them together; variants with and without a payload, `is` and plan B to
+  4 | # read maybe values, and text compared by contents.
+    | comment:# read maybe values, and text compared by contents.
+  6 | kind Status
     | keyword:kind  type:Status
-  6 |     Todo
+  7 |     Todo
     | variant:Todo
-  7 |     Done
+  8 |     Done
     | variant:Done
-  8 |     Blocked(reason: text)
+  9 |     Blocked(reason: text)
     | variant:Blocked  punctuation:(  field:reason  punctuation::  type-builtin:text  punctuation:)
-  9 | fi
+ 10 | fi
     | keyword:fi
- 11 | shape Item
+ 12 | shape Item
     | keyword:shape  type:Item
- 12 |     title: text
+ 13 |     title: text
     | field:title  punctuation::  type-builtin:text
- 13 |     status: Status
+ 14 |     status: Status
     | field:status  punctuation::  type:Status
- 14 |     next: maybe ^Item
+ 15 |     next: maybe ^Item
     | field:next  punctuation::  keyword:maybe  operator:^  type:Item
- 15 | fi
+ 16 | fi
     | keyword:fi
- 17 | task describe(s: Status) -> text
+ 18 | task describe(s: Status) -> text
     | keyword:task  task:describe  punctuation:(  parameter:s  punctuation::  type:Status  punctuation:)  operator:->  type-builtin:text
- 18 |     match s
+ 19 |     match s
     | keyword:match  parameter:s
- 19 |     case Todo
+ 20 |     case Todo
     | keyword:case  variant:Todo
- 20 |         <- "todo"
+ 21 |         <- "todo"
     | keyword:<-  string:"todo"
- 21 |     case Done
+ 22 |     case Done
     | keyword:case  variant:Done
- 22 |         <- "done"
+ 23 |         <- "done"
     | keyword:<-  string:"done"
- 23 |     case Blocked reason
+ 24 |     case Blocked reason
     | keyword:case  variant:Blocked  variable:reason
- 24 |         <- reason
+ 25 |         <- reason
     | keyword:<-  variable:reason
- 25 |     fi
+ 26 |     fi
     | keyword:fi
- 26 | fi
+ 27 | fi
     | keyword:fi
- 28 | task print_list(first: maybe ^Item)
-    | keyword:task  task:print_list  punctuation:(  parameter:first  punctuation::  keyword:maybe  operator:^  type:Item  punctuation:)
- 29 |     hold current = first
+ 29 | task print_list(first: maybe ^Item@r)
+    | keyword:task  task:print_list  punctuation:(  parameter:first  punctuation::  keyword:maybe  operator:^  type:Item  operator:@  region:r  punctuation:)
+ 30 |     hold current = first
     | keyword:hold  variable:current  operator:=  parameter:first
- 30 |     loop current is {item}
+ 31 |     loop current is {item}
     | keyword:loop  variable:current  keyword:is  punctuation:{  variable:item  punctuation:}
- 31 |         show(item^.title)
+ 32 |         show(item^.title)
     | builtin-fn:show  punctuation:(  variable:item  operator:^  punctuation:.  field:title  punctuation:)
- 32 |         show(describe(item^.status))
+ 33 |         show(describe(item^.status))
     | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variable:item  operator:^  punctuation:.  field:status  punctuation:)  punctuation:)
- 33 |         current = item^.next
+ 34 |         current = item^.next
     | variable:current  operator:=  variable:item  operator:^  punctuation:.  field:next
- 34 |     fi
+ 35 |     fi
     | keyword:fi
- 35 | fi
+ 36 | fi
     | keyword:fi
- 37 | task count_done(first: maybe ^Item) -> int
-    | keyword:task  task:count_done  punctuation:(  parameter:first  punctuation::  keyword:maybe  operator:^  type:Item  punctuation:)  operator:->  type-builtin:int
- 38 |     hold count = 0
+ 38 | task count_done(first: maybe ^Item@r) -> int
+    | keyword:task  task:count_done  punctuation:(  parameter:first  punctuation::  keyword:maybe  operator:^  type:Item  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 39 |     hold count = 0
     | keyword:hold  variable:count  operator:=  number:0
- 39 |     hold current = first
+ 40 |     hold current = first
     | keyword:hold  variable:current  operator:=  parameter:first
- 40 |     loop current is {item}
+ 41 |     loop current is {item}
     | keyword:loop  variable:current  keyword:is  punctuation:{  variable:item  punctuation:}
- 41 |         when item^.status is Done
+ 42 |         when item^.status is Done
     | keyword:when  variable:item  operator:^  punctuation:.  field:status  keyword:is  variant:Done
- 42 |             count = count + 1
+ 43 |             count = count + 1
     | variable:count  operator:=  variable:count  operator:+  number:1
- 43 |         fi
+ 44 |         fi
     | keyword:fi
- 44 |         current = item^.next
+ 45 |         current = item^.next
     | variable:current  operator:=  variable:item  operator:^  punctuation:.  field:next
- 45 |     fi
+ 46 |     fi
     | keyword:fi
- 46 |     <- count
+ 47 |     <- count
     | keyword:<-  variable:count
- 47 | fi
+ 48 | fi
     | keyword:fi
- 49 | task find(first: maybe ^Item, title: text) -> maybe ^Item
-    | keyword:task  task:find  punctuation:(  parameter:first  punctuation::  keyword:maybe  operator:^  type:Item  punctuation:,  parameter:title  punctuation::  type-builtin:text  punctuation:)  operator:->  keyword:maybe  operator:^  type:Item
- 50 |     hold current = first
+ 50 | task find(first: maybe ^Item@r, title: text) -> maybe ^Item@r
+    | keyword:task  task:find  punctuation:(  parameter:first  punctuation::  keyword:maybe  operator:^  type:Item  operator:@  region:r  punctuation:,  parameter:title  punctuation::  type-builtin:text  punctuation:)  operator:->  keyword:maybe  operator:^  type:Item  operator:@  region:r
+ 51 |     hold current = first
     | keyword:hold  variable:current  operator:=  parameter:first
- 51 |     loop current is {item}
+ 52 |     loop current is {item}
     | keyword:loop  variable:current  keyword:is  punctuation:{  variable:item  punctuation:}
- 52 |         when item^.title == title
+ 53 |         when item^.title == title
     | keyword:when  variable:item  operator:^  punctuation:.  field:title  operator:==  parameter:title
- 53 |             <- item
+ 54 |             <- item
     | keyword:<-  variable:item
- 54 |         fi
+ 55 |         fi
     | keyword:fi
- 55 |         current = item^.next
+ 56 |         current = item^.next
     | variable:current  operator:=  variable:item  operator:^  punctuation:.  field:next
- 56 |     fi
+ 57 |     fi
     | keyword:fi
- 57 |     <- none
+ 58 |     <- none
     | keyword:<-  keyword:none
- 58 | fi
+ 59 | fi
     | keyword:fi
- 60 | task main()
+ 61 | # Adding allocates, so `add` takes the region to allocate in.
+    | comment:# Adding allocates, so `add` takes the region to allocate in.
+ 62 | task add(r: region, title: text, status: Status, next: maybe ^Item@r) -> ^Item@r
+    | keyword:task  task:add  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:title  punctuation::  type-builtin:text  punctuation:,  parameter:status  punctuation::  type:Status  punctuation:,  parameter:next  punctuation::  keyword:maybe  operator:^  type:Item  operator:@  region:r  punctuation:)  operator:->  operator:^  type:Item  operator:@  region:r
+ 63 |     <- new Item(Item { title: title, status: status, next: next }) in r
+    | keyword:<-  keyword:new  type:Item  punctuation:(  type:Item  punctuation:{  field:title  punctuation::  parameter:title  punctuation:,  field:status  punctuation::  parameter:status  punctuation:,  field:next  punctuation::  parameter:next  punctuation:}  punctuation:)  keyword:in  region:r
+ 64 | fi
+    | keyword:fi
+ 66 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 61 |     bind third = new Item(Item { title: "ship it", status: Blocked("waiting for review"), next: none })
-    | keyword:bind  variable:third  operator:=  keyword:new  type:Item  punctuation:(  type:Item  punctuation:{  field:title  punctuation::  string:"ship it"  punctuation:,  field:status  punctuation::  variant:Blocked  punctuation:(  string:"waiting for review"  punctuation:)  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)
- 62 |     bind second = new Item(Item { title: "write tests", status: Done, next: third })
-    | keyword:bind  variable:second  operator:=  keyword:new  type:Item  punctuation:(  type:Item  punctuation:{  field:title  punctuation::  string:"write tests"  punctuation:,  field:status  punctuation::  variant:Done  punctuation:,  field:next  punctuation::  variable:third  punctuation:}  punctuation:)
- 63 |     bind first = new Item(Item { title: "fix the parser", status: Todo, next: second })
-    | keyword:bind  variable:first  operator:=  keyword:new  type:Item  punctuation:(  type:Item  punctuation:{  field:title  punctuation::  string:"fix the parser"  punctuation:,  field:status  punctuation::  variant:Todo  punctuation:,  field:next  punctuation::  variable:second  punctuation:}  punctuation:)
- 64 |     print_list(first)
+ 67 |     # Every item lives in `todos`, which frees them all when main ends.
+    | comment:# Every item lives in `todos`, which frees them all when main ends.
+ 68 |     region todos
+    | keyword:region  region:todos
+ 69 |     bind third = add(todos, "ship it", Blocked("waiting for review"), none)
+    | keyword:bind  variable:third  operator:=  task:add  punctuation:(  region:todos  punctuation:,  string:"ship it"  punctuation:,  variant:Blocked  punctuation:(  string:"waiting for review"  punctuation:)  punctuation:,  keyword:none  punctuation:)
+ 70 |     bind second = add(todos, "write tests", Done, third)
+    | keyword:bind  variable:second  operator:=  task:add  punctuation:(  region:todos  punctuation:,  string:"write tests"  punctuation:,  variant:Done  punctuation:,  variable:third  punctuation:)
+ 71 |     bind first = add(todos, "fix the parser", Todo, second)
+    | keyword:bind  variable:first  operator:=  task:add  punctuation:(  region:todos  punctuation:,  string:"fix the parser"  punctuation:,  variant:Todo  punctuation:,  variable:second  punctuation:)
+ 72 |     print_list(first)
     | task:print_list  punctuation:(  variable:first  punctuation:)
- 65 |     show(count_done(first))
+ 73 |     show(count_done(first))
     | builtin-fn:show  punctuation:(  task:count_done  punctuation:(  variable:first  punctuation:)  punctuation:)
- 67 |     when find(first, "write tests") is {tests}
+ 75 |     when find(first, "write tests") is {tests}
     | keyword:when  task:find  punctuation:(  variable:first  punctuation:,  string:"write tests"  punctuation:)  keyword:is  punctuation:{  variable:tests  punctuation:}
- 68 |         tests^.status = Todo
+ 76 |         tests^.status = Todo
     | variable:tests  operator:^  punctuation:.  field:status  operator:=  variant:Todo
- 69 |     fi
+ 77 |     fi
     | keyword:fi
- 70 |     show(count_done(first))
+ 78 |     show(count_done(first))
     | builtin-fn:show  punctuation:(  task:count_done  punctuation:(  variable:first  punctuation:)  punctuation:)
- 71 |     show(find(first, "celebrate") == none)
+ 79 |     show(find(first, "celebrate") == none)
     | builtin-fn:show  punctuation:(  task:find  punctuation:(  variable:first  punctuation:,  string:"celebrate"  punctuation:)  operator:==  keyword:none  punctuation:)
- 73 |     # A plan B gives a value to use when there is nothing to extract.
+ 81 |     # A plan B gives a value to use when there is nothing to extract.
     | comment:# A plan B gives a value to use when there is nothing to extract.
- 74 |     bind start = find(first, "celebrate") { first }
+ 82 |     bind start = find(first, "celebrate") { first }
     | keyword:bind  variable:start  operator:=  task:find  punctuation:(  variable:first  punctuation:,  string:"celebrate"  punctuation:)  punctuation:{  variable:first  punctuation:}
- 75 |     show(start^.title)
+ 83 |     show(start^.title)
     | builtin-fn:show  punctuation:(  variable:start  operator:^  punctuation:.  field:title  punctuation:)
- 77 |     free(third)
-    | keyword:free  punctuation:(  variable:third  punctuation:)
- 78 |     free(second)
-    | keyword:free  punctuation:(  variable:second  punctuation:)
- 79 |     free(first)
-    | keyword:free  punctuation:(  variable:first  punctuation:)
- 80 | fi
+ 84 | fi
     | keyword:fi

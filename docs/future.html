@@ -307,8 +307,8 @@
           <p>Fixed: every syntax node now carries a source span, and errors are reported as <code>file:line:col</code> with the offending line and a caret.</p>
         </div>
         <div class="card">
-          <h3>Manual memory risks <span class="badge b-high">High</span></h3>
-          <p><code>new</code>/<code>free</code> gives control but allows leaks and use-after-free, just like C.</p>
+          <h3>Manual memory risks <span class="badge b-done">Done</span></h3>
+          <p>Fixed: <code>new</code>/<code>free</code> allowed leaks and use-after-free, just like C. Regions replaced them: memory is freed a region at a time, and pointer types name their region, so no pointer outlives its memory. <a href="#memory">Details below.</a></p>
         </div>
         <div class="card">
           <h3>No standard library <span class="badge b-high">High</span></h3>
@@ -384,6 +384,11 @@
         <div class="card">
           <h3>Real string type <span class="badge b-idea">Idea</span></h3>
           <p>Replace C strings with a <code>(ptr, len)</code> struct and safe operations.</p>
+        </div>
+        <div class="card">
+          <h3>Regions <span class="badge b-done">Done</span></h3>
+          <p><code>region r</code>, <code>new T(v) in r</code>, and pointer types <code>^T@r</code> that can't
+            outlive their region, instead of <code>free</code>. <a href="#memory">Details below.</a></p>
         </div>
         <div class="card">
           <h3>Maybe & errors <span class="badge b-done">Done</span></h3>
@@ -635,9 +640,8 @@ fi</pre>
           the safety costs nothing.</li>
         <li>A shape that reaches itself only through <code>^</code> pointers could never be created (the first one
           would need another to exist already), so the checker rejects it and suggests <code>maybe ^T</code>.</li>
-        <li><code>free</code> accepts a <code>maybe ^T</code> and does nothing for <code>none</code>.</li>
-        <li>This removes null dereferences. A freed pointer can still be used, and a pointer freed twice is still a
-          bug: that is a separate question for the memory model below.</li>
+        <li>This removes null dereferences. Freed memory and double frees were a separate question, since answered by
+          the region model below: pointers there can't outlive their memory, and there is no <code>free</code>.</li>
       </ul>
 
       <h3>Getting the value out</h3>
@@ -776,18 +780,28 @@ fi</pre>
           <li><strong>Named results</strong> work inside plan B unchanged: <code>total &lt;- v</code> updates, a bare
             <code>&lt;-</code> ends.</li>
           <li><strong>Calling C:</strong> pointers coming from C functions should arrive as <code>maybe ^T</code>.</li>
-          <li><strong>Dangling pointers and double <code>free</code>:</strong> the remaining pointer bugs, for the
-            memory model.</li>
+          <li><s><strong>Dangling pointers and double <code>free</code>:</strong> the remaining pointer bugs, for the
+            memory model.</s> Done: <a href="#memory">regions</a>.</li>
         </ul>
       </div>
     </section>
 
     <section>
-      <h2><span class="icon" aria-hidden="true">🧠</span> Memory Management: The Big Question</h2>
+      <h2 id="memory"><span class="icon" aria-hidden="true">🧠</span> Memory Management: The Big Question <span class="badge b-done">Decided</span></h2>
       <p>
-        Vela's biggest open question is memory safety. There are several credible paths, each with trade-offs.
+        Vela's biggest open question was memory safety. There are several credible paths, each with trade-offs.
         Below are the main candidates.
       </p>
+      <div class="note">
+        <strong>Decided and implemented: Option B, regions,</strong> with named regions in types (<code>^Node@r</code>),
+        the design sketched in <a href="future-2.html">the second notebook</a>. <code>free</code> is gone:
+        <code>region r</code> declares an arena freed when its block closes, <code>new T(v) in r</code> (or
+        <code>new@r T(v)</code>) allocates in it, a task allocates only in a <code>r: region</code> parameter and can
+        name any region its parameters' types show, and a shape holding pointers lives in one region
+        (<code>Node@r</code>). The checker keeps every pointer from outliving its region. The full description is in
+        <a href="vela.html#regions">the language reference</a>. The other options stay below: parts of them, such as
+        borrowed references or move-only pointers, may still grow the model later.
+      </div>
 
       <div class="option">
         <h3><span aria-hidden="true">🔒</span> Option A: Rust-Style Borrow Checker</h3>
@@ -845,7 +859,8 @@ fi</pre>
         </div>
         <div class="note">
           <strong>Verdict:</strong> A strong fit for Vela. It is simpler than full borrowing and aligns with the
-          language's explicit, minimal philosophy.
+          language's explicit, minimal philosophy. <strong>Chosen and implemented</strong>; see
+          <a href="vela.html#regions">Memory and Regions</a>.
         </div>
       </div>
 
@@ -912,12 +927,13 @@ fi</pre>
       <div class="recommendation">
         <h3>💡 Recommended Path for Vela</h3>
         <p>
-          Adopt a <strong>hybrid of linear ownership and regions</strong>:
+          The first step, regions, is done. Growing it into a <strong>hybrid of linear ownership and regions</strong>
+          remains the direction, where real programs show the need:
         </p>
         <ul>
-          <li><strong>Owned pointers <code>^T</code></strong> are move-only. You cannot copy them; you can only move or free them.</li>
+          <li><strong>Owned pointers <code>^T</code></strong> could be move-only, letting a single value be freed early without dangling copies.</li>
           <li><strong>Borrowed references <code>&T</code></strong> are temporary and cannot be stored. They are valid only within the current scope/region.</li>
-          <li><strong>Regions</strong> (explicit arenas) group allocations and free them in bulk. References cannot escape their region.</li>
+          <li><strong>Regions</strong> (explicit arenas) group allocations and free them in bulk. References cannot escape their region. <em>(Done.)</em> Next for them: regions known to outlive others, so a shape could point into two regions, and copying a value into another region.</li>
           <li><strong>No shared mutable state</strong> by default: either you own it mutably, or you borrow it immutably.</li>
         </ul>
         <p>
@@ -1284,7 +1300,7 @@ show(p.length_squared())</pre>
             <li>Multiple results, then named results (<code>-&gt; total: int</code>, set with <code>total &lt;- value</code>)</li>
             <li>Defined integer overflow and division by zero</li>
             <li>Fixed-size arrays and a real <code>text</code> type</li>
-            <li>Move-only owned pointers</li>
+            <li>Move-only owned pointers, on top of regions</li>
             <li>Basic standard library (math, strings, files)</li>
           </ul>
         </div>
@@ -1296,7 +1312,7 @@ show(p.length_squared())</pre>
             <li>Generics</li>
             <li><s>Missing values and error handling</s> (done: <a href="#maybe"><code>maybe T</code>, plan B, <code>T or E</code></a>)</li>
             <li>Pattern-match expressions</li>
-            <li>Region-based allocation</li>
+            <li><s>Region-based allocation</s> (done: <a href="vela.html#regions">regions</a>)</li>
           </ul>
         </div>
         <div class="roadmap-phase later">
@@ -1316,9 +1332,10 @@ show(p.length_squared())</pre>
       <h2><span class="icon" aria-hidden="true">🎯</span> Conclusion</h2>
       <p>
         Vela's strength is its smallness. The best next steps preserve that smallness while filling the
-        obvious gaps: multiple and named results, a real string type, arrays, defined integer arithmetic, and a safer memory model. The
-        recommended memory direction — <strong>move-only ownership + scoped regions + optional temporary borrows</strong>
-        — keeps Vela fast, simple, and far safer than C without becoming Rust.
+        obvious gaps: multiple and named results, a real string type, arrays, and defined integer arithmetic. The memory
+        model's first step, <strong>scoped regions</strong>, is in place; <strong>move-only ownership and optional
+        temporary borrows</strong> can grow it while keeping Vela fast, simple, and far safer than C without becoming
+        Rust.
       </p>
       <p>
         Beyond memory, Vela should grow carefully: methods as qualified tasks, generics, and modules before

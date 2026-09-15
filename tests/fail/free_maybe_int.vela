@@ -1,5 +1,0 @@
-# error: 4:10: free requires a pointer
-task main()
-    bind m: maybe int = 1
-    free(m)
-fi

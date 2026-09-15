@@ -18,6 +18,11 @@ task ignore(p: Point)
     show("ignored")
 fi
 
+task unused_region(r: region, p: ^int@r, s: region)
+    region spare
+    show("regions unused")
+fi
+
 task value(r: Reading) -> int
     match r
     case Sample v w
@@ -33,8 +38,10 @@ task main()
     overwritten = 3
     hold moved = Point { x: 1, y: 2 }
     moved.x = 10
-    bind boxed = new int(4)
+    region scratch
+    bind boxed = new int(4) in scratch
     boxed^ = 5
+    unused_region(scratch, boxed, scratch)
     bind later = 6
     when true
         show(later)

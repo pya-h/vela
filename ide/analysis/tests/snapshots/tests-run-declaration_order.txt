@@ -1,88 +1,88 @@
-  1 | # Types may be used before they are declared, and may point to themselves.
-    | comment:# Types may be used before they are declared, and may point to themselves.
-  3 | shape Segment
+  1 | # Types may be used before they are declared, and may point to themselves. A
+    | comment:# Types may be used before they are declared, and may point to themselves. A
+  2 | # kind holding pointers lives in a region, like the pointers it holds.
+    | comment:# kind holding pointers lives in a region, like the pointers it holds.
+  4 | shape Segment
     | keyword:shape  type:Segment
-  4 |     from: Point
+  5 |     from: Point
     | field:from  punctuation::  type:Point
-  5 |     to: Point
+  6 |     to: Point
     | field:to  punctuation::  type:Point
-  6 | fi
+  7 | fi
     | keyword:fi
-  8 | kind List
+  9 | kind List
     | keyword:kind  type:List
-  9 |     Nil
+ 10 |     Nil
     | variant:Nil
- 10 |     Cons(head: Point, tail: ^List)
+ 11 |     Cons(head: Point, tail: ^List)
     | variant:Cons  punctuation:(  field:head  punctuation::  type:Point  punctuation:,  field:tail  punctuation::  operator:^  type:List  punctuation:)
- 11 | fi
+ 12 | fi
     | keyword:fi
- 13 | shape Point
+ 14 | shape Point
     | keyword:shape  type:Point
- 14 |     x: int
+ 15 |     x: int
     | field:x  punctuation::  type-builtin:int
- 15 |     y: int
+ 16 |     y: int
     | field:y  punctuation::  type-builtin:int
- 16 | fi
+ 17 | fi
     | keyword:fi
- 18 | shape Node
+ 19 | shape Node
     | keyword:shape  type:Node
- 19 |     value: int
+ 20 |     value: int
     | field:value  punctuation::  type-builtin:int
- 20 |     next: maybe ^Node
+ 21 |     next: maybe ^Node
     | field:next  punctuation::  keyword:maybe  operator:^  type:Node
- 21 | fi
+ 22 | fi
     | keyword:fi
- 23 | task length(l: List) -> int
-    | keyword:task  task:length  punctuation:(  parameter:l  punctuation::  type:List  punctuation:)  operator:->  type-builtin:int
- 24 |     match l
+ 24 | task length(l: List@r) -> int
+    | keyword:task  task:length  punctuation:(  parameter:l  punctuation::  type:List  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 25 |     match l
     | keyword:match  parameter:l
- 25 |     case Nil
+ 26 |     case Nil
     | keyword:case  variant:Nil
- 26 |         <- 0
+ 27 |         <- 0
     | keyword:<-  number:0
- 27 |     case Cons head tail
+ 28 |     case Cons head tail
     | keyword:case  variant:Cons  variable:head  variable:tail
- 28 |         <- 1 + length(tail^)
+ 29 |         <- 1 + length(tail^)
     | keyword:<-  number:1  operator:+  task:length  punctuation:(  variable:tail  operator:^  punctuation:)
- 29 |     fi
+ 30 |     fi
     | keyword:fi
- 30 | fi
+ 31 | fi
     | keyword:fi
- 32 | task sum_x(l: List) -> int
-    | keyword:task  task:sum_x  punctuation:(  parameter:l  punctuation::  type:List  punctuation:)  operator:->  type-builtin:int
- 33 |     match l
+ 33 | task sum_x(l: List@r) -> int
+    | keyword:task  task:sum_x  punctuation:(  parameter:l  punctuation::  type:List  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 34 |     match l
     | keyword:match  parameter:l
- 34 |     case Nil
+ 35 |     case Nil
     | keyword:case  variant:Nil
- 35 |         <- 0
+ 36 |         <- 0
     | keyword:<-  number:0
- 36 |     case Cons head tail
+ 37 |     case Cons head tail
     | keyword:case  variant:Cons  variable:head  variable:tail
- 37 |         <- head.x + sum_x(tail^)
+ 38 |         <- head.x + sum_x(tail^)
     | keyword:<-  variable:head  punctuation:.  field:x  operator:+  task:sum_x  punctuation:(  variable:tail  operator:^  punctuation:)
- 38 |     fi
+ 39 |     fi
     | keyword:fi
- 39 | fi
+ 40 | fi
     | keyword:fi
- 41 | task main()
+ 42 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 42 |     bind s = Segment { from: Point { x: 1, y: 2 }, to: Point { x: 3, y: 4 } }
+ 43 |     bind s = Segment { from: Point { x: 1, y: 2 }, to: Point { x: 3, y: 4 } }
     | keyword:bind  variable:s  operator:=  type:Segment  punctuation:{  field:from  punctuation::  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:,  field:to  punctuation::  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:}
- 43 |     show(s.to.y - s.from.y)
+ 44 |     show(s.to.y - s.from.y)
     | builtin-fn:show  punctuation:(  variable:s  punctuation:.  field:to  punctuation:.  field:y  operator:-  variable:s  punctuation:.  field:from  punctuation:.  field:y  punctuation:)
- 44 |     bind empty: ^List = new List(Nil)
-    | keyword:bind  variable:empty  punctuation::  operator:^  type:List  operator:=  keyword:new  type:List  punctuation:(  variant:Nil  punctuation:)
- 45 |     bind one: ^List = new List(Cons(Point { x: 5, y: 0 }, empty))
-    | keyword:bind  variable:one  punctuation::  operator:^  type:List  operator:=  keyword:new  type:List  punctuation:(  variant:Cons  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:5  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:,  variable:empty  punctuation:)  punctuation:)
- 46 |     bind two = Cons(Point { x: 7, y: 0 }, one)
+ 45 |     region lists
+    | keyword:region  region:lists
+ 46 |     bind empty: ^List@lists = new List(Nil) in lists
+    | keyword:bind  variable:empty  punctuation::  operator:^  type:List  operator:@  region:lists  operator:=  keyword:new  type:List  punctuation:(  variant:Nil  punctuation:)  keyword:in  region:lists
+ 47 |     bind one: ^List@lists = new List(Cons(Point { x: 5, y: 0 }, empty)) in lists
+    | keyword:bind  variable:one  punctuation::  operator:^  type:List  operator:@  region:lists  operator:=  keyword:new  type:List  punctuation:(  variant:Cons  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:5  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:,  variable:empty  punctuation:)  punctuation:)  keyword:in  region:lists
+ 48 |     bind two = Cons(Point { x: 7, y: 0 }, one)
     | keyword:bind  variable:two  operator:=  variant:Cons  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:7  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:,  variable:one  punctuation:)
- 47 |     show(length(two))
+ 49 |     show(length(two))
     | builtin-fn:show  punctuation:(  task:length  punctuation:(  variable:two  punctuation:)  punctuation:)
- 48 |     show(sum_x(two))
+ 50 |     show(sum_x(two))
     | builtin-fn:show  punctuation:(  task:sum_x  punctuation:(  variable:two  punctuation:)  punctuation:)
- 49 |     free(one)
-    | keyword:free  punctuation:(  variable:one  punctuation:)
- 50 |     free(empty)
-    | keyword:free  punctuation:(  variable:empty  punctuation:)
  51 | fi
     | keyword:fi

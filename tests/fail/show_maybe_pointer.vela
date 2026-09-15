@@ -1,5 +1,6 @@
-# error: 4:10: show expects int, float, bool, or text
+# error: 5:10: show expects int, float, bool, or text
 task main()
-    bind p: maybe ^int = none
+    region r
+    bind p: maybe ^int@r = none
     show(p)
 fi
