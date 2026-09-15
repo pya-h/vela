@@ -32,6 +32,13 @@ task report(m: maybe int)
     show(n)
 fi
 
+# A call with a plan B as a statement: leave when there's no value, and drop
+# the value otherwise.
+task stop_on_none(m: maybe int)
+    noisy("statement", m) { <- }
+    show("kept going")
+fi
+
 task countdown(start: int) -> maybe int
     when start > 0
         <- start - 1
@@ -105,4 +112,7 @@ task main()
     boxed^ = noisy("through", 12) { 0 }
     show(boxed^)
     free(boxed)
+
+    stop_on_none(5)
+    stop_on_none(none)
 fi

@@ -131,7 +131,7 @@ impl Checker {
                 Item::Kind(k) => &k.name,
                 Item::Task(_) => continue,
             };
-            self.check_value_cycle(name, &mut Vec::new(), &mut acyclic)?;
+            self.check_value_cycle(name, &mut acyclic)?;
         }
         self.check_constructible(items)
     }
@@ -184,33 +184,49 @@ impl Checker {
 
     /// Rejects a shape or kind that contains itself by value, directly or
     /// through other types: its values would have infinite size. Containing a
-    /// pointer to itself (`maybe ^T`) is fine. `path` holds the types being
-    /// entered; `acyclic` the types already known to be free of cycles.
-    fn check_value_cycle(&self, name: &str, path: &mut Vec<String>, acyclic: &mut HashSet<String>) -> Result<()> {
-        if acyclic.contains(name) {
+    /// pointer to itself (`maybe ^T`) is fine. `acyclic` holds the types
+    /// already known to be free of cycles. The search keeps its own stack, so
+    /// a long chain of types can't overflow the compiler's.
+    fn check_value_cycle(&self, root: &str, acyclic: &mut HashSet<String>) -> Result<()> {
+        if acyclic.contains(root) {
             return Ok(());
         }
-        path.push(name.to_string());
+        // Each type being entered, with the types its fields contain by value
+        // and how many of those have been followed.
+        type Entered<'a> = (&'a str, Vec<(&'a str, Span)>, usize);
+        let mut path: Vec<Entered> = vec![(root, self.contained_types(root), 0)];
+        let mut on_path: HashSet<&str> = HashSet::from([root]);
+        while let Some((_, targets, next)) = path.last_mut() {
+            let Some(&(target, span)) = targets.get(*next) else {
+                if let Some((name, _, _)) = path.pop() {
+                    on_path.remove(name);
+                    acyclic.insert(name.to_string());
+                }
+                continue;
+            };
+            *next += 1;
+            if on_path.contains(target) {
+                let start = path.iter().position(|(name, _, _)| *name == target).unwrap_or_default();
+                let chain: Vec<&str> = path.iter().skip(start).map(|(name, _, _)| *name).chain([target]).collect();
+                return err(span, format!("'{}' contains itself by value ({}); use a pointer such as 'maybe ^{}'", target, chain.join(" -> "), target));
+            }
+            if !acyclic.contains(target) {
+                on_path.insert(target);
+                path.push((target, self.contained_types(target), 0));
+            }
+        }
+        Ok(())
+    }
+
+    /// The types a shape's fields or a kind's payloads contain by value, each
+    /// with the position of the field's type.
+    fn contained_types(&self, name: &str) -> Vec<(&str, Span)> {
         let fields: Vec<&Field> = match (self.shapes.get(name), self.kinds.get(name)) {
             (Some(shape), _) => shape.fields.iter().collect(),
             (None, Some(kind)) => kind.variants.iter().flat_map(|v| &v.payload).collect(),
             (None, None) => Vec::new(),
         };
-        for field in fields {
-            for target in contained_by_value(&field.ty) {
-                if let Some(start) = path.iter().position(|n| n == target) {
-                    let chain: Vec<&str> = path.iter().skip(start).map(String::as_str).chain([target]).collect();
-                    return err(
-                        field.ty_span,
-                        format!("'{}' contains itself by value ({}); use a pointer such as 'maybe ^{}'", target, chain.join(" -> "), target),
-                    );
-                }
-                self.check_value_cycle(target, path, acyclic)?;
-            }
-        }
-        path.pop();
-        acyclic.insert(name.to_string());
-        Ok(())
+        fields.into_iter().flat_map(|field| contained_by_value(&field.ty).into_iter().map(|target| (target, field.ty_span))).collect()
     }
 
     /// Rejects a shape or kind that could never be created. A pointer can't be
@@ -218,21 +234,31 @@ impl Checker {
     /// through other types) would need one to exist before the first is made.
     /// A kind can be created if any of its variants can.
     fn check_constructible(&self, items: &[Item]) -> Result<()> {
-        let mut can: HashSet<&str> = HashSet::new();
-        loop {
-            let mut changed = false;
-            for item in items {
-                let (name, ok) = match item {
-                    Item::Shape(s) => (s.name.as_str(), s.fields.iter().all(|f| constructible(&f.ty, &can))),
-                    Item::Kind(k) => (k.name.as_str(), k.variants.iter().any(|v| v.payload.iter().all(|f| constructible(&f.ty, &can)))),
-                    Item::Task(_) => continue,
-                };
-                if ok && can.insert(name) {
-                    changed = true;
+        // The items whose fields name each type: when a type turns out to be
+        // creatable, only those need another look.
+        let mut users: HashMap<&str, Vec<usize>> = HashMap::new();
+        for (i, item) in items.iter().enumerate() {
+            let fields: Vec<&Field> = match item {
+                Item::Shape(s) => s.fields.iter().collect(),
+                Item::Kind(k) => k.variants.iter().flat_map(|v| &v.payload).collect(),
+                Item::Task(_) => continue,
+            };
+            for field in fields {
+                for name in named_types(&field.ty) {
+                    users.entry(name).or_default().push(i);
                 }
             }
-            if !changed {
-                break;
+        }
+        let mut can: HashSet<&str> = HashSet::new();
+        let mut pending: Vec<usize> = (0..items.len()).collect();
+        while let Some(i) = pending.pop() {
+            let (name, ok) = match items.get(i) {
+                Some(Item::Shape(s)) => (s.name.as_str(), s.fields.iter().all(|f| constructible(&f.ty, &can))),
+                Some(Item::Kind(k)) => (k.name.as_str(), k.variants.iter().any(|v| v.payload.iter().all(|f| constructible(&f.ty, &can)))),
+                _ => continue,
+            };
+            if ok && can.insert(name) {
+                pending.extend(users.get(name).into_iter().flatten().copied());
             }
         }
         for item in items {
@@ -338,6 +364,13 @@ impl Checker {
         self.lookup(name).ok_or_else(|| {
             if self.variants.contains_key(name) {
                 Error::at(span, format!("'{}' is a variant, not a variable", name))
+            } else if let Some(shape) = self.shapes.get(name) {
+                // Most likely a shape literal the parser read as a plan B.
+                let example = match shape.fields.first() {
+                    Some(field) => format!("{} {{ {}: … }}", name, field.name),
+                    None => format!("{} {{}}", name),
+                };
+                Error::at(span, format!("'{}' is a shape, not a variable; a literal names its fields on one line, as in '{}'", name, example))
             } else {
                 Error::at(span, format!("unknown variable '{}'", name))
             }
@@ -356,15 +389,15 @@ impl Checker {
         match &mut stmt.kind {
             StmtKind::Expr(e) => {
                 self.check_expr(e)?;
-                // Of all expressions, only a call can have an effect, and a
-                // plan B that gives no value only runs for its effect.
+                // Of all expressions, only a call can have an effect, and so
+                // can a plan B on a call, or one that gives no value.
                 match &e.kind {
                     ExprKind::Call(name, _) if matches!(e.ty, Some(Type::Or(..))) => err(
                         e.span,
                         format!("the error '{}' may send is ignored; handle it with a plan B, as in '{}(…) {{ fail e … }}', or with match", name, name),
                     ),
                     ExprKind::Call(..) => Ok(()),
-                    ExprKind::PlanB { .. } if e.ty == Some(Type::Unit) => Ok(()),
+                    ExprKind::PlanB { value, .. } if e.ty == Some(Type::Unit) || matches!(value.kind, ExprKind::Call(..)) => Ok(()),
                     ExprKind::Binary(BinaryOp::Eq, ..) => err(e.span, "the result of '==' is unused; use '=' to assign"),
                     _ => err(e.span, "this value is unused; only a task call can be used as a statement"),
                 }
@@ -475,6 +508,13 @@ impl Checker {
     fn pattern_bindings(&self, subject: &Type, pattern: &Pattern, in_case: bool) -> Result<Vec<(String, Span, Type)>> {
         let span = pattern.span;
         let bound = |(name, at): &Binding, ty: &Type| vec![(name.clone(), *at, ty.clone())];
+        // `fail TooBig` or `{Red}`: a pattern names the whole error or value.
+        if let PatternKind::Value((name, at)) | PatternKind::Fail((name, at)) = &pattern.kind
+            && self.variants.contains_key(name)
+        {
+            let (keyword, whole) = if matches!(pattern.kind, PatternKind::Fail(_)) { ("fail e", "error") } else { ("{value}", "value") };
+            return err(*at, format!("'{}' is a variant, but '{}' names the whole {}; give it a name, then match on it", name, keyword, whole));
+        }
         match (&pattern.kind, subject) {
             (PatternKind::Any | PatternKind::None, Type::Maybe(_)) => Ok(Vec::new()),
             (PatternKind::Any, _) => Ok(Vec::new()),
@@ -705,6 +745,10 @@ impl Checker {
             }
             ExprKind::New { ty, ty_span, value } => {
                 self.check_type(ty, *ty_span)?;
+                // `^int or E` means `(^int) or E`, so no written type could hold the pointer.
+                if matches!(ty, Type::Or(..)) {
+                    return err(*ty_span, format!("'new' can't make a pointer to '{}'; extract the value first, or keep it in a shape's field", ty));
+                }
                 self.check_expr(value)?;
                 self.coerce(value, ty)?;
                 Ok(Type::Ptr(Box::new(ty.clone())))
@@ -934,6 +978,10 @@ impl Checker {
         }
         let hint = match (&actual, expected) {
             (Type::None, Type::Ptr(_)) => format!("; a pointer can't be none, so use 'maybe {}'", expected),
+            (Type::None, Type::Or(value, _)) if value.ptr_inner().is_some() => {
+                format!("; a pointer can't be none, so use 'maybe {}'", value)
+            }
+            (_, Type::Or(_, error)) if actual == **error => "; an error is given with 'fail', as in '<- fail e'".to_string(),
             (Type::Fail(_), _) => "; 'fail …' is an error, which only a 'T or E' can hold".to_string(),
             (Type::Maybe(inner) | Type::Or(inner, _), _) if **inner == *expected => {
                 "; extract its value first, as in 'x { … }' or 'when x is {value}'".to_string()
@@ -964,8 +1012,12 @@ fn wrap(expr: &mut Expr, ty: &Type) {
 /// A hint for an operation on a `maybe` or `T or E`, whose value must be
 /// extracted first; empty if none of `types` is one.
 fn extract_hint(types: &[&Type]) -> String {
-    match types.iter().find(|t| matches!(t, Type::Maybe(_) | Type::Or(..))) {
-        Some(ty) => format!("; a {} must be extracted first, as in 'x {{ … }}' or 'when x is {{value}}'", ty),
+    match types.iter().find(|t| matches!(t, Type::Maybe(_) | Type::Or(..) | Type::Fail(_))) {
+        Some(Type::Fail(_)) => "; 'fail' takes only the value right after it, so write 'fail (a + b)'".to_string(),
+        Some(Type::Or(value, error)) if **value == Type::Unit => {
+            format!("; a 'unit or {}' has no value, only an error to handle, as in 'x {{ fail e … }}'", error)
+        }
+        Some(ty) => format!("; the value in this {} must be extracted first, as in 'x {{ … }}' or 'when x is {{value}}'", ty),
         None => String::new(),
     }
 }
@@ -985,6 +1037,20 @@ fn contained_by_value(ty: &Type) -> Vec<&str> {
         Type::Or(value, error) => {
             let mut names = contained_by_value(value);
             names.extend(contained_by_value(error));
+            names
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// Every shape or kind a type names, by value or through pointers.
+fn named_types(ty: &Type) -> Vec<&str> {
+    match ty {
+        Type::Named(name) => vec![name.as_str()],
+        Type::Ptr(inner) | Type::Maybe(inner) | Type::Fail(inner) => named_types(inner),
+        Type::Or(value, error) => {
+            let mut names = named_types(value);
+            names.extend(named_types(error));
             names
         }
         _ => Vec::new(),

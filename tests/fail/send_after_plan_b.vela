@@ -1,0 +1,6 @@
+# error: 4:22: '<-' sends a value and must start a line; to compare with a negative number, write '< -'
+task main()
+    bind m: maybe int = none
+    bind a = m { 0 } <-1
+    show(a)
+fi

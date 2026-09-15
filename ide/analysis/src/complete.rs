@@ -126,6 +126,12 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     if let (Some(is), Some(Token::Is)) = (prev, prev_token) {
         return (is_pattern_items(source, scan, &k, is), word_start, byte);
     }
+    // The rest of the line after `is` is the pattern, whose names are declared.
+    if let Some(q) = prev
+        && (k.line_start(q + 1)..q).any(|p| k.token(p) == Some(&Token::Is))
+    {
+        return (Vec::new(), word_start, byte);
+    }
     let before_prev = prev.and_then(|q| k.token_before(q));
     let declares_name = match prev_token {
         Some(Token::LBrace) => before_prev == Some(&Token::Is),
@@ -174,8 +180,9 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     };
     if type_context {
         let after_arrow = prev_token == Some(&Token::Arrow);
-        let after_maybe = prev_token == Some(&Token::Maybe);
-        return (type_items(&k, after_arrow, after_maybe), word_start, byte);
+        // A maybe can't hold a maybe, and an error type can't be one.
+        let offer_maybe = !matches!(prev_token, Some(Token::Maybe | Token::Or));
+        return (type_items(&k, after_arrow, offer_maybe), word_start, byte);
     }
 
     // (`prev_token` is also `None` after invalid text, which isn't a line start.)
@@ -187,7 +194,9 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
             Some(_) => {
                 let probe = probe(source, word_start, word_end);
                 let exact = Knowledge::new(source, scan, &probe);
-                statement_items(&exact, &blocks, word_start)
+                // A plan B's first line may name its error: `fail e`.
+                let names_error = prev.is_some_and(|q| blocks.last() == Some(&Block::PlanB) && starts_plan_b_or_pattern(&k, q + 1));
+                statement_items(&exact, &blocks, word_start, names_error)
             }
         };
         return (items, word_start, byte);
@@ -262,14 +271,29 @@ enum Block {
     When,
     Match,
     Other,
+    /// A plan B's block, opened by a `{` ending its line.
+    PlanB,
 }
 
 /// The blocks open at `byte`, outermost first.
 fn open_blocks(k: &Knowledge, byte: usize) -> Vec<Block> {
     let mut blocks = Vec::new();
+    // Braces opened and not yet closed on the current line.
+    let mut inline_braces = 0usize;
     let end = k.last_before(byte).map_or(0, |q| q + 1);
     for q in 0..end {
         match k.token(q) {
+            Some(Token::Newline) => inline_braces = 0,
+            Some(Token::LBrace) if k.token(q + 1) == Some(&Token::Newline) => blocks.push(Block::PlanB),
+            Some(Token::LBrace) => inline_braces += 1,
+            Some(Token::RBrace) if inline_braces > 0 => inline_braces -= 1,
+            // Closing a plan B also closes any block left open inside it.
+            Some(Token::RBrace) => {
+                if let Some(at) = blocks.iter().rposition(|b| *b == Block::PlanB) {
+                    blocks.truncate(at);
+                }
+            }
+            Some(Token::Fi) if blocks.last() == Some(&Block::PlanB) => {}
             Some(Token::Task | Token::Shape | Token::Kind) => {
                 blocks.clear();
                 blocks.push(match k.token(q) {
@@ -358,23 +382,7 @@ fn literal_field_items(k: &Knowledge, brace: usize, word_start: usize) -> Vec<Co
 }
 
 fn case_items(source: &str, scan: &Scan, k: &Knowledge, case: usize) -> Vec<CompletionItem> {
-    // The enclosing `match`, skipping nested blocks.
-    let mut depth = 0usize;
-    let mut found = None;
-    for q in (0..case).rev() {
-        match k.token(q) {
-            Some(Token::Fi) => depth += 1,
-            Some(Token::When | Token::Loop | Token::Each) if depth > 0 => depth -= 1,
-            Some(Token::Match) if depth == 0 => {
-                found = Some(q);
-                break;
-            }
-            Some(Token::Match) => depth -= 1,
-            Some(Token::Task | Token::Shape | Token::Kind) => break,
-            _ => {}
-        }
-    }
-    let Some(match_q) = found else { return Vec::new() };
+    let Some(match_q) = k.enclosing_match(case) else { return Vec::new() };
 
     // The subject's kind, checked without the half-typed `case` line.
     let case_start = k.range(case).start;
@@ -566,7 +574,7 @@ fn unique(used: &mut Vec<String>, name: &str) -> String {
     candidate
 }
 
-fn type_items(k: &Knowledge, after_arrow: bool, after_maybe: bool) -> Vec<CompletionItem> {
+fn type_items(k: &Knowledge, after_arrow: bool, offer_maybe: bool) -> Vec<CompletionItem> {
     let descriptions = [
         ("int", "64-bit signed integer"),
         ("float", "64-bit floating point"),
@@ -576,7 +584,7 @@ fn type_items(k: &Knowledge, after_arrow: bool, after_maybe: bool) -> Vec<Comple
     ];
     let builtin = BUILTIN_TYPES
         .iter()
-        .filter(|(_, ty)| (after_arrow && !after_maybe) || *ty != Type::Unit)
+        .filter(|(_, ty)| after_arrow || *ty != Type::Unit)
         .map(|(name, _)| CompletionItem {
             label: name.to_string(),
             kind: CompletionKind::Type,
@@ -597,7 +605,7 @@ fn type_items(k: &Knowledge, after_arrow: bool, after_maybe: bool) -> Vec<Comple
             snippet: None,
             boost: GLOBAL,
         });
-    let maybe = (!after_maybe).then(|| CompletionItem {
+    let maybe = offer_maybe.then(|| CompletionItem {
         label: "maybe".to_string(),
         kind: CompletionKind::Keyword,
         detail: "a value, or none".to_string(),
@@ -642,13 +650,17 @@ fn item_level_items() -> Vec<CompletionItem> {
     ]
 }
 
-fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize) -> Vec<CompletionItem> {
+fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bool) -> Vec<CompletionItem> {
     let mut items: Vec<CompletionItem> = STATEMENT_KEYWORDS.iter().map(|word| keyword(word)).collect();
-    items.push(keyword("fi"));
+    // Inside a plan B, `}` closes the block, not `fi`.
     match blocks.last() {
-        Some(Block::When) => items.push(keyword("else")),
-        Some(Block::Match) => items.push(keyword("case")),
-        _ => {}
+        Some(Block::PlanB) => {}
+        Some(Block::When) => items.extend([keyword("fi"), keyword("else")]),
+        Some(Block::Match) => items.extend([keyword("fi"), keyword("case")]),
+        _ => items.push(keyword("fi")),
+    }
+    if names_error {
+        items.push(snippet("fail", "name the error this plan B handles", "fail ${e}"));
     }
     items.extend([
         snippet("when", "a condition", "when ${condition}\n\t${}\nfi"),

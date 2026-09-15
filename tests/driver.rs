@@ -165,3 +165,20 @@ fn deep_nesting_is_an_error_not_a_crash() {
     );
     driver::generate_c(&plan_bs).unwrap();
 }
+
+#[test]
+fn long_chains_of_types_are_checked_without_a_crash() {
+    // Each shape contains the next, by value or through a pointer, declared
+    // before it: checking and ordering the types follows the whole chain.
+    let count = 20_000;
+    let chain = |field: &str, last: &str| {
+        let shapes: String = (0..count).map(|i| format!("shape S{}\n    next: {}S{}\nfi\n", i, field, i + 1)).collect();
+        format!("{}shape S{}\n    {}\nfi\ntask main()\nfi\n", shapes, count, last)
+    };
+    driver::generate_c(&chain("", "value: int")).unwrap();
+    driver::generate_c(&chain("^", "value: int")).unwrap();
+    let error = driver::generate_c(&chain("", "first: S0")).unwrap_err();
+    assert!(error.message.starts_with("'S0' contains itself by value (S0 -> S1 -> "), "{}", error.message);
+    let error = driver::generate_c(&chain("^", "first: ^S0")).unwrap_err();
+    assert!(error.message.contains("can never be created"), "{}", error.message);
+}

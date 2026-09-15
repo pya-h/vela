@@ -66,6 +66,15 @@ describe("plan B braces", () => {
     // A brace in a comment or a one-line plan B opens nothing.
     expect(indentOfLast("task main()\n    # a {\n")).toBe(4);
     expect(indentOfLast("task main()\n    bind n = m { 0 }\n")).toBe(4);
+    // Nor does one in a trailing comment or a string.
+    expect(indentOfLast("task main()\n    show(1)  # see {\n")).toBe(4);
+    expect(indentOfLast('task main()\n    show("use { # like this")\n')).toBe(4);
+    expect(indentOfLast('task main()\n    show("\\" {")\n')).toBe(4);
+    expect(indentOfLast('task main()\n    bind n = m {  # "quoted" {\n')).toBe(8);
+    expect(indentOfLast("task main()\n    bind n = m {\n        show(1)  # uses {\n        0\n        }")).toBe(4);
+    // A line closing one plan B and opening another.
+    expect(indentOfLast("task main()\n    bind x = a {\n        0\n    } + b {\n")).toBe(8);
+    expect(indentOfLast("task main()\n    bind x = a {\n        0\n    } + b {\n        1\n        }")).toBe(4);
   });
 
   it("folds a plan B up to its }", () => {
@@ -73,6 +82,10 @@ describe("plan B braces", () => {
     expect(closingLine(lines, lines.length, 1, WORDS)).toBe(6);
     expect(closingLine(lines, lines.length, 2, WORDS)).toBe(4);
     expect(closingLine(lines, lines.length, 0, WORDS)).toBe(7);
+    const chained = ["task main()", "    bind n = m {", "        bind x = a {", "            0", "        } + b {  # see {", "            1", "        }", "        x", "    }", "fi"];
+    expect(closingLine(chained, chained.length, 1, WORDS)).toBe(8);
+    expect(closingLine(chained, chained.length, 2, WORDS)).toBe(4);
+    expect(closingLine(chained, chained.length, 4, WORDS)).toBe(6);
   });
 });
 

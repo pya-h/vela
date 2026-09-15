@@ -205,10 +205,17 @@ task main()
         inside
     }
     show(inside)
+    bind own = m {
+        own
+    }
+    show(own)
 fi
 ";
     assert_definition(source, ("inside\n    }", 0), ("inside =", 0));
     assert_eq!(Analysis::new(source).definition(at(source, "inside)", 0)), None);
+    // A binding isn't visible in its own plan B, only after it.
+    assert_eq!(Analysis::new(source).definition(at(source, "own\n    }", 0)), None);
+    assert_definition(source, ("own)", 0), ("own =", 0));
 }
 
 #[test]

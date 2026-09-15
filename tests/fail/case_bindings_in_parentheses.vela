@@ -1,4 +1,4 @@
-# error: 8:20: a case names its bindings without parentheses, as in 'case Circle value'
+# error: 8:20: a pattern names its bindings without parentheses, as in 'case Circle value'
 kind Shape
     Circle(radius: float)
 fi

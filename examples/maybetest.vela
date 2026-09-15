@@ -1,0 +1,13 @@
+
+task main()
+    bind x: maybe int = none
+    bind a = x { 10 }
+    show(a)
+    bind y = x { <- }  # if its none then end program
+    when x is { z }
+        show("yeah")
+        show(z)
+    fi
+    show(x)
+    show(y)
+fi

@@ -287,8 +287,11 @@ impl Generator {
         match &stmt.kind {
             StmtKind::Expr(e) => {
                 let expr = self.gen_expr(e)?;
-                // A plan B that gives no value is all prelude.
-                if !expr.is_empty() {
+                // A plan B that gives no value is all prelude, and one that
+                // does gives a temporary, which the statement drops.
+                if matches!(e.kind, ExprKind::PlanB { .. }) && !expr.is_empty() {
+                    self.w.line(&format!("(void){};", expr));
+                } else if !expr.is_empty() {
                     self.w.line(&format!("{};", expr));
                 }
             }
@@ -514,7 +517,11 @@ impl Generator {
                 let test = if last { None } else { Some(self.pattern_test(&ty, &subject, &case.pattern)?) };
                 match (i, test) {
                     (0, Some(test)) => self.w.open(&format!("if ({})", test)),
-                    (0, None) => self.w.open(""),
+                    // A lone `_`, which never reads the subject.
+                    (0, None) => {
+                        self.w.open("");
+                        self.w.line(&format!("(void){};", subject));
+                    }
                     (_, Some(test)) => self.w.reopen(&format!("else if ({})", test)),
                     (_, None) => self.w.reopen("else"),
                 }
@@ -1075,39 +1082,58 @@ fn type_order<'a>(items: &'a [Item], compounds: &'a [Type]) -> Result<Vec<TypeDe
     Ok(order)
 }
 
-/// Depth-first step of `type_order`. `finished` maps a type to `false` while
-/// its dependencies are being emitted and `true` once it is in `order`.
+/// Depth-first step of `type_order`, from `root`. `finished` maps a type to
+/// `false` while its dependencies are being emitted and `true` once it is in
+/// `order`. The search keeps its own stack, so a long chain of types can't
+/// overflow the compiler's.
 fn visit_type<'a>(
-    name: &str,
+    root: &str,
     by_name: &mut HashMap<String, TypeDef<'a>>,
     finished: &mut HashMap<String, bool>,
     order: &mut Vec<TypeDef<'a>>,
 ) -> Result<()> {
-    match finished.get(name) {
-        Some(true) => return Ok(()),
-        Some(false) => return Err(Error::internal(format!("type '{}' contains itself by value", name))),
-        None => {}
+    // Each type being entered, with its dependencies, reversed so the next is last.
+    let mut stack: Vec<(String, TypeDef<'a>, Vec<String>)> = Vec::new();
+    let mut next = Some(root.to_string());
+    loop {
+        if let Some(name) = next.take() {
+            match finished.get(&name) {
+                Some(true) => {}
+                Some(false) => return Err(Error::internal(format!("type '{}' contains itself by value", name))),
+                // A builtin type has no definition.
+                None => {
+                    if let Some(def) = by_name.remove(&name) {
+                        finished.insert(name.clone(), false);
+                        let mut dependencies = dependencies_of(&def);
+                        dependencies.reverse();
+                        stack.push((name, def, dependencies));
+                    }
+                }
+            }
+        }
+        let Some((_, _, dependencies)) = stack.last_mut() else { return Ok(()) };
+        match dependencies.pop() {
+            Some(dependency) => next = Some(dependency),
+            None => {
+                if let Some((name, def, _)) = stack.pop() {
+                    finished.insert(name, true);
+                    order.push(def);
+                }
+            }
+        }
     }
-    let Some(def) = by_name.remove(name) else {
-        return Ok(()); // a builtin type
-    };
-    finished.insert(name.to_string(), false);
-    let dependencies: Vec<String> = match &def {
+}
+
+/// The types a definition contains by value.
+fn dependencies_of(def: &TypeDef) -> Vec<String> {
+    match def {
         TypeDef::Item(Item::Shape(s)) => s.fields.iter().flat_map(|f| value_dependencies(&f.ty)).collect(),
         TypeDef::Item(Item::Kind(k)) => k.variants.iter().flat_map(|v| &v.payload).flat_map(|f| value_dependencies(&f.ty)).collect(),
         TypeDef::Item(Item::Task(_)) => Vec::new(),
         TypeDef::Compound(Type::Maybe(inner)) => value_dependencies(inner),
-        TypeDef::Compound(Type::Or(value, error)) => {
-            value_dependencies(value).into_iter().chain(value_dependencies(error)).collect()
-        }
+        TypeDef::Compound(Type::Or(value, error)) => value_dependencies(value).into_iter().chain(value_dependencies(error)).collect(),
         TypeDef::Compound(_) => Vec::new(),
-    };
-    for dependency in dependencies {
-        visit_type(&dependency, by_name, finished, order)?;
     }
-    finished.insert(name.to_string(), true);
-    order.push(def);
-    Ok(())
 }
 
 /// The C declarator of a task, e.g. `int64_t vela_add(int64_t a, int64_t b)`.

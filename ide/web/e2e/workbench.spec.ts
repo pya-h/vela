@@ -1,12 +1,15 @@
 // The workbench in Chromium against a real vela-studio: loading, files,
 // editing and saving, and changes made on disk.
 
+import { readdirSync } from "node:fs";
+
 import { cursorAtEndOf, expect, launch, lineText, openFile, tab, test, treeRow } from "./fixtures";
 
 test("loads the workspace and keeps the token out of the address", async ({ page, studio }) => {
   await launch(page, studio);
   expect(page.url()).not.toContain("token");
-  await expect(page.locator(".tree-row")).toHaveCount(5);
+  // One row for each example copied into the workspace.
+  await expect(page.locator(".tree-row")).toHaveCount(readdirSync(studio.workspace).length);
   await expect(page.locator(".welcome")).toBeVisible();
   await expect(page).toHaveTitle(/· Vela Studio$/);
 

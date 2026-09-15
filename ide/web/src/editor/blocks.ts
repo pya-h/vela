@@ -28,12 +28,30 @@ export function indentWidth(line: string, tabSize: number): number {
 
 const isBlank = (line: string) => line.trim() === "";
 
-/** Whether a line ends with `{` (before any comment), opening a plan B's block. */
-export function opensBrace(line: string): boolean {
-  return !/^\s*#/.test(line) && /\{\s*(?:#.*)?$/.test(line);
+/** A line's code: its comment removed and each string emptied to `""`. */
+function code(line: string): string {
+  let out = "";
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === "#") break;
+    if (char === '"') {
+      for (i++; i < line.length && line[i] !== '"'; i++) {
+        if (line[i] === "\\") i++;
+      }
+      out += '""';
+      continue;
+    }
+    out += char;
+  }
+  return out;
 }
 
-/** Whether a line starts with `}`, closing a plan B's block. */
+/** Whether a line's code ends with `{`, opening a plan B's block. */
+export function opensBrace(line: string): boolean {
+  return /\{\s*$/.test(code(line));
+}
+
+/** Whether a line starts with `}`, closing a plan B's block. A line such as `} + b {` also opens one. */
 export function closesBrace(line: string): boolean {
   return /^\s*\}/.test(line);
 }
@@ -52,13 +70,13 @@ export function closesBrace(line: string): boolean {
 export function indentation(current: string, above: Iterable<string>, words: BlockWords, unit: number, tabSize: number): number {
   if (closesBrace(current)) {
     let depth = 0;
+    // Going up, a line's `{` comes before its own `}`.
     for (const line of above) {
-      if (closesBrace(line)) {
-        depth++;
-      } else if (opensBrace(line)) {
+      if (opensBrace(line)) {
         if (depth === 0) return indentWidth(line, tabSize);
         depth--;
       }
+      if (closesBrace(line)) depth++;
     }
     return 0;
   }
@@ -109,9 +127,8 @@ export function closingLine(lines: readonly string[] | ((index: number) => strin
       if (closesBrace(line(i))) {
         if (depth === 0) return i;
         depth--;
-      } else if (opensBrace(line(i))) {
-        depth++;
       }
+      if (opensBrace(line(i))) depth++;
     }
     return null;
   }

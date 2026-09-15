@@ -1,0 +1,8 @@
+# error: 3:15: arithmetic requires numeric operands; 'fail' takes only the value right after it, so write 'fail (a + b)'
+task parse(n: int) -> text or int
+    <- fail n + 1
+fi
+
+task main()
+    parse(1) { "x" }
+fi

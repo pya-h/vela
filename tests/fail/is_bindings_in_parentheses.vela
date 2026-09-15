@@ -1,0 +1,12 @@
+# error: 9:18: a pattern names its bindings without parentheses, as in 'is Red value'
+kind Light
+    Red
+    Green
+fi
+
+task main()
+    bind l = Red
+    when l is Red()
+        show(1)
+    fi
+fi

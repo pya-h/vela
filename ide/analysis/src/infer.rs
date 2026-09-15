@@ -136,7 +136,8 @@ impl<'a> Knowledge<'a> {
         match (symbol.kind, symbol.intro) {
             (SymbolKind::Parameter, _) | (SymbolKind::Field, _) => parse_type(&symbol.detail),
             (SymbolKind::Variable, Some("each")) => Some(Type::Int),
-            (SymbolKind::Variable, Some("case" | "is")) => self.case_binding_type(id),
+            (SymbolKind::Variable, Some("case" | "is")) => self.case_binding_type(id, depth + 1),
+            (SymbolKind::Variable, Some("fail")) => self.plan_b_error_type(id, depth + 1),
             (SymbolKind::Variable, _) if !symbol.detail.is_empty() => parse_type(&symbol.detail),
             (SymbolKind::Variable, _) => {
                 // The initializer's type: `bind x = Point { … }`, `bind ok = a < b`.
@@ -148,22 +149,78 @@ impl<'a> Knowledge<'a> {
                 if last <= name + 1 {
                     return None;
                 }
+                if self.token(last) == Some(&Token::LBrace) {
+                    // A plan B spanning lines gives the value it extracts.
+                    return self.expression_type(last.checked_sub(1)?, depth + 1)?.extracted().cloned();
+                }
                 self.span_type(name + 2, last, depth + 1)
             }
             _ => None,
         }
     }
 
-    /// The type of a name a `case` or `is` pattern binds from a variant's
-    /// payload. (The checker gives the types of `{value}` and `fail e`.)
-    fn case_binding_type(&self, id: usize) -> Option<Type> {
+    /// The type of a name a `case` or `is` pattern binds: a variant's payload
+    /// field, or what `{value}` and `fail e` take from the subject.
+    fn case_binding_type(&self, id: usize, depth: usize) -> Option<Type> {
         let symbol = self.symbol(id)?;
         let name = self.at_byte(symbol.name_range.start)?;
         let case = (self.line_start(name)..name).rev().find(|&q| matches!(self.token(q), Some(Token::Case | Token::Is)))?;
-        let index = name.checked_sub(case + 2)?;
-        let variant = self.global(self.ident(case + 1)?, SymbolKind::Variant)?;
-        let (_, field) = self.children(variant).nth(index)?;
-        parse_type(&field.detail)
+        let outcome = || {
+            let subject = if self.token(case) == Some(&Token::Is) {
+                self.span_type(self.line_start(case) + 1, case.checked_sub(1)?, depth)?
+            } else {
+                let matched = self.enclosing_match(case)?;
+                self.span_type(matched + 1, self.line_end(matched).checked_sub(1)?, depth)?
+            };
+            Some(subject)
+        };
+        match self.token(case + 1)? {
+            Token::LBrace => outcome()?.extracted().cloned(),
+            Token::Fail => match outcome()? {
+                Type::Or(_, error) => Some(*error),
+                _ => None,
+            },
+            _ => {
+                let index = name.checked_sub(case + 2)?;
+                let variant = self.global(self.ident(case + 1)?, SymbolKind::Variant)?;
+                let (_, field) = self.children(variant).nth(index)?;
+                parse_type(&field.detail)
+            }
+        }
+    }
+
+    /// The type of the error a plan B's `fail e` names: the `E` of the value
+    /// before its `{`.
+    fn plan_b_error_type(&self, id: usize, depth: usize) -> Option<Type> {
+        let symbol = self.symbol(id)?;
+        let name = self.at_byte(symbol.name_range.start)?;
+        let mut open = name.checked_sub(1)?.checked_sub(1)?;
+        while self.token(open) == Some(&Token::Newline) {
+            open = open.checked_sub(1)?;
+        }
+        if self.token(open) != Some(&Token::LBrace) {
+            return None;
+        }
+        match self.expression_type(open.checked_sub(1)?, depth)? {
+            Type::Or(_, error) => Some(*error),
+            _ => None,
+        }
+    }
+
+    /// The `match` whose case is at position `case`, skipping nested blocks.
+    pub fn enclosing_match(&self, case: usize) -> Option<usize> {
+        let mut depth = 0usize;
+        for q in (0..case).rev() {
+            match self.token(q) {
+                Some(Token::Fi) => depth += 1,
+                Some(Token::When | Token::Loop | Token::Each) if depth > 0 => depth -= 1,
+                Some(Token::Match) if depth == 0 => return Some(q),
+                Some(Token::Match) => depth -= 1,
+                Some(Token::Task | Token::Shape | Token::Kind) => return None,
+                _ => {}
+            }
+        }
+        None
     }
 
     /// The type of the expression whose last token is at position `q`.
@@ -199,8 +256,9 @@ impl<'a> Knowledge<'a> {
                 let literal = self.token(open + 1) == Some(&Token::RBrace)
                     || (self.ident(open + 1).is_some() && self.token(open + 2) == Some(&Token::Colon));
                 if !literal {
-                    // A plan B, whose type the checker records at its `{`.
-                    return exact(open);
+                    // A plan B, whose type the checker records at its `{`:
+                    // the value it extracts.
+                    return exact(open).or_else(|| self.expression_type(open.checked_sub(1)?, depth + 1)?.extracted().cloned());
                 }
                 let shape = self.ident(open.checked_sub(1)?)?;
                 Some(Type::Named(shape.to_string()))

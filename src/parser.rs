@@ -98,7 +98,19 @@ impl Parser {
         let after_value = self.pos > 0
             && matches!(
                 self.tokens.get(self.pos - 1),
-                Some(Token::Ident(_) | Token::Int(_) | Token::Float(_) | Token::RParen | Token::RBracket | Token::Caret)
+                Some(
+                    Token::Ident(_)
+                        | Token::Int(_)
+                        | Token::Float(_)
+                        | Token::Text(_)
+                        | Token::True
+                        | Token::False
+                        | Token::None
+                        | Token::RParen
+                        | Token::RBracket
+                        | Token::RBrace
+                        | Token::Caret
+                )
             );
         let message = if after_value {
             "'<-' sends a value and must start a line; to compare with a negative number, write '< -'"
@@ -465,7 +477,7 @@ impl Parser {
             if self.check(Token::Fi) || self.at_item_start() { break; }
             self.reject_stray_end()?;
             self.expect(Token::Case)?;
-            let pattern = self.parse_pattern()?;
+            let pattern = self.parse_pattern("case")?;
             if !self.check(Token::Newline) && !self.check(Token::Fi) && !self.check(Token::Case) && !self.is_at_end() {
                 return Err(match pattern.kind {
                     PatternKind::Variant { .. } => self.name_expected(),
@@ -480,8 +492,9 @@ impl Parser {
         Ok(Stmt::new(StmtKind::Match(expr, cases), span))
     }
 
-    /// What a `case` or `is` matches: `Circle r`, `{value}`, `none`, `fail e`, or `_`.
-    fn parse_pattern(&mut self) -> Result<Pattern> {
+    /// What a `case` or `is` (the `keyword`) matches: `Circle r`, `{value}`,
+    /// `none`, `fail e`, or `_`.
+    fn parse_pattern(&mut self, keyword: &str) -> Result<Pattern> {
         let span = self.peek_span();
         let kind = match self.peek() {
             Token::Underscore => {
@@ -507,7 +520,7 @@ impl Parser {
                 if self.check(Token::LParen) {
                     return Err(Error::at(
                         self.peek_span(),
-                        format!("a case names its bindings without parentheses, as in 'case {} value'", tag),
+                        format!("a pattern names its bindings without parentheses, as in '{} {} value'", keyword, tag),
                     ));
                 }
                 let mut binds = Vec::new();
@@ -574,7 +587,7 @@ impl Parser {
         if !self.match_token(Token::Is) {
             return Ok(Condition { value, pattern: None });
         }
-        let pattern = self.parse_pattern()?;
+        let pattern = self.parse_pattern("is")?;
         if self.check(Token::And) || self.check(Token::Or) {
             return Err(Error::at(
                 self.peek_span(),
@@ -744,8 +757,20 @@ impl Parser {
     fn parse_plan_b(&mut self, value: Expr) -> Result<Expr> {
         let opened = self.peek_span();
         self.advance(); // {
+        let same_line = !self.check(Token::Newline);
         self.skip_newlines();
         let next = self.tokens.get(self.pos + 1).unwrap_or(&Token::Eof);
+        // `Point {` with its fields on the next line: a line never starts with `name:`.
+        if !same_line && matches!(self.peek(), Token::Ident(_)) && matches!(next, Token::Colon) {
+            let example = match &value.kind {
+                ExprKind::Var(name) => format!("{} {{ ", name),
+                _ => "Point { ".to_string(),
+            };
+            return Err(Error::at(
+                self.peek_span(),
+                format!("a shape literal is written on one line, starting after its '{{', as in '{}x: 1 }}'", example),
+            ));
+        }
         let error = if self.check(Token::Fail) && matches!(next, Token::Ident(_) | Token::Underscore) {
             self.advance(); // fail
             Some(self.parse_bound_name()?)

@@ -1,0 +1,8 @@
+# error: 3:8: expected type int or text, got text; an error is given with 'fail', as in '<- fail e'
+task parse(t: text) -> int or text
+    <- "oops"
+fi
+
+task main()
+    show(parse("1") { 0 })
+fi

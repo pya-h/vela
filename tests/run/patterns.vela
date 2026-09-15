@@ -2,6 +2,17 @@
 # binding drops a value, and `is` tests one pattern with its names visible
 # only in the block it guards.
 
+task half(n: int) -> maybe int
+    when n % 2 == 0
+        <- n / 2
+    fi
+    <- none
+fi
+
+task parse(t: text) -> int or text
+    <- fail t
+fi
+
 kind Light
     Red
     Green
@@ -60,5 +71,19 @@ task main()
         show("no light")
     case {_}
         show("some light")
+    fi
+
+    # A lone `_` matches anything, without reading the value.
+    match half(3)
+    case _
+        show("any maybe")
+    fi
+    match lights
+    case _
+        show("any light")
+    fi
+    match parse("x")
+    case _
+        show("any result")
     fi
 fi

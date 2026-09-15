@@ -219,7 +219,7 @@
       </p>
       <p>
         A statement is a binding, an assignment, a block, a send (<code>&lt;-</code>), <code>free</code>, or a task
-        call. Any other expression on its own line would do nothing, so it is an error: <code>x == 1</code> alone
+        call, which may have a plan B (see <a href="#maybe">Maybe and Errors</a>). Any other expression on its own line would do nothing, so it is an error: <code>x == 1</code> alone
         reports <code>the result of '==' is unused; use '=' to assign</code>. Comments start with <code>#</code>.
       </p>
 
@@ -523,7 +523,7 @@ p.x = 5                    <span class="comment"># error: cannot assign to a fie
 <span class="keyword">bind</span> m = half(7)
 show(m)                    <span class="comment"># none</span>
 show(m == <span class="keyword">none</span>)            <span class="comment"># true</span>
-show(m + 1)                <span class="comment"># error: arithmetic requires numeric operands; a maybe int must be extracted first</span></pre>
+show(m + 1)                <span class="comment"># error: arithmetic requires numeric operands; the value in this maybe int must be extracted first</span></pre>
       <p>There are three ways to get the value out. <code>match</code> handles both outcomes:</p>
       <pre><span class="keyword">match</span> half(8)
 <span class="keyword">case</span> {n}
@@ -549,9 +549,11 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
         The value before the block is evaluated once, and the block runs only when it is empty. Its last line gives
         the value, of the type inside the <code>maybe</code>; a <code>&lt;-</code> in the block sends from the task as
         usual, and when every path through the block sends, it needs no value line. Names declared in the block
-        stay in it, and an empty block is an error. A <code>{</code> after a shape's name followed by
-        <code>field:</code> or <code>}</code> is a shape literal; any other <code>{</code> after a value starts a plan
-        B, and a <code>&lt;-</code> may follow it on the same line: <code>m { &lt;- 0 }</code>.
+        stay in it, and an empty block is an error. A call with a plan B can be a statement of its own:
+        <code>half(7) { &lt;- }</code> leaves the task when there is no value, and drops the value otherwise. A
+        <code>{</code> after a shape's name followed, on the same line, by <code>field:</code> or <code>}</code> is a
+        shape literal; any other <code>{</code> after a value starts a plan B, and a <code>&lt;-</code> may follow it
+        on the same line: <code>m { &lt;- 0 }</code>.
       </p>
       <p>
         A task that can fail sends <code>T or E</code>: its value when it works, or an error of type

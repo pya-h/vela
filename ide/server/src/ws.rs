@@ -117,18 +117,19 @@ async fn connect(studio: Arc<Studio>, id: String, mut socket: WebSocket) {
     }
 }
 
-/// How long closing waits for the client to answer the close frame.
+/// How long closing may take, including waiting for the client's answer.
 const CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Sends a close frame and waits for the client's answer before dropping the
 /// connection. Dropping it at once, with messages from the client still
 /// unread (a resize, a keystroke), resets the TCP connection, and the browser
-/// may then discard what was sent just before, such as the exit message.
+/// may then discard what was sent just before, such as the exit message. A
+/// client that stops reading can't hold the connection open past the timeout.
 async fn close(mut socket: WebSocket, code: u16, reason: &'static str) {
-    if socket.send(Message::Close(Some(CloseFrame { code, reason: Utf8Bytes::from_static(reason) }))).await.is_err() {
-        return;
-    }
     let _ = timeout(CLOSE_TIMEOUT, async {
+        if socket.send(Message::Close(Some(CloseFrame { code, reason: Utf8Bytes::from_static(reason) }))).await.is_err() {
+            return;
+        }
         while let Some(Ok(message)) = socket.recv().await {
             if matches!(message, Message::Close(_)) {
                 break;

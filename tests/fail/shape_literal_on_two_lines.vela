@@ -1,0 +1,11 @@
+# error: 9:9: a shape literal is written on one line, starting after its '{', as in 'Point { x: 1 }'
+shape Point
+    x: int
+    y: int
+fi
+
+task main()
+    bind p = Point {
+        x: 1, y: 2 }
+    show(p.x)
+fi

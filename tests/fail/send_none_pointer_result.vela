@@ -1,0 +1,10 @@
+# error: 3:8: expected type ^int or text, got none; a pointer can't be none, so use 'maybe ^int'
+task find(n: int) -> ^int or text
+    <- none
+fi
+
+task main()
+    find(1) { fail _
+        <-
+    }
+fi

@@ -653,9 +653,23 @@ impl<'a> Classifier<'a> {
         let name = tokens.ident(p).unwrap_or_default().to_string();
         let range = tokens.range(p);
         let start = tokens.get(p).map(|t| t.start).unwrap_or_default();
-        // Usable from the next line: not in its own initializer, range, or header.
+        // Usable from the next line: not in its own initializer, range, or
+        // header, including a plan B there that spans lines.
+        let mut depth = 0usize;
         let line_end = (p..tokens.len())
-            .find(|&q| matches!(tokens.token(q), Some(Token::Newline | Token::Eof)))
+            .find(|&q| match tokens.token(q) {
+                Some(Token::LBrace) => {
+                    depth += 1;
+                    false
+                }
+                Some(Token::RBrace) => {
+                    depth = depth.saturating_sub(1);
+                    false
+                }
+                Some(Token::Newline) => depth == 0,
+                Some(Token::Eof) | None => true,
+                _ => false,
+            })
             .map_or(tokens.source.len(), |q| tokens.range(q).end);
         let visible = line_end..tokens.source.len();
         self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None });

@@ -323,8 +323,8 @@ fn types_offer_maybe_and_error_types() {
     // After `maybe`, another type, but not `maybe` or `unit` again.
     assert_offers(&in_outcomes("bind x: maybe @@"), &["int", "Problem"], &["maybe", "unit"]);
     assert_offers(&in_outcomes("bind x: maybe ^@@"), &["int"], &["m"]);
-    // After `or` in a type, the error type.
-    assert_offers("task f() -> int or @@\nfi\n", &["text", "maybe"], &["unit"]);
+    // After `or` in a type, the error type, which is never unit or a maybe.
+    assert_offers("task f() -> int or @@\nfi\n", &["text"], &["unit", "maybe"]);
     assert_offers(&in_outcomes("bind x: int or @@"), &["Problem"], &["m", "total"]);
     // `or` between values is still an expression.
     assert_offers(&in_outcomes("show(total == 1 or @@)"), &["total", "m"], &["Problem"]);
@@ -344,7 +344,13 @@ fn case_and_is_offer_the_patterns_of_maybe_and_error_values() {
     assert_offers(&in_outcomes("when r is @@"), &["{value}", "fail e"], &["none"]);
     assert_offers(&in_outcomes("when parse(\"x\") { fail _\n        0\n    } is @@"), &[], &[]);
     // The names a pattern or plan B declares are new.
-    for marked in [in_outcomes("when m is {@@"), in_outcomes("bind n = r { fail @@"), in_outcomes("bind n = r {\n        fail @@")] {
+    for marked in [
+        in_outcomes("when m is {@@"),
+        in_outcomes("when r is fail @@"),
+        in_outcomes("when parse(\"2\") is Bad @@"),
+        in_outcomes("bind n = r { fail @@"),
+        in_outcomes("bind n = r {\n        fail @@"),
+    ] {
         assert_eq!(labels(&marked), Vec::<String>::new(), "at {:?}", marked);
     }
     // A kind's `_` case.
@@ -356,6 +362,13 @@ fn case_and_is_offer_the_patterns_of_maybe_and_error_values() {
 fn plan_b_blocks_offer_values_and_statements() {
     assert_offers(&in_outcomes("bind n = m { @@"), &["total", "m", "fail", "none"], &[]);
     assert_offers(&in_outcomes("bind n = m {\n        @@"), &["bind", "total", "when"], &[]);
+    // `}` closes a plan B, not `fi`, and only its first line may name the error.
+    let marked = in_outcomes("when total > 0\n        bind n = r {\n            @@");
+    assert_offers(&marked, &["fail", "bind"], &["fi", "else"]);
+    assert_eq!(item(&marked, "fail").snippet.as_deref(), Some("fail ${e}"));
+    assert_offers(&in_outcomes("bind n = r {\n        fail e\n        @@"), &["bind"], &["fail", "fi"]);
+    // After the plan B closes, the blocks around it continue.
+    assert_offers(&in_outcomes("when total > 0\n        bind n = r {\n            0\n        }\n        @@"), &["fi", "else"], &["fail"]);
     assert_offers(&in_outcomes("@@"), &["match m", "match r", "when … is", "loop … is"], &[]);
     assert_eq!(item(&in_outcomes("@@"), "match r").snippet.as_deref(), Some("match r\ncase {${value}}\n\t\ncase fail ${e}\n\t${}\nfi"));
 }
@@ -372,6 +385,27 @@ fn hover_describes_maybe_and_error_names() {
     assert_eq!(hover(&source, "r =", 0).code, "bind r: int or Problem");
     assert_eq!(hover(&source, "maybe int", 0).code, "maybe T");
     assert_eq!(hover(&source, "none", 0).code, "none");
+}
+
+#[test]
+fn hover_reads_maybe_and_error_names_when_the_file_doesnt_check() {
+    let source = OUTCOMES.replace(
+        "    @@\n",
+        "    show(missing)\n    bind a = m { 0 }\n    bind b = r {\n        fail problem\n        0\n    }\n    \
+         when m is {value}\n        show(value)\n    fi\n    when r is fail wrong\n        show(1)\n    fi\n    \
+         match r\n    case {got}\n        show(got)\n    case fail bad\n        show(1)\n    fi\n",
+    );
+    for (needle, code) in [
+        ("a =", "bind a: int"),
+        ("b =", "bind b: int"),
+        ("problem", "fail problem: Problem"),
+        ("value}", "value: int"),
+        ("wrong", "wrong: Problem"),
+        ("got}", "got: int"),
+        ("bad", "bad: Problem"),
+    ] {
+        assert_eq!(hover(&source, needle, 0).code, code, "at {:?}", needle);
+    }
 }
 
 #[test]
