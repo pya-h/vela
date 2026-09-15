@@ -468,6 +468,10 @@ impl Lexer {
         let mut s = String::new();
         while self.peek().is_ascii_digit() {
             s.push(self.advance());
+            // Underscores between digits are ignored: 1_000_000 reads as 1000000.
+            if self.peek() == '_' && self.peek2().is_ascii_digit() {
+                self.advance();
+            }
         }
         let is_float = self.peek() == '.' && self.peek2().is_ascii_digit();
         // `1.` is not a float (and `1..5` is a range).
@@ -479,6 +483,9 @@ impl Lexer {
             s.push(self.advance());
             while self.peek().is_ascii_digit() {
                 s.push(self.advance());
+                if self.peek() == '_' && self.peek2().is_ascii_digit() {
+                    self.advance();
+                }
             }
         }
         // Letters, digits, or `_` right after a number, as in `12abc`, `1e5`, or

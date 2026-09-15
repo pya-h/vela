@@ -118,6 +118,7 @@ fn agrees_with_the_compiler_on_malformed_input() {
         "élan", "12abc", "1.5e3", "99999999999999999999", "x @ y", "a ! b", "\0", "\"\0\"", "# only a comment",
         "task main()\n    show(\"unterminated)\nfi\n", "\"bad \\q then\nunterminated",
         "x\r\ny", "# comment\r\nfi", "\"a\\\r\nb\"", "\u{feff}task", "1.", "1..5", "a && b", "!x",
+        "1__000", "1_", "1_000abc",
     ];
     for source in cases {
         check_agreement(source, &format!("{:?}", source));
@@ -212,6 +213,16 @@ fn builtin_types_are_named_as_written() {
         assert_eq!(Type::builtin(name).as_ref(), Some(ty));
     }
     assert_eq!(Type::builtin("Point"), None);
+}
+
+#[test]
+fn underscores_between_digits_are_ignored() {
+    assert_eq!(kinds("1_000"), [token(Token::Int(1000)), token(Token::Eof)]);
+    assert_eq!(kinds("1_000_000"), [token(Token::Int(1_000_000)), token(Token::Eof)]);
+    assert_eq!(kinds("1_2_3"), [token(Token::Int(123)), token(Token::Eof)]);
+    assert_eq!(kinds("1_000.000_001"), [token(Token::Float(1000.000001)), token(Token::Eof)]);
+    assert_eq!(kinds("1__000")[0], invalid(1, 1, "invalid number '1__000'"));
+    assert_eq!(kinds("1_")[0], invalid(1, 1, "invalid number '1_'"));
 }
 
 #[test]

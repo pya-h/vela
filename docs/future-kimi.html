@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela — Future Directions (Kimi Edition)</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-2: #111827;
+      --fg: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --accent-3: #34d399;
+      --accent-4: #f472b6;
+      --accent-5: #fbbf24;
+      --code-bg: #1e293b;
+      --card-bg: #151c2c;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.65;
+    }
+    header {
+      padding: 5rem 1rem 4rem;
+      text-align: center;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(56,189,248,0.12) 0%, transparent 40%),
+        radial-gradient(circle at 80% 20%, rgba(244,114,182,0.1) 0%, transparent 40%),
+        radial-gradient(circle at 50% 80%, rgba(52,211,153,0.08) 0%, transparent 40%),
+        var(--bg-2);
+      border-bottom: 1px solid var(--border);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2), var(--accent-4));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .tagline {
+      margin-top: 1rem;
+      font-size: 1.25rem;
+      color: var(--muted);
+      max-width: 650px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 4rem;
+      font-size: 2rem;
+      color: var(--fg);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    h2 .icon {
+      width: 2rem;
+      height: 2rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 0.5rem;
+      background: rgba(56,189,248,0.1);
+      color: var(--accent);
+      font-size: 1.1rem;
+    }
+    h3 {
+      margin-top: 2.5rem;
+      color: var(--accent-2);
+      font-size: 1.35rem;
+    }
+    h4 {
+      margin-top: 1.5rem;
+      color: var(--accent);
+      font-size: 1.1rem;
+    }
+    p { margin: 1rem 0; }
+    code {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      background: var(--code-bg);
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.35rem;
+      color: var(--accent);
+      font-size: 0.9rem;
+      overflow-wrap: anywhere;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1.25rem;
+      border-radius: 0.75rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      line-height: 1.55;
+    }
+    .intro {
+      font-size: 1.15rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.25rem;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .card:hover {
+      transform: translateY(-3px);
+      border-color: var(--accent);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .card, .card:hover { transition: none; transform: none; }
+    }
+    .card h3 {
+      margin: 0 0 0.5rem;
+      color: var(--fg);
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .card .badge {
+      margin-left: auto;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .b-high { background: rgba(248,113,113,0.15); color: #fca5a5; }
+    .b-med { background: rgba(250,204,21,0.15); color: #fde047; }
+    .b-low { background: rgba(52,211,153,0.15); color: #6ee7b7; }
+    .b-idea { background: rgba(56,189,248,0.15); color: #7dd3fc; }
+    .b-rec { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+    .b-done { background: rgba(148,163,184,0.15); color: #cbd5e1; }
+
+    .option {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin: 1.25rem 0;
+    }
+    .option h3 {
+      margin: 0 0 0.75rem;
+      font-size: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .option .pros-cons {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .option .pros, .option .cons {
+      background: var(--bg-2);
+      padding: 1rem;
+      border-radius: 0.5rem;
+    }
+    .option .pros strong { color: var(--accent-3); }
+    .option .cons strong { color: var(--accent-4); }
+    .option ul {
+      margin: 0.5rem 0 0;
+      padding-left: 1.25rem;
+      color: var(--muted);
+    }
+    .option li { margin: 0.35rem 0; }
+
+    .note {
+      background: linear-gradient(90deg, rgba(56,189,248,0.1), transparent);
+      border-left: 4px solid var(--accent);
+      padding: 1.25rem 1.5rem;
+      border-radius: 0 0.75rem 0.75rem 0;
+      margin: 1.5rem 0;
+    }
+    .note strong { color: var(--accent); }
+    .note.warn {
+      background: linear-gradient(90deg, rgba(251,191,36,0.1), transparent);
+      border-left-color: var(--accent-5);
+    }
+    .note.warn strong { color: var(--accent-5); }
+
+    .recommendation {
+      background: linear-gradient(135deg, rgba(167,139,250,0.12), rgba(56,189,248,0.08));
+      border: 1px solid var(--accent-2);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    .recommendation h3 {
+      margin: 0 0 0.75rem;
+      color: var(--accent-2);
+      font-size: 1.25rem;
+    }
+
+    .table-wrap { overflow-x: auto; margin: 1.5rem 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--accent-2); font-weight: 700; }
+    td { color: var(--muted); }
+    td:first-child { color: var(--fg); white-space: nowrap; }
+
+    main a { color: var(--accent); }
+    ul { padding-left: 1.5rem; }
+    li { margin: 0.6rem 0; }
+    footer {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      background: var(--bg-2);
+    }
+    .doc-nav {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .doc-nav a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"] {
+      color: var(--accent);
+    }
+
+    .applied {
+      background: linear-gradient(90deg, rgba(52,211,153,0.1), transparent);
+      border-left: 4px solid var(--accent-3);
+      padding: 1.25rem 1.5rem;
+      border-radius: 0 0.75rem 0.75rem 0;
+      margin: 1.5rem 0;
+    }
+    .applied strong { color: var(--accent-3); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Vela Future Directions</h1>
+    <p class="tagline">A Kimi-edition design notebook: bolder memory models, zero-cost abstractions, and ideas that push Vela's power without losing its smallness.</p>
+    <nav class="doc-nav" aria-label="Vela documentation">
+      <a href="vela.html">Language</a>
+      <a href="ide.html">Studio</a>
+      <a href="comparison.html">Comparison</a>
+      <a href="future.html">Future</a>
+      <a href="future-kimi.html" aria-current="page">Future (Kimi)</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="intro">
+      Vela is already a clean, opinionated little language. This document is a sketch of where it could go if it dared to be more ambitious — especially in memory safety, performance, and expressive power. The ideas here are meant to be inspiring rather than a rigid roadmap; some are experiments, some are long-term bets, and a few are small enough to land today.
+    </p>
+
+    <section>
+      <h2><span class="icon" aria-hidden="true">🧠</span> Memory Safety: Beyond Manual <code>new</code> and <code>free</code></h2>
+      <p>
+        Vela's current memory model is explicit but unsafe: a missing <code>free</code> leaks, a double <code>free</code> corrupts, and <code>p^</code> on <code>none</code> is a crash. The ideas below aim to keep the explicit feel while making common mistakes impossible — or at least caught at compile time.
+      </p>
+
+      <div class="option">
+        <h3><span aria-hidden="true">🔐</span> Capability Ownership: <code>own</code>, <code>read</code>, <code>write</code></h3>
+        <p>
+          Instead of a single <code>^T</code> pointer, Vela could track capabilities at the type level. A capability says what you are allowed to do with a value, and the compiler rejects operations that don't match.
+        </p>
+        <pre>task copy_name(own src: text) -> text
+    # `own` means this task now owns src; the caller cannot use it after.
+    <- src
+fi
+
+task print_name(read name: text)
+    # `read` means immutable, temporary access. The owner keeps the value.
+    show(name)
+fi
+
+task reset(hold write counter: ^int)
+    # `write` means mutable access to memory owned by someone else.
+    counter^ = 0
+fi</pre>
+        <div class="pros-cons">
+          <div class="pros">
+            <strong>Pros</strong>
+            <ul>
+              <li>Eliminates use-after-free and double-free for owned values</li>
+              <li>No hidden reference counting or garbage collector</li>
+              <li>Capabilities are visible in types, so APIs are self-documenting</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <strong>Cons</strong>
+            <ul>
+              <li>Requires a borrow/capability checker in the compiler</li>
+              <li>More concepts for beginners than today's single pointer</li>
+              <li>Needs careful design to keep Vela's syntax minimal</li>
+            </ul>
+          </div>
+        </div>
+        <div class="note">
+          <strong>Why it's cool:</strong> it is Rust's ownership model distilled to three words. Vela could implement it as an opt-in layer: keep <code>^T</code> for unsafe escape hatches, but make <code>own</code>/<code>read</code>/<code>write</code> the default for new code.
+        </div>
+      </div>
+
+      <div class="option">
+        <h3><span aria-hidden="true">🧭</span> Named Regions: <code>T@arena</code></h3>
+        <p>
+          Make regions first-class and named. A value's type can include the region it lives in, and references cannot escape that region. This is stronger than arenas alone: it lets the compiler prove a reference is still valid.
+        </p>
+        <pre>task process_files() -> int
+    region arena
+    bind buffer: [byte]@arena = allocate(arena, 4096)
+    work(buffer)
+    # `buffer` and everything in `arena` are freed here automatically.
+    <- 0
+fi</pre>
+        <p>
+          A function can accept a region parameter so that callers decide where data lives:
+        </p>
+        <pre>task load_config(arena: region) -> text@arena
+    bind bytes: text@arena = read_file(arena, "config.ini")
+    <- bytes
+fi</pre>
+        <div class="pros-cons">
+          <div class="pros">
+            <strong>Pros</strong>
+            <ul>
+              <li>Bulk deallocation is extremely fast</li>
+              <li>Region names make lifetimes explicit but not cryptic</li>
+              <li>Combines beautifully with capability ownership</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <strong>Cons</strong>
+            <ul>
+              <li>Region subtyping ("this region outlives that one") adds complexity</li>
+              <li>Some long-lived data needs escape mechanisms</li>
+            </ul>
+          </div>
+        </div>
+        <div class="note">
+          <strong>Why it's cool:</strong> regions give Vela a memory model that is safer than C's malloc/free, faster than reference counting, and simpler than a full borrow checker. Named regions make the safety visible in source code.
+        </div>
+      </div>
+
+      <div class="option">
+        <h3><span aria-hidden="true">🛡️</span> Scope Guards: <code>defer</code></h3>
+        <p>
+          A small, powerful statement that schedules cleanup when the current block ends. It works with any resource, not just memory: files, locks, network sockets.
+        </p>
+        <pre>task read_lines(path: text)
+    bind f = open(path)
+    defer close(f)
+
+    loop not eof(f)
+        show(read_line(f))
+    fi
+    # close(f) runs here, even if a future `return` happened above.
+fi</pre>
+        <div class="pros-cons">
+          <div class="pros">
+            <strong>Pros</strong>
+            <ul>
+              <li>Cleanup is written next to acquisition, not at the bottom of the block</li>
+              <li>Deterministic, no GC</li>
+              <li>Cheap to implement: the compiler emits cleanup code at block exits</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <strong>Cons</strong>
+            <ul>
+              <li>Order of multiple defers matters and must be intuitive (LIFO is standard)</li>
+              <li>A deferred expression must not itself fail, or failure needs a story</li>
+            </ul>
+          </div>
+        </div>
+        <div class="note">
+          <strong>Why it's cool:</strong> <code>defer</code> is the missing half of manual memory management. It lets Vela keep explicit ownership while removing the tedium and bug surface of matching every acquisition with a release.
+        </div>
+      </div>
+
+      <div class="option">
+        <h3><span aria-hidden="true">🎯</span> Niche-Optimized Nullability</h3>
+        <p>
+          Vela's <code>^T</code> already uses <code>none</code> as a sentinel. The compiler could guarantee that the underlying representation uses a spare bit pattern (a null pointer, in this case) so <code>^T?</code> costs nothing extra. But Vela could go further: track which types have spare niches and use them automatically.
+        </p>
+        <pre>kind Option
+    Some(value: int)
+    None
+fi
+
+# The compiler sees that `Some` always has a non-zero tag, and stores the
+# whole kind in a single int64_t: the payload when the tag is non-zero,
+# and zero for `None`. No extra memory, no indirection.</pre>
+        <div class="note">
+          <strong>Why it's cool:</strong> most languages pay for <code>Option&lt;T&gt;</code> with extra memory or branches. Vela could make nullable pointers, booleans-with-missing, and small tagged unions as cheap as their raw counterparts.
+        </div>
+      </div>
+
+      <div class="option">
+        <h3><span aria-hidden="true">📊</span> Static Leak Checking</h3>
+        <p>
+          The compiler could require every resource-acquiring expression to have a matching release on every control-flow path. This is like a borrow checker but only for resources, and only forward-propagating.
+        </p>
+        <pre>task leaky() -> int
+    bind p = new int(5)
+    show(p^)
+    # Error: `p` is owned but never freed.
+    <- 0
+fi</pre>
+        <p>
+          With <code>defer</code>, this becomes trivial to satisfy; without it, the checker demands explicit <code>free</code> on every path. The rule is simple: <em>every <code>own</code> value must be consumed exactly once by the end of its scope</em>.
+        </p>
+        <div class="note">
+          <strong>Why it's cool:</strong> this is the safety benefit of Rust's <code>Drop</code> without the complexity of lifetimes. It catches the most common memory bug — forgetting to free — at compile time.
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon" aria-hidden="true">⚡</span> Performance: Zero-Cost Power Features</h2>
+      <p>
+        Vela compiles to C, so it already inherits C's speed. The ideas below add features that let programmers express intent the C compiler cannot see on its own.
+      </p>
+
+      <div class="option">
+        <h3><span aria-hidden="true">🔮</span> Compile-Time Execution: <code>comptime</code></h3>
+        <p>
+          Let Vela run code while compiling. Use it for constants, lookup tables, parser generators, and type-driven code generation.
+        </p>
+        <pre>comptime fib(n: int) -> int
+    when n < 2
+        <- n
+    else
+        <- fib(n - 1) + fib(n - 2)
+    fi
+fi
+
+bind table: [int; 10] = comptime build_lookup_table()</pre>
+        <p>
+          <code>comptime</code> tasks run in the compiler using the same interpreter (or the same code generator targeting a small VM). They have no I/O and no mutable global state. The result must be a constant value.
+        </p>
+        <div class="note">
+          <strong>Why it's cool:</strong> generics, metaprogramming, and zero-cost abstractions all become possible without a separate macro language. Vela stays one language from runtime to compile time.
+        </div>
+      </div>
+
+      <div class="option">
+        <h3><span aria-hidden="true">🚀</span> SIMD Vector Types</h3>
+        <p>
+          Explicit vector types that map directly to CPU SIMD registers. No auto-vectorization magic, just predictable performance.
+        </p>
+        <pre>bind a: vec4f = [1.0, 2.0, 3.0, 4.0]
+bind b: vec4f = [5.0, 6.0, 7.0, 8.0]
+bind c: vec4f = a + b   # four additions in one instruction</pre>
+        <p>
+          Vectors support lane-wise arithmetic, shuffles, reductions, and masked operations. The compiler generates the right intrinsics for the target; if SIMD is unavailable, it scalarizes cleanly.
+        </p>
+        <div class="note">
+          <strong>Why it's cool:</strong> Vela could become a serious language for numeric and game code without abandoning its minimalism. Vector types are small syntax with huge upside.
+        </div>
+      </div>
+
+      <div class="option">
+        <h3><span aria-hidden="true">🧱</span> Controlled Shape Layout</h3>
+        <p>
+          Let programmers control how shapes are laid out in memory for cache, ABI, or hardware reasons.
+        </p>
+        <pre>shape Vec3 packed
+    x: float
+    y: float
+    z: float
+fi
+
+shape Header aligned(64)
+    magic: int
+    version: int
+fi</pre>
+        <p>
+          Vela could also support field reordering hints: <code>shape Foo hot</code> tells the compiler to group hot fields together and pad cold fields to the end. This is information a C compiler usually ignores.
+        </p>
+        <div class="note">
+          <strong>Why it's cool:</strong> systems programming sometimes needs to talk directly to hardware or squeeze cache lines. Vela can expose this power without making it the default.
+        </div>
+      </div>
+
+      <div class="option">
+        <h3><span aria-hidden="true">🔗</span> Inline Assembly with Vela Types</h3>
+        <p>
+          An <code>asm</code> block where inputs and outputs are ordinary Vela values, type-checked by the compiler.
+        </p>
+        <pre>task rdtsc() -> int
+    bind low: int
+    bind high: int
+    asm("rdtsc" : "=a"(low), "=d"(high))
+    <- (high &lt;&lt; 32) | low
+fi</pre>
+        <p>
+          The compiler checks that the constraints match the Vela types, inserts the right clobbers, and forbids outputs that don't fit in a register. It is as unsafe as assembly always is, but the boundaries are typed.
+        </p>
+        <div class="note">
+          <strong>Why it's cool:</strong> Vela could be used for kernel code, cryptography, and micro-optimization without dropping to a separate assembler or losing type safety at the interface.
+        </div>
+      </div>
+
+      <div class="option">
+        <h3><span aria-hidden="true">🧬</span> Monomorphization Hints</h3>
+        <p>
+          A way to ask the compiler to specialize a generic task for specific types at specific call sites, or conversely to share code when binary size matters more than speed.
+        </p>
+        <pre>task max[T](a: T, b: T) -> T inline
+    when a > b
+        <- a
+    fi
+    <- b
+fi</pre>
+        <p>
+          <code>inline</code> on a generic task means "generate a separate copy for every concrete type." <code>shared</code> would mean "use one implementation via type-erased pointers." The default is a heuristic.
+        </p>
+        <div class="note">
+          <strong>Why it's cool:</strong> generic code often hits a tension between speed and size. Letting the programmer decide, rather than the compiler guessing, is a rare power feature.
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon" aria-hidden="true">🎨</span> Expressiveness: More Language in Less Syntax</h2>
+      <p>
+        Vela's syntax is one of its best features. These ideas extend what a small syntax can express.
+      </p>
+
+      <div class="option">
+        <h3><span aria-hidden="true">🧩</span> Match Expressions</h3>
+        <p>
+          Let <code>match</code> produce a value, so it can be used on the right side of a binding.
+        </p>
+        <pre>bind grade = match score
+    case A _ -> "excellent"
+    case B _ -> "good"
+    case C _ -> "pass"
+    case F _ -> "fail"
+fi</pre>
+        <p>
+          Each branch ends with <code>-> expr</code> instead of <code>&lt;-</code>, distinguishing match values from task returns. The compiler still checks exhaustiveness.
+        </p>
+        <div class="note">
+          <strong>Why it's cool:</strong> it removes the need for helper tasks that only exist to compute a value from a kind. Less boilerplate, same safety.
+        </div>
+      </div>
+
+      <div class="option">
+        <h3><span aria-hidden="true">🎭</span> Algebraic Effects</h3>
+        <p>
+          A lightweight effect system where a task can <code>perform</code> an effect and a caller can handle it. This unifies errors, generators, async, and dependency injection in one concept.
+        </p>
+        <pre>effect Log
+    case Message(text: text)
+fi
+
+task do_work()
+    perform Log.Message("starting")
+    # ...
+fi
+
+task main()
+    handle do_work()
+    case Log.Message msg
+        show(msg)
+        resume           # continue the caller
+    fi
+fi</pre>
+        <div class="note warn">
+          <strong>Why it's bold:</strong> algebraic effects are powerful but can make control flow hard to follow. They fit Vela only if kept simple and explicit — no implicit effect inference, and handlers must be lexically visible.
+        </div>
+      </div>
+
+      <div class="option">
+        <h3><span aria-hidden="true">🚦</span> Typestate / Session Types</h3>
+        <p>
+          Encode state machines in the type system. A file handle can be <code>File[Open]</code> or <code>File[Closed]</code>; calling <code>read</code> on a closed file is a compile error.
+        </p>
+        <pre>shape File[State]
+    fd: int
+fi
+
+task open(path: text) -> File[Open]
+    # ...
+fi
+
+task close(f: File[Open]) -> File[Closed]
+    # ...
+fi
+
+task read(f: File[Open]) -> text
+    # ...
+fi</pre>
+        <p>
+          This generalizes to session types for protocols: a socket type tracks whether the next allowed action is <code>send</code> or <code>receive</code>, preventing protocol bugs at compile time.
+        </p>
+        <div class="note">
+          <strong>Why it's cool:</strong> typestates turn runtime bugs into compile-time errors for resources, protocols, and UI flows. They are a natural fit for a systems language with explicit lifetimes.
+        </div>
+      </div>
+
+      <div class="option">
+        <h3><span aria-hidden="true">📦</span> Derive for Shapes and Kinds</h3>
+        <p>
+          Ask the compiler to generate common tasks for a shape or kind: equality, hashing, cloning, debug printing.
+        </p>
+        <pre>shape Point
+    x: int
+    y: int
+derive Eq, Hash, Show
+fi
+
+bind a = Point { x: 1, y: 2 }
+bind b = Point { x: 1, y: 2 }
+show(a == b)   # true, generated automatically</pre>
+        <p>
+          Derive is implemented with compile-time reflection (or comptime code generation), so it costs nothing at runtime and adds no hidden vtables.
+        </p>
+        <div class="note">
+          <strong>Why it's cool:</strong> it gives Vela the convenience of Rust's derives without adding traits or macros to the core language. Derive is just a compiler service.
+        </div>
+      </div>
+
+      <div class="option">
+        <h3><span aria-hidden="true">🔀</span> Pipeline Operator</h3>
+        <p>
+          A syntax for chaining tasks left-to-right, making nested calls read more naturally.
+        </p>
+        <pre>bind result = fetch(url)
+    |> parse_json()
+    |> extract_user()
+    |> validate()</pre>
+        <p>
+          <code>value |> task(args)</code> is rewritten to <code>task(value, args)</code>. It is pure sugar, but it makes data-flow pipelines readable without methods.
+        </p>
+        <div class="note">
+          <strong>Why it's cool:</strong> it gives Vela most of the ergonomics of method chaining without adding methods, receivers, or namespaces.
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon" aria-hidden="true">🌐</span> Concurrency Without Shared Mutation</h2>
+      <p>
+        Vela's minimalism is a good foundation for a concurrency model that is easy to reason about. The theme is: share by communicating, and ownership travels with the message.
+      </p>
+
+      <div class="option">
+        <h3><span aria-hidden="true">📬</span> Ownership-Transferring Channels</h3>
+        <p>
+          A channel can only carry <code>own</code> values. After sending, the sender can no longer use the value; the receiver becomes the sole owner.
+        </p>
+        <pre>task worker(input: Chan[own Job], output: Chan[own Result])
+    loop true
+        bind job = recv(input)
+        bind result = process(job)
+        send(output, result)
+    fi
+fi</pre>
+        <p>
+          Because ownership moves, there can be no data races on the carried values. The runtime only needs to synchronize the channel itself, not the data.
+        </p>
+        <div class="note">
+          <strong>Why it's cool:</strong> this is Go's channels plus Rust's ownership guarantees. It keeps the friendly syntax of channels while eliminating an entire class of concurrency bugs.
+        </div>
+      </div>
+
+      <div class="option">
+        <h3><span aria-hidden="true">🧵</span> Actor-Style Tasks</h3>
+        <p>
+          A task can be spawned as an actor with its own mailbox. The actor owns its state; messages are handled sequentially. No locks, no shared mutable state.
+        </p>
+        <pre>actor Counter
+    hold count = 0
+
+    on Increment
+        count = count + 1
+    fi
+
+    on Get(reply: Chan[int])
+        send(reply, count)
+    fi
+end</pre>
+        <p>
+          The <code>actor</code>/<code>end</code> syntax is just a task with a built-in message loop. The compiler guarantees that the actor's state is only touched inside its own <code>on</code> handlers.
+        </p>
+        <div class="note">
+          <strong>Why it's cool:</strong> actors give Vela a concurrency model that is both simple and safe, with no risk of deadlocks or data races on actor state.
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon" aria-hidden="true">🧪</span> Smaller but Worthwhile Ideas</h2>
+      <div class="cards">
+        <div class="card">
+          <h3>Refinement types <span class="badge b-idea">Idea</span></h3>
+          <p><code>bind n: int where n > 0 = 5</code> — the compiler checks predicates where it can, and runtime checks where it must.</p>
+        </div>
+        <div class="card">
+          <h3>Tagged pointers <span class="badge b-idea">Idea</span></h3>
+          <p>Small variants and booleans stored inside a pointer's unused low bits, cutting allocation for common cases.</p>
+        </div>
+        <div class="card">
+          <h3>Lazy streams <span class="badge b-idea">Idea</span></h3>
+          <p><code>each n in fib_stream()</code> where the stream is computed on demand, backed by a generator task.</p>
+        </div>
+        <div class="card">
+          <h3>First-class assertions <span class="badge b-idea">Idea</span></h3>
+          <p><code>assert(x > 0)</code> as a statement, compiled out in release builds or turned into traps.</p>
+        </div>
+        <div class="card">
+          <h3>Static array slices <span class="badge b-idea">Idea</span></h3>
+          <p><code>[]T</code> as a fat pointer <code>(ptr, len)</code> with bounds checking and no ownership.</p>
+        </div>
+        <div class="card">
+          <h3>Named arguments <span class="badge b-idea">Idea</span></h3>
+          <p><code>resize(width: 2.0, height: 3.0)</code> for readability, mirroring shape literals.</p>
+        </div>
+        <div class="card">
+          <h3>Source maps in generated C <span class="badge b-idea">Idea</span></h3>
+          <p><code>#line</code> directives so C compiler errors and debuggers point at Vela source lines.</p>
+        </div>
+        <div class="card">
+          <h3>Compile-time benchmarks <span class="badge b-idea">Idea</span></h3>
+          <p><code>comptime bench fib(35)</code> runs a benchmark during build and warns if it regresses.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon" aria-hidden="true">✅</span> Already Applied in This Fork</h2>
+      <div class="applied">
+        <strong>Minor improvements that landed while writing this document:</strong>
+        <ul>
+          <li><strong><code>--version</code> flag:</strong> prints the compiler name and version and exits successfully.</li>
+          <li><strong><code>--check</code> flag:</strong> parses and type-checks a file without generating C or invoking the C compiler. Useful for editors and CI.</li>
+          <li><strong>Integer literal underscores:</strong> numbers like <code>1_000_000</code> and <code>1_000.000_001</code> are accepted, with underscores ignored for readability. Malformed forms such as <code>1__000</code> or <code>1_</code> are rejected.</li>
+        </ul>
+        <p>These are non-breaking additions: existing programs compile unchanged, and the CLI flags follow the same style as <code>--emit-c</code>.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="icon" aria-hidden="true">🎯</span> Recommended Priority Order</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Phase</th><th>Focus</th><th>Why first?</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>1. Safety foundation</td><td><code>defer</code>, static leak checking, null checks on <code>p^</code></td><td>Catches the most common bugs with the smallest compiler change</td></tr>
+            <tr><td>2. Borrowed views</td><td><code>[]T</code> slices, <code>read</code> capabilities</td><td>Adds power without changing ownership semantics</td></tr>
+            <tr><td>3. Regions</td><td>Named arenas and <code>T@region</code></td><td>Bulk allocation + safety, a big win for real programs</td></tr>
+            <tr><td>4. Compile time</td><td><code>comptime</code> tasks</td><td>Unlocks generics, derives, and metaprogramming</td></tr>
+            <tr><td>5. Concurrency</td><td>Ownership channels or actors</td><td>Only after memory is solid</td></tr>
+            <tr><td>6. Big bets</td><td>Algebraic effects, refinement types, SIMD</td><td>Experiment once the core is stable</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="recommendation">
+        <h3>💡 The Kimi Take</h3>
+        <p>
+          Vela's biggest opportunity is to become a <strong>safer C that still feels like C</strong> — not a smaller Rust. That means keeping explicit memory and explicit control, but adding just enough compile-time proof to eliminate leaks, use-after-free, and data races. <code>defer</code>, static leak checking, borrowed slices, and named regions would give Vela a memory story that is both innovative and practical.
+        </p>
+        <p>
+          For performance, <code>comptime</code> and SIMD are the high-leverage bets: they make Vela competitive with C++ and Zig without adding complexity to the everyday syntax. And for expressiveness, match expressions and derive keep Vela small while removing the boilerplate that currently forces helper tasks and hand-written equality.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Vela — small by design, with room to be bold.</p>
+  </footer>
+</body>
+</html>

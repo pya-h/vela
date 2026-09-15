@@ -35,6 +35,34 @@ fn help_prints_usage_and_succeeds() {
 }
 
 #[test]
+fn version_prints_version_and_succeeds() {
+    let out = vela(&["--version"]);
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.starts_with("vela "), "{}", stdout);
+}
+
+#[test]
+fn check_only_type_checks_without_building() {
+    let dir = temp_dir("check");
+    let out = vela(&[&example("hello"), "--check"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.starts_with("checked:"), "{}", stdout);
+    assert!(out.stderr.is_empty(), "{}", stderr(&out));
+
+    let exe = dir.join("should_not_be_created");
+    let out = vela(&[&example("hello"), "--check", "-o", exe.to_str().unwrap()]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(!exe.exists(), "--check should not create an output file");
+
+    let out = vela(&["does/not/exist.vela", "--check"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).starts_with("error: cannot read 'does/not/exist.vela'"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn unknown_option_is_rejected() {
     let out = vela(&[&example("hello"), "--bogus"]);
     assert_eq!(out.status.code(), Some(2));
