@@ -138,6 +138,7 @@
     <p class="tagline">A minimal, safe, fast systems language with a fresh face.</p>
     <nav class="doc-nav" aria-label="Vela documentation">
       <a href="vela.html" aria-current="page">Language</a>
+      <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html">Future</a>
     </nav>
@@ -186,6 +187,10 @@
         (kinds and <code>match</code>), <code>todo.vela</code> (a linked list with pointers and
         <code>none</code>), and <code>demo.vela</code> (tasks, shapes, pointers, and control flow).
       </p>
+      <div class="note">
+        Prefer an editor? <a href="ide.html">Vela Studio</a> highlights Vela, shows errors as you type, completes
+        names, and runs the file with <kbd>F5</kbd>: <code>vela-studio examples</code>.
+      </div>
     </section>
 
     <section>
@@ -521,6 +526,7 @@ show(origin.x)             <span class="comment"># error: type ^Point has no fie
         <li><code>text</code> is a C string, so a <code>\0</code> ends it; there are no text operations besides
           <code>==</code>, <code>!=</code>, and <code>show</code>.</li>
         <li>There are no arrays, no modules (a program is one file), and no way to read input.</li>
+        <li>A task sends at most one value; to report two, declare a shape that holds both and send that.</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
       </ul>
     </section>
@@ -565,30 +571,13 @@ CC=clang cargo test</pre>
         <code>lexer::KEYWORDS</code> and <code>ast::BUILTIN_TYPES</code> list the language's reserved words and types.
       </p>
       <p>
-        The repository is a Cargo workspace: the compiler is the default member, and Vela Studio's code lives under
-        <code>ide/</code>: <code>ide/analysis</code> is the engine behind highlighting, diagnostics, outline,
-        go-to-definition, completion, and hover, built on the compiler; <code>ide/wasm</code> compiles it to
-        WebAssembly so it runs in the editor page; <code>ide/server</code> is the <code>vela-studio</code> program,
-        a local server for files, builds, runs, and terminals; and <code>ide/web</code> is the editor page
-        (TypeScript, CodeMirror). Plain <code>cargo build</code> and <code>cargo test</code> cover only the
-        compiler, which has no dependencies; add <code>--workspace</code> to include the IDE crates.
+        The repository is a Cargo workspace: the compiler is the default member, and <a href="ide.html">Vela
+        Studio</a>, the editor, lives under <code>ide/</code>. Plain <code>cargo build</code> and
+        <code>cargo test</code> cover only the compiler, which has no dependencies; add <code>--workspace</code> to
+        include Vela Studio's crates. Building and testing Vela Studio's page are described in
+        <a href="ide.html#install">its own guide</a>.
       </p>
       <pre>cargo test --workspace</pre>
-      <p>
-        The editor page needs Node.js and the <code>wasm32-unknown-unknown</code> Rust target
-        (<code>rustup target add wasm32-unknown-unknown</code>). Build it, then start <code>vela-studio</code> on a
-        folder. It serves that folder on <code>127.0.0.1</code> only, prints an address with a secret token, and
-        opens it in the browser (<code>--no-open</code> just prints it). <kbd>F5</kbd> saves and runs the open
-        file in the Output panel, compiler errors are listed under Problems, and <kbd>Ctrl</kbd>+<kbd>`</kbd>
-        opens a terminal in the folder.
-      </p>
-      <pre>npm --prefix ide/web install
-npm --prefix ide/web run build         # the analysis module and the page
-cargo run -p vela-studio -- examples</pre>
-      <p>The page's own checks: unit tests, type checking, and end-to-end tests in Chromium against a real server.</p>
-      <pre>npm --prefix ide/web test
-npm --prefix ide/web run typecheck
-npm --prefix ide/web run e2e           # set CHROMIUM if it isn't /usr/bin/chromium</pre>
       <p>To lint the compiler (or everything, with <code>--workspace</code>):</p>
       <pre>cargo clippy --all-targets</pre>
       <p>

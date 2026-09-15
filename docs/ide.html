@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela Studio — The Editor for Vela</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --fg: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --code-bg: #1e293b;
+      --card-bg: #131c30;
+      --border: #334155;
+      --warn: #fbbf24;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+    }
+    header {
+      padding: 4rem 1rem 3rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(167,139,250,0.1) 0%, transparent 100%);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+    h1 span {
+      color: var(--accent);
+    }
+    .tagline {
+      margin-top: 0.75rem;
+      font-size: 1.25rem;
+      color: var(--muted);
+    }
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 3rem;
+      font-size: 1.75rem;
+      color: var(--accent-2);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    h3 {
+      margin-top: 2rem;
+      color: var(--accent);
+    }
+    p { margin: 1rem 0; }
+    a { color: var(--accent); }
+    code, pre, kbd {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      font-size: 0.92rem;
+    }
+    code {
+      background: var(--code-bg);
+      padding: 0.15rem 0.4rem;
+      border-radius: 0.25rem;
+      color: var(--accent);
+    }
+    kbd {
+      display: inline-block;
+      padding: 0.05rem 0.4rem;
+      border: 1px solid var(--border);
+      border-bottom-width: 2px;
+      border-radius: 0.3rem;
+      background: var(--code-bg);
+      color: var(--fg);
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1.25rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      line-height: 1.5;
+    }
+    pre.layout {
+      line-height: 1.25;
+      font-size: 0.8rem;
+    }
+    .comment { color: #64748b; font-style: italic; }
+    ul, ol {
+      padding-left: 1.5rem;
+    }
+    li {
+      margin: 0.5rem 0;
+    }
+    .note {
+      background: rgba(56,189,248,0.08);
+      border-left: 4px solid var(--accent);
+      padding: 1rem 1.25rem;
+      border-radius: 0 0.5rem 0.5rem 0;
+      margin: 1.5rem 0;
+    }
+    .note.warning {
+      background: rgba(251,191,36,0.08);
+      border-left-color: var(--warn);
+    }
+    .note.warning strong { color: var(--warn); }
+    .doc-nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .doc-nav a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"] {
+      color: var(--accent);
+    }
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.25rem;
+      margin: 1.5rem 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .toc li { margin: 0; }
+    .toc a { color: var(--muted); text-decoration: none; }
+    .toc a:hover { color: var(--accent); }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1rem 1.25rem;
+    }
+    .card h4 {
+      margin: 0 0 0.35rem;
+      font-size: 1.05rem;
+    }
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+    }
+    th, td {
+      padding: 0.45rem 0.6rem;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .nowrap { white-space: nowrap; }
+    td.group {
+      padding-top: 1.25rem;
+      color: var(--accent-2);
+      font-weight: 600;
+    }
+    footer {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Vela Studio<span>.</span></h1>
+    <p class="tagline">The editor for Vela: write, check, and run programs, with a terminal beside them.</p>
+    <nav class="doc-nav" aria-label="Vela documentation">
+      <a href="vela.html">Language</a>
+      <a href="ide.html" aria-current="page">Studio</a>
+      <a href="comparison.html">Comparison</a>
+      <a href="future.html">Future</a>
+    </nav>
+  </header>
+
+  <main>
+    <section>
+      <h2>What is Vela Studio?</h2>
+      <p>
+        Vela Studio is a small editor made for <a href="vela.html">Vela</a>. You start it on a folder, and it opens in
+        your browser: files on the left, the editor in the middle, and a panel below with problems, your program's
+        output, and a terminal. <kbd>F5</kbd> saves the file, compiles it, and runs it.
+      </p>
+      <p>
+        It understands Vela because it <em>is</em> Vela: the compiler's own lexer, parser, and checker are compiled
+        to WebAssembly and run inside the page on every keystroke, and programs are built by the same code as the
+        <code>vela</code> command. Highlighting, errors, completion, and the compiler can't disagree about the
+        language.
+      </p>
+      <ul class="toc" aria-label="On this page">
+        <li><a href="#install">Install</a></li>
+        <li><a href="#launch">Launch</a></li>
+        <li><a href="#tour">A tour</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#shortcuts">Shortcuts</a></li>
+        <li><a href="#security">Security</a></li>
+        <li><a href="#troubleshooting">Troubleshooting</a></li>
+        <li><a href="#developing">Working on Vela Studio</a></li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 id="install">Install</h2>
+      <h3>Requirements</h3>
+      <ul>
+        <li><strong>Rust</strong>, a recent stable release (tested with 1.97), with the WebAssembly target:
+          <code>rustup target add wasm32-unknown-unknown</code>.</li>
+        <li><strong>Node.js</strong> 20.19 or later (22.12 or later on the 22 line), with npm, to build the page.</li>
+        <li><strong>A C compiler</strong> to run programs: <code>cc</code>, or the one named by <code>CC</code>, exactly
+          as for the <code>vela</code> command. Editing works without one.</li>
+        <li><strong>A browser.</strong> Vela Studio is tested in Chromium; current Firefox and Safari are expected to
+          work.</li>
+      </ul>
+      <p>
+        Linux is the tested platform. macOS and Windows are supported by the libraries Vela Studio uses (including
+        Windows' ConPTY for terminals), but aren't tested yet.
+      </p>
+
+      <h3>Build</h3>
+      <p>From the root of the Vela repository:</p>
+      <pre>npm --prefix ide/web install
+npm --prefix ide/web run build          <span class="comment"># the WebAssembly module and the page</span>
+cargo build -p vela-studio --release    <span class="comment"># the server, with the page inside it</span></pre>
+      <p>
+        The order matters: a release build embeds <code>ide/web/dist</code>, so build the page first, and rebuild the
+        server after changing it. The result is a single program, <code>target/release/vela-studio</code>, that
+        needs nothing else from the repository. Copy it anywhere on your <code>PATH</code>:
+      </p>
+      <pre>cp target/release/vela-studio ~/.local/bin/</pre>
+    </section>
+
+    <section>
+      <h2 id="launch">Launch</h2>
+      <pre>vela-studio [WORKSPACE] [--port N] [--no-open]</pre>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Argument</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>WORKSPACE</code></td><td>The folder to open. Defaults to the current folder.</td></tr>
+            <tr><td><code>--port N</code></td><td>Listen on port <code>N</code>. Without it, a free port is chosen.</td></tr>
+            <tr><td><code>--no-open</code></td><td>Print the address without opening a browser.</td></tr>
+            <tr><td><code>--help</code></td><td>Print the usage.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>It prints the address, which carries a secret token, and opens it:</p>
+      <pre>$ vela-studio examples
+Vela Studio is running for /home/you/vela/examples
+  http://127.0.0.1:41377/#token=5f0c…
+Press Ctrl+C to stop.</pre>
+      <p>
+        Keep that terminal open while you work. <kbd>Ctrl</kbd>+<kbd>C</kbd> stops Vela Studio, along with any program
+        or shell it started. To work on another folder at the same time, start another <code>vela-studio</code>; each
+        gets its own port and token.
+      </p>
+      <p>
+        Reloading the page keeps working. A new browser tab needs the full printed address, since the token is kept
+        per tab. The exit status is 2 for wrong arguments and 1 when Vela Studio can't start (for example, the folder
+        doesn't exist or the port is taken).
+      </p>
+    </section>
+
+    <section>
+      <h2 id="tour">A Tour</h2>
+      <pre class="layout" aria-label="The Vela Studio window">┌──────────────────────────────────────────────────────────────────────────────┐
+│ ≡  ◆ Vela Studio   examples              [Build]  [▶ Run]   [Open]  [Theme]  │ title bar
+├─────────────┬────────────────────────────────────────────────────────────────┤
+│ EXPLORER    │  fib.vela ●   kinds.vela   hello.vela                          │ tabs
+│  demo.vela  │ ────────────────────────────────────────────────────────────── │
+│  fib.vela   │  1  task fib(n: int) -&gt; int                                    │
+│  hello.vela │  2      when n &lt; 2                                             │ editor
+│  kinds.vela │  3          &lt;- n                                               │
+│             │  4      fi                                                     │
+│ OUTLINE     │  5      &lt;- fib(n - 1) + fib(n - 2)                             │
+│  ƒ fib      ├────────────────────────────────────────────────────────────────┤
+│  ƒ main     │  PROBLEMS   OUTPUT   TERMINAL                                  │ panel
+│             │  ▶ fib.vela                                                    │
+│             │  0                                                             │
+│             │  1                                                             │
+│             │  …                                                             │
+│             │  ── exited with code 0 · 3 ms ──                               │
+├─────────────┴────────────────────────────────────────────────────────────────┤
+│ No problems    fib.vela exited with code 0 · 3 ms        Ln 3, Col 13   Vela │ status bar
+└──────────────────────────────────────────────────────────────────────────────┘</pre>
+      <ul>
+        <li><strong>Title bar:</strong> toggle the sidebar, the folder's name, Build (hammer), Run (which turns into a
+          spinner while building and Stop while the program runs), open a file by name, and the light/dark theme. A
+          <em>No C compiler</em> warning appears here when <code>cc</code> or <code>$CC</code> can't be started.</li>
+        <li><strong>Sidebar:</strong> the Explorer (the folder's files) and the Outline (the open file's tasks,
+          shapes, and kinds; the one under the cursor is highlighted). Drag its edge to resize it; double-click the
+          edge to reset.</li>
+        <li><strong>Tabs and editor:</strong> one tab per open file; a dot marks unsaved changes. With no file open,
+          a welcome screen lists the folder's programs and the main shortcuts.</li>
+        <li><strong>Panel:</strong> <em>Problems</em> (errors in your files), <em>Output</em> (the program you ran),
+          and <em>Terminal</em> (a shell in the folder). Drag its top edge to resize it.</li>
+        <li><strong>Status bar:</strong> the problem count and the last run's result (click either to open its tab),
+          the cursor position, and the file's language.</li>
+      </ul>
+      <p>Sizes, open tabs, expanded folders, the panel's tab, and the theme are remembered for next time.</p>
+    </section>
+
+    <section>
+      <h2 id="features">Features</h2>
+
+      <h3>Writing Vela</h3>
+      <div class="cards">
+        <div class="card">
+          <h4>Highlighting that knows names</h4>
+          <p>Tasks, shapes and kinds, variants, parameters, variables, and fields each get their own color, even in a
+            half-typed line.</p>
+        </div>
+        <div class="card">
+          <h4>Errors as you type</h4>
+          <p>The compiler's error is underlined in place, marked in the gutter, explained on hover, and listed under
+            Problems. <kbd>F8</kbd> jumps to it.</p>
+        </div>
+        <div class="card">
+          <h4>Completion</h4>
+          <p>Only what fits: types after <code>:</code>, <code>-&gt;</code>, <code>^</code>, and <code>new</code>;
+            variables declared above the cursor; fields after <code>.</code>; the cases still missing after
+            <code>case</code>.</p>
+        </div>
+        <div class="card">
+          <h4>Snippets</h4>
+          <p><code>task</code>, <code>shape</code>, <code>kind</code>, <code>when</code>, <code>loop</code>,
+            <code>each</code>, and <code>match</code>, which expands to one <code>case</code> per variant, with its
+            bindings. <kbd>Tab</kbd> moves between the fields.</p>
+        </div>
+        <div class="card">
+          <h4>Hover and go to definition</h4>
+          <p>Hover a name to see its type or signature. <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it
+            is declared; <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> finds a declaration by name.</p>
+        </div>
+        <div class="card">
+          <h4>Blocks that indent themselves</h4>
+          <p>Enter indents after a block's first line; typing <code>fi</code>, <code>else</code>, or
+            <code>case</code> lines it up with its block. Blocks fold from the gutter.</p>
+        </div>
+      </div>
+      <p>
+        The editor also has the usual tools: find and replace, multiple cursors, bracket matching and closing,
+        comment toggling, and line moves (see <a href="#shortcuts">Shortcuts</a>). Other files open as plain text.
+      </p>
+
+      <h3>Files</h3>
+      <ul>
+        <li><strong>Explorer:</strong> create files and folders (a name like <code>lib/util.vela</code> creates the
+          folder too), rename (a name with folders moves the entry), and delete, from the buttons, the right-click
+          menu, or the keyboard. Hidden files and folders, <code>target/</code>, and <code>node_modules/</code> aren't
+          listed.</li>
+        <li><strong>Saving:</strong> <kbd>Ctrl</kbd>+<kbd>S</kbd> saves the file, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>
+          saves all. Closing a tab or leaving the page with unsaved changes asks first.</li>
+        <li><strong>Changes made elsewhere</strong> are noticed when you come back to the page: a file without
+          unsaved changes reloads, keeping your cursor; a file with unsaved changes is marked, and saving it asks
+          whether to overwrite the other version or reload it. A deleted file can be saved again.</li>
+        <li>Files up to 1 MiB of UTF-8 text can be opened.</li>
+      </ul>
+
+      <h3>Running</h3>
+      <ul>
+        <li><kbd>F5</kbd> (or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>) saves the current <code>.vela</code> file, builds it,
+          and runs it in the <strong>Output</strong> tab. A program is one file, so only that file is saved. Output is
+          a real terminal: colors work, and what you type goes to the program.</li>
+        <li>The run ends with a summary line, <code>── exited with code 0 · 3 ms ──</code>, and the status bar keeps
+          the result. <kbd>Shift</kbd>+<kbd>F5</kbd> or the Stop button ends a program; running again replaces the
+          one that is running.</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> builds without running.</li>
+        <li><strong>When a build fails,</strong> a Vela error (or a missing <code>task main()</code>) opens
+          <strong>Problems</strong>, where clicking it selects the spot; a failure of the C compiler opens Output with
+          its message. A build error stays listed until that file builds again.</li>
+        <li>Builds happen in a temporary folder that is removed afterwards. Running never writes into your
+          folder.</li>
+      </ul>
+
+      <h3>Terminal</h3>
+      <ul>
+        <li>The <strong>Terminal</strong> tab starts your default shell in the workspace folder the first time you open
+          it (<kbd>Ctrl</kbd>+<kbd>`</kbd>). Use it for the <code>vela</code> command, <code>git</code>, or anything
+          else.</li>
+        <li>Its buttons restart the shell, stop it, and clear the screen. After the shell exits, any key starts a new
+          one. Links in Output and the terminal open with <kbd>Ctrl</kbd>+click (<kbd>⌘</kbd>+click on a Mac).</li>
+      </ul>
+
+      <h3>Look and feel</h3>
+      <ul>
+        <li>Dark and light themes that match these docs; the first follows your system, until you choose one.</li>
+        <li>Short animations for panels, tabs, completion, the Run button, and toasts, turned off when your system
+          asks for reduced motion.</li>
+        <li>Everything is keyboard-reachable: the explorer, tabs, panel tabs, and resize handles all work with arrow
+          keys.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 id="shortcuts">Keyboard Shortcuts</h2>
+      <p>
+        On a Mac, <kbd>⌘</kbd> replaces <kbd>Ctrl</kbd> except where the table says otherwise; completion stays
+        <kbd>⌃</kbd>+<kbd>Space</kbd> and the terminal <kbd>⌃</kbd>+<kbd>`</kbd>. Browser shortcuts such as
+        <kbd>Ctrl</kbd>+<kbd>W</kbd> still belong to the browser.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Action</th><th>Linux and Windows</th><th>macOS</th></tr></thead>
+          <tbody>
+            <tr><td class="group" colspan="3">Workbench</td></tr>
+            <tr><td>Open a file by name</td><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td><kbd>⌘</kbd><kbd>P</kbd></td></tr>
+            <tr><td>Go to a declaration in the file</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td><td><kbd>⌘</kbd><kbd>⇧</kbd><kbd>O</kbd></td></tr>
+            <tr><td>Save</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td><kbd>⌘</kbd><kbd>S</kbd></td></tr>
+            <tr><td>Save all</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></td><td><kbd>⌘</kbd><kbd>⇧</kbd><kbd>S</kbd></td></tr>
+            <tr><td>Show or hide the sidebar</td><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td><td><kbd>⌘</kbd><kbd>B</kbd></td></tr>
+            <tr><td>Show or hide the panel</td><td><kbd>Ctrl</kbd>+<kbd>J</kbd></td><td><kbd>⌘</kbd><kbd>J</kbd></td></tr>
+            <tr><td>Show Problems</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd></td><td><kbd>⌘</kbd><kbd>⇧</kbd><kbd>M</kbd></td></tr>
+            <tr><td>Terminal (hides it when it has focus)</td><td><kbd>Ctrl</kbd>+<kbd>`</kbd></td><td><kbd>⌃</kbd><kbd>`</kbd></td></tr>
+
+            <tr><td class="group" colspan="3">Running</td></tr>
+            <tr><td>Save and run the file</td><td><kbd>F5</kbd> or <kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td><kbd>F5</kbd> or <kbd>⌘</kbd><kbd>↩</kbd></td></tr>
+            <tr><td>Stop the program</td><td><kbd>Shift</kbd>+<kbd>F5</kbd></td><td><kbd>⇧</kbd><kbd>F5</kbd></td></tr>
+            <tr><td>Save and build the file</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd></td><td><kbd>⌘</kbd><kbd>⇧</kbd><kbd>B</kbd></td></tr>
+
+            <tr><td class="group" colspan="3">Vela</td></tr>
+            <tr><td>Complete (also opens while typing)</td><td><kbd>Ctrl</kbd>+<kbd>Space</kbd></td><td><kbd>⌃</kbd><kbd>Space</kbd></td></tr>
+            <tr><td>Go to definition</td><td><kbd>F12</kbd> or <kbd>Ctrl</kbd>+click</td><td><kbd>F12</kbd> or <kbd>⌘</kbd>+click</td></tr>
+            <tr><td>Next error</td><td><kbd>F8</kbd></td><td><kbd>F8</kbd></td></tr>
+            <tr><td>Toggle comment</td><td><kbd>Ctrl</kbd>+<kbd>/</kbd></td><td><kbd>⌘</kbd><kbd>/</kbd></td></tr>
+
+            <tr><td class="group" colspan="3">Editing</td></tr>
+            <tr><td>Find / replace</td><td><kbd>Ctrl</kbd>+<kbd>F</kbd> / <kbd>Ctrl</kbd>+<kbd>H</kbd></td><td><kbd>⌘</kbd><kbd>F</kbd> / <kbd>⌘</kbd><kbd>⌥</kbd><kbd>F</kbd></td></tr>
+            <tr><td>Next / previous match</td><td><kbd>F3</kbd> / <kbd>Shift</kbd>+<kbd>F3</kbd></td><td><kbd>⌘</kbd><kbd>G</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>G</kbd></td></tr>
+            <tr><td>Go to line</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd></td><td><kbd>⌘</kbd><kbd>⌥</kbd><kbd>G</kbd></td></tr>
+            <tr><td>Select the next occurrence / all occurrences</td><td><kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></td><td><kbd>⌘</kbd><kbd>D</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>L</kbd></td></tr>
+            <tr><td>Add a cursor above / below</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd></td><td><kbd>⌘</kbd><kbd>⌥</kbd><kbd>↑</kbd> / <kbd>↓</kbd></td></tr>
+            <tr><td>Move the line up / down</td><td><kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd></td><td><kbd>⌥</kbd><kbd>↑</kbd> / <kbd>↓</kbd></td></tr>
+            <tr><td>Copy the line up / down</td><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd></td><td><kbd>⇧</kbd><kbd>⌥</kbd><kbd>↑</kbd> / <kbd>↓</kbd></td></tr>
+            <tr><td>Delete the line</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd></td><td><kbd>⌘</kbd><kbd>⇧</kbd><kbd>K</kbd></td></tr>
+            <tr><td>Indent / outdent</td><td><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd></td><td><kbd>Tab</kbd> / <kbd>⇧</kbd><kbd>Tab</kbd></td></tr>
+            <tr><td>Fold / unfold the block</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd> / <kbd>]</kbd></td><td><kbd>⌘</kbd><kbd>⌥</kbd><kbd>[</kbd> / <kbd>]</kbd></td></tr>
+            <tr><td>Fold / unfold everything</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>[</kbd> / <kbd>]</kbd></td><td><kbd>⌃</kbd><kbd>⌥</kbd><kbd>[</kbd> / <kbd>]</kbd></td></tr>
+            <tr><td>Undo / redo</td><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td><kbd>⌘</kbd><kbd>Z</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Z</kbd></td></tr>
+            <tr><td>Let <kbd>Tab</kbd> move focus out of the editor</td><td><kbd>Ctrl</kbd>+<kbd>M</kbd></td><td><kbd>⇧</kbd><kbd>⌥</kbd><kbd>M</kbd></td></tr>
+
+            <tr><td class="group" colspan="3">Explorer, tabs, and panels</td></tr>
+            <tr><td>Move in the explorer; open or close folders</td><td colspan="2"><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Home</kbd> <kbd>End</kbd>; <kbd>→</kbd> opens a folder, <kbd>←</kbd> closes it or goes to its parent</td></tr>
+            <tr><td>Open, rename, delete in the explorer</td><td colspan="2"><kbd>Enter</kbd>, <kbd>F2</kbd>, <kbd>Delete</kbd> (or right-click for the menu)</td></tr>
+            <tr><td>Switch tabs; close a tab</td><td colspan="2"><kbd>←</kbd> <kbd>→</kbd> on the tabs; <kbd>Delete</kbd> or a middle-click</td></tr>
+            <tr><td>Resize the sidebar or panel</td><td colspan="2">Arrow keys on its edge; double-click the edge to reset</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="security">Security</h2>
+      <p>
+        Vela Studio can read and write your files, run programs, and open a shell, so it is as powerful as a terminal.
+        It is built so that only the page it opened for you can use it.
+      </p>
+      <ul>
+        <li><strong>Only this computer.</strong> It listens on <code>127.0.0.1</code>, never on a network address, and
+          has no option to change that.</li>
+        <li><strong>A new secret for every launch.</strong> The address carries a random 256-bit token after
+          <code>#</code>, a part that browsers never send to a server. The page moves it into the tab's session
+          storage and removes it from the address bar. Every request needs it; when Vela Studio stops, the token stops
+          working.</li>
+        <li><strong>Other websites can't use it.</strong> A site open in another tab doesn't have the token; besides,
+          requests from another origin, or addressed to any host but <code>127.0.0.1</code> or
+          <code>localhost</code> on its port (which stops DNS rebinding), are refused, and no cross-origin headers
+          are ever sent.</li>
+        <li><strong>File operations stay in the folder.</strong> The editor's reads, writes, renames, and deletes are
+          confined to the workspace: <code>..</code>, absolute paths, and symbolic links that lead outside are
+          refused.</li>
+        <li><strong>A locked-down page.</strong> A strict Content Security Policy allows only the page's own scripts
+          and styles, and the page can't be framed. Fonts and the WebAssembly module are served by Vela Studio
+          itself: nothing is loaded from the internet, and nothing is sent anywhere.</li>
+        <li><strong>Nothing left running.</strong> A program or shell whose page has been closed for 30 seconds is
+          stopped with its child processes, and stopping Vela Studio stops them all.</li>
+      </ul>
+      <div class="note warning">
+        <p><strong>What it can't protect you from</strong></p>
+        <ul>
+          <li><strong>Programs run as you.</strong> The folder limit applies to the editor, not to programs you run or
+            to the terminal, which have all of your account's permissions. Run code you trust, as you would in any
+            terminal.</li>
+          <li><strong>The address is a key.</strong> Anyone with the full address can use Vela Studio until it stops.
+            Don't paste it into chats or show it on a shared screen, and stop Vela Studio when you're done.</li>
+          <li><strong>It isn't meant for remote use.</strong> Forwarding its port to another machine hands a shell to
+            whoever gets the address.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="troubleshooting">Troubleshooting</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>You see</th><th>What to do</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>“The frontend hasn't been built yet”</td>
+              <td>Build the page (<code>npm --prefix ide/web run build</code>), then rebuild and restart
+                <code>vela-studio</code>.</td>
+            </tr>
+            <tr>
+              <td>“Open Vela Studio from its link”</td>
+              <td>The page was opened without its token. Use the full address that <code>vela-studio</code> printed,
+                including <code>#token=…</code>.</td>
+            </tr>
+            <tr>
+              <td><em>No C compiler</em> in the title bar</td>
+              <td>Install gcc or clang, or start <code>vela-studio</code> with <code>CC</code> naming your compiler, as in
+                <code>CC=clang vela-studio</code>.</td>
+            </tr>
+            <tr>
+              <td><code>error: cannot listen on 127.0.0.1:N</code></td>
+              <td>Another program uses that port. Pick another, or leave out <code class="nowrap">--port</code>.</td>
+            </tr>
+            <tr>
+              <td>“Couldn't open a browser”</td>
+              <td>Open the printed address yourself.</td>
+            </tr>
+            <tr>
+              <td>A file won't open</td>
+              <td>Only UTF-8 text files up to 1 MiB can be edited.</td>
+            </tr>
+            <tr>
+              <td>A file changed by another program still shows the old text</td>
+              <td>Changes are checked when the page regains focus: switch away and back.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Vela Studio shows the compiler's first error in a file, since the compiler stops there (see
+        <a href="vela.html#limits">Current Limits</a>). Ideas for what comes next are in
+        <a href="future.html">Future Directions</a>.
+      </p>
+    </section>
+
+    <section>
+      <h2 id="developing">Working on Vela Studio</h2>
+      <p>Vela Studio lives in <code>ide/</code>, separate from the compiler, as members of the repository's Cargo workspace:</p>
+      <ul>
+        <li><code>ide/analysis</code> (<code>vela-analysis</code>): highlighting classes, diagnostics, outline,
+          definitions, completion, and hover, built on the compiler's library. Pure Rust, no I/O.</li>
+        <li><code>ide/wasm</code> (<code>vela-analysis-wasm</code>): that engine compiled to WebAssembly for the page,
+          behind a small JSON interface.</li>
+        <li><code>ide/server</code> (<code>vela-studio</code>): the local server for files, builds, runs, and
+          terminals (pseudo-terminals over WebSockets), which also serves the page.</li>
+        <li><code>ide/web</code>: the page, in TypeScript with CodeMirror 6 and xterm.js, built by Vite.</li>
+      </ul>
+      <p>
+        The compiler has no dependencies and doesn't depend on any of these: plain <code>cargo build</code> and
+        <code>cargo test</code> at the root still cover only the compiler.
+      </p>
+      <p>
+        A debug server reads <code>ide/web/dist</code> from disk, so after <code>npm run build</code> a reload shows the
+        new page. For hot reloading, run the server on a fixed port and Vite's dev server beside it, then open
+        <code>http://localhost:5173/#token=…</code> with the token the server printed:
+      </p>
+      <pre>cargo run -p vela-studio -- examples --port 4000 --no-open
+VELA_STUDIO_PORT=4000 npm --prefix ide/web run dev</pre>
+      <p>Tests:</p>
+      <pre>cargo test --workspace                 <span class="comment"># compiler, analysis, and server</span>
+cargo clippy --workspace --all-targets
+npm --prefix ide/web test              <span class="comment"># unit tests</span>
+npm --prefix ide/web run typecheck
+npm --prefix ide/web run e2e           <span class="comment"># Chromium against a real server; set CHROMIUM if it isn't /usr/bin/chromium</span></pre>
+    </section>
+  </main>
+
+  <footer>
+    <p>Vela Studio — a small editor for a small language, built on its compiler.</p>
+  </footer>
+</body>
+</html>

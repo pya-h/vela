@@ -89,6 +89,7 @@
       border-radius: 0.35rem;
       color: var(--accent);
       font-size: 0.9rem;
+      overflow-wrap: anywhere;
     }
     pre {
       background: var(--code-bg);
@@ -249,6 +250,7 @@
       font-size: 1.25rem;
     }
 
+    main a { color: var(--accent); }
     ul { padding-left: 1.5rem; }
     li { margin: 0.6rem 0; }
     footer {
@@ -280,6 +282,7 @@
     <p class="tagline">A design notebook of weak points, safe improvements, and bold ideas for where Vela could go next.</p>
     <nav class="doc-nav" aria-label="Vela documentation">
       <a href="vela.html">Language</a>
+      <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html" aria-current="page">Future</a>
     </nav>
@@ -360,8 +363,16 @@
           <p>Generated C is warning-free ISO C11, tested with gcc and clang, and any name that means something in C still works in Vela.</p>
         </div>
         <div class="card">
-          <h4>Vela Studio <span class="badge b-idea">In progress</span></h4>
-          <p>A small editor for Vela with highlighting, completion, live errors, one-key run, and a terminal, built on the compiler itself.</p>
+          <h4>Vela Studio <span class="badge b-done">Done</span></h4>
+          <p>A small editor for Vela with highlighting, completion, live errors, one-key run, and a terminal, built on the compiler itself. <a href="ide.html">See Vela Studio.</a></p>
+        </div>
+        <div class="card">
+          <h4>Multiple results <span class="badge b-rec">Up next</span></h4>
+          <p>A task sends several values, <code>-&gt; int, int</code> and <code>&lt;- a / b, a % b</code>, received with <code>bind q, r = divmod(17, 5)</code>. <a href="#results">Details below.</a></p>
+        </div>
+        <div class="card">
+          <h4>Named results <span class="badge b-rec">Up next</span></h4>
+          <p>Results with names, <code>-&gt; total: int</code>, set along the way with <code>total &lt;- value</code>; a bare <code>&lt;-</code> or the end of the task sends them. <a href="#named-results">Details below.</a></p>
         </div>
         <div class="card">
           <h4>Built-in arrays & slices <span class="badge b-idea">Idea</span></h4>
@@ -391,6 +402,176 @@
           <h4>Move-only pointers <span class="badge b-idea">Idea</span></h4>
           <p>Prevent accidental aliasing of <code>^T</code> by making them move-only by default.</p>
         </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="results"><span class="icon">🎁</span> Multiple and Named Results</h2>
+      <p>
+        Today a task sends at most one value. A task that has two things to report, such as a quotient and a
+        remainder, or a value and whether it was found, has to declare a shape only to carry them, or be split
+        into two tasks that repeat the same work. Two small, related features fix that, and they come first
+        among the language ideas because they are the cheapest: neither needs a new type, a runtime, or a change
+        to existing programs. <code>-&gt; int</code> and <code>&lt;- value</code> keep their meaning.
+      </p>
+
+      <h3>Step 1: Multiple Results</h3>
+      <p>The return type after <code>-&gt;</code> becomes a list of types, and <code>&lt;-</code> sends one value per type:</p>
+      <pre>task divmod(a: int, b: int) -&gt; int, int
+    &lt;- a / b, a % b
+fi
+
+task main()
+    bind q, r = divmod(17, 5)
+    show(q)                      # 3
+    show(r)                      # 2
+
+    bind whole, _ = divmod(9, 4)  # _ skips a result
+    show(whole)                  # 2
+fi</pre>
+      <ul>
+        <li><strong>Sending:</strong> <code>&lt;- a, b</code> must list exactly as many values as the header has types,
+          each of its type. A bare <code>&lt;-</code> stays reserved for tasks with no results.</li>
+        <li><strong>Receiving:</strong> <code>bind</code>, <code>hold</code>, and assignment take a list of names:
+          <code>hold q, r = divmod(17, 5)</code> or <code>q, r = divmod(20, 6)</code>. Types can be written per name,
+          <code>bind q: int, r: int = …</code>. <code>_</code> receives a result and drops it; no Vela name can start
+          with <code>_</code>, so it's free for this.</li>
+        <li><strong>Results aren't one value.</strong> <code>show(divmod(17, 5))</code> and
+          <code>bind pair = divmod(17, 5)</code> are errors: <em>'divmod' sends 2 values; receive them with
+          'bind a, b = …'</em>. A task with several results can only be called as the whole right side of a list.
+          First-class tuples are a separate, larger idea.</li>
+        <li><strong>Plain lists too:</strong> the same form works with ordinary values, and the right side is
+          evaluated completely before anything is assigned, so <code>a, b = b, a</code> swaps two variables.</li>
+        <li><strong>Generated C:</strong> each task with several results gets a result shape,
+          <code>struct vela_divmod__results { int64_t r0; int64_t r1; }</code>, returned by value; the call site
+          copies its fields into the new variables. No pointers, no allocation.</li>
+      </ul>
+
+      <h3 id="named-results">Step 2: Named Results</h3>
+      <p>
+        With results in place, each can have a name, written like a parameter: <code>name: type</code>. A named
+        result is a variable of the task, and it is set with the same arrow that sends results. What stands
+        before the arrow says what happens:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Header</th><th>Line</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>-&gt; int</code></td><td><code>&lt;- value</code></td><td>Send the value and end the task (today's Vela)</td></tr>
+            <tr><td><code>-&gt; int, int</code></td><td><code>&lt;- a, b</code></td><td>Send both values and end the task</td></tr>
+            <tr><td><code>-&gt; total: int</code></td><td><code>total &lt;- value</code></td><td>Set the result and keep going</td></tr>
+            <tr><td><code>-&gt; total: int</code></td><td><code>&lt;- value</code></td><td>Set the result, then send it and end the task</td></tr>
+            <tr><td><code>-&gt; total: int</code></td><td><code>&lt;-</code></td><td>Send the result as it is and end the task</td></tr>
+            <tr><td><code>-&gt; total: int</code></td><td>the closing <code>fi</code></td><td>Reaching the end sends the result</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>So an empty left side means "send and stop", and a name on the left means "this is the result so far":</p>
+      <pre>task score(hits: int, misses: int) -&gt; total: int
+    total &lt;- hits * 10
+    when misses == 0
+        &lt;- total + 50            # a perfect round: send the bonus score and end here
+    fi
+    total &lt;- total - misses * 5  # otherwise keep going
+    when total &lt; 0
+        total &lt;- 0
+    fi
+fi                              # reaching the end sends total</pre>
+      <p>
+        When <code>misses</code> isn't zero, <code>score</code> runs to its last line, updating
+        <code>total</code> each time it reaches a <code>total &lt;-</code> line, and the end sends whatever
+        <code>total</code> holds. A perfect round stops at the inner <code>&lt;-</code> instead, and
+        <code>total + 50</code> is sent. Setting a named result never ends the task. With several names:
+      </p>
+      <pre>task collatz(start: int) -&gt; steps: int, peak: int
+    hold n = start
+    steps, peak &lt;- 0, start
+    loop n != 1
+        when n % 2 == 0
+            n = n / 2
+        else
+            n = 3 * n + 1
+        fi
+        steps &lt;- steps + 1
+        when n &gt; peak
+            peak &lt;- n
+        fi
+        when steps == 1000
+            &lt;-                  # give up and send what we have
+        fi
+    fi
+fi
+
+task main()
+    bind steps, peak = collatz(27)
+    show(steps)                 # 111
+    show(peak)                  # 9232
+fi</pre>
+      <p>Named results follow Go's, with Vela's arrows and Vela's rule that every variable has a value:</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th></th><th>Go</th><th>Vela</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Declare</td><td><code>func score(…) (total int)</code></td><td><code>task score(…) -&gt; total: int</code></td></tr>
+            <tr><td>Set and keep going</td><td><code>total = x</code></td><td><code>total &lt;- x</code></td></tr>
+            <tr><td>Set and end</td><td><code>return x</code></td><td><code>&lt;- x</code></td></tr>
+            <tr><td>End with the current values</td><td><code>return</code></td><td><code>&lt;-</code></td></tr>
+            <tr><td>Reach the end</td><td>Not allowed: a <code>return</code> is required</td><td>Sends the named results</td></tr>
+            <tr><td>A result never set</td><td>Sends the zero value</td><td>Compile error</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The rules:</p>
+      <ul>
+        <li><strong>All or none.</strong> Either every result has a name or none does:
+          <code>-&gt; q: int, int</code> is an error.</li>
+        <li><strong>Names live in the task's scope.</strong> A result can't share a parameter's name, and the body
+          can't declare another variable with it. After it is set, it reads like any variable:
+          <code>total &lt;- total - 1</code>.</li>
+        <li><strong>Only <code>&lt;-</code> changes a result.</strong> <code>total = 0</code> is an error
+          (<em>'total' is a result; set it with 'total &lt;- …'</em>), and so is <code>count &lt;- 1</code> on an
+          ordinary variable (<em>'count' isn't a result of this task; use '='</em>). Every line that changes what a
+          task sends starts with a result's name and an arrow, so those lines stand out when reading, and an editor
+          can color them.</li>
+        <li><strong>No zero values.</strong> Vela has no uninitialized variables, and results are no exception. The
+          checker requires each named result to be set before it is read, and before every bare <code>&lt;-</code>
+          and the end of the task, on every path. This is the same path analysis that checks "a send on every
+          path" today: <em>'peak' might not be set here</em>. A <code>&lt;- values</code> line sets them all, so it
+          counts as a send on its path.</li>
+        <li><strong>Whole values only, at first.</strong> <code>best &lt;- Point { x: 0.0, y: 0.0 }</code> sets a
+          shape result; setting one field, <code>best.x &lt;- 0.0</code>, can come later if it's needed.</li>
+      </ul>
+
+      <div class="recommendation">
+        <h4>💡 Why the arrow, and what it costs</h4>
+        <p>
+          Setting a result with <code>=</code> would work too, but <code>total &lt;- value</code> keeps one symbol
+          for "this is what the task sends", with the name telling whether it stops there. It also costs the parser
+          almost nothing:
+        </p>
+        <ul>
+          <li><strong>Parser:</strong> the lexer already reads <code>&lt;-</code> as one token. A line that starts
+            with a name, or names separated by commas, followed by <code>&lt;-</code> is a result update; an
+            <code>&lt;-</code> anywhere else in a line is still an error. That is a few tokens of lookahead in
+            <code>parse_stmt</code>, the same as telling <code>x = 1</code> from <code>x + 1</code>. The header's
+            <code>-&gt;</code> list reads names the way parameter lists already do.</li>
+          <li><strong>Checker:</strong> result names join the task's scope; "set on every path" reuses the existing
+            send-on-every-path analysis; the mid-line error for <code>a &lt;-1</code> keeps its hint to write
+            <code>&lt; -</code> when <code>a</code> isn't a result.</li>
+          <li><strong>Generated C:</strong> named results are locals declared at the top of the function; every
+            <code>&lt;-</code> that ends the task, and the end itself, returns them (in the result shape when there
+            are several).</li>
+          <li><strong>Vela Studio:</strong> hover on a result name shows <code>result total: int</code>, completion at
+            the start of a line offers <code>total &lt;- </code>, and the outline shows the names in the signature.</li>
+        </ul>
+        <p>
+          Build multiple results first, since named results reuse their header list, send list, and C result
+          shape; then add names on top.
+        </p>
       </div>
     </section>
 
@@ -817,7 +998,7 @@ show(p.length_squared())</pre>
         <li><strong>Guards in patterns:</strong> <code>case Point x y when x > 0</code></li>
         <li><strong>Else-if chains:</strong> <code>when ... else when ... else ... fi</code></li>
         <li><strong>Inclusive ranges:</strong> <code>0..=10</code> or <code>0...10</code></li>
-        <li><strong>Tuples:</strong> <code>(int, text)</code> for lightweight grouping</li>
+        <li><strong>Tuples:</strong> <code>(int, text)</code> as values that can be stored and passed, beyond <a href="#results">multiple results</a></li>
         <li><strong>Named arguments:</strong> <code>Point(x: 1, y: 2)</code> always, not just struct init</li>
       </ul>
 
@@ -864,7 +1045,8 @@ show(p.length_squared())</pre>
           <ul>
             <li><s>Source spans and good error messages</s> (done)</li>
             <li><s>Complete type checking and portable C output</s> (done)</li>
-            <li>Vela Studio: an editor with language support and a terminal</li>
+            <li><s>Vela Studio: an editor with language support and a terminal</s> (done: <a href="ide.html">Vela Studio</a>)</li>
+            <li>Multiple results, then named results (<code>-&gt; total: int</code>, set with <code>total &lt;- value</code>)</li>
             <li>Defined integer overflow and division by zero</li>
             <li>Fixed-size arrays and a real <code>text</code> type</li>
             <li>Move-only owned pointers</li>
@@ -899,7 +1081,7 @@ show(p.length_squared())</pre>
       <h2><span class="icon">🎯</span> Conclusion</h2>
       <p>
         Vela's strength is its smallness. The best next steps preserve that smallness while filling the
-        obvious gaps: a real string type, arrays, defined integer arithmetic, and a safer memory model. The
+        obvious gaps: multiple and named results, a real string type, arrays, defined integer arithmetic, and a safer memory model. The
         recommended memory direction — <strong>move-only ownership + scoped regions + optional temporary borrows</strong>
         — keeps Vela fast, simple, and far safer than C without becoming Rust.
       </p>
