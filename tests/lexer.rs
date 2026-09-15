@@ -118,7 +118,7 @@ fn agrees_with_the_compiler_on_malformed_input() {
         "élan", "12abc", "1.5e3", "99999999999999999999", "x @ y", "a ! b", "\0", "\"\0\"", "# only a comment",
         "task main()\n    show(\"unterminated)\nfi\n", "\"bad \\q then\nunterminated",
         "x\r\ny", "# comment\r\nfi", "\"a\\\r\nb\"", "\u{feff}task", "1.", "1..5", "a && b", "!x",
-        "1__000", "1_", "1_000abc",
+        "1__000", "1_", "1_000abc", "_", "a _ b", "{_}", "_é", "__", "case _\n",
     ];
     for source in cases {
         check_agreement(source, &format!("{:?}", source));
@@ -196,6 +196,20 @@ fn the_send_arrow_is_one_token() {
     assert_eq!(kinds("<=")[0], token(Token::Le));
     // `send` is an ordinary name.
     assert_eq!(kinds("send"), [token(Token::Ident("send".into())), token(Token::Eof)]);
+}
+
+#[test]
+fn the_underscore_alone_is_a_symbol() {
+    assert_eq!(kinds("_"), [token(Token::Underscore), token(Token::Eof)]);
+    assert_eq!(Token::Underscore.describe(), "'_'");
+    assert_eq!(kinds("{_}"), [token(Token::LBrace), token(Token::Underscore), token(Token::RBrace), token(Token::Eof)]);
+    assert_eq!(kinds("fail _")[1], token(Token::Underscore));
+    // A name still can't start with `_`.
+    assert_eq!(kinds("_x")[0], invalid(1, 1, "names must start with a letter"));
+    assert_eq!(kinds("__")[0], invalid(1, 1, "names must start with a letter"));
+    // `maybe`, `is`, and `fail` are keywords; longer words are names.
+    assert_eq!(kinds("maybe int")[0], token(Token::Maybe));
+    assert_eq!(kinds("issue")[0], token(Token::Ident("issue".into())));
 }
 
 #[test]

@@ -142,6 +142,76 @@ fi
 }
 
 #[test]
+fn plan_b_and_is_names_are_scoped_to_their_blocks() {
+    let source = "\
+task parse(t: text) -> int or text
+    <- 1
+fi
+
+task main()
+    bind m: maybe int = 2
+    bind n = parse(\"x\") {
+        fail problem
+        bind fallback = 0
+        show(problem)
+        fallback
+    }
+    show(fallback)
+    when m is {value}
+        show(value + n)
+    else
+        show(value)
+    fi
+    loop m is {again}
+        show(again)
+    fi
+fi
+";
+    assert_definition(source, ("problem)", 0), ("problem", 0));
+    assert_definition(source, ("fallback\n    }", 0), ("fallback =", 0));
+    // A plan B's names end with its block, and an `is` pattern's with its branch.
+    assert_eq!(Analysis::new(source).definition(at(source, "fallback)", 0)), None);
+    assert_definition(source, ("value + n", 0), ("value}", 0));
+    assert_eq!(Analysis::new(source).definition(at(source, "value)", 0)), None);
+    assert_definition(source, ("again)", 0), ("again}", 0));
+    assert_eq!(class_at(source, "is {value}", 0), TokenClass::Keyword);
+    assert_eq!(class_at(source, "maybe int", 0), TokenClass::Keyword);
+    assert_eq!(class_at(source, "text\n    <- 1", 0), TokenClass::TypeBuiltin);
+    assert_eq!(class_at(source, "fail problem", 0), TokenClass::Keyword);
+
+    // Blocks inside a plan B don't end it early.
+    let source = "\
+kind Light
+    Red
+    Green
+fi
+
+task main()
+    bind m: maybe int = none
+    bind n = m {
+        bind light = Red
+        match light
+        case Red
+            show(1)
+        case Green
+            show(2)
+        fi
+        when true
+            show(3)
+        else
+            show(4)
+        fi
+        bind inside = 5
+        inside
+    }
+    show(inside)
+fi
+";
+    assert_definition(source, ("inside\n    }", 0), ("inside =", 0));
+    assert_eq!(Analysis::new(source).definition(at(source, "inside)", 0)), None);
+}
+
+#[test]
 fn half_typed_code_still_resolves_and_highlights() {
     // The first task is never closed and a string is unterminated.
     let source = "\

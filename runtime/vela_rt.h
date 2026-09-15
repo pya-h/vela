@@ -34,6 +34,11 @@ static inline void vela__rt__show_text(const char* x) {
     printf("%s\n", x);
 }
 
+/* `show` on an empty `maybe`. */
+static inline void vela__rt__show_none(void) {
+    puts("none");
+}
+
 /* `==` on text compares contents. */
 static inline bool vela__rt__text_eq(const char* a, const char* b) {
     return strcmp(a, b) == 0;

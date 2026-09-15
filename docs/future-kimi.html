@@ -289,7 +289,7 @@
     <section>
       <h2><span class="icon" aria-hidden="true">🧠</span> Memory Safety: Beyond Manual <code>new</code> and <code>free</code></h2>
       <p>
-        Vela's current memory model is explicit but unsafe: a missing <code>free</code> leaks, a double <code>free</code> corrupts, and <code>p^</code> on <code>none</code> is a crash. The ideas below aim to keep the explicit feel while making common mistakes impossible — or at least caught at compile time.
+        Vela's current memory model is explicit but unsafe: a missing <code>free</code> leaks, a double <code>free</code> corrupts, and a freed pointer can still be read. (Null is already gone: a <code>^T</code> always points to something, and a pointer that can be missing is a <a href="future.html#maybe"><code>maybe ^T</code></a>.) The ideas below aim to keep the explicit feel while making common mistakes impossible — or at least caught at compile time.
       </p>
 
       <div class="option">
@@ -414,7 +414,7 @@ fi</pre>
       <div class="option">
         <h3><span aria-hidden="true">🎯</span> Niche-Optimized Nullability</h3>
         <p>
-          Vela's <code>^T</code> already uses <code>none</code> as a sentinel. The compiler could guarantee that the underlying representation uses a spare bit pattern (a null pointer, in this case) so <code>^T?</code> costs nothing extra. But Vela could go further: track which types have spare niches and use them automatically.
+          Vela's <code>maybe ^T</code> already uses the null pointer as <code>none</code>, so it costs nothing extra over <code>^T</code>. But Vela could go further: track which types have spare niches and use them automatically, so other <code>maybe</code> values need no separate flag.
         </p>
         <pre>kind Option
     Some(value: int)

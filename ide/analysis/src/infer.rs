@@ -136,7 +136,7 @@ impl<'a> Knowledge<'a> {
         match (symbol.kind, symbol.intro) {
             (SymbolKind::Parameter, _) | (SymbolKind::Field, _) => parse_type(&symbol.detail),
             (SymbolKind::Variable, Some("each")) => Some(Type::Int),
-            (SymbolKind::Variable, Some("case")) => self.case_binding_type(id),
+            (SymbolKind::Variable, Some("case" | "is")) => self.case_binding_type(id),
             (SymbolKind::Variable, _) if !symbol.detail.is_empty() => parse_type(&symbol.detail),
             (SymbolKind::Variable, _) => {
                 // The initializer's type: `bind x = Point { … }`, `bind ok = a < b`.
@@ -154,10 +154,12 @@ impl<'a> Knowledge<'a> {
         }
     }
 
+    /// The type of a name a `case` or `is` pattern binds from a variant's
+    /// payload. (The checker gives the types of `{value}` and `fail e`.)
     fn case_binding_type(&self, id: usize) -> Option<Type> {
         let symbol = self.symbol(id)?;
         let name = self.at_byte(symbol.name_range.start)?;
-        let case = (self.line_start(name)..name).find(|&q| self.token(q) == Some(&Token::Case))?;
+        let case = (self.line_start(name)..name).rev().find(|&q| matches!(self.token(q), Some(Token::Case | Token::Is)))?;
         let index = name.checked_sub(case + 2)?;
         let variant = self.global(self.ident(case + 1)?, SymbolKind::Variant)?;
         let (_, field) = self.children(variant).nth(index)?;
@@ -194,6 +196,12 @@ impl<'a> Knowledge<'a> {
             Token::Caret => exact(q).or_else(|| self.expression_type(q.checked_sub(1)?, depth + 1)?.ptr_inner().cloned()),
             Token::RBrace => {
                 let open = self.matching_open(q, &Token::LBrace, &Token::RBrace)?;
+                let literal = self.token(open + 1) == Some(&Token::RBrace)
+                    || (self.ident(open + 1).is_some() && self.token(open + 2) == Some(&Token::Colon));
+                if !literal {
+                    // A plan B, whose type the checker records at its `{`.
+                    return exact(open);
+                }
                 let shape = self.ident(open.checked_sub(1)?)?;
                 Some(Type::Named(shape.to_string()))
             }
@@ -316,11 +324,24 @@ impl<'a> Knowledge<'a> {
     }
 }
 
-/// A type written in source, such as `int`, `^Point`, or `^^text`.
+/// A type written in source, such as `int`, `^Point`, `maybe ^Node`, or
+/// `int or ParseError`.
 pub(crate) fn parse_type(text: &str) -> Option<Type> {
     let text = text.trim();
+    if let Some((value, error)) = text.split_once(" or ") {
+        return Some(Type::Or(Box::new(parse_simple_type(value)?), Box::new(parse_simple_type(error)?)));
+    }
+    parse_simple_type(text)
+}
+
+/// A type without `or`.
+fn parse_simple_type(text: &str) -> Option<Type> {
+    let text = text.trim();
     if let Some(inner) = text.strip_prefix('^') {
-        return parse_type(inner).map(|ty| Type::Ptr(Box::new(ty)));
+        return parse_simple_type(inner).map(|ty| Type::Ptr(Box::new(ty)));
+    }
+    if let Some(inner) = text.strip_prefix("maybe ") {
+        return parse_simple_type(inner).map(|ty| Type::Maybe(Box::new(ty)));
     }
     let is_name = text.starts_with(|c: char| c.is_ascii_alphabetic()) && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
     if !is_name {

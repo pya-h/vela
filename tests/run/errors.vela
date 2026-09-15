@@ -1,0 +1,130 @@
+# `T or E`: a task that can fail sends a value or `fail error`. `match`, `is`,
+# and plan B read the result; `unit or E` succeeds with a bare `<-` or by
+# reaching its end.
+
+kind ParseError
+    Empty
+    Negative(value: int)
+fi
+
+task check_size(size: int) -> int or ParseError
+    when size < 0
+        <- fail Negative(size)
+    fi
+    when size == 0
+        <- fail Empty
+    fi
+    <- size * 2
+fi
+
+task explain(e: ParseError) -> text
+    match e
+    case Empty
+        <- "empty"
+    case Negative value
+        when value < -100
+            <- "very negative"
+        fi
+        <- "negative"
+    fi
+fi
+
+task save(size: int) -> unit or text
+    when size > 100
+        <- fail "too big"
+    fi
+    when size == 50
+        show("exactly fifty")
+        <-
+    fi
+    show("saved")
+fi
+
+task lookup(key: text) -> maybe int or text
+    when key == ""
+        <- fail "no key"
+    fi
+    when key == "answer"
+        <- 42
+    fi
+    <- none
+fi
+
+task save_twice(size: int) -> unit or text
+    save(size) { fail e
+        <- fail e
+    }
+    <- save(size)
+fi
+
+task doubled_or_zero(size: int) -> int
+    bind n = check_size(size) {
+        fail e
+        show(explain(e))
+        <- 0
+    }
+    <- n
+fi
+
+task main()
+    show(check_size(3) { 0 })
+    show(check_size(-1) { 0 })
+
+    bind described = check_size(-500) {
+        fail problem
+        show(explain(problem))
+        -1
+    }
+    show(described)
+
+    show(doubled_or_zero(5))
+    show(doubled_or_zero(0))
+
+    match check_size(7)
+    case {value}
+        show(value)
+    case fail e
+        show(explain(e))
+    fi
+
+    when check_size(-2) is fail e
+        show(explain(e))
+    fi
+    when check_size(1) is {value}
+        show(value)
+    fi
+
+    save(10) { fail e
+        show(e)
+    }
+    save(500) {
+        fail reason
+        show(reason)
+    }
+    save(50) { }
+    save(1000) { fail _ }
+    save_twice(300) { fail e
+        show(e)
+    }
+
+    match save(200)
+    case {_}
+        show("fine")
+    case fail message
+        show(message)
+    fi
+
+    hold stored: int or ParseError = fail Empty
+    show(stored { -1 })
+    stored = 8
+    show(stored { -1 })
+
+    show(lookup("answer") { none } { 0 })
+    show(lookup("other") { none })
+    bind missing = lookup("") {
+        fail why
+        show(why)
+        none
+    }
+    show(missing)
+fi

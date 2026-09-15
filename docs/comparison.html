@@ -409,9 +409,10 @@
         Vela provides static type safety and exhaustive pattern matching on kinds, which catches many bugs
         at compile time: there are no implicit conversions (except that mixing <code>int</code> and
         <code>float</code> in arithmetic gives a <code>float</code>), every value-returning task must send a value
-        (<code>&lt;- value</code>) on every path, and <code>none</code> only fits pointer types. However, it does <em>not</em> prevent memory
-        errors like Rust does: dereferencing <code>none</code> or a freed pointer is not caught, and integer overflow
-        and division by zero are undefined, as in C. It is safer than C because shapes, kinds, and pointers are
+        (<code>&lt;- value</code>) on every path, a missing value is a <code>maybe T</code> that must be checked
+        before use (pointers can't be null), and a failure is a <code>T or E</code> whose error can't be ignored by
+        accident. However, it does <em>not</em> prevent memory errors like Rust does: using a freed pointer, or
+        freeing one twice, is not caught, and integer overflow and division by zero are undefined, as in C. It is safer than C because shapes, kinds, and pointers are
         checked, but less safe than Rust, Swift, Haskell, OCaml, or GC'd languages.
       </p>
       <div class="table-wrap">
@@ -422,7 +423,7 @@
           <tbody>
             <tr><td class="lang">C</td><td>Weak</td><td>Unsafe</td><td>No</td></tr>
             <tr><td class="lang">C++</td><td>Moderate</td><td>Unsafe by default</td><td>No</td></tr>
-            <tr><td class="lang vela">Vela</td><td>Strong</td><td>Manual, type-checked</td><td><code>none</code> exists, unchecked</td></tr>
+            <tr><td class="lang vela">Vela</td><td>Strong</td><td>Manual, type-checked</td><td><code>maybe T</code>; no null pointers</td></tr>
             <tr><td class="lang">Zig</td><td>Strong</td><td>Manual + checks</td><td>Optional</td></tr>
             <tr><td class="lang">Go</td><td>Strong</td><td>GC-safe</td><td>Nil exists</td></tr>
             <tr><td class="lang">Rust</td><td>Strong</td><td>Compile-time proven</td><td>Option&lt;T&gt;</td></tr>
@@ -454,8 +455,8 @@
       <p>
         Vela is best understood as an <strong>experimental, teaching-friendly systems language</strong>. It is not
         trying to dethrone Rust or C. Instead, it demonstrates that you can have a small, fast, compiled
-        language with modern features — pattern matching, sum types, and clean syntax — while staying close to
-        the metal.
+        language with modern features — pattern matching, sum types, <code>maybe</code> values instead of null,
+        errors as types, and clean syntax — while staying close to the metal.
       </p>
       <div class="note">
         <strong>When to choose Vela:</strong> learning about compilers and language design, experiments, and

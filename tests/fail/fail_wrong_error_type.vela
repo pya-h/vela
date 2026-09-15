@@ -1,0 +1,8 @@
+# error: 3:8: expected an error of type text, got int
+task parse(t: text) -> int or text
+    <- fail 3
+fi
+
+task main()
+    show(parse("x") { 0 })
+fi

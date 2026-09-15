@@ -1,0 +1,13 @@
+# error: 3:16: a plan B must end with a value of type int, or send with '<-' on every path
+task pick(m: maybe int, stop: bool) -> int
+    bind n = m {
+        when stop
+            <- 0
+        fi
+    }
+    <- n
+fi
+
+task main()
+    show(pick(none, true))
+fi

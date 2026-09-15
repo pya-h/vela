@@ -1,0 +1,74 @@
+# `maybe T`: a plain value or `none` becomes one wherever a maybe is expected,
+# `show` prints the value or `none`, `==` compares with `none`, and `match`
+# reads it.
+
+shape Reading
+    label: text
+    value: maybe float
+fi
+
+task half(n: int) -> maybe int
+    when n % 2 == 0
+        <- n / 2
+    fi
+    <- none
+fi
+
+task describe(m: maybe int) -> text
+    match m
+    case {n}
+        when n > 10
+            <- "big"
+        fi
+        <- "small"
+    case none
+        <- "nothing"
+    fi
+fi
+
+task first_word(t: maybe text)
+    match t
+    case {_}
+        show("a word")
+    case _
+        show("no word")
+    fi
+fi
+
+task main()
+    bind a: maybe int = 5
+    hold b: maybe int = none
+    show(a)
+    show(b)
+    b = 42
+    show(b)
+    show(b == none)
+    show(b != none)
+    b = none
+    show(none == b)
+
+    show(half(8))
+    show(half(7))
+    show(describe(half(40)))
+    show(describe(half(4)))
+    show(describe(half(3)))
+    show(describe(7))
+
+    bind r = Reading { label: "temperature", value: 21.5 }
+    bind blank = Reading { label: "wind", value: none }
+    show(r.value)
+    show(blank.value)
+
+    bind flag: maybe bool = true
+    bind word: maybe text = "hi"
+    show(flag)
+    show(word)
+    first_word(word)
+    first_word(none)
+
+    bind boxed = new maybe int(3)
+    show(boxed^)
+    boxed^ = none
+    show(boxed^)
+    free(boxed)
+fi

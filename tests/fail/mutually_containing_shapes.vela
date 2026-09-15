@@ -1,4 +1,4 @@
-# error: 7:11: 'Left' contains itself by value (Left -> Right -> Left); use a pointer such as '^Left'
+# error: 7:11: 'Left' contains itself by value (Left -> Right -> Left); use a pointer such as 'maybe ^Left'
 shape Left
     right: Right
 fi

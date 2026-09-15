@@ -1,0 +1,130 @@
+  1 | # `maybe T`: a plain value or `none` becomes one wherever a maybe is expected,
+    | comment:# `maybe T`: a plain value or `none` becomes one wherever a maybe is expected,
+  2 | # `show` prints the value or `none`, `==` compares with `none`, and `match`
+    | comment:# `show` prints the value or `none`, `==` compares with `none`, and `match`
+  3 | # reads it.
+    | comment:# reads it.
+  5 | shape Reading
+    | keyword:shape  type:Reading
+  6 |     label: text
+    | field:label  punctuation::  type-builtin:text
+  7 |     value: maybe float
+    | field:value  punctuation::  keyword:maybe  type-builtin:float
+  8 | fi
+    | keyword:fi
+ 10 | task half(n: int) -> maybe int
+    | keyword:task  task:half  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int
+ 11 |     when n % 2 == 0
+    | keyword:when  parameter:n  operator:%  number:2  operator:==  number:0
+ 12 |         <- n / 2
+    | keyword:<-  parameter:n  operator:/  number:2
+ 13 |     fi
+    | keyword:fi
+ 14 |     <- none
+    | keyword:<-  keyword:none
+ 15 | fi
+    | keyword:fi
+ 17 | task describe(m: maybe int) -> text
+    | keyword:task  task:describe  punctuation:(  parameter:m  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:text
+ 18 |     match m
+    | keyword:match  parameter:m
+ 19 |     case {n}
+    | keyword:case  punctuation:{  variable:n  punctuation:}
+ 20 |         when n > 10
+    | keyword:when  variable:n  operator:>  number:10
+ 21 |             <- "big"
+    | keyword:<-  string:"big"
+ 22 |         fi
+    | keyword:fi
+ 23 |         <- "small"
+    | keyword:<-  string:"small"
+ 24 |     case none
+    | keyword:case  keyword:none
+ 25 |         <- "nothing"
+    | keyword:<-  string:"nothing"
+ 26 |     fi
+    | keyword:fi
+ 27 | fi
+    | keyword:fi
+ 29 | task first_word(t: maybe text)
+    | keyword:task  task:first_word  punctuation:(  parameter:t  punctuation::  keyword:maybe  type-builtin:text  punctuation:)
+ 30 |     match t
+    | keyword:match  parameter:t
+ 31 |     case {_}
+    | keyword:case  punctuation:{  keyword:_  punctuation:}
+ 32 |         show("a word")
+    | builtin-fn:show  punctuation:(  string:"a word"  punctuation:)
+ 33 |     case _
+    | keyword:case  keyword:_
+ 34 |         show("no word")
+    | builtin-fn:show  punctuation:(  string:"no word"  punctuation:)
+ 35 |     fi
+    | keyword:fi
+ 36 | fi
+    | keyword:fi
+ 38 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 39 |     bind a: maybe int = 5
+    | keyword:bind  variable:a  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:5
+ 40 |     hold b: maybe int = none
+    | keyword:hold  variable:b  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 41 |     show(a)
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:)
+ 42 |     show(b)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:)
+ 43 |     b = 42
+    | variable:b  operator:=  number:42
+ 44 |     show(b)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:)
+ 45 |     show(b == none)
+    | builtin-fn:show  punctuation:(  variable:b  operator:==  keyword:none  punctuation:)
+ 46 |     show(b != none)
+    | builtin-fn:show  punctuation:(  variable:b  operator:!=  keyword:none  punctuation:)
+ 47 |     b = none
+    | variable:b  operator:=  keyword:none
+ 48 |     show(none == b)
+    | builtin-fn:show  punctuation:(  keyword:none  operator:==  variable:b  punctuation:)
+ 50 |     show(half(8))
+    | builtin-fn:show  punctuation:(  task:half  punctuation:(  number:8  punctuation:)  punctuation:)
+ 51 |     show(half(7))
+    | builtin-fn:show  punctuation:(  task:half  punctuation:(  number:7  punctuation:)  punctuation:)
+ 52 |     show(describe(half(40)))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  task:half  punctuation:(  number:40  punctuation:)  punctuation:)  punctuation:)
+ 53 |     show(describe(half(4)))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  task:half  punctuation:(  number:4  punctuation:)  punctuation:)  punctuation:)
+ 54 |     show(describe(half(3)))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  task:half  punctuation:(  number:3  punctuation:)  punctuation:)  punctuation:)
+ 55 |     show(describe(7))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  number:7  punctuation:)  punctuation:)
+ 57 |     bind r = Reading { label: "temperature", value: 21.5 }
+    | keyword:bind  variable:r  operator:=  type:Reading  punctuation:{  field:label  punctuation::  string:"temperature"  punctuation:,  field:value  punctuation::  number:21.5  punctuation:}
+ 58 |     bind blank = Reading { label: "wind", value: none }
+    | keyword:bind  variable:blank  operator:=  type:Reading  punctuation:{  field:label  punctuation::  string:"wind"  punctuation:,  field:value  punctuation::  keyword:none  punctuation:}
+ 59 |     show(r.value)
+    | builtin-fn:show  punctuation:(  variable:r  punctuation:.  field:value  punctuation:)
+ 60 |     show(blank.value)
+    | builtin-fn:show  punctuation:(  variable:blank  punctuation:.  field:value  punctuation:)
+ 62 |     bind flag: maybe bool = true
+    | keyword:bind  variable:flag  punctuation::  keyword:maybe  type-builtin:bool  operator:=  keyword:true
+ 63 |     bind word: maybe text = "hi"
+    | keyword:bind  variable:word  punctuation::  keyword:maybe  type-builtin:text  operator:=  string:"hi"
+ 64 |     show(flag)
+    | builtin-fn:show  punctuation:(  variable:flag  punctuation:)
+ 65 |     show(word)
+    | builtin-fn:show  punctuation:(  variable:word  punctuation:)
+ 66 |     first_word(word)
+    | task:first_word  punctuation:(  variable:word  punctuation:)
+ 67 |     first_word(none)
+    | task:first_word  punctuation:(  keyword:none  punctuation:)
+ 69 |     bind boxed = new maybe int(3)
+    | keyword:bind  variable:boxed  operator:=  keyword:new  keyword:maybe  type-builtin:int  punctuation:(  number:3  punctuation:)
+ 70 |     show(boxed^)
+    | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:)
+ 71 |     boxed^ = none
+    | variable:boxed  operator:^  operator:=  keyword:none
+ 72 |     show(boxed^)
+    | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:)
+ 73 |     free(boxed)
+    | keyword:free  punctuation:(  variable:boxed  punctuation:)
+ 74 | fi
+    | keyword:fi

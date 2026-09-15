@@ -83,6 +83,12 @@ impl Parser {
         if self.check(Token::Send) {
             return self.misplaced_send();
         }
+        if self.check(Token::Is) {
+            return Error::at(
+                self.peek_span(),
+                "'is' can only test the whole condition of a 'when' or 'loop', as in 'when x is {value}'",
+            );
+        }
         Error::at(self.peek_span(), format!("expected {}, got {}", expected, self.peek().describe()))
     }
 
@@ -280,12 +286,34 @@ impl Parser {
         Ok(fields)
     }
 
+    /// A type, with an optional error type: `int`, `^Node`, `maybe int`,
+    /// `int or ParseError`. `^` and `maybe` bind tighter than `or`.
     fn parse_type(&mut self) -> Result<Type> {
-        if self.match_token(Token::Caret) {
+        let value = self.parse_simple_type()?;
+        if !self.match_token(Token::Or) {
+            return Ok(value);
+        }
+        let error = self.parse_simple_type()?;
+        if self.check(Token::Or) {
+            return Err(Error::at(self.peek_span(), "a type has one error type: 'or' can't appear twice"));
+        }
+        Ok(Type::Or(Box::new(value), Box::new(error)))
+    }
+
+    /// A type without `or`.
+    fn parse_simple_type(&mut self) -> Result<Type> {
+        let prefix = if self.match_token(Token::Caret) {
+            Some(Token::Caret)
+        } else if self.match_token(Token::Maybe) {
+            Some(Token::Maybe)
+        } else {
+            None
+        };
+        if let Some(prefix) = prefix {
             self.enter()?;
-            let inner = self.parse_type()?;
+            let inner = Box::new(self.parse_simple_type()?);
             self.leave(1);
-            return Ok(Type::Ptr(Box::new(inner)));
+            return Ok(if prefix == Token::Caret { Type::Ptr(inner) } else { Type::Maybe(inner) });
         }
         let name = self.expect_ident()?;
         Ok(Type::builtin(&name).unwrap_or(Type::Named(name)))
@@ -437,38 +465,83 @@ impl Parser {
             if self.check(Token::Fi) || self.at_item_start() { break; }
             self.reject_stray_end()?;
             self.expect(Token::Case)?;
-            let case_span = self.peek_span();
-            let tag = self.expect_ident()?;
-            if self.check(Token::LParen) {
-                return Err(Error::at(
-                    self.peek_span(),
-                    format!("a case names its bindings without parentheses, as in 'case {} value'", tag),
-                ));
-            }
-            let mut binds = Vec::new();
-            while !self.check(Token::Newline) && !self.check(Token::Fi) && !self.check(Token::Case) && !self.is_at_end() {
-                let bind_span = self.peek_span();
-                binds.push((self.expect_ident()?, bind_span));
+            let pattern = self.parse_pattern()?;
+            if !self.check(Token::Newline) && !self.check(Token::Fi) && !self.check(Token::Case) && !self.is_at_end() {
+                return Err(match pattern.kind {
+                    PatternKind::Variant { .. } => self.name_expected(),
+                    _ => self.unexpected("the end of the line"),
+                });
             }
             self.skip_newlines();
             let body = self.parse_block_until(&[Token::Case, Token::Fi])?;
-            cases.push(Case { tag, binds, body, span: case_span });
+            cases.push(Case { pattern, body });
         }
         self.expect_fi("match", span)?;
         Ok(Stmt::new(StmtKind::Match(expr, cases), span))
     }
 
-    /// `<-` or `<- value`. A send starts its line: `<-` after something else
-    /// is almost always a comparison with a negative number written without a
-    /// space (`a <-1`), which would otherwise end the statement and send.
+    /// What a `case` or `is` matches: `Circle r`, `{value}`, `none`, `fail e`, or `_`.
+    fn parse_pattern(&mut self) -> Result<Pattern> {
+        let span = self.peek_span();
+        let kind = match self.peek() {
+            Token::Underscore => {
+                self.advance();
+                PatternKind::Any
+            }
+            Token::None => {
+                self.advance();
+                PatternKind::None
+            }
+            Token::LBrace => {
+                self.advance();
+                let bind = self.parse_bound_name()?;
+                self.expect(Token::RBrace)?;
+                PatternKind::Value(bind)
+            }
+            Token::Fail => {
+                self.advance();
+                PatternKind::Fail(self.parse_bound_name()?)
+            }
+            Token::Ident(_) => {
+                let tag = self.expect_ident()?;
+                if self.check(Token::LParen) {
+                    return Err(Error::at(
+                        self.peek_span(),
+                        format!("a case names its bindings without parentheses, as in 'case {} value'", tag),
+                    ));
+                }
+                let mut binds = Vec::new();
+                while matches!(self.peek(), Token::Ident(_) | Token::Underscore) {
+                    binds.push(self.parse_bound_name()?);
+                }
+                PatternKind::Variant { tag, binds }
+            }
+            _ => return Err(self.unexpected("a variant, '{value}', 'none', 'fail e', or '_'")),
+        };
+        Ok(Pattern { kind, span })
+    }
+
+    /// A name a pattern binds, or `_`.
+    fn parse_bound_name(&mut self) -> Result<Binding> {
+        let span = self.peek_span();
+        if self.match_token(Token::Underscore) {
+            return Ok((DISCARD.to_string(), span));
+        }
+        Ok((self.expect_ident()?, span))
+    }
+
+    /// `<-` or `<- value`. A send starts its line (or a plan B's block, as in
+    /// `x { <- 0 }`): `<-` after something else is almost always a comparison
+    /// with a negative number written without a space (`a <-1`), which would
+    /// otherwise end the statement and send.
     fn parse_send(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
-        let starts_line = self.pos == 0 || matches!(self.tokens.get(self.pos - 1), Some(Token::Newline));
+        let starts_line = self.pos == 0 || matches!(self.tokens.get(self.pos - 1), Some(Token::Newline | Token::LBrace));
         if !starts_line {
             return Err(self.misplaced_send());
         }
         self.advance(); // <-
-        let ends = [Token::Newline, Token::Fi, Token::Else, Token::Case];
+        let ends = [Token::Newline, Token::Fi, Token::Else, Token::Case, Token::RBrace];
         if ends.iter().any(|token| self.check(token.clone())) || self.is_at_end() {
             Ok(Stmt::new(StmtKind::Send(None), span))
         } else {
@@ -491,13 +564,24 @@ impl Parser {
         Ok(expr)
     }
 
-    /// A `when` or `loop` condition, explaining `=` written for `==`.
-    fn parse_condition(&mut self) -> Result<Expr> {
-        let cond = self.parse_expr()?;
+    /// A `when` or `loop` condition, `value` or `value is pattern`,
+    /// explaining `=` written for `==`.
+    fn parse_condition(&mut self) -> Result<Condition> {
+        let value = self.parse_expr()?;
         if self.check(Token::Assign) {
             return Err(Error::at(self.peek_span(), "'=' assigns; to compare, write '=='"));
         }
-        Ok(cond)
+        if !self.match_token(Token::Is) {
+            return Ok(Condition { value, pattern: None });
+        }
+        let pattern = self.parse_pattern()?;
+        if self.check(Token::And) || self.check(Token::Or) {
+            return Err(Error::at(
+                self.peek_span(),
+                "an 'is' condition can't be combined with 'and' or 'or'; put a 'when' inside it instead",
+            ));
+        }
+        Ok(Condition { value, pattern: Some(pattern) })
     }
 
     /// The binary operator `token` stands for, with its precedence (higher
@@ -564,6 +648,12 @@ impl Parser {
 
     fn parse_unary(&mut self) -> Result<Expr> {
         let span = self.peek_span();
+        if self.match_token(Token::Fail) {
+            self.enter()?;
+            let error = self.parse_unary()?;
+            self.leave(1);
+            return Ok(Expr::new(ExprKind::Fail(Box::new(error)), span));
+        }
         let op = if self.match_token(Token::Minus) {
             UnaryOp::Neg
         } else if self.match_token(Token::Not) {
@@ -581,7 +671,7 @@ impl Parser {
         let mut expr = self.parse_primary()?;
         let mut levels = 0;
         loop {
-            if matches!(self.peek(), Token::Dot | Token::LBracket | Token::Caret) {
+            if matches!(self.peek(), Token::Dot | Token::LBracket | Token::Caret | Token::LBrace) {
                 self.enter()?;
                 levels += 1;
             }
@@ -599,6 +689,8 @@ impl Parser {
                 let span = self.peek_span();
                 self.advance();
                 expr = Expr::new(ExprKind::Deref(Box::new(expr)), span);
+            } else if self.check(Token::LBrace) {
+                expr = self.parse_plan_b(expr)?;
             } else {
                 break;
             }
@@ -626,7 +718,7 @@ impl Parser {
             Token::Ident(name) => {
                 let name = name.clone();
                 self.advance();
-                if self.check(Token::LBrace) {
+                if self.check(Token::LBrace) && self.at_shape_literal() {
                     self.parse_struct_init(name)?
                 } else if self.check(Token::LParen) {
                     let args = self.parse_arg_list()?;
@@ -638,6 +730,41 @@ impl Parser {
             _ => return Err(self.unexpected("an expression")),
         };
         Ok(Expr::new(kind, span))
+    }
+
+    /// Whether the `{` at the cursor, after a name, opens a shape literal
+    /// (`Point { x: 1 }` or `Marker {}`) rather than a plan B (`x { 0 }`).
+    fn at_shape_literal(&self) -> bool {
+        let after = |n: usize| self.tokens.get(self.pos + n).unwrap_or(&Token::Eof);
+        matches!(after(1), Token::RBrace) || (matches!(after(1), Token::Ident(_)) && matches!(after(2), Token::Colon))
+    }
+
+    /// `value { … }`, with the cursor at `{`: a plan B, whose block may start
+    /// with `fail e` to name the error.
+    fn parse_plan_b(&mut self, value: Expr) -> Result<Expr> {
+        let opened = self.peek_span();
+        self.advance(); // {
+        self.skip_newlines();
+        let next = self.tokens.get(self.pos + 1).unwrap_or(&Token::Eof);
+        let error = if self.check(Token::Fail) && matches!(next, Token::Ident(_) | Token::Underscore) {
+            self.advance(); // fail
+            Some(self.parse_bound_name()?)
+        } else {
+            None
+        };
+        let body = self.parse_block_until(&[Token::RBrace, Token::Fi, Token::Else, Token::Case])?;
+        if !self.match_token(Token::RBrace) {
+            return Err(Error::at(
+                self.peek_span(),
+                format!(
+                    "expected '}}' to close the plan B at {}:{}, got {}",
+                    opened.line,
+                    opened.col,
+                    self.peek().describe()
+                ),
+            ));
+        }
+        Ok(Expr::new(ExprKind::PlanB { value: Box::new(value), error, body }, opened))
     }
 
     fn parse_new(&mut self) -> Result<Expr> {
@@ -688,13 +815,18 @@ impl Parser {
     fn expect_ident(&mut self) -> Result<String> {
         match self.peek() {
             Token::Ident(s) => { let v = s.clone(); self.advance(); Ok(v) }
-            token => match KEYWORDS.iter().find(|(_, keyword)| keyword == token) {
-                Some((word, _)) => Err(Error::at(
-                    self.peek_span(),
-                    format!("expected a name, got '{}', which is a reserved word", word),
-                )),
-                None => Err(self.unexpected("a name")),
-            },
+            _ => Err(self.name_expected()),
+        }
+    }
+
+    /// The error for a missing name at the cursor, explaining reserved words.
+    fn name_expected(&self) -> Error {
+        match KEYWORDS.iter().find(|(_, keyword)| keyword == self.peek()) {
+            Some((word, _)) => Error::at(
+                self.peek_span(),
+                format!("expected a name, got '{}', which is a reserved word", word),
+            ),
+            None => self.unexpected("a name"),
         }
     }
 }

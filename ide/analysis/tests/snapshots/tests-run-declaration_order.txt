@@ -28,8 +28,8 @@
     | keyword:shape  type:Node
  19 |     value: int
     | field:value  punctuation::  type-builtin:int
- 20 |     next: ^Node
-    | field:next  punctuation::  operator:^  type:Node
+ 20 |     next: maybe ^Node
+    | field:next  punctuation::  keyword:maybe  operator:^  type:Node
  21 | fi
     | keyword:fi
  23 | task length(l: List) -> int

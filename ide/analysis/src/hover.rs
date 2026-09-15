@@ -27,6 +27,15 @@ const BUILTIN_TYPE_DOCS: &[(&str, &str)] = &[
     ("unit", "The return type of a task that sends no value."),
 ];
 
+/// The words of `maybe` and error results, which are easy to forget.
+const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
+    ("maybe", "maybe T", "A T, or none. Read it with match, is, or a plan B: x { fallback }."),
+    ("none", "none", "The empty maybe. A pointer can't be none; use maybe ^T."),
+    ("is", "value is pattern", "The condition holds when the pattern matches; its names are visible in the block."),
+    ("fail", "fail error", "An error, for a task that sends T or E. In a plan B, a first line fail e names the error."),
+    ("_", "_", "Matches anything left, or drops a value without naming it."),
+];
+
 /// The hover for the classified token covering `byte`, as `(code, doc)` and
 /// the token's byte range.
 pub(crate) fn hover(k: &Knowledge, byte: usize) -> Option<((String, String), std::ops::Range<usize>)> {
@@ -46,9 +55,13 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
             (name.to_string(), doc.to_string())
         }
         (TokenClass::BuiltinFn, _) => (
-            format!("task {}(value: int | float | bool | text)", text),
-            "Prints the value followed by a newline.".to_string(),
+            format!("task {}(value: int | float | bool | text | maybe)", text),
+            "Prints the value followed by a newline; a maybe prints its value or none.".to_string(),
         ),
+        (TokenClass::Keyword, _) => {
+            let (_, code, doc) = KEYWORD_DOCS.iter().find(|(word, _, _)| *word == text)?;
+            (code.to_string(), doc.to_string())
+        }
         (_, Some(id)) => describe(k, id)?,
         _ => return None,
     };
@@ -99,9 +112,11 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 let name = k.at_byte(symbol.name_range.start)?;
                 let case = (k.line_start(name)..name).find(|&q| k.token(q) == Some(&vela::lexer::Token::Case));
                 let variant = case.and_then(|q| k.ident(q + 1));
-                let doc = variant.map(|v| format!("Bound by case {}.", v)).unwrap_or_default();
+                let doc = variant.map_or_else(|| "Bound by a case.".to_string(), |v| format!("Bound by case {}.", v));
                 (typed(&symbol.name), doc)
             }
+            Some("is") => (typed(&symbol.name), "Bound by an is condition.".to_string()),
+            Some("fail") => (format!("fail {}", typed(&symbol.name)), "The error this plan B handles.".to_string()),
             Some("each") => (format!("each {}", typed(&symbol.name)), "The counter of an each loop.".to_string()),
             Some("hold") => (format!("hold {}", typed(&symbol.name)), "A mutable variable.".to_string()),
             _ => (format!("bind {}", typed(&symbol.name)), "An immutable variable.".to_string()),

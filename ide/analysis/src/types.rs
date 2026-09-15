@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use vela::ast::{Block, Expr, ExprKind, Item, KindDef, Span, Stmt, StmtKind, Type};
+use vela::ast::{Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, Span, Stmt, StmtKind, Type};
 use vela::driver;
 use vela::error::Error;
 
@@ -62,52 +62,76 @@ impl Checked {
 
     fn statement(&mut self, stmt: &Stmt, kinds: &HashMap<&str, &KindDef>) {
         match &stmt.kind {
-            StmtKind::Expr(e) | StmtKind::Free(e) | StmtKind::Send(Some(e)) => self.expr(e),
+            StmtKind::Expr(e) | StmtKind::Free(e) | StmtKind::Send(Some(e)) => self.expr(e, kinds),
             StmtKind::Send(None) => {}
             StmtKind::Binding { ty, init, .. } => {
                 if let Some(ty) = ty {
                     self.decls.insert(pos(stmt.span), ty.clone());
                 }
-                self.expr(init);
+                self.expr(init, kinds);
             }
             StmtKind::Assign(target, value) => {
-                self.expr(target);
-                self.expr(value);
+                self.expr(target, kinds);
+                self.expr(value, kinds);
             }
             StmtKind::When(cond, then_block, else_block) => {
-                self.expr(cond);
+                self.expr(&cond.value, kinds);
+                if let Some(pattern) = &cond.pattern {
+                    self.pattern(cond.value.ty.as_ref(), pattern, kinds);
+                }
                 self.block(then_block, kinds);
                 if let Some(else_block) = else_block {
                     self.block(else_block, kinds);
                 }
             }
             StmtKind::Loop(cond, body) => {
-                self.expr(cond);
+                self.expr(&cond.value, kinds);
+                if let Some(pattern) = &cond.pattern {
+                    self.pattern(cond.value.ty.as_ref(), pattern, kinds);
+                }
                 self.block(body, kinds);
             }
             StmtKind::Each(_, range, body) => {
                 self.decls.insert(pos(stmt.span), Type::Int);
-                self.expr(range);
+                self.expr(range, kinds);
                 self.block(body, kinds);
             }
             StmtKind::Match(subject, cases) => {
-                self.expr(subject);
-                let kind = match &subject.ty {
-                    Some(Type::Named(name)) => kinds.get(name.as_str()),
-                    _ => None,
-                };
+                self.expr(subject, kinds);
                 for case in cases {
-                    let payload = kind.and_then(|k| k.variants.iter().find(|v| v.tag == case.tag)).map(|v| &v.payload);
-                    for ((_, span), field) in case.binds.iter().zip(payload.into_iter().flatten()) {
-                        self.decls.insert(pos(*span), field.ty.clone());
-                    }
+                    self.pattern(subject.ty.as_ref(), &case.pattern, kinds);
                     self.block(&case.body, kinds);
                 }
             }
         }
     }
 
-    fn expr(&mut self, e: &Expr) {
+    /// Records the types of the names `pattern` binds from a value of type
+    /// `subject`.
+    fn pattern(&mut self, subject: Option<&Type>, pattern: &Pattern, kinds: &HashMap<&str, &KindDef>) {
+        let Some(subject) = subject else { return };
+        match (&pattern.kind, subject) {
+            (PatternKind::Variant { tag, binds }, Type::Named(name)) => {
+                let payload = kinds.get(name.as_str()).and_then(|k| k.variants.iter().find(|v| v.tag == *tag)).map(|v| &v.payload);
+                for ((_, span), field) in binds.iter().zip(payload.into_iter().flatten()) {
+                    self.decls.insert(pos(*span), field.ty.clone());
+                }
+            }
+            (PatternKind::Value((_, span)), Type::Maybe(inner) | Type::Or(inner, _)) => {
+                self.decls.insert(pos(*span), (**inner).clone());
+            }
+            (PatternKind::Fail((_, span)), Type::Or(_, error)) => {
+                self.decls.insert(pos(*span), (**error).clone());
+            }
+            _ => {}
+        }
+    }
+
+    fn expr(&mut self, e: &Expr, kinds: &HashMap<&str, &KindDef>) {
+        // A wrapped value keeps its own type at its position.
+        if let ExprKind::Wrap(inner) = &e.kind {
+            return self.expr(inner, kinds);
+        }
         if let Some(ty) = &e.ty {
             self.exprs.entry(pos(e.span)).or_insert_with(|| ty.clone());
         }
@@ -116,24 +140,32 @@ impl Checked {
                 if let Some(Type::Named(shape)) = &base.ty {
                     self.field_accesses.insert(pos(e.span), shape.clone());
                 }
-                self.expr(base);
+                self.expr(base, kinds);
             }
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
             | ExprKind::Var(_) => {}
-            ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. } => self.expr(inner),
+            ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. } => self.expr(inner, kinds),
             ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => {
-                self.expr(a);
-                self.expr(b);
+                self.expr(a, kinds);
+                self.expr(b, kinds);
             }
             ExprKind::Call(_, args) | ExprKind::Construct { args, .. } => {
                 for arg in args {
-                    self.expr(arg);
+                    self.expr(arg, kinds);
                 }
             }
             ExprKind::StructInit(_, fields) => {
                 for field in fields {
-                    self.expr(&field.value);
+                    self.expr(&field.value, kinds);
                 }
+            }
+            ExprKind::Fail(inner) | ExprKind::Wrap(inner) => self.expr(inner, kinds),
+            ExprKind::PlanB { value, error, body } => {
+                self.expr(value, kinds);
+                if let (Some((_, span)), Some(Type::Or(_, error_ty))) = (error, &value.ty) {
+                    self.decls.insert(pos(*span), (**error_ty).clone());
+                }
+                self.block(body, kinds);
             }
         }
     }

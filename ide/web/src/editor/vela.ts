@@ -285,9 +285,9 @@ function structure(language: Language): Extension {
     {
       commentTokens: { line: language.lineComment },
       closeBrackets: { brackets: language.brackets.map(([open]) => open) },
-      // Re-indent a line when it becomes just `fi`, `else`, or `case`, and
-      // again when a word continues past it (`fib`), undoing the dedent.
-      indentOnInput: new RegExp(`^\\s*(?:${closeOrBranch})[A-Za-z0-9_]?$`),
+      // Re-indent a line when it becomes just `fi`, `else`, `case`, or `}`, and
+      // again when a word continues past a keyword (`fib`), undoing the dedent.
+      indentOnInput: new RegExp(`^\\s*(?:(?:${closeOrBranch})[A-Za-z0-9_]?|\\})$`),
     },
   ];
   return [

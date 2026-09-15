@@ -145,6 +145,8 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ("calls", format!("task id(n: int) -> int\n    <- n\nfi\n{}", program(format!("{}1{}", "id(".repeat(deep), ")".repeat(deep))))),
         ("blocks", format!("task main()\n{}fi\n", "when true\n".repeat(deep) + &"fi\n".repeat(deep))),
         ("pointer types", format!("task f(p: {}int)\nfi\n", "^".repeat(deep))),
+        ("maybe types", format!("task f(p: {}int)\nfi\n", "maybe ".repeat(deep))),
+        ("plan B blocks", program(format!("{}1{}", "m {\n".repeat(deep), "\n}".repeat(deep)))),
     ];
     for (what, source) in cases {
         let error = driver::generate_c(&source).expect_err(what);
@@ -155,4 +157,11 @@ fn deep_nesting_is_an_error_not_a_crash() {
     let ok = program(format!("{}1{}", "(".repeat(near), ")".repeat(near)));
     driver::generate_c(&ok).unwrap();
     driver::generate_c(&program(vec!["1"; near].join(" + "))).unwrap();
+    // Plan Bs nest two levels each (the value, then the block).
+    let plan_bs = format!(
+        "task main()\n    bind m: maybe int = none\n    show({}1{})\nfi\n",
+        "m {\n".repeat(near / 3),
+        "\n}".repeat(near / 3)
+    );
+    driver::generate_c(&plan_bs).unwrap();
 }

@@ -1,0 +1,13 @@
+# error: 10:10: 'none' matches an empty maybe, but this value is int or text
+task parse(t: text) -> int or text
+    <- 1
+fi
+
+task main()
+    match parse("1")
+    case {n}
+        show(n)
+    case none
+        show(0)
+    fi
+fi

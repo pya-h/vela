@@ -1,0 +1,4 @@
+# error: 3:14: cannot infer the type of 'e' from 'fail …'; give it a type, such as 'e: int or text'
+task main()
+    bind e = fail "bad"
+fi

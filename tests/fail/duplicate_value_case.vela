@@ -1,0 +1,12 @@
+# error: 7:10: duplicate case '{…}'
+task main()
+    bind m: maybe int = 1
+    match m
+    case {n}
+        show(n)
+    case {k}
+        show(k)
+    case none
+        show(0)
+    fi
+fi

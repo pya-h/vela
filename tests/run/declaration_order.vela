@@ -17,7 +17,7 @@ fi
 
 shape Node
     value: int
-    next: ^Node
+    next: maybe ^Node
 fi
 
 task length(l: List) -> int

@@ -1,4 +1,4 @@
-# error: 3:14: cannot infer the type of 'p' from none; give it a pointer type, such as 'p: ^int'
+# error: 3:14: cannot infer the type of 'p' from none; give it a type, such as 'p: maybe int'
 task main()
     bind p = none
     show(1)

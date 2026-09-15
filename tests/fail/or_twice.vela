@@ -1,0 +1,4 @@
+# error: 2:36: a type has one error type: 'or' can't appear twice
+task parse(t: text) -> int or text or bool
+    <- 1
+fi

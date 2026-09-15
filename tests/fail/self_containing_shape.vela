@@ -1,4 +1,4 @@
-# error: 4:11: 'Node' contains itself by value (Node -> Node); use a pointer such as '^Node'
+# error: 4:11: 'Node' contains itself by value (Node -> Node); use a pointer such as 'maybe ^Node'
 shape Node
     value: int
     next: Node

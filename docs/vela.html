@@ -184,8 +184,8 @@
 ./examples/hello</pre>
       <p>
         More programs are in <code>examples/</code>: <code>fib.vela</code> (recursion), <code>kinds.vela</code>
-        (kinds and <code>match</code>), <code>todo.vela</code> (a linked list with pointers and
-        <code>none</code>), and <code>demo.vela</code> (tasks, shapes, pointers, and control flow).
+        (kinds and <code>match</code>), <code>todo.vela</code> (a linked list with <code>maybe</code> pointers,
+        <code>is</code>, and a plan B), and <code>demo.vela</code> (tasks, shapes, pointers, and control flow).
       </p>
       <div class="note">
         Prefer an editor? <a href="ide.html">Vela Studio</a> highlights Vela, shows errors as you type, completes
@@ -202,7 +202,9 @@
         <li><code class="type">text</code> — UTF-8 string; <code>==</code> compares contents</li>
         <li><code class="type">unit</code> — the return type of a task that returns nothing; it has no values, so it
           can't be the type of a variable, parameter, or field</li>
-        <li><code class="type">^T</code> — owned pointer to T; <code>none</code> is the empty pointer</li>
+        <li><code class="type">^T</code> — owned pointer to T; it always points to something</li>
+        <li><code class="type">maybe T</code> — a T, or <code>none</code> (see <a href="#maybe">Maybe and Errors</a>)</li>
+        <li><code class="type">T or E</code> — a T, or an error E, sent by a task that can fail</li>
         <li>User-defined shapes and kinds</li>
       </ul>
     </section>
@@ -223,8 +225,8 @@
 
       <h3>Reserved Words and Symbols</h3>
       <p>These words can't be used as names:</p>
-      <pre>task  shape  kind  bind  hold  when  else  loop  each  in  match  case
-new   free   and   or    not   true  false none  fi</pre>
+      <pre>task  shape  kind  bind  hold  when  else  loop  each  in    match  case
+new   free   and   or    not   true  false none  fi    maybe is     fail</pre>
       <p>
         <code>show</code> and the builtin types (<code>int</code>, <code>float</code>, <code>bool</code>,
         <code>text</code>, <code>unit</code>) aren't reserved words: no task, shape, kind, or variant can take their
@@ -236,6 +238,8 @@ new   free   and   or    not   true  false none  fi</pre>
         <tr><td><code>&lt;- value</code></td><td>sends that value back (starts a line)</td></tr>
         <tr><td><code>name: T</code></td><td>a parameter's, field's, or binding's type</td></tr>
         <tr><td><code>^T</code>, <code>p^</code></td><td>a pointer type; the value a pointer points to</td></tr>
+        <tr><td><code>value { … }</code></td><td>a plan B: the value inside a <code>maybe</code> or <code>T or E</code>, or else what the block gives</td></tr>
+        <tr><td><code>{v}</code>, <code>_</code></td><td>in a <code>case</code> or <code>is</code>: the value inside, and anything (or a value left unnamed)</td></tr>
         <tr><td><code>a.x</code></td><td>a field of a shape value</td></tr>
         <tr><td><code>Name { x: 1 }</code></td><td>a shape literal</td></tr>
         <tr><td><code>0..5</code></td><td>a range, in <code>each</code></td></tr>
@@ -319,8 +323,9 @@ show(label)                <span class="comment"># error: unknown variable 'labe
         division truncating toward zero. <code>%</code> on floats keeps the sign of the dividend.
         On <code>int</code>s too, <code>%</code> keeps the sign of the dividend (<code>-7 % 3</code> is
         <code>-1</code>). Comparisons (<code>&lt; &lt;= &gt; &gt;=</code>) work on numbers of the same type.
-        Number literals are decimal digits with an optional fraction (<code>42</code>, <code>3.14</code>); there
-        are no exponent or hex forms, so <code>1e5</code> is an invalid number. Integer overflow and division by
+        Number literals are decimal digits with an optional fraction (<code>42</code>, <code>3.14</code>), and
+        <code>_</code> may separate digits (<code>1_000_000</code>); there are no exponent or hex forms, so
+        <code>1e5</code> is an invalid number. Integer overflow and division by
         zero are not checked yet (see <a href="#limits">Current Limits</a>).
       </p>
       <pre>show(7 / 2)       <span class="comment"># 3</span>
@@ -337,7 +342,7 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         <tr><td><code>+ -</code></td><td></td></tr>
         <tr><td><code>* / %</code></td><td><code>2 + 3 * 4</code> is <code>14</code></td></tr>
         <tr><td><code>-x</code>, <code>not x</code></td><td><code>not a == b</code> is <code>(not a) == b</code>; write <code>not (a == b)</code></td></tr>
-        <tr><td><code>a.x</code>, <code>p^</code>, <code>f(x)</code></td><td><code>p^.x</code> reads a field through a pointer</td></tr>
+        <tr><td><code>a.x</code>, <code>p^</code>, <code>f(x)</code>, <code>x { … }</code></td><td><code>p^.x</code> reads a field through a pointer; <code>x { 0 } * 2</code> is <code>(x { 0 }) * 2</code></td></tr>
       </table>
 
       <h3>Text, Output, and Logic</h3>
@@ -346,7 +351,8 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         <code>\\</code>, <code>\"</code>, and <code>\0</code>. A <code>#</code> starts a comment that runs to the end
         of the line. Text holds any UTF-8, but a <code>\0</code> ends it early (<code>"ab\0cd"</code> shows as
         <code>ab</code>). <code>show</code> is the only builtin task: it prints an <code>int</code>, <code>float</code>,
-        <code>bool</code>, or <code>text</code> followed by a newline. Floats print with up to 6 significant digits,
+        <code>bool</code>, or <code>text</code> followed by a newline (or a <code>maybe</code> of one: its value, or
+        <code>none</code>). Floats print with up to 6 significant digits,
         switching to exponent form for very large or small values (<code>123456789.0</code> shows as
         <code>1.23457e+08</code>), and <code>0.0 / 0.0</code> and <code>1.0 / 0.0</code> show as <code>nan</code> and
         <code>inf</code>.
@@ -356,7 +362,8 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         <code>and</code>/<code>or</code> skip the right side when the left side decides the result. Conditions in
         <code>when</code> and <code>loop</code> must be <code>bool</code>: <code>when count</code> is an error.
         <code>==</code> and <code>!=</code> work on numbers, <code>bool</code>, <code>text</code> (by contents), and
-        pointers; both sides must have the same type, except that <code>none</code> compares with any pointer.
+        pointers (by address); both sides must have the same type. A <code>maybe</code> compares only with
+        <code>none</code>.
       </p>
       <pre><span class="comment"># greet the user</span>
 show(<span class="string">"say \"hi\""</span>)       <span class="comment"># say "hi"</span>
@@ -379,15 +386,20 @@ show(p.x)</pre>
       </p>
       <p>
         Shapes and kinds can be used before they are declared. A type cannot contain itself by value, since its
-        values would be infinitely large, but it can point to itself:
+        values would be infinitely large, but it can point to itself. A pointer always points to something, so
+        the pointer to the next one must be a <code>maybe</code>: the last node has none.
       </p>
       <pre><span class="keyword">shape</span> Node
     value: int
-    next: ^Node            <span class="comment"># ok: a pointer</span>
+    next: <span class="keyword">maybe</span> ^Node      <span class="comment"># ok: a pointer that can be none</span>
 <span class="keyword">fi</span>
 
 <span class="keyword">shape</span> Loop
     inner: Loop            <span class="comment"># error: 'Loop' contains itself by value</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">shape</span> Chain
+    next: ^Chain           <span class="comment"># error: 'Chain' can never be created: field 'next' needs an existing ^Chain</span>
 <span class="keyword">fi</span></pre>
       <p>Assigning to a field requires the variable to be a <code>hold</code>; task parameters are immutable.</p>
       <pre><span class="keyword">hold</span> q = Point { x: 1, y: 2 }
@@ -416,8 +428,15 @@ p.x = 5                    <span class="comment"># error: cannot assign to a fie
 <span class="keyword">fi</span></pre>
       <p>
         A <code>match</code> must have a <code>case</code> for every variant, each once; leaving one out is an error
-        that names it.
+        that names it. A last <code>case _</code> covers every variant not matched above (it is an error when
+        there are none left), and <code>_</code> in place of a binding leaves that payload field unnamed.
       </p>
+      <pre><span class="keyword">match</span> s
+<span class="keyword">case</span> Rectangle w <span class="keyword">_</span>
+    show(w)
+<span class="keyword">case</span> <span class="keyword">_</span>
+    show(<span class="string">"not a rectangle"</span>)
+<span class="keyword">fi</span></pre>
       <p>
         A variant can have no payload. Write its value as just its name, with or without parentheses; its
         <code>case</code> binds nothing.
@@ -447,7 +466,7 @@ p.x = 5                    <span class="comment"># error: cannot assign to a fie
         means the variant.
       </p>
 
-      <h3>Control Flow</h3>
+      <h3 id="control-flow">Control Flow</h3>
       <pre><span class="keyword">when</span> x &gt; 0
     show(<span class="string">"positive"</span>)
 <span class="keyword">else</span>
@@ -472,6 +491,127 @@ p.x = 5                    <span class="comment"># error: cannot assign to a fie
         <code>continue</code>: end a loop through its condition, or leave the task with <code>&lt;-</code>. There is
         no <code>else when</code> either; put a <code>when</code> inside the <code>else</code>.
       </p>
+      <p>
+        A condition can also test a pattern with <code>is</code>, the same patterns a <code>case</code> takes. The
+        names it binds are visible only in the block it guards (not in the <code>else</code>), and <code>is</code>
+        must be the whole condition: combining it with <code>and</code> or <code>or</code> is an error.
+      </p>
+      <pre><span class="keyword">when</span> light <span class="keyword">is</span> Dimmed level
+    show(level)
+<span class="keyword">fi</span>
+
+<span class="keyword">loop</span> current <span class="keyword">is</span> {node}      <span class="comment"># while current holds a node</span>
+    show(node^.value)
+    current = node^.next
+<span class="keyword">fi</span></pre>
+
+      <h3 id="maybe">Maybe and Errors</h3>
+      <p>
+        A value that might be missing has type <code>maybe T</code>. Wherever a <code>maybe</code> is expected (a
+        typed binding, an assignment, an argument, a field, or a send), a plain value becomes one, and
+        <code>none</code> is the empty one. A <code>maybe</code> can't be used as its value directly:
+        <code>m + 1</code> is an error, and <code>==</code> compares it only with <code>none</code>. A
+        <code>maybe</code> can't hold another <code>maybe</code>.
+      </p>
+      <pre><span class="keyword">task</span> half(n: int) -&gt; <span class="keyword">maybe</span> int
+    <span class="keyword">when</span> n % 2 == 0
+        <span class="keyword">&lt;-</span> n / 2               <span class="comment"># the int becomes a maybe int</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> <span class="keyword">none</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">bind</span> m = half(7)
+show(m)                    <span class="comment"># none</span>
+show(m == <span class="keyword">none</span>)            <span class="comment"># true</span>
+show(m + 1)                <span class="comment"># error: arithmetic requires numeric operands; a maybe int must be extracted first</span></pre>
+      <p>There are three ways to get the value out. <code>match</code> handles both outcomes:</p>
+      <pre><span class="keyword">match</span> half(8)
+<span class="keyword">case</span> {n}
+    show(n)                <span class="comment"># 4</span>
+<span class="keyword">case</span> <span class="keyword">none</span>
+    show(<span class="string">"odd"</span>)
+<span class="keyword">fi</span></pre>
+      <p>
+        <code>is</code> runs a block only when there is a value (see <a href="#control-flow">Control Flow</a>):
+        <code>when half(8) is {n}</code>. And a <em>plan B</em>, a block after the value, gives the value to use
+        when there is none:
+      </p>
+      <pre><span class="keyword">bind</span> a = half(7) { 0 }            <span class="comment"># 0</span>
+<span class="keyword">bind</span> b = half(7) { 1 } * 10       <span class="comment"># 10: a plan B works inside expressions</span>
+<span class="keyword">bind</span> c = half(7) {
+    show(<span class="string">"odd, using 3"</span>)
+    3                              <span class="comment"># the last line is the value</span>
+}
+<span class="keyword">bind</span> d = half(7) {
+    <span class="keyword">&lt;-</span>                             <span class="comment"># or leave the task instead</span>
+}</pre>
+      <p>
+        The value before the block is evaluated once, and the block runs only when it is empty. Its last line gives
+        the value, of the type inside the <code>maybe</code>; a <code>&lt;-</code> in the block sends from the task as
+        usual, and when every path through the block sends, it needs no value line. Names declared in the block
+        stay in it, and an empty block is an error. A <code>{</code> after a shape's name followed by
+        <code>field:</code> or <code>}</code> is a shape literal; any other <code>{</code> after a value starts a plan
+        B, and a <code>&lt;-</code> may follow it on the same line: <code>m { &lt;- 0 }</code>.
+      </p>
+      <p>
+        A task that can fail sends <code>T or E</code>: its value when it works, or an error of type
+        <code>E</code>, sent with <code>&lt;- fail error</code>. The error type must differ from the value type, and
+        can be any type but <code>unit</code> or a <code>maybe</code>. <code>case {v}</code> matches a success and
+        <code>case fail e</code> an error, and a plan B's first line <code>fail e</code> names the error:
+      </p>
+      <pre><span class="keyword">kind</span> SizeError
+    Negative(value: int)
+    TooBig
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> checked(size: int) -&gt; int <span class="keyword">or</span> SizeError
+    <span class="keyword">when</span> size &lt; 0
+        <span class="keyword">&lt;-</span> <span class="keyword">fail</span> Negative(size)
+    <span class="keyword">fi</span>
+    <span class="keyword">when</span> size &gt; 100
+        <span class="keyword">&lt;-</span> <span class="keyword">fail</span> TooBig
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> size
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">bind</span> a = checked(500) { 100 }       <span class="comment"># ignore the error: use 100</span>
+    <span class="keyword">bind</span> b = checked(-1) {
+        <span class="keyword">fail</span> e
+        <span class="keyword">match</span> e
+        <span class="keyword">case</span> Negative value
+            show(value)            <span class="comment"># -1</span>
+        <span class="keyword">case</span> TooBig
+            show(<span class="string">"too big"</span>)
+        <span class="keyword">fi</span>
+        0
+    }
+    <span class="keyword">match</span> checked(7)
+    <span class="keyword">case</span> {size}
+        show(size)                 <span class="comment"># 7</span>
+    <span class="keyword">case</span> <span class="keyword">fail</span> e
+        show(<span class="string">"failed"</span>)
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        <code>unit or E</code> is a task that sends nothing when it works: a bare <code>&lt;-</code>, or reaching the
+        end, succeeds, and <code>case {_}</code> matches that success. An error can't be dropped by accident: a call
+        whose <code>or</code> result goes unused is an error, and an empty plan B, <code>save(file) { }</code>, ignores
+        the error on purpose. <code>fail</code> binds like <code>-</code> and <code>not</code>, so an error computed
+        with operators needs parentheses.
+      </p>
+      <pre><span class="keyword">task</span> save(size: int) -&gt; unit <span class="keyword">or</span> text
+    <span class="keyword">when</span> size &gt; 100
+        <span class="keyword">&lt;-</span> <span class="keyword">fail</span> <span class="string">"too big"</span>
+    <span class="keyword">fi</span>
+    show(<span class="string">"saved"</span>)
+<span class="keyword">fi</span>
+
+save(500)                  <span class="comment"># error: the error 'save' may send is ignored</span>
+save(500) {
+    <span class="keyword">fail</span> reason
+    show(reason)           <span class="comment"># too big</span>
+}</pre>
 
       <h3>Memory</h3>
       <p>Owned pointers are explicit and manually freed. No garbage collector.</p>
@@ -489,18 +629,25 @@ show(origin^.x)            <span class="comment"># 5</span>
 show(origin.x)             <span class="comment"># error: type ^Point has no fields; dereference it first, as in 'p^.x'</span>
 <span class="keyword">free</span>(origin)</pre>
       <p>
-        <code>none</code> is the empty pointer. It fits any pointer type and can be compared with any pointer, but
-        on its own it has no pointer type, so a binding initialized with <code>none</code> needs one written out.
+        A pointer always points to something: there is no null pointer. A pointer that may be missing is a
+        <code>maybe ^T</code>, which must be checked before it is used (see <a href="#maybe">Maybe and
+        Errors</a>); it costs nothing extra, since the C it becomes is a plain pointer. <code>free</code> accepts a
+        <code>maybe ^T</code> and does nothing for <code>none</code>.
       </p>
-      <pre><span class="keyword">hold</span> next: ^int = <span class="keyword">none</span>
+      <pre><span class="keyword">hold</span> next: <span class="keyword">maybe</span> ^int = <span class="keyword">none</span>
 <span class="keyword">when</span> next == <span class="keyword">none</span>
     next = <span class="keyword">new</span> int(1)
 <span class="keyword">fi</span>
-<span class="keyword">bind</span> q = <span class="keyword">none</span>             <span class="comment"># error: cannot infer the type of 'q' from none</span></pre>
+<span class="keyword">when</span> next <span class="keyword">is</span> {p}
+    show(p^)                <span class="comment"># 1</span>
+<span class="keyword">fi</span>
+show(next^)                <span class="comment"># error: this pointer is a maybe ^int, which may be none</span>
+<span class="keyword">bind</span> bad: ^int = <span class="keyword">none</span>     <span class="comment"># error: a pointer can't be none, so use 'maybe ^int'</span>
+<span class="keyword">free</span>(next)</pre>
       <div class="note">
         <strong>Note:</strong> Vela intentionally keeps memory management simple. There is no borrow checker;
         ownership is manual, like C but with clearer syntax. Use <code>new</code>/<code>free</code> with care:
-        reading through <code>none</code> or a freed pointer is not caught.
+        using a freed pointer, or freeing one twice, is not caught.
       </div>
     </section>
 
@@ -527,14 +674,15 @@ show(origin.x)             <span class="comment"># error: type ^Point has no fie
       <ul>
         <li>The compiler reports the first error in a program, not all of them.</li>
         <li>Integer overflow and division by zero are not checked: they behave as in C, where they are undefined.</li>
-        <li>Reading through <code>none</code> or a freed pointer is not caught.</li>
+        <li>Using a freed pointer, or freeing one twice, is not caught.</li>
         <li><code>text</code> is a C string, so a <code>\0</code> ends it; there are no text operations besides
           <code>==</code>, <code>!=</code>, and <code>show</code>.</li>
         <li>There are no arrays, no modules (a program is one file), and no way to read input.</li>
         <li>A task sends at most one value; to report two, declare a shape that holds both and send that.</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which
-          matters only when they call tasks that print.</li>
+          matters only when they call tasks that print. (Where one of them contains a plan B, they are evaluated
+          left to right.)</li>
         <li>Statements aren't yet required to end at a line break (<code>show(1) show(2)</code> on one line is
           accepted), and a text literal may contain a raw line break.</li>
         <li>Code may nest at most 100 levels deep (parentheses, operators in a row, blocks inside blocks); deeper code
@@ -553,9 +701,11 @@ show(origin.x)             <span class="comment"># error: type ^Point has no fie
 ./target/debug/vela program.vela -o program
 CC=clang ./target/debug/vela program.vela -o program</pre>
       <p>
-        <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c]</code>: <code>-o</code> names the executable
+        <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c] [--check]</code>: <code>-o</code> names the executable
         (<code>a.out</code> by default), <code>--emit-c</code> prints the generated C instead of compiling it (or,
-        with <code>-o</code>, writes it to that file), and <code>-h</code>/<code>--help</code> prints the usage. A
+        with <code>-o</code>, writes it to that file), <code>--check</code> only checks the program, without
+        generating C or running a C compiler, <code>-h</code>/<code>--help</code> prints the usage, and
+        <code>--version</code> prints the compiler's version. A
         file name starting with <code>-</code> goes after <code>--</code>. The exit status is 0 on success, 1 when
         the program can't be read or doesn't compile (in Vela or in C), and 2 for wrong arguments.
       </p>
@@ -609,6 +759,7 @@ CC=clang cargo test</pre>
         <li>Memory is manually managed to avoid GC complexity while keeping the implementation approachable.</li>
         <li>The compiler generates readable C, making it easy to debug and interoperate with existing C code.</li>
         <li>Syntax uses keywords over punctuation to keep source code friendly and self-documenting; the few symbols (<code>-&gt;</code>, <code>&lt;-</code>, <code>^</code>) each stand for one idea.</li>
+        <li>Missing values and failures are types (<code>maybe T</code>, <code>T or E</code>) rather than conventions such as null pointers or error codes, so the checker makes sure they are handled.</li>
       </ul>
     </section>
   </main>

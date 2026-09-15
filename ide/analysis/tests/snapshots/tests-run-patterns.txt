@@ -1,0 +1,112 @@
+  1 | # Patterns in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
+    | comment:# Patterns in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
+  2 | # binding drops a value, and `is` tests one pattern with its names visible
+    | comment:# binding drops a value, and `is` tests one pattern with its names visible
+  3 | # only in the block it guards.
+    | comment:# only in the block it guards.
+  5 | kind Light
+    | keyword:kind  type:Light
+  6 |     Red
+    | variant:Red
+  7 |     Green
+    | variant:Green
+  8 |     Dimmed(level: int, reason: text)
+    | variant:Dimmed  punctuation:(  field:level  punctuation::  type-builtin:int  punctuation:,  field:reason  punctuation::  type-builtin:text  punctuation:)
+  9 | fi
+    | keyword:fi
+ 11 | task name(l: Light) -> text
+    | keyword:task  task:name  punctuation:(  parameter:l  punctuation::  type:Light  punctuation:)  operator:->  type-builtin:text
+ 12 |     match l
+    | keyword:match  parameter:l
+ 13 |     case Red
+    | keyword:case  variant:Red
+ 14 |         <- "red"
+    | keyword:<-  string:"red"
+ 15 |     case _
+    | keyword:case  keyword:_
+ 16 |         <- "not red"
+    | keyword:<-  string:"not red"
+ 17 |     fi
+    | keyword:fi
+ 18 | fi
+    | keyword:fi
+ 20 | task level(l: Light) -> int
+    | keyword:task  task:level  punctuation:(  parameter:l  punctuation::  type:Light  punctuation:)  operator:->  type-builtin:int
+ 21 |     match l
+    | keyword:match  parameter:l
+ 22 |     case Dimmed amount _
+    | keyword:case  variant:Dimmed  variable:amount  keyword:_
+ 23 |         <- amount
+    | keyword:<-  variable:amount
+ 24 |     case _
+    | keyword:case  keyword:_
+ 25 |         <- 100
+    | keyword:<-  number:100
+ 26 |     fi
+    | keyword:fi
+ 27 | fi
+    | keyword:fi
+ 29 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 30 |     show(name(Red))
+    | builtin-fn:show  punctuation:(  task:name  punctuation:(  variant:Red  punctuation:)  punctuation:)
+ 31 |     show(name(Dimmed(3, "night")))
+    | builtin-fn:show  punctuation:(  task:name  punctuation:(  variant:Dimmed  punctuation:(  number:3  punctuation:,  string:"night"  punctuation:)  punctuation:)  punctuation:)
+ 32 |     show(level(Green))
+    | builtin-fn:show  punctuation:(  task:level  punctuation:(  variant:Green  punctuation:)  punctuation:)
+ 33 |     show(level(Dimmed(30, "dusk")))
+    | builtin-fn:show  punctuation:(  task:level  punctuation:(  variant:Dimmed  punctuation:(  number:30  punctuation:,  string:"dusk"  punctuation:)  punctuation:)  punctuation:)
+ 35 |     bind lights: maybe Light = Dimmed(5, "evening")
+    | keyword:bind  variable:lights  punctuation::  keyword:maybe  type:Light  operator:=  variant:Dimmed  punctuation:(  number:5  punctuation:,  string:"evening"  punctuation:)
+ 36 |     when lights is {light}
+    | keyword:when  variable:lights  keyword:is  punctuation:{  variable:light  punctuation:}
+ 37 |         when light is Dimmed amount why
+    | keyword:when  variable:light  keyword:is  variant:Dimmed  variable:amount  variable:why
+ 38 |             show(amount)
+    | builtin-fn:show  punctuation:(  variable:amount  punctuation:)
+ 39 |             show(why)
+    | builtin-fn:show  punctuation:(  variable:why  punctuation:)
+ 40 |         else
+    | keyword:else
+ 41 |             show("bright")
+    | builtin-fn:show  punctuation:(  string:"bright"  punctuation:)
+ 42 |         fi
+    | keyword:fi
+ 43 |     fi
+    | keyword:fi
+ 45 |     hold count = 0
+    | keyword:hold  variable:count  operator:=  number:0
+ 46 |     bind current: maybe int = none
+    | keyword:bind  variable:current  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 47 |     loop current is {n}
+    | keyword:loop  variable:current  keyword:is  punctuation:{  variable:n  punctuation:}
+ 48 |         count = count + n
+    | variable:count  operator:=  variable:count  operator:+  variable:n
+ 49 |     fi
+    | keyword:fi
+ 50 |     show(count)
+    | builtin-fn:show  punctuation:(  variable:count  punctuation:)
+ 52 |     when Green is Red
+    | keyword:when  variant:Green  keyword:is  variant:Red
+ 53 |         show("impossible")
+    | builtin-fn:show  punctuation:(  string:"impossible"  punctuation:)
+ 54 |     else
+    | keyword:else
+ 55 |         show("green is not red")
+    | builtin-fn:show  punctuation:(  string:"green is not red"  punctuation:)
+ 56 |     fi
+    | keyword:fi
+ 58 |     match lights
+    | keyword:match  variable:lights
+ 59 |     case none
+    | keyword:case  keyword:none
+ 60 |         show("no light")
+    | builtin-fn:show  punctuation:(  string:"no light"  punctuation:)
+ 61 |     case {_}
+    | keyword:case  punctuation:{  keyword:_  punctuation:}
+ 62 |         show("some light")
+    | builtin-fn:show  punctuation:(  string:"some light"  punctuation:)
+ 63 |     fi
+    | keyword:fi
+ 64 | fi
+    | keyword:fi

@@ -7,8 +7,8 @@
 //! shapes and their fields, kinds and their variants), which may be used
 //! before they are declared. The second walks the tokens in order, tracking
 //! blocks and the variables declared in them (parameters, `bind`/`hold`,
-//! `each`, and `case` bindings), which are only visible after their
-//! declaration.
+//! `each`, the names `case` and `is` patterns bind, and the error a plan B
+//! names), which are only visible after their declaration.
 
 use std::collections::HashMap;
 use std::ops::Range;
@@ -55,7 +55,7 @@ pub enum SymbolKind {
     /// A shape field or a variant's payload field.
     Field,
     Parameter,
-    /// A `bind`, `hold`, `each`, or `case` binding.
+    /// A `bind`, `hold`, `each`, `case`, `is`, or plan B (`fail e`) binding.
     Variable,
 }
 
@@ -85,7 +85,8 @@ pub(crate) struct Symbol {
     /// end of its declaring line to the end of its block. Everything else is
     /// visible everywhere.
     pub visible: Range<usize>,
-    /// The keyword that declared a variable: `bind`, `hold`, `each`, or `case`.
+    /// The keyword that declared a variable: `bind`, `hold`, `each`, `case`,
+    /// `is`, or `fail` (the error a plan B names).
     pub intro: Option<&'static str>,
     /// Bytes of the whole declaration: from `task`/`shape`/`kind` to its
     /// `fi` for those, and just the name for everything else.
@@ -331,6 +332,17 @@ enum ScopeKind {
     Other,
     Match,
     Case,
+    /// A plan B's block, `{ … }`.
+    PlanB,
+}
+
+/// An open `{`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Brace {
+    /// A shape literal, with its shape's name if known.
+    Literal(Option<String>),
+    /// A plan B's block, which may span lines.
+    PlanB,
 }
 
 /// Second pass: classifies every token.
@@ -368,9 +380,13 @@ impl<'a> Classifier<'a> {
         // The keyword declaring the next name as a variable.
         let mut declaring: Option<&'static str> = None;
         let mut in_task_header = false;
-        let mut in_case_header = false;
-        // For each open `{`, the shape it builds, if known.
-        let mut braces: Vec<Option<String>> = Vec::new();
+        // In a `case` or `is` pattern, whose names are declared.
+        let mut in_pattern = false;
+        // Just after a plan B's `{`, where `fail e` names the error.
+        let mut plan_b_head = false;
+        // Just after a type's name, where `or` starts the error type.
+        let mut after_type = false;
+        let mut braces: Vec<Brace> = Vec::new();
 
         let mut p = 0;
         for lexed in tokens.all {
@@ -395,25 +411,32 @@ impl<'a> Classifier<'a> {
                 LexKind::Token(token) => token,
             };
             let was_type = std::mem::take(&mut in_type);
+            let was_after_type = std::mem::take(&mut after_type);
             let declaring_now = declaring.take();
+            if !matches!(token, Token::Newline | Token::Fail) {
+                plan_b_head = false;
+            }
 
             match token {
                 Token::Newline => {
                     in_task_header = false;
-                    in_case_header = false;
-                    // Shape literals are on one line, so an unclosed `{` ends with it.
-                    braces.clear();
+                    in_pattern = false;
+                    // Shape literals are on one line, so an unclosed literal `{` ends
+                    // with it; a plan B's block continues.
+                    braces.retain(|brace| *brace == Brace::PlanB);
                 }
                 Token::Eof => {}
                 Token::Int(_) | Token::Float(_) => self.push(range, TokenClass::Number, None),
                 Token::Text(_) => self.string(range),
                 Token::Ident(name) => {
-                    let (class, symbol) = self.identifier(p, name, was_type, declaring_now, in_task_header, in_case_header, &braces);
+                    let (class, symbol) = self.identifier(p, name, was_type, declaring_now, in_task_header, in_pattern, &braces);
                     self.push(range, class, symbol);
+                    after_type = was_type;
                 }
                 Token::Colon => {
                     self.push(range, TokenClass::Punctuation, None);
-                    in_type = braces.is_empty();
+                    // A field's value in a shape literal is not a type.
+                    in_type = !matches!(braces.last(), Some(Brace::Literal(_)));
                 }
                 Token::Arrow => {
                     self.push(range, TokenClass::Operator, None);
@@ -425,11 +448,24 @@ impl<'a> Classifier<'a> {
                 }
                 Token::LBrace => {
                     self.push(range, TokenClass::Punctuation, None);
-                    braces.push(p.checked_sub(1).and_then(|q| tokens.ident(q)).map(str::to_string));
+                    let literal = matches!(tokens.token(p + 1), Some(Token::RBrace))
+                        || (tokens.ident(p + 1).is_some() && tokens.token(p + 2) == Some(&Token::Colon));
+                    if in_pattern {
+                        // `case {value}`: the name inside is declared by the pattern.
+                        braces.push(Brace::Literal(None));
+                    } else if literal {
+                        braces.push(Brace::Literal(p.checked_sub(1).and_then(|q| tokens.ident(q)).map(str::to_string)));
+                    } else {
+                        braces.push(Brace::PlanB);
+                        self.open(ScopeKind::PlanB);
+                        plan_b_head = true;
+                    }
                 }
                 Token::RBrace => {
                     self.push(range, TokenClass::Punctuation, None);
-                    braces.pop();
+                    if braces.pop() == Some(Brace::PlanB) && self.scopes.last().is_some_and(|s| s.kind == ScopeKind::PlanB) {
+                        self.close_scope(at);
+                    }
                 }
                 Token::LParen | Token::RParen | Token::LBracket | Token::RBracket | Token::Comma | Token::Dot => {
                     self.push(range, TokenClass::Punctuation, None);
@@ -437,6 +473,15 @@ impl<'a> Classifier<'a> {
                 Token::Plus | Token::Minus | Token::Star | Token::Slash | Token::Percent | Token::Eq | Token::Ne
                 | Token::Lt | Token::Gt | Token::Le | Token::Ge | Token::Assign | Token::Range => {
                     self.push(range, TokenClass::Operator, None);
+                }
+                // A type after `maybe`, and the error type after `or` in a type.
+                Token::Maybe => {
+                    self.push(range, TokenClass::Keyword, None);
+                    in_type = was_type;
+                }
+                Token::Or if was_after_type => {
+                    self.push(range, TokenClass::Keyword, None);
+                    in_type = true;
                 }
                 // Everything else is a keyword.
                 keyword => {
@@ -450,6 +495,8 @@ impl<'a> Classifier<'a> {
                             in_task_header = *keyword == Token::Task;
                             braces.clear();
                         }
+                        Token::Is => in_pattern = true,
+                        Token::Fail if plan_b_head => declaring = Some("fail"),
                         Token::When => self.open(ScopeKind::When),
                         Token::Loop => self.open(ScopeKind::Other),
                         Token::Each => {
@@ -459,25 +506,29 @@ impl<'a> Classifier<'a> {
                         Token::Match => self.open(ScopeKind::Match),
                         Token::Bind => declaring = Some("bind"),
                         Token::Hold => declaring = Some("hold"),
+                        Token::Case => {
+                            self.close_plan_b(at, &mut braces);
+                            if self.scopes.last().is_some_and(|s| s.kind == ScopeKind::Case) {
+                                self.close_scope(at);
+                            }
+                            self.open(ScopeKind::Case);
+                            in_pattern = true;
+                        }
+                        Token::Fi => {
+                            // A plan B still open here is missing its `}`.
+                            self.close_plan_b(at, &mut braces);
+                            if self.scopes.last().is_some_and(|s| s.kind == ScopeKind::Case) {
+                                self.close_scope(at);
+                            }
+                            self.close_scope(at);
+                        }
                         Token::Else => {
+                            self.close_plan_b(at, &mut braces);
                             // The `else` branch can't see the `when` branch's variables.
                             if self.scopes.last().is_some_and(|s| s.kind == ScopeKind::When) {
                                 self.close_scope(at);
                                 self.open(ScopeKind::When);
                             }
-                        }
-                        Token::Case => {
-                            if self.scopes.last().is_some_and(|s| s.kind == ScopeKind::Case) {
-                                self.close_scope(at);
-                            }
-                            self.open(ScopeKind::Case);
-                            in_case_header = true;
-                        }
-                        Token::Fi => {
-                            if self.scopes.last().is_some_and(|s| s.kind == ScopeKind::Case) {
-                                self.close_scope(at);
-                            }
-                            self.close_scope(at);
                         }
                         Token::New => in_type = true,
                         _ => {}
@@ -497,8 +548,8 @@ impl<'a> Classifier<'a> {
         in_type: bool,
         declaring: Option<&'static str>,
         in_task_header: bool,
-        in_case_header: bool,
-        braces: &[Option<String>],
+        in_pattern: bool,
+        braces: &[Brace],
     ) -> (TokenClass, Option<usize>) {
         let tokens = self.tokens;
         let before = tokens.before(p);
@@ -522,25 +573,29 @@ impl<'a> Classifier<'a> {
             let detail = tokens.text_after(p + 1, ends_field);
             return (TokenClass::Parameter, Some(self.declare_local(p, SymbolKind::Parameter, None, detail)));
         }
-        if in_case_header {
-            if before == Some(&Token::Case) {
+        if in_pattern {
+            if matches!(before, Some(Token::Case | Token::Is)) {
                 return (TokenClass::Variant, self.global(name, &[SymbolKind::Variant]));
             }
-            return (TokenClass::Variable, Some(self.declare_local(p, SymbolKind::Variable, Some("case"), String::new())));
+            let intro = if self.scopes.last().is_some_and(|s| s.kind == ScopeKind::Case) { "case" } else { "is" };
+            return (TokenClass::Variable, Some(self.declare_local(p, SymbolKind::Variable, Some(intro), String::new())));
         }
         if before == Some(&Token::Dot) {
             let start = tokens.get(p).map(|t| (t.start.line, t.start.col));
             let shape = start.and_then(|at| self.field_accesses.get(&at)).cloned();
             return (TokenClass::Field, self.field(shape.as_deref(), name));
         }
-        if let Some(Some(shape)) = braces.last()
+        if let Some(Brace::Literal(Some(shape))) = braces.last()
             && after == Some(&Token::Colon)
             && matches!(before, Some(Token::LBrace | Token::Comma))
         {
             let shape = shape.clone();
             return (TokenClass::Field, self.field(Some(&shape), name));
         }
-        if after == Some(&Token::LBrace) {
+        let literal_follows = after == Some(&Token::LBrace)
+            && (tokens.token(p + 2) == Some(&Token::RBrace)
+                || (tokens.ident(p + 2).is_some() && tokens.token(p + 3) == Some(&Token::Colon)));
+        if literal_follows && self.local(name, tokens.range(p).start).is_none() {
             return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind]));
         }
         // A call always names a task or a variant, even when a variable has the same name.
@@ -569,6 +624,17 @@ impl<'a> Classifier<'a> {
 
     fn open(&mut self, kind: ScopeKind) {
         self.scopes.push(Scope { kind, variables: Vec::new() });
+    }
+
+    /// Closes the plan B scopes open at the top, at byte `at`, and forgets
+    /// their braces: a block keyword there means they are missing their `}`.
+    fn close_plan_b(&mut self, at: usize, braces: &mut Vec<Brace>) {
+        while self.scopes.last().is_some_and(|s| s.kind == ScopeKind::PlanB) {
+            self.close_scope(at);
+            if let Some(open) = braces.iter().rposition(|brace| *brace == Brace::PlanB) {
+                braces.truncate(open);
+            }
+        }
     }
 
     /// Closes the innermost scope at byte `at`, where its variables stop being

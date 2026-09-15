@@ -254,7 +254,7 @@ fn hover_describes_declarations() {
     assert_eq!(code_and_doc(hover(&source, "radius", 0)), pair("radius: float", "A payload field of variant Circle."));
     assert_eq!(code_and_doc(hover(&source, "start: p", 0)), pair("start: Point", "A field of shape Line."));
     assert_eq!(code_and_doc(hover(&source, "int\n    y: int", 0)), pair("int", "A 64-bit signed integer."));
-    assert_eq!(hover(&source, "show", 0).code, "task show(value: int | float | bool | text)");
+    assert_eq!(hover(&source, "show", 0).code, "task show(value: int | float | bool | text | maybe)");
     assert_eq!(hover(&source, "Point {", 0).code, "shape Point\n    x: int\n    y: int\nfi");
     assert_eq!(hover(&source, "Shape\n", 0).code, "kind Shape\n    Circle(radius: float)\n    Rectangle(width: float, height: float)\n    Dot\nfi");
     // The hovered range is the name.
@@ -293,6 +293,85 @@ fn hover_reads_operators_in_initializers_when_the_file_doesnt_check() {
     ] {
         assert_eq!(hover(&source, needle, 0).code, code, "at {:?}", needle);
     }
+}
+
+const OUTCOMES: &str = "\
+kind Problem
+    Empty
+    Bad(at: int)
+fi
+
+task parse(t: text) -> int or Problem
+    <- 1
+fi
+
+task main()
+    bind m: maybe int = none
+    bind r = parse(\"1\")
+    hold total = 0
+    @@
+fi
+";
+
+fn in_outcomes(code: &str) -> String {
+    OUTCOMES.replace("    @@\n", &format!("    {}\n", code))
+}
+
+#[test]
+fn types_offer_maybe_and_error_types() {
+    assert_offers(&in_outcomes("bind x: @@"), &["maybe", "int", "Problem"], &["unit", "m"]);
+    // After `maybe`, another type, but not `maybe` or `unit` again.
+    assert_offers(&in_outcomes("bind x: maybe @@"), &["int", "Problem"], &["maybe", "unit"]);
+    assert_offers(&in_outcomes("bind x: maybe ^@@"), &["int"], &["m"]);
+    // After `or` in a type, the error type.
+    assert_offers("task f() -> int or @@\nfi\n", &["text", "maybe"], &["unit"]);
+    assert_offers(&in_outcomes("bind x: int or @@"), &["Problem"], &["m", "total"]);
+    // `or` between values is still an expression.
+    assert_offers(&in_outcomes("show(total == 1 or @@)"), &["total", "m"], &["Problem"]);
+}
+
+#[test]
+fn case_and_is_offer_the_patterns_of_maybe_and_error_values() {
+    let marked = in_outcomes("match m\n    case @@\n    fi");
+    assert_offers(&marked, &["{value}", "none", "all remaining cases"], &["fail e", "Empty"]);
+    assert_eq!(item(&marked, "{value}").snippet.as_deref(), Some("{${value}}"));
+    assert_eq!(item(&marked, "all remaining cases").snippet.as_deref(), Some("{${value}}\n\t\ncase none\n\t${}"));
+    let marked = in_outcomes("match r\n    case {n}\n        show(n)\n    case @@\n    fi");
+    assert_offers(&marked, &["fail e"], &["{value}", "none", "all remaining cases"]);
+    assert_eq!(item(&marked, "fail e").snippet.as_deref(), Some("fail ${e}"));
+
+    assert_offers(&in_outcomes("when m is @@"), &["{value}", "none"], &["fail e", "total"]);
+    assert_offers(&in_outcomes("when r is @@"), &["{value}", "fail e"], &["none"]);
+    assert_offers(&in_outcomes("when parse(\"x\") { fail _\n        0\n    } is @@"), &[], &[]);
+    // The names a pattern or plan B declares are new.
+    for marked in [in_outcomes("when m is {@@"), in_outcomes("bind n = r { fail @@"), in_outcomes("bind n = r {\n        fail @@")] {
+        assert_eq!(labels(&marked), Vec::<String>::new(), "at {:?}", marked);
+    }
+    // A kind's `_` case.
+    let marked = PROGRAM.replace("    @@\n", "    match figure\n    case Dot\n        show(1)\n    case @@\n    fi\n");
+    assert_offers(&marked, &["_", "Circle"], &["Dot"]);
+}
+
+#[test]
+fn plan_b_blocks_offer_values_and_statements() {
+    assert_offers(&in_outcomes("bind n = m { @@"), &["total", "m", "fail", "none"], &[]);
+    assert_offers(&in_outcomes("bind n = m {\n        @@"), &["bind", "total", "when"], &[]);
+    assert_offers(&in_outcomes("@@"), &["match m", "match r", "when … is", "loop … is"], &[]);
+    assert_eq!(item(&in_outcomes("@@"), "match r").snippet.as_deref(), Some("match r\ncase {${value}}\n\t\ncase fail ${e}\n\t${}\nfi"));
+}
+
+#[test]
+fn hover_describes_maybe_and_error_names() {
+    let source = OUTCOMES.replace(
+        "    @@\n",
+        "    bind n = r {\n        fail problem\n        show(0)\n        0\n    }\n    when m is {value}\n        show(value + n)\n    fi\n",
+    );
+    assert_eq!(code_and_doc(hover(&source, "problem", 0)), ("fail problem: Problem".to_string(), "The error this plan B handles.".to_string()));
+    assert_eq!(code_and_doc(hover(&source, "value + n", 0)), ("value: int".to_string(), "Bound by an is condition.".to_string()));
+    assert_eq!(hover(&source, "m:", 0).code, "bind m: maybe int");
+    assert_eq!(hover(&source, "r =", 0).code, "bind r: int or Problem");
+    assert_eq!(hover(&source, "maybe int", 0).code, "maybe T");
+    assert_eq!(hover(&source, "none", 0).code, "none");
 }
 
 #[test]

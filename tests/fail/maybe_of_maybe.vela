@@ -1,0 +1,4 @@
+# error: 3:13: a maybe can't hold another maybe
+task main()
+    bind m: maybe maybe int = none
+fi

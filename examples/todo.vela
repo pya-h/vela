@@ -1,6 +1,6 @@
-# A tiny to-do list: a linked list of shapes that point to themselves,
-# `none` for the end of the list, variants with and without a payload,
-# and text compared by contents.
+# A tiny to-do list: a linked list of shapes, each pointing to the next one
+# (a `maybe ^Item`, since the last item has none), variants with and without
+# a payload, `is` and plan B to read maybe values, and text compared by contents.
 
 kind Status
     Todo
@@ -11,7 +11,7 @@ fi
 shape Item
     title: text
     status: Status
-    next: ^Item
+    next: maybe ^Item
 fi
 
 task describe(s: Status) -> text
@@ -25,45 +25,34 @@ task describe(s: Status) -> text
     fi
 fi
 
-task is_done(s: Status) -> bool
-    match s
-    case Done
-        <- true
-    case Todo
-        <- false
-    case Blocked reason
-        <- false
-    fi
-fi
-
-task print_list(first: ^Item)
+task print_list(first: maybe ^Item)
     hold current = first
-    loop current != none
-        show(current^.title)
-        show(describe(current^.status))
-        current = current^.next
+    loop current is {item}
+        show(item^.title)
+        show(describe(item^.status))
+        current = item^.next
     fi
 fi
 
-task count_done(first: ^Item) -> int
+task count_done(first: maybe ^Item) -> int
     hold count = 0
     hold current = first
-    loop current != none
-        when is_done(current^.status)
+    loop current is {item}
+        when item^.status is Done
             count = count + 1
         fi
-        current = current^.next
+        current = item^.next
     fi
     <- count
 fi
 
-task find(first: ^Item, title: text) -> ^Item
+task find(first: maybe ^Item, title: text) -> maybe ^Item
     hold current = first
-    loop current != none
-        when current^.title == title
-            <- current
+    loop current is {item}
+        when item^.title == title
+            <- item
         fi
-        current = current^.next
+        current = item^.next
     fi
     <- none
 fi
@@ -75,12 +64,15 @@ task main()
     print_list(first)
     show(count_done(first))
 
-    bind tests = find(first, "write tests")
-    when tests != none
+    when find(first, "write tests") is {tests}
         tests^.status = Todo
     fi
     show(count_done(first))
     show(find(first, "celebrate") == none)
+
+    # A plan B gives a value to use when there is nothing to extract.
+    bind start = find(first, "celebrate") { first }
+    show(start^.title)
 
     free(third)
     free(second)

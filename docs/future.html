@@ -320,7 +320,7 @@
         </div>
         <div class="card">
           <h3>Limited types <span class="badge b-med">Medium</span></h3>
-          <p>No generics, arrays, slices, tuples, or optional/error types. Pointers have <code>none</code>, but nothing stops dereferencing it.</p>
+          <p>No generics, arrays, slices, or tuples. (Missing values and errors now have types: <code>maybe T</code> and <code>T or E</code>, and a pointer can't be <code>none</code>.)</p>
         </div>
         <div class="card">
           <h3>No methods <span class="badge b-med">Medium</span></h3>
@@ -386,8 +386,9 @@
           <p>Replace C strings with a <code>(ptr, len)</code> struct and safe operations.</p>
         </div>
         <div class="card">
-          <h3>Option & Result <span class="badge b-idea">Idea</span></h3>
-          <p>Introduce sum types for nullable values and error handling without exceptions.</p>
+          <h3>Maybe & errors <span class="badge b-done">Done</span></h3>
+          <p><code>maybe T</code> and <code>T or E</code>, read with <code>match</code>, <code>is</code>, or a plan B
+            (<code>x { 0.0 }</code>); pointers can no longer be <code>none</code>. <a href="#maybe">Details below.</a></p>
         </div>
         <div class="card">
           <h3>Pattern match expressions <span class="badge b-idea">Idea</span></h3>
@@ -575,6 +576,209 @@ fi</pre>
           Build multiple results first, since named results reuse their header list, send list, and C result
           shape; then add names on top.
         </p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="maybe"><span class="icon" aria-hidden="true">🛟</span> Maybe, Plan B, and Errors <span class="badge b-done">Done</span></h2>
+      <p>
+        A value that might be missing, and a task that might fail, are the two most common sources of bugs that a
+        type checker can rule out. C spells both with conventions (<code>NULL</code>, <code>-1</code>,
+        <code>errno</code>) that nothing enforces. Vela now spells them with types, and gives three ways to get a
+        value out, from the most explicit to the most compact. This is implemented; the language guide describes
+        it in <a href="vela.html#maybe">Maybe and Errors</a>. This section keeps the reasoning behind the design.
+      </p>
+
+      <h3>maybe</h3>
+      <p>
+        <code>maybe T</code> holds a <code>T</code> or nothing. A plain value becomes one wherever a
+        <code>maybe</code> is expected (a typed binding, an assignment, an argument, a field, a send), and
+        <code>none</code> is the empty one. There is no <code>Some(…)</code> to write.
+      </p>
+      <pre>task find(names: ^Names, wanted: text) -&gt; maybe int
+    …
+    &lt;- index                  # found: the int becomes a maybe int
+    …
+    &lt;- none                   # not found
+fi
+
+bind x: maybe float = 2.1
+hold y: maybe float = none</pre>
+      <ul>
+        <li>The word is <code>maybe</code>, never <code>Option</code>: the type reads as what it is, a value that is
+          maybe there.</li>
+        <li>The type is a prefix, like <code>^</code>: <code>maybe int</code>, <code>maybe ^Node</code>,
+          <code>^maybe int</code>. A brace form (<code>maybe{int}</code>) was considered and rejected: braces would
+          mean a type argument, a pattern, a plan B, and a shape literal at once, and generics written with braces
+          would collide with plan B in expressions.</li>
+        <li>A <code>maybe</code> can't hold another <code>maybe</code>, or <code>unit</code>.</li>
+        <li>A plain value never becomes a <code>maybe</code> in arithmetic or comparisons: <code>m + 1</code> is an
+          error that says to extract it first, and <code>==</code> compares a <code>maybe</code> only with
+          <code>none</code>.</li>
+        <li><code>show(m)</code> prints the value, or <code>none</code>.</li>
+      </ul>
+
+      <h3>No more null pointers</h3>
+      <p>
+        <code>maybe</code> exists to remove null mistakes, so <code>none</code> no longer fits a pointer type. A
+        <code>^T</code> always points to something: <code>new</code> already stops the program when memory runs
+        out, every binding needs a value, and every shape literal gives every field. A pointer that may be empty is
+        a <code>maybe ^T</code>, and like any <code>maybe</code> it must be checked before use:
+        <code>p^</code> on a <code>maybe ^T</code> is a compile error.
+      </p>
+      <pre>shape Item
+    title: text
+    next: maybe ^Item        # the last item has no next
+fi</pre>
+      <ul>
+        <li>A <code>maybe ^T</code> compiles to a plain C pointer, with <code>NULL</code> for <code>none</code>, so
+          the safety costs nothing.</li>
+        <li>A shape that reaches itself only through <code>^</code> pointers could never be created (the first one
+          would need another to exist already), so the checker rejects it and suggests <code>maybe ^T</code>.</li>
+        <li><code>free</code> accepts a <code>maybe ^T</code> and does nothing for <code>none</code>.</li>
+        <li>This removes null dereferences. A freed pointer can still be used, and a pointer freed twice is still a
+          bug: that is a separate question for the memory model below.</li>
+      </ul>
+
+      <h3>Getting the value out</h3>
+      <p><strong>1. <code>match</code></strong>, when both outcomes need real work:</p>
+      <pre>match find(names, "vela")
+case {index}
+    show(index)
+case none
+    show("not found")
+fi</pre>
+      <p>
+        <code>{index}</code> matches a value and names it; <code>none</code> matches nothing; <code>_</code> matches
+        whatever the earlier cases didn't, and works for kinds too. Cases stay exhaustive.
+      </p>
+      <p><strong>2. <code>is</code></strong>, for "only when there is one", and for walking linked structures:</p>
+      <pre>when find(names, "vela") is {index}
+    show(index)
+fi
+
+hold current = first
+loop current is {item}
+    show(item^.title)
+    current = item^.next
+fi</pre>
+      <p>
+        <code>is</code> takes the same patterns as <code>case</code>, including a kind's variants
+        (<code>when light is Dimmed level</code>), and its names are visible only in the block it guards. It is
+        the whole condition of a <code>when</code> or <code>loop</code>: combining it with <code>and</code> or
+        <code>or</code> would make it unclear where the names exist, so that is an error that suggests nesting.
+        Without <code>is</code>, removing null pointers would make every list walk check twice.
+      </p>
+      <p><strong>3. Plan B</strong>, the compact form: a block after a value runs only when there is no value, and
+        its last line is the value to use instead.</p>
+      <pre>bind y = x { 0.0 }                 # x's value, or 0.0
+bind z: float = y * 5.2
+
+bind port = config_port() {
+    show("no port set, using 8080")
+    8080
+}
+
+bind scaled = x { 1.0 } * 2.2      # works inside expressions
+
+bind first = head {
+    &lt;-                             # nothing to do: leave the task
+}</pre>
+      <ul>
+        <li>The value before the block is evaluated once. A plan B binds like <code>.</code> and <code>^</code>, so
+          <code>x { 0.0 } * 2.2</code> and <code>-x { 1 }</code> mean what they look like.</li>
+        <li>The last line gives the value, and must have the wrapped type. A <code>&lt;-</code> inside a plan B
+          sends from the task, as anywhere else; only a line that isn't a send gives the value. When every path
+          through the block ends in <code>&lt;-</code>, no value line is needed.</li>
+        <li>Names declared in a plan B stay inside it. Plan Bs nest: <code>a { b { 0 } }</code> falls back to a
+          second <code>maybe</code>.</li>
+        <li>An empty block is an error, except where there's no value to replace (below).</li>
+      </ul>
+
+      <h3>Errors: <code>T or E</code></h3>
+      <p>
+        A task that can fail sends <code>T or E</code>: a <code>T</code> when it works, an <code>E</code> when it
+        doesn't. The name <code>Result</code> was avoided because "result" already means what a task sends.
+      </p>
+      <pre>kind ParseError
+    Empty
+    BadDigit(at: int)
+fi
+
+task parse(digits: text) -&gt; int or ParseError
+    when digits == ""
+        &lt;- fail Empty
+    fi
+    …
+    &lt;- value
+fi
+
+task main()
+    bind n = parse("42") { 0 }            # the error is ignored: use 0
+
+    bind m = parse("4x") {
+        fail e                            # names the error for this block
+        match e
+        case Empty
+            show("empty")
+        case BadDigit at
+            show(at)
+        fi
+        -1
+    }
+
+    match parse("7")
+    case {value}
+        show(value)
+    case fail e
+        show("failed")
+    fi
+fi</pre>
+      <ul>
+        <li><code>fail e</code> makes an error value. It is always written, even where the types would tell, so
+          <code>text or text</code> and future generic code stay unambiguous; the error type must differ from the
+          value type anyway.</li>
+        <li><code>case fail e</code> and <code>is fail e</code> match an error; <code>case {v}</code> a success.</li>
+        <li>In a plan B, a first line <code>fail e</code> names the error. The form
+          <code>{ err: ErrorType</code> was considered and rejected: after a variable,
+          <code>res { err: Problem }</code> is already a shape literal, and the error's type is known anyway.</li>
+        <li><code>unit or E</code> is a task that sends nothing when it works: a bare <code>&lt;-</code>, or reaching
+          the end, succeeds.</li>
+        <li>An error can't be dropped by accident. A call whose <code>or</code> result is unused is an error;
+          <code>save(file) { }</code> ignores the error on purpose.</li>
+      </ul>
+
+      <h3>How it fits the grammar</h3>
+      <ul>
+        <li><strong>Braces:</strong> <code>Name {</code> followed by <code>field:</code> or <code>}</code> is a shape
+          literal; any other brace after a value is a plan B. No statement starts with <code>name:</code>, so
+          nothing is lost. If shape literals may later span lines, the check skips line breaks.</li>
+        <li><strong>Sends:</strong> <code>&lt;-</code> may follow <code>{</code> (<code>x { &lt;- 0 }</code>), and
+          <code>}</code> ends a bare <code>&lt;-</code>. The hint for <code>a &lt;-1</code> is unaffected, since
+          <code>{</code> is not a value.</li>
+        <li><strong>New words:</strong> <code>maybe</code>, <code>is</code>, and <code>fail</code> are reserved, and
+          <code>_</code> is a symbol. In types, <code>or</code> separates the value type from the error type.</li>
+        <li><strong>Generated C:</strong> a <code>maybe T</code> is a small struct <code>{ bool has; T value; }</code>
+          (a plain pointer for <code>maybe ^T</code>), and <code>T or E</code> is
+          <code>{ bool ok; T value; E error; }</code>. An expression containing a plan B is generated as
+          statements: its operands are evaluated left to right into temporaries, <code>and</code>/<code>or</code>
+          still skip their right side, and a <code>loop</code> condition runs its plan B on every pass.</li>
+      </ul>
+
+      <div class="recommendation">
+        <h3>💡 Next steps on top of this</h3>
+        <ul>
+          <li><strong>Forwarding errors:</strong> a plan B that only sends the error on, <code>fail e</code> then
+            <code>&lt;- fail e</code>, will be common;
+            a shorthand can come once real code shows its shape.</li>
+          <li><strong>Match expressions</strong> can reuse plan B's rule, "the last line is the value", instead of a
+            separate <code>= value</code> form per case.</li>
+          <li><strong>Named results</strong> work inside plan B unchanged: <code>total &lt;- v</code> updates, a bare
+            <code>&lt;-</code> ends.</li>
+          <li><strong>Calling C:</strong> pointers coming from C functions should arrive as <code>maybe ^T</code>.</li>
+          <li><strong>Dangling pointers and double <code>free</code>:</strong> the remaining pointer bugs, for the
+            memory model.</li>
+        </ul>
       </div>
     </section>
 
@@ -1014,10 +1218,10 @@ show(p.length_squared())</pre>
       <ul>
         <li><strong>Integer traps:</strong> overflow and division by zero stop the program with a message instead of
           being C's undefined behavior, identical under every C compiler</li>
-        <li><strong>A null check on <code>p^</code>:</strong> the cheapest first memory-safety step, sharing the
-          "stop with a message" runtime helper with the integer traps</li>
         <li><strong>Left-to-right evaluation:</strong> arguments and operands that call tasks are evaluated in order
-          (codegen stores them in temporaries first), so output never depends on the C compiler</li>
+          (codegen stores them in temporaries first), so output never depends on the C compiler. Expressions that
+          contain a <a href="#maybe">plan B</a> already work this way; the rest would follow. (A null check on
+          <code>p^</code> is no longer needed: a pointer can't be <code>none</code>.)</li>
         <li><strong>Lints:</strong> warn about code that can't run (after a <code>&lt;-</code> in the same block), a
           value compared with itself, and <code>x = x</code>; these fit naturally with reporting many errors at once</li>
       </ul>
@@ -1090,7 +1294,7 @@ show(p.length_squared())</pre>
             <li>Module system and package manager</li>
             <li>Methods on shapes and kinds (qualified tasks with <code>self</code> / <code>hold self</code>)</li>
             <li>Generics</li>
-            <li>Result/Option types and error handling</li>
+            <li><s>Missing values and error handling</s> (done: <a href="#maybe"><code>maybe T</code>, plan B, <code>T or E</code></a>)</li>
             <li>Pattern-match expressions</li>
             <li>Region-based allocation</li>
           </ul>
@@ -1117,7 +1321,7 @@ show(p.length_squared())</pre>
         — keeps Vela fast, simple, and far safer than C without becoming Rust.
       </p>
       <p>
-        Beyond memory, Vela should grow carefully: methods as qualified tasks, generics, modules, and lightweight error handling before
+        Beyond memory, Vela should grow carefully: methods as qualified tasks, generics, and modules before
         concurrency or a self-hosted compiler. The goal is not to be everything; it is to be a small,
         beautiful, fast language that proves you do not need a massive toolchain to write safe systems code.
       </p>

@@ -1,0 +1,8 @@
+# error: 4:5: missing case 'none' in match
+task main()
+    bind m: maybe int = 1
+    match m
+    case {n}
+        show(n)
+    fi
+fi

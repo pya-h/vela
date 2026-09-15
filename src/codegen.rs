@@ -57,11 +57,22 @@ impl CWriter {
 /// `check::Checker`. Types come from the checker's annotations; the generator
 /// does no type inference of its own. A missing annotation or other broken
 /// checker guarantee is reported as an internal compiler error.
-#[derive(Default)]
+///
+/// An expression is normally one C expression. One that contains a plan B
+/// (`x { … }`) needs statements, so generating it writes those statements
+/// ("the prelude") before the line that uses its value; see `gen_operands`.
 pub struct Generator {
     w: CWriter,
     temp_counter: u64,
     kinds: HashMap<String, KindDef>,
+    /// The return type of the task being generated.
+    ret: Type,
+}
+
+impl Default for Generator {
+    fn default() -> Self {
+        Generator { w: CWriter::default(), temp_counter: 0, kinds: HashMap::new(), ret: Type::Unit }
+    }
 }
 
 impl Generator {
@@ -76,30 +87,39 @@ impl Generator {
                 self.kinds.insert(k.name.clone(), k.clone());
             }
         }
+        let used = UsedTypes::collect(items);
 
         self.w = CWriter::default();
         self.w.line("#include \"vela_rt.h\"");
         self.w.blank();
 
-        // Types. A typedef for every shape and kind comes first, so any type can
-        // point to any other (or to itself); then the kinds' tag enums; then the
-        // struct bodies, each after the types it contains by value.
+        // Types. A typedef for every shape, kind, `maybe`, and `or` comes first,
+        // so any type can point to any other (or to itself); then the kinds' tag
+        // enums; then the struct bodies, each after the types it contains by
+        // value.
         for item in items {
             if let Some(name) = type_name(item) {
                 self.w.line(&format!("typedef struct {0} {0};", mangle(name)));
             }
+        }
+        for ty in &used.compounds {
+            self.w.line(&format!("typedef struct {0} {0};", c_type(ty)));
         }
         for item in items {
             if let Item::Kind(k) = item {
                 self.gen_tag_enum(k);
             }
         }
-        for item in type_order(items)? {
-            match item {
-                Item::Shape(s) => self.gen_shape(s),
-                Item::Kind(k) => self.gen_kind(k),
-                Item::Task(_) => {}
+        for def in type_order(items, &used.compounds)? {
+            match def {
+                TypeDef::Item(Item::Shape(s)) => self.gen_shape(s),
+                TypeDef::Item(Item::Kind(k)) => self.gen_kind(k),
+                TypeDef::Item(Item::Task(_)) => {}
+                TypeDef::Compound(ty) => self.gen_compound(ty),
             }
+        }
+        for ty in &used.shown {
+            self.gen_show_maybe(ty);
         }
         self.w.blank();
 
@@ -126,7 +146,7 @@ impl Generator {
             self.w.blank();
             self.w.open("int main(void)");
             // Line by line even into a pipe, so output isn't lost if the
-            // program then crashes (on `none`, say).
+            // program then crashes.
             self.w.line("setvbuf(stdout, NULL, _IOLBF, BUFSIZ);");
             self.w.line("vela_main();");
             self.w.line("return 0;");
@@ -184,26 +204,70 @@ impl Generator {
         self.w.close_with(";");
     }
 
+    /// The struct of a `maybe T` (`has`, `value`) or a `T or E` (`ok`, `value`,
+    /// `error`; no `value` for `unit or E`). Both members are always
+    /// initialized, so either can be read.
+    fn gen_compound(&mut self, ty: &Type) {
+        self.w.open(&format!("struct {}", c_type(ty)));
+        match ty {
+            Type::Maybe(inner) => {
+                self.w.line("bool has;");
+                self.w.line(&format!("{} value;", c_type(inner)));
+            }
+            Type::Or(value, error) => {
+                self.w.line("bool ok;");
+                if **value != Type::Unit {
+                    self.w.line(&format!("{} value;", c_type(value)));
+                }
+                self.w.line(&format!("{} error;", c_type(error)));
+            }
+            _ => {}
+        }
+        self.w.close_with(";");
+    }
+
+    /// `show` for a `maybe` of a type `show` prints: the value, or `none`.
+    fn gen_show_maybe(&mut self, ty: &Type) {
+        let Type::Maybe(inner) = ty else { return };
+        let helper = show_helper(inner);
+        self.w.open(&format!("static void {}({} m)", show_maybe_helper(ty), c_type(ty)));
+        self.w.open("if (m.has)");
+        self.w.line(&format!("{}(m.value);", helper));
+        self.w.reopen("else");
+        self.w.line("vela__rt__show_none();");
+        self.w.close();
+        self.w.close();
+    }
+
     fn gen_task(&mut self, t: &TaskDef) -> Result<()> {
+        self.ret = t.ret.clone();
         self.w.open(&signature(t));
         for param in &t.params {
             self.use_if_unread(&param.name, &t.body);
         }
         self.gen_block(&t.body)?;
-        if t.ret == Type::Unit {
-            self.w.line("return;");
-        } else {
-            self.w.line(&format!("vela__rt__missing_send(\"{}\");", t.name));
+        match &t.ret {
+            Type::Unit => self.w.line("return;"),
+            Type::Or(value, _) if **value == Type::Unit => {
+                self.w.line(&format!("return {};", success(&t.ret)));
+            }
+            _ => self.w.line(&format!("vela__rt__missing_send(\"{}\");", t.name)),
         }
         self.w.close();
         Ok(())
     }
 
-    fn gen_block(&mut self, block: &Block) -> Result<()> {
-        for (i, stmt) in block.iter().enumerate() {
+    fn gen_block(&mut self, block: &[Stmt]) -> Result<()> {
+        self.gen_statements(block, block)
+    }
+
+    /// Generates `stmts`, the first statements of `scope`: a variable declared
+    /// in them counts as read if anything after it in `scope` reads it.
+    fn gen_statements(&mut self, stmts: &[Stmt], scope: &[Stmt]) -> Result<()> {
+        for (i, stmt) in stmts.iter().enumerate() {
             self.gen_stmt(stmt)?;
             if let StmtKind::Binding { name, .. } = &stmt.kind {
-                self.use_if_unread(name, block.get(i + 1..).unwrap_or_default());
+                self.use_if_unread(name, scope.get(i + 1..).unwrap_or_default());
             }
         }
         Ok(())
@@ -223,7 +287,10 @@ impl Generator {
         match &stmt.kind {
             StmtKind::Expr(e) => {
                 let expr = self.gen_expr(e)?;
-                self.w.line(&format!("{};", expr));
+                // A plan B that gives no value is all prelude.
+                if !expr.is_empty() {
+                    self.w.line(&format!("{};", expr));
+                }
             }
             StmtKind::Binding { name, ty, init, .. } => {
                 let ty = ty
@@ -235,26 +302,70 @@ impl Generator {
             StmtKind::Assign(lhs, rhs) => {
                 // The checker guarantees `lhs` is a variable, field, or deref,
                 // all of which generate valid C lvalues.
-                let l = self.gen_expr(lhs)?;
-                let r = self.gen_expr(rhs)?;
-                self.w.line(&format!("{} = {};", l, r));
+                if has_plan_b(rhs) && !matches!(lhs.kind, ExprKind::Var(_)) {
+                    // Find the place before the value's prelude runs, which
+                    // might change what the place refers to.
+                    let place = self.gen_expr(lhs)?;
+                    let pointer = self.fresh_temp("place");
+                    self.w.line(&format!("{}* {} = &{};", c_type(lhs.ty()?), pointer, place));
+                    let value = self.gen_expr(rhs)?;
+                    self.w.line(&format!("*{} = {};", pointer, value));
+                } else {
+                    let l = self.gen_expr(lhs)?;
+                    let r = self.gen_expr(rhs)?;
+                    self.w.line(&format!("{} = {};", l, r));
+                }
             }
             StmtKind::When(cond, then_b, else_b) => {
-                let c = self.gen_condition(cond)?;
-                self.w.open(&format!("if ({})", c));
-                self.gen_block(then_b)?;
+                match &cond.pattern {
+                    None => {
+                        let c = self.gen_condition(&cond.value)?;
+                        self.w.open(&format!("if ({})", c));
+                        self.gen_block(then_b)?;
+                    }
+                    Some(pattern) => {
+                        let subject = self.gen_subject(&cond.value)?;
+                        let test = self.pattern_test(cond.value.ty()?, &subject, pattern)?;
+                        self.w.open(&format!("if ({})", test));
+                        self.gen_pattern_bindings(cond.value.ty()?, &subject, pattern, then_b)?;
+                        self.gen_block(then_b)?;
+                    }
+                }
                 if let Some(else_b) = else_b {
                     self.w.reopen("else");
                     self.gen_block(else_b)?;
                 }
                 self.w.close();
             }
-            StmtKind::Loop(cond, body) => {
-                let c = self.gen_condition(cond)?;
-                self.w.open(&format!("while ({})", c));
-                self.gen_block(body)?;
-                self.w.close();
-            }
+            StmtKind::Loop(cond, body) => match &cond.pattern {
+                None if !has_plan_b(&cond.value) => {
+                    let c = self.gen_condition(&cond.value)?;
+                    self.w.open(&format!("while ({})", c));
+                    self.gen_block(body)?;
+                    self.w.close();
+                }
+                None => {
+                    // The condition's prelude runs before every test.
+                    self.w.open("while (1)");
+                    let c = self.gen_expr(&cond.value)?;
+                    self.w.open(&format!("if (!{})", parenthesized(&c)));
+                    self.w.line("break;");
+                    self.w.close();
+                    self.gen_block(body)?;
+                    self.w.close();
+                }
+                Some(pattern) => {
+                    self.w.open("while (1)");
+                    let subject = self.gen_subject(&cond.value)?;
+                    let test = self.pattern_test(cond.value.ty()?, &subject, pattern)?;
+                    self.w.open(&format!("if (!({}))", test));
+                    self.w.line("break;");
+                    self.w.close();
+                    self.gen_pattern_bindings(cond.value.ty()?, &subject, pattern, body)?;
+                    self.gen_block(body)?;
+                    self.w.close();
+                }
+            },
             StmtKind::Each(name, range, body) => {
                 let (a, b) = self.gen_range(range)?;
                 // The end of the range is evaluated once, before the first
@@ -270,7 +381,10 @@ impl Generator {
                 self.w.close();
             }
             StmtKind::Match(expr, cases) => self.gen_match(expr, cases)?,
-            StmtKind::Send(None) => self.w.line("return;"),
+            StmtKind::Send(None) => match &self.ret {
+                Type::Or(..) => self.w.line(&format!("return {};", success(&self.ret))),
+                _ => self.w.line("return;"),
+            },
             StmtKind::Send(Some(e)) => {
                 let expr = self.gen_expr(e)?;
                 self.w.line(&format!("return {};", expr));
@@ -283,61 +397,136 @@ impl Generator {
         Ok(())
     }
 
-    /// Generates a `switch` on the kind's tag. Each case body gets its own C
-    /// block, so different cases may bind the same names. The matched value
-    /// is evaluated exactly once: a plain variable is used directly, anything
-    /// else is first stored in a temporary.
-    fn gen_match(&mut self, expr: &Expr, cases: &[Case]) -> Result<()> {
-        let kind_name = match expr.ty()? {
-            Type::Named(n) => n.clone(),
-            other => return Err(Error::internal_at(expr.span, format!("match on non-kind type {}", other))),
-        };
-        let kind = self
-            .kinds
-            .get(&kind_name)
-            .ok_or_else(|| Error::internal_at(expr.span, format!("match on unknown kind '{}'", kind_name)))?
-            .clone();
-
+    /// The value a `match` or `is` tests, as a C expression that can be
+    /// read several times: a variable is used directly, anything else is
+    /// stored in a temporary first.
+    fn gen_subject(&mut self, expr: &Expr) -> Result<String> {
         let value = self.gen_expr(expr)?;
+        if matches!(expr.kind, ExprKind::Var(_)) {
+            return Ok(value);
+        }
+        let subject = self.fresh_temp("subject");
+        self.w.line(&format!("{} {} = {};", c_type(expr.ty()?), subject, value));
+        Ok(subject)
+    }
+
+    /// The C condition under which `pattern` matches `subject`, of type `ty`.
+    fn pattern_test(&self, ty: &Type, subject: &str, pattern: &Pattern) -> Result<String> {
+        let test = match (&pattern.kind, ty) {
+            (PatternKind::Any, _) => "1".to_string(),
+            (PatternKind::Value(_), Type::Maybe(inner)) if is_pointer(inner) => format!("{} != NULL", subject),
+            (PatternKind::None, Type::Maybe(inner)) if is_pointer(inner) => format!("{} == NULL", subject),
+            (PatternKind::Value(_), Type::Maybe(_)) => format!("{}.has", subject),
+            (PatternKind::None, Type::Maybe(_)) => format!("!{}.has", subject),
+            (PatternKind::Value(_), Type::Or(..)) => format!("{}.ok", subject),
+            (PatternKind::Fail(_), Type::Or(..)) => format!("!{}.ok", subject),
+            (PatternKind::Variant { tag, .. }, Type::Named(kind)) => format!("{}.tag == {}", subject, tag_value(kind, tag)),
+            _ => return Err(Error::internal_at(pattern.span, format!("pattern '{}' on type {}", pattern.label(), ty))),
+        };
+        Ok(test)
+    }
+
+    /// Declares the names `pattern` binds from `subject`, of type `ty`, for the
+    /// block `body`.
+    fn gen_pattern_bindings(&mut self, ty: &Type, subject: &str, pattern: &Pattern, body: &[Stmt]) -> Result<()> {
+        let mut bindings: Vec<(&str, Type, String)> = Vec::new();
+        match (&pattern.kind, ty) {
+            (PatternKind::Value((name, _)), Type::Maybe(inner)) if is_pointer(inner) => {
+                bindings.push((name, (**inner).clone(), subject.to_string()));
+            }
+            (PatternKind::Value((name, _)), Type::Maybe(inner) | Type::Or(inner, _)) => {
+                bindings.push((name, (**inner).clone(), format!("{}.value", subject)));
+            }
+            (PatternKind::Fail((name, _)), Type::Or(_, error)) => {
+                bindings.push((name, (**error).clone(), format!("{}.error", subject)));
+            }
+            (PatternKind::Variant { tag, binds }, Type::Named(kind_name)) => {
+                let variant = self
+                    .kinds
+                    .get(kind_name)
+                    .and_then(|k| k.variants.iter().find(|v| v.tag == *tag))
+                    .ok_or_else(|| Error::internal_at(pattern.span, format!("unknown variant '{}'", tag)))?;
+                if binds.len() != variant.payload.len() {
+                    return Err(Error::internal_at(
+                        pattern.span,
+                        format!("case '{}' has {} bindings (expected {})", tag, binds.len(), variant.payload.len()),
+                    ));
+                }
+                for ((name, _), field) in binds.iter().zip(&variant.payload) {
+                    let value = format!("{}.data.{}.{}", subject, c_ident(tag), c_ident(&field.name));
+                    bindings.push((name, field.ty.clone(), value));
+                }
+            }
+            _ => {}
+        }
+        for (name, ty, value) in bindings {
+            if name == DISCARD {
+                continue;
+            }
+            self.w.line(&format!("{} {} = {};", c_type(&ty), c_ident(name), value));
+            // A pattern must name every value, even ones its block never reads.
+            self.use_if_unread(name, body);
+        }
+        Ok(())
+    }
+
+    /// Generates a `match`. On a kind, it is a `switch` on the tag, with `_` as
+    /// `default`; on a `maybe` or `T or E`, an `if`/`else` chain whose last case
+    /// needs no test. Each case body gets its own C block, so different cases
+    /// may bind the same names. The matched value is evaluated exactly once.
+    fn gen_match(&mut self, expr: &Expr, cases: &[Case]) -> Result<()> {
+        let ty = expr.ty()?.clone();
         let needs_temp = !matches!(expr.kind, ExprKind::Var(_));
         let subject = if needs_temp {
+            let value = self.gen_expr(expr)?;
             let tmp = self.fresh_temp("match");
             self.w.open("");
-            self.w.line(&format!("{} {} = {};", mangle(&kind_name), tmp, value));
+            self.w.line(&format!("{} {} = {};", c_type(&ty), tmp, value));
             tmp
         } else {
-            value
+            self.gen_expr(expr)?
         };
 
-        // Case labels line up with their `switch`, so the switch's own braces
-        // do not indent.
-        self.w.line(&format!("switch ({}.tag) {{", subject));
-        for case in cases {
-            let variant = kind
-                .variants
-                .iter()
-                .find(|v| v.tag == case.tag)
-                .ok_or_else(|| Error::internal_at(case.span, format!("unknown variant '{}'", case.tag)))?;
-            if case.binds.len() != variant.payload.len() {
-                return Err(Error::internal_at(
-                    case.span,
-                    format!("case '{}' has {} bindings (expected {})", case.tag, case.binds.len(), variant.payload.len()),
-                ));
+        if let Type::Named(kind_name) = &ty {
+            if !self.kinds.contains_key(kind_name) {
+                return Err(Error::internal_at(expr.span, format!("match on unknown kind '{}'", kind_name)));
             }
-            self.w.open(&format!("case {}:", tag_value(&kind_name, &case.tag)));
-            for ((bind, _), field) in case.binds.iter().zip(&variant.payload) {
-                self.w.line(&format!(
-                    "{} {} = {}.data.{}.{};",
-                    c_type(&field.ty), c_ident(bind), subject, c_ident(&case.tag), c_ident(&field.name)
-                ));
-                // A case must bind every field, even ones its body never reads.
-                self.use_if_unread(bind, &case.body);
+            // Case labels line up with their `switch`, so the switch's own braces
+            // do not indent.
+            self.w.line(&format!("switch ({}.tag) {{", subject));
+            for case in cases {
+                match &case.pattern.kind {
+                    PatternKind::Variant { tag, .. } => self.w.open(&format!("case {}:", tag_value(kind_name, tag))),
+                    PatternKind::Any => self.w.open("default:"),
+                    _ => {
+                        return Err(Error::internal_at(case.pattern.span, format!("case '{}' on kind '{}'", case.pattern.label(), kind_name)));
+                    }
+                }
+                self.gen_pattern_bindings(&ty, &subject, &case.pattern, &case.body)?;
+                self.gen_block(&case.body)?;
+                self.w.line("break;");
+                self.w.close();
             }
-            self.gen_block(&case.body)?;
-            self.w.line("break;");
-            self.w.close();
+            self.w.line("}");
+        } else if matches!(ty, Type::Maybe(_) | Type::Or(..)) {
+            for (i, case) in cases.iter().enumerate() {
+                let last = i + 1 == cases.len();
+                let test = if last { None } else { Some(self.pattern_test(&ty, &subject, &case.pattern)?) };
+                match (i, test) {
+                    (0, Some(test)) => self.w.open(&format!("if ({})", test)),
+                    (0, None) => self.w.open(""),
+                    (_, Some(test)) => self.w.reopen(&format!("else if ({})", test)),
+                    (_, None) => self.w.reopen("else"),
+                }
+                self.gen_pattern_bindings(&ty, &subject, &case.pattern, &case.body)?;
+                self.gen_block(&case.body)?;
+            }
+            if !cases.is_empty() {
+                self.w.close();
+            }
+        } else {
+            return Err(Error::internal_at(expr.span, format!("match on type {}", ty)));
         }
-        self.w.line("}");
 
         if needs_temp {
             self.w.close();
@@ -352,6 +541,30 @@ impl Generator {
             ExprKind::Binary(op, l, r) => self.gen_binary(e, *op, l, r),
             _ => self.gen_expr(e),
         }
+    }
+
+    /// Generates operands that are evaluated in order, as a call's arguments or
+    /// an operator's two sides. When one of them has a prelude, every operand
+    /// before it is stored in a temporary first, so that it is evaluated before
+    /// that prelude runs (the prelude may call tasks or change variables).
+    fn gen_operands(&mut self, operands: &[&Expr]) -> Result<Vec<String>> {
+        let last_prelude = operands.iter().rposition(|e| has_plan_b(e));
+        let mut values = Vec::new();
+        for (i, operand) in operands.iter().enumerate() {
+            let value = self.gen_expr(operand)?;
+            let constant = matches!(
+                operand.kind,
+                ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
+            );
+            if last_prelude.is_some_and(|last| i < last) && !constant {
+                let tmp = self.fresh_temp("arg");
+                self.w.line(&format!("{} {} = {};", c_type(operand.ty()?), tmp, value));
+                values.push(tmp);
+            } else {
+                values.push(value);
+            }
+        }
+        Ok(values)
     }
 
     fn gen_expr(&mut self, e: &Expr) -> Result<String> {
@@ -374,16 +587,15 @@ impl Generator {
                         return Err(Error::internal_at(span, format!("show called with {} arguments", args.len())));
                     };
                     let helper = match arg.ty()? {
-                        Type::Int => "vela__rt__show_int",
-                        Type::Float => "vela__rt__show_float",
-                        Type::Bool => "vela__rt__show_bool",
-                        Type::Text => "vela__rt__show_text",
+                        Type::Maybe(_) => show_maybe_helper(arg.ty()?),
+                        Type::Int | Type::Float | Type::Bool | Type::Text => show_helper(arg.ty()?),
                         other => return Err(Error::internal_at(span, format!("show called with type {}", other))),
                     };
                     let value = self.gen_expr(arg)?;
                     return Ok(format!("{}({})", helper, value));
                 }
-                let values = args.iter().map(|arg| self.gen_expr(arg)).collect::<Result<Vec<_>>>()?;
+                let args: Vec<&Expr> = args.iter().collect();
+                let values = self.gen_operands(&args)?;
                 Ok(format!("{}({})", mangle(name), values.join(", ")))
             }
             ExprKind::Unary(op, operand) => {
@@ -396,7 +608,7 @@ impl Generator {
             }
             ExprKind::Binary(op, l, r) => {
                 let binary = self.gen_binary(e, *op, l, r)?;
-                Ok(format!("({})", binary))
+                Ok(parenthesized(&binary))
             }
             ExprKind::Construct { kind, tag, args } => {
                 let variant = self
@@ -415,10 +627,14 @@ impl Generator {
                 if variant.payload.is_empty() {
                     return Ok(format!("(({}){{ .tag = {} }})", mangle(kind), tag_value));
                 }
-                let mut fields = Vec::new();
-                for (field, arg) in variant.payload.iter().zip(args) {
-                    fields.push(format!(".{} = {}", c_ident(&field.name), self.gen_expr(arg)?));
-                }
+                let operands: Vec<&Expr> = args.iter().collect();
+                let values = self.gen_operands(&operands)?;
+                let fields: Vec<String> = variant
+                    .payload
+                    .iter()
+                    .zip(values)
+                    .map(|(field, value)| format!(".{} = {}", c_ident(&field.name), value))
+                    .collect();
                 Ok(format!(
                     "(({}){{ .tag = {}, .data = {{ .{} = {{ {} }} }} }})",
                     mangle(kind), tag_value, c_ident(tag), fields.join(", ")
@@ -440,20 +656,126 @@ impl Generator {
                     // Initializes the placeholder member of an empty shape.
                     return Ok(format!("(({}){{ 0 }})", mangle(name)));
                 }
-                let mut values = Vec::new();
-                for field in fields {
-                    values.push(format!(".{} = {}", c_ident(&field.name), self.gen_expr(&field.value)?));
-                }
-                Ok(format!("(({}){{ {} }})", mangle(name), values.join(", ")))
+                let operands: Vec<&Expr> = fields.iter().map(|field| &field.value).collect();
+                let values = self.gen_operands(&operands)?;
+                let fields: Vec<String> = fields
+                    .iter()
+                    .zip(values)
+                    .map(|(field, value)| format!(".{} = {}", c_ident(&field.name), value))
+                    .collect();
+                Ok(format!("(({}){{ {} }})", mangle(name), fields.join(", ")))
             }
             ExprKind::Range(_, _) => Err(Error::internal_at(span, "range outside 'each' reached code generation")),
+            // The error value itself; `Wrap` makes it part of a `T or E`.
+            ExprKind::Fail(error) => self.gen_expr(error),
+            ExprKind::Wrap(inner) => self.gen_wrap(e, inner),
+            ExprKind::PlanB { value, error, body } => self.gen_plan_b(e, value, error.as_ref(), body),
         }
+    }
+
+    /// A value becoming part of a `maybe` or `T or E`, the type of `e`.
+    fn gen_wrap(&mut self, e: &Expr, inner: &Expr) -> Result<String> {
+        let target = e.ty()?;
+        let ctype = c_type(target);
+        match target {
+            Type::Maybe(pointer) if is_pointer(pointer) => match inner.ty()? {
+                Type::None => Ok("NULL".to_string()),
+                _ => self.gen_expr(inner),
+            },
+            Type::Maybe(_) => match inner.ty()? {
+                Type::None => Ok(format!("(({}){{ .has = false }})", ctype)),
+                _ => Ok(format!("(({}){{ .has = true, .value = {} }})", ctype, self.gen_expr(inner)?)),
+            },
+            Type::Or(value, _) => {
+                if let ExprKind::Fail(error) = &inner.kind {
+                    return Ok(format!("(({}){{ .ok = false, .error = {} }})", ctype, self.gen_expr(error)?));
+                }
+                if **value == Type::Unit {
+                    return Err(Error::internal_at(e.span, "a value wrapped as the success of 'unit or E'"));
+                }
+                Ok(format!("(({}){{ .ok = true, .value = {} }})", ctype, self.gen_expr(inner)?))
+            }
+            other => Err(Error::internal_at(e.span, format!("a value wrapped as {}", other))),
+        }
+    }
+
+    /// A plan B, `value { body }`, the plan B `e`. Its prelude stores `value`,
+    /// then runs `body` if there is nothing to extract; its C expression is the
+    /// temporary holding the result (empty when it gives no value).
+    fn gen_plan_b(&mut self, e: &Expr, value: &Expr, error: Option<&Binding>, body: &[Stmt]) -> Result<String> {
+        let value_ty = value.ty()?.clone();
+        let result_ty = e.ty()?.clone();
+        let value_c = self.gen_expr(value)?;
+        let subject = self.fresh_temp("subject");
+        self.w.line(&format!("{} {} = {};", c_type(&value_ty), subject, value_c));
+        let (present, extracted) = match &value_ty {
+            Type::Maybe(inner) if is_pointer(inner) => (format!("{} != NULL", subject), subject.clone()),
+            Type::Maybe(_) => (format!("{}.has", subject), format!("{}.value", subject)),
+            Type::Or(..) => (format!("{}.ok", subject), format!("{}.value", subject)),
+            other => return Err(Error::internal_at(e.span, format!("plan B on type {}", other))),
+        };
+        let result = if result_ty == Type::Unit {
+            String::new()
+        } else {
+            let result = self.fresh_temp("value");
+            self.w.line(&format!("{} {} = {};", c_type(&result_ty), result, extracted));
+            result
+        };
+        self.w.open(&format!("if (!({}))", present));
+        if let (Some((name, _)), Type::Or(_, error_ty)) = (error, &value_ty)
+            && name != DISCARD
+        {
+            self.w.line(&format!("{} {} = {}.error;", c_type(error_ty), c_ident(name), subject));
+            self.use_if_unread(name, body);
+        }
+        match body.split_last() {
+            Some((last, rest)) if !result.is_empty() && matches!(last.kind, StmtKind::Expr(_)) => {
+                self.gen_statements(rest, body)?;
+                if let StmtKind::Expr(fallback) = &last.kind {
+                    let fallback = self.gen_expr(fallback)?;
+                    self.w.line(&format!("{} = {};", result, fallback));
+                }
+            }
+            _ => self.gen_block(body)?,
+        }
+        self.w.close();
+        Ok(result)
     }
 
     /// A binary operation without surrounding parentheses.
     fn gen_binary(&mut self, e: &Expr, op: BinaryOp, l: &Expr, r: &Expr) -> Result<String> {
-        let left = self.gen_expr(l)?;
-        let right = self.gen_expr(r)?;
+        if matches!(op, BinaryOp::And | BinaryOp::Or) && has_plan_b(r) {
+            // The right side's prelude must only run when the left side
+            // doesn't decide the result.
+            let left = self.gen_expr(l)?;
+            let result = self.fresh_temp("cond");
+            self.w.line(&format!("bool {} = {};", result, left));
+            let test = if op == BinaryOp::And { result.clone() } else { format!("!{}", result) };
+            self.w.open(&format!("if ({})", test));
+            let right = self.gen_expr(r)?;
+            self.w.line(&format!("{} = {};", result, right));
+            self.w.close();
+            return Ok(result);
+        }
+        let [left, right] = <[String; 2]>::try_from(self.gen_operands(&[l, r])?)
+            .map_err(|_| Error::internal_at(e.span, "a binary operation without two operands"))?;
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne) {
+            // `m == none` tests a maybe.
+            let maybe = match (l.ty()?, r.ty()?) {
+                (Type::Maybe(inner), Type::None) => Some((inner, &left)),
+                (Type::None, Type::Maybe(inner)) => Some((inner, &right)),
+                _ => None,
+            };
+            if let Some((inner, value)) = maybe {
+                let empty = op == BinaryOp::Eq;
+                return Ok(match (is_pointer(inner), empty) {
+                    (true, true) => format!("{} == NULL", value),
+                    (true, false) => format!("{} != NULL", value),
+                    (false, true) => format!("!{}.has", value),
+                    (false, false) => format!("{}.has", value),
+                });
+            }
+        }
         if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && *l.ty()? == Type::Text {
             // Text compares by contents, not by address.
             let not = if op == BinaryOp::Ne { "!" } else { "" };
@@ -484,11 +806,173 @@ impl Generator {
     fn gen_range(&mut self, e: &Expr) -> Result<(String, String)> {
         match &e.kind {
             ExprKind::Range(a, b) => {
-                let av = self.gen_expr(a)?;
-                let bv = self.gen_expr(b)?;
+                let [av, bv] = <[String; 2]>::try_from(self.gen_operands(&[a, b])?)
+                    .map_err(|_| Error::internal_at(e.span, "a range without two ends"))?;
                 Ok((av, bv))
             }
             _ => Err(Error::internal_at(e.span, "each over a non-range expression")),
+        }
+    }
+}
+
+/// `text` in parentheses, unless it already is one parenthesized expression
+/// or a plain name.
+fn parenthesized(text: &str) -> String {
+    let simple = text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    if simple { text.to_string() } else { format!("({})", text) }
+}
+
+fn is_pointer(ty: &Type) -> bool {
+    matches!(ty, Type::Ptr(_))
+}
+
+/// The success of a `unit or E` task, as a C compound literal.
+fn success(ret: &Type) -> String {
+    format!("(({}){{ .ok = true }})", c_type(ret))
+}
+
+/// The runtime task that shows a value of builtin type `ty`.
+fn show_helper(ty: &Type) -> String {
+    let name = match ty {
+        Type::Int => "int",
+        Type::Float => "float",
+        Type::Bool => "bool",
+        _ => "text",
+    };
+    format!("vela__rt__show_{}", name)
+}
+
+/// The generated task that shows a `maybe` of type `ty`.
+fn show_maybe_helper(ty: &Type) -> String {
+    format!("vela__show__{}", c_type(ty).trim_start_matches("vela__"))
+}
+
+/// Whether the expression contains a plan B, so generating it writes a prelude.
+fn has_plan_b(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::PlanB { .. } => true,
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
+        | ExprKind::Var(_) => false,
+        ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. }
+        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => has_plan_b(inner),
+        ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => has_plan_b(a) || has_plan_b(b),
+        ExprKind::Call(_, args) | ExprKind::Construct { args, .. } => args.iter().any(has_plan_b),
+        ExprKind::StructInit(_, fields) => fields.iter().any(|field| has_plan_b(&field.value)),
+    }
+}
+
+/// The `maybe` and `or` types a program uses, which each need a C struct, and
+/// the `maybe` types it shows, which each need a helper.
+struct UsedTypes {
+    compounds: Vec<Type>,
+    shown: Vec<Type>,
+}
+
+impl UsedTypes {
+    fn collect(items: &[Item]) -> UsedTypes {
+        let mut used = UsedTypes { compounds: Vec::new(), shown: Vec::new() };
+        for item in items {
+            match item {
+                Item::Shape(s) => s.fields.iter().for_each(|f| used.add(&f.ty)),
+                Item::Kind(k) => k.variants.iter().flat_map(|v| &v.payload).for_each(|f| used.add(&f.ty)),
+                Item::Task(t) => {
+                    t.params.iter().for_each(|p| used.add(&p.ty));
+                    used.add(&t.ret);
+                    used.block(&t.body);
+                }
+            }
+        }
+        used
+    }
+
+    /// Records `ty` and every type inside it.
+    fn add(&mut self, ty: &Type) {
+        match ty {
+            Type::Ptr(inner) | Type::Range(inner) | Type::Fail(inner) => self.add(inner),
+            Type::Maybe(inner) => {
+                self.add(inner);
+                if !is_pointer(inner) && !self.compounds.contains(ty) {
+                    self.compounds.push(ty.clone());
+                }
+            }
+            Type::Or(value, error) => {
+                self.add(value);
+                self.add(error);
+                if !self.compounds.contains(ty) {
+                    self.compounds.push(ty.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn block(&mut self, block: &[Stmt]) {
+        for stmt in block {
+            match &stmt.kind {
+                StmtKind::Expr(e) | StmtKind::Free(e) | StmtKind::Send(Some(e)) => self.expr(e),
+                StmtKind::Send(None) => {}
+                StmtKind::Binding { ty, init, .. } => {
+                    if let Some(ty) = ty {
+                        self.add(ty);
+                    }
+                    self.expr(init);
+                }
+                StmtKind::Assign(target, value) => {
+                    self.expr(target);
+                    self.expr(value);
+                }
+                StmtKind::When(cond, then_b, else_b) => {
+                    self.expr(&cond.value);
+                    self.block(then_b);
+                    if let Some(else_b) = else_b {
+                        self.block(else_b);
+                    }
+                }
+                StmtKind::Loop(cond, body) => {
+                    self.expr(&cond.value);
+                    self.block(body);
+                }
+                StmtKind::Each(_, range, body) => {
+                    self.expr(range);
+                    self.block(body);
+                }
+                StmtKind::Match(subject, cases) => {
+                    self.expr(subject);
+                    cases.iter().for_each(|case| self.block(&case.body));
+                }
+            }
+        }
+    }
+
+    fn expr(&mut self, e: &Expr) {
+        if let Some(ty) = &e.ty {
+            self.add(ty);
+        }
+        match &e.kind {
+            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
+            | ExprKind::Var(_) => {}
+            ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. }
+            | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => self.expr(inner),
+            ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => {
+                self.expr(a);
+                self.expr(b);
+            }
+            ExprKind::Call(name, args) => {
+                if name == "show"
+                    && let [arg] = args.as_slice()
+                    && let Some(ty @ Type::Maybe(_)) = &arg.ty
+                    && !self.shown.contains(ty)
+                {
+                    self.shown.push(ty.clone());
+                }
+                args.iter().for_each(|arg| self.expr(arg));
+            }
+            ExprKind::Construct { args, .. } => args.iter().for_each(|arg| self.expr(arg)),
+            ExprKind::StructInit(_, fields) => fields.iter().for_each(|field| self.expr(&field.value)),
+            ExprKind::PlanB { value, body, .. } => {
+                self.expr(value);
+                self.block(body);
+            }
         }
     }
 }
@@ -509,8 +993,8 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
         StmtKind::Send(None) => false,
         StmtKind::Binding { init, .. } => expr(init),
         StmtKind::Assign(target, value) => target_reads(target, name) || expr(value),
-        StmtKind::When(cond, then_b, else_b) => expr(cond) || body(then_b) || else_b.as_ref().is_some_and(body),
-        StmtKind::Loop(cond, b) => expr(cond) || body(b),
+        StmtKind::When(cond, then_b, else_b) => expr(&cond.value) || body(then_b) || else_b.as_ref().is_some_and(body),
+        StmtKind::Loop(cond, b) => expr(&cond.value) || body(b),
         StmtKind::Each(_, range, b) => expr(range) || body(b),
         StmtKind::Match(subject, cases) => expr(subject) || cases.iter().any(|case| body(&case.body)),
     }
@@ -530,14 +1014,14 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
     match &e.kind {
         ExprKind::Var(var) => var == name,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit => false,
-        ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. } => {
-            expr_reads(inner, name)
-        }
+        ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. }
+        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => expr_reads(inner, name),
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => {
             expr_reads(a, name) || expr_reads(b, name)
         }
         ExprKind::Call(_, args) | ExprKind::Construct { args, .. } => args.iter().any(|arg| expr_reads(arg, name)),
         ExprKind::StructInit(_, fields) => fields.iter().any(|field| expr_reads(&field.value, name)),
+        ExprKind::PlanB { value, body, .. } => expr_reads(value, name) || block_reads(body, name),
     }
 }
 
@@ -549,21 +1033,44 @@ fn type_name(item: &Item) -> Option<&str> {
     }
 }
 
-/// Shapes and kinds in source order, except that each comes after every type
-/// it contains by value, since C needs a struct's complete definition before
-/// it can be embedded. (The checker has rejected types that contain
-/// themselves by value.)
-fn type_order(items: &[Item]) -> Result<Vec<&Item>> {
-    let by_name: HashMap<&str, &Item> = items
-        .iter()
-        .filter_map(|item| type_name(item).map(|name| (name, item)))
-        .collect();
-    let mut finished = HashMap::new();
-    let mut order = Vec::new();
+/// A type with a C struct definition: a shape or kind, or a `maybe` or `or`.
+enum TypeDef<'a> {
+    Item(&'a Item),
+    Compound(&'a Type),
+}
+
+/// The C names of the struct definitions a value of type `ty` contains by
+/// value, which must come before any struct embedding it.
+fn value_dependencies(ty: &Type) -> Vec<String> {
+    match ty {
+        Type::Named(name) => vec![mangle(name)],
+        Type::Maybe(inner) if is_pointer(inner) => Vec::new(),
+        Type::Maybe(_) | Type::Or(..) => vec![c_type(ty)],
+        _ => Vec::new(),
+    }
+}
+
+/// Shapes, kinds, and compound types in source order, except that each comes
+/// after every type it contains by value, since C needs a struct's complete
+/// definition before it can be embedded. (The checker has rejected types that
+/// contain themselves by value.)
+fn type_order<'a>(items: &'a [Item], compounds: &'a [Type]) -> Result<Vec<TypeDef<'a>>> {
+    let mut by_name: HashMap<String, TypeDef<'a>> = HashMap::new();
+    let mut names = Vec::new();
     for item in items {
         if let Some(name) = type_name(item) {
-            visit_type(name, &by_name, &mut finished, &mut order)?;
+            names.push(mangle(name));
+            by_name.insert(mangle(name), TypeDef::Item(item));
         }
+    }
+    for ty in compounds {
+        names.push(c_type(ty));
+        by_name.insert(c_type(ty), TypeDef::Compound(ty));
+    }
+    let mut finished = HashMap::new();
+    let mut order = Vec::new();
+    for name in &names {
+        visit_type(name, &mut by_name, &mut finished, &mut order)?;
     }
     Ok(order)
 }
@@ -571,32 +1078,35 @@ fn type_order(items: &[Item]) -> Result<Vec<&Item>> {
 /// Depth-first step of `type_order`. `finished` maps a type to `false` while
 /// its dependencies are being emitted and `true` once it is in `order`.
 fn visit_type<'a>(
-    name: &'a str,
-    by_name: &HashMap<&'a str, &'a Item>,
-    finished: &mut HashMap<&'a str, bool>,
-    order: &mut Vec<&'a Item>,
+    name: &str,
+    by_name: &mut HashMap<String, TypeDef<'a>>,
+    finished: &mut HashMap<String, bool>,
+    order: &mut Vec<TypeDef<'a>>,
 ) -> Result<()> {
     match finished.get(name) {
         Some(true) => return Ok(()),
         Some(false) => return Err(Error::internal(format!("type '{}' contains itself by value", name))),
         None => {}
     }
-    let Some(&item) = by_name.get(name) else {
+    let Some(def) = by_name.remove(name) else {
         return Ok(()); // a builtin type
     };
-    finished.insert(name, false);
-    let fields: Vec<&Field> = match item {
-        Item::Shape(s) => s.fields.iter().collect(),
-        Item::Kind(k) => k.variants.iter().flat_map(|v| &v.payload).collect(),
-        Item::Task(_) => Vec::new(),
-    };
-    for field in fields {
-        if let Type::Named(dep) = &field.ty {
-            visit_type(dep, by_name, finished, order)?;
+    finished.insert(name.to_string(), false);
+    let dependencies: Vec<String> = match &def {
+        TypeDef::Item(Item::Shape(s)) => s.fields.iter().flat_map(|f| value_dependencies(&f.ty)).collect(),
+        TypeDef::Item(Item::Kind(k)) => k.variants.iter().flat_map(|v| &v.payload).flat_map(|f| value_dependencies(&f.ty)).collect(),
+        TypeDef::Item(Item::Task(_)) => Vec::new(),
+        TypeDef::Compound(Type::Maybe(inner)) => value_dependencies(inner),
+        TypeDef::Compound(Type::Or(value, error)) => {
+            value_dependencies(value).into_iter().chain(value_dependencies(error)).collect()
         }
+        TypeDef::Compound(_) => Vec::new(),
+    };
+    for dependency in dependencies {
+        visit_type(&dependency, by_name, finished, order)?;
     }
-    finished.insert(name, true);
-    order.push(item);
+    finished.insert(name.to_string(), true);
+    order.push(def);
     Ok(())
 }
 
@@ -620,6 +1130,9 @@ fn signature(t: &TaskDef) -> String {
 //   vela_Shape__Tag               a kind's tag enum type        (`tag_type`)
 //   vela_Shape__tag_Circle        a variant's tag value         (`tag_value`)
 //   vela__int                     a local or field named like C (`c_ident`)
+//   vela__maybe__int              a `maybe` struct              (`c_type`)
+//   vela__or__int__n_ParseError   an `or` struct                (`c_type`)
+//   vela__show__maybe__int        `show` for a `maybe`          (`show_maybe_helper`)
 //   vela__end__0, vela__empty__   compiler temporaries and members
 
 /// The C name of a task, shape, or kind.
@@ -678,6 +1191,31 @@ fn c_type(ty: &Type) -> String {
         Type::Ptr(t) => format!("{}*", c_type(t)),
         Type::Named(n) => mangle(n),
         Type::Range(t) => format!("/*range<{}>*/", c_type(t)),
+        // A `maybe` pointer is the pointer itself, with `NULL` for none.
+        Type::Maybe(inner) if is_pointer(inner) => c_type(inner),
+        Type::Maybe(inner) => format!("vela__maybe__{}", type_key(inner)),
+        Type::Or(value, error) => format!("vela__or__{}__{}", type_key(value), type_key(error)),
+        Type::Fail(error) => c_type(error),
+    }
+}
+
+/// A type as part of a C name, distinct for distinct types: words separated by
+/// `__`, which no Vela name contains, with a shape or kind name marked `n_` so
+/// it can't read as a builtin or as `ptr`, `maybe`, or `or`.
+fn type_key(ty: &Type) -> String {
+    match ty {
+        Type::Int => "int".to_string(),
+        Type::Float => "float".to_string(),
+        Type::Bool => "bool".to_string(),
+        Type::Text => "text".to_string(),
+        Type::Unit => "unit".to_string(),
+        Type::None => "none".to_string(),
+        Type::Named(name) => format!("n_{}", name),
+        Type::Ptr(inner) => format!("ptr__{}", type_key(inner)),
+        Type::Range(inner) => format!("range__{}", type_key(inner)),
+        Type::Maybe(inner) => format!("maybe__{}", type_key(inner)),
+        Type::Or(value, error) => format!("or__{}__{}", type_key(value), type_key(error)),
+        Type::Fail(error) => format!("fail__{}", type_key(error)),
     }
 }
 

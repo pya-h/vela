@@ -1,0 +1,5 @@
+# error: 4:11: this pointer is a maybe ^int, which may be none; extract it first, as in 'when p is {q}' or 'p { … }'
+task main()
+    bind p: maybe ^int = new int(1)
+    show(p^)
+fi

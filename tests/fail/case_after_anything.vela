@@ -1,0 +1,14 @@
+# error: 11:10: this case comes after '_', which already matches everything
+kind Light
+    Red
+    Green
+fi
+
+task main()
+    match Red
+    case _
+        show(1)
+    case Green
+        show(2)
+    fi
+fi

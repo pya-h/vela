@@ -1,0 +1,14 @@
+# error: 9:10: 'Red' is a variant, but this value is maybe int
+kind Light
+    Red
+fi
+
+task main()
+    bind m: maybe int = 1
+    match m
+    case Red
+        show(0)
+    case _
+        show(1)
+    fi
+fi

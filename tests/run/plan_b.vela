@@ -1,0 +1,108 @@
+# Plan B: `value { … }` gives the value inside a maybe, or else what its block
+# gives on its last line. A `<-` inside sends from the task. Operands around a
+# plan B are evaluated left to right, `and`/`or` still skip their right side,
+# and a loop condition runs its plan B on every pass.
+
+shape Pair
+    left: int
+    right: int
+fi
+
+task noisy(label: text, value: maybe int) -> maybe int
+    show(label)
+    <- value
+fi
+
+task check(label: text, result: bool) -> bool
+    show(label)
+    <- result
+fi
+
+task first_or_stop(m: maybe int) -> int
+    bind n = m {
+        show("stopping")
+        <- -1
+    }
+    show("continuing")
+    <- n * 10
+fi
+
+task report(m: maybe int)
+    bind n = m { <- }
+    show(n)
+fi
+
+task countdown(start: int) -> maybe int
+    when start > 0
+        <- start - 1
+    fi
+    <- none
+fi
+
+task main()
+    bind some: maybe float = 2.5
+    bind nothing: maybe float = none
+    show(some { 0.0 })
+    show(nothing { 0.0 })
+    show(nothing { 1.0 } * 2.2)
+    show(-some { 1.0 })
+
+    bind port = noisy("port", none) {
+        show("no port set")
+        bind base = 8000
+        base + 80
+    }
+    show(port)
+
+    show(first_or_stop(4))
+    show(first_or_stop(none))
+    report(9)
+    report(none)
+
+    # Nested: fall back to a second maybe.
+    bind backup: maybe int = 7
+    show(noisy("a", none) { backup { 0 } })
+
+    # Left to right, even across a plan B.
+    show(noisy("left", 1) { 0 } + noisy("right", none) { 2 })
+    bind pair = Pair { left: noisy("l", none) { 3 }, right: noisy("r", 4) { 0 } }
+    show(pair.left * pair.right)
+
+    # A variable changed by a plan B is read before the plan B runs.
+    hold n = 1
+    bind total = n + noisy("change", none) {
+        n = 100
+        5
+    }
+    show(total)
+    show(n)
+
+    # `and` and `or` skip their right side, plan B included.
+    show(check("and", false) and noisy("never", none) { 1 } == 1)
+    show(check("or", true) or noisy("never", none) { 1 } == 1)
+    show(check("and", true) and noisy("runs", none) { 1 } == 1)
+
+    # A loop condition runs its plan B on every pass.
+    hold left: maybe int = 3
+    hold passes = 0
+    loop left { 0 } > 0
+        passes = passes + 1
+        left = countdown(left { 0 })
+    fi
+    show(passes)
+
+    # In a `when`, an `each` range, a match subject, and an assignment target.
+    when noisy("cond", none) { 1 } == 1
+        show("yes")
+    fi
+    each i in noisy("from", none) { 2 }..noisy("to", 4) { 0 }
+        show(i)
+    fi
+    hold cell = Pair { left: 0, right: 0 }
+    cell.left = noisy("assign", none) { 11 }
+    show(cell.left)
+    bind boxed = new int(1)
+    boxed^ = noisy("through", 12) { 0 }
+    show(boxed^)
+    free(boxed)
+fi

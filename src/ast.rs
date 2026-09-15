@@ -22,11 +22,17 @@ pub enum Type {
     Bool,
     Text,
     Unit,
-    /// The type of the `none` literal: fits any pointer type.
+    /// The type of the `none` literal: fits any `maybe` type.
     None,
     Ptr(Box<Type>),
     Named(String),
     Range(Box<Type>),
+    /// `maybe T`: a `T`, or `none`.
+    Maybe(Box<Type>),
+    /// `T or E`: a `T` on success, or an error `E`. `T` may be `unit`.
+    Or(Box<Type>, Box<Type>),
+    /// The type of `fail e` before it becomes part of a `T or E`: the error's type.
+    Fail(Box<Type>),
 }
 
 /// The builtin types by name: the one list the parser, the checker, and tools
@@ -55,6 +61,9 @@ impl fmt::Display for Type {
             Type::Ptr(inner) => write!(f, "^{}", inner),
             Type::Named(name) => write!(f, "{}", name),
             Type::Range(inner) => write!(f, "range of {}", inner),
+            Type::Maybe(inner) => write!(f, "maybe {}", inner),
+            Type::Or(value, error) => write!(f, "{} or {}", value, error),
+            Type::Fail(error) => write!(f, "fail {}", error),
         }
     }
 }
@@ -75,7 +84,19 @@ impl Type {
             _ => None,
         }
     }
+
+    /// The type a plan B or a `{value}` pattern extracts: `T` from `maybe T`
+    /// or `T or E`.
+    pub fn extracted(&self) -> Option<&Type> {
+        match self {
+            Type::Maybe(inner) | Type::Or(inner, _) => Some(inner),
+            _ => None,
+        }
+    }
 }
+
+/// The name a pattern or plan B uses to drop a value it doesn't need.
+pub const DISCARD: &str = "_";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOp {
@@ -154,6 +175,20 @@ pub enum ExprKind {
         args: Vec<Expr>,
     },
     Range(Box<Expr>, Box<Expr>),
+    /// `fail e`: an error value, which fits a `T or E`.
+    Fail(Box<Expr>),
+    /// A plan B, `value { … }`: the value extracted from a `maybe` or a
+    /// `T or E`, or else what the block gives. `error` is the name of a first
+    /// line `fail e`, with its position.
+    PlanB {
+        value: Box<Expr>,
+        error: Option<(String, Span)>,
+        body: Block,
+    },
+    /// Added by the checker where a value becomes part of a `maybe` or a
+    /// `T or E`: a plain value, `none`, or `fail e`. The node's `ty` is the
+    /// type it becomes.
+    Wrap(Box<Expr>),
 }
 
 /// One `name: value` in a shape literal.
@@ -195,22 +230,92 @@ pub enum StmtKind {
         init: Expr,
     },
     Assign(Expr, Expr),
-    When(Expr, Block, Option<Block>),
-    Loop(Expr, Block),
+    When(Condition, Block, Option<Block>),
+    Loop(Condition, Block),
     Each(String, Expr, Block),
     Match(Expr, Vec<Case>),
     Send(Option<Expr>),
     Free(Expr),
 }
 
+/// The condition of a `when` or `loop`: a `bool`, or `value is pattern`.
+#[derive(Debug, Clone)]
+pub struct Condition {
+    pub value: Expr,
+    pub pattern: Option<Pattern>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Case {
-    pub tag: String,
-    /// Names bound to the variant's payload fields, with their positions.
-    pub binds: Vec<(String, Span)>,
+    pub pattern: Pattern,
     pub body: Block,
-    /// Position of the variant tag.
+}
+
+/// What a `case` or an `is` condition matches.
+#[derive(Debug, Clone)]
+pub struct Pattern {
+    pub kind: PatternKind,
+    /// Position of the pattern's first token.
     pub span: Span,
+}
+
+/// A name bound by a pattern, with its position. `_` (`DISCARD`) binds nothing.
+pub type Binding = (String, Span);
+
+#[derive(Debug, Clone)]
+pub enum PatternKind {
+    /// `Circle r`: a variant, naming its payload fields in order.
+    Variant { tag: String, binds: Vec<Binding> },
+    /// `{v}`: the value in a `maybe`, or the success of a `T or E`.
+    Value(Binding),
+    /// `none`: an empty `maybe`.
+    None,
+    /// `fail e`: the error of a `T or E`.
+    Fail(Binding),
+    /// `_`: anything the earlier cases didn't match.
+    Any,
+}
+
+impl Pattern {
+    /// The pattern without its names, for messages: `Circle`, `{…}`, `none`,
+    /// `fail …`, or `_`.
+    pub fn label(&self) -> String {
+        match &self.kind {
+            PatternKind::Variant { tag, .. } => tag.clone(),
+            PatternKind::Value(_) => "{…}".to_string(),
+            PatternKind::None => "none".to_string(),
+            PatternKind::Fail(_) => "fail …".to_string(),
+            PatternKind::Any => DISCARD.to_string(),
+        }
+    }
+
+    /// The names the pattern binds, in order, including discards.
+    pub fn bindings(&self) -> &[Binding] {
+        match &self.kind {
+            PatternKind::Variant { binds, .. } => binds,
+            PatternKind::Value(bind) | PatternKind::Fail(bind) => std::slice::from_ref(bind),
+            PatternKind::None | PatternKind::Any => &[],
+        }
+    }
+}
+
+impl fmt::Display for Pattern {
+    /// The pattern as it is written, with its names, as in `{value}`.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.kind {
+            PatternKind::Variant { tag, binds } => {
+                write!(f, "{}", tag)?;
+                for (name, _) in binds {
+                    write!(f, " {}", name)?;
+                }
+                Ok(())
+            }
+            PatternKind::Value((name, _)) => write!(f, "{{{}}}", name),
+            PatternKind::None => write!(f, "none"),
+            PatternKind::Fail((name, _)) => write!(f, "fail {}", name),
+            PatternKind::Any => write!(f, "_"),
+        }
+    }
 }
 
 /// A named, typed slot: a task parameter, shape field, or variant payload field.

@@ -55,6 +55,27 @@ describe("indentation", () => {
   });
 });
 
+describe("plan B braces", () => {
+  it("indents after a line ending with { and lines } up with it", () => {
+    expect(indentOfLast("task main()\n    bind n = m {\n")).toBe(8);
+    expect(indentOfLast("task main()\n    bind n = m {  # no value\n")).toBe(8);
+    expect(indentOfLast("task main()\n    bind n = m {\n        show(1)\n        }")).toBe(4);
+    expect(indentOfLast("task main()\n    bind n = m {\n        bind k = j {\n            0\n        }\n        k\n        }")).toBe(4);
+    // After the closing line, the block's level again.
+    expect(indentOfLast("task main()\n    bind n = m {\n        0\n    }\n")).toBe(4);
+    // A brace in a comment or a one-line plan B opens nothing.
+    expect(indentOfLast("task main()\n    # a {\n")).toBe(4);
+    expect(indentOfLast("task main()\n    bind n = m { 0 }\n")).toBe(4);
+  });
+
+  it("folds a plan B up to its }", () => {
+    const lines = ["task main()", "    bind n = m {", "        bind k = j {", "            0", "        }", "        k", "    }", "fi"];
+    expect(closingLine(lines, lines.length, 1, WORDS)).toBe(6);
+    expect(closingLine(lines, lines.length, 2, WORDS)).toBe(4);
+    expect(closingLine(lines, lines.length, 0, WORDS)).toBe(7);
+  });
+});
+
 describe("closingLine", () => {
   const source = ["task main()", "    when x", "        show(1)", "    else", "        show(2)", "    fi", "fi", "task other()"];
 

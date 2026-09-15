@@ -1,0 +1,14 @@
+# error: 9:10: '{…}' matches the value in a maybe or a 'T or E', but this value is Light
+kind Light
+    Red
+    Green
+fi
+
+task main()
+    match Red
+    case {light}
+        show(1)
+    case _
+        show(2)
+    fi
+fi

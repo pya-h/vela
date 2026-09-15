@@ -65,7 +65,7 @@ const SNIPPET: i32 = 1;
 const KEYWORD: i32 = 0;
 
 const STATEMENT_KEYWORDS: &[&str] = &["bind", "hold", "when", "loop", "each", "match", "free"];
-const VALUE_KEYWORDS: &[&str] = &["true", "false", "none", "not", "new"];
+const VALUE_KEYWORDS: &[&str] = &["true", "false", "none", "not", "new", "fail"];
 
 /// Completions at byte `byte` of `source`. Returns the items and the byte
 /// range they replace.
@@ -121,6 +121,21 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     if matches!(prev_token, Some(Token::Task | Token::Shape | Token::Kind | Token::Bind | Token::Hold | Token::Each)) {
         return (Vec::new(), word_start, byte);
     }
+    // After `is`: patterns. Names a pattern or plan B declares (`is {v}`,
+    // `is fail e`, `{ fail e`) get no suggestions.
+    if let (Some(is), Some(Token::Is)) = (prev, prev_token) {
+        return (is_pattern_items(source, scan, &k, is), word_start, byte);
+    }
+    let before_prev = prev.and_then(|q| k.token_before(q));
+    let declares_name = match prev_token {
+        Some(Token::LBrace) => before_prev == Some(&Token::Is),
+        Some(Token::Fail) => matches!(before_prev, Some(Token::Is | Token::LBrace | Token::Newline))
+            && prev.is_some_and(|q| starts_plan_b_or_pattern(&k, q)),
+        _ => false,
+    };
+    if declares_name {
+        return (Vec::new(), word_start, byte);
+    }
     let inside_parens = prev.is_some_and(|q| unclosed_on_line(&k, q, &Token::LParen, &Token::RParen));
     if matches!(prev_token, Some(Token::LParen | Token::Comma))
         && inside_parens
@@ -138,31 +153,29 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
         return (items, word_start, byte);
     }
 
-    // A field name in a shape literal: the fields not given yet.
+    // A field name in a shape literal: the fields not given yet. (A `{` after
+    // anything but a shape's name opens a plan B, where values are typed.)
     if let Some(q) = prev
         && matches!(prev_token, Some(Token::LBrace | Token::Comma))
         && let Some(brace) = unclosed_brace(&k, q)
+        && brace.checked_sub(1).and_then(|b| k.ident(b)).is_some_and(|name| k.global(name, SymbolKind::Shape).is_some())
     {
         return (literal_field_items(&k, brace, word_start), word_start, byte);
     }
 
     // Types.
-    let type_context = match prev_token {
-        Some(Token::Colon) => !prev.is_some_and(|q| unclosed_on_line(&k, q, &Token::LBrace, &Token::RBrace)),
-        Some(Token::Arrow | Token::New) => true,
-        Some(Token::Caret) => {
-            // `^` starts a type after `:`, `->`, `new`, or another type `^`.
-            let mut q = prev.unwrap_or_default();
-            while k.token(q) == Some(&Token::Caret) && q > 0 {
-                q -= 1;
-            }
-            matches!(k.token(q), Some(Token::Colon | Token::Arrow | Token::New))
-        }
+    let type_context = match (prev, prev_token) {
+        (Some(q), Some(Token::Colon)) => !unclosed_on_line(&k, q, &Token::LBrace, &Token::RBrace),
+        (_, Some(Token::Arrow | Token::New)) => true,
+        // A type continues after `^` and `maybe`, and `or` starts the error type.
+        (Some(q), Some(Token::Caret | Token::Maybe)) => starts_type(&k, q),
+        (Some(q), Some(Token::Or)) => q.checked_sub(1).is_some_and(|name| k.ident(name).is_some() && starts_type(&k, name)),
         _ => false,
     };
     if type_context {
         let after_arrow = prev_token == Some(&Token::Arrow);
-        return (type_items(&k, after_arrow), word_start, byte);
+        let after_maybe = prev_token == Some(&Token::Maybe);
+        return (type_items(&k, after_arrow, after_maybe), word_start, byte);
     }
 
     // (`prev_token` is also `None` after invalid text, which isn't a line start.)
@@ -183,6 +196,32 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
         return (Vec::new(), word_start, byte);
     }
     (expression_items(&k, word_start), word_start, byte)
+}
+
+/// Whether the type-starting token at position `q` (a name, `^`, or `maybe`)
+/// is in a type: before it, after any `^` and `maybe`, comes `:` (outside a
+/// shape literal), `->`, `new`, or `or` after a type.
+fn starts_type(k: &Knowledge, q: usize) -> bool {
+    let mut p = q;
+    while p > 0 && matches!(k.token(p - 1), Some(Token::Caret | Token::Maybe)) {
+        p -= 1;
+    }
+    match p.checked_sub(1).map(|b| (b, k.token(b))) {
+        Some((b, Some(Token::Colon))) => !unclosed_on_line(k, b, &Token::LBrace, &Token::RBrace),
+        Some((_, Some(Token::Arrow | Token::New))) => true,
+        Some((b, Some(Token::Or))) => b.checked_sub(1).is_some_and(|name| k.ident(name).is_some() && starts_type(k, name)),
+        _ => false,
+    }
+}
+
+/// Whether the `fail` at position `q` names an error: it follows `is` or
+/// `case`, or it is the first word inside a plan B's `{`.
+fn starts_plan_b_or_pattern(k: &Knowledge, q: usize) -> bool {
+    let mut p = q;
+    while p > 0 && k.token(p - 1) == Some(&Token::Newline) {
+        p -= 1;
+    }
+    matches!(p.checked_sub(1).and_then(|b| k.token(b)), Some(Token::Is | Token::Case | Token::LBrace))
 }
 
 /// `source` with `from..to` removed, checked.
@@ -343,8 +382,9 @@ fn case_items(source: &str, scan: &Scan, k: &Knowledge, case: usize) -> Vec<Comp
     let probe = probe(source, case_start, line_end.max(case_start));
     let exact = Knowledge::new(source, scan, &probe);
     let subject_end = k.line_end(match_q).checked_sub(1).filter(|&q| q > match_q);
-    let kind = match subject_end.and_then(|q| exact.type_ending_at(q)) {
-        Some(Type::Named(name)) => k.global(&name, SymbolKind::Kind),
+    let subject = subject_end.and_then(|q| exact.type_ending_at(q));
+    let kind = match &subject {
+        Some(Type::Named(name)) => k.global(name, SymbolKind::Kind),
         _ => None,
     };
 
@@ -357,13 +397,40 @@ fn case_items(source: &str, scan: &Scan, k: &Knowledge, case: usize) -> Vec<Comp
             Some(Token::Fi) if depth == 0 => break,
             Some(Token::Fi) => depth -= 1,
             Some(Token::Case) if depth == 0 && q != case => {
-                if let Some(tag) = k.ident(q + 1) {
-                    covered.push(tag.to_string());
-                }
+                let label = match k.token(q + 1) {
+                    Some(Token::Ident(tag)) => tag.clone(),
+                    Some(Token::LBrace) => "{value}".to_string(),
+                    Some(Token::None) => "none".to_string(),
+                    Some(Token::Fail) => "fail e".to_string(),
+                    Some(Token::Underscore) => "_".to_string(),
+                    _ => continue,
+                };
+                covered.push(label);
             }
             Some(Token::Task | Token::Shape | Token::Kind) => break,
             _ => {}
         }
+    }
+
+    // A maybe or `T or E`: a value, and none or an error.
+    if let Some(outcomes) = subject.as_ref().and_then(outcome_patterns) {
+        let uncovered: Vec<&(String, String, String)> = outcomes.iter().filter(|(label, _, _)| !covered.contains(label)).collect();
+        let mut items: Vec<CompletionItem> = uncovered
+            .iter()
+            .map(|(label, detail, template)| CompletionItem {
+                label: label.clone(),
+                kind: CompletionKind::Snippet,
+                detail: detail.clone(),
+                apply: None,
+                snippet: (template != label).then(|| template.clone()),
+                boost: LOCAL,
+            })
+            .collect();
+        if uncovered.len() > 1 {
+            let cases: Vec<&str> = uncovered.iter().map(|(_, _, template)| template.as_str()).collect();
+            items.push(snippet("all remaining cases", "a value, and the other case", &format!("{}\n\t${{}}", cases.join("\n\t\ncase "))));
+        }
+        return items;
     }
 
     let variants: Vec<usize> = match kind {
@@ -390,6 +457,16 @@ fn case_items(source: &str, scan: &Scan, k: &Knowledge, case: usize) -> Vec<Comp
             })
         })
         .collect();
+    if kind.is_some() && !uncovered.is_empty() {
+        items.push(CompletionItem {
+            label: "_".to_string(),
+            kind: CompletionKind::Keyword,
+            detail: "every other case".to_string(),
+            apply: None,
+            snippet: None,
+            boost: KEYWORD,
+        });
+    }
     if kind.is_some() && uncovered.len() > 1 {
         let names: Vec<&str> = uncovered.iter().filter_map(|&id| k.symbol(id).map(|v| v.name.as_str())).collect();
         let mut used = Vec::new();
@@ -404,6 +481,64 @@ fn case_items(source: &str, scan: &Scan, k: &Knowledge, case: usize) -> Vec<Comp
         });
     }
     items
+}
+
+/// The patterns of a `maybe` or `T or E` as `(label, detail, snippet)`: its
+/// value, and `none` or its error.
+fn outcome_patterns(ty: &Type) -> Option<Vec<(String, String, String)>> {
+    let value = |extracted: &Type| {
+        let name = if *extracted == Type::Unit { "{_}" } else { "{${value}}" };
+        ("{value}".to_string(), format!("the {}", extracted), name.to_string())
+    };
+    match ty {
+        Type::Maybe(inner) => Some(vec![value(inner), ("none".to_string(), "no value".to_string(), "none".to_string())]),
+        Type::Or(ok, error) => Some(vec![value(ok), ("fail e".to_string(), format!("the {} error", error), "fail ${e}".to_string())]),
+        _ => None,
+    }
+}
+
+/// The patterns after `is`, for the value before it.
+fn is_pattern_items(source: &str, scan: &Scan, k: &Knowledge, is: usize) -> Vec<CompletionItem> {
+    let line_end = k.range(k.line_end(is)).start;
+    let probe = probe(source, k.range(is).start, line_end.max(k.range(is).start));
+    let exact = Knowledge::new(source, scan, &probe);
+    let subject = is.checked_sub(1).and_then(|q| exact.type_ending_at(q));
+    if let Some(outcomes) = subject.as_ref().and_then(outcome_patterns) {
+        return outcomes
+            .into_iter()
+            .map(|(label, detail, template)| CompletionItem {
+                snippet: (template != label).then_some(template),
+                label,
+                kind: CompletionKind::Snippet,
+                detail,
+                apply: None,
+                boost: LOCAL,
+            })
+            .collect();
+    }
+    let kind = match &subject {
+        Some(Type::Named(name)) => k.global(name, SymbolKind::Kind),
+        _ => None,
+    };
+    let variants: Vec<usize> = match kind {
+        Some(kind) => k.children(kind).map(|(id, _)| id).collect(),
+        None => k.symbols().iter().enumerate().filter(|(_, s)| s.kind == SymbolKind::Variant).map(|(id, _)| id).collect(),
+    };
+    variants
+        .into_iter()
+        .filter_map(|id| {
+            let variant = k.symbol(id)?;
+            let template = case_template(k, id, &mut Vec::new());
+            Some(CompletionItem {
+                label: variant.name.clone(),
+                kind: CompletionKind::Variant,
+                detail: variant.detail.clone(),
+                apply: None,
+                snippet: (template != variant.name).then_some(template),
+                boost: LOCAL,
+            })
+        })
+        .collect()
 }
 
 /// `Rectangle ${width} ${height}`: a variant with a field for each binding,
@@ -431,7 +566,7 @@ fn unique(used: &mut Vec<String>, name: &str) -> String {
     candidate
 }
 
-fn type_items(k: &Knowledge, after_arrow: bool) -> Vec<CompletionItem> {
+fn type_items(k: &Knowledge, after_arrow: bool, after_maybe: bool) -> Vec<CompletionItem> {
     let descriptions = [
         ("int", "64-bit signed integer"),
         ("float", "64-bit floating point"),
@@ -441,7 +576,7 @@ fn type_items(k: &Knowledge, after_arrow: bool) -> Vec<CompletionItem> {
     ];
     let builtin = BUILTIN_TYPES
         .iter()
-        .filter(|(_, ty)| after_arrow || *ty != Type::Unit)
+        .filter(|(_, ty)| (after_arrow && !after_maybe) || *ty != Type::Unit)
         .map(|(name, _)| CompletionItem {
             label: name.to_string(),
             kind: CompletionKind::Type,
@@ -462,7 +597,15 @@ fn type_items(k: &Knowledge, after_arrow: bool) -> Vec<CompletionItem> {
             snippet: None,
             boost: GLOBAL,
         });
-    builtin.chain(declared).collect()
+    let maybe = (!after_maybe).then(|| CompletionItem {
+        label: "maybe".to_string(),
+        kind: CompletionKind::Keyword,
+        detail: "a value, or none".to_string(),
+        apply: None,
+        snippet: None,
+        boost: SNIPPET,
+    });
+    builtin.chain(declared).chain(maybe).collect()
 }
 
 fn keyword(word: &str) -> CompletionItem {
@@ -511,12 +654,27 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize) -> Vec<Completi
         snippet("when", "a condition", "when ${condition}\n\t${}\nfi"),
         snippet("when … else", "a condition with an alternative", "when ${condition}\n\t${}\nelse\n\t\nfi"),
         snippet("loop", "repeat while a condition holds", "loop ${condition}\n\t${}\nfi"),
+        snippet("when … is", "run a block when a pattern matches", "when ${value} is {${name}}\n\t${}\nfi"),
+        snippet("loop … is", "repeat while a pattern matches", "loop ${value} is {${name}}\n\t${}\nfi"),
         snippet("each", "count through a range", "each ${i} in ${start}..${end}\n\t${}\nfi"),
         snippet("match", "a match on a kind", "match ${value}\ncase ${Variant}\n\t${}\nfi"),
     ]);
-    // A `match` with every case, for each visible value of a kind.
+    // A `match` with every case, for each visible value of a kind, a maybe, or
+    // a `T or E`.
     for (id, symbol) in visible_locals(k, byte) {
-        let Some(Type::Named(kind_name)) = k.type_of_symbol(id) else { continue };
+        let ty = k.type_of_symbol(id);
+        if let Some(outcomes) = ty.as_ref().and_then(outcome_patterns) {
+            let cases: Vec<&str> = outcomes.iter().map(|(_, _, template)| template.as_str()).collect();
+            let mut item = snippet(
+                &format!("match {}", symbol.name),
+                &format!("both cases of {}", ty.as_ref().map(ToString::to_string).unwrap_or_default()),
+                &format!("match {}\ncase {}\n\t${{}}\nfi", symbol.name, cases.join("\n\t\ncase ")),
+            );
+            item.boost = GLOBAL;
+            items.push(item);
+            continue;
+        }
+        let Some(Type::Named(kind_name)) = ty else { continue };
         let Some(kind) = k.global(&kind_name, SymbolKind::Kind) else { continue };
         let mut used = Vec::new();
         let cases: Vec<String> = k.children(kind).map(|(variant, _)| case_template(k, variant, &mut used)).collect();
@@ -631,7 +789,7 @@ fn task_items(k: &Knowledge) -> Vec<CompletionItem> {
     items.extend(BUILTIN_TASKS.iter().map(|name| CompletionItem {
         label: name.to_string(),
         kind: CompletionKind::BuiltinFn,
-        detail: "(value: int | float | bool | text)".to_string(),
+        detail: "(value: int | float | bool | text | maybe)".to_string(),
         apply: None,
         snippet: Some(format!("{}(${{value}})", name)),
         boost: GLOBAL,

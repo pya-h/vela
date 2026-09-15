@@ -1,0 +1,64 @@
+# Patterns in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
+# binding drops a value, and `is` tests one pattern with its names visible
+# only in the block it guards.
+
+kind Light
+    Red
+    Green
+    Dimmed(level: int, reason: text)
+fi
+
+task name(l: Light) -> text
+    match l
+    case Red
+        <- "red"
+    case _
+        <- "not red"
+    fi
+fi
+
+task level(l: Light) -> int
+    match l
+    case Dimmed amount _
+        <- amount
+    case _
+        <- 100
+    fi
+fi
+
+task main()
+    show(name(Red))
+    show(name(Dimmed(3, "night")))
+    show(level(Green))
+    show(level(Dimmed(30, "dusk")))
+
+    bind lights: maybe Light = Dimmed(5, "evening")
+    when lights is {light}
+        when light is Dimmed amount why
+            show(amount)
+            show(why)
+        else
+            show("bright")
+        fi
+    fi
+
+    hold count = 0
+    bind current: maybe int = none
+    loop current is {n}
+        count = count + n
+    fi
+    show(count)
+
+    when Green is Red
+        show("impossible")
+    else
+        show("green is not red")
+    fi
+
+    match lights
+    case none
+        show("no light")
+    case {_}
+        show("some light")
+    fi
+fi

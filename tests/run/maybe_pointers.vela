@@ -1,0 +1,75 @@
+# A pointer always points to something; `maybe ^T` is the one that can be
+# `none`. `is` walks a list, a plan B supplies a missing pointer, and `free`
+# accepts a maybe pointer.
+
+shape Node
+    value: int
+    next: maybe ^Node
+fi
+
+task sum(list: maybe ^Node) -> int
+    hold total = 0
+    hold current = list
+    loop current is {node}
+        total = total + node^.value
+        current = node^.next
+    fi
+    <- total
+fi
+
+task find(list: maybe ^Node, wanted: int) -> maybe ^Node
+    hold current = list
+    loop current is {node}
+        when node^.value == wanted
+            <- node
+        fi
+        current = node^.next
+    fi
+    <- none
+fi
+
+task last(list: ^Node) -> ^Node
+    hold current = list
+    loop current^.next is {next}
+        current = next
+    fi
+    <- current
+fi
+
+task main()
+    bind empty: maybe ^Node = none
+    show(empty == none)
+    show(sum(empty))
+    bind third = new Node(Node { value: 3, next: none })
+    bind second = new Node(Node { value: 2, next: third })
+    bind first = new Node(Node { value: 1, next: second })
+    show(sum(first))
+    show(last(first)^.value)
+
+    when find(first, 2) is {found}
+        show(found == second)
+        found^.value = 20
+    fi
+    show(sum(first))
+    show(find(first, 9) == none)
+
+    when find(first, 9) is {found}
+        show(found^.value)
+    else
+        show("not found")
+    fi
+
+    bind fallback = find(first, 9) { third }
+    show(fallback^.value)
+
+    hold spare: maybe ^int = none
+    free(spare)
+    spare = new int(7)
+    when spare is {p}
+        show(p^)
+    fi
+    free(spare)
+    free(third)
+    free(second)
+    free(first)
+fi

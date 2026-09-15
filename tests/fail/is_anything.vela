@@ -1,0 +1,7 @@
+# error: 4:15: '_' matches anything, so this condition would always hold
+task main()
+    bind m: maybe int = 1
+    when m is _
+        show(1)
+    fi
+fi

@@ -1,0 +1,7 @@
+# error: 6:24: this expression has no value (its type is unit)
+task save() -> unit or text
+fi
+
+task main()
+    bind done = save() { }
+fi

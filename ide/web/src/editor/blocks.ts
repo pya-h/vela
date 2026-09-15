@@ -1,6 +1,7 @@
 // Vela's block structure, read line by line for indentation and folding.
 // Blocks open with a keyword at the start of a line (`task`, `when`, …),
-// may have branches (`else`, `case`), and close with `fi`. The words come from
+// may have branches (`else`, `case`), and close with `fi`. A plan B's block
+// opens with a `{` ending a line and closes with a line starting with `}`. The words come from
 // the compiler (see `language()` in ide/analysis), so nothing here is a grammar.
 
 export interface BlockWords {
@@ -27,17 +28,41 @@ export function indentWidth(line: string, tabSize: number): number {
 
 const isBlank = (line: string) => line.trim() === "";
 
+/** Whether a line ends with `{` (before any comment), opening a plan B's block. */
+export function opensBrace(line: string): boolean {
+  return !/^\s*#/.test(line) && /\{\s*(?:#.*)?$/.test(line);
+}
+
+/** Whether a line starts with `}`, closing a plan B's block. */
+export function closesBrace(line: string): boolean {
+  return /^\s*\}/.test(line);
+}
+
 /**
  * The indentation for a line starting with `current`, given the lines above
  * it, nearest first:
  *
  * - `fi`, `else`, and `case` line up with the keyword that opened their block
  *   (`case` with its `match`, as cases are written at the match's level);
- * - after a block opener or a branch, one level deeper, except after `match`,
- *   whose cases come next at its own level;
+ * - `}` lines up with the line whose `{` it closes;
+ * - after a block opener, a branch, or a line ending with `{`, one level
+ *   deeper, except after `match`, whose cases come next at its own level;
  * - otherwise, the same as the line above.
  */
 export function indentation(current: string, above: Iterable<string>, words: BlockWords, unit: number, tabSize: number): number {
+  if (closesBrace(current)) {
+    let depth = 0;
+    for (const line of above) {
+      if (closesBrace(line)) {
+        depth++;
+      } else if (opensBrace(line)) {
+        if (depth === 0) return indentWidth(line, tabSize);
+        depth--;
+      }
+    }
+    return 0;
+  }
+
   const word = firstWord(current);
   const closesOrBranches = word !== null && (word === words.blockCloser || words.branchKeywords.includes(word));
 
@@ -62,6 +87,7 @@ export function indentation(current: string, above: Iterable<string>, words: Blo
   for (const line of above) {
     if (isBlank(line)) continue;
     const base = indentWidth(line, tabSize);
+    if (opensBrace(line)) return base + unit;
     const w = firstWord(line);
     if (w === "match") return base;
     if (w !== null && (words.blockOpeners.includes(w) || words.branchKeywords.includes(w))) return base + unit;
@@ -72,10 +98,23 @@ export function indentation(current: string, above: Iterable<string>, words: Blo
 
 /**
  * The line of the `fi` closing the block opened on line `open` (0-based), or
- * null if that line opens no block or the block is unclosed.
+ * of the `}` closing a plan B opened there; null if that line opens no block
+ * or the block is unclosed.
  */
 export function closingLine(lines: readonly string[] | ((index: number) => string), count: number, open: number, words: BlockWords): number | null {
   const line = (i: number) => (typeof lines === "function" ? lines(i) : (lines[i] ?? ""));
+  if (opensBrace(line(open))) {
+    let depth = 0;
+    for (let i = open + 1; i < count; i++) {
+      if (closesBrace(line(i))) {
+        if (depth === 0) return i;
+        depth--;
+      } else if (opensBrace(line(i))) {
+        depth++;
+      }
+    }
+    return null;
+  }
   const opener = firstWord(line(open));
   if (opener === null || !words.blockOpeners.includes(opener)) return null;
   let depth = 0;

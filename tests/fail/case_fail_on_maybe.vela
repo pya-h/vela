@@ -1,0 +1,10 @@
+# error: 7:10: 'fail …' matches the error of a 'T or E', but this value is maybe int
+task main()
+    bind m: maybe int = 1
+    match m
+    case {n}
+        show(n)
+    case fail e
+        show(0)
+    fi
+fi

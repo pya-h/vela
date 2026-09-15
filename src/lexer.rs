@@ -31,6 +31,9 @@ pub enum Token {
     Or,
     Not,
     Fi,
+    Maybe,
+    Is,
+    Fail,
     Ident(String),
     LParen,
     RParen,
@@ -56,6 +59,8 @@ pub enum Token {
     Ge,
     Assign,
     Caret,
+    /// `_`, which matches or binds a value without naming it.
+    Underscore,
     Newline,
     Eof,
 }
@@ -84,6 +89,9 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("false", Token::False),
     ("none", Token::None),
     ("fi", Token::Fi),
+    ("maybe", Token::Maybe),
+    ("is", Token::Is),
+    ("fail", Token::Fail),
 ];
 
 /// The escapes allowed in text literals: the character after `\` and the
@@ -136,6 +144,7 @@ impl Token {
             Token::Ge => ">=",
             Token::Assign => "=",
             Token::Caret => "^",
+            Token::Underscore => "_",
             // Keywords are found in `KEYWORDS` above.
             _ => return format!("{:?}", self),
         };
@@ -335,6 +344,11 @@ impl Lexer {
         }
 
         if c == '_' {
+            // `_` alone is a symbol; a name can't start with it.
+            if !(self.peek2().is_alphanumeric() || self.peek2() == '_') {
+                self.advance();
+                return LexKind::Token(Token::Underscore);
+            }
             self.skip_name();
             return invalid(loc, "names must start with a letter");
         }

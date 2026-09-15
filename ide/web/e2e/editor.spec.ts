@@ -93,3 +93,37 @@ test("quick open and go to a declaration", async ({ page, studio }) => {
   await page.keyboard.press("Enter");
   await expect(page.locator(".cm-activeLine")).toContainText("Rectangle(width: float, height: float)");
 });
+
+const MAYBE = "task find(n: int) -> maybe int\n    when n > 0\n        <- n\n    fi\n    <- none\nfi\n\ntask main()\n    bind m = find(2)\n    show(m)\nfi\n";
+
+test("maybe values: highlighting, hover, patterns, and plan B blocks", async ({ page, studio }) => {
+  studio.write("maybe.vela", MAYBE);
+  await launch(page, studio);
+  await openFile(page, "maybe.vela");
+  const content = page.locator(".cm-content");
+  const maybe = content.locator(".tok-keyword", { hasText: /^maybe$/ });
+  await expect(maybe).toHaveCount(1);
+  await maybe.hover();
+  await expect(page.locator(".vs-hover .vs-hover-code")).toHaveText("maybe T");
+
+  // After `is`, the patterns of the value's type.
+  await cursorAtEndOf(page, 10);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("when m is ");
+  await page.keyboard.press("Control+Space");
+  const popup = page.locator(".cm-tooltip-autocomplete");
+  const option = (label: string) => popup.getByRole("option").filter({ has: page.locator(".cm-completionLabel", { hasText: label }) });
+  await expect(option("{value}")).toBeVisible();
+  await expect(option("none")).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // A plan B's block is indented, and its `}` lines up with the line that opened it.
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Shift+End");
+  await page.keyboard.type("bind n = m {");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("0");
+  expect(await lineText(page, 12)).toBe("        0");
+  expect(await lineText(page, 13)).toBe("    }");
+  await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
+});

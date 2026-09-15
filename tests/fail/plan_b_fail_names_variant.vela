@@ -1,0 +1,12 @@
+# error: 11:28: 'Bad' is a variant; to send an error, write '<- fail Bad'
+kind Problem
+    Bad
+fi
+
+task parse(t: text) -> int or Problem
+    <- fail Bad
+fi
+
+task main()
+    show(parse("x") { fail Bad })
+fi

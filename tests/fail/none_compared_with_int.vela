@@ -1,4 +1,4 @@
-# error: 3:15: 'none' can only be compared with a pointer
+# error: 3:15: 'none' can only be compared with a maybe value
 task main()
     show(none == 1)
 fi

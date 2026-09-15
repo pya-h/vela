@@ -1,0 +1,12 @@
+# error: 7:11: this success has no value to name; write '{_}'
+task save() -> unit or text
+fi
+
+task main()
+    match save()
+    case {done}
+        show(1)
+    case fail e
+        show(e)
+    fi
+fi

@@ -346,25 +346,29 @@ Press Ctrl+C to stop.</pre>
         </div>
         <div class="card">
           <h4>Completion</h4>
-          <p>Only what fits: types after <code>:</code>, <code>-&gt;</code>, <code>^</code>, and <code>new</code>;
-            variables declared above the cursor; fields after <code>.</code>; the cases still missing after
-            <code>case</code>.</p>
+          <p>Only what fits: types after <code>:</code>, <code>-&gt;</code>, <code>^</code>, <code>maybe</code>,
+            <code>new</code>, and a type's <code>or</code>; variables declared above the cursor; fields after
+            <code>.</code>; the cases still missing after <code>case</code>, including <code>{value}</code>,
+            <code>none</code>, and <code>fail e</code>; and the patterns that fit after <code>is</code>.</p>
         </div>
         <div class="card">
           <h4>Snippets</h4>
           <p><code>task</code>, <code>shape</code>, <code>kind</code>, <code>when</code>, <code>loop</code>,
-            <code>each</code>, and <code>match</code>, which expands to one <code>case</code> per variant, with its
+            <code>each</code>, <code>when … is</code>, <code>loop … is</code>, and <code>match</code>, which expands to
+            one <code>case</code> per variant (or <code>{value}</code> and <code>none</code> for a maybe), with its
             bindings. <kbd>Tab</kbd> moves between the fields.</p>
         </div>
         <div class="card">
           <h4>Hover and go to definition</h4>
-          <p>Hover a name to see its type or signature. <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it
+          <p>Hover a name to see its type or signature, or <code>maybe</code>, <code>is</code>, <code>fail</code>,
+            <code>none</code>, and <code>_</code> for a reminder of what they do. <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it
             is declared; <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> finds a declaration by name.</p>
         </div>
         <div class="card">
           <h4>Blocks that indent themselves</h4>
-          <p>Enter indents after a block's first line; typing <code>fi</code>, <code>else</code>, or
-            <code>case</code> lines it up with its block. Blocks fold from the gutter.</p>
+          <p>Enter indents after a block's first line, and after a line ending with a plan B's <code>{</code>; typing
+            <code>fi</code>, <code>else</code>, <code>case</code>, or <code>}</code> lines it up with its block. Blocks
+            fold from the gutter.</p>
         </div>
       </div>
       <p>

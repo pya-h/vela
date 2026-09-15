@@ -98,6 +98,9 @@ test("problems come from editing and from builds", async ({ page, studio }) => {
 
   // A failure only the build finds: no main task.
   await treeRow(page, "helper.vela").click();
+  // F5 runs the active file, so wait until the click has opened it.
+  await expect(tab(page, "helper.vela")).toHaveClass(/active/);
+  await expect(page.locator(".cm-content")).toContainText("task helper()");
   await page.keyboard.press("F5");
   await expect(page.locator(".panel-tab.active")).toContainText("Problems");
   await expect(page.locator(".problem-file", { hasText: "helper.vela" })).toContainText("program has no 'main' task");
