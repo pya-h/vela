@@ -1,0 +1,10 @@
+# error: modules/sees_main.vela:4:8: unknown task 'helper'
+use modules/sees_main
+
+task helper() -> int
+    <- 1
+fi
+
+task main()
+    show(sees_main.call_main())
+fi

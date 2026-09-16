@@ -1,0 +1,6 @@
+# error: 5:10: 'library' is a module, not a variable; name something in it, as in 'library.name'
+use modules/library
+
+task main()
+    show(library)
+fi

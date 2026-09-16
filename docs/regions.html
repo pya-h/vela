@@ -1205,7 +1205,7 @@ list = push(list, <span class="number">1</span>)             <span class="commen
         <h4>Owned pointers with <code>drop</code> <span class="badge b-rec">Recommended, long term</span></h4>
         <pre><span class="keyword">region</span> cache
 <span class="keyword">bind</span> big = <span class="keyword">new</span> own Buffer(Buffer { size: <span class="number">1024</span> }) <span class="keyword">at</span> cache
-use(big^)
+read(big^)
 drop big                         <span class="comment"># its memory goes back to the region now</span>
 show(big^.size)                  <span class="comment"># error: 'big' was dropped</span></pre>
         <ul>

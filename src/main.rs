@@ -97,10 +97,11 @@ fn run(opts: &Options) -> Result<(), String> {
     let source = fs::read_to_string(&opts.input)
         .map_err(|e| format!("error: cannot read '{}': {}", opts.input, e))?;
 
+    let path = Path::new(&opts.input);
     if opts.check {
         // Everything a build checks before generating C, so a program that
         // passes can be built.
-        let items = driver::front_end(&source).map_err(|e| driver::render_error(&opts.input, &source, &e))?;
+        let items = driver::check_program(path, &source, &mut driver::read_from_disk).map_err(|e| e.render(&opts.input))?;
         if !driver::has_main(&items) {
             return Err(driver::BuildError::NoMain.render(&opts.input, &source));
         }
@@ -108,7 +109,7 @@ fn run(opts: &Options) -> Result<(), String> {
     }
 
     if opts.emit_c {
-        let c_code = driver::generate_c(&source).map_err(|e| driver::render_error(&opts.input, &source, &e))?;
+        let c_code = driver::generate_c_program(path, &source, &mut driver::read_from_disk).map_err(|e| e.render(&opts.input))?;
         return match &opts.output {
             Some(path) if fs::canonicalize(path).ok() == fs::canonicalize(&opts.input).ok() => {
                 Err(format!("error: output '{}' would overwrite the input file", path))

@@ -6,13 +6,21 @@
 
 export interface BlockWords {
   blockOpeners: readonly string[];
+  /** Words that may come before an opener, as in `priv task`, which the line's keyword skips. */
+  blockModifiers: readonly string[];
   branchKeywords: readonly string[];
   blockCloser: string;
 }
 
-/** The keyword a line starts with, if it starts with a word at all. */
-export function firstWord(line: string): string | null {
-  return /^\s*([A-Za-z_][A-Za-z0-9_]*)/.exec(line)?.[1] ?? null;
+/**
+ * The keyword a line starts with, if it starts with a word at all, after any of
+ * `modifiers` (so `priv task` starts with `task`).
+ */
+export function firstWord(line: string, modifiers: readonly string[] = []): string | null {
+  const words = /^\s*([A-Za-z_][A-Za-z0-9_]*)(?:\s+([A-Za-z_][A-Za-z0-9_]*))?/.exec(line);
+  const first = words?.[1] ?? null;
+  const second = words?.[2];
+  return first !== null && second !== undefined && modifiers.includes(first) ? second : first;
 }
 
 /** The width of a line's leading whitespace, with tabs to the next stop. */
@@ -81,13 +89,13 @@ export function indentation(current: string, above: Iterable<string>, words: Blo
     return 0;
   }
 
-  const word = firstWord(current);
+  const word = firstWord(current, words.blockModifiers);
   const closesOrBranches = word !== null && (word === words.blockCloser || words.branchKeywords.includes(word));
 
   if (closesOrBranches) {
     let depth = 0;
     for (const line of above) {
-      const w = firstWord(line);
+      const w = firstWord(line, words.blockModifiers);
       if (w === null) continue;
       if (w === words.blockCloser) {
         depth++;
@@ -106,7 +114,7 @@ export function indentation(current: string, above: Iterable<string>, words: Blo
     if (isBlank(line)) continue;
     const base = indentWidth(line, tabSize);
     if (opensBrace(line)) return base + unit;
-    const w = firstWord(line);
+    const w = firstWord(line, words.blockModifiers);
     if (w === "match") return base;
     if (w !== null && (words.blockOpeners.includes(w) || words.branchKeywords.includes(w))) return base + unit;
     return base;
@@ -132,11 +140,11 @@ export function closingLine(lines: readonly string[] | ((index: number) => strin
     }
     return null;
   }
-  const opener = firstWord(line(open));
+  const opener = firstWord(line(open), words.blockModifiers);
   if (opener === null || !words.blockOpeners.includes(opener)) return null;
   let depth = 0;
   for (let i = open + 1; i < count; i++) {
-    const w = firstWord(line(i));
+    const w = firstWord(line(i), words.blockModifiers);
     if (w === null) continue;
     if (words.blockOpeners.includes(w)) {
       depth++;

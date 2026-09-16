@@ -1428,15 +1428,23 @@ fn signature(t: &TaskDef) -> String {
 
 /// The C name of a task, shape, or kind.
 fn mangle(name: &str) -> String {
-    format!("vela_{}", name)
+    format!("vela_{}", c_name(name))
 }
 
 fn tag_type(kind: &str) -> String {
-    format!("vela_{}__Tag", kind)
+    format!("vela_{}__Tag", c_name(kind))
 }
 
 fn tag_value(kind: &str, tag: &str) -> String {
-    format!("vela_{}__tag_{}", kind, tag)
+    format!("vela_{}__tag_{}", c_name(kind), tag)
+}
+
+/// A task, shape, or kind name as part of a C name. A name from a module other
+/// than the main file's has the module before a `.`, which becomes `__0__`:
+/// no Vela name contains `__`, and none starts with a digit, so the result
+/// can't be any other name, or read as a word the generated names use.
+fn c_name(name: &str) -> String {
+    name.replace(MODULE_SEPARATOR, "__0__")
 }
 
 /// The C name of a local, parameter, field, or variant union member: the Vela
@@ -1503,7 +1511,7 @@ fn type_key(ty: &Type) -> String {
         Type::Text => "text".to_string(),
         Type::Unit => "unit".to_string(),
         Type::None => "none".to_string(),
-        Type::Named(name, _) => format!("n_{}", name),
+        Type::Named(name, _) => format!("n_{}", c_name(name)),
         Type::Region => "region".to_string(),
         Type::Ptr(inner, _) => format!("ptr__{}", type_key(inner)),
         Type::Range(inner) => format!("range__{}", type_key(inner)),

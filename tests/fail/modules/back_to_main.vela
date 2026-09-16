@@ -1,0 +1,6 @@
+# Uses the fail fixture that uses it, closing a circle through the main file.
+use ../use_main_file
+
+task back() -> int
+    <- 1
+fi

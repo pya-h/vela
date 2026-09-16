@@ -92,20 +92,33 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
         None => name.to_string(),
     };
     Some(match symbol.kind {
-        SymbolKind::Task => (format!("task {}{}", symbol.name, symbol.detail), String::new()),
+        SymbolKind::Module => {
+            let module = k.scan.modules.iter().find(|m| m.symbol == id);
+            let doc = match module {
+                Some(m) if m.source.is_some() => format!("A module this file uses: the file {}.", m.path),
+                Some(m) => format!("A module this file uses: the file {}, which can't be read.", m.path),
+                None => "A module this file uses.".to_string(),
+            };
+            (format!("use {}", symbol.detail), doc)
+        }
+        SymbolKind::Task => (format!("task {}{}", symbol.name, symbol.detail), from_module(k, symbol)),
         SymbolKind::Shape | SymbolKind::Kind => {
             let keyword = if symbol.kind == SymbolKind::Shape { "shape" } else { "kind" };
-            let mut code = format!("{} {}\n", keyword, symbol.name);
+            let private = if symbol.private { "priv " } else { "" };
+            let mut code = format!("{}{} {}\n", private, keyword, symbol.name);
             for (_, member) in k.children(id) {
                 let separator = if member.kind == SymbolKind::Field { ": " } else { "" };
-                code.push_str(&format!("    {}{}{}\n", member.name, separator, member.detail));
+                let private = if member.private { "priv " } else { "" };
+                code.push_str(&format!("    {}{}{}{}\n", private, vela::ast::unqualified(&member.name), separator, member.detail));
             }
             code.push_str("fi");
-            (code, String::new())
+            (code, from_module(k, symbol))
         }
         SymbolKind::Variant => {
             let kind = parent.map(|p| p.name.as_str()).unwrap_or("?");
-            (format!("{}{}", symbol.name, symbol.detail), format!("A variant of kind {}.", kind))
+            let doc = format!("A variant of kind {}.", kind);
+            let module = from_module(k, symbol);
+            (format!("{}{}", symbol.name, symbol.detail), if module.is_empty() { doc } else { format!("{} {}", doc, module) })
         }
         SymbolKind::Field => {
             let doc = match parent {
@@ -170,4 +183,15 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             _ => (format!("bind {}", typed(&symbol.name)), "An immutable variable.".to_string()),
         },
     })
+}
+
+/// For a declaration of another file, which module it is from.
+fn from_module(k: &Knowledge, symbol: &crate::scan::Symbol) -> String {
+    match symbol.module.and_then(|m| k.scan.modules.get(m)) {
+        Some(module) => {
+            let name = k.symbol(module.symbol).map_or("", |s| s.name.as_str());
+            format!("From module {} ({}).", name, module.path)
+        }
+        None => String::new(),
+    }
 }

@@ -4,6 +4,7 @@ import { type BlockWords, closingLine, firstWord, indentWidth, indentation } fro
 
 const WORDS: BlockWords = {
   blockOpeners: ["task", "shape", "kind", "when", "loop", "each", "match"],
+  blockModifiers: ["priv"],
   branchKeywords: ["else", "case"],
   blockCloser: "fi",
 };
@@ -18,6 +19,8 @@ function indentOfLast(source: string): number {
 describe("reading lines", () => {
   it("finds the first word and the indentation", () => {
     expect([firstWord("    when x"), firstWord("# when"), firstWord("  "), firstWord("fi")]).toEqual(["when", null, null, "fi"]);
+    // A modifier before an opener is skipped; alone, or before anything else, it is the word.
+    expect([firstWord("priv task f()", ["priv"]), firstWord("    priv balance: int", ["priv"]), firstWord("priv", ["priv"])]).toEqual(["task", "balance", "priv"]);
     expect([indentWidth("    x", 4), indentWidth("\tx", 4), indentWidth("  \tx", 4), indentWidth("", 4)]).toEqual([4, 4, 4, 0]);
   });
 });
@@ -91,6 +94,14 @@ describe("plan B braces", () => {
 
 describe("closingLine", () => {
   const source = ["task main()", "    when x", "        show(1)", "    else", "        show(2)", "    fi", "fi", "task other()"];
+
+  it("reads a private item as its block", () => {
+    expect(indentOfLast("priv task f()\n")).toBe(4);
+    expect(indentOfLast("priv task f()\n    when x\n    fi\nfi")).toBe(0);
+    expect(indentOfLast("shape S\n    priv x: int\n")).toBe(4);
+    expect(indentOfLast("priv shape S\n    priv x: int\nfi")).toBe(0);
+    expect(closingLine(["priv kind K", "    A", "fi", "task t()", "fi"], 5, 0, WORDS)).toBe(2);
+  });
 
   it("finds the fi of a block", () => {
     expect(closingLine(source, source.length, 0, WORDS)).toBe(6);

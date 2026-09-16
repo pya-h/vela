@@ -1,9 +1,10 @@
-// Each test gets its own vela-studio server on a fresh copy of examples/, and
+// Each test gets its own vela-studio server on a fresh copy of examples/ (its
+// programs and the folders of modules they use), and
 // fails if the page logs an error (including Content-Security-Policy
 // violations, which the page reports as errors).
 
 import { type ChildProcess, spawn } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -54,8 +55,10 @@ export const test = base.extend<{ studio: Studio }>({
   studio: async ({ page }, use) => {
     const workspace = mkdtempSync(join(tmpdir(), "vela-studio-e2e-"));
     const examples = join(repo, "examples");
-    for (const name of readdirSync(examples).filter((f) => f.endsWith(".vela"))) {
-      copyFileSync(join(examples, name), join(workspace, name));
+    for (const name of readdirSync(examples)) {
+      const from = join(examples, name);
+      if (statSync(from).isDirectory()) cpSync(from, join(workspace, name), { recursive: true });
+      else if (name.endsWith(".vela")) copyFileSync(from, join(workspace, name));
     }
     const { server, url } = await start(workspace);
     const errors: string[] = [];

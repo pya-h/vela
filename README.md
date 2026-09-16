@@ -8,7 +8,9 @@ be missing is a `maybe T`, and a task that can fail sends `T or E`; both are rea
 plan B (`x { fallback }`). Blocks close with `fi`, and a task sends its results with `<-`: one value, or
 several (`-> int, int` … `<- a / b, a % b`), received with `bind q, r = divmod(17, 5)`. Results can be named
 (`-> total: int`), set along the way with `total <- value` and sent by reaching the end of the task. An `int`
-never wraps: overflow and division by zero stop the program with a message saying where.
+never wraps: overflow and division by zero stop the program with a message saying where. A program can span
+several files: `use shapes/geometry` reads `shapes/geometry.vela`, named as `geometry.area(…)` (or brought in
+with `use shapes/geometry (area)`), and everything a file declares is public unless marked `priv`.
 
 ```
 task fib(n: int) -> int

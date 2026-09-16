@@ -4,18 +4,23 @@
 //! typed.
 //!
 //! It runs in two passes. The first finds the top-level declarations (tasks,
-//! shapes and their fields, kinds and their variants), which may be used
-//! before they are declared. The second walks the tokens in order, tracking
+//! shapes and their fields, kinds and their variants, and the modules `use`
+//! lines name), which may be used before they are declared. The declarations
+//! of each module the file uses are added then too, named as the file names
+//! them (`geometry.area`). The second walks the tokens in order, tracking
 //! blocks and the variables declared in them (parameters, `bind`/`hold`,
 //! `each`, the names `case` and `is` patterns bind, the error a plan B names,
 //! and regions), which are only visible after their declaration.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
+use std::path::Path;
 
 use serde::Serialize;
-use vela::ast::{BUILTIN_TASKS, Span, Type};
+use vela::ast::{BUILTIN_TASKS, MODULE_SEPARATOR, Span, Type};
 use vela::lexer::{ESCAPES, LexKind, LexToken, Token, highlight};
+
+use crate::types::{Context, slashed};
 
 /// What a highlighted piece of source is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -44,6 +49,8 @@ pub enum TokenClass {
     Punctuation,
     /// Text the compiler rejects.
     Invalid,
+    /// A module's name, and the folders of a `use` path.
+    Module,
 }
 
 /// What a declared name is.
@@ -62,6 +69,8 @@ pub enum SymbolKind {
     /// A region: declared by `region r`, taken as a parameter `r: region`, or
     /// only named in a task header's types (`@r`).
     Region,
+    /// A module the file uses, declared by its `use` line.
+    Module,
 }
 
 impl SymbolKind {
@@ -74,6 +83,7 @@ impl SymbolKind {
             SymbolKind::Parameter => TokenClass::Parameter,
             SymbolKind::Variable => TokenClass::Variable,
             SymbolKind::Region => TokenClass::Region,
+            SymbolKind::Module => TokenClass::Module,
         }
     }
 }
@@ -104,6 +114,22 @@ pub(crate) struct Symbol {
     /// The shape of a field, the kind of a variant, or the variant of a
     /// payload field.
     pub parent: Option<usize>,
+    /// The module it is declared in (an index into `Scan::modules`), for a
+    /// declaration of another file; its ranges are in that file.
+    pub module: Option<usize>,
+    /// Marked `priv`: a task, shape, kind, or field of its own file only.
+    pub private: bool,
+}
+
+/// A module the file uses.
+#[derive(Debug, Clone)]
+pub(crate) struct Module {
+    /// Its path, as the editor names files; empty when the file has no path.
+    pub path: String,
+    /// Its text, when the editor gave it.
+    pub source: Option<String>,
+    /// Its `use` line's symbol.
+    pub symbol: usize,
 }
 
 /// A classified piece of source.
@@ -121,17 +147,105 @@ pub(crate) struct Scan {
     pub symbols: Vec<Symbol>,
     /// In source order, without overlaps.
     pub tokens: Vec<Classified>,
+    /// The modules the file uses, in the order of its `use` lines.
+    pub modules: Vec<Module>,
+    /// The names `use m (a, b)` brings in, each with the declaration it names.
+    pub imports: HashMap<String, usize>,
 }
 
 /// `field_accesses` maps the (line, column) of a field name in `a.b` to the
-/// shape of `a`, when the checker knows it.
-pub(crate) fn scan(source: &str, field_accesses: &HashMap<(usize, usize), String>) -> Scan {
+/// shape of `a`, when the checker knows it. `context` gives the file's path
+/// and the other files it may use.
+pub(crate) fn scan(source: &str, field_accesses: &HashMap<(usize, usize), String>, context: Context) -> Scan {
     let lexed = highlight(source);
     let tokens = Tokens::new(source, &lexed);
-    let (symbols, declared_at) = declarations(&tokens);
-    let classified = Classifier::new(&tokens, symbols, declared_at, field_accesses).run();
+    let (mut symbols, declared_at, uses) = declarations(&tokens);
+    let (modules, imports) = used_modules(&mut symbols, &uses, context);
+    let classified = Classifier::new(&tokens, symbols, declared_at, field_accesses, imports.clone()).run();
     let (symbols, tokens) = classified;
-    Scan { lexed, symbols, tokens }
+    Scan { lexed, symbols, tokens, modules, imports }
+}
+
+/// A `use` line found by the first pass.
+struct UseLine {
+    /// The path as written: names and `..`.
+    parts: Vec<String>,
+    /// The module's symbol.
+    symbol: usize,
+    /// The names in parentheses.
+    names: Vec<String>,
+}
+
+/// Adds the declarations of each module in `uses` to `symbols`, named as this
+/// file names them (`geometry.area`, whose signature says `geometry.Point`),
+/// and returns the modules and the names brought in by name.
+fn used_modules(symbols: &mut Vec<Symbol>, uses: &[UseLine], context: Context) -> (Vec<Module>, HashMap<String, usize>) {
+    let folder = Path::new(context.path).parent().unwrap_or(Path::new(""));
+    let mut modules = Vec::new();
+    let mut imports = HashMap::new();
+    for line in uses {
+        let index = modules.len();
+        let path = slashed(&vela::modules::module_file(folder, &line.parts));
+        let source = context.sources.get(&path).cloned();
+        let name = line.parts.last().cloned().unwrap_or_default();
+        if let Some(source) = &source {
+            let lexed = highlight(source);
+            let tokens = Tokens::new(source, &lexed);
+            let (theirs, _, _) = declarations(&tokens);
+            let own_types: HashSet<String> =
+                theirs.iter().filter(|s| matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind)).map(|s| s.name.clone()).collect();
+            // Their own `use` lines aren't this file's modules; indices move past them.
+            let kept: Vec<usize> = (0..theirs.len()).filter(|&i| theirs.get(i).is_some_and(|s| s.kind != SymbolKind::Module)).collect();
+            let base = symbols.len();
+            for &i in &kept {
+                let Some(symbol) = theirs.get(i) else { continue };
+                let mut symbol = symbol.clone();
+                if matches!(symbol.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Variant) {
+                    symbol.name = format!("{}{}{}", name, MODULE_SEPARATOR, symbol.name);
+                }
+                symbol.detail = qualify_types(&symbol.detail, &name, &own_types);
+                symbol.parent = symbol.parent.and_then(|parent| kept.iter().position(|&k| k == parent)).map(|p| base + p);
+                symbol.module = Some(index);
+                symbols.push(symbol);
+            }
+        }
+        for written in &line.names {
+            let full = format!("{}{}{}", name, MODULE_SEPARATOR, written);
+            let found = symbols.iter().position(|s| {
+                s.module == Some(index) && s.name == full && !s.private && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Variant)
+            });
+            if let Some(id) = found {
+                imports.entry(written.clone()).or_insert(id);
+            }
+        }
+        modules.push(Module { path, source, symbol: line.symbol });
+    }
+    (modules, imports)
+}
+
+/// `text`, a declaration's detail written in module `module`, with the names
+/// of that module's shapes and kinds (`own_types`) qualified: `(p: Point)`
+/// becomes `(p: geometry.Point)`.
+fn qualify_types(text: &str, module: &str, own_types: &HashSet<String>) -> String {
+    let lexed = highlight(text);
+    let mut out = String::new();
+    let mut at = 0;
+    let significant: Vec<&LexToken> = lexed.iter().filter(|t| t.kind != LexKind::Comment).collect();
+    for (i, token) in significant.iter().enumerate() {
+        let LexKind::Token(Token::Ident(name)) = &token.kind else { continue };
+        let before = i.checked_sub(1).and_then(|b| significant.get(b)).map(|t| &t.kind);
+        let after = significant.get(i + 1).map(|t| &t.kind);
+        let names_type = own_types.contains(name)
+            && !matches!(before, Some(LexKind::Token(Token::Dot | Token::AtSign)))
+            && !matches!(after, Some(LexKind::Token(Token::Colon)));
+        if names_type {
+            out.push_str(text.get(at..token.range.start).unwrap_or_default());
+            out.push_str(&format!("{}{}{}", module, MODULE_SEPARATOR, name));
+            at = token.range.end;
+        }
+    }
+    out.push_str(text.get(at..).unwrap_or_default());
+    out
 }
 
 /// The token stream with comments set aside, so that patterns such as
@@ -234,11 +348,12 @@ enum Block {
     Inner,
 }
 
-/// First pass: top-level declarations. Returns the symbols and, for each
-/// declaring token, its symbol.
-fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>) {
+/// First pass: top-level declarations. Returns the symbols, for each
+/// declaring token its symbol, and the `use` lines.
+fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<UseLine>) {
     let mut symbols: Vec<Symbol> = Vec::new();
     let mut declared_at = HashMap::new();
+    let mut uses = Vec::new();
     let mut blocks: Vec<Block> = Vec::new();
     // The open task, shape, or kind, and the variant whose payload is open.
     let mut item: Option<usize> = None;
@@ -252,7 +367,8 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>) {
         let range = tokens.range(p);
         let start = tokens.get(p).map(|t| t.start).unwrap_or_default();
         let visible = 0..tokens.source.len();
-        symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro: None, detail, parent });
+        let private = tokens.before(p) == Some(&Token::Priv) || tokens.before(p.saturating_sub(1)) == Some(&Token::Priv);
+        symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro: None, detail, parent, module: None, private });
         declared_at.insert(p, symbols.len() - 1);
         symbols.len() - 1
     };
@@ -263,6 +379,34 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>) {
             continue;
         };
         match token {
+            // `use path/name (a, b)`: declares the module `name`.
+            Token::Use => {
+                let mut parts = Vec::new();
+                let mut names = Vec::new();
+                let mut alias = None;
+                let mut in_names = false;
+                let mut q = p + 1;
+                while let Some(part) = tokens.token(q) {
+                    match part {
+                        Token::Newline | Token::Eof => break,
+                        Token::LParen => in_names = true,
+                        Token::Ident(name) if in_names => names.push(name.clone()),
+                        Token::Ident(name) => {
+                            parts.push(name.clone());
+                            alias = Some(q);
+                        }
+                        Token::Range if !in_names => parts.push("..".to_string()),
+                        _ => {}
+                    }
+                    q += 1;
+                }
+                if let Some(alias) = alias.filter(|&a| tokens.token(a + 1) != Some(&Token::Slash)) {
+                    let written = tokens.text_after(p, never);
+                    let path = written.split('(').next().unwrap_or_default().trim().to_string();
+                    let symbol = declare(&mut symbols, alias, SymbolKind::Module, path, None);
+                    uses.push(UseLine { parts, symbol, names });
+                }
+            }
             // Items only appear at the top level, so a new one also closes
             // any item left open by half-typed code.
             Token::Task | Token::Shape | Token::Kind => {
@@ -298,7 +442,10 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>) {
             Token::RParen => parens = parens.saturating_sub(1),
             Token::Newline => parens = 0,
             Token::Ident(_) => match (blocks.as_slice(), item) {
-                ([Block::Shape], Some(shape)) if tokens.starts_line(p) && tokens.token(p + 1) == Some(&Token::Colon) => {
+                ([Block::Shape], Some(shape))
+                    if (tokens.starts_line(p) || (tokens.before(p) == Some(&Token::Priv) && tokens.starts_line(p - 1)))
+                        && tokens.token(p + 1) == Some(&Token::Colon) =>
+                {
                     let detail = tokens.text_after(p + 1, never);
                     declare(&mut symbols, p, SymbolKind::Field, detail, Some(shape));
                 }
@@ -325,7 +472,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>) {
     if let Some(open) = item {
         close(&mut symbols, open, last_end);
     }
-    (symbols, declared_at)
+    (symbols, declared_at, uses)
 }
 
 fn close(symbols: &mut [Symbol], id: usize, end: usize) {
@@ -366,8 +513,11 @@ struct Classifier<'a> {
     symbols: Vec<Symbol>,
     declared_at: HashMap<usize, usize>,
     field_accesses: &'a HashMap<(usize, usize), String>,
-    /// Tasks, shapes, kinds, and variants by name (the first, if repeated).
+    /// Tasks, shapes, kinds, variants, and modules by name (the first, if
+    /// repeated); another module's by their qualified names (`geometry.area`).
     globals: HashMap<String, usize>,
+    /// The names `use m (a, b)` brings in, with their declarations.
+    imports: HashMap<String, usize>,
     scopes: Vec<Scope>,
     out: Vec<Classified>,
 }
@@ -378,6 +528,7 @@ impl<'a> Classifier<'a> {
         symbols: Vec<Symbol>,
         declared_at: HashMap<usize, usize>,
         field_accesses: &'a HashMap<(usize, usize), String>,
+        imports: HashMap<String, usize>,
     ) -> Self {
         let mut globals = HashMap::new();
         for (id, symbol) in symbols.iter().enumerate() {
@@ -385,7 +536,7 @@ impl<'a> Classifier<'a> {
                 globals.entry(symbol.name.clone()).or_insert(id);
             }
         }
-        Classifier { tokens, symbols, declared_at, field_accesses, globals, scopes: Vec::new(), out: Vec::new() }
+        Classifier { tokens, symbols, declared_at, field_accesses, globals, imports, scopes: Vec::new(), out: Vec::new() }
     }
 
     fn run(mut self) -> (Vec<Symbol>, Vec<Classified>) {
@@ -410,6 +561,9 @@ impl<'a> Classifier<'a> {
         // In the names of a `bind` or `hold`, where each comma declares
         // another one.
         let mut declaring_list: Option<&'static str> = None;
+        // On a `use` line, and inside its parentheses of names.
+        let mut in_use = false;
+        let mut in_use_names = false;
         let mut braces: Vec<Brace> = Vec::new();
 
         let mut p = 0;
@@ -444,6 +598,8 @@ impl<'a> Classifier<'a> {
 
             match token {
                 Token::Newline => {
+                    in_use = false;
+                    in_use_names = false;
                     in_task_header = false;
                     in_pattern = false;
                     in_results = false;
@@ -455,6 +611,19 @@ impl<'a> Classifier<'a> {
                 Token::Eof => {}
                 Token::Int(_) | Token::Float(_) => self.push(range, TokenClass::Number, None),
                 Token::Text(_) => self.string(range),
+                Token::Ident(name) if in_use => {
+                    let (class, symbol) = match self.declared_at.get(&p) {
+                        Some(&id) => (TokenClass::Module, Some(id)),
+                        None if in_use_names => {
+                            let id = self.imports.get(name.as_str()).copied();
+                            let class = id.and_then(|id| self.symbols.get(id)).map_or(TokenClass::Variable, |s| s.kind.class());
+                            (class, id)
+                        }
+                        // A folder of the path.
+                        None => (TokenClass::Module, None),
+                    };
+                    self.push(range, class, symbol);
+                }
                 Token::Ident(name) => {
                     if let Some(type_follows) = region_now {
                         let symbol = self.region(p, name, in_task_header);
@@ -513,6 +682,12 @@ impl<'a> Classifier<'a> {
                 }
                 Token::LParen | Token::RParen | Token::LBracket | Token::RBracket | Token::Dot => {
                     self.push(range, TokenClass::Punctuation, None);
+                    match token {
+                        Token::LParen if in_use => in_use_names = true,
+                        // `geometry.Point`: a type goes on after the module's name.
+                        Token::Dot => in_type = was_type,
+                        _ => {}
+                    }
                 }
                 Token::Comma => {
                     self.push(range, TokenClass::Punctuation, None);
@@ -595,6 +770,7 @@ impl<'a> Classifier<'a> {
                         Token::At => region_next = Some(false),
                         // `region r` declares a region; `r: region` is a parameter's type.
                         Token::Region if !was_type => declaring = Some("region"),
+                        Token::Use => in_use = true,
                         _ => {}
                     }
                 }
@@ -622,6 +798,24 @@ impl<'a> Classifier<'a> {
         if let Some(&id) = self.declared_at.get(&p) {
             let kind = self.symbols.get(id).map_or(SymbolKind::Variable, |s| s.kind);
             return (kind.class(), Some(id));
+        }
+        // `geometry.area`: a module's name, then a name in it.
+        let at = tokens.range(p).start;
+        if after == Some(&Token::Dot)
+            && let Some(module) = self.module_named(name, at)
+        {
+            return (TokenClass::Module, Some(module));
+        }
+        if before == Some(&Token::Dot)
+            && let Some(module) = p.checked_sub(2).and_then(|q| tokens.ident(q))
+            && self.module_named(module, tokens.range(p - 2).start).is_some()
+        {
+            let full = format!("{}{}{}", module, MODULE_SEPARATOR, name);
+            return match self.globals.get(&full).and_then(|&id| self.symbols.get(id).map(|s| (id, s.kind))) {
+                Some((id, kind)) => (kind.class(), Some(id)),
+                None if in_type => (TokenClass::Type, None),
+                None => (TokenClass::Variable, None),
+            };
         }
         // A name being declared is one even where a type would be written,
         // as a result's name is (`-> total: int`).
@@ -791,7 +985,7 @@ impl<'a> Classifier<'a> {
             })
             .map_or(tokens.source.len(), |q| tokens.range(q).end);
         let visible = line_end..tokens.source.len();
-        self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None });
+        self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, module: None, private: false });
         let id = self.symbols.len() - 1;
         if let Some(scope) = self.scopes.last_mut() {
             scope.variables.push(id);
@@ -810,12 +1004,18 @@ impl<'a> Classifier<'a> {
             .find(|&id| self.symbols.get(id).is_some_and(|s| s.name == name && s.visible.start <= at))
     }
 
-    /// The top-level declaration called `name`, if it is one of `kinds`.
+    /// The top-level declaration called `name`, if it is one of `kinds`: one of
+    /// this file's, or one `use` brings in by name.
     fn global(&self, name: &str, kinds: &[SymbolKind]) -> Option<usize> {
-        self.globals
-            .get(name)
-            .copied()
+        let own = self.globals.get(name).copied().filter(|&id| self.symbols.get(id).is_some_and(|s| s.module.is_none()));
+        own.or_else(|| self.imports.get(name).copied())
             .filter(|&id| self.symbols.get(id).is_some_and(|s| kinds.contains(&s.kind)))
+    }
+
+    /// The module the file uses under `name`, unless a variable at byte `at`
+    /// has that name.
+    fn module_named(&self, name: &str, at: usize) -> Option<usize> {
+        self.global(name, &[SymbolKind::Module]).filter(|_| self.local(name, at).is_none())
     }
 
     /// A shape's field called `name`. Without a known shape, a field name that

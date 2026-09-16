@@ -1,0 +1,6 @@
+# error: 5:19: 'Vault' is private to module 'library'
+use modules/library
+
+task main()
+    bind v: maybe library.Vault = none
+fi

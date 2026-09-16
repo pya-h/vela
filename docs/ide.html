@@ -337,8 +337,17 @@ Press Ctrl+C to stop.</pre>
       <div class="cards">
         <div class="card">
           <h4>Highlighting that knows names</h4>
-          <p>Tasks, shapes and kinds, variants, parameters, variables, fields, and regions each get their own color,
-            even in a half-typed line.</p>
+          <p>Tasks, shapes and kinds, variants, parameters, variables, fields, regions, and modules each get their own
+            color, even in a half-typed line.</p>
+        </div>
+        <div class="card">
+          <h4>Programs in several files</h4>
+          <p>A file's <code>use</code> lines are followed into the files they name, as you type: <code>geometry.area</code>
+            is colored as a task, hovers with its signature and module, and jumps into <code>geometry.vela</code> with
+            <kbd>F12</kbd>; completion after <code>geometry.</code> and inside <code>use … (</code> offers what the
+            module declares, without its <code>priv</code> names; and an error in a module, even one not saved yet, is
+            shown at the <code>use</code> that leads to it, with the module's file and line. An open file counts as
+            edited; any other is read from the workspace.</p>
         </div>
         <div class="card">
           <h4>Errors as you type</h4>
@@ -360,7 +369,8 @@ Press Ctrl+C to stop.</pre>
             of <code>bind q, r = …</code>, and each of those names hovers with the type of the value in its place.
             A task's named results (<code>-&gt; total: int</code>) are offered at the start of a line as
             <code>total &lt;- </code>, and hover as <code>result total: int</code>. After <code>match</code>, only <code>case</code>; <code>new</code> only where a region can
-            be allocated in.</p>
+            be allocated in; <code>use</code> only above a file's tasks, shapes, and kinds; and <code>priv</code> before
+            those and a shape's fields.</p>
         </div>
         <div class="card">
           <h4>Snippets</h4>
@@ -405,16 +415,18 @@ Press Ctrl+C to stop.</pre>
 
       <h3>Running</h3>
       <ul>
-        <li><kbd>F5</kbd> (or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>) saves the current <code>.vela</code> file, builds it,
-          and runs it in the <strong>Output</strong> tab. A program is one file, so only that file is saved. Output is
-          a real terminal: colors work, and what you type goes to the program.</li>
+        <li><kbd>F5</kbd> (or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>) saves every file with changes (a program may use any
+          of them as a module), builds the current <code>.vela</code> file, and runs it in the <strong>Output</strong>
+          tab. Output is a real terminal: colors work, and what you type goes to the program.</li>
         <li>The run ends with a summary line, <code>── exited with code 0 · 3 ms ──</code>, and the status bar keeps
           the result. <kbd>Shift</kbd>+<kbd>F5</kbd> or the Stop button ends a program; running again replaces the
           one that is running, even when the new build fails.</li>
         <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> builds without running.</li>
         <li><strong>When a build fails,</strong> a Vela error (or a missing <code>task main()</code>) opens
-          <strong>Problems</strong>, where clicking it selects the spot; a failure of the C compiler opens Output with
-          its message. A build error stays listed until that file builds again.</li>
+          <strong>Problems</strong>, where clicking it selects the spot (an error in a module is listed under the
+          module's file); a failure of the C compiler opens Output with its message. A build error stays listed until
+          that file builds again. A program's modules are read from the workspace only, so a <code>use</code> can't
+          read a file outside it.</li>
         <li>Builds happen in a temporary folder that is removed afterwards. Running never writes into your
           folder.</li>
       </ul>
@@ -606,7 +618,8 @@ Press Ctrl+C to stop.</pre>
       <p>Vela Studio lives in <code>ide/</code>, separate from the compiler, as members of the repository's Cargo workspace:</p>
       <ul>
         <li><code>ide/analysis</code> (<code>vela-analysis</code>): highlighting classes, diagnostics, outline,
-          definitions, completion, and hover, built on the compiler's library. Pure Rust, no I/O.</li>
+          definitions, completion, and hover, built on the compiler's library. Pure Rust, no I/O: the page gives it
+          the text of the modules a file uses, and it says which it still needs.</li>
         <li><code>ide/wasm</code> (<code>vela-analysis-wasm</code>): that engine compiled to WebAssembly for the page,
           behind a small JSON interface.</li>
         <li><code>ide/server</code> (<code>vela-studio</code>): the local server for files, builds, runs, and

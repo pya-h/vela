@@ -178,8 +178,8 @@
     show(<span class="string">"Hello, Vela!"</span>)
 <span class="keyword">fi</span></pre>
       <p>
-        A program is one <code>.vela</code> file. Compile and run it with (the output is <code>a.out</code> unless
-        <code>-o</code> names it):
+        A program is a <code>.vela</code> file, with any files it uses (see <a href="#modules">Modules</a>). Compile and
+        run it with (the output is <code>a.out</code> unless <code>-o</code> names it):
       </p>
       <pre>cargo run -- examples/hello.vela -o examples/hello
 ./examples/hello</pre>
@@ -188,8 +188,9 @@
         (kinds and <code>match</code>), <code>todo.vela</code> (a linked list in a region, with <code>maybe</code>
         pointers, <code>is</code>, and a plan B), <code>errors.vela</code> (<code>T or E</code>, <code>fail</code>, and handling
         errors with <code>match</code>, <code>is</code>, and a plan B), <code>regions.vela</code> (a tree in a region, a region
-        per loop pass, and copying a result into a longer-lived region), and <code>demo.vela</code> (tasks, shapes,
-        pointers, and control flow).
+        per loop pass, and copying a result into a longer-lived region), <code>shop.vela</code> (a program in three
+        files, with <code>use</code> and <code>priv</code>), and <code>demo.vela</code> (tasks, shapes, pointers, and
+        control flow).
       </p>
       <div class="note">
         Prefer an editor? <a href="ide.html">Vela Studio</a> highlights Vela, shows errors as you type, completes
@@ -233,7 +234,7 @@
       <p>These words can't be used as names:</p>
       <pre>task shape kind  bind hold  when   else loop each
 in   at    match case new   region and  or   not
-true false none  fi   maybe is     fail</pre>
+true false none  fi   maybe is     fail use  priv</pre>
       <p>
         <code>show</code> and the builtin types (<code>int</code>, <code>float</code>, <code>bool</code>,
         <code>text</code>, <code>unit</code>) aren't reserved words: no task, shape, kind, or variant can take their
@@ -251,6 +252,7 @@ true false none  fi   maybe is     fail</pre>
         <tr><td><code>value { … }</code></td><td>a plan B: the value inside a <code>maybe</code> or <code>T or E</code>, or else what the block gives</td></tr>
         <tr><td><code>{v}</code>, <code>_</code></td><td>in a <code>case</code> or <code>is</code>: the value inside, and anything (or a value left unnamed); <code>_</code> also drops a result</td></tr>
         <tr><td><code>a.x</code></td><td>a field of a shape value</td></tr>
+        <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, or variant of module <code>m</code>; a folder in a <code>use</code> path (see <a href="#modules">Modules</a>)</td></tr>
         <tr><td><code>Name { x: 1 }</code></td><td>a shape literal</td></tr>
         <tr><td><code>0..5</code></td><td>a range, in <code>each</code></td></tr>
         <tr><td><code>=</code></td><td>assignment, and the value of a binding</td></tr>
@@ -620,11 +622,12 @@ p.x = 5                    <span class="comment"># error: cannot assign to a fie
         in Vela.
       </p>
       <p>
-        Tasks, shapes, kinds, and variants share one namespace: no two of them can have the same name, even across
-        different kinds, and none can be named like a builtin (<code>int</code>, <code>float</code>,
-        <code>bool</code>, <code>text</code>, <code>unit</code>, <code>show</code>). Every type you write must be a
-        builtin, a shape, or a kind. A variable can't take a variant's name, so a bare <code>Red</code> always
-        means the variant.
+        Tasks, shapes, kinds, and variants share one namespace in a file: no two of them can have the same name, even
+        across different kinds, and none can be named like a builtin (<code>int</code>, <code>float</code>,
+        <code>bool</code>, <code>text</code>, <code>unit</code>, <code>show</code>). Another module has names of its own
+        (see <a href="#modules">Modules</a>). Every type you write must be a builtin, a shape, or a kind. A variable
+        can't take the name of a variant or of a module the file uses, so a bare <code>Red</code> always means the
+        variant.
       </p>
 
       <h3 id="control-flow">Control Flow</h3>
@@ -1004,6 +1007,96 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
     </section>
 
     <section>
+      <h2 id="modules">Modules</h2>
+      <p>
+        A program can be split into several files. Each file is a <em>module</em>, and a file uses another with
+        <code>use</code>, naming its path without <code>.vela</code>. What the other file declares is then named through
+        the module's name, the path's last part:
+      </p>
+      <pre><span class="comment"># main.vela</span>
+<span class="keyword">use</span> shapes/geometry
+<span class="keyword">use</span> shapes/palette (Color, describe)
+
+<span class="keyword">task</span> main()
+    <span class="keyword">bind</span> square = geometry.Square(3.0)
+    show(geometry.area(square))              <span class="comment"># 9</span>
+    <span class="keyword">bind</span> corner: geometry.Point = geometry.Point { x: 3.0, y: 4.0 }
+    show(corner.x)                           <span class="comment"># 3</span>
+    <span class="keyword">match</span> square                             <span class="comment"># a case names the variant alone</span>
+    <span class="keyword">case</span> Square side
+        show(side)                           <span class="comment"># 3</span>
+    <span class="keyword">case</span> Circle radius
+        show(radius)
+    <span class="keyword">fi</span>
+    <span class="keyword">bind</span> red: Color = palette.Red           <span class="comment"># Color came in by name</span>
+    show(describe(red))                      <span class="comment"># red</span>
+<span class="keyword">fi</span>
+
+<span class="comment"># shapes/geometry.vela</span>
+<span class="keyword">shape</span> Point
+    x: float
+    y: float
+<span class="keyword">fi</span>
+
+<span class="keyword">kind</span> Figure
+    Circle(radius: float)
+    Square(side: float)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> area(figure: Figure) -&gt; float
+    <span class="keyword">match</span> figure
+    <span class="keyword">case</span> Circle radius
+        <span class="keyword">&lt;-</span> pi() * radius * radius
+    <span class="keyword">case</span> Square side
+        <span class="keyword">&lt;-</span> side * side
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">priv</span> <span class="keyword">task</span> pi() -&gt; float                <span class="comment"># only geometry.vela can call it</span>
+    <span class="keyword">&lt;-</span> 3.14159
+<span class="keyword">fi</span></pre>
+      <ul>
+        <li><strong>Where.</strong> <code>use</code> lines come first in a file, before any task, shape, or kind. A path
+          is relative to the folder of the file that has the <code>use</code>: <code>use geometry</code> reads
+          <code>geometry.vela</code> next to it, <code>use shapes/geometry</code> reads it from the folder
+          <code>shapes</code>, and <code>..</code> goes up one folder (<code>use ../common/text</code>). The command is
+          the same as for one file: <code>vela main.vela -o program</code> reads every file the program uses, and an
+          error in any of them names that file.</li>
+        <li><strong>Names.</strong> <code>geometry.area(…)</code> calls a task, <code>geometry.Point { … }</code> builds a
+          shape, <code>geometry.Square(3.0)</code> and <code>geometry.Dot</code> make variants, and
+          <code>geometry.Point</code> is a type anywhere a type is written (<code>^geometry.Node@r</code>,
+          <code>maybe geometry.Point</code>, <code>new geometry.Point(p) at r</code>). A <code>case</code> or
+          <code>is</code> names a variant alone, as in <code>case Square side</code>, since the value's kind already says
+          which module it is from. Messages name another module's types the same way, as in <em>expected type
+          geometry.Point, got int</em>.</li>
+        <li><strong>Bringing names in.</strong> <code>use shapes/palette (Color, describe)</code> also lets the file write
+          <code>Color</code> and <code>describe</code> without <code>palette.</code>, which still works too. Each name
+          listed must exist in the module, and a kind's variants come in only when listed themselves.</li>
+        <li><strong>Private.</strong> Everything a file declares can be used by the files that use it, unless it is
+          marked <code>priv</code>: a task, shape, or kind (whose variants are then private too), or a shape's field.
+          Another file can't read or assign a private field, or build its shape with a literal, so a module can keep
+          a value's invariants to itself through its tasks. What other files see of a public task (its parameters and
+          results), a public shape (its public fields), or a public kind (its variants' values) can't mention a
+          private type, since they couldn't name it.</li>
+        <li><strong>Each module's own names.</strong> Tasks, shapes, kinds, and variants share one namespace within a
+          file, but each module has its own: two modules can both have an <code>area</code>, and a program can have its
+          own <code>Red</code> beside <code>palette.Red</code>. A module sees only what it declares and what it uses; the
+          main file's names aren't visible to the modules it uses.</li>
+        <li><strong>Rules.</strong> Modules can't use one another in a circle (<em>modules can't use one another in a
+          circle: a -&gt; b -&gt; a</em>). A file uses each module once, a module's name can't also be the name of
+          something the file declares, of a name it brings in, or of a variable, and a module can't be named like a
+          builtin type or task. Two modules of one program can't have the same name, even in different folders.</li>
+      </ul>
+      <pre><span class="comment"># in main.vela, after use shapes/geometry</span>
+show(geometry.pi())            <span class="comment"># error: 'pi' is private to module 'geometry'</span>
+show(area(square))             <span class="comment"># error: unknown task 'area'; module 'geometry' has one: write 'geometry.area', …</span></pre>
+      <p>
+        <code>examples/shop.vela</code> is a program in three files. In the generated C, a module's names are
+        prefixed with it (<code>vela_geometry__0__area</code>), so every module's names stay apart.
+      </p>
+    </section>
+
+    <section>
       <h2>Complete Example</h2>
       <pre><span class="keyword">task</span> fib(n: int) -&gt; int
     <span class="keyword">when</span> n &lt; 2
@@ -1029,7 +1122,9 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
           <a href="#regions">Memory and Regions</a>).</li>
         <li><code>text</code> is a C string, so a <code>\0</code> ends it; there are no text operations besides
           <code>==</code>, <code>!=</code>, and <code>show</code>.</li>
-        <li>There are no arrays, no modules (a program is one file), and no way to read input.</li>
+        <li>There are no arrays and no way to read input.</li>
+        <li>Two modules of one program can't have the same name, and a module can't be used under another name
+          (see <a href="#modules">Modules</a>). There are no packages to share modules between programs.</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which
           matters only when they call tasks that print, or when more than one of them would stop the program
@@ -1059,7 +1154,8 @@ CC=clang ./target/debug/vela program.vela -o program</pre>
         with <code>-o</code>, writes it to that file; a program without <code>main</code> is allowed here), <code>--check</code>
         only checks the program (everything a build checks before running the C compiler, including that it has a
         <code>main</code>), <code>-h</code>/<code>--help</code> prints the usage, and <code>--version</code> prints the
-        compiler's version. A file name starting with <code>-</code> goes after <code>--</code>. The exit status is 0 on
+        compiler's version. The files the program uses are read from the disk, next to it (see
+        <a href="#modules">Modules</a>). A file name starting with <code>-</code> goes after <code>--</code>. The exit status is 0 on
         success, 1 when the program can't be read or doesn't compile (in Vela or in C), and 2 for wrong arguments.
       </p>
       <pre>./target/debug/vela program.vela --emit-c -o program.c

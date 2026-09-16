@@ -227,11 +227,13 @@ fn nothing_is_offered_in_comments_text_or_new_names() {
         "task f(@@".to_string(),
         "task f(a: int, @@".to_string(),
         "kind K\n    V(@@".to_string(),
-        "shape S\n    @@".to_string(),
+        "shape S\n    x: int\n    priv @@".to_string(),
         in_main("each @@"),
     ] {
         assert_eq!(labels(&marked), Vec::<String>::new(), "at {:?}", marked);
     }
+    // A field's name is new, but it may be private.
+    assert_eq!(labels("shape S\n    @@"), ["priv"]);
 }
 
 /// The hover at the `nth` occurrence of `needle` (offset `shift` into it).

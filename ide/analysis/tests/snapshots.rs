@@ -7,6 +7,7 @@
 // A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
+use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -27,9 +28,23 @@ fn vela_files(dir: &str) -> Vec<PathBuf> {
     files
 }
 
-/// Each source line, followed by its tokens as `class:text`.
-fn render(source: &str) -> String {
-    let analysis = Analysis::new(source);
+/// Each source line, followed by its tokens as `class:text`. `path` is the
+/// file's path from the repository's root; the modules it uses are read from
+/// there, as the editor fetches them.
+fn render(path: &str, source: &str) -> String {
+    let mut sources = HashMap::new();
+    loop {
+        let missing = Analysis::with_modules(source, path, &sources).missing_modules();
+        let unread: Vec<String> = missing.into_iter().filter(|m| !sources.contains_key(m)).collect();
+        if unread.is_empty() {
+            break;
+        }
+        for module in unread {
+            let text = fs::read_to_string(root().join(&module)).unwrap_or_default();
+            sources.insert(module, text);
+        }
+    }
+    let analysis = Analysis::with_modules(source, path, &sources);
     let index = LineIndex::new(source);
     let tokens = analysis.tokens();
     let mut out = String::new();
@@ -63,7 +78,8 @@ fn token_classes_match_snapshots() {
             let source = fs::read_to_string(&file).unwrap();
             let name = format!("{}-{}.txt", dir.replace('/', "-"), file.file_stem().unwrap().to_string_lossy());
             let snapshot = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots").join(&name);
-            let actual = render(&source);
+            let path = format!("{}/{}", dir, file.file_name().unwrap().to_string_lossy());
+            let actual = render(&path, &source);
             if update {
                 fs::write(&snapshot, &actual).unwrap();
             } else if fs::read_to_string(&snapshot).ok().as_deref() != Some(actual.as_str()) {

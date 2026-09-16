@@ -1,0 +1,9 @@
+# error: 2:22: 'greet' is brought in here, but this file also defines a task with that name at 4:6
+use modules/library (greet)
+
+task greet() -> text
+    <- "hey"
+fi
+
+task main()
+fi

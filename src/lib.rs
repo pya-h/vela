@@ -4,4 +4,5 @@ pub mod codegen;
 pub mod driver;
 pub mod error;
 pub mod lexer;
+pub mod modules;
 pub mod parser;

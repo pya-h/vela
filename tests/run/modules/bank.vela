@@ -1,0 +1,39 @@
+# An account whose balance only this file can touch, for tests/run/modules.vela.
+
+kind Problem
+    TooLittle(missing: int)
+fi
+
+shape Account
+    owner: text
+    priv balance: int
+fi
+
+task open(owner: text, amount: int) -> Account
+    <- Account { owner: owner, balance: amount }
+fi
+
+task deposit(account: Account, amount: int) -> Account
+    <- Account { owner: account.owner, balance: account.balance + amount }
+fi
+
+task withdraw(account: Account, amount: int) -> Account or Problem
+    when amount > account.balance
+        <- fail TooLittle(amount - account.balance)
+    fi
+    <- Account { owner: account.owner, balance: account.balance - amount }
+fi
+
+task balance(account: Account) -> int
+    <- account.balance
+fi
+
+task explain(problem: Problem) -> text
+    match problem
+    case TooLittle missing
+        when missing > 100
+            <- "far short"
+        fi
+        <- "short"
+    fi
+fi

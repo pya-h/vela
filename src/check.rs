@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
 use crate::error::{Error, Result};
+use crate::modules::{ModuleScope, Program};
 
 #[derive(Clone)]
 struct VariantInfo {
@@ -50,8 +51,17 @@ pub struct Checker {
     /// The shapes and kinds that hold pointers, directly or in other shapes and
     /// kinds, so their values live in a region.
     regional: HashSet<String>,
-    /// Every variant, by tag. Tags are unique across all kinds.
+    /// Every variant, by its name in the program: its tag, qualified with its
+    /// kind's module outside the main file (`geometry.Circle`). Tags are unique
+    /// across the kinds of a module.
     variants: HashMap<String, VariantInfo>,
+    /// Each module of the program, by name; the main file's is empty.
+    modules: HashMap<String, ModuleScope>,
+    /// The tasks, shapes, kinds, and variants marked `priv` (a variant through
+    /// its kind), by their names in the program.
+    private: HashSet<String>,
+    /// The module whose code is being checked.
+    current_module: String,
     scopes: Vec<HashMap<String, VarInfo>>,
     current_ret: Option<Type>,
     /// The names of the current task's results, in order, when it names them.
@@ -76,13 +86,70 @@ impl Checker {
         Checker { type_places, ..Self::default() }
     }
 
+    /// Checks a program loaded with `modules::load`, and annotates its items.
+    pub fn check_program(program: &mut Program) -> Result<()> {
+        let mut checker = Checker::with_type_places(std::mem::take(&mut program.type_places));
+        checker.modules = program.modules.iter().map(|scope| (scope.name.clone(), scope.clone())).collect();
+        let result = checker.check_file(&mut program.items);
+        program.type_places = checker.type_places;
+        result
+    }
+
+    /// Whether a task, shape, kind, or variant name written in the current
+    /// module can name the declaration called `name` in the program. The
+    /// resolver has given every name a module's code can use its full name, so a
+    /// name without a module is one of the main file's only in the main file.
+    fn sees(&self, name: &str) -> bool {
+        self.current_module.is_empty() || name.contains(MODULE_SEPARATOR)
+    }
+
+    /// The program's name for `name` written unqualified in the current module:
+    /// what `use` brings in under it, or else a name of the module itself.
+    fn in_module(&self, name: &str) -> String {
+        if let Some(full) = self.modules.get(&self.current_module).and_then(|scope| scope.imported(name)) {
+            return full.to_string();
+        }
+        qualify(&self.current_module, name)
+    }
+
+    /// The program's name for a task, shape, kind, or variant name written in
+    /// the current module: itself when qualified, and `in_module` otherwise.
+    fn full_name(&self, name: &str) -> String {
+        if name.contains(MODULE_SEPARATOR) { name.to_string() } else { self.in_module(name) }
+    }
+
+    /// The variant `name`, written unqualified in the current module, stands for.
+    fn variant_in_scope(&self, name: &str) -> Option<&VariantInfo> {
+        self.variants.get(&self.in_module(name))
+    }
+
+    /// A hint for a name written in the current module that names nothing
+    /// here, but that a module it uses declares: `; it is in module 'm', as 'm.name'`.
+    fn elsewhere(&self, name: &str) -> String {
+        let Some(scope) = self.modules.get(&self.current_module) else { return String::new() };
+        let declared = |full: &str| {
+            !self.private.contains(full) && (self.tasks.contains_key(full) || self.shapes.contains_key(full) || self.kinds.contains_key(full) || self.variants.contains_key(full))
+        };
+        match scope.uses.iter().find(|(module, _)| declared(&qualify(module, name))) {
+            Some((module, _)) => format!("; module '{0}' has one: write '{0}.{1}', or bring it in with 'use … ({1})'", module, name),
+            None => String::new(),
+        }
+    }
+
+    /// Where the current module uses the module called `name`, if it does.
+    fn module_used(&self, name: &str) -> Option<Span> {
+        let scope = self.modules.get(&self.current_module)?;
+        scope.uses.iter().find(|(used, _)| used == name).map(|(_, at)| *at)
+    }
+
     /// Where `part` (see `TypePlaces`) is in the type written at `span`, or
     /// `span` itself if it isn't known.
     fn place(&self, span: Span, part: &str) -> Span {
-        self.type_places
-            .get(&(span.line, span.col))
-            .and_then(|parts| parts.iter().find(|(name, _)| name == part))
-            .map_or(span, |(_, at)| *at)
+        let parts = self.type_places.get(&span.place_key());
+        // A shape or kind of another module may be written without its module,
+        // as in its own file or after `use m (Name)`.
+        let found = |part: &str| parts.and_then(|parts| parts.iter().find(|(name, _)| name == part)).map(|(_, at)| *at);
+        found(part).or_else(|| found(unqualified(part))).unwrap_or(span)
     }
 
     pub fn check_file(&mut self, items: &mut [Item]) -> Result<()> {
@@ -91,9 +158,11 @@ impl Checker {
         self.check_declarations(items)?;
         for item in items.iter_mut() {
             if let Item::Task(t) = item {
+                self.current_module = module_of(&t.name).to_string();
                 self.check_task(t)?;
             }
         }
+        self.current_module.clear();
         Ok(())
     }
 
@@ -104,19 +173,36 @@ impl Checker {
         let mut names: HashMap<String, Span> = HashMap::new();
         let mut declare = |name: &str, span: Span| -> Result<()> {
             // No declaration may take the name of a builtin type or task.
-            if Type::builtin(name).is_some() {
-                return err(span, format!("'{}' is a builtin type and cannot be redefined", name));
+            let written = unqualified(name);
+            if Type::builtin(written).is_some() {
+                return err(span, format!("'{}' is a builtin type and cannot be redefined", written));
             }
-            if BUILTIN_TASKS.contains(&name) {
-                return err(span, format!("'{}' is a builtin task and cannot be redefined", name));
+            if BUILTIN_TASKS.contains(&written) {
+                return err(span, format!("'{}' is a builtin task and cannot be redefined", written));
             }
             if let Some(at) = names.get(name) {
-                return err(span, format!("'{}' is already defined at {}:{}", name, at.line, at.col));
+                return err(span, format!("'{}' is already defined at {}:{}", written, at.line, at.col));
             }
             names.insert(name.to_string(), span);
             Ok(())
         };
         for item in items {
+            let private = match item {
+                Item::Task(t) => t.private,
+                Item::Shape(s) => s.private,
+                Item::Kind(k) => k.private,
+            };
+            if private {
+                let name = match item {
+                    Item::Task(t) => &t.name,
+                    Item::Shape(s) => &s.name,
+                    Item::Kind(k) => &k.name,
+                };
+                self.private.insert(name.clone());
+                if let Item::Kind(k) = item {
+                    self.private.extend(k.variants.iter().map(|v| qualify(module_of(&k.name), &v.tag)));
+                }
+            }
             match item {
                 Item::Shape(s) => {
                     declare(&s.name, s.span)?;
@@ -125,9 +211,10 @@ impl Checker {
                 Item::Kind(k) => {
                     declare(&k.name, k.span)?;
                     for v in &k.variants {
-                        declare(&v.tag, v.span)?;
+                        let full = qualify(module_of(&k.name), &v.tag);
+                        declare(&full, v.span)?;
                         let info = VariantInfo { kind: k.name.clone(), variant: v.clone() };
-                        self.variants.insert(v.tag.clone(), info);
+                        self.variants.insert(full, info);
                     }
                     self.kinds.insert(k.name.clone(), k.clone());
                 }
@@ -146,6 +233,13 @@ impl Checker {
     /// A task's header gets its types with regions settled (see `resolve_type`).
     fn check_declarations(&mut self, items: &mut [Item]) -> Result<()> {
         for item in items.iter_mut() {
+            let name = match item {
+                Item::Task(t) => &t.name,
+                Item::Shape(s) => &s.name,
+                Item::Kind(k) => &k.name,
+            };
+            self.current_module = module_of(name).to_string();
+            self.check_private_types(item)?;
             match item {
                 Item::Shape(s) => self.check_fields(&s.fields)?,
                 Item::Kind(k) => {
@@ -178,7 +272,37 @@ impl Checker {
             };
             self.check_value_cycle(name, &mut acyclic)?;
         }
+        self.current_module.clear();
         self.check_constructible(items)
+    }
+
+    /// Rejects a private type in what other files see of a public item: a
+    /// task's parameters and results, a shape's public fields, and a kind's
+    /// payloads. Code using the item couldn't name the type.
+    fn check_private_types(&self, item: &Item) -> Result<()> {
+        let (private, what, name, fields): (bool, &str, &str, Vec<&Field>) = match item {
+            Item::Task(t) => (t.private, "task", &t.name, t.params.iter().collect()),
+            Item::Shape(s) => (s.private, "shape", &s.name, s.fields.iter().filter(|f| !f.private).collect()),
+            Item::Kind(k) => (k.private, "kind", &k.name, k.variants.iter().flat_map(|v| &v.payload).collect()),
+        };
+        if private {
+            return Ok(());
+        }
+        let mut written: Vec<(&Type, Span)> = fields.iter().map(|f| (&f.ty, f.ty_span)).collect();
+        if let Item::Task(t) = item {
+            written.extend(t.ret.results().iter().enumerate().map(|(i, ty)| (ty, t.result_span(i))));
+        }
+        for (ty, span) in written {
+            let hidden = named_types(ty).into_iter().find(|n| self.shapes.get(*n).is_some_and(|s| s.private) || self.kinds.get(*n).is_some_and(|k| k.private));
+            if let Some(hidden) = hidden {
+                let fix = if matches!(item, Item::Shape(_)) { "make the field 'priv' too, or the type public" } else { "make it 'priv' too, or the type public" };
+                return err(
+                    self.place(span, hidden),
+                    format!("{} '{}' is public, but '{}' is private to its file, so other files couldn't name it; {}", what, unqualified(name), unqualified(hidden), fix),
+                );
+            }
+        }
+        Ok(())
     }
 
     /// Checks a shape's fields or a variant's payload.
@@ -387,8 +511,8 @@ impl Checker {
                 }
                 Ok(())
             }
-            Type::Named(name, _) if !self.shapes.contains_key(name) && !self.kinds.contains_key(name) => {
-                err(self.place(span, name), format!("unknown type '{}'", name))
+            Type::Named(name, _) if !self.sees(name) || (!self.shapes.contains_key(name) && !self.kinds.contains_key(name)) => {
+                err(self.place(span, name), format!("unknown type '{}'{}", name, self.elsewhere(name)))
             }
             _ => Ok(()),
         }
@@ -596,9 +720,13 @@ impl Checker {
     /// (Sibling blocks may reuse names, since neither is visible to the other.)
     fn define(&mut self, name: &str, ty: Type, mutable: bool, span: Span) -> Result<()> {
         // A variable named like a variant would make a bare `Empty` ambiguous.
-        if let Some(info) = self.variants.get(name) {
+        if let Some(info) = self.variant_in_scope(name) {
             let at = info.variant.span;
             return err(span, format!("'{}' is already defined at {}:{}", name, at.line, at.col));
+        }
+        // Nor may it take a module's name, which `name.x` would read as.
+        if let Some(at) = self.module_used(name) {
+            return err(span, format!("'{}' is the name of a module this file uses, at {}:{}", name, at.line, at.col));
         }
         if let Some(existing) = self.lookup(name) {
             let at = existing.span;
@@ -660,9 +788,11 @@ impl Checker {
             return err(span, format!("'{0}' is a region, not a value; allocate in it with 'new T(…) at {0}'", name));
         }
         self.lookup(name).ok_or_else(|| {
-            if self.variants.contains_key(name) {
+            if self.sees(name) && self.variants.contains_key(name) {
                 Error::at(span, format!("'{}' is a variant, not a variable", name))
-            } else if let Some(shape) = self.shapes.get(name) {
+            } else if self.module_used(name).is_some() {
+                Error::at(span, format!("'{0}' is a module, not a variable; name something in it, as in '{0}.name'", name))
+            } else if let Some(shape) = self.shapes.get(&self.full_name(name)) {
                 // Most likely a shape literal the parser read as a plan B.
                 let example = match shape.fields.first() {
                     Some(field) => format!("{} {{ {}: … }}", name, field.name),
@@ -670,7 +800,7 @@ impl Checker {
                 };
                 Error::at(span, format!("'{}' is a shape, not a variable; a literal names its fields on one line, as in '{}'", name, example))
             } else {
-                Error::at(span, format!("unknown variable '{}'", name))
+                Error::at(span, format!("unknown variable '{}'{}", name, self.elsewhere(name)))
             }
         })
     }
@@ -897,7 +1027,7 @@ impl Checker {
         let bound = |(name, at): &Binding, ty: &Type| vec![(name.clone(), *at, ty.clone())];
         // `fail TooBig` or `{Red}`: a pattern names the whole error or value.
         if let PatternKind::Value((name, at)) | PatternKind::Fail((name, at)) = &pattern.kind
-            && self.variants.contains_key(name)
+            && self.variant_in_scope(name).is_some()
         {
             let (keyword, whole) = if matches!(pattern.kind, PatternKind::Fail(_)) { ("fail e", "error") } else { ("{value}", "value") };
             return err(*at, format!("'{}' is a variant, but '{}' names the whole {}; give it a name, then match on it", name, keyword, whole));
@@ -916,7 +1046,7 @@ impl Checker {
                 Ok(binds.iter().zip(&variant.payload).map(|((name, at), field)| (name.clone(), *at, self.field_in(&field.ty, region))).collect())
             }
             (PatternKind::Variant { tag, .. }, other) => {
-                if self.variants.contains_key(tag) {
+                if self.variant_in_scope(tag).is_some() {
                     err(span, format!("'{}' is a variant, but this value is {}", tag, other))
                 } else {
                     err(span, format!("unknown variant '{}'", tag))
@@ -1159,14 +1289,12 @@ impl Checker {
     /// into a `Construct` node. Variables can't share a variant's name, so a
     /// bare name is never ambiguous.
     fn resolve_constructor(&self, expr: &mut Expr) {
-        let variant_kind = |tag: &str| self.variants.get(tag).map(|info| info.kind.clone());
+        let variant = |name: &str| {
+            self.variants.get(name).filter(|_| self.sees(name)).map(|info| (info.kind.clone(), info.variant.tag.clone()))
+        };
         let resolved = match &mut expr.kind {
-            ExprKind::Var(name) if self.lookup(name).is_none() => {
-                variant_kind(name).map(|kind| (kind, std::mem::take(name), Vec::new()))
-            }
-            ExprKind::Call(name, args) => {
-                variant_kind(name).map(|kind| (kind, std::mem::take(name), std::mem::take(args)))
-            }
+            ExprKind::Var(name) if self.lookup(name).is_none() => variant(name).map(|(kind, tag)| (kind, tag, Vec::new())),
+            ExprKind::Call(name, args) => variant(name).map(|(kind, tag)| (kind, tag, std::mem::take(args))),
             _ => None,
         };
         if let Some((kind, tag, args)) = resolved {
@@ -1178,7 +1306,7 @@ impl Checker {
     /// than a shape: the parser reads both as a shape literal.
     fn resolve_empty_plan_b(&self, expr: &mut Expr) {
         let ExprKind::StructInit(name, fields) = &mut expr.kind else { return };
-        if !fields.is_empty() || self.shapes.contains_key(name.as_str()) || self.lookup(name).is_none() {
+        if !fields.is_empty() || (self.sees(name) && self.shapes.contains_key(name.as_str())) || self.lookup(name).is_none() {
             return;
         }
         let value = Expr::new(ExprKind::Var(std::mem::take(name)), expr.span);
@@ -1228,13 +1356,14 @@ impl Checker {
                     }
                     return Ok(Type::Unit);
                 }
-                let (params, ret) = self.tasks.get(name.as_str())
+                let (params, ret) = self.tasks.get(name.as_str()).filter(|_| self.sees(name))
                     .ok_or_else(|| {
                         // `send (x)` written the old way reads as a call.
                         let hint = match name.as_str() {
-                            "send" => "; a task sends its result with '<-'",
-                            "free" => "; Vela has no 'free': memory in a region is freed when the block declaring the region closes",
-                            _ => "",
+                            "send" => "; a task sends its result with '<-'".to_string(),
+                            "free" => "; Vela has no 'free': memory in a region is freed when the block declaring the region closes".to_string(),
+                            _ if self.module_used(name).is_some() => format!("; '{0}' is a module, so name a task in it, as in '{0}.name(…)'", name),
+                            _ => self.elsewhere(name),
                         };
                         Error::at(span, format!("unknown task '{}'{}", name, hint))
                     })?
@@ -1247,8 +1376,9 @@ impl Checker {
             ExprKind::Unary(op, e) => self.check_unary(*op, e, span),
             ExprKind::Binary(op, l, r) => self.check_binary(*op, l, r, span),
             ExprKind::Construct { kind, tag, args } => {
-                let variant = self.variants.get(tag.as_str())
-                    .map(|info| info.variant.clone())
+                let variant = self.kinds.get(kind.as_str())
+                    .and_then(|k| k.variants.iter().find(|v| v.tag == *tag))
+                    .cloned()
                     .ok_or_else(|| Error::internal_at(span, format!("unknown variant '{}'", tag)))?;
                 if args.len() != variant.payload.len() {
                     return err(span, format!("variant '{}' expects {}, got {}", tag, count(variant.payload.len(), "argument"), args.len()));
@@ -1258,9 +1388,9 @@ impl Checker {
                 Ok(Type::Named(kind.clone(), self.regional.contains(kind.as_str()).then_some(region)))
             }
             ExprKind::New { ty, ty_span, value, region, region_span } => {
-                *ty = self.resolve_type(ty, *ty_span, TypePlace::New)?;
+                **ty = self.resolve_type(ty, *ty_span, TypePlace::New)?;
                 // `^int or E` means `(^int) or E`, so no written type could hold the pointer.
-                if matches!(ty, Type::Or(..)) {
+                if matches!(**ty, Type::Or(..)) {
                     return err(*ty_span, format!("'new' can't make a pointer to '{}'; extract the value first, or keep it in a shape's field", ty));
                 }
                 self.visible_region(region, *region_span, true)?;
@@ -1285,12 +1415,20 @@ impl Checker {
                     .ok_or_else(|| Error::at(span, format!("'^' reads the value a pointer points to, but this value is {}", ty)))
             }
             ExprKind::StructInit(name, fields) => {
-                if self.kinds.contains_key(name.as_str()) {
+                if self.sees(name) && self.kinds.contains_key(name.as_str()) {
                     return err(span, format!("'{}' is a kind, not a shape; create its values with its variants", name));
                 }
-                let shape = self.shapes.get(name.as_str())
-                    .ok_or_else(|| Error::at(span, format!("unknown shape '{}'", name)))?
+                let shape = self.shapes.get(name.as_str()).filter(|_| self.sees(name))
+                    .ok_or_else(|| Error::at(span, format!("unknown shape '{}'{}", name, self.elsewhere(name))))?
                     .clone();
+                if module_of(name) != self.current_module
+                    && let Some(hidden) = shape.fields.iter().find(|f| f.private)
+                {
+                    return err(
+                        span,
+                        format!("'{}' can't be built outside its file, since its field '{}' is private; a task of its module can build it", name, hidden.name),
+                    );
+                }
                 // Fields may be given in any order, each exactly once.
                 let mut given: HashMap<String, Span> = HashMap::new();
                 let mut declared = Vec::new();
@@ -1341,7 +1479,7 @@ impl Checker {
             let Some(error_ty) = error_ty else {
                 return err(*at, format!("a {} has no error to name; 'fail e' names the error of a 'T or E'", value_ty));
             };
-            if self.variants.contains_key(name) {
+            if self.variant_in_scope(name).is_some() {
                 return err(*at, format!("'{}' is a variant; to send an error, write '<- fail {}'", name, name));
             }
             bindings.push((name.clone(), *at, error_ty));
@@ -1483,6 +1621,9 @@ impl Checker {
                 };
                 for f in &shape.fields {
                     if f.name == field {
+                        if f.private && module_of(name) != self.current_module {
+                            return err(span, format!("'{}' is a private field of '{}', which only its own file can use", field, name));
+                        }
                         return Ok(self.field_in(&f.ty, region));
                     }
                 }
@@ -1930,6 +2071,12 @@ fn example_names(n: usize) -> String {
 /// `1 argument`, `2 arguments`.
 fn count(n: usize, noun: &str) -> String {
     if n == 1 { format!("1 {}", noun) } else { format!("{} {}s", n, noun) }
+}
+
+/// The program's name for `name` declared in module `module`: `module.name`,
+/// or just `name` in the main file.
+fn qualify(module: &str, name: &str) -> String {
+    if module.is_empty() { name.to_string() } else { format!("{}{}{}", module, MODULE_SEPARATOR, name) }
 }
 
 fn err<T>(span: Span, msg: impl Into<String>) -> Result<T> {

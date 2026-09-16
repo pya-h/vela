@@ -1,0 +1,5 @@
+# error: 2:7: a module path goes on after '..' with '/', as in 'use ../geometry'
+use ..
+
+task main()
+fi

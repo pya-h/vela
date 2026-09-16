@@ -1,0 +1,9 @@
+# A public task mentioning a private shape, for a fail fixture.
+
+priv shape Inner
+    value: int
+fi
+
+task inner() -> Inner
+    <- Inner { value: 1 }
+fi

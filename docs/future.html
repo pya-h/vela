@@ -316,8 +316,9 @@
           <p>Only <code>show</code> exists. No arrays, strings, files, networking, or math utilities.</p>
         </div>
         <div class="card">
-          <h3>No module system <span class="badge b-med">Medium</span></h3>
-          <p>All code must live in one file. There is no way to split projects or share packages.</p>
+          <h3>No module system <span class="badge b-done">Done</span></h3>
+          <p>All code had to live in one file. Now a file uses another with <code>use</code>; there is still no way to
+            share packages between programs. <a href="#modules">Details below.</a></p>
         </div>
         <div class="card">
           <h3>Limited types <span class="badge b-med">Medium</span></h3>
@@ -403,8 +404,10 @@
           <p>Let <code>match</code> produce a value, not just execute statements.</p>
         </div>
         <div class="card">
-          <h3>Module system <span class="badge b-idea">Idea</span></h3>
-          <p>Simple file-based modules with explicit imports and exports.</p>
+          <h3>Module system <span class="badge b-done">Done</span></h3>
+          <p>A file is a module: <code>use shapes/geometry</code>, then <code>geometry.area(…)</code>, or
+            <code>use shapes/geometry (area)</code>; everything is public unless marked <code>priv</code>.
+            <a href="vela.html#modules">The language guide describes it</a>; the reasoning is <a href="#modules">below</a>.</p>
         </div>
         <div class="card">
           <h3>Built-in testing <span class="badge b-idea">Idea</span></h3>
@@ -610,6 +613,59 @@ fi</pre>
           A <code>unit or E</code> task succeeds by reaching its end, so its result has no value to name.
         </p>
       </div>
+    </section>
+
+    <section>
+      <h2 id="modules"><span class="icon" aria-hidden="true">📦</span> Modules <span class="badge b-done">Done</span></h2>
+      <p>
+        A program used to be one file. Now each file is a module, and a file uses another with <code>use</code>
+        (see <a href="vela.html#modules">Modules</a> in the language guide):
+      </p>
+      <pre>use shapes/geometry               # shapes/geometry.vela, named geometry
+use shapes/palette (Color, describe)
+
+task main()
+    show(geometry.area(geometry.Square(3.0)))
+    show(describe(palette.Red))
+fi
+
+# in shapes/geometry.vela
+priv task pi() -&gt; float           # only this file can call it
+    &lt;- 3.14159
+fi</pre>
+      <ul>
+        <li><strong>A file is a module.</strong> A folder of files as one module (Go's packages) splits a big module
+          across files, but then no file alone says what it declares, and every name needs a search. A module path
+          names folders with <code>/</code> and the file last, relative to the file with the <code>use</code>.</li>
+        <li><strong>Both <code>m.name</code> and <code>use m (name)</code>.</strong> Qualified names say at every use
+          where a name comes from and never collide; a list of names keeps code that uses a few names often short.
+          This is the one place where Vela gives two ways to write the same thing, on purpose: a file chooses per
+          name, and the list at the top says which.</li>
+        <li><strong>Public unless <code>priv</code>.</strong> Most of what a file declares is meant to be used, so
+          the rare private helper is the one marked, the reverse of Rust's <code>pub</code>. Fields follow the same
+          rule, which is what lets a module keep an invariant: another file can't read, assign, or build a private
+          field, so it goes through the module's tasks.</li>
+      </ul>
+      <p>
+        What building it settled. <strong>Names.</strong> Every task, shape, kind, and variant gets one name in the
+        program: its own in the main file, <code>module.Name</code> in any other. Module names must therefore be
+        unique in a program (two <code>util</code> modules in different folders are an error), which also makes every
+        message's names unambiguous and valid Vela: <em>expected type geometry.Point, got int</em>. In C, the
+        <code>.</code> becomes <code>__0__</code> (<code>vela_geometry__0__area</code>), which no Vela name can contain.
+        <strong>Patterns.</strong> A <code>case</code> names a variant alone even for another module's kind: the matched
+        value's type says whose it is, so <code>case geometry.Square</code> is an error that says so. A kind listed in
+        <code>use m (…)</code> doesn't bring its variants; each is listed on its own. <strong>Visibility.</strong> A
+        module sees only what it declares and uses, never the main file's names. What other files see of a public
+        item (a task's parameters and results, a shape's public fields, a kind's values) can't mention a private
+        type, since they couldn't name it. <strong>Errors.</strong> Import cycles, a missing file, a module used twice,
+        a module named like a builtin, and a module name that clashes with a name the file declares, brings in, or
+        binds are all errors at the <code>use</code> or the name; an error in another module names that file.
+        <strong>Studio.</strong> Vela Studio follows <code>use</code> lines as you type: the page gives the analysis
+        the text of the files a program uses (an open file as edited), and the analysis says which it still needs; an
+        error in a module is shown at the <code>use</code> that leads to it. The server builds a program's modules from
+        the workspace only, so a <code>use</code> can't read a file outside it. A way to use a module under another name
+        (<code>use util as text_util</code>), and packages shared between programs, are left for later.
+      </p>
     </section>
 
     <section>
@@ -1368,7 +1424,7 @@ show(p.length_squared())</pre>
         <div class="roadmap-phase next">
           <h3>Next — Growth <span class="badge b-med">Medium Risk</span></h3>
           <ul>
-            <li>Module system and package manager</li>
+            <li><s>Module system</s> (done: <a href="vela.html#modules">modules</a>), then a package manager</li>
             <li>Methods on shapes and kinds (qualified tasks with <code>self</code> / <code>hold self</code>)</li>
             <li>Generics</li>
             <li><s>Missing values and error handling</s> (done: <a href="#maybe"><code>maybe T</code>, plan B, <code>T or E</code></a>)</li>
@@ -1400,8 +1456,8 @@ show(p.length_squared())</pre>
         Rust.
       </p>
       <p>
-        Beyond memory, Vela should grow carefully: methods as qualified tasks, generics, and modules before
-        concurrency or a self-hosted compiler. The goal is not to be everything; it is to be a small,
+        Beyond memory, Vela should grow carefully: methods as qualified tasks, generics, and packages built on its
+        modules before concurrency or a self-hosted compiler. The goal is not to be everything; it is to be a small,
         beautiful, fast language that proves you do not need a massive toolchain to write safe systems code.
       </p>
     </section>

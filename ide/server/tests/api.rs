@@ -325,6 +325,38 @@ async fn symlinks_cannot_lead_out_of_the_workspace() {
 }
 
 #[tokio::test]
+async fn builds_read_modules_from_the_workspace_only() {
+    let dir = TempDir::new("modules");
+    std::fs::create_dir_all(dir.workspace().join("app/shapes")).unwrap();
+    dir.write("app/main.vela", "use shapes/geometry\n\ntask main()\n    show(geometry.double(21))\nfi\n");
+    dir.write("app/shapes/geometry.vela", "task double(n: int) -> int\n    <- n * 2\nfi\n");
+    dir.write("app/broken.vela", "use shapes/bad\n\ntask main()\n    show(bad.double(21))\nfi\n");
+    dir.write("app/shapes/bad.vela", "task double(n: int) -> int\n    <- missing\nfi\n");
+    dir.write("app/escape.vela", "use ../../outside\n\ntask main()\nfi\n");
+    let (app, studio) = app(config(&dir.workspace(), PORT));
+    let build = |path: &'static str| {
+        let (app, studio) = (app.clone(), studio.clone());
+        async move { call(&app, &studio, Method::POST, "/api/build", Some(json!({ "path": path }))).await.json() }
+    };
+
+    assert_eq!(build("app/main.vela").await, json!({ "ok": true }));
+
+    // An error in a module names that module's file, as the workspace knows it.
+    let broken = build("app/broken.vela").await;
+    assert_eq!(broken["error"]["file"], "app/shapes/bad.vela");
+    assert_eq!((broken["error"]["line"].clone(), broken["error"]["col"].clone()), (json!(2), json!(8)));
+    assert_eq!(
+        broken["error"]["rendered"],
+        "app/shapes/bad.vela:2:8: error: unknown variable 'missing'\n 2 |     <- missing\n   |        ^"
+    );
+
+    // A module outside the workspace isn't read.
+    let escape = build("app/escape.vela").await;
+    assert_eq!(escape["error"]["file"], "app/escape.vela");
+    assert_eq!(escape["error"]["message"], "can't read module '../../outside' (../outside.vela): it isn't in the workspace");
+}
+
+#[tokio::test]
 async fn builds_report_errors_with_positions_and_leave_the_workspace_alone() {
     let dir = TempDir::new("build");
     dir.write("hello.vela", HELLO);
@@ -346,6 +378,7 @@ async fn builds_report_errors_with_positions_and_leave_the_workspace_alone() {
         json!({ "ok": false, "error": {
             "kind": "vela",
             "message": "unknown variable 'missing'",
+            "file": "bad.vela",
             "line": 2,
             "col": 10,
             "rendered": "bad.vela:2:10: error: unknown variable 'missing'\n 2 |     show(missing)\n   |          ^"

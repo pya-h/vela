@@ -1,0 +1,4 @@
+# error: 3:5: 'priv' goes before a task, shape, or kind, or a shape's field, not a statement
+task main()
+    priv bind x = 1
+fi

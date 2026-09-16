@@ -495,6 +495,14 @@
         Every line that changes what a task sends starts with a result's name and an arrow, which Go's plain
         <code>=</code> doesn't show.
       </p>
+      <p>
+        Modules work much like Go's packages, but a module is one file: <code>use shapes/geometry</code> reads
+        <code>shapes/geometry.vela</code>, whose names are written <code>geometry.area</code>, and
+        <code>use shapes/geometry (area)</code> also brings <code>area</code> in, as Python's <code>from … import</code>
+        does. Where Go exports a name by capitalizing it and Rust by marking it <code>pub</code>, everything in a Vela
+        file is public unless marked <code>priv</code>, fields included, so a name's spelling never decides who can use
+        it. There is no package manager yet.
+      </p>
     </section>
 
     <section>

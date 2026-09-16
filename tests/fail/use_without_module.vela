@@ -1,0 +1,5 @@
+# error: 2:4: expected a module after 'use', as in 'use geometry'
+use
+
+task main()
+fi

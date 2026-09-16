@@ -307,3 +307,27 @@ fn an_output_that_cant_be_written_is_reported_before_compiling() {
     std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o755)).unwrap();
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn modules_are_read_next_to_the_program() {
+    let out = vela(&[&example("shop"), "--check"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    let out = vela(&[&example("shop"), "--emit-c"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("vela_cart__0__add("));
+
+    // An error in a module is shown in that module's file.
+    let dir = temp_dir("modules");
+    std::fs::create_dir_all(dir.join("parts")).unwrap();
+    std::fs::write(dir.join("main.vela"), "use parts/lib\n\ntask main()\n    show(lib.twice(2))\nfi\n").unwrap();
+    std::fs::write(dir.join("parts/lib.vela"), "task twice(n: int) -> int\n    <- n * \"2\"\nfi\n").unwrap();
+    let main = dir.join("main.vela");
+    let out = vela(&[main.to_str().unwrap(), "--check"]);
+    assert_eq!(out.status.code(), Some(1));
+    let module = dir.join("parts/lib.vela");
+    assert_eq!(
+        stderr(&out),
+        format!("{}:2:10: error: arithmetic requires numeric operands\n 2 |     <- n * \"2\"\n   |          ^\n", module.display())
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

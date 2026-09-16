@@ -1,0 +1,6 @@
+# error: modules/back_to_main.vela:2:5: modules can't use one another in a circle: use_main_file -> back_to_main -> use_main_file
+use modules/back_to_main
+
+task main()
+    show(back_to_main.back())
+fi

@@ -1,0 +1,79 @@
+# Modules: a program in several files. `use` loads a file from this file's
+# folder; what it declares is named through the module's name (`geometry.area`)
+# or, when listed in parentheses, by its own name. `priv` keeps a task, shape,
+# kind, or field to its own file.
+
+use modules/geometry
+use modules/palette (Color, Custom, describe)
+use modules/bank
+use modules/lists/stack
+
+# The same variant name as palette's Red, and the same task name as
+# geometry's area: each module has names of its own.
+kind Shade
+    Red
+    Dark(level: int)
+fi
+
+task area(size: int) -> int
+    <- size * size
+fi
+
+task main()
+    # Tasks, shapes, and variants of a module, through its name.
+    bind square = geometry.Square(3.0)
+    bind circle = geometry.Circle(1.0)
+    show(geometry.area(square))
+    show(geometry.area(circle) > 3.0)
+    show(area(4))
+    bind origin = geometry.Point { x: 0.0, y: 0.0 }
+    bind corner: geometry.Point = geometry.Point { x: 3.0, y: 4.0 }
+    show(geometry.distance(origin, corner))
+    # A case names a variant alone: the value's kind says whose it is.
+    match square
+    case Circle radius
+        show(radius)
+    case Square side
+        show(side)
+    case Dot
+        show(0.0)
+    fi
+    when geometry.Dot is Dot
+        show("a dot")
+    fi
+
+    # Names brought in with `use m (…)`, and the others still through `m.`.
+    bind red: Color = palette.Red
+    show(describe(red))
+    show(describe(Custom(10, 20, 30)))
+    show(describe(palette.Blue))
+    match Dark(3)
+    case Red
+        show("red shade")
+    case Dark level
+        show(level)
+    fi
+
+    # A private field, set and read through its module's tasks.
+    hold account = bank.open("ada", 100)
+    account = bank.deposit(account, 50)
+    show(account.owner)
+    show(bank.balance(account))
+    bind after = bank.withdraw(account, 500) {
+        fail problem
+        show(bank.explain(problem))
+        account
+    }
+    show(bank.balance(after))
+
+    # A module in a folder, which uses another through `..`, with regions and
+    # named results.
+    region r
+    hold top: maybe ^stack.Node@r = none
+    each i in 1..4
+        top = stack.push(r, top, i * 10)
+    fi
+    bind total, count = stack.sum(top)
+    show(total)
+    show(count)
+fi

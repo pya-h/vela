@@ -1,0 +1,5 @@
+# A second module named library, in another folder, for a fail fixture.
+
+task greet() -> text
+    <- "hi"
+fi

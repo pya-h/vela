@@ -1,0 +1,6 @@
+# Uses cycle_a, which uses this module: a fail fixture.
+use cycle_a
+
+task b() -> int
+    <- 2
+fi

@@ -1,0 +1,21 @@
+# A cart that keeps its total to itself: other files change it only through
+# these tasks. prices.vela is in the same folder, so it is used as `prices`.
+
+use prices (Item, price_of)
+
+shape Cart
+    items: int
+    priv total: int
+fi
+
+task empty() -> Cart
+    <- Cart { items: 0, total: 0 }
+fi
+
+task add(cart: Cart, item: Item, count: int) -> Cart
+    <- Cart { items: cart.items + count, total: cart.total + price_of(item) * count }
+fi
+
+task total(cart: Cart) -> int
+    <- cart.total
+fi

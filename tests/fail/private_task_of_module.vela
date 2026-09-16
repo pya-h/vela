@@ -1,0 +1,6 @@
+# error: 5:10: 'secret' is private to module 'library'
+use modules/library
+
+task main()
+    show(library.secret())
+fi

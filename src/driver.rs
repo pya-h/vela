@@ -15,18 +15,18 @@ use crate::ast::Item;
 use crate::check::Checker;
 use crate::codegen::Generator;
 use crate::error::{Error, Result};
-use crate::lexer::Lexer;
-use crate::parser::Parser;
+use crate::modules::{self, Loader, SourceFile};
 
 /// The runtime header that generated C includes as `vela_rt.h`.
 pub const RUNTIME_H: &str = include_str!("../runtime/vela_rt.h");
 
-/// Lexes, parses, and type-checks `source`, returning the checked program.
+/// Lexes, parses, and type-checks `source`, a program in one file, returning
+/// the checked program. A `use` in it can't be loaded; see `check_program`.
 pub fn front_end(source: &str) -> Result<Vec<Item>> {
     match front_end_partial(source) {
         Partial { error: Some(error), .. } => Err(error),
-        Partial { items: Some(items), error: None } => Ok(items),
-        Partial { items: None, error: None } => Err(Error::internal("the front end produced neither a program nor an error")),
+        Partial { items: Some(items), error: None, .. } => Ok(items),
+        Partial { items: None, error: None, .. } => Err(Error::internal("the front end produced neither a program nor an error")),
     }
 }
 
@@ -39,21 +39,83 @@ pub struct Partial {
     pub items: Option<Vec<Item>>,
     /// The first error, exactly as `front_end` reports it.
     pub error: Option<Error>,
+    /// The program's files, the main file first; `Span::file` indexes them.
+    pub files: Vec<SourceFile>,
 }
 
 /// Like `front_end`, but keeps the program when checking fails, for tools
 /// such as editors that want the types found before the first error.
 pub fn front_end_partial(source: &str) -> Partial {
-    let parsed = Lexer::new(source).tokenize().and_then(|(tokens, spans)| {
-        let mut parser = Parser::new(tokens, spans);
-        parser.parse_file().map(|items| (items, parser.type_places()))
-    });
-    match parsed {
-        Err(error) => Partial { items: None, error: Some(error) },
-        Ok((mut items, type_places)) => {
-            let error = Checker::with_type_places(type_places).check_file(&mut items).err();
-            Partial { items: Some(items), error }
+    front_end_program(Path::new(""), source, &mut no_modules)
+}
+
+/// `front_end_partial` for a program whose main file is `source`, at the
+/// path `path`, and whose modules `loader` reads (see `modules::load`).
+pub fn front_end_program(path: &Path, source: &str, loader: &mut Loader) -> Partial {
+    let (files, loaded) = modules::load(path, source, loader);
+    match loaded {
+        Err(error) => Partial { items: None, error: Some(error), files },
+        Ok(mut program) => {
+            let error = Checker::check_program(&mut program).err();
+            Partial { items: Some(program.items), error, files }
         }
+    }
+}
+
+/// A loader for a program in one file, which has no other files to read.
+fn no_modules(path: &Path) -> io::Result<String> {
+    Err(io::Error::new(io::ErrorKind::NotFound, format!("'{}' isn't loaded here", path.display())))
+}
+
+/// Reads a module from the disk: the loader of the `vela` command.
+pub fn read_from_disk(path: &Path) -> io::Result<String> {
+    fs::read_to_string(path)
+}
+
+/// An error in a program of several files, with the files, to show it.
+#[derive(Debug)]
+pub struct ProgramError {
+    pub error: Error,
+    /// The program's files, the main file first.
+    pub files: Vec<SourceFile>,
+}
+
+impl ProgramError {
+    /// The error as the `vela` command prints it (see `render_error`), with the
+    /// path and source line of the file it is in; `main_path` names the main
+    /// file, and every other file is named by its path as loaded.
+    pub fn render(&self, main_path: &str) -> String {
+        render_program_error(main_path, &self.files, &self.error)
+    }
+
+    /// The path of the file the error is in, other than the main file, as loaded
+    /// (`/`-separated).
+    pub fn error_file(&self) -> Option<String> {
+        let file = self.error.span.map(|span| span.file).filter(|&file| file > 0)?;
+        self.files.get(file).map(|found| found.path.to_string_lossy().replace('\\', "/"))
+    }
+}
+
+/// Formats `e`, an error in one of `files`, like `render_error`.
+pub fn render_program_error(main_path: &str, files: &[SourceFile], e: &Error) -> String {
+    let file = e.span.map_or(0, |span| span.file);
+    match files.get(file) {
+        Some(found) if file > 0 => render_error(&found.path.display().to_string(), &found.source, e),
+        Some(main) => render_error(main_path, &main.source, e),
+        None => render_error(main_path, "", e),
+    }
+}
+
+/// Checks the program whose main file is `source`, at `path`, loading its
+/// modules with `loader`.
+pub fn check_program(path: &Path, source: &str, loader: &mut Loader) -> std::result::Result<Vec<Item>, ProgramError> {
+    let partial = front_end_program(path, source, loader);
+    match (partial.items, partial.error) {
+        (Some(items), None) => Ok(items),
+        (_, error) => Err(ProgramError {
+            error: error.unwrap_or_else(|| Error::internal("the front end produced neither a program nor an error")),
+            files: partial.files,
+        }),
     }
 }
 
@@ -64,12 +126,19 @@ pub fn generate_c(source: &str) -> Result<String> {
     Generator::new().generate(&items)
 }
 
+/// `generate_c` for a program whose main file is `source`, at `path`, loading
+/// its modules with `loader`.
+pub fn generate_c_program(path: &Path, source: &str, loader: &mut Loader) -> std::result::Result<String, ProgramError> {
+    let items = check_program(path, source, loader)?;
+    Generator::new().generate(&items).map_err(|error| ProgramError { error, files: Vec::new() })
+}
+
 /// Why `build` failed.
 #[derive(Debug)]
 pub enum BuildError {
     /// The program is not valid Vela (or the compiler has a bug, reported as
-    /// an internal compiler error).
-    Vela(Error),
+    /// an internal compiler error), with its files, where the error is.
+    Vela(ProgramError),
     /// The program has no `main` task, so it can't be an executable.
     NoMain,
     /// The output path names the input file, which building would overwrite.
@@ -88,7 +157,8 @@ impl BuildError {
     /// input file and `source` is its text, for Vela diagnostics.
     pub fn render(&self, path: &str, source: &str) -> String {
         match self {
-            BuildError::Vela(error) => render_error(path, source, error),
+            BuildError::Vela(ProgramError { error, files }) if files.is_empty() => render_error(path, source, error),
+            BuildError::Vela(error) => error.render(path),
             BuildError::NoMain => format!("{}: error: program has no 'main' task", path),
             BuildError::OutputIsInput(output) => {
                 format!("error: output '{}' would overwrite the input file", output.display())
@@ -108,6 +178,12 @@ impl BuildError {
 
 impl From<Error> for BuildError {
     fn from(error: Error) -> Self {
+        BuildError::Vela(ProgramError { error, files: Vec::new() })
+    }
+}
+
+impl From<ProgramError> for BuildError {
+    fn from(error: ProgramError) -> Self {
         BuildError::Vela(error)
     }
 }
@@ -126,9 +202,16 @@ pub fn has_main(items: &[Item]) -> bool {
 /// Compiles `source`, the contents of the file at `input`, into an
 /// executable at `output`, using `cc` as the C compiler command (see
 /// `c_compiler_from_env`). `input` names the generated C file and guards
-/// against overwriting the source.
+/// against overwriting the source. The modules the program uses are read
+/// from the disk, next to `input`.
 pub fn build(source: &str, input: &Path, output: &Path, cc: &str) -> std::result::Result<(), BuildError> {
-    let items = front_end(source)?;
+    build_program(source, input, input, output, cc, &mut read_from_disk)
+}
+
+/// `build`, with the program's main file at `path` as `loader` knows it (for
+/// its modules' paths and for messages) and at `input` on the disk.
+pub fn build_program(source: &str, path: &Path, input: &Path, output: &Path, cc: &str, loader: &mut Loader) -> std::result::Result<(), BuildError> {
+    let items = check_program(path, source, loader)?;
     if !has_main(&items) {
         return Err(BuildError::NoMain);
     }

@@ -1,12 +1,13 @@
 // Vela language support for CodeMirror, powered by the compiler running in
 // WebAssembly (see ../analysis): semantic highlighting, diagnostics,
 // completion with snippets, hover, go to definition, indentation, folding,
-// comments, and bracket closing.
+// comments, and bracket closing. A file's modules come from `ModuleSources`,
+// and each document says its path with the `documentPath` facet.
 
 import { type Completion, type CompletionContext, type CompletionResult, insertCompletionText, snippet } from "@codemirror/autocomplete";
 import { foldService, getIndentation, indentService, indentString, indentUnit } from "@codemirror/language";
-import { type Diagnostic, linter } from "@codemirror/lint";
-import { EditorState, type Extension, RangeSetBuilder, type Text } from "@codemirror/state";
+import { type Diagnostic, forceLinting, linter } from "@codemirror/lint";
+import { EditorState, type Extension, Facet, RangeSetBuilder, StateEffect, type Text } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -19,39 +20,70 @@ import {
 } from "@codemirror/view";
 
 import type { VelaAnalysis } from "../analysis/bridge";
-import type { CompletionItem, Diagnostic as VelaDiagnostic, Language, OutlineItem, Token, TokenClass } from "../analysis/protocol";
+import { ModuleSources } from "../analysis/modules";
+import type { CompletionItem, ProgramContext, Diagnostic as VelaDiagnostic, Language, OutlineItem, Token, TokenClass } from "../analysis/protocol";
 import { closingLine, indentation } from "./blocks";
 
 export interface FileAnalysis {
   tokens: Token[];
   diagnostics: VelaDiagnostic[];
   outline: OutlineItem[];
+  /** The modules the file's program uses that weren't known yet. */
+  missing: string[];
 }
 
-const EMPTY: FileAnalysis = { tokens: [], diagnostics: [], outline: [] };
+const EMPTY: FileAnalysis = { tokens: [], diagnostics: [], outline: [], missing: [] };
 
-/** Analyzes documents, once per version: CodeMirror documents are immutable. */
+/** The workspace path of the file an editor state shows; empty for text without a file. */
+export const documentPath = Facet.define<string, string>({ combine: (paths) => paths[0] ?? "" });
+
+/** Redoes an editor's analysis, when the modules its file uses changed. */
+const reanalyze = StateEffect.define<null>();
+
+/** Redoes the analysis shown in `view`: highlighting and diagnostics. */
+export function refreshAnalysis(view: EditorView): void {
+  view.dispatch({ effects: reanalyze.of(null) });
+  forceLinting(view);
+}
+
+/**
+ * Analyzes documents, once per version and per version of the modules they
+ * use: CodeMirror documents are immutable.
+ */
 export class Analyzer {
-  private readonly cache = new WeakMap<Text, FileAnalysis>();
+  private readonly cache = new WeakMap<Text, { path: string; modules: number; result: FileAnalysis }>();
+  /** The text of the files Vela files use. */
+  readonly modules = new ModuleSources();
+  /** Shows a definition in another file; the workbench sets it. */
+  openDefinition: ((path: string, from: number, to: number) => void) | null = null;
 
   constructor(
     readonly analysis: VelaAnalysis,
     readonly language: Language,
   ) {}
 
-  file(doc: Text): FileAnalysis {
-    let result = this.cache.get(doc);
-    if (!result) {
-      try {
-        result = this.analysis.file(doc.toString());
-      } catch (error) {
-        // A crash restarts the module (see the bridge); show nothing for this version.
-        console.error(error);
-        result = EMPTY;
-      }
-      this.cache.set(doc, result);
+  /** The analysis of `doc`, the text of the file at `path`. */
+  file(doc: Text, path = ""): FileAnalysis {
+    const cached = this.cache.get(doc);
+    if (cached && cached.path === path && cached.modules === this.modules.version) return cached.result;
+    const modules = this.modules.version;
+    let result: FileAnalysis;
+    try {
+      result = this.analysis.file(doc.toString(), this.context(path));
+    } catch (error) {
+      // A crash restarts the module (see the bridge); show nothing for this version.
+      console.error(error);
+      result = EMPTY;
     }
+    this.cache.set(doc, { path, modules, result });
+    // Fetched modules change the version, which redoes this analysis.
+    if (result.missing.length > 0) this.modules.request(result.missing);
     return result;
+  }
+
+  /** The program around the file at `path`, for a query. */
+  context(path: string): ProgramContext {
+    return { path, modules: this.modules.sources() };
   }
 
   /** Runs a query that may crash the module, treating a crash as no answer. */
@@ -80,7 +112,7 @@ function mark(tokenClass: TokenClass): Decoration {
 function highlighting(analyzer: Analyzer): Extension {
   const build = (view: EditorView): DecorationSet => {
     const builder = new RangeSetBuilder<Decoration>();
-    const tokens = analyzer.file(view.state.doc).tokens;
+    const tokens = analyzer.file(view.state.doc, view.state.facet(documentPath)).tokens;
     for (const { from, to } of view.visibleRanges) {
       // Tokens are sorted and don't overlap: skip to the first visible one.
       let low = 0;
@@ -105,7 +137,8 @@ function highlighting(analyzer: Analyzer): Extension {
         this.decorations = build(view);
       }
       update(update: ViewUpdate) {
-        if (update.docChanged || update.viewportChanged) {
+        const redo = update.transactions.some((tr) => tr.effects.some((effect) => effect.is(reanalyze)));
+        if (update.docChanged || update.viewportChanged || redo) {
           this.decorations = build(update.view);
         }
       }
@@ -137,7 +170,7 @@ function diagnostics(analyzer: Analyzer): Extension {
   return linter(
     (view): Diagnostic[] => {
       const length = view.state.doc.length;
-      return analyzer.file(view.state.doc).diagnostics.map((d) => ({
+      return analyzer.file(view.state.doc, view.state.facet(documentPath)).diagnostics.map((d) => ({
         from: Math.min(d.from, length),
         to: Math.min(Math.max(d.to, d.from), length),
         severity: "error",
@@ -209,7 +242,8 @@ function completion(analyzer: Analyzer) {
     // While typing, open only on a word or right after `.`; Ctrl+Space opens anywhere.
     if (!context.explicit && !context.matchBefore(/[A-Za-z_][A-Za-z0-9_]*$/) && before !== ".") return null;
     const source = context.state.doc.toString();
-    const result = analyzer.safely(() => analyzer.analysis.complete(source, context.pos), null);
+    const program = analyzer.context(context.state.facet(documentPath));
+    const result = analyzer.safely(() => analyzer.analysis.complete(source, context.pos, program), null);
     const line = context.state.doc.lineAt(context.pos);
     const dedented = dedentWord.test(line.text.slice(0, context.pos - line.from));
     return result && completionResult(result.items, result.from, context.pos, context.state.doc, dedented);
@@ -221,7 +255,8 @@ function completion(analyzer: Analyzer) {
 function hover(analyzer: Analyzer): Extension {
   return hoverTooltip(
     (view, pos): Tooltip | null => {
-      const found = analyzer.safely(() => analyzer.analysis.hover(view.state.doc.toString(), pos), null);
+      const program = analyzer.context(view.state.facet(documentPath));
+      const found = analyzer.safely(() => analyzer.analysis.hover(view.state.doc.toString(), pos, program), null);
       if (!found) return null;
       return {
         pos: found.from,
@@ -248,10 +283,19 @@ function hover(analyzer: Analyzer): Extension {
   );
 }
 
-/** Selects the declaration of the name at `pos` (or the cursor). */
+/**
+ * Selects the declaration of the name at `pos` (or the cursor), opening its
+ * file when it is in another one.
+ */
 export function goToDefinition(analyzer: Analyzer, view: EditorView, pos = view.state.selection.main.head): boolean {
-  const target = analyzer.safely(() => analyzer.analysis.definition(view.state.doc.toString(), pos), null);
+  const program = analyzer.context(view.state.facet(documentPath));
+  const target = analyzer.safely(() => analyzer.analysis.definition(view.state.doc.toString(), pos, program), null);
   if (!target) return false;
+  if (target.path !== undefined) {
+    if (!analyzer.openDefinition) return false;
+    analyzer.openDefinition(target.path, target.from, target.to);
+    return true;
+  }
   view.dispatch({
     selection: { anchor: target.from, head: target.to },
     effects: EditorView.scrollIntoView(target.from, { y: "center" }),

@@ -1,0 +1,6 @@
+# error: 2:11: only a shape's field can be 'priv', not a parameter or a variant's value
+task open(priv code: int)
+fi
+
+task main()
+fi

@@ -1,0 +1,6 @@
+# error: modules/broken.vela:4:10: arithmetic requires numeric operands
+use modules/broken
+
+task main()
+    show(broken.twice(2))
+fi

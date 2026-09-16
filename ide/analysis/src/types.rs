@@ -4,14 +4,30 @@
 //! checked before that error.
 
 use std::collections::{HashMap, HashSet};
+use std::io;
+use std::path::Path;
 
 use vela::ast::{Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, Span, Stmt, StmtKind, Target, Type};
 use vela::check::{in_region, regional_types};
 use vela::driver;
 use vela::error::Error;
+use vela::modules::{self, SourceFile};
+
+/// Where the analyzed file is, and the text of the other files of its program
+/// that the editor has, by path (`/`-separated, as `use` paths resolve).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Context<'a> {
+    pub path: &'a str,
+    pub sources: &'a HashMap<String, String>,
+}
+
+/// A path as the editor names files: `/`-separated.
+pub(crate) fn slashed(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
 
 /// What recording types needs to know about the program's declarations.
-struct Context<'a> {
+struct Declarations<'a> {
     kinds: HashMap<&'a str, &'a KindDef>,
     /// The shapes and kinds that hold pointers.
     regional: HashSet<String>,
@@ -26,8 +42,14 @@ fn pos(span: Span) -> Pos {
 
 #[derive(Default)]
 pub(crate) struct Checked {
-    /// The compiler's first error, if any.
+    /// The compiler's first error, if any. Its position may be in another file
+    /// of the program (see `files`).
     pub error: Option<Error>,
+    /// The program's files, the analyzed file first, as far as they loaded.
+    pub files: Vec<SourceFile>,
+    /// The files the program uses, directly or through others, that the
+    /// editor didn't give.
+    pub missing: Vec<String>,
     /// The type of each checked expression, by the position of the token that
     /// identifies it: the name of a variable, call, or field access; the
     /// operator of a unary or binary operation or of `^`; `new`; or a shape
@@ -41,9 +63,25 @@ pub(crate) struct Checked {
 }
 
 impl Checked {
-    pub fn new(source: &str) -> Checked {
-        let partial = driver::front_end_partial(source);
-        let mut checked = Checked { error: partial.error, ..Checked::default() };
+    pub fn new(source: &str, context: Context) -> Checked {
+        let path = Path::new(context.path);
+        // Every file reachable through the files the editor has, reading the
+        // ones it doesn't as empty, so it can fetch them all at once.
+        let mut missing = Vec::new();
+        let mut discover = |file: &Path| -> io::Result<String> {
+            let file = slashed(file);
+            if let Some(source) = context.sources.get(&file) {
+                return Ok(source.clone());
+            }
+            if !missing.contains(&file) {
+                missing.push(file);
+            }
+            Ok(String::new())
+        };
+        let _ = modules::load(path, source, &mut discover);
+        let mut loader = |file: &Path| context.sources.get(&slashed(file)).cloned().ok_or_else(|| io::Error::from(io::ErrorKind::NotFound));
+        let partial = driver::front_end_program(path, source, &mut loader);
+        let mut checked = Checked { error: partial.error, files: partial.files, missing, ..Checked::default() };
         let Some(items) = partial.items else { return checked };
         let kinds: HashMap<&str, &KindDef> = items
             .iter()
@@ -52,9 +90,12 @@ impl Checked {
                 _ => None,
             })
             .collect();
-        let context = Context { kinds, regional: regional_types(&items) };
+        let declarations = Declarations { kinds, regional: regional_types(&items) };
+        // Positions are recorded for the analyzed file only.
         for item in &items {
-            if let Item::Task(task) = item {
+            if let Item::Task(task) = item
+                && task.span.file == 0
+            {
                 for param in &task.params {
                     checked.decls.insert(pos(param.span), param.ty.clone());
                 }
@@ -65,19 +106,19 @@ impl Checked {
                         checked.decls.insert(pos(*at), ty.clone());
                     }
                 }
-                checked.block(&task.body, &context);
+                checked.block(&task.body, &declarations);
             }
         }
         checked
     }
 
-    fn block(&mut self, stmts: &Block, kinds: &Context) {
+    fn block(&mut self, stmts: &Block, kinds: &Declarations) {
         for stmt in stmts {
             self.statement(stmt, kinds);
         }
     }
 
-    fn statement(&mut self, stmt: &Stmt, kinds: &Context) {
+    fn statement(&mut self, stmt: &Stmt, kinds: &Declarations) {
         match &stmt.kind {
             StmtKind::Expr(e) => self.expr(e, kinds),
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter().for_each(|value| self.expr(value, kinds)),
@@ -134,7 +175,7 @@ impl Checked {
 
     /// Records the types of the names `pattern` binds from a value of type
     /// `subject`.
-    fn pattern(&mut self, subject: Option<&Type>, pattern: &Pattern, kinds: &Context) {
+    fn pattern(&mut self, subject: Option<&Type>, pattern: &Pattern, kinds: &Declarations) {
         let Some(subject) = subject else { return };
         match (&pattern.kind, subject) {
             (PatternKind::Variant { tag, binds }, Type::Named(name, region)) => {
@@ -157,7 +198,7 @@ impl Checked {
         }
     }
 
-    fn expr(&mut self, e: &Expr, kinds: &Context) {
+    fn expr(&mut self, e: &Expr, kinds: &Declarations) {
         // A wrapped value keeps its own type at its position.
         if let ExprKind::Wrap(inner) = &e.kind {
             return self.expr(inner, kinds);

@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
-use vela::ast::{ANY_REGION, Span, Type};
+use vela::ast::{ANY_REGION, MODULE_SEPARATOR, Span, Type, unqualified};
 use vela::lexer::{LexKind, LexToken, Token};
 
 use crate::scan::{Scan, Symbol, SymbolKind};
@@ -116,9 +116,35 @@ impl<'a> Knowledge<'a> {
         self.scan.symbols.iter().enumerate().filter(move |(_, s)| s.parent == Some(parent))
     }
 
-    /// The first top-level declaration of `kind` called `name`.
+    /// The first top-level declaration of `kind` called `name`: one of this
+    /// file's, another module's by its qualified name (`geometry.Point`), or one
+    /// `use` brings in by name.
     pub fn global(&self, name: &str, kind: SymbolKind) -> Option<usize> {
-        self.scan.symbols.iter().position(|s| s.kind == kind && s.name == name)
+        let symbols = &self.scan.symbols;
+        let qualified = name.contains(MODULE_SEPARATOR);
+        symbols
+            .iter()
+            .position(|s| s.kind == kind && s.name == name && (qualified || s.module.is_none()))
+            .or_else(|| self.scan.imports.get(name).copied().filter(|&id| symbols.get(id).is_some_and(|s| s.kind == kind)))
+    }
+
+    /// The module used under the name at position `q`, when that name is one.
+    pub fn module_at(&self, q: usize) -> Option<usize> {
+        self.symbol_at(q).filter(|&id| self.symbol(id).is_some_and(|s| s.kind == SymbolKind::Module))
+    }
+
+    /// For the name at position `q`: `module.name` and the position where it
+    /// starts when a module's name and `.` come before it, or else the name
+    /// and `q`.
+    pub fn qualified_at(&self, q: usize) -> Option<(String, usize)> {
+        let name = self.ident(q)?;
+        if self.token_before(q) == Some(&Token::Dot)
+            && let Some(start) = q.checked_sub(2)
+            && self.module_at(start).is_some()
+        {
+            return Some((format!("{}{}{}", self.ident(start)?, MODULE_SEPARATOR, name), start));
+        }
+        Some((name.to_string(), q))
     }
 
     /// The type of a variable or parameter.
@@ -131,7 +157,11 @@ impl<'a> Knowledge<'a> {
         if depth > MAX_DEPTH {
             return None;
         }
-        if let Some(ty) = self.checked.decls.get(&(symbol.start.line, symbol.start.col)) {
+        // The checker's positions are in this file; another's declarations are
+        // read as written.
+        if symbol.module.is_none()
+            && let Some(ty) = self.checked.decls.get(&(symbol.start.line, symbol.start.col))
+        {
             return Some(ty.clone());
         }
         match (symbol.kind, symbol.intro) {
@@ -227,7 +257,16 @@ impl<'a> Knowledge<'a> {
             },
             _ => {
                 let index = name.checked_sub(case + 2)?;
-                let variant = self.global(self.ident(case + 1)?, SymbolKind::Variant)?;
+                let tag = self.ident(case + 1)?;
+                // The variant of the matched value's kind, which may be another
+                // module's, whose variants the case names alone.
+                let of_subject = match outcome() {
+                    Some(Type::Named(kind, _)) => self
+                        .global(&kind, SymbolKind::Kind)
+                        .and_then(|kind| self.children(kind).find(|(_, v)| unqualified(&v.name) == tag).map(|(id, _)| id)),
+                    _ => None,
+                };
+                let variant = of_subject.or_else(|| self.global(tag, SymbolKind::Variant))?;
                 let (_, field) = self.children(variant).nth(index)?;
                 let ty = parse_type(&field.detail)?;
                 // A payload's pointers are in the region of the value matched.
@@ -289,6 +328,13 @@ impl<'a> Knowledge<'a> {
             Token::Text(_) => Some(Type::Text),
             Token::True | Token::False => Some(Type::Bool),
             Token::Ident(name) => exact(q).or_else(|| {
+                // `palette.Red`: a module's variant, recorded at the module's name.
+                if let Some((full, start)) = self.qualified_at(q).filter(|(_, start)| *start != q) {
+                    return exact(start).or_else(|| {
+                        let variant = self.global(&full, SymbolKind::Variant)?;
+                        self.variant_kind(variant).map(|kind| Type::named(&kind))
+                    });
+                }
                 if self.token_before(q) == Some(&Token::Dot) {
                     let Type::Named(shape, region) = self.expression_type(q.checked_sub(2)?, depth + 1)? else { return None };
                     let ty = self.field_type(&shape, name)?;
@@ -328,8 +374,8 @@ impl<'a> Knowledge<'a> {
                         }
                     });
                 }
-                let shape = self.ident(open.checked_sub(1)?)?;
-                Some(Type::named(shape))
+                let (shape, _) = self.qualified_at(open.checked_sub(1)?)?;
+                Some(Type::named(&shape))
             }
             Token::RParen => {
                 let open = self.matching_open(q, &Token::LParen, &Token::RParen)?;
@@ -337,10 +383,12 @@ impl<'a> Knowledge<'a> {
                     // A parenthesized expression.
                     return self.span_type(open + 1, q.checked_sub(1)?, depth + 1);
                 };
-                let (p, name) = callee;
+                let (p, _) = callee;
+                // A module's task or variant is recorded at the module's name.
+                let (name, p) = self.qualified_at(p)?;
                 // `new T(…)`, `new ^T(…)`, `new@r T(…)`: the type is everything
                 // between `new` (and its region) and `(`.
-                let new = (0..p).rev().take_while(|&r| matches!(self.token(r), Some(Token::Caret | Token::Maybe | Token::New | Token::AtSign | Token::Ident(_)))).find(|&r| self.token(r) == Some(&Token::New));
+                let new = (0..p).rev().take_while(|&r| matches!(self.token(r), Some(Token::Caret | Token::Maybe | Token::New | Token::AtSign | Token::Dot | Token::Ident(_)))).find(|&r| self.token(r) == Some(&Token::New));
                 if let Some(new) = new.filter(|&new| (new + 1..p).all(|r| self.token(r) != Some(&Token::New))) {
                     return exact(new).or_else(|| {
                         let region = (self.token(new + 1) == Some(&Token::AtSign)).then(|| self.ident(new + 2)).flatten();
@@ -353,10 +401,10 @@ impl<'a> Knowledge<'a> {
                     });
                 }
                 exact(p).or_else(|| {
-                    if let Some(variant) = self.global(name, SymbolKind::Variant) {
+                    if let Some(variant) = self.global(&name, SymbolKind::Variant) {
                         return self.variant_kind(variant).map(|kind| Type::named(&kind));
                     }
-                    let task = self.global(name, SymbolKind::Task)?;
+                    let task = self.global(&name, SymbolKind::Task)?;
                     Some(self.call_type(&self.symbol(task)?.detail, open, q, depth))
                 })
             }
@@ -598,6 +646,8 @@ fn parse_prefixed_type(text: &str) -> Option<Type> {
     let mut ty = match text.trim_end() {
         "region" => Type::Region,
         name if is_name(name) => Type::builtin(name).unwrap_or_else(|| Type::named(name)),
+        // Another module's shape or kind: `geometry.Point`.
+        name if name.split_once(MODULE_SEPARATOR).is_some_and(|(module, member)| is_name(module) && is_name(member)) => Type::named(name),
         _ => return None,
     };
     for pointer in pointers.into_iter().rev() {

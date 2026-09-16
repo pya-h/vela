@@ -2,7 +2,7 @@
 // compiled to WebAssembly) and exchanges JSON with it. See ide/wasm/src/lib.rs
 // for the memory protocol.
 
-import type { Completions, Diagnostic, Hover, Language, Location, OutlineItem, Query, QueryResults, Token } from "./protocol";
+import type { Completions, Diagnostic, Hover, Language, Location, OutlineItem, ProgramContext, Query, QueryResults, Token } from "./protocol";
 
 interface Exports {
   memory: WebAssembly.Memory;
@@ -57,11 +57,14 @@ export class VelaAnalysis {
 
   /**
    * Answers several queries about one version of `source` at once, analyzing
-   * it only once. Throws `AnalysisError` if the module rejects the request or
-   * crashes; after a crash the module is restarted, so later calls work.
+   * it only once. `context` gives the file's path and the modules it may use.
+   * Throws `AnalysisError` if the module rejects the request or crashes; after
+   * a crash the module is restarted, so later calls work.
    */
-  request<const Q extends readonly Query[]>(source: string, queries: Q): Results<Q> {
-    const response = this.call(JSON.stringify({ source: wellFormed(source), queries })) as { results?: unknown[]; error?: string };
+  request<const Q extends readonly Query[]>(source: string, queries: Q, context?: ProgramContext): Results<Q> {
+    const modules = context && Object.fromEntries(Object.entries(context.modules).map(([path, text]) => [path, wellFormed(text)]));
+    const body = context ? { source: wellFormed(source), path: context.path, modules, queries } : { source: wellFormed(source), queries };
+    const response = this.call(JSON.stringify(body)) as { results?: unknown[]; error?: string };
     if (typeof response.error === "string") {
       throw new AnalysisError(response.error);
     }
@@ -71,26 +74,29 @@ export class VelaAnalysis {
     return response.results as Results<Q>;
   }
 
-  /** Everything that changes when the text changes, in one call. */
-  file(source: string): { tokens: Token[]; diagnostics: Diagnostic[]; outline: OutlineItem[] } {
-    const [tokens, diagnostics, outline] = this.request(source, [
-      { kind: "tokens" },
-      { kind: "diagnostics" },
-      { kind: "outline" },
-    ] as const);
-    return { tokens, diagnostics, outline };
+  /**
+   * Everything that changes when the text changes, in one call, with the
+   * modules the program uses that `context` didn't give (`missing`).
+   */
+  file(source: string, context?: ProgramContext): { tokens: Token[]; diagnostics: Diagnostic[]; outline: OutlineItem[]; missing: string[] } {
+    const [tokens, diagnostics, outline, missing] = this.request(
+      source,
+      [{ kind: "tokens" }, { kind: "diagnostics" }, { kind: "outline" }, { kind: "missing-modules" }] as const,
+      context,
+    );
+    return { tokens, diagnostics, outline, missing };
   }
 
-  complete(source: string, offset: number): Completions {
-    return this.request(source, [{ kind: "complete", offset }] as const)[0];
+  complete(source: string, offset: number, context?: ProgramContext): Completions {
+    return this.request(source, [{ kind: "complete", offset }] as const, context)[0];
   }
 
-  hover(source: string, offset: number): Hover | null {
-    return this.request(source, [{ kind: "hover", offset }] as const)[0];
+  hover(source: string, offset: number, context?: ProgramContext): Hover | null {
+    return this.request(source, [{ kind: "hover", offset }] as const, context)[0];
   }
 
-  definition(source: string, offset: number): Location | null {
-    return this.request(source, [{ kind: "definition", offset }] as const)[0];
+  definition(source: string, offset: number, context?: ProgramContext): Location | null {
+    return this.request(source, [{ kind: "definition", offset }] as const, context)[0];
   }
 
   language(): Language {

@@ -13,7 +13,12 @@
 //! A request is `{"source": "…", "queries": [{"kind": "tokens"}, {"kind":
 //! "complete", "offset": 12}, …]}`, and its response is `{"results": […]}`
 //! with one result per query, in order, or `{"error": "…"}` if the request is
-//! malformed. Offsets are UTF-16, like JavaScript string indices.
+//! malformed. Offsets are UTF-16, like JavaScript string indices. A request
+//! may also give the file's `path` and `modules`, the text of other files of
+//! its program by path; the `missing-modules` query lists the ones a `use`
+//! needs that weren't given.
+
+use std::collections::HashMap;
 
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -28,6 +33,8 @@ enum Query {
     Definition { offset: usize },
     Complete { offset: usize },
     Hover { offset: usize },
+    /// The paths of the files the program uses that `modules` didn't give.
+    MissingModules,
     /// Keywords and block words; ignores the source.
     Language,
 }
@@ -37,6 +44,12 @@ enum Query {
 struct Request {
     #[serde(default)]
     source: String,
+    /// The file's path, `/`-separated; empty for a file without one.
+    #[serde(default)]
+    path: String,
+    /// The text of the program's other files, by path.
+    #[serde(default)]
+    modules: HashMap<String, String>,
     queries: Vec<Query>,
 }
 
@@ -46,7 +59,7 @@ pub fn handle(request: &str) -> String {
         Ok(request) => request,
         Err(error) => return json!({ "error": format!("invalid request: {}", error) }).to_string(),
     };
-    let analysis = Analysis::new(&request.source);
+    let analysis = Analysis::with_modules(&request.source, &request.path, &request.modules);
     let results: Vec<Value> = request
         .queries
         .iter()
@@ -58,6 +71,7 @@ pub fn handle(request: &str) -> String {
                 Query::Definition { offset } => serde_json::to_value(analysis.definition(*offset)),
                 Query::Complete { offset } => serde_json::to_value(analysis.complete(*offset)),
                 Query::Hover { offset } => serde_json::to_value(analysis.hover(*offset)),
+                Query::MissingModules => serde_json::to_value(analysis.missing_modules()),
                 Query::Language => serde_json::to_value(vela_analysis::language()),
             };
             result.unwrap_or_else(|error| json!({ "error": error.to_string() }))

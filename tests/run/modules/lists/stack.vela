@@ -1,0 +1,22 @@
+# A stack of numbers in a region, for tests/run/modules.vela. It uses a module
+# from the folder above.
+
+use ../numbers (add)
+
+shape Node
+    value: int
+    below: maybe ^Node
+fi
+
+task push(r: region, top: maybe ^Node@r, value: int) -> ^Node@r
+    <- new Node(Node { value: value, below: top }) at r
+fi
+
+task sum(top: maybe ^Node@r) -> total: int, count: int
+    total, count <- 0, 0
+    hold current = top
+    loop current is {node}
+        total, count <- add(total, node^.value), numbers.add(count, 1)
+        current = node^.below
+    fi
+fi

@@ -28,7 +28,7 @@ fn assert_definition(source: &str, name_use: (&str, usize), declaration: (&str, 
     let name: String = declaration.0.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
     let found = Analysis::new(source).definition(at(source, name_use.0, name_use.1));
     let expected = at(source, declaration.0, declaration.1);
-    let expected = Location { from: expected, to: expected + name.len() };
+    let expected = Location { from: expected, to: expected + name.len(), path: None };
     assert_eq!(found, Some(expected), "{:?} should go to {:?}", name_use, declaration);
 }
 
@@ -340,8 +340,8 @@ fn outline_lists_items_with_their_members() {
     );
     let light = &analysis.outline()[2];
     assert_eq!(light.children[1].children[0].name, "level");
-    assert_eq!(text(SHAPES, Location { from: light.from, to: light.to }), "kind Light\n    Red\n    Dimmed(level: int)\nfi");
-    assert_eq!(text(SHAPES, Location { from: light.name_from, to: light.name_to }), "Light");
+    assert_eq!(text(SHAPES, Location { from: light.from, to: light.to, path: None }), "kind Light\n    Red\n    Dimmed(level: int)\nfi");
+    assert_eq!(text(SHAPES, Location { from: light.name_from, to: light.name_to, path: None }), "Light");
 }
 
 #[test]
@@ -426,7 +426,7 @@ fn check_well_formed(source: &str, what: &str, everywhere: bool) {
     let names = [TokenClass::Task, TokenClass::Type, TokenClass::Variant, TokenClass::Field, TokenClass::Parameter, TokenClass::Variable, TokenClass::Region];
     for token in tokens.iter().filter(|t| names.contains(&t.class)) {
         if let Some(target) = analysis.definition(token.from) {
-            let name = text(source, Location { from: token.from, to: token.to });
+            let name = text(source, Location { from: token.from, to: token.to, path: None });
             assert_eq!(text(source, target), name, "{}: definition of {:?}", what, name);
         }
     }

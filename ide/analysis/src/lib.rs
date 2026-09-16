@@ -1,5 +1,6 @@
 //! Language analysis for Vela Studio: highlighting, diagnostics, outline,
-//! go-to-definition, completion, and hover for one Vela source file.
+//! go-to-definition, completion, and hover for one Vela source file, with the
+//! other files of its program (the modules it uses) that the editor gives.
 //!
 //! Everything is computed from the compiler itself: tokens come from
 //! `vela::lexer::highlight`, errors from `vela::driver::front_end`, and names
@@ -17,8 +18,12 @@ mod position;
 mod scan;
 mod types;
 
+use std::collections::HashMap;
+use std::sync::LazyLock;
+
 use serde::Serialize;
 use vela::lexer::{LexKind, Token as LexedToken};
+use vela::modules::SourceFile;
 
 pub use complete::{CompletionItem, CompletionKind, Completions};
 pub use hover::Hover;
@@ -72,17 +77,24 @@ pub struct OutlineItem {
     pub children: Vec<OutlineItem>,
 }
 
-/// A range of source, such as the name a definition points to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+/// A range of source, such as the name a definition points to, in the
+/// analyzed file or, with `path`, in another file of the program.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Location {
     pub from: usize,
     pub to: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
 }
+
+/// No other files, for a file analyzed on its own.
+static NO_SOURCES: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
 
 /// The analysis of one version of a source file. Create one per change and
 /// ask it anything.
 pub struct Analysis<'a> {
     source: &'a str,
+    context: types::Context<'a>,
     index: LineIndex<'a>,
     scan: scan::Scan,
     /// What the compiler found: its first error and the checked types.
@@ -90,10 +102,25 @@ pub struct Analysis<'a> {
 }
 
 impl<'a> Analysis<'a> {
+    /// The analysis of a file on its own: a module it uses can't be read.
     pub fn new(source: &'a str) -> Self {
-        let checked = types::Checked::new(source);
-        let scan = scan::scan(source, &checked.field_accesses);
-        Analysis { source, index: LineIndex::new(source), scan, checked }
+        Analysis::with_modules(source, "", &NO_SOURCES)
+    }
+
+    /// The analysis of the file at `path` (`/`-separated), whose program's
+    /// other files are in `sources`, by path. A file it uses that isn't there is
+    /// reported by `missing_modules`, for the editor to fetch.
+    pub fn with_modules(source: &'a str, path: &'a str, sources: &'a HashMap<String, String>) -> Self {
+        let context = types::Context { path, sources };
+        let checked = types::Checked::new(source, context);
+        let scan = scan::scan(source, &checked.field_accesses, context);
+        Analysis { source, context, index: LineIndex::new(source), scan, checked }
+    }
+
+    /// The paths of the files the program uses, directly or through other
+    /// modules, that weren't given, in the order they are needed.
+    pub fn missing_modules(&self) -> Vec<String> {
+        self.checked.missing.clone()
     }
 
     /// Every piece of source to highlight, in order and without overlaps.
@@ -114,7 +141,7 @@ impl<'a> Analysis<'a> {
     /// inside a token, or is empty at the end of a line.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
         let Some(error) = &self.checked.error else { return Vec::new() };
-        let Some(span) = error.span else {
+        let Some(found) = error.span else {
             return vec![Diagnostic {
                 from: 0,
                 to: 0,
@@ -124,13 +151,31 @@ impl<'a> Analysis<'a> {
                 severity: Severity::Error,
             }];
         };
+        // An error in another file is shown at the `use` that leads to it, with
+        // that file's path and position.
+        let files: &[SourceFile] = &self.checked.files;
+        let span = SourceFile::in_main_file(files, found);
+        let message = match files.get(found.file) {
+            Some(file) if found.file > 0 => {
+                format!("{}:{}:{}: {}", types::slashed(&file.path), found.line, found.col, error.message)
+            }
+            _ => error.message.clone(),
+        };
         let start = self.index.byte_of(span);
         let token = self.scan.lexed.iter().find(|t| {
             t.range.start == start
                 && t.range.end > start
                 && !matches!(t.kind, LexKind::Token(LexedToken::Newline) | LexKind::Token(LexedToken::Eof))
         });
+        // An error from another file underlines the whole module path of the `use`.
+        let path_end = (found.file > 0).then(|| {
+            let lexed = &self.scan.lexed;
+            let first = lexed.iter().position(|t| t.range.start == start)?;
+            let path = lexed.get(first..)?.iter().take_while(|t| matches!(t.kind, LexKind::Token(LexedToken::Ident(_) | LexedToken::Slash | LexedToken::Range)));
+            path.last().map(|t| t.range.end)
+        });
         let end = match token {
+            Some(_) if path_end.flatten().is_some() => path_end.flatten().unwrap_or(start),
             Some(token) => token.range.end,
             None => match self.source.get(start..).and_then(|rest| rest.chars().next()) {
                 Some(c) if c != '\n' && c != '\r' => start + c.len_utf8(),
@@ -142,7 +187,7 @@ impl<'a> Analysis<'a> {
             to: self.index.utf16_of(end),
             line: Some(span.line),
             col: Some(span.col),
-            message: error.message.clone(),
+            message,
             severity: Severity::Error,
         }]
     }
@@ -154,7 +199,7 @@ impl<'a> Analysis<'a> {
         symbols
             .iter()
             .enumerate()
-            .filter(|(_, s)| matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind))
+            .filter(|(_, s)| s.module.is_none() && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind))
             .map(|(id, _)| self.outline_item(id, &children_of))
             .collect()
     }
@@ -189,15 +234,30 @@ impl<'a> Analysis<'a> {
             .filter(|t| t.range.start <= byte && byte < t.range.end)
             .find_map(|t| t.symbol)
             .or_else(|| tokens.iter().filter(|t| t.range.end == byte).find_map(|t| t.symbol))?;
-        let range = self.index.utf16_range(&self.scan.symbols.get(symbol)?.name_range);
-        Some(Location { from: range.start, to: range.end })
+        let symbol = self.scan.symbols.get(symbol)?;
+        // A module's name leads to its file.
+        if symbol.kind == SymbolKind::Module {
+            let module = self.scan.modules.iter().find(|m| self.scan.symbols.get(m.symbol).is_some_and(|s| s.name_range == symbol.name_range))?;
+            return module.source.as_ref().map(|_| Location { from: 0, to: 0, path: Some(module.path.clone()) });
+        }
+        match symbol.module.and_then(|m| self.scan.modules.get(m)) {
+            Some(module) => {
+                let source = module.source.as_deref()?;
+                let range = LineIndex::new(source).utf16_range(&symbol.name_range);
+                Some(Location { from: range.start, to: range.end, path: Some(module.path.clone()) })
+            }
+            None => {
+                let range = self.index.utf16_range(&symbol.name_range);
+                Some(Location { from: range.start, to: range.end, path: None })
+            }
+        }
     }
 
     /// What may be typed at `offset`: keywords, snippets, names, fields, or
     /// types, depending on where the cursor is.
     pub fn complete(&self, offset: usize) -> Completions {
         let byte = self.index.byte_of_utf16(offset);
-        let (items, from, to) = complete::complete(self.source, &self.scan, &self.checked, byte);
+        let (items, from, to) = complete::complete(self.source, &self.scan, &self.checked, self.context, byte);
         Completions { from: self.index.utf16_of(from), to: self.index.utf16_of(to), items }
     }
 

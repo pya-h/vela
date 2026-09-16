@@ -1,0 +1,11 @@
+# error: 6:10: a pattern names the variant alone, as in 'case Hearts': the value's kind tells which module it is from
+use modules/library
+
+task main()
+    match library.Hearts
+    case library.Hearts
+        show(1)
+    case Spades rank
+        show(rank)
+    fi
+fi

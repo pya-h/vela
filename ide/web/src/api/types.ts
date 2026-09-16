@@ -38,6 +38,8 @@ export interface BuildFailure {
   /** The error on its own, such as `unknown variable 'x'`. */
   message: string;
   /** 1-based, for `vela` errors. */
+  /** The file the error is in: the file built, or a module it uses. */
+  file: string | null;
   line: number | null;
   col: number | null;
   /** The error as the `vela` command prints it. */

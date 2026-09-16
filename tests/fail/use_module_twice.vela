@@ -1,0 +1,6 @@
+# error: 3:13: this module is already used at 2:13; a file uses each module once
+use modules/library
+use modules/library
+
+task main()
+fi

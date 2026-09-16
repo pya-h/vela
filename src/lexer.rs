@@ -35,6 +35,10 @@ pub enum Token {
     Maybe,
     Is,
     Fail,
+    /// `use`: makes another file's tasks, shapes, and kinds usable in this one.
+    Use,
+    /// `priv`: keeps a task, shape, kind, or shape's field to its own file.
+    Priv,
     Ident(String),
     LParen,
     RParen,
@@ -100,6 +104,8 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("maybe", Token::Maybe),
     ("is", Token::Is),
     ("fail", Token::Fail),
+    ("use", Token::Use),
+    ("priv", Token::Priv),
 ];
 
 /// The escapes allowed in text literals: the character after `\` and the
@@ -215,6 +221,8 @@ pub struct Lexer {
     byte: usize,
     line: usize,
     col: usize,
+    /// The file the source is, for the positions of its tokens (see `Span::file`).
+    file: usize,
 }
 
 /// A saved lexer position, for backing up.
@@ -238,7 +246,13 @@ impl Lexer {
             byte: if bom { '\u{feff}'.len_utf8() } else { 0 },
             line: 1,
             col: 1,
+            file: 0,
         }
+    }
+
+    /// A lexer for file number `file` of a program, whose positions say so.
+    pub fn for_file(source: &str, file: usize) -> Self {
+        Lexer { file, ..Lexer::new(source) }
     }
 
     /// Returns every token (ending with `Eof`) and, in parallel, its position,
@@ -318,7 +332,7 @@ impl Lexer {
     }
 
     fn location(&self) -> Span {
-        Span::new(self.line, self.col)
+        Span { line: self.line, col: self.col, file: self.file }
     }
 
     /// Reads the next token, comment, or invalid text.

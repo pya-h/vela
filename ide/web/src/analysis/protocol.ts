@@ -19,7 +19,8 @@ export type TokenClass =
   | "comment"
   | "operator"
   | "punctuation"
-  | "invalid";
+  | "invalid"
+  | "module";
 
 export interface Token {
   from: number;
@@ -37,7 +38,7 @@ export interface Diagnostic {
   severity: "error";
 }
 
-export type SymbolKind = "task" | "shape" | "kind" | "variant" | "field" | "parameter" | "variable" | "region";
+export type SymbolKind = "task" | "shape" | "kind" | "variant" | "field" | "parameter" | "variable" | "region" | "module";
 
 export interface OutlineItem {
   name: string;
@@ -53,6 +54,8 @@ export interface OutlineItem {
 export interface Location {
   from: number;
   to: number;
+  /** The file it is in, when that isn't the analyzed file. */
+  path?: string;
 }
 
 export type CompletionKind =
@@ -65,7 +68,8 @@ export type CompletionKind =
   | "field"
   | "variant"
   | "type"
-  | "region";
+  | "region"
+  | "module";
 
 export interface CompletionItem {
   label: string;
@@ -99,10 +103,21 @@ export interface Language {
   builtinTypes: string[];
   builtinTasks: string[];
   blockOpeners: string[];
+  /** Words that may come before a block opener on its line, as in `priv task`. */
+  blockModifiers: string[];
   branchKeywords: string[];
   blockCloser: string;
   lineComment: string;
   brackets: [string, string][];
+}
+
+/**
+ * Where the analyzed file is, and the text of the other files of its program
+ * (the modules it uses) by path. Paths are `/`-separated workspace paths.
+ */
+export interface ProgramContext {
+  path: string;
+  modules: Record<string, string>;
 }
 
 export type Query =
@@ -112,6 +127,7 @@ export type Query =
   | { kind: "definition"; offset: number }
   | { kind: "complete"; offset: number }
   | { kind: "hover"; offset: number }
+  | { kind: "missing-modules" }
   | { kind: "language" };
 
 /** The result type of each query kind. */
@@ -122,5 +138,7 @@ export interface QueryResults {
   definition: Location | null;
   complete: Completions;
   hover: Hover | null;
+  /** The paths of the files the program uses that the context didn't give. */
+  "missing-modules": string[];
   language: Language;
 }

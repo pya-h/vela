@@ -36,10 +36,13 @@ export function collectProblems(live: { path: string; diagnostics: Diagnostic[] 
     }
   }
   const analyzed = new Set(live.map((file) => file.path));
-  for (const [path, failure] of builds) {
+  for (const [built, failure] of builds) {
+    // An error in a module the program uses is a problem of that module's file.
+    const path = failure.file ?? built;
     // In an open file, the analysis shows the current Vela errors (with the
-    // compiler the build used), so the build's may be out of date.
-    if (failure.kind === "vela" && analyzed.has(path)) continue;
+    // compiler the build used), so the build's may be out of date. (An open
+    // file also shows an error in a module it uses, at its `use`.)
+    if (failure.kind === "vela" && (analyzed.has(path) || analyzed.has(built))) continue;
     add({ path, message: failure.message, line: failure.line, col: failure.col, from: null, to: null, source: "build" });
   }
   return [...byPath.entries()]

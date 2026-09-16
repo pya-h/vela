@@ -1,0 +1,33 @@
+# A module for the fail fixtures: public and private tasks, shapes, kinds, and
+# fields.
+
+shape Card
+    owner: text
+    priv pin: int
+fi
+
+kind Suit
+    Hearts
+    Spades(rank: int)
+fi
+
+task greet() -> text
+    <- "hello"
+fi
+
+task card(owner: text) -> Card
+    <- Card { owner: owner, pin: 1234 }
+fi
+
+priv task secret() -> int
+    <- 42
+fi
+
+priv shape Vault
+    gold: int
+fi
+
+priv kind Lock
+    Open
+    Shut
+fi

@@ -1,0 +1,11 @@
+# Arithmetic, for tests/run/modules/lists/stack.vela.
+
+shape Sum
+    value: int
+fi
+
+task add(a: int, b: int) -> int
+    # A variable may have the name of a shape, as in any file.
+    bind Sum = a + b
+    <- Sum
+fi

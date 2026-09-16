@@ -7,12 +7,12 @@
 //! used whenever the rest of the file allows it.
 
 use serde::Serialize;
-use vela::ast::{BUILTIN_TASKS, BUILTIN_TYPES, Type};
+use vela::ast::{BUILTIN_TASKS, BUILTIN_TYPES, Type, unqualified};
 use vela::lexer::{LexKind, Token};
 
 use crate::infer::{Knowledge, parameter_names, parameters};
 use crate::scan::{Scan, SymbolKind};
-use crate::types::Checked;
+use crate::types::{Checked, Context};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -27,6 +27,7 @@ pub enum CompletionKind {
     Variant,
     Type,
     Region,
+    Module,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -70,7 +71,7 @@ const VALUE_KEYWORDS: &[&str] = &["true", "false", "none", "not", "new", "fail"]
 
 /// Completions at byte `byte` of `source`. Returns the items and the byte
 /// range they replace.
-pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize) -> (Vec<CompletionItem>, usize, usize) {
+pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Context, byte: usize) -> (Vec<CompletionItem>, usize, usize) {
     let is_word = |c: char| c.is_ascii_alphanumeric() || c == '_';
     let before = source.get(..byte).unwrap_or_default();
     let word_start = before.len() - before.chars().rev().take_while(|c| is_word(*c)).map(char::len_utf8).sum::<usize>();
@@ -85,9 +86,33 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     let prev_token = prev.and_then(|q| k.token(q));
     let blocks = open_blocks(&k, word_start);
 
+    // On a `use` line: nothing for the path; in its parentheses, the names the
+    // module declares.
+    if let Some(q) = prev
+        && k.token(k.line_start(q)) == Some(&Token::Use)
+    {
+        let line = k.line_start(q);
+        let items = match (line..=q).find(|&p| k.token(p) == Some(&Token::LParen)) {
+            Some(open) if !(open..=q).any(|p| k.token(p) == Some(&Token::RParen)) && matches!(prev_token, Some(Token::LParen | Token::Comma)) => {
+                let module = open.checked_sub(1).and_then(|p| k.module_at(p));
+                module.map(|m| member_items(&k, m, false)).unwrap_or_default()
+            }
+            _ => Vec::new(),
+        };
+        return (items, word_start, byte);
+    }
+
+    // After a module's name and `.`: what the module declares.
+    if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
+        && let Some(module) = dot.checked_sub(1).and_then(|q| k.module_at(q))
+    {
+        let types_only = dot.checked_sub(1).is_some_and(|q| starts_type(&k, q));
+        return (member_items(&k, module, types_only), word_start, byte);
+    }
+
     // After `.`: fields.
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token) {
-        let probe = probe(source, k.range(dot).start, word_end);
+        let probe = probe(source, context, k.range(dot).start, word_end);
         let exact = Knowledge::new(source, scan, &probe);
         let base = dot.checked_sub(1).and_then(|q| exact.type_ending_at(q));
         let (shape, through_pointer) = match base {
@@ -101,6 +126,8 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
         let Some(shape_id) = k.global(&shape, SymbolKind::Shape) else { return (Vec::new(), word_start, byte) };
         let items = k
             .children(shape_id)
+            // Another module's private fields can't be used here.
+            .filter(|(_, field)| field.module.is_none() || !field.private)
             .map(|(_, field)| CompletionItem {
                 label: field.name.clone(),
                 kind: CompletionKind::Field,
@@ -145,7 +172,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     // After `is`: patterns. Names a pattern or plan B declares (`is {v}`,
     // `is fail e`, `{ fail e`) get no suggestions.
     if let (Some(is), Some(Token::Is)) = (prev, prev_token) {
-        return (is_pattern_items(source, scan, &k, is), word_start, byte);
+        return (is_pattern_items(source, scan, context, &k, is), word_start, byte);
     }
     // The rest of the line after `is` is the pattern, whose names are declared.
     if let Some(q) = prev
@@ -176,7 +203,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
         if prev_token != Some(&Token::Case) {
             return (Vec::new(), word_start, byte);
         }
-        let items = prev.map(|case| case_items(source, scan, &k, case)).unwrap_or_default();
+        let items = prev.map(|case| case_items(source, scan, context, &k, case)).unwrap_or_default();
         return (items, word_start, byte);
     }
 
@@ -185,7 +212,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     if let Some(q) = prev
         && matches!(prev_token, Some(Token::LBrace | Token::Comma))
         && let Some(brace) = unclosed_brace(&k, q)
-        && brace.checked_sub(1).and_then(|b| k.ident(b)).is_some_and(|name| k.global(name, SymbolKind::Shape).is_some())
+        && brace.checked_sub(1).and_then(|b| k.qualified_at(b)).is_some_and(|(name, _)| k.global(&name, SymbolKind::Shape).is_some())
     {
         return (literal_field_items(&k, brace, word_start), word_start, byte);
     }
@@ -227,10 +254,16 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     let at_line_start = prev.is_none() || prev_token == Some(&Token::Newline);
     if at_line_start {
         let items = match blocks.first() {
-            None => item_level_items(),
-            Some(Block::Shape | Block::Kind) => Vec::new(),
+            // `use` lines come before the file's items.
+            None => {
+                let before_items = !(0..prev.map_or(0, |q| q + 1)).any(|q| matches!(k.token(q), Some(Token::Task | Token::Shape | Token::Kind)));
+                item_level_items().into_iter().filter(|item| before_items || item.label != "use").collect()
+            }
+            // A shape's field can be private.
+            Some(Block::Shape) => vec![keyword("priv")],
+            Some(Block::Kind) => Vec::new(),
             Some(_) => {
-                let probe = probe(source, word_start, word_end);
+                let probe = probe(source, context, word_start, word_end);
                 let exact = Knowledge::new(source, scan, &probe);
                 // A plan B's first line may name its error: `fail e`.
                 let names_error = prev.is_some_and(|q| {
@@ -307,11 +340,11 @@ fn argument_parameter(k: &Knowledge, q: usize) -> Option<Option<Type>> {
             Some(Token::RParen | Token::RBrace | Token::RBracket) => depth += 1,
             Some(Token::LBrace | Token::LBracket) if depth == 0 => return None,
             Some(Token::LParen) if depth == 0 => {
-                let name = k.ident(p.checked_sub(1)?)?;
-                if BUILTIN_TASKS.contains(&name) {
+                let (name, _) = k.qualified_at(p.checked_sub(1)?)?;
+                if BUILTIN_TASKS.contains(&name.as_str()) {
                     return Some(None);
                 }
-                let task = k.symbol(k.global(name, SymbolKind::Task)?)?;
+                let task = k.symbol(k.global(&name, SymbolKind::Task)?)?;
                 return Some(parameters(&task.detail).into_iter().nth(index).and_then(|(_, ty)| ty));
             }
             Some(Token::LParen | Token::LBrace | Token::LBracket) => depth -= 1,
@@ -423,9 +456,9 @@ fn plan_b_value_can_fail(k: &Knowledge, q: usize) -> bool {
 }
 
 /// `source` with `from..to` removed, checked.
-fn probe(source: &str, from: usize, to: usize) -> Checked {
+fn probe(source: &str, context: Context, from: usize, to: usize) -> Checked {
     let text = format!("{}{}", source.get(..from).unwrap_or_default(), source.get(to..).unwrap_or_default());
-    Checked::new(&text)
+    Checked::new(&text, context)
 }
 
 /// Whether `byte` is inside a comment or a text literal, where nothing is
@@ -547,7 +580,7 @@ fn unclosed_brace(k: &Knowledge, q: usize) -> Option<usize> {
 }
 
 fn literal_field_items(k: &Knowledge, brace: usize, word_start: usize) -> Vec<CompletionItem> {
-    let Some(shape) = brace.checked_sub(1).and_then(|q| k.ident(q)).and_then(|name| k.global(name, SymbolKind::Shape)) else {
+    let Some(shape) = brace.checked_sub(1).and_then(|q| k.qualified_at(q)).and_then(|(name, _)| k.global(&name, SymbolKind::Shape)) else {
         return Vec::new();
     };
     // Fields already given: `name:` directly inside these braces.
@@ -578,13 +611,13 @@ fn literal_field_items(k: &Knowledge, brace: usize, word_start: usize) -> Vec<Co
         .collect()
 }
 
-fn case_items(source: &str, scan: &Scan, k: &Knowledge, case: usize) -> Vec<CompletionItem> {
+fn case_items(source: &str, scan: &Scan, context: Context, k: &Knowledge, case: usize) -> Vec<CompletionItem> {
     let Some(match_q) = k.enclosing_match(case) else { return Vec::new() };
 
     // The subject's kind, checked without the half-typed `case` line.
     let case_start = k.range(case).start;
     let line_end = k.range(k.line_end(case)).start;
-    let probe = probe(source, case_start, line_end.max(case_start));
+    let probe = probe(source, context, case_start, line_end.max(case_start));
     let exact = Knowledge::new(source, scan, &probe);
     let subject_end = k.line_end(match_q).checked_sub(1).filter(|&q| q > match_q);
     let subject = subject_end.and_then(|q| exact.type_ending_at(q));
@@ -650,11 +683,12 @@ fn case_items(source: &str, scan: &Scan, k: &Knowledge, case: usize) -> Vec<Comp
 
     let variants: Vec<usize> = match kind {
         Some(kind) => k.children(kind).map(|(id, _)| id).collect(),
-        None => k.symbols().iter().enumerate().filter(|(_, s)| s.kind == SymbolKind::Variant).map(|(id, _)| id).collect(),
+        None => k.symbols().iter().enumerate().filter(|(_, s)| s.kind == SymbolKind::Variant && s.module.is_none()).map(|(id, _)| id).collect(),
     };
+    // A case names a variant alone, even another module's.
     let uncovered: Vec<usize> = variants
         .into_iter()
-        .filter(|&id| k.symbol(id).is_some_and(|v| !covered.contains(&v.name)))
+        .filter(|&id| k.symbol(id).is_some_and(|v| !covered.iter().any(|c| c == unqualified(&v.name))))
         .collect();
 
     let mut items: Vec<CompletionItem> = uncovered
@@ -662,12 +696,13 @@ fn case_items(source: &str, scan: &Scan, k: &Knowledge, case: usize) -> Vec<Comp
         .filter_map(|&id| {
             let variant = k.symbol(id)?;
             let template = case_template(k, id, &mut Vec::new());
+            let label = unqualified(&variant.name).to_string();
             Some(CompletionItem {
-                label: variant.name.clone(),
+                snippet: (template != label).then_some(template),
+                label,
                 kind: CompletionKind::Variant,
                 detail: variant.detail.clone(),
                 apply: None,
-                snippet: (template != variant.name).then_some(template),
                 boost: LOCAL,
             })
         })
@@ -683,7 +718,7 @@ fn case_items(source: &str, scan: &Scan, k: &Knowledge, case: usize) -> Vec<Comp
         });
     }
     if kind.is_some() && uncovered.len() > 1 {
-        let names: Vec<&str> = uncovered.iter().filter_map(|&id| k.symbol(id).map(|v| v.name.as_str())).collect();
+        let names: Vec<&str> = uncovered.iter().filter_map(|&id| k.symbol(id).map(|v| unqualified(&v.name))).collect();
         let mut used = Vec::new();
         let cases: Vec<String> = uncovered.iter().map(|&id| case_template(k, id, &mut used)).collect();
         items.push(CompletionItem {
@@ -713,9 +748,9 @@ fn outcome_patterns(ty: &Type) -> Option<Vec<(String, String, String)>> {
 }
 
 /// The patterns after `is`, for the value before it.
-fn is_pattern_items(source: &str, scan: &Scan, k: &Knowledge, is: usize) -> Vec<CompletionItem> {
+fn is_pattern_items(source: &str, scan: &Scan, context: Context, k: &Knowledge, is: usize) -> Vec<CompletionItem> {
     let line_end = k.range(k.line_end(is)).start;
-    let probe = probe(source, k.range(is).start, line_end.max(k.range(is).start));
+    let probe = probe(source, context, k.range(is).start, line_end.max(k.range(is).start));
     let exact = Knowledge::new(source, scan, &probe);
     let subject = is.checked_sub(1).and_then(|q| exact.type_ending_at(q));
     if let Some(outcomes) = subject.as_ref().and_then(outcome_patterns) {
@@ -737,19 +772,20 @@ fn is_pattern_items(source: &str, scan: &Scan, k: &Knowledge, is: usize) -> Vec<
     };
     let variants: Vec<usize> = match kind {
         Some(kind) => k.children(kind).map(|(id, _)| id).collect(),
-        None => k.symbols().iter().enumerate().filter(|(_, s)| s.kind == SymbolKind::Variant).map(|(id, _)| id).collect(),
+        None => k.symbols().iter().enumerate().filter(|(_, s)| s.kind == SymbolKind::Variant && s.module.is_none()).map(|(id, _)| id).collect(),
     };
     variants
         .into_iter()
         .filter_map(|id| {
             let variant = k.symbol(id)?;
             let template = case_template(k, id, &mut Vec::new());
+            let label = unqualified(&variant.name).to_string();
             Some(CompletionItem {
-                label: variant.name.clone(),
+                snippet: (template != label).then_some(template),
+                label,
                 kind: CompletionKind::Variant,
                 detail: variant.detail.clone(),
                 apply: None,
-                snippet: (template != variant.name).then_some(template),
                 boost: LOCAL,
             })
         })
@@ -761,7 +797,7 @@ fn is_pattern_items(source: &str, scan: &Scan, k: &Knowledge, is: usize) -> Vec<
 /// the snippet, so that cases of variants sharing a payload field name get
 /// separate fields.
 fn case_template(k: &Knowledge, variant: usize, used: &mut Vec<String>) -> String {
-    let mut text = k.symbol(variant).map(|v| v.name.clone()).unwrap_or_default();
+    let mut text = k.symbol(variant).map(|v| unqualified(&v.name).to_string()).unwrap_or_default();
     for (_, field) in k.children(variant) {
         text.push_str(&format!(" ${{{}}}", unique(used, &field.name)));
     }
@@ -800,18 +836,16 @@ fn type_items(k: &Knowledge, after_arrow: bool, offer_maybe: bool) -> Vec<Comple
             snippet: None,
             boost: SNIPPET,
         });
-    let declared = k
-        .symbols()
-        .iter()
-        .filter(|s| matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind))
-        .map(|s| CompletionItem {
-            label: s.name.clone(),
-            kind: CompletionKind::Type,
-            detail: if s.kind == SymbolKind::Shape { "shape" } else { "kind" }.to_string(),
-            apply: None,
-            snippet: None,
-            boost: GLOBAL,
-        });
+    let declared = visible_globals(k, &[SymbolKind::Shape, SymbolKind::Kind]).into_iter().map(|(label, s)| CompletionItem {
+        label,
+        kind: CompletionKind::Type,
+        detail: if s.kind == SymbolKind::Shape { "shape" } else { "kind" }.to_string(),
+        apply: None,
+        snippet: None,
+        boost: GLOBAL,
+    });
+    // A type of another module is written after its name: `geometry.Point`.
+    let modules = module_items(k);
     let maybe = offer_maybe.then(|| CompletionItem {
         label: "maybe".to_string(),
         kind: CompletionKind::Keyword,
@@ -820,7 +854,84 @@ fn type_items(k: &Knowledge, after_arrow: bool, offer_maybe: bool) -> Vec<Comple
         snippet: None,
         boost: SNIPPET,
     });
-    builtin.chain(declared).chain(maybe).collect()
+    builtin.chain(declared).chain(modules).chain(maybe).collect()
+}
+
+/// The names of the tasks, shapes, kinds, or variants (as `kinds` says) usable
+/// without a module's name: the file's own, and those `use` brings in, with
+/// the name to write for each.
+fn visible_globals<'k>(k: &'k Knowledge, kinds: &[SymbolKind]) -> Vec<(String, &'k crate::scan::Symbol)> {
+    let own = k.symbols().iter().filter(|s| s.module.is_none() && kinds.contains(&s.kind)).map(|s| (s.name.clone(), s));
+    let mut imported: Vec<(String, &crate::scan::Symbol)> = k
+        .scan
+        .imports
+        .iter()
+        .filter_map(|(name, &id)| k.symbol(id).filter(|s| kinds.contains(&s.kind)).map(|s| (name.clone(), s)))
+        .collect();
+    imported.sort_by(|a, b| a.0.cmp(&b.0));
+    own.chain(imported).collect()
+}
+
+/// The modules the file uses, as names to complete.
+fn module_items(k: &Knowledge) -> Vec<CompletionItem> {
+    k.scan
+        .modules
+        .iter()
+        .filter_map(|module| {
+            let symbol = k.symbol(module.symbol)?;
+            Some(CompletionItem {
+                label: symbol.name.clone(),
+                kind: CompletionKind::Module,
+                detail: module.path.clone(),
+                apply: None,
+                snippet: None,
+                boost: GLOBAL,
+            })
+        })
+        .collect()
+}
+
+/// What module `module` (its `use` line's symbol) declares that another file
+/// can use, named without the module: its tasks, shapes, kinds, and variants,
+/// or only its shapes and kinds where a type is written.
+fn member_items(k: &Knowledge, module: usize, types_only: bool) -> Vec<CompletionItem> {
+    let Some(index) = k.scan.modules.iter().position(|m| m.symbol == module) else { return Vec::new() };
+    let kinds: &[SymbolKind] = if types_only { &[SymbolKind::Shape, SymbolKind::Kind] } else { &[SymbolKind::Task, SymbolKind::Shape, SymbolKind::Kind, SymbolKind::Variant] };
+    k.symbols()
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.module == Some(index) && !s.private && kinds.contains(&s.kind))
+        // A variant is as private as its kind.
+        .filter(|(_, s)| s.kind != SymbolKind::Variant || s.parent.and_then(|p| k.symbol(p)).is_none_or(|kind| !kind.private))
+        .map(|(id, s)| {
+            let label = unqualified(&s.name).to_string();
+            let (kind, detail, apply, snippet) = match s.kind {
+                SymbolKind::Task => {
+                    let params = parameter_names(&s.detail);
+                    let mut used = Vec::new();
+                    let args: Vec<String> = params.iter().map(|p| format!("${{{}}}", unique(&mut used, p))).collect();
+                    let (apply, snippet) = if args.is_empty() { (Some(format!("{}()", label)), None) } else { (None, Some(format!("{}({})", label, args.join(", ")))) };
+                    (CompletionKind::Task, s.detail.clone(), apply, snippet)
+                }
+                SymbolKind::Variant => {
+                    let fields = parameter_names(&s.detail);
+                    let mut used = Vec::new();
+                    let snippet = (!fields.is_empty()).then(|| format!("{}({})", label, fields.iter().map(|f| format!("${{{}}}", unique(&mut used, f))).collect::<Vec<_>>().join(", ")));
+                    let kind_name = s.parent.and_then(|p| k.symbol(p)).map(|p| p.name.as_str()).unwrap_or_default();
+                    (CompletionKind::Variant, format!("{} {}", kind_name, s.detail).trim().to_string(), None, snippet)
+                }
+                SymbolKind::Shape if !types_only => {
+                    let mut used = Vec::new();
+                    let fields: Vec<String> = k.children(id).map(|(_, f)| format!("{}: ${{{}}}", f.name, unique(&mut used, &f.name))).collect();
+                    let body = if fields.is_empty() { "{}".to_string() } else { format!("{{ {} }}", fields.join(", ")) };
+                    (CompletionKind::Type, "shape".to_string(), None, Some(format!("{} {}", label, body)))
+                }
+                SymbolKind::Shape => (CompletionKind::Type, "shape".to_string(), None, None),
+                _ => (CompletionKind::Type, "kind".to_string(), None, None),
+            };
+            CompletionItem { label, kind, detail, apply, snippet, boost: GLOBAL }
+        })
+        .collect()
 }
 
 fn keyword(word: &str) -> CompletionItem {
@@ -850,6 +961,9 @@ fn item_level_items() -> Vec<CompletionItem> {
         keyword("task"),
         keyword("shape"),
         keyword("kind"),
+        keyword("priv"),
+        keyword("use"),
+        snippet("use", "use another file of the program", "use ${module}"),
         snippet("task", "a task", "task ${name}(${})\n\t${}\nfi"),
         snippet("task -> type", "a task that sends a value", "task ${name}(${}) -> ${type}\n\t<- ${value}\nfi"),
         snippet("shape", "a shape with a field", "shape ${Name}\n\t${field}: ${type}\nfi"),
@@ -956,16 +1070,17 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bo
 fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
     let mut items = local_items(k, byte);
     items.extend(task_items(k));
-    for (_, variant) in k.symbols().iter().enumerate().filter(|(_, s)| s.kind == SymbolKind::Variant) {
+    items.extend(module_items(k));
+    for (label, variant) in visible_globals(k, &[SymbolKind::Variant]) {
         let fields: Vec<String> = parameter_names(&variant.detail);
         let mut used = Vec::new();
         let snippet = (!fields.is_empty()).then(|| {
             let args: Vec<String> = fields.iter().map(|f| format!("${{{}}}", unique(&mut used, f))).collect();
-            format!("{}({})", variant.name, args.join(", "))
+            format!("{}({})", label, args.join(", "))
         });
         let kind = variant.parent.and_then(|p| k.symbol(p)).map(|s| s.name.as_str()).unwrap_or_default();
         items.push(CompletionItem {
-            label: variant.name.clone(),
+            label,
             kind: CompletionKind::Variant,
             detail: format!("{} {}", kind, variant.detail).trim().to_string(),
             apply: None,
@@ -974,7 +1089,8 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
         });
     }
     // A shape's value is a literal with every field: `Point { x: ${x}, y: ${y} }`.
-    for (id, shape) in k.symbols().iter().enumerate().filter(|(_, s)| s.kind == SymbolKind::Shape) {
+    for (label, shape) in visible_globals(k, &[SymbolKind::Shape]) {
+        let Some(id) = k.symbols().iter().position(|s| std::ptr::eq(s, shape)) else { continue };
         let mut used = Vec::new();
         let fields: Vec<String> = k
             .children(id)
@@ -982,17 +1098,17 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
             .collect();
         let body = if fields.is_empty() { "{}".to_string() } else { format!("{{ {} }}", fields.join(", ")) };
         items.push(CompletionItem {
-            label: shape.name.clone(),
+            snippet: Some(format!("{} {}", label, body)),
+            label,
             kind: CompletionKind::Type,
             detail: "shape".to_string(),
             apply: None,
-            snippet: Some(format!("{} {}", shape.name, body)),
             boost: GLOBAL,
         });
     }
     // `new` needs a region to allocate in, and `fail` a `T or E` to hold its error.
     let can_allocate = !region_items(k, byte, true).is_empty();
-    let has_errors = k.symbols().iter().any(|symbol| symbol.detail.contains(" or "));
+    let has_errors = k.symbols().iter().any(|symbol| symbol.module.is_none() && symbol.detail.contains(" or "));
     items.extend(
         VALUE_KEYWORDS
             .iter()
@@ -1067,20 +1183,18 @@ fn local_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
 }
 
 fn task_items(k: &Knowledge) -> Vec<CompletionItem> {
-    let mut items: Vec<CompletionItem> = k
-        .symbols()
-        .iter()
-        .filter(|s| s.kind == SymbolKind::Task)
-        .map(|task| {
+    let mut items: Vec<CompletionItem> = visible_globals(k, &[SymbolKind::Task])
+        .into_iter()
+        .map(|(label, task)| {
             let params = parameter_names(&task.detail);
             let mut used = Vec::new();
             let args: Vec<String> = params.iter().map(|p| format!("${{{}}}", unique(&mut used, p))).collect();
             let (apply, snippet) = if args.is_empty() {
-                (Some(format!("{}()", task.name)), None)
+                (Some(format!("{}()", label)), None)
             } else {
-                (None, Some(format!("{}({})", task.name, args.join(", "))))
+                (None, Some(format!("{}({})", label, args.join(", "))))
             };
-            CompletionItem { label: task.name.clone(), kind: CompletionKind::Task, detail: task.detail.clone(), apply, snippet, boost: GLOBAL }
+            CompletionItem { label, kind: CompletionKind::Task, detail: task.detail.clone(), apply, snippet, boost: GLOBAL }
         })
         .collect();
     items.extend(BUILTIN_TASKS.iter().map(|name| CompletionItem {

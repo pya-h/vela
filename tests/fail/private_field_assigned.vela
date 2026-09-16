@@ -1,0 +1,7 @@
+# error: 6:10: 'pin' is a private field of 'library.Card', which only its own file can use
+use modules/library
+
+task main()
+    hold card = library.card("ada")
+    card.pin = 0
+fi

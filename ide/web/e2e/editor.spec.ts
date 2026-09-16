@@ -1,7 +1,7 @@
 // Vela language support in the browser: highlighting, diagnostics,
 // completion, hover, navigation, and the pickers.
 
-import { cursorAtEndOf, expect, launch, lineText, openFile, tab, test } from "./fixtures";
+import { cursorAtEndOf, expect, launch, lineText, openFile, tab, terminal, test, treeRow } from "./fixtures";
 
 test("highlights and outlines a Vela file", async ({ page, studio }) => {
   await launch(page, studio);
@@ -237,4 +237,65 @@ test("several results: highlighting, hover, and completion of the names", async 
   await page.keyboard.type("b = divmod(9, 4)");
   expect(await lineText(page, 9)).toBe("    bind a, b = divmod(9, 4)");
   await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
+});
+
+const GEOMETRY = "priv task twice(n: int) -> int\n    <- n * 2\nfi\n\ntask area(side: int) -> int\n    <- side * twice(side) / 2\nfi\n";
+const USES_GEOMETRY = "use shapes/geometry\n\ntask main()\n    show(geometry.area(3))\nfi\n";
+
+test("modules: highlighting, hover, definitions, errors, and running", async ({ page, studio }) => {
+  studio.write("app/shapes/geometry.vela", GEOMETRY);
+  studio.write("app/main.vela", USES_GEOMETRY);
+  await launch(page, studio);
+  await treeRow(page, "app").click();
+  await openFile(page, "app/main.vela");
+  const content = page.locator(".cm-content");
+  // The module's file is fetched, and its names are known.
+  await expect(content.locator(".tok-module", { hasText: /^geometry$/ })).toHaveCount(2);
+  await expect(content.locator(".tok-task", { hasText: /^area$/ })).toHaveCount(1);
+  await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
+  await content.locator(".tok-task", { hasText: /^area$/ }).hover();
+  await expect(page.locator(".vs-hover .vs-hover-code")).toHaveText("task geometry.area(side: int) -> int");
+  await expect(page.locator(".vs-hover .vs-hover-doc")).toHaveText("From module geometry (app/shapes/geometry.vela).");
+
+  // Completion after the module's name offers what it declares, but not its private task.
+  await cursorAtEndOf(page, 4);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("show(geometry.");
+  const popup = page.locator(".cm-tooltip-autocomplete");
+  await expect(popup.locator(".cm-completionLabel")).toHaveText(["area"]);
+  await page.keyboard.press("Escape");
+  // Remove the line again.
+  await page.keyboard.press("End");
+  await page.keyboard.press("Shift+Home");
+  await page.keyboard.press("Shift+Home");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Backspace");
+  expect(await lineText(page, 5)).toBe("fi");
+
+  // Going to the definition opens the module's file, at the task.
+  await content.locator(".tok-task", { hasText: /^area$/ }).click({ modifiers: ["ControlOrMeta"] });
+  await expect(tab(page, "app/shapes/geometry.vela")).toHaveClass(/active/);
+  expect(await page.evaluate(() => getSelection()?.toString())).toBe("area");
+
+  // An unsaved error in the module shows in the file that uses it, at its `use`.
+  await cursorAtEndOf(page, 2);
+  await page.keyboard.type(" + missing");
+  await tab(page, "app/main.vela").click();
+  await expect(page.locator(".cm-lintRange-error")).toHaveText("shapes/geometry");
+  await page.locator(".cm-lintRange-error").hover();
+  await expect(page.locator(".cm-tooltip-lint")).toContainText("app/shapes/geometry.vela:2:16: unknown variable 'missing'");
+  await page.mouse.move(0, 0);
+  await expect(page.locator(".cm-tooltip-lint")).toHaveCount(0);
+
+  // Fixing it and running saves the module too.
+  await tab(page, "app/shapes/geometry.vela").click();
+  for (let i = 0; i < " + missing".length; i++) await page.keyboard.press("Backspace");
+  await page.keyboard.type(" * 1");
+  await tab(page, "app/main.vela").click();
+  await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
+  await page.keyboard.press("F5");
+  await expect(terminal(page, "output")).toContainText("9");
+  await expect(terminal(page, "output")).toContainText(/── exited with code 0 · \d+ ms ──/);
+  expect(studio.read("app/shapes/geometry.vela")).toContain("<- n * 2 * 1");
+  await expect(tab(page, "app/shapes/geometry.vela")).not.toHaveClass(/dirty/);
 });

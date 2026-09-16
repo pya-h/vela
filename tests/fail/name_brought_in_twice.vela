@@ -1,0 +1,5 @@
+# error: 2:29: 'greet' is already brought in at 2:22
+use modules/library (greet, greet)
+
+task main()
+fi

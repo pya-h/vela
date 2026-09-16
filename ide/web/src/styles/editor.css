@@ -53,6 +53,9 @@
 .tok-punctuation {
   color: var(--syn-punctuation);
 }
+.tok-module {
+  color: var(--syn-module);
+}
 .tok-invalid {
   color: var(--syn-invalid);
   text-decoration: underline wavy var(--syn-invalid);
@@ -145,4 +148,8 @@
 .cm-completionIcon-region::after {
   content: "@";
   color: var(--syn-region);
+}
+.cm-completionIcon-module::after {
+  content: "m";
+  color: var(--syn-module);
 }

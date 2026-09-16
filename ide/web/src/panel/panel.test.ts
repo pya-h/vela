@@ -36,9 +36,10 @@ describe("run output", () => {
 
 describe("problems", () => {
   const diagnostic = (line: number, message: string): Diagnostic => ({ from: line * 10, to: line * 10 + 3, line, col: 5, message, severity: "error" });
-  const failure = (kind: BuildFailure["kind"], message: string, line: number | null = null): BuildFailure => ({
+  const failure = (kind: BuildFailure["kind"], message: string, line: number | null = null, file: string | null = null): BuildFailure => ({
     kind,
     message,
+    file,
     line,
     col: line === null ? null : 5,
     rendered: message,
@@ -71,6 +72,16 @@ describe("problems", () => {
     expect(closed[0]?.problems[0]).toMatchObject({ source: "build", line: 3, col: 5 });
     const other = collectProblems(live, new Map([["a.vela", failure("c-failed", "C compilation failed")]]));
     expect(problemCount(other)).toBe(2);
+  });
+
+  it("puts a build error in a module under that module's file", () => {
+    const inModule = failure("vela", "unknown variable 'x'", 4, "lib/geometry.vela");
+    const closed = collectProblems([], new Map([["main.vela", inModule]]));
+    expect(closed.map((f) => f.path)).toEqual(["lib/geometry.vela"]);
+    expect(closed[0]?.problems[0]).toMatchObject({ line: 4, source: "build" });
+    // With the program's file open, its analysis shows the error at the `use`.
+    const open = collectProblems([{ path: "main.vela", diagnostics: [diagnostic(1, "lib/geometry.vela:4:5: unknown variable 'x'")] }], new Map([["main.vela", inModule]]));
+    expect(problemCount(open)).toBe(1);
   });
 });
 

@@ -33,7 +33,12 @@ describe("VelaAnalysis", () => {
   it("covers every non-space character of every example with a token", () => {
     for (const name of readdirSync(examples).filter((f) => f.endsWith(".vela"))) {
       const source = readFileSync(join(examples, name), "utf8");
-      const { tokens, diagnostics, outline } = analysis.file(source);
+      // The modules an example uses are next to it, fetched as the editor does.
+      const context = { path: name, modules: {} as Record<string, string> };
+      for (let missing = analysis.file(source, context).missing; missing.length > 0; missing = analysis.file(source, context).missing) {
+        for (const path of missing) context.modules[path] = readFileSync(join(examples, path), "utf8");
+      }
+      const { tokens, diagnostics, outline } = analysis.file(source, context);
       expect(diagnostics, name).toEqual([]);
       expect(outline.length, name).toBeGreaterThan(0);
       const covered = new Array<boolean>(source.length).fill(false);
@@ -43,6 +48,25 @@ describe("VelaAnalysis", () => {
       const uncovered = [...source].flatMap((_, i) => (!covered[i] && !/\s/.test(source[i] ?? "") ? [i] : []));
       expect(uncovered, name).toEqual([]);
     }
+  });
+
+  it("analyzes a file with the modules it uses", () => {
+    const source = "use shapes/geometry\n\ntask main()\n    show(geometry.area(2))\nfi\n";
+    const geometry = "task area(side: int) -> int\n    <- side * side\nfi\n";
+    const alone = analysis.file(source, { path: "app/main.vela", modules: {} });
+    expect(alone.missing).toEqual(["app/shapes/geometry.vela"]);
+    expect(alone.diagnostics[0]?.message).toBe("can't find module 'shapes/geometry': there is no file 'shapes/geometry.vela'");
+
+    const context = { path: "app/main.vela", modules: { "app/shapes/geometry.vela": geometry } };
+    const { tokens, diagnostics, missing } = analysis.file(source, context);
+    expect([diagnostics, missing]).toEqual([[], []]);
+    const area = source.indexOf("area(2)");
+    expect(tokens.find((t) => t.from === source.indexOf("geometry.area"))?.class).toBe("module");
+    expect(tokens.find((t) => t.from === area)?.class).toBe("task");
+    expect(analysis.hover(source, area, context)?.code).toBe("task geometry.area(side: int) -> int");
+    expect(analysis.definition(source, area, context)).toEqual({ from: 5, to: 9, path: "app/shapes/geometry.vela" });
+    const labels = analysis.complete(source.replace("area(2)", "(2)"), source.indexOf("area"), context).items.map((i) => i.label);
+    expect(labels).toEqual(["area"]);
   });
 
   it("reports diagnostics, completions, hovers, and definitions", () => {
@@ -77,6 +101,7 @@ describe("VelaAnalysis", () => {
     const language = analysis.language();
     expect(language.keywords).toEqual(expect.arrayContaining(["task", "fi", "hold", "none"]));
     expect(language.blockOpeners).toEqual(["task", "shape", "kind", "when", "loop", "each", "match"]);
+    expect(language.blockModifiers).toEqual(["priv"]);
     expect(language.branchKeywords).toEqual(["else", "case"]);
     expect(language.builtinTypes).toEqual(["int", "float", "bool", "text", "unit"]);
     expect(language.lineComment).toBe("#");

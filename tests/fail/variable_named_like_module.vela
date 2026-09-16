@@ -1,0 +1,6 @@
+# error: 5:10: 'library' is the name of a module this file uses, at 2:13
+use modules/library
+
+task main()
+    bind library = 1
+fi

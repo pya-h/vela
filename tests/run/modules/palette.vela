@@ -1,0 +1,25 @@
+# Colors, for tests/run/modules.vela.
+
+kind Color
+    Red
+    Blue
+    Custom(red: int, green: int, blue: int)
+fi
+
+task describe(color: Color) -> text
+    match color
+    case Red
+        <- "red"
+    case Blue
+        <- "blue"
+    case Custom r g b
+        <- mix(r, g, b)
+    fi
+fi
+
+priv task mix(r: int, g: int, b: int) -> text
+    when r + g + b > 50
+        <- "light"
+    fi
+    <- "dark"
+fi

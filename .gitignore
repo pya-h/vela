@@ -3,6 +3,10 @@
 /examples/*
 !/examples/*.vela
 !/examples/*.md
+# The folders of modules examples use, likewise
+!/examples/*/
+/examples/*/*
+!/examples/*/*.vela
 # The `vela` command's default output
 a.out
 # Vela Studio frontend: dependencies and build outputs

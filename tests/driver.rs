@@ -59,7 +59,7 @@ fn builds_a_program_that_runs() {
 fn invalid_programs_report_the_vela_error() {
     let source = "task main()\n    show(missing)\nfi\n";
     let err = driver::build(source, Path::new("bad.vela"), Path::new("unused-output"), &cc()).unwrap_err();
-    let BuildError::Vela(error) = &err else { panic!("expected a Vela error, got {:?}", err) };
+    let BuildError::Vela(driver::ProgramError { error, .. }) = &err else { panic!("expected a Vela error, got {:?}", err) };
     assert_eq!(error.span, Some(Span::new(2, 10)));
     assert_eq!(error.message, "unknown variable 'missing'");
     assert_eq!(
@@ -202,4 +202,80 @@ fn long_chains_of_types_are_checked_without_a_crash() {
     assert!(error.message.starts_with("'S0' contains itself by value (S0 -> S1 -> "), "{}", error.message);
     let error = driver::generate_c(&chain("^", "first: ^S0")).unwrap_err();
     assert!(error.message.contains("can never be created"), "{}", error.message);
+}
+
+/// A loader over files held in memory, which records every path it is asked for.
+fn memory_loader<'a>(files: &'a [(&'a str, &'a str)], asked: &'a std::cell::RefCell<Vec<String>>) -> impl FnMut(&Path) -> std::io::Result<String> + 'a {
+    move |path: &Path| {
+        let path = path.to_string_lossy().replace('\\', "/");
+        asked.borrow_mut().push(path.clone());
+        files
+            .iter()
+            .find(|(name, _)| *name == path)
+            .map(|(_, source)| source.to_string())
+            .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::NotFound))
+    }
+}
+
+#[test]
+fn a_program_loads_each_module_once_through_its_loader() {
+    let main = "use shapes/geometry\nuse text/labels (label)\n\ntask main()\n    show(label(geometry.area(3)))\nfi\n";
+    let files = [
+        ("app/shapes/geometry.vela", "use ../text/labels\n\ntask area(side: int) -> int\n    <- labels.width(side) * side\nfi\n"),
+        ("app/text/labels.vela", "task label(n: int) -> text\n    <- \"shape\"\nfi\n\ntask width(n: int) -> int\n    <- n\nfi\n"),
+    ];
+    let asked = std::cell::RefCell::new(Vec::new());
+    let items = driver::check_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
+    // Paths are relative to the file with the `use`, with `..` settled, and a
+    // module used twice is read once.
+    assert_eq!(*asked.borrow(), ["app/shapes/geometry.vela", "app/text/labels.vela"]);
+    let names: Vec<&str> = items.iter().map(|item| match item {
+        Item::Task(t) => t.name.as_str(),
+        _ => "",
+    }).collect();
+    assert_eq!(names, ["labels.label", "labels.width", "geometry.area", "main"]);
+    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
+    assert!(c.contains("int64_t vela_geometry__0__area(int64_t side)"), "{}", c);
+}
+
+#[test]
+fn an_error_in_a_module_names_that_file() {
+    let main = "use lib\n\ntask main()\n    show(lib.twice(2))\nfi\n";
+    let files = [("lib.vela", "task twice(n: int) -> int\n    <- n * \"2\"\nfi\n")];
+    let asked = std::cell::RefCell::new(Vec::new());
+    let error = driver::check_program(Path::new("main.vela"), main, &mut memory_loader(&files, &asked)).unwrap_err();
+    assert_eq!(error.error.span, Some(Span { line: 2, col: 10, file: 1 }));
+    assert_eq!(error.error_file().as_deref(), Some("lib.vela"));
+    assert_eq!(
+        error.render("main.vela"),
+        "lib.vela:2:10: error: arithmetic requires numeric operands\n 2 |     <- n * \"2\"\n   |          ^"
+    );
+    // A program in one file can't load modules, and says which is missing.
+    let partial = driver::front_end_partial(main);
+    assert_eq!(partial.error.unwrap().message, "can't find module 'lib': there is no file 'lib.vela'");
+}
+
+#[test]
+fn long_chains_of_modules_are_an_error_not_a_crash() {
+    // Module i uses module i + 1: loading follows the chain recursively, on a
+    // test thread's small stack.
+    let chain = |length: usize| -> Vec<(String, String)> {
+        (1..=length)
+            .map(|i| {
+                let uses = if i < length { format!("use m{}\n\n", i + 1) } else { String::new() };
+                (format!("m{}.vela", i), format!("{}task value{}() -> int\n    <- {}\nfi\n", uses, i, i))
+            })
+            .collect()
+    };
+    let main = "use m1\n\ntask main()\n    show(m1.value1())\nfi\n";
+    let check = |length: usize| {
+        let files = chain(length);
+        let borrowed: Vec<(&str, &str)> = files.iter().map(|(name, source)| (name.as_str(), source.as_str())).collect();
+        let asked = std::cell::RefCell::new(Vec::new());
+        driver::check_program(Path::new("main.vela"), main, &mut memory_loader(&borrowed, &asked))
+    };
+    let limit = vela::parser::MAX_NESTING;
+    check(limit - 1).unwrap();
+    let error = check(limit + 50).unwrap_err();
+    assert_eq!(error.error.message, format!("modules use one another too deeply (more than {} in a chain)", limit));
 }

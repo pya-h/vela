@@ -3,22 +3,31 @@ use std::fmt;
 use crate::error::{Error, Result};
 
 /// Where the names inside each written type are: for the type starting at
-/// `(line, col)`, each shape, kind, or builtin name, `@region`, `maybe`,
+/// `(file, line, col)`, each shape, kind, or builtin name, `@region`, `maybe`,
 /// `region`, and `or` (at the error type after it), with its position. The
 /// types themselves carry no positions; errors about a part of a type use this
 /// to point at that part.
-pub type TypePlaces = std::collections::HashMap<(usize, usize), Vec<(String, Span)>>;
+pub type TypePlaces = std::collections::HashMap<(usize, usize, usize), Vec<(String, Span)>>;
 
-/// A position in the source file (1-based line and column).
+/// A position in a source file (1-based line and column). `file` tells which
+/// file of a program: 0 is the file the program was compiled from, and each
+/// module it uses gets the next number (see `modules::SourceFile`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Span {
     pub line: usize,
     pub col: usize,
+    pub file: usize,
 }
 
 impl Span {
+    /// A position in the program's first file.
     pub fn new(line: usize, col: usize) -> Self {
-        Span { line, col }
+        Span { line, col, file: 0 }
+    }
+
+    /// The key of the type written at this position in `TypePlaces`.
+    pub fn place_key(self) -> (usize, usize, usize) {
+        (self.file, self.line, self.col)
     }
 }
 
@@ -307,7 +316,9 @@ pub enum ExprKind {
     /// `new T(value) at r` or `new@r T(value)`; `ty_span` is the position of
     /// `T`, and `region_span` of `r`.
     New {
-        ty: Type,
+        /// Boxed, which keeps every expression small: the compiler's stages
+        /// recurse through expressions, and each level holds some on the stack.
+        ty: Box<Type>,
         ty_span: Span,
         value: Box<Expr>,
         region: String,
@@ -510,6 +521,52 @@ pub struct Field {
     pub span: Span,
     /// Position of the type.
     pub ty_span: Span,
+    /// `priv`: a shape's field that only its own file reads, writes, or sets
+    /// in a literal. Parameters and payloads are never private.
+    pub private: bool,
+}
+
+/// `use shapes/circle` or `use geometry (area, Point)`: another file of the
+/// program, whose tasks, shapes, and kinds this file names as `circle.area`,
+/// and the names it also brings in unqualified.
+#[derive(Debug, Clone)]
+pub struct Use {
+    /// The path as written: names and `..`, the last one the module's name.
+    pub path: Vec<String>,
+    /// Position of the path's first part.
+    pub span: Span,
+    /// Position of the module's name, the path's last part.
+    pub name_span: Span,
+    /// The names in parentheses, each with its position.
+    pub names: Vec<Binding>,
+}
+
+impl Use {
+    /// The module's name, by which this file refers to it: the path's last part.
+    pub fn name(&self) -> &str {
+        self.path.last().map_or("", String::as_str)
+    }
+
+    /// The path as written, as in `../shapes/circle`.
+    pub fn written(&self) -> String {
+        self.path.join("/")
+    }
+}
+
+/// The separator between a module's name and a name inside it, both as
+/// written (`geometry.area`) and in the names the checker and code generator
+/// use for the items of modules other than the program's main file.
+pub const MODULE_SEPARATOR: char = '.';
+
+/// The module a name belongs to: `geometry` for `geometry.Point`, and the
+/// empty string for a name of the program's main file.
+pub fn module_of(name: &str) -> &str {
+    name.rsplit_once(MODULE_SEPARATOR).map_or("", |(module, _)| module)
+}
+
+/// A name without its module: `Point` for `geometry.Point`.
+pub fn unqualified(name: &str) -> &str {
+    name.rsplit_once(MODULE_SEPARATOR).map_or(name, |(_, name)| name)
 }
 
 #[derive(Debug, Clone)]
@@ -531,6 +588,8 @@ pub struct TaskDef {
     pub body: Block,
     /// Position of the task name.
     pub span: Span,
+    /// `priv task`: only its own file can call it.
+    pub private: bool,
 }
 
 /// One result in a task's header, `int` or `total: int`. Either every result
@@ -572,6 +631,8 @@ pub struct ShapeDef {
     pub fields: Vec<Field>,
     /// Position of the shape name.
     pub span: Span,
+    /// `priv shape`: only its own file can name it.
+    pub private: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -588,4 +649,6 @@ pub struct KindDef {
     pub variants: Vec<Variant>,
     /// Position of the kind name.
     pub span: Span,
+    /// `priv kind`: only its own file can name it or its variants.
+    pub private: bool,
 }

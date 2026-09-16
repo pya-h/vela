@@ -3,14 +3,14 @@
 // run operations that connect them to the server.
 
 import { isolateHistory } from "@codemirror/commands";
-import { EditorState, type Text } from "@codemirror/state";
+import { Compartment, EditorState, StateEffect, type Text } from "@codemirror/state";
 import { EditorView, type ViewUpdate } from "@codemirror/view";
 
 import type { OutlineItem } from "../analysis/protocol";
 import { ApiError, type StudioApi } from "../api/client";
 import type { Entry, Info, Tree } from "../api/types";
 import { editorExtensions } from "../editor/setup";
-import type { Analyzer } from "../editor/vela";
+import { type Analyzer, documentPath, refreshAnalysis } from "../editor/vela";
 import { Panel } from "../panel/panel";
 import { type Problem, collectProblems, problemCount } from "../panel/problems";
 import { ProblemsView } from "../panel/problems-view";
@@ -62,6 +62,9 @@ export class Workbench {
   private readonly runButton: HTMLButtonElement;
   private readonly buildButton: HTMLButtonElement;
   private problemsTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Each editor state's file path, which a rename changes. */
+  private readonly pathCompartment = new Compartment();
+  private modulesTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     private readonly api: StudioApi,
@@ -195,6 +198,31 @@ export class Workbench {
       this.showEditorOrWelcome();
       this.scheduleProblems();
     });
+    // The files a Vela file uses: open ones as edited, others from the workspace.
+    this.analyzer.modules.connect({
+      read: async (path) => {
+        try {
+          return (await this.api.readFile(path)).content;
+        } catch {
+          return null;
+        }
+      },
+      openText: (path) => {
+        const doc = this.documents.get(path);
+        return doc ? this.latest(doc).doc.toString() : undefined;
+      },
+    });
+    // Changes can come from inside an editor update (typing in a module), where
+    // the editor can't be updated again, and several at once: once, just after.
+    this.analyzer.modules.onChange(() => {
+      clearTimeout(this.modulesTimer);
+      this.modulesTimer = setTimeout(() => {
+        refreshAnalysis(this.view);
+        this.scheduleOutline();
+        this.scheduleProblems();
+      }, 0);
+    });
+    this.analyzer.openDefinition = (path, from, to) => void this.openLocation(path, from, to);
     this.showEditorOrWelcome();
     this.outline.update(null, 0);
     this.updateProblems();
@@ -224,14 +252,18 @@ export class Workbench {
         onUpdate: EditorView.updateListener.of((update) => this.onEditorUpdate(update)),
         keys: [],
       }),
-    });
+    }).update({ effects: StateEffect.appendConfig.of(this.pathCompartment.of(documentPath.of(path))) }).state;
   }
 
   private onEditorUpdate(update: ViewUpdate): void {
     const doc = this.documents.current;
     if (!doc || update.view !== this.view) return;
     doc.state = update.state;
-    if (update.docChanged) this.documents.changed();
+    if (update.docChanged) {
+      this.documents.changed();
+      // Files that use this one are analyzed again.
+      this.analyzer.modules.changed(doc.path);
+    }
     if (update.docChanged || update.selectionSet) {
       this.scheduleOutline();
       this.updateCursor();
@@ -261,6 +293,20 @@ export class Workbench {
     }
     await loading;
     if (this.documents.get(path)) this.activate(path);
+  }
+
+  /** Opens the file at `path` with `from`..`to` selected, as a definition there. */
+  private async openLocation(path: string, from: number, to: number): Promise<void> {
+    await this.openFile(path);
+    if (this.documents.current?.path !== path) return;
+    const length = this.view.state.doc.length;
+    const start = Math.min(from, length);
+    this.view.dispatch({
+      selection: { anchor: start, head: Math.min(Math.max(to, start), length) },
+      effects: EditorView.scrollIntoView(start, { y: "center" }),
+      userEvent: "select.definition",
+    });
+    this.view.focus();
   }
 
   activate(path: string): void {
@@ -341,9 +387,15 @@ export class Workbench {
   }
 
   async saveAll(): Promise<void> {
+    await this.saveChanged();
+  }
+
+  /** Saves every open file with changes; resolves to whether all were saved. */
+  private async saveChanged(): Promise<boolean> {
     for (const doc of this.documents.all.filter(isDirty)) {
-      if (!(await this.save(doc))) return;
+      if (!(await this.save(doc))) return false;
     }
+    return true;
   }
 
   /**
@@ -465,6 +517,8 @@ export class Workbench {
     if (now - this.lastDiskCheck < 1000) return;
     this.lastDiskCheck = now;
     void this.refreshTree();
+    // Modules may have changed on disk too; they are read again when used.
+    this.analyzer.modules.forget();
     for (const doc of this.documents.all) {
       try {
         // A save in progress changes the file and then the hash; comparing
@@ -570,7 +624,8 @@ export class Workbench {
       const active = this.documents.current;
       if (active) active.state = this.view.state;
       this.documents.renamed(entry.path, to);
-      // A file that became (or stopped being) Vela gets the right editor features.
+      // A file that became (or stopped being) Vela gets the right editor features,
+      // and every moved file its new path.
       for (const doc of this.documents.within(to)) {
         const wasVela = (entry.path + doc.path.slice(to.length)).endsWith(".vela");
         if (wasVela !== doc.path.endsWith(".vela")) {
@@ -578,8 +633,14 @@ export class Workbench {
           doc.state = this.createState(doc.path, doc.state.doc.toString());
           doc.saved = saved.eq(doc.state.doc) ? doc.state.doc : saved;
           if (doc === this.documents.current) this.view.setState(doc.state);
+        } else {
+          const effects = this.pathCompartment.reconfigure(documentPath.of(doc.path));
+          if (doc === this.documents.current) this.view.dispatch({ effects });
+          else doc.state = doc.state.update({ effects }).state;
         }
       }
+      // Paths changed, so the modules files use are found again.
+      this.analyzer.modules.forget();
       this.explorer.renamed(entry.path, to);
       this.runner.renamed(entry.path, to);
       this.updateOutline();
@@ -600,6 +661,7 @@ export class Workbench {
     try {
       await this.api.remove(entry.path);
       for (const doc of this.documents.within(entry.path)) this.discard(doc.path);
+      this.analyzer.modules.forget();
       this.runner.deleted(entry.path);
       await this.refreshTree();
       // The deleted row had focus; keep it in the explorer.
@@ -611,22 +673,24 @@ export class Workbench {
 
   // Running, problems, and the status bar -------------------------------------------------
 
-  /** Saves the active Vela file and runs it, showing Output. */
+  /**
+   * Saves every open file with changes, since the program may use any of them
+   * as a module, and runs the active Vela file, showing Output.
+   */
   async runActive(): Promise<void> {
     const doc = this.runnableDocument("run");
     if (!doc || this.runner.busy) return;
-    // A program is one file, so only that file needs saving.
-    if (isDirty(doc) && !(await this.save(doc))) return;
+    if (!(await this.saveChanged())) return;
     this.panel.show("output", false);
     await nextFrame();
     await this.runner.run(doc.path);
   }
 
-  /** Saves the active Vela file and builds it without running it. */
+  /** Saves every open file with changes and builds the active Vela file without running it. */
   async buildActive(): Promise<void> {
     const doc = this.runnableDocument("build");
     if (!doc || this.runner.busy) return;
-    if (isDirty(doc) && !(await this.save(doc))) return;
+    if (!(await this.saveChanged())) return;
     const built = await this.runner.build(doc.path);
     if (built) toast(`${fileName(doc.path)} built without errors.`, "success");
     // While a program runs, a failed build doesn't take over Output.
@@ -720,7 +784,7 @@ export class Workbench {
   private updateProblems(): void {
     const live = this.documents.all
       .filter((doc) => doc.path.endsWith(".vela"))
-      .map((doc) => ({ path: doc.path, diagnostics: this.analyzer.file(this.latest(doc).doc).diagnostics }));
+      .map((doc) => ({ path: doc.path, diagnostics: this.analyzer.file(this.latest(doc).doc, doc.path).diagnostics }));
     const files = collectProblems(live, this.runner.failures);
     this.problems.update(files);
     const count = problemCount(files);
@@ -782,7 +846,7 @@ export class Workbench {
       toast("Open a .vela file to go to its declarations.");
       return;
     }
-    const symbols = flattenOutline(this.analyzer.file(this.view.state.doc).outline).map(({ item }) => ({
+    const symbols = flattenOutline(this.analyzer.file(this.view.state.doc, doc.path).outline).map(({ item }) => ({
       label: item.name,
       detail: item.detail,
       badge: SYMBOL_BADGES[item.kind],
@@ -817,7 +881,7 @@ export class Workbench {
       this.outline.update(null, 0);
       return;
     }
-    this.outline.update(this.analyzer.file(this.view.state.doc).outline, this.view.state.selection.main.head);
+    this.outline.update(this.analyzer.file(this.view.state.doc, doc.path).outline, this.view.state.selection.main.head);
   }
 
   private onGlobalKey(event: KeyboardEvent): void {

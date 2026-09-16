@@ -1,0 +1,6 @@
+# error: modules/cycle_b.vela:2:5: modules can't use one another in a circle: cycle_a -> cycle_b -> cycle_a
+use modules/cycle_a
+
+task main()
+    show(cycle_a.a())
+fi

@@ -19,12 +19,19 @@ pub struct Parser {
     type_places: TypePlaces,
     /// The parts of the type being parsed.
     type_parts: Vec<(String, Span)>,
+    /// The file's `use` lines, which come before its items.
+    uses: Vec<Use>,
 }
 
 impl Parser {
     /// `tokens` and `spans` are parallel, as produced by `Lexer::tokenize`.
     pub fn new(tokens: Vec<Token>, spans: Vec<Span>) -> Self {
-        Parser { tokens, spans, pos: 0, depth: 0, type_places: TypePlaces::new(), type_parts: Vec::new() }
+        Parser { tokens, spans, pos: 0, depth: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), uses: Vec::new() }
+    }
+
+    /// The `use` lines of the file parsed.
+    pub fn uses(&mut self) -> Vec<Use> {
+        std::mem::take(&mut self.uses)
     }
 
     /// Where the parts of every type parsed so far are.
@@ -32,14 +39,86 @@ impl Parser {
         std::mem::take(&mut self.type_places)
     }
 
+    /// Parses a whole file: its `use` lines (see `uses`), then its items.
     pub fn parse_file(&mut self) -> Result<Vec<Item>> {
         let mut items = Vec::new();
         self.skip_newlines();
+        while self.check(Token::Use) {
+            let used = self.parse_use()?;
+            self.uses.push(used);
+            self.skip_newlines();
+        }
         while !self.is_at_end() {
+            if self.check(Token::Use) {
+                return Err(Error::at(self.peek_span(), "'use' lines go at the top of the file, before any task, shape, or kind"));
+            }
             items.push(self.parse_item()?);
             self.skip_newlines();
         }
         Ok(items)
+    }
+
+    /// `use path` or `use path (name, …)`, where the path is names and `..`
+    /// separated by `/`.
+    fn parse_use(&mut self) -> Result<Use> {
+        self.advance(); // use
+        let span = self.peek_span();
+        if matches!(self.peek(), Token::Newline | Token::Eof) {
+            return Err(Error::at(span, "expected a module after 'use', as in 'use geometry'"));
+        }
+        if let Token::Text(text) = self.peek() {
+            let written = text.strip_suffix(".vela").unwrap_or(text).to_string();
+            return Err(Error::at(span, format!("a module is named without quotes or '.vela', as in 'use {}'", written)));
+        }
+        let mut path = Vec::new();
+        let name_span = loop {
+            let part_span = self.peek_span();
+            if self.match_token(Token::Range) {
+                path.push("..".to_string());
+                if !self.match_token(Token::Slash) {
+                    return Err(Error::at(self.peek_span(), "a module path goes on after '..' with '/', as in 'use ../geometry'"));
+                }
+                continue;
+            }
+            path.push(self.expect_ident()?);
+            if self.check(Token::Dot) {
+                return Err(Error::at(self.peek_span(), "a module path separates its folders with '/', as in 'use shapes/circle'"));
+            }
+            if !self.match_token(Token::Slash) {
+                break part_span;
+            }
+        };
+        let mut names = Vec::new();
+        if self.match_token(Token::LParen) {
+            loop {
+                let at = self.peek_span();
+                names.push((self.expect_ident()?, at));
+                if !self.match_token(Token::Comma) {
+                    break;
+                }
+            }
+            self.expect(Token::RParen)?;
+        }
+        if !matches!(self.peek(), Token::Newline | Token::Eof) {
+            return Err(self.unexpected("the end of the 'use' line"));
+        }
+        Ok(Use { path, span, name_span, names })
+    }
+
+    /// Whether `name` is the name of a module this file uses.
+    fn is_module(&self, name: &str) -> bool {
+        self.uses.iter().any(|used| used.name() == name)
+    }
+
+    /// After a name at the cursor's previous token: `.member` when the name is a
+    /// module this file uses, giving `module.member`; otherwise the name alone.
+    fn qualified(&mut self, name: String) -> Result<String> {
+        if !self.is_module(&name) || !self.check(Token::Dot) {
+            return Ok(name);
+        }
+        self.advance(); // .
+        let member = self.expect_ident()?;
+        Ok(format!("{}{}{}", name, MODULE_SEPARATOR, member))
     }
 
     fn peek(&self) -> &Token {
@@ -164,7 +243,7 @@ impl Parser {
         if self.match_token(Token::Fi) {
             return Ok(());
         }
-        if self.is_at_end() || matches!(self.peek(), Token::Task | Token::Shape | Token::Kind | Token::Else | Token::Case | Token::RBrace) {
+        if self.is_at_end() || self.at_item_start() || matches!(self.peek(), Token::Else | Token::Case | Token::RBrace) {
             // Directly in a task, an `else` or `case` has no block to belong to.
             let hint = match self.peek() {
                 Token::Else if opener == "task" => " (or an 'else' without its 'when')",
@@ -229,7 +308,12 @@ impl Parser {
     /// Whether the next token starts a top-level item, which can't appear
     /// inside a block (so a block before it is missing its `fi`).
     fn at_item_start(&self) -> bool {
-        matches!(self.peek(), Token::Task | Token::Shape | Token::Kind)
+        match self.peek() {
+            Token::Task | Token::Shape | Token::Kind | Token::Use => true,
+            // `priv` also marks a shape's field.
+            Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind)),
+            _ => false,
+        }
     }
 
     /// Whether the next token is `end` followed, after any blank lines, by the
@@ -240,11 +324,27 @@ impl Parser {
         }
         let rest = self.tokens.get(self.pos + 1..).unwrap_or_default();
         let next = rest.iter().find(|token| **token != Token::Newline).unwrap_or(&Token::Eof);
-        matches!(next, Token::Eof | Token::Task | Token::Shape | Token::Kind)
+        matches!(next, Token::Eof | Token::Task | Token::Shape | Token::Kind | Token::Priv)
     }
 
     fn parse_item(&mut self) -> Result<Item> {
         self.skip_newlines();
+        if self.check(Token::Priv) {
+            let span = self.peek_span();
+            self.advance();
+            let mut item = match self.peek() {
+                Token::Task => self.parse_task().map(Item::Task)?,
+                Token::Shape => self.parse_shape().map(Item::Shape)?,
+                Token::Kind => self.parse_kind().map(Item::Kind)?,
+                _ => return Err(Error::at(span, "'priv' goes before a task, shape, or kind, or a shape's field")),
+            };
+            match &mut item {
+                Item::Task(t) => t.private = true,
+                Item::Shape(s) => s.private = true,
+                Item::Kind(k) => k.private = true,
+            }
+            return Ok(item);
+        }
         match self.peek() {
             Token::Task => self.parse_task().map(Item::Task),
             Token::Shape => self.parse_shape().map(Item::Shape),
@@ -286,7 +386,7 @@ impl Parser {
         self.skip_newlines();
         let body = self.parse_block()?;
         self.expect_fi("task", opened)?;
-        Ok(TaskDef { name, params, ret, results, body, span })
+        Ok(TaskDef { name, params, ret, results, body, span, private: false })
     }
 
     /// The results after a task's `->`: one, or several separated by commas,
@@ -346,11 +446,14 @@ impl Parser {
             self.skip_newlines();
             if self.check(Token::Fi) || self.at_item_start() { break; }
             self.reject_stray_end()?;
-            fields.push(self.parse_field()?);
+            let private = self.match_token(Token::Priv);
+            let mut field = self.parse_field()?;
+            field.private = private;
+            fields.push(field);
             self.skip_newlines();
         }
         self.expect_fi("shape", opened)?;
-        Ok(ShapeDef { name, fields, span })
+        Ok(ShapeDef { name, fields, span, private: false })
     }
 
     fn parse_kind(&mut self) -> Result<KindDef> {
@@ -369,6 +472,9 @@ impl Parser {
                 self.reject_stray_end()?;
             }
             let variant_span = self.peek_span();
+            if self.check(Token::Priv) {
+                return Err(Error::at(variant_span, "a variant can't be 'priv': every variant is as visible as its kind"));
+            }
             let tag = self.expect_ident()?;
             let payload = if self.check(Token::LParen) {
                 self.parse_field_list()?
@@ -379,17 +485,20 @@ impl Parser {
             self.skip_newlines();
         }
         self.expect_fi("kind", opened)?;
-        Ok(KindDef { name, variants, span })
+        Ok(KindDef { name, variants, span, private: false })
     }
 
     /// `name: type`
     fn parse_field(&mut self) -> Result<Field> {
         let span = self.peek_span();
+        if self.check(Token::Priv) {
+            return Err(Error::at(span, "only a shape's field can be 'priv', not a parameter or a variant's value"));
+        }
         let name = self.expect_ident()?;
         self.expect(Token::Colon)?;
         let ty_span = self.peek_span();
         let ty = self.parse_type()?;
-        Ok(Field { name, ty, span, ty_span })
+        Ok(Field { name, ty, span, ty_span, private: false })
     }
 
     /// `(name: type, ...)`
@@ -415,7 +524,7 @@ impl Parser {
         let start = self.peek_span();
         self.type_parts.clear();
         let ty = self.parse_type_parts();
-        self.type_places.insert((start.line, start.col), std::mem::take(&mut self.type_parts));
+        self.type_places.insert(start.place_key(), std::mem::take(&mut self.type_parts));
         ty
     }
 
@@ -479,6 +588,7 @@ impl Parser {
             return Ok(if prefix == Token::Caret { Type::Ptr(inner, None) } else { Type::Maybe(inner) });
         }
         let name = self.expect_ident()?;
+        let name = self.qualified(name)?;
         self.type_parts.push((name.clone(), span));
         Ok(Type::builtin(&name).unwrap_or(Type::Named(name, None)))
     }
@@ -522,6 +632,7 @@ impl Parser {
                 self.parse_simple_stmt(span)
             }
             Token::Region => self.parse_region(),
+            Token::Priv => Err(Error::at(span, "'priv' goes before a task, shape, or kind, or a shape's field, not a statement")),
             Token::Ident(name) if name == "free" && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::New)) => Err(
                 Error::at(span, "Vela has no 'free': memory in a region is freed when the block declaring the region closes"),
             ),
@@ -767,6 +878,16 @@ impl Parser {
             }
             Token::Ident(_) => {
                 let tag = self.expect_ident()?;
+                if self.check(Token::Dot) && self.is_module(&tag) {
+                    let variant = match self.tokens.get(self.pos + 1) {
+                        Some(Token::Ident(variant)) => variant.clone(),
+                        _ => "Circle".to_string(),
+                    };
+                    return Err(Error::at(
+                        span,
+                        format!("a pattern names the variant alone, as in '{} {}': the value's kind tells which module it is from", keyword, variant),
+                    ));
+                }
                 if self.check(Token::LParen) {
                     return Err(Error::at(
                         self.peek_span(),
@@ -982,6 +1103,7 @@ impl Parser {
             Token::Ident(name) => {
                 let name = name.clone();
                 self.advance();
+                let name = self.qualified(name)?;
                 if self.check(Token::LBrace) && self.at_shape_literal() {
                     self.parse_struct_init(name)?
                 } else if self.check(Token::LParen) {
@@ -1092,7 +1214,7 @@ impl Parser {
                 format!("'new' needs a region to allocate in, as in 'new {}(…) at r' or 'new@r {}(…)'", ty, ty),
             ));
         };
-        Ok(Expr::new(ExprKind::New { ty, ty_span, value: Box::new(value), region, region_span }, span))
+        Ok(Expr::new(ExprKind::New { ty: Box::new(ty), ty_span, value: Box::new(value), region, region_span }, span))
     }
 
     fn parse_struct_init(&mut self, name: String) -> Result<ExprKind> {

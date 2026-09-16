@@ -1,0 +1,6 @@
+# error: 5:5: unknown task 'library'; 'library' is a module, so name a task in it, as in 'library.name(…)'
+use modules/library
+
+task main()
+    library()
+fi

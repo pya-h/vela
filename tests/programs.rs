@@ -6,8 +6,11 @@
 //!   with no warnings (see `STRICT_C_FLAGS`).
 //! - `tests/fail/NAME.vela` must be rejected by the Vela compiler itself (not by
 //!   the C compiler). Its first line is `# error: LINE:COL: MESSAGE` (or
-//!   `# error: MESSAGE` for an error without a position), and the compiler's
-//!   first line of output must be exactly that diagnostic.
+//!   `# error: MESSAGE` for an error without a position, or
+//!   `# error: modules/other.vela:LINE:COL: MESSAGE` for one in a module the
+//!   program uses, with its path from the fixture's folder), and the compiler's
+//!   first line of output must be exactly that diagnostic. The modules
+//!   fixtures use are in `tests/fail/modules/`.
 //! - `tests/trap/NAME.vela` must compile, with strict C, and then stop with a
 //!   runtime error: its first line is `# trap: MESSAGE`, the program's stderr
 //!   must be exactly `vela: MESSAGE`, and what it printed before stopping must
@@ -202,8 +205,17 @@ fn check_fail(source: &Path, scratch: &Path) -> Option<String> {
 
 /// The diagnostic line the compiler prints for a fixture's expected error:
 /// `LINE:COL: message` becomes `PATH:LINE:COL: error: message`, and a message
-/// without a location becomes `PATH: error: message`.
+/// without a location becomes `PATH: error: message`. An error in another
+/// file, `modules/x.vela:LINE:COL: message`, names that file from the
+/// fixture's folder.
 fn diagnostic_line(source: &Path, expected: &str) -> String {
+    if let Some((file, rest)) = expected.split_once(".vela:")
+        && !file.contains(' ')
+    {
+        let path = source.parent().unwrap().join(format!("{}.vela", file));
+        let (location, message) = rest.split_once(": ").unwrap();
+        return format!("{}:{}: error: {}", path.display(), location, message);
+    }
     if let Some((location, message)) = expected.split_once(": ") {
         let is_location = location
             .split_once(':')

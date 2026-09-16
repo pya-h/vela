@@ -1,0 +1,11 @@
+# error: 6:21: task 'reveal' is public, but 'Secret' is private to its file, so other files couldn't name it; make it 'priv' too, or the type public
+priv shape Secret
+    code: int
+fi
+
+task reveal(secret: Secret) -> int
+    <- secret.code
+fi
+
+task main()
+fi

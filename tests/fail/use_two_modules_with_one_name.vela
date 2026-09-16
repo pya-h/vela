@@ -1,0 +1,6 @@
+# error: 3:19: another module named 'library' is already used at 2:13; a file can't use two modules with one name
+use modules/library
+use modules/other/library
+
+task main()
+fi

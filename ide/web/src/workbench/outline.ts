@@ -13,6 +13,8 @@ export const SYMBOL_BADGES: Record<SymbolKind, { text: string; className: string
   parameter: { text: "P", className: "kind-parameter" },
   variable: { text: "B", className: "kind-variable" },
   region: { text: "R", className: "kind-region" },
+  // The outline lists a file's own declarations, never a module it uses.
+  module: { text: "M", className: "kind-module" },
 };
 
 /** Every item with its depth, parents before children. */

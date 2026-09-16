@@ -2,7 +2,7 @@
 task make(r: region) -> ^int@r
     <- new int(1) at r
 fi
-task use(p: ^int@r) -> ^int@r
+task put(p: ^int@r) -> ^int@r
     <- make(r)
 fi
 task main()

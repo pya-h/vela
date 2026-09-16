@@ -1,0 +1,44 @@
+# Figures and their measures, for tests/run/modules.vela.
+
+shape Point
+    x: float
+    y: float
+fi
+
+kind Figure
+    Circle(radius: float)
+    Square(side: float)
+    Dot
+fi
+
+task area(figure: Figure) -> float
+    match figure
+    case Circle radius
+        <- pi() * radius * radius
+    case Square side
+        <- side * side
+    case Dot
+        <- 0.0
+    fi
+fi
+
+task distance(a: Point, b: Point) -> float
+    bind dx = a.x - b.x
+    bind dy = a.y - b.y
+    <- root(dx * dx + dy * dy)
+fi
+
+priv task pi() -> float
+    <- 3.14159
+fi
+
+# Newton's method: Vela has no math library yet.
+priv task root(n: float) -> float
+    hold guess = n
+    each step in 0..30
+        when guess > 0.0
+            guess = (guess + n / guess) / 2.0
+        fi
+    fi
+    <- guess
+fi
