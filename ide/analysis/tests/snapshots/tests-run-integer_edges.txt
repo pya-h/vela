@@ -1,0 +1,50 @@
+  1 | # Integer arithmetic at the edges of an int. Every result that fits is exact,
+    | comment:# Integer arithmetic at the edges of an int. Every result that fits is exact,
+  2 | # division truncates toward zero, and a remainder has the dividend's sign.
+    | comment:# division truncates toward zero, and a remainder has the dividend's sign.
+  3 | # (An operation whose result doesn't fit stops the program: see tests/trap.)
+    | comment:# (An operation whose result doesn't fit stops the program: see tests/trap.)
+  5 | task same(n: int) -> int
+    | keyword:task  task:same  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  6 |     <- n
+    | keyword:<-  parameter:n
+  7 | fi
+    | keyword:fi
+  9 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 10 |     bind largest = same(9223372036854775807)
+    | keyword:bind  variable:largest  operator:=  task:same  punctuation:(  number:9223372036854775807  punctuation:)
+ 11 |     bind smallest = same(-9223372036854775807 - 1)
+    | keyword:bind  variable:smallest  operator:=  task:same  punctuation:(  operator:-  number:9223372036854775807  operator:-  number:1  punctuation:)
+ 12 |     show(largest - 1 + 1)
+    | builtin-fn:show  punctuation:(  variable:largest  operator:-  number:1  operator:+  number:1  punctuation:)
+ 13 |     show(smallest + 1 - 1)
+    | builtin-fn:show  punctuation:(  variable:smallest  operator:+  number:1  operator:-  number:1  punctuation:)
+ 14 |     show(largest + smallest)
+    | builtin-fn:show  punctuation:(  variable:largest  operator:+  variable:smallest  punctuation:)
+ 15 |     show(-largest)
+    | builtin-fn:show  punctuation:(  operator:-  variable:largest  punctuation:)
+ 16 |     show(smallest / 1)
+    | builtin-fn:show  punctuation:(  variable:smallest  operator:/  number:1  punctuation:)
+ 17 |     show(largest / -1)
+    | builtin-fn:show  punctuation:(  variable:largest  operator:/  operator:-  number:1  punctuation:)
+ 18 |     show(smallest % -1)          # 0: a remainder always fits
+    | builtin-fn:show  punctuation:(  variable:smallest  operator:%  operator:-  number:1  punctuation:)  comment:# 0: a remainder always fits
+ 19 |     show(smallest % largest)
+    | builtin-fn:show  punctuation:(  variable:smallest  operator:%  variable:largest  punctuation:)
+ 20 |     show(same(-7) / 2)
+    | builtin-fn:show  punctuation:(  task:same  punctuation:(  operator:-  number:7  punctuation:)  operator:/  number:2  punctuation:)
+ 21 |     show(same(-7) % 3)
+    | builtin-fn:show  punctuation:(  task:same  punctuation:(  operator:-  number:7  punctuation:)  operator:%  number:3  punctuation:)
+ 22 |     show(same(7) % -3)
+    | builtin-fn:show  punctuation:(  task:same  punctuation:(  number:7  punctuation:)  operator:%  operator:-  number:3  punctuation:)
+ 23 |     show(3037000499 * same(3037000499))
+    | builtin-fn:show  punctuation:(  number:3037000499  operator:*  task:same  punctuation:(  number:3037000499  punctuation:)  punctuation:)
+ 24 |     show(same(-4611686018427387904) * 2)
+    | builtin-fn:show  punctuation:(  task:same  punctuation:(  operator:-  number:4611686018427387904  punctuation:)  operator:*  number:2  punctuation:)
+ 25 |     show(60 * 60 * 24 * 365)
+    | builtin-fn:show  punctuation:(  number:60  operator:*  number:60  operator:*  number:24  operator:*  number:365  punctuation:)
+ 26 |     show(same(1) / 0.0)          # floats don't stop: this is infinity
+    | builtin-fn:show  punctuation:(  task:same  punctuation:(  number:1  punctuation:)  operator:/  number:0.0  punctuation:)  comment:# floats don't stop: this is infinity
+ 27 | fi
+    | keyword:fi

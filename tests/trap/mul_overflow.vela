@@ -1,0 +1,15 @@
+# trap: integer overflow at 6:27 in task 'factorial'
+# 21! is the first factorial too large for an int.
+task factorial(n: int) -> int
+    hold product = 1
+    each i in 1..n + 1
+        product = product * i
+    fi
+    <- product
+fi
+
+task main()
+    each n in 19..22
+        show(factorial(n))
+    fi
+fi

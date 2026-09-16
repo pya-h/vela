@@ -76,11 +76,13 @@ pub struct Generator {
     regions: Vec<Vec<String>>,
     /// The names of the task's results, in order, when it names them.
     results: Vec<String>,
+    /// The name of the task being generated, for runtime messages.
+    task: String,
 }
 
 impl Default for Generator {
     fn default() -> Self {
-        Generator { w: CWriter::default(), temp_counter: 0, kinds: HashMap::new(), ret: Type::Unit, regions: Vec::new(), results: Vec::new() }
+        Generator { w: CWriter::default(), temp_counter: 0, kinds: HashMap::new(), ret: Type::Unit, regions: Vec::new(), results: Vec::new(), task: String::new() }
     }
 }
 
@@ -258,6 +260,7 @@ impl Generator {
         self.ret = t.ret.clone();
         self.regions.clear();
         self.results = t.result_names().map(|(name, _)| name.clone()).collect();
+        self.task = t.name.clone();
         self.w.open(&signature(t));
         for param in &t.params {
             self.use_if_unread(&param.name, &t.body);
@@ -805,6 +808,11 @@ impl Generator {
             }
             ExprKind::Unary(op, operand) => {
                 let expr = self.gen_expr(operand)?;
+                // `-x` on an int overflows only for the smallest int; a
+                // negated literal can't be it.
+                if *op == UnaryOp::Neg && *operand.ty()? == Type::Int && int_constant(operand).is_none() {
+                    return Ok(format!("vela__rt__neg({}, {})", expr, self.location(span)));
+                }
                 let op_s = match op {
                     UnaryOp::Neg => "-",
                     UnaryOp::Not => "!",
@@ -1000,9 +1008,15 @@ impl Generator {
         }
         // Two integer literals would be computed in C's `int`, which is often 32
         // bits: `1000000 * 1000000` must be computed in 64 bits, as Vela's `int`.
+        // The checker has made sure the result fits.
         let (left, right) = match (int_constant(l), int_constant(r)) {
             (Some(left), Some(right)) if *e.ty()? == Type::Int => (left, right),
-            _ => (left, right),
+            _ => {
+                if let Some(helper) = checked_int_helper(op, e, r)? {
+                    return Ok(format!("vela__rt__{}({}, {}, {})", helper, left, right, self.location(e.span)));
+                }
+                (left, right)
+            }
         };
         let op_s = match op {
             BinaryOp::Add => "+",
@@ -1020,6 +1034,12 @@ impl Generator {
             BinaryOp::Or => "||",
         };
         Ok(format!("{} {} {}", left, op_s, right))
+    }
+
+    /// Where an operation is, for a runtime message: a C string literal
+    /// `"LINE:COL in task 'NAME'"`.
+    fn location(&self, span: Span) -> String {
+        format!("\"{}:{} in task '{}'\"", span.line, span.col, escape_c_string(&self.task))
     }
 
     fn gen_range(&mut self, e: &Expr) -> Result<(String, String)> {
@@ -1527,6 +1547,34 @@ fn escape_c_string(s: &str) -> String {
         }
     }
     out
+}
+
+/// The runtime helper that computes the int operation `e` (`op` on the
+/// operands, `r` the right one), stopping the program when its result doesn't
+/// fit or it divides by zero; `None` when C's operator can't go wrong: `e`
+/// isn't int arithmetic, or it divides by a literal other than 0 and -1.
+fn checked_int_helper(op: BinaryOp, e: &Expr, r: &Expr) -> Result<Option<&'static str>> {
+    if *e.ty()? != Type::Int {
+        return Ok(None);
+    }
+    let safe_divisor = int_value(r).is_some_and(|divisor| divisor != 0 && divisor != -1);
+    Ok(match op {
+        BinaryOp::Add => Some("add"),
+        BinaryOp::Sub => Some("sub"),
+        BinaryOp::Mul => Some("mul"),
+        BinaryOp::Div if !safe_divisor => Some("div"),
+        BinaryOp::Mod if !safe_divisor => Some("mod"),
+        _ => None,
+    })
+}
+
+/// The value of an integer literal, possibly negated.
+fn int_value(e: &Expr) -> Option<i64> {
+    match &e.kind {
+        ExprKind::IntLit(n) => Some(*n),
+        ExprKind::Unary(UnaryOp::Neg, operand) => int_value(operand).and_then(i64::checked_neg),
+        _ => None,
+    }
 }
 
 /// An integer literal, possibly negated, as a 64-bit C constant: `INT64_C(5)`,

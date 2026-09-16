@@ -1,0 +1,9 @@
+# trap: integer overflow at 7:15 in task 'main'
+# Doubling with + until the sum no longer fits in an int.
+task main()
+    hold n = 1_152_921_504_606_846_976
+    loop true
+        show(n)
+        n = n + n
+    fi
+fi

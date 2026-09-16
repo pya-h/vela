@@ -461,12 +461,33 @@ show(label)                <span class="comment"># error: unknown variable 'labe
         <code>_</code> may separate digits (<code>1_000_000</code>); there are no exponent or hex forms, so
         <code>1e5</code> is an invalid number. An <code>int</code> literal can be at most
         <code>9223372036854775807</code>, so the smallest <code>int</code> is written
-        <code>-9223372036854775807 - 1</code>. Integer overflow and division by
-        zero are not checked yet (see <a href="#limits">Current Limits</a>).
+        <code>-9223372036854775807 - 1</code>.
       </p>
       <pre>show(7 / 2)       <span class="comment"># 3</span>
 show(7 / 2.0)     <span class="comment"># 3.5</span>
 show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
+      <p id="int-limits">
+        An <code>int</code> never wraps around. An operation whose result doesn't fit in an <code>int</code>, and a
+        division or remainder by zero, stop the program with a message saying where, on every C compiler:
+      </p>
+      <pre><span class="keyword">task</span> average(total: int, count: int) -&gt; int
+    <span class="keyword">&lt;-</span> total / count
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    show(average(10, 4))     <span class="comment"># 2</span>
+    show(average(10, 0))     <span class="comment"># stops: vela: division by zero at 2:14 in task 'average'</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        The one quotient that doesn't fit is the smallest <code>int</code> divided by <code>-1</code>, and
+        <code>-x</code> overflows only when <code>x</code> is the smallest <code>int</code>. A remainder always fits:
+        the smallest <code>int</code> <code>% -1</code> is <code>0</code>. Arithmetic on floats never stops the program:
+        <code>1.0 / 0.0</code> is infinity. Arithmetic written with literals only (<code>60 * 60 * 24</code>) gives the
+        same result every time, so the compiler computes it and rejects one whose result doesn't fit
+        (<em>integer overflow: the result, 9223372036854775808, is more than an int holds (at most
+        9223372036854775807)</em>), and a division or remainder by a zero written that way, as in <code>n / 0</code>
+        (<em>division by zero</em>).
+      </p>
       <p>Operators bind from loosest to tightest as follows; operators on the same row group from the left.</p>
       <table>
         <tr><th>Operators</th><th>Example</th></tr>
@@ -1004,7 +1025,6 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
       <p>Vela is young. These are known, and planned for (see <a href="future.html">Future Directions</a>):</p>
       <ul>
         <li>The compiler reports the first error in a program, not all of them.</li>
-        <li>Integer overflow and division by zero are not checked: they behave as in C, where they are undefined.</li>
         <li>Memory is freed a whole region at a time, and a value holds pointers into one region only (see
           <a href="#regions">Memory and Regions</a>).</li>
         <li><code>text</code> is a C string, so a <code>\0</code> ends it; there are no text operations besides
@@ -1012,8 +1032,9 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         <li>There are no arrays, no modules (a program is one file), and no way to read input.</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which
-          matters only when they call tasks that print. (Where one of them contains a plan B, they are evaluated
-          left to right.)</li>
+          matters only when they call tasks that print, or when more than one of them would stop the program
+          (see <a href="#int-limits">Numbers</a>), which decides the message. (Where one of them contains a plan B,
+          they are evaluated left to right.)</li>
         <li>An expression, including a shape literal or a call's arguments, must be written on one line.</li>
         <li>Statements aren't yet required to end at a line break (<code>show(1) show(2)</code> on one line is
           accepted).</li>
@@ -1052,15 +1073,17 @@ cc -std=c11 -I runtime program.c -o program -lm   # the C includes runtime/vela_
 CC=clang cargo test</pre>
       <p>
         Tests are plain Vela programs: <code>tests/run/</code> holds programs with their expected output,
-        <code>tests/fail/</code> holds programs the compiler must reject, and every file in
+        <code>tests/fail/</code> holds programs the compiler must reject, <code>tests/trap/</code> holds programs that
+        must stop with a runtime error (such as an integer overflow) after printing their expected output, and every file in
         <code>examples/</code> is checked against <code>tests/examples/</code>, as is every complete program in
         <code>docs/regions.html</code> against the output the page shows. The C generated for run tests and
         examples must also compile as strict ISO C11 with no warnings (<code>-std=c11 -pedantic-errors -Wall
         -Wextra -Werror</code>). Rust tests in <code>tests/*.rs</code> run those programs
         (<code>programs.rs</code>) and cover the
         command line, the library's build pipeline, the lexer, internal compiler errors, and the runtime
-        (<code>runtime.rs</code>: the C tests in <code>tests/runtime/</code>, and the region programs in <code>tests/run/</code> and
-        <code>examples/</code> run under AddressSanitizer and UndefinedBehaviorSanitizer with leak checks).
+        (<code>runtime.rs</code>: the C tests in <code>tests/runtime/</code>, and the programs in <code>tests/run/</code>,
+        <code>tests/trap/</code>, and <code>examples/</code> run under AddressSanitizer and UndefinedBehaviorSanitizer with
+        leak checks).
       </p>
       <p>
         The compiler is also a Rust library, <code>vela</code>, so tools can use the language without copying it:

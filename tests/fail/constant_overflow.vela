@@ -1,0 +1,6 @@
+# error: 5:39: integer overflow: the result, 86400000000000000000000, is more than an int holds (at most 9223372036854775807)
+# Arithmetic written with literals only gives the same result every time it runs,
+# so a result that doesn't fit is an error before the program runs.
+task main()
+    show(24 * 60 * 60 * 1_000_000_000 * 1_000_000_000)
+fi

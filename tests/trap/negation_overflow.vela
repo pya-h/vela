@@ -1,0 +1,10 @@
+# trap: integer overflow at 3:8 in task 'opposite'
+task opposite(n: int) -> int
+    <- -n
+fi
+
+task main()
+    bind largest = 9223372036854775807
+    show(opposite(largest))
+    show(opposite(-largest - 1))
+fi

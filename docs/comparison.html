@@ -440,8 +440,8 @@
         or named results that are set), a missing value is a <code>maybe T</code> that must be checked
         before use (pointers can't be null), and a failure is a <code>T or E</code> whose error can't be ignored by
         accident. Memory is freed through regions, whose pointers the checker keeps from outliving them, so freed
-        memory can't be used or freed again. However, integer overflow and division by zero are undefined, as in C,
-        and there are no arrays or bounds checks yet. It is much safer than C, but its guarantees are narrower than
+        memory can't be used or freed again. Integer overflow and division by zero stop the program with a message
+        instead of being undefined, as they are in C. There are no arrays or bounds checks yet. It is much safer than C, but its guarantees are narrower than
         Rust's (which also rules out data races) or those of GC'd languages.
       </p>
       <div class="table-wrap">

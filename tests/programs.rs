@@ -8,6 +8,10 @@
 //!   the C compiler). Its first line is `# error: LINE:COL: MESSAGE` (or
 //!   `# error: MESSAGE` for an error without a position), and the compiler's
 //!   first line of output must be exactly that diagnostic.
+//! - `tests/trap/NAME.vela` must compile, with strict C, and then stop with a
+//!   runtime error: its first line is `# trap: MESSAGE`, the program's stderr
+//!   must be exactly `vela: MESSAGE`, and what it printed before stopping must
+//!   equal `tests/trap/NAME.out`.
 //! - `examples/NAME.vela` must compile and run, with strict C, and its stdout
 //!   must equal `tests/examples/NAME.out`.
 
@@ -58,9 +62,10 @@ fn stem(path: &Path) -> String {
     path.file_stem().unwrap().to_string_lossy().into_owned()
 }
 
-/// Compiles and runs `source`, comparing stdout with `expected_path`.
-/// Returns a description of the failure, if any.
-fn check_run(source: &Path, expected_path: &Path, scratch: &Path) -> Option<String> {
+/// Compiles and runs `source`, comparing stdout with `expected_path`. The
+/// program must succeed, or, when `trap` gives the message it stops with, fail
+/// with exactly that message. Returns a description of the failure, if any.
+fn check_run(source: &Path, expected_path: &Path, trap: Option<&str>, scratch: &Path) -> Option<String> {
     let name = stem(source);
     let expected = match fs::read_to_string(expected_path) {
         Ok(s) => s,
@@ -82,8 +87,20 @@ fn check_run(source: &Path, expected_path: &Path, scratch: &Path) -> Option<Stri
         Some(run) => run,
         None => return Some(format!("{}: still running after {} seconds", name, RUN_TIMEOUT.as_secs())),
     };
-    if !run.status.success() {
-        return Some(format!("{}: program exited with {}", name, run.status));
+    match trap {
+        None if !run.status.success() => {
+            return Some(format!("{}: program exited with {}\n{}", name, run.status, String::from_utf8_lossy(&run.stderr)));
+        }
+        Some(_) if run.status.success() => return Some(format!("{}: program finished, but was expected to stop", name)),
+        Some(message) if String::from_utf8_lossy(&run.stderr) != format!("vela: {}\n", message) => {
+            return Some(format!(
+                "{}: expected the program to stop with\nvela: {}\ngot:\n{}",
+                name,
+                message,
+                String::from_utf8_lossy(&run.stderr)
+            ));
+        }
+        _ => {}
     }
     let actual = String::from_utf8_lossy(&run.stdout);
     if actual != expected {
@@ -214,10 +231,31 @@ fn run_programs() {
     let scratch = scratch_dir("run");
     let failures = vela_files(&dir)
         .iter()
-        .filter_map(|src| check_run(src, &src.with_extension("out"), &scratch))
+        .filter_map(|src| check_run(src, &src.with_extension("out"), None, &scratch))
         .collect();
     let _ = fs::remove_dir_all(&scratch);
     report("tests/run", failures);
+}
+
+/// The message a `tests/trap` program's first line says it stops with.
+fn trap_message(source: &Path) -> Option<String> {
+    let text = fs::read_to_string(source).unwrap();
+    text.lines().next()?.strip_prefix("# trap: ").map(|message| message.trim().to_string())
+}
+
+#[test]
+fn trapping_programs() {
+    let dir = project_root().join("tests/trap");
+    let scratch = scratch_dir("trap");
+    let failures = vela_files(&dir)
+        .iter()
+        .filter_map(|src| match trap_message(src) {
+            Some(message) => check_run(src, &src.with_extension("out"), Some(&message), &scratch),
+            None => Some(format!("{}: first line must be '# trap: MESSAGE'", stem(src))),
+        })
+        .collect();
+    let _ = fs::remove_dir_all(&scratch);
+    report("tests/trap", failures);
 }
 
 #[test]
@@ -277,7 +315,7 @@ fn docs_programs() {
             let expected = source.with_extension("out");
             fs::write(&source, code).unwrap();
             fs::write(&expected, output).unwrap();
-            check_run(&source, &expected, &scratch).map(|failure| format!("docs/regions.html, {}", failure))
+            check_run(&source, &expected, None, &scratch).map(|failure| format!("docs/regions.html, {}", failure))
         })
         .collect();
     let _ = fs::remove_dir_all(&scratch);
@@ -292,7 +330,7 @@ fn examples() {
         .iter()
         .filter_map(|src| {
             let expected = root.join("tests/examples").join(format!("{}.out", stem(src)));
-            check_run(src, &expected, &scratch)
+            check_run(src, &expected, None, &scratch)
         })
         .collect();
     let _ = fs::remove_dir_all(&scratch);

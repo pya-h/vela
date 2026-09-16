@@ -1,0 +1,8 @@
+# error: 3:10: division by zero
+task halve(n: int) -> int
+    <- n / 0
+fi
+
+task main()
+    show(halve(4))
+fi

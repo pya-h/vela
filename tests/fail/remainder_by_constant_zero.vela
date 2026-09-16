@@ -1,0 +1,5 @@
+# error: 4:12: remainder of division by zero
+task main()
+    hold n = 7
+    show(n % (4 - 4))
+fi

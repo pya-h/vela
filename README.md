@@ -7,7 +7,8 @@ when its block closes, and pointer types (`^T@r`) keep every pointer from outliv
 be missing is a `maybe T`, and a task that can fail sends `T or E`; both are read with `match`, `is`, or a
 plan B (`x { fallback }`). Blocks close with `fi`, and a task sends its results with `<-`: one value, or
 several (`-> int, int` … `<- a / b, a % b`), received with `bind q, r = divmod(17, 5)`. Results can be named
-(`-> total: int`), set along the way with `total <- value` and sent by reaching the end of the task.
+(`-> total: int`), set along the way with `total <- value` and sent by reaching the end of the task. An `int`
+never wraps: overflow and division by zero stop the program with a message saying where.
 
 ```
 task fib(n: int) -> int
@@ -57,7 +58,8 @@ cargo clippy --workspace --all-targets
 ```
 
 Programs in `tests/run/` must print their `.out` files, programs in `tests/fail/` must be rejected with
-the error in their first line, and every file in `examples/` is checked against `tests/examples/`.
+the error in their first line, programs in `tests/trap/` must print their `.out` files and then stop with
+the runtime error in their first line, and every file in `examples/` is checked against `tests/examples/`.
 
 ## Vela Studio
 

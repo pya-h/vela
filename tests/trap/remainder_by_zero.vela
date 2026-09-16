@@ -1,0 +1,8 @@
+# trap: remainder of division by zero at 5:17 in task 'main'
+task main()
+    hold n = 3
+    loop true
+        show(10 % n)
+        n = n - 1
+    fi
+fi

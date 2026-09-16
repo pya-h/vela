@@ -45,6 +45,127 @@ static inline bool vela__rt__text_eq(const char* a, const char* b) {
     return strcmp(a, b) == 0;
 }
 
+/* Integer arithmetic. An `int` doesn't wrap: an operation whose result doesn't
+ * fit in 64 bits, and a division or remainder by zero, stop the program with a
+ * message saying where, which `at` gives as "LINE:COL in task 'NAME'". The
+ * checks use the C compiler's overflow builtins where it has them, and plain
+ * comparisons elsewhere (or when VELA__RT__PORTABLE_ARITHMETIC is defined, which
+ * the runtime tests use to test those). */
+
+static inline _Noreturn void vela__rt__int_trap(const char* what, const char* at) {
+    fflush(stdout);
+    fprintf(stderr, "vela: %s at %s\n", what, at);
+    abort();
+}
+
+#if defined(__GNUC__) && !defined(VELA__RT__PORTABLE_ARITHMETIC)
+#define VELA__RT__OVERFLOW_BUILTINS 1
+#else
+#define VELA__RT__OVERFLOW_BUILTINS 0
+#endif
+
+/* Whether `a + b` overflows; otherwise stores it in `*r`. */
+static inline bool vela__rt__add_overflows(int64_t a, int64_t b, int64_t* r) {
+#if VELA__RT__OVERFLOW_BUILTINS
+    return __builtin_add_overflow(a, b, r);
+#else
+    if ((b > 0 && a > INT64_MAX - b) || (b < 0 && a < INT64_MIN - b)) {
+        return true;
+    }
+    *r = a + b;
+    return false;
+#endif
+}
+
+/* Whether `a - b` overflows; otherwise stores it in `*r`. */
+static inline bool vela__rt__sub_overflows(int64_t a, int64_t b, int64_t* r) {
+#if VELA__RT__OVERFLOW_BUILTINS
+    return __builtin_sub_overflow(a, b, r);
+#else
+    if ((b < 0 && a > INT64_MAX + b) || (b > 0 && a < INT64_MIN + b)) {
+        return true;
+    }
+    *r = a - b;
+    return false;
+#endif
+}
+
+/* Whether `a * b` overflows; otherwise stores it in `*r`. */
+static inline bool vela__rt__mul_overflows(int64_t a, int64_t b, int64_t* r) {
+#if VELA__RT__OVERFLOW_BUILTINS
+    return __builtin_mul_overflow(a, b, r);
+#else
+    bool overflows;
+    if (a > 0) {
+        overflows = b > 0 ? a > INT64_MAX / b : b < INT64_MIN / a;
+    } else if (a < 0) {
+        overflows = b > 0 ? a < INT64_MIN / b : b < 0 && a < INT64_MAX / b;
+    } else {
+        overflows = false;
+    }
+    if (overflows) {
+        return true;
+    }
+    *r = a * b;
+    return false;
+#endif
+}
+
+static inline int64_t vela__rt__add(int64_t a, int64_t b, const char* at) {
+    int64_t r;
+    if (vela__rt__add_overflows(a, b, &r)) {
+        vela__rt__int_trap("integer overflow", at);
+    }
+    return r;
+}
+
+static inline int64_t vela__rt__sub(int64_t a, int64_t b, const char* at) {
+    int64_t r;
+    if (vela__rt__sub_overflows(a, b, &r)) {
+        vela__rt__int_trap("integer overflow", at);
+    }
+    return r;
+}
+
+static inline int64_t vela__rt__mul(int64_t a, int64_t b, const char* at) {
+    int64_t r;
+    if (vela__rt__mul_overflows(a, b, &r)) {
+        vela__rt__int_trap("integer overflow", at);
+    }
+    return r;
+}
+
+/* Division truncates toward zero. The one quotient that doesn't fit is
+ * INT64_MIN / -1. */
+static inline int64_t vela__rt__div(int64_t a, int64_t b, const char* at) {
+    if (b == 0) {
+        vela__rt__int_trap("division by zero", at);
+    }
+    if (b == -1 && a == INT64_MIN) {
+        vela__rt__int_trap("integer overflow", at);
+    }
+    return a / b;
+}
+
+/* The remainder has the dividend's sign. A remainder always fits: INT64_MIN % -1
+ * is 0, which C leaves undefined, so it is computed here. */
+static inline int64_t vela__rt__mod(int64_t a, int64_t b, const char* at) {
+    if (b == 0) {
+        vela__rt__int_trap("remainder of division by zero", at);
+    }
+    if (b == -1) {
+        return 0;
+    }
+    return a % b;
+}
+
+static inline int64_t vela__rt__neg(int64_t a, const char* at) {
+    if (a == INT64_MIN) {
+        vela__rt__int_trap("integer overflow", at);
+    }
+    return -a;
+}
+
 /* Float remainder (Vela's `%` on floats); the result has the dividend's sign. */
 static inline double vela__rt__fmod(double a, double b) {
     return fmod(a, b);

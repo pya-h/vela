@@ -1410,6 +1410,9 @@ impl Checker {
                 if !ty.is_numeric() {
                     return err(span, format!("negation requires a number, got {}{}", ty, extract_hint(&[&ty])));
                 }
+                if let Some(value) = constant_int(e) {
+                    fits_int(-i128::from(value), span)?;
+                }
                 Ok(ty)
             }
             UnaryOp::Not => {
@@ -1429,10 +1432,10 @@ impl Checker {
                 }
                 // Mixing int and float promotes the result to float.
                 if lt == Type::Float || rt == Type::Float {
-                    Ok(Type::Float)
-                } else {
-                    Ok(Type::Int)
+                    return Ok(Type::Float);
                 }
+                check_constant_arithmetic(op, l, r, span)?;
+                Ok(Type::Int)
             }
             BinaryOp::Eq | BinaryOp::Ne => {
                 let none_and_maybe = matches!((&lt, &rt), (Type::None, Type::Maybe(_)) | (Type::Maybe(_), Type::None));
@@ -1797,6 +1800,68 @@ fn always_sends(block: &Block) -> bool {
         StmtKind::Match(_, cases) => cases.iter().all(|case| always_sends(&case.body)),
         _ => false,
     })
+}
+
+/// The value of an int expression written with literals only (`-5`,
+/// `60 * 60 * 24`), which the program computes the same way every time, or
+/// `None` for any other expression. Its parts have been checked, so each of
+/// them fits in an `int`.
+fn constant_int(e: &Expr) -> Option<i64> {
+    match &e.kind {
+        ExprKind::IntLit(n) => Some(*n),
+        ExprKind::Unary(UnaryOp::Neg, operand) => constant_int(operand)?.checked_neg(),
+        ExprKind::Binary(op, l, r) => {
+            let (a, b) = (constant_int(l)?, constant_int(r)?);
+            match op {
+                BinaryOp::Add => a.checked_add(b),
+                BinaryOp::Sub => a.checked_sub(b),
+                BinaryOp::Mul => a.checked_mul(b),
+                BinaryOp::Div => a.checked_div(b),
+                // The remainder of a division by -1 is 0, which Rust's
+                // `checked_rem` leaves out for the smallest int.
+                BinaryOp::Mod if b == -1 => Some(0),
+                BinaryOp::Mod => a.checked_rem(b),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Rejects int arithmetic the program would stop on every time it runs: a
+/// division or remainder by a constant zero, and a constant whose result
+/// doesn't fit in an `int`. Anything else is checked as the program runs.
+fn check_constant_arithmetic(op: BinaryOp, l: &Expr, r: &Expr, span: Span) -> Result<()> {
+    let divisor = constant_int(r);
+    if divisor == Some(0) {
+        match op {
+            BinaryOp::Div => return err(span, "division by zero"),
+            BinaryOp::Mod => return err(span, "remainder of division by zero"),
+            _ => {}
+        }
+    }
+    let (Some(a), Some(b)) = (constant_int(l), divisor) else { return Ok(()) };
+    let (a, b) = (i128::from(a), i128::from(b));
+    let exact = match op {
+        BinaryOp::Add => a + b,
+        BinaryOp::Sub => a - b,
+        BinaryOp::Mul => a * b,
+        BinaryOp::Div => a / b,
+        _ => return Ok(()),
+    };
+    fits_int(exact, span)
+}
+
+/// Rejects `value`, the exact result of a constant int operation at `span`,
+/// when it doesn't fit in an `int`.
+fn fits_int(value: i128, span: Span) -> Result<()> {
+    if value > i128::from(i64::MAX) {
+        return err(span, format!("integer overflow: the result, {}, is more than an int holds (at most {})", value, i64::MAX));
+    }
+    if value < i128::from(i64::MIN) {
+        return err(span, format!("integer overflow: the result, {}, is less than an int holds (at least {})", value, i64::MIN));
+    }
+    Ok(())
 }
 
 /// Why a value of type `actual` doesn't fit where `expected` is required, or

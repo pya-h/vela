@@ -6,6 +6,8 @@
 //!   where the C compiler supports AddressSanitizer and UndefinedBehaviorSanitizer,
 //!   the runtime tests and every `tests/run` and `examples` program run under
 //!   them (with leak checks on Linux), and must print their expected output.
+//!   Each `tests/trap` program must stop with its message and no sanitizer
+//!   report, so nothing undefined happens before an integer check stops it.
 
 // A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
@@ -125,12 +127,18 @@ fn programs_run_clean_under_the_sanitizers() {
             Err(errors) => failures.push(format!("{}: {}", stem(&source), errors)),
         }
     }
-    // Each program with its expected output: `tests/run/NAME.out` or `tests/examples/NAME.out`.
-    let programs: Vec<(PathBuf, PathBuf, String)> = files("tests/run", "vela")
+    // Each program with its expected output (`tests/run/NAME.out`,
+    // `tests/examples/NAME.out`, or `tests/trap/NAME.out`), and for a trap, the
+    // message it stops with.
+    let programs: Vec<(PathBuf, PathBuf, String, Option<String>)> = files("tests/run", "vela")
         .into_iter()
-        .map(|p| (p.with_extension("out"), format!("run-{}", stem(&p)), p))
-        .chain(files("examples", "vela").into_iter().map(|p| (root().join("tests/examples").join(format!("{}.out", stem(&p))), format!("example-{}", stem(&p)), p)))
-        .map(|(expected, name, source)| (source, expected, name))
+        .map(|p| (p.with_extension("out"), format!("run-{}", stem(&p)), p, None))
+        .chain(files("examples", "vela").into_iter().map(|p| (root().join("tests/examples").join(format!("{}.out", stem(&p))), format!("example-{}", stem(&p)), p, None)))
+        .chain(files("tests/trap", "vela").into_iter().map(|p| {
+            let message = fs::read_to_string(&p).unwrap().lines().next().and_then(|l| l.strip_prefix("# trap: ")).map(|m| m.trim().to_string());
+            (p.with_extension("out"), format!("trap-{}", stem(&p)), p, Some(message.unwrap_or_default()))
+        }))
+        .map(|(expected, name, source, trap)| (source, expected, name, trap))
         .collect();
     assert!(programs.len() >= 20, "expected the run tests and examples, found {}", programs.len());
     // Sanitized builds are slow, so programs are checked on a few threads.
@@ -139,7 +147,7 @@ fn programs_run_clean_under_the_sanitizers() {
     let results: Vec<Vec<String>> = std::thread::scope(|scope| {
         let handles: Vec<_> = chunks
             .into_iter()
-            .map(|chunk| scope.spawn(|| chunk.iter().filter_map(|(source, expected, name)| check_sanitized(source, expected, name, &scratch)).collect()))
+            .map(|chunk| scope.spawn(|| chunk.iter().filter_map(|(source, expected, name, trap)| check_sanitized(source, expected, name, trap.as_deref(), &scratch)).collect()))
             .collect();
         handles.into_iter().map(|handle| handle.join().unwrap()).collect()
     });
@@ -148,9 +156,10 @@ fn programs_run_clean_under_the_sanitizers() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-/// Builds `source` with the sanitizers and runs it, expecting success and the
-/// output in `expected`; a description of the failure, if any.
-fn check_sanitized(source: &Path, expected: &Path, name: &str, scratch: &Path) -> Option<String> {
+/// Builds `source` with the sanitizers and runs it, expecting the output in
+/// `expected` and success, or, when `trap` gives a message, to stop with exactly
+/// that message; a description of the failure, if any.
+fn check_sanitized(source: &Path, expected: &Path, name: &str, trap: Option<&str>, scratch: &Path) -> Option<String> {
     let emit = Command::new(VELA).arg(source).arg("--emit-c").output().unwrap();
     if !emit.status.success() {
         return Some(format!("{}: {}", name, String::from_utf8_lossy(&emit.stderr)));
@@ -162,8 +171,13 @@ fn check_sanitized(source: &Path, expected: &Path, name: &str, scratch: &Path) -
         return Some(format!("{}: {}", name, errors));
     }
     let output = run(&exe);
-    if !output.status.success() {
-        return Some(format!("{}:\n{}", name, String::from_utf8_lossy(&output.stderr)));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    match trap {
+        None if !output.status.success() => return Some(format!("{}:\n{}", name, stderr)),
+        Some(message) if output.status.success() || stderr != format!("vela: {}\n", message) => {
+            return Some(format!("{}: expected to stop with 'vela: {}' under the sanitizers, got:\n{}", name, message, stderr));
+        }
+        _ => {}
     }
     let wanted = fs::read_to_string(expected).unwrap_or_default();
     if String::from_utf8_lossy(&output.stdout) != wanted {

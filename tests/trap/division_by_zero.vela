@@ -1,0 +1,9 @@
+# trap: division by zero at 3:14 in task 'average'
+task average(total: int, count: int) -> int
+    <- total / count
+fi
+
+task main()
+    show(average(10, 4))
+    show(average(10, 0))
+fi

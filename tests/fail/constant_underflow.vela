@@ -1,0 +1,4 @@
+# error: 3:35: integer overflow: the result, -9223372036854775809, is less than an int holds (at least -9223372036854775808)
+task main()
+    show(-9223372036854775807 - 1 - 1)
+fi

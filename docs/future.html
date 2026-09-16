@@ -336,8 +336,9 @@
           <p><code>text</code> is currently <code>const char*</code>. <code>==</code> compares contents, but there is no length, no safe concatenation, and a <code>\0</code> ends the text early.</p>
         </div>
         <div class="card">
-          <h3>Undefined integer edge cases <span class="badge b-med">Medium</span></h3>
-          <p>Integer overflow and division by zero behave as in C: undefined. Vela should trap or define them.</p>
+          <h3>Undefined integer edge cases <span class="badge b-done">Done</span></h3>
+          <p>Integer overflow and division by zero behaved as in C: undefined. They now stop the program with a
+            message, the same under every C compiler (<a href="vela.html#int-limits">the language guide</a>).</p>
         </div>
         <div class="card">
           <h3>One error at a time <span class="badge b-low">Low</span></h3>
@@ -1279,8 +1280,14 @@ show(p.length_squared())</pre>
 
       <h3>Defined Behavior</h3>
       <ul>
-        <li><strong>Integer traps:</strong> overflow and division by zero stop the program with a message instead of
-          being C's undefined behavior, identical under every C compiler</li>
+        <li><s><strong>Integer traps:</strong> overflow and division by zero stop the program with a message instead of
+          being C's undefined behavior, identical under every C compiler</s> (done: <a href="vela.html#int-limits">Numbers</a>).
+          Trapping won over wrapping and saturating, which would both turn the bug into a wrong number. The
+          location in the message (<code>vela: integer overflow at 7:15 in task 'main'</code>) costs one string per
+          operation; the checks use the C compiler's overflow builtins where it has them. Two cases never reach the
+          program: arithmetic written with literals only is computed by the compiler, which rejects a result that
+          doesn't fit, and a division by a zero written that way is an error. The smallest int <code>% -1</code> is
+          <code>0</code>, its exact value, rather than a trap.</li>
         <li><strong>Left-to-right evaluation:</strong> arguments and operands that call tasks are evaluated in order
           (codegen stores them in temporaries first), so output never depends on the C compiler. Expressions that
           contain a <a href="#maybe">plan B</a> already work this way; the rest would follow. (A null check on
@@ -1350,7 +1357,7 @@ show(p.length_squared())</pre>
             <li><s>Vela Studio: an editor with language support and a terminal</s> (done: <a href="ide.html">Vela Studio</a>)</li>
             <li><s>Multiple results, then named results (<code>-&gt; total: int</code>, set with <code>total &lt;- value</code>)</s>
               (done: <a href="vela.html#results">Several Results</a>, <a href="vela.html#named-results">Named Results</a>)</li>
-            <li>Defined integer overflow and division by zero</li>
+            <li><s>Defined integer overflow and division by zero</s> (done: <a href="vela.html#int-limits">they stop the program with a message</a>)</li>
             <li>Fixed-size arrays and a real <code>text</code> type</li>
             <li>Small region improvements: result-only regions, typed patterns, a lint for regions that grow in loops, and a
               chunk cache (<a href="regions.html#ideas">ideas</a>)</li>
@@ -1387,7 +1394,7 @@ show(p.length_squared())</pre>
       <h2><span class="icon" aria-hidden="true">🎯</span> Conclusion</h2>
       <p>
         Vela's strength is its smallness. The best next steps preserve that smallness while filling the
-        obvious gaps: a real string type, arrays, and defined integer arithmetic. The memory
+        obvious gaps: a real string type and arrays. The memory
         model's first step, <strong>scoped regions</strong>, is in place (<a href="regions.html">Vela Regions</a>); <strong>move-only ownership and optional
         temporary borrows</strong> can grow it while keeping Vela fast, simple, and far safer than C without becoming
         Rust.
