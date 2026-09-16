@@ -462,6 +462,11 @@ impl<'a> Classifier<'a> {
                         in_type = type_follows;
                         after_type = !type_follows;
                     } else {
+                        // `-> total: int`: the result's name, not its type.
+                        let declaring_now = match tokens.token(p + 1) {
+                            Some(Token::Colon) if in_results && was_type => Some("result"),
+                            _ => declaring_now,
+                        };
                         let (class, symbol) = self.identifier(p, name, was_type, declaring_now, in_task_header, in_pattern, &braces);
                         self.push(range, class, symbol);
                         after_type = was_type;
@@ -618,23 +623,26 @@ impl<'a> Classifier<'a> {
             let kind = self.symbols.get(id).map_or(SymbolKind::Variable, |s| s.kind);
             return (kind.class(), Some(id));
         }
-        if in_type {
-            if Type::builtin(name).is_some() {
-                return (TokenClass::TypeBuiltin, None);
-            }
-            return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind]));
-        }
+        // A name being declared is one even where a type would be written,
+        // as a result's name is (`-> total: int`).
         if let Some(intro) = declaring {
             if intro == "region" {
                 return (TokenClass::Region, Some(self.declare_local(p, SymbolKind::Region, Some(intro), String::new())));
             }
-            // `bind q: int, r = …`: the annotation ends at the next name.
+            // `bind q: int, r = …` and `-> steps: int, peak: int`: the type
+            // ends at the next name.
             let detail = if after == Some(&Token::Colon) {
                 tokens.text_after(p + 1, |t| matches!(t, Token::Assign | Token::Comma))
             } else {
                 String::new()
             };
             return (TokenClass::Variable, Some(self.declare_local(p, SymbolKind::Variable, Some(intro), detail)));
+        }
+        if in_type {
+            if Type::builtin(name).is_some() {
+                return (TokenClass::TypeBuiltin, None);
+            }
+            return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind]));
         }
         if in_task_header && after == Some(&Token::Colon) && matches!(before, Some(Token::LParen | Token::Comma)) {
             let detail = tokens.text_after(p + 1, ends_field);

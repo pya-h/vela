@@ -1,0 +1,222 @@
+  1 | # Named results: `-> total: int` makes the result a variable of the task.
+    | comment:# Named results: `-> total: int` makes the result a variable of the task.
+  2 | # `total <- value` sets it and keeps going, `<- value` sets it and ends the
+    | comment:# `total <- value` sets it and keeps going, `<- value` sets it and ends the
+  3 | # task, a bare `<-` sends what the results hold, and reaching the end sends
+    | comment:# task, a bare `<-` sends what the results hold, and reaching the end sends
+  4 | # them too. Vela has no zero values, so the checker makes sure each result is
+    | comment:# them too. Vela has no zero values, so the checker makes sure each result is
+  5 | # set before it is read, before a bare `<-`, and before the end.
+    | comment:# set before it is read, before a bare `<-`, and before the end.
+  7 | shape Node
+    | keyword:shape  type:Node
+  8 |     value: int
+    | field:value  punctuation::  type-builtin:int
+  9 |     next: maybe ^Node
+    | field:next  punctuation::  keyword:maybe  operator:^  type:Node
+ 10 | fi
+    | keyword:fi
+ 12 | task score(hits: int, misses: int) -> total: int
+    | keyword:task  task:score  punctuation:(  parameter:hits  punctuation::  type-builtin:int  punctuation:,  parameter:misses  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:total  punctuation::  type-builtin:int
+ 13 |     total <- hits * 10
+    | variable:total  keyword:<-  parameter:hits  operator:*  number:10
+ 14 |     when misses == 0
+    | keyword:when  parameter:misses  operator:==  number:0
+ 15 |         <- total + 50            # a perfect round: send the bonus and end here
+    | keyword:<-  variable:total  operator:+  number:50  comment:# a perfect round: send the bonus and end here
+ 16 |     fi
+    | keyword:fi
+ 17 |     total <- total - misses * 5  # otherwise keep going
+    | variable:total  keyword:<-  variable:total  operator:-  parameter:misses  operator:*  number:5  comment:# otherwise keep going
+ 18 |     when total < 0
+    | keyword:when  variable:total  operator:<  number:0
+ 19 |         total <- 0
+    | variable:total  keyword:<-  number:0
+ 20 |     fi
+    | keyword:fi
+ 21 | fi                               # reaching the end sends total
+    | keyword:fi  comment:# reaching the end sends total
+ 23 | task collatz(start: int) -> steps: int, peak: int
+    | keyword:task  task:collatz  punctuation:(  parameter:start  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:steps  punctuation::  type-builtin:int  punctuation:,  variable:peak  punctuation::  type-builtin:int
+ 24 |     hold n = start
+    | keyword:hold  variable:n  operator:=  parameter:start
+ 25 |     steps, peak <- 0, start
+    | variable:steps  punctuation:,  variable:peak  keyword:<-  number:0  punctuation:,  parameter:start
+ 26 |     loop n != 1
+    | keyword:loop  variable:n  operator:!=  number:1
+ 27 |         when n % 2 == 0
+    | keyword:when  variable:n  operator:%  number:2  operator:==  number:0
+ 28 |             n = n / 2
+    | variable:n  operator:=  variable:n  operator:/  number:2
+ 29 |         else
+    | keyword:else
+ 30 |             n = 3 * n + 1
+    | variable:n  operator:=  number:3  operator:*  variable:n  operator:+  number:1
+ 31 |         fi
+    | keyword:fi
+ 32 |         steps <- steps + 1
+    | variable:steps  keyword:<-  variable:steps  operator:+  number:1
+ 33 |         when n > peak
+    | keyword:when  variable:n  operator:>  variable:peak
+ 34 |             peak <- n
+    | variable:peak  keyword:<-  variable:n
+ 35 |         fi
+    | keyword:fi
+ 36 |         when steps == 1000
+    | keyword:when  variable:steps  operator:==  number:1000
+ 37 |             <-                   # give up and send what we have
+    | keyword:<-  comment:# give up and send what we have
+ 38 |         fi
+    | keyword:fi
+ 39 |     fi
+    | keyword:fi
+ 40 | fi
+    | keyword:fi
+ 42 | # A result set in every branch, and one branch that leaves instead.
+    | comment:# A result set in every branch, and one branch that leaves instead.
+ 43 | task classify(n: int) -> label: text
+    | keyword:task  task:classify  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:label  punctuation::  type-builtin:text
+ 44 |     when n < 0
+    | keyword:when  parameter:n  operator:<  number:0
+ 45 |         <- "negative"
+    | keyword:<-  string:"negative"
+ 46 |     fi
+    | keyword:fi
+ 47 |     when n == 0
+    | keyword:when  parameter:n  operator:==  number:0
+ 48 |         label <- "zero"
+    | variable:label  keyword:<-  string:"zero"
+ 49 |     else
+    | keyword:else
+ 50 |         label <- "positive"
+    | variable:label  keyword:<-  string:"positive"
+ 51 |     fi
+    | keyword:fi
+ 52 | fi
+    | keyword:fi
+ 54 | # Every case of a match sets the result.
+    | comment:# Every case of a match sets the result.
+ 55 | kind Light
+    | keyword:kind  type:Light
+ 56 |     Red
+    | variant:Red
+ 57 |     Green
+    | variant:Green
+ 58 |     Dimmed(level: int)
+    | variant:Dimmed  punctuation:(  field:level  punctuation::  type-builtin:int  punctuation:)
+ 59 | fi
+    | keyword:fi
+ 61 | task brightness(light: Light) -> level: int
+    | keyword:task  task:brightness  punctuation:(  parameter:light  punctuation::  type:Light  punctuation:)  operator:->  variable:level  punctuation::  type-builtin:int
+ 62 |     match light
+    | keyword:match  parameter:light
+ 63 |     case Red
+    | keyword:case  variant:Red
+ 64 |         level <- 0
+    | variable:level  keyword:<-  number:0
+ 65 |     case Green
+    | keyword:case  variant:Green
+ 66 |         level <- 100
+    | variable:level  keyword:<-  number:100
+ 67 |     case Dimmed amount
+    | keyword:case  variant:Dimmed  variable:amount
+ 68 |         level <- amount
+    | variable:level  keyword:<-  variable:amount
+ 69 |     fi
+    | keyword:fi
+ 70 | fi
+    | keyword:fi
+ 72 | # A named result in a region the caller gives, built one node at a time.
+    | comment:# A named result in a region the caller gives, built one node at a time.
+ 73 | task build(r: region, n: int) -> list: maybe ^Node@r, count: int
+    | keyword:task  task:build  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:,  variable:count  punctuation::  type-builtin:int
+ 74 |     list, count <- none, 0
+    | variable:list  punctuation:,  variable:count  keyword:<-  keyword:none  punctuation:,  number:0
+ 75 |     each i in 0..n
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:n
+ 76 |         list, count <- new Node(Node { value: i, next: list }) at r, count + 1
+    | variable:list  punctuation:,  variable:count  keyword:<-  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  variable:i  punctuation:,  field:next  punctuation::  variable:list  punctuation:}  punctuation:)  keyword:at  region:r  punctuation:,  variable:count  operator:+  number:1
+ 77 |     fi
+    | keyword:fi
+ 78 | fi
+    | keyword:fi
+ 80 | # A region of the task's own is freed before the results are sent.
+    | comment:# A region of the task's own is freed before the results are sent.
+ 81 | task summed(n: int) -> sum: int, made: int
+    | keyword:task  task:summed  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:sum  punctuation::  type-builtin:int  punctuation:,  variable:made  punctuation::  type-builtin:int
+ 82 |     region scratch
+    | keyword:region  region:scratch
+ 83 |     sum, made <- 0, 0
+    | variable:sum  punctuation:,  variable:made  keyword:<-  number:0  punctuation:,  number:0
+ 84 |     each i in 0..n
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:n
+ 85 |         bind node = new Node(Node { value: i * i, next: none }) at scratch
+    | keyword:bind  variable:node  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  variable:i  operator:*  variable:i  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:scratch
+ 86 |         sum, made <- sum + node^.value, made + 1
+    | variable:sum  punctuation:,  variable:made  keyword:<-  variable:sum  operator:+  variable:node  operator:^  punctuation:.  field:value  punctuation:,  variable:made  operator:+  number:1
+ 87 |     fi
+    | keyword:fi
+ 88 | fi
+    | keyword:fi
+ 90 | # One call's results set another task's results.
+    | comment:# One call's results set another task's results.
+ 91 | task twice(n: int) -> sum: int, made: int
+    | keyword:task  task:twice  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:sum  punctuation::  type-builtin:int  punctuation:,  variable:made  punctuation::  type-builtin:int
+ 92 |     sum, made <- summed(n)
+    | variable:sum  punctuation:,  variable:made  keyword:<-  task:summed  punctuation:(  parameter:n  punctuation:)
+ 93 | fi
+    | keyword:fi
+ 95 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 96 |     show(score(10, 0))
+    | builtin-fn:show  punctuation:(  task:score  punctuation:(  number:10  punctuation:,  number:0  punctuation:)  punctuation:)
+ 97 |     show(score(10, 1))
+    | builtin-fn:show  punctuation:(  task:score  punctuation:(  number:10  punctuation:,  number:1  punctuation:)  punctuation:)
+ 98 |     show(score(1, 100))
+    | builtin-fn:show  punctuation:(  task:score  punctuation:(  number:1  punctuation:,  number:100  punctuation:)  punctuation:)
+100 |     bind steps, peak = collatz(27)
+    | keyword:bind  variable:steps  punctuation:,  variable:peak  operator:=  task:collatz  punctuation:(  number:27  punctuation:)
+101 |     show(steps)
+    | builtin-fn:show  punctuation:(  variable:steps  punctuation:)
+102 |     show(peak)
+    | builtin-fn:show  punctuation:(  variable:peak  punctuation:)
+104 |     show(classify(-2))
+    | builtin-fn:show  punctuation:(  task:classify  punctuation:(  operator:-  number:2  punctuation:)  punctuation:)
+105 |     show(classify(0))
+    | builtin-fn:show  punctuation:(  task:classify  punctuation:(  number:0  punctuation:)  punctuation:)
+106 |     show(classify(7))
+    | builtin-fn:show  punctuation:(  task:classify  punctuation:(  number:7  punctuation:)  punctuation:)
+108 |     show(brightness(Red))
+    | builtin-fn:show  punctuation:(  task:brightness  punctuation:(  variant:Red  punctuation:)  punctuation:)
+109 |     show(brightness(Green))
+    | builtin-fn:show  punctuation:(  task:brightness  punctuation:(  variant:Green  punctuation:)  punctuation:)
+110 |     show(brightness(Dimmed(42)))
+    | builtin-fn:show  punctuation:(  task:brightness  punctuation:(  variant:Dimmed  punctuation:(  number:42  punctuation:)  punctuation:)  punctuation:)
+112 |     region r
+    | keyword:region  region:r
+113 |     bind list, count = build(r, 4)
+    | keyword:bind  variable:list  punctuation:,  variable:count  operator:=  task:build  punctuation:(  region:r  punctuation:,  number:4  punctuation:)
+114 |     show(count)
+    | builtin-fn:show  punctuation:(  variable:count  punctuation:)
+115 |     hold current = list
+    | keyword:hold  variable:current  operator:=  variable:list
+116 |     loop current is {node}
+    | keyword:loop  variable:current  keyword:is  punctuation:{  variable:node  punctuation:}
+117 |         show(node^.value)
+    | builtin-fn:show  punctuation:(  variable:node  operator:^  punctuation:.  field:value  punctuation:)
+118 |         current = node^.next
+    | variable:current  operator:=  variable:node  operator:^  punctuation:.  field:next
+119 |     fi
+    | keyword:fi
+121 |     bind sum, made = summed(4)
+    | keyword:bind  variable:sum  punctuation:,  variable:made  operator:=  task:summed  punctuation:(  number:4  punctuation:)
+122 |     show(sum)
+    | builtin-fn:show  punctuation:(  variable:sum  punctuation:)
+123 |     show(made)
+    | builtin-fn:show  punctuation:(  variable:made  punctuation:)
+124 |     bind again, _ = twice(4)
+    | keyword:bind  variable:again  punctuation:,  keyword:_  operator:=  task:twice  punctuation:(  number:4  punctuation:)
+125 |     show(again)
+    | builtin-fn:show  punctuation:(  variable:again  punctuation:)
+126 | fi
+    | keyword:fi

@@ -274,9 +274,9 @@ impl Parser {
         let span = self.peek_span();
         let name = self.expect_ident()?;
         let params = self.parse_field_list()?;
-        let mut ret_spans = Vec::new();
+        let mut results = Vec::new();
         let ret = if self.match_token(Token::Arrow) {
-            self.parse_result_types(&mut ret_spans)?
+            self.parse_results(&mut results)?
         } else {
             Type::Unit
         };
@@ -286,19 +286,43 @@ impl Parser {
         self.skip_newlines();
         let body = self.parse_block()?;
         self.expect_fi("task", opened)?;
-        Ok(TaskDef { name, params, ret, ret_spans, body, span })
+        Ok(TaskDef { name, params, ret, results, body, span })
     }
 
-    /// The types after a task's `->`: one, or several separated by commas,
-    /// recording where each is written in `spans`.
-    fn parse_result_types(&mut self, spans: &mut Vec<Span>) -> Result<Type> {
+    /// The results after a task's `->`: one, or several separated by commas,
+    /// each a type or a name and a type (`total: int`). Either all of them are
+    /// named or none is.
+    fn parse_results(&mut self, results: &mut Vec<ResultDef>) -> Result<Type> {
         let mut types = Vec::new();
         loop {
             if self.check(Token::Newline) || self.check(Token::Fi) || self.is_at_end() {
-                let expected = if types.is_empty() { "expected a return type after '->'" } else { "expected another result type after ','" };
+                let expected = if types.is_empty() { "expected a return type after '->'" } else { "expected another result after ','" };
                 return Err(Error::at(self.peek_span(), expected));
             }
-            spans.push(self.peek_span());
+            // A name only when a `:` follows it; a result's type is a name too.
+            let named = matches!(self.peek(), Token::Ident(_)) && self.tokens.get(self.pos + 1) == Some(&Token::Colon);
+            let name = if named {
+                let at = self.peek_span();
+                let name = self.expect_ident()?;
+                self.advance(); // :
+                Some((name, at))
+            } else {
+                None
+            };
+            if let Some(first) = results.first()
+                && first.name.is_some() != name.is_some()
+            {
+                let (at, which) = match &name {
+                    Some((_, at)) => (*at, "has a name"),
+                    None => (self.peek_span(), "has no name"),
+                };
+                return Err(Error::at(
+                    at,
+                    format!("either every result has a name or none does, and this one {}, as in '-> steps: int, peak: int'", which),
+                ));
+            }
+            let ty_span = self.peek_span();
+            results.push(ResultDef { name, ty_span });
             types.push(self.parse_type()?);
             if !self.match_token(Token::Comma) {
                 break;
@@ -505,9 +529,14 @@ impl Parser {
         }
     }
 
-    /// An assignment, to one place or to a list of them, or an expression used
-    /// as a statement.
+    /// An assignment, to one place or to a list of them, a result update, or an
+    /// expression used as a statement.
     fn parse_simple_stmt(&mut self, span: Span) -> Result<Stmt> {
+        // `name <- value`, or `a, b <- …`: sets results. The checker knows
+        // which names are results of this task.
+        if self.at_result_update() {
+            return self.parse_set_results(span);
+        }
         // `_` only takes a value, so a line starting with it is an assignment.
         if self.check(Token::Underscore) {
             let first = self.parse_target()?;
@@ -535,6 +564,40 @@ impl Parser {
         }
         let values = self.parse_value_list()?;
         Ok(Stmt::new(StmtKind::Assign(targets, values), span))
+    }
+
+    /// Whether the statement at the cursor is `name(, name)* <-`, which sets
+    /// results. A `<-` anywhere else in a line is still an error.
+    fn at_result_update(&self) -> bool {
+        let mut p = self.pos;
+        loop {
+            if !matches!(self.tokens.get(p), Some(Token::Ident(_))) {
+                return false;
+            }
+            match self.tokens.get(p + 1) {
+                Some(Token::Send) => return true,
+                Some(Token::Comma) => p += 2,
+                _ => return false,
+            }
+        }
+    }
+
+    /// `name(, name)* <- values`: sets the named results.
+    fn parse_set_results(&mut self, span: Span) -> Result<Stmt> {
+        let mut names = Vec::new();
+        loop {
+            let at = self.peek_span();
+            names.push((self.expect_ident()?, at));
+            if !self.match_token(Token::Comma) {
+                break;
+            }
+        }
+        self.expect(Token::Send)?;
+        if self.check(Token::Newline) || self.is_at_end() {
+            return Err(Error::at(self.peek_span(), "expected the value to set the result to, after '<-'"));
+        }
+        let values = self.parse_value_list()?;
+        Ok(Stmt::new(StmtKind::SetResults(names, values), span))
     }
 
     /// One place an assignment writes to, or `_`.

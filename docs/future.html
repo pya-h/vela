@@ -375,8 +375,8 @@
           <p>A task sends several values, <code>-&gt; int, int</code> and <code>&lt;- a / b, a % b</code>, received with <code>bind q, r = divmod(17, 5)</code>. <a href="vela.html#results">The language guide describes it</a>; the reasoning is <a href="#results">below</a>.</p>
         </div>
         <div class="card">
-          <h3>Named results <span class="badge b-rec">Up next</span></h3>
-          <p>Results with names, <code>-&gt; total: int</code>, set along the way with <code>total &lt;- value</code>; a bare <code>&lt;-</code> or the end of the task sends them. <a href="#named-results">Details below.</a></p>
+          <h3>Named results <span class="badge b-done">Done</span></h3>
+          <p>Results with names, <code>-&gt; total: int</code>, set along the way with <code>total &lt;- value</code>; a bare <code>&lt;-</code> or the end of the task sends them. <a href="vela.html#named-results">The language guide describes it</a>; the reasoning is <a href="#named-results">below</a>.</p>
         </div>
         <div class="card">
           <h3>Built-in arrays & slices <span class="badge b-idea">Idea</span></h3>
@@ -464,11 +464,12 @@ fi</pre>
           values on is a plain <code>return</code>. No pointers, no allocation.</li>
       </ul>
 
-      <h3 id="named-results">Step 2: Named Results <span class="badge b-rec">Up next</span></h3>
+      <h3 id="named-results">Step 2: Named Results <span class="badge b-done">Done</span></h3>
       <p>
-        With results in place, each can have a name, written like a parameter: <code>name: type</code>. A named
-        result is a variable of the task, and it is set with the same arrow that sends results. What stands
-        before the arrow says what happens:
+        Implemented; <a href="vela.html#named-results">Named Results</a> in the language guide is the reference, and
+        what follows is the design it was built from. Each result can have a name, written like a parameter:
+        <code>name: type</code>. A named result is a variable of the task, and it is set with the same arrow that
+        sends results. What stands before the arrow says what happens:
       </p>
       <div class="table-wrap">
         <table>
@@ -583,16 +584,28 @@ fi</pre>
             <code>&lt;-</code> that ends the task, and the end itself, returns them (in the result shape when there
             are several).</li>
           <li><strong>Vela Studio:</strong> hover on a result name shows <code>result total: int</code>, completion at
-            the start of a line offers <code>total &lt;- </code>, and the outline shows the names in the signature.</li>
+            the start of a line offers <code>total &lt;- </code>, and the outline shows the names in the signature.
+            (All three are in place.)</li>
         </ul>
         <p>
           Multiple results came first, since named results reuse their header list, send list, and C result
-          struct; names go on top of them. What step 1 settled: a call that sends several values can only be the
+          struct; names went on top of them. What step 1 settled: a call that sends several values can only be the
           whole right side of a list (<code>bind a, b = f()</code>, <code>a, b = f()</code>, <code>&lt;- f()</code>),
           and those values are taken as they are, since there is no single expression to wrap; every value of a
           list is computed before the first is stored, so <code>a, b = b, a</code> swaps; and all the tasks whose
           results have the same types share one C struct, whose members are <code>r0</code>, <code>r1</code>, …,
           so sending them on is a plain <code>return</code>.
+        </p>
+        <p>
+          What step 2 settled: a line-start <code>name(, name)* &lt;-</code> is a result update, and the parser
+          reads it without knowing the task's results, so the checker gives the message
+          (<em>'count' isn't a result of this task; assign it with 'count = …'</em>); a <code>&lt;-</code> anywhere
+          else in a line is still an error with its <code>&lt; -</code> hint. "Set on every path" is a walk over
+          the body that keeps the results not yet set: a branch that leaves the task contributes nothing to the
+          join, a loop's body sets nothing for certain since it might not run, and the same state answers reads,
+          bare <code>&lt;-</code>s, and the end of the task. A named result is a C local, zero-initialized so that
+          a gap in that analysis would still read a defined value, and reaching the end of the task returns them.
+          A <code>unit or E</code> task succeeds by reaching its end, so its result has no value to name.
         </p>
       </div>
     </section>

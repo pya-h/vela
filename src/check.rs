@@ -20,6 +20,8 @@ struct VarInfo {
     /// For a region: whether `new` can allocate in it. A region a task only
     /// names in its header's types (`p: ^int@r`) can't be.
     allocates: bool,
+    /// Whether this is a named result, which only `<-` sets.
+    result: bool,
 }
 
 /// Where a type is written, which decides the regions it may name.
@@ -52,6 +54,14 @@ pub struct Checker {
     variants: HashMap<String, VariantInfo>,
     scopes: Vec<HashMap<String, VarInfo>>,
     current_ret: Option<Type>,
+    /// The current task's name, for messages.
+    current_task: String,
+    /// The names of the current task's results, in order, when it names them.
+    result_names: Vec<String>,
+    /// Those of them not set on the path being checked. Vela has no zero
+    /// values, so a result must be set before it is read, before a bare `<-`,
+    /// and before the end of the task, on every path.
+    unset: HashSet<String>,
     /// Where the parts of written types are, from the parser.
     type_places: TypePlaces,
 }
@@ -242,6 +252,13 @@ impl Checker {
             1 => results.into_iter().next().unwrap_or(Type::Unit),
             _ => Type::Results(results),
         };
+        // A `unit or E` task succeeds by reaching its end or a bare `<-`, so a
+        // name for its result would have nothing to hold.
+        if !sends_value(&t.ret)
+            && let Some((name, at)) = t.result_names().next()
+        {
+            return err(*at, format!("a '{}' task succeeds by reaching its end or a bare '<-', so '{}' has no value to name", t.ret, name));
+        }
         for (param, ty) in t.params.iter_mut().zip(resolved) {
             param.ty = ty;
         }
@@ -496,13 +513,50 @@ impl Checker {
                 }
             }
         }
+        // Named results are variables of the task, declared by its header.
+        self.current_task = task.name.clone();
+        self.result_names = task.result_names().map(|(name, _)| name.clone()).collect();
+        self.unset = self.result_names.iter().cloned().collect();
+        for (result, ty) in task.results.iter().zip(task.ret.results()) {
+            if let Some((name, at)) = &result.name {
+                self.define_result(name, ty.clone(), *at)?;
+            }
+        }
         self.check_block(&mut task.body)?;
         self.scopes.clear();
         self.current_ret = None;
-        if sends_value(&task.ret) && !always_sends(&task.body) {
-            return err(task.span, format!("task '{}' can finish without sending a value", task.name));
+        if self.result_names.is_empty() {
+            if sends_value(&task.ret) && !always_sends(&task.body) {
+                return err(task.span, format!("task '{}' can finish without sending a value", task.name));
+            }
+        } else if !always_sends(&task.body)
+            && let Some(name) = self.first_unset()
+        {
+            // Reaching the end sends the results, so they must all be set.
+            return err(task.span, format!("task '{}' can finish without setting '{}'", task.name, name));
         }
+        self.result_names.clear();
+        self.unset.clear();
         Ok(())
+    }
+
+    /// Checks `block` as a path of its own, and returns the results it leaves
+    /// unset, or `None` when every path through it leaves the task, so nothing
+    /// after it runs on this path. `entry` is the state the block starts from.
+    fn branch_state(&mut self, block: &Block, entry: &HashSet<String>) -> Option<HashSet<String>> {
+        let after = std::mem::replace(&mut self.unset, entry.clone());
+        (!always_sends(block)).then_some(after)
+    }
+
+    /// The state after branches that each start from `entry`: a result is set
+    /// only where every branch that runs on sets it. Where no branch runs on,
+    /// what follows is unreachable, and `entry` is kept for checking it.
+    fn join_branches(&mut self, entry: HashSet<String>, branches: Vec<Option<HashSet<String>>>) {
+        let mut after: Option<HashSet<String>> = None;
+        for branch in branches.into_iter().flatten() {
+            after.get_or_insert_with(HashSet::new).extend(branch);
+        }
+        self.unset = after.unwrap_or(entry);
     }
 
     fn push_scope(&mut self) {
@@ -545,15 +599,35 @@ impl Checker {
         }
         if let Some(existing) = self.lookup(name) {
             let at = existing.span;
-            let what = if existing.ty == Type::Region { "the name of a region" } else { "defined" };
+            let what = match existing {
+                _ if existing.ty == Type::Region => "the name of a region",
+                _ if existing.result => "a result of this task, declared",
+                _ => "defined",
+            };
             return err(span, format!("'{}' is already {} at {}:{}", name, what, at.line, at.col));
         }
         let Some(scope) = self.scopes.last_mut() else {
             return Err(Error::internal(format!("'{}' defined outside of a task", name)));
         };
         let allocates = ty == Type::Region;
-        scope.insert(name.to_string(), VarInfo { ty, mutable, span, allocates });
+        scope.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false });
         Ok(())
+    }
+
+    /// Declares a named result, which reads like a variable and is set only by
+    /// `total <- value`.
+    fn define_result(&mut self, name: &str, ty: Type, span: Span) -> Result<()> {
+        self.define(name, ty, false, span)?;
+        if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.get_mut(name)) {
+            info.result = true;
+        }
+        Ok(())
+    }
+
+    /// The first result, in the order the header names them, that isn't set on
+    /// this path.
+    fn first_unset(&self) -> Option<&str> {
+        self.result_names.iter().find(|name| self.unset.contains(*name)).map(String::as_str)
     }
 
     /// Declares a region in the innermost scope; `allocates` tells whether
@@ -706,14 +780,29 @@ impl Checker {
                 }
                 Ok(())
             }
+            StmtKind::SetResults(names, values) => self.check_set_results(span, names, values),
             StmtKind::When(cond, then_block, else_block) => {
+                let entry = self.unset.clone();
                 self.check_condition(cond, then_block)?;
-                if let Some(else_b) = else_block {
-                    self.check_scoped_block(else_b)?;
-                }
+                let after_then = self.branch_state(then_block, &entry);
+                let after_else = match else_block {
+                    Some(else_b) => {
+                        self.check_scoped_block(else_b)?;
+                        self.branch_state(else_b, &entry)
+                    }
+                    // Without an `else`, not running the block is a path too.
+                    None => Some(entry.clone()),
+                };
+                self.join_branches(entry, vec![after_then, after_else]);
                 Ok(())
             }
-            StmtKind::Loop(cond, body) => self.check_condition(cond, body),
+            StmtKind::Loop(cond, body) => {
+                // A loop's body might not run, so it sets nothing for certain.
+                let entry = self.unset.clone();
+                self.check_condition(cond, body)?;
+                self.unset = entry;
+                Ok(())
+            }
             StmtKind::Each(name, range, body) => {
                 // A range is only valid here, so it is checked here rather than
                 // as an ordinary expression.
@@ -726,10 +815,12 @@ impl Checker {
                 }
                 range.ty = Some(Type::Range(Box::new(Type::Int)));
                 // The loop variable and the body share one scope.
+                let entry = self.unset.clone();
                 self.push_scope();
                 let result = self.define(name, Type::Int, false, span)
                     .and_then(|()| self.check_block(body));
                 self.pop_scope();
+                self.unset = entry;
                 result
             }
             StmtKind::Match(expr, cases) => self.check_match(span, expr, cases),
@@ -737,6 +828,13 @@ impl Checker {
                 let ret = self.current_ret.clone().unwrap_or(Type::Unit);
                 let expected = ret.results();
                 if values.is_empty() {
+                    if !self.result_names.is_empty() {
+                        // A bare `<-` sends the results as they are.
+                        return match self.first_unset() {
+                            Some(name) => err(span, format!("'{}' might not be set here", name)),
+                            None => Ok(()),
+                        };
+                    }
                     return match (sends_value(&ret), expected.len()) {
                         (false, _) => Ok(()),
                         (true, 1) => err(span, "expected a value after '<-'"),
@@ -851,6 +949,9 @@ impl Checker {
         match &mut expr.kind {
             ExprKind::Var(name) => {
                 let info = self.lookup_or_err(name, span)?;
+                if info.result {
+                    return err(span, format!("'{0}' is a result; set it with '{0} <- …'", name));
+                }
                 if !info.mutable {
                     return err(span, format!("cannot assign to immutable variable '{}'", name));
                 }
@@ -903,6 +1004,10 @@ impl Checker {
         };
         let mut seen: Vec<String> = Vec::new();
         let mut matched_all = false;
+        // Every case is a path of its own, and a result is set after the match
+        // only where every case that runs on sets it.
+        let entry = self.unset.clone();
+        let mut branches = Vec::new();
         for case in cases {
             if matched_all {
                 return err(case.pattern.span, "this case comes after '_', which already matches everything");
@@ -919,7 +1024,11 @@ impl Checker {
             }
             seen.push(label);
             self.check_block_with(bindings, &mut case.body)?;
+            branches.push(self.branch_state(&case.body, &entry));
         }
+        // A value the cases don't cover would leave the match without setting
+        // anything, but then a case is missing, which is the error below.
+        self.join_branches(entry, branches);
         if !matched_all
             && let Some(missing) = needed.iter().find(|n| !seen.contains(n))
         {
@@ -975,6 +1084,48 @@ impl Checker {
             return err(at, format!("expected {}, got {}", count(wanted, "value"), given.len()));
         }
         Ok(given)
+    }
+
+    /// Checks `total <- value`, which sets named results and keeps going. The
+    /// names may be any of the task's results, in any order, each once.
+    fn check_set_results(&mut self, span: Span, names: &[Binding], values: &mut [Expr]) -> Result<()> {
+        let mut expected = Vec::new();
+        let mut seen: HashMap<&str, Span> = HashMap::new();
+        for (name, at) in names {
+            if let Some(before) = seen.insert(name, *at) {
+                return err(*at, format!("'{}' is already set at {}:{}", name, before.line, before.col));
+            }
+            let Some(info) = self.lookup(name).filter(|info| info.result) else {
+                return err(*at, self.not_a_result(name));
+            };
+            expected.push(info.ty.clone());
+        }
+        let given = self.value_types(values, expected.len(), span)?;
+        let forwarded = values.len() < expected.len();
+        let list_span = values.first().map_or(span, |value| value.span);
+        for (i, want) in expected.iter().enumerate() {
+            let Some(actual) = given.get(i).cloned() else { continue };
+            match values.get_mut(i).filter(|_| !forwarded) {
+                Some(value) => self.coerce(value, want)?,
+                None => fits_or_err(&actual, want, list_span)?,
+            }
+        }
+        // Set, so the results can be read from here on.
+        for (name, _) in names {
+            self.unset.remove(name);
+        }
+        Ok(())
+    }
+
+    /// Why `name <- value` doesn't name a result of this task.
+    fn not_a_result(&self, name: &str) -> String {
+        if self.lookup(name).is_some() {
+            return format!("'{0}' isn't a result of this task; assign it with '{0} = …'", name);
+        }
+        match self.result_names.as_slice() {
+            [] => format!("'{}' isn't a result of this task, which names none; a header names them, as in '-> total: int'", name),
+            names => format!("'{}' isn't a result of this task; its results are {}", name, names.join(", ")),
+        }
     }
 
     /// The type a `bind` or `hold` without an annotation gives `name`, from the
@@ -1039,7 +1190,13 @@ impl Checker {
             ExprKind::BoolLit(_) => Ok(Type::Bool),
             ExprKind::TextLit(_) => Ok(Type::Text),
             ExprKind::NoneLit => Ok(Type::None),
-            ExprKind::Var(name) => Ok(self.lookup_or_err(name, span)?.ty.clone()),
+            ExprKind::Var(name) => {
+                let ty = self.lookup_or_err(name, span)?.ty.clone();
+                if self.unset.contains(name.as_str()) {
+                    return err(span, format!("'{}' might not be set here", name));
+                }
+                Ok(ty)
+            }
             ExprKind::Field(base, field) => {
                 let base_ty = self.check_expr(base)?;
                 self.field_type(&base_ty, field, span)
@@ -1186,6 +1343,9 @@ impl Checker {
             }
             bindings.push((name.clone(), *at, error_ty));
         }
+        // The block runs only when there is nothing to extract, so a result it
+        // sets isn't set for certain.
+        let entry = self.unset.clone();
         self.push_scope();
         let result = bindings
             .into_iter()
@@ -1193,6 +1353,7 @@ impl Checker {
             .try_for_each(|(name, at, ty)| self.define(&name, ty, false, at))
             .and_then(|()| self.check_plan_b_body(span, &extracted, body));
         self.pop_scope();
+        self.unset = entry;
         let Some((settled, at)) = result? else { return Ok(extracted) };
         // The fallback's regions must outlive the plan B: a region declared in
         // its block is freed when it ends.

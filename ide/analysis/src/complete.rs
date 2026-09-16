@@ -202,8 +202,9 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
         // A maybe can't hold a maybe, and an error type can't be one.
         let offer_maybe = !matches!(prev_token, Some(Token::Maybe | Token::Or));
         let mut items = type_items(&k, after_arrow, offer_maybe);
-        // A parameter can be a region the task allocates in.
-        if prev_token == Some(&Token::Colon) && first_token == Some(&Token::Task) {
+        // A parameter can be a region the task allocates in; a result can't,
+        // since a task never sends one.
+        if prev_token == Some(&Token::Colon) && first_token == Some(&Token::Task) && inside_parens {
             items.push(CompletionItem {
                 label: "region".to_string(),
                 kind: CompletionKind::Keyword,
@@ -901,6 +902,16 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bo
             &format!("match {}", symbol.name),
             &format!("every case of {}", kind_name),
             &format!("match {}\ncase {}\n\t${{}}\nfi", symbol.name, cases.join("\n\t\ncase ")),
+        );
+        item.boost = GLOBAL;
+        items.push(item);
+    }
+    // Setting a named result is a statement of its own: `total <- value`.
+    for (_, symbol) in visible_locals(k, byte).filter(|(_, s)| s.intro == Some("result")) {
+        let mut item = snippet(
+            &format!("{} <- ", symbol.name),
+            &format!("set result {}", symbol.detail),
+            &format!("{} <- ${{value}}", symbol.name),
         );
         item.boost = GLOBAL;
         items.push(item);

@@ -74,11 +74,13 @@ pub struct Generator {
     ret: Type,
     /// The regions declared in each block being generated, outermost first.
     regions: Vec<Vec<String>>,
+    /// The names of the task's results, in order, when it names them.
+    results: Vec<String>,
 }
 
 impl Default for Generator {
     fn default() -> Self {
-        Generator { w: CWriter::default(), temp_counter: 0, kinds: HashMap::new(), ret: Type::Unit, regions: Vec::new() }
+        Generator { w: CWriter::default(), temp_counter: 0, kinds: HashMap::new(), ret: Type::Unit, regions: Vec::new(), results: Vec::new() }
     }
 }
 
@@ -255,9 +257,18 @@ impl Generator {
     fn gen_task(&mut self, t: &TaskDef) -> Result<()> {
         self.ret = t.ret.clone();
         self.regions.clear();
+        self.results = t.result_names().map(|(name, _)| name.clone()).collect();
         self.w.open(&signature(t));
         for param in &t.params {
             self.use_if_unread(&param.name, &t.body);
+        }
+        // Named results are locals of the task. The checker has made sure none
+        // is read before it is set; the zero is there so that a checker of
+        // mine that ever missed one would still read a defined value.
+        for (result, ty) in t.results.iter().zip(t.ret.results()) {
+            if let Some((name, _)) = &result.name {
+                self.w.line(&format!("{} {} = {{0}};", c_type(ty), c_ident(name)));
+            }
         }
         self.gen_block(&t.body)?;
         match &t.ret {
@@ -265,10 +276,29 @@ impl Generator {
             Type::Or(value, _) if **value == Type::Unit => {
                 self.w.line(&format!("return {};", success(&t.ret)));
             }
+            // Reaching the end of a task sends its results as they are.
+            _ if !self.results.is_empty() => {
+                let results = self.current_results();
+                self.w.line(&format!("return {};", results));
+            }
             _ => self.w.line(&format!("vela__rt__missing_send(\"{}\");", t.name)),
         }
         self.w.close();
+        self.results.clear();
         Ok(())
+    }
+
+    /// The C expression for the task's named results as they are now: the one
+    /// result, or a result struct holding them all.
+    fn current_results(&self) -> String {
+        let names: Vec<String> = self.results.iter().map(|name| c_ident(name)).collect();
+        match names.as_slice() {
+            [only] => only.clone(),
+            _ => {
+                let members: Vec<String> = names.iter().enumerate().map(|(i, name)| format!(".{} = {}", result_member(i), name)).collect();
+                format!("(({}){{ {} }})", c_type(&self.ret), members.join(", "))
+            }
+        }
     }
 
     fn gen_block(&mut self, block: &[Stmt]) -> Result<()> {
@@ -443,10 +473,20 @@ impl Generator {
             }
             StmtKind::Match(expr, cases) => self.gen_match(expr, cases)?,
             StmtKind::Send(values) if values.is_empty() => {
+                // A task's own regions are freed first; the results are locals,
+                // and can't point into one of them.
+                let results = (!self.results.is_empty()).then(|| self.current_results());
                 self.free_all_regions();
-                match &self.ret {
-                    Type::Or(..) => self.w.line(&format!("return {};", success(&self.ret))),
-                    _ => self.w.line("return;"),
+                match (results, &self.ret) {
+                    (Some(results), _) => self.w.line(&format!("return {};", results)),
+                    (None, Type::Or(..)) => self.w.line(&format!("return {};", success(&self.ret))),
+                    (None, _) => self.w.line("return;"),
+                }
+            }
+            StmtKind::SetResults(names, values) => {
+                let given = self.gen_value_list(names.len(), values, stmt.span)?;
+                for ((name, _), value) in names.iter().zip(given) {
+                    self.w.line(&format!("{} = {};", c_ident(name), value));
                 }
             }
             StmtKind::Send(values) => {
@@ -1102,7 +1142,7 @@ impl UsedTypes {
         for stmt in block {
             match &stmt.kind {
                 StmtKind::Expr(e) => self.expr(e),
-                StmtKind::Send(values) => values.iter().for_each(|value| self.expr(value)),
+                StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter().for_each(|value| self.expr(value)),
                 StmtKind::Region(_) => {}
                 StmtKind::Binding { names, init, .. } => {
                     for bound in names {
@@ -1190,7 +1230,7 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
     let body = |b: &Block| block_reads(b, name);
     match &stmt.kind {
         StmtKind::Expr(e) => expr(e),
-        StmtKind::Send(values) => values.iter().any(expr),
+        StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter().any(expr),
         StmtKind::Region(_) => false,
         StmtKind::Binding { init, .. } => init.iter().any(expr),
         StmtKind::Assign(targets, values) => {

@@ -1,0 +1,126 @@
+# Named results: `-> total: int` makes the result a variable of the task.
+# `total <- value` sets it and keeps going, `<- value` sets it and ends the
+# task, a bare `<-` sends what the results hold, and reaching the end sends
+# them too. Vela has no zero values, so the checker makes sure each result is
+# set before it is read, before a bare `<-`, and before the end.
+
+shape Node
+    value: int
+    next: maybe ^Node
+fi
+
+task score(hits: int, misses: int) -> total: int
+    total <- hits * 10
+    when misses == 0
+        <- total + 50            # a perfect round: send the bonus and end here
+    fi
+    total <- total - misses * 5  # otherwise keep going
+    when total < 0
+        total <- 0
+    fi
+fi                               # reaching the end sends total
+
+task collatz(start: int) -> steps: int, peak: int
+    hold n = start
+    steps, peak <- 0, start
+    loop n != 1
+        when n % 2 == 0
+            n = n / 2
+        else
+            n = 3 * n + 1
+        fi
+        steps <- steps + 1
+        when n > peak
+            peak <- n
+        fi
+        when steps == 1000
+            <-                   # give up and send what we have
+        fi
+    fi
+fi
+
+# A result set in every branch, and one branch that leaves instead.
+task classify(n: int) -> label: text
+    when n < 0
+        <- "negative"
+    fi
+    when n == 0
+        label <- "zero"
+    else
+        label <- "positive"
+    fi
+fi
+
+# Every case of a match sets the result.
+kind Light
+    Red
+    Green
+    Dimmed(level: int)
+fi
+
+task brightness(light: Light) -> level: int
+    match light
+    case Red
+        level <- 0
+    case Green
+        level <- 100
+    case Dimmed amount
+        level <- amount
+    fi
+fi
+
+# A named result in a region the caller gives, built one node at a time.
+task build(r: region, n: int) -> list: maybe ^Node@r, count: int
+    list, count <- none, 0
+    each i in 0..n
+        list, count <- new Node(Node { value: i, next: list }) at r, count + 1
+    fi
+fi
+
+# A region of the task's own is freed before the results are sent.
+task summed(n: int) -> sum: int, made: int
+    region scratch
+    sum, made <- 0, 0
+    each i in 0..n
+        bind node = new Node(Node { value: i * i, next: none }) at scratch
+        sum, made <- sum + node^.value, made + 1
+    fi
+fi
+
+# One call's results set another task's results.
+task twice(n: int) -> sum: int, made: int
+    sum, made <- summed(n)
+fi
+
+task main()
+    show(score(10, 0))
+    show(score(10, 1))
+    show(score(1, 100))
+
+    bind steps, peak = collatz(27)
+    show(steps)
+    show(peak)
+
+    show(classify(-2))
+    show(classify(0))
+    show(classify(7))
+
+    show(brightness(Red))
+    show(brightness(Green))
+    show(brightness(Dimmed(42)))
+
+    region r
+    bind list, count = build(r, 4)
+    show(count)
+    hold current = list
+    loop current is {node}
+        show(node^.value)
+        current = node^.next
+    fi
+
+    bind sum, made = summed(4)
+    show(sum)
+    show(made)
+    bind again, _ = twice(4)
+    show(again)
+fi

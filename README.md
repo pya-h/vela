@@ -6,7 +6,8 @@ immutable-by-default bindings, and memory in regions: `new T(v) at r` allocates 
 when its block closes, and pointer types (`^T@r`) keep every pointer from outliving it or being null. A value that may
 be missing is a `maybe T`, and a task that can fail sends `T or E`; both are read with `match`, `is`, or a
 plan B (`x { fallback }`). Blocks close with `fi`, and a task sends its results with `<-`: one value, or
-several (`-> int, int` … `<- a / b, a % b`), received with `bind q, r = divmod(17, 5)`.
+several (`-> int, int` … `<- a / b, a % b`), received with `bind q, r = divmod(17, 5)`. Results can be named
+(`-> total: int`), set along the way with `total <- value` and sent by reaching the end of the task.
 
 ```
 task fib(n: int) -> int

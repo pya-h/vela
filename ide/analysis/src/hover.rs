@@ -156,6 +156,17 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             Some("fail") => (format!("fail {}", typed(&symbol.name)), "The error this plan B handles.".to_string()),
             Some("each") => (format!("each {}", typed(&symbol.name)), "The counter of an each loop.".to_string()),
             Some("hold") => (format!("hold {}", typed(&symbol.name)), "A mutable variable.".to_string()),
+            Some("result") => {
+                let task = k
+                    .symbols()
+                    .iter()
+                    .find(|s| s.kind == SymbolKind::Task && s.range.start <= symbol.name_range.start && symbol.name_range.end <= s.range.end);
+                let doc = match task {
+                    Some(task) => format!("A result of task {}, which reaching the end of the task sends.", task.name),
+                    None => "A result of this task, which reaching its end sends.".to_string(),
+                };
+                (format!("result {}", typed(&symbol.name)), format!("{} Set it with '{} <- …'.", doc, symbol.name))
+            }
             _ => (format!("bind {}", typed(&symbol.name)), "An immutable variable.".to_string()),
         },
     })

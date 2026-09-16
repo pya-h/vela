@@ -1,0 +1,11 @@
+# error: 6:10: 'total' might not be set here
+task f(m: maybe int) -> total: int
+    bind x = m { total <- 1
+        0 }
+    show(x)
+    show(total)
+fi
+
+task main()
+    show(f(7))
+fi

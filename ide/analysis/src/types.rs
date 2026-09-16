@@ -73,7 +73,7 @@ impl Checked {
     fn statement(&mut self, stmt: &Stmt, kinds: &Context) {
         match &stmt.kind {
             StmtKind::Expr(e) => self.expr(e, kinds),
-            StmtKind::Send(values) => values.iter().for_each(|value| self.expr(value, kinds)),
+            StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter().for_each(|value| self.expr(value, kinds)),
             StmtKind::Region(_) => {
                 self.decls.insert(pos(stmt.span), Type::Region);
             }

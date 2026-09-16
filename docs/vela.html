@@ -240,8 +240,9 @@ true false none  fi   maybe is     fail</pre>
       </p>
       <table>
         <tr><th>Symbol</th><th>Meaning</th></tr>
-        <tr><td><code>-&gt; T</code></td><td>the type a task sends back, in its header (several: <code>-&gt; int, int</code>)</td></tr>
+        <tr><td><code>-&gt; T</code></td><td>the type a task sends back, in its header (several: <code>-&gt; int, int</code>; named: <code>-&gt; total: int</code>)</td></tr>
         <tr><td><code>&lt;- value</code></td><td>sends that value back (starts a line; several: <code>&lt;- a, b</code>)</td></tr>
+        <tr><td><code>name &lt;- value</code></td><td>sets a named result and keeps going</td></tr>
         <tr><td><code>name: T</code></td><td>a parameter's, field's, or binding's type</td></tr>
         <tr><td><code>^T</code>, <code>p^</code></td><td>a pointer type; the value a pointer points to</td></tr>
         <tr><td><code>T@r</code>, <code>new@r</code></td><td>the region a type's pointers live in; the region <code>new</code> allocates in (also <code>new T(v) at r</code>)</td></tr>
@@ -346,6 +347,75 @@ a, b = b, a                  <span class="comment"># a is 2, b is 1</span>
         <code>hold</code> must all be new, as any binding's must. A <code>_</code> on the left takes a value and
         drops it, except a <code>T or E</code>, whose error must be handled.
       </p>
+
+      <h3 id="named-results">Named Results</h3>
+      <p>
+        A result can have a name, written like a parameter. The name is a variable of the task, and the same arrow
+        that sends results sets it. What stands before the arrow says what happens:
+      </p>
+      <table>
+        <tr><th>Header</th><th>Line</th><th>Meaning</th></tr>
+        <tr><td><code>-&gt; int</code></td><td><code>&lt;- value</code></td><td>Send the value and end the task</td></tr>
+        <tr><td><code>-&gt; int, int</code></td><td><code>&lt;- a, b</code></td><td>Send both values and end the task</td></tr>
+        <tr><td><code>-&gt; total: int</code></td><td><code>total &lt;- value</code></td><td>Set the result and keep going</td></tr>
+        <tr><td><code>-&gt; total: int</code></td><td><code>&lt;- value</code></td><td>Send that value and end the task</td></tr>
+        <tr><td><code>-&gt; total: int</code></td><td><code>&lt;-</code></td><td>Send the results as they are and end the task</td></tr>
+        <tr><td><code>-&gt; total: int</code></td><td>the closing <code>fi</code></td><td>Reaching the end sends the results</td></tr>
+      </table>
+      <p>So an empty left side means "send and stop", and a name on the left means "this is the result so far":</p>
+      <pre><span class="keyword">task</span> score(hits: int, misses: int) -&gt; total: int
+    total <span class="keyword">&lt;-</span> hits * <span class="number">10</span>
+    <span class="keyword">when</span> misses == <span class="number">0</span>
+        <span class="keyword">&lt;-</span> total + <span class="number">50</span>            <span class="comment"># a perfect round: send the bonus score and end here</span>
+    <span class="keyword">fi</span>
+    total <span class="keyword">&lt;-</span> total - misses * <span class="number">5</span>  <span class="comment"># otherwise keep going</span>
+    <span class="keyword">when</span> total &lt; <span class="number">0</span>
+        total <span class="keyword">&lt;-</span> <span class="number">0</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>                               <span class="comment"># reaching the end sends total</span></pre>
+      <p>
+        Setting a result never ends the task. With several names, one line can set them all, and a bare
+        <code>&lt;-</code> sends what they hold:
+      </p>
+      <pre><span class="keyword">task</span> collatz(start: int) -&gt; steps: int, peak: int
+    <span class="keyword">hold</span> n = start
+    steps, peak <span class="keyword">&lt;-</span> <span class="number">0</span>, start
+    <span class="keyword">loop</span> n != <span class="number">1</span>
+        <span class="keyword">when</span> n % <span class="number">2</span> == <span class="number">0</span>
+            n = n / <span class="number">2</span>
+        <span class="keyword">else</span>
+            n = <span class="number">3</span> * n + <span class="number">1</span>
+        <span class="keyword">fi</span>
+        steps <span class="keyword">&lt;-</span> steps + <span class="number">1</span>
+        <span class="keyword">when</span> n &gt; peak
+            peak <span class="keyword">&lt;-</span> n
+        <span class="keyword">fi</span>
+        <span class="keyword">when</span> steps == <span class="number">1000</span>
+            <span class="keyword">&lt;-</span>                  <span class="comment"># give up and send what we have</span>
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+      <p>The rules:</p>
+      <ul>
+        <li><strong>All or none.</strong> Either every result has a name or none does: <code>-&gt; q: int, int</code>
+          is an error.</li>
+        <li><strong>The names are the task's.</strong> A result can't share a parameter's name, and the body can't
+          declare another variable with it. After it is set it reads like any variable,
+          <code>total &lt;- total - 1</code>.</li>
+        <li><strong>Only <code>&lt;-</code> changes a result.</strong> <code>total = 0</code> reports <em>'total' is
+          a result; set it with 'total &lt;- …'</em>, and <code>count &lt;- 1</code> on an ordinary variable reports
+          <em>'count' isn't a result of this task; assign it with 'count = …'</em>. So every line that changes what a
+          task sends starts with a result's name and an arrow.</li>
+        <li><strong>No zero values.</strong> Vela has no uninitialized variables, and results are no exception: each
+          must be set before it is read, before every bare <code>&lt;-</code>, and before the end of the task, on
+          every path. Reading one too early reports <em>'peak' might not be set here</em>, and a path that reaches
+          the end without setting one reports <em>task 'collatz' can finish without setting 'peak'</em>. A
+          <code>&lt;- values</code> line sends its own values, so nothing after it runs and nothing else need be set.</li>
+        <li><strong>Whole values.</strong> <code>best &lt;- Point { x: 0, y: 0 }</code> sets a shape result; setting
+          one field of it, <code>best.x &lt;- 0</code>, isn't part of this.</li>
+        <li>A task that sends <code>unit or E</code> succeeds by reaching its end, so its result has no value to
+          name.</li>
+      </ul>
 
       <h3>Bindings</h3>
       <p><code>bind</code> creates an immutable binding. <code>hold</code> creates a mutable variable.</p>

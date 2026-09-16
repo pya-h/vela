@@ -1,0 +1,8 @@
+# error: 3:5: 'total' is a result; set it with 'total <- …'
+task score(hits: int) -> total: int
+    total = hits * 10
+fi
+
+task main()
+    show(score(2))
+fi

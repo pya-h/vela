@@ -1,8 +1,8 @@
 # A tiny to-do list: a linked list of shapes, each pointing to the next one
 # (a `maybe ^Item`, since the last item has none), all in one region that
 # frees them together; variants with and without a payload, `is` and plan B to
-# read maybe values, text compared by contents, and a task that sends two
-# results at once.
+# read maybe values, text compared by contents, and a task with two named
+# results.
 
 kind Status
     Todo
@@ -36,20 +36,18 @@ task print_list(first: maybe ^Item@r)
     fi
 fi
 
-# Two things to report, so two results: how many items are done, and how many
-# there are.
-task progress(first: maybe ^Item@r) -> int, int
-    hold done = 0
-    hold total = 0
+# Two things to report, so two results, and naming them makes the counting
+# read as the task's answer: reaching the end sends what they hold.
+task progress(first: maybe ^Item@r) -> done: int, total: int
     hold current = first
+    done, total <- 0, 0
     loop current is {item}
         when item^.status is Done
-            done = done + 1
+            done <- done + 1
         fi
-        total = total + 1
+        total <- total + 1
         current = item^.next
     fi
-    <- done, total
 fi
 
 task find(first: maybe ^Item@r, title: text) -> maybe ^Item@r

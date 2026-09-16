@@ -488,6 +488,13 @@
         does in C. Unlike Go, those values are not a tuple type of their own: they can only be received by a list of
         names, so there is one way to carry several values around, a <code>shape</code>.
       </p>
+      <p>
+        Results can also be named, as in Go: <code>-&gt; total: int</code>, set with <code>total &lt;- value</code>
+        and sent by reaching the end of the task. Go gives a named result its zero value, so forgetting to set it is
+        silent; Vela has no zero values, so the compiler rejects a path that reads one, or ends, without setting it.
+        Every line that changes what a task sends starts with a result's name and an arrow, which Go's plain
+        <code>=</code> doesn't show.
+      </p>
     </section>
 
     <section>

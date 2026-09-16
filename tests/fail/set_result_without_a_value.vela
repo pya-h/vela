@@ -1,0 +1,8 @@
+# error: 3:13: expected the value to set the result to, after '<-'
+task score(hits: int) -> total: int
+    total <-
+fi
+
+task main()
+    show(score(2))
+fi

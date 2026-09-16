@@ -1,0 +1,10 @@
+# error: 3:12: 'steps' is already set at 3:5
+task pair(n: int) -> steps: int, peak: int
+    steps, steps <- n, n
+    peak <- n
+fi
+
+task main()
+    bind s, p = pair(1)
+    show(s + p)
+fi

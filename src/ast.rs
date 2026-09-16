@@ -383,6 +383,8 @@ pub enum StmtKind {
     Match(Expr, Vec<Case>),
     /// `<-`, `<- value`, or `<- a, b`: one value per result.
     Send(Vec<Expr>),
+    /// `total <- value`: sets named results, and keeps going.
+    SetResults(Vec<Binding>, Vec<Expr>),
     /// `region r`: memory that `new` allocates in `r` until the block closes.
     Region(String),
 }
@@ -439,7 +441,8 @@ pub struct Pattern {
     pub span: Span,
 }
 
-/// A name bound by a pattern, with its position. `_` (`DISCARD`) binds nothing.
+/// A name with its position: one a pattern binds, where `_` (`DISCARD`) binds
+/// nothing, or a result a `<-` sets.
 pub type Binding = (String, Span);
 
 #[derive(Debug, Clone)]
@@ -523,22 +526,43 @@ pub struct TaskDef {
     /// What the task sends: `unit` for nothing, one type, or `Type::Results`
     /// for several.
     pub ret: Type,
-    /// Position of each result type; empty when the task sends nothing.
-    pub ret_spans: Vec<Span>,
+    /// One entry per result, in order; empty when the task sends nothing.
+    pub results: Vec<ResultDef>,
     pub body: Block,
     /// Position of the task name.
     pub span: Span,
 }
 
+/// One result in a task's header, `int` or `total: int`. Either every result
+/// of a task has a name or none does.
+#[derive(Debug, Clone)]
+pub struct ResultDef {
+    /// The name the task sets with `total <- value`, and its position.
+    pub name: Option<Binding>,
+    /// Position of the result's type.
+    pub ty_span: Span,
+}
+
 impl TaskDef {
     /// Position of the return type, or of the task name when there is none.
     pub fn ret_span(&self) -> Span {
-        self.ret_spans.first().copied().unwrap_or(self.span)
+        self.results.first().map_or(self.span, |result| result.ty_span)
     }
 
     /// Position of result `i`, or of the return type when it isn't known.
     pub fn result_span(&self, i: usize) -> Span {
-        self.ret_spans.get(i).copied().unwrap_or_else(|| self.ret_span())
+        self.results.get(i).map_or_else(|| self.ret_span(), |result| result.ty_span)
+    }
+
+    /// The names of the results, in order, when they have them.
+    pub fn result_names(&self) -> impl Iterator<Item = &Binding> {
+        self.results.iter().filter_map(|result| result.name.as_ref())
+    }
+
+    /// Whether the results are named, so that setting them with `<-` is what
+    /// the task sends, and reaching its end sends them.
+    pub fn names_results(&self) -> bool {
+        self.results.iter().any(|result| result.name.is_some())
     }
 }
 

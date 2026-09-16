@@ -611,15 +611,24 @@ fn is_name(text: &str) -> bool {
 }
 
 /// The return type in a task's detail, `(n: int) -> int`, or every result of
-/// `(a: int, b: int) -> int, int`.
+/// `(a: int, b: int) -> int, int`. A result may be named, `-> total: int`.
 pub(crate) fn return_type(detail: &str) -> Type {
     let Some((_, ret)) = detail.rsplit_once("->") else { return Type::Unit };
-    let written: Vec<&str> = ret.split(',').collect();
-    if written.len() == 1 {
-        return parse_type(ret).unwrap_or(Type::Unit);
+    let written: Vec<&str> = ret.split(',').map(result_type).collect();
+    if let [only] = written.as_slice() {
+        return parse_type(only).unwrap_or(Type::Unit);
     }
     let types: Option<Vec<Type>> = written.into_iter().map(parse_type).collect();
     types.map_or(Type::Unit, Type::Results)
+}
+
+/// One result as written, without the name of a named one: `total: int` is an
+/// `int`.
+fn result_type(written: &str) -> &str {
+    match written.split_once(':') {
+        Some((name, ty)) if is_name(name.trim()) => ty,
+        _ => written,
+    }
 }
 
 /// The parameter names in a task's detail, `(a: int, b: int) -> int`.

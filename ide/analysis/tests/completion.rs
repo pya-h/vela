@@ -665,3 +665,55 @@ fn several_results_are_typed_and_completed() {
     assert_offers(&in_results("x, y = 1, @@"), &["q", "divmod"], &["bind"]);
     assert_offers(&in_results("<- 1, @@"), &["q", "divmod"], &["bind"]);
 }
+
+const NAMED: &str = "\
+task score(hits: int, misses: int) -> total: int
+    total <- hits * 10
+    when misses == 0
+        <- total + 50
+    fi
+    total <- total - misses * 5
+fi
+
+task main()
+    show(score(3, 1))
+    @@
+fi
+";
+
+/// `NAMED` with `@@` replaced by `code` (which has its own `@@`).
+fn in_named(code: &str) -> String {
+    NAMED.replace("    @@\n", &format!("    {}\n", code))
+}
+
+#[test]
+fn named_results_are_names_of_the_task() {
+    assert_eq!(Analysis::new(&NAMED.replace("    @@\n", "")).diagnostics(), Vec::new());
+
+    // The name in the header is the result, not a type, and it keeps its type
+    // where it is set and read.
+    let hover_total = hover(NAMED, "total", 0);
+    assert_eq!(hover_total.code, "result total: int");
+    assert!(hover_total.doc.contains("task score") && hover_total.doc.contains("total <- …"), "{}", hover_total.doc);
+    assert_eq!(hover(NAMED, "total <- total", 0).code, "result total: int");
+    assert_eq!(hover(NAMED, "total + 50", 0).code, "result total: int");
+    assert_eq!(hover(NAMED, "score(3, 1)", 0).code, "task score(hits: int, misses: int) -> total: int");
+
+    // A named result's type is the task's result type, as a call gives it.
+    let broken = "task pair() -> steps: int, peak: int\n    steps, peak <- 0, 1\nfi\ntask main()\n    bind s, p = pair()\n    show(missing)\nfi\n";
+    assert_eq!(hover(broken, "s, p = pair", 0).code, "bind s: int");
+    assert_eq!(hover(broken, "p = pair", 0).code, "bind p: int");
+
+    // Setting a result is offered as a statement, inside its task only.
+    assert_offers(&in_named("@@"), &["show", "when"], &["total <- "]);
+    let inside = "task score(hits: int) -> total: int\n    @@\nfi\n";
+    assert_offers(inside, &["total <- ", "when", "hits"], &[]);
+    assert_eq!(item(inside, "total <- ").snippet.as_deref(), Some("total <- ${value}"));
+    assert_eq!(item(inside, "total <- ").detail, "set result int");
+
+    // A result's type is completed after its `:`, where `unit` and `region`
+    // are not types a task can send; types after `->` still are offered.
+    assert_offers("task f() -> total: @@", &["int", "text", "maybe"], &["total", "region"]);
+    assert_offers("task f(r: @@", &["int", "region"], &[]);
+    assert_offers("task f() -> @@", &["int", "unit"], &["region"]);
+}

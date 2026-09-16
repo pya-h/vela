@@ -166,6 +166,41 @@ test("maybe values: highlighting, hover, patterns, and plan B blocks", async ({ 
   await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
 });
 
+const NAMED =
+  "task score(hits: int, misses: int) -> total: int\n    total <- hits * 10\n    when misses == 0\n        <- total + 50\n    fi\n    total <- total - misses * 5\nfi\n\ntask main()\n    show(score(3, 1))\nfi\n";
+
+test("named results: highlighting, hover, and setting them", async ({ page, studio }) => {
+  studio.write("named.vela", NAMED);
+  await launch(page, studio);
+  await openFile(page, "named.vela");
+  const content = page.locator(".cm-content");
+  // The name in the header is the result, not a type.
+  const header = content.locator(".cm-line").first();
+  await expect(header.locator(".tok-variable", { hasText: /^total$/ })).toHaveCount(1);
+  await header.locator(".tok-variable", { hasText: /^total$/ }).hover();
+  await expect(page.locator(".vs-hover .vs-hover-code")).toHaveText("result total: int");
+
+  // Setting a result is offered as a statement of its own.
+  await cursorAtEndOf(page, 6);
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Control+Space");
+  const popup = page.locator(".cm-tooltip-autocomplete");
+  const option = (label: string) => popup.getByRole("option").filter({ has: page.locator(".cm-completionLabel", { hasText: new RegExp(`^${label}`) }) });
+  await expect(option("total <- ")).toBeVisible();
+  await option("total <- ").click();
+  await page.keyboard.type("0");
+  expect(await lineText(page, 7)).toBe("    total <- 0");
+  await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
+
+  // A result is not a variable: `=` says so.
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Shift+End");
+  await page.keyboard.type("    total = 0");
+  await expect(page.locator(".cm-lintRange-error")).toHaveText("total");
+  await page.locator(".cm-lintRange-error").hover();
+  await expect(page.locator(".cm-tooltip-lint")).toContainText("'total' is a result; set it with 'total <- …'");
+});
+
 const RESULTS =
   "task divmod(a: int, b: int) -> int, int\n    <- a / b, a % b\nfi\n\ntask main()\n    bind q, r = divmod(17, 5)\n    show(q)\n    show(r)\nfi\n";
 
