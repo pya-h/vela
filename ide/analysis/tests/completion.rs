@@ -699,6 +699,11 @@ fn named_results_are_names_of_the_task() {
     assert_eq!(hover(NAMED, "total + 50", 0).code, "result total: int");
     assert_eq!(hover(NAMED, "score(3, 1)", 0).code, "task score(hits: int, misses: int) -> total: int");
 
+    // A result's type comes from the header, regions and all.
+    let regional = "shape Node\n    value: int\nfi\ntask build(r: region, n: int) -> list: maybe ^Node@r, count: int\n    list, count <- none, 0\nfi\n";
+    assert_eq!(hover(regional, "list, count", 0).code, "result list: maybe ^Node@r");
+    assert_eq!(hover(regional, "count <- none", 0).code, "result count: int");
+
     // A named result's type is the task's result type, as a call gives it.
     let broken = "task pair() -> steps: int, peak: int\n    steps, peak <- 0, 1\nfi\ntask main()\n    bind s, p = pair()\n    show(missing)\nfi\n";
     assert_eq!(hover(broken, "s, p = pair", 0).code, "bind s: int");
@@ -716,4 +721,14 @@ fn named_results_are_names_of_the_task() {
     assert_offers("task f() -> total: @@", &["int", "text", "maybe"], &["total", "region"]);
     assert_offers("task f(r: @@", &["int", "region"], &[]);
     assert_offers("task f() -> @@", &["int", "unit"], &["region"]);
+
+    // Either every result has a name or none does, so a name follows the comma
+    // of a named list, as in a parameter list, and nothing is completed there.
+    assert_offers("task f() -> total: int, @@", &[], &["int", "maybe", "total", "f", "show"]);
+    assert_offers("task f() -> total: int, p@@", &[], &["int", "maybe", "total", "show"]);
+    assert_offers("task f() -> total: int, ^@@", &[], &["int", "total", "show"]);
+    assert_offers("task f() -> total: int, maybe @@", &[], &["int", "total", "show"]);
+    assert_offers("task f() -> total: int, peak: int, @@", &[], &["int", "peak", "show"]);
+    // An unnamed list still takes another type.
+    assert_offers("task f() -> maybe int, @@", &["int", "maybe"], &["unit"]);
 }

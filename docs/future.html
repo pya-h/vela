@@ -417,7 +417,7 @@
     </section>
 
     <section>
-      <h2 id="results"><span class="icon" aria-hidden="true">🎁</span> Multiple and Named Results</h2>
+      <h2 id="results"><span class="icon" aria-hidden="true">🎁</span> Multiple and Named Results <span class="badge b-done">Done</span></h2>
       <p>
         A task used to send at most one value. A task that has two things to report, such as a quotient and a
         remainder, or a value and whether it was found, had to declare a shape only to carry them, or be split
@@ -445,7 +445,8 @@ task main()
 fi</pre>
       <ul>
         <li><strong>Sending:</strong> <code>&lt;- a, b</code> must list exactly as many values as the header has types,
-          each of its type. A bare <code>&lt;-</code> stays reserved for tasks with no results.</li>
+          each of its type. A bare <code>&lt;-</code> stayed reserved for tasks with no results, until step 2 gave it a
+          second meaning: sending named results as they are.</li>
         <li><strong>Receiving:</strong> <code>bind</code>, <code>hold</code>, and assignment take a list of names:
           <code>hold q, r = divmod(17, 5)</code> or <code>q, r = divmod(20, 6)</code>. Types can be written per name,
           <code>bind q: int, r: int = …</code>. <code>_</code> receives a result and drops it; no Vela name can start
@@ -480,7 +481,7 @@ fi</pre>
             <tr><td><code>-&gt; int</code></td><td><code>&lt;- value</code></td><td>Send the value and end the task (today's Vela)</td></tr>
             <tr><td><code>-&gt; int, int</code></td><td><code>&lt;- a, b</code></td><td>Send both values and end the task</td></tr>
             <tr><td><code>-&gt; total: int</code></td><td><code>total &lt;- value</code></td><td>Set the result and keep going</td></tr>
-            <tr><td><code>-&gt; total: int</code></td><td><code>&lt;- value</code></td><td>Set the result, then send it and end the task</td></tr>
+            <tr><td><code>-&gt; total: int</code></td><td><code>&lt;- value</code></td><td>Send that value and end the task</td></tr>
             <tr><td><code>-&gt; total: int</code></td><td><code>&lt;-</code></td><td>Send the result as it is and end the task</td></tr>
             <tr><td><code>-&gt; total: int</code></td><td>the closing <code>fi</code></td><td>Reaching the end sends the result</td></tr>
           </tbody>
@@ -552,7 +553,7 @@ fi</pre>
           <code>total &lt;- total - 1</code>.</li>
         <li><strong>Only <code>&lt;-</code> changes a result.</strong> <code>total = 0</code> is an error
           (<em>'total' is a result; set it with 'total &lt;- …'</em>), and so is <code>count &lt;- 1</code> on an
-          ordinary variable (<em>'count' isn't a result of this task; use '='</em>). Every line that changes what a
+          ordinary variable (<em>'count' isn't a result of this task; assign it with 'count = …'</em>). Every line that changes what a
           task sends starts with a result's name and an arrow, so those lines stand out when reading, and an editor
           can color them.</li>
         <li><strong>No zero values.</strong> Vela has no uninitialized variables, and results are no exception. The
@@ -1347,7 +1348,8 @@ show(p.length_squared())</pre>
             <li><s>Source spans and good error messages</s> (done)</li>
             <li><s>Complete type checking and portable C output</s> (done)</li>
             <li><s>Vela Studio: an editor with language support and a terminal</s> (done: <a href="ide.html">Vela Studio</a>)</li>
-            <li>Multiple results, then named results (<code>-&gt; total: int</code>, set with <code>total &lt;- value</code>)</li>
+            <li><s>Multiple results, then named results (<code>-&gt; total: int</code>, set with <code>total &lt;- value</code>)</s>
+              (done: <a href="vela.html#results">Several Results</a>, <a href="vela.html#named-results">Named Results</a>)</li>
             <li>Defined integer overflow and division by zero</li>
             <li>Fixed-size arrays and a real <code>text</code> type</li>
             <li>Small region improvements: result-only regions, typed patterns, a lint for regions that grow in loops, and a
@@ -1385,7 +1387,7 @@ show(p.length_squared())</pre>
       <h2><span class="icon" aria-hidden="true">🎯</span> Conclusion</h2>
       <p>
         Vela's strength is its smallness. The best next steps preserve that smallness while filling the
-        obvious gaps: multiple and named results, a real string type, arrays, and defined integer arithmetic. The memory
+        obvious gaps: a real string type, arrays, and defined integer arithmetic. The memory
         model's first step, <strong>scoped regions</strong>, is in place (<a href="regions.html">Vela Regions</a>); <strong>move-only ownership and optional
         temporary borrows</strong> can grow it while keeping Vela fast, simple, and far safer than C without becoming
         Rust.

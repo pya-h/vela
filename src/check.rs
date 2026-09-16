@@ -54,8 +54,6 @@ pub struct Checker {
     variants: HashMap<String, VariantInfo>,
     scopes: Vec<HashMap<String, VarInfo>>,
     current_ret: Option<Type>,
-    /// The current task's name, for messages.
-    current_task: String,
     /// The names of the current task's results, in order, when it names them.
     result_names: Vec<String>,
     /// Those of them not set on the path being checked. Vela has no zero
@@ -236,7 +234,13 @@ impl Checker {
                 if t.params.iter().any(|p| p.name == region) {
                     return err(at, format!("'{}' is a parameter, not a region", region));
                 }
-                let which = if several { format!("result {}", i + 1) } else { "the result".to_string() };
+                // A named result is easier to point at by its name than by its
+                // place in the list.
+                let which = match t.results.get(i).and_then(|r| r.name.as_ref()) {
+                    Some((name, _)) => format!("result '{}'", name),
+                    None if several => format!("result {}", i + 1),
+                    None => "the result".to_string(),
+                };
                 return err(
                     at,
                     format!(
@@ -514,7 +518,6 @@ impl Checker {
             }
         }
         // Named results are variables of the task, declared by its header.
-        self.current_task = task.name.clone();
         self.result_names = task.result_names().map(|(name, _)| name.clone()).collect();
         self.unset = self.result_names.iter().cloned().collect();
         for (result, ty) in task.results.iter().zip(task.ret.results()) {

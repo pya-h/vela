@@ -128,6 +128,12 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     {
         return (Vec::new(), word_start, byte);
     }
+    // The next name of a named result list (`-> total: int, peak: int`).
+    if let Some(q) = prev
+        && names_a_result(&k, q)
+    {
+        return (Vec::new(), word_start, byte);
+    }
     // A region: after `@` in a type or `new@`, or after the `at` of `new T(v) at`.
     // `new` allocates, so it takes only a region the task can allocate in.
     if let Some(q) = prev
@@ -316,11 +322,36 @@ fn argument_parameter(k: &Knowledge, q: usize) -> Option<Option<Type>> {
     None
 }
 
+/// Whether the comma at position `q` separates a task's results, and whether
+/// the list names them: `Some(true)` for `-> total: int, …`, where a name
+/// follows the comma, and `Some(false)` for `-> int, …`, where a type does.
+/// Either every result has a name or none does, so the result before the comma
+/// says which list this is.
+fn result_list(k: &Knowledge, q: usize) -> Option<bool> {
+    let line = k.line_start(q);
+    if k.token(line) != Some(&Token::Task) {
+        return None;
+    }
+    let arrow = (line..q).find(|&p| k.token(p) == Some(&Token::Arrow))?;
+    let start = (arrow + 1..q).rev().find(|&p| k.token(p) == Some(&Token::Comma)).map_or(arrow + 1, |p| p + 1);
+    Some(k.ident(start).is_some() && k.token(start + 1) == Some(&Token::Colon))
+}
+
 /// Whether the comma at position `q` separates a task's result types, so
 /// another type follows it.
 fn in_result_list(k: &Knowledge, q: usize) -> bool {
-    let line = k.line_start(q);
-    k.token(line) == Some(&Token::Task) && (line..q).any(|p| k.token(p) == Some(&Token::Arrow))
+    result_list(k, q) == Some(false)
+}
+
+/// Whether position `q` is where a named result list declares its next name,
+/// after the comma and any `^` or `maybe` typed since.
+fn names_a_result(k: &Knowledge, q: usize) -> bool {
+    let mut p = q;
+    while matches!(k.token(p), Some(Token::Caret | Token::Maybe)) {
+        let Some(before) = p.checked_sub(1) else { return false };
+        p = before;
+    }
+    k.token(p) == Some(&Token::Comma) && result_list(k, p) == Some(true)
 }
 
 /// Whether the comma at position `q` separates the names of a `bind` or

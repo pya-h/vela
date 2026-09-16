@@ -223,7 +223,8 @@
         Files may use LF or CRLF line endings.
       </p>
       <p>
-        A statement is a binding, an assignment, a block, a send (<code>&lt;-</code>), a <code>region</code>, or a task
+        A statement is a binding, an assignment, a block, a send (<code>&lt;-</code>), a result update
+        (<code>total &lt;- value</code>, see <a href="#named-results">Named Results</a>), a <code>region</code>, or a task
         call, which may have a plan B (see <a href="#maybe">Maybe and Errors</a>). Any other expression on its own line would do nothing, so it is an error: <code>x == 1</code> alone
         reports <code>the result of '==' is unused; use '=' to assign</code>. Comments start with <code>#</code>.
       </p>
@@ -242,7 +243,8 @@ true false none  fi   maybe is     fail</pre>
         <tr><th>Symbol</th><th>Meaning</th></tr>
         <tr><td><code>-&gt; T</code></td><td>the type a task sends back, in its header (several: <code>-&gt; int, int</code>; named: <code>-&gt; total: int</code>)</td></tr>
         <tr><td><code>&lt;- value</code></td><td>sends that value back (starts a line; several: <code>&lt;- a, b</code>)</td></tr>
-        <tr><td><code>name &lt;- value</code></td><td>sets a named result and keeps going</td></tr>
+        <tr><td><code>&lt;-</code></td><td>ends the task, sending its named results as they are</td></tr>
+        <tr><td><code>name &lt;- value</code></td><td>sets a named result and keeps going (several: <code>steps, peak &lt;- 0, start</code>)</td></tr>
         <tr><td><code>name: T</code></td><td>a parameter's, field's, or binding's type</td></tr>
         <tr><td><code>^T</code>, <code>p^</code></td><td>a pointer type; the value a pointer points to</td></tr>
         <tr><td><code>T@r</code>, <code>new@r</code></td><td>the region a type's pointers live in; the region <code>new</code> allocates in (also <code>new T(v) at r</code>)</td></tr>
@@ -272,7 +274,9 @@ true false none  fi   maybe is     fail</pre>
         A task that returns a value must send one on every path: the compiler rejects a task that could reach its
         end without sending. A <code>when</code> counts only if both branches send, a <code>match</code> only if every
         case does, and a loop never counts, since its body might not run. A task without a return type uses a bare
-        <code>&lt;-</code> to return early.
+        <code>&lt;-</code> to return early. A task whose results are named sets them instead, and reaching its end
+        sends them; the same paths are walked, to make sure each one is set (see <a href="#named-results">Named
+        Results</a>).
       </p>
       <pre><span class="keyword">task</span> sign(x: int) -&gt; int
     <span class="keyword">when</span> x &lt; 0
@@ -289,7 +293,10 @@ true false none  fi   maybe is     fail</pre>
 <span class="keyword">fi</span></pre>
       <p>
         A send starts its line. <code>&lt;-</code> is always one symbol, so a comparison with a negative number needs
-        a space: <code>a &lt;-1</code> is an error that says so, wherever it appears, and <code>a &lt; -1</code> compares.
+        a space: <code>a &lt; -1</code> compares, and <code>a &lt;-1</code> is an error. In the middle of a line the
+        error says so — <code>'&lt;-' sends a value and must start a line; to compare with a negative number, write
+        '&lt; -'</code> — and at the start of a line, where <code>name &lt;- value</code> sets a named result, it
+        reports that <code>a</code> isn't a result of the task.
       </p>
       <p>
         Tasks can be called before they are declared, and can call themselves. Parameters are immutable, and
@@ -332,7 +339,9 @@ true false none  fi   maybe is     fail</pre>
         call (see <a href="#regions">Memory and Regions</a>). One value can't be <code>unit</code>, since
         <code>unit</code> means no value at all. A value sent on from a call, as in <code>halves</code> above,
         goes as it is: it doesn't become a <code>maybe</code> or a <code>T or E</code> on the way, which a single
-        sent value would, and the error says so.
+        sent value would, and the error says so. Results fail one at a time, not together:
+        <code>-&gt; int, int or Bad</code> is two results, the second of which may fail, and its receiver gives that
+        one a plan B. A task that fails as a whole sends a single <code>T or E</code>.
       </p>
       <p>
         <code>bind</code>, <code>hold</code>, and assignment take the same lists with plain values too, and every
@@ -836,7 +845,7 @@ show(next^)                                <span class="comment"># error: this p
 <span class="keyword">fi</span>                                         <span class="comment">#   a value can't move to another region</span></pre>
       <p>
         The region is freed however the block ends: at its <code>fi</code>, at the end of a plan B's block (after its
-        last line has given its value), or by a <code>&lt;-</code> from anywhere inside it, which frees every region the
+        last line has given its value), or by a send (<code>&lt;-</code>) from anywhere inside it, which frees every region the
         task has declared before it returns (after computing the value it sends). A <code>region</code> in a loop's body
         is a new region on every pass, freed at the end of the pass, which is how a loop allocates without growing:
       </p>

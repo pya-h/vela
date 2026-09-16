@@ -84,3 +84,15 @@ fn match_on_unchecked_value() {
         "expression has not been type-checked (at 6:11)",
     );
 }
+
+#[test]
+fn value_list_that_does_not_fit_its_names() {
+    // The checker counts the values a list of names receives; only one call
+    // may give several of them.
+    assert_internal_error("task main()\n    bind a, b = 1, 2, 3\nfi\n", "3 values received by 2 names (at 2:10)");
+}
+
+#[test]
+fn send_with_the_wrong_number_of_values() {
+    assert_internal_error("task one() -> int\n    <- 1, 2\nfi\n", "2 values sent by a task of type int (at 2:5)");
+}

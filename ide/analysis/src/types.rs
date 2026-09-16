@@ -58,6 +58,13 @@ impl Checked {
                 for param in &task.params {
                     checked.decls.insert(pos(param.span), param.ty.clone());
                 }
+                // A named result is a variable of the task, with the type the
+                // header gives it.
+                for (result, ty) in task.results.iter().zip(task.ret.results()) {
+                    if let Some((_, at)) = &result.name {
+                        checked.decls.insert(pos(*at), ty.clone());
+                    }
+                }
                 checked.block(&task.body, &context);
             }
         }
