@@ -1,0 +1,9 @@
+# error: 6:10: Vela has no 'else when'; put a 'when' inside the 'else', on its own line
+task main()
+    bind x = 1
+    when x == 1
+        show(1)
+    else when x == 2
+        show(2)
+    fi
+fi

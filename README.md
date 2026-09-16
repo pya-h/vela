@@ -40,8 +40,9 @@ cargo build
 ./examples/hello
 ```
 
-`vela <input.vela> [-o <output>] [--emit-c]`: `-o` names the executable (`a.out` by default), and
-`--emit-c` prints the generated C (or writes it to the `-o` file). The exit status is 0 on success, 1
+`vela <input.vela> [-o <output>] [--emit-c | --check]`: `-o` names the executable (`a.out` by default),
+`--emit-c` prints the generated C (or writes it to the `-o` file), `--check` only checks the program
+(including that it has a `main`), and `-h`/`--help` and `--version` print the usage and the version. The exit status is 0 on success, 1
 when the program can't be read or doesn't compile, and 2 for wrong arguments.
 
 ## Tests
@@ -84,4 +85,4 @@ See [docs/ide.html](docs/ide.html) for features, shortcuts, and security notes.
 - [Regions: memory in Vela](docs/regions.html), a guide and tutorial
 - [Vela Studio](docs/ide.html)
 - [Vela and other languages](docs/comparison.html)
-- [Future directions](docs/future.html)
+- [Future directions](docs/future.html), and a [second design notebook](docs/future-2.html)

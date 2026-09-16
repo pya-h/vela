@@ -239,6 +239,9 @@ pub struct RunRequest {
 /// Builds a file and runs it in a new session (stopping the previous run):
 /// `{"ok": true, "session": id}`, or the build failure as from `build`.
 pub async fn run(State(studio): State<Arc<Studio>>, ApiJson(request): ApiJson<RunRequest>) -> ApiResult {
+    // A new run replaces the running program even when its build fails, since
+    // the page no longer offers a way to stop the old one.
+    studio.sessions.stop_run();
     let built = blocking({
         let studio = studio.clone();
         let path = request.path.clone();

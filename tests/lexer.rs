@@ -139,7 +139,7 @@ fn invalid_text_becomes_a_token_and_lexing_continues() {
     assert_eq!(
         kinds("_tmp = 12abc"),
         [
-            invalid(1, 1, "names must start with a letter"),
+            invalid(1, 1, "'_tmp': names must start with a letter"),
             token(Token::Assign),
             invalid(1, 8, "invalid number '12abc'"),
             token(Token::Eof),
@@ -149,11 +149,26 @@ fn invalid_text_becomes_a_token_and_lexing_continues() {
     assert_eq!(kinds("\"a\\qb\" fi"), [invalid(1, 3, "invalid escape '\\q'"), token(Token::Fi), token(Token::Eof)]);
 }
 
+const UNCLOSED_TEXT: &str = "text isn't closed on its line; end it with '\"' (a line break in text is written '\\n')";
+
+#[test]
+fn messages_quote_numbers_as_written_and_name_unprintable_escapes() {
+    assert_eq!(kinds("1_000abc")[0], invalid(1, 1, "invalid number '1_000abc'"));
+    assert_eq!(kinds("9_223_372_036_854_775_808")[0], invalid(1, 1, "integer literal '9_223_372_036_854_775_808' is too large"));
+    assert_eq!(kinds("1_0.")[0], invalid(1, 1, "invalid number '1_0.': write '1_0.0'"));
+    assert_eq!(kinds("\"a\\\tb\"")[0], invalid(1, 3, "invalid escape: '\\' followed by a tab"));
+    assert_eq!(kinds("\"a\\\u{1}b\"")[0], invalid(1, 3, "invalid escape: '\\' followed by a control character"));
+    // A missing closing quote is reported at its own literal, not at a later one.
+    let tokens = kinds("show(\"abc)\nshow(\"def\")\n");
+    assert_eq!(tokens[2], invalid(1, 6, UNCLOSED_TEXT));
+    assert_eq!(tokens[6], token(Token::Text("def".into())));
+}
+
 #[test]
 fn an_unterminated_string_ends_with_its_line() {
     let tokens = highlight("show(\"oops)\nfi\n");
     let string = &tokens[2];
-    assert_eq!(string.kind, invalid(1, 6, "unterminated string"));
+    assert_eq!(string.kind, invalid(1, 6, UNCLOSED_TEXT));
     assert_eq!((string.range.clone(), string.end), (5..11, Span::new(1, 12)));
     let rest: Vec<LexKind> = tokens[3..].iter().map(|t| t.kind.clone()).collect();
     assert_eq!(rest, [token(Token::Newline), token(Token::Fi), token(Token::Newline), token(Token::Eof)]);
@@ -205,8 +220,8 @@ fn the_underscore_alone_is_a_symbol() {
     assert_eq!(kinds("{_}"), [token(Token::LBrace), token(Token::Underscore), token(Token::RBrace), token(Token::Eof)]);
     assert_eq!(kinds("fail _")[1], token(Token::Underscore));
     // A name still can't start with `_`.
-    assert_eq!(kinds("_x")[0], invalid(1, 1, "names must start with a letter"));
-    assert_eq!(kinds("__")[0], invalid(1, 1, "names must start with a letter"));
+    assert_eq!(kinds("_x")[0], invalid(1, 1, "'_x': names must start with a letter"));
+    assert_eq!(kinds("__")[0], invalid(1, 1, "'__': names must start with a letter"));
     // `maybe`, `is`, and `fail` are keywords; longer words are names.
     assert_eq!(kinds("maybe int")[0], token(Token::Maybe));
     assert_eq!(kinds("issue")[0], token(Token::Ident("issue".into())));
@@ -263,8 +278,9 @@ fn crlf_line_ends_read_like_lf() {
     assert_eq!(tokens[5].range, 13..19);
     // A backslash at the end of a CRLF line is reported like one at the end of an LF line.
     assert_eq!(kinds("\"a\\\r\nb\"")[0], invalid(1, 3, "invalid escape: '\\' at the end of a line"));
-    // A line break inside text is `\n` either way.
-    assert_eq!(kinds("\"a\r\nb\"")[0], token(Token::Text("a\nb".into())));
+    // Text ends on its line, whichever line end the file uses.
+    assert_eq!(kinds("\"a\r\nb\"")[0], invalid(1, 1, UNCLOSED_TEXT));
+    assert_eq!(kinds("\"a\nb\"")[0], invalid(1, 1, UNCLOSED_TEXT));
 }
 
 #[test]

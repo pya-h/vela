@@ -1,0 +1,15 @@
+# error: 10:10: case 'Circle' expects 1 binding, got 2
+kind Shape
+    Circle(radius: float)
+    Square(side: float)
+fi
+
+task main()
+    bind s = Circle(1.0)
+    match s
+    case Circle r extra
+        show(r)
+    case Square side
+        show(side)
+    fi
+fi

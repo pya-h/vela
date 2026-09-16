@@ -364,7 +364,7 @@
         </div>
         <div class="card">
           <h3>Portable C output <span class="badge b-done">Done</span></h3>
-          <p>Generated C is warning-free ISO C11, tested with gcc and clang, and any name that means something in C still works in Vela.</p>
+          <p>Generated C is ISO C11, tested warning-free with gcc and clang on every test program and example, and any name that means something in C still works in Vela. (Code the C compiler finds suspicious, such as <code>x == x</code>, or text longer than C's 4,095-byte limit for a literal, can still draw a warning in its strictest modes.)</p>
         </div>
         <div class="card">
           <h3>Vela Studio <span class="badge b-done">Done</span></h3>

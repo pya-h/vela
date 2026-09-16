@@ -116,9 +116,13 @@ describe("obtainToken", () => {
     expect(bodies).toEqual([{ code: "code1" }]);
     expect(replaced).toEqual(["/"]);
     expect(store.data.get("vela-studio:token")).toBe("real");
-    // A used code falls back to the token kept earlier in the tab.
-    expect(await obtainToken(place, history, store, fetch)).toBe("real");
-    expect(await obtainToken(place, history, null, fetch)).toBeNull();
+    // A used code falls back to the token kept earlier in the tab, and without
+    // one, the server's reason is passed on.
+    const reasons: string[] = [];
+    expect(await obtainToken(place, history, store, fetch, (reason) => reasons.push(reason))).toBe("real");
+    expect(reasons).toEqual([]);
+    expect(await obtainToken(place, history, null, fetch, (reason) => reasons.push(reason))).toBeNull();
+    expect(reasons).toEqual(["used"]);
   });
 
   it("reads a token from the address without calling the server", async () => {

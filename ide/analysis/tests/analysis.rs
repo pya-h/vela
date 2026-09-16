@@ -423,7 +423,7 @@ fn check_well_formed(source: &str, what: &str, everywhere: bool) {
         }
     }
     // A definition always names the same identifier as the name it came from.
-    let names = [TokenClass::Task, TokenClass::Type, TokenClass::Variant, TokenClass::Field, TokenClass::Parameter, TokenClass::Variable];
+    let names = [TokenClass::Task, TokenClass::Type, TokenClass::Variant, TokenClass::Field, TokenClass::Parameter, TokenClass::Variable, TokenClass::Region];
     for token in tokens.iter().filter(|t| names.contains(&t.class)) {
         if let Some(target) = analysis.definition(token.from) {
             let name = text(source, Location { from: token.from, to: token.to });
@@ -474,4 +474,65 @@ fn hover_works_at_the_end_of_a_name() {
 fn an_unclosed_brace_ends_with_its_line() {
     let source = "shape P\n    x: int\nfi\n\ntask main()\n    bind p = P { x: 1\n    bind q: int = 2\nfi\n";
     assert_eq!(class_at(source, "int = 2", 0), TokenClass::TypeBuiltin);
+}
+
+#[test]
+fn a_header_region_named_before_its_parameter_is_that_parameter() {
+    let source = "task f(a: ^int@r, r: region) -> ^int@r\n    <- new int(a^) in r\nfi\n\ntask main()\nfi\n";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::<Diagnostic>::new());
+    for nth in 0..2 {
+        assert_definition(source, ("r,", 0), ("r: region", 0));
+        assert_definition(source, ("r\n", nth), ("r: region", 0));
+    }
+    let hover = Analysis::new(source).hover(at(source, "r,", 0)).unwrap();
+    assert_eq!((hover.code.as_str(), hover.doc.contains("can allocate in")), ("r: region", true));
+    check_well_formed(source, "header region", true);
+}
+
+#[test]
+fn very_deep_types_are_analyzed_without_a_crash() {
+    // The compiler stops at its nesting limit; the analysis must not recurse
+    // through the text of a type written far deeper. A 1 MiB stack, smaller
+    // than Vela Studio's, shows a missing limit as a crash.
+    let run = || {
+        let deep = "^".repeat(20_000);
+        for source in [
+            format!("task f(a: {}int)\n    show(1)\nfi\n", deep),
+            format!("task main()\n    bind a: {}int = 1\n    show(a)\nfi\n", deep),
+            format!("task main()\n    bind a: {}int = 1\n    show(a)\nfi\n", "maybe ".repeat(20_000)),
+        ] {
+            let analysis = Analysis::new(&source);
+            let length = source.encode_utf16().count();
+            analysis.tokens();
+            analysis.outline();
+            assert!(!analysis.diagnostics().is_empty());
+            for offset in [8, length.saturating_sub(12), length.saturating_sub(5), length] {
+                analysis.hover(offset);
+                analysis.complete(offset);
+                analysis.definition(offset);
+            }
+        }
+    };
+    std::thread::Builder::new().stack_size(1 << 20).spawn(run).unwrap().join().unwrap();
+}
+
+#[test]
+fn a_variable_on_a_line_with_an_unclosed_brace_is_visible_on_the_next() {
+    let source = "shape P\n    x: int\nfi\n\ntask main()\n    bind p = P { x: 1\n    show(p)\nfi\n";
+    assert_definition(source, ("p)", 0), ("p =", 0));
+    // A plan B spanning lines still hides the name inside it.
+    let plan_b = "task main()\n    bind m: maybe int = none\n    bind n = m { fail e\n        n\n    }\n    show(n)\nfi\n";
+    assert_eq!(Analysis::new(plan_b).definition(at(plan_b, "n\n    }", 0)), None);
+    assert_definition(plan_b, ("n)", 0), ("n =", 0));
+}
+
+#[test]
+fn positions_convert_quickly_on_very_long_lines() {
+    let source = format!("task main()\n    show(1{})\nfi\n", " + 1".repeat(20_000));
+    let started = std::time::Instant::now();
+    let analysis = Analysis::new(&source);
+    analysis.tokens();
+    analysis.diagnostics();
+    analysis.outline();
+    assert!(started.elapsed() < std::time::Duration::from_secs(2), "took {:?}", started.elapsed());
 }

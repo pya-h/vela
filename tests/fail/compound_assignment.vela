@@ -1,0 +1,5 @@
+# error: 4:8: expected an expression, got '='; Vela has no '+=': write 'x = x + value'
+task main()
+    hold x = 1
+    x += 1
+fi

@@ -44,11 +44,14 @@ pub struct Partial {
 /// Like `front_end`, but keeps the program when checking fails, for tools
 /// such as editors that want the types found before the first error.
 pub fn front_end_partial(source: &str) -> Partial {
-    let parsed = Lexer::new(source).tokenize().and_then(|(tokens, spans)| Parser::new(tokens, spans).parse_file());
+    let parsed = Lexer::new(source).tokenize().and_then(|(tokens, spans)| {
+        let mut parser = Parser::new(tokens, spans);
+        parser.parse_file().map(|items| (items, parser.type_places()))
+    });
     match parsed {
         Err(error) => Partial { items: None, error: Some(error) },
-        Ok(mut items) => {
-            let error = Checker::new().check_file(&mut items).err();
+        Ok((mut items, type_places)) => {
+            let error = Checker::with_type_places(type_places).check_file(&mut items).err();
             Partial { items: Some(items), error }
         }
     }
@@ -115,14 +118,18 @@ pub fn c_compiler_from_env() -> String {
     env::var("CC").ok().filter(|cc| !cc.trim().is_empty()).unwrap_or_else(|| "cc".to_string())
 }
 
+/// Whether a checked program has a `main` task, which an executable needs.
+pub fn has_main(items: &[Item]) -> bool {
+    items.iter().any(|item| matches!(item, Item::Task(t) if t.name == "main"))
+}
+
 /// Compiles `source`, the contents of the file at `input`, into an
 /// executable at `output`, using `cc` as the C compiler command (see
 /// `c_compiler_from_env`). `input` names the generated C file and guards
 /// against overwriting the source.
 pub fn build(source: &str, input: &Path, output: &Path, cc: &str) -> std::result::Result<(), BuildError> {
     let items = front_end(source)?;
-    let has_main = items.iter().any(|item| matches!(item, Item::Task(t) if t.name == "main"));
-    if !has_main {
+    if !has_main(&items) {
         return Err(BuildError::NoMain);
     }
     let c_code = Generator::new().generate(&items)?;
@@ -136,20 +143,28 @@ pub fn build(source: &str, input: &Path, output: &Path, cc: &str) -> std::result
 /// Rejects an output path the C compiler couldn't write, before compiling, so
 /// the problem isn't reported as a failure of the generated C.
 fn check_output(output: &Path) -> std::result::Result<(), BuildError> {
-    let problem = if output.is_dir() {
-        Some(format!("'{}' is a folder", output.display()))
-    } else {
-        match output.parent() {
-            Some(folder) if !folder.as_os_str().is_empty() && !folder.is_dir() => {
-                Some(format!("the folder '{}' doesn't exist", folder.display()))
-            }
-            _ => None,
-        }
-    };
-    match problem {
-        Some(problem) => Err(BuildError::Io { action: "write the executable", error: io::Error::other(problem) }),
-        None => Ok(()),
+    let folder = output.parent().filter(|folder| !folder.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let io_error = |error: io::Error| BuildError::Io { action: "write the executable", error };
+    if output.is_dir() {
+        return Err(io_error(io::Error::other(format!("'{}' is a folder", output.display()))));
     }
+    if !folder.is_dir() {
+        return Err(io_error(io::Error::other(format!("the folder '{}' doesn't exist", folder.display()))));
+    }
+    // The C compiler (its linker) replaces the output, which needs a folder it
+    // can create files in, or else an existing output it can write.
+    let denied = |error: io::Error| io_error(io::Error::new(error.kind(), format!("'{}': {}", output.display(), error)));
+    let probe = folder.join(format!(".vela-output-check-{}", process::id()));
+    match fs::OpenOptions::new().write(true).create_new(true).open(&probe) {
+        Ok(_) => {
+            let _ = fs::remove_file(&probe);
+        }
+        Err(error) if output.exists() => {
+            fs::OpenOptions::new().write(true).open(output).map_err(|_| denied(error))?;
+        }
+        Err(error) => return Err(denied(error)),
+    }
+    Ok(())
 }
 
 /// Formats a diagnostic as `path:line:col: error: message`, followed by the

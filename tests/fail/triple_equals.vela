@@ -1,0 +1,4 @@
+# error: 3:14: expected an expression, got '='; to compare, write '=='
+task main()
+    show(1 === 1)
+fi

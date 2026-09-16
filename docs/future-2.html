@@ -331,7 +331,7 @@ fi</pre>
           </div>
         </div>
         <div class="note">
-          <strong>Why it's cool:</strong> it is Rust's ownership model distilled to three words. Vela could implement it as an opt-in layer: keep <code>^T</code> for unsafe escape hatches, but make <code>own</code>/<code>read</code>/<code>write</code> the default for new code.
+          <strong>Why it's cool:</strong> it is Rust's ownership model distilled to three words. Vela could implement it as an opt-in layer: keep today's region pointers (<code>^T@r</code>, already checked and never null), and add <code>own</code>/<code>read</code>/<code>write</code> on top of them for new code.
         </div>
         <div class="note">
           <strong>With regions:</strong> capabilities would sit on top of region pointers rather than replace them. A
@@ -405,7 +405,7 @@ fi</pre>
     loop not eof(f)
         show(read_line(f))
     fi
-    # close(f) runs here, even if a future `return` happened above.
+    # close(f) runs here, even if a `<-` above had left the task early.
 fi</pre>
         <div class="pros-cons">
           <div class="pros">
@@ -470,7 +470,7 @@ fi</pre>
           (This example allocated memory with <code>new</code> before regions existed. Regions already rule out memory leaks past a block, so the idea now matters for other resources, and for owned pointers dropped from a region early.)
         </p>
         <div class="note">
-          <strong>Why it's cool:</strong> this is the safety benefit of Rust's <code>Drop</code> without the complexity of lifetimes. It catches the most common memory bug — forgetting to free — at compile time.
+          <strong>Why it's cool:</strong> this is the safety benefit of Rust's <code>Drop</code> without the complexity of lifetimes. It catches the most common resource bug — forgetting to release something — at compile time.
         </div>
       </div>
     </section>
@@ -548,8 +548,8 @@ fi</pre>
           An <code>asm</code> block where inputs and outputs are ordinary Vela values, type-checked by the compiler.
         </p>
         <pre>task rdtsc() -> int
-    bind low: int
-    bind high: int
+    hold low = 0             # Vela has no uninitialized variables
+    hold high = 0
     asm("rdtsc" : "=a"(low), "=d"(high))
     <- (high &lt;&lt; 32) | low
 fi</pre>
@@ -599,7 +599,7 @@ fi</pre>
     case F _ -> "fail"
 fi</pre>
         <p>
-          Each branch ends with <code>-> expr</code> instead of <code>&lt;-</code>, distinguishing match values from task returns. The compiler still checks exhaustiveness.
+          Each branch ends with <code>-> expr</code> instead of <code>&lt;-</code>, distinguishing match values from task returns. The compiler still checks exhaustiveness. (<a href="future.html">Future Directions</a> argues against <code>-&gt;</code> here, since it already names a task's result type, and suggests a plan B's rule instead: the last line of each case is its value.)
         </p>
         <div class="note">
           <strong>Why it's cool:</strong> it removes the need for helper tasks that only exist to compute a value from a kind. Less boilerplate, same safety.
@@ -744,9 +744,9 @@ fi</pre>
     on Get(reply: Chan[int])
         send(reply, count)
     fi
-end</pre>
+fi</pre>
         <p>
-          The <code>actor</code>/<code>end</code> syntax is just a task with a built-in message loop. The compiler guarantees that the actor's state is only touched inside its own <code>on</code> handlers.
+          The <code>actor</code>/<code>fi</code> syntax is just a task with a built-in message loop. The compiler guarantees that the actor's state is only touched inside its own <code>on</code> handlers.
         </p>
         <div class="note">
           <strong>Why it's cool:</strong> actors give Vela a concurrency model that is both simple and safe, with no risk of deadlocks or data races on actor state.

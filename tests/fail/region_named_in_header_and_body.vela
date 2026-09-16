@@ -1,0 +1,8 @@
+# error: 3:12: 'r' is already the name of a region at 2:11
+task f(p: ^int@r) -> int
+    region r
+    <- p^
+fi
+
+task main()
+fi

@@ -155,6 +155,29 @@ fn signal(pid: Option<u32>, _killer: Box<dyn ChildKiller + Send + Sync>, which: 
     }
 }
 
+/// Hangs up every process still in the session whose leader, `leader`, has
+/// just exited (the child called setsid, so the session's id is its pid).
+/// Processes that ignore hangups keep running. Only on Linux, where `/proc`
+/// lists each process's session.
+#[cfg(target_os = "linux")]
+fn hang_up_session(leader: u32) {
+    let Ok(entries) = std::fs::read_dir("/proc") else { return };
+    for pid in entries.flatten().filter_map(|entry| entry.file_name().to_str()?.parse::<i32>().ok()) {
+        // `pid (name) state ppid pgrp session …`; the name may hold spaces and parentheses.
+        let stat = std::fs::read_to_string(format!("/proc/{}/stat", pid)).unwrap_or_default();
+        let fields: Vec<&str> = stat.rsplit_once(')').map_or("", |(_, rest)| rest).split_whitespace().collect();
+        if fields.get(3).and_then(|session| session.parse::<u32>().ok()) == Some(leader) {
+            // SAFETY: `kill` has no memory-safety preconditions.
+            unsafe {
+                libc::kill(pid, libc::SIGHUP);
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn hang_up_session(_leader: u32) {}
+
 #[cfg(not(unix))]
 fn signal(_pid: Option<u32>, mut killer: Box<dyn ChildKiller + Send + Sync>, _which: Signal) {
     let _ = killer.kill();
@@ -170,6 +193,9 @@ pub struct Sessions {
     /// The run session, if one is open: starting another run stops it. Held
     /// while a run starts, so concurrent runs can't both survive.
     run: Mutex<Option<String>>,
+    /// Held while a terminal starts, from checking the limit until it is
+    /// registered, so concurrent requests can't start more than the limit.
+    terminal_start: Mutex<()>,
     idle_timeout: Duration,
     max_terminals: usize,
     /// Set by `shutdown`: no new sessions start.
@@ -181,6 +207,7 @@ impl Sessions {
         Arc::new(Sessions {
             open: Mutex::new(HashMap::new()),
             run: Mutex::new(None),
+            terminal_start: Mutex::new(()),
             idle_timeout,
             max_terminals,
             closing: AtomicBool::new(false),
@@ -197,6 +224,14 @@ impl Sessions {
         lock(&self.open).values().filter(|session| session.kind == kind && session.is_alive()).count()
     }
 
+    /// Stops the program started by the latest run, if it is still running.
+    pub fn stop_run(&self) {
+        let previous = lock(&self.run).take();
+        if let Some(session) = previous.and_then(|id| self.get(&id)) {
+            session.stop();
+        }
+    }
+
     /// Starts `command` in a new terminal of `size`, returning the session id.
     /// `scratch` (a built program's folder) is removed when the session ends.
     pub fn spawn(
@@ -209,6 +244,7 @@ impl Sessions {
         if self.closing.load(Ordering::SeqCst) {
             return Err(SessionError::Closing);
         }
+        let _terminal_start = (kind == SessionKind::Terminal).then(|| lock(&self.terminal_start));
         if kind == SessionKind::Terminal && self.count(SessionKind::Terminal) >= self.max_terminals {
             return Err(SessionError::TooManyTerminals);
         }
@@ -265,6 +301,12 @@ impl Sessions {
         spawn_thread("vela-studio-wait", move || {
             let status = child.wait();
             waiting.store(false, Ordering::SeqCst);
+            // Jobs it left running in process groups of their own get the
+            // hangup a closed terminal gives. (Their session keeps the pid in
+            // use, so nothing else can have taken it yet.)
+            if let Some(pid) = pid {
+                hang_up_session(pid);
+            }
             let duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
             let exit = match status {
                 Ok(status) => Exit { code: status.exit_code(), signal: status.signal().map(str::to_string), duration_ms },

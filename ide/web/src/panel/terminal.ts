@@ -8,7 +8,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { type ITheme, Terminal } from "@xterm/xterm";
 
 import type { TerminalSize } from "../api/types";
-import { h } from "../workbench/dom";
+import { h, hasShortcutModifier, isMac } from "../workbench/dom";
 
 const FONT = '"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace';
 /** How long to wait after the last layout change before telling the process its size. */
@@ -52,8 +52,15 @@ function currentTheme(): ITheme {
 }
 
 /** Ctrl/⌘+S, Ctrl/⌘+Shift+S, Ctrl/⌘+P, and Ctrl/⌘+Shift+O, which the workbench handles. */
-export function isWorkbenchShortcut(event: KeyboardEvent): boolean {
-  if (!(event.ctrlKey || event.metaKey) || event.altKey) return false;
+/** Opens a link from the terminal, if Ctrl or ⌘ is held and it is a web address. */
+export function openLink(event: MouseEvent, uri: string, open: (uri: string) => void = (u) => void window.open(u, "_blank", "noopener,noreferrer")): boolean {
+  if (!(event.ctrlKey || event.metaKey) || !/^https?:\/\//i.test(uri)) return false;
+  open(uri);
+  return true;
+}
+
+export function isWorkbenchShortcut(event: KeyboardEvent, mac = isMac): boolean {
+  if (!hasShortcutModifier(event, mac) || event.altKey) return false;
   const key = event.key.toLowerCase();
   return key === "s" || (key === "p" && !event.shiftKey) || (key === "o" && event.shiftKey);
 }
@@ -86,12 +93,13 @@ export class TerminalView {
       cursorInactiveStyle: "none",
       allowProposedApi: false,
       theme: currentTheme(),
+      // Links a program writes with the terminal's hyperlink sequence open like
+      // the addresses found in its text: with Ctrl or ⌘, and only for web addresses.
+      linkHandler: { activate: (event, uri) => openLink(event, uri) },
     });
     this.terminal.loadAddon(this.fitAddon);
     this.terminal.loadAddon(
-      new WebLinksAddon((event, uri) => {
-        if (event.ctrlKey || event.metaKey) window.open(uri, "_blank", "noopener,noreferrer");
-      }),
+      new WebLinksAddon((event, uri) => openLink(event, uri)),
     );
     // Saving and the pickers work from a terminal too: xterm.js would send
     // these keys to the program (Ctrl+S would even pause its output).

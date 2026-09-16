@@ -1,0 +1,21 @@
+# Integer arithmetic is 64-bit, even between literals, which C would compute
+# in its (often 32-bit) int.
+
+task main()
+    show(1000000 * 1000000)
+    show(2147483647 + 1)
+    show(-2147483647 - 2)
+    show(-1000000 * -1000000)
+    bind big = 3 * 1000000000
+    show(big)
+    hold n = 2
+    show(1000000 * 1000000 * n)
+    show(n * 1000000 * 1000000)
+    each i in 0..65536 * 65536 - 4294967295
+        show(65536 * 65536 + i)
+    fi
+    show(9223372036854775807)
+    show(4611686018427387904 - 1 + 4611686018427387904)
+    show(1 + 2.5)
+    show(7 % 3)
+fi

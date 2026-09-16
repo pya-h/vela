@@ -1,4 +1,4 @@
-# error: 3:13: unknown region 'r'; declare it with 'region r'
+# error: 3:24: unknown region 'r'; declare it with 'region r'
 task main()
     hold p: maybe ^int@r = none
     when true

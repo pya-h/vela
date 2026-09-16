@@ -26,9 +26,16 @@ type Fetch = (input: string, init: RequestInit) => Promise<Response>;
 
 /**
  * The token, from a launch code in the address, the token in the address, or
- * earlier in this tab, in that order.
+ * earlier in this tab, in that order. When the server refuses the launch code
+ * and no earlier token is kept, `refused` gets its reason.
  */
-export async function obtainToken(place: Place, history: History, store: Store | null, fetch: Fetch): Promise<string | null> {
+export async function obtainToken(
+  place: Place,
+  history: History,
+  store: Store | null,
+  fetch: Fetch,
+  refused: (reason: string) => void = () => {},
+): Promise<string | null> {
   const code = new URLSearchParams(place.hash.replace(/^#/, "")).get("launch");
   if (!code) return takeToken(place, history, store);
   history.replaceState(null, "", place.pathname + place.search);
@@ -38,16 +45,21 @@ export async function obtainToken(place: Place, history: History, store: Store |
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ code }),
     });
-    const body: unknown = response.ok ? await response.json() : null;
-    const token = typeof body === "object" && body !== null && "token" in body ? body.token : null;
+    const body: unknown = await response.json().catch(() => null);
+    const field = (name: string): unknown => (typeof body === "object" && body !== null && name in body ? (body as Record<string, unknown>)[name] : null);
+    const token = response.ok ? field("token") : null;
     if (typeof token === "string") {
       keep(store, token);
       return token;
     }
+    // A used or expired code (a reloaded launch tab): an earlier token may still work.
+    const earlier = stored(store);
+    const reason = field("error");
+    if (earlier === null && typeof reason === "string") refused(reason);
+    return earlier;
   } catch {
     // The server isn't answering; fall back to a token from earlier.
   }
-  // A used or expired code (a reloaded launch tab): an earlier token may still work.
   return stored(store);
 }
 

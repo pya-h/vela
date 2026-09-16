@@ -91,14 +91,14 @@ async fn run(options: Options) -> Result<(), String> {
     println!("Vela Studio is running for {}", studio.workspace_root().display());
     println!("  {}", url);
     println!("Press Ctrl+C to stop.");
+    // The browser opens a private page holding a one-time code, not the token
+    // or the code itself: its command line can be read by other users of this
+    // machine. The page is kept until Vela Studio stops.
+    let mut _launch_page = None;
     if options.open {
-        // The browser gets a one-time code instead of the token: its command
-        // line can be read by other users of this machine.
-        let opened = studio
-            .launch_code()
-            .is_ok_and(|code| open_browser(&format!("http://127.0.0.1:{}/#launch={}", port, code)));
-        if !opened {
-            println!("(Couldn't open a browser; open the address above.)");
+        match studio.launch_page() {
+            Ok(page) if open_browser(&page.path.to_string_lossy()) => _launch_page = Some(page),
+            _ => println!("(Couldn't open a browser; open the address above.)"),
         }
     }
 

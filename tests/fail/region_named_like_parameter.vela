@@ -1,4 +1,4 @@
-# error: 2:11: 'p' is a parameter, not a region
+# error: 2:16: 'p' is a parameter, not a region
 task f(p: ^int@p)
 fi
 task main()

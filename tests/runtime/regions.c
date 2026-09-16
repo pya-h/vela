@@ -105,6 +105,23 @@ int main(void) {
     check(*p_after == 3 && first_huge[0] == 1 && chunks(huge) == 2, "a small allocation after a huge first one gets a new chunk");
     vela__rt__region_free(huge);
 
+    /* A first allocation that fits the first chunk goes there, however large a
+     * part of it, and small ones after it share the chunk. */
+    vela__rt__region medium[1] = { VELA__RT__REGION_EMPTY };
+    vela__rt__region_alloc(medium, 2100, 1);
+    vela__rt__region_alloc(medium, 8, 8);
+    check(chunks(medium) == 1, "a first allocation of half a chunk or more shares its chunk");
+    vela__rt__region_free(medium);
+
+    /* After a first allocation too large for any chunk, ordinary chunks start
+     * at the first size again. */
+    vela__rt__region large[1] = { VELA__RT__REGION_EMPTY };
+    vela__rt__region_alloc(large, VELA__RT__CHUNK_FIRST * 3 + 5, 1);
+    vela__rt__region_alloc(large, 8, 8);
+    check(chunks(large) == 2 && large->newest->size + sizeof(vela__rt__chunk) == VELA__RT__CHUNK_FIRST,
+          "ordinary chunks after an odd-sized first chunk start at the first size");
+    vela__rt__region_free(large);
+
     /* Freeing empties the region, which can then be used again. */
     vela__rt__region_free(r);
     check(r->newest == NULL, "freeing a region empties it");

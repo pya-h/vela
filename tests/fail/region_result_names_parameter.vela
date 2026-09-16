@@ -1,0 +1,7 @@
+# error: 2:24: 'r' is a parameter, not a region
+task f(r: int) -> ^int@r
+    <- f(r)
+fi
+
+task main()
+fi

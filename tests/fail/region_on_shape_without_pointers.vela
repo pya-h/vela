@@ -1,4 +1,4 @@
-# error: 5:11: 'Point' holds no pointers, so it lives in no region; remove '@r'
+# error: 5:17: 'Point' holds no pointers, so it lives in no region; remove '@r'
 shape Point
     x: int
 fi

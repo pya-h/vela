@@ -2,6 +2,13 @@ use std::fmt;
 
 use crate::error::{Error, Result};
 
+/// Where the names inside each written type are: for the type starting at
+/// `(line, col)`, each shape, kind, or builtin name, `@region`, `maybe`,
+/// `region`, and `or` (at the error type after it), with its position. The
+/// types themselves carry no positions; errors about a part of a type use this
+/// to point at that part.
+pub type TypePlaces = std::collections::HashMap<(usize, usize), Vec<(String, Span)>>;
+
 /// A position in the source file (1-based line and column).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Span {

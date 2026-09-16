@@ -306,6 +306,65 @@ async fn terminals_are_limited() {
     server.run("hello.vela").await;
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_terminal_limit_holds_under_concurrent_requests() {
+    let server = Arc::new(server("limit-concurrent", &[], |config| config.max_terminals = 2).await);
+    let requests: Vec<_> = (0..16)
+        .map(|_| {
+            let server = server.clone();
+            tokio::spawn(async move { server.post("/api/terminal", json!({ "cols": 80, "rows": 24 })).await.status })
+        })
+        .collect();
+    let mut created = 0;
+    for request in requests {
+        let status = request.await.unwrap();
+        assert!(matches!(status, StatusCode::CREATED | StatusCode::TOO_MANY_REQUESTS), "{}", status);
+        created += usize::from(status == StatusCode::CREATED);
+    }
+    assert_eq!(created, 2);
+    assert_eq!(server.studio.sessions.count(vela_studio::SessionKind::Terminal), 2);
+}
+
+#[tokio::test]
+async fn a_run_whose_build_fails_still_stops_the_running_program() {
+    let server = server("run-then-fail", &[("forever.vela", LOOP_FOREVER), ("bad.vela", "task main()\n    show(missing)\nfi\n")], |_| {}).await;
+    let id = server.run("forever.vela").await;
+    let mut socket = server.connect(&id).await;
+    sleep(Duration::from_millis(200)).await;
+    let reply = server.post("/api/run", json!({ "path": "bad.vela" })).await.json();
+    assert_eq!(reply["ok"], false);
+    assert!(receive(&mut socket, never).await.exit.unwrap()["signal"].is_string());
+}
+
+/// Whether a process runs `sleep SECONDS`.
+#[cfg(target_os = "linux")]
+fn sleeping(seconds: &str) -> bool {
+    std::fs::read_dir("/proc").unwrap().flatten().any(|entry| {
+        std::fs::read(entry.path().join("cmdline")).is_ok_and(|cmdline| cmdline == format!("sleep\0{}\0", seconds).as_bytes())
+    })
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn a_background_job_is_hung_up_when_its_shell_exits() {
+    // `sh` doesn't hang up its own jobs when it exits, as zsh does.
+    if !std::path::Path::new("/bin/sh").exists() {
+        return;
+    }
+    let server = server("background-job", &[], |config| config.shell = Some("/bin/sh".to_string())).await;
+    let id = server.terminal().await;
+    let mut socket = server.connect(&id).await;
+    socket.send(Message::binary(b"sleep 9973 & sleep 0.3; exit\n".to_vec())).await.unwrap();
+    assert!(receive(&mut socket, never).await.exit.is_some());
+    for _ in 0..50 {
+        if !sleeping("9973") {
+            return;
+        }
+        sleep(Duration::from_millis(20)).await;
+    }
+    panic!("the background job is still running");
+}
+
 #[tokio::test]
 async fn a_terminal_that_exited_frees_its_place() {
     let server = server("limit-exit", &[], |config| config.max_terminals = 1).await;

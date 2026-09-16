@@ -1,0 +1,15 @@
+# error: 12:21: 'Red' is a variant, but '{value}' names the whole value; give it a name, then match on it
+kind Light
+    Red
+    Green
+fi
+
+task pick() -> maybe Light
+    <- Red
+fi
+
+task main()
+    when pick() is {Red}
+        show(1)
+    fi
+fi

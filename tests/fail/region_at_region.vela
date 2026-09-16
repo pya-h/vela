@@ -1,0 +1,6 @@
+# error: 2:11: a region doesn't live in another region
+task f(r: region@s)
+fi
+
+task main()
+fi

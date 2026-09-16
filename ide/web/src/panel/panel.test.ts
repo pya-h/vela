@@ -24,6 +24,7 @@ describe("run output", () => {
     expect(exitSummary({ code: 2, signal: null, durationMs: 1 }, false)).toEqual({ text: "exited with code 2", ok: false });
     expect(exitSummary({ code: 1, signal: "Hangup", durationMs: 1 }, true)).toEqual({ text: "stopped", ok: false });
     expect(exitSummary({ code: 1, signal: "Killed", durationMs: 1 }, false).text).toBe("ended by signal Killed");
+    expect(exitSummary({ code: 1, signal: null, durationMs: 1 }, true)).toEqual({ text: "stopped", ok: false });
   });
 
   it("writes the closing line on its own line, styled", () => {
@@ -70,5 +71,29 @@ describe("problems", () => {
     expect(closed[0]?.problems[0]).toMatchObject({ source: "build", line: 3, col: 5 });
     const other = collectProblems(live, new Map([["a.vela", failure("c-failed", "C compilation failed")]]));
     expect(problemCount(other)).toBe(2);
+  });
+});
+
+describe("terminal keys and links", async () => {
+  const { isWorkbenchShortcut, openLink } = await import("./terminal");
+  const key = (init: Partial<KeyboardEvent>) => ({ ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...init }) as KeyboardEvent;
+
+  it("leaves Ctrl to the shell on a Mac, where ⌘ is the shortcut modifier", () => {
+    expect(isWorkbenchShortcut(key({ key: "p", ctrlKey: true }), false)).toBe(true);
+    expect(isWorkbenchShortcut(key({ key: "p", metaKey: true }), false)).toBe(false);
+    expect(isWorkbenchShortcut(key({ key: "p", ctrlKey: true }), true)).toBe(false);
+    expect(isWorkbenchShortcut(key({ key: "p", metaKey: true }), true)).toBe(true);
+    expect(isWorkbenchShortcut(key({ key: "b", ctrlKey: true }), false)).toBe(false);
+  });
+
+  it("opens only web links, and only with Ctrl or ⌘", () => {
+    const opened: string[] = [];
+    const open = (uri: string) => void opened.push(uri);
+    const click = (init: Partial<MouseEvent>) => ({ ctrlKey: false, metaKey: false, ...init }) as MouseEvent;
+    expect(openLink(click({}), "https://example.com", open)).toBe(false);
+    expect(openLink(click({ ctrlKey: true }), "javascript:alert(1)", open)).toBe(false);
+    expect(openLink(click({ metaKey: true }), "file:///etc/passwd", open)).toBe(false);
+    expect(openLink(click({ ctrlKey: true }), "https://example.com", open)).toBe(true);
+    expect(opened).toEqual(["https://example.com"]);
   });
 });

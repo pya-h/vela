@@ -1,0 +1,4 @@
+# error: 3:5: only a variable, a field, or the value a pointer points to (p^) can be assigned
+task main()
+    1 = 2
+fi

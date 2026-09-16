@@ -1,4 +1,4 @@
-# error: 2:19: a maybe can't hold unit, which has no value
+# error: 2:25: a maybe can't hold unit, which has no value
 task nothing() -> maybe unit
 fi
 

@@ -1,0 +1,8 @@
+# error: 7:5: only a variable, a field, or the value a pointer points to (p^) can be assigned
+task one() -> int
+    <- 1
+fi
+
+task main()
+    one() = 2
+fi

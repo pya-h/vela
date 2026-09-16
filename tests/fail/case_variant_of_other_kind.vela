@@ -1,0 +1,17 @@
+# error: 14:10: kind 'Light' has no variant 'Circle'
+kind Light
+    Red
+    Green
+fi
+
+kind Shape
+    Circle(radius: float)
+fi
+
+task main()
+    bind light = Red
+    match light
+    case Circle r
+        show(r)
+    fi
+fi

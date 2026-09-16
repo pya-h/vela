@@ -15,12 +15,21 @@ pub struct Parser {
     pos: usize,
     /// Current nesting level; see `MAX_NESTING`.
     depth: usize,
+    /// The parts of the written types, for errors about them (see `TypePlaces`).
+    type_places: TypePlaces,
+    /// The parts of the type being parsed.
+    type_parts: Vec<(String, Span)>,
 }
 
 impl Parser {
     /// `tokens` and `spans` are parallel, as produced by `Lexer::tokenize`.
     pub fn new(tokens: Vec<Token>, spans: Vec<Span>) -> Self {
-        Parser { tokens, spans, pos: 0, depth: 0 }
+        Parser { tokens, spans, pos: 0, depth: 0, type_places: TypePlaces::new(), type_parts: Vec::new() }
+    }
+
+    /// Where the parts of every type parsed so far are.
+    pub fn type_places(&mut self) -> TypePlaces {
+        std::mem::take(&mut self.type_places)
     }
 
     pub fn parse_file(&mut self) -> Result<Vec<Item>> {
@@ -80,7 +89,7 @@ impl Parser {
     }
 
     fn unexpected(&self, expected: &str) -> Error {
-        if self.check(Token::Send) {
+        if self.check(Token::Send) && !self.at_line_start() {
             return self.misplaced_send();
         }
         if self.check(Token::Is) {
@@ -89,12 +98,40 @@ impl Parser {
                 "'is' can only test the whole condition of a 'when' or 'loop', as in 'when x is {value}'",
             );
         }
-        Error::at(self.peek_span(), format!("expected {}, got {}", expected, self.peek().describe()))
+        let previous = self.pos.checked_sub(1).and_then(|p| self.tokens.get(p));
+        let next = self.tokens.get(self.pos + 1);
+        let hint = match (self.peek(), previous, next) {
+            (Token::Assign, Some(op @ (Token::Plus | Token::Minus | Token::Star | Token::Slash | Token::Percent)), _) => {
+                let op = op.describe();
+                let op = op.trim_matches('\'');
+                format!("; Vela has no '{0}=': write 'x = x {0} value'", op)
+            }
+            (Token::Assign, Some(Token::Eq), _) => "; to compare, write '=='".to_string(),
+            (Token::Assign, _, _) if expected == "an expression" => "; '=' assigns, as a statement of its own".to_string(),
+            (Token::Dot, _, Some(Token::Int(n))) => format!("; a number starts with a digit, as in '0.{}'", n),
+            (Token::LBrace, Some(Token::Newline) | None, _) => "; a plan B's '{' goes on the line of its value, and blocks close with 'fi'".to_string(),
+            _ => String::new(),
+        };
+        Error::at(self.peek_span(), format!("expected {}, got {}{}", expected, self.peek().describe(), hint))
+    }
+
+    /// Whether the next token is the first on its line.
+    fn at_line_start(&self) -> bool {
+        self.pos == 0 || matches!(self.tokens.get(self.pos - 1), Some(Token::Newline))
     }
 
     /// The error for a `<-` that doesn't start a line. After something that
-    /// can end a value, it was most likely meant as `< -`.
+    /// can end a value in a condition or statement, it was most likely meant as
+    /// `< -`; on the line of a task's header, an `each`, or a `case`, the block's
+    /// body was meant to start on the next line.
     fn misplaced_send(&self) -> Error {
+        let line_start = (0..self.pos).rev().find(|&p| self.tokens.get(p) == Some(&Token::Newline)).map_or(0, |p| p + 1);
+        if let Some(opener @ (Token::Task | Token::Each | Token::Case)) = self.tokens.get(line_start) {
+            return Error::at(
+                self.peek_span(),
+                format!("'<-' must start a line: the body of a '{}' starts on the line after it", opener.describe().trim_matches('\'')),
+            );
+        }
         let after_value = self.pos > 0
             && matches!(
                 self.tokens.get(self.pos - 1),
@@ -127,15 +164,22 @@ impl Parser {
         if self.match_token(Token::Fi) {
             return Ok(());
         }
-        if self.is_at_end() || matches!(self.peek(), Token::Task | Token::Shape | Token::Kind) {
+        if self.is_at_end() || matches!(self.peek(), Token::Task | Token::Shape | Token::Kind | Token::Else | Token::Case | Token::RBrace) {
+            // Directly in a task, an `else` or `case` has no block to belong to.
+            let hint = match self.peek() {
+                Token::Else if opener == "task" => " (or an 'else' without its 'when')",
+                Token::Case if opener == "task" => " (or a 'case' outside a 'match')",
+                _ => "",
+            };
             return Err(Error::at(
                 self.peek_span(),
                 format!(
-                    "expected 'fi' to close the '{}' at {}:{}, got {}",
+                    "expected 'fi' to close the '{}' at {}:{}, got {}{}",
                     opener,
                     opened.line,
                     opened.col,
-                    self.peek().describe()
+                    self.peek().describe(),
+                    hint
                 ),
             ));
         }
@@ -168,10 +212,16 @@ impl Parser {
     /// close with `fi`; `end` is an ordinary name, but alone on a line it is
     /// never meaningful code, so it is almost certainly the old keyword.
     fn reject_stray_end(&self) -> Result<()> {
+        self.reject_stray_end_in(false)
+    }
+
+    /// `reject_stray_end` in a block that closes with `}` when `plan_b`.
+    fn reject_stray_end_in(&self, plan_b: bool) -> Result<()> {
         let is_end = matches!(self.peek(), Token::Ident(name) if name == "end");
         let next = self.tokens.get(self.pos + 1).unwrap_or(&Token::Eof);
         if is_end && matches!(next, Token::Newline | Token::Eof) {
-            return Err(Error::at(self.peek_span(), "blocks close with 'fi', not 'end'"));
+            let message = if plan_b { "a plan B's block closes with '}', not 'end'" } else { "blocks close with 'fi', not 'end'" };
+            return Err(Error::at(self.peek_span(), message));
         }
         Ok(())
     }
@@ -199,6 +249,21 @@ impl Parser {
             Token::Task => self.parse_task().map(Item::Task),
             Token::Shape => self.parse_shape().map(Item::Shape),
             Token::Kind => self.parse_kind().map(Item::Kind),
+            Token::Fi => Err(Error::at(self.peek_span(), "expected 'task', 'shape', or 'kind', got 'fi'; is there an extra 'fi' above it?")),
+            token if !matches!(token, Token::Send) || self.at_line_start() => {
+                let statement = matches!(
+                    token,
+                    Token::Ident(_) | Token::Bind | Token::Hold | Token::When | Token::Loop | Token::Each | Token::Match | Token::Send | Token::Region | Token::Else | Token::Case
+                );
+                let error = self.unexpected("'task', 'shape', or 'kind'");
+                if statement {
+                    return Err(Error::at(
+                        self.peek_span(),
+                        format!("{}; statements go inside a task (is there an extra 'fi' above it?)", error.message),
+                    ));
+                }
+                Err(error)
+            }
             _ => Err(self.unexpected("'task', 'shape', or 'kind'")),
         }
     }
@@ -219,6 +284,9 @@ impl Parser {
         } else {
             Type::Unit
         };
+        if self.check(Token::LBrace) {
+            return Err(Error::at(self.peek_span(), "a task's body starts on the line after its header, and closes with 'fi'"));
+        }
         self.skip_newlines();
         let body = self.parse_block()?;
         self.expect_fi("task", opened)?;
@@ -302,10 +370,19 @@ impl Parser {
     /// `int or ParseError`. `^` and `maybe` bind tighter than `@`, and `@`
     /// tighter than `or`.
     fn parse_type(&mut self) -> Result<Type> {
+        let start = self.peek_span();
+        self.type_parts.clear();
+        let ty = self.parse_type_parts();
+        self.type_places.insert((start.line, start.col), std::mem::take(&mut self.type_parts));
+        ty
+    }
+
+    fn parse_type_parts(&mut self) -> Result<Type> {
         let value = self.parse_simple_type()?;
         if !self.match_token(Token::Or) {
             return Ok(value);
         }
+        self.type_parts.push(("or".to_string(), self.peek_span()));
         let error = self.parse_simple_type()?;
         if self.check(Token::Or) {
             return Err(Error::at(self.peek_span(), "a type has one error type: 'or' can't appear twice"));
@@ -321,8 +398,10 @@ impl Parser {
         if !self.match_token(Token::At) {
             return Ok(ty);
         }
+        let region_span = self.peek_span();
         let region = self.expect_ident()?;
-        if ty == Type::Region {
+        self.type_parts.push((format!("@{}", region), region_span));
+        if mentions_region(&ty) {
             return Err(Error::at(span, "a region doesn't live in another region"));
         }
         let mut named = false;
@@ -331,19 +410,22 @@ impl Parser {
             Some(region.clone())
         });
         if !named {
-            return Err(Error::at(span, format!("{} holds no pointers, so it lives in no region", ty)));
+            return Err(Error::at(region_span, format!("'{}' holds no pointers, so it lives in no region; remove '@{}'", ty, region)));
         }
         Ok(ty)
     }
 
     /// A type without `or` or `@`: a name, after any `^` and `maybe`.
     fn parse_prefixed_type(&mut self) -> Result<Type> {
+        let span = self.peek_span();
         if self.match_token(Token::Region) {
+            self.type_parts.push(("region".to_string(), span));
             return Ok(Type::Region);
         }
         let prefix = if self.match_token(Token::Caret) {
             Some(Token::Caret)
         } else if self.match_token(Token::Maybe) {
+            self.type_parts.push(("maybe".to_string(), span));
             Some(Token::Maybe)
         } else {
             None
@@ -355,6 +437,7 @@ impl Parser {
             return Ok(if prefix == Token::Caret { Type::Ptr(inner, None) } else { Type::Maybe(inner) });
         }
         let name = self.expect_ident()?;
+        self.type_parts.push((name.clone(), span));
         Ok(Type::builtin(&name).unwrap_or(Type::Named(name, None)))
     }
 
@@ -367,10 +450,13 @@ impl Parser {
         let mut stmts = Vec::new();
         loop {
             self.skip_newlines();
-            if self.is_at_end() || self.at_item_start() || stops.iter().any(|t| self.check(t.clone())) {
+            // `else`, `case`, and `}` can't start a statement: they end an
+            // enclosing block, so this one is missing its end.
+            let ends_outer = matches!(self.peek(), Token::Else | Token::Case | Token::RBrace);
+            if self.is_at_end() || self.at_item_start() || ends_outer || stops.iter().any(|t| self.check(t.clone())) {
                 break;
             }
-            self.reject_stray_end()?;
+            self.reject_stray_end_in(stops.contains(&Token::RBrace))?;
             stmts.push(self.parse_stmt()?);
             self.skip_newlines();
         }
@@ -394,7 +480,7 @@ impl Parser {
                 self.parse_simple_stmt(span)
             }
             Token::Region => self.parse_region(),
-            Token::Ident(name) if name == "free" && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) => Err(
+            Token::Ident(name) if name == "free" && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::New)) => Err(
                 Error::at(span, "Vela has no 'free': memory in a region is freed when the block declaring the region closes"),
             ),
             _ => self.parse_simple_stmt(span),
@@ -464,6 +550,9 @@ impl Parser {
         self.skip_newlines();
         let then_block = self.parse_block_until(&[Token::Else, Token::Fi])?;
         let else_block = if self.match_token(Token::Else) {
+            if self.check(Token::When) || matches!(self.peek(), Token::Ident(name) if name == "if") {
+                return Err(Error::at(self.peek_span(), "Vela has no 'else when'; put a 'when' inside the 'else', on its own line"));
+            }
             self.skip_newlines();
             Some(self.parse_block_until(&[Token::Fi])?)
         } else {
@@ -509,6 +598,9 @@ impl Parser {
             self.expect(Token::Case)?;
             let pattern = self.parse_pattern("case")?;
             if !self.check(Token::Newline) && !self.check(Token::Fi) && !self.check(Token::Case) && !self.is_at_end() {
+                if self.check(Token::Send) {
+                    return Err(self.misplaced_send());
+                }
                 return Err(match pattern.kind {
                     PatternKind::Variant { .. } => self.name_expected(),
                     _ => self.unexpected("the end of the line"),
@@ -825,11 +917,24 @@ impl Parser {
 
     /// `new T(value) in r` or `new@r T(value)`.
     fn parse_new(&mut self) -> Result<Expr> {
+        // A `new` holds a type and a value, and takes more stack than most
+        // expressions, so it counts as a level of its own.
+        self.enter()?;
+        let result = self.parse_new_inner();
+        self.leave(1);
+        result
+    }
+
+    fn parse_new_inner(&mut self) -> Result<Expr> {
         let span = self.peek_span();
         self.advance(); // new
         let before = if self.match_token(Token::At) {
             let region_span = self.peek_span();
-            Some((self.expect_ident()?, region_span))
+            let region = self.expect_ident()?;
+            if self.check(Token::LParen) {
+                return Err(Error::at(region_span, format!("after 'new@', write the region and then the type, as in 'new@r {}(…)'", region)));
+            }
+            Some((region, region_span))
         } else {
             None
         };
@@ -841,11 +946,11 @@ impl Parser {
         let after = if self.check(Token::In) {
             let in_span = self.peek_span();
             self.advance();
+            if before.is_some() {
+                return Err(Error::at(in_span, "the region is already named after 'new@'; write one of 'new T(v) in r' or 'new@r T(v)'"));
+            }
             let region_span = self.peek_span();
             let region = self.expect_ident()?;
-            if before.is_some() {
-                return Err(Error::at(in_span, "the region is already named after 'new@'; write one of 'new@r T(v)' or 'new T(v) in r'"));
-            }
             Some((region, region_span))
         } else {
             None
@@ -860,6 +965,7 @@ impl Parser {
     }
 
     fn parse_struct_init(&mut self, name: String) -> Result<ExprKind> {
+        let shape_name = name.clone();
         self.advance(); // {
         let mut fields = Vec::new();
         if !self.check(Token::RBrace) {
@@ -871,6 +977,12 @@ impl Parser {
                 fields.push(FieldInit { name, span, value });
                 if !self.match_token(Token::Comma) {
                     break;
+                }
+                if self.check(Token::Newline) {
+                    return Err(Error::at(
+                        self.peek_span(),
+                        format!("a shape literal is written on one line, as in '{} {{ x: 1, y: 2 }}'", shape_name),
+                    ));
                 }
             }
         }
@@ -909,5 +1021,14 @@ impl Parser {
             ),
             None => self.unexpected("a name"),
         }
+    }
+}
+
+/// Whether `ty` is `region`, or holds it (as `maybe region` would).
+fn mentions_region(ty: &Type) -> bool {
+    match ty {
+        Type::Region => true,
+        Type::Ptr(inner, _) | Type::Maybe(inner) => mentions_region(inner),
+        _ => false,
     }
 }

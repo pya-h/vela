@@ -182,9 +182,11 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     let type_context = match (prev, prev_token) {
         (Some(q), Some(Token::Colon)) => !unclosed_on_line(&k, q, &Token::LBrace, &Token::RBrace),
         (_, Some(Token::Arrow | Token::New)) => true,
+        // `new@r T`: the type follows the region.
+        (Some(q), Some(Token::Ident(_))) => after_new_region(&k, q),
         // A type continues after `^` and `maybe`, and `or` starts the error type.
         (Some(q), Some(Token::Caret | Token::Maybe)) => starts_type(&k, q),
-        (Some(q), Some(Token::Or)) => q.checked_sub(1).is_some_and(|name| k.ident(name).is_some() && starts_type(&k, name)),
+        (Some(q), Some(Token::Or)) => q.checked_sub(1).is_some_and(|end| ends_type(&k, end)),
         _ => false,
     };
     if type_context {
@@ -216,7 +218,9 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
                 let probe = probe(source, word_start, word_end);
                 let exact = Knowledge::new(source, scan, &probe);
                 // A plan B's first line may name its error: `fail e`.
-                let names_error = prev.is_some_and(|q| blocks.last() == Some(&Block::PlanB) && starts_plan_b_or_pattern(&k, q + 1));
+                let names_error = prev.is_some_and(|q| {
+                    blocks.last() == Some(&Block::PlanB) && starts_plan_b_or_pattern(&k, q + 1) && plan_b_value_can_fail(&exact, q)
+                });
                 statement_items(&exact, &blocks, word_start, names_error)
             }
         };
@@ -231,11 +235,49 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     if parameter == Some(Some(Type::Region)) {
         return (region_items(&k, word_start, true), word_start, byte);
     }
+    // After a finished value, only the words that can continue it.
+    if let Some(q) = prev
+        && k.range(q).end < word_start
+        && ends_value(&k, q)
+    {
+        return (continuation_items(&k, q), word_start, byte);
+    }
     let mut items = expression_items(&k, word_start);
     if !inside_parens || parameter.is_some() {
         items.retain(|item| item.kind != CompletionKind::Region);
     }
     (items, word_start, byte)
+}
+
+/// Whether the token at position `q` can end a value, a type, or a loop's name.
+fn ends_value(k: &Knowledge, q: usize) -> bool {
+    matches!(
+        k.token(q),
+        Some(Token::Ident(_) | Token::Int(_) | Token::Float(_) | Token::Text(_) | Token::True | Token::False | Token::None | Token::RParen | Token::RBrace | Token::Caret)
+    )
+}
+
+/// The words that can follow the finished value, type, or name ending at
+/// position `q`: `in` after an `each`'s name or a `new`'s value, `or` after a
+/// written type, `is` in a condition, and `and`/`or` after a value.
+fn continuation_items(k: &Knowledge, q: usize) -> Vec<CompletionItem> {
+    let line = k.line_start(q);
+    let on_line = |token: &Token| (line..=q).any(|p| k.token(p) == Some(token));
+    if k.token_before(q) == Some(&Token::Each) {
+        return vec![keyword("in")];
+    }
+    if ends_type(k, q) {
+        return if on_line(&Token::Or) { Vec::new() } else { vec![keyword("or")] };
+    }
+    let mut items = Vec::new();
+    if k.token(q) == Some(&Token::RParen) && on_line(&Token::New) && !on_line(&Token::In) {
+        items.push(keyword("in"));
+    }
+    if matches!(k.token(line), Some(Token::When | Token::Loop)) && !on_line(&Token::Is) {
+        items.push(keyword("is"));
+    }
+    items.extend([keyword("and"), keyword("or")]);
+    items
 }
 
 /// The parameter whose argument is being typed after position `q`, inside a
@@ -276,9 +318,25 @@ fn starts_type(k: &Knowledge, q: usize) -> bool {
     match p.checked_sub(1).map(|b| (b, k.token(b))) {
         Some((b, Some(Token::Colon))) => !unclosed_on_line(k, b, &Token::LBrace, &Token::RBrace),
         Some((_, Some(Token::Arrow | Token::New))) => true,
-        Some((b, Some(Token::Or))) => b.checked_sub(1).is_some_and(|name| k.ident(name).is_some() && starts_type(k, name)),
+        Some((b, Some(Token::Ident(_)))) => after_new_region(k, b),
+        Some((b, Some(Token::Or))) => b.checked_sub(1).is_some_and(|end| ends_type(k, end)),
         _ => false,
     }
+}
+
+/// Whether position `q` is the region name of `new@r`, after which its type comes.
+fn after_new_region(k: &Knowledge, q: usize) -> bool {
+    k.ident(q).is_some() && k.token_before(q) == Some(&Token::At) && q.checked_sub(2).is_some_and(|new| k.token(new) == Some(&Token::New))
+}
+
+/// Whether the type-ending name at position `q` (a type's name, or the region
+/// after its `@`) ends a type, so that an `or` after it starts the error type.
+fn ends_type(k: &Knowledge, q: usize) -> bool {
+    if k.ident(q).is_none() {
+        return false;
+    }
+    let name = if k.token_before(q) == Some(&Token::At) { q.checked_sub(2) } else { Some(q) };
+    name.is_some_and(|name| k.ident(name).is_some() && starts_type(k, name))
 }
 
 /// Whether the `fail` at position `q` names an error: it follows `is` or
@@ -289,6 +347,24 @@ fn starts_plan_b_or_pattern(k: &Knowledge, q: usize) -> bool {
         p -= 1;
     }
     matches!(p.checked_sub(1).and_then(|b| k.token(b)), Some(Token::Is | Token::Case | Token::LBrace))
+}
+
+/// Whether the plan B whose `{` is at or before position `q` (across line
+/// breaks) is on a value that can fail, so its first line may name the error.
+/// Unknown types are given the benefit of the doubt.
+fn plan_b_value_can_fail(k: &Knowledge, q: usize) -> bool {
+    let mut brace = q;
+    while k.token(brace) == Some(&Token::Newline) {
+        let Some(before) = brace.checked_sub(1) else { return true };
+        brace = before;
+    }
+    if k.token(brace) != Some(&Token::LBrace) {
+        return true;
+    }
+    match brace.checked_sub(1).and_then(|end| k.type_ending_at(end)) {
+        Some(Type::Or(..)) | None => true,
+        Some(_) => false,
+    }
 }
 
 /// `source` with `from..to` removed, checked.
@@ -342,7 +418,7 @@ fn open_blocks(k: &Knowledge, byte: usize) -> Vec<Block> {
     for q in 0..end {
         match k.token(q) {
             Some(Token::Newline) => inline_braces = 0,
-            Some(Token::LBrace) if k.token(q + 1) == Some(&Token::Newline) => blocks.push(Block::PlanB),
+            Some(Token::LBrace) if opens_block_of_lines(k, q) => blocks.push(Block::PlanB),
             Some(Token::LBrace) => inline_braces += 1,
             Some(Token::RBrace) if inline_braces > 0 => inline_braces -= 1,
             // Closing a plan B also closes any block left open inside it.
@@ -370,6 +446,14 @@ fn open_blocks(k: &Knowledge, byte: usize) -> Vec<Block> {
         }
     }
     blocks
+}
+
+/// Whether the `{` at position `q` opens a plan B whose block continues on the
+/// next lines: it ends its line, or only `fail e` follows it there.
+pub(crate) fn opens_block_of_lines(k: &Knowledge, q: usize) -> bool {
+    let names_error = k.token(q + 1) == Some(&Token::Fail) && matches!(k.token(q + 2), Some(Token::Ident(_) | Token::Underscore));
+    let end = if names_error { q + 3 } else { q + 1 };
+    matches!(k.token(end), Some(Token::Newline) | None)
 }
 
 /// Whether an `open` bracket before position `q` (inclusive) on its line is
@@ -492,6 +576,16 @@ fn case_items(source: &str, scan: &Scan, k: &Knowledge, case: usize) -> Vec<Comp
                 boost: LOCAL,
             })
             .collect();
+        if !uncovered.is_empty() && !covered.iter().any(|label| label == "_") {
+            items.push(CompletionItem {
+                label: "_".to_string(),
+                kind: CompletionKind::Keyword,
+                detail: "every other case".to_string(),
+                apply: None,
+                snippet: None,
+                boost: KEYWORD,
+            });
+        }
         if uncovered.len() > 1 {
             let cases: Vec<&str> = uncovered.iter().map(|(_, _, template)| template.as_str()).collect();
             items.push(snippet("all remaining cases", "a value, and the other case", &format!("{}\n\t${{}}", cases.join("\n\t\ncase "))));
@@ -708,11 +802,40 @@ fn item_level_items() -> Vec<CompletionItem> {
     ]
 }
 
+/// The word that last opened or divided the innermost block before `byte`:
+/// `when`, `else`, `loop`, `each`, `match`, `case`, or a declaration word.
+fn innermost_block_word<'k>(k: &'k Knowledge, byte: usize) -> Option<&'k Token> {
+    let mut depth = 0usize;
+    let mut q = k.last_before(byte)?;
+    loop {
+        match k.token(q) {
+            Some(Token::Fi) => depth += 1,
+            Some(token @ (Token::When | Token::Loop | Token::Each | Token::Match)) => {
+                if depth == 0 {
+                    return Some(token);
+                }
+                depth -= 1;
+            }
+            Some(token @ (Token::Else | Token::Case)) if depth == 0 => return Some(token),
+            Some(token @ (Token::Task | Token::Shape | Token::Kind)) => return Some(token),
+            _ => {}
+        }
+        q = q.checked_sub(1)?;
+    }
+}
+
 fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bool) -> Vec<CompletionItem> {
+    let innermost = innermost_block_word(k, byte);
+    // Right after `match`, only a `case` can come.
+    if blocks.last() == Some(&Block::Match) && innermost == Some(&Token::Match) {
+        return vec![keyword("case")];
+    }
     let mut items: Vec<CompletionItem> = STATEMENT_KEYWORDS.iter().map(|word| keyword(word)).collect();
     // Inside a plan B, `}` closes the block, not `fi`.
     match blocks.last() {
         Some(Block::PlanB) => {}
+        // A `when` has one `else`.
+        Some(Block::When) if innermost == Some(&Token::Else) => items.push(keyword("fi")),
         Some(Block::When) => items.extend([keyword("fi"), keyword("else")]),
         Some(Block::Match) => items.extend([keyword("fi"), keyword("case")]),
         _ => items.push(keyword("fi")),
@@ -802,8 +925,18 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
             boost: GLOBAL,
         });
     }
-    items.extend(VALUE_KEYWORDS.iter().map(|word| keyword(word)));
-    items.push(snippet("new … in", "allocate a value in a region", "new ${T}(${value}) in ${r}"));
+    // `new` needs a region to allocate in, and `fail` a `T or E` to hold its error.
+    let can_allocate = !region_items(k, byte, true).is_empty();
+    let has_errors = k.symbols().iter().any(|symbol| symbol.detail.contains(" or "));
+    items.extend(
+        VALUE_KEYWORDS
+            .iter()
+            .filter(|word| (**word != "new" || can_allocate) && (**word != "fail" || has_errors))
+            .map(|word| keyword(word)),
+    );
+    if can_allocate {
+        items.push(snippet("new … in", "allocate a value in a region", "new ${T}(${value}) in ${r}"));
+    }
     items
 }
 

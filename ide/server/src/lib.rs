@@ -78,6 +78,12 @@ pub struct Studio {
     launch: Mutex<Option<(Token, Instant)>>,
 }
 
+/// The browser's launch page (see `Studio::launch_page`), removed when dropped.
+pub struct LaunchPage {
+    pub path: PathBuf,
+    _folder: scratch::ScratchDir,
+}
+
 /// How long a launch code can be exchanged for the token.
 const LAUNCH_CODE_LIFETIME: Duration = Duration::from_secs(300);
 
@@ -101,6 +107,27 @@ impl Studio {
         let text = code.as_str().to_string();
         *self.launch.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some((code, Instant::now()));
         Ok(text)
+    }
+
+    /// A page that sends the browser to Vela Studio with a new launch code,
+    /// written to a file only this user can read. Opening the browser with this
+    /// file keeps the code off the browser's command line, which other users
+    /// can read and could use before the browser does. The file is removed
+    /// when the returned value is dropped.
+    pub fn launch_page(&self) -> std::io::Result<LaunchPage> {
+        let folder = scratch::ScratchDir::create()?;
+        let url = format!("http://127.0.0.1:{}/#launch={}", self.config.port, self.launch_code()?);
+        let path = folder.path().join("open-vela-studio.html");
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+        let html = format!(
+            "<!DOCTYPE html>\n<meta charset=\"utf-8\">\n<title>Vela Studio</title>\n<meta http-equiv=\"refresh\" content=\"0; url={0}\">\n<p><a href=\"{0}\">Open Vela Studio</a></p>\n",
+            url
+        );
+        std::io::Write::write_all(&mut options.open(&path)?, html.as_bytes())?;
+        Ok(LaunchPage { path, _folder: folder })
     }
 
     /// Takes the launch code if `candidate` is it and it hasn't expired.

@@ -1,4 +1,4 @@
-# error: 2:24: the error type can't be unit
+# error: 2:31: the error type can't be unit
 task parse(t: text) -> int or unit
     <- 1
 fi

@@ -1,0 +1,6 @@
+# error: 5:5: expected an expression, got '{'; a plan B's '{' goes on the line of its value, and blocks close with 'fi'
+task main()
+    bind m: maybe int = none
+    bind n = m
+    { 0 }
+fi

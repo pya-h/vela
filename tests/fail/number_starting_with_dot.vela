@@ -1,0 +1,4 @@
+# error: 3:10: expected an expression, got '.'; a number starts with a digit, as in '0.5'
+task main()
+    show(.5)
+fi

@@ -1,0 +1,8 @@
+# error: 7:10: show expects int, float, bool, or text; the value in this int or text must be extracted first, as in 'x { … }' or 'when x is {value}'
+task get() -> int or text
+    <- 1
+fi
+
+task main()
+    show(get())
+fi

@@ -1,0 +1,40 @@
+  1 | # Integer arithmetic is 64-bit, even between literals, which C would compute
+    | comment:# Integer arithmetic is 64-bit, even between literals, which C would compute
+  2 | # in its (often 32-bit) int.
+    | comment:# in its (often 32-bit) int.
+  4 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  5 |     show(1000000 * 1000000)
+    | builtin-fn:show  punctuation:(  number:1000000  operator:*  number:1000000  punctuation:)
+  6 |     show(2147483647 + 1)
+    | builtin-fn:show  punctuation:(  number:2147483647  operator:+  number:1  punctuation:)
+  7 |     show(-2147483647 - 2)
+    | builtin-fn:show  punctuation:(  operator:-  number:2147483647  operator:-  number:2  punctuation:)
+  8 |     show(-1000000 * -1000000)
+    | builtin-fn:show  punctuation:(  operator:-  number:1000000  operator:*  operator:-  number:1000000  punctuation:)
+  9 |     bind big = 3 * 1000000000
+    | keyword:bind  variable:big  operator:=  number:3  operator:*  number:1000000000
+ 10 |     show(big)
+    | builtin-fn:show  punctuation:(  variable:big  punctuation:)
+ 11 |     hold n = 2
+    | keyword:hold  variable:n  operator:=  number:2
+ 12 |     show(1000000 * 1000000 * n)
+    | builtin-fn:show  punctuation:(  number:1000000  operator:*  number:1000000  operator:*  variable:n  punctuation:)
+ 13 |     show(n * 1000000 * 1000000)
+    | builtin-fn:show  punctuation:(  variable:n  operator:*  number:1000000  operator:*  number:1000000  punctuation:)
+ 14 |     each i in 0..65536 * 65536 - 4294967295
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:65536  operator:*  number:65536  operator:-  number:4294967295
+ 15 |         show(65536 * 65536 + i)
+    | builtin-fn:show  punctuation:(  number:65536  operator:*  number:65536  operator:+  variable:i  punctuation:)
+ 16 |     fi
+    | keyword:fi
+ 17 |     show(9223372036854775807)
+    | builtin-fn:show  punctuation:(  number:9223372036854775807  punctuation:)
+ 18 |     show(4611686018427387904 - 1 + 4611686018427387904)
+    | builtin-fn:show  punctuation:(  number:4611686018427387904  operator:-  number:1  operator:+  number:4611686018427387904  punctuation:)
+ 19 |     show(1 + 2.5)
+    | builtin-fn:show  punctuation:(  number:1  operator:+  number:2.5  punctuation:)
+ 20 |     show(7 % 3)
+    | builtin-fn:show  punctuation:(  number:7  operator:%  number:3  punctuation:)
+ 21 | fi
+    | keyword:fi

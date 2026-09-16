@@ -603,9 +603,11 @@ impl Generator {
     }
 
     /// Generates operands that are evaluated in order, as a call's arguments or
-    /// an operator's two sides. When one of them has a prelude, every operand
-    /// before it is stored in a temporary first, so that it is evaluated before
-    /// that prelude runs (the prelude may call tasks or change variables).
+    /// an operator's two sides. When one of them has a prelude, they are
+    /// evaluated left to right: every operand before the last prelude is stored
+    /// in a temporary first, so that it is evaluated before that prelude runs
+    /// (the prelude may call tasks or change variables), and so is every other
+    /// operand but the last, since C evaluates the rest in no fixed order.
     fn gen_operands(&mut self, operands: &[&Expr]) -> Result<Vec<String>> {
         let last_prelude = operands.iter().rposition(|e| has_plan_b(e));
         let mut values = Vec::new();
@@ -615,7 +617,10 @@ impl Generator {
                 operand.kind,
                 ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
             );
-            if last_prelude.is_some_and(|last| i < last) && !constant {
+            // A variable after the last prelude reads the same value whenever C reads it.
+            let variable = matches!(operand.kind, ExprKind::Var(_));
+            let in_order = last_prelude.is_some_and(|last| i < last || (i + 1 < operands.len() && !variable));
+            if in_order && !constant {
                 let tmp = self.fresh_temp("arg");
                 self.w.line(&format!("{} {} = {};", c_type(operand.ty()?), tmp, value));
                 values.push(tmp);
@@ -852,6 +857,12 @@ impl Generator {
             // C's `%` is integer-only.
             return Ok(format!("vela__rt__fmod({}, {})", left, right));
         }
+        // Two integer literals would be computed in C's `int`, which is often 32
+        // bits: `1000000 * 1000000` must be computed in 64 bits, as Vela's `int`.
+        let (left, right) = match (int_constant(l), int_constant(r)) {
+            (Some(left), Some(right)) if *e.ty()? == Type::Int => (left, right),
+            _ => (left, right),
+        };
         let op_s = match op {
             BinaryOp::Add => "+",
             BinaryOp::Sub => "-",
@@ -1343,4 +1354,14 @@ fn escape_c_string(s: &str) -> String {
         }
     }
     out
+}
+
+/// An integer literal, possibly negated, as a 64-bit C constant: `INT64_C(5)`,
+/// `(-INT64_C(5))`. `None` for any other expression.
+fn int_constant(e: &Expr) -> Option<String> {
+    match &e.kind {
+        ExprKind::IntLit(n) => Some(format!("INT64_C({})", n)),
+        ExprKind::Unary(UnaryOp::Neg, operand) => int_constant(operand).map(|inner| format!("(-{})", inner)),
+        _ => None,
+    }
 }

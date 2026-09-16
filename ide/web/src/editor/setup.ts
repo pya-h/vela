@@ -103,10 +103,19 @@ export function editorExtensions(options: EditorOptions): Extension {
       indentWithTab,
       // Find and replace share one panel (Mod-f opens it too). ⌘H hides the
       // app on a Mac, so replace is ⌘⌥F there.
-      { key: "Mod-h", mac: "Mod-Alt-f", run: openSearchPanel, preventDefault: true },
+      { key: "Mod-h", mac: "Mod-Alt-f", run: openReplace, preventDefault: true },
     ]),
     theme,
     options.analyzer ? vela(options.analyzer) : [],
     options.onUpdate,
   ];
+}
+
+/** Opens the find and replace panel with the cursor in its replace field. */
+function openReplace(view: EditorView): boolean {
+  openSearchPanel(view);
+  const field = view.dom.querySelector<HTMLInputElement>(".cm-search input[name=replace]");
+  field?.focus();
+  field?.select();
+  return true;
 }

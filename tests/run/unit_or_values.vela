@@ -1,0 +1,32 @@
+# A `unit or E` is a value too: it can be bound, held, stored in a field, and
+# passed to a task, and `case {_}` matches its success.
+
+shape Saved
+    result: unit or text
+fi
+
+task save(n: int) -> unit or text
+    when n > 1
+        <- fail "big"
+    fi
+fi
+
+task take(x: unit or text) -> int
+    match x
+    case {_}
+        <- 1
+    case fail e
+        show(e)
+        <- 2
+    fi
+fi
+
+task main()
+    bind x = save(5)
+    show(take(x))
+    bind s = Saved { result: save(0) }
+    show(take(s.result))
+    hold y: unit or text = save(0)
+    y = fail "z"
+    show(take(y))
+fi

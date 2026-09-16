@@ -1,0 +1,11 @@
+# error: 9:5: expected 'case', got '<-'
+kind K
+    A
+fi
+
+task main()
+    bind k = A
+    match k
+    <- 0
+    fi
+fi

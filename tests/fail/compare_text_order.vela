@@ -1,0 +1,4 @@
+# error: 3:14: comparison requires numeric operands
+task main()
+    show("a" < "b")
+fi

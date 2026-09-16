@@ -186,7 +186,10 @@
       <p>
         More programs are in <code>examples/</code>: <code>fib.vela</code> (recursion), <code>kinds.vela</code>
         (kinds and <code>match</code>), <code>todo.vela</code> (a linked list in a region, with <code>maybe</code>
-        pointers, <code>is</code>, and a plan B), and <code>demo.vela</code> (tasks, shapes, pointers, and control flow).
+        pointers, <code>is</code>, and a plan B), <code>errors.vela</code> (<code>T or E</code>, <code>fail</code>, and handling
+        errors with <code>match</code>, <code>is</code>, and a plan B), <code>regions.vela</code> (a tree in a region, a region
+        per loop pass, and copying a result into a longer-lived region), and <code>demo.vela</code> (tasks, shapes,
+        pointers, and control flow).
       </p>
       <div class="note">
         Prefer an editor? <a href="ide.html">Vela Studio</a> highlights Vela, shows errors as you type, completes
@@ -288,8 +291,8 @@ new   region and   or    not   true  false none  fi    maybe is     fail</pre>
       </p>
       <p>
         Tasks can be called before they are declared, and can call themselves. Parameters are immutable, and
-        arguments are copies: a task that changes a shape it was given changes its own copy (pass a pointer to
-        share one value).
+        arguments are copies, so a task can't change a shape it was given; pass a pointer to let it change the
+        caller's value.
       </p>
       <p>
         Every program starts at <code>task main()</code>, which takes no parameters and returns nothing.
@@ -328,7 +331,9 @@ show(label)                <span class="comment"># error: unknown variable 'labe
         <code>-1</code>). Comparisons (<code>&lt; &lt;= &gt; &gt;=</code>) work on numbers of the same type.
         Number literals are decimal digits with an optional fraction (<code>42</code>, <code>3.14</code>), and
         <code>_</code> may separate digits (<code>1_000_000</code>); there are no exponent or hex forms, so
-        <code>1e5</code> is an invalid number. Integer overflow and division by
+        <code>1e5</code> is an invalid number. An <code>int</code> literal can be at most
+        <code>9223372036854775807</code>, so the smallest <code>int</code> is written
+        <code>-9223372036854775807 - 1</code>. Integer overflow and division by
         zero are not checked yet (see <a href="#limits">Current Limits</a>).
       </p>
       <pre>show(7 / 2)       <span class="comment"># 3</span>
@@ -352,7 +357,8 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
       <p>
         Text literals use double quotes and support the escapes <code>\n</code>, <code>\t</code>, <code>\r</code>,
         <code>\\</code>, <code>\"</code>, and <code>\0</code>. A <code>#</code> starts a comment that runs to the end
-        of the line. Text holds any UTF-8, but a <code>\0</code> ends it early (<code>"ab\0cd"</code> shows as
+        of the line. A text literal ends on the line it starts (a line break in it is written <code>\n</code>). Text holds
+        any UTF-8, but a <code>\0</code> ends it early (<code>"ab\0cd"</code> shows as
         <code>ab</code>). <code>show</code> is the only builtin task: it prints an <code>int</code>, <code>float</code>,
         <code>bool</code>, or <code>text</code> followed by a newline (or a <code>maybe</code> of one: its value, or
         <code>none</code>). Floats print with up to 6 significant digits,
@@ -690,7 +696,7 @@ save(500) {
     show(p^)                               <span class="comment"># 1</span>
 <span class="keyword">fi</span>
 show(next^)                                <span class="comment"># error: this pointer is a maybe ^int@r, which may be none</span>
-<span class="keyword">bind</span> bad: ^int@r = <span class="keyword">none</span>                    <span class="comment"># error: a pointer can't be none, so use 'maybe ^int@r'</span>
+<span class="keyword">bind</span> bad: ^int@r = <span class="keyword">none</span>                    <span class="comment"># error: expected type ^int@r, got none; a pointer can't be none, so use 'maybe ^int@r'</span>
 <span class="keyword">bind</span> lost: ^int = <span class="keyword">new</span> int(2) <span class="keyword">in</span> r         <span class="comment"># error: a pointer lives in a region, so its type names one</span></pre>
 
       <h3>A region lives until its block closes</h3>
@@ -807,8 +813,10 @@ show(next^)                                <span class="comment"># error: this p
       <p>
         A value built without any pointers, such as <code>Leaf(5)</code> or <code>Node { value: 1, next: none }</code>,
         takes the region of the place it goes: an argument, a field, or a variable with a written type. (So does the
-        result of a task given only such values, as in <code>sum(none)</code>, and a plan B on such a result takes the
-        region of its fallback.) A binding without a type can't tell which region such a value should be in, so it asks for
+        result of a task given only such values, as in <code>first(none)</code> for a
+        <code>task first(list: maybe ^Node@r) -&gt; maybe ^Node@r</code>, and a plan B on such a result takes the region
+        of its fallback, which can't be a region declared in the plan B's own block, since that is freed when the block
+        ends.) A binding without a type can't tell which region such a value should be in, so it asks for
         one:
       </p>
       <pre><span class="keyword">hold</span> head = Node { value: 1, next: <span class="keyword">none</span> }     <span class="comment"># error: cannot tell which region 'head' lives in, ...;</span>
@@ -837,8 +845,8 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         <li>A task that only names a region in its header can't allocate in it, and a region can't be returned.</li>
         <li>A value holding pointers can't be copied into another region whole, even when its pointers are
           <code>none</code>: rebuild it field by field.</li>
-        <li>A task without a region parameter can't send a pointer-free value of a type that holds pointers
-          (<code>-&gt; Tree@r</code> sending <code>Leaf(1)</code>), and a name bound from a value in no region
+        <li>A task can't send a pointer-free value of a type that holds pointers (<code>-&gt; Tree@r</code> sending
+          <code>Leaf(1)</code>) unless a parameter names that region, and a name bound from a value in no region
           (<code>@_</code>, as <code>when first(none) is {n}</code>) can't be given a pointer.</li>
         <li>Each of these has a workaround in <a href="regions.html#limits">Vela Regions</a>, which also collects ideas for
           going further: easier region passing, freeing one value early, shapes with several regions, and more. The other
@@ -879,10 +887,11 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which
           matters only when they call tasks that print. (Where one of them contains a plan B, they are evaluated
           left to right.)</li>
+        <li>An expression, including a shape literal or a call's arguments, must be written on one line.</li>
         <li>Statements aren't yet required to end at a line break (<code>show(1) show(2)</code> on one line is
-          accepted), and a text literal may contain a raw line break.</li>
-        <li>Code may nest at most 100 levels deep (parentheses, operators in a row, blocks inside blocks); deeper code
-          is an error rather than a crash.</li>
+          accepted).</li>
+        <li>Code may nest at most 100 levels deep (parentheses, operators in a row, blocks inside blocks; a
+          <code>new</code> counts as two, and a plan B as three); deeper code is an error rather than a crash.</li>
       </ul>
     </section>
 
@@ -897,13 +906,13 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
 ./target/debug/vela program.vela -o program
 CC=clang ./target/debug/vela program.vela -o program</pre>
       <p>
-        <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c] [--check]</code>: <code>-o</code> names the executable
+        <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c | --check]</code>: <code>-o</code> names the executable
         (<code>a.out</code> by default), <code>--emit-c</code> prints the generated C instead of compiling it (or,
-        with <code>-o</code>, writes it to that file), <code>--check</code> only checks the program, without
-        generating C or running a C compiler, <code>-h</code>/<code>--help</code> prints the usage, and
-        <code>--version</code> prints the compiler's version. A
-        file name starting with <code>-</code> goes after <code>--</code>. The exit status is 0 on success, 1 when
-        the program can't be read or doesn't compile (in Vela or in C), and 2 for wrong arguments.
+        with <code>-o</code>, writes it to that file; a program without <code>main</code> is allowed here), <code>--check</code>
+        only checks the program (everything a build checks before running the C compiler, including that it has a
+        <code>main</code>), <code>-h</code>/<code>--help</code> prints the usage, and <code>--version</code> prints the
+        compiler's version. A file name starting with <code>-</code> goes after <code>--</code>. The exit status is 0 on
+        success, 1 when the program can't be read or doesn't compile (in Vela or in C), and 2 for wrong arguments.
       </p>
       <pre>./target/debug/vela program.vela --emit-c -o program.c
 cc -std=c11 -I runtime program.c -o program -lm   # the C includes runtime/vela_rt.h</pre>
@@ -921,8 +930,10 @@ CC=clang cargo test</pre>
         <code>docs/regions.html</code> against the output the page shows. The C generated for run tests and
         examples must also compile as strict ISO C11 with no warnings (<code>-std=c11 -pedantic-errors -Wall
         -Wextra -Werror</code>). Rust tests in <code>tests/*.rs</code> run those programs
-        (<code>programs.rs</code>) and cover the command line, the library's build pipeline, the lexer, and
-        internal compiler errors.
+        (<code>programs.rs</code>) and cover the
+        command line, the library's build pipeline, the lexer, internal compiler errors, and the runtime
+        (<code>runtime.rs</code>: the C tests in <code>tests/runtime/</code>, and the region programs in <code>tests/run/</code> and
+        <code>examples/</code> run under AddressSanitizer and UndefinedBehaviorSanitizer with leak checks).
       </p>
       <p>
         The compiler is also a Rust library, <code>vela</code>, so tools can use the language without copying it:

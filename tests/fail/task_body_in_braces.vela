@@ -1,0 +1,4 @@
+# error: 2:13: a task's body starts on the line after its header, and closes with 'fi'
+task main() {
+    show(1)
+}

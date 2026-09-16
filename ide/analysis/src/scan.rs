@@ -178,6 +178,14 @@ impl<'a> Tokens<'a> {
         self.get(p).map(|t| t.range.clone()).unwrap_or(self.source.len()..self.source.len())
     }
 
+    /// Whether the `{` at position `p` opens a block that continues on the next
+    /// lines: it ends its line, or only `fail e` follows it there.
+    fn opens_lines(&self, p: usize) -> bool {
+        let names_error = self.token(p + 1) == Some(&Token::Fail) && matches!(self.token(p + 2), Some(Token::Ident(_) | Token::Underscore));
+        let end = if names_error { p + 3 } else { p + 1 };
+        matches!(self.token(end), Some(Token::Newline | Token::Eof) | None)
+    }
+
     /// Whether position `p` starts a line.
     fn starts_line(&self, p: usize) -> bool {
         p == 0 || self.before(p) == Some(&Token::Newline)
@@ -661,7 +669,25 @@ impl<'a> Classifier<'a> {
         }
         let header = self.scopes.last().map(|scope| scope.variables.clone()).unwrap_or_default();
         let known = header.into_iter().find(|&id| self.symbols.get(id).is_some_and(|s| s.name == name && s.kind == SymbolKind::Region));
-        known.or_else(|| Some(self.declare_local(p, SymbolKind::Region, Some("@"), String::new())))
+        if known.is_some() {
+            return known;
+        }
+        // A `region` parameter later in the header: `task f(a: ^int@r, r: region)`.
+        let tokens = self.tokens;
+        let later = (p + 1..tokens.len())
+            .take_while(|&q| !matches!(tokens.token(q), Some(Token::Newline | Token::Eof) | None))
+            .find(|&q| {
+                tokens.ident(q) == Some(name)
+                    && tokens.token(q + 1) == Some(&Token::Colon)
+                    && tokens.token(q + 2) == Some(&Token::Region)
+                    && matches!(tokens.before(q), Some(Token::LParen | Token::Comma))
+            });
+        if let Some(q) = later {
+            let id = self.declare_local(q, SymbolKind::Region, None, "region".to_string());
+            self.declared_at.insert(q, id);
+            return Some(id);
+        }
+        Some(self.declare_local(p, SymbolKind::Region, Some("@"), String::new()))
     }
 
     fn open(&mut self, kind: ScopeKind) {
@@ -696,19 +722,32 @@ impl<'a> Classifier<'a> {
         let range = tokens.range(p);
         let start = tokens.get(p).map(|t| t.start).unwrap_or_default();
         // Usable from the next line: not in its own initializer, range, or
-        // header, including a plan B there that spans lines.
-        let mut depth = 0usize;
+        // header, including a plan B there that spans lines. Other braces
+        // (shape literals, plan Bs written on one line) end with their line.
+        let mut open_plan_bs = 0usize;
+        let mut line_braces = 0usize;
         let line_end = (p..tokens.len())
             .find(|&q| match tokens.token(q) {
+                Some(Token::LBrace) if tokens.opens_lines(q) => {
+                    open_plan_bs += 1;
+                    false
+                }
                 Some(Token::LBrace) => {
-                    depth += 1;
+                    line_braces += 1;
+                    false
+                }
+                Some(Token::RBrace) if line_braces > 0 => {
+                    line_braces -= 1;
                     false
                 }
                 Some(Token::RBrace) => {
-                    depth = depth.saturating_sub(1);
+                    open_plan_bs = open_plan_bs.saturating_sub(1);
                     false
                 }
-                Some(Token::Newline) => depth == 0,
+                Some(Token::Newline) => {
+                    line_braces = 0;
+                    open_plan_bs == 0
+                }
                 Some(Token::Eof) | None => true,
                 _ => false,
             })

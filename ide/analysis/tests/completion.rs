@@ -33,8 +33,9 @@ task origin() -> Point
 fi
 
 task main()
+    region points
     bind p = Point { x: 1, y: 2 }
-    bind line = Line { start: p, finish: new Point(p) }
+    bind line = Line { start: p, finish: new Point(p) in points }
     bind figure = Circle(1.0)
     hold total = 0
     when total > 0
@@ -113,6 +114,13 @@ fn statements_offer_keywords_snippets_and_visible_names() {
     // `else` and `case` where they can close a branch.
     assert_offers(&in_main("when true\n        @@"), &["else", "fi"], &["case"]);
     assert_offers(&in_main("match figure\n    @@"), &["case"], &["else"]);
+}
+
+#[test]
+fn the_program_used_by_these_tests_compiles() {
+    // So the tests below see the compiler's types, not only the fallbacks
+    // used while a file has an error.
+    assert_eq!(Analysis::new(&PROGRAM.replace("    @@\n", "")).diagnostics(), Vec::new());
 }
 
 #[test]
@@ -269,7 +277,7 @@ fn hover_reads_declared_types_when_the_file_doesnt_check() {
         "    show(missing)\n    bind q = Point { x: 1, y: 2 }\n    bind far = line.finish\n    bind made = origin()\n    bind c = Circle(2.0)\n    show(q)\n",
     );
     assert_eq!(hover(&source, "q =", 0).code, "bind q: Point");
-    assert_eq!(hover(&source, "far", 0).code, "bind far: ^Point");
+    assert_eq!(hover(&source, "far", 0).code, "bind far: ^Point@points");
     assert_eq!(hover(&source, "made", 0).code, "bind made: Point");
     assert_eq!(hover(&source, "c =", 0).code, "bind c: Shape");
 }
@@ -533,4 +541,76 @@ fn results_serialize_to_the_json_the_editor_reads() {
     let json = serde_json::to_value(&h).unwrap();
     assert_eq!(json["code"], "task origin() -> Point");
     assert!(json.get("from").is_some() && json.get("doc").is_some());
+}
+
+#[test]
+fn types_follow_a_region_and_error_types_follow_a_regional_type() {
+    let regions = "shape Node\n    value: int\n    next: maybe ^Node\nfi\n\ntask main()\n    region nodes\n    @@\nfi\n";
+    let in_regions = |code: &str| regions.replace("    @@\n", &format!("    {}\n", code));
+    assert_offers(&in_regions("bind two = new@nodes @@"), &["int", "Node", "maybe"], &["main", "show", "true"]);
+    assert_offers("shape Node\n    value: int\nfi\ntask f(r: region) -> ^Node@r or @@", &["text", "Node"], &["unit", "maybe", "f"]);
+}
+
+#[test]
+fn a_plan_b_naming_its_error_is_a_block_of_its_own() {
+    let source = "task parse(t: text) -> int or text\n    <- 1\nfi\ntask main()\n    when true\n        bind r = parse(\"x\") { fail e\n            @@\n        }\n    fi\nfi\n";
+    assert_offers(source, &["show", "e"], &["fi", "else"]);
+    // While the file doesn't check, the binding still has the value's type, not the error's.
+    let broken = "kind Problem\n    Empty\nfi\ntask parse(t: text) -> int or Problem\n    <- 1\nfi\ntask main()\n    show(missing)\n    bind r = parse(\"x\") { fail e\n        0\n    }\n    show(r)\nfi\n";
+    assert_eq!(hover(broken, "r = parse", 0).code, "bind r: int");
+}
+
+#[test]
+fn only_a_value_that_can_fail_has_an_error_to_name() {
+    let source = "task main()\n    bind m: maybe int = none\n    bind n = m {\n        @@\n    }\nfi\n";
+    assert_offers(source, &["show"], &["fail"]);
+    let failing = "task get() -> int or text\n    <- 1\nfi\ntask main()\n    bind n = get() {\n        @@\n    }\nfi\n";
+    assert_offers(failing, &["fail"], &[]);
+    // `fail` as a value only where some type can hold an error.
+    assert_offers("task main()\n    bind x = @@\nfi\n", &["true"], &["fail"]);
+}
+
+#[test]
+fn a_case_binding_of_a_kind_in_a_region_keeps_the_region() {
+    let source = "kind Tree\n    Leaf(value: int)\n    Branch(left: ^Tree, right: ^Tree)\nfi\ntask count(t: Tree@r) -> int\n    show(missing)\n    match t\n    case Leaf value\n        <- value\n    case Branch left right\n        <- count(left^) + count(right^)\n    fi\nfi\n";
+    assert_eq!(hover(source, "left right", 0).code, "left: ^Tree@r");
+}
+
+#[test]
+fn block_words_fit_where_they_are() {
+    // Right after `match`, only a case.
+    let matching = "kind K\n    A(v: int)\n    B\nfi\ntask main()\n    bind k = A(1)\n    match k\n    @@\nfi\n";
+    assert_eq!(labels(matching), vec!["case".to_string()]);
+    // A `when` has one `else`.
+    let second_else = "task main()\n    when true\n        show(1)\n    else\n        @@\n    fi\nfi\n";
+    assert_offers(second_else, &["fi", "show"], &["else"]);
+    // A maybe's cases include `_`.
+    let maybe = "task main()\n    bind m: maybe int = 1\n    match m\n    case {v}\n        show(v)\n    case @@\n    fi\nfi\n";
+    assert_offers(maybe, &["none", "_"], &["{value}"]);
+}
+
+#[test]
+fn after_a_finished_value_only_words_that_continue_it() {
+    let in_task = |code: &str| format!("task main()\n    region r\n    bind m: maybe int = 1\n    {}\nfi\n", code);
+    assert_offers(&in_task("when m @@"), &["is", "and", "or"], &["m", "show", "new"]);
+    assert_offers(&in_task("each i @@"), &["in"], &["and", "m"]);
+    assert_offers(&in_task("bind p = new int(1) @@"), &["in", "and"], &["m"]);
+    assert_offers("task f() -> int @@", &["or"], &["and", "is"]);
+    // Right after an operator, values again.
+    assert_offers(&in_task("bind x = 1 + @@"), &["m"], &["and"]);
+}
+
+#[test]
+fn new_is_offered_only_where_a_region_can_be_allocated_in() {
+    assert_offers("task main()\n    bind x = @@\nfi\n", &["true"], &["new", "new … in"]);
+    assert_offers("task main()\n    region r\n    bind x = @@\nfi\n", &["new", "new … in"], &[]);
+    assert_offers("task f(list: maybe ^int@r)\n    bind x = @@\nfi\n", &["list"], &["new", "new … in"]);
+}
+
+#[test]
+fn keyword_hovers_describe_fail_is_and_underscore() {
+    let source = "task get() -> int or text\n    <- fail \"x\"\nfi\ntask main()\n    when get() is {_}\n        show(1)\n    fi\nfi\n";
+    assert!(hover(source, "fail", 0).code.starts_with("fail"));
+    assert!(hover(source, "is {", 0).code.contains("is"));
+    assert_eq!(hover(source, "_}", 0).code, "_");
 }

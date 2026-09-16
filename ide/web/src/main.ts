@@ -42,10 +42,11 @@ function screen(title: string, ...lines: (string | HTMLElement)[]): void {
   );
 }
 
-function needsToken(): void {
+function needsToken(refusal: string | null): void {
+  const reason = refusal ? `${refusal.charAt(0).toUpperCase()}${refusal.slice(1)}.` : "This page needs a link from vela-studio.";
   screen(
-    "Open Vela Studio from its link",
-    "This page needs the address that vela-studio printed when it started, which includes a secret token.",
+    refusal ? "This link no longer works" : "Open Vela Studio from its link",
+    `${reason} Open the address that vela-studio printed when it started, which includes a secret token.`,
     h("pre", { text: "vela-studio path/to/workspace" }),
   );
 }
@@ -72,9 +73,12 @@ async function start(): Promise<void> {
     toast(`Something went wrong: ${event.reason instanceof Error ? event.reason.message : String(event.reason)}`, "error");
   });
 
-  const token = await obtainToken(window.location, window.history, sessionStore(), (input, init) => fetch(input, init));
+  let refusal: string | null = null;
+  const token = await obtainToken(window.location, window.history, sessionStore(), (input, init) => fetch(input, init), (reason) => {
+    refusal = reason;
+  });
   if (!token) {
-    needsToken();
+    needsToken(refusal);
     return;
   }
   document.body.replaceChildren(h("div", { class: "loading", attrs: { role: "status", "aria-label": "Loading" } }, h("span", { text: "◆" })));
@@ -88,7 +92,7 @@ async function start(): Promise<void> {
     document.body.replaceChildren(workbench.element);
   } catch (error) {
     if (error instanceof ApiError && error.unauthorized) {
-      needsToken();
+      needsToken(null);
     } else {
       screen("Vela Studio couldn't start", error instanceof Error ? error.message : String(error), "Check that vela-studio is still running, then reload.");
     }

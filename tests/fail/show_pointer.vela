@@ -1,0 +1,6 @@
+# error: 5:10: show expects int, float, bool, or text; to show the value it points to, write 'p^'
+task main()
+    region r
+    bind p = new int(1) in r
+    show(p)
+fi

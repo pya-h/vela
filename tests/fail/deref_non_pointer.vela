@@ -1,0 +1,5 @@
+# error: 4:11: '^' reads the value a pointer points to, but this value is int
+task main()
+    bind x = 1
+    show(x^)
+fi

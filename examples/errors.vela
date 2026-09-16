@@ -1,0 +1,74 @@
+# Errors as values: a task that can fail sends `T or E`, and its caller
+# handles the error with match, is, or a plan B.
+
+kind ReadingError
+    Missing
+    TooCold(value: int)
+    TooHot(value: int)
+fi
+
+task check(reading: maybe int) -> int or ReadingError
+    bind value = reading { <- fail Missing }
+    when value < -50
+        <- fail TooCold(value)
+    fi
+    when value > 60
+        <- fail TooHot(value)
+    fi
+    <- value
+fi
+
+task describe(problem: ReadingError) -> text
+    match problem
+    case Missing
+        <- "no reading"
+    case TooCold _
+        <- "too cold"
+    case TooHot _
+        <- "too hot"
+    fi
+fi
+
+# `unit or E` sends nothing when it works: reaching the end succeeds.
+task add_reading(sum: ^int@r, reading: maybe int) -> unit or ReadingError
+    bind value = check(reading) {
+        fail problem
+        <- fail problem
+    }
+    sum^ = sum^ + value
+fi
+
+task main()
+    # match handles both outcomes.
+    match check(21)
+    case {value}
+        show(value)
+    case fail problem
+        show(describe(problem))
+    fi
+
+    # is runs a block for one outcome only.
+    when check(99) is fail problem
+        show(describe(problem))
+    fi
+
+    # A plan B gives the value to use instead; `fail e` names the error.
+    show(check(none) { 0 })
+    bind lowest = check(-80) {
+        fail problem
+        show(describe(problem))
+        -50
+    }
+    show(lowest)
+
+    # An error can't be ignored by accident: an empty plan B ignores it on purpose.
+    region totals
+    bind sum = new int(0) in totals
+    add_reading(sum, 10) { }
+    add_reading(sum, 70) {
+        fail problem
+        show(describe(problem))
+    }
+    add_reading(sum, 5) { }
+    show(sum^)
+fi

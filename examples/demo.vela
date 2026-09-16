@@ -1,4 +1,4 @@
-# Vela demo: functions, shapes, pointers, control flow
+# Vela demo: tasks, shapes, pointers, control flow
 
 shape Point
     x: int

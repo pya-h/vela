@@ -1,0 +1,13 @@
+# error: 10:9: this value is in region 'local', which is freed when the plan B ends, so it can't be the plan B's value
+shape Node
+    value: int
+    next: maybe ^Node
+fi
+
+task main()
+    bind p = Node { value: 1, next: none }.next {
+        region local
+        new Node(Node { value: 5, next: none }) in local
+    }
+    show(p^.value)
+fi

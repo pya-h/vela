@@ -6,8 +6,15 @@ use std::process;
 
 use vela::driver;
 
-const USAGE: &str = "usage: vela <input.vela> [-o <output>] [--emit-c] [--check]";
+const USAGE: &str = "usage: vela <input.vela> [-o <output>] [--emit-c | --check] [--]\n       vela --help | --version";
 const VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
+
+/// What the command line asks for.
+enum Action {
+    Help,
+    Version,
+    Run(Options),
+}
 
 struct Options {
     input: String,
@@ -19,18 +26,11 @@ struct Options {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().skip(1).collect();
-    if wants_version(&args) {
-        if let Err(msg) = write_stdout(&format!("{}\n", VERSION)) {
-            eprintln!("{}", msg);
-            process::exit(1);
-        }
-        return;
-    }
-    let opts = match parse_args(args.into_iter()) {
-        Ok(Some(opts)) => opts,
-        Ok(None) => {
-            if let Err(msg) = write_stdout(&format!("{}\n", USAGE)) {
+    let opts = match parse_args(env::args().skip(1)) {
+        Ok(Action::Run(opts)) => opts,
+        Ok(action) => {
+            let text = if matches!(action, Action::Version) { VERSION } else { USAGE };
+            if let Err(msg) = write_stdout(&format!("{}\n", text)) {
                 eprintln!("{}", msg);
                 process::exit(1);
             }
@@ -47,25 +47,14 @@ fn main() {
     }
 }
 
-/// Whether the arguments contain a bare `--version` flag (before any `--`).
-fn wants_version(args: &[String]) -> bool {
-    let mut only_files = false;
-    for arg in args {
-        if arg == "--" && !only_files {
-            only_files = true;
-        } else if !only_files && arg == "--version" {
-            return true;
-        }
-    }
-    false
-}
-
-/// Returns `Ok(None)` when help was requested.
-fn parse_args(args: impl Iterator<Item = String>) -> Result<Option<Options>, String> {
+/// Reads the command line. `--help` wins at once; `--version` wins once the
+/// rest of the arguments are valid, so a wrong argument is still an error.
+fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
     let mut input = None;
     let mut output = None;
     let mut emit_c = false;
     let mut check = false;
+    let mut version = false;
     let mut only_files = false;
     let mut args = args;
     while let Some(arg) = args.next() {
@@ -78,7 +67,8 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Option<Options>, Str
                 }
                 input = Some(arg);
             }
-            "-h" | "--help" => return Ok(None),
+            "-h" | "--help" => return Ok(Action::Help),
+            "--version" => version = true,
             "--emit-c" => emit_c = true,
             "--check" => check = true,
             "-o" => match args.next() {
@@ -93,8 +83,14 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Option<Options>, Str
             _ => input = Some(arg),
         }
     }
+    if version {
+        return Ok(Action::Version);
+    }
+    if emit_c && check {
+        return Err("--emit-c and --check can't be used together".to_string());
+    }
     let input = input.ok_or_else(|| "no input file".to_string())?;
-    Ok(Some(Options { input, output, emit_c, check }))
+    Ok(Action::Run(Options { input, output, emit_c, check }))
 }
 
 fn run(opts: &Options) -> Result<(), String> {
@@ -102,7 +98,12 @@ fn run(opts: &Options) -> Result<(), String> {
         .map_err(|e| format!("error: cannot read '{}': {}", opts.input, e))?;
 
     if opts.check {
-        driver::front_end(&source).map_err(|e| driver::render_error(&opts.input, &source, &e))?;
+        // Everything a build checks before generating C, so a program that
+        // passes can be built.
+        let items = driver::front_end(&source).map_err(|e| driver::render_error(&opts.input, &source, &e))?;
+        if !driver::has_main(&items) {
+            return Err(driver::BuildError::NoMain.render(&opts.input, &source));
+        }
         return write_stdout(&format!("checked: {}\n", opts.input));
     }
 

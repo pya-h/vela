@@ -1,0 +1,4 @@
+# error: 3:10: text isn't closed on its line; end it with '"' (a line break in text is written '\n')
+task main()
+    show("abc)
+fi

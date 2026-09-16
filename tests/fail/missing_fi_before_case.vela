@@ -1,0 +1,11 @@
+# error: 8:5: expected 'fi' to close the 'when' at 6:9, got 'case'
+task main()
+    bind m: maybe int = 1
+    match m
+    case {v}
+        when v > 0
+            show(v)
+    case none
+        show(0)
+    fi
+fi

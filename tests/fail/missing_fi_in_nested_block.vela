@@ -1,0 +1,7 @@
+# error: 6:1: expected 'fi' to close the 'each' at 3:5, got 'task'
+task main()
+    each i in 0..3
+        show(i)
+
+task other()
+fi

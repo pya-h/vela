@@ -1,0 +1,136 @@
+  1 | # Tasks generic over regions: a region parameter after the parameter that
+    | comment:# Tasks generic over regions: a region parameter after the parameter that
+  2 | # names it, forwarding a result whose error holds no pointers, a plan B that
+    | comment:# names it, forwarding a result whose error holds no pointers, a plan B that
+  3 | # takes its fallback's region through a `T or E`, and a result whose two sides
+    | comment:# takes its fallback's region through a `T or E`, and a result whose two sides
+  4 | # are in regions the caller chooses.
+    | comment:# are in regions the caller chooses.
+  6 | shape Node
+    | keyword:shape  type:Node
+  7 |     value: int
+    | field:value  punctuation::  type-builtin:int
+  8 |     next: maybe ^Node
+    | field:next  punctuation::  keyword:maybe  operator:^  type:Node
+  9 | fi
+    | keyword:fi
+ 11 | kind Tree
+    | keyword:kind  type:Tree
+ 12 |     Leaf(value: int)
+    | variant:Leaf  punctuation:(  field:value  punctuation::  type-builtin:int  punctuation:)
+ 13 |     Branch(left: ^Tree, right: ^Tree)
+    | variant:Branch  punctuation:(  field:left  punctuation::  operator:^  type:Tree  punctuation:,  field:right  punctuation::  operator:^  type:Tree  punctuation:)
+ 14 | fi
+    | keyword:fi
+ 16 | task read(p: ^int@r, r: region) -> int
+    | keyword:task  task:read  punctuation:(  parameter:p  punctuation::  operator:^  type-builtin:int  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:int
+ 17 |     bind extra = new int(1) in r
+    | keyword:bind  variable:extra  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:in  region:r
+ 18 |     <- p^ + extra^
+    | keyword:<-  parameter:p  operator:^  operator:+  variable:extra  operator:^
+ 19 | fi
+    | keyword:fi
+ 21 | task check(t: Tree@s) -> unit or Tree@s
+    | keyword:task  task:check  punctuation:(  parameter:t  punctuation::  type:Tree  operator:@  region:s  punctuation:)  operator:->  type-builtin:unit  keyword:or  type:Tree  operator:@  region:s
+ 22 |     when t is Leaf v
+    | keyword:when  parameter:t  keyword:is  variant:Leaf  variable:v
+ 23 |         when v < 0
+    | keyword:when  variable:v  operator:<  number:0
+ 24 |             <- fail t
+    | keyword:<-  keyword:fail  parameter:t
+ 25 |         fi
+    | keyword:fi
+ 26 |     fi
+    | keyword:fi
+ 27 | fi
+    | keyword:fi
+ 29 | task outer(r: region, n: int) -> unit or Tree@r
+    | keyword:task  task:outer  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  keyword:or  type:Tree  operator:@  region:r
+ 30 |     <- check(Leaf(n))
+    | keyword:<-  task:check  punctuation:(  variant:Leaf  punctuation:(  parameter:n  punctuation:)  punctuation:)
+ 31 | fi
+    | keyword:fi
+ 33 | task first_or(list: maybe ^Node@r) -> maybe ^Node@r or text
+    | keyword:task  task:first_or  punctuation:(  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  keyword:maybe  operator:^  type:Node  operator:@  region:r  keyword:or  type-builtin:text
+ 34 |     <- list
+    | keyword:<-  parameter:list
+ 35 | fi
+    | keyword:fi
+ 37 | task pick(a: ^int@r, b: ^int@s, left: bool) -> ^int@r or ^int@s
+    | keyword:task  task:pick  punctuation:(  parameter:a  punctuation::  operator:^  type-builtin:int  operator:@  region:r  punctuation:,  parameter:b  punctuation::  operator:^  type-builtin:int  operator:@  region:s  punctuation:,  parameter:left  punctuation::  type-builtin:bool  punctuation:)  operator:->  operator:^  type-builtin:int  operator:@  region:r  keyword:or  operator:^  type-builtin:int  operator:@  region:s
+ 38 |     when left
+    | keyword:when  parameter:left
+ 39 |         <- a
+    | keyword:<-  parameter:a
+ 40 |     fi
+    | keyword:fi
+ 41 |     <- fail b
+    | keyword:<-  keyword:fail  parameter:b
+ 42 | fi
+    | keyword:fi
+ 44 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 45 |     region a
+    | keyword:region  region:a
+ 46 |     bind p = new int(41) in a
+    | keyword:bind  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  number:41  punctuation:)  keyword:in  region:a
+ 47 |     show(read(p, a))
+    | builtin-fn:show  punctuation:(  task:read  punctuation:(  variable:p  punctuation:,  region:a  punctuation:)  punctuation:)
+ 49 |     outer(a, 1) {
+    | task:outer  punctuation:(  region:a  punctuation:,  number:1  punctuation:)  punctuation:{
+ 50 |         fail e
+    | keyword:fail  variable:e
+ 51 |         show("unexpected")
+    | builtin-fn:show  punctuation:(  string:"unexpected"  punctuation:)
+ 52 |     }
+    | punctuation:}
+ 53 |     outer(a, -1) {
+    | task:outer  punctuation:(  region:a  punctuation:,  operator:-  number:1  punctuation:)  punctuation:{
+ 54 |         fail e
+    | keyword:fail  variable:e
+ 55 |         when e is Leaf v
+    | keyword:when  variable:e  keyword:is  variant:Leaf  variable:v
+ 56 |             show(v)
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:)
+ 57 |         fi
+    | keyword:fi
+ 58 |     }
+    | punctuation:}
+ 60 |     bind good = new Node(Node { value: 7, next: none }) in a
+    | keyword:bind  variable:good  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:7  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:in  region:a
+ 61 |     bind x: maybe ^Node@a = first_or(none) {
+    | keyword:bind  variable:x  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:a  operator:=  task:first_or  punctuation:(  keyword:none  punctuation:)  punctuation:{
+ 62 |         fail e
+    | keyword:fail  variable:e
+ 63 |         good
+    | variable:good
+ 64 |     }
+    | punctuation:}
+ 65 |     show(x { good }^.value)
+    | builtin-fn:show  punctuation:(  variable:x  punctuation:{  variable:good  punctuation:}  operator:^  punctuation:.  field:value  punctuation:)
+ 67 |     region b
+    | keyword:region  region:b
+ 68 |     bind q = new int(2) in b
+    | keyword:bind  variable:q  operator:=  keyword:new  type-builtin:int  punctuation:(  number:2  punctuation:)  keyword:in  region:b
+ 69 |     match pick(p, q, true)
+    | keyword:match  task:pick  punctuation:(  variable:p  punctuation:,  variable:q  punctuation:,  keyword:true  punctuation:)
+ 70 |     case {v}
+    | keyword:case  punctuation:{  variable:v  punctuation:}
+ 71 |         show(v^)
+    | builtin-fn:show  punctuation:(  variable:v  operator:^  punctuation:)
+ 72 |     case fail w
+    | keyword:case  keyword:fail  variable:w
+ 73 |         show(w^)
+    | builtin-fn:show  punctuation:(  variable:w  operator:^  punctuation:)
+ 74 |     fi
+    | keyword:fi
+ 75 |     show(pick(p, q, false) { fail w
+    | builtin-fn:show  punctuation:(  task:pick  punctuation:(  variable:p  punctuation:,  variable:q  punctuation:,  keyword:false  punctuation:)  punctuation:{  keyword:fail  variable:w
+ 76 |         new int(w^) in a }^)
+    | keyword:new  type-builtin:int  punctuation:(  variable:w  operator:^  punctuation:)  keyword:in  region:a  punctuation:}  operator:^  punctuation:)
+ 77 |     show(pick(p, p, false) { fail w
+    | builtin-fn:show  punctuation:(  task:pick  punctuation:(  variable:p  punctuation:,  variable:p  punctuation:,  keyword:false  punctuation:)  punctuation:{  keyword:fail  variable:w
+ 78 |         w }^)
+    | variable:w  punctuation:}  operator:^  punctuation:)
+ 79 | fi
+    | keyword:fi

@@ -1,4 +1,4 @@
-# error: 7:27: expected type ^int@x, got ^int@y; a value can't move to another region: a pointer into one region is never stored in another
+# error: 7:27: expected type ^int@x, got ^int@y; task 'link' names one region for this and another argument, so they must be in the same region
 task link(a: ^int@r, b: ^int@r)
 fi
 task main()

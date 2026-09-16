@@ -52,11 +52,29 @@ pub struct Checker {
     variants: HashMap<String, VariantInfo>,
     scopes: Vec<HashMap<String, VarInfo>>,
     current_ret: Option<Type>,
+    /// Where the parts of written types are, from the parser.
+    type_places: TypePlaces,
 }
 
 impl Checker {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// A checker that points errors about a part of a written type (a region,
+    /// a type name, the error type) at that part, using the parser's
+    /// `Parser::type_places`.
+    pub fn with_type_places(type_places: TypePlaces) -> Self {
+        Checker { type_places, ..Self::default() }
+    }
+
+    /// Where `part` (see `TypePlaces`) is in the type written at `span`, or
+    /// `span` itself if it isn't known.
+    fn place(&self, span: Span, part: &str) -> Span {
+        self.type_places
+            .get(&(span.line, span.col))
+            .and_then(|parts| parts.iter().find(|(name, _)| name == part))
+            .map_or(span, |(_, at)| *at)
     }
 
     pub fn check_file(&mut self, items: &mut [Item]) -> Result<()> {
@@ -184,7 +202,7 @@ impl Checker {
             let ty = self.resolve_type(&param.ty, param.ty_span, TypePlace::Header)?;
             for region in ty.regions() {
                 if let Some(other) = t.params.iter().find(|p| p.name == region && p.ty != Type::Region) {
-                    return err(param.ty_span, format!("'{}' is a parameter, not a region", other.name));
+                    return err(self.place(param.ty_span, &format!("@{}", region)), format!("'{}' is a parameter, not a region", other.name));
                 }
                 if !named.iter().any(|n| n == region) {
                     named.push(region.to_string());
@@ -198,8 +216,12 @@ impl Checker {
         if t.ret != Type::Unit {
             let ret = self.resolve_type(&t.ret, t.ret_span, TypePlace::Header)?;
             if let Some(region) = ret.regions().into_iter().find(|r| !named.iter().any(|n| n == r)) {
+                let at = self.place(t.ret_span, &format!("@{}", region));
+                if t.params.iter().any(|p| p.name == region) {
+                    return err(at, format!("'{}' is a parameter, not a region", region));
+                }
                 return err(
-                    t.ret_span,
+                    at,
                     format!(
                         "the result lives in region '{0}', which the task isn't given; take it as a parameter, as in '{0}: region'",
                         region
@@ -232,14 +254,14 @@ impl Checker {
         let given = |region: &Option<String>| -> Result<()> {
             match (place, region) {
                 (TypePlace::Field, Some(region)) => err(
-                    span,
+                    self.place(span, &format!("@{}", region)),
                     format!("a field lives in the region of the value holding it, so its type names no region; remove '@{}'", region),
                 ),
                 (TypePlace::New, Some(region)) => err(
-                    span,
+                    self.place(span, &format!("@{}", region)),
                     format!("the value 'new' makes lives in the region it allocates in, so its type names no region; remove '@{}'", region),
                 ),
-                (TypePlace::Body, Some(region)) => self.visible_region(region, span, false),
+                (TypePlace::Body, Some(region)) => self.visible_region(region, self.place(span, &format!("@{}", region)), false),
                 _ => Ok(()),
             }
         };
@@ -259,12 +281,12 @@ impl Checker {
                     if let Some(region) = region
                         && inside != Some(region.as_str())
                     {
-                        return err(span, format!("'{}' holds no pointers, so it lives in no region; remove '@{}'", name, region));
+                        return err(self.place(span, &format!("@{}", region)), format!("'{}' holds no pointers, so it lives in no region; remove '@{}'", name, region));
                     }
                     return Ok(Type::named(name));
                 }
                 if needs_region && region.is_none() {
-                    return err(span, format!("'{0}' holds pointers, so it lives in a region; name it, as in '{0}@r'", name));
+                    return err(self.place(span, name), format!("'{0}' holds pointers, so it lives in a region; name it, as in '{0}@r'", name));
                 }
                 Ok(ty.clone())
             }
@@ -307,12 +329,12 @@ impl Checker {
     /// as the value side of `unit or E`.
     fn check_type(&self, ty: &Type, span: Span) -> Result<()> {
         match ty {
-            Type::Unit => err(span, "unit is only allowed as a return type"),
-            Type::Region => err(span, "'region' is only the type of a task's parameter, as in 'task build(r: region)'"),
+            Type::Unit => err(self.place(span, "unit"), "unit is only allowed as a return type"),
+            Type::Region => err(self.place(span, "region"), "'region' is only the type of a task's parameter, as in 'task build(r: region)'"),
             Type::Ptr(inner, _) => self.check_type(inner, span),
             Type::Maybe(inner) => match inner.as_ref() {
                 Type::Maybe(_) => err(span, "a maybe can't hold another maybe"),
-                Type::Unit => err(span, "a maybe can't hold unit, which has no value"),
+                Type::Unit => err(self.place(span, "unit"), "a maybe can't hold unit, which has no value"),
                 _ => self.check_type(inner, span),
             },
             Type::Or(value, error) => {
@@ -320,17 +342,17 @@ impl Checker {
                     self.check_type(value, span)?;
                 }
                 match error.as_ref() {
-                    Type::Unit => return err(span, "the error type can't be unit"),
-                    Type::Maybe(_) => return err(span, "the error type can't be a maybe"),
+                    Type::Unit => return err(self.place(span, "or"), "the error type can't be unit"),
+                    Type::Maybe(_) => return err(self.place(span, "or"), "the error type can't be a maybe"),
                     _ => self.check_type(error, span)?,
                 }
                 if value == error {
-                    return err(span, format!("the error type must differ from the value type, as in '{} or ParseError'", value));
+                    return err(self.place(span, "or"), format!("the error type must differ from the value type, as in '{} or ParseError'", value));
                 }
                 Ok(())
             }
             Type::Named(name, _) if !self.shapes.contains_key(name) && !self.kinds.contains_key(name) => {
-                err(span, format!("unknown type '{}'", name))
+                err(self.place(span, name), format!("unknown type '{}'", name))
             }
             _ => Ok(()),
         }
@@ -508,7 +530,8 @@ impl Checker {
         }
         if let Some(existing) = self.lookup(name) {
             let at = existing.span;
-            return err(span, format!("'{}' is already defined at {}:{}", name, at.line, at.col));
+            let what = if existing.ty == Type::Region { "the name of a region" } else { "defined" };
+            return err(span, format!("'{}' is already {} at {}:{}", name, what, at.line, at.col));
         }
         let Some(scope) = self.scopes.last_mut() else {
             return Err(Error::internal(format!("'{}' defined outside of a task", name)));
@@ -571,6 +594,13 @@ impl Checker {
         let span = stmt.span;
         match &mut stmt.kind {
             StmtKind::Expr(e) => {
+                // `fail e` names a plan B's error only on its first line.
+                if let ExprKind::Fail(inner) = &e.kind
+                    && let ExprKind::Var(name) = &inner.kind
+                    && self.lookup(name).is_none()
+                {
+                    return err(e.span, format!("'fail {0}' names the error only on the first line of a plan B; to send an error, write '<- fail {0}'", name));
+                }
                 self.check_expr(e)?;
                 // Of all expressions, only a call can have an effect, and so
                 // can a plan B on a call, or one that gives no value.
@@ -657,7 +687,7 @@ impl Checker {
                     Some(e) if ret == Type::Unit => err(e.span, "this task has no return type, so '<-' cannot take a value"),
                     Some(e) => {
                         let ety = self.check_expr(e)?;
-                        if !sends_value(&ret) && !matches!(ety, Type::Fail(_)) && ety != ret {
+                        if !sends_value(&ret) && !matches!(ety, Type::Fail(_)) && !fits_regions(&ety, &ret) {
                             return err(e.span, "this task sends no value when it succeeds; write a bare '<-', or '<- fail …' to send an error");
                         }
                         self.coerce(e, &ret)
@@ -729,6 +759,7 @@ impl Checker {
             (PatternKind::Value(_), other) => {
                 err(span, format!("'{{…}}' matches the value in a maybe or a 'T or E', but this value is {}", other))
             }
+            (PatternKind::None, Type::None) => err(span, "this value is always none, so there is nothing to match"),
             (PatternKind::None, other) => err(span, format!("'none' matches an empty maybe, but this value is {}", other)),
             (PatternKind::Fail(_), other) => {
                 err(span, format!("'fail …' matches the error of a 'T or E', but this value is {}", other))
@@ -761,7 +792,7 @@ impl Checker {
                 Ok(ty)
             }
             ExprKind::Deref(_) => self.check_expr(expr),
-            _ => err(span, "invalid assignment target"),
+            _ => err(span, "only a variable, a field, or the value a pointer points to (p^) can be assigned"),
         }
     }
 
@@ -791,7 +822,7 @@ impl Checker {
         let needed: Vec<String> = match &ety {
             Type::Named(name, _) => match self.kinds.get(name) {
                 Some(kind) => kind.variants.iter().map(|v| v.tag.clone()).collect(),
-                None => return err(expr.span, format!("'{}' is not a kind", name)),
+                None => return err(expr.span, format!("'match' needs a kind, a maybe, or a 'T or E', but '{}' is a shape", name)),
             },
             Type::Maybe(_) => vec!["{…}".to_string(), "none".to_string()],
             Type::Or(..) => vec!["{…}".to_string(), "fail …".to_string()],
@@ -878,7 +909,7 @@ impl Checker {
             }
             ExprKind::Index(_base, _index) => {
                 // Arrays not supported yet
-                err(span, "indexing not supported")
+                err(span, "Vela has no arrays yet, so '[…]' can't index a value")
             }
             ExprKind::Call(name, args) => {
                 if name == "show" {
@@ -891,7 +922,12 @@ impl Checker {
                         other => other,
                     };
                     if !matches!(shown, Type::Int | Type::Float | Type::Bool | Type::Text) {
-                        return err(arg.span, "show expects int, float, bool, or text");
+                        let hint = match &ty {
+                            Type::Ptr(..) => "; to show the value it points to, write 'p^'".to_string(),
+                            Type::Or(..) => extract_hint(&[&ty]),
+                            _ => String::new(),
+                        };
+                        return err(arg.span, format!("show expects int, float, bool, or text{}", hint));
                     }
                     return Ok(Type::Unit);
                 }
@@ -943,8 +979,13 @@ impl Checker {
                 {
                     return err(span, format!("this pointer is a {}, which may be none; extract it first, as in 'when p is {{q}}' or 'p {{ … }}'", ty));
                 }
+                if let Type::Or(value, _) = &ty
+                    && value.ptr_inner().is_some()
+                {
+                    return err(span, format!("this pointer is a {}, which may be an error; extract it first, as in 'p {{ … }}' or 'match'", ty));
+                }
                 ty.ptr_inner().cloned()
-                    .ok_or_else(|| Error::at(span, "cannot dereference non-pointer"))
+                    .ok_or_else(|| Error::at(span, format!("'^' reads the value a pointer points to, but this value is {}", ty)))
             }
             ExprKind::StructInit(name, fields) => {
                 if self.kinds.contains_key(name.as_str()) {
@@ -1015,16 +1056,23 @@ impl Checker {
             .try_for_each(|(name, at, ty)| self.define(&name, ty, false, at))
             .and_then(|()| self.check_plan_b_body(span, &extracted, body));
         self.pop_scope();
-        Ok(result?.unwrap_or(extracted))
+        let Some((settled, at)) = result? else { return Ok(extracted) };
+        // The fallback's regions must outlive the plan B: a region declared in
+        // its block is freed when it ends.
+        if let Some(region) = settled.regions().into_iter().find(|region| *region != ANY_REGION && self.lookup(region).is_none()) {
+            return err(at, format!("this value is in region '{}', which is freed when the plan B ends, so it can't be the plan B's value", region));
+        }
+        Ok(settled)
     }
 
     /// Checks a plan B's statements: the last line gives the value, unless every
     /// path through the block sends, or there is no value to give (`unit or E`).
     ///
-    /// Returns the plan B's type when the last line settles it: a value holding
-    /// no pointers (of `ANY_REGION`, such as `first(none)`) has nothing to
-    /// extract that lives anywhere, so the plan B takes the fallback's regions.
-    fn check_plan_b_body(&mut self, span: Span, extracted: &Type, body: &mut Block) -> Result<Option<Type>> {
+    /// Returns the plan B's type, and the last line's position, when the last line
+    /// settles it: a value holding no pointers (of `ANY_REGION`, such as
+    /// `first(none)`) has nothing to extract that lives anywhere, so the plan B
+    /// takes the fallback's regions.
+    fn check_plan_b_body(&mut self, span: Span, extracted: &Type, body: &mut Block) -> Result<Option<(Type, Span)>> {
         if *extracted == Type::Unit {
             return self.check_block(body).map(|()| None);
         }
@@ -1037,8 +1085,13 @@ impl Checker {
             if ty == Type::Unit {
                 return err(e.span, format!("the last line of a plan B gives its value, but this has none; expected a value of type {}", extracted));
             }
-            if !fits_regions(&ty, extracted) && fits_regions(extracted, &ty) {
-                return Ok(Some(ty));
+            if extracted.regions().contains(&ANY_REGION) {
+                let mut regions = HashMap::new();
+                unify_regions(extracted, &ty, &mut regions);
+                let settled = extracted.map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| region.to_string())));
+                if settled != *extracted {
+                    return self.coerce(e, &settled).map(|()| Some((settled, e.span)));
+                }
             }
             return self.coerce(e, extracted).map(|()| None);
         }
@@ -1054,7 +1107,7 @@ impl Checker {
         match op {
             UnaryOp::Neg => {
                 if !ty.is_numeric() {
-                    return err(span, format!("negation requires numeric type{}", extract_hint(&[&ty])));
+                    return err(span, format!("negation requires a number, got {}{}", ty, extract_hint(&[&ty])));
                 }
                 Ok(ty)
             }
@@ -1098,7 +1151,8 @@ impl Checker {
                     self.expect_type(&rt, &lt, r.span)?;
                 }
                 if !lt.is_numeric() && !matches!(lt, Type::Bool | Type::Text | Type::Ptr(..)) {
-                    return err(span, "cannot compare this type");
+                    let symbol = if op == BinaryOp::Eq { "==" } else { "!=" };
+                    return err(span, format!("'{}' can't compare values of type {}", symbol, lt));
                 }
                 Ok(Type::Bool)
             }
@@ -1194,8 +1248,20 @@ impl Checker {
             ty.map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| ANY_REGION.to_string())))
         };
         for (arg, (_, ty)) in args.iter_mut().zip(params) {
-            if *ty != Type::Region {
-                self.coerce(arg, &substitute(ty))?;
+            if *ty == Type::Region {
+                continue;
+            }
+            let expected = substitute(ty);
+            let actual = arg.ty()?.clone();
+            let same_but_region = [Some(&expected), expected.extracted()].into_iter().flatten().any(|e| actual.without_regions() == e.without_regions());
+            match self.coerce(arg, &expected) {
+                Err(_) if same_but_region && !expected.regions().contains(&ANY_REGION) => {
+                    return err(
+                        arg.span,
+                        format!("expected type {}, got {}; task '{}' names one region for this and another argument, so they must be in the same region", expected, actual, task),
+                    );
+                }
+                result => result?,
             }
         }
         Ok(substitute(ret))

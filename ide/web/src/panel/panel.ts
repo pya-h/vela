@@ -160,6 +160,10 @@ export class Panel {
     if (!this.column) return;
     this.column.classList.toggle("panel-hidden", !this.visible);
     this.column.style.setProperty("--panel-height", `${this.fittedHeight()}px`);
+    // The resize handle's value, for assistive technology.
+    this.resizer.setAttribute("aria-valuemin", String(HEIGHT.min));
+    this.resizer.setAttribute("aria-valuemax", String(Math.max(HEIGHT.min, this.column.clientHeight - 120)));
+    this.resizer.setAttribute("aria-valuenow", String(this.fittedHeight()));
     for (const { id } of TABS) {
       const active = id === this.tab;
       const button = this.buttons.get(id);

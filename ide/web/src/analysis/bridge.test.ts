@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { AnalysisError, VelaAnalysis } from "./bridge";
+import { AnalysisError, VelaAnalysis, wellFormed } from "./bridge";
 import { examplesFolder as examples, wasmBytes } from "./test-module";
 
 let analysis: VelaAnalysis;
@@ -20,6 +20,14 @@ describe("VelaAnalysis", () => {
     const variables = tokens.filter((t) => t.class === "variable").map((t) => source.slice(t.from, t.to));
     expect(variables).toEqual(["total", "total"]);
     expect(tokens.find((t) => t.class === "string")).toMatchObject({ from: source.indexOf('"é') });
+  });
+
+  it("analyzes text holding a lone surrogate, with offsets unchanged", () => {
+    const source = 'task main()\n    show("a\ud800")\n    show(missing)\nfi\n';
+    const { tokens, diagnostics } = analysis.file(source);
+    expect(diagnostics).toMatchObject([{ from: source.indexOf("missing"), message: "unknown variable 'missing'" }]);
+    expect(tokens.find((t) => t.class === "string")).toMatchObject({ from: source.indexOf('"a'), to: source.indexOf('")') + 1 });
+    expect(wellFormed("x\udc00y\ud83d\ude00\ud83d")).toBe("x\ufffdy\ud83d\ude00\ufffd");
   });
 
   it("covers every non-space character of every example with a token", () => {

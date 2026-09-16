@@ -147,6 +147,15 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ("pointer types", format!("task f(p: {}int)\nfi\n", "^".repeat(deep))),
         ("maybe types", format!("task f(p: {}int)\nfi\n", "maybe ".repeat(deep))),
         ("plan B blocks", program(format!("{}1{}", "m {\n".repeat(deep), "\n}".repeat(deep)))),
+        ("fail chains", format!("task f() -> int or text\n    <- {}\"x\"\nfi\n", "fail ".repeat(deep))),
+        ("dereference chains", program(format!("p{}", "^".repeat(deep)))),
+        ("field chains", program(format!("p{}", ".a".repeat(deep)))),
+        ("nested matches", format!("task main()\n{}fi\n", "match k\ncase _\n".repeat(deep) + &"fi\n".repeat(deep))),
+        ("nested loops", format!("task main()\n{}fi\n", "loop true\neach i in 0..1\n".repeat(deep) + &"fi\nfi\n".repeat(deep))),
+        ("nested is conditions", format!("task main()\n{}fi\n", "when m is {v}\n".repeat(deep) + &"fi\n".repeat(deep))),
+        ("nested new", program(format!("{}1{}", "new int(".repeat(deep), ") in r".repeat(deep)))),
+        ("nested shape literals", program(format!("{}1{}", "P { x: ".repeat(deep), " }".repeat(deep)))),
+        ("region pointer types", format!("task f(p: {}int@r)\nfi\n", "^".repeat(deep))),
     ];
     for (what, source) in cases {
         let error = driver::generate_c(&source).expect_err(what);
@@ -157,13 +166,25 @@ fn deep_nesting_is_an_error_not_a_crash() {
     let ok = program(format!("{}1{}", "(".repeat(near), ")".repeat(near)));
     driver::generate_c(&ok).unwrap();
     driver::generate_c(&program(vec!["1"; near].join(" + "))).unwrap();
-    // Plan Bs nest two levels each (the value, then the block).
+    // Plan Bs nest three levels each (the postfix value, the block, and the
+    // statement's expression inside it).
     let plan_bs = format!(
         "task main()\n    bind m: maybe int = none\n    show({}1{})\nfi\n",
         "m {\n".repeat(near / 3),
         "\n}".repeat(near / 3)
     );
     driver::generate_c(&plan_bs).unwrap();
+    // A `new` counts two levels (itself, and its value).
+    let news = format!(
+        "task main()\n    region r\n    show({}new int(1) in r{}^)\nfi\n",
+        "new int(".repeat(near / 2 - 1),
+        "^) in r".repeat(near / 2 - 1)
+    );
+    driver::generate_c(&news).unwrap();
+    let literals = format!("shape P\n    x: int\nfi\n{}", program(format!("{}1{}", "P { x: ".repeat(near), " }".repeat(near))));
+    assert!(driver::generate_c(&literals).is_err_and(|e| !e.message.contains("nested too deeply")), "a deep literal reaches the checker");
+    let fails = format!("task f() -> int or text\n    <- {}\"x\"\nfi\n", "fail ".repeat(near));
+    assert!(driver::generate_c(&fails).is_err_and(|e| !e.message.contains("nested too deeply")), "a deep fail chain reaches the checker");
 }
 
 #[test]

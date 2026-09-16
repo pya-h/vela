@@ -14,21 +14,31 @@ pub struct LineIndex<'a> {
     starts: Vec<usize>,
     /// UTF-16 offset of the start of each line.
     starts_utf16: Vec<usize>,
+    /// Whether each line is plain ASCII, where bytes, characters, and UTF-16
+    /// units are the same and positions convert without counting.
+    ascii: Vec<bool>,
 }
 
 impl<'a> LineIndex<'a> {
     pub fn new(source: &'a str) -> Self {
         let mut starts = vec![0];
         let mut starts_utf16 = vec![0];
+        let mut ascii = vec![true];
         let mut utf16 = 0;
         for (byte, c) in source.char_indices() {
             utf16 += c.len_utf16();
+            if !c.is_ascii()
+                && let Some(last) = ascii.last_mut()
+            {
+                *last = false;
+            }
             if c == '\n' {
                 starts.push(byte + 1);
                 starts_utf16.push(utf16);
+                ascii.push(true);
             }
         }
-        LineIndex { source, starts, starts_utf16 }
+        LineIndex { source, starts, starts_utf16, ascii }
     }
 
     /// The byte offset of a compiler position. A column past the end of its
@@ -59,6 +69,9 @@ impl<'a> LineIndex<'a> {
         let (Some(&start), Some(&start_utf16)) = (self.starts.get(line), self.starts_utf16.get(line)) else {
             return 0;
         };
+        if self.ascii.get(line) == Some(&true) {
+            return start_utf16 + (byte - start);
+        }
         let text = self.source.get(start..byte).unwrap_or_default();
         start_utf16 + text.chars().map(char::len_utf16).sum::<usize>()
     }
@@ -71,6 +84,10 @@ impl<'a> LineIndex<'a> {
         let (Some(&start), Some(&start_utf16)) = (self.starts.get(line), self.starts_utf16.get(line)) else {
             return 0;
         };
+        if self.ascii.get(line) == Some(&true) {
+            let line_end = self.starts.get(line + 1).copied().unwrap_or(self.source.len());
+            return (start + utf16.saturating_sub(start_utf16)).min(line_end);
+        }
         let mut offset = start;
         let mut remaining = utf16.saturating_sub(start_utf16);
         for c in self.source.get(start..).unwrap_or_default().chars() {

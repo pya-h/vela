@@ -1,0 +1,42 @@
+  1 | # A plan B with a region of its own runs, and frees it, on every pass of a
+    | comment:# A plan B with a region of its own runs, and frees it, on every pass of a
+  2 | # loop condition, and not at all when `and` doesn't need its value.
+    | comment:# loop condition, and not at all when `and` doesn't need its value.
+  4 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  5 |     hold count = 0
+    | keyword:hold  variable:count  operator:=  number:0
+  6 |     bind m: maybe int = none
+    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+  7 |     loop m {
+    | keyword:loop  variable:m  punctuation:{
+  8 |         region r
+    | keyword:region  region:r
+  9 |         bind p = new int(count) in r
+    | keyword:bind  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:count  punctuation:)  keyword:in  region:r
+ 10 |         p^
+    | variable:p  operator:^
+ 11 |     } < 3
+    | punctuation:}  operator:<  number:3
+ 12 |         count = count + 1
+    | variable:count  operator:=  variable:count  operator:+  number:1
+ 13 |     fi
+    | keyword:fi
+ 14 |     show(count)
+    | builtin-fn:show  punctuation:(  variable:count  punctuation:)
+ 16 |     bind b: maybe bool = none
+    | keyword:bind  variable:b  punctuation::  keyword:maybe  type-builtin:bool  operator:=  keyword:none
+ 17 |     show(false and b {
+    | builtin-fn:show  punctuation:(  keyword:false  keyword:and  variable:b  punctuation:{
+ 18 |         region unused
+    | keyword:region  region:unused
+ 19 |         bind flag = new bool(true) in unused
+    | keyword:bind  variable:flag  operator:=  keyword:new  type-builtin:bool  punctuation:(  keyword:true  punctuation:)  keyword:in  region:unused
+ 20 |         show("not shown")
+    | builtin-fn:show  punctuation:(  string:"not shown"  punctuation:)
+ 21 |         flag^
+    | variable:flag  operator:^
+ 22 |     })
+    | punctuation:}  punctuation:)
+ 23 | fi
+    | keyword:fi

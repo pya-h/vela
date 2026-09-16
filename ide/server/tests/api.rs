@@ -399,6 +399,34 @@ async fn a_launch_code_gives_the_token_once() {
 }
 
 #[tokio::test]
+async fn the_launch_page_is_private_and_holds_a_working_code() {
+    let dir = TempDir::new("launch-page");
+    let (app, studio) = app(config(&dir.workspace(), PORT));
+    let page = studio.launch_page().unwrap();
+    let html = std::fs::read_to_string(&page.path).unwrap();
+    let code = html.split("#launch=").nth(1).and_then(|rest| rest.split('"').next()).unwrap().to_string();
+    assert!(html.contains(&format!("http://127.0.0.1:{}/#launch={}", PORT, code)), "{}", html);
+    assert!(!html.contains(studio.config.token.as_str()), "the page must not hold the token itself");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |path: &std::path::Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&page.path), 0o600);
+        assert_eq!(mode(page.path.parent().unwrap()), 0o700);
+    }
+    let redeem = Request::post("/api/launch")
+        .header("host", "127.0.0.1:4000")
+        .header("origin", "http://127.0.0.1:4000")
+        .header("content-type", "application/json")
+        .body(Body::from(json!({ "code": code }).to_string()))
+        .unwrap();
+    assert_eq!(send(&app, redeem).await.status, StatusCode::OK);
+    let path = page.path.clone();
+    drop(page);
+    assert!(!path.exists() && !path.parent().unwrap().exists());
+}
+
+#[tokio::test]
 async fn malformed_requests_get_json_errors() {
     let dir = TempDir::new("malformed");
     let (app, studio) = app(config(&dir.workspace(), PORT));
@@ -440,6 +468,15 @@ async fn saving_respects_read_only_files_and_long_names() {
     assert_eq!(refused.status, StatusCode::FORBIDDEN);
     assert_eq!(refused.json()["error"], "the file is read-only");
     assert_eq!(dir.read("locked.vela"), HELLO);
+    // Writable by the group and others, but not by its owner, this user.
+    let others = dir.write("others.vela", HELLO);
+    std::fs::set_permissions(&others, std::fs::Permissions::from_mode(0o464)).unwrap();
+    // Root can write any file, so there is nothing to refuse.
+    if std::fs::OpenOptions::new().write(true).open(&others).is_err() {
+        let refused = call(&app, &studio, Method::PUT, "/api/file", Some(json!({ "path": "others.vela", "content": "x" }))).await;
+        assert_eq!(refused.status, StatusCode::FORBIDDEN);
+        assert_eq!(dir.read("others.vela"), HELLO);
+    }
 
     let saved = call(&app, &studio, Method::PUT, "/api/file", Some(json!({ "path": long, "content": "x" }))).await;
     assert_eq!(saved.status, StatusCode::OK, "{:?}", String::from_utf8_lossy(&saved.body));

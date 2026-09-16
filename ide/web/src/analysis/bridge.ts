@@ -30,6 +30,16 @@ function instantiate(module: WebAssembly.Module): Exports {
 
 type Results<Q extends readonly Query[]> = { [I in keyof Q]: Q[I] extends Query ? QueryResults[Q[I]["kind"]] : never };
 
+/**
+ * `text` with each lone surrogate (half of a character, as a paste or a
+ * half-deleted emoji can leave) replaced by U+FFFD. JSON can't carry a lone
+ * surrogate to the module, and one code unit replaces one, so offsets stay
+ * the same.
+ */
+export function wellFormed(text: string): string {
+  return text.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "\uFFFD");
+}
+
 export class VelaAnalysis {
   private exports: Exports;
 
@@ -51,7 +61,7 @@ export class VelaAnalysis {
    * crashes; after a crash the module is restarted, so later calls work.
    */
   request<const Q extends readonly Query[]>(source: string, queries: Q): Results<Q> {
-    const response = this.call(JSON.stringify({ source, queries })) as { results?: unknown[]; error?: string };
+    const response = this.call(JSON.stringify({ source: wellFormed(source), queries })) as { results?: unknown[]; error?: string };
     if (typeof response.error === "string") {
       throw new AnalysisError(response.error);
     }

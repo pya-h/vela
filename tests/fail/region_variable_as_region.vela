@@ -1,0 +1,5 @@
+# error: 4:28: 'x' is a variable, not a region
+task main()
+    bind x = 1
+    bind p = new int(2) in x
+fi

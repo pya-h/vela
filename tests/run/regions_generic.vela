@@ -1,0 +1,79 @@
+# Tasks generic over regions: a region parameter after the parameter that
+# names it, forwarding a result whose error holds no pointers, a plan B that
+# takes its fallback's region through a `T or E`, and a result whose two sides
+# are in regions the caller chooses.
+
+shape Node
+    value: int
+    next: maybe ^Node
+fi
+
+kind Tree
+    Leaf(value: int)
+    Branch(left: ^Tree, right: ^Tree)
+fi
+
+task read(p: ^int@r, r: region) -> int
+    bind extra = new int(1) in r
+    <- p^ + extra^
+fi
+
+task check(t: Tree@s) -> unit or Tree@s
+    when t is Leaf v
+        when v < 0
+            <- fail t
+        fi
+    fi
+fi
+
+task outer(r: region, n: int) -> unit or Tree@r
+    <- check(Leaf(n))
+fi
+
+task first_or(list: maybe ^Node@r) -> maybe ^Node@r or text
+    <- list
+fi
+
+task pick(a: ^int@r, b: ^int@s, left: bool) -> ^int@r or ^int@s
+    when left
+        <- a
+    fi
+    <- fail b
+fi
+
+task main()
+    region a
+    bind p = new int(41) in a
+    show(read(p, a))
+
+    outer(a, 1) {
+        fail e
+        show("unexpected")
+    }
+    outer(a, -1) {
+        fail e
+        when e is Leaf v
+            show(v)
+        fi
+    }
+
+    bind good = new Node(Node { value: 7, next: none }) in a
+    bind x: maybe ^Node@a = first_or(none) {
+        fail e
+        good
+    }
+    show(x { good }^.value)
+
+    region b
+    bind q = new int(2) in b
+    match pick(p, q, true)
+    case {v}
+        show(v^)
+    case fail w
+        show(w^)
+    fi
+    show(pick(p, q, false) { fail w
+        new int(w^) in a }^)
+    show(pick(p, p, false) { fail w
+        w }^)
+fi

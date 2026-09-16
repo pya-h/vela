@@ -21,8 +21,12 @@ export interface ExitSummary {
 
 /** How a process ended, in words. `stopped` says the user asked it to stop. */
 export function exitSummary(exit: ExitInfo, stopped: boolean): ExitSummary {
+  // A stopped process may still exit with a code of its own (zsh exits with 1 on a hangup).
+  if (stopped) {
+    return { text: "stopped", ok: false };
+  }
   if (exit.signal !== null) {
-    return { text: stopped ? "stopped" : `ended by signal ${exit.signal}`, ok: false };
+    return { text: `ended by signal ${exit.signal}`, ok: false };
   }
   return { text: `exited with code ${exit.code}`, ok: exit.code === 0 };
 }

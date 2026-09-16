@@ -1,0 +1,7 @@
+# error: 4:15: unknown variant 'Purple'
+task main()
+    bind m: maybe int = 1
+    when m is Purple
+        show(1)
+    fi
+fi

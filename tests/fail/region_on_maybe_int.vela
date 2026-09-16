@@ -1,0 +1,6 @@
+# error: 2:21: 'maybe int' holds no pointers, so it lives in no region; remove '@r'
+task f(p: maybe int@r)
+fi
+
+task main()
+fi

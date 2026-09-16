@@ -2,10 +2,10 @@
 //!
 //! - `tests/runtime/NAME.c` tests it directly: each must compile as strict ISO
 //!   C11 and print `ok`.
-//! - Programs that use regions must free all their memory and stay within it:
+//! - Programs must be free of undefined behavior, and free all their memory:
 //!   where the C compiler supports AddressSanitizer and UndefinedBehaviorSanitizer,
-//!   the runtime tests and every `tests/run` and `examples` program that
-//!   declares a region run under them (with leak checks on Linux).
+//!   the runtime tests and every `tests/run` and `examples` program run under
+//!   them (with leak checks on Linux), and must print their expected output.
 
 // A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
@@ -101,11 +101,12 @@ fn runtime_tests_pass_as_strict_c() {
             failures.push(format!("{}: {}", stem(&source), String::from_utf8_lossy(&output.stdout)));
         }
     }
+    let _ = fs::remove_dir_all(&scratch);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 #[test]
-fn regions_free_everything_under_the_sanitizers() {
+fn programs_run_clean_under_the_sanitizers() {
     let scratch = scratch_dir("runtime-sanitized");
     if !sanitizers_work(&scratch) {
         eprintln!("skipped: the C compiler can't build sanitized programs here");
@@ -124,25 +125,75 @@ fn regions_free_everything_under_the_sanitizers() {
             Err(errors) => failures.push(format!("{}: {}", stem(&source), errors)),
         }
     }
-    let programs = files("tests/run", "vela").into_iter().chain(files("examples", "vela"));
-    let mut checked = 0;
-    for source in programs.filter(|p| fs::read_to_string(p).unwrap().contains("region")) {
-        checked += 1;
-        let name = stem(&source);
-        let emit = Command::new(VELA).arg(&source).arg("--emit-c").output().unwrap();
-        assert!(emit.status.success(), "{}: {}", name, String::from_utf8_lossy(&emit.stderr));
-        let c_path = scratch.join(format!("{}.c", name));
-        fs::write(&c_path, &emit.stdout).unwrap();
-        let exe = scratch.join(&name);
-        if let Err(errors) = compile_c(&c_path, &exe, SANITIZER_FLAGS) {
-            failures.push(format!("{}: {}", name, errors));
-            continue;
-        }
-        let output = run(&exe);
-        if !output.status.success() {
-            failures.push(format!("{}:\n{}", name, String::from_utf8_lossy(&output.stderr)));
-        }
-    }
-    assert!(checked >= 5, "expected several region programs, found {}", checked);
+    // Each program with its expected output: `tests/run/NAME.out` or `tests/examples/NAME.out`.
+    let programs: Vec<(PathBuf, PathBuf, String)> = files("tests/run", "vela")
+        .into_iter()
+        .map(|p| (p.with_extension("out"), format!("run-{}", stem(&p)), p))
+        .chain(files("examples", "vela").into_iter().map(|p| (root().join("tests/examples").join(format!("{}.out", stem(&p))), format!("example-{}", stem(&p)), p)))
+        .map(|(expected, name, source)| (source, expected, name))
+        .collect();
+    assert!(programs.len() >= 20, "expected the run tests and examples, found {}", programs.len());
+    // Sanitized builds are slow, so programs are checked on a few threads.
+    let threads = std::thread::available_parallelism().map_or(2, |n| n.get()).min(8);
+    let chunks: Vec<_> = programs.chunks(programs.len().div_ceil(threads)).collect();
+    let results: Vec<Vec<String>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = chunks
+            .into_iter()
+            .map(|chunk| scope.spawn(|| chunk.iter().filter_map(|(source, expected, name)| check_sanitized(source, expected, name, &scratch)).collect()))
+            .collect();
+        handles.into_iter().map(|handle| handle.join().unwrap()).collect()
+    });
+    failures.extend(results.into_iter().flatten());
+    let _ = fs::remove_dir_all(&scratch);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Builds `source` with the sanitizers and runs it, expecting success and the
+/// output in `expected`; a description of the failure, if any.
+fn check_sanitized(source: &Path, expected: &Path, name: &str, scratch: &Path) -> Option<String> {
+    let emit = Command::new(VELA).arg(source).arg("--emit-c").output().unwrap();
+    if !emit.status.success() {
+        return Some(format!("{}: {}", name, String::from_utf8_lossy(&emit.stderr)));
+    }
+    let c_path = scratch.join(format!("{}.c", name));
+    fs::write(&c_path, &emit.stdout).unwrap();
+    let exe = scratch.join(name);
+    if let Err(errors) = compile_c(&c_path, &exe, SANITIZER_FLAGS) {
+        return Some(format!("{}: {}", name, errors));
+    }
+    let output = run(&exe);
+    if !output.status.success() {
+        return Some(format!("{}:\n{}", name, String::from_utf8_lossy(&output.stderr)));
+    }
+    let wanted = fs::read_to_string(expected).unwrap_or_default();
+    if String::from_utf8_lossy(&output.stdout) != wanted {
+        return Some(format!("{}: output differs from {} under the sanitizers", name, expected.display()));
+    }
+    None
+}
+
+/// An allocation that can't be satisfied (one whose size overflows, and one
+/// the system refuses) stops the program with a message instead of returning
+/// memory that isn't there.
+#[test]
+fn an_impossible_allocation_stops_the_program() {
+    let scratch = scratch_dir("runtime-out-of-memory");
+    for (name, size) in [("overflow", "SIZE_MAX - 8"), ("refused", "SIZE_MAX / 2")] {
+        let source = scratch.join(format!("{}.c", name));
+        fs::write(
+            &source,
+            format!(
+                "#include \"vela_rt.h\"\nint main(void) {{\n    vela__rt__region r[1] = {{ VELA__RT__REGION_EMPTY }};\n    unsigned char* p = vela__rt__region_alloc(r, {}, 1);\n    p[0] = 1;\n    puts(\"allocated\");\n    return 0;\n}}\n",
+                size
+            ),
+        )
+        .unwrap();
+        let exe = scratch.join(name);
+        compile_c(&source, &exe, STRICT_C_FLAGS).unwrap_or_else(|errors| panic!("{}: {}", name, errors));
+        let output = Command::new(&exe).output().unwrap();
+        assert!(!output.status.success(), "{}: the allocation succeeded", name);
+        assert!(output.stdout.is_empty(), "{}: {}", name, String::from_utf8_lossy(&output.stdout));
+        assert_eq!(String::from_utf8_lossy(&output.stderr), "vela: out of memory\n", "{}", name);
+    }
+    let _ = fs::remove_dir_all(&scratch);
 }

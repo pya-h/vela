@@ -1,0 +1,5 @@
+# error: 4:11: Vela has no arrays yet, so '[…]' can't index a value
+task main()
+    bind x = 5
+    show(x[0])
+fi

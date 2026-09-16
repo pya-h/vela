@@ -238,10 +238,20 @@ impl Workspace {
         if !metadata.is_file() {
             return Err(FsError::NotAFile);
         }
-        if metadata.permissions().readonly() {
+        // No write bit at all, or none that lets this user write: saving
+        // renames a new file over it, which only needs the folder to be
+        // writable, so the file's own permission is checked here.
+        let writable = OpenOptions::new().write(true).open(&resolved);
+        if metadata.permissions().readonly() || writable.as_ref().is_err_and(|error| error.kind() == io::ErrorKind::PermissionDenied) {
             return Err(FsError::ReadOnly);
         }
+        drop(writable);
         if let Some(base) = base_hash {
+            // The editor only ever held a file up to the size limit, so a
+            // larger file has changed, and isn't read to find out.
+            if metadata.len() > MAX_FILE_BYTES as u64 {
+                return Err(FsError::Changed { hash: String::new() });
+            }
             let current = content_hash(&fs::read(&resolved)?);
             if current != base {
                 return Err(FsError::Changed { hash: current });

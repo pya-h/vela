@@ -1,5 +1,5 @@
-  1 | # Vela demo: functions, shapes, pointers, control flow
-    | comment:# Vela demo: functions, shapes, pointers, control flow
+  1 | # Vela demo: tasks, shapes, pointers, control flow
+    | comment:# Vela demo: tasks, shapes, pointers, control flow
   3 | shape Point
     | keyword:shape  type:Point
   4 |     x: int

@@ -81,18 +81,23 @@ static inline _Noreturn void vela__rt__out_of_memory(void) {
 
 /* A new chunk of at least `size` bytes, whose first `size` bytes are taken.
  * Ordinary chunks double in total size (header included, so each malloc is a
- * round size) from 4 KB up to 1 MB. An allocation larger than half the next
+ * power of two) from 4 KB up to 1 MB. An allocation larger than half the next
  * ordinary chunk gets a chunk of exactly its size instead, placed behind the
- * newest chunk, which keeps serving small allocations. */
+ * newest chunk, which keeps serving small allocations. In an empty region, an
+ * allocation that fits the first ordinary chunk goes there, and a larger one
+ * gets its own chunk, after which ordinary chunks start again at 4 KB. */
 static inline void* vela__rt__region_grow(vela__rt__region* r, size_t size) {
     size_t header = sizeof(vela__rt__chunk);
     size_t total = VELA__RT__CHUNK_FIRST;
     if (r->newest != NULL) {
         size_t previous = r->newest->size + header;
-        total = previous >= VELA__RT__CHUNK_MAX / 2 ? VELA__RT__CHUNK_MAX : previous * 2;
+        bool ordinary = previous <= VELA__RT__CHUNK_MAX && (previous & (previous - 1)) == 0;
+        if (ordinary) {
+            total = previous >= VELA__RT__CHUNK_MAX / 2 ? VELA__RT__CHUNK_MAX : previous * 2;
+        }
     }
     size_t capacity = total - header;
-    bool own = size > capacity / 2;
+    bool own = r->newest != NULL ? size > capacity / 2 : size > capacity;
     if (own) {
         capacity = size;
     }

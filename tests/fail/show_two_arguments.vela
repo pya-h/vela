@@ -1,0 +1,4 @@
+# error: 3:5: show expects 1 argument
+task main()
+    show(1, 2)
+fi

@@ -613,7 +613,7 @@ no spare yet
       </ul>
 
       <h3 id="lesson-shapes">Lesson 6: Shapes and kinds that hold pointers</h3>
-      <pre class="program" data-file="07_shapes.vela"><span class="keyword">shape</span> Node
+      <pre class="program" data-file="06_shapes.vela"><span class="keyword">shape</span> Node
     value: int
     next: <span class="keyword">maybe</span> ^Node
 <span class="keyword">fi</span>
@@ -667,7 +667,7 @@ no spare yet
       </p>
 
       <h3 id="lesson-errors">Lesson 7: Regions with errors and maybe values</h3>
-      <pre class="program" data-file="08_errors.vela"><span class="keyword">shape</span> Node
+      <pre class="program" data-file="07_errors.vela"><span class="keyword">shape</span> Node
     value: int
     next: <span class="keyword">maybe</span> ^Node
 <span class="keyword">fi</span>
@@ -706,7 +706,7 @@ not a digit
         throw the rest away. With regions, the temporary data goes in a region inside the work's block, and the result is
         copied into a region outside it:
       </p>
-      <pre class="program" data-file="06_copy.vela"><span class="keyword">shape</span> Node
+      <pre class="program" data-file="08_copy.vela"><span class="keyword">shape</span> Node
     value: int
     next: <span class="keyword">maybe</span> ^Node
 <span class="keyword">fi</span>
@@ -975,14 +975,16 @@ not a digit
       </div>
 
       <div class="limit">
-        <h3 id="limit-result">A task can't send a pointer-free value of a pointer-holding type without a region parameter</h3>
+        <h3 id="limit-result">A task can't send a pointer-free value in a region none of its parameters names</h3>
         <pre><span class="keyword">task</span> leaf() -&gt; Tree@r
     <span class="keyword">&lt;-</span> Leaf(<span class="number">1</span>)
     <span class="comment"># error: the result lives in region 'r', which the task isn't given; take it as a parameter, as in 'r: region'</span>
 <span class="keyword">fi</span></pre>
         <p>
-          <code>Leaf(1)</code> holds no pointer and could go in any region, but a result's region must come from a
-          parameter. <strong>Workaround:</strong> take a region parameter, even if the task never allocates in it.
+          <code>Leaf(1)</code> holds no pointer and could go in any region, but a result's region must be one a parameter
+          names. (<code>task leaf(t: Tree@r) -&gt; Tree@r</code> may send <code>Leaf(1)</code>, since <code>t</code> names
+          <code>r</code>.) <strong>Workaround:</strong> add a parameter that names the region; a <code>region</code> parameter
+          works even if the task never allocates in it.
         </p>
         <pre class="program" data-file="w_leaf.vela"><span class="keyword">kind</span> Tree
     Leaf(value: int)
@@ -1129,8 +1131,8 @@ list = push[nodes](list, <span class="number">1</span>)</pre>
         <ul>
           <li><strong>The declaration matches the call:</strong> regions go in brackets in both, and ordinary values in
             parentheses. The region stops looking like a value argument.</li>
-          <li><strong>Grammar:</strong> <code>[</code> after a name is unused today (it reports that indexing isn't
-            supported). Arrays would later use <code>a[i]</code>, but tasks aren't values, so <code>name[…](…)</code> is a region
+          <li><strong>Grammar:</strong> <code>[</code> after a name is unused today (it reports that Vela has no arrays
+            yet). Arrays would later use <code>a[i]</code>, but tasks aren't values, so <code>name[…](…)</code> is a region
             list when <code>name</code> is a task and an index when it is a variable. Go resolves its generic calls
             (<code>f[int](x)</code>) the same way.</li>
           <li><strong>Room to grow:</strong> the second notebook sketches generics with brackets (<code>task max[T](…)</code>).

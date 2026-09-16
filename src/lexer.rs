@@ -353,8 +353,10 @@ impl Lexer {
                 self.advance();
                 return LexKind::Token(Token::Underscore);
             }
+            let start = self.pos;
             self.skip_name();
-            return invalid(loc, "names must start with a letter");
+            let name: String = self.source.get(start..self.pos).unwrap_or_default().iter().collect();
+            return invalid(loc, format!("'{}': names must start with a letter", name));
         }
 
         if !c.is_ascii() && c.is_alphanumeric() {
@@ -484,55 +486,59 @@ impl Lexer {
     }
 
     fn number(&mut self, loc: Span) -> LexKind {
+        // `s` is the number without its underscores; `raw` is as written, for messages.
         let mut s = String::new();
-        while self.peek().is_ascii_digit() {
-            s.push(self.advance());
-            // Underscores between digits are ignored: 1_000_000 reads as 1000000.
-            if self.peek() == '_' && self.peek2().is_ascii_digit() {
-                self.advance();
+        let mut raw = String::new();
+        let digits = |lexer: &mut Self, s: &mut String, raw: &mut String| {
+            while lexer.peek().is_ascii_digit() {
+                let c = lexer.advance();
+                s.push(c);
+                raw.push(c);
+                // Underscores between digits are ignored: 1_000_000 reads as 1000000.
+                if lexer.peek() == '_' && lexer.peek2().is_ascii_digit() {
+                    raw.push(lexer.advance());
+                }
             }
-        }
+        };
+        digits(self, &mut s, &mut raw);
         let is_float = self.peek() == '.' && self.peek2().is_ascii_digit();
         // `1.` is not a float (and `1..5` is a range).
         if self.peek() == '.' && !self.peek2().is_ascii_digit() && self.peek2() != '.' && !self.peek2().is_ascii_alphabetic() {
             self.advance();
-            return invalid(loc, format!("invalid number '{}.': write '{}.0'", s, s));
+            return invalid(loc, format!("invalid number '{}.': write '{}.0'", raw, raw));
         }
         if is_float {
-            s.push(self.advance());
-            while self.peek().is_ascii_digit() {
-                s.push(self.advance());
-                if self.peek() == '_' && self.peek2().is_ascii_digit() {
-                    self.advance();
-                }
-            }
+            let dot = self.advance();
+            s.push(dot);
+            raw.push(dot);
+            digits(self, &mut s, &mut raw);
         }
         // Letters, digits, or `_` right after a number, as in `12abc`, `1e5`, or
         // `0x1F`, make it invalid rather than a number followed by a name.
         if self.peek().is_ascii_alphabetic() || self.peek() == '_' {
             while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
-                s.push(self.advance());
+                raw.push(self.advance());
             }
-            return invalid(loc, format!("invalid number '{}'", s));
+            return invalid(loc, format!("invalid number '{}'", raw));
         }
         if is_float {
             match s.parse::<f64>() {
                 Ok(val) if val.is_finite() => LexKind::Token(Token::Float(val)),
-                Ok(_) => invalid(loc, format!("float literal '{}' is too large", s)),
+                Ok(_) => invalid(loc, format!("float literal '{}' is too large", raw)),
                 Err(_) => invalid(loc, "invalid float"),
             }
         } else {
             match s.parse::<i64>() {
                 Ok(val) => LexKind::Token(Token::Int(val)),
-                Err(_) => invalid(loc, format!("integer literal '{}' is too large", s)),
+                Err(_) => invalid(loc, format!("integer literal '{}' is too large", raw)),
             }
         }
     }
 
     /// A text literal. An invalid one is still read up to its closing quote,
-    /// reporting its first bad escape. An unterminated one is an error; as a
-    /// token it ends with its first line, so the lines after it are lexed
-    /// normally.
+    /// reporting its first bad escape. One whose line ends before its closing
+    /// quote is an error; as a token it ends with its line, so the lines after
+    /// it are lexed normally.
     fn string(&mut self, loc: Span) -> LexKind {
         self.advance(); // opening "
         let mut s = String::new();
@@ -567,27 +573,29 @@ impl Lexer {
                         None if c == '\n' => {
                             error = Some(Error::at(escape_loc, "invalid escape: '\\' at the end of a line"));
                         }
+                        None if c.is_control() => {
+                            let what = match c {
+                                '\t' => "a tab",
+                                '\0' => "a NUL character",
+                                _ => "a control character",
+                            };
+                            error = Some(Error::at(escape_loc, format!("invalid escape: '\\' followed by {}", what)));
+                        }
                         None => {
                             error = Some(Error::at(escape_loc, format!("invalid escape '\\{}'", c.escape_debug())));
                         }
                     }
                 }
-                c => {
-                    if c == '\n' || self.at_line_end() {
-                        line_end.get_or_insert(self.mark());
-                    }
-                    let c = self.advance();
-                    // Text keeps `\n` for a line break in a CRLF file too.
-                    if !(c == '\r' && self.peek() == '\n') {
-                        s.push(c);
-                    }
-                }
+                // Text ends on the line it starts, so a missing `"` is reported
+                // where it is missing, not at a later literal.
+                c if c == '\n' || self.at_line_end() => break,
+                _ => s.push(self.advance()),
             }
         }
         if let Some(mark) = line_end {
             self.reset(mark);
         }
-        LexKind::Invalid(error.unwrap_or_else(|| Error::at(loc, "unterminated string")))
+        LexKind::Invalid(error.unwrap_or_else(|| Error::at(loc, "text isn't closed on its line; end it with '\"' (a line break in text is written '\\n')")))
     }
 }
 

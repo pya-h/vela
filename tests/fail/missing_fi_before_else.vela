@@ -1,0 +1,9 @@
+# error: 6:5: expected 'fi' to close the 'loop' at 4:9, got 'else'
+task main()
+    when true
+        loop false
+            show(1)
+    else
+        show(2)
+    fi
+fi

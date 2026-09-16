@@ -354,7 +354,10 @@ Press Ctrl+C to stop.</pre>
             visible after <code>@</code>, and the ones <code>new</code> can allocate in after <code>new@</code> and a
             <code>new</code>'s <code>in</code>, or as the argument for a task's <code>region</code> parameter; and
             <code>region</code> as a statement or a parameter's type. A call's result shows the caller's regions
-            (<code>push(nodes, list)</code> gives a <code>^Node@nodes</code>), even while the file has an error.</p>
+            (<code>push(nodes, list)</code> gives a <code>^Node@nodes</code>), even while the file has an error. After
+            a finished value, only the words that can continue it: <code>is</code>, <code>in</code>, <code>or</code>,
+            <code>and</code>. After <code>match</code>, only <code>case</code>; <code>new</code> only where a region can
+            be allocated in.</p>
         </div>
         <div class="card">
           <h4>Snippets</h4>
@@ -387,8 +390,8 @@ Press Ctrl+C to stop.</pre>
       <ul>
         <li><strong>Explorer:</strong> create files and folders (a name like <code>lib/util.vela</code> creates the
           folder too), rename (a name with folders moves the entry), and delete, from the buttons, the right-click
-          menu, or the keyboard. Hidden files and folders, <code>target/</code>, and <code>node_modules/</code> aren't
-          listed.</li>
+          menu, or the keyboard. Hidden files and folders, <code>target/</code>, <code>node_modules/</code>, links to
+          folders, and names holding <code>:</code> or <code>\</code> aren't listed.</li>
         <li><strong>Saving:</strong> <kbd>Ctrl</kbd>+<kbd>S</kbd> saves the file, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>
           saves all. Closing a tab or leaving the page with unsaved changes asks first.</li>
         <li><strong>Changes made elsewhere</strong> are noticed when you come back to the page: a file without
@@ -404,7 +407,7 @@ Press Ctrl+C to stop.</pre>
           a real terminal: colors work, and what you type goes to the program.</li>
         <li>The run ends with a summary line, <code>── exited with code 0 · 3 ms ──</code>, and the status bar keeps
           the result. <kbd>Shift</kbd>+<kbd>F5</kbd> or the Stop button ends a program; running again replaces the
-          one that is running.</li>
+          one that is running, even when the new build fails.</li>
         <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> builds without running.</li>
         <li><strong>When a build fails,</strong> a Vela error (or a missing <code>task main()</code>) opens
           <strong>Problems</strong>, where clicking it selects the spot; a failure of the C compiler opens Output with
@@ -504,9 +507,11 @@ Press Ctrl+C to stop.</pre>
           <code>#</code>, a part that browsers never send to a server. The page moves it into the tab's session
           storage and removes it from the address bar. Every request needs it; when Vela Studio stops, the token stops
           working.</li>
-        <li><strong>The browser never sees the token on its command line.</strong> Other users of a computer can read
-          the command lines of your programs, so Vela Studio opens the browser with a one-time launch code instead,
-          which the page exchanges for the token. A code works once, for five minutes.</li>
+        <li><strong>Nothing secret on the browser's command line.</strong> Other users of a computer can read the
+          command lines of your programs, so Vela Studio doesn't pass the token, or even a launch link, to the browser.
+          It writes a small page that only you can read (in a private temporary folder) and opens that file; the page
+          sends the browser to Vela Studio with a one-time launch code, which it exchanges for the token. A code works
+          once, for five minutes, and the file is removed when Vela Studio stops.</li>
         <li><strong>Other websites can't use it.</strong> A site open in another tab doesn't have the token; besides,
           requests from another origin, or addressed to any host but <code>127.0.0.1</code> or
           <code>localhost</code> on its port (which stops DNS rebinding), are refused, and no cross-origin headers
@@ -518,9 +523,10 @@ Press Ctrl+C to stop.</pre>
           and styles, and the page can't be framed. Fonts and the WebAssembly module are served by Vela Studio
           itself: nothing is loaded from the internet, and nothing is sent anywhere.</li>
         <li><strong>Nothing left running.</strong> A program or shell whose page has been closed for 30 seconds is
-          stopped along with the processes in its group, and stopping Vela Studio stops them all. (A background job
-          that a shell started in a group of its own, and that ignores hangups, can outlive it; on Windows only the
-          program itself is stopped.)</li>
+          stopped along with the processes in its group, and stopping Vela Studio stops them all. When a terminal's shell
+          exits, the background jobs it left get a hangup, as when a terminal window closes. (A job that ignores hangups
+          can outlive it; the background-job hangup is on Linux only, and on Windows only the program itself is
+          stopped.)</li>
       </ul>
       <div class="note warning">
         <p><strong>What it can't protect you from</strong></p>
@@ -562,8 +568,9 @@ Press Ctrl+C to stop.</pre>
               <td>Another program uses that port. Pick another, or leave out <code class="nowrap">--port</code>.</td>
             </tr>
             <tr>
-              <td>“Couldn't open a browser”</td>
-              <td>Open the printed address yourself.</td>
+              <td>“Couldn't open a browser”, or the browser shows an error for a local file</td>
+              <td>Open the printed address yourself. (Some sandboxed browsers, such as snap packages, can't open the
+                private page Vela Studio writes for them.)</td>
             </tr>
             <tr>
               <td>A file won't open</td>
@@ -574,7 +581,7 @@ Press Ctrl+C to stop.</pre>
               <td>Vela Studio doesn't change read-only files; make the file writable (<code>chmod u+w</code>) and save again.</td>
             </tr>
             <tr>
-              <td>“this link has already been used or has expired”</td>
+              <td>“This link no longer works” (“this link has already been used or has expired”)</td>
               <td>The browser's launch link works once. Open the address <code>vela-studio</code> printed instead.</td>
             </tr>
             <tr>

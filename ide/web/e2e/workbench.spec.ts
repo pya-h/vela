@@ -203,3 +203,33 @@ test("remembers open tabs across reloads", async ({ page, studio }) => {
   await expect(tab(page, "fib.vela")).toHaveClass(/active/);
   await expect(tab(page, "kinds.vela")).toBeVisible();
 });
+
+test("saving over a deleted file that was made again asks before overwriting it", async ({ page, studio }) => {
+  studio.allowError(/status of 404/);
+  studio.allowError(/status of 409/);
+  await launch(page, studio);
+  await openFile(page, "hello.vela");
+  await cursorAtEndOf(page, 1);
+  await page.keyboard.type(" (mine)");
+  studio.remove("hello.vela");
+  await page.keyboard.press("Control+s");
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("heading", { name: "File deleted" })).toBeVisible();
+  // Another program makes the file again before the save goes ahead.
+  studio.write("hello.vela", "# made again elsewhere\n");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog.getByRole("heading", { name: "File changed on disk" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  expect(studio.read("hello.vela")).toBe("# made again elsewhere\n");
+});
+
+test("a launch link that no longer works says so", async ({ page, studio }) => {
+  studio.allowError(/status of 403/);
+  await page.route("**/api/launch", (route) =>
+    route.fulfill({ status: 403, contentType: "application/json", body: JSON.stringify({ error: "this link has already been used or has expired" }) }),
+  );
+  await page.goto(new URL("/#launch=0123", studio.url).toString());
+  await expect(page.getByRole("heading", { name: "This link no longer works" })).toBeVisible();
+  await expect(page.locator("body")).toContainText("This link has already been used or has expired.");
+  expect(page.url()).not.toContain("launch");
+});

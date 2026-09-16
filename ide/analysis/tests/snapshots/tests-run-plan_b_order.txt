@@ -1,0 +1,50 @@
+  1 | # Where an operand contains a plan B, a call's arguments and an operator's
+    | comment:# Where an operand contains a plan B, a call's arguments and an operator's
+  2 | # sides are evaluated left to right, including calls wrapped around a plan B.
+    | comment:# sides are evaluated left to right, including calls wrapped around a plan B.
+  4 | task say(label: text, v: int) -> int
+    | keyword:task  task:say  punctuation:(  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  5 |     show(label)
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:)
+  6 |     <- v
+    | keyword:<-  parameter:v
+  7 | fi
+    | keyword:fi
+  9 | task add(a: int, b: int) -> int
+    | keyword:task  task:add  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 10 |     <- a + b
+    | keyword:<-  parameter:a  operator:+  parameter:b
+ 11 | fi
+    | keyword:fi
+ 13 | task three(a: int, b: int, c: int) -> int
+    | keyword:task  task:three  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:,  parameter:c  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 14 |     <- a * 100 + b * 10 + c
+    | keyword:<-  parameter:a  operator:*  number:100  operator:+  parameter:b  operator:*  number:10  operator:+  parameter:c
+ 15 | fi
+    | keyword:fi
+ 17 | shape Pair
+    | keyword:shape  type:Pair
+ 18 |     first: int
+    | field:first  punctuation::  type-builtin:int
+ 19 |     second: int
+    | field:second  punctuation::  type-builtin:int
+ 20 | fi
+    | keyword:fi
+ 22 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 23 |     bind m: maybe int = none
+    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 24 |     show(add(say("left", m { 1 }), say("right", 2)))
+    | builtin-fn:show  punctuation:(  task:add  punctuation:(  task:say  punctuation:(  string:"left"  punctuation:,  variable:m  punctuation:{  number:1  punctuation:}  punctuation:)  punctuation:,  task:say  punctuation:(  string:"right"  punctuation:,  number:2  punctuation:)  punctuation:)  punctuation:)
+ 25 |     show(say("left", m { 1 }) + say("right", 2))
+    | builtin-fn:show  punctuation:(  task:say  punctuation:(  string:"left"  punctuation:,  variable:m  punctuation:{  number:1  punctuation:}  punctuation:)  operator:+  task:say  punctuation:(  string:"right"  punctuation:,  number:2  punctuation:)  punctuation:)
+ 26 |     show(three(say("a", 1), say("b", m { 2 }), say("c", 3)))
+    | builtin-fn:show  punctuation:(  task:three  punctuation:(  task:say  punctuation:(  string:"a"  punctuation:,  number:1  punctuation:)  punctuation:,  task:say  punctuation:(  string:"b"  punctuation:,  variable:m  punctuation:{  number:2  punctuation:}  punctuation:)  punctuation:,  task:say  punctuation:(  string:"c"  punctuation:,  number:3  punctuation:)  punctuation:)  punctuation:)
+ 27 |     bind p = Pair { first: say("first", m { 4 }), second: say("second", 5) }
+    | keyword:bind  variable:p  operator:=  type:Pair  punctuation:{  field:first  punctuation::  task:say  punctuation:(  string:"first"  punctuation:,  variable:m  punctuation:{  number:4  punctuation:}  punctuation:)  punctuation:,  field:second  punctuation::  task:say  punctuation:(  string:"second"  punctuation:,  number:5  punctuation:)  punctuation:}
+ 28 |     show(p.first + p.second)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:first  operator:+  variable:p  punctuation:.  field:second  punctuation:)
+ 29 |     show(say("text", 1) == m { say("fallback", 1) })
+    | builtin-fn:show  punctuation:(  task:say  punctuation:(  string:"text"  punctuation:,  number:1  punctuation:)  operator:==  variable:m  punctuation:{  task:say  punctuation:(  string:"fallback"  punctuation:,  number:1  punctuation:)  punctuation:}  punctuation:)
+ 30 | fi
+    | keyword:fi

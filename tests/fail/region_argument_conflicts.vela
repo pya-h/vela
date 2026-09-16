@@ -1,0 +1,10 @@
+# error: 9:32: expected region 'a', got 'b'
+task read(p: ^int@r, r: region) -> int
+    <- p^
+fi
+
+task main()
+    region a
+    region b
+    show(read(new int(1) in a, b))
+fi

@@ -151,9 +151,12 @@ impl<'a> Knowledge<'a> {
                 if last <= name + 1 {
                     return None;
                 }
-                if self.token(last) == Some(&Token::LBrace) {
-                    // A plan B spanning lines gives the value it extracts.
-                    return self.expression_type(last.checked_sub(1)?, depth + 1)?.extracted().cloned();
+                // A plan B spanning lines (`{`, or `{ fail e`) gives the value it extracts.
+                let names_error = self.token(last.checked_sub(1)?) == Some(&Token::Fail)
+                    && matches!(self.token(last), Some(Token::Ident(_) | Token::Underscore));
+                let brace = if names_error { last.checked_sub(2)? } else { last };
+                if self.token(brace) == Some(&Token::LBrace) {
+                    return self.expression_type(brace.checked_sub(1)?, depth + 1)?.extracted().cloned();
                 }
                 self.span_type(name + 2, last, depth + 1)
             }
@@ -186,7 +189,12 @@ impl<'a> Knowledge<'a> {
                 let index = name.checked_sub(case + 2)?;
                 let variant = self.global(self.ident(case + 1)?, SymbolKind::Variant)?;
                 let (_, field) = self.children(variant).nth(index)?;
-                parse_type(&field.detail)
+                let ty = parse_type(&field.detail)?;
+                // A payload's pointers are in the region of the value matched.
+                Some(match outcome() {
+                    Some(Type::Named(_, Some(region))) => self.in_region(&ty, &region),
+                    _ => ty,
+                })
             }
         }
     }
@@ -529,20 +537,33 @@ fn parse_simple_type(text: &str) -> Option<Type> {
 }
 
 fn parse_prefixed_type(text: &str) -> Option<Type> {
-    let text = text.trim();
-    if let Some(inner) = text.strip_prefix('^') {
-        return parse_prefixed_type(inner).map(|ty| Type::Ptr(Box::new(ty), None));
+    // The prefixes, outermost first; no deeper than the compiler allows, so a
+    // type with thousands of `^` isn't built (and walked) recursively.
+    let mut text = text.trim();
+    let mut pointers = Vec::new();
+    loop {
+        if let Some(inner) = text.strip_prefix('^') {
+            pointers.push(true);
+            text = inner.trim_start();
+        } else if let Some(inner) = text.strip_prefix("maybe ") {
+            pointers.push(false);
+            text = inner.trim_start();
+        } else {
+            break;
+        }
+        if pointers.len() > vela::parser::MAX_NESTING {
+            return None;
+        }
     }
-    if let Some(inner) = text.strip_prefix("maybe ") {
-        return parse_prefixed_type(inner).map(|ty| Type::Maybe(Box::new(ty)));
+    let mut ty = match text.trim_end() {
+        "region" => Type::Region,
+        name if is_name(name) => Type::builtin(name).unwrap_or_else(|| Type::named(name)),
+        _ => return None,
+    };
+    for pointer in pointers.into_iter().rev() {
+        ty = if pointer { Type::Ptr(Box::new(ty), None) } else { Type::Maybe(Box::new(ty)) };
     }
-    if text == "region" {
-        return Some(Type::Region);
-    }
-    if !is_name(text) {
-        return None;
-    }
-    Some(Type::builtin(text).unwrap_or_else(|| Type::named(text)))
+    Some(ty)
 }
 
 fn is_name(text: &str) -> bool {

@@ -2,7 +2,7 @@
 name = "vela-analysis"
 version = "0.1.0"
 edition = "2024"
-description = "Language analysis for Vela Studio: highlighting, diagnostics, outline, and definitions"
+description = "Language analysis for Vela Studio: highlighting, diagnostics, outline, definitions, completion, and hover"
 publish = false
 
 [dependencies]

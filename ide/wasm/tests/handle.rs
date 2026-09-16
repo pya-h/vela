@@ -85,3 +85,27 @@ fn raw_functions_round_trip() {
     assert!(call_raw(b"")["error"].is_string());
     assert_eq!(call_raw(&[0xff, 0xfe])["error"], "invalid request: not UTF-8");
 }
+
+#[test]
+fn offsets_past_the_end_are_clamped() {
+    let response = request(json!({
+        "source": SOURCE,
+        "queries": [
+            { "kind": "complete", "offset": 4294967295u32 },
+            { "kind": "hover", "offset": 4294967295u32 },
+            { "kind": "definition", "offset": 4294967295u32 },
+        ]
+    }));
+    let results = response["results"].as_array().unwrap_or_else(|| panic!("{}", response));
+    let length = SOURCE.encode_utf16().count() as u64;
+    assert_eq!((results[0]["from"].as_u64(), results[0]["to"].as_u64()), (Some(length), Some(length)));
+    assert_eq!((&results[1], &results[2]), (&Value::Null, &Value::Null));
+}
+
+#[test]
+fn a_type_deeper_than_the_compiler_allows_gets_an_answer() {
+    let source = format!("task f(a: {}int)\n    show(1)\nfi\n", "^".repeat(12_000));
+    let response = request(json!({ "source": source, "queries": [{ "kind": "hover", "offset": 8 }, { "kind": "diagnostics" }] }));
+    let results = response["results"].as_array().unwrap_or_else(|| panic!("{}", response));
+    assert!(results[1][0]["message"].as_str().is_some_and(|m| m.contains("nested too deeply")), "{}", results[1]);
+}

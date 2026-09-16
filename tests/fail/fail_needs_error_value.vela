@@ -1,0 +1,7 @@
+# error: 3:13: 'fail' needs an error value, got maybe text
+task check(m: maybe text) -> int or text
+    <- fail m
+fi
+
+task main()
+fi

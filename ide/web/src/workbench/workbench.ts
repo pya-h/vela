@@ -18,7 +18,7 @@ import { type RunStatus, Runner } from "../panel/runner";
 import { Shell } from "../panel/shell";
 import { choose, confirm, prompt } from "./dialogs";
 import { Documents, type OpenDocument, fileName, isDirty, isWithin, nameProblem, parentFolder, textChange } from "./documents";
-import { h, iconButton, shortcutLabel } from "./dom";
+import { h, hasShortcutModifier, iconButton, shortcutLabel } from "./dom";
 import { Explorer, allFiles, hasEntry } from "./explorer";
 import { icon } from "./icons";
 import { Outline, SYMBOL_BADGES, flattenOutline } from "./outline";
@@ -370,10 +370,21 @@ export class Workbench {
       if (doc.disk === "deleted") {
         await this.refreshTree();
         await this.createFolders(parentFolder(doc.path));
-        await this.api.create(doc.path, "file").catch((error: unknown) => {
-          if (!(error instanceof ApiError && error.conflict)) throw error;
-        });
+        const recreated = await this.api.create(doc.path, "file").then(
+          () => false,
+          (error: unknown) => {
+            if (!(error instanceof ApiError && error.conflict)) throw error;
+            return true;
+          },
+        );
         await this.refreshTree();
+        // Another program made the file again meanwhile: it is a changed file
+        // now, which isn't overwritten without asking.
+        if (recreated && !overwrite) {
+          doc.disk = "changed";
+          this.documents.changed();
+          return this.resolveConflict(doc);
+        }
       }
       const base = overwrite || doc.disk === "deleted" ? undefined : doc.hash;
       const { hash } = await this.api.writeFile(doc.path, text.toString(), base);
@@ -810,8 +821,7 @@ export class Workbench {
   }
 
   private onGlobalKey(event: KeyboardEvent): void {
-    const mod = event.ctrlKey || event.metaKey;
-    if (!mod || event.altKey) return;
+    if (!hasShortcutModifier(event) || event.altKey) return;
     const key = event.key.toLowerCase();
     const dialogOpen = document.querySelector("dialog[open]") !== null;
     const run = (action: () => void) => {
@@ -837,6 +847,10 @@ export class Workbench {
   private applySidebar(): void {
     this.element.classList.toggle("sidebar-hidden", !this.sidebarVisible);
     this.element.style.setProperty("--sidebar-width", `${this.sidebarWidth}px`);
+    const resizer = this.element.querySelector(".resizer");
+    resizer?.setAttribute("aria-valuemin", String(SIDEBAR.min));
+    resizer?.setAttribute("aria-valuemax", String(SIDEBAR.max));
+    resizer?.setAttribute("aria-valuenow", String(this.sidebarWidth));
   }
 
   private setupResizer(resizer: HTMLElement): void {

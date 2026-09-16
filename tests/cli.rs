@@ -213,3 +213,97 @@ fn a_failed_write_to_standard_output_is_an_error_not_a_crash() {
     assert_eq!(out.status.code(), Some(1));
     assert!(stderr(&out).starts_with("error: cannot write output:"), "{}", stderr(&out));
 }
+
+#[test]
+fn version_is_an_option_like_the_others() {
+    // A wrong argument is still an error, even beside --version.
+    let out = vela(&[&example("hello"), "--bogus", "--version"]);
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    assert!(out.stdout.is_empty());
+    // After -o, `--version` is the output's name.
+    let dir = temp_dir("version-output");
+    let out = Command::new(VELA).args([&example("hello"), "-o", "--version"]).current_dir(&dir).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(dir.join("--version").exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn wrong_argument_combinations_are_rejected() {
+    for args in [
+        vec![example("hello"), "--emit-c".to_string(), "--check".to_string()],
+        vec![example("hello"), "-o".to_string(), "a".to_string(), "-o".to_string(), "b".to_string()],
+        vec![example("hello"), example("fib")],
+    ] {
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let out = vela(&args);
+        assert_eq!(out.status.code(), Some(2), "{:?}: {}", args, stderr(&out));
+        assert!(stderr(&out).contains("usage: vela"), "{}", stderr(&out));
+    }
+}
+
+#[test]
+fn the_default_output_is_a_out() {
+    let dir = temp_dir("a-out");
+    let out = Command::new(VELA).arg(example("hello")).current_dir(&dir).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "compiled: a.out\n");
+    assert!(dir.join("a.out").exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn check_reports_what_a_build_would() {
+    let dir = temp_dir("check-errors");
+    let invalid = dir.join("invalid.vela");
+    std::fs::write(&invalid, "task main()\n    show(missing)\nfi\n").unwrap();
+    let out = vela(&[invalid.to_str().unwrap(), "--check"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains("2:10: error: unknown variable 'missing'"), "{}", stderr(&out));
+    assert!(out.stdout.is_empty());
+    // A program without `main` can't be built, so --check rejects it too;
+    // --emit-c still gives its C.
+    let library = dir.join("library.vela");
+    std::fs::write(&library, "task helper() -> int\n    <- 1\nfi\n").unwrap();
+    let out = vela(&[library.to_str().unwrap(), "--check"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).ends_with("error: program has no 'main' task\n"), "{}", stderr(&out));
+    let out = vela(&[library.to_str().unwrap(), "--emit-c"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_c_compiler_failure_keeps_the_generated_c() {
+    let dir = temp_dir("cc-fails");
+    let exe = dir.join("hello");
+    let out = Command::new(VELA).args([&example("hello"), "-o", exe.to_str().unwrap()]).env("CC", "false").output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let err = stderr(&out);
+    let kept = err.trim_end().strip_suffix(')').and_then(|e| e.split_once("error: C compilation failed (generated C kept in ")).map(|(_, folder)| folder.to_string());
+    let kept = kept.unwrap_or_else(|| panic!("{}", err));
+    assert!(std::path::Path::new(&kept).is_dir(), "{}", kept);
+    let _ = std::fs::remove_dir_all(&kept);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn an_output_that_cant_be_written_is_reported_before_compiling() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = temp_dir("read-only-folder");
+    let folder = dir.join("locked");
+    std::fs::create_dir(&folder).unwrap();
+    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o555)).unwrap();
+    // Root can write anywhere, so there is nothing to test.
+    let writable = std::fs::File::create(folder.join("probe")).is_ok();
+    if !writable {
+        let out = vela(&[&example("hello"), "-o", folder.join("hello").to_str().unwrap()]);
+        assert_eq!(out.status.code(), Some(1));
+        let err = stderr(&out);
+        assert!(err.starts_with("error: cannot write the executable:"), "{}", err);
+        assert!(!err.contains("C compilation failed"), "{}", err);
+    }
+    std::fs::set_permissions(&folder, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -1,0 +1,7 @@
+# error: 2:25: 'text' holds no pointers, so it lives in no region; remove '@r'
+task f() -> int or text@r
+    <- 1
+fi
+
+task main()
+fi

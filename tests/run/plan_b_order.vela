@@ -1,0 +1,30 @@
+# Where an operand contains a plan B, a call's arguments and an operator's
+# sides are evaluated left to right, including calls wrapped around a plan B.
+
+task say(label: text, v: int) -> int
+    show(label)
+    <- v
+fi
+
+task add(a: int, b: int) -> int
+    <- a + b
+fi
+
+task three(a: int, b: int, c: int) -> int
+    <- a * 100 + b * 10 + c
+fi
+
+shape Pair
+    first: int
+    second: int
+fi
+
+task main()
+    bind m: maybe int = none
+    show(add(say("left", m { 1 }), say("right", 2)))
+    show(say("left", m { 1 }) + say("right", 2))
+    show(three(say("a", 1), say("b", m { 2 }), say("c", 3)))
+    bind p = Pair { first: say("first", m { 4 }), second: say("second", 5) }
+    show(p.first + p.second)
+    show(say("text", 1) == m { say("fallback", 1) })
+fi

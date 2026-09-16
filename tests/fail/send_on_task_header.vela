@@ -1,0 +1,6 @@
+# error: 2:17: '<-' must start a line: the body of a 'task' starts on the line after it
+task f() -> int <- 1
+fi
+
+task main()
+fi

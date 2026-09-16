@@ -1,0 +1,4 @@
+# error: 3:14: unknown shape 'Pointt'
+task main()
+    bind p = Pointt { x: 1 }
+fi
