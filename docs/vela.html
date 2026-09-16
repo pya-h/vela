@@ -1081,7 +1081,8 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         <li><strong>Each module's own names.</strong> Tasks, shapes, kinds, and variants share one namespace within a
           file, but each module has its own: two modules can both have an <code>area</code>, and a program can have its
           own <code>Red</code> beside <code>palette.Red</code>. A module sees only what it declares and what it uses; the
-          main file's names aren't visible to the modules it uses.</li>
+          main file's names aren't visible to the modules it uses. Only the main file's <code>main</code> starts the
+          program; a module's <code>main</code> is an ordinary task, called as <code>tools.main()</code>.</li>
         <li><strong>Rules.</strong> Modules can't use one another in a circle (<em>modules can't use one another in a
           circle: a -&gt; b -&gt; a</em>). A file uses each module once, a module's name can't also be the name of
           something the file declares, of a name it brings in, or of a variable, and a module can't be named like a

@@ -28,6 +28,11 @@ task distance(a: Point, b: Point) -> float
     <- root(dx * dx + dy * dy)
 fi
 
+# Only the main file's main starts the program: this one is an ordinary task.
+task main()
+    show("geometry")
+fi
+
 priv task pi() -> float
     <- 3.14159
 fi

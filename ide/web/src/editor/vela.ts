@@ -40,6 +40,11 @@ export const documentPath = Facet.define<string, string>({ combine: (paths) => p
 /** Redoes an editor's analysis, when the modules its file uses changed. */
 const reanalyze = StateEffect.define<null>();
 
+/** Whether `update` asks for the analysis to be redone. */
+function reanalyzes(update: ViewUpdate): boolean {
+  return update.transactions.some((tr) => tr.effects.some((effect) => effect.is(reanalyze)));
+}
+
 /** Redoes the analysis shown in `view`: highlighting and diagnostics. */
 export function refreshAnalysis(view: EditorView): void {
   view.dispatch({ effects: reanalyze.of(null) });
@@ -137,8 +142,7 @@ function highlighting(analyzer: Analyzer): Extension {
         this.decorations = build(view);
       }
       update(update: ViewUpdate) {
-        const redo = update.transactions.some((tr) => tr.effects.some((effect) => effect.is(reanalyze)));
-        if (update.docChanged || update.viewportChanged || redo) {
+        if (update.docChanged || update.viewportChanged || reanalyzes(update)) {
           this.decorations = build(update.view);
         }
       }
@@ -178,7 +182,8 @@ function diagnostics(analyzer: Analyzer): Extension {
         message: d.message,
       }));
     },
-    { delay: 150 },
+    // A lint that ran before the modules arrived is redone when they do.
+    { delay: 150, needsRefresh: reanalyzes },
   );
 }
 

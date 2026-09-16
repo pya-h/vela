@@ -29,6 +29,7 @@ task main()
     bind origin = geometry.Point { x: 0.0, y: 0.0 }
     bind corner: geometry.Point = geometry.Point { x: 3.0, y: 4.0 }
     show(geometry.distance(origin, corner))
+    geometry.main()
     # A case names a variant alone: the value's kind says whose it is.
     match square
     case Circle radius
