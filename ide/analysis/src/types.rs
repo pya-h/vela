@@ -5,7 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use vela::ast::{Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, Span, Stmt, StmtKind, Type};
+use vela::ast::{Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, Span, Stmt, StmtKind, Target, Type};
 use vela::check::{in_region, regional_types};
 use vela::driver;
 use vela::error::Error;
@@ -72,20 +72,26 @@ impl Checked {
 
     fn statement(&mut self, stmt: &Stmt, kinds: &Context) {
         match &stmt.kind {
-            StmtKind::Expr(e) | StmtKind::Send(Some(e)) => self.expr(e, kinds),
-            StmtKind::Send(None) => {}
+            StmtKind::Expr(e) => self.expr(e, kinds),
+            StmtKind::Send(values) => values.iter().for_each(|value| self.expr(value, kinds)),
             StmtKind::Region(_) => {
                 self.decls.insert(pos(stmt.span), Type::Region);
             }
-            StmtKind::Binding { ty, init, .. } => {
-                if let Some(ty) = ty {
-                    self.decls.insert(pos(stmt.span), ty.clone());
+            StmtKind::Binding { names, init, .. } => {
+                for bound in names {
+                    if let Some(ty) = &bound.ty {
+                        self.decls.insert(pos(bound.span), ty.clone());
+                    }
                 }
-                self.expr(init, kinds);
+                init.iter().for_each(|value| self.expr(value, kinds));
             }
-            StmtKind::Assign(target, value) => {
-                self.expr(target, kinds);
-                self.expr(value, kinds);
+            StmtKind::Assign(targets, values) => {
+                for target in targets {
+                    if let Target::Place(place) = target {
+                        self.expr(place, kinds);
+                    }
+                }
+                values.iter().for_each(|value| self.expr(value, kinds));
             }
             StmtKind::When(cond, then_block, else_block) => {
                 self.expr(&cond.value, kinds);

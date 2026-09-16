@@ -1,0 +1,16 @@
+# error: 7:34: result 2 lives in region 'r', which the task isn't given; take it as a parameter, as in 'r: region'
+shape Node
+    value: int
+    next: maybe ^Node
+fi
+
+task build(v: int) -> int, ^Node@r
+    <- v, new Node(Node { value: v, next: none }) at r
+fi
+
+task main()
+    region r
+    bind n, node = build(1)
+    show(n)
+    show(node^.value)
+fi

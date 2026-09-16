@@ -211,12 +211,18 @@ impl Generator {
         self.w.close_with(";");
     }
 
-    /// The struct of a `maybe T` (`has`, `value`) or a `T or E` (`ok`, `value`,
-    /// `error`; no `value` for `unit or E`). Both members are always
-    /// initialized, so either can be read.
+    /// The struct of a `maybe T` (`has`, `value`), a `T or E` (`ok`, `value`,
+    /// `error`; no `value` for `unit or E`), or several results (`r0`, `r1`,
+    /// …). A `maybe`'s and an `or`'s members are always initialized, so either
+    /// can be read.
     fn gen_compound(&mut self, ty: &Type) {
         self.w.open(&format!("struct {}", c_type(ty)));
         match ty {
+            Type::Results(types) => {
+                for (i, result) in types.iter().enumerate() {
+                    self.w.line(&format!("{} {};", c_type(result), result_member(i)));
+                }
+            }
             Type::Maybe(inner) => {
                 self.w.line("bool has;");
                 self.w.line(&format!("{} value;", c_type(inner)));
@@ -304,8 +310,10 @@ impl Generator {
     fn gen_statements(&mut self, stmts: &[Stmt], scope: &[Stmt]) -> Result<()> {
         for (i, stmt) in stmts.iter().enumerate() {
             self.gen_stmt(stmt)?;
-            if let StmtKind::Binding { name, .. } = &stmt.kind {
-                self.use_if_unread(name, scope.get(i + 1..).unwrap_or_default());
+            if let StmtKind::Binding { names, .. } = &stmt.kind {
+                for bound in names.iter().filter(|bound| bound.name != DISCARD) {
+                    self.use_if_unread(&bound.name, scope.get(i + 1..).unwrap_or_default());
+                }
             }
         }
         Ok(())
@@ -333,28 +341,40 @@ impl Generator {
                     self.w.line(&format!("{};", expr));
                 }
             }
-            StmtKind::Binding { name, ty, init, .. } => {
-                let ty = ty
-                    .as_ref()
-                    .ok_or_else(|| Error::internal_at(stmt.span, format!("binding '{}' has no type", name)))?;
-                let expr = self.gen_expr(init)?;
-                self.w.line(&format!("{} {} = {};", c_type(ty), c_ident(name), expr));
+            StmtKind::Binding { names, init, .. } => {
+                let values = self.gen_value_list(names.len(), init, stmt.span)?;
+                for (bound, value) in names.iter().zip(values) {
+                    let ty = bound
+                        .ty
+                        .as_ref()
+                        .ok_or_else(|| Error::internal_at(bound.span, format!("binding '{}' has no type", bound.name)))?;
+                    if bound.name == DISCARD {
+                        // Nothing to declare: the value is computed and dropped.
+                        self.drop_value(&value);
+                    } else {
+                        self.w.line(&format!("{} {} = {};", c_type(ty), c_ident(&bound.name), value));
+                    }
+                }
             }
-            StmtKind::Assign(lhs, rhs) => {
-                // The checker guarantees `lhs` is a variable, field, or deref,
-                // all of which generate valid C lvalues.
-                if has_plan_b(rhs) && !matches!(lhs.kind, ExprKind::Var(_)) {
-                    // Find the place before the value's prelude runs, which
-                    // might change what the place refers to.
-                    let place = self.gen_expr(lhs)?;
-                    let pointer = self.fresh_temp("place");
-                    self.w.line(&format!("{}* {} = &{};", c_type(lhs.ty()?), pointer, place));
-                    let value = self.gen_expr(rhs)?;
-                    self.w.line(&format!("*{} = {};", pointer, value));
+            StmtKind::Assign(targets, values) => {
+                // The checker guarantees every place is a variable, field, or
+                // deref, all of which generate valid C lvalues.
+                if let ([Target::Place(lhs)], [rhs]) = (targets.as_slice(), values.as_slice()) {
+                    if has_plan_b(rhs) && !matches!(lhs.kind, ExprKind::Var(_)) {
+                        // Find the place before the value's prelude runs, which
+                        // might change what the place refers to.
+                        let place = self.gen_expr(lhs)?;
+                        let pointer = self.fresh_temp("place");
+                        self.w.line(&format!("{}* {} = &{};", c_type(lhs.ty()?), pointer, place));
+                        let value = self.gen_expr(rhs)?;
+                        self.w.line(&format!("*{} = {};", pointer, value));
+                    } else {
+                        let l = self.gen_expr(lhs)?;
+                        let r = self.gen_expr(rhs)?;
+                        self.w.line(&format!("{} = {};", l, r));
+                    }
                 } else {
-                    let l = self.gen_expr(lhs)?;
-                    let r = self.gen_expr(rhs)?;
-                    self.w.line(&format!("{} = {};", l, r));
+                    self.gen_multi_assign(targets, values, stmt.span)?;
                 }
             }
             StmtKind::When(cond, then_b, else_b) => {
@@ -422,15 +442,15 @@ impl Generator {
                 self.w.close();
             }
             StmtKind::Match(expr, cases) => self.gen_match(expr, cases)?,
-            StmtKind::Send(None) => {
+            StmtKind::Send(values) if values.is_empty() => {
                 self.free_all_regions();
                 match &self.ret {
                     Type::Or(..) => self.w.line(&format!("return {};", success(&self.ret))),
                     _ => self.w.line("return;"),
                 }
             }
-            StmtKind::Send(Some(e)) => {
-                let expr = self.gen_expr(e)?;
+            StmtKind::Send(values) => {
+                let expr = self.gen_sent_value(values, stmt.span)?;
                 if self.regions.iter().all(Vec::is_empty) {
                     self.w.line(&format!("return {};", expr));
                 } else {
@@ -450,6 +470,87 @@ impl Generator {
             }
         }
         Ok(())
+    }
+
+    /// The C expressions for `wanted` values received by a list of names or
+    /// places: one per value, or the members of the result struct of a single
+    /// call that sends them all. Values are evaluated in order, before the
+    /// first of them is stored, so `a, b = b, a` swaps.
+    fn gen_value_list(&mut self, wanted: usize, values: &[Expr], span: Span) -> Result<Vec<String>> {
+        if values.len() == wanted {
+            let operands: Vec<&Expr> = values.iter().collect();
+            let mut given = self.gen_operands(&operands)?;
+            if wanted > 1 {
+                // Each value is stored before any of them is, since a place
+                // assigned here may be read by a later value.
+                for (value, expr) in given.iter_mut().zip(values) {
+                    let temp = self.fresh_temp("value");
+                    self.w.line(&format!("{} {} = {};", c_type(expr.ty()?), temp, value));
+                    *value = temp;
+                }
+            }
+            return Ok(given);
+        }
+        // One call, giving every value.
+        let [call] = values else {
+            return Err(Error::internal_at(span, format!("{} values received by {} names", values.len(), wanted)));
+        };
+        let Type::Results(types) = call.ty()?.clone() else {
+            return Err(Error::internal_at(span, format!("a value of type {} received by {} names", call.ty()?, wanted)));
+        };
+        let value = self.gen_expr(call)?;
+        let results = self.fresh_temp("results");
+        self.w.line(&format!("{} {} = {};", c_type(&Type::Results(types.clone())), results, value));
+        Ok((0..types.len()).map(|i| format!("{}.{}", results, result_member(i))).collect())
+    }
+
+    /// Writes `value`, which is received by a `_`, as a statement that drops it.
+    fn drop_value(&mut self, value: &str) {
+        if !value.is_empty() {
+            self.w.line(&format!("(void){};", parenthesized(value)));
+        }
+    }
+
+    /// An assignment to several places, or to a single `_`.
+    fn gen_multi_assign(&mut self, targets: &[Target], values: &[Expr], span: Span) -> Result<()> {
+        // Every place is found before the values run, since a value may change
+        // what a later place refers to, and a place assigned here may be read
+        // by a later value.
+        let mut places = Vec::new();
+        for target in targets {
+            match target {
+                Target::Discard(_) => places.push(None),
+                Target::Place(place) => {
+                    let lvalue = self.gen_expr(place)?;
+                    let pointer = self.fresh_temp("place");
+                    self.w.line(&format!("{}* {} = &{};", c_type(place.ty()?), pointer, lvalue));
+                    places.push(Some(pointer));
+                }
+            }
+        }
+        let given = self.gen_value_list(targets.len(), values, span)?;
+        for (place, value) in places.into_iter().zip(given) {
+            match place {
+                Some(pointer) => self.w.line(&format!("*{} = {};", pointer, value)),
+                None => self.drop_value(&value),
+            }
+        }
+        Ok(())
+    }
+
+    /// The one C expression a `<-` sends: the value, or a result struct holding
+    /// every value.
+    fn gen_sent_value(&mut self, values: &[Expr], span: Span) -> Result<String> {
+        if let [only] = values {
+            return self.gen_expr(only);
+        }
+        let Type::Results(types) = self.ret.clone() else {
+            return Err(Error::internal_at(span, format!("{} values sent by a task of type {}", values.len(), self.ret)));
+        };
+        let operands: Vec<&Expr> = values.iter().collect();
+        let given = self.gen_operands(&operands)?;
+        let members: Vec<String> = given.iter().enumerate().map(|(i, value)| format!(".{} = {}", result_member(i), value)).collect();
+        Ok(format!("(({}){{ {} }})", c_type(&Type::Results(types)), members.join(", ")))
     }
 
     /// The value a `match` or `is` tests, as a C expression that can be
@@ -904,6 +1005,11 @@ fn is_pointer(ty: &Type) -> bool {
     matches!(ty, Type::Ptr(..))
 }
 
+/// The member of a result struct holding result `i`.
+fn result_member(i: usize) -> String {
+    format!("r{}", i)
+}
+
 /// The success of a `unit or E` task, as a C compound literal.
 fn success(ret: &Type) -> String {
     format!("(({}){{ .ok = true }})", c_type(ret))
@@ -982,6 +1088,12 @@ impl UsedTypes {
                     self.compounds.push(ty.clone());
                 }
             }
+            Type::Results(types) => {
+                types.iter().for_each(|result| self.add(result));
+                if !self.compounds.contains(ty) {
+                    self.compounds.push(ty.clone());
+                }
+            }
             _ => {}
         }
     }
@@ -989,17 +1101,24 @@ impl UsedTypes {
     fn block(&mut self, block: &[Stmt]) {
         for stmt in block {
             match &stmt.kind {
-                StmtKind::Expr(e) | StmtKind::Send(Some(e)) => self.expr(e),
-                StmtKind::Send(None) | StmtKind::Region(_) => {}
-                StmtKind::Binding { ty, init, .. } => {
-                    if let Some(ty) = ty {
-                        self.add(ty);
+                StmtKind::Expr(e) => self.expr(e),
+                StmtKind::Send(values) => values.iter().for_each(|value| self.expr(value)),
+                StmtKind::Region(_) => {}
+                StmtKind::Binding { names, init, .. } => {
+                    for bound in names {
+                        if let Some(ty) = &bound.ty {
+                            self.add(ty);
+                        }
                     }
-                    self.expr(init);
+                    init.iter().for_each(|value| self.expr(value));
                 }
-                StmtKind::Assign(target, value) => {
-                    self.expr(target);
-                    self.expr(value);
+                StmtKind::Assign(targets, values) => {
+                    for target in targets {
+                        if let Target::Place(place) = target {
+                            self.expr(place);
+                        }
+                    }
+                    values.iter().for_each(|value| self.expr(value));
                 }
                 StmtKind::When(cond, then_b, else_b) => {
                     self.expr(&cond.value);
@@ -1070,10 +1189,16 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
     let expr = |e: &Expr| expr_reads(e, name);
     let body = |b: &Block| block_reads(b, name);
     match &stmt.kind {
-        StmtKind::Expr(e) | StmtKind::Send(Some(e)) => expr(e),
-        StmtKind::Send(None) | StmtKind::Region(_) => false,
-        StmtKind::Binding { init, .. } => expr(init),
-        StmtKind::Assign(target, value) => target_reads(target, name) || expr(value),
+        StmtKind::Expr(e) => expr(e),
+        StmtKind::Send(values) => values.iter().any(expr),
+        StmtKind::Region(_) => false,
+        StmtKind::Binding { init, .. } => init.iter().any(expr),
+        StmtKind::Assign(targets, values) => {
+            targets.iter().any(|target| match target {
+                Target::Discard(_) => false,
+                Target::Place(place) => target_reads(place, name),
+            }) || values.iter().any(expr)
+        }
         StmtKind::When(cond, then_b, else_b) => expr(&cond.value) || body(then_b) || else_b.as_ref().is_some_and(body),
         StmtKind::Loop(cond, b) => expr(&cond.value) || body(b),
         StmtKind::Each(_, range, b) => expr(range) || body(b),
@@ -1128,7 +1253,7 @@ fn value_dependencies(ty: &Type) -> Vec<String> {
     match ty {
         Type::Named(name, _) => vec![mangle(name)],
         Type::Maybe(inner) if is_pointer(inner) => Vec::new(),
-        Type::Maybe(_) | Type::Or(..) => vec![c_type(ty)],
+        Type::Maybe(_) | Type::Or(..) | Type::Results(_) => vec![c_type(ty)],
         _ => Vec::new(),
     }
 }
@@ -1208,6 +1333,7 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
         TypeDef::Item(Item::Task(_)) => Vec::new(),
         TypeDef::Compound(Type::Maybe(inner)) => value_dependencies(inner),
         TypeDef::Compound(Type::Or(value, error)) => value_dependencies(value).into_iter().chain(value_dependencies(error)).collect(),
+        TypeDef::Compound(Type::Results(types)) => types.iter().flat_map(value_dependencies).collect(),
         TypeDef::Compound(_) => Vec::new(),
     }
 }
@@ -1302,6 +1428,7 @@ fn c_type(ty: &Type) -> String {
         Type::Maybe(inner) => format!("vela__maybe__{}", type_key(inner)),
         Type::Or(value, error) => format!("vela__or__{}__{}", type_key(value), type_key(error)),
         Type::Fail(error) => c_type(error),
+        Type::Results(_) => format!("vela__{}", type_key(ty)),
     }
 }
 
@@ -1323,6 +1450,12 @@ fn type_key(ty: &Type) -> String {
         Type::Maybe(inner) => format!("maybe__{}", type_key(inner)),
         Type::Or(value, error) => format!("or__{}__{}", type_key(value), type_key(error)),
         Type::Fail(error) => format!("fail__{}", type_key(error)),
+        // The count keeps two lists of results apart when the types of one
+        // read as the start of the other.
+        Type::Results(types) => {
+            let keys: Vec<String> = types.iter().map(type_key).collect();
+            format!("results__{}__{}", types.len(), keys.join("__"))
+        }
     }
 }
 

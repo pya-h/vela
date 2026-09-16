@@ -1,0 +1,133 @@
+# Several results: a task's `->` lists the types it sends, `<-` sends one
+# value per type, and a list of names receives them. `_` takes a value and
+# drops it. The values of a list are all computed before the first is stored,
+# so `a, b = b, a` swaps.
+
+kind Oops
+    Bad
+fi
+
+task divmod(a: int, b: int) -> int, int
+    <- a / b, a % b
+fi
+
+# Results of different types, one of them a maybe.
+task find(n: int) -> maybe int, bool
+    when n > 0
+        <- n, true
+    fi
+    <- none, false
+fi
+
+task risky(n: int) -> int or Oops
+    when n < 0
+        <- fail Bad
+    fi
+    <- n
+fi
+
+# One value per result, the second an error result.
+task pair(n: int) -> int, int or Oops
+    <- n, risky(n)
+fi
+
+# A call that sends every value of another task.
+task forward(a: int, b: int) -> int, int
+    <- divmod(a, b)
+fi
+
+# Three results, with a region among them: each follows the rule for a single
+# result, so the pointer's region comes from the header.
+shape Node
+    value: int
+    next: maybe ^Node
+fi
+
+shape Point
+    x: int
+    y: int
+fi
+
+task build(r: region, v: int) -> ^Node@r, int, bool
+    <- new Node(Node { value: v, next: none }) at r, v * 2, v > 0
+fi
+
+# The values are computed before the regions of the block are freed.
+task counted(n: int) -> int, int
+    region r
+    hold total = 0
+    hold count = 0
+    each i in 0..n
+        bind node = new Node(Node { value: i, next: none }) at r
+        total = total + node^.value
+        count = count + 1
+    fi
+    <- total, count
+fi
+
+task main()
+    bind q, r = divmod(17, 5)
+    show(q)
+    show(r)
+
+    # `_` drops a result.
+    bind whole, _ = divmod(9, 4)
+    show(whole)
+
+    bind m, ok = find(3)
+    show(m)
+    show(ok)
+    bind empty, missing = find(-1)
+    show(empty)
+    show(missing)
+
+    bind value, result = pair(4)
+    show(value)
+    show(result { 0 })
+    bind other, failed = pair(-2)
+    show(other)
+    show(failed { fail e
+        show("handled")
+        -1
+    })
+
+    bind a, b = forward(20, 6)
+    show(a)
+    show(b)
+
+    # Assigning a list, and swapping.
+    hold x = 1
+    hold y = 2
+    x, y = y, x
+    show(x)
+    show(y)
+    x, y = divmod(100, 7)
+    show(x)
+    show(y)
+    _, y = divmod(1, 9)
+    show(y)
+
+    # A plain list of values, and one with a plan B in it.
+    bind first, second = risky(3) { 0 }, risky(-3) { 8 }
+    show(first)
+    show(second)
+
+    region nodes
+    bind node, doubled, positive = build(nodes, 21)
+    show(node^.value)
+    show(doubled)
+    show(positive)
+
+    bind total, count = counted(5)
+    show(total)
+    show(count)
+
+    # A field and a variable in one assignment.
+    hold spot = Point { x: 0, y: 0 }
+    hold last = 0
+    spot.x, last = divmod(31, 4)
+    show(spot.x)
+    show(last)
+    spot.x, spot.y = spot.y, spot.x
+    show(spot.x)
+fi

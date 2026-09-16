@@ -482,6 +482,12 @@
         and <code>r: region</code> parameters. That is still far less than lifetimes and borrowing, and code that doesn't use
         pointers never sees it.
       </p>
+      <p>
+        Like Go, a Vela task can send several values — <code>task divmod(a: int, b: int) -&gt; int, int</code>, then
+        <code>bind q, r = divmod(17, 5)</code> — so a pair of results needs no record and no output parameter, as it
+        does in C. Unlike Go, those values are not a tuple type of their own: they can only be received by a list of
+        names, so there is one way to carry several values around, a <code>shape</code>.
+      </p>
     </section>
 
     <section>

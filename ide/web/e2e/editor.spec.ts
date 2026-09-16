@@ -165,3 +165,41 @@ test("maybe values: highlighting, hover, patterns, and plan B blocks", async ({ 
   expect(await lineText(page, 13)).toBe("    }");
   await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
 });
+
+const RESULTS =
+  "task divmod(a: int, b: int) -> int, int\n    <- a / b, a % b\nfi\n\ntask main()\n    bind q, r = divmod(17, 5)\n    show(q)\n    show(r)\nfi\n";
+
+test("several results: highlighting, hover, and completion of the names", async ({ page, studio }) => {
+  studio.write("results.vela", RESULTS);
+  await launch(page, studio);
+  await openFile(page, "results.vela");
+  const content = page.locator(".cm-content");
+  // Both result types are types, not variables.
+  await expect(content.locator(".cm-line").first().locator(".tok-type-builtin", { hasText: /^int$/ })).toHaveCount(4);
+
+  // Each name takes the type of the value in its place.
+  await content.locator(".tok-variable", { hasText: /^q$/ }).first().hover();
+  await expect(page.locator(".vs-hover .vs-hover-code")).toHaveText("bind q: int");
+
+  // Another result type after a comma in a header, but no name to suggest
+  // after a comma in a `bind`.
+  await cursorAtEndOf(page, 1);
+  await page.keyboard.type(", ");
+  await page.keyboard.press("Control+Space");
+  const popup = page.locator(".cm-tooltip-autocomplete");
+  const option = (label: string) => popup.getByRole("option").filter({ has: page.locator(".cm-completionLabel", { hasText: new RegExp(`^${label}$`) }) });
+  await expect(option("bool")).toBeVisible();
+  await expect(option("unit")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Backspace");
+
+  await cursorAtEndOf(page, 8);
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("bind a, ");
+  await page.keyboard.press("Control+Space");
+  await expect(popup).toHaveCount(0);
+  await page.keyboard.type("b = divmod(9, 4)");
+  expect(await lineText(page, 9)).toBe("    bind a, b = divmod(9, 4)");
+  await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
+});

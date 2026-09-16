@@ -1,0 +1,9 @@
+# error: 3:5: expected 2 values after '<-', one for each result
+task divmod(a: int, b: int) -> int, int
+    <-
+fi
+
+task main()
+    bind q, r = divmod(9, 2)
+    show(q + r)
+fi

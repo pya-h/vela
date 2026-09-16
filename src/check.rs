@@ -155,7 +155,7 @@ impl Checker {
                             return err(param.span, "task 'main' cannot take parameters");
                         }
                         if t.ret != Type::Unit {
-                            return err(t.ret_span, "task 'main' cannot return a value");
+                            return err(t.ret_span(), "task 'main' cannot return a value");
                         }
                     }
                 }
@@ -186,9 +186,9 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks a task's parameters and return type, and settles their regions.
+    /// Checks a task's parameters and result types, and settles their regions.
     /// A region the header names without a `region` parameter is one the task
-    /// only reads or links pointers in (it can't allocate there), and the
+    /// only reads or links pointers in (it can't allocate there), and each
     /// result's regions must be regions the task is given.
     fn check_header(&mut self, t: &mut TaskDef) -> Result<()> {
         let region_params: Vec<&str> = t.params.iter().filter(|p| p.ty == Type::Region).map(|p| p.name.as_str()).collect();
@@ -210,26 +210,38 @@ impl Checker {
             }
             resolved.push(ty);
         }
-        if t.ret == Type::Region {
-            return err(t.ret_span, "a task can't send a region; regions are only parameters, as in 'task build(r: region)'");
-        }
-        if t.ret != Type::Unit {
-            let ret = self.resolve_type(&t.ret, t.ret_span, TypePlace::Header)?;
+        let several = matches!(t.ret, Type::Results(_));
+        let written: Vec<(Type, Span)> = t.ret.results().iter().cloned().zip((0..).map(|i| t.result_span(i))).collect();
+        let mut results = Vec::new();
+        for (i, (result, span)) in written.into_iter().enumerate() {
+            if result == Type::Region {
+                return err(span, "a task can't send a region; regions are only parameters, as in 'task build(r: region)'");
+            }
+            if result == Type::Unit {
+                return err(span, "unit is only allowed as a task's whole return type, so it can't be one of several results");
+            }
+            let ret = self.resolve_type(&result, span, TypePlace::Header)?;
             if let Some(region) = ret.regions().into_iter().find(|r| !named.iter().any(|n| n == r)) {
-                let at = self.place(t.ret_span, &format!("@{}", region));
+                let at = self.place(span, &format!("@{}", region));
                 if t.params.iter().any(|p| p.name == region) {
                     return err(at, format!("'{}' is a parameter, not a region", region));
                 }
+                let which = if several { format!("result {}", i + 1) } else { "the result".to_string() };
                 return err(
                     at,
                     format!(
-                        "the result lives in region '{0}', which the task isn't given; take it as a parameter, as in '{0}: region'",
-                        region
+                        "{1} lives in region '{0}', which the task isn't given; take it as a parameter, as in '{0}: region'",
+                        region, which
                     ),
                 );
             }
-            t.ret = ret;
+            results.push(ret);
         }
+        t.ret = match results.len() {
+            0 => Type::Unit,
+            1 => results.into_iter().next().unwrap_or(Type::Unit),
+            _ => Type::Results(results),
+        };
         for (param, ty) in t.params.iter_mut().zip(resolved) {
             param.ty = ty;
         }
@@ -331,6 +343,9 @@ impl Checker {
         match ty {
             Type::Unit => err(self.place(span, "unit"), "unit is only allowed as a return type"),
             Type::Region => err(self.place(span, "region"), "'region' is only the type of a task's parameter, as in 'task build(r: region)'"),
+            // Only a task's header lists several types, and `check_header`
+            // checks each of them on its own.
+            Type::Results(_) => err(span, "several types, separated by commas, are only a task's results"),
             Type::Ptr(inner, _) => self.check_type(inner, span),
             Type::Maybe(inner) => match inner.as_ref() {
                 Type::Maybe(_) => err(span, "a maybe can't hold another maybe"),
@@ -605,54 +620,91 @@ impl Checker {
                 // Of all expressions, only a call can have an effect, and so
                 // can a plan B on a call, or one that gives no value.
                 match &e.kind {
-                    ExprKind::Call(name, _) if matches!(e.ty, Some(Type::Or(..))) => err(
-                        e.span,
-                        format!("the error '{}' may send is ignored; handle it with a plan B, as in '{}(…) {{ fail e … }}', or with match", name, name),
-                    ),
+                    ExprKind::Call(name, _) if matches!(e.ty, Some(Type::Or(..))) => err(e.span, ignored_error(name)),
                     ExprKind::Call(..) => Ok(()),
                     ExprKind::PlanB { value, .. } if e.ty == Some(Type::Unit) || matches!(value.kind, ExprKind::Call(..)) => Ok(()),
                     ExprKind::Binary(BinaryOp::Eq, ..) => err(e.span, "the result of '==' is unused; use '=' to assign"),
                     _ => err(e.span, "this value is unused; only a task call can be used as a statement"),
                 }
             }
-            StmtKind::Binding { name, mutable, ty, ty_span, init } => {
-                if let Some(annotated) = ty {
-                    *annotated = self.resolve_type(annotated, ty_span.unwrap_or(span), TypePlace::Body)?;
-                }
-                let init_ty = self.check_expr(init)?;
-                let binding_ty = match ty {
-                    Some(annotated) => {
-                        self.coerce(init, annotated)?;
-                        annotated.clone()
+            StmtKind::Binding { names, mutable, init } => {
+                for bound in names.iter_mut() {
+                    if let Some(annotated) = &mut bound.ty {
+                        *annotated = self.resolve_type(annotated, bound.ty_span.unwrap_or(bound.span), TypePlace::Body)?;
                     }
-                    None => match init_ty {
-                        Type::None => {
-                            return err(init.span, format!("cannot infer the type of '{}' from none; give it a type, such as '{}: maybe int'", name, name));
+                }
+                let given = self.value_types(init, names.len(), span)?;
+                // A single call sending several values gives them all, and
+                // those values are taken as they are.
+                let forwarded = init.len() < names.len();
+                let list_span = init.first().map_or(span, |value| value.span);
+                let mut declared = Vec::new();
+                for i in 0..names.len() {
+                    let Some(actual) = given.get(i).cloned() else { continue };
+                    let Some((name, at, annotated)) = names.get(i).map(|b| (b.name.clone(), b.span, b.ty.clone())) else { continue };
+                    let value_span = if forwarded { list_span } else { init.get(i).map_or(span, |value| value.span) };
+                    let ty = match annotated {
+                        Some(annotated) => {
+                            match init.get_mut(i).filter(|_| !forwarded) {
+                                Some(value) => self.coerce(value, &annotated)?,
+                                None => fits_or_err(&actual, &annotated, value_span)?,
+                            }
+                            annotated
                         }
-                        Type::Fail(error) => {
-                            return err(init.span, format!("cannot infer the type of '{}' from 'fail …'; give it a type, such as '{}: int or {}'", name, name, error));
-                        }
-                        Type::Unit => return err(init.span, "this expression has no value (its type is unit)"),
-                        other if other.regions().contains(&ANY_REGION) => {
-                            let example = other.map_regions(&mut |region| Some(if region == ANY_REGION { "r" } else { region }.to_string()));
-                            return err(
-                                init.span,
-                                format!(
-                                    "cannot tell which region '{0}' lives in, since its value holds no pointers yet; give it a type, such as '{0}: {1}'",
-                                    name, example
-                                ),
-                            );
-                        }
-                        other => other,
-                    },
-                };
-                *ty = Some(binding_ty.clone());
-                self.define(name, binding_ty, *mutable, span)
+                        None if name == DISCARD => actual,
+                        None => self.inferred_type(&name, &actual, value_span)?,
+                    };
+                    if name == DISCARD && matches!(ty, Type::Or(..)) {
+                        return err(value_span, dropped_error(&ty));
+                    }
+                    if let Some(bound) = names.get_mut(i) {
+                        bound.ty = Some(ty.clone());
+                    }
+                    declared.push((name, at, ty));
+                }
+                for (name, at, ty) in declared {
+                    if name != DISCARD {
+                        self.define(&name, ty, *mutable, at)?;
+                    }
+                }
+                Ok(())
             }
-            StmtKind::Assign(lhs, rhs) => {
-                let lhs_ty = self.check_assign_target(lhs)?;
-                self.check_expr(rhs)?;
-                self.coerce(rhs, &lhs_ty)
+            StmtKind::Assign(targets, values) => {
+                let mut places = Vec::new();
+                let mut assigned: HashMap<String, Span> = HashMap::new();
+                for target in targets.iter_mut() {
+                    places.push(match target {
+                        Target::Discard(_) => None,
+                        Target::Place(place) => {
+                            // Each place takes one value, so a variable
+                            // assigned twice would quietly keep the last.
+                            if let ExprKind::Var(name) = &place.kind
+                                && let Some(at) = assigned.insert(name.clone(), place.span)
+                            {
+                                return err(place.span, format!("'{}' is already assigned at {}:{}", name, at.line, at.col));
+                            }
+                            Some(self.check_assign_target(place)?)
+                        }
+                    });
+                }
+                let given = self.value_types(values, targets.len(), span)?;
+                let forwarded = values.len() < targets.len();
+                let list_span = values.first().map_or(span, |value| value.span);
+                for (i, place) in places.into_iter().enumerate() {
+                    let Some(actual) = given.get(i).cloned() else { continue };
+                    let value_span = if forwarded { list_span } else { values.get(i).map_or(span, |value| value.span) };
+                    let Some(expected) = place else {
+                        if matches!(actual, Type::Or(..)) {
+                            return err(value_span, dropped_error(&actual));
+                        }
+                        continue;
+                    };
+                    match values.get_mut(i).filter(|_| !forwarded) {
+                        Some(value) => self.coerce(value, &expected)?,
+                        None => fits_or_err(&actual, &expected, value_span)?,
+                    }
+                }
+                Ok(())
             }
             StmtKind::When(cond, then_block, else_block) => {
                 self.check_condition(cond, then_block)?;
@@ -681,20 +733,41 @@ impl Checker {
                 result
             }
             StmtKind::Match(expr, cases) => self.check_match(span, expr, cases),
-            StmtKind::Send(expr) => {
+            StmtKind::Send(values) => {
                 let ret = self.current_ret.clone().unwrap_or(Type::Unit);
-                match expr {
-                    Some(e) if ret == Type::Unit => err(e.span, "this task has no return type, so '<-' cannot take a value"),
-                    Some(e) => {
-                        let ety = self.check_expr(e)?;
-                        if !sends_value(&ret) && !matches!(ety, Type::Fail(_)) && !fits_regions(&ety, &ret) {
-                            return err(e.span, "this task sends no value when it succeeds; write a bare '<-', or '<- fail …' to send an error");
-                        }
-                        self.coerce(e, &ret)
-                    }
-                    None if sends_value(&ret) => err(span, "expected a value after '<-'"),
-                    None => Ok(()),
+                let expected = ret.results();
+                if values.is_empty() {
+                    return match (sends_value(&ret), expected.len()) {
+                        (false, _) => Ok(()),
+                        (true, 1) => err(span, "expected a value after '<-'"),
+                        (true, n) => err(span, format!("expected {} after '<-', one for each result", count(n, "value"))),
+                    };
                 }
+                let first = values.first().map_or(span, |value| value.span);
+                if expected.is_empty() {
+                    return err(first, "this task has no return type, so '<-' cannot take a value");
+                }
+                // One value for one result, which may become a `maybe`, a
+                // `T or E`, or the error of one.
+                if let ([e], [ret]) = (values.as_mut_slice(), expected) {
+                    let ret = ret.clone();
+                    let ety = self.check_expr(e)?;
+                    if !sends_value(&ret) && !matches!(ety, Type::Fail(_)) && !fits_regions(&ety, &ret) {
+                        return err(e.span, "this task sends no value when it succeeds; write a bare '<-', or '<- fail …' to send an error");
+                    }
+                    return self.coerce(e, &ret);
+                }
+                let expected = expected.to_vec();
+                let given = self.value_types(values, expected.len(), span)?;
+                let forwarded = values.len() < expected.len();
+                for (i, want) in expected.iter().enumerate() {
+                    let Some(actual) = given.get(i).cloned() else { continue };
+                    match values.get_mut(i).filter(|_| !forwarded) {
+                        Some(value) => self.coerce(value, want)?,
+                        None => fits_or_err(&actual, want, first)?,
+                    }
+                }
+                Ok(())
             }
             StmtKind::Region(name) => self.define_region(name, span, true),
         }
@@ -855,13 +928,77 @@ impl Checker {
         Ok(())
     }
 
-    /// Checks an expression, records its type on the node, and returns it.
+    /// Checks an expression, records its type on the node, and returns it. A
+    /// call that sends several values is rejected here: its values are
+    /// separate, so only a list can receive them (see `value_types`).
     fn check_expr(&mut self, expr: &mut Expr) -> Result<Type> {
+        let ty = self.check_expr_multi(expr)?;
+        let Type::Results(types) = &ty else { return Ok(ty) };
+        let what = match &expr.kind {
+            ExprKind::Call(name, _) => format!("'{}'", name),
+            _ => "this call".to_string(),
+        };
+        err(
+            expr.span,
+            format!("{} sends {} values; receive them with 'bind {} = …'", what, types.len(), example_names(types.len())),
+        )
+    }
+
+    /// `check_expr`, which also allows a call that sends several values.
+    fn check_expr_multi(&mut self, expr: &mut Expr) -> Result<Type> {
         self.resolve_constructor(expr);
         self.resolve_empty_plan_b(expr);
         let ty = self.infer_expr(expr)?;
         expr.ty = Some(ty.clone());
         Ok(ty)
+    }
+
+    /// Checks the values of a list — a send, or the right side of a binding or
+    /// an assignment — and returns the type of each. A single call that sends
+    /// `wanted` values gives them all; otherwise every value gives its own, and
+    /// there must be one per name.
+    fn value_types(&mut self, values: &mut [Expr], wanted: usize, span: Span) -> Result<Vec<Type>> {
+        let mut given = Vec::new();
+        if let ([only], false) = (&mut *values, wanted == 1) {
+            let ty = self.check_expr_multi(only)?;
+            match ty {
+                Type::Results(types) => given = types,
+                other => given.push(other),
+            }
+        } else {
+            for value in values.iter_mut() {
+                given.push(self.check_expr(value)?);
+            }
+        }
+        if given.len() != wanted {
+            let at = values.get(wanted).map_or(span, |extra| extra.span);
+            return err(at, format!("expected {}, got {}", count(wanted, "value"), given.len()));
+        }
+        Ok(given)
+    }
+
+    /// The type a `bind` or `hold` without an annotation gives `name`, from the
+    /// type of its value.
+    fn inferred_type(&self, name: &str, actual: &Type, at: Span) -> Result<Type> {
+        match actual {
+            Type::None => err(at, format!("cannot infer the type of '{}' from none; give it a type, such as '{}: maybe int'", name, name)),
+            Type::Fail(error) => err(
+                at,
+                format!("cannot infer the type of '{}' from 'fail …'; give it a type, such as '{}: int or {}'", name, name, error),
+            ),
+            Type::Unit => err(at, "this expression has no value (its type is unit)"),
+            other if other.regions().contains(&ANY_REGION) => {
+                let example = other.map_regions(&mut |region| Some(if region == ANY_REGION { "r" } else { region }.to_string()));
+                err(
+                    at,
+                    format!(
+                        "cannot tell which region '{0}' lives in, since its value holds no pointers yet; give it a type, such as '{0}: {1}'",
+                        name, example
+                    ),
+                )
+            }
+            other => Ok(other.clone()),
+        }
     }
 
     /// Rewrites a variant used as a value, `Empty`, or called, `Circle(1.0)`,
@@ -1306,26 +1443,7 @@ impl Checker {
             }
             _ => {}
         }
-        let hint = match (&actual, expected) {
-            (Type::None, Type::Ptr(..)) => format!("; a pointer can't be none, so use 'maybe {}'", expected),
-            (Type::None, Type::Or(value, _)) if value.ptr_inner().is_some() => {
-                format!("; a pointer can't be none, so use 'maybe {}'", value)
-            }
-            (_, Type::Or(_, error)) if fits_regions(&actual, error) => "; an error is given with 'fail', as in '<- fail e'".to_string(),
-            (Type::Fail(_), _) => "; 'fail …' is an error, which only a 'T or E' can hold".to_string(),
-            (Type::Maybe(inner) | Type::Or(inner, _), _) if fits_regions(inner, expected) => {
-                "; extract its value first, as in 'x { … }' or 'when x is {value}'".to_string()
-            }
-            _ if [Some(expected), expected.extracted()].into_iter().flatten().any(|e| actual.without_regions() == e.without_regions()) => {
-                if expected.regions().contains(&ANY_REGION) {
-                    "; this place holds a value without pointers (of no region), so it can't take a pointer into one".to_string()
-                } else {
-                    "; a value can't move to another region: a pointer into one region is never stored in another".to_string()
-                }
-            }
-            _ => String::new(),
-        };
-        err(expr.span, format!("expected type {}, got {}{}", expected, actual, hint))
+        err(expr.span, format!("expected type {}, got {}{}", expected, actual, mismatch_hint(&actual, expected)))
     }
 
     /// Checks that a value of type `actual` is exactly `expected`, where no
@@ -1515,6 +1633,69 @@ fn always_sends(block: &Block) -> bool {
         StmtKind::Match(_, cases) => cases.iter().all(|case| always_sends(&case.body)),
         _ => false,
     })
+}
+
+/// Why a value of type `actual` doesn't fit where `expected` is required, or
+/// nothing when there is nothing useful to say.
+fn mismatch_hint(actual: &Type, expected: &Type) -> String {
+    match (actual, expected) {
+        (Type::None, Type::Ptr(..)) => format!("; a pointer can't be none, so use 'maybe {}'", expected),
+        (Type::None, Type::Or(value, _)) if value.ptr_inner().is_some() => {
+            format!("; a pointer can't be none, so use 'maybe {}'", value)
+        }
+        (_, Type::Or(_, error)) if fits_regions(actual, error) => "; an error is given with 'fail', as in '<- fail e'".to_string(),
+        (Type::Fail(_), _) => "; 'fail …' is an error, which only a 'T or E' can hold".to_string(),
+        (Type::Maybe(inner) | Type::Or(inner, _), _) if fits_regions(inner, expected) => {
+            "; extract its value first, as in 'x { … }' or 'when x is {value}'".to_string()
+        }
+        _ if [Some(expected), expected.extracted()].into_iter().flatten().any(|e| actual.without_regions() == e.without_regions()) => {
+            if expected.regions().contains(&ANY_REGION) {
+                "; this place holds a value without pointers (of no region), so it can't take a pointer into one".to_string()
+            } else {
+                "; a value can't move to another region: a pointer into one region is never stored in another".to_string()
+            }
+        }
+        _ => String::new(),
+    }
+}
+
+/// Checks that a value of type `actual`, one of the several a call sends, fits
+/// where `expected` is required. Nothing can change it on the way, so unlike a
+/// single value it never becomes a `maybe` or a `T or E` here.
+fn fits_or_err(actual: &Type, expected: &Type, at: Span) -> Result<()> {
+    if fits_regions(actual, expected) {
+        return Ok(());
+    }
+    let wrapping = match expected {
+        Type::Maybe(inner) => *actual == Type::None || fits_regions(actual, inner),
+        Type::Or(value, error) => match actual {
+            Type::Fail(given) => fits_regions(given, error),
+            _ => fits_regions(actual, value),
+        },
+        _ => false,
+    };
+    let hint = if wrapping {
+        format!("; a task sends each of its values as it is, so it doesn't become a {} on the way", expected)
+    } else {
+        mismatch_hint(actual, expected)
+    };
+    err(at, format!("expected type {}, got {}{}", expected, actual, hint))
+}
+
+/// The error for a call whose `T or E` result is thrown away.
+fn ignored_error(task: &str) -> String {
+    format!("the error '{0}' may send is ignored; handle it with a plan B, as in '{0}(…) {{ fail e … }}', or with match", task)
+}
+
+/// The error for a `_` that would drop a value holding an error.
+fn dropped_error(ty: &Type) -> String {
+    format!("'_' would drop the error in a {}; give it a name, then handle it with a plan B or match", ty)
+}
+
+/// Example names for a list of `n` values, as in `bind a, b = …`.
+fn example_names(n: usize) -> String {
+    let names: Vec<String> = (0..n.min(3)).filter_map(|i| u8::try_from(i).ok()).map(|i| char::from(b'a' + i).to_string()).collect();
+    if n > 3 { format!("{}, …", names.join(", ")) } else { names.join(", ") }
 }
 
 /// `1 argument`, `2 arguments`.

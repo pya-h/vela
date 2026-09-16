@@ -240,13 +240,13 @@ true false none  fi   maybe is     fail</pre>
       </p>
       <table>
         <tr><th>Symbol</th><th>Meaning</th></tr>
-        <tr><td><code>-&gt; T</code></td><td>the type a task sends back, in its header</td></tr>
-        <tr><td><code>&lt;- value</code></td><td>sends that value back (starts a line)</td></tr>
+        <tr><td><code>-&gt; T</code></td><td>the type a task sends back, in its header (several: <code>-&gt; int, int</code>)</td></tr>
+        <tr><td><code>&lt;- value</code></td><td>sends that value back (starts a line; several: <code>&lt;- a, b</code>)</td></tr>
         <tr><td><code>name: T</code></td><td>a parameter's, field's, or binding's type</td></tr>
         <tr><td><code>^T</code>, <code>p^</code></td><td>a pointer type; the value a pointer points to</td></tr>
         <tr><td><code>T@r</code>, <code>new@r</code></td><td>the region a type's pointers live in; the region <code>new</code> allocates in (also <code>new T(v) at r</code>)</td></tr>
         <tr><td><code>value { … }</code></td><td>a plan B: the value inside a <code>maybe</code> or <code>T or E</code>, or else what the block gives</td></tr>
-        <tr><td><code>{v}</code>, <code>_</code></td><td>in a <code>case</code> or <code>is</code>: the value inside, and anything (or a value left unnamed)</td></tr>
+        <tr><td><code>{v}</code>, <code>_</code></td><td>in a <code>case</code> or <code>is</code>: the value inside, and anything (or a value left unnamed); <code>_</code> also drops a result</td></tr>
         <tr><td><code>a.x</code></td><td>a field of a shape value</td></tr>
         <tr><td><code>Name { x: 1 }</code></td><td>a shape literal</td></tr>
         <tr><td><code>0..5</code></td><td>a range, in <code>each</code></td></tr>
@@ -297,6 +297,54 @@ true false none  fi   maybe is     fail</pre>
       </p>
       <p>
         Every program starts at <code>task main()</code>, which takes no parameters and returns nothing.
+      </p>
+
+      <h3 id="results">Several Results</h3>
+      <p>
+        A task can send more than one value: its header lists the types after <code>-&gt;</code>, and
+        <code>&lt;-</code> sends one value for each. A list of names receives them.
+      </p>
+      <pre><span class="keyword">task</span> divmod(a: int, b: int) -&gt; int, int
+    <span class="keyword">&lt;-</span> a / b, a % b
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">bind</span> q, r = divmod(17, 5)
+    show(q)                      <span class="comment"># 3</span>
+    show(r)                      <span class="comment"># 2</span>
+
+    <span class="keyword">bind</span> whole, <span class="keyword">_</span> = divmod(9, 4)  <span class="comment"># _ drops a result</span>
+    show(whole)                  <span class="comment"># 2</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        The results are separate values, not one value: <code>show(divmod(17, 5))</code> and
+        <code>bind pair = divmod(17, 5)</code> are errors that say <em>'divmod' sends 2 values; receive them with
+        'bind a, b = …'</em>. A task with several results can only be called as the whole right side of a list,
+        which includes a <code>&lt;-</code> that sends them on:
+      </p>
+      <pre><span class="keyword">task</span> halves(n: int) -&gt; int, int
+    <span class="keyword">&lt;-</span> divmod(n, 2)         <span class="comment"># sends both of divmod's values</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        Each result follows the rules of a single one: <code>-&gt; maybe int, bool</code> and
+        <code>-&gt; ^Node@r, int</code> work as they read, and the regions of a call's results are settled at the
+        call (see <a href="#regions">Memory and Regions</a>). One value can't be <code>unit</code>, since
+        <code>unit</code> means no value at all. A value sent on from a call, as in <code>halves</code> above,
+        goes as it is: it doesn't become a <code>maybe</code> or a <code>T or E</code> on the way, which a single
+        sent value would, and the error says so.
+      </p>
+      <p>
+        <code>bind</code>, <code>hold</code>, and assignment take the same lists with plain values too, and every
+        value is computed before the first of them is stored, so two variables can be swapped in one line:
+      </p>
+      <pre><span class="keyword">hold</span> a = 1
+<span class="keyword">hold</span> b = 2
+a, b = b, a                  <span class="comment"># a is 2, b is 1</span>
+<span class="keyword">bind</span> x: int, y: float = 3, 0.5</pre>
+      <p>
+        A name can appear once on the left of an assignment, and the names of a <code>bind</code> or
+        <code>hold</code> must all be new, as any binding's must. A <code>_</code> on the left takes a value and
+        drops it, except a <code>T or E</code>, whose error must be handled.
       </p>
 
       <h3>Bindings</h3>
@@ -883,7 +931,6 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         <li><code>text</code> is a C string, so a <code>\0</code> ends it; there are no text operations besides
           <code>==</code>, <code>!=</code>, and <code>show</code>.</li>
         <li>There are no arrays, no modules (a program is one file), and no way to read input.</li>
-        <li>A task sends at most one value; to report two, declare a shape that holds both and send that.</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which
           matters only when they call tasks that print. (Where one of them contains a plan B, they are evaluated

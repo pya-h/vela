@@ -274,13 +274,9 @@ impl Parser {
         let span = self.peek_span();
         let name = self.expect_ident()?;
         let params = self.parse_field_list()?;
-        let mut ret_span = span;
+        let mut ret_spans = Vec::new();
         let ret = if self.match_token(Token::Arrow) {
-            if self.check(Token::Newline) || self.check(Token::Fi) || self.is_at_end() {
-                return Err(Error::at(self.peek_span(), "expected a return type after '->'"));
-            }
-            ret_span = self.peek_span();
-            self.parse_type()?
+            self.parse_result_types(&mut ret_spans)?
         } else {
             Type::Unit
         };
@@ -290,7 +286,29 @@ impl Parser {
         self.skip_newlines();
         let body = self.parse_block()?;
         self.expect_fi("task", opened)?;
-        Ok(TaskDef { name, params, ret, ret_span, body, span })
+        Ok(TaskDef { name, params, ret, ret_spans, body, span })
+    }
+
+    /// The types after a task's `->`: one, or several separated by commas,
+    /// recording where each is written in `spans`.
+    fn parse_result_types(&mut self, spans: &mut Vec<Span>) -> Result<Type> {
+        let mut types = Vec::new();
+        loop {
+            if self.check(Token::Newline) || self.check(Token::Fi) || self.is_at_end() {
+                let expected = if types.is_empty() { "expected a return type after '->'" } else { "expected another result type after ','" };
+                return Err(Error::at(self.peek_span(), expected));
+            }
+            spans.push(self.peek_span());
+            types.push(self.parse_type()?);
+            if !self.match_token(Token::Comma) {
+                break;
+            }
+        }
+        Ok(if types.len() == 1 {
+            types.into_iter().next().unwrap_or(Type::Unit)
+        } else {
+            Type::Results(types)
+        })
     }
 
     fn parse_shape(&mut self) -> Result<ShapeDef> {
@@ -487,15 +505,54 @@ impl Parser {
         }
     }
 
-    /// An assignment, or an expression used as a statement.
+    /// An assignment, to one place or to a list of them, or an expression used
+    /// as a statement.
     fn parse_simple_stmt(&mut self, span: Span) -> Result<Stmt> {
-        let expr = self.parse_expr()?;
-        if self.match_token(Token::Assign) {
-            let rhs = self.parse_expr()?;
-            Ok(Stmt::new(StmtKind::Assign(expr, rhs), span))
-        } else {
-            Ok(Stmt::new(StmtKind::Expr(expr), span))
+        // `_` only takes a value, so a line starting with it is an assignment.
+        if self.check(Token::Underscore) {
+            let first = self.parse_target()?;
+            return self.parse_assignment(span, first);
         }
+        let expr = self.parse_expr()?;
+        if self.check(Token::Comma) || self.check(Token::Assign) {
+            return self.parse_assignment(span, Target::Place(expr));
+        }
+        Ok(Stmt::new(StmtKind::Expr(expr), span))
+    }
+
+    /// The rest of an assignment whose first place is `first`: any more places,
+    /// then `= values`.
+    fn parse_assignment(&mut self, span: Span, first: Target) -> Result<Stmt> {
+        let mut targets = vec![first];
+        while self.match_token(Token::Comma) {
+            targets.push(self.parse_target()?);
+        }
+        if !self.match_token(Token::Assign) {
+            return Err(Error::at(
+                self.peek_span(),
+                "expected '=': a list of names takes the values of an assignment, as in 'a, b = divmod(17, 5)'",
+            ));
+        }
+        let values = self.parse_value_list()?;
+        Ok(Stmt::new(StmtKind::Assign(targets, values), span))
+    }
+
+    /// One place an assignment writes to, or `_`.
+    fn parse_target(&mut self) -> Result<Target> {
+        let span = self.peek_span();
+        if self.match_token(Token::Underscore) {
+            return Ok(Target::Discard(span));
+        }
+        Ok(Target::Place(self.parse_expr()?))
+    }
+
+    /// One value, or several separated by commas.
+    fn parse_value_list(&mut self) -> Result<Vec<Expr>> {
+        let mut values = vec![self.parse_expr()?];
+        while self.match_token(Token::Comma) {
+            values.push(self.parse_expr()?);
+        }
+        Ok(values)
     }
 
     /// Rejects `send` used as the old keyword: alone on its line, or followed
@@ -526,20 +583,28 @@ impl Parser {
         Ok(())
     }
 
-    /// `bind name [: type] = expr` or `hold name [: type] = expr`
+    /// `bind name [: type] [, name [: type]]* = values`, or the same with
+    /// `hold`. A name may be `_`, which drops its value.
     fn parse_binding(&mut self, immutable: bool) -> Result<Stmt> {
         self.advance(); // bind / hold
         let span = self.peek_span();
-        let name = self.expect_ident()?;
-        let (ty, ty_span) = if self.match_token(Token::Colon) {
-            let ty_span = self.peek_span();
-            (Some(self.parse_type()?), Some(ty_span))
-        } else {
-            (None, None)
-        };
+        let mut names = Vec::new();
+        loop {
+            let (name, name_span) = self.parse_bound_name()?;
+            let (ty, ty_span) = if self.match_token(Token::Colon) {
+                let ty_span = self.peek_span();
+                (Some(self.parse_type()?), Some(ty_span))
+            } else {
+                (None, None)
+            };
+            names.push(Bound { name, span: name_span, ty, ty_span });
+            if !self.match_token(Token::Comma) {
+                break;
+            }
+        }
         self.expect(Token::Assign)?;
-        let init = self.parse_expr()?;
-        let kind = StmtKind::Binding { name, mutable: !immutable, ty, ty_span, init };
+        let init = self.parse_value_list()?;
+        let kind = StmtKind::Binding { names, mutable: !immutable, init };
         Ok(Stmt::new(kind, span))
     }
 
@@ -665,7 +730,7 @@ impl Parser {
         Ok((self.expect_ident()?, span))
     }
 
-    /// `<-` or `<- value`. A send starts its line (or a plan B's block, as in
+    /// `<-`, `<- value`, or `<- a, b`. A send starts its line (or a plan B's block, as in
     /// `x { <- 0 }`): `<-` after something else is almost always a comparison
     /// with a negative number written without a space (`a <-1`), which would
     /// otherwise end the statement and send.
@@ -678,10 +743,10 @@ impl Parser {
         self.advance(); // <-
         let ends = [Token::Newline, Token::Fi, Token::Else, Token::Case, Token::RBrace];
         if ends.iter().any(|token| self.check(token.clone())) || self.is_at_end() {
-            Ok(Stmt::new(StmtKind::Send(None), span))
+            Ok(Stmt::new(StmtKind::Send(Vec::new()), span))
         } else {
-            let expr = self.parse_expr()?;
-            Ok(Stmt::new(StmtKind::Send(Some(expr)), span))
+            let values = self.parse_value_list()?;
+            Ok(Stmt::new(StmtKind::Send(values), span))
         }
     }
 
@@ -915,7 +980,7 @@ impl Parser {
         Ok(Expr::new(ExprKind::PlanB { value: Box::new(value), error, body }, opened))
     }
 
-    /// `new T(value) in r` or `new@r T(value)`.
+    /// `new T(value) at r` or `new@r T(value)`.
     fn parse_new(&mut self) -> Result<Expr> {
         // A `new` holds a type and a value, and takes more stack than most
         // expressions, so it counts as a level of its own.

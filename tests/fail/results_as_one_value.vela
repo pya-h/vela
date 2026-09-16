@@ -1,0 +1,8 @@
+# error: 7:10: 'divmod' sends 2 values; receive them with 'bind a, b = …'
+task divmod(a: int, b: int) -> int, int
+    <- a / b, a % b
+fi
+
+task main()
+    show(divmod(17, 5))
+fi

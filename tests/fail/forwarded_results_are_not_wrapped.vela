@@ -1,0 +1,14 @@
+# error: 7:8: expected type maybe int, got int; a task sends each of its values as it is, so it doesn't become a maybe int on the way
+task two() -> int, int
+    <- 1, 2
+fi
+
+task maybes() -> maybe int, int
+    <- two()
+fi
+
+task main()
+    bind a, b = maybes()
+    show(a)
+    show(b)
+fi

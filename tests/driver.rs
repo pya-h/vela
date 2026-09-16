@@ -119,7 +119,7 @@ fn partial_front_end_keeps_the_types_found_before_an_error() {
     let items = partial.items.unwrap();
     let Item::Task(main) = &items[0] else { panic!("expected a task") };
     let binding_type = |i: usize| match &main.body[i].kind {
-        StmtKind::Binding { ty, .. } => ty.clone(),
+        StmtKind::Binding { names, .. } => names.first().and_then(|bound| bound.ty.clone()),
         other => panic!("expected a binding, got {:?}", other),
     };
     // Checked before the error, and not after it.

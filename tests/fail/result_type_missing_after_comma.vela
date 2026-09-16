@@ -1,0 +1,9 @@
+# error: 2:36: expected another result type after ','
+task divmod(a: int, b: int) -> int,
+    <- a / b, a % b
+fi
+
+task main()
+    bind q, r = divmod(9, 2)
+    show(q + r)
+fi

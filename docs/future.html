@@ -371,8 +371,8 @@
           <p>A small editor for Vela with highlighting, completion, live errors, one-key run, and a terminal, built on the compiler itself. <a href="ide.html">See Vela Studio.</a></p>
         </div>
         <div class="card">
-          <h3>Multiple results <span class="badge b-rec">Up next</span></h3>
-          <p>A task sends several values, <code>-&gt; int, int</code> and <code>&lt;- a / b, a % b</code>, received with <code>bind q, r = divmod(17, 5)</code>. <a href="#results">Details below.</a></p>
+          <h3>Multiple results <span class="badge b-done">Done</span></h3>
+          <p>A task sends several values, <code>-&gt; int, int</code> and <code>&lt;- a / b, a % b</code>, received with <code>bind q, r = divmod(17, 5)</code>. <a href="vela.html#results">The language guide describes it</a>; the reasoning is <a href="#results">below</a>.</p>
         </div>
         <div class="card">
           <h3>Named results <span class="badge b-rec">Up next</span></h3>
@@ -419,15 +419,18 @@
     <section>
       <h2 id="results"><span class="icon" aria-hidden="true">🎁</span> Multiple and Named Results</h2>
       <p>
-        Today a task sends at most one value. A task that has two things to report, such as a quotient and a
-        remainder, or a value and whether it was found, has to declare a shape only to carry them, or be split
-        into two tasks that repeat the same work. Two small, related features fix that, and they come first
+        A task used to send at most one value. A task that has two things to report, such as a quotient and a
+        remainder, or a value and whether it was found, had to declare a shape only to carry them, or be split
+        into two tasks that repeat the same work. Two small, related features fix that, and they came first
         among the language ideas because they are the cheapest: neither needs a new type, a runtime, or a change
         to existing programs. <code>-&gt; int</code> and <code>&lt;- value</code> keep their meaning.
       </p>
 
-      <h3>Step 1: Multiple Results</h3>
-      <p>The return type after <code>-&gt;</code> becomes a list of types, and <code>&lt;-</code> sends one value per type:</p>
+      <h3>Step 1: Multiple Results <span class="badge b-done">Done</span></h3>
+      <p>
+        Implemented; <a href="vela.html#results">Several Results</a> in the language guide is the reference, and
+        what follows is the design it was built from. The return type after <code>-&gt;</code> is a list of types,
+        and <code>&lt;-</code> sends one value per type:</p>
       <pre>task divmod(a: int, b: int) -&gt; int, int
     &lt;- a / b, a % b
 fi
@@ -455,12 +458,13 @@ fi</pre>
           parameter that names <code>r</code>, and the results' regions are inferred at the call like a single result's.</li>
         <li><strong>Plain lists too:</strong> the same form works with ordinary values, and the right side is
           evaluated completely before anything is assigned, so <code>a, b = b, a</code> swaps two variables.</li>
-        <li><strong>Generated C:</strong> each task with several results gets a result shape,
-          <code>struct vela_divmod__results { int64_t r0; int64_t r1; }</code>, returned by value; the call site
-          copies its fields into the new variables. No pointers, no allocation.</li>
+        <li><strong>Generated C:</strong> results become a struct returned by value,
+          <code>struct vela__results__2__int__int { int64_t r0; int64_t r1; }</code>; the call site copies its
+          members into the new variables. One struct per list of types, not per task, so a task that sends another's
+          values on is a plain <code>return</code>. No pointers, no allocation.</li>
       </ul>
 
-      <h3 id="named-results">Step 2: Named Results</h3>
+      <h3 id="named-results">Step 2: Named Results <span class="badge b-rec">Up next</span></h3>
       <p>
         With results in place, each can have a name, written like a parameter: <code>name: type</code>. A named
         result is a variable of the task, and it is set with the same arrow that sends results. What stands
@@ -582,8 +586,13 @@ fi</pre>
             the start of a line offers <code>total &lt;- </code>, and the outline shows the names in the signature.</li>
         </ul>
         <p>
-          Build multiple results first, since named results reuse their header list, send list, and C result
-          shape; then add names on top.
+          Multiple results came first, since named results reuse their header list, send list, and C result
+          struct; names go on top of them. What step 1 settled: a call that sends several values can only be the
+          whole right side of a list (<code>bind a, b = f()</code>, <code>a, b = f()</code>, <code>&lt;- f()</code>),
+          and those values are taken as they are, since there is no single expression to wrap; every value of a
+          list is computed before the first is stored, so <code>a, b = b, a</code> swaps; and all the tasks whose
+          results have the same types share one C struct, whose members are <code>r0</code>, <code>r1</code>, …,
+          so sending them on is a plain <code>return</code>.
         </p>
       </div>
     </section>

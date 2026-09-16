@@ -1,0 +1,9 @@
+# error: 7:10: expected 3 values, got 2
+task divmod(a: int, b: int) -> int, int
+    <- a / b, a % b
+fi
+
+task main()
+    bind q, r, extra = divmod(17, 5)
+    show(q + r + extra)
+fi

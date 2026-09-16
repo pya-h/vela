@@ -48,6 +48,11 @@ pub enum Type {
     Fail(Box<Type>),
     /// `region`: the type of a region parameter, which a task allocates in.
     Region,
+    /// `-> int, int`: the several values a task sends, always two or more.
+    /// Only a task's return type, and a call of such a task, ever have this
+    /// type: the values are separate, so no variable, field, or operand holds
+    /// one.
+    Results(Vec<Type>),
 }
 
 /// The region of a value built without pointers, such as `Node { next: none }`:
@@ -116,6 +121,15 @@ impl Type {
                 write!(f, "fail ")?;
                 error.write(f, outer)
             }
+            Type::Results(types) => {
+                for (i, ty) in types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    ty.write(f, outer)?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -157,6 +171,7 @@ impl Type {
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
             Type::Fail(error) => Type::Fail(boxed(error, f)),
+            Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_regions(&mut *f)).collect()),
             other => other.clone(),
         }
     }
@@ -176,6 +191,7 @@ impl Type {
             Type::Maybe(inner) => Type::Maybe(Box::new(inner.map_regions_of_names(f))),
             Type::Or(value, error) => Type::Or(Box::new(value.map_regions_of_names(f)), Box::new(error.map_regions_of_names(f))),
             Type::Fail(error) => Type::Fail(Box::new(error.map_regions_of_names(f))),
+            Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_regions_of_names(&mut *f)).collect()),
             other => other.clone(),
         }
     }
@@ -199,7 +215,18 @@ impl Type {
                 value.collect_regions(regions);
                 error.collect_regions(regions);
             }
+            Type::Results(types) => types.iter().for_each(|ty| ty.collect_regions(regions)),
             _ => {}
+        }
+    }
+
+    /// The values a task with this return type sends: none for `unit`, each of
+    /// a `Results`, or the type itself.
+    pub fn results(&self) -> &[Type] {
+        match self {
+            Type::Unit => &[],
+            Type::Results(types) => types,
+            other => std::slice::from_ref(other),
         }
     }
 
@@ -277,7 +304,7 @@ pub enum ExprKind {
     Call(String, Vec<Expr>),
     Unary(UnaryOp, Box<Expr>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
-    /// `new T(value) in r` or `new@r T(value)`; `ty_span` is the position of
+    /// `new T(value) at r` or `new@r T(value)`; `ty_span` is the position of
     /// `T`, and `region_span` of `r`.
     New {
         ty: Type,
@@ -340,24 +367,55 @@ impl Stmt {
 #[derive(Debug, Clone)]
 pub enum StmtKind {
     Expr(Expr),
-    /// `bind` (immutable) or `hold` (mutable). `ty` is the annotation, if
-    /// any, at `ty_span`; the checker fills it in with the inferred type
-    /// otherwise.
+    /// `bind` (immutable) or `hold` (mutable), with one name per value:
+    /// `bind q, r = divmod(17, 5)`.
     Binding {
-        name: String,
+        names: Vec<Bound>,
         mutable: bool,
-        ty: Option<Type>,
-        ty_span: Option<Span>,
-        init: Expr,
+        /// The values: one per name, or a single call that sends them all.
+        init: Vec<Expr>,
     },
-    Assign(Expr, Expr),
+    /// `a, b = b, a`: the places assigned, and the values, as in a binding.
+    Assign(Vec<Target>, Vec<Expr>),
     When(Condition, Block, Option<Block>),
     Loop(Condition, Block),
     Each(String, Expr, Block),
     Match(Expr, Vec<Case>),
-    Send(Option<Expr>),
+    /// `<-`, `<- value`, or `<- a, b`: one value per result.
+    Send(Vec<Expr>),
     /// `region r`: memory that `new` allocates in `r` until the block closes.
     Region(String),
+}
+
+/// A name a `bind` or `hold` declares, `q` or `q: int`. `ty` is the
+/// annotation, if any, at `ty_span`; the checker fills it in with the
+/// inferred type otherwise. The name may be `_` (`DISCARD`), which declares
+/// nothing and drops its value.
+#[derive(Debug, Clone)]
+pub struct Bound {
+    pub name: String,
+    /// Position of the name.
+    pub span: Span,
+    pub ty: Option<Type>,
+    pub ty_span: Option<Span>,
+}
+
+/// One place an assignment writes to.
+#[derive(Debug, Clone)]
+pub enum Target {
+    /// `_`: takes a value and drops it.
+    Discard(Span),
+    /// A variable, a field, or what a pointer points to.
+    Place(Expr),
+}
+
+impl Target {
+    pub fn span(&self) -> Span {
+        match self {
+            Target::Discard(span) => *span,
+            Target::Place(expr) => expr.span,
+        }
+    }
 }
 
 /// The condition of a `when` or `loop`: a `bool`, or `value is pattern`.
@@ -462,12 +520,26 @@ pub enum Item {
 pub struct TaskDef {
     pub name: String,
     pub params: Vec<Field>,
+    /// What the task sends: `unit` for nothing, one type, or `Type::Results`
+    /// for several.
     pub ret: Type,
-    /// Position of the return type, or of the task name when there is none.
-    pub ret_span: Span,
+    /// Position of each result type; empty when the task sends nothing.
+    pub ret_spans: Vec<Span>,
     pub body: Block,
     /// Position of the task name.
     pub span: Span,
+}
+
+impl TaskDef {
+    /// Position of the return type, or of the task name when there is none.
+    pub fn ret_span(&self) -> Span {
+        self.ret_spans.first().copied().unwrap_or(self.span)
+    }
+
+    /// Position of result `i`, or of the return type when it isn't known.
+    pub fn result_span(&self, i: usize) -> Span {
+        self.ret_spans.get(i).copied().unwrap_or_else(|| self.ret_span())
+    }
 }
 
 #[derive(Debug, Clone)]

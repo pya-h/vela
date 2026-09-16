@@ -1,0 +1,15 @@
+# error: 14:9: '_' would drop the error in a int or Oops; give it a name, then handle it with a plan B or match
+kind Oops
+    Bad
+fi
+
+task risky(n: int) -> int or Oops
+    when n < 0
+        <- fail Bad
+    fi
+    <- n
+fi
+
+task main()
+    _ = risky(1)
+fi

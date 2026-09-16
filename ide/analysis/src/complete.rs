@@ -118,8 +118,14 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     let line_first = prev.map(|q| k.line_start(q + 1));
     let first_token = line_first.and_then(|q| k.token(q));
 
-    // Names being declared get no suggestions.
+    // Names being declared get no suggestions, including another name in a
+    // `bind` or `hold` list (`bind q, r = …`).
     if matches!(prev_token, Some(Token::Task | Token::Shape | Token::Kind | Token::Bind | Token::Hold | Token::Each | Token::Region)) {
+        return (Vec::new(), word_start, byte);
+    }
+    if let (Some(q), Some(Token::Comma)) = (prev, prev_token)
+        && in_binding_names(&k, q)
+    {
         return (Vec::new(), word_start, byte);
     }
     // A region: after `@` in a type or `new@`, or after the `at` of `new T(v) at`.
@@ -182,6 +188,8 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     let type_context = match (prev, prev_token) {
         (Some(q), Some(Token::Colon)) => !unclosed_on_line(&k, q, &Token::LBrace, &Token::RBrace),
         (_, Some(Token::Arrow | Token::New)) => true,
+        // `-> int, int`: another result type follows the comma.
+        (Some(q), Some(Token::Comma)) => in_result_list(&k, q),
         // `new@r T`: the type follows the region.
         (Some(q), Some(Token::Ident(_))) => after_new_region(&k, q),
         // A type continues after `^` and `maybe`, and `or` starts the error type.
@@ -307,6 +315,20 @@ fn argument_parameter(k: &Knowledge, q: usize) -> Option<Option<Type>> {
     None
 }
 
+/// Whether the comma at position `q` separates a task's result types, so
+/// another type follows it.
+fn in_result_list(k: &Knowledge, q: usize) -> bool {
+    let line = k.line_start(q);
+    k.token(line) == Some(&Token::Task) && (line..q).any(|p| k.token(p) == Some(&Token::Arrow))
+}
+
+/// Whether the comma at position `q` separates the names of a `bind` or
+/// `hold`, so another name follows it.
+fn in_binding_names(k: &Knowledge, q: usize) -> bool {
+    let line = k.line_start(q);
+    matches!(k.token(line), Some(Token::Bind | Token::Hold)) && !(line..q).any(|p| k.token(p) == Some(&Token::Assign))
+}
+
 /// Whether the type-starting token at position `q` (a name, `^`, or `maybe`)
 /// is in a type: before it, after any `^` and `maybe`, comes `:` (outside a
 /// shape literal), `->`, `new`, or `or` after a type.
@@ -318,6 +340,7 @@ fn starts_type(k: &Knowledge, q: usize) -> bool {
     match p.checked_sub(1).map(|b| (b, k.token(b))) {
         Some((b, Some(Token::Colon))) => !unclosed_on_line(k, b, &Token::LBrace, &Token::RBrace),
         Some((_, Some(Token::Arrow | Token::New))) => true,
+        Some((b, Some(Token::Comma))) => in_result_list(k, b),
         Some((b, Some(Token::Ident(_)))) => after_new_region(k, b),
         Some((b, Some(Token::Or))) => b.checked_sub(1).is_some_and(|end| ends_type(k, end)),
         _ => false,

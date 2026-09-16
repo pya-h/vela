@@ -143,12 +143,22 @@ impl<'a> Knowledge<'a> {
             (SymbolKind::Variable, _) if !symbol.detail.is_empty() => parse_type(&symbol.detail),
             (SymbolKind::Variable, _) => {
                 // The initializer's type: `bind x = Point { … }`, `bind ok = a < b`.
+                // In a list, the name's place decides which value it takes.
                 let name = self.at_byte(symbol.name_range.start)?;
-                if self.token(name + 1) != Some(&Token::Assign) {
+                let (index, equals) = self.binding_place(name)?;
+                let end = self.line_end(name).checked_sub(1)?;
+                if end <= equals {
                     return None;
                 }
-                let last = self.line_end(name).checked_sub(1)?;
-                if last <= name + 1 {
+                let values = self.value_list(equals + 1, end);
+                let names = (self.line_start(name)..equals).filter(|&q| self.token(q) == Some(&Token::Comma)).count() + 1;
+                if names > 1 && values.len() == 1 {
+                    // One call sends every value.
+                    let Type::Results(types) = self.expression_type(end, depth + 1)? else { return None };
+                    return types.into_iter().nth(index);
+                }
+                let &(first, last) = values.get(index)?;
+                if first > last {
                     return None;
                 }
                 // A plan B spanning lines (`{`, or `{ fail e`) gives the value it extracts.
@@ -158,10 +168,40 @@ impl<'a> Knowledge<'a> {
                 if self.token(brace) == Some(&Token::LBrace) {
                     return self.expression_type(brace.checked_sub(1)?, depth + 1)?.extracted().cloned();
                 }
-                self.span_type(name + 2, last, depth + 1)
+                self.span_type(first, last, depth + 1)
             }
             _ => None,
         }
+    }
+
+    /// Where the `bind` or `hold` name at position `name` is in its list, and
+    /// the position of the `=` that ends the names.
+    fn binding_place(&self, name: usize) -> Option<(usize, usize)> {
+        let end = self.line_end(name);
+        let equals = (name..end).find(|&q| self.token(q) == Some(&Token::Assign))?;
+        let index = (self.line_start(name)..name).filter(|&q| self.token(q) == Some(&Token::Comma)).count();
+        Some((index, equals))
+    }
+
+    /// The first and last position of each value between `first` and `last`,
+    /// which commas outside brackets separate.
+    fn value_list(&self, first: usize, last: usize) -> Vec<(usize, usize)> {
+        let mut values = Vec::new();
+        let mut start = first;
+        let mut brackets = 0usize;
+        for p in first..=last {
+            match self.token(p) {
+                Some(Token::LParen | Token::LBrace | Token::LBracket) => brackets += 1,
+                Some(Token::RParen | Token::RBrace | Token::RBracket) => brackets = brackets.saturating_sub(1),
+                Some(Token::Comma) if brackets == 0 => {
+                    values.push((start, p.saturating_sub(1)));
+                    start = p + 1;
+                }
+                _ => {}
+            }
+        }
+        values.push((start, last));
+        values
     }
 
     /// The type of a name a `case` or `is` pattern binds: a variant's payload
@@ -570,12 +610,16 @@ fn is_name(text: &str) -> bool {
     text.starts_with(|c: char| c.is_ascii_alphabetic()) && text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
-/// The return type in a task's detail, `(n: int) -> int`.
+/// The return type in a task's detail, `(n: int) -> int`, or every result of
+/// `(a: int, b: int) -> int, int`.
 pub(crate) fn return_type(detail: &str) -> Type {
-    match detail.rsplit_once("->") {
-        Some((_, ret)) => parse_type(ret).unwrap_or(Type::Unit),
-        None => Type::Unit,
+    let Some((_, ret)) = detail.rsplit_once("->") else { return Type::Unit };
+    let written: Vec<&str> = ret.split(',').collect();
+    if written.len() == 1 {
+        return parse_type(ret).unwrap_or(Type::Unit);
     }
+    let types: Option<Vec<Type>> = written.into_iter().map(parse_type).collect();
+    types.map_or(Type::Unit, Type::Results)
 }
 
 /// The parameter names in a task's detail, `(a: int, b: int) -> int`.

@@ -401,9 +401,15 @@ impl<'a> Classifier<'a> {
         let mut plan_b_head = false;
         // Just after a type's name, where `or` starts the error type.
         let mut after_type = false;
-        // After `@` or a `new …(…)`'s `in`, where a region is named; whether a
+        // After `@` or a `new …(…)`'s `at`, where a region is named; whether a
         // type follows it (as after `new@r`).
         let mut region_next: Option<bool> = None;
+        // In a task header after `->`, where each comma starts another result
+        // type.
+        let mut in_results = false;
+        // In the names of a `bind` or `hold`, where each comma declares
+        // another one.
+        let mut declaring_list: Option<&'static str> = None;
         let mut braces: Vec<Brace> = Vec::new();
 
         let mut p = 0;
@@ -440,6 +446,8 @@ impl<'a> Classifier<'a> {
                 Token::Newline => {
                     in_task_header = false;
                     in_pattern = false;
+                    in_results = false;
+                    declaring_list = None;
                     // Shape literals are on one line, so an unclosed literal `{` ends
                     // with it; a plan B's block continues.
                     braces.retain(|brace| *brace == Brace::PlanB);
@@ -471,6 +479,7 @@ impl<'a> Classifier<'a> {
                 Token::Arrow => {
                     self.push(range, TokenClass::Operator, None);
                     in_type = true;
+                    in_results = true;
                 }
                 Token::Caret => {
                     self.push(range, TokenClass::Operator, None);
@@ -497,12 +506,25 @@ impl<'a> Classifier<'a> {
                         self.close_scope(at);
                     }
                 }
-                Token::LParen | Token::RParen | Token::LBracket | Token::RBracket | Token::Comma | Token::Dot => {
+                Token::LParen | Token::RParen | Token::LBracket | Token::RBracket | Token::Dot => {
                     self.push(range, TokenClass::Punctuation, None);
+                }
+                Token::Comma => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    match declaring_list {
+                        // `-> int, int`: another result type.
+                        _ if in_results => in_type = true,
+                        // `bind q, r = …`: another name.
+                        Some(intro) => declaring = Some(intro),
+                        None => {}
+                    }
                 }
                 Token::Plus | Token::Minus | Token::Star | Token::Slash | Token::Percent | Token::Eq | Token::Ne
                 | Token::Lt | Token::Gt | Token::Le | Token::Ge | Token::Assign | Token::Range => {
                     self.push(range, TokenClass::Operator, None);
+                    if *token == Token::Assign {
+                        declaring_list = None;
+                    }
                 }
                 // A type after `maybe`, and the error type after `or` in a type.
                 Token::Maybe => {
@@ -534,8 +556,11 @@ impl<'a> Classifier<'a> {
                             declaring = Some("each");
                         }
                         Token::Match => self.open(ScopeKind::Match),
-                        Token::Bind => declaring = Some("bind"),
-                        Token::Hold => declaring = Some("hold"),
+                        Token::Bind | Token::Hold => {
+                            let intro = if *keyword == Token::Bind { "bind" } else { "hold" };
+                            declaring = Some(intro);
+                            declaring_list = Some(intro);
+                        }
                         Token::Case => {
                             self.close_plan_b(at, &mut braces);
                             if self.scopes.last().is_some_and(|s| s.kind == ScopeKind::Case) {
@@ -603,7 +628,12 @@ impl<'a> Classifier<'a> {
             if intro == "region" {
                 return (TokenClass::Region, Some(self.declare_local(p, SymbolKind::Region, Some(intro), String::new())));
             }
-            let detail = if after == Some(&Token::Colon) { tokens.text_after(p + 1, |t| *t == Token::Assign) } else { String::new() };
+            // `bind q: int, r = …`: the annotation ends at the next name.
+            let detail = if after == Some(&Token::Colon) {
+                tokens.text_after(p + 1, |t| matches!(t, Token::Assign | Token::Comma))
+            } else {
+                String::new()
+            };
             return (TokenClass::Variable, Some(self.declare_local(p, SymbolKind::Variable, Some(intro), detail)));
         }
         if in_task_header && after == Some(&Token::Colon) && matches!(before, Some(Token::LParen | Token::Comma)) {

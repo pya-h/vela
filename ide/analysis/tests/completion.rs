@@ -615,3 +615,53 @@ fn keyword_hovers_describe_fail_is_and_underscore() {
     assert!(hover(source, "is {", 0).code.contains("is"));
     assert_eq!(hover(source, "_}", 0).code, "_");
 }
+
+const RESULTS: &str = "\
+task divmod(a: int, b: int) -> int, int
+    <- a / b, a % b
+fi
+
+task main()
+    bind q, r = divmod(17, 5)
+    hold x = 0
+    hold y = 0
+    bind first, second = 1.5, true
+    @@
+fi
+";
+
+/// `RESULTS` with `@@` replaced by `code` (which has its own `@@`).
+fn in_results(code: &str) -> String {
+    RESULTS.replace("    @@\n", &format!("    {}\n", code))
+}
+
+#[test]
+fn several_results_are_typed_and_completed() {
+    assert_eq!(Analysis::new(&RESULTS.replace("    @@\n", "")).diagnostics(), Vec::new());
+
+    // Each name in a list takes the type of the value in its place.
+    assert_eq!(hover(RESULTS, "q,", 0).code, "bind q: int");
+    assert_eq!(hover(RESULTS, "r =", 0).code, "bind r: int");
+    assert_eq!(hover(RESULTS, "first", 0).code, "bind first: float");
+    assert_eq!(hover(RESULTS, "second", 0).code, "bind second: bool");
+    assert_eq!(hover(RESULTS, "divmod", 0).code, "task divmod(a: int, b: int) -> int, int");
+
+    // The same while the file doesn't check, from the declarations alone.
+    let broken = in_results("show(missing)");
+    assert_eq!(hover(&broken, "q,", 0).code, "bind q: int");
+    assert_eq!(hover(&broken, "second", 0).code, "bind second: bool");
+    assert_eq!(hover(&broken, "r =", 0).code, "bind r: int");
+
+    // Another result type after a comma, where `unit` is not one.
+    assert_offers("task f() -> int, @@", &["int", "text", "maybe"], &["unit", "f"]);
+    assert_offers("task f() -> int, ^@@", &["int"], &["unit"]);
+    assert_offers("task f() -> int, int, @@", &["float"], &["unit"]);
+    // A parameter list's comma still declares a name.
+    assert_offers("task f(a: int, @@", &[], &["int", "a"]);
+
+    // Another name after a comma in a `bind`, then values after the `=`.
+    assert_offers(&in_results("bind a, @@"), &[], &["int", "q", "divmod"]);
+    assert_offers(&in_results("hold a, b = 1, @@"), &["q", "divmod", "true"], &["bind"]);
+    assert_offers(&in_results("x, y = 1, @@"), &["q", "divmod"], &["bind"]);
+    assert_offers(&in_results("<- 1, @@"), &["q", "divmod"], &["bind"]);
+}

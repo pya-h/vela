@@ -64,7 +64,8 @@ fn variant_with_wrong_argument_count() {
     let mut items = parse("kind Shape\n    Circle(radius: float)\nfi\n\ntask main()\n    bind c = Circle(1.0)\nfi\n");
     Checker::new().check_file(&mut items).unwrap();
     let Item::Task(main) = &mut items[1] else { panic!("expected task main") };
-    let StmtKind::Binding { init: expr, .. } = &mut main.body[0].kind else { panic!("expected a binding") };
+    let StmtKind::Binding { init, .. } = &mut main.body[0].kind else { panic!("expected a binding") };
+    let expr = &mut init[0];
     let ExprKind::Construct { args, .. } = &mut expr.kind else { panic!("expected a constructor, got {:?}", expr.kind) };
     args.push(args[0].clone());
 

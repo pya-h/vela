@@ -890,7 +890,10 @@ not a digit
 <span class="keyword">bind</span> p = Pair { first: <span class="keyword">new</span> int(<span class="number">1</span>) <span class="keyword">at</span> a, second: <span class="keyword">new</span> int(<span class="number">2</span>) <span class="keyword">at</span> b }
 <span class="comment"># error: expected type ^int@a, got ^int@b; a value can't move to another region</span></pre>
         <p><strong>Workaround:</strong> allocate everything a value points to in the same region (usually the longer-lived
-          one), or copy the value from the other region.</p>
+          one), or copy the value from the other region. A task's <em>results</em> are separate values, so each may be
+          in a region of its own: <code>task both(a: region, b: region) -&gt; ^int@a, ^int@b</code> is fine, and
+          <code>bind x, y = both(first, second)</code> receives them (see
+          <a href="vela.html#results">Several Results</a>). It is one value holding both that can't.</p>
         <pre class="program" data-file="w_pair.vela"><span class="keyword">shape</span> Pair
     first: ^int
     second: ^int

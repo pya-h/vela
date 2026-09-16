@@ -1,7 +1,8 @@
 # A tiny to-do list: a linked list of shapes, each pointing to the next one
 # (a `maybe ^Item`, since the last item has none), all in one region that
 # frees them together; variants with and without a payload, `is` and plan B to
-# read maybe values, and text compared by contents.
+# read maybe values, text compared by contents, and a task that sends two
+# results at once.
 
 kind Status
     Todo
@@ -35,16 +36,20 @@ task print_list(first: maybe ^Item@r)
     fi
 fi
 
-task count_done(first: maybe ^Item@r) -> int
-    hold count = 0
+# Two things to report, so two results: how many items are done, and how many
+# there are.
+task progress(first: maybe ^Item@r) -> int, int
+    hold done = 0
+    hold total = 0
     hold current = first
     loop current is {item}
         when item^.status is Done
-            count = count + 1
+            done = done + 1
         fi
+        total = total + 1
         current = item^.next
     fi
-    <- count
+    <- done, total
 fi
 
 task find(first: maybe ^Item@r, title: text) -> maybe ^Item@r
@@ -70,12 +75,16 @@ task main()
     bind second = add(todos, "write tests", Done, third)
     bind first = add(todos, "fix the parser", Todo, second)
     print_list(first)
-    show(count_done(first))
+    bind done, total = progress(first)
+    show(done)
+    show(total)
 
     when find(first, "write tests") is {tests}
         tests^.status = Todo
     fi
-    show(count_done(first))
+    # Only the count of done items is wanted now, so the other is dropped.
+    bind still_done, _ = progress(first)
+    show(still_done)
     show(find(first, "celebrate") == none)
 
     # A plan B gives a value to use when there is nothing to extract.
