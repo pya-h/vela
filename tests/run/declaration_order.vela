@@ -43,8 +43,8 @@ task main()
     bind s = Segment { from: Point { x: 1, y: 2 }, to: Point { x: 3, y: 4 } }
     show(s.to.y - s.from.y)
     region lists
-    bind empty: ^List@lists = new List(Nil) in lists
-    bind one: ^List@lists = new List(Cons(Point { x: 5, y: 0 }, empty)) in lists
+    bind empty: ^List@lists = new List(Nil) at lists
+    bind one: ^List@lists = new List(Cons(Point { x: 5, y: 0 }, empty)) at lists
     bind two = Cons(Point { x: 7, y: 0 }, one)
     show(length(two))
     show(sum_x(two))

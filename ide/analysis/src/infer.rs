@@ -257,8 +257,8 @@ impl<'a> Knowledge<'a> {
                         None => ty,
                     });
                 }
-                // `new T(v) in r`: a pointer into `r`.
-                if self.token_before(q) == Some(&Token::In) && q >= 2 && self.token(q - 2) == Some(&Token::RParen) {
+                // `new T(v) at r`: a pointer into `r`.
+                if self.token_before(q) == Some(&Token::At) && q >= 2 && self.token(q - 2) == Some(&Token::RParen) {
                     let pointer = self.expression_type(q - 2, depth + 1)?;
                     let Type::Ptr(pointee, _) = pointer else { return None };
                     return Some(Type::Ptr(Box::new(self.in_region(&pointee, name)), Some(name.to_string())));
@@ -300,10 +300,10 @@ impl<'a> Knowledge<'a> {
                 let (p, name) = callee;
                 // `new T(…)`, `new ^T(…)`, `new@r T(…)`: the type is everything
                 // between `new` (and its region) and `(`.
-                let new = (0..p).rev().take_while(|&r| matches!(self.token(r), Some(Token::Caret | Token::Maybe | Token::New | Token::At | Token::Ident(_)))).find(|&r| self.token(r) == Some(&Token::New));
+                let new = (0..p).rev().take_while(|&r| matches!(self.token(r), Some(Token::Caret | Token::Maybe | Token::New | Token::AtSign | Token::Ident(_)))).find(|&r| self.token(r) == Some(&Token::New));
                 if let Some(new) = new.filter(|&new| (new + 1..p).all(|r| self.token(r) != Some(&Token::New))) {
                     return exact(new).or_else(|| {
-                        let region = (self.token(new + 1) == Some(&Token::At)).then(|| self.ident(new + 2)).flatten();
+                        let region = (self.token(new + 1) == Some(&Token::AtSign)).then(|| self.ident(new + 2)).flatten();
                         let from = if region.is_some() { self.range(new + 2).end } else { self.range(new).end };
                         let pointee = parse_type(self.source.get(from..self.range(open).start)?)?;
                         Some(match region {

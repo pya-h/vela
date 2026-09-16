@@ -54,7 +54,7 @@ task main()
     bind vela_x = 5
     show(vela_x)
     region free
-    bind boxed = new Record(r) in free
+    bind boxed = new Record(r) at free
     show(boxed^.stdout)
     region static
     bind message = new@static text("boxed text")

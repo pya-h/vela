@@ -6,7 +6,7 @@ task main()
     bind m: maybe int = none
     loop m {
         region r
-        bind p = new int(count) in r
+        bind p = new int(count) at r
         p^
     } < 3
         count = count + 1
@@ -16,7 +16,7 @@ task main()
     bind b: maybe bool = none
     show(false and b {
         region unused
-        bind flag = new bool(true) in unused
+        bind flag = new bool(true) at unused
         show("not shown")
         flag^
     })

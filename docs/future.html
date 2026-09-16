@@ -388,7 +388,7 @@
         </div>
         <div class="card">
           <h3>Regions <span class="badge b-done">Done</span></h3>
-          <p><code>region r</code>, <code>new T(v) in r</code>, and pointer types <code>^T@r</code> that can't
+          <p><code>region r</code>, <code>new T(v) at r</code>, and pointer types <code>^T@r</code> that can't
             outlive their region, instead of <code>free</code>. <a href="#memory">Details below</a>; ideas for making them
             easier to use are in <a href="regions.html#ideas">Vela Regions</a>.</p>
         </div>
@@ -710,7 +710,7 @@ bind first = head {
       </p>
       <pre>kind ParseError
     Empty
-    BadDigit(at: int)
+    BadDigit(position: int)
 fi
 
 task parse(digits: text) -&gt; int or ParseError
@@ -729,8 +729,8 @@ task main()
         match e
         case Empty
             show("empty")
-        case BadDigit at
-            show(at)
+        case BadDigit position
+            show(position)
         fi
         -1
     }
@@ -799,7 +799,7 @@ fi</pre>
       <div class="note">
         <strong>Decided and implemented: Option B, regions,</strong> with named regions in types (<code>^Node@r</code>),
         the design sketched in <a href="future-2.html">the second notebook</a>. <code>free</code> is gone:
-        <code>region r</code> declares an arena freed when its block closes, <code>new T(v) in r</code> (or
+        <code>region r</code> declares an arena freed when its block closes, <code>new T(v) at r</code> (or
         <code>new@r T(v)</code>) allocates in it, a task allocates only in a <code>r: region</code> parameter and can
         name any region its parameters' types show, and a shape holding pointers lives in one region
         (<code>Node@r</code>). The checker keeps every pointer from outliving its region. The reference is in

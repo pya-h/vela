@@ -188,8 +188,8 @@
     | builtin-fn:show  punctuation:(  variable:cell  punctuation:.  field:left  punctuation:)
 111 |     region r
     | keyword:region  region:r
-112 |     bind boxed = new int(1) in r
-    | keyword:bind  variable:boxed  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:in  region:r
+112 |     bind boxed = new int(1) at r
+    | keyword:bind  variable:boxed  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:at  region:r
 113 |     boxed^ = noisy("through", 12) { 0 }
     | variable:boxed  operator:^  operator:=  task:noisy  punctuation:(  string:"through"  punctuation:,  number:12  punctuation:)  punctuation:{  number:0  punctuation:}
 114 |     show(boxed^)

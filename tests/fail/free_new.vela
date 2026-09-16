@@ -1,5 +1,5 @@
 # error: 4:5: Vela has no 'free': memory in a region is freed when the block declaring the region closes
 task main()
     region r
-    free new int(1) in r
+    free new int(1) at r
 fi

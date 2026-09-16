@@ -16,12 +16,12 @@ task main()
     show(line.to.x)
 
     region r
-    bind p = new Point(Point { x: 1, y: 2 }) in r
+    bind p = new Point(Point { x: 1, y: 2 }) at r
     p^.x = 9
     p^ = Point { x: p^.x + 1, y: 0 }
     show(p^.x)
 
-    bind lp = new Line(line) in r
+    bind lp = new Line(line) at r
     lp^.from.y = 7
     show(lp^.from.y)
 fi

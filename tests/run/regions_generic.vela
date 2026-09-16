@@ -14,7 +14,7 @@ kind Tree
 fi
 
 task read(p: ^int@r, r: region) -> int
-    bind extra = new int(1) in r
+    bind extra = new int(1) at r
     <- p^ + extra^
 fi
 
@@ -43,7 +43,7 @@ fi
 
 task main()
     region a
-    bind p = new int(41) in a
+    bind p = new int(41) at a
     show(read(p, a))
 
     outer(a, 1) {
@@ -57,7 +57,7 @@ task main()
         fi
     }
 
-    bind good = new Node(Node { value: 7, next: none }) in a
+    bind good = new Node(Node { value: 7, next: none }) at a
     bind x: maybe ^Node@a = first_or(none) {
         fail e
         good
@@ -65,7 +65,7 @@ task main()
     show(x { good }^.value)
 
     region b
-    bind q = new int(2) in b
+    bind q = new int(2) at b
     match pick(p, q, true)
     case {v}
         show(v^)
@@ -73,7 +73,7 @@ task main()
         show(w^)
     fi
     show(pick(p, q, false) { fail w
-        new int(w^) in a }^)
+        new int(w^) at a }^)
     show(pick(p, p, false) { fail w
         w }^)
 fi

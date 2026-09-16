@@ -1,7 +1,7 @@
 # error: 4:8: expected type ^int@r, got ^int@local; a value can't move to another region: a pointer into one region is never stored in another
 task make(r: region) -> ^int@r
     region local
-    <- new int(1) in local
+    <- new int(1) at local
 fi
 task main()
 fi

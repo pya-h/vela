@@ -56,7 +56,7 @@ fi
 
 task main()
     region r
-    bind p = new Point(Point { x: 1, y: 2 }) in r
+    bind p = new Point(Point { x: 1, y: 2 }) at r
     |
 fi
 `;

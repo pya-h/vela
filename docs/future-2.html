@@ -383,7 +383,7 @@ fi</pre>
         <div class="note">
           <strong>Implemented.</strong> Vela now works this way, spelled for the language as it is (it has no arrays or
           <code>allocate</code> yet): <code>region arena</code> declares a region freed when its block closes;
-          <code>new T(value) in arena</code> (or <code>new@arena T(value)</code>) allocates in it, giving a
+          <code>new T(value) at arena</code> (or <code>new@arena T(value)</code>) allocates in it, giving a
           <code>^T@arena</code>; a task allocates in a parameter <code>arena: region</code> and may return
           <code>-&gt; ^T@arena</code>; a task that only reads names the region in its types
           (<code>list: maybe ^Node@r</code>) without taking it; and a shape holding pointers lives in one region,
@@ -802,7 +802,7 @@ fi</pre>
           <li><strong>Integer literal underscores:</strong> numbers like <code>1_000_000</code> and <code>1_000.000_001</code> are accepted, with underscores ignored for readability. Malformed forms such as <code>1__000</code> or <code>1_</code> are rejected.</li>
         </ul>
         <p>These are non-breaking additions: existing programs compile unchanged, and the CLI flags follow the same style as <code>--emit-c</code>.</p>
-        <p>Since then, a larger idea from this notebook has landed too, as a breaking change: <strong>named regions</strong>. <code>region r</code>, <code>^T@r</code>, and <code>new T(v) in r</code> replaced <code>new</code>/<code>free</code>; see <a href="regions.html">Vela Regions</a>.</p>
+        <p>Since then, a larger idea from this notebook has landed too, as a breaking change: <strong>named regions</strong>. <code>region r</code>, <code>^T@r</code>, and <code>new T(v) at r</code> replaced <code>new</code>/<code>free</code>; see <a href="regions.html">Vela Regions</a>.</p>
       </div>
     </section>
 

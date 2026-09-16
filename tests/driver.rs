@@ -153,7 +153,7 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ("nested matches", format!("task main()\n{}fi\n", "match k\ncase _\n".repeat(deep) + &"fi\n".repeat(deep))),
         ("nested loops", format!("task main()\n{}fi\n", "loop true\neach i in 0..1\n".repeat(deep) + &"fi\nfi\n".repeat(deep))),
         ("nested is conditions", format!("task main()\n{}fi\n", "when m is {v}\n".repeat(deep) + &"fi\n".repeat(deep))),
-        ("nested new", program(format!("{}1{}", "new int(".repeat(deep), ") in r".repeat(deep)))),
+        ("nested new", program(format!("{}1{}", "new int(".repeat(deep), ") at r".repeat(deep)))),
         ("nested shape literals", program(format!("{}1{}", "P { x: ".repeat(deep), " }".repeat(deep)))),
         ("region pointer types", format!("task f(p: {}int@r)\nfi\n", "^".repeat(deep))),
     ];
@@ -176,9 +176,9 @@ fn deep_nesting_is_an_error_not_a_crash() {
     driver::generate_c(&plan_bs).unwrap();
     // A `new` counts two levels (itself, and its value).
     let news = format!(
-        "task main()\n    region r\n    show({}new int(1) in r{}^)\nfi\n",
+        "task main()\n    region r\n    show({}new int(1) at r{}^)\nfi\n",
         "new int(".repeat(near / 2 - 1),
-        "^) in r".repeat(near / 2 - 1)
+        "^) at r".repeat(near / 2 - 1)
     );
     driver::generate_c(&news).unwrap();
     let literals = format!("shape P\n    x: int\nfi\n{}", program(format!("{}1{}", "P { x: ".repeat(near), " }".repeat(near))));

@@ -1,6 +1,6 @@
 # error: 5:11: this pointer is a maybe ^int@r, which may be none; extract it first, as in 'when p is {q}' or 'p { … }'
 task main()
     region r
-    bind p: maybe ^int@r = new int(1) in r
+    bind p: maybe ^int@r = new int(1) at r
     show(p^)
 fi

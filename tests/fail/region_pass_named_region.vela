@@ -1,6 +1,6 @@
 # error: 6:13: this task can't allocate in 'r', which it only names in its types; take it as a parameter, 'r: region'
 task make(r: region) -> ^int@r
-    <- new int(1) in r
+    <- new int(1) at r
 fi
 task use(p: ^int@r) -> ^int@r
     <- make(r)

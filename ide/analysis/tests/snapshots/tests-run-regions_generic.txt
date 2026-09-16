@@ -24,8 +24,8 @@
     | keyword:fi
  16 | task read(p: ^int@r, r: region) -> int
     | keyword:task  task:read  punctuation:(  parameter:p  punctuation::  operator:^  type-builtin:int  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:int
- 17 |     bind extra = new int(1) in r
-    | keyword:bind  variable:extra  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:in  region:r
+ 17 |     bind extra = new int(1) at r
+    | keyword:bind  variable:extra  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:at  region:r
  18 |     <- p^ + extra^
     | keyword:<-  parameter:p  operator:^  operator:+  variable:extra  operator:^
  19 | fi
@@ -72,8 +72,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  45 |     region a
     | keyword:region  region:a
- 46 |     bind p = new int(41) in a
-    | keyword:bind  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  number:41  punctuation:)  keyword:in  region:a
+ 46 |     bind p = new int(41) at a
+    | keyword:bind  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  number:41  punctuation:)  keyword:at  region:a
  47 |     show(read(p, a))
     | builtin-fn:show  punctuation:(  task:read  punctuation:(  variable:p  punctuation:,  region:a  punctuation:)  punctuation:)
  49 |     outer(a, 1) {
@@ -96,8 +96,8 @@
     | keyword:fi
  58 |     }
     | punctuation:}
- 60 |     bind good = new Node(Node { value: 7, next: none }) in a
-    | keyword:bind  variable:good  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:7  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:in  region:a
+ 60 |     bind good = new Node(Node { value: 7, next: none }) at a
+    | keyword:bind  variable:good  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:7  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:a
  61 |     bind x: maybe ^Node@a = first_or(none) {
     | keyword:bind  variable:x  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:a  operator:=  task:first_or  punctuation:(  keyword:none  punctuation:)  punctuation:{
  62 |         fail e
@@ -110,8 +110,8 @@
     | builtin-fn:show  punctuation:(  variable:x  punctuation:{  variable:good  punctuation:}  operator:^  punctuation:.  field:value  punctuation:)
  67 |     region b
     | keyword:region  region:b
- 68 |     bind q = new int(2) in b
-    | keyword:bind  variable:q  operator:=  keyword:new  type-builtin:int  punctuation:(  number:2  punctuation:)  keyword:in  region:b
+ 68 |     bind q = new int(2) at b
+    | keyword:bind  variable:q  operator:=  keyword:new  type-builtin:int  punctuation:(  number:2  punctuation:)  keyword:at  region:b
  69 |     match pick(p, q, true)
     | keyword:match  task:pick  punctuation:(  variable:p  punctuation:,  variable:q  punctuation:,  keyword:true  punctuation:)
  70 |     case {v}
@@ -126,8 +126,8 @@
     | keyword:fi
  75 |     show(pick(p, q, false) { fail w
     | builtin-fn:show  punctuation:(  task:pick  punctuation:(  variable:p  punctuation:,  variable:q  punctuation:,  keyword:false  punctuation:)  punctuation:{  keyword:fail  variable:w
- 76 |         new int(w^) in a }^)
-    | keyword:new  type-builtin:int  punctuation:(  variable:w  operator:^  punctuation:)  keyword:in  region:a  punctuation:}  operator:^  punctuation:)
+ 76 |         new int(w^) at a }^)
+    | keyword:new  type-builtin:int  punctuation:(  variable:w  operator:^  punctuation:)  keyword:at  region:a  punctuation:}  operator:^  punctuation:)
  77 |     show(pick(p, p, false) { fail w
     | builtin-fn:show  punctuation:(  task:pick  punctuation:(  variable:p  punctuation:,  variable:p  punctuation:,  keyword:false  punctuation:)  punctuation:{  keyword:fail  variable:w
  78 |         w }^)

@@ -1,10 +1,10 @@
 # error: 7:13: expected type ^int@outer, got ^int@inner; a value can't move to another region: a pointer into one region is never stored in another
 task main()
     region outer
-    hold p = new int(0) in outer
+    hold p = new int(0) at outer
     when true
         region inner
-        p = new int(1) in inner
+        p = new int(1) at inner
     fi
     show(p^)
 fi

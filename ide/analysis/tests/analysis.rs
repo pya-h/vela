@@ -227,7 +227,7 @@ shape Node
 fi
 
 task push(r: region, list: maybe ^Node@r) -> ^Node@r
-    <- new Node(Node { value: 1, next: list }) in r
+    <- new Node(Node { value: 1, next: list }) at r
 fi
 
 task sum(list: maybe ^Node@s) -> int
@@ -478,7 +478,7 @@ fn an_unclosed_brace_ends_with_its_line() {
 
 #[test]
 fn a_header_region_named_before_its_parameter_is_that_parameter() {
-    let source = "task f(a: ^int@r, r: region) -> ^int@r\n    <- new int(a^) in r\nfi\n\ntask main()\nfi\n";
+    let source = "task f(a: ^int@r, r: region) -> ^int@r\n    <- new int(a^) at r\nfi\n\ntask main()\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::<Diagnostic>::new());
     for nth in 0..2 {
         assert_definition(source, ("r,", 0), ("r: region", 0));

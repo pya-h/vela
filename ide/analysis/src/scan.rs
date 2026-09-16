@@ -459,7 +459,7 @@ impl<'a> Classifier<'a> {
                         after_type = was_type;
                     }
                 }
-                Token::At => {
+                Token::AtSign => {
                     self.push(range, TokenClass::Operator, None);
                     region_next = Some(was_type);
                 }
@@ -561,8 +561,8 @@ impl<'a> Classifier<'a> {
                             }
                         }
                         Token::New => in_type = true,
-                        // `new T(v) in r`; an `each`'s `in` follows its name.
-                        Token::In if tokens.before(p) == Some(&Token::RParen) => region_next = Some(false),
+                        // `new T(v) at r` names a region; `in` belongs to `each`.
+                        Token::At => region_next = Some(false),
                         // `region r` declares a region; `r: region` is a parameter's type.
                         Token::Region if !was_type => declaring = Some("region"),
                         _ => {}

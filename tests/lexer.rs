@@ -231,9 +231,14 @@ fn the_underscore_alone_is_a_symbol() {
 fn regions_are_named_with_a_keyword_and_an_at_sign() {
     let ident = |name: &str| token(Token::Ident(name.into()));
     assert_eq!(kinds("region r"), [token(Token::Region), ident("r"), token(Token::Eof)]);
-    assert_eq!(kinds("^Node@r")[1..4], [ident("Node"), token(Token::At), ident("r")]);
-    assert_eq!(kinds("new@r")[..3], [token(Token::New), token(Token::At), ident("r")]);
-    assert_eq!(Token::At.describe(), "'@'");
+    assert_eq!(kinds("^Node@r")[1..4], [ident("Node"), token(Token::AtSign), ident("r")]);
+    assert_eq!(kinds("new@r")[..3], [token(Token::New), token(Token::AtSign), ident("r")]);
+    assert_eq!(Token::AtSign.describe(), "'@'");
+    // `at` names the region a `new` allocates in; `in` counts through a range.
+    assert_eq!(kinds("new int(1) at r")[5..], [token(Token::At), ident("r"), token(Token::Eof)]);
+    assert_eq!(Token::At.describe(), "'at'");
+    assert_eq!(kinds("each i in 0..3")[2], token(Token::In));
+    assert_eq!(kinds("attic")[0], ident("attic"));
     // `free` is an ordinary name now that regions free memory.
     assert_eq!(kinds("free"), [ident("free"), token(Token::Eof)]);
     assert_eq!(kinds("regions")[0], ident("regions"));

@@ -5,10 +5,10 @@ shape Node
 fi
 task main()
     region a
-    bind first = new Node(Node { value: 1, next: none }) in a
+    bind first = new Node(Node { value: 1, next: none }) at a
     when true
         region b
-        bind second = new Node(Node { value: 2, next: none }) in b
+        bind second = new Node(Node { value: 2, next: none }) at b
         first^.next = second
     fi
 fi

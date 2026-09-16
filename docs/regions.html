@@ -248,7 +248,7 @@
       <h2 id="idea">1. The idea</h2>
       <p>
         A <em>region</em> is a named place to put memory. You declare one with <code>region r</code>, and
-        <code>new T(value) in r</code> copies a value into it and gives you a pointer to the copy. Nothing in a region is
+        <code>new T(value) at r</code> copies a value into it and gives you a pointer to the copy. Nothing in a region is
         freed on its own. Instead, the whole region is freed at once, when the block that declared it ends.
       </p>
       <p>
@@ -264,13 +264,13 @@
       </p>
       <pre><span class="keyword">task</span> main()
     <span class="keyword">region</span> scratch                     <span class="comment"># a new, empty region</span>
-    <span class="keyword">bind</span> n = <span class="keyword">new</span> int(<span class="number">42</span>) <span class="keyword">in</span> scratch    <span class="comment"># n has type ^int@scratch</span>
+    <span class="keyword">bind</span> n = <span class="keyword">new</span> int(<span class="number">42</span>) <span class="keyword">at</span> scratch    <span class="comment"># n has type ^int@scratch</span>
     show(n^)                           <span class="comment"># 42</span>
 <span class="keyword">fi</span>                                     <span class="comment"># scratch, and everything in it, is freed here</span></pre>
       <div class="note">
         <p><strong>The whole model in five rules</strong></p>
         <ol>
-          <li><code>region r</code> declares a region; <code>new T(v) in r</code>, or <code>new@r T(v)</code>, allocates in it.</li>
+          <li><code>region r</code> declares a region; <code>new T(v) at r</code>, or <code>new@r T(v)</code>, allocates in it.</li>
           <li>A pointer into <code>r</code> has type <code>^T@r</code>, and a type can only name regions visible where it is written.</li>
           <li>When the block declaring <code>r</code> ends, however it ends, everything in <code>r</code> is freed.</li>
           <li>A task allocates only in a region it takes as a parameter (<code>r: region</code>); it can read and link pointers in any region its parameters' types name.</li>
@@ -400,14 +400,14 @@
       <h3 id="lesson-first">Lesson 1: A first region</h3>
       <pre class="program" data-file="01_first.vela"><span class="keyword">task</span> main()
     <span class="keyword">region</span> scratch
-    <span class="keyword">bind</span> count = <span class="keyword">new</span> int(<span class="number">41</span>) <span class="keyword">in</span> scratch
+    <span class="keyword">bind</span> count = <span class="keyword">new</span> int(<span class="number">41</span>) <span class="keyword">at</span> scratch
     count^ = count^ + <span class="number">1</span>
     show(count^)
 <span class="keyword">fi</span></pre>
 <pre class="output" aria-label="Output">42</pre>
       <p>
         <code>region scratch</code> is a statement: from here to the end of the block (the task), <code>scratch</code> is
-        a region you can allocate in. <code>new int(41) in scratch</code> copies <code>41</code> into it and gives back a
+        a region you can allocate in. <code>new int(41) at scratch</code> copies <code>41</code> into it and gives back a
         pointer, so <code>count</code> has type <code>^int@scratch</code>. <code>count^</code> is the value it points to,
         which you can read and write. <code>count</code> is a <code>bind</code>, so the pointer can't change, but the value
         it points to can. At the task's <code>fi</code>, the region is freed.
@@ -421,7 +421,7 @@
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> points
-    <span class="keyword">bind</span> p: ^Point@points = <span class="keyword">new</span> Point(Point { x: <span class="number">1</span>, y: <span class="number">2</span> }) <span class="keyword">in</span> points
+    <span class="keyword">bind</span> p: ^Point@points = <span class="keyword">new</span> Point(Point { x: <span class="number">1</span>, y: <span class="number">2</span> }) <span class="keyword">at</span> points
     <span class="keyword">bind</span> q = <span class="keyword">new</span>@points Point(Point { x: <span class="number">3</span>, y: <span class="number">4</span> })
     p^.x = p^.x + q^.x
     show(p^.x)
@@ -439,7 +439,7 @@
 no spare yet
 4</pre>
       <ul>
-        <li><code>new Point(v) in points</code> and <code>new@points Point(v)</code> mean the same thing; use whichever
+        <li><code>new Point(v) at points</code> and <code>new@points Point(v)</code> mean the same thing; use whichever
           reads better.</li>
         <li>A pointer's type is <code>^T@r</code>. You can write it out (<code>p: ^Point@points</code>) or let Vela infer it
           (<code>q</code>).</li>
@@ -455,7 +455,7 @@ no spare yet
       <pre class="program" data-file="03_blocks.vela"><span class="keyword">task</span> first_square_over(limit: int) -&gt; int
     <span class="keyword">region</span> work
     <span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">0</span>..<span class="number">100</span>
-        <span class="keyword">bind</span> square = <span class="keyword">new</span> int(i * i) <span class="keyword">in</span> work
+        <span class="keyword">bind</span> square = <span class="keyword">new</span> int(i * i) <span class="keyword">at</span> work
         <span class="keyword">when</span> square^ &gt; limit
             <span class="keyword">&lt;-</span> square^
         <span class="keyword">fi</span>
@@ -465,10 +465,10 @@ no spare yet
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> outer
-    <span class="keyword">bind</span> total = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">in</span> outer
+    <span class="keyword">bind</span> total = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">at</span> outer
     <span class="keyword">each</span> round <span class="keyword">in</span> <span class="number">0</span>..<span class="number">3</span>
         <span class="keyword">region</span> pass
-        <span class="keyword">bind</span> step = <span class="keyword">new</span> int(round * <span class="number">10</span>) <span class="keyword">in</span> pass
+        <span class="keyword">bind</span> step = <span class="keyword">new</span> int(round * <span class="number">10</span>) <span class="keyword">at</span> pass
         total^ = total^ + step^
     <span class="keyword">fi</span>
     show(total^)
@@ -477,7 +477,7 @@ no spare yet
     <span class="keyword">bind</span> missing: <span class="keyword">maybe</span> int = <span class="keyword">none</span>
     <span class="keyword">bind</span> rescued = missing {
         <span class="keyword">region</span> rescue
-        <span class="keyword">bind</span> spare = <span class="keyword">new</span> int(<span class="number">7</span>) <span class="keyword">in</span> rescue
+        <span class="keyword">bind</span> spare = <span class="keyword">new</span> int(<span class="number">7</span>) <span class="keyword">at</span> rescue
         spare^ * <span class="number">6</span>
     }
     show(rescued)
@@ -506,7 +506,7 @@ no spare yet
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> push(r: <span class="keyword">region</span>, list: <span class="keyword">maybe</span> ^Node@r, value: int) -&gt; ^Node@r
-    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">in</span> r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> sum(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int
@@ -556,7 +556,7 @@ no spare yet
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> push(r: <span class="keyword">region</span>, list: <span class="keyword">maybe</span> ^Node@r, value: int) -&gt; ^Node@r
-    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">in</span> r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> length(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int
@@ -627,7 +627,7 @@ no spare yet
     <span class="keyword">when</span> depth == <span class="number">0</span>
         <span class="keyword">&lt;-</span> Leaf(<span class="number">1</span>)
     <span class="keyword">fi</span>
-    <span class="keyword">&lt;-</span> Branch(<span class="keyword">new</span> Tree(build(r, depth - <span class="number">1</span>)) <span class="keyword">in</span> r, <span class="keyword">new</span> Tree(build(r, depth - <span class="number">1</span>)) <span class="keyword">in</span> r)
+    <span class="keyword">&lt;-</span> Branch(<span class="keyword">new</span> Tree(build(r, depth - <span class="number">1</span>)) <span class="keyword">at</span> r, <span class="keyword">new</span> Tree(build(r, depth - <span class="number">1</span>)) <span class="keyword">at</span> r)
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> leaves(t: Tree@r) -&gt; int
@@ -645,7 +645,7 @@ no spare yet
     show(leaves(Leaf(<span class="number">5</span>)))
 
     <span class="keyword">hold</span> head: Node@trees = Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }
-    head.next = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: <span class="keyword">none</span> }) <span class="keyword">in</span> trees
+    head.next = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> trees
     <span class="keyword">when</span> head.next <span class="keyword">is</span> {second}
         show(head.value + second^.value)
     <span class="keyword">fi</span>
@@ -676,7 +676,7 @@ no spare yet
     <span class="keyword">when</span> digit &lt; <span class="number">0</span> <span class="keyword">or</span> digit &gt; <span class="number">9</span>
         <span class="keyword">&lt;-</span> <span class="keyword">fail</span> <span class="string">"not a digit"</span>
     <span class="keyword">fi</span>
-    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: digit, next: <span class="keyword">none</span> }) <span class="keyword">in</span> r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: digit, next: <span class="keyword">none</span> }) <span class="keyword">at</span> r
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> main()
@@ -712,7 +712,7 @@ not a digit
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> push(r: <span class="keyword">region</span>, list: <span class="keyword">maybe</span> ^Node@r, value: int) -&gt; ^Node@r
-    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">in</span> r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> sum(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int
@@ -728,7 +728,7 @@ not a digit
 <span class="comment"># Copies a list, node by node, into another region.</span>
 <span class="keyword">task</span> copy(to: <span class="keyword">region</span>, list: <span class="keyword">maybe</span> ^Node@from) -&gt; <span class="keyword">maybe</span> ^Node@to
     <span class="keyword">when</span> list <span class="keyword">is</span> {node}
-        <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: node^.value, next: copy(to, node^.next) }) <span class="keyword">in</span> to
+        <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: node^.value, next: copy(to, node^.next) }) <span class="keyword">at</span> to
     <span class="keyword">fi</span>
     <span class="keyword">&lt;-</span> <span class="keyword">none</span>
 <span class="keyword">fi</span>
@@ -778,7 +778,7 @@ not a digit
       <div class="table-wrap">
         <table>
           <tr><th>Message (shortened)</th><th>What it means, and the fix</th></tr>
-          <tr><td><code>'new' needs a region to allocate in</code></td><td>Add <code>in r</code> (or write <code>new@r</code>).</td></tr>
+          <tr><td><code>'new' needs a region to allocate in</code></td><td>Add <code>at r</code> (or write <code>new@r</code>).</td></tr>
           <tr><td><code>a pointer lives in a region, so its type names one</code></td><td>Write the region: <code>^int@r</code>, not <code>^int</code>.</td></tr>
           <tr><td><code>'Node' holds pointers, so it lives in a region</code></td><td>Write <code>Node@r</code> where the shape is used.</td></tr>
           <tr><td><code>'Point' holds no pointers, so it lives in no region</code></td><td>Remove <code>@r</code>: plain values need none.</td></tr>
@@ -788,7 +788,7 @@ not a digit
           <tr><td><code>this task can't allocate in 'r', which it only names in its types</code></td><td>Take the region as a parameter: <code>r: region</code>.</td></tr>
           <tr><td><code>the result lives in region 'r', which the task isn't given</code></td><td>A result can't point into the task's own region; take <code>r: region</code> from the caller.</td></tr>
           <tr><td><code>cannot tell which region 'x' lives in</code></td><td>The value holds no pointers yet; write the binding's type, <code>x: Node@r</code>.</td></tr>
-          <tr><td><code>'r' is a region, not a value</code></td><td>Regions can only be passed to a <code>region</code> parameter or used after <code>in</code>/<code>@</code>.</td></tr>
+          <tr><td><code>'r' is a region, not a value</code></td><td>Regions can only be passed to a <code>region</code> parameter or used after <code>at</code>/<code>@</code>.</td></tr>
           <tr><td><code>expected type maybe ^Node@_, got ^Node@a</code></td><td><code>@_</code> means "no region": the value was made without any pointer into one, so it can't be given a pointer (see <a href="#limit-pattern">this limitation</a>).</td></tr>
           <tr><td><code>Vela has no 'free'</code></td><td>Memory is freed when the region's block ends; use a smaller region to free sooner.</td></tr>
         </table>
@@ -844,7 +844,7 @@ not a digit
 
 <span class="keyword">task</span> summarize(count: int) -&gt; Report
     <span class="keyword">region</span> work                          <span class="comment"># only this call's scratch data</span>
-    <span class="keyword">hold</span> sum = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">in</span> work
+    <span class="keyword">hold</span> sum = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">at</span> work
     <span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">0</span>..count
         sum^ = sum^ + i
     <span class="keyword">fi</span>
@@ -861,15 +861,15 @@ not a digit
       <div class="limit">
         <h3 id="limit-growth">Replacing a value in a long-lived region keeps the old one's memory</h3>
         <pre><span class="keyword">region</span> long
-<span class="keyword">hold</span> latest = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">in</span> long
+<span class="keyword">hold</span> latest = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">at</span> long
 <span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">0</span>..<span class="number">1000000</span>
-    latest = <span class="keyword">new</span> int(i) <span class="keyword">in</span> long        <span class="comment"># a million ints stay allocated until long is freed</span>
+    latest = <span class="keyword">new</span> int(i) <span class="keyword">at</span> long        <span class="comment"># a million ints stay allocated until long is freed</span>
 <span class="keyword">fi</span></pre>
         <p><strong>Workaround:</strong> change the value in place through its pointer, or allocate per-pass values in a region
           inside the loop and copy out only what survives (Lesson 8).</p>
         <pre class="program" data-file="w_replace.vela"><span class="keyword">task</span> main()
     <span class="keyword">region</span> long
-    <span class="keyword">bind</span> latest = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">in</span> long
+    <span class="keyword">bind</span> latest = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">at</span> long
     <span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">0</span>..<span class="number">1000</span>
         latest^ = i                      <span class="comment"># reuse the memory: no new allocation</span>
     <span class="keyword">fi</span>
@@ -887,7 +887,7 @@ not a digit
 
 <span class="keyword">region</span> a
 <span class="keyword">region</span> b
-<span class="keyword">bind</span> p = Pair { first: <span class="keyword">new</span> int(<span class="number">1</span>) <span class="keyword">in</span> a, second: <span class="keyword">new</span> int(<span class="number">2</span>) <span class="keyword">in</span> b }
+<span class="keyword">bind</span> p = Pair { first: <span class="keyword">new</span> int(<span class="number">1</span>) <span class="keyword">at</span> a, second: <span class="keyword">new</span> int(<span class="number">2</span>) <span class="keyword">at</span> b }
 <span class="comment"># error: expected type ^int@a, got ^int@b; a value can't move to another region</span></pre>
         <p><strong>Workaround:</strong> allocate everything a value points to in the same region (usually the longer-lived
           one), or copy the value from the other region.</p>
@@ -899,9 +899,9 @@ not a digit
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> a
     <span class="keyword">region</span> b
-    <span class="keyword">bind</span> short = <span class="keyword">new</span> int(<span class="number">2</span>) <span class="keyword">in</span> b
+    <span class="keyword">bind</span> short = <span class="keyword">new</span> int(<span class="number">2</span>) <span class="keyword">at</span> b
     <span class="comment"># Copy the value into a, the region the pair lives in.</span>
-    <span class="keyword">bind</span> p = Pair { first: <span class="keyword">new</span> int(<span class="number">1</span>) <span class="keyword">in</span> a, second: <span class="keyword">new</span> int(short^) <span class="keyword">in</span> a }
+    <span class="keyword">bind</span> p = Pair { first: <span class="keyword">new</span> int(<span class="number">1</span>) <span class="keyword">at</span> a, second: <span class="keyword">new</span> int(short^) <span class="keyword">at</span> a }
     show(p.first^ + p.second^)
 <span class="keyword">fi</span></pre>
 <pre class="output" aria-label="Output">3</pre>
@@ -914,10 +914,10 @@ not a digit
           longer. But a value's pointers are all in its own region, so this is rejected:
         </p>
         <pre><span class="keyword">region</span> outer
-<span class="keyword">bind</span> root = <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }) <span class="keyword">in</span> outer
+<span class="keyword">bind</span> root = <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> outer
 <span class="keyword">when</span> root^.value &gt; <span class="number">0</span>
     <span class="keyword">region</span> inner
-    <span class="keyword">bind</span> leaf = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: root }) <span class="keyword">in</span> inner
+    <span class="keyword">bind</span> leaf = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: root }) <span class="keyword">at</span> inner
     <span class="comment"># error: expected type Node@inner, got Node@outer; a value can't move to another region</span>
 <span class="keyword">fi</span></pre>
         <p><strong>Workaround:</strong> rebuild the older value in the younger region (as below, or with a copy task like
@@ -929,12 +929,12 @@ not a digit
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> outer
-    <span class="keyword">bind</span> root = <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }) <span class="keyword">in</span> outer
+    <span class="keyword">bind</span> root = <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> outer
     <span class="keyword">when</span> root^.value &gt; <span class="number">0</span>
         <span class="keyword">region</span> inner
         <span class="comment"># Rebuild the value in the younger region, field by field.</span>
-        <span class="keyword">bind</span> copy = <span class="keyword">new</span> Node(Node { value: root^.value, next: <span class="keyword">none</span> }) <span class="keyword">in</span> inner
-        <span class="keyword">bind</span> leaf = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: copy }) <span class="keyword">in</span> inner
+        <span class="keyword">bind</span> copy = <span class="keyword">new</span> Node(Node { value: root^.value, next: <span class="keyword">none</span> }) <span class="keyword">at</span> inner
+        <span class="keyword">bind</span> leaf = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: copy }) <span class="keyword">at</span> inner
         show(leaf^.value + copy^.value)
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></pre>
@@ -945,7 +945,7 @@ not a digit
         <h3 id="limit-copy">A value that holds pointers can't be copied to another region whole</h3>
         <p>
           Even when its pointers are all <code>none</code>, a <code>Node@outer</code> is in <code>outer</code>:
-          <code>new Node(root^) in inner</code> is an error.
+          <code>new Node(root^) at inner</code> is an error.
         </p>
         <p><strong>Workaround:</strong> build a new value field by field (<code>Node { value: root^.value, next: none }</code>),
           or write a copy task that follows the pointers (Lesson 8).</p>
@@ -954,7 +954,7 @@ not a digit
       <div class="limit">
         <h3 id="limit-generic">A task that only names a region can't allocate in it</h3>
         <pre><span class="keyword">task</span> grow(list: <span class="keyword">maybe</span> ^Node@r) -&gt; ^Node@r
-    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: list }) <span class="keyword">in</span> r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: list }) <span class="keyword">at</span> r
     <span class="comment"># error: this task can't allocate in 'r', which it only names in its types; take it as a parameter, 'r: region'</span>
 <span class="keyword">fi</span></pre>
         <p>
@@ -1011,7 +1011,7 @@ not a digit
       <div class="limit">
         <h3 id="limit-pattern">A name bound from a pointer-free value can't be given a pointer</h3>
         <pre><span class="keyword">region</span> a
-<span class="keyword">bind</span> q = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: <span class="keyword">none</span> }) <span class="keyword">in</span> a
+<span class="keyword">bind</span> q = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> a
 <span class="keyword">when</span> first(<span class="keyword">none</span>) <span class="keyword">is</span> {n}
     n^.next = q
     <span class="comment"># error: expected type maybe ^Node@_, got ^Node@a; this place holds a value without pointers (of no region), ...</span>
@@ -1033,8 +1033,8 @@ not a digit
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> a
-    <span class="keyword">bind</span> q = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: <span class="keyword">none</span> }) <span class="keyword">in</span> a
-    <span class="keyword">bind</span> start: <span class="keyword">maybe</span> ^Node@a = <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }) <span class="keyword">in</span> a
+    <span class="keyword">bind</span> q = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> a
+    <span class="keyword">bind</span> start: <span class="keyword">maybe</span> ^Node@a = <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> a
     <span class="keyword">when</span> first(start) <span class="keyword">is</span> {n}
         n^.next = q
         show(n^.value + q^.value)
@@ -1078,7 +1078,7 @@ not a digit
       <div class="idea">
         <h4><code>nodes.push(list, 1)</code>: the region before a dot <span class="badge b-later">Later, with methods</span></h4>
         <pre><span class="keyword">task</span> push(r: <span class="keyword">region</span>, list: <span class="keyword">maybe</span> ^Node@r, value: int) -&gt; ^Node@r
-    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">in</span> r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
 <span class="keyword">fi</span>
 
 list = nodes.push(list, <span class="number">1</span>)       <span class="comment"># the same call as push(nodes, list, 1)</span></pre>
@@ -1120,7 +1120,7 @@ list = nodes.push(list, <span class="number">1</span>)       <span class="commen
       <div class="idea">
         <h4><code>task push[r: region](…)</code> and <code>push[nodes](list, 1)</code>: regions in brackets <span class="badge b-rec">Recommended</span></h4>
         <pre><span class="keyword">task</span> push[r: <span class="keyword">region</span>](list: <span class="keyword">maybe</span> ^Node@r, value: int) -&gt; ^Node@r
-    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">in</span> r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> sum[r](list: <span class="keyword">maybe</span> ^Node@r) -&gt; int      <span class="comment"># a region the task only names</span>
@@ -1172,7 +1172,7 @@ list = push(list, <span class="number">1</span>)             <span class="commen
         <h4><code>bind p: ^int@scratch = new int(1)</code>: <code>new</code> takes its region from the type <span class="badge b-maybe">Worth trying</span></h4>
         <ul>
           <li>When the place a <code>new</code> goes already names a region (a typed binding, an assignment, a field, an argument,
-            or a send in a task whose result names it), <code>in r</code> could be left out.</li>
+            or a send in a task whose result names it), <code>at r</code> could be left out.</li>
           <li>Small: the checker would fill in <code>new</code>'s region from the expected type, with the same error as today
             when nothing names one.</li>
           <li>Best limited to places where the region is written on the same line, such as typed bindings, so the source still
@@ -1201,7 +1201,7 @@ list = push(list, <span class="number">1</span>)             <span class="commen
       <div class="idea">
         <h4>Owned pointers with <code>drop</code> <span class="badge b-rec">Recommended, long term</span></h4>
         <pre><span class="keyword">region</span> cache
-<span class="keyword">bind</span> big = <span class="keyword">new</span> own Buffer(Buffer { size: <span class="number">1024</span> }) <span class="keyword">in</span> cache
+<span class="keyword">bind</span> big = <span class="keyword">new</span> own Buffer(Buffer { size: <span class="number">1024</span> }) <span class="keyword">at</span> cache
 use(big^)
 drop big                         <span class="comment"># its memory goes back to the region now</span>
 show(big^.size)                  <span class="comment"># error: 'big' was dropped</span></pre>
@@ -1216,7 +1216,7 @@ show(big^.size)                  <span class="comment"># error: 'big' was droppe
       </div>
       <div class="idea">
         <h4>Pools with checked handles <span class="badge b-maybe">Worth trying</span></h4>
-        <pre>pool entities of Entity <span class="keyword">in</span> world
+        <pre>pool entities of Entity <span class="keyword">at</span> world
 <span class="keyword">bind</span> player = entities.add(Entity { health: <span class="number">100</span> })  <span class="comment"># a handle, not a pointer</span>
 entities.remove(player)
 <span class="keyword">when</span> entities.get(player) <span class="keyword">is</span> {e}                     <span class="comment"># none: removed</span>
@@ -1297,7 +1297,7 @@ head.next = push(nodes, <span class="keyword">none</span>, <span class="number">
         </p>
       </div>
       <div class="idea">
-        <h4>A generated copy: <code>copy value in r</code> <span class="badge b-rec">Recommended</span></h4>
+        <h4>A generated copy: <code>copy value at r</code> <span class="badge b-rec">Recommended</span></h4>
         <p>
           Fixes <a href="#limit-copy">this limitation</a>, and replaces hand-written copy tasks like Lesson 8's. The compiler would
           generate a deep copy for each type that holds pointers. Linked data can share nodes or even form cycles, so the copy

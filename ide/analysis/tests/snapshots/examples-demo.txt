@@ -60,8 +60,8 @@
     | keyword:fi
  40 |     region numbers
     | keyword:region  region:numbers
- 41 |     bind ptr: ^int@numbers = new int(42) in numbers
-    | keyword:bind  variable:ptr  punctuation::  operator:^  type-builtin:int  operator:@  region:numbers  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)  keyword:in  region:numbers
+ 41 |     bind ptr: ^int@numbers = new int(42) at numbers
+    | keyword:bind  variable:ptr  punctuation::  operator:^  type-builtin:int  operator:@  region:numbers  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)  keyword:at  region:numbers
  42 |     show(ptr^)
     | builtin-fn:show  punctuation:(  variable:ptr  operator:^  punctuation:)
  43 | fi

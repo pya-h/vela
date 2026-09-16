@@ -67,7 +67,7 @@ task main()
     first_word(none)
 
     region cells
-    bind boxed = new maybe int(3) in cells
+    bind boxed = new maybe int(3) at cells
     show(boxed^)
     boxed^ = none
     show(boxed^)

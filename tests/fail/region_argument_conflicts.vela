@@ -6,5 +6,5 @@ fi
 task main()
     region a
     region b
-    show(read(new int(1) in a, b))
+    show(read(new int(1) at a, b))
 fi

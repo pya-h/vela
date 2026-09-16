@@ -6,6 +6,6 @@ fi
 task main()
     region a
     region b
-    bind first = new Node(Node { value: 1, next: none }) in a
-    bind second = new Node(Node { value: 2, next: first }) in b
+    bind first = new Node(Node { value: 1, next: none }) at a
+    bind second = new Node(Node { value: 2, next: first }) at b
 fi

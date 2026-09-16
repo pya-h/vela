@@ -35,7 +35,7 @@ fi
 task main()
     region points
     bind p = Point { x: 1, y: 2 }
-    bind line = Line { start: p, finish: new Point(p) in points }
+    bind line = Line { start: p, finish: new Point(p) at points }
     bind figure = Circle(1.0)
     hold total = 0
     when total > 0
@@ -423,7 +423,7 @@ shape Node
 fi
 
 task push(r: region, list: maybe ^Node@r) -> ^Node@r
-    <- new Node(Node { value: 1, next: list }) in r
+    <- new Node(Node { value: 1, next: list }) at r
 fi
 
 task sum(list: maybe ^Node@s) -> int
@@ -442,18 +442,18 @@ fn regions_are_offered_where_a_region_is_named() {
     // After `@` in a type, every visible region.
     assert_offers(&in_main("hold later: maybe ^Node@ @@"), &["nodes"], &["first", "int"]);
     // `new` allocates, so a region a task only names in its types isn't offered.
-    assert_offers(&in_main("bind two = new int(2) in @@"), &["nodes"], &["first"]);
+    assert_offers(&in_main("bind two = new int(2) at @@"), &["nodes"], &["first"]);
     assert_offers(&in_main("bind two = new@ @@"), &["nodes"], &["first"]);
     let in_sum = |code: &str| REGIONS.replace("    @@\n", &format!("    {}\n", code));
     assert_offers(&in_sum("bind p: maybe ^int@ @@"), &["s"], &[]);
-    assert_offers(&in_sum("bind p = new int(1) in @@"), &[], &["s"]);
+    assert_offers(&in_sum("bind p = new int(1) at @@"), &[], &["s"]);
     assert_eq!(item(&in_sum("bind p: maybe ^int@ @@"), "s").detail, "region, named in the task's types");
     // In a header, the regions named so far on its line.
     assert_offers("task link(a: ^int@left, b: ^int@ @@", &["left"], &[]);
     // A parameter's type can be `region`; a statement can declare one.
     assert_offers("task make(r: @@", &["region", "int"], &[]);
     assert_offers(&in_main("bind x: @@"), &["int"], &["region"]);
-    assert_offers(&in_main("@@"), &["region"], &["nodes", "free", "new … in"]);
+    assert_offers(&in_main("@@"), &["region"], &["nodes", "free", "new … at"]);
     // A region is a value only as the argument for a region parameter, and there
     // only the regions the caller can allocate in are offered.
     assert_offers(&in_main("show(sum(push(@@"), &["nodes"], &["first"]);
@@ -464,8 +464,8 @@ fn regions_are_offered_where_a_region_is_named() {
     assert_offers(&in_sum("bind p = push(@@"), &[], &["s", "list"]);
     // A task the file doesn't declare may take one.
     assert_offers(&in_main("later(@@"), &["first", "nodes"], &[]);
-    assert_offers(&in_main("bind y = @@"), &["first", "new … in"], &["nodes"]);
-    assert_eq!(item(&in_main("bind y = @@"), "new … in").snippet.as_deref(), Some("new ${T}(${value}) in ${r}"));
+    assert_offers(&in_main("bind y = @@"), &["first", "new … at"], &["nodes"]);
+    assert_eq!(item(&in_main("bind y = @@"), "new … at").snippet.as_deref(), Some("new ${T}(${value}) at ${r}"));
     assert_eq!(labels(&in_main("region @@")), Vec::<String>::new());
 }
 
@@ -478,15 +478,16 @@ fn hover_describes_regions() {
     assert!(hover(&source, "s) -> int", 0).doc.contains("can't allocate in it"));
     assert_eq!(hover(&source, "nodes\n", 0).code, "region nodes");
     assert_eq!(hover(&source, "region nodes", 0).code, "region r");
-    assert_eq!(hover(&source, "new Node", 0).code, "new T(value) in r");
+    assert_eq!(hover(&source, "new Node", 0).code, "new T(value) at r");
     assert_eq!(hover(&source, "first =", 0).code, "bind first: ^Node@nodes");
     // While the file doesn't check, written types still show their regions.
     let broken = source.replace("    <- 0\n", "    <- missing\n").replace("bind first = push(nodes, none)", "bind first: maybe ^Node@nodes = none\n    bind two = new@nodes int(2)");
     assert_eq!(hover(&broken, "first:", 0).code, "bind first: maybe ^Node@nodes");
     assert_eq!(hover(&broken, "two =", 0).code, "bind two: ^int@nodes");
     assert_eq!(hover(&broken, "list: maybe", 1).code, "list: maybe ^Node@s");
-    // `in` has a description in both of its places.
-    assert!(hover(&source, "in r", 0).doc.contains("allocates in region r"));
+    // `at` names a region, and `in` counts through a range.
+    assert!(hover(&source, "at r", 0).doc.contains("Allocates in region r"));
+    assert!(hover("task main()\n    each i in 0..3\n        show(i)\n    fi\nfi\n", "in 0", 0).doc.contains("Counts from a"));
 }
 
 #[test]
@@ -498,7 +499,7 @@ shape Node
 fi
 
 task push(r: region, list: maybe ^Node@r) -> ^Node@r
-    <- new Node(Node { value: 1, next: list }) in r
+    <- new Node(Node { value: 1, next: list }) at r
 fi
 
 task first(list: maybe ^Node@q) -> maybe ^Node@q
@@ -594,7 +595,7 @@ fn after_a_finished_value_only_words_that_continue_it() {
     let in_task = |code: &str| format!("task main()\n    region r\n    bind m: maybe int = 1\n    {}\nfi\n", code);
     assert_offers(&in_task("when m @@"), &["is", "and", "or"], &["m", "show", "new"]);
     assert_offers(&in_task("each i @@"), &["in"], &["and", "m"]);
-    assert_offers(&in_task("bind p = new int(1) @@"), &["in", "and"], &["m"]);
+    assert_offers(&in_task("bind p = new int(1) @@"), &["at", "and"], &["m", "in"]);
     assert_offers("task f() -> int @@", &["or"], &["and", "is"]);
     // Right after an operator, values again.
     assert_offers(&in_task("bind x = 1 + @@"), &["m"], &["and"]);
@@ -602,9 +603,9 @@ fn after_a_finished_value_only_words_that_continue_it() {
 
 #[test]
 fn new_is_offered_only_where_a_region_can_be_allocated_in() {
-    assert_offers("task main()\n    bind x = @@\nfi\n", &["true"], &["new", "new … in"]);
-    assert_offers("task main()\n    region r\n    bind x = @@\nfi\n", &["new", "new … in"], &[]);
-    assert_offers("task f(list: maybe ^int@r)\n    bind x = @@\nfi\n", &["list"], &["new", "new … in"]);
+    assert_offers("task main()\n    bind x = @@\nfi\n", &["true"], &["new", "new … at"]);
+    assert_offers("task main()\n    region r\n    bind x = @@\nfi\n", &["new", "new … at"], &[]);
+    assert_offers("task f(list: maybe ^int@r)\n    bind x = @@\nfi\n", &["list"], &["new", "new … at"]);
 }
 
 #[test]

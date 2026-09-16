@@ -95,7 +95,7 @@ test("quick open and go to a declaration", async ({ page, studio }) => {
 });
 
 const REGIONS =
-  "shape Node\n    value: int\n    next: maybe ^Node\nfi\n\ntask push(r: region, list: maybe ^Node@r) -> ^Node@r\n    <- new Node(Node { value: 1, next: list }) in r\nfi\n\ntask main()\n    region nodes\n    bind first = push(nodes, none)\n    show(first^.value)\nfi\n";
+  "shape Node\n    value: int\n    next: maybe ^Node\nfi\n\ntask push(r: region, list: maybe ^Node@r) -> ^Node@r\n    <- new Node(Node { value: 1, next: list }) at r\nfi\n\ntask main()\n    region nodes\n    bind first = push(nodes, none)\n    show(first^.value)\nfi\n";
 
 test("regions: highlighting, hover, and completion of region names", async ({ page, studio }) => {
   studio.write("regions.vela", REGIONS);
@@ -107,16 +107,16 @@ test("regions: highlighting, hover, and completion of region names", async ({ pa
   await nodes.first().hover();
   await expect(page.locator(".vs-hover .vs-hover-code")).toHaveText("region nodes");
 
-  // After the `in` of a `new`, the regions it can allocate in.
+  // After the `at` of a `new`, the regions it can allocate in.
   await cursorAtEndOf(page, 13);
   await page.keyboard.press("Enter");
-  await page.keyboard.type("bind two = new int(2) in ");
+  await page.keyboard.type("bind two = new int(2) at ");
   await page.keyboard.press("Control+Space");
   const popup = page.locator(".cm-tooltip-autocomplete");
   const nodesOption = popup.getByRole("option").filter({ has: page.locator(".cm-completionLabel", { hasText: /^nodes$/ }) });
   await expect(nodesOption).toBeVisible();
   await nodesOption.click();
-  expect(await lineText(page, 14)).toBe("    bind two = new int(2) in nodes");
+  expect(await lineText(page, 14)).toBe("    bind two = new int(2) at nodes");
   await expect(page.locator(".cm-lintRange-error")).toHaveCount(0);
 
   // In a call, a region parameter's argument offers only regions.

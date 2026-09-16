@@ -4,5 +4,5 @@ fi
 task main()
     region x
     region y
-    link(new int(1) in x, new int(2) in y)
+    link(new int(1) at x, new int(2) at y)
 fi

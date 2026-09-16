@@ -20,8 +20,8 @@
     | keyword:<-  variant:Leaf  punctuation:(  parameter:seed  operator:%  number:10  punctuation:)
  13 |     fi
     | keyword:fi
- 14 |     bind left = new Tree(build(r, depth - 1, seed * 3 + 1)) in r
-    | keyword:bind  variable:left  operator:=  keyword:new  type:Tree  punctuation:(  task:build  punctuation:(  region:r  punctuation:,  parameter:depth  operator:-  number:1  punctuation:,  parameter:seed  operator:*  number:3  operator:+  number:1  punctuation:)  punctuation:)  keyword:in  region:r
+ 14 |     bind left = new Tree(build(r, depth - 1, seed * 3 + 1)) at r
+    | keyword:bind  variable:left  operator:=  keyword:new  type:Tree  punctuation:(  task:build  punctuation:(  region:r  punctuation:,  parameter:depth  operator:-  number:1  punctuation:,  parameter:seed  operator:*  number:3  operator:+  number:1  punctuation:)  punctuation:)  keyword:at  region:r
  15 |     bind right = new@r Tree(build(r, depth - 1, seed * 7 + 2))
     | keyword:bind  variable:right  operator:=  keyword:new  operator:@  region:r  type:Tree  punctuation:(  task:build  punctuation:(  region:r  punctuation:,  parameter:depth  operator:-  number:1  punctuation:,  parameter:seed  operator:*  number:7  operator:+  number:2  punctuation:)  punctuation:)
  16 |     <- Branch(left, right)
@@ -58,8 +58,8 @@
     | keyword:<-  variant:Leaf  punctuation:(  variable:value  punctuation:)
  34 |     case Branch left right
     | keyword:case  variant:Branch  variable:left  variable:right
- 35 |         <- Branch(new Tree(copy(to, left^)) in to, new Tree(copy(to, right^)) in to)
-    | keyword:<-  variant:Branch  punctuation:(  keyword:new  type:Tree  punctuation:(  task:copy  punctuation:(  region:to  punctuation:,  variable:left  operator:^  punctuation:)  punctuation:)  keyword:in  region:to  punctuation:,  keyword:new  type:Tree  punctuation:(  task:copy  punctuation:(  region:to  punctuation:,  variable:right  operator:^  punctuation:)  punctuation:)  keyword:in  region:to  punctuation:)
+ 35 |         <- Branch(new Tree(copy(to, left^)) at to, new Tree(copy(to, right^)) at to)
+    | keyword:<-  variant:Branch  punctuation:(  keyword:new  type:Tree  punctuation:(  task:copy  punctuation:(  region:to  punctuation:,  variable:left  operator:^  punctuation:)  punctuation:)  keyword:at  region:to  punctuation:,  keyword:new  type:Tree  punctuation:(  task:copy  punctuation:(  region:to  punctuation:,  variable:right  operator:^  punctuation:)  punctuation:)  keyword:at  region:to  punctuation:)
  36 |     fi
     | keyword:fi
  37 | fi

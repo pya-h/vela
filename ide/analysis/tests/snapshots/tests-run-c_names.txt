@@ -98,8 +98,8 @@
     | builtin-fn:show  punctuation:(  variable:vela_x  punctuation:)
  56 |     region free
     | keyword:region  region:free
- 57 |     bind boxed = new Record(r) in free
-    | keyword:bind  variable:boxed  operator:=  keyword:new  type:Record  punctuation:(  variable:r  punctuation:)  keyword:in  region:free
+ 57 |     bind boxed = new Record(r) at free
+    | keyword:bind  variable:boxed  operator:=  keyword:new  type:Record  punctuation:(  variable:r  punctuation:)  keyword:at  region:free
  58 |     show(boxed^.stdout)
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:.  field:stdout  punctuation:)
  59 |     region static

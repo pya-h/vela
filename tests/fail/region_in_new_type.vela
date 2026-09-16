@@ -1,5 +1,5 @@
 # error: 4:23: the value 'new' makes lives in the region it allocates in, so its type names no region; remove '@r'
 task main()
     region r
-    bind p = new ^int@r(new int(1) in r) in r
+    bind p = new ^int@r(new int(1) at r) at r
 fi

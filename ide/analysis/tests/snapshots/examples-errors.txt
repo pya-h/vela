@@ -112,8 +112,8 @@
     | comment:# An error can't be ignored by accident: an empty plan B ignores it on purpose.
  65 |     region totals
     | keyword:region  region:totals
- 66 |     bind sum = new int(0) in totals
-    | keyword:bind  variable:sum  operator:=  keyword:new  type-builtin:int  punctuation:(  number:0  punctuation:)  keyword:in  region:totals
+ 66 |     bind sum = new int(0) at totals
+    | keyword:bind  variable:sum  operator:=  keyword:new  type-builtin:int  punctuation:(  number:0  punctuation:)  keyword:at  region:totals
  67 |     add_reading(sum, 10) { }
     | task:add_reading  punctuation:(  variable:sum  punctuation:,  number:10  punctuation:)  punctuation:{  punctuation:}
  68 |     add_reading(sum, 70) {

@@ -38,8 +38,8 @@
     | comment:# Allocates, so it takes the region.
  24 | task push(r: region, list: maybe ^Node@r, value: int) -> ^Node@r
     | keyword:task  task:push  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:,  parameter:value  punctuation::  type-builtin:int  punctuation:)  operator:->  operator:^  type:Node  operator:@  region:r
- 25 |     <- new Node(Node { value: value, next: list }) in r
-    | keyword:<-  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  parameter:value  punctuation:,  field:next  punctuation::  parameter:list  punctuation:}  punctuation:)  keyword:in  region:r
+ 25 |     <- new Node(Node { value: value, next: list }) at r
+    | keyword:<-  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  parameter:value  punctuation:,  field:next  punctuation::  parameter:list  punctuation:}  punctuation:)  keyword:at  region:r
  26 | fi
     | keyword:fi
  28 | # Only reads, so it names the region without taking it.
@@ -72,8 +72,8 @@
     | keyword:<-  variant:Leaf  punctuation:(  number:1  punctuation:)
  43 |     fi
     | keyword:fi
- 44 |     <- Branch(new Tree(build(r, depth - 1)) in r, new@r Tree(build(r, depth - 1)))
-    | keyword:<-  variant:Branch  punctuation:(  keyword:new  type:Tree  punctuation:(  task:build  punctuation:(  region:r  punctuation:,  parameter:depth  operator:-  number:1  punctuation:)  punctuation:)  keyword:in  region:r  punctuation:,  keyword:new  operator:@  region:r  type:Tree  punctuation:(  task:build  punctuation:(  region:r  punctuation:,  parameter:depth  operator:-  number:1  punctuation:)  punctuation:)  punctuation:)
+ 44 |     <- Branch(new Tree(build(r, depth - 1)) at r, new@r Tree(build(r, depth - 1)))
+    | keyword:<-  variant:Branch  punctuation:(  keyword:new  type:Tree  punctuation:(  task:build  punctuation:(  region:r  punctuation:,  parameter:depth  operator:-  number:1  punctuation:)  punctuation:)  keyword:at  region:r  punctuation:,  keyword:new  operator:@  region:r  type:Tree  punctuation:(  task:build  punctuation:(  region:r  punctuation:,  parameter:depth  operator:-  number:1  punctuation:)  punctuation:)  punctuation:)
  45 | fi
     | keyword:fi
  47 | task count(t: Tree@r) -> int
@@ -96,14 +96,14 @@
     | comment:# A region passed on under another name.
  57 | task twice(outer: region, value: int) -> Pair@outer
     | keyword:task  task:twice  punctuation:(  region:outer  punctuation::  keyword:region  punctuation:,  parameter:value  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Pair  operator:@  region:outer
- 58 |     <- Pair { first: new int(value) in outer, second: make(outer, value * 2) }
-    | keyword:<-  type:Pair  punctuation:{  field:first  punctuation::  keyword:new  type-builtin:int  punctuation:(  parameter:value  punctuation:)  keyword:in  region:outer  punctuation:,  field:second  punctuation::  task:make  punctuation:(  region:outer  punctuation:,  parameter:value  operator:*  number:2  punctuation:)  punctuation:}
+ 58 |     <- Pair { first: new int(value) at outer, second: make(outer, value * 2) }
+    | keyword:<-  type:Pair  punctuation:{  field:first  punctuation::  keyword:new  type-builtin:int  punctuation:(  parameter:value  punctuation:)  keyword:at  region:outer  punctuation:,  field:second  punctuation::  task:make  punctuation:(  region:outer  punctuation:,  parameter:value  operator:*  number:2  punctuation:)  punctuation:}
  59 | fi
     | keyword:fi
  61 | task make(inner: region, value: int) -> ^int@inner
     | keyword:task  task:make  punctuation:(  region:inner  punctuation::  keyword:region  punctuation:,  parameter:value  punctuation::  type-builtin:int  punctuation:)  operator:->  operator:^  type-builtin:int  operator:@  region:inner
- 62 |     <- new int(value) in inner
-    | keyword:<-  keyword:new  type-builtin:int  punctuation:(  parameter:value  punctuation:)  keyword:in  region:inner
+ 62 |     <- new int(value) at inner
+    | keyword:<-  keyword:new  type-builtin:int  punctuation:(  parameter:value  punctuation:)  keyword:at  region:inner
  63 | fi
     | keyword:fi
  65 | # A `<-` from inside nested blocks frees the task's regions first.
@@ -112,14 +112,14 @@
     | keyword:task  task:early  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  67 |     region outer
     | keyword:region  region:outer
- 68 |     bind a = new int(n) in outer
-    | keyword:bind  variable:a  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:in  region:outer
+ 68 |     bind a = new int(n) at outer
+    | keyword:bind  variable:a  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:at  region:outer
  69 |     each i in 0..3
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:3
  70 |         region inner
     | keyword:region  region:inner
- 71 |         bind b = new int(i) in inner
-    | keyword:bind  variable:b  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:i  punctuation:)  keyword:in  region:inner
+ 71 |         bind b = new int(i) at inner
+    | keyword:bind  variable:b  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:i  punctuation:)  keyword:at  region:inner
  72 |         when b^ == 1
     | keyword:when  variable:b  operator:^  operator:==  number:1
  73 |             <- a^ + b^
@@ -142,8 +142,8 @@
     | keyword:task  task:checked  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  operator:^  type:Node  operator:@  region:r  keyword:or  type-builtin:text
  84 |     region scratch
     | keyword:region  region:scratch
- 85 |     bind temporary = new int(n) in scratch
-    | keyword:bind  variable:temporary  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:in  region:scratch
+ 85 |     bind temporary = new int(n) at scratch
+    | keyword:bind  variable:temporary  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:at  region:scratch
  86 |     when temporary^ < 0
     | keyword:when  variable:temporary  operator:^  operator:<  number:0
  87 |         <- fail "negative"
@@ -158,8 +158,8 @@
     | keyword:task  task:save  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  keyword:or  type-builtin:text
  93 |     region scratch
     | keyword:region  region:scratch
- 94 |     bind copy = new int(n) in scratch
-    | keyword:bind  variable:copy  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:in  region:scratch
+ 94 |     bind copy = new int(n) at scratch
+    | keyword:bind  variable:copy  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:at  region:scratch
  95 |     when copy^ > 9
     | keyword:when  variable:copy  operator:^  operator:>  number:9
  96 |         <- fail "too big"
@@ -228,8 +228,8 @@
     | keyword:bind  variable:rescued  operator:=  variable:missing  punctuation:{
 134 |         region rescue
     | keyword:region  region:rescue
-135 |         bind spare = new int(99) in rescue
-    | keyword:bind  variable:spare  operator:=  keyword:new  type-builtin:int  punctuation:(  number:99  punctuation:)  keyword:in  region:rescue
+135 |         bind spare = new int(99) at rescue
+    | keyword:bind  variable:spare  operator:=  keyword:new  type-builtin:int  punctuation:(  number:99  punctuation:)  keyword:at  region:rescue
 136 |         spare^
     | variable:spare  operator:^
 137 |     }
@@ -246,8 +246,8 @@
     | keyword:case  keyword:fail  variable:reason
 144 |         region report
     | keyword:region  region:report
-145 |         bind message = new text(reason) in report
-    | keyword:bind  variable:message  operator:=  keyword:new  type-builtin:text  punctuation:(  variable:reason  punctuation:)  keyword:in  region:report
+145 |         bind message = new text(reason) at report
+    | keyword:bind  variable:message  operator:=  keyword:new  type-builtin:text  punctuation:(  variable:reason  punctuation:)  keyword:at  region:report
 146 |         show(message^)
     | builtin-fn:show  punctuation:(  variable:message  operator:^  punctuation:)
 147 |     fi
@@ -294,14 +294,14 @@
     | builtin-fn:show  punctuation:(  variable:fallback  operator:^  punctuation:.  field:value  punctuation:)
 170 |     # Pointers into different regions compare, and are never equal.
     | comment:# Pointers into different regions compare, and are never equal.
-171 |     show(good == new Node(Node { value: 7, next: none }) in trees)
-    | builtin-fn:show  punctuation:(  variable:good  operator:==  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:7  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:in  region:trees  punctuation:)
+171 |     show(good == new Node(Node { value: 7, next: none }) at trees)
+    | builtin-fn:show  punctuation:(  variable:good  operator:==  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:7  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:trees  punctuation:)
 173 |     # A pointer to a pointer lives in one region too.
     | comment:# A pointer to a pointer lives in one region too.
-174 |     bind inner = new int(8) in trees
-    | keyword:bind  variable:inner  operator:=  keyword:new  type-builtin:int  punctuation:(  number:8  punctuation:)  keyword:in  region:trees
-175 |     bind outer = new ^int(inner) in trees
-    | keyword:bind  variable:outer  operator:=  keyword:new  operator:^  type-builtin:int  punctuation:(  variable:inner  punctuation:)  keyword:in  region:trees
+174 |     bind inner = new int(8) at trees
+    | keyword:bind  variable:inner  operator:=  keyword:new  type-builtin:int  punctuation:(  number:8  punctuation:)  keyword:at  region:trees
+175 |     bind outer = new ^int(inner) at trees
+    | keyword:bind  variable:outer  operator:=  keyword:new  operator:^  type-builtin:int  punctuation:(  variable:inner  punctuation:)  keyword:at  region:trees
 176 |     outer^^ = outer^^ + 1
     | variable:outer  operator:^  operator:^  operator:=  variable:outer  operator:^  operator:^  operator:+  number:1
 177 |     show(inner^)

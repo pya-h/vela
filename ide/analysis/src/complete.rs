@@ -122,12 +122,12 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, byte: usize
     if matches!(prev_token, Some(Token::Task | Token::Shape | Token::Kind | Token::Bind | Token::Hold | Token::Each | Token::Region)) {
         return (Vec::new(), word_start, byte);
     }
-    // A region: after `@` in a type or `new@`, or after the `in` of `new T(v) in`.
+    // A region: after `@` in a type or `new@`, or after the `at` of `new T(v) at`.
     // `new` allocates, so it takes only a region the task can allocate in.
     if let Some(q) = prev
-        && (prev_token == Some(&Token::At) || (prev_token == Some(&Token::In) && k.token_before(q) == Some(&Token::RParen)))
+        && (prev_token == Some(&Token::AtSign) || prev_token == Some(&Token::At))
     {
-        let allocating = prev_token == Some(&Token::In) || k.token_before(q) == Some(&Token::New);
+        let allocating = prev_token == Some(&Token::At) || k.token_before(q) == Some(&Token::New);
         return (region_items(&k, word_start, allocating), word_start, byte);
     }
     // After `is`: patterns. Names a pattern or plan B declares (`is {v}`,
@@ -270,8 +270,8 @@ fn continuation_items(k: &Knowledge, q: usize) -> Vec<CompletionItem> {
         return if on_line(&Token::Or) { Vec::new() } else { vec![keyword("or")] };
     }
     let mut items = Vec::new();
-    if k.token(q) == Some(&Token::RParen) && on_line(&Token::New) && !on_line(&Token::In) {
-        items.push(keyword("in"));
+    if k.token(q) == Some(&Token::RParen) && on_line(&Token::New) && !on_line(&Token::At) {
+        items.push(keyword("at"));
     }
     if matches!(k.token(line), Some(Token::When | Token::Loop)) && !on_line(&Token::Is) {
         items.push(keyword("is"));
@@ -326,7 +326,7 @@ fn starts_type(k: &Knowledge, q: usize) -> bool {
 
 /// Whether position `q` is the region name of `new@r`, after which its type comes.
 fn after_new_region(k: &Knowledge, q: usize) -> bool {
-    k.ident(q).is_some() && k.token_before(q) == Some(&Token::At) && q.checked_sub(2).is_some_and(|new| k.token(new) == Some(&Token::New))
+    k.ident(q).is_some() && k.token_before(q) == Some(&Token::AtSign) && q.checked_sub(2).is_some_and(|new| k.token(new) == Some(&Token::New))
 }
 
 /// Whether the type-ending name at position `q` (a type's name, or the region
@@ -335,7 +335,7 @@ fn ends_type(k: &Knowledge, q: usize) -> bool {
     if k.ident(q).is_none() {
         return false;
     }
-    let name = if k.token_before(q) == Some(&Token::At) { q.checked_sub(2) } else { Some(q) };
+    let name = if k.token_before(q) == Some(&Token::AtSign) { q.checked_sub(2) } else { Some(q) };
     name.is_some_and(|name| k.ident(name).is_some() && starts_type(k, name))
 }
 
@@ -935,7 +935,7 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
             .map(|word| keyword(word)),
     );
     if can_allocate {
-        items.push(snippet("new … in", "allocate a value in a region", "new ${T}(${value}) in ${r}"));
+        items.push(snippet("new … at", "allocate a value in a region", "new ${T}(${value}) at ${r}"));
     }
     items
 }

@@ -3,6 +3,6 @@ task main()
     hold p: maybe ^int@r = none
     when true
         region r
-        p = new int(1) in r
+        p = new int(1) at r
     fi
 fi

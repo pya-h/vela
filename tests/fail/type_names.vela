@@ -5,5 +5,5 @@ fi
 
 task main()
     region r
-    bind p: ^Point@r = new int(1) in r
+    bind p: ^Point@r = new int(1) at r
 fi

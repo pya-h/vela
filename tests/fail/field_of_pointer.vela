@@ -5,7 +5,7 @@ fi
 
 task main()
     region r
-    bind p = new Point(Point { x: 1 }) in r
+    bind p = new Point(Point { x: 1 }) at r
     show(p^.x)
     show(p.x)
 fi

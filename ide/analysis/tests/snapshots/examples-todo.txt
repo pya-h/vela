@@ -108,8 +108,8 @@
     | comment:# Adding allocates, so `add` takes the region to allocate in.
  62 | task add(r: region, title: text, status: Status, next: maybe ^Item@r) -> ^Item@r
     | keyword:task  task:add  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:title  punctuation::  type-builtin:text  punctuation:,  parameter:status  punctuation::  type:Status  punctuation:,  parameter:next  punctuation::  keyword:maybe  operator:^  type:Item  operator:@  region:r  punctuation:)  operator:->  operator:^  type:Item  operator:@  region:r
- 63 |     <- new Item(Item { title: title, status: status, next: next }) in r
-    | keyword:<-  keyword:new  type:Item  punctuation:(  type:Item  punctuation:{  field:title  punctuation::  parameter:title  punctuation:,  field:status  punctuation::  parameter:status  punctuation:,  field:next  punctuation::  parameter:next  punctuation:}  punctuation:)  keyword:in  region:r
+ 63 |     <- new Item(Item { title: title, status: status, next: next }) at r
+    | keyword:<-  keyword:new  type:Item  punctuation:(  type:Item  punctuation:{  field:title  punctuation::  parameter:title  punctuation:,  field:status  punctuation::  parameter:status  punctuation:,  field:next  punctuation::  parameter:next  punctuation:}  punctuation:)  keyword:at  region:r
  64 | fi
     | keyword:fi
  66 | task main()

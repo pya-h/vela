@@ -63,7 +63,7 @@ task main()
 
     # An error can't be ignored by accident: an empty plan B ignores it on purpose.
     region totals
-    bind sum = new int(0) in totals
+    bind sum = new int(0) at totals
     add_reading(sum, 10) { }
     add_reading(sum, 70) {
         fail problem

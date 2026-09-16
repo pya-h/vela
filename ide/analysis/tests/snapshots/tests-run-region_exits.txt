@@ -32,16 +32,16 @@
     | keyword:task  task:from_condition  punctuation:(  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  20 |     region outer
     | keyword:region  region:outer
- 21 |     bind total = new int(0) in outer
-    | keyword:bind  variable:total  operator:=  keyword:new  type-builtin:int  punctuation:(  number:0  punctuation:)  keyword:in  region:outer
+ 21 |     bind total = new int(0) at outer
+    | keyword:bind  variable:total  operator:=  keyword:new  type-builtin:int  punctuation:(  number:0  punctuation:)  keyword:at  region:outer
  22 |     hold j = 1
     | keyword:hold  variable:j  operator:=  number:1
  23 |     loop pick(j) {
     | keyword:loop  task:pick  punctuation:(  variable:j  punctuation:)  punctuation:{
  24 |         region c
     | keyword:region  region:c
- 25 |         bind pc = new int(j) in c
-    | keyword:bind  variable:pc  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:j  punctuation:)  keyword:in  region:c
+ 25 |         bind pc = new int(j) at c
+    | keyword:bind  variable:pc  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:j  punctuation:)  keyword:at  region:c
  26 |         when pc^ > limit
     | keyword:when  variable:pc  operator:^  operator:>  parameter:limit
  27 |             <- total^
@@ -64,8 +64,8 @@
     | keyword:task  task:from_and  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  37 |     region a
     | keyword:region  region:a
- 38 |     bind pa = new int(n) in a
-    | keyword:bind  variable:pa  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:in  region:a
+ 38 |     bind pa = new int(n) at a
+    | keyword:bind  variable:pa  operator:=  keyword:new  type-builtin:int  punctuation:(  parameter:n  punctuation:)  keyword:at  region:a
  39 |     match fails(pa^)
     | keyword:match  task:fails  punctuation:(  variable:pa  operator:^  punctuation:)
  40 |     case {v}
@@ -76,8 +76,8 @@
     | keyword:case  keyword:fail  variable:msg
  43 |         region d
     | keyword:region  region:d
- 44 |         bind pd = new text(msg) in d
-    | keyword:bind  variable:pd  operator:=  keyword:new  type-builtin:text  punctuation:(  variable:msg  punctuation:)  keyword:in  region:d
+ 44 |         bind pd = new text(msg) at d
+    | keyword:bind  variable:pd  operator:=  keyword:new  type-builtin:text  punctuation:(  variable:msg  punctuation:)  keyword:at  region:d
  45 |         when pd^ == "four" and pick(pa^ / 4) { <- 1000 } > 0
     | keyword:when  variable:pd  operator:^  operator:==  string:"four"  keyword:and  task:pick  punctuation:(  variable:pa  operator:^  operator:/  number:4  punctuation:)  punctuation:{  keyword:<-  number:1000  punctuation:}  operator:>  number:0
  46 |             <- 1
@@ -106,14 +106,14 @@
     | keyword:each  variable:k  keyword:in  number:0  operator:..  number:1000
  59 |         region per
     | keyword:region  region:per
- 60 |         bind p = new int(k) in per
-    | keyword:bind  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:k  punctuation:)  keyword:in  region:per
+ 60 |         bind p = new int(k) at per
+    | keyword:bind  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:k  punctuation:)  keyword:at  region:per
  61 |         show(pick(p^) { fails(p^) { fail e
     | builtin-fn:show  punctuation:(  task:pick  punctuation:(  variable:p  operator:^  punctuation:)  punctuation:{  task:fails  punctuation:(  variable:p  operator:^  punctuation:)  punctuation:{  keyword:fail  variable:e
  62 |             region inner
     | keyword:region  region:inner
- 63 |             bind q = new int(0) in inner
-    | keyword:bind  variable:q  operator:=  keyword:new  type-builtin:int  punctuation:(  number:0  punctuation:)  keyword:in  region:inner
+ 63 |             bind q = new int(0) at inner
+    | keyword:bind  variable:q  operator:=  keyword:new  type-builtin:int  punctuation:(  number:0  punctuation:)  keyword:at  region:inner
  64 |             when k > 10
     | keyword:when  variable:k  operator:>  number:10
  65 |                 <-

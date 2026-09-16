@@ -22,7 +22,7 @@ fi
 
 # Allocates, so it takes the region.
 task push(r: region, list: maybe ^Node@r, value: int) -> ^Node@r
-    <- new Node(Node { value: value, next: list }) in r
+    <- new Node(Node { value: value, next: list }) at r
 fi
 
 # Only reads, so it names the region without taking it.
@@ -41,7 +41,7 @@ task build(r: region, depth: int) -> Tree@r
     when depth == 0
         <- Leaf(1)
     fi
-    <- Branch(new Tree(build(r, depth - 1)) in r, new@r Tree(build(r, depth - 1)))
+    <- Branch(new Tree(build(r, depth - 1)) at r, new@r Tree(build(r, depth - 1)))
 fi
 
 task count(t: Tree@r) -> int
@@ -55,20 +55,20 @@ fi
 
 # A region passed on under another name.
 task twice(outer: region, value: int) -> Pair@outer
-    <- Pair { first: new int(value) in outer, second: make(outer, value * 2) }
+    <- Pair { first: new int(value) at outer, second: make(outer, value * 2) }
 fi
 
 task make(inner: region, value: int) -> ^int@inner
-    <- new int(value) in inner
+    <- new int(value) at inner
 fi
 
 # A `<-` from inside nested blocks frees the task's regions first.
 task early(n: int) -> int
     region outer
-    bind a = new int(n) in outer
+    bind a = new int(n) at outer
     each i in 0..3
         region inner
-        bind b = new int(i) in inner
+        bind b = new int(i) at inner
         when b^ == 1
             <- a^ + b^
         fi
@@ -82,7 +82,7 @@ fi
 
 task checked(r: region, n: int) -> ^Node@r or text
     region scratch
-    bind temporary = new int(n) in scratch
+    bind temporary = new int(n) at scratch
     when temporary^ < 0
         <- fail "negative"
     fi
@@ -91,7 +91,7 @@ fi
 
 task save(n: int) -> unit or text
     region scratch
-    bind copy = new int(n) in scratch
+    bind copy = new int(n) at scratch
     when copy^ > 9
         <- fail "too big"
     fi
@@ -132,7 +132,7 @@ task main()
     bind missing: maybe int = none
     bind rescued = missing {
         region rescue
-        bind spare = new int(99) in rescue
+        bind spare = new int(99) at rescue
         spare^
     }
     show(rescued)
@@ -142,7 +142,7 @@ task main()
         show(node^.value)
     case fail reason
         region report
-        bind message = new text(reason) in report
+        bind message = new text(reason) at report
         show(message^)
     fi
     bind good = checked(lists, 7) { <- }
@@ -168,11 +168,11 @@ task main()
     bind fallback: ^Node@lists = first(none) { good }
     show(fallback^.value)
     # Pointers into different regions compare, and are never equal.
-    show(good == new Node(Node { value: 7, next: none }) in trees)
+    show(good == new Node(Node { value: 7, next: none }) at trees)
 
     # A pointer to a pointer lives in one region too.
-    bind inner = new int(8) in trees
-    bind outer = new ^int(inner) in trees
+    bind inner = new int(8) at trees
+    bind outer = new ^int(inner) at trees
     outer^^ = outer^^ + 1
     show(inner^)
 fi

@@ -74,12 +74,12 @@
     | builtin-fn:show  punctuation:(  variable:empty  operator:==  keyword:none  punctuation:)
  43 |     show(sum(empty))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:empty  punctuation:)  punctuation:)
- 44 |     bind third = new Node(Node { value: 3, next: none }) in nodes
-    | keyword:bind  variable:third  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:3  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:in  region:nodes
- 45 |     bind second = new Node(Node { value: 2, next: third }) in nodes
-    | keyword:bind  variable:second  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:2  punctuation:,  field:next  punctuation::  variable:third  punctuation:}  punctuation:)  keyword:in  region:nodes
- 46 |     bind first = new Node(Node { value: 1, next: second }) in nodes
-    | keyword:bind  variable:first  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  variable:second  punctuation:}  punctuation:)  keyword:in  region:nodes
+ 44 |     bind third = new Node(Node { value: 3, next: none }) at nodes
+    | keyword:bind  variable:third  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:3  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:nodes
+ 45 |     bind second = new Node(Node { value: 2, next: third }) at nodes
+    | keyword:bind  variable:second  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:2  punctuation:,  field:next  punctuation::  variable:third  punctuation:}  punctuation:)  keyword:at  region:nodes
+ 46 |     bind first = new Node(Node { value: 1, next: second }) at nodes
+    | keyword:bind  variable:first  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  variable:second  punctuation:}  punctuation:)  keyword:at  region:nodes
  47 |     show(sum(first))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:first  punctuation:)  punctuation:)
  48 |     show(last(first)^.value)
@@ -112,8 +112,8 @@
     | builtin-fn:show  punctuation:(  variable:fallback  operator:^  punctuation:.  field:value  punctuation:)
  66 |     hold spare: maybe ^int@nodes = none
     | keyword:hold  variable:spare  punctuation::  keyword:maybe  operator:^  type-builtin:int  operator:@  region:nodes  operator:=  keyword:none
- 67 |     spare = new int(7) in nodes
-    | variable:spare  operator:=  keyword:new  type-builtin:int  punctuation:(  number:7  punctuation:)  keyword:in  region:nodes
+ 67 |     spare = new int(7) at nodes
+    | variable:spare  operator:=  keyword:new  type-builtin:int  punctuation:(  number:7  punctuation:)  keyword:at  region:nodes
  68 |     when spare is {p}
     | keyword:when  variable:spare  keyword:is  punctuation:{  variable:p  punctuation:}
  69 |         show(p^)

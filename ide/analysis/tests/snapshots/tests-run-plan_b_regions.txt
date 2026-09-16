@@ -12,8 +12,8 @@
     | keyword:loop  variable:m  punctuation:{
   8 |         region r
     | keyword:region  region:r
-  9 |         bind p = new int(count) in r
-    | keyword:bind  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:count  punctuation:)  keyword:in  region:r
+  9 |         bind p = new int(count) at r
+    | keyword:bind  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:count  punctuation:)  keyword:at  region:r
  10 |         p^
     | variable:p  operator:^
  11 |     } < 3
@@ -30,8 +30,8 @@
     | builtin-fn:show  punctuation:(  keyword:false  keyword:and  variable:b  punctuation:{
  18 |         region unused
     | keyword:region  region:unused
- 19 |         bind flag = new bool(true) in unused
-    | keyword:bind  variable:flag  operator:=  keyword:new  type-builtin:bool  punctuation:(  keyword:true  punctuation:)  keyword:in  region:unused
+ 19 |         bind flag = new bool(true) at unused
+    | keyword:bind  variable:flag  operator:=  keyword:new  type-builtin:bool  punctuation:(  keyword:true  punctuation:)  keyword:at  region:unused
  20 |         show("not shown")
     | builtin-fn:show  punctuation:(  string:"not shown"  punctuation:)
  21 |         flag^

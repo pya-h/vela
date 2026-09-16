@@ -10,7 +10,7 @@ fi
 
 task main()
     region a
-    bind q = new Node(Node { value: 1, next: none }) in a
+    bind q = new Node(Node { value: 1, next: none }) at a
     when first(none) is {n}
         n^.next = q
     fi

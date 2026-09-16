@@ -41,9 +41,9 @@ task main()
     bind empty: maybe ^Node@nodes = none
     show(empty == none)
     show(sum(empty))
-    bind third = new Node(Node { value: 3, next: none }) in nodes
-    bind second = new Node(Node { value: 2, next: third }) in nodes
-    bind first = new Node(Node { value: 1, next: second }) in nodes
+    bind third = new Node(Node { value: 3, next: none }) at nodes
+    bind second = new Node(Node { value: 2, next: third }) at nodes
+    bind first = new Node(Node { value: 1, next: second }) at nodes
     show(sum(first))
     show(last(first)^.value)
 
@@ -64,7 +64,7 @@ task main()
     show(fallback^.value)
 
     hold spare: maybe ^int@nodes = none
-    spare = new int(7) in nodes
+    spare = new int(7) at nodes
     when spare is {p}
         show(p^)
     fi

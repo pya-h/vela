@@ -1,5 +1,5 @@
-  1 | # Pointers live in regions: `new` allocates in one (written `new T(v) in r`
-    | comment:# Pointers live in regions: `new` allocates in one (written `new T(v) in r`
+  1 | # Pointers live in regions: `new` allocates in one (written `new T(v) at r`
+    | comment:# Pointers live in regions: `new` allocates in one (written `new T(v) at r`
   2 | # or `new@r T(v)`), `^` reads and writes through the pointer, and the region
     | comment:# or `new@r T(v)`), `^` reads and writes through the pointer, and the region
   3 | # frees everything in it when its block closes.
@@ -16,8 +16,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  11 |     region r
     | keyword:region  region:r
- 12 |     bind n: ^int@r = new int(42) in r
-    | keyword:bind  variable:n  punctuation::  operator:^  type-builtin:int  operator:@  region:r  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)  keyword:in  region:r
+ 12 |     bind n: ^int@r = new int(42) at r
+    | keyword:bind  variable:n  punctuation::  operator:^  type-builtin:int  operator:@  region:r  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)  keyword:at  region:r
  13 |     show(n^)
     | builtin-fn:show  punctuation:(  variable:n  operator:^  punctuation:)
  14 |     n^ = n^ + 1

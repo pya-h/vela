@@ -565,7 +565,7 @@ impl Checker {
         if let Some(info) = self.lookup(name)
             && info.ty == Type::Region
         {
-            return err(span, format!("'{0}' is a region, not a value; allocate in it with 'new T(…) in {0}'", name));
+            return err(span, format!("'{0}' is a region, not a value; allocate in it with 'new T(…) at {0}'", name));
         }
         self.lookup(name).ok_or_else(|| {
             if self.variants.contains_key(name) {

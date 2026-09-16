@@ -230,8 +230,9 @@
 
       <h3>Reserved Words and Symbols</h3>
       <p>These words can't be used as names:</p>
-      <pre>task  shape  kind  bind  hold  when  else  loop  each  in    match  case
-new   region and   or    not   true  false none  fi    maybe is     fail</pre>
+      <pre>task shape kind  bind hold  when   else loop each
+in   at    match case new   region and  or   not
+true false none  fi   maybe is     fail</pre>
       <p>
         <code>show</code> and the builtin types (<code>int</code>, <code>float</code>, <code>bool</code>,
         <code>text</code>, <code>unit</code>) aren't reserved words: no task, shape, kind, or variant can take their
@@ -243,7 +244,7 @@ new   region and   or    not   true  false none  fi    maybe is     fail</pre>
         <tr><td><code>&lt;- value</code></td><td>sends that value back (starts a line)</td></tr>
         <tr><td><code>name: T</code></td><td>a parameter's, field's, or binding's type</td></tr>
         <tr><td><code>^T</code>, <code>p^</code></td><td>a pointer type; the value a pointer points to</td></tr>
-        <tr><td><code>T@r</code>, <code>new@r</code></td><td>the region a type's pointers live in; the region <code>new</code> allocates in (also <code>new T(v) in r</code>)</td></tr>
+        <tr><td><code>T@r</code>, <code>new@r</code></td><td>the region a type's pointers live in; the region <code>new</code> allocates in (also <code>new T(v) at r</code>)</td></tr>
         <tr><td><code>value { … }</code></td><td>a plan B: the value inside a <code>maybe</code> or <code>T or E</code>, or else what the block gives</td></tr>
         <tr><td><code>{v}</code>, <code>_</code></td><td>in a <code>case</code> or <code>is</code>: the value inside, and anything (or a value left unnamed)</td></tr>
         <tr><td><code>a.x</code></td><td>a field of a shape value</td></tr>
@@ -648,7 +649,7 @@ save(500) {
       <div class="note">
         <strong>The rules in short.</strong>
         <ul>
-          <li><code>region r</code> declares a region; <code>new T(v) in r</code> (or <code>new@r T(v)</code>) copies a value into it.</li>
+          <li><code>region r</code> declares a region; <code>new T(v) at r</code> (or <code>new@r T(v)</code>) copies a value into it.</li>
           <li>A pointer into <code>r</code> has type <code>^T@r</code>, and a type can only name regions visible where it is written.</li>
           <li>When the block declaring <code>r</code> closes, however it closes, everything in <code>r</code> is freed.</li>
           <li>A task allocates only in a region it is given as a parameter, <code>r: region</code>; it can read and link pointers in any region its parameters' types name.</li>
@@ -664,14 +665,14 @@ save(500) {
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> scratch                          <span class="comment"># a new, empty region</span>
-    <span class="keyword">bind</span> n = <span class="keyword">new</span> int(42) <span class="keyword">in</span> scratch         <span class="comment"># n is a ^int@scratch</span>
+    <span class="keyword">bind</span> n = <span class="keyword">new</span> int(42) <span class="keyword">at</span> scratch         <span class="comment"># n is a ^int@scratch</span>
     <span class="keyword">bind</span> p = <span class="keyword">new</span>@scratch Point(Point { x: 1, y: 2 })
     n^ = n^ + 1                             <span class="comment"># read and write through ^</span>
     p^.x = 5
     show(n^ + p^.x)                         <span class="comment"># 48</span>
 <span class="keyword">fi</span>                                          <span class="comment"># scratch, and all in it, is freed here</span></pre>
       <p>
-        <code>new T(value) in r</code> and <code>new@r T(value)</code> are the same: both copy the value into region
+        <code>new T(value) at r</code> and <code>new@r T(value)</code> are the same: both copy the value into region
         <code>r</code> and give back a <code>^T@r</code>. The type after <code>new</code> names no region, since what
         it makes lives in the region it allocates in. A pointer to a shape has no fields of its own: read and write
         them through <code>^</code>, as in <code>p^.x</code> (<code>p.x</code> is an error that says so). Writing
@@ -690,14 +691,14 @@ save(500) {
       <pre><span class="keyword">region</span> r
 <span class="keyword">hold</span> next: <span class="keyword">maybe</span> ^int@r = <span class="keyword">none</span>
 <span class="keyword">when</span> next == <span class="keyword">none</span>
-    next = <span class="keyword">new</span> int(1) <span class="keyword">in</span> r
+    next = <span class="keyword">new</span> int(1) <span class="keyword">at</span> r
 <span class="keyword">fi</span>
 <span class="keyword">when</span> next <span class="keyword">is</span> {p}
     show(p^)                               <span class="comment"># 1</span>
 <span class="keyword">fi</span>
 show(next^)                                <span class="comment"># error: this pointer is a maybe ^int@r, which may be none</span>
 <span class="keyword">bind</span> bad: ^int@r = <span class="keyword">none</span>                    <span class="comment"># error: expected type ^int@r, got none; a pointer can't be none, so use 'maybe ^int@r'</span>
-<span class="keyword">bind</span> lost: ^int = <span class="keyword">new</span> int(2) <span class="keyword">in</span> r         <span class="comment"># error: a pointer lives in a region, so its type names one</span></pre>
+<span class="keyword">bind</span> lost: ^int = <span class="keyword">new</span> int(2) <span class="keyword">at</span> r         <span class="comment"># error: a pointer lives in a region, so its type names one</span></pre>
 
       <h3>A region lives until its block closes</h3>
       <p>
@@ -710,10 +711,10 @@ show(next^)                                <span class="comment"># error: this p
       <pre><span class="keyword">hold</span> saved: <span class="keyword">maybe</span> ^int@inner = <span class="keyword">none</span>     <span class="comment"># error: unknown region 'inner'; declare it with 'region inner'</span>
 
 <span class="keyword">region</span> outer
-<span class="keyword">hold</span> p = <span class="keyword">new</span> int(0) <span class="keyword">in</span> outer
+<span class="keyword">hold</span> p = <span class="keyword">new</span> int(0) <span class="keyword">at</span> outer
 <span class="keyword">when</span> ready
     <span class="keyword">region</span> inner
-    p = <span class="keyword">new</span> int(1) <span class="keyword">in</span> inner                <span class="comment"># error: expected type ^int@outer, got ^int@inner;</span>
+    p = <span class="keyword">new</span> int(1) <span class="keyword">at</span> inner                <span class="comment"># error: expected type ^int@outer, got ^int@inner;</span>
 <span class="keyword">fi</span>                                         <span class="comment">#   a value can't move to another region</span></pre>
       <p>
         The region is freed however the block ends: at its <code>fi</code>, at the end of a plan B's block (after its
@@ -723,7 +724,7 @@ show(next^)                                <span class="comment"># error: this p
       </p>
       <pre><span class="keyword">each</span> line <span class="keyword">in</span> 0..1000
     <span class="keyword">region</span> work                            <span class="comment"># empty again on every pass</span>
-    <span class="keyword">bind</span> temporary = <span class="keyword">new</span> int(line) <span class="keyword">in</span> work
+    <span class="keyword">bind</span> temporary = <span class="keyword">new</span> int(line) <span class="keyword">at</span> work
     show(temporary^)
 <span class="keyword">fi</span></pre>
       <p>
@@ -743,7 +744,7 @@ show(next^)                                <span class="comment"># error: this p
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> push(r: <span class="keyword">region</span>, list: <span class="keyword">maybe</span> ^Node@r, value: int) -&gt; ^Node@r
-    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">in</span> r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> sum(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int         <span class="comment"># only reads, so r is just a name</span>
@@ -768,17 +769,17 @@ show(next^)                                <span class="comment"># error: this p
         A region named in a task's header without a <code>region</code> parameter, like <code>r</code> in
         <code>sum</code>, stands for whichever region the caller's arguments are in: <code>sum(list)</code> reads a
         list in <code>nodes</code>, and the same task reads lists in any other region. It costs nothing at run time,
-        but the task can't allocate there (<code>new … in r</code> is an error that suggests the parameter). Two
+        but the task can't allocate there (<code>new … at r</code> is an error that suggests the parameter). Two
         parameters with the same region name must be in the same region, and a result can only name regions the
         header's parameters name:
       </p>
       <pre><span class="keyword">task</span> make() -&gt; ^int@r                     <span class="comment"># error: the result lives in region 'r', which the task isn't given</span>
     <span class="keyword">region</span> r
-    <span class="keyword">&lt;-</span> <span class="keyword">new</span> int(1) <span class="keyword">in</span> r
+    <span class="keyword">&lt;-</span> <span class="keyword">new</span> int(1) <span class="keyword">at</span> r
 <span class="keyword">fi</span></pre>
       <p>
         Regions aren't values: a region is only a <code>region</code> statement, a <code>region</code> parameter,
-        an argument for one, or a name after <code>@</code> or <code>in</code>. It can't be stored in a variable or a
+        an argument for one, or a name after <code>@</code> or <code>at</code>. It can't be stored in a variable or a
         field, or sent from a task.
       </p>
 
@@ -805,8 +806,8 @@ show(next^)                                <span class="comment"># error: this p
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> trees
-    <span class="keyword">bind</span> one = <span class="keyword">new</span> Tree(Leaf(1)) <span class="keyword">in</span> trees
-    <span class="keyword">bind</span> two = <span class="keyword">new</span> Tree(Leaf(2)) <span class="keyword">in</span> trees
+    <span class="keyword">bind</span> one = <span class="keyword">new</span> Tree(Leaf(1)) <span class="keyword">at</span> trees
+    <span class="keyword">bind</span> two = <span class="keyword">new</span> Tree(Leaf(2)) <span class="keyword">at</span> trees
     show(count(Branch(one, two)))          <span class="comment"># 3</span>
     show(count(Leaf(5)))                   <span class="comment"># 5</span>
 <span class="keyword">fi</span></pre>

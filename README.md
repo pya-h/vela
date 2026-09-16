@@ -2,7 +2,7 @@
 
 Vela is a small, statically typed systems language that compiles to portable C11. It has one kind of
 function (`task`), one kind of record (`shape`), one kind of sum type (`kind`), exhaustive `match`,
-immutable-by-default bindings, and memory in regions: `new T(v) in r` allocates in a region that is freed
+immutable-by-default bindings, and memory in regions: `new T(v) at r` allocates in a region that is freed
 when its block closes, and pointer types (`^T@r`) keep every pointer from outliving it or being null. A value that may
 be missing is a `maybe T`, and a task that can fail sends `T or E`; both are read with `match`, `is`, or a
 plan B (`x { fallback }`). Blocks close with `fi`, and a task sends its result with `<-`.

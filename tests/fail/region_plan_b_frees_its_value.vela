@@ -11,7 +11,7 @@ fi
 task main()
     bind p = first(none) {
         region local
-        new Node(Node { value: 5, next: none }) in local
+        new Node(Node { value: 5, next: none }) at local
     }
     show(p^.value)
 fi

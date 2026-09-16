@@ -74,10 +74,10 @@
     | builtin-fn:show  punctuation:(  variable:s  punctuation:.  field:to  punctuation:.  field:y  operator:-  variable:s  punctuation:.  field:from  punctuation:.  field:y  punctuation:)
  45 |     region lists
     | keyword:region  region:lists
- 46 |     bind empty: ^List@lists = new List(Nil) in lists
-    | keyword:bind  variable:empty  punctuation::  operator:^  type:List  operator:@  region:lists  operator:=  keyword:new  type:List  punctuation:(  variant:Nil  punctuation:)  keyword:in  region:lists
- 47 |     bind one: ^List@lists = new List(Cons(Point { x: 5, y: 0 }, empty)) in lists
-    | keyword:bind  variable:one  punctuation::  operator:^  type:List  operator:@  region:lists  operator:=  keyword:new  type:List  punctuation:(  variant:Cons  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:5  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:,  variable:empty  punctuation:)  punctuation:)  keyword:in  region:lists
+ 46 |     bind empty: ^List@lists = new List(Nil) at lists
+    | keyword:bind  variable:empty  punctuation::  operator:^  type:List  operator:@  region:lists  operator:=  keyword:new  type:List  punctuation:(  variant:Nil  punctuation:)  keyword:at  region:lists
+ 47 |     bind one: ^List@lists = new List(Cons(Point { x: 5, y: 0 }, empty)) at lists
+    | keyword:bind  variable:one  punctuation::  operator:^  type:List  operator:@  region:lists  operator:=  keyword:new  type:List  punctuation:(  variant:Cons  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:5  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:,  variable:empty  punctuation:)  punctuation:)  keyword:at  region:lists
  48 |     bind two = Cons(Point { x: 7, y: 0 }, one)
     | keyword:bind  variable:two  operator:=  variant:Cons  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:7  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:,  variable:one  punctuation:)
  49 |     show(length(two))

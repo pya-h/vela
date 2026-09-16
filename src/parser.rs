@@ -395,7 +395,7 @@ impl Parser {
     fn parse_simple_type(&mut self) -> Result<Type> {
         let span = self.peek_span();
         let ty = self.parse_prefixed_type()?;
-        if !self.match_token(Token::At) {
+        if !self.match_token(Token::AtSign) {
             return Ok(ty);
         }
         let region_span = self.peek_span();
@@ -928,7 +928,7 @@ impl Parser {
     fn parse_new_inner(&mut self) -> Result<Expr> {
         let span = self.peek_span();
         self.advance(); // new
-        let before = if self.match_token(Token::At) {
+        let before = if self.match_token(Token::AtSign) {
             let region_span = self.peek_span();
             let region = self.expect_ident()?;
             if self.check(Token::LParen) {
@@ -943,11 +943,14 @@ impl Parser {
         self.expect(Token::LParen)?;
         let value = self.parse_expr()?;
         self.expect(Token::RParen)?;
-        let after = if self.check(Token::In) {
-            let in_span = self.peek_span();
+        if self.check(Token::In) {
+            return Err(Error::at(self.peek_span(), "a 'new' names its region with 'at', as in 'new T(v) at r' (or 'new@r T(v)'); 'in' counts through a range"));
+        }
+        let after = if self.check(Token::At) {
+            let at_span = self.peek_span();
             self.advance();
             if before.is_some() {
-                return Err(Error::at(in_span, "the region is already named after 'new@'; write one of 'new T(v) in r' or 'new@r T(v)'"));
+                return Err(Error::at(at_span, "the region is already named after 'new@'; write one of 'new T(v) at r' or 'new@r T(v)'"));
             }
             let region_span = self.peek_span();
             let region = self.expect_ident()?;
@@ -958,7 +961,7 @@ impl Parser {
         let Some((region, region_span)) = before.or(after) else {
             return Err(Error::at(
                 self.peek_span(),
-                format!("'new' needs a region to allocate in, as in 'new {}(…) in r' or 'new@r {}(…)'", ty, ty),
+                format!("'new' needs a region to allocate in, as in 'new {}(…) at r' or 'new@r {}(…)'", ty, ty),
             ));
         };
         Ok(Expr::new(ExprKind::New { ty, ty_span, value: Box::new(value), region, region_span }, span))

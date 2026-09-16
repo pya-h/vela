@@ -60,7 +60,7 @@ fi
 
 # Adding allocates, so `add` takes the region to allocate in.
 task add(r: region, title: text, status: Status, next: maybe ^Item@r) -> ^Item@r
-    <- new Item(Item { title: title, status: status, next: next }) in r
+    <- new Item(Item { title: title, status: status, next: next }) at r
 fi
 
 task main()

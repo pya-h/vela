@@ -38,6 +38,6 @@ task main()
     fi
 
     region numbers
-    bind ptr: ^int@numbers = new int(42) in numbers
+    bind ptr: ^int@numbers = new int(42) at numbers
     show(ptr^)
 fi

@@ -60,7 +60,11 @@ pub enum Token {
     Ge,
     Assign,
     Caret,
-    /// `@`, which names the region a type lives in (`^Node@r`) or `new` allocates in.
+    /// `@`, which names the region a type lives in (`^Node@r`) or `new`
+    /// allocates in (`new@r T(v)`). The word `at` is `Token::At`.
+    AtSign,
+    /// The word `at`, which names the region a `new` allocates in:
+    /// `new T(v) at r`, the same as `new@r T(v)`.
     At,
     /// `_`, which matches or binds a value without naming it.
     Underscore,
@@ -81,6 +85,7 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("loop", Token::Loop),
     ("each", Token::Each),
     ("in", Token::In),
+    ("at", Token::At),
     ("match", Token::Match),
     ("case", Token::Case),
     ("new", Token::New),
@@ -147,7 +152,7 @@ impl Token {
             Token::Ge => ">=",
             Token::Assign => "=",
             Token::Caret => "^",
-            Token::At => "@",
+            Token::AtSign => "@",
             Token::Underscore => "_",
             // Keywords are found in `KEYWORDS` above.
             _ => return format!("{:?}", self),
@@ -403,7 +408,7 @@ impl Lexer {
             '/' => Token::Slash,
             '%' => Token::Percent,
             '^' => Token::Caret,
-            '@' => Token::At,
+            '@' => Token::AtSign,
             '=' => {
                 if self.peek() == '=' {
                     self.advance();

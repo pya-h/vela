@@ -11,7 +11,7 @@ task build(r: region, depth: int, seed: int) -> Tree@r
     when depth == 0
         <- Leaf(seed % 10)
     fi
-    bind left = new Tree(build(r, depth - 1, seed * 3 + 1)) in r
+    bind left = new Tree(build(r, depth - 1, seed * 3 + 1)) at r
     bind right = new@r Tree(build(r, depth - 1, seed * 7 + 2))
     <- Branch(left, right)
 fi
@@ -32,7 +32,7 @@ task copy(to: region, t: Tree@from) -> Tree@to
     case Leaf value
         <- Leaf(value)
     case Branch left right
-        <- Branch(new Tree(copy(to, left^)) in to, new Tree(copy(to, right^)) in to)
+        <- Branch(new Tree(copy(to, left^)) at to, new Tree(copy(to, right^)) at to)
     fi
 fi
 
