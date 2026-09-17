@@ -1,0 +1,8 @@
+# error: 5:10: expected a variant, '{value}', 'none', 'fail e', or '_', got integer 5
+task main()
+    bind n: maybe int = 5
+    match n
+    case 5
+        show(1)
+    fi
+fi

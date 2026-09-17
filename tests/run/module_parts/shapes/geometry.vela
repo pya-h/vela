@@ -1,0 +1,16 @@
+# Points, nodes, and figures, for tests/run/module_parts.vela.
+
+shape Point
+    x: float
+    y: float
+fi
+
+shape Node
+    value: int
+    next: maybe ^Node
+fi
+
+kind Figure
+    Circle(radius: float)
+    Square(side: float)
+fi

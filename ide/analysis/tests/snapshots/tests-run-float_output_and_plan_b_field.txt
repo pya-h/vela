@@ -1,0 +1,26 @@
+  1 | # How `show` writes large, small, and negative floats, and a field read from
+    | comment:# How `show` writes large, small, and negative floats, and a field read from
+  2 | # the value a plan B gives.
+    | comment:# the value a plan B gives.
+  4 | shape Point
+    | keyword:shape  type:Point
+  5 |     x: float
+    | field:x  punctuation::  type-builtin:float
+  6 |     y: float
+    | field:y  punctuation::  type-builtin:float
+  7 | fi
+    | keyword:fi
+  9 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 10 |     show(123456789.0)
+    | builtin-fn:show  punctuation:(  number:123456789.0  punctuation:)
+ 11 |     show(0.0000001234)
+    | builtin-fn:show  punctuation:(  number:0.0000001234  punctuation:)
+ 12 |     show(-0.5)
+    | builtin-fn:show  punctuation:(  operator:-  number:0.5  punctuation:)
+ 13 |     bind spot: maybe Point = none
+    | keyword:bind  variable:spot  punctuation::  keyword:maybe  type:Point  operator:=  keyword:none
+ 14 |     show(spot { Point { x: 1.0, y: 2.0 } }.y)
+    | builtin-fn:show  punctuation:(  variable:spot  punctuation:{  type:Point  punctuation:{  field:x  punctuation::  number:1.0  punctuation:,  field:y  punctuation::  number:2.0  punctuation:}  punctuation:}  punctuation:.  field:y  punctuation:)
+ 15 | fi
+    | keyword:fi

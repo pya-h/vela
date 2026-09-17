@@ -1,0 +1,12 @@
+# error: 9:15: 'Red' is a variant of kind 'Light', but this value is int
+kind Light
+    Red
+    Green
+fi
+
+task main()
+    bind n = 3
+    when n is Light.Red
+        show(1)
+    fi
+fi

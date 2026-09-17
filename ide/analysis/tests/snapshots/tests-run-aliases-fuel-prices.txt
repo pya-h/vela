@@ -1,0 +1,18 @@
+  1 | # Prices of fuel, for tests/run/aliases.vela, in a file with the same name as
+    | comment:# Prices of fuel, for tests/run/aliases.vela, in a file with the same name as
+  2 | # tests/run/aliases/shop/prices.vela.
+    | comment:# tests/run/aliases/shop/prices.vela.
+  4 | kind Size
+    | keyword:kind  type:Size
+  5 |     Small
+    | variant:Small
+  6 |     Tank(liters: int)
+    | variant:Tank  punctuation:(  field:liters  punctuation::  type-builtin:int  punctuation:)
+  7 | fi
+    | keyword:fi
+  9 | task price_of(liters: int) -> int
+    | keyword:task  task:price_of  punctuation:(  parameter:liters  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 10 |     <- liters * 180
+    | keyword:<-  parameter:liters  operator:*  number:180
+ 11 | fi
+    | keyword:fi

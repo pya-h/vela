@@ -1,0 +1,25 @@
+# A named result holding a slice in the caller's region, sliced again before
+# the task ends.
+
+task evens(r: region, n: int) -> out: [int]@r, count: int
+    out, count <- new@r [int]([0; n]), 0
+    each i in 0..n
+        when i % 2 == 0
+            out[count] = i
+            count <- count + 1
+        fi
+    fi
+    out <- out[0..count]
+fi
+
+task main()
+    region r
+    bind xs, n = evens(r, 7)
+    show(xs.len == n)
+    each x in xs
+        show(x)
+    fi
+    hold total: float = 0.0
+    total = total + 1.5
+    show(total)
+fi

@@ -76,9 +76,15 @@ export class ModuleSources {
     return this.fetched.has(path) || this.pending.has(path);
   }
 
-  /** Records that the text of `path` changed (in the editor or on disk). */
+  /**
+   * Records that the text of `path` changed (in the editor or on disk), or
+   * that the file was created.
+   */
   changed(path: string): void {
-    if (this.uses(path)) this.bump();
+    if (!this.uses(path)) return;
+    // A file that couldn't be read may exist now: it is read when next asked for.
+    if (this.fetched.get(path) === null) this.fetched.delete(path);
+    this.bump();
   }
 
   /**

@@ -579,6 +579,8 @@ export class Workbench {
       // Create any folders in the name first.
       await this.createFolders(parentFolder(path));
       await this.api.create(path, kind);
+      // A file that an include named before it existed is read now.
+      if (kind === "file") this.analyzer.modules.changed(path);
       this.explorer.expand(kind === "folder" ? path : parentFolder(path));
       await this.refreshTree();
       if (kind === "file") await this.openFile(path);

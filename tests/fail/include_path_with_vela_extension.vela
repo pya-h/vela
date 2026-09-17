@@ -1,0 +1,5 @@
+# error: 2:24: a module is named without '.vela', as in 'include modules/library'
+include modules/library.vela
+
+task main()
+fi

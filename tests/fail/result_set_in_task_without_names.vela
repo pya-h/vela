@@ -1,0 +1,4 @@
+# error: 3:5: 'total' isn't a result of this task, which names none; a header names them, as in '-> total: int'
+task main()
+    total <- 1
+fi

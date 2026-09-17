@@ -1,0 +1,12 @@
+# error: 9:15: kind 'Light' has no variant 'Blue'
+kind Light
+    Red
+    Green
+fi
+
+task main()
+    bind n = 3
+    when n is Light.Blue
+        show(1)
+    fi
+fi

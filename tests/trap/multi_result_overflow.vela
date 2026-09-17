@@ -1,0 +1,7 @@
+# trap: integer overflow at 3:10 in task 'split'
+task split(n: int) -> int, int
+    <- n + 1, n
+fi
+task main()
+    bind a, b = split(9223372036854775807)
+fi

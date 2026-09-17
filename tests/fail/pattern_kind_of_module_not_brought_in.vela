@@ -1,0 +1,11 @@
+# error: 6:10: 'Suit' isn't a kind, so a pattern can't name a variant of it; module 'library' has one: write 'library.Suit', or bring it in with 'include … (Suit)'
+include modules/library
+
+task main()
+    match library.Suit.Hearts
+    case Suit.Hearts
+        show(1)
+    case _
+        show(2)
+    fi
+fi

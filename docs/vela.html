@@ -817,8 +817,10 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
 <span class="keyword">fi</span></pre>
       <p>
         <code>unit or E</code> is a task that sends nothing when it works: a bare <code>&lt;-</code>, or reaching the
-        end, succeeds, and <code>case {_}</code> matches that success. An error can't be dropped by accident: a call
-        whose <code>or</code> result goes unused is an error, and an empty plan B, <code>save(file) { }</code>, ignores
+        end, succeeds, and <code>case {_}</code> matches that success. A call written as a statement can't drop an error by
+        accident: when its <code>or</code> result goes unused, that is an error. (A result kept with <code>bind</code>
+        stays a <code>T or E</code> that only a <code>match</code> or a plan B opens, but nothing yet checks that
+        such a variable is ever used.) An empty plan B, <code>save(file) { }</code>, ignores
         the error on purpose. <code>fail</code> binds like <code>-</code> and <code>not</code>, so an error computed
         with operators needs parentheses.
       </p>
@@ -1158,13 +1160,13 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         <li><strong>Where.</strong> <code>include</code> lines come first in a file, before any task, shape, or kind. A
           path is relative to the folder of the file that has the <code>include</code>: <code>include geometry</code>
           reads <code>geometry.vela</code> next to it, <code>include shapes/geometry</code> reads it from the folder
-          <code>shapes</code>, and <code>..</code> goes up one folder (<code>include ../common/text</code>). The command
+          <code>shapes</code>, and <code>..</code> goes up one folder (<code>include ../common/strings</code>). The command
           is the same as for one file: <code>vela main.vela -o program</code> reads every file the program includes,
           and an error in any of them names that file. The word is C's, but an <code>include</code> doesn't paste the
           file in: the other file stays a module with names of its own, and is read once however many files include
           it. Writing <code>use</code> or <code>import</code> instead is an error that names <code>include</code>.</li>
         <li><strong>Names.</strong> <code>geometry.area(…)</code> calls a task, <code>geometry.Point { … }</code> builds a
-          shape, <code>geometry.Square(3.0)</code> and <code>geometry.Dot</code> make variants, and
+          shape, <code>geometry.Square(3.0)</code> makes a variant, and
           <code>geometry.Point</code> is a type anywhere a type is written (<code>^geometry.Node@r</code>,
           <code>maybe geometry.Point</code>, <code>new geometry.Point(p) at r</code>). A variant can also be named
           through its kind, <code>geometry.Figure.Square(3.0)</code>. A <code>case</code> or <code>is</code> names a
@@ -1203,11 +1205,13 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         <li><strong>Messages.</strong> A message names things as the file with the error writes them: <em>expected type
           Hue, got int</em> after <code>(Color =&gt; Hue)</code>, <em>expected type geometry.Point, got int</em> through the
           module's name. Something the file has no way to write is named by its module's path, as in <em>expected type
-          shapes/palette.Color, got int</em>.</li>
+          shapes/palette.Color, got int</em>, and starts with <code>./</code> when that path reads like the name the
+          file gives another module (<code>./c.Thing</code>, in a file with <code>include x =&gt; c</code>).</li>
         <li><strong>Rules.</strong> Modules can't include one another in a circle (<em>modules can't include one another
-          in a circle: a -&gt; b -&gt; a</em>). A file includes each module once, and can't include two modules under one
-          name. The name a module is included under can't also be the name of something the file declares, of a name
-          it brings in, or of a variable, and can't be a builtin type or task. A name can't be renamed to itself, or to
+          in a circle: a -&gt; b -&gt; a</em>). A file includes each module once, however its path is written
+          (from the folder <code>app</code>, <code>../app/shapes</code> is <code>shapes</code>), and can't include two
+          modules under one name. A name is listed once on an <code>include</code> line. The name a module is included under can't also be the name of something the file declares, of a name
+          it brings in, or of a variable, and can't be a builtin type or task. A module or name can't be renamed to itself, or to
           a builtin.</li>
       </ul>
       <pre><span class="comment"># in main.vela, after include shapes/geometry</span>
@@ -1279,7 +1283,8 @@ CC=clang ./target/debug/vela program.vela -o program</pre>
         only checks the program (everything a build checks before running the C compiler, including that it has a
         <code>main</code>), <code>-h</code>/<code>--help</code> prints the usage, and <code>--version</code> prints the
         compiler's version. The files the program includes are read from the disk, next to it (see
-        <a href="#modules">Modules</a>). A file name starting with <code>-</code> goes after <code>--</code>. The exit status is 0 on
+        <a href="#modules">Modules</a>). The output can't be the program's own file or a file it includes. A file name
+        starting with <code>-</code> goes after <code>--</code>. The exit status is 0 on
         success, 1 when the program can't be read or doesn't compile (in Vela or in C), and 2 for wrong arguments.
       </p>
       <pre>./target/debug/vela program.vela --emit-c -o program.c

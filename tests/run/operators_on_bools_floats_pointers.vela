@@ -1,0 +1,18 @@
+# `==`, `!=`, and `<=` on bools, floats, and pointers, and `and` binding
+# tighter than `or`.
+
+task main()
+    show(true == true)
+    show(false != true)
+    show(1.5 == 1.5)
+    show(1.5 != 2.5)
+    show(2.5 <= 2.5)
+    show(true or false and false)
+    show(false and true or true)
+    region r
+    bind p = new int(1) at r
+    bind q = new int(1) at r
+    show(p != q)
+    bind same = p
+    show(same == p)
+fi

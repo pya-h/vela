@@ -131,6 +131,62 @@ fn output_cannot_overwrite_the_input() {
 }
 
 #[test]
+fn output_cannot_overwrite_a_module_of_the_program() {
+    let dir = temp_dir("overwrite-module");
+    let module = "task value() -> int\n    <- 1\nfi\n";
+    std::fs::write(dir.join("numbers.vela"), module).unwrap();
+    std::fs::write(dir.join("main.vela"), "include numbers\n\ntask main()\n    show(numbers.value())\nfi\n").unwrap();
+    for args in [vec!["main.vela", "-o", "numbers.vela"], vec!["main.vela", "--emit-c", "-o", "./numbers.vela"]] {
+        let out = Command::new(VELA).args(&args).current_dir(&dir).output().unwrap();
+        assert_eq!(out.status.code(), Some(1), "{:?}", args);
+        assert!(stderr(&out).contains("would overwrite a module the program includes"), "{:?}: {}", args, stderr(&out));
+        assert_eq!(std::fs::read_to_string(dir.join("numbers.vela")).unwrap(), module, "{:?}", args);
+    }
+    let out = Command::new(VELA).args(["main.vela", "--emit-c", "-o", "main.vela"]).current_dir(&dir).output().unwrap();
+    assert!(stderr(&out).contains("would overwrite the input file"), "{}", stderr(&out));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn an_output_that_cannot_be_written_is_reported_before_compiling() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = temp_dir("read-only-output");
+    let exe = dir.join("hello");
+    std::fs::write(&exe, "old").unwrap();
+    std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o444)).unwrap();
+    // Root may write a read-only file anyway.
+    if std::fs::OpenOptions::new().write(true).open(&exe).is_err() {
+        let out = vela(&[&example("hello"), "-o", exe.to_str().unwrap()]);
+        assert_eq!(out.status.code(), Some(1));
+        let err = stderr(&out);
+        assert!(err.starts_with("error: cannot write the executable:") && err.contains("Permission denied"), "{}", err);
+        assert!(!err.contains("C compilation failed"), "{}", err);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_module_reached_through_a_folder_above_is_read_once() {
+    // From `app`, `../app/shapes` is `shapes`: one module, not two of one name.
+    let dir = temp_dir("climb-back");
+    let app = dir.join("app");
+    std::fs::create_dir_all(&app).unwrap();
+    std::fs::write(app.join("shapes.vela"), "shape Point\n    x: int\nfi\n\ntask origin() -> Point\n    <- Point { x: 7 }\nfi\n").unwrap();
+    std::fs::write(app.join("maker.vela"), "include ../app/shapes\n\ntask make() -> shapes.Point\n    <- shapes.origin()\nfi\n").unwrap();
+    std::fs::write(app.join("main.vela"), "include maker\ninclude shapes\n\ntask main()\n    bind p: shapes.Point = maker.make()\n    show(p.x)\nfi\n").unwrap();
+    let out = Command::new(VELA).args(["main.vela", "-o", "main"]).current_dir(&app).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    let run = Command::new(app.join("main")).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "7\n");
+    // Included twice by one file, under two spellings, is the error for including a module twice.
+    std::fs::write(app.join("twice.vela"), "include ../app/shapes\ninclude shapes => other\n\ntask main()\nfi\n").unwrap();
+    let out = Command::new(VELA).args(["twice.vela", "--check"]).current_dir(&app).output().unwrap();
+    assert!(stderr(&out).starts_with("twice.vela:2:9: error: this module is already included at 1:16"), "{}", stderr(&out));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn cc_may_include_arguments() {
     let dir = temp_dir("cc-args");
     let exe = dir.join("hello");
@@ -230,16 +286,55 @@ fn version_is_an_option_like_the_others() {
 
 #[test]
 fn wrong_argument_combinations_are_rejected() {
-    for args in [
-        vec![example("hello"), "--emit-c".to_string(), "--check".to_string()],
-        vec![example("hello"), "-o".to_string(), "a".to_string(), "-o".to_string(), "b".to_string()],
-        vec![example("hello"), example("fib")],
+    for (args, message) in [
+        (vec![example("hello"), "--emit-c".to_string(), "--check".to_string()], "error: --emit-c and --check can't be used together"),
+        (vec![example("hello"), "-o".to_string(), "a".to_string(), "-o".to_string(), "b".to_string()], "error: -o given more than once"),
+        (vec![example("hello"), example("fib")], "error: only one input file is allowed"),
+        (vec![example("hello"), "--".to_string(), example("fib")], "error: only one input file is allowed"),
     ] {
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
         let out = vela(&args);
         assert_eq!(out.status.code(), Some(2), "{:?}: {}", args, stderr(&out));
+        assert!(stderr(&out).starts_with(message), "{:?}: {}", args, stderr(&out));
         assert!(stderr(&out).contains("usage: vela"), "{}", stderr(&out));
     }
+}
+
+#[test]
+fn short_help_and_the_exact_version() {
+    let out = vela(&["-h"]);
+    assert!(out.status.success());
+    assert!(String::from_utf8_lossy(&out.stdout).starts_with("usage: vela"));
+    let out = vela(&["--version"]);
+    assert_eq!(String::from_utf8_lossy(&out.stdout), format!("vela {}\n", env!("CARGO_PKG_VERSION")));
+}
+
+#[test]
+fn emitted_c_into_a_missing_folder_is_an_error() {
+    let out = vela(&[&example("hello"), "--emit-c", "-o", "/nonexistent-vela-folder/hello.c"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).starts_with("error: cannot write '/nonexistent-vela-folder/hello.c':"), "{}", stderr(&out));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn help_and_version_written_to_a_full_disk_are_errors() {
+    for flag in ["--help", "--version"] {
+        let full = std::fs::OpenOptions::new().write(true).open("/dev/full").unwrap();
+        let out = Command::new(VELA).arg(flag).stdout(full).output().unwrap();
+        assert_eq!(out.status.code(), Some(1), "{}", flag);
+        assert!(stderr(&out).starts_with("error: cannot write output:"), "{}: {}", flag, stderr(&out));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_build_folder_that_cannot_be_made_is_an_error() {
+    let dir = temp_dir("no-tmp");
+    let out = Command::new(VELA).args([&example("hello"), "-o", dir.join("hello").to_str().unwrap()]).env("TMPDIR", "/nonexistent-vela-tmp").output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).starts_with("error: cannot create build directory:"), "{}", stderr(&out));
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

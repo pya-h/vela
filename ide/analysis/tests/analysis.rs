@@ -85,6 +85,38 @@ fn definitions_of_declarations_and_uses() {
 }
 
 #[test]
+fn a_files_own_kind_leads_to_its_variants() {
+    let source = SHAPES.replace("    match Dimmed(4)\n", "    bind glow = Light.Dimmed(2)\n    bind off = Light.Red\n    match Dimmed(4)\n");
+    let analysis = Analysis::new(&source);
+    assert_eq!(analysis.diagnostics(), Vec::new());
+    assert_eq!(class_at(&source, "Light.Dimmed", 0), TokenClass::Type);
+    assert_eq!(class_at(&source, "Dimmed(2)", 0), TokenClass::Variant);
+    assert_definition(&source, ("Light.Dimmed", 0), ("Light\n", 0));
+    assert_definition(&source, ("Dimmed(2)", 0), ("Dimmed(level", 0));
+    assert_definition(&source, ("Red\n    match", 0), ("Red\n", 0));
+    let hover = analysis.hover(at(&source, "Dimmed(2)", 0)).unwrap();
+    assert_eq!((hover.code.as_str(), hover.doc.as_str()), ("Dimmed(level: int)", "A variant of kind Light."));
+    assert_eq!(analysis.hover(at(&source, "glow =", 0)).unwrap().code, "bind glow: Light");
+
+    // Completion after the kind's name: its variants, as values.
+    let completions = |marked: &str| {
+        let offset = marked.find("@@").unwrap();
+        let source = marked.replacen("@@", "", 1);
+        Analysis::new(&source).complete(LineIndex::new(&source).utf16_of(offset)).items
+    };
+    let variants = completions(&SHAPES.replace("    show(total(p))\n", "    show(Light.@@)\n"));
+    let offered: Vec<(&str, Option<&str>)> = variants.iter().map(|item| (item.label.as_str(), item.snippet.as_deref())).collect();
+    assert_eq!(offered, [("Red", None), ("Dimmed", Some("Dimmed(${level})"))]);
+    // A shape's name and an unknown name have no variants.
+    assert_eq!(completions(&SHAPES.replace("    show(total(p))\n", "    show(Point.@@)\n")).len(), 0);
+    assert_eq!(completions(&SHAPES.replace("    show(total(p))\n", "    show(Lights.@@)\n")).len(), 0);
+    // A variant the kind doesn't have resolves to nothing.
+    let wrong = SHAPES.replace("    show(total(p))\n", "    show(Light.Blue)\n");
+    assert_eq!(Analysis::new(&wrong).definition(at(&wrong, "Blue", 0)), None);
+    assert_eq!(Analysis::new(&wrong).hover(at(&wrong, "Blue", 0)), None);
+}
+
+#[test]
 fn field_definitions_use_the_type_of_the_value() {
     // Two shapes have a field `x`: the checker's types pick the right one.
     let analysis = Analysis::new(SHAPES);

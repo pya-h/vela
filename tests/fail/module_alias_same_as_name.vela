@@ -1,0 +1,5 @@
+# error: 2:28: 'library' is already named 'library'; leave out '=> library'
+include modules/library => library
+
+task main()
+fi

@@ -1,0 +1,14 @@
+# `each` over part of a slice, and over the array a pointer points to.
+
+task main()
+    region r
+    bind xs = new [int]([1, 2, 3, 4]) at r
+    each x in xs[1..3]
+        show(x)
+    fi
+    bind boxed = new [int; 3]([7, 8, 9]) at r
+    show(boxed^.len)
+    each v in boxed^
+        show(v)
+    fi
+fi

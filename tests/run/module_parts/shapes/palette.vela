@@ -1,0 +1,39 @@
+# Colors described through a private kind and shape, for
+# tests/run/module_parts.vela and tests/run/module_braces.vela.
+
+kind Color
+    Red
+    Blue
+    Mix(amount: int)
+fi
+
+priv kind Tone
+    Warm
+    Cool
+fi
+
+priv shape Swatch
+    tone: Tone
+    level: int
+fi
+
+task describe(c: Color) -> text
+    bind s = swatch(c)
+    match s.tone
+    case Warm
+        <- "warm"
+    case Tone.Cool
+        <- "cool"
+    fi
+fi
+
+priv task swatch(c: Color) -> Swatch
+    match c
+    case Red
+        <- Swatch { tone: Warm, level: 1 }
+    case Blue
+        <- Swatch { tone: Tone.Cool, level: 2 }
+    case Mix n
+        <- Swatch { tone: Warm, level: n }
+    fi
+fi

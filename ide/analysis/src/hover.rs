@@ -61,7 +61,7 @@ pub(crate) fn hover(k: &Knowledge, byte: usize) -> Option<((String, String), std
 
 fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((String, String), std::ops::Range<usize>)> {
     let text = k.source.get(token.range.clone()).unwrap_or_default();
-    let info = match (token.class, token.symbol) {
+    let info = match (token.class, k.symbol_of(token)) {
         (TokenClass::TypeBuiltin, _) => {
             let (name, doc) = BUILTIN_TYPE_DOCS.iter().find(|(name, _)| *name == text)?;
             (name.to_string(), doc.to_string())

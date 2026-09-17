@@ -1,0 +1,32 @@
+  1 | # A cart that keeps its total to itself: other files change it only through
+    | comment:# A cart that keeps its total to itself: other files change it only through
+  2 | # these tasks. prices.vela is in the same folder, so it is included as `prices`.
+    | comment:# these tasks. prices.vela is in the same folder, so it is included as `prices`.
+  4 | include prices (Item, price_of)
+    | keyword:include  module:prices  punctuation:(  type:Item  punctuation:,  task:price_of  punctuation:)
+  6 | shape Cart
+    | keyword:shape  type:Cart
+  7 |     items: int
+    | field:items  punctuation::  type-builtin:int
+  8 |     priv total: int
+    | keyword:priv  field:total  punctuation::  type-builtin:int
+  9 | fi
+    | keyword:fi
+ 11 | task empty() -> Cart
+    | keyword:task  task:empty  punctuation:(  punctuation:)  operator:->  type:Cart
+ 12 |     <- Cart { items: 0, total: 0 }
+    | keyword:<-  type:Cart  punctuation:{  field:items  punctuation::  number:0  punctuation:,  field:total  punctuation::  number:0  punctuation:}
+ 13 | fi
+    | keyword:fi
+ 15 | task add(cart: Cart, item: Item, count: int) -> Cart
+    | keyword:task  task:add  punctuation:(  parameter:cart  punctuation::  type:Cart  punctuation:,  parameter:item  punctuation::  type:Item  punctuation:,  parameter:count  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Cart
+ 16 |     <- Cart { items: cart.items + count, total: cart.total + price_of(item) * count }
+    | keyword:<-  type:Cart  punctuation:{  field:items  punctuation::  parameter:cart  punctuation:.  field:items  operator:+  parameter:count  punctuation:,  field:total  punctuation::  parameter:cart  punctuation:.  field:total  operator:+  task:price_of  punctuation:(  parameter:item  punctuation:)  operator:*  parameter:count  punctuation:}
+ 17 | fi
+    | keyword:fi
+ 19 | task total(cart: Cart) -> int
+    | keyword:task  task:total  punctuation:(  parameter:cart  punctuation::  type:Cart  punctuation:)  operator:->  type-builtin:int
+ 20 |     <- cart.total
+    | keyword:<-  parameter:cart  punctuation:.  field:total
+ 21 | fi
+    | keyword:fi

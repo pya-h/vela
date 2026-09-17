@@ -1,0 +1,84 @@
+  1 | # Figures and their measures, for tests/run/modules.vela.
+    | comment:# Figures and their measures, for tests/run/modules.vela.
+  3 | shape Point
+    | keyword:shape  type:Point
+  4 |     x: float
+    | field:x  punctuation::  type-builtin:float
+  5 |     y: float
+    | field:y  punctuation::  type-builtin:float
+  6 | fi
+    | keyword:fi
+  8 | kind Figure
+    | keyword:kind  type:Figure
+  9 |     Circle(radius: float)
+    | variant:Circle  punctuation:(  field:radius  punctuation::  type-builtin:float  punctuation:)
+ 10 |     Square(side: float)
+    | variant:Square  punctuation:(  field:side  punctuation::  type-builtin:float  punctuation:)
+ 11 |     Dot
+    | variant:Dot
+ 12 | fi
+    | keyword:fi
+ 14 | task area(figure: Figure) -> float
+    | keyword:task  task:area  punctuation:(  parameter:figure  punctuation::  type:Figure  punctuation:)  operator:->  type-builtin:float
+ 15 |     match figure
+    | keyword:match  parameter:figure
+ 16 |     case Circle radius
+    | keyword:case  variant:Circle  variable:radius
+ 17 |         <- pi() * radius * radius
+    | keyword:<-  task:pi  punctuation:(  punctuation:)  operator:*  variable:radius  operator:*  variable:radius
+ 18 |     case Square side
+    | keyword:case  variant:Square  variable:side
+ 19 |         <- side * side
+    | keyword:<-  variable:side  operator:*  variable:side
+ 20 |     case Dot
+    | keyword:case  variant:Dot
+ 21 |         <- 0.0
+    | keyword:<-  number:0.0
+ 22 |     fi
+    | keyword:fi
+ 23 | fi
+    | keyword:fi
+ 25 | task distance(a: Point, b: Point) -> float
+    | keyword:task  task:distance  punctuation:(  parameter:a  punctuation::  type:Point  punctuation:,  parameter:b  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:float
+ 26 |     bind dx = a.x - b.x
+    | keyword:bind  variable:dx  operator:=  parameter:a  punctuation:.  field:x  operator:-  parameter:b  punctuation:.  field:x
+ 27 |     bind dy = a.y - b.y
+    | keyword:bind  variable:dy  operator:=  parameter:a  punctuation:.  field:y  operator:-  parameter:b  punctuation:.  field:y
+ 28 |     <- root(dx * dx + dy * dy)
+    | keyword:<-  task:root  punctuation:(  variable:dx  operator:*  variable:dx  operator:+  variable:dy  operator:*  variable:dy  punctuation:)
+ 29 | fi
+    | keyword:fi
+ 31 | # Only the main file's main starts the program: this one is an ordinary task.
+    | comment:# Only the main file's main starts the program: this one is an ordinary task.
+ 32 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 33 |     show("geometry")
+    | builtin-fn:show  punctuation:(  string:"geometry"  punctuation:)
+ 34 | fi
+    | keyword:fi
+ 36 | priv task pi() -> float
+    | keyword:priv  keyword:task  task:pi  punctuation:(  punctuation:)  operator:->  type-builtin:float
+ 37 |     <- 3.14159
+    | keyword:<-  number:3.14159
+ 38 | fi
+    | keyword:fi
+ 40 | # Newton's method: Vela has no math library yet.
+    | comment:# Newton's method: Vela has no math library yet.
+ 41 | priv task root(n: float) -> float
+    | keyword:priv  keyword:task  task:root  punctuation:(  parameter:n  punctuation::  type-builtin:float  punctuation:)  operator:->  type-builtin:float
+ 42 |     hold guess = n
+    | keyword:hold  variable:guess  operator:=  parameter:n
+ 43 |     each step in 0..30
+    | keyword:each  variable:step  keyword:in  number:0  operator:..  number:30
+ 44 |         when guess > 0.0
+    | keyword:when  variable:guess  operator:>  number:0.0
+ 45 |             guess = (guess + n / guess) / 2.0
+    | variable:guess  operator:=  punctuation:(  variable:guess  operator:+  parameter:n  operator:/  variable:guess  punctuation:)  operator:/  number:2.0
+ 46 |         fi
+    | keyword:fi
+ 47 |     fi
+    | keyword:fi
+ 48 |     <- guess
+    | keyword:<-  variable:guess
+ 49 | fi
+    | keyword:fi

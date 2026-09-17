@@ -1,0 +1,9 @@
+# error: 8:10: 'p.x.twice' names nothing: 'p' isn't a module this file includes, and Vela has no methods
+shape Point
+    x: int
+fi
+
+task main()
+    bind p = Point { x: 1 }
+    show(p.x.twice())
+fi

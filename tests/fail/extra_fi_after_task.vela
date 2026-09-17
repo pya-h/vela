@@ -1,0 +1,4 @@
+# error: 4:1: expected 'task', 'shape', or 'kind', got 'fi'; is there an extra 'fi' above it?
+task main()
+fi
+fi

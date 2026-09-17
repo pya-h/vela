@@ -1,0 +1,3 @@
+# error: 2:6: expected a name, got text literal
+task "main"()
+fi

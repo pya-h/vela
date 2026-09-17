@@ -1,0 +1,44 @@
+# Named results holding a shape and a maybe, set from a plan B, and sent with
+# `<-` from inside a plan B.
+
+shape Point
+    x: int
+    y: int
+fi
+
+task half(n: int) -> maybe int
+    when n % 2 == 0
+        <- n / 2
+    fi
+    <- none
+fi
+
+task best(n: int) -> spot: Point
+    spot <- Point { x: 0, y: 0 }
+    when n > 0
+        spot <- Point { x: n, y: spot.y + 1 }
+    fi
+fi
+
+task found(n: int) -> item: maybe int
+    item <- none
+    when n > 3
+        item <- n
+    fi
+fi
+
+task halved(n: int) -> total: int
+    total <- half(n) { 0 }
+    total <- total + half(n + 1) {
+        <- -1
+    }
+fi
+
+task main()
+    show(best(4).x)
+    show(best(4).y)
+    show(found(2))
+    show(found(5))
+    show(halved(4))
+    show(halved(5))
+fi

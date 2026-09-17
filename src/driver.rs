@@ -113,7 +113,11 @@ pub fn render_program_error(main_path: &str, files: &[SourceFile], e: &Error) ->
 /// Checks the program whose main file is `source`, at `path`, loading its
 /// modules with `loader`.
 pub fn check_program(path: &Path, source: &str, loader: &mut Loader) -> std::result::Result<Vec<Item>, ProgramError> {
-    let partial = front_end_program(path, source, loader);
+    checked(front_end_program(path, source, loader))
+}
+
+/// The checked program, or the error that stopped it.
+fn checked(partial: Partial) -> std::result::Result<Vec<Item>, ProgramError> {
     match (partial.items, partial.error) {
         (Some(items), None) => Ok(items),
         (_, error) => Err(ProgramError {
@@ -137,6 +141,34 @@ pub fn generate_c_program(path: &Path, source: &str, loader: &mut Loader) -> std
     Generator::new().generate(&items).map_err(|error| ProgramError { error, files: Vec::new() })
 }
 
+/// `generate_c_program` for C to be written to the file `output`, which must
+/// not be a file of the program: the main file, at `input` on the disk, or a
+/// module it includes.
+pub fn generate_c_file(path: &Path, input: &Path, source: &str, output: &Path, loader: &mut Loader) -> std::result::Result<String, BuildError> {
+    let partial = front_end_program(path, source, loader);
+    let modules = module_paths(&partial);
+    let items = checked(partial)?;
+    let c_code = Generator::new().generate(&items)?;
+    overwrites_source(input, &modules, output)?;
+    Ok(c_code)
+}
+
+/// The paths of the modules a program read, as its loader knows them.
+fn module_paths(partial: &Partial) -> Vec<PathBuf> {
+    partial.files.iter().skip(1).map(|file| file.path.clone()).collect()
+}
+
+/// Rejects an `output` that names the main file, at `input`, or one of `modules`.
+fn overwrites_source(input: &Path, modules: &[PathBuf], output: &Path) -> std::result::Result<(), BuildError> {
+    if same_file(input, output) {
+        return Err(BuildError::OutputIsInput(output.to_path_buf()));
+    }
+    if modules.iter().any(|module| same_file(module, output)) {
+        return Err(BuildError::OutputIsModule(output.to_path_buf()));
+    }
+    Ok(())
+}
+
 /// Why `build` failed.
 #[derive(Debug)]
 pub enum BuildError {
@@ -147,6 +179,8 @@ pub enum BuildError {
     NoMain,
     /// The output path names the input file, which building would overwrite.
     OutputIsInput(PathBuf),
+    /// The output path names a module the program includes.
+    OutputIsModule(PathBuf),
     /// Creating the build directory or writing a file into it failed.
     Io { action: &'static str, error: io::Error },
     /// The C compiler could not be started.
@@ -166,6 +200,9 @@ impl BuildError {
             BuildError::NoMain => format!("{}: error: program has no 'main' task", path),
             BuildError::OutputIsInput(output) => {
                 format!("error: output '{}' would overwrite the input file", output.display())
+            }
+            BuildError::OutputIsModule(output) => {
+                format!("error: output '{}' would overwrite a module the program includes", output.display())
             }
             BuildError::Io { action, error } => format!("error: cannot {}: {}", action, error),
             BuildError::CompilerNotStarted { cc, error } => {
@@ -215,14 +252,14 @@ pub fn build(source: &str, input: &Path, output: &Path, cc: &str) -> std::result
 /// `build`, with the program's main file at `path` as `loader` knows it (for
 /// its modules' paths and for messages) and at `input` on the disk.
 pub fn build_program(source: &str, path: &Path, input: &Path, output: &Path, cc: &str, loader: &mut Loader) -> std::result::Result<(), BuildError> {
-    let items = check_program(path, source, loader)?;
+    let partial = front_end_program(path, source, loader);
+    let modules = module_paths(&partial);
+    let items = checked(partial)?;
     if !has_main(&items) {
         return Err(BuildError::NoMain);
     }
     let c_code = Generator::new().generate(&items)?;
-    if same_file(input, output) {
-        return Err(BuildError::OutputIsInput(output.to_path_buf()));
-    }
+    overwrites_source(input, &modules, output)?;
     check_output(output)?;
     compile_c(&c_code, input, output, cc)
 }
@@ -250,6 +287,10 @@ fn check_output(output: &Path) -> std::result::Result<(), BuildError> {
             fs::OpenOptions::new().write(true).open(output).map_err(|_| denied(error))?;
         }
         Err(error) => return Err(denied(error)),
+    }
+    // An existing output that can't be written, in a folder that can.
+    if output.exists() {
+        fs::OpenOptions::new().write(true).open(output).map_err(denied)?;
     }
     Ok(())
 }

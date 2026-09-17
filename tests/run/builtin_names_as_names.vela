@@ -1,0 +1,29 @@
+# The names of builtin tasks and types are only reserved as declarations:
+# variables, parameters, and fields may use them; `Light.Red()` is a variant
+# without a payload written with parentheses.
+
+shape Box
+    unit: int
+    show: text
+fi
+
+kind Light
+    Red
+    Dimmed(level: int)
+fi
+
+task twice(text: int, float: int) -> int
+    <- text + float
+fi
+
+task main()
+    bind show = 3
+    hold bool = Box { unit: show, show: "shown" }
+    bool.unit = twice(bool.unit, 1)
+    show(bool.unit)
+    show(bool.show)
+    bind l = Light.Red()
+    when l is Light.Red
+        show("red")
+    fi
+fi

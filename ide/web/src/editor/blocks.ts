@@ -1,8 +1,9 @@
 // Vela's block structure, read line by line for indentation and folding.
 // Blocks open with a keyword at the start of a line (`task`, `when`, …),
 // may have branches (`else`, `case`), and close with `fi`. A plan B's block
-// opens with a `{` ending a line and closes with a line starting with `}`. The words come from
-// the compiler (see `language()` in ide/analysis), so nothing here is a grammar.
+// opens with a `{` ending a line (or followed only by `fail e`, naming the error)
+// and closes with a line starting with `}`. The block words come from the
+// compiler (see `language()` in ide/analysis), so nothing here is a grammar.
 
 export interface BlockWords {
   blockOpeners: readonly string[];
@@ -54,9 +55,12 @@ function code(line: string): string {
   return out;
 }
 
-/** Whether a line's code ends with `{`, opening a plan B's block. */
+/**
+ * Whether a line's code ends with `{`, or with `{ fail e` naming the error,
+ * opening a plan B's block.
+ */
 export function opensBrace(line: string): boolean {
-  return /\{\s*$/.test(code(line));
+  return /\{\s*(?:fail\s+[A-Za-z_][A-Za-z0-9_]*\s*)?$/.test(code(line));
 }
 
 /** Whether a line starts with `}`, closing a plan B's block. A line such as `} + b {` also opens one. */

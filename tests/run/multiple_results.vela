@@ -130,4 +130,10 @@ task main()
     show(last)
     spot.x, spot.y = spot.y, spot.x
     show(spot.x)
+
+    # A task that sends nothing, received by '_': it runs in its place.
+    bind _, after = show(1), 2
+    show(after)
+    _, last = show(3), 4
+    show(last)
 fi

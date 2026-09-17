@@ -1,0 +1,6 @@
+# error: 5:10: 'lib.Suit' is a kind, not a variable; name one of its variants, as in 'lib.Suit.Variant'
+include modules/library => lib
+
+task main()
+    show(lib.Suit)
+fi

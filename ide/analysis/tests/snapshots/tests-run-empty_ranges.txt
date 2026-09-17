@@ -1,0 +1,28 @@
+  1 | # Ranges that end before they start, or where they start, run no steps; a
+    | comment:# Ranges that end before they start, or where they start, run no steps; a
+  2 | # range may start below zero.
+    | comment:# range may start below zero.
+  4 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  5 |     each i in 5..2
+    | keyword:each  variable:i  keyword:in  number:5  operator:..  number:2
+  6 |         show(i)
+    | builtin-fn:show  punctuation:(  variable:i  punctuation:)
+  7 |     fi
+    | keyword:fi
+  8 |     each i in 3..3
+    | keyword:each  variable:i  keyword:in  number:3  operator:..  number:3
+  9 |         show(i)
+    | builtin-fn:show  punctuation:(  variable:i  punctuation:)
+ 10 |     fi
+    | keyword:fi
+ 11 |     each i in -2..1
+    | keyword:each  variable:i  keyword:in  operator:-  number:2  operator:..  number:1
+ 12 |         show(i)
+    | builtin-fn:show  punctuation:(  variable:i  punctuation:)
+ 13 |     fi
+    | keyword:fi
+ 14 |     show("done")
+    | builtin-fn:show  punctuation:(  string:"done"  punctuation:)
+ 15 | fi
+    | keyword:fi

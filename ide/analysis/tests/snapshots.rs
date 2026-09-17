@@ -1,5 +1,5 @@
 //! Highlighting snapshots: the token classes of every example and run test,
-//! one annotated line per source line, in `tests/snapshots/`. A change in
+//! and of the modules they include, one annotated line per source line, in `tests/snapshots/`. A change in
 //! classification shows up as a readable diff. Regenerate after an intended
 //! change with `UPDATE_SNAPSHOTS=1 cargo test -p vela-analysis`, and review
 //! the diff.
@@ -18,12 +18,19 @@ fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-fn vela_files(dir: &str) -> Vec<PathBuf> {
-    let mut files: Vec<PathBuf> = fs::read_dir(root().join(dir))
-        .unwrap()
-        .map(|entry| entry.unwrap().path())
-        .filter(|p| p.extension().is_some_and(|ext| ext == "vela"))
-        .collect();
+/// The `.vela` files in `dir`, from the repository's root, and in its folders
+/// (the modules the programs include), each by its path from the root.
+fn vela_files(dir: &str) -> Vec<String> {
+    let mut files = Vec::new();
+    for entry in fs::read_dir(root().join(dir)).unwrap() {
+        let path = entry.unwrap().path();
+        let name = format!("{}/{}", dir, path.file_name().unwrap().to_string_lossy());
+        if path.is_dir() {
+            files.extend(vela_files(&name));
+        } else if path.extension().is_some_and(|ext| ext == "vela") {
+            files.push(name);
+        }
+    }
     files.sort();
     files
 }
@@ -74,11 +81,10 @@ fn token_classes_match_snapshots() {
     let update = std::env::var_os("UPDATE_SNAPSHOTS").is_some();
     let mut failures = Vec::new();
     for dir in ["examples", "tests/run"] {
-        for file in vela_files(dir) {
-            let source = fs::read_to_string(&file).unwrap();
-            let name = format!("{}-{}.txt", dir.replace('/', "-"), file.file_stem().unwrap().to_string_lossy());
+        for path in vela_files(dir) {
+            let source = fs::read_to_string(root().join(&path)).unwrap();
+            let name = format!("{}.txt", path.trim_end_matches(".vela").replace('/', "-"));
             let snapshot = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots").join(&name);
-            let path = format!("{}/{}", dir, file.file_name().unwrap().to_string_lossy());
             let actual = render(&path, &source);
             if update {
                 fs::write(&snapshot, &actual).unwrap();

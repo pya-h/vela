@@ -1,0 +1,34 @@
+  1 | # `==`, `!=`, and `<=` on bools, floats, and pointers, and `and` binding
+    | comment:# `==`, `!=`, and `<=` on bools, floats, and pointers, and `and` binding
+  2 | # tighter than `or`.
+    | comment:# tighter than `or`.
+  4 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  5 |     show(true == true)
+    | builtin-fn:show  punctuation:(  keyword:true  operator:==  keyword:true  punctuation:)
+  6 |     show(false != true)
+    | builtin-fn:show  punctuation:(  keyword:false  operator:!=  keyword:true  punctuation:)
+  7 |     show(1.5 == 1.5)
+    | builtin-fn:show  punctuation:(  number:1.5  operator:==  number:1.5  punctuation:)
+  8 |     show(1.5 != 2.5)
+    | builtin-fn:show  punctuation:(  number:1.5  operator:!=  number:2.5  punctuation:)
+  9 |     show(2.5 <= 2.5)
+    | builtin-fn:show  punctuation:(  number:2.5  operator:<=  number:2.5  punctuation:)
+ 10 |     show(true or false and false)
+    | builtin-fn:show  punctuation:(  keyword:true  keyword:or  keyword:false  keyword:and  keyword:false  punctuation:)
+ 11 |     show(false and true or true)
+    | builtin-fn:show  punctuation:(  keyword:false  keyword:and  keyword:true  keyword:or  keyword:true  punctuation:)
+ 12 |     region r
+    | keyword:region  region:r
+ 13 |     bind p = new int(1) at r
+    | keyword:bind  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:at  region:r
+ 14 |     bind q = new int(1) at r
+    | keyword:bind  variable:q  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:at  region:r
+ 15 |     show(p != q)
+    | builtin-fn:show  punctuation:(  variable:p  operator:!=  variable:q  punctuation:)
+ 16 |     bind same = p
+    | keyword:bind  variable:same  operator:=  variable:p
+ 17 |     show(same == p)
+    | builtin-fn:show  punctuation:(  variable:same  operator:==  variable:p  punctuation:)
+ 18 | fi
+    | keyword:fi

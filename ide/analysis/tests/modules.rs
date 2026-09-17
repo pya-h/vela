@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use vela_analysis::{Analysis, LineIndex, Location, TokenClass};
+use vela_analysis::{Analysis, CompletionItem, LineIndex, Location, TokenClass};
 
 const MAIN: &str = "\
 include shapes/geometry
@@ -65,6 +65,10 @@ fi
 priv task pi() -> float
     <- 3.14159
 fi
+
+priv kind Secret
+    Hidden
+fi
 ";
 
 const NUMBERS: &str = "task square(x: float) -> float\n    <- x * x\nfi\n";
@@ -108,13 +112,18 @@ fn class_at(analysis: &Analysis, source: &str, needle: &str, nth: usize) -> Toke
     analysis.tokens().into_iter().find(|t| t.from == offset).unwrap_or_else(|| panic!("no token at {:?}", needle)).class
 }
 
-/// The labels completed at `@@` in `marked`, with every module given.
-fn labels(marked: &str) -> Vec<String> {
+/// The items completed at `@@` in `marked`, with every module given.
+fn items(marked: &str) -> Vec<CompletionItem> {
     let offset = marked.find("@@").unwrap();
     let source = marked.replacen("@@", "", 1);
     let sources = sources();
     let analysis = Analysis::with_modules(&source, "app/main.vela", &sources);
-    analysis.complete(LineIndex::new(&source).utf16_of(offset)).items.into_iter().map(|item| item.label).collect()
+    analysis.complete(LineIndex::new(&source).utf16_of(offset)).items
+}
+
+/// The labels completed at `@@` in `marked`, with every module given.
+fn labels(marked: &str) -> Vec<String> {
+    items(marked).into_iter().map(|item| item.label).collect()
 }
 
 #[test]
@@ -267,4 +276,159 @@ fn every_request_works_on_every_prefix_of_a_program_and_its_modules() {
         cut_sources.insert("app/shapes/geometry.vela".to_string(), GEOMETRY[..cut].to_string());
         every(&full, &cut_sources);
     }
+}
+
+#[test]
+fn names_on_an_include_line_are_inserted_alone() {
+    // A task or shape listed on an include line is its name, not a call or a literal.
+    let listed = items("include shapes/geometry (@@)\n\ntask main()\nfi\n");
+    let names: Vec<&str> = listed.iter().map(|item| item.label.as_str()).collect();
+    for name in ["area", "measure", "Point", "Figure", "Circle"] {
+        assert!(names.contains(&name), "{} in {:?}", name, names);
+    }
+    // Private names can't be listed.
+    assert!(!names.contains(&"pi") && !names.contains(&"Secret") && !names.contains(&"Hidden"), "{:?}", names);
+    for item in listed.iter().chain(&items("include shapes/geometry {Point, @@}\n\ntask main()\nfi\n")) {
+        assert_eq!((&item.snippet, &item.apply), (&None, &None), "{:?}", item);
+    }
+    // Elsewhere, a task still completes as a call.
+    let call = items(&main_with("show(geometry.@@)")).into_iter().find(|item| item.label == "area").unwrap();
+    assert_eq!(call.snippet.as_deref(), Some("area(${figure})"));
+}
+
+#[test]
+fn a_private_kind_and_its_variants_are_hidden_from_other_files() {
+    let members = labels(&main_with("show(geometry.@@)"));
+    assert!(members.contains(&"Figure".to_string()) && members.contains(&"Circle".to_string()), "{:?}", members);
+    assert!(!members.iter().any(|name| name == "Secret" || name == "Hidden"), "{:?}", members);
+    assert!(!labels(&main_with("bind s: geometry.@@ = square")).contains(&"Secret".to_string()));
+}
+
+#[test]
+fn a_shape_with_a_private_field_is_not_offered_as_a_literal_in_another_file() {
+    // `Measure` has a private field, so only its module can build it.
+    let members = items(&main_with("show(geometry.@@)"));
+    let measure = members.iter().find(|item| item.label == "Measure").unwrap();
+    assert_eq!(measure.snippet, None);
+    let point = members.iter().find(|item| item.label == "Point").unwrap();
+    assert_eq!(point.snippet.as_deref(), Some("Point { x: ${x}, y: ${y} }"));
+    // The same through a name brought in.
+    let brought = MAIN.replace("include palette (Color, describe)", "include palette (Color, describe)\ninclude shapes/geometry (Measure => Size)");
+    let brought = brought.replace("include shapes/geometry\n", "");
+    let values = items(&brought.replace("    @@\n", "    show(@@)\n"));
+    assert_eq!(values.iter().find(|item| item.label == "Size").map(|item| item.snippet.clone()), Some(None));
+    // In a literal, only the fields another file sees.
+    assert_eq!(labels(&main_with("bind m = geometry.Measure { @@ }")), ["size"]);
+}
+
+/// `MAIN` with a task above `main` that sends another module's type or an error.
+fn with_parse(code: &str) -> String {
+    main_with("").replace("task main()", &format!("{}\n    <- fail s\nfi\n\ntask main()", code))
+}
+
+#[test]
+fn another_modules_type_goes_on_with_its_error_type() {
+    let source = with_parse("task parse(s: text) -> geometry.Point or text");
+    let sources = sources();
+    let analysis = Analysis::with_modules(&source, "app/main.vela", &sources);
+    assert_eq!(analysis.diagnostics(), Vec::new());
+    assert_eq!(class_at(&analysis, &source, "Point or", 0), TokenClass::Type);
+    assert_eq!(class_at(&analysis, &source, "text\n", 0), TokenClass::TypeBuiltin);
+    assert_eq!(analysis.hover(at(&source, "text\n", 0)).unwrap().code, "text");
+
+    let error_types = labels(&with_parse("task parse(s: text) -> geometry.Point or @@"));
+    assert!(error_types.contains(&"int".to_string()) && !error_types.contains(&"main".to_string()), "{:?}", error_types);
+    assert_eq!(labels(&with_parse("task parse(s: text) -> geometry.Point @@")), ["or"]);
+    assert_eq!(labels(&with_parse("task parse(s: text) -> ^geometry.Point@r @@")), ["or"]);
+    // After a value, both words still continue it.
+    assert_eq!(labels(&main_with("show(geometry.area(square) @@)")), ["and", "or"]);
+}
+
+/// A file bringing in names from `shapes/geometry` with braces, so the types those
+/// names use aren't names this file can write.
+fn braces_program(checks: bool, code: &str) -> String {
+    let first = if checks { "show(0)" } else { "show(unknown)" };
+    format!("include shapes/geometry {{measure, Circle}}\n\ntask main()\n    {}\n    bind size = measure(Circle(1.0))\n    {}\nfi\n", first, code)
+}
+
+#[test]
+fn types_a_file_cant_write_are_spelled_with_their_module_path() {
+    let sources = sources();
+    for checks in [true, false] {
+        let source = braces_program(checks, "show(size.size)");
+        let analysis = Analysis::with_modules(&source, "app/main.vela", &sources);
+        assert_eq!(analysis.diagnostics().is_empty(), checks, "{:?}", analysis.diagnostics());
+        assert_eq!(analysis.hover(at(&source, "size =", 0)).unwrap().code, "bind size: shapes/geometry.Measure", "checks: {}", checks);
+        assert_eq!(labels(&braces_program(checks, "show(size.@@)")), ["size"], "checks: {}", checks);
+        // A variant listed alone belongs to a kind the file can't name, spelled
+        // as the compiler spells it.
+        let circle = analysis.hover(at(&source, "Circle(1.0)", 0)).unwrap();
+        assert_eq!(circle.code, "Circle(radius: float)");
+        assert_eq!(circle.doc, "A variant of kind shapes/geometry.Figure. From module shapes/geometry (app/shapes/geometry.vela).");
+    }
+    let wrong = braces_program(true, "bind n: int = Circle(2.0)");
+    let messages: Vec<String> = Analysis::with_modules(&wrong, "app/main.vela", &sources).diagnostics().into_iter().map(|d| d.message).collect();
+    assert_eq!(messages, ["expected type int, got shapes/geometry.Figure"]);
+}
+
+const CLASH: &str = "\
+include shapes/geometry
+
+kind Mark
+    Circle(label: text)
+fi
+
+task main()
+    CHECK
+    bind figure = geometry.Square(2.0)
+    match figure
+    case Circle radius
+        show(radius)
+    case Square side
+        show(side)
+    fi
+    when figure is Square edge
+        show(edge)
+    fi
+    match Circle(\"m\")
+    case Circle label
+        show(label)
+    fi
+fi
+";
+
+#[test]
+fn a_variant_named_alone_in_a_pattern_is_the_matched_kinds() {
+    let sources = sources();
+    for checks in [true, false] {
+        let source = CLASH.replace("CHECK", if checks { "show(0)" } else { "show(unknown)" });
+        let analysis = Analysis::with_modules(&source, "app/main.vela", &sources);
+        let path = |needle: &str| analysis.definition(at(&source, needle, 0)).map(|location| location.path);
+        let geometry = Some(Some("app/shapes/geometry.vela".to_string()));
+        assert_eq!(path("Circle radius"), geometry, "checks: {}", checks);
+        assert_eq!(path("Square side"), geometry, "checks: {}", checks);
+        assert_eq!(path("Square edge"), geometry, "checks: {}", checks);
+        assert_eq!(analysis.hover(at(&source, "Circle radius", 0)).unwrap().code, "geometry.Circle(radius: float)");
+        assert_eq!(analysis.hover(at(&source, "radius)", 0)).unwrap().code, "radius: float");
+        // The file's own variant, where its own kind is matched.
+        assert_eq!(path("Circle label"), Some(None), "checks: {}", checks);
+        assert_eq!(analysis.hover(at(&source, "Circle label", 0)).unwrap().code, "Circle(label: text)");
+    }
+}
+
+#[test]
+fn patterns_through_a_kind_that_isnt_known_still_name_a_variant() {
+    // Before the module arrives (or with a kind that doesn't exist), the variant
+    // is not a new variable.
+    let source = main_with("match square\n    case geometry.Figure.Circle r\n        show(r)\n    fi\n    match square\n    case Unknown.Thing t\n        show(t)\n    fi");
+    let alone = Analysis::new(&source);
+    assert_eq!(class_at(&alone, &source, "Figure.Circle", 0), TokenClass::Type);
+    assert_eq!(class_at(&alone, &source, "Circle r", 0), TokenClass::Variant);
+    assert_eq!(class_at(&alone, &source, "r)", 0), TokenClass::Variable);
+    assert_eq!(class_at(&alone, &source, "Unknown", 0), TokenClass::Type);
+    assert_eq!(class_at(&alone, &source, "Thing", 0), TokenClass::Variant);
+    assert_eq!(alone.hover(at(&source, "Thing", 0)), None);
+    let offset = at(&source, "show(r)", 0) + "show(".len();
+    let names: Vec<String> = alone.complete(offset).items.into_iter().map(|item| item.label).collect();
+    assert!(names.contains(&"r".to_string()) && !names.contains(&"Circle".to_string()), "{:?}", names);
 }

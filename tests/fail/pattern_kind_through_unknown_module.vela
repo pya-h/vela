@@ -1,0 +1,11 @@
+# error: 8:10: 'a.Mood' names nothing: 'a' isn't a module this file includes
+kind Mood
+    Calm
+fi
+
+task main()
+    match Mood.Calm
+    case a.Mood.Calm
+        show(1)
+    fi
+fi

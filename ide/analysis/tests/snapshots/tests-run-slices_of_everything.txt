@@ -1,0 +1,48 @@
+  1 | # Slices of shapes with fields written through them, a slice of an array held
+    | comment:# Slices of shapes with fields written through them, a slice of an array held
+  2 | # in a slice (sharing its items), and a slice of slices.
+    | comment:# in a slice (sharing its items), and a slice of slices.
+  4 | shape Point
+    | keyword:shape  type:Point
+  5 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  6 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  7 | fi
+    | keyword:fi
+  9 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 10 |     region r
+    | keyword:region  region:r
+ 11 |     bind pts = new@r [Point]([Point { x: 0, y: 0 }; 3])
+    | keyword:bind  variable:pts  operator:=  keyword:new  operator:@  region:r  punctuation:[  type:Point  punctuation:]  punctuation:(  punctuation:[  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}  punctuation:;  number:3  punctuation:]  punctuation:)
+ 12 |     pts[1].x = 5
+    | variable:pts  punctuation:[  number:1  punctuation:]  punctuation:.  field:x  operator:=  number:5
+ 13 |     each p in pts
+    | keyword:each  variable:p  keyword:in  variable:pts
+ 14 |         show(p.x)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:x  punctuation:)
+ 15 |     fi
+    | keyword:fi
+ 16 |     bind rows = new [[int; 4]]([[1, 2, 3, 4]; 2]) at r
+    | keyword:bind  variable:rows  operator:=  keyword:new  punctuation:[  punctuation:[  type-builtin:int  punctuation:;  number:4  punctuation:]  punctuation:]  punctuation:(  punctuation:[  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:]  punctuation:;  number:2  punctuation:]  punctuation:)  keyword:at  region:r
+ 17 |     bind part = rows[1][1..3]
+    | keyword:bind  variable:part  operator:=  variable:rows  punctuation:[  number:1  punctuation:]  punctuation:[  number:1  operator:..  number:3  punctuation:]
+ 18 |     part[0] = 20
+    | variable:part  punctuation:[  number:0  punctuation:]  operator:=  number:20
+ 19 |     show(rows[1][1])
+    | builtin-fn:show  punctuation:(  variable:rows  punctuation:[  number:1  punctuation:]  punctuation:[  number:1  punctuation:]  punctuation:)
+ 20 |     show(rows[0][1])
+    | builtin-fn:show  punctuation:(  variable:rows  punctuation:[  number:0  punctuation:]  punctuation:[  number:1  punctuation:]  punctuation:)
+ 21 |     bind row = new [int]([0; 3]) at r
+    | keyword:bind  variable:row  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:;  number:3  punctuation:]  punctuation:)  keyword:at  region:r
+ 22 |     bind table = new [[int]]([row; 2]) at r
+    | keyword:bind  variable:table  operator:=  keyword:new  punctuation:[  punctuation:[  type-builtin:int  punctuation:]  punctuation:]  punctuation:(  punctuation:[  variable:row  punctuation:;  number:2  punctuation:]  punctuation:)  keyword:at  region:r
+ 23 |     table[0][2] = 8
+    | variable:table  punctuation:[  number:0  punctuation:]  punctuation:[  number:2  punctuation:]  operator:=  number:8
+ 24 |     show(table[1][2])
+    | builtin-fn:show  punctuation:(  variable:table  punctuation:[  number:1  punctuation:]  punctuation:[  number:2  punctuation:]  punctuation:)
+ 25 |     show(table.len * table[0].len)
+    | builtin-fn:show  punctuation:(  variable:table  punctuation:.  field:len  operator:*  variable:table  punctuation:[  number:0  punctuation:]  punctuation:.  field:len  punctuation:)
+ 26 | fi
+    | keyword:fi

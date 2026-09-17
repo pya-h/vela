@@ -791,8 +791,9 @@ impl<'a> Classifier<'a> {
                     self.push(range, TokenClass::Punctuation, None);
                     match token {
                         Token::LParen if in_include => in_include_names = true,
-                        // `geometry.Point`: a type goes on after the module's name.
-                        Token::Dot => in_type = was_type,
+                        // `geometry.Point`: a type goes on after the module's name,
+                        // which ended a type as far as it went.
+                        Token::Dot => in_type = was_after_type,
                         _ => {}
                     }
                 }
@@ -920,7 +921,8 @@ impl<'a> Classifier<'a> {
             let full = format!("{}{}{}", module, MODULE_SEPARATOR, name);
             return match self.globals.get(&full).and_then(|&id| self.symbols.get(id).map(|s| (id, s.kind))) {
                 Some((id, kind)) => (kind.class(), Some(id)),
-                None if in_type => (TokenClass::Type, None),
+                // A pattern names a kind after the module's name.
+                None if in_type || in_pattern => (TokenClass::Type, None),
                 None => (TokenClass::Variable, None),
             };
         }
@@ -930,6 +932,11 @@ impl<'a> Classifier<'a> {
         {
             let variant = self.symbols.iter().position(|s| s.kind == SymbolKind::Variant && s.parent == Some(kind) && unqualified(&s.name) == name);
             return (TokenClass::Variant, variant);
+        }
+        // In a pattern, a name after `.` is a variant even when its kind isn't
+        // known (a module not read yet, or a misspelled kind): not a new variable.
+        if in_pattern && before == Some(&Token::Dot) {
+            return (TokenClass::Variant, None);
         }
         // `case Shape.Circle`: the kind's name, before its variant.
         if in_pattern && after == Some(&Token::Dot) && matches!(before, Some(Token::Case | Token::Is)) {

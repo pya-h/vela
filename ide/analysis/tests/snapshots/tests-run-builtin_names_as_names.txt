@@ -1,0 +1,50 @@
+  1 | # The names of builtin tasks and types are only reserved as declarations:
+    | comment:# The names of builtin tasks and types are only reserved as declarations:
+  2 | # variables, parameters, and fields may use them; `Light.Red()` is a variant
+    | comment:# variables, parameters, and fields may use them; `Light.Red()` is a variant
+  3 | # without a payload written with parentheses.
+    | comment:# without a payload written with parentheses.
+  5 | shape Box
+    | keyword:shape  type:Box
+  6 |     unit: int
+    | field:unit  punctuation::  type-builtin:int
+  7 |     show: text
+    | field:show  punctuation::  type-builtin:text
+  8 | fi
+    | keyword:fi
+ 10 | kind Light
+    | keyword:kind  type:Light
+ 11 |     Red
+    | variant:Red
+ 12 |     Dimmed(level: int)
+    | variant:Dimmed  punctuation:(  field:level  punctuation::  type-builtin:int  punctuation:)
+ 13 | fi
+    | keyword:fi
+ 15 | task twice(text: int, float: int) -> int
+    | keyword:task  task:twice  punctuation:(  parameter:text  punctuation::  type-builtin:int  punctuation:,  parameter:float  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 16 |     <- text + float
+    | keyword:<-  parameter:text  operator:+  parameter:float
+ 17 | fi
+    | keyword:fi
+ 19 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 20 |     bind show = 3
+    | keyword:bind  variable:show  operator:=  number:3
+ 21 |     hold bool = Box { unit: show, show: "shown" }
+    | keyword:hold  variable:bool  operator:=  type:Box  punctuation:{  field:unit  punctuation::  variable:show  punctuation:,  field:show  punctuation::  string:"shown"  punctuation:}
+ 22 |     bool.unit = twice(bool.unit, 1)
+    | variable:bool  punctuation:.  field:unit  operator:=  task:twice  punctuation:(  variable:bool  punctuation:.  field:unit  punctuation:,  number:1  punctuation:)
+ 23 |     show(bool.unit)
+    | variable:show  punctuation:(  variable:bool  punctuation:.  field:unit  punctuation:)
+ 24 |     show(bool.show)
+    | variable:show  punctuation:(  variable:bool  punctuation:.  field:show  punctuation:)
+ 25 |     bind l = Light.Red()
+    | keyword:bind  variable:l  operator:=  type:Light  punctuation:.  variant:Red  punctuation:(  punctuation:)
+ 26 |     when l is Light.Red
+    | keyword:when  variable:l  keyword:is  type:Light  punctuation:.  variant:Red
+ 27 |         show("red")
+    | variable:show  punctuation:(  string:"red"  punctuation:)
+ 28 |     fi
+    | keyword:fi
+ 29 | fi
+    | keyword:fi

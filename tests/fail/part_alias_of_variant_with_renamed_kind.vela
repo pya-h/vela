@@ -1,0 +1,5 @@
+# error: 2:51: 'Hearts' is a variant, which keeps its own name; bring in 'Hearts' as it is, or its kind, and write 'Color.Hearts'
+include modules/library (Suit => Color, Hearts => Red)
+
+task main()
+fi

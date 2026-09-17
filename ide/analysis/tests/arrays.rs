@@ -130,3 +130,26 @@ fn values_in_an_array_inside_a_shape_literal_are_not_its_fields() {
     assert!(!items.contains(&"y".to_string()), "{:?}", items);
     assert!(items.contains(&"scores".to_string()), "{:?}", items);
 }
+
+#[test]
+fn completion_continues_array_and_slice_expressions() {
+    for checks in [true, false] {
+        let when = if checks { "checked" } else { "declared" };
+        // After a slice made with `new`, the region it goes in.
+        assert!(labels(&program(checks, "bind copy = new [int](scores) @@")).contains(&"at".to_string()), "{}", when);
+        assert!(labels(&program(checks, "bind copy = new [int; 3](scores) @@")).contains(&"at".to_string()), "{}", when);
+        assert_eq!(labels(&program(checks, "bind copy = new [int](scores) at @@")), ["r"], "{}", when);
+        // Once it has one, no second `at`.
+        assert!(!labels(&program(checks, "bind copy = new [int](scores) at r @@")).contains(&"at".to_string()), "{}", when);
+        // Nor after an array literal, which `new` doesn't make.
+        assert!(!labels(&program(checks, "bind copy = [1, 2] @@")).contains(&"at".to_string()), "{}", when);
+        // What `each` goes through is a value: arrays, slices, and counts.
+        let values = labels(&program(checks, "each v in @@"));
+        for name in ["scores", "points", "part", "count", "sum"] {
+            assert!(values.contains(&name.to_string()), "{} in {:?} ({})", name, values, when);
+        }
+        assert!(!values.iter().any(|name| name == "bind" || name == "each" || name == "fi"), "{:?} ({})", values, when);
+        // After its name, only `in`.
+        assert_eq!(labels(&program(checks, "each v @@")), ["in"], "{}", when);
+    }
+}

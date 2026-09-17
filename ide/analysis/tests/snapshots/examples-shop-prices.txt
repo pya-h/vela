@@ -1,0 +1,44 @@
+  1 | # What things cost, in cents. The discount rule is private to this file.
+    | comment:# What things cost, in cents. The discount rule is private to this file.
+  3 | kind Item
+    | keyword:kind  type:Item
+  4 |     Apple
+    | variant:Apple
+  5 |     Bread
+    | variant:Bread
+  6 |     Cheese(grams: int)
+    | variant:Cheese  punctuation:(  field:grams  punctuation::  type-builtin:int  punctuation:)
+  7 | fi
+    | keyword:fi
+  9 | task price_of(item: Item) -> int
+    | keyword:task  task:price_of  punctuation:(  parameter:item  punctuation::  type:Item  punctuation:)  operator:->  type-builtin:int
+ 10 |     match item
+    | keyword:match  parameter:item
+ 11 |     case Apple
+    | keyword:case  variant:Apple
+ 12 |         <- 40
+    | keyword:<-  number:40
+ 13 |     case Bread
+    | keyword:case  variant:Bread
+ 14 |         <- 250
+    | keyword:<-  number:250
+ 15 |     case Cheese grams
+    | keyword:case  variant:Cheese  variable:grams
+ 16 |         <- cheese(grams)
+    | keyword:<-  task:cheese  punctuation:(  variable:grams  punctuation:)
+ 17 |     fi
+    | keyword:fi
+ 18 | fi
+    | keyword:fi
+ 20 | priv task cheese(grams: int) -> int
+    | keyword:priv  keyword:task  task:cheese  punctuation:(  parameter:grams  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 21 |     when grams >= 500
+    | keyword:when  parameter:grams  operator:>=  number:500
+ 22 |         <- grams * 2        # big pieces cost less per gram
+    | keyword:<-  parameter:grams  operator:*  number:2  comment:# big pieces cost less per gram
+ 23 |     fi
+    | keyword:fi
+ 24 |     <- grams * 3
+    | keyword:<-  parameter:grams  operator:*  number:3
+ 25 | fi
+    | keyword:fi

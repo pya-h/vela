@@ -1,0 +1,4 @@
+# error: 3:15: unexpected character '&'; Vela writes 'and'
+task main()
+    show(true & false)
+fi

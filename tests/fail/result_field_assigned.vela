@@ -1,0 +1,12 @@
+# error: 8:5: 'spot' is a result; set it with 'spot <- …'
+shape Point
+    x: int
+fi
+
+task origin() -> spot: Point
+    spot <- Point { x: 1 }
+    spot.x = 2
+fi
+
+task main()
+fi

@@ -222,5 +222,15 @@
     | variable:spot  punctuation:.  field:x  punctuation:,  variable:spot  punctuation:.  field:y  operator:=  variable:spot  punctuation:.  field:y  punctuation:,  variable:spot  punctuation:.  field:x
 132 |     show(spot.x)
     | builtin-fn:show  punctuation:(  variable:spot  punctuation:.  field:x  punctuation:)
-133 | fi
+134 |     # A task that sends nothing, received by '_': it runs in its place.
+    | comment:# A task that sends nothing, received by '_': it runs in its place.
+135 |     bind _, after = show(1), 2
+    | keyword:bind  keyword:_  punctuation:,  variable:after  operator:=  builtin-fn:show  punctuation:(  number:1  punctuation:)  punctuation:,  number:2
+136 |     show(after)
+    | builtin-fn:show  punctuation:(  variable:after  punctuation:)
+137 |     _, last = show(3), 4
+    | keyword:_  punctuation:,  variable:last  operator:=  builtin-fn:show  punctuation:(  number:3  punctuation:)  punctuation:,  number:4
+138 |     show(last)
+    | builtin-fn:show  punctuation:(  variable:last  punctuation:)
+139 | fi
     | keyword:fi

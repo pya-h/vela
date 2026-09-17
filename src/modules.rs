@@ -157,10 +157,14 @@ impl Spelling {
             let (word, after) = from.split_at(end);
             // A word may end a sentence, as in "… Point.".
             let trimmed = word.trim_end_matches('.');
-            match self.names.get(trimmed) {
-                Some(spelled) => {
+            // A name may also start a longer word, as a kind does in `Kind.Variant`.
+            let name = std::iter::once(trimmed.len())
+                .chain(trimmed.rmatch_indices('.').map(|(at, _)| at))
+                .find_map(|end| trimmed.get(..end).and_then(|name| self.names.get(name)).map(|spelled| (end, spelled)));
+            match name {
+                Some((end, spelled)) => {
                     out.push_str(spelled);
-                    out.push_str(word.get(trimmed.len()..).unwrap_or_default());
+                    out.push_str(word.get(end..).unwrap_or_default());
                 }
                 None => out.push_str(word),
             }
@@ -211,7 +215,7 @@ struct Module {
 struct State {
     files: Vec<SourceFile>,
     modules: Vec<Module>,
-    /// Each loaded file's module, by its path with `.` and `..` settled.
+    /// Each loaded file's module, by its `identity`.
     by_path: HashMap<PathBuf, usize>,
     /// The modules being loaded, outermost first, to find a module that
     /// includes itself through others.
@@ -227,7 +231,7 @@ impl State {
         let main = self.parse(String::new(), path, source.to_string(), None)?;
         self.visit(main, loader)?;
         let tables: Vec<Names> = self.modules.iter().map(own_names).collect();
-        let variants = variants_of_kinds(&tables);
+        let variants = variants_of_kinds(&self.modules);
         let mut scopes = Vec::new();
         for index in 0..self.modules.len() {
             scopes.push(self.resolve(index, &tables, &variants)?);
@@ -253,17 +257,13 @@ impl State {
         self.type_places.extend(parser.type_places());
         let includes = parser.includes();
         let index = self.modules.len();
-        self.by_path.insert(normalize(path), index);
+        self.by_path.insert(identity(path), index);
         self.modules.push(Module { id, file, includes, included: Vec::new(), items });
         Ok(index)
     }
 
     /// Loads every module that module `index` includes, and theirs, in order.
     fn visit(&mut self, index: usize, loader: &mut Loader) -> Result<()> {
-        if self.loading.len() >= MAX_MODULE_DEPTH {
-            let span = self.modules.get(index).and_then(|m| m.includes.first()).map_or_else(Span::default, |u| u.span);
-            return err(span, format!("modules include one another too deeply (more than {} in a chain)", MAX_MODULE_DEPTH));
-        }
         self.loading.push(index);
         let includes = self.modules.get(index).map(|m| m.includes.clone()).unwrap_or_default();
         let folder = self.module_path(index).parent().map(Path::to_path_buf).unwrap_or_default();
@@ -273,9 +273,14 @@ impl State {
             if let Some(local) = include.local_name() {
                 check_module_name(local, include.local_span())?;
             }
+            if let Some((alias, at)) = &include.alias
+                && alias == include.file_name()
+            {
+                return err(*at, format!("'{0}' is already named '{0}'; leave out '=> {0}'", alias));
+            }
             let path = module_file(&folder, &include.path);
             let earlier = includes.iter().take(i);
-            if let Some(earlier) = earlier.clone().find(|earlier| module_file(&folder, &earlier.path) == path) {
+            if let Some(earlier) = earlier.clone().find(|earlier| identity(&module_file(&folder, &earlier.path)) == identity(&path)) {
                 let at = earlier.name_span;
                 return err(include.name_span, format!("this module is already included at {}:{}; a file includes each module once", at.line, at.col));
             }
@@ -291,7 +296,7 @@ impl State {
                     ),
                 );
             }
-            let target = match self.by_path.get(&path) {
+            let target = match self.by_path.get(&identity(&path)) {
                 Some(&target) => {
                     if let Some(start) = self.loading.iter().position(|&m| m == target) {
                         return err(include.span, self.cycle(start, target));
@@ -299,6 +304,9 @@ impl State {
                     target
                 }
                 None => {
+                    if self.loading.len() >= MAX_MODULE_DEPTH {
+                        return err(include.span, format!("modules include one another too deeply (more than {} in a chain)", MAX_MODULE_DEPTH));
+                    }
                     let source = loader(&path).map_err(|error| {
                         let message = match error.kind() {
                             io::ErrorKind::NotFound => format!("can't find module '{}': there is no file '{}.vela'", include.written(), include.written()),
@@ -380,7 +388,10 @@ impl State {
         for (include, &target) in module.includes.iter().zip(&module.included) {
             let label = include.local_name().map_or_else(|| include.written(), str::to_string);
             let table = tables.get(target);
-            for part in &include.parts {
+            for (i, part) in include.parts.iter().enumerate() {
+                if let Some(earlier) = include.parts.iter().take(i).find(|earlier| earlier.name == part.name) {
+                    return err(part.span, format!("'{}' is already listed at {}:{}; a name is brought in once", part.name, earlier.span.line, earlier.span.col));
+                }
                 let Some(entry) = table.and_then(|table| table.get(&part.name)) else {
                     return err(part.span, format!("module '{}' has no task, shape, kind, or variant named '{}'", label, part.name));
                 };
@@ -389,7 +400,13 @@ impl State {
                 }
                 if let Some((alias, at)) = &part.alias {
                     if entry.what == What::Variant {
-                        let kind = entry.kind.as_deref().map_or("Kind", unqualified);
+                        let tag = entry.kind.as_deref().map_or("Kind", unqualified);
+                        // The kind as this line would let the file write it.
+                        let kind = match (include.parts.iter().find(|listed| listed.name == tag), include.local_name()) {
+                            (Some(listed), _) => listed.local_name().to_string(),
+                            (None, Some(local)) => format!("{}{}{}", local, MODULE_SEPARATOR, tag),
+                            (None, None) => tag.to_string(),
+                        };
                         return err(
                             *at,
                             format!("'{0}' is a variant, which keeps its own name; bring in '{0}' as it is, or its kind, and write '{1}.{0}'", part.name, kind),
@@ -420,7 +437,7 @@ impl State {
                 resolver.imports.insert(written.to_string(), (entry, at));
             }
         }
-        let spelling = spelling(module, tables.get(index), tables, variants, &imports);
+        let spelling = spelling(module, tables.get(index), tables, variants, &imports, &includes);
         let scope = ModuleScope { name: module.id.clone(), file: module.file, includes, imports, spelling };
         let Some(module) = self.modules.get_mut(index) else { return Ok(scope) };
         let mut items = std::mem::take(&mut module.items);
@@ -436,8 +453,8 @@ impl State {
 
 /// How module `module`, which declares `own`, writes the program's names (see
 /// `Spelling`), given the names its `include` lines bring in (`imports`, as in
-/// `ModuleScope`).
-fn spelling(module: &Module, own: Option<&Names>, tables: &[Names], variants: &Variants, imports: &[(String, String, Span)]) -> Spelling {
+/// `ModuleScope`) and the modules it includes (`includes`).
+fn spelling(module: &Module, own: Option<&Names>, tables: &[Names], variants: &Variants, imports: &[(String, String, Span)], includes: &[IncludeScope]) -> Spelling {
     let mut names = HashMap::new();
     if let Some(own) = own {
         for (written, entry) in own {
@@ -463,6 +480,17 @@ fn spelling(module: &Module, own: Option<&Names>, tables: &[Names], variants: &V
             names.entry(entry.full.clone()).or_insert_with(|| format!("{}{}{}", kind, MODULE_SEPARATOR, tag));
         }
     }
+    // A name the file can't write, of a module whose identity reads like the
+    // name the file gives another module (`c.Thing` from `c.vela`, where
+    // `include x => c`), starts with `./`, to tell them apart.
+    let taken = |id: &str| includes.iter().any(|include| include.local.as_deref() == Some(id) && include.id != id);
+    for (_, entry) in tables.iter().flatten() {
+        if let Some((id, _)) = entry.full.rsplit_once(MODULE_SEPARATOR)
+            && taken(id)
+        {
+            names.entry(entry.full.clone()).or_insert_with(|| format!("./{}", entry.full));
+        }
+    }
     // The main file's names are already written as the program names them.
     names.retain(|full, written| full != written);
     Spelling { names }
@@ -484,15 +512,28 @@ fn check_module_name(name: &str, span: Span) -> Result<()> {
 /// file's folder `main_folder`, with `/` between the parts and without
 /// `.vela`, as in `shapes/geometry` or `../common/text`.
 pub fn module_id(main_folder: &Path, path: &Path) -> String {
-    let folder = normalize(main_folder);
+    let folder = identity(main_folder);
     let folder: Vec<Component> = folder.components().collect();
-    let file = normalize(&path.with_extension(""));
+    let file = identity(&path.with_extension(""));
     let parts: Vec<Component> = file.components().collect();
     let common = folder.iter().zip(&parts).take_while(|(a, b)| a == b).count();
     let ups = folder.len().saturating_sub(common);
     let mut id: Vec<String> = vec!["..".to_string(); ups];
     id.extend(parts.iter().skip(common).map(|part| part.as_os_str().to_string_lossy().into_owned()));
     id.join("/")
+}
+
+/// The path that tells which file `path` is: from the working directory, when
+/// there is one, and normalized. A relative `..` can climb above the folder a
+/// program's paths start from, as in `../app/config` read from the folder
+/// `app`, which is `config`; only the working directory knows that folder's
+/// name. (Such a path can only be read from the disk: an editor keeps a
+/// program inside its folder.)
+fn identity(path: &Path) -> PathBuf {
+    match std::env::current_dir() {
+        Ok(dir) => normalize(&dir.join(path)),
+        Err(_) => normalize(path),
+    }
 }
 
 /// `path` with `.` removed and each `..` taking away the folder before it,
@@ -575,12 +616,20 @@ fn own_names(module: &Module) -> Names {
     names
 }
 
-/// The variants of every kind in `tables` (see `Variants`).
-fn variants_of_kinds(tables: &[Names]) -> Variants {
+/// The variants of every kind in `modules` (see `Variants`). Unlike a module's
+/// names, a variant named like another declaration of its module is kept, so
+/// that `Kind.Variant` finds it and the checker reports the clash.
+fn variants_of_kinds(modules: &[Module]) -> Variants {
     let mut variants = Variants::new();
-    for (tag, entry) in tables.iter().flatten() {
-        if let (What::Variant, Some(kind)) = (entry.what, &entry.kind) {
-            variants.entry(kind.clone()).or_default().entry(tag.clone()).or_insert_with(|| entry.clone());
+    for module in modules {
+        let full = |name: &str| if module.id.is_empty() { name.to_string() } else { format!("{}{}{}", module.id, MODULE_SEPARATOR, name) };
+        for item in &module.items {
+            let Item::Kind(k) = item else { continue };
+            let tags = variants.entry(full(&k.name)).or_default();
+            for variant in &k.variants {
+                let entry = Entry { full: full(&variant.tag), what: What::Variant, private: k.private, span: variant.span, kind: Some(full(&k.name)) };
+                tags.entry(variant.tag.clone()).or_insert(entry);
+            }
         }
     }
     variants
@@ -658,20 +707,20 @@ impl Resolver<'_> {
     /// brought in by name; `m.Name` in a module this file includes;
     /// `Kind.Variant` or `m.Kind.Variant`. `None` for an undotted name that
     /// names none of them, which the checker reports (or which is a variable).
-    /// `at` is where the name is written, for errors.
-    fn lookup(&self, written: &str, at: Span) -> Result<Option<Entry>> {
+    /// `at` is where the name is written, for errors, and `calls` whether it is
+    /// called.
+    fn lookup(&self, written: &str, at: Span, calls: bool) -> Result<Option<Entry>> {
         let parts: Vec<&str> = written.split(MODULE_SEPARATOR).collect();
         match parts.as_slice() {
             [name] => Ok(self.own.get(*name).or_else(|| self.imports.get(*name).map(|(entry, _)| entry)).cloned()),
             [first, member] => match self.modules.get(*first) {
                 Some(module) => self.member(first, module, member, at).map(Some),
-                None => match self.lookup(first, at)? {
+                None => match self.lookup(first, at, calls)? {
                     Some(kind) if kind.what == What::Kind => self.variant(&kind, first, member, at).map(Some),
                     _ => {
-                        let hint = match self.unnamed.iter().find(|(file_name, _, _)| file_name == first) {
-                            Some((_, Some(alias), path)) => format!("; module '{}' is included as '{}'", path, alias),
-                            Some((_, None, path)) => format!("; module '{}' is included with only its parts, which are named alone", path),
-                            None => ", and Vela has no methods".to_string(),
+                        let hint = match self.kind_hint(first) {
+                            hint if hint.is_empty() => self.unnamed_hint(first, calls),
+                            hint => hint,
                         };
                         err(at, format!("'{}' names nothing: '{}' is neither a module this file includes nor a kind{}", written, first, hint))
                     }
@@ -679,7 +728,7 @@ impl Resolver<'_> {
             },
             [module_name, kind_name, variant] => {
                 let Some(module) = self.modules.get(*module_name) else {
-                    return err(at, format!("'{}' names nothing: '{}' isn't a module this file includes", written, module_name));
+                    return err(at, format!("'{}' names nothing: '{}' isn't a module this file includes{}", written, module_name, self.unnamed_hint(module_name, calls)));
                 };
                 let kind = self.member(module_name, module, kind_name, at)?;
                 if kind.what != What::Kind {
@@ -687,7 +736,39 @@ impl Resolver<'_> {
                 }
                 self.variant(&kind, &format!("{}{}{}", module_name, MODULE_SEPARATOR, kind_name), variant, at).map(Some)
             }
-            _ => err(at, format!("'{}' names nothing", written)),
+            [first, ..] if !self.modules.contains_key(*first) => {
+                err(at, format!("'{}' names nothing: '{}' isn't a module this file includes{}", written, first, self.unnamed_hint(first, calls)))
+            }
+            _ => err(at, format!("'{}' names nothing: a variant of a module is named with three names, as in 'geometry.Figure.Square'", written)),
+        }
+    }
+
+    /// The end of an error for `name`, written where a kind belongs, when a
+    /// module this file includes by name has a kind of that name.
+    fn kind_hint(&self, name: &str) -> String {
+        let mut locals: Vec<&String> = self.modules.keys().collect();
+        locals.sort();
+        locals
+            .into_iter()
+            .find(|local| {
+                self.modules.get(*local).is_some_and(|module| {
+                    !module.hidden.contains_key(name) && module.names.get(name).is_some_and(|entry| entry.what == What::Kind && !entry.private)
+                })
+            })
+            .map_or_else(String::new, |local| {
+                format!("; module '{0}' has one: write '{0}{1}{2}', or bring it in with 'include … ({2})'", local, MODULE_SEPARATOR, name)
+            })
+    }
+
+    /// The end of a "names nothing" error for `first`, a name this file doesn't
+    /// give a module or kind: how the module with that file name is included,
+    /// if it is, or for a call, that Vela has no methods.
+    fn unnamed_hint(&self, first: &str, calls: bool) -> String {
+        match self.unnamed.iter().find(|(file_name, _, _)| file_name == first) {
+            Some((_, Some(alias), path)) => format!("; module '{}' is included as '{}'", path, alias),
+            Some((_, None, path)) => format!("; module '{}' is included with only its parts, which are named alone", path),
+            None if calls => ", and Vela has no methods".to_string(),
+            None => String::new(),
         }
     }
 
@@ -722,14 +803,14 @@ impl Resolver<'_> {
     /// The kind `name` (as written, maybe `m.Kind`) stands for, if it names one.
     fn kind(&self, name: &str, at: Span) -> Result<Option<Entry>> {
         if !name.contains(MODULE_SEPARATOR) || name.split(MODULE_SEPARATOR).count() == 2 && self.modules.contains_key(module_of(name)) {
-            return Ok(self.lookup(name, at)?.filter(|entry| entry.what == What::Kind));
+            return Ok(self.lookup(name, at, false)?.filter(|entry| entry.what == What::Kind));
         }
         Ok(None)
     }
 
     /// `name` rewritten, when it stands for a declaration of one of the kinds `whats`.
     fn rename(&self, name: &mut String, at: Span, whats: &[What]) -> Result<()> {
-        if let Some(entry) = self.lookup(name, at)?
+        if let Some(entry) = self.lookup(name, at, whats.contains(&What::Task))?
             && (whats.contains(&entry.what) || name.contains(MODULE_SEPARATOR))
         {
             *name = entry.full;
@@ -744,7 +825,12 @@ impl Resolver<'_> {
             let (name, at) = &mut **kind;
             match self.kind(name, *at)? {
                 Some(kind) => *name = kind.full,
-                None => return err(*at, format!("'{}' isn't a kind, so a pattern can't name a variant of it", name)),
+                None => match name.split_once(MODULE_SEPARATOR) {
+                    Some((first, _)) if !self.modules.contains_key(first) => {
+                        return err(*at, format!("'{}' names nothing: '{}' isn't a module this file includes{}", name, first, self.unnamed_hint(first, false)));
+                    }
+                    _ => return err(*at, format!("'{}' isn't a kind, so a pattern can't name a variant of it{}", name, self.kind_hint(name))),
+                },
             }
         }
         Ok(())
@@ -759,13 +845,15 @@ impl Resolver<'_> {
         let ExprKind::Var(name) = &base.kind else { return Ok(false) };
         if let Some(kind) = self.kind(name, base.span)? {
             let variant = self.variant(&kind, name, tag, expr.span)?;
+            // Where the kind is written, as for `Kind.Variant(…)`.
+            expr.span = base.span;
             expr.kind = ExprKind::Var(variant.full);
             return Ok(true);
         }
         // `m.Name.x`, where `m.Name` isn't a kind. (A variable may be named like
         // a shape or task of this file, so `Name.x` may be a field.)
         if name.contains(MODULE_SEPARATOR)
-            && let Some(entry) = self.lookup(name, base.span)?
+            && let Some(entry) = self.lookup(name, base.span, false)?
         {
             return err(expr.span, format!("'{}' is a {}, not a kind, so it has no variant '{}'", name, entry.what.word(), tag));
         }

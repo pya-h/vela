@@ -1,0 +1,68 @@
+  1 | # Colors described through a private kind and shape, for
+    | comment:# Colors described through a private kind and shape, for
+  2 | # tests/run/module_parts.vela and tests/run/module_braces.vela.
+    | comment:# tests/run/module_parts.vela and tests/run/module_braces.vela.
+  4 | kind Color
+    | keyword:kind  type:Color
+  5 |     Red
+    | variant:Red
+  6 |     Blue
+    | variant:Blue
+  7 |     Mix(amount: int)
+    | variant:Mix  punctuation:(  field:amount  punctuation::  type-builtin:int  punctuation:)
+  8 | fi
+    | keyword:fi
+ 10 | priv kind Tone
+    | keyword:priv  keyword:kind  type:Tone
+ 11 |     Warm
+    | variant:Warm
+ 12 |     Cool
+    | variant:Cool
+ 13 | fi
+    | keyword:fi
+ 15 | priv shape Swatch
+    | keyword:priv  keyword:shape  type:Swatch
+ 16 |     tone: Tone
+    | field:tone  punctuation::  type:Tone
+ 17 |     level: int
+    | field:level  punctuation::  type-builtin:int
+ 18 | fi
+    | keyword:fi
+ 20 | task describe(c: Color) -> text
+    | keyword:task  task:describe  punctuation:(  parameter:c  punctuation::  type:Color  punctuation:)  operator:->  type-builtin:text
+ 21 |     bind s = swatch(c)
+    | keyword:bind  variable:s  operator:=  task:swatch  punctuation:(  parameter:c  punctuation:)
+ 22 |     match s.tone
+    | keyword:match  variable:s  punctuation:.  field:tone
+ 23 |     case Warm
+    | keyword:case  variant:Warm
+ 24 |         <- "warm"
+    | keyword:<-  string:"warm"
+ 25 |     case Tone.Cool
+    | keyword:case  type:Tone  punctuation:.  variant:Cool
+ 26 |         <- "cool"
+    | keyword:<-  string:"cool"
+ 27 |     fi
+    | keyword:fi
+ 28 | fi
+    | keyword:fi
+ 30 | priv task swatch(c: Color) -> Swatch
+    | keyword:priv  keyword:task  task:swatch  punctuation:(  parameter:c  punctuation::  type:Color  punctuation:)  operator:->  type:Swatch
+ 31 |     match c
+    | keyword:match  parameter:c
+ 32 |     case Red
+    | keyword:case  variant:Red
+ 33 |         <- Swatch { tone: Warm, level: 1 }
+    | keyword:<-  type:Swatch  punctuation:{  field:tone  punctuation::  variant:Warm  punctuation:,  field:level  punctuation::  number:1  punctuation:}
+ 34 |     case Blue
+    | keyword:case  variant:Blue
+ 35 |         <- Swatch { tone: Tone.Cool, level: 2 }
+    | keyword:<-  type:Swatch  punctuation:{  field:tone  punctuation::  type:Tone  punctuation:.  variant:Cool  punctuation:,  field:level  punctuation::  number:2  punctuation:}
+ 36 |     case Mix n
+    | keyword:case  variant:Mix  variable:n
+ 37 |         <- Swatch { tone: Warm, level: n }
+    | keyword:<-  type:Swatch  punctuation:{  field:tone  punctuation::  variant:Warm  punctuation:,  field:level  punctuation::  variable:n  punctuation:}
+ 38 |     fi
+    | keyword:fi
+ 39 | fi
+    | keyword:fi

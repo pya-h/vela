@@ -328,7 +328,7 @@
         </div>
         <div class="card">
           <h3>No methods <span class="badge b-med">Medium</span></h3>
-          <p>Behavior lives in free tasks such as <code>area(s)</code>. All tasks share one namespace, so two shapes can't both have an <code>area</code>, and a task can only change a shape through a <code>^</code> pointer.</p>
+          <p>Behavior lives in free tasks such as <code>area(s)</code>. All tasks in a file share one namespace, so two shapes of one file can't both have an <code>area</code>, and a task can only change a shape through a <code>^</code> pointer.</p>
         </div>
         <div class="card">
           <h3>No concurrency <span class="badge b-med">Medium</span></h3>
@@ -656,7 +656,7 @@ fi</pre>
           name, and the list at the top says which. Braces list names without the module's name, for a file that
           wants only those.</li>
         <li><strong>Aliases with <code>=&gt;</code>, and the old name gone.</strong> An alias hides the name it replaces,
-          in that file, both <code>cart</code> and <code>prices.Item</code>, so each thing has one spelling per file and
+          in that file, both <code>Item</code> and <code>prices.Item</code>, so each thing has one spelling per file and
           nothing needs a search to know which name is meant. The arrow points from the real name to the new one, and
           doesn't read as a type (<code>:</code>) or an assignment (<code>=</code>). A variant or a field can't be renamed:
           they are parts of a declaration, and renaming them would redefine it. Instead any variant can be written
@@ -916,7 +916,8 @@ fi</pre>
           <code>res { err: Problem }</code> is already a shape literal, and the error's type is known anyway.</li>
         <li><code>unit or E</code> is a task that sends nothing when it works: a bare <code>&lt;-</code>, or reaching
           the end, succeeds.</li>
-        <li>An error can't be dropped by accident. A call whose <code>or</code> result is unused is an error;
+        <li>A call written as a statement can't drop an error by accident: when its <code>or</code> result is unused,
+          that is an error (a variable holding one isn't checked for being used, yet);
           <code>save(file) { }</code> ignores the error on purpose.</li>
       </ul>
 
@@ -1134,7 +1135,7 @@ fi</pre>
         good default, but today it has real costs:
       </p>
       <ul>
-        <li><strong>One namespace for every task.</strong> A <code>Circle</code> and a <code>Rect</code> can't both
+        <li><strong>One namespace for a file's tasks.</strong> A <code>Circle</code> and a <code>Rect</code> declared in one file can't both
           have a task called <code>area</code>; programs end up with <code>circle_area</code> and
           <code>rect_area</code>, and the second <code>area</code> is rejected with
           <code>'area' is already defined</code>.</li>

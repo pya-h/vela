@@ -1,0 +1,76 @@
+  1 | # A kind holding another kind: a `match` inside a `case`, and `is` patterns
+    | comment:# A kind holding another kind: a `match` inside a `case`, and `is` patterns
+  2 | # through `Kind.Variant` one inside the other.
+    | comment:# through `Kind.Variant` one inside the other.
+  4 | kind Shape
+    | keyword:kind  type:Shape
+  5 |     Circle(radius: int)
+    | variant:Circle  punctuation:(  field:radius  punctuation::  type-builtin:int  punctuation:)
+  6 |     Square(side: int)
+    | variant:Square  punctuation:(  field:side  punctuation::  type-builtin:int  punctuation:)
+  7 | fi
+    | keyword:fi
+  9 | kind Box
+    | keyword:kind  type:Box
+ 10 |     Empty
+    | variant:Empty
+ 11 |     Holding(item: Shape)
+    | variant:Holding  punctuation:(  field:item  punctuation::  type:Shape  punctuation:)
+ 12 | fi
+    | keyword:fi
+ 14 | task describe(b: Box) -> text
+    | keyword:task  task:describe  punctuation:(  parameter:b  punctuation::  type:Box  punctuation:)  operator:->  type-builtin:text
+ 15 |     match b
+    | keyword:match  parameter:b
+ 16 |     case Empty
+    | keyword:case  variant:Empty
+ 17 |         <- "empty"
+    | keyword:<-  string:"empty"
+ 18 |     case Holding item
+    | keyword:case  variant:Holding  variable:item
+ 19 |         match item
+    | keyword:match  variable:item
+ 20 |         case Circle r
+    | keyword:case  variant:Circle  variable:r
+ 21 |             when r > 5
+    | keyword:when  variable:r  operator:>  number:5
+ 22 |                 <- "big circle"
+    | keyword:<-  string:"big circle"
+ 23 |             fi
+    | keyword:fi
+ 24 |             <- "circle"
+    | keyword:<-  string:"circle"
+ 25 |         case Square _
+    | keyword:case  variant:Square  keyword:_
+ 26 |             <- "square"
+    | keyword:<-  string:"square"
+ 27 |         fi
+    | keyword:fi
+ 28 |     fi
+    | keyword:fi
+ 29 | fi
+    | keyword:fi
+ 31 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 32 |     show(describe(Holding(Circle(9))))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variant:Holding  punctuation:(  variant:Circle  punctuation:(  number:9  punctuation:)  punctuation:)  punctuation:)  punctuation:)
+ 33 |     show(describe(Holding(Circle(1))))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variant:Holding  punctuation:(  variant:Circle  punctuation:(  number:1  punctuation:)  punctuation:)  punctuation:)  punctuation:)
+ 34 |     show(describe(Holding(Square(2))))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variant:Holding  punctuation:(  variant:Square  punctuation:(  number:2  punctuation:)  punctuation:)  punctuation:)  punctuation:)
+ 35 |     show(describe(Empty))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variant:Empty  punctuation:)  punctuation:)
+ 36 |     bind b = Box.Holding(Shape.Square(4))
+    | keyword:bind  variable:b  operator:=  type:Box  punctuation:.  variant:Holding  punctuation:(  type:Shape  punctuation:.  variant:Square  punctuation:(  number:4  punctuation:)  punctuation:)
+ 37 |     when b is Box.Holding inner
+    | keyword:when  variable:b  keyword:is  type:Box  punctuation:.  variant:Holding  variable:inner
+ 38 |         when inner is Shape.Square s
+    | keyword:when  variable:inner  keyword:is  type:Shape  punctuation:.  variant:Square  variable:s
+ 39 |             show(s)
+    | builtin-fn:show  punctuation:(  variable:s  punctuation:)
+ 40 |         fi
+    | keyword:fi
+ 41 |     fi
+    | keyword:fi
+ 42 | fi
+    | keyword:fi

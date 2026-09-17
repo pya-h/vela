@@ -90,7 +90,7 @@ fn failure(error: &BuildError, path: &str, source: &str) -> Failure {
             let rendered = format!("{}error: C compilation failed", messages);
             return Failure { kind: FailureKind::CFailed, message: "C compilation failed".to_string(), file: None, line: None, col: None, rendered };
         }
-        BuildError::OutputIsInput(_) | BuildError::Io { .. } => (FailureKind::Io, rendered.clone(), None),
+        BuildError::OutputIsInput(_) | BuildError::OutputIsModule(_) | BuildError::Io { .. } => (FailureKind::Io, rendered.clone(), None),
     };
     let file = match (error, span) {
         (BuildError::Vela(e), Some(span)) if span.file > 0 => e.error_file(),

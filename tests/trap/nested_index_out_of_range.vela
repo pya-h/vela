@@ -1,0 +1,9 @@
+# trap: index 3 is out of range 0..3 at 8:17 in task 'main'
+task main()
+    region r
+    bind rows = new [[int; 3]]([[1, 2, 3]; 2]) at r
+    hold j = 2
+    show(rows[1][j])
+    j = j + 1
+    show(rows[1][j])
+fi

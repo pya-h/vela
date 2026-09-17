@@ -50,7 +50,7 @@ cargo build
 ```
 
 `vela <input.vela> [-o <output>] [--emit-c | --check]`: `-o` names the executable (`a.out` by default),
-`--emit-c` prints the generated C (or writes it to the `-o` file), `--check` only checks the program
+`--emit-c` prints the generated C (or writes it to the `-o` file; neither may overwrite the program's files), `--check` only checks the program
 (including that it has a `main`), and `-h`/`--help` and `--version` print the usage and the version. The exit status is 0 on success, 1
 when the program can't be read or doesn't compile, and 2 for wrong arguments.
 
@@ -85,7 +85,7 @@ See [docs/ide.html](docs/ide.html) for features, shortcuts, and security notes.
 | `src/` | The compiler: lexer, parser, checker, C generator, and the build driver |
 | `runtime/vela_rt.h` | The small C runtime the generated code includes |
 | `examples/` | Example programs |
-| `tests/` | Program tests (`run/`, `fail/`, `examples/`) and Rust tests |
+| `tests/` | Program tests (`run/`, `fail/`, `trap/`, `examples/`), C runtime tests (`runtime/`), and Rust tests |
 | `docs/` | The language reference, the regions guide, a comparison with other languages, design notes, and the Vela Studio guide |
 | `ide/` | Vela Studio: `analysis` (language support), `wasm` (it, for the browser), `server` (`vela-studio`), `web` (the page) |
 

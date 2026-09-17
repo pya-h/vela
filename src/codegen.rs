@@ -604,6 +604,12 @@ impl Generator {
                 // Each value is stored before any of them is, since a place
                 // assigned here may be read by a later value.
                 for (value, expr) in given.iter_mut().zip(values) {
+                    if matches!(expr.ty()?, Type::Unit) {
+                        // A call that sends nothing, received by `_`: it runs here.
+                        self.w.line(&format!("{};", value));
+                        value.clear();
+                        continue;
+                    }
                     let temp = self.fresh_temp("value");
                     self.w.line(&format!("{} {} = {};", c_type(expr.ty()?), temp, value));
                     *value = temp;
@@ -852,8 +858,10 @@ impl Generator {
         Ok(values)
     }
 
+    /// The C expression for `e`. Each kind of expression with more to do than
+    /// a word has a function of its own: this function's frame is on the
+    /// stack once per nesting level of an expression.
     fn gen_expr(&mut self, e: &Expr) -> Result<String> {
-        let span = e.span;
         match &e.kind {
             ExprKind::IntLit(n) => Ok(n.to_string()),
             ExprKind::FloatLit(n) => Ok(c_float_literal(*n)),
@@ -861,135 +869,18 @@ impl Generator {
             ExprKind::TextLit(s) => Ok(format!("\"{}\"", escape_c_string(s))),
             ExprKind::NoneLit => Ok("NULL".to_string()),
             ExprKind::Var(name) => Ok(c_ident(name)),
-            ExprKind::Field(base, field) => {
-                let b = self.gen_expr(base)?;
-                match base.ty()? {
-                    // An array's length is its type's; the array is still read.
-                    Type::Array(_, count) => Ok(format!("((void){}, INT64_C({}))", parenthesized(&b), count)),
-                    Type::Slice(..) => Ok(format!("({}).len", b)),
-                    _ => Ok(format!("({}).{}", b, c_ident(field))),
-                }
-            }
+            ExprKind::Field(base, field) => self.gen_field(base, field),
             ExprKind::Index(base, index) => self.gen_index(e, base, index, None),
-            ExprKind::Array(values) => {
-                let operands: Vec<&Expr> = values.iter().collect();
-                let given = self.gen_operands(&operands)?;
-                Ok(format!("(({}){{ .items = {{ {} }} }})", c_type(e.ty()?), given.join(", ")))
-            }
-            ExprKind::Repeat { value, .. } => {
-                let value = self.gen_expr(value)?;
-                Ok(format!("{}({})", item_helper("fill", e.ty()?), value))
-            }
-            ExprKind::Call(name, args) => {
-                if name == "show" {
-                    let [arg] = args.as_slice() else {
-                        return Err(Error::internal_at(span, format!("show called with {} arguments", args.len())));
-                    };
-                    let helper = match arg.ty()? {
-                        Type::Maybe(_) => show_maybe_helper(arg.ty()?),
-                        Type::Int | Type::Float | Type::Bool | Type::Text => show_helper(arg.ty()?),
-                        other => return Err(Error::internal_at(span, format!("show called with type {}", other))),
-                    };
-                    let value = self.gen_expr(arg)?;
-                    return Ok(format!("{}({})", helper, value));
-                }
-                let args: Vec<&Expr> = args.iter().collect();
-                let values = self.gen_operands(&args)?;
-                Ok(format!("{}({})", mangle(name), values.join(", ")))
-            }
-            ExprKind::Unary(op, operand) => {
-                let expr = self.gen_expr(operand)?;
-                // `-x` on an int overflows only for the smallest int; a
-                // negated literal can't be it.
-                if *op == UnaryOp::Neg && *operand.ty()? == Type::Int && int_constant(operand).is_none() {
-                    return Ok(format!("vela__rt__neg({}, {})", expr, self.location(span)));
-                }
-                let op_s = match op {
-                    UnaryOp::Neg => "-",
-                    UnaryOp::Not => "!",
-                };
-                Ok(format!("({}{})", op_s, expr))
-            }
-            ExprKind::Binary(op, l, r) => {
-                let binary = self.gen_binary(e, *op, l, r)?;
-                Ok(parenthesized(&binary))
-            }
-            ExprKind::Construct { kind, tag, args } => {
-                let variant = self
-                    .kinds
-                    .get(kind)
-                    .and_then(|k| k.variants.iter().find(|v| v.tag == *tag))
-                    .cloned()
-                    .ok_or_else(|| Error::internal_at(span, format!("unknown variant '{}'", tag)))?;
-                if args.len() != variant.payload.len() {
-                    return Err(Error::internal_at(
-                        span,
-                        format!("variant '{}' called with {} arguments (expected {})", tag, args.len(), variant.payload.len()),
-                    ));
-                }
-                let tag_value = tag_value(kind, tag);
-                if variant.payload.is_empty() {
-                    return Ok(format!("(({}){{ .tag = {} }})", mangle(kind), tag_value));
-                }
-                let operands: Vec<&Expr> = args.iter().collect();
-                let values = self.gen_operands(&operands)?;
-                let fields: Vec<String> = variant
-                    .payload
-                    .iter()
-                    .zip(values)
-                    .map(|(field, value)| format!(".{} = {}", c_ident(&field.name), value))
-                    .collect();
-                Ok(format!(
-                    "(({}){{ .tag = {}, .data = {{ .{} = {{ {} }} }} }})",
-                    mangle(kind), tag_value, c_ident(tag), fields.join(", ")
-                ))
-            }
-            ExprKind::New { ty, value, region, .. } if matches!(**ty, Type::Slice(..)) => {
-                let slice = e.ty()?;
-                if let ExprKind::Repeat { value: item, count } = &value.kind {
-                    let [item, count] = <[String; 2]>::try_from(self.gen_operands(&[item, count])?)
-                        .map_err(|_| Error::internal_at(span, "a repeated value without its count"))?;
-                    return Ok(format!("{}({}, {}, {}, {})", item_helper("fill", slice), c_ident(region), count, item, self.location(span)));
-                }
-                let source = self.gen_expr(value)?;
-                let source = match value.ty()? {
-                    // A view of the array, which lives until the copy is made.
-                    Type::Array(_, count) => format!("(({}){{ .items = ({}).items, .len = INT64_C({}) }})", c_type(slice), source, count),
-                    _ => source,
-                };
-                Ok(format!("{}({}, {})", item_helper("copy", slice), c_ident(region), source))
-            }
-            ExprKind::New { ty, value, region, .. } => {
-                // Copies the value out of a one-element array compound literal,
-                // which works for every type in standard C.
-                let val = self.gen_expr(value)?;
-                let ctype = c_type(ty);
-                Ok(format!(
-                    "(({0}*)vela__rt__new({1}, ({0}[1]){{ {2} }}, sizeof({0}), _Alignof({0})))",
-                    ctype,
-                    c_ident(region),
-                    val
-                ))
-            }
-            ExprKind::Deref(inner) => {
-                let expr = self.gen_expr(inner)?;
-                Ok(format!("(*({}))", expr))
-            }
-            ExprKind::StructInit(name, fields) => {
-                if fields.is_empty() {
-                    // Initializes the placeholder member of an empty shape.
-                    return Ok(format!("(({}){{ 0 }})", mangle(name)));
-                }
-                let operands: Vec<&Expr> = fields.iter().map(|field| &field.value).collect();
-                let values = self.gen_operands(&operands)?;
-                let fields: Vec<String> = fields
-                    .iter()
-                    .zip(values)
-                    .map(|(field, value)| format!(".{} = {}", c_ident(&field.name), value))
-                    .collect();
-                Ok(format!("(({}){{ {} }})", mangle(name), fields.join(", ")))
-            }
-            ExprKind::Range(_, _) => Err(Error::internal_at(span, "range outside 'each' reached code generation")),
+            ExprKind::Array(values) => self.gen_array(e, values),
+            ExprKind::Repeat { value, .. } => self.gen_repeat(e, value),
+            ExprKind::Call(name, args) => self.gen_call(e, name, args),
+            ExprKind::Unary(op, operand) => self.gen_unary(e, *op, operand),
+            ExprKind::Binary(op, l, r) => self.gen_binary(e, *op, l, r).map(|binary| parenthesized(&binary)),
+            ExprKind::Construct { kind, tag, args } => self.gen_construct(e, kind, tag, args),
+            ExprKind::New { ty, value, region, .. } => self.gen_new(e, ty, value, region),
+            ExprKind::Deref(inner) => self.gen_expr(inner).map(|expr| format!("(*({}))", expr)),
+            ExprKind::StructInit(name, fields) => self.gen_struct_init(name, fields),
+            ExprKind::Range(_, _) => Err(Error::internal_at(e.span, "range outside 'each' reached code generation")),
             // The error value itself; `Wrap` makes it part of a `T or E`.
             ExprKind::Fail(error) => self.gen_expr(error),
             ExprKind::Wrap(inner) => self.gen_wrap(e, inner),
@@ -997,34 +888,150 @@ impl Generator {
         }
     }
 
+    /// `base.field`, or an array's or slice's `len`.
+    fn gen_field(&mut self, base: &Expr, field: &str) -> Result<String> {
+        let b = self.gen_expr(base)?;
+        match base.ty()? {
+            // An array's length is its type's; the array is still read.
+            Type::Array(_, count) => Ok(format!("((void){}, INT64_C({}))", parenthesized(&b), count)),
+            Type::Slice(..) => Ok(format!("({}).len", b)),
+            _ => Ok(format!("({}).{}", b, c_ident(field))),
+        }
+    }
+
+    /// `[a, b, c]`, the expression `e`.
+    fn gen_array(&mut self, e: &Expr, values: &[Expr]) -> Result<String> {
+        let operands: Vec<&Expr> = values.iter().collect();
+        let given = self.gen_operands(&operands)?;
+        Ok(format!("(({}){{ .items = {{ {} }} }})", c_type(e.ty()?), given.join(", ")))
+    }
+
+    /// `[value; count]`, the expression `e`.
+    fn gen_repeat(&mut self, e: &Expr, value: &Expr) -> Result<String> {
+        let value = self.gen_expr(value)?;
+        Ok(format!("{}({})", item_helper("fill", e.ty()?), value))
+    }
+
+    /// A call of a task, or of `show`, the expression `e`.
+    fn gen_call(&mut self, e: &Expr, name: &str, args: &[Expr]) -> Result<String> {
+        if name == "show" {
+            let [arg] = args else {
+                return Err(Error::internal_at(e.span, format!("show called with {} arguments", args.len())));
+            };
+            let helper = match arg.ty()? {
+                Type::Maybe(_) => show_maybe_helper(arg.ty()?),
+                Type::Int | Type::Float | Type::Bool | Type::Text => show_helper(arg.ty()?),
+                other => return Err(Error::internal_at(e.span, format!("show called with type {}", other))),
+            };
+            let value = self.gen_expr(arg)?;
+            return Ok(format!("{}({})", helper, value));
+        }
+        let args: Vec<&Expr> = args.iter().collect();
+        let values = self.gen_operands(&args)?;
+        Ok(format!("{}({})", mangle(name), values.join(", ")))
+    }
+
+    /// `-operand` or `not operand`, the expression `e`.
+    fn gen_unary(&mut self, e: &Expr, op: UnaryOp, operand: &Expr) -> Result<String> {
+        let expr = self.gen_expr(operand)?;
+        // `-x` on an int overflows only for the smallest int; a
+        // negated literal can't be it.
+        if op == UnaryOp::Neg && *operand.ty()? == Type::Int && int_constant(operand).is_none() {
+            return Ok(format!("vela__rt__neg({}, {})", expr, self.location(e.span)));
+        }
+        let op_s = match op {
+            UnaryOp::Neg => "-",
+            UnaryOp::Not => "!",
+        };
+        Ok(format!("({}{})", op_s, expr))
+    }
+
+    /// The variant `tag` of `kind` with its payload `args`, the expression `e`.
+    fn gen_construct(&mut self, e: &Expr, kind: &str, tag: &str, args: &[Expr]) -> Result<String> {
+        let span = e.span;
+        let variant = self
+            .kinds
+            .get(kind)
+            .and_then(|k| k.variants.iter().find(|v| v.tag == *tag))
+            .cloned()
+            .ok_or_else(|| Error::internal_at(span, format!("unknown variant '{}'", tag)))?;
+        if args.len() != variant.payload.len() {
+            return Err(Error::internal_at(
+                span,
+                format!("variant '{}' called with {} arguments (expected {})", tag, args.len(), variant.payload.len()),
+            ));
+        }
+        let tag_value = tag_value(kind, tag);
+        if variant.payload.is_empty() {
+            return Ok(format!("(({}){{ .tag = {} }})", mangle(kind), tag_value));
+        }
+        let operands: Vec<&Expr> = args.iter().collect();
+        let values = self.gen_operands(&operands)?;
+        let fields: Vec<String> = variant
+            .payload
+            .iter()
+            .zip(values)
+            .map(|(field, value)| format!(".{} = {}", c_ident(&field.name), value))
+            .collect();
+        Ok(format!(
+            "(({}){{ .tag = {}, .data = {{ .{} = {{ {} }} }} }})",
+            mangle(kind), tag_value, c_ident(tag), fields.join(", ")
+        ))
+    }
+
+    /// `new T(value) at region`, the expression `e`: a pointer, or a slice.
+    fn gen_new(&mut self, e: &Expr, ty: &Type, value: &Expr, region: &str) -> Result<String> {
+        let span = e.span;
+        if matches!(ty, Type::Slice(..)) {
+            let slice = e.ty()?;
+            if let ExprKind::Repeat { value: item, count } = &value.kind {
+                let [item, count] = <[String; 2]>::try_from(self.gen_operands(&[item, count])?)
+                    .map_err(|_| Error::internal_at(span, "a repeated value without its count"))?;
+                return Ok(format!("{}({}, {}, {}, {})", item_helper("fill", slice), c_ident(region), count, item, self.location(span)));
+            }
+            let source = self.gen_expr(value)?;
+            let source = match value.ty()? {
+                // A view of the array, which lives until the copy is made.
+                Type::Array(_, count) => format!("(({}){{ .items = ({}).items, .len = INT64_C({}) }})", c_type(slice), source, count),
+                _ => source,
+            };
+            return Ok(format!("{}({}, {})", item_helper("copy", slice), c_ident(region), source));
+        }
+        // Copies the value out of a one-element array compound literal,
+        // which works for every type in standard C.
+        let val = self.gen_expr(value)?;
+        let ctype = c_type(ty);
+        Ok(format!(
+            "(({0}*)vela__rt__new({1}, ({0}[1]){{ {2} }}, sizeof({0}), _Alignof({0})))",
+            ctype,
+            c_ident(region),
+            val
+        ))
+    }
+
+    /// A shape literal of `name`.
+    fn gen_struct_init(&mut self, name: &str, fields: &[FieldInit]) -> Result<String> {
+        if fields.is_empty() {
+            // Initializes the placeholder member of an empty shape.
+            return Ok(format!("(({}){{ 0 }})", mangle(name)));
+        }
+        let operands: Vec<&Expr> = fields.iter().map(|field| &field.value).collect();
+        let values = self.gen_operands(&operands)?;
+        let fields: Vec<String> = fields
+            .iter()
+            .zip(values)
+            .map(|(field, value)| format!(".{} = {}", c_ident(&field.name), value))
+            .collect();
+        Ok(format!("(({}){{ {} }})", mangle(name), fields.join(", ")))
+    }
+
     /// `xs[i]` or `xs[a..b]`, the expression `e`. `place` is the array `base`
     /// names as a place, already generated, when `e` is assigned to.
     fn gen_index(&mut self, e: &Expr, base: &Expr, index: &Expr, place: Option<String>) -> Result<String> {
-        let at = self.location(e.span);
         if let ExprKind::Range(from, to) = &index.kind {
-            let slice = e.ty()?;
-            let source = match base.ty()? {
-                Type::Array(_, count) => {
-                    // The array is in a region: the slice points at its items there.
-                    let array = self.gen_place(base)?;
-                    let items = if has_plan_b(from) || has_plan_b(to) {
-                        let items = self.fresh_temp("items");
-                        self.w.line(&format!("{}* {} = ({}).items;", c_type(item_type(slice)), items, array));
-                        items
-                    } else {
-                        format!("({}).items", array)
-                    };
-                    let [from, to] = <[String; 2]>::try_from(self.gen_operands(&[from, to])?)
-                        .map_err(|_| Error::internal_at(e.span, "a slice without two bounds"))?;
-                    let view = format!("(({}){{ .items = {}, .len = INT64_C({}) }})", c_type(slice), items, count);
-                    return Ok(format!("{}({}, {}, {}, {})", item_helper("part", slice), view, from, to, at));
-                }
-                _ => base,
-            };
-            let [source, from, to] = <[String; 3]>::try_from(self.gen_operands(&[source, from, to])?)
-                .map_err(|_| Error::internal_at(e.span, "a slice without two bounds"))?;
-            return Ok(format!("{}({}, {}, {}, {})", item_helper("part", slice), source, from, to, at));
+            return self.gen_slice(e, base, from, to);
         }
+        let at = self.location(e.span);
         match base.ty()? {
             Type::Array(_, count) => {
                 let constant = int_constant(index);
@@ -1050,6 +1057,33 @@ impl Generator {
             }
             other => Err(Error::internal_at(e.span, format!("an index into a value of type {}", other))),
         }
+    }
+
+    /// `base[from..to]`, the expression `e`: a slice.
+    fn gen_slice(&mut self, e: &Expr, base: &Expr, from: &Expr, to: &Expr) -> Result<String> {
+        let at = self.location(e.span);
+        let slice = e.ty()?;
+        let source = match base.ty()? {
+            Type::Array(_, count) => {
+                // The array is in a region: the slice points at its items there.
+                let array = self.gen_place(base)?;
+                let items = if has_plan_b(from) || has_plan_b(to) {
+                    let items = self.fresh_temp("items");
+                    self.w.line(&format!("{}* {} = ({}).items;", c_type(item_type(slice)), items, array));
+                    items
+                } else {
+                    format!("({}).items", array)
+                };
+                let [from, to] = <[String; 2]>::try_from(self.gen_operands(&[from, to])?)
+                    .map_err(|_| Error::internal_at(e.span, "a slice without two bounds"))?;
+                let view = format!("(({}){{ .items = {}, .len = INT64_C({}) }})", c_type(slice), items, count);
+                return Ok(format!("{}({}, {}, {}, {})", item_helper("part", slice), view, from, to, at));
+            }
+            _ => base,
+        };
+        let [source, from, to] = <[String; 3]>::try_from(self.gen_operands(&[source, from, to])?)
+            .map_err(|_| Error::internal_at(e.span, "a slice without two bounds"))?;
+        Ok(format!("{}({}, {}, {}, {})", item_helper("part", slice), source, from, to, at))
     }
 
     /// A place an assignment writes to, as a C lvalue. An item of an array is

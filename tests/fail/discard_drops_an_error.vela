@@ -1,4 +1,4 @@
-# error: 14:9: '_' would drop the error in a int or Oops; give it a name, then handle it with a plan B or match
+# error: 14:9: '_' would drop the error in a value of type int or Oops; give it a name, then handle it with a plan B or match
 kind Oops
     Bad
 fi

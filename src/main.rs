@@ -109,13 +109,16 @@ fn run(opts: &Options) -> Result<(), String> {
     }
 
     if opts.emit_c {
-        let c_code = driver::generate_c_program(path, &source, &mut driver::read_from_disk).map_err(|e| e.render(&opts.input))?;
         return match &opts.output {
-            Some(path) if fs::canonicalize(path).ok() == fs::canonicalize(&opts.input).ok() => {
-                Err(format!("error: output '{}' would overwrite the input file", path))
+            Some(output) => {
+                let c_code = driver::generate_c_file(path, path, &source, Path::new(output), &mut driver::read_from_disk)
+                    .map_err(|e| e.render(&opts.input, &source))?;
+                fs::write(output, c_code).map_err(|e| format!("error: cannot write '{}': {}", output, e))
             }
-            Some(path) => fs::write(path, c_code).map_err(|e| format!("error: cannot write '{}': {}", path, e)),
-            None => write_stdout(&c_code),
+            None => {
+                let c_code = driver::generate_c_program(path, &source, &mut driver::read_from_disk).map_err(|e| e.render(&opts.input))?;
+                write_stdout(&c_code)
+            }
         };
     }
 

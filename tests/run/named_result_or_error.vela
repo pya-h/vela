@@ -1,0 +1,16 @@
+# A named result in a task that may fail: `value <-` sets it, and `<- fail`
+# sends the error instead.
+
+task checked(n: int) -> value: int or text
+    when n < 0
+        <- fail "negative"
+    fi
+    value <- n * 2
+fi
+
+task main()
+    show(checked(4) { 0 })
+    show(checked(-1) { fail e
+        show(e)
+        0 })
+fi

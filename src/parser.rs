@@ -83,6 +83,9 @@ impl Parser {
             }
             path.push(self.expect_ident()?);
             if self.check(Token::Dot) {
+                if self.tokens.get(self.pos + 1) == Some(&Token::Ident("vela".to_string())) {
+                    return Err(Error::at(self.peek_span(), format!("a module is named without '.vela', as in 'include {}'", path.join("/"))));
+                }
                 return Err(Error::at(self.peek_span(), "a module path separates its folders with '/', as in 'include shapes/circle'"));
             }
             if !self.match_token(Token::Slash) {
@@ -640,7 +643,13 @@ impl Parser {
             return Ok(if prefix == Token::Caret { Type::Ptr(inner, None) } else { Type::Maybe(inner) });
         }
         let name = self.expect_ident()?;
-        let name = self.qualified(name)?;
+        let mut name = self.qualified(name)?;
+        // `geometry.Point` for a module this file doesn't include: a dotted name
+        // the resolver reports as naming nothing.
+        while self.check(Token::Dot) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
+            self.advance(); // .
+            name = format!("{}{}{}", name, MODULE_SEPARATOR, self.expect_ident()?);
+        }
         self.type_parts.push((name.clone(), span));
         Ok(Type::builtin(&name).unwrap_or(Type::Named(name, None)))
     }
@@ -960,7 +969,9 @@ impl Parser {
                 }
                 let module_first = written.first().is_some_and(|first| self.is_module(first));
                 let tag = written.pop().unwrap_or_default();
-                if written.len() > 2 || (written.len() == 1 && module_first) || (written.len() == 2 && !module_first) {
+                // A kind after a name that isn't a module this file includes is
+                // left for the resolver, which says what the name is instead.
+                if written.len() > 2 || (written.len() == 1 && module_first) {
                     return Err(Error::at(
                         span,
                         format!(
@@ -1137,33 +1148,43 @@ impl Parser {
     fn parse_postfix(&mut self) -> Result<Expr> {
         let mut expr = self.parse_primary()?;
         let mut levels = 0;
-        loop {
-            if matches!(self.peek(), Token::Dot | Token::LBracket | Token::Caret | Token::LBrace) {
-                self.enter()?;
-                levels += 1;
-            }
-            if self.match_token(Token::Dot) {
-                let span = self.peek_span();
-                let field = self.expect_ident()?;
-                expr = Expr::new(ExprKind::Field(Box::new(expr), field), span);
-            } else if self.check(Token::LBracket) {
-                let span = self.peek_span();
-                self.advance();
-                let index = self.parse_expr()?;
-                self.expect(Token::RBracket)?;
-                expr = Expr::new(ExprKind::Index(Box::new(expr), Box::new(index)), span);
-            } else if self.check(Token::Caret) {
-                let span = self.peek_span();
-                self.advance();
-                expr = Expr::new(ExprKind::Deref(Box::new(expr)), span);
-            } else if self.check(Token::LBrace) {
-                expr = self.parse_plan_b(expr)?;
-            } else {
-                break;
-            }
+        while matches!(self.peek(), Token::Dot | Token::LBracket | Token::Caret | Token::LBrace) {
+            self.enter()?;
+            levels += 1;
+            expr = self.parse_suffix(expr)?;
         }
         self.leave(levels);
         Ok(expr)
+    }
+
+    /// `.field`, `[index]`, `^`, or a plan B after `expr`, with the cursor at
+    /// its first token. (A function of its own: `parse_postfix`'s frame is on
+    /// the stack once per nesting level of every expression.)
+    fn parse_suffix(&mut self, expr: Expr) -> Result<Expr> {
+        let span = self.peek_span();
+        match self.peek() {
+            Token::LBrace => self.parse_plan_b(expr),
+            Token::Dot => {
+                self.advance();
+                let span = self.peek_span();
+                let field = self.expect_ident()?;
+                let expr = Expr::new(ExprKind::Field(Box::new(expr), field), span);
+                if self.check(Token::LParen) || (self.check(Token::LBrace) && self.at_shape_literal()) {
+                    return self.dotted_name_use(expr);
+                }
+                Ok(expr)
+            }
+            Token::LBracket => {
+                self.advance();
+                let index = self.parse_expr()?;
+                self.expect(Token::RBracket)?;
+                Ok(Expr::new(ExprKind::Index(Box::new(expr), Box::new(index)), span))
+            }
+            _ => {
+                self.advance(); // ^
+                Ok(Expr::new(ExprKind::Deref(Box::new(expr)), span))
+            }
+        }
     }
 
     fn parse_primary(&mut self) -> Result<Expr> {
@@ -1245,6 +1266,26 @@ impl Parser {
         Err(self.unexpected("']'"))
     }
 
+    /// A call or shape literal after a field, as in `p.x.f()` or
+    /// `geometry.Point { x: 1 }` where `geometry` isn't a module this file
+    /// includes (`value_name` joins the names that are): one dotted name, which
+    /// the resolver reports as naming nothing. Vela has no methods, so a call
+    /// on any other value is an error here. (A function of its own:
+    /// `parse_postfix`'s frame is on the stack once per nesting level.)
+    fn dotted_name_use(&mut self, expr: Expr) -> Result<Expr> {
+        let Some((name, span)) = dotted_name(&expr) else {
+            if self.check(Token::LParen) {
+                return Err(Error::at(
+                    self.peek_span(),
+                    "only a task or a variant can be called, and Vela has no methods; pass the value to a task, as in 'f(value)'",
+                ));
+            }
+            return Ok(expr);
+        };
+        let kind = if self.check(Token::LParen) { ExprKind::Call(name, self.parse_arg_list()?) } else { self.parse_struct_init(name)? };
+        Ok(Expr::new(kind, span))
+    }
+
     /// Whether the `{` at the cursor, after a name, opens a shape literal
     /// (`Point { x: 1 }` or `Marker {}`) rather than a plan B (`x { 0 }`).
     fn at_shape_literal(&self) -> bool {
@@ -1262,10 +1303,7 @@ impl Parser {
         let next = self.tokens.get(self.pos + 1).unwrap_or(&Token::Eof);
         // `Point {` with its fields on the next line: a line never starts with `name:`.
         if !same_line && matches!(self.peek(), Token::Ident(_)) && matches!(next, Token::Colon) {
-            let example = match &value.kind {
-                ExprKind::Var(name) => format!("{} {{ ", name),
-                _ => "Point { ".to_string(),
-            };
+            let example = dotted_name(&value).map_or_else(|| "Point { ".to_string(), |(name, _)| format!("{} {{ ", name));
             return Err(Error::at(
                 self.peek_span(),
                 format!("a shape literal is written on one line, starting after its '{{', as in '{}x: 1 }}'", example),
@@ -1410,5 +1448,14 @@ fn mentions_region(ty: &Type) -> bool {
         Type::Region => true,
         Type::Ptr(inner, _) | Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => mentions_region(inner),
         _ => false,
+    }
+}
+
+/// `a.b.c` for a chain of fields on a variable, with where `a` is written.
+fn dotted_name(expr: &Expr) -> Option<(String, Span)> {
+    match &expr.kind {
+        ExprKind::Var(name) => Some((name.clone(), expr.span)),
+        ExprKind::Field(base, field) => dotted_name(base).map(|(name, span)| (format!("{}{}{}", name, MODULE_SEPARATOR, field), span)),
+        _ => None,
     }
 }

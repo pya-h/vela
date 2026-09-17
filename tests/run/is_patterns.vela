@@ -1,0 +1,37 @@
+# `is` with `none`, `{_}`, and `else`, and `loop … is` walking a kind until its
+# pattern no longer matches.
+
+kind Step
+    Walk(left: int)
+    Stop
+fi
+
+task next(s: Step) -> Step
+    when s is Walk n
+        when n > 1
+            <- Walk(n - 1)
+        fi
+    fi
+    <- Stop
+fi
+
+task main()
+    bind m: maybe int = none
+    when m is none
+        show("none")
+    fi
+    bind k: maybe int = 4
+    when k is {_}
+        show("some")
+    fi
+    when k is none
+        show("wrong")
+    else
+        show("not none")
+    fi
+    hold s = Walk(3)
+    loop s is Walk n
+        show(n)
+        s = next(s)
+    fi
+fi

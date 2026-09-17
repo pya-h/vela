@@ -1,0 +1,42 @@
+  1 | # A shape is a value: `hold b = a` and passing it to a task copy it, so
+    | comment:# A shape is a value: `hold b = a` and passing it to a task copy it, so
+  2 | # changing the copy leaves the original as it was.
+    | comment:# changing the copy leaves the original as it was.
+  4 | shape Point
+    | keyword:shape  type:Point
+  5 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  6 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  7 | fi
+    | keyword:fi
+  9 | task moved(p: Point) -> Point
+    | keyword:task  task:moved  punctuation:(  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type:Point
+ 10 |     hold q = p
+    | keyword:hold  variable:q  operator:=  parameter:p
+ 11 |     q.x = q.x + 100
+    | variable:q  punctuation:.  field:x  operator:=  variable:q  punctuation:.  field:x  operator:+  number:100
+ 12 |     <- q
+    | keyword:<-  variable:q
+ 13 | fi
+    | keyword:fi
+ 15 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 16 |     hold a = Point { x: 1, y: 2 }
+    | keyword:hold  variable:a  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+ 17 |     hold b = a
+    | keyword:hold  variable:b  operator:=  variable:a
+ 18 |     b.x = 9
+    | variable:b  punctuation:.  field:x  operator:=  number:9
+ 19 |     show(a.x)
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:.  field:x  punctuation:)
+ 20 |     show(b.x)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:.  field:x  punctuation:)
+ 21 |     bind c = moved(a)
+    | keyword:bind  variable:c  operator:=  task:moved  punctuation:(  variable:a  punctuation:)
+ 22 |     show(a.x)
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:.  field:x  punctuation:)
+ 23 |     show(c.x)
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:x  punctuation:)
+ 24 | fi
+    | keyword:fi

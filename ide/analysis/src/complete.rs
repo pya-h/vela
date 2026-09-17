@@ -119,7 +119,15 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     {
         let line = k.line_start(dot);
         let in_pattern = (line..dot).any(|q| matches!(k.token(q), Some(Token::Case | Token::Is)));
-        return (kind_variant_items(&k, kind, in_pattern), word_start, byte);
+        let mut items = kind_variant_items(&k, kind, in_pattern);
+        // A `case` offers the variants its match doesn't cover yet.
+        if k.token(line) == Some(&Token::Case)
+            && let Some(match_q) = k.enclosing_match(line)
+        {
+            let covered = covered_cases(&k, match_q, line);
+            items.retain(|item| !covered.contains(&item.label));
+        }
+        return (items, word_start, byte);
     }
 
     // After `.`: fields.
@@ -170,6 +178,19 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
 
     let line_first = prev.map(|q| k.line_start(q + 1));
     let first_token = line_first.and_then(|q| k.token(q));
+
+    // After `priv` starting a line outside any item: what it can mark. (Before a
+    // shape's field, the field's name is being declared.)
+    if let (Some(q), Some(Token::Priv)) = (prev, prev_token)
+        && k.line_start(q) == q
+    {
+        let items = if blocks.is_empty() {
+            item_level_items().into_iter().filter(|item| item.label != "priv" && item.label != "include").collect()
+        } else {
+            Vec::new()
+        };
+        return (items, word_start, byte);
+    }
 
     // Names being declared get no suggestions, including another name in a
     // `bind` or `hold` list (`bind q, r = …`).
@@ -432,7 +453,8 @@ fn in_binding_names(k: &Knowledge, q: usize) -> bool {
 
 /// Whether the type-starting token at position `q` (a name, `^`, `maybe`, or
 /// `[`) is in a type: before it, after any `^`, `maybe`, and `[`, comes `:`
-/// (outside a shape literal), `->`, `new`, or `or` after a type.
+/// (outside a shape literal), `->`, `new`, `or` after a type, or a module's
+/// name and `.` that are in a type themselves.
 fn starts_type(k: &Knowledge, q: usize) -> bool {
     let mut p = q;
     while p > 0 && matches!(k.token(p - 1), Some(Token::Caret | Token::Maybe | Token::LBracket)) {
@@ -444,6 +466,8 @@ fn starts_type(k: &Knowledge, q: usize) -> bool {
         Some((b, Some(Token::Comma))) => in_result_list(k, b),
         Some((b, Some(Token::Ident(_)))) => after_new_region(k, b),
         Some((b, Some(Token::Or))) => b.checked_sub(1).is_some_and(|end| ends_type(k, end)),
+        // `geometry.Point`: the type goes on after the module's name.
+        Some((b, Some(Token::Dot))) => b.checked_sub(1).is_some_and(|module| k.module_at(module).is_some() && starts_type(k, module)),
         _ => false,
     }
 }
@@ -654,7 +678,8 @@ fn literal_field_items(k: &Knowledge, brace: usize, word_start: usize) -> Vec<Co
         }
     }
     k.children(shape)
-        .filter(|(_, field)| !given.contains(&field.name))
+        // Another module's private fields can't be given here.
+        .filter(|(_, field)| !given.contains(&field.name) && (field.module.is_none() || !field.private))
         .map(|(_, field)| CompletionItem {
             label: field.name.clone(),
             kind: CompletionKind::Field,
@@ -681,29 +706,7 @@ fn case_items(source: &str, scan: &Scan, context: Context, k: &Knowledge, case: 
         _ => None,
     };
 
-    // Cases already written in this match.
-    let mut covered = Vec::new();
-    let mut depth = 0usize;
-    for q in match_q + 1..k.len() {
-        match k.token(q) {
-            Some(Token::When | Token::Loop | Token::Each | Token::Match) => depth += 1,
-            Some(Token::Fi) if depth == 0 => break,
-            Some(Token::Fi) => depth -= 1,
-            Some(Token::Case) if depth == 0 && q != case => {
-                let label = match k.token(q + 1) {
-                    Some(Token::Ident(tag)) => tag.clone(),
-                    Some(Token::LBrace) => "{value}".to_string(),
-                    Some(Token::None) => "none".to_string(),
-                    Some(Token::Fail) => "fail e".to_string(),
-                    Some(Token::Underscore) => "_".to_string(),
-                    _ => continue,
-                };
-                covered.push(label);
-            }
-            Some(Token::Task | Token::Shape | Token::Kind) => break,
-            _ => {}
-        }
-    }
+    let covered = covered_cases(k, match_q, case);
 
     // A maybe or `T or E`: a value, and none or an error.
     if let Some(outcomes) = subject.as_ref().and_then(outcome_patterns) {
@@ -786,6 +789,38 @@ fn case_items(source: &str, scan: &Scan, context: Context, k: &Knowledge, case: 
         });
     }
     items
+}
+
+/// The cases already written in the `match` at position `match_q`, other than
+/// the one at position `case`: each variant by its name alone (also when written
+/// `Kind.Variant`), `{value}`, `none`, `fail e`, or `_`.
+fn covered_cases(k: &Knowledge, match_q: usize, case: usize) -> Vec<String> {
+    let mut covered = Vec::new();
+    let mut depth = 0usize;
+    for q in match_q + 1..k.len() {
+        match k.token(q) {
+            Some(Token::When | Token::Loop | Token::Each | Token::Match) => depth += 1,
+            Some(Token::Fi) if depth == 0 => break,
+            Some(Token::Fi) => depth -= 1,
+            Some(Token::Case) if depth == 0 && q != case => {
+                let label = match k.token(q + 1) {
+                    Some(Token::Ident(_)) => match k.ident(k.pattern_variant_at(q)) {
+                        Some(tag) => tag.to_string(),
+                        None => continue,
+                    },
+                    Some(Token::LBrace) => "{value}".to_string(),
+                    Some(Token::None) => "none".to_string(),
+                    Some(Token::Fail) => "fail e".to_string(),
+                    Some(Token::Underscore) => "_".to_string(),
+                    _ => continue,
+                };
+                covered.push(label);
+            }
+            Some(Token::Task | Token::Shape | Token::Kind) => break,
+            _ => {}
+        }
+    }
+    covered
 }
 
 /// The patterns of a `maybe` or `T or E` as `(label, detail, snippet)`: its
@@ -1022,18 +1057,29 @@ fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<Completio
                     let kind_name = s.parent.and_then(|p| k.symbol(p)).map(|p| p.name.as_str()).unwrap_or_default();
                     (CompletionKind::Variant, format!("{} {}", kind_name, s.detail).trim().to_string(), None, snippet)
                 }
-                SymbolKind::Shape if !types_only => {
-                    let mut used = Vec::new();
-                    let fields: Vec<String> = k.children(id).map(|(_, f)| format!("{}: ${{{}}}", f.name, unique(&mut used, &f.name))).collect();
-                    let body = if fields.is_empty() { "{}".to_string() } else { format!("{{ {} }}", fields.join(", ")) };
-                    (CompletionKind::Type, "shape".to_string(), None, Some(format!("{} {}", label, body)))
-                }
+                SymbolKind::Shape if !types_only => (CompletionKind::Type, "shape".to_string(), None, literal_snippet(k, id, &label)),
                 SymbolKind::Shape => (CompletionKind::Type, "shape".to_string(), None, None),
                 _ => (CompletionKind::Type, "kind".to_string(), None, None),
             };
+            // An include line lists names alone: no call or literal.
+            let (apply, snippet) = if members == Members::Listed { (None, None) } else { (apply, snippet) };
             CompletionItem { label, kind, detail, apply, snippet, boost: GLOBAL }
         })
         .collect()
+}
+
+/// A literal of the shape `shape`, written `label`, with every field:
+/// `Point { x: ${x}, y: ${y} }`. None for another module's shape with a private
+/// field, which only its own module can build.
+fn literal_snippet(k: &Knowledge, shape: usize, label: &str) -> Option<String> {
+    let foreign = k.symbol(shape).is_some_and(|s| s.module.is_some());
+    if foreign && k.children(shape).any(|(_, field)| field.private) {
+        return None;
+    }
+    let mut used = Vec::new();
+    let fields: Vec<String> = k.children(shape).map(|(_, field)| format!("{}: ${{{}}}", field.name, unique(&mut used, &field.name))).collect();
+    let body = if fields.is_empty() { "{}".to_string() } else { format!("{{ {} }}", fields.join(", ")) };
+    Some(format!("{} {}", label, body))
 }
 
 fn keyword(word: &str) -> CompletionItem {
@@ -1193,14 +1239,8 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
     // A shape's value is a literal with every field: `Point { x: ${x}, y: ${y} }`.
     for (label, shape) in visible_globals(k, &[SymbolKind::Shape]) {
         let Some(id) = k.symbols().iter().position(|s| std::ptr::eq(s, shape)) else { continue };
-        let mut used = Vec::new();
-        let fields: Vec<String> = k
-            .children(id)
-            .map(|(_, field)| format!("{}: ${{{}}}", field.name, unique(&mut used, &field.name)))
-            .collect();
-        let body = if fields.is_empty() { "{}".to_string() } else { format!("{{ {} }}", fields.join(", ")) };
         items.push(CompletionItem {
-            snippet: Some(format!("{} {}", label, body)),
+            snippet: literal_snippet(k, id, &label),
             label,
             kind: CompletionKind::Type,
             detail: "shape".to_string(),

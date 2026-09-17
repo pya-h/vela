@@ -1,0 +1,15 @@
+# How `show` writes large, small, and negative floats, and a field read from
+# the value a plan B gives.
+
+shape Point
+    x: float
+    y: float
+fi
+
+task main()
+    show(123456789.0)
+    show(0.0000001234)
+    show(-0.5)
+    bind spot: maybe Point = none
+    show(spot { Point { x: 1.0, y: 2.0 } }.y)
+fi

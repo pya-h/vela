@@ -1,0 +1,9 @@
+# error: 8:18: 'Dim' is a variant of kind 'Light', not a shape; its values are written 'Dim(…)'
+kind Light
+    Red
+    Dim(level: int)
+fi
+
+task main()
+    bind light = Light.Dim { level: 3 }
+fi

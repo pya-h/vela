@@ -1,0 +1,14 @@
+# error: 8:5: 'Off' is already defined at 3:5
+kind Light
+    Off
+    Red
+fi
+
+kind Fan
+    Off
+    Fast
+fi
+
+task main()
+    bind fan = Fan.Off
+fi

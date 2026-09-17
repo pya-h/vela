@@ -229,11 +229,12 @@ impl<'a> Analysis<'a> {
     pub fn definition(&self, offset: usize) -> Option<Location> {
         let byte = self.index.byte_of_utf16(offset);
         let tokens = &self.scan.tokens;
+        let knowledge = infer::Knowledge::new(self.source, &self.scan, &self.checked);
         let symbol = tokens
             .iter()
             .filter(|t| t.range.start <= byte && byte < t.range.end)
-            .find_map(|t| t.symbol)
-            .or_else(|| tokens.iter().filter(|t| t.range.end == byte).find_map(|t| t.symbol))?;
+            .find_map(|t| knowledge.symbol_of(t))
+            .or_else(|| tokens.iter().filter(|t| t.range.end == byte).find_map(|t| knowledge.symbol_of(t)))?;
         let symbol = self.scan.symbols.get(symbol)?;
         // A module's name leads to its file.
         if symbol.kind == SymbolKind::Module {

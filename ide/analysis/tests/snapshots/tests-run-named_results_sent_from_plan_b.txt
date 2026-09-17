@@ -1,0 +1,40 @@
+  1 | # A bare `<-` in a plan B, in a task with named results, sends the results
+    | comment:# A bare `<-` in a plan B, in a task with named results, sends the results
+  2 | # as they are set so far.
+    | comment:# as they are set so far.
+  4 | task sum_until_none(a: maybe int, b: maybe int) -> total: int, seen: int
+    | keyword:task  task:sum_until_none  punctuation:(  parameter:a  punctuation::  keyword:maybe  type-builtin:int  punctuation:,  parameter:b  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  variable:total  punctuation::  type-builtin:int  punctuation:,  variable:seen  punctuation::  type-builtin:int
+  5 |     total, seen <- 0, 0
+    | variable:total  punctuation:,  variable:seen  keyword:<-  number:0  punctuation:,  number:0
+  6 |     bind first = a { <- }
+    | keyword:bind  variable:first  operator:=  parameter:a  punctuation:{  keyword:<-  punctuation:}
+  7 |     total, seen <- first, 1
+    | variable:total  punctuation:,  variable:seen  keyword:<-  variable:first  punctuation:,  number:1
+  8 |     bind second = b { <- }
+    | keyword:bind  variable:second  operator:=  parameter:b  punctuation:{  keyword:<-  punctuation:}
+  9 |     total, seen <- total + second, seen + 1
+    | variable:total  punctuation:,  variable:seen  keyword:<-  variable:total  operator:+  variable:second  punctuation:,  variable:seen  operator:+  number:1
+ 10 | fi
+    | keyword:fi
+ 12 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 13 |     bind t1, s1 = sum_until_none(none, 4)
+    | keyword:bind  variable:t1  punctuation:,  variable:s1  operator:=  task:sum_until_none  punctuation:(  keyword:none  punctuation:,  number:4  punctuation:)
+ 14 |     show(t1)
+    | builtin-fn:show  punctuation:(  variable:t1  punctuation:)
+ 15 |     show(s1)
+    | builtin-fn:show  punctuation:(  variable:s1  punctuation:)
+ 16 |     bind t2, s2 = sum_until_none(3, none)
+    | keyword:bind  variable:t2  punctuation:,  variable:s2  operator:=  task:sum_until_none  punctuation:(  number:3  punctuation:,  keyword:none  punctuation:)
+ 17 |     show(t2)
+    | builtin-fn:show  punctuation:(  variable:t2  punctuation:)
+ 18 |     show(s2)
+    | builtin-fn:show  punctuation:(  variable:s2  punctuation:)
+ 19 |     bind t3, s3 = sum_until_none(3, 4)
+    | keyword:bind  variable:t3  punctuation:,  variable:s3  operator:=  task:sum_until_none  punctuation:(  number:3  punctuation:,  number:4  punctuation:)
+ 20 |     show(t3)
+    | builtin-fn:show  punctuation:(  variable:t3  punctuation:)
+ 21 |     show(s3)
+    | builtin-fn:show  punctuation:(  variable:s3  punctuation:)
+ 22 | fi
+    | keyword:fi

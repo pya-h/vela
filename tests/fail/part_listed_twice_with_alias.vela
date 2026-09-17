@@ -1,0 +1,5 @@
+# error: 2:42: 'greet' is already listed at 2:26; a name is brought in once
+include modules/library (greet => hello, greet)
+
+task main()
+fi

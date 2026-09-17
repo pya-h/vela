@@ -1,0 +1,74 @@
+  1 | # A module's names in every position: kinds brought in by name and used
+    | comment:# A module's names in every position: kinds brought in by name and used
+  2 | # through `Kind.Variant`, a module under another name in patterns, maybe,
+    | comment:# through `Kind.Variant`, a module under another name in patterns, maybe,
+  3 | # `new`, region types, and arrays. The palette module uses its own private
+    | comment:# `new`, region types, and arrays. The palette module uses its own private
+  4 | # kind and shape.
+    | comment:# kind and shape.
+  6 | include module_parts/shapes/palette (Color, describe)
+    | keyword:include  module:module_parts  operator:/  module:shapes  operator:/  module:palette  punctuation:(  type:Color  punctuation:,  task:describe  punctuation:)
+  7 | include module_parts/shapes/geometry => geo
+    | keyword:include  module:module_parts  operator:/  module:shapes  operator:/  module:geometry  operator:=>  module:geo
+  9 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 10 |     show(describe(Color.Blue))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  type:Color  punctuation:.  variant:Blue  punctuation:)  punctuation:)
+ 11 |     show(describe(Color.Mix(3)))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  type:Color  punctuation:.  variant:Mix  punctuation:(  number:3  punctuation:)  punctuation:)  punctuation:)
+ 12 |     bind c: Color = Color.Red
+    | keyword:bind  variable:c  punctuation::  type:Color  operator:=  type:Color  punctuation:.  variant:Red
+ 13 |     match c
+    | keyword:match  variable:c
+ 14 |     case Color.Red
+    | keyword:case  type:Color  punctuation:.  variant:Red
+ 15 |         show("red")
+    | builtin-fn:show  punctuation:(  string:"red"  punctuation:)
+ 16 |     case _
+    | keyword:case  keyword:_
+ 17 |         show("other")
+    | builtin-fn:show  punctuation:(  string:"other"  punctuation:)
+ 18 |     fi
+    | keyword:fi
+ 19 |     bind f = geo.Figure.Square(2.0)
+    | keyword:bind  variable:f  operator:=  module:geo  punctuation:.  type:Figure  punctuation:.  variant:Square  punctuation:(  number:2.0  punctuation:)
+ 20 |     when f is geo.Figure.Square side
+    | keyword:when  variable:f  keyword:is  module:geo  punctuation:.  type:Figure  punctuation:.  variant:Square  variable:side
+ 21 |         show(side)
+    | builtin-fn:show  punctuation:(  variable:side  punctuation:)
+ 22 |     fi
+    | keyword:fi
+ 23 |     hold spot: maybe geo.Point = none
+    | keyword:hold  variable:spot  punctuation::  keyword:maybe  module:geo  punctuation:.  type:Point  operator:=  keyword:none
+ 24 |     spot = geo.Point { x: 1.5, y: 2.5 }
+    | variable:spot  operator:=  module:geo  punctuation:.  type:Point  punctuation:{  field:x  punctuation::  number:1.5  punctuation:,  field:y  punctuation::  number:2.5  punctuation:}
+ 25 |     when spot is {p}
+    | keyword:when  variable:spot  keyword:is  punctuation:{  variable:p  punctuation:}
+ 26 |         show(p.y)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:y  punctuation:)
+ 27 |     fi
+    | keyword:fi
+ 28 |     region r
+    | keyword:region  region:r
+ 29 |     bind boxed = new geo.Point(geo.Point { x: 4.0, y: 0.0 }) at r
+    | keyword:bind  variable:boxed  operator:=  keyword:new  module:geo  punctuation:.  type:Point  punctuation:(  module:geo  punctuation:.  type:Point  punctuation:{  field:x  punctuation::  number:4.0  punctuation:,  field:y  punctuation::  number:0.0  punctuation:}  punctuation:)  keyword:at  region:r
+ 30 |     show(boxed^.x)
+    | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:.  field:x  punctuation:)
+ 31 |     hold head: geo.Node@r = geo.Node { value: 1, next: none }
+    | keyword:hold  variable:head  punctuation::  module:geo  punctuation:.  type:Node  operator:@  region:r  operator:=  module:geo  punctuation:.  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}
+ 32 |     head.next = new@r geo.Node(geo.Node { value: 2, next: none })
+    | variable:head  punctuation:.  field:next  operator:=  keyword:new  operator:@  region:r  module:geo  punctuation:.  type:Node  punctuation:(  module:geo  punctuation:.  type:Node  punctuation:{  field:value  punctuation::  number:2  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)
+ 33 |     show(head.next { boxed2(r) }^.value)
+    | builtin-fn:show  punctuation:(  variable:head  punctuation:.  field:next  punctuation:{  task:boxed2  punctuation:(  region:r  punctuation:)  punctuation:}  operator:^  punctuation:.  field:value  punctuation:)
+ 34 |     bind corners: [geo.Point; 2] = [geo.Point { x: 0.0, y: 0.0 }; 2]
+    | keyword:bind  variable:corners  punctuation::  punctuation:[  module:geo  punctuation:.  type:Point  punctuation:;  number:2  punctuation:]  operator:=  punctuation:[  module:geo  punctuation:.  type:Point  punctuation:{  field:x  punctuation::  number:0.0  punctuation:,  field:y  punctuation::  number:0.0  punctuation:}  punctuation:;  number:2  punctuation:]
+ 35 |     show(corners.len)
+    | builtin-fn:show  punctuation:(  variable:corners  punctuation:.  field:len  punctuation:)
+ 36 | fi
+    | keyword:fi
+ 38 | task boxed2(r: region) -> ^geo.Node@r
+    | keyword:task  task:boxed2  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  operator:^  module:geo  punctuation:.  type:Node  operator:@  region:r
+ 39 |     <- new geo.Node(geo.Node { value: 0, next: none }) at r
+    | keyword:<-  keyword:new  module:geo  punctuation:.  type:Node  punctuation:(  module:geo  punctuation:.  type:Node  punctuation:{  field:value  punctuation::  number:0  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
+ 40 | fi
+    | keyword:fi

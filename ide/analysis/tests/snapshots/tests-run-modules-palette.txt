@@ -1,0 +1,44 @@
+  1 | # Colors, for tests/run/modules.vela.
+    | comment:# Colors, for tests/run/modules.vela.
+  3 | kind Color
+    | keyword:kind  type:Color
+  4 |     Red
+    | variant:Red
+  5 |     Blue
+    | variant:Blue
+  6 |     Custom(red: int, green: int, blue: int)
+    | variant:Custom  punctuation:(  field:red  punctuation::  type-builtin:int  punctuation:,  field:green  punctuation::  type-builtin:int  punctuation:,  field:blue  punctuation::  type-builtin:int  punctuation:)
+  7 | fi
+    | keyword:fi
+  9 | task describe(color: Color) -> text
+    | keyword:task  task:describe  punctuation:(  parameter:color  punctuation::  type:Color  punctuation:)  operator:->  type-builtin:text
+ 10 |     match color
+    | keyword:match  parameter:color
+ 11 |     case Red
+    | keyword:case  variant:Red
+ 12 |         <- "red"
+    | keyword:<-  string:"red"
+ 13 |     case Blue
+    | keyword:case  variant:Blue
+ 14 |         <- "blue"
+    | keyword:<-  string:"blue"
+ 15 |     case Custom r g b
+    | keyword:case  variant:Custom  variable:r  variable:g  variable:b
+ 16 |         <- mix(r, g, b)
+    | keyword:<-  task:mix  punctuation:(  variable:r  punctuation:,  variable:g  punctuation:,  variable:b  punctuation:)
+ 17 |     fi
+    | keyword:fi
+ 18 | fi
+    | keyword:fi
+ 20 | priv task mix(r: int, g: int, b: int) -> text
+    | keyword:priv  keyword:task  task:mix  punctuation:(  parameter:r  punctuation::  type-builtin:int  punctuation:,  parameter:g  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:text
+ 21 |     when r + g + b > 50
+    | keyword:when  parameter:r  operator:+  parameter:g  operator:+  parameter:b  operator:>  number:50
+ 22 |         <- "light"
+    | keyword:<-  string:"light"
+ 23 |     fi
+    | keyword:fi
+ 24 |     <- "dark"
+    | keyword:<-  string:"dark"
+ 25 | fi
+    | keyword:fi

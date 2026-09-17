@@ -1,0 +1,18 @@
+  1 | # Arithmetic, for tests/run/modules/lists/stack.vela.
+    | comment:# Arithmetic, for tests/run/modules/lists/stack.vela.
+  3 | shape Sum
+    | keyword:shape  type:Sum
+  4 |     value: int
+    | field:value  punctuation::  type-builtin:int
+  5 | fi
+    | keyword:fi
+  7 | task add(a: int, b: int) -> int
+    | keyword:task  task:add  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  8 |     # A variable may have the name of a shape, as in any file.
+    | comment:# A variable may have the name of a shape, as in any file.
+  9 |     bind Sum = a + b
+    | keyword:bind  variable:Sum  operator:=  parameter:a  operator:+  parameter:b
+ 10 |     <- Sum
+    | keyword:<-  variable:Sum
+ 11 | fi
+    | keyword:fi

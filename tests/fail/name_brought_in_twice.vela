@@ -1,4 +1,4 @@
-# error: 2:33: 'greet' is already brought in at 2:26
+# error: 2:33: 'greet' is already listed at 2:26; a name is brought in once
 include modules/library (greet, greet)
 
 task main()

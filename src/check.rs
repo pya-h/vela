@@ -159,6 +159,17 @@ impl Checker {
         }
     }
 
+    /// The error for a shape literal of `name`, which names no shape.
+    fn unknown_shape(&self, span: Span, name: &str) -> Error {
+        match self.variants.get(name).filter(|_| self.sees(name)) {
+            Some(info) => Error::at(
+                span,
+                format!("'{}' is a variant of kind '{}', not a shape; its values are written '{}(…)'", info.variant.tag, info.kind, name),
+            ),
+            None => Error::at(span, format!("unknown shape '{}'{}", name, self.elsewhere(name))),
+        }
+    }
+
     /// A hint for a variable name that names nothing, but that a module the
     /// current module includes would be named by, without its alias or braces.
     fn module_elsewhere(&self, name: &str) -> String {
@@ -600,7 +611,13 @@ impl Checker {
                 Ok(())
             }
             Type::Named(name, _) if !self.sees(name) || (!self.shapes.contains_key(name) && !self.kinds.contains_key(name)) => {
-                err(self.place(span, name), format!("unknown type '{}'{}", name, self.elsewhere(name)))
+                match self.variants.get(name).filter(|_| self.sees(name)) {
+                    Some(info) => err(
+                        self.place(span, name),
+                        format!("'{}' is a variant, not a type; its type is its kind, '{}'", info.variant.tag, info.kind),
+                    ),
+                    None => err(self.place(span, name), format!("unknown type '{}'{}", name, self.elsewhere(name))),
+                }
             }
             _ => Ok(()),
         }
@@ -1174,6 +1191,15 @@ impl Checker {
                 }
                 Ok(binds.iter().zip(&variant.payload).map(|((name, at), field)| (name.clone(), *at, self.field_in(&field.ty, region))).collect())
             }
+            (PatternKind::Variant { kind: Some(written), tag, .. }, other) => {
+                let (kind, at) = &**written;
+                match self.kinds.get(kind) {
+                    Some(declared) if declared.variants.iter().any(|v| v.tag == *tag) => {
+                        err(span, format!("'{}' is a variant of kind '{}', but this value is {}", tag, kind, other))
+                    }
+                    _ => err(*at, format!("kind '{}' has no variant '{}'", kind, tag)),
+                }
+            }
             (PatternKind::Variant { tag, .. }, other) => {
                 if self.variant_in_scope(tag).is_some() {
                     err(span, format!("'{}' is a variant, but this value is {}", tag, other))
@@ -1302,6 +1328,9 @@ impl Checker {
                 // Only a shape has fields to assign; for anything else (a pointer,
                 // a kind) the field error from `field_type` is the useful one.
                 let is_shape = matches!(&info.ty, Type::Named(ty, _) if self.shapes.contains_key(ty));
+                if is_shape && info.result {
+                    return err(span, format!("'{0}' is a result; set it with '{0} <- …'", name));
+                }
                 if is_shape && !info.mutable {
                     return err(span, format!("cannot assign to a field of immutable variable '{}'", name));
                 }
@@ -1623,7 +1652,7 @@ impl Checker {
                     return err(span, format!("'{}' is a kind, not a shape; create its values with its variants", name));
                 }
                 let shape = self.shapes.get(name.as_str()).filter(|_| self.sees(name))
-                    .ok_or_else(|| Error::at(span, format!("unknown shape '{}'{}", name, self.elsewhere(name))))?
+                    .ok_or_else(|| self.unknown_shape(span, name))?
                     .clone();
                 if module_of(name) != self.current_module
                     && let Some(hidden) = shape.fields.iter().find(|f| f.private)
@@ -1653,7 +1682,7 @@ impl Checker {
                 let region = self.check_fields_of_value(&mut values, &declared)?;
                 Ok(Type::Named(name.clone(), self.regional.contains(name.as_str()).then_some(region)))
             }
-            ExprKind::Range(..) => err(span, "a range can only be used in 'each'"),
+            ExprKind::Range(..) => err(span, "a range can only be used in 'each' or to take part of an array or slice, as in 'xs[1..3]'"),
             ExprKind::Fail(error) => {
                 let ty = self.check_expr(error)?;
                 if matches!(ty, Type::Unit | Type::None | Type::Fail(_) | Type::Maybe(_) | Type::Or(..)) {
@@ -1704,7 +1733,8 @@ impl Checker {
         let count_ty = self.check_expr(count)?;
         self.expect_type(&count_ty, &Type::Int, count.span)?;
         let Some(n) = constant_int(count) else {
-            let written = if unsettled(&items) { "T".to_string() } else { items.to_string() };
+            // The region of a slice's items is the one it is made in.
+            let written = if unsettled(&items) { "T".to_string() } else { items.without_regions().to_string() };
             return err(
                 count.span,
                 format!("an array's count is known before the program runs, as in '[0; 8]'; for a count known only as it runs, make a slice in a region, as in 'new [{}]([…; n]) at r'", written),
@@ -1724,6 +1754,11 @@ impl Checker {
     /// checks the rest as it runs.
     fn check_index(&mut self, base: &Expr, base_ty: &Type, index: &mut Expr, span: Span) -> Result<Type> {
         let items = match base_ty {
+            // `[none, none][i]`: an item that is only a literal can be wrapped
+            // where a `maybe` or `T or E` is expected, but not one read out.
+            Type::Array(items, _) if matches!(**items, Type::None | Type::Fail(_)) => {
+                return err(span, "cannot tell the type of this item from none or 'fail …'; give the array a type first");
+            }
             Type::Array(items, _) | Type::Slice(items, _) => (**items).clone(),
             Type::Ptr(inner, _) if matches!(**inner, Type::Array(..)) => {
                 return err(span, format!("this value is a pointer, {}; index the array it points to, as in 'p^[i]'", base_ty));
@@ -1779,7 +1814,8 @@ impl Checker {
                         span,
                         format!(
                             "a slice points into a region, but this array isn't in one; copy it into a slice, as in 'new [{}](xs) at r', or keep the array in a region with 'new {}(…) at r'",
-                            items, base_ty
+                            items.without_regions(),
+                            base_ty.without_regions()
                         ),
                     );
                 }
@@ -2539,7 +2575,7 @@ fn ignored_error(task: &str) -> String {
 
 /// The error for a `_` that would drop a value holding an error.
 fn dropped_error(ty: &Type) -> String {
-    format!("'_' would drop the error in a {}; give it a name, then handle it with a plan B or match", ty)
+    format!("'_' would drop the error in a value of type {}; give it a name, then handle it with a plan B or match", ty)
 }
 
 /// Example names for a list of `n` values, as in `bind a, b = …`.

@@ -1,0 +1,5 @@
+# trap: integer overflow at 2:10 in task 'modules/calc.wrap'
+include modules/calc
+task main()
+    show(calc.wrap(4611686018427387904))
+fi

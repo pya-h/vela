@@ -1,0 +1,26 @@
+  1 | # Points, nodes, and figures, for tests/run/module_parts.vela.
+    | comment:# Points, nodes, and figures, for tests/run/module_parts.vela.
+  3 | shape Point
+    | keyword:shape  type:Point
+  4 |     x: float
+    | field:x  punctuation::  type-builtin:float
+  5 |     y: float
+    | field:y  punctuation::  type-builtin:float
+  6 | fi
+    | keyword:fi
+  8 | shape Node
+    | keyword:shape  type:Node
+  9 |     value: int
+    | field:value  punctuation::  type-builtin:int
+ 10 |     next: maybe ^Node
+    | field:next  punctuation::  keyword:maybe  operator:^  type:Node
+ 11 | fi
+    | keyword:fi
+ 13 | kind Figure
+    | keyword:kind  type:Figure
+ 14 |     Circle(radius: float)
+    | variant:Circle  punctuation:(  field:radius  punctuation::  type-builtin:float  punctuation:)
+ 15 |     Square(side: float)
+    | variant:Square  punctuation:(  field:side  punctuation::  type-builtin:float  punctuation:)
+ 16 | fi
+    | keyword:fi

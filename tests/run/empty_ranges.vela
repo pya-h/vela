@@ -1,0 +1,15 @@
+# Ranges that end before they start, or where they start, run no steps; a
+# range may start below zero.
+
+task main()
+    each i in 5..2
+        show(i)
+    fi
+    each i in 3..3
+        show(i)
+    fi
+    each i in -2..1
+        show(i)
+    fi
+    show("done")
+fi

@@ -1,0 +1,10 @@
+# Braces bring in a module's names without the module's name.
+
+include module_parts/shapes/palette {Color, describe}
+
+task main()
+    show(describe(Color.Red))
+    when Color.Mix(4) is Color.Mix n
+        show(n)
+    fi
+fi

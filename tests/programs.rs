@@ -334,6 +334,24 @@ fn docs_programs() {
     report("docs/regions.html", failures);
 }
 
+/// The generated C that `docs/regions.html` shows for Lesson 1's `main` is what
+/// the compiler writes for it.
+#[test]
+fn docs_generated_c() {
+    let page = fs::read_to_string(project_root().join("docs/regions.html")).unwrap();
+    let (_, code, _) = doc_programs(&page).into_iter().find(|(name, _, _)| name == "01_first.vela").unwrap();
+    let listing = page.split_once("The generated C for Lesson 1's").unwrap().1;
+    let listing = html_text(listing.split_once("<pre>").unwrap().1.split_once("</pre>").unwrap().0);
+    let scratch = scratch_dir("docs-c");
+    let source = scratch.join("01_first.vela");
+    fs::write(&source, code).unwrap();
+    let out = Command::new(VELA).arg(&source).arg("--emit-c").output().unwrap();
+    let _ = fs::remove_dir_all(&scratch);
+    let c = String::from_utf8(out.stdout).unwrap();
+    let main = c.split_once("void vela_main(void) {").map(|(_, body)| format!("void vela_main(void) {{{}\n}}", body.split_once("\n}").unwrap().0));
+    assert_eq!(main.as_deref(), Some(listing.as_str()), "docs/regions.html shows C that the compiler no longer generates");
+}
+
 #[test]
 fn examples() {
     let root = project_root();

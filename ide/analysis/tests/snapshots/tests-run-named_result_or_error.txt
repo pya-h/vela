@@ -1,0 +1,28 @@
+  1 | # A named result in a task that may fail: `value <-` sets it, and `<- fail`
+    | comment:# A named result in a task that may fail: `value <-` sets it, and `<- fail`
+  2 | # sends the error instead.
+    | comment:# sends the error instead.
+  4 | task checked(n: int) -> value: int or text
+    | keyword:task  task:checked  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:value  punctuation::  type-builtin:int  keyword:or  type-builtin:text
+  5 |     when n < 0
+    | keyword:when  parameter:n  operator:<  number:0
+  6 |         <- fail "negative"
+    | keyword:<-  keyword:fail  string:"negative"
+  7 |     fi
+    | keyword:fi
+  8 |     value <- n * 2
+    | variable:value  keyword:<-  parameter:n  operator:*  number:2
+  9 | fi
+    | keyword:fi
+ 11 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 12 |     show(checked(4) { 0 })
+    | builtin-fn:show  punctuation:(  task:checked  punctuation:(  number:4  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+ 13 |     show(checked(-1) { fail e
+    | builtin-fn:show  punctuation:(  task:checked  punctuation:(  operator:-  number:1  punctuation:)  punctuation:{  keyword:fail  variable:e
+ 14 |         show(e)
+    | builtin-fn:show  punctuation:(  variable:e  punctuation:)
+ 15 |         0 })
+    | number:0  punctuation:}  punctuation:)
+ 16 | fi
+    | keyword:fi

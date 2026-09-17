@@ -158,6 +158,7 @@ fn messages_quote_numbers_as_written_and_name_unprintable_escapes() {
     assert_eq!(kinds("1_0.")[0], invalid(1, 1, "invalid number '1_0.': write '1_0.0'"));
     assert_eq!(kinds("\"a\\\tb\"")[0], invalid(1, 3, "invalid escape: '\\' followed by a tab"));
     assert_eq!(kinds("\"a\\\u{1}b\"")[0], invalid(1, 3, "invalid escape: '\\' followed by a control character"));
+    assert_eq!(kinds("\"a\\\u{0}b\"")[0], invalid(1, 3, "invalid escape: '\\' followed by a NUL character"));
     // A missing closing quote is reported at its own literal, not at a later one.
     let tokens = kinds("show(\"abc)\nshow(\"def\")\n");
     assert_eq!(tokens[2], invalid(1, 6, UNCLOSED_TEXT));

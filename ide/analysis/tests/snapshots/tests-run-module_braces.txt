@@ -1,0 +1,16 @@
+  1 | # Braces bring in a module's names without the module's name.
+    | comment:# Braces bring in a module's names without the module's name.
+  3 | include module_parts/shapes/palette {Color, describe}
+    | keyword:include  module:module_parts  operator:/  module:shapes  operator:/  module:palette  punctuation:{  type:Color  punctuation:,  task:describe  punctuation:}
+  5 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  6 |     show(describe(Color.Red))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  type:Color  punctuation:.  variant:Red  punctuation:)  punctuation:)
+  7 |     when Color.Mix(4) is Color.Mix n
+    | keyword:when  type:Color  punctuation:.  variant:Mix  punctuation:(  number:4  punctuation:)  keyword:is  type:Color  punctuation:.  variant:Mix  variable:n
+  8 |         show(n)
+    | builtin-fn:show  punctuation:(  variable:n  punctuation:)
+  9 |     fi
+    | keyword:fi
+ 10 | fi
+    | keyword:fi

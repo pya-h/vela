@@ -10,7 +10,8 @@ use std::ops::Range;
 use vela::ast::{ANY_REGION, MODULE_SEPARATOR, Span, Type, unqualified};
 use vela::lexer::{LexKind, LexToken, Token};
 
-use crate::scan::{Scan, Symbol, SymbolKind};
+use crate::TokenClass;
+use crate::scan::{Classified, Scan, Symbol, SymbolKind};
 use crate::types::Checked;
 
 /// Guards against initializers that refer to each other.
@@ -282,21 +283,47 @@ impl<'a> Knowledge<'a> {
         at
     }
 
+    /// The type of the value the pattern after the `case` or `is` at position
+    /// `case` matches: the `match`'s subject, or the value before `is`.
+    fn pattern_subject(&self, case: usize, depth: usize) -> Option<Type> {
+        if self.token(case) == Some(&Token::Is) {
+            self.span_type(self.line_start(case) + 1, case.checked_sub(1)?, depth)
+        } else {
+            let matched = self.enclosing_match(case)?;
+            self.span_type(matched + 1, self.line_end(matched).checked_sub(1)?, depth)
+        }
+    }
+
+    /// The variant called `tag` of `subject`'s kind, which may be another
+    /// module's, whose variants a pattern names alone.
+    fn variant_of(&self, subject: &Type, tag: &str) -> Option<usize> {
+        let Type::Named(kind, _) = subject else { return None };
+        let kind = self.global(kind, SymbolKind::Kind)?;
+        self.children(kind).find(|(_, v)| unqualified(&v.name) == tag).map(|(id, _)| id)
+    }
+
+    /// The declaration `token` refers to. A variant named alone in a pattern
+    /// (`case Circle r`) is the matched value's kind's, when that is known,
+    /// rather than whichever variant of that name the file sees.
+    pub fn symbol_of(&self, token: &Classified) -> Option<usize> {
+        if token.class == TokenClass::Variant
+            && let Some(q) = self.at_byte(token.range.start)
+            && let Some(case) = q.checked_sub(1).filter(|&case| matches!(self.token(case), Some(Token::Case | Token::Is)))
+            && let Some(tag) = self.ident(q)
+            && let Some(variant) = self.pattern_subject(case, 0).and_then(|subject| self.variant_of(&subject, tag))
+        {
+            return Some(variant);
+        }
+        token.symbol
+    }
+
     /// The type of a name a `case` or `is` pattern binds: a variant's payload
     /// field, or what `{value}` and `fail e` take from the subject.
     fn case_binding_type(&self, id: usize, depth: usize) -> Option<Type> {
         let symbol = self.symbol(id)?;
         let name = self.at_byte(symbol.name_range.start)?;
         let case = (self.line_start(name)..name).rev().find(|&q| matches!(self.token(q), Some(Token::Case | Token::Is)))?;
-        let outcome = || {
-            let subject = if self.token(case) == Some(&Token::Is) {
-                self.span_type(self.line_start(case) + 1, case.checked_sub(1)?, depth)?
-            } else {
-                let matched = self.enclosing_match(case)?;
-                self.span_type(matched + 1, self.line_end(matched).checked_sub(1)?, depth)?
-            };
-            Some(subject)
-        };
+        let outcome = || self.pattern_subject(case, depth);
         match self.token(case + 1)? {
             Token::LBrace => outcome()?.extracted().cloned(),
             Token::Fail => match outcome()? {
@@ -309,12 +336,7 @@ impl<'a> Knowledge<'a> {
                 let tag = self.ident(tag_at)?;
                 // The variant of the matched value's kind, which may be another
                 // module's, whose variants the case names alone.
-                let of_subject = match outcome() {
-                    Some(Type::Named(kind, _)) => self
-                        .global(&kind, SymbolKind::Kind)
-                        .and_then(|kind| self.children(kind).find(|(_, v)| unqualified(&v.name) == tag).map(|(id, _)| id)),
-                    _ => None,
-                };
+                let of_subject = outcome().and_then(|subject| self.variant_of(&subject, tag));
                 let named = self.symbol_at(tag_at).filter(|&id| self.symbol(id).is_some_and(|s| s.kind == SymbolKind::Variant));
                 let variant = of_subject.or(named).or_else(|| self.global(tag, SymbolKind::Variant))?;
                 let (_, field) = self.children(variant).nth(index)?;
@@ -382,12 +404,12 @@ impl<'a> Knowledge<'a> {
                 if let Some((full, start)) = self.qualified_at(q).filter(|(_, start)| *start != q) {
                     return exact(start).or_else(|| {
                         let variant = self.global(&full, SymbolKind::Variant)?;
-                        self.variant_kind(variant).map(|kind| Type::named(&kind))
+                        self.variant_value(variant, None, depth)
                     });
                 }
                 // `Shape.Circle`: a kind's variant.
                 if let Some(variant) = self.symbol_at(q).filter(|&id| self.symbol(id).is_some_and(|s| s.kind == SymbolKind::Variant)) {
-                    return self.variant_kind(variant).map(|kind| Type::named(&kind));
+                    return self.variant_value(variant, None, depth);
                 }
                 if self.token_before(q) == Some(&Token::Dot) {
                     let base = self.expression_type(q.checked_sub(2)?, depth + 1)?;
@@ -412,7 +434,7 @@ impl<'a> Knowledge<'a> {
                 let id = self.symbol_at(q)?;
                 match self.symbol(id)?.kind {
                     SymbolKind::Parameter | SymbolKind::Variable | SymbolKind::Region => self.symbol_type(id, depth + 1),
-                    SymbolKind::Variant => self.variant_kind(id).map(|kind| Type::named(&kind)),
+                    SymbolKind::Variant => self.variant_value(id, None, depth),
                     _ => None,
                 }
             }),
@@ -440,7 +462,14 @@ impl<'a> Knowledge<'a> {
                     });
                 }
                 let (shape, _) = self.qualified_at(open.checked_sub(1)?)?;
-                Some(Type::named(&shape))
+                // Each `field: value`, with the field's declared type.
+                let fields = self
+                    .value_list(open + 1, q.checked_sub(1)?)
+                    .into_iter()
+                    .filter(|&(first, last)| first + 2 <= last && self.token(first + 1) == Some(&Token::Colon))
+                    .map(|(first, last)| (self.ident(first).and_then(|field| self.field_type(&shape, field)), (first + 2, last)))
+                    .collect();
+                Some(self.value_type(&shape, fields, depth))
             }
             Token::RParen => {
                 let open = self.matching_open(q, &Token::LParen, &Token::RParen)?;
@@ -481,13 +510,13 @@ impl<'a> Knowledge<'a> {
                     while self.token_before(start) == Some(&Token::Dot) && start >= 2 && self.ident(start - 2).is_some() {
                         start -= 2;
                     }
-                    return exact(start).or_else(|| self.variant_kind(variant).map(|kind| Type::named(&kind)));
+                    return exact(start).or_else(|| self.variant_value(variant, Some((open, q)), depth));
                 }
                 // A module's task or variant is recorded at the module's name.
                 let (name, p) = self.qualified_at(p)?;
                 exact(p).or_else(|| {
                     if let Some(variant) = self.global(&name, SymbolKind::Variant) {
-                        return self.variant_kind(variant).map(|kind| Type::named(&kind));
+                        return self.variant_value(variant, Some((open, q)), depth);
                     }
                     let task = self.global(&name, SymbolKind::Task)?;
                     Some(self.call_type(&self.symbol(task)?.detail, open, q, depth))
@@ -639,6 +668,39 @@ impl<'a> Knowledge<'a> {
             }
         }
         None
+    }
+
+    /// The value a variant makes, with the arguments in the parentheses at
+    /// positions `parens`, if it has any.
+    fn variant_value(&self, variant: usize, parens: Option<(usize, usize)>, depth: usize) -> Option<Type> {
+        let kind = self.variant_kind(variant)?;
+        let args = match parens {
+            Some((open, close)) if open + 1 < close => self.value_list(open + 1, close - 1),
+            _ => Vec::new(),
+        };
+        let fields = self.children(variant).map(|(_, field)| parse_type(&field.detail)).zip(args).collect();
+        Some(self.value_type(&kind, fields, depth))
+    }
+
+    /// The type of a value of the shape or kind `name` whose fields, of the
+    /// declared types given, take the values from each first to last position.
+    /// As the checker settles it, a value holding pointers is in their region,
+    /// or in any region (`@_`) while it holds none.
+    fn value_type(&self, name: &str, fields: Vec<(Option<Type>, (usize, usize))>, depth: usize) -> Type {
+        let regional = self.regional();
+        if !regional.contains(name) {
+            return Type::named(name);
+        }
+        // The region of the value itself, as its fields' types name it.
+        const OWN: &str = "";
+        let mut regions = HashMap::new();
+        for (declared, (first, last)) in fields {
+            if let (Some(declared), Some(actual)) = (declared, self.span_type(first, last, depth + 1)) {
+                vela::check::unify_regions(&vela::check::in_region(&declared, OWN, &regional), &actual, &mut regions);
+            }
+        }
+        let region = regions.remove(OWN).unwrap_or_else(|| ANY_REGION.to_string());
+        Type::Named(name.to_string(), Some(region))
     }
 
     /// The kind a variant belongs to.
@@ -802,13 +864,19 @@ fn parse_prefixed_type(text: &str, depth: usize) -> Option<Type> {
         }
         name if is_name(name) => Type::builtin(name).unwrap_or_else(|| Type::named(name)),
         // Another module's shape or kind: `geometry.Point`.
-        name if name.split_once(MODULE_SEPARATOR).is_some_and(|(module, member)| is_name(module) && is_name(member)) => Type::named(name),
+        // A module the file can't name is written by its path: `shapes/geometry.Point`.
+        name if name.rsplit_once(MODULE_SEPARATOR).is_some_and(|(module, member)| is_module_path(module) && is_name(member)) => Type::named(name),
         _ => return None,
     };
     for pointer in pointers.into_iter().rev() {
         ty = if pointer { Type::Ptr(Box::new(ty), None) } else { Type::Maybe(Box::new(ty)) };
     }
     Some(ty)
+}
+
+/// A module's name, or its path from the file's folder (`shapes/geometry`, `../common/text`).
+fn is_module_path(text: &str) -> bool {
+    text.split('/').all(|part| part == ".." || is_name(part))
 }
 
 fn is_name(text: &str) -> bool {

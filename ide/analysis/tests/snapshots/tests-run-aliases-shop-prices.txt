@@ -1,0 +1,36 @@
+  1 | # Prices in a shop, for tests/run/aliases.vela. tests/run/aliases/fuel has a
+    | comment:# Prices in a shop, for tests/run/aliases.vela. tests/run/aliases/fuel has a
+  2 | # module named prices too: a module is known by its path.
+    | comment:# module named prices too: a module is known by its path.
+  4 | shape Item
+    | keyword:shape  type:Item
+  5 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  6 |     cents: int
+    | field:cents  punctuation::  type-builtin:int
+  7 | fi
+    | keyword:fi
+  9 | kind Size
+    | keyword:kind  type:Size
+ 10 |     Small
+    | variant:Small
+ 11 |     Large(extra: int)
+    | variant:Large  punctuation:(  field:extra  punctuation::  type-builtin:int  punctuation:)
+ 12 | fi
+    | keyword:fi
+ 14 | task price_of(item: Item, size: Size) -> int
+    | keyword:task  task:price_of  punctuation:(  parameter:item  punctuation::  type:Item  punctuation:,  parameter:size  punctuation::  type:Size  punctuation:)  operator:->  type-builtin:int
+ 15 |     match size
+    | keyword:match  parameter:size
+ 16 |     case Small
+    | keyword:case  variant:Small
+ 17 |         <- item.cents
+    | keyword:<-  parameter:item  punctuation:.  field:cents
+ 18 |     case Size.Large extra
+    | keyword:case  type:Size  punctuation:.  variant:Large  variable:extra
+ 19 |         <- item.cents + extra
+    | keyword:<-  parameter:item  punctuation:.  field:cents  operator:+  variable:extra
+ 20 |     fi
+    | keyword:fi
+ 21 | fi
+    | keyword:fi

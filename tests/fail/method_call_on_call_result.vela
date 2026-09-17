@@ -1,0 +1,12 @@
+# error: 11:27: only a task or a variant can be called, and Vela has no methods; pass the value to a task, as in 'f(value)'
+shape Point
+    x: int
+fi
+
+task origin() -> Point
+    <- Point { x: 0 }
+fi
+
+task main()
+    show(origin()[0].twice())
+fi

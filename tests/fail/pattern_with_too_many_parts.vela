@@ -5,7 +5,7 @@ fi
 
 task main()
     match Mood.Calm
-    case a.Mood.Calm
+    case x.a.Mood.Calm
         show(1)
     fi
 fi

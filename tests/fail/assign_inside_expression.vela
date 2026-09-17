@@ -1,0 +1,4 @@
+# error: 3:10: expected an expression, got '='; '=' assigns, as a statement of its own
+task main()
+    show(=)
+fi

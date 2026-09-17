@@ -1,0 +1,38 @@
+# Errors of every type: a shape, an int computed with `fail (…)`, and a
+# `text or int`, handled by `match`, a plan B, and `is fail e`.
+
+shape Problem
+    code: int
+    note: text
+fi
+
+task parse(word: text) -> int or Problem
+    when word == ""
+        <- fail Problem { code: 1, note: "empty" }
+    fi
+    <- 7
+fi
+
+task steps(n: int) -> text or int
+    when n > 10
+        <- fail ((n - 10) * 2)
+    fi
+    <- "ok"
+fi
+
+task main()
+    match parse("")
+    case {v}
+        show(v)
+    case fail p
+        show(p.code)
+        show(p.note)
+    fi
+    show(steps(3) { "bad" })
+    show(steps(15) { fail over
+        show(over)
+        "too many" })
+    when steps(12) is fail extra
+        show(-extra)
+    fi
+fi

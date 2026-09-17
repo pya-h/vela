@@ -200,3 +200,52 @@ fn every_request_works_on_every_prefix_of_a_program_with_aliases() {
         }
     }
 }
+
+#[test]
+fn patterns_through_a_kind_offer_its_variants_not_yet_matched() {
+    for checks in [true, false] {
+        let when = if checks { "checked" } else { "declared" };
+        // After `case Fuel.`, the variants of the kind, less the cases already written,
+        // however they are written.
+        assert_eq!(labels(&program(checks, "match tank\n    case Fuel.@@\n    fi")), ["Small", "Tank"], "{}", when);
+        let one_written = "match tank\n    case Fuel.Tank n\n        show(n)\n    case Fuel.@@\n    fi";
+        assert_eq!(labels(&program(checks, one_written)), ["Small"], "{}", when);
+        let alone = "match tank\n    case Tank n\n        show(n)\n    case Fuel.@@\n    fi";
+        assert_eq!(labels(&program(checks, alone)), ["Small"], "{}", when);
+        // After `case`, the same.
+        let through_kind = "match tank\n    case Fuel.Tank n\n        show(n)\n    case @@\n    fi";
+        assert_eq!(labels(&program(checks, through_kind)), ["Small", "_"], "{}", when);
+        let through_module = "match big\n    case shop.Size.Large n\n        show(n)\n    case @@\n    fi";
+        assert_eq!(labels(&program(checks, through_module)), ["Small", "_"], "{}", when);
+        // Every variant after `is Fuel.`, which covers nothing.
+        assert_eq!(labels(&program(checks, "when tank is Fuel.@@")), ["Small", "Tank"], "{}", when);
+        // A shape or a misspelled kind has no variants.
+        assert_eq!(labels(&program(checks, "match tank\n    case Product.@@\n    fi")), Vec::<String>::new(), "{}", when);
+        assert_eq!(labels(&program(checks, "when tank is Fual.@@")), Vec::<String>::new(), "{}", when);
+    }
+}
+
+#[test]
+fn definitions_of_names_on_include_lines_and_through_modules() {
+    let source = program(true, "show(0)");
+    let analysis = analysis(&source);
+    let shop = Some("app/shop/prices.vela");
+    let fuel = Some("app/fuel/prices.vela");
+    let definition = |needle: &str| analysis.definition(at(&source, needle)).map(|location| (location.path, location.from));
+    let declared = |module: &str, needle: &str| LineIndex::new(module).utf16_of(module.find(needle).unwrap());
+    // A module's alias leads to its file, where it is used and on its include line.
+    assert_eq!(definition("shop.Size.Large"), Some((shop.map(str::to_string), 0)));
+    assert_eq!(definition("shop ("), Some((shop.map(str::to_string), 0)));
+    // A kind through its module, and a variant through both.
+    assert_eq!(definition("Size.Large(75)"), Some((shop.map(str::to_string), declared(SHOP, "Size\n"))));
+    assert_eq!(definition("Large(75)"), Some((shop.map(str::to_string), declared(SHOP, "Large("))));
+    // The original name left of `=>` leads to the declaration, as the alias does.
+    assert_eq!(definition("Item =>"), Some((shop.map(str::to_string), declared(SHOP, "Item\n"))));
+    assert_eq!(definition("Product,"), Some((shop.map(str::to_string), declared(SHOP, "Item\n"))));
+    assert_eq!(definition("Size => Fuel"), Some((fuel.map(str::to_string), declared(FUEL, "Size\n"))));
+    assert_eq!(definition("price_of => fuel_price"), Some((fuel.map(str::to_string), declared(FUEL, "price_of("))));
+    // A variant named alone in a case is the matched kind's.
+    assert_eq!(definition("Small\n        show(price_of"), Some((shop.map(str::to_string), declared(SHOP, "Small\n"))));
+    // A folder of an include path declares nothing.
+    assert_eq!(definition("fuel/prices"), None);
+}

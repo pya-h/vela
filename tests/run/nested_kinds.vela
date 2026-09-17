@@ -1,0 +1,42 @@
+# A kind holding another kind: a `match` inside a `case`, and `is` patterns
+# through `Kind.Variant` one inside the other.
+
+kind Shape
+    Circle(radius: int)
+    Square(side: int)
+fi
+
+kind Box
+    Empty
+    Holding(item: Shape)
+fi
+
+task describe(b: Box) -> text
+    match b
+    case Empty
+        <- "empty"
+    case Holding item
+        match item
+        case Circle r
+            when r > 5
+                <- "big circle"
+            fi
+            <- "circle"
+        case Square _
+            <- "square"
+        fi
+    fi
+fi
+
+task main()
+    show(describe(Holding(Circle(9))))
+    show(describe(Holding(Circle(1))))
+    show(describe(Holding(Square(2))))
+    show(describe(Empty))
+    bind b = Box.Holding(Shape.Square(4))
+    when b is Box.Holding inner
+        when inner is Shape.Square s
+            show(s)
+        fi
+    fi
+fi

@@ -345,7 +345,7 @@ Press Ctrl+C to stop.</pre>
           <p>A file's <code>include</code> lines are followed into the files they name, as you type: <code>geometry.area</code>
             is colored as a task, hovers with its signature and module, and jumps into <code>geometry.vela</code> with
             <kbd>F12</kbd>; completion after <code>geometry.</code> and inside <code>include … (</code> or <code>{</code> offers what the
-            module declares, without its <code>priv</code> names; aliases (<code>=&gt;</code>) are followed, so a renamed
+            module declares, without its <code>priv</code> names (on the <code>include</code> line, each by its name alone); aliases (<code>=&gt;</code>) are followed, so a renamed
             name hovers, completes, and jumps under its new name, and after <code>Size.</code> completion offers the
             kind's variants; and an error in a module, even one not saved yet, is
             shown at the <code>include</code> that leads to it, with the module's file and line. An open file counts as
@@ -360,7 +360,8 @@ Press Ctrl+C to stop.</pre>
           <h4>Completion</h4>
           <p>Only what fits: types after <code>:</code>, <code>-&gt;</code>, <code>^</code>, <code>maybe</code>,
             <code>new</code>, a type's <code>[</code> and <code>or</code>, and each comma of a header's results (<code>-&gt; int, int</code>), and nothing for an array type's count; variables declared above the cursor; fields after
-            <code>.</code>, and <code>len</code> after an array's or slice's; the cases still missing after <code>case</code>, including <code>{value}</code>,
+            <code>.</code>, and <code>len</code> after an array's or slice's; the cases still missing after <code>case</code> and
+            <code>case Kind.</code>, including <code>{value}</code>,
             <code>none</code>, and <code>fail e</code>; the patterns that fit after <code>is</code>; the regions
             visible after <code>@</code>, and the ones <code>new</code> can allocate in after <code>new@</code> and a
             <code>new</code>'s <code>at</code>, or as the argument for a task's <code>region</code> parameter; and
@@ -372,7 +373,7 @@ Press Ctrl+C to stop.</pre>
             A task's named results (<code>-&gt; total: int</code>) are offered at the start of a line as
             <code>total &lt;- </code>, and hover as <code>result total: int</code>. After <code>match</code>, only <code>case</code>; <code>new</code> only where a region can
             be allocated in; <code>include</code> only above a file's tasks, shapes, and kinds; and <code>priv</code> before
-            those and a shape's fields.</p>
+            those and a shape's fields, with <code>task</code>, <code>shape</code>, and <code>kind</code> after it.</p>
         </div>
         <div class="card">
           <h4>Snippets</h4>
@@ -387,11 +388,12 @@ Press Ctrl+C to stop.</pre>
             type with <code>@_</code> explains it), or <code>maybe</code>, <code>is</code>, <code>fail</code>,
             <code>none</code>, <code>_</code>, <code>region</code>, <code>new</code>, and <code>in</code> for a reminder
             of what they do. <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it
-            is declared; <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> finds a declaration by name.</p>
+            is declared (a variant named alone in a <code>case</code> is the matched value's kind's, even another module's); <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> finds a declaration by name.</p>
         </div>
         <div class="card">
           <h4>Blocks that indent themselves</h4>
-          <p>Enter indents after a block's first line, and after a line ending with a plan B's <code>{</code>; typing
+          <p>Enter indents after a block's first line, and after a line ending with a plan B's <code>{</code> (or
+            <code>{ fail e</code>); typing
             <code>fi</code>, <code>else</code>, <code>case</code>, or <code>}</code> lines it up with its block. Blocks
             fold from the gutter.</p>
         </div>

@@ -1,0 +1,46 @@
+  1 | # A named result holding a slice in the caller's region, sliced again before
+    | comment:# A named result holding a slice in the caller's region, sliced again before
+  2 | # the task ends.
+    | comment:# the task ends.
+  4 | task evens(r: region, n: int) -> out: [int]@r, count: int
+    | keyword:task  task:evens  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:out  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  variable:count  punctuation::  type-builtin:int
+  5 |     out, count <- new@r [int]([0; n]), 0
+    | variable:out  punctuation:,  variable:count  keyword:<-  keyword:new  operator:@  region:r  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:;  parameter:n  punctuation:]  punctuation:)  punctuation:,  number:0
+  6 |     each i in 0..n
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:n
+  7 |         when i % 2 == 0
+    | keyword:when  variable:i  operator:%  number:2  operator:==  number:0
+  8 |             out[count] = i
+    | variable:out  punctuation:[  variable:count  punctuation:]  operator:=  variable:i
+  9 |             count <- count + 1
+    | variable:count  keyword:<-  variable:count  operator:+  number:1
+ 10 |         fi
+    | keyword:fi
+ 11 |     fi
+    | keyword:fi
+ 12 |     out <- out[0..count]
+    | variable:out  keyword:<-  variable:out  punctuation:[  number:0  operator:..  variable:count  punctuation:]
+ 13 | fi
+    | keyword:fi
+ 15 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 16 |     region r
+    | keyword:region  region:r
+ 17 |     bind xs, n = evens(r, 7)
+    | keyword:bind  variable:xs  punctuation:,  variable:n  operator:=  task:evens  punctuation:(  region:r  punctuation:,  number:7  punctuation:)
+ 18 |     show(xs.len == n)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:.  field:len  operator:==  variable:n  punctuation:)
+ 19 |     each x in xs
+    | keyword:each  variable:x  keyword:in  variable:xs
+ 20 |         show(x)
+    | builtin-fn:show  punctuation:(  variable:x  punctuation:)
+ 21 |     fi
+    | keyword:fi
+ 22 |     hold total: float = 0.0
+    | keyword:hold  variable:total  punctuation::  type-builtin:float  operator:=  number:0.0
+ 23 |     total = total + 1.5
+    | variable:total  operator:=  variable:total  operator:+  number:1.5
+ 24 |     show(total)
+    | builtin-fn:show  punctuation:(  variable:total  punctuation:)
+ 25 | fi
+    | keyword:fi

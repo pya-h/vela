@@ -1,0 +1,76 @@
+  1 | # Named results holding a shape and a maybe, set from a plan B, and sent with
+    | comment:# Named results holding a shape and a maybe, set from a plan B, and sent with
+  2 | # `<-` from inside a plan B.
+    | comment:# `<-` from inside a plan B.
+  4 | shape Point
+    | keyword:shape  type:Point
+  5 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  6 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  7 | fi
+    | keyword:fi
+  9 | task half(n: int) -> maybe int
+    | keyword:task  task:half  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int
+ 10 |     when n % 2 == 0
+    | keyword:when  parameter:n  operator:%  number:2  operator:==  number:0
+ 11 |         <- n / 2
+    | keyword:<-  parameter:n  operator:/  number:2
+ 12 |     fi
+    | keyword:fi
+ 13 |     <- none
+    | keyword:<-  keyword:none
+ 14 | fi
+    | keyword:fi
+ 16 | task best(n: int) -> spot: Point
+    | keyword:task  task:best  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:spot  punctuation::  type:Point
+ 17 |     spot <- Point { x: 0, y: 0 }
+    | variable:spot  keyword:<-  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}
+ 18 |     when n > 0
+    | keyword:when  parameter:n  operator:>  number:0
+ 19 |         spot <- Point { x: n, y: spot.y + 1 }
+    | variable:spot  keyword:<-  type:Point  punctuation:{  field:x  punctuation::  parameter:n  punctuation:,  field:y  punctuation::  variable:spot  punctuation:.  field:y  operator:+  number:1  punctuation:}
+ 20 |     fi
+    | keyword:fi
+ 21 | fi
+    | keyword:fi
+ 23 | task found(n: int) -> item: maybe int
+    | keyword:task  task:found  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:item  punctuation::  keyword:maybe  type-builtin:int
+ 24 |     item <- none
+    | variable:item  keyword:<-  keyword:none
+ 25 |     when n > 3
+    | keyword:when  parameter:n  operator:>  number:3
+ 26 |         item <- n
+    | variable:item  keyword:<-  parameter:n
+ 27 |     fi
+    | keyword:fi
+ 28 | fi
+    | keyword:fi
+ 30 | task halved(n: int) -> total: int
+    | keyword:task  task:halved  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:total  punctuation::  type-builtin:int
+ 31 |     total <- half(n) { 0 }
+    | variable:total  keyword:<-  task:half  punctuation:(  parameter:n  punctuation:)  punctuation:{  number:0  punctuation:}
+ 32 |     total <- total + half(n + 1) {
+    | variable:total  keyword:<-  variable:total  operator:+  task:half  punctuation:(  parameter:n  operator:+  number:1  punctuation:)  punctuation:{
+ 33 |         <- -1
+    | keyword:<-  operator:-  number:1
+ 34 |     }
+    | punctuation:}
+ 35 | fi
+    | keyword:fi
+ 37 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 38 |     show(best(4).x)
+    | builtin-fn:show  punctuation:(  task:best  punctuation:(  number:4  punctuation:)  punctuation:.  field:x  punctuation:)
+ 39 |     show(best(4).y)
+    | builtin-fn:show  punctuation:(  task:best  punctuation:(  number:4  punctuation:)  punctuation:.  field:y  punctuation:)
+ 40 |     show(found(2))
+    | builtin-fn:show  punctuation:(  task:found  punctuation:(  number:2  punctuation:)  punctuation:)
+ 41 |     show(found(5))
+    | builtin-fn:show  punctuation:(  task:found  punctuation:(  number:5  punctuation:)  punctuation:)
+ 42 |     show(halved(4))
+    | builtin-fn:show  punctuation:(  task:halved  punctuation:(  number:4  punctuation:)  punctuation:)
+ 43 |     show(halved(5))
+    | builtin-fn:show  punctuation:(  task:halved  punctuation:(  number:5  punctuation:)  punctuation:)
+ 44 | fi
+    | keyword:fi

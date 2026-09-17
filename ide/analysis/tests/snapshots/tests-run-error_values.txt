@@ -1,0 +1,68 @@
+  1 | # Errors of every type: a shape, an int computed with `fail (…)`, and a
+    | comment:# Errors of every type: a shape, an int computed with `fail (…)`, and a
+  2 | # `text or int`, handled by `match`, a plan B, and `is fail e`.
+    | comment:# `text or int`, handled by `match`, a plan B, and `is fail e`.
+  4 | shape Problem
+    | keyword:shape  type:Problem
+  5 |     code: int
+    | field:code  punctuation::  type-builtin:int
+  6 |     note: text
+    | field:note  punctuation::  type-builtin:text
+  7 | fi
+    | keyword:fi
+  9 | task parse(word: text) -> int or Problem
+    | keyword:task  task:parse  punctuation:(  parameter:word  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  keyword:or  type:Problem
+ 10 |     when word == ""
+    | keyword:when  parameter:word  operator:==  string:""
+ 11 |         <- fail Problem { code: 1, note: "empty" }
+    | keyword:<-  keyword:fail  type:Problem  punctuation:{  field:code  punctuation::  number:1  punctuation:,  field:note  punctuation::  string:"empty"  punctuation:}
+ 12 |     fi
+    | keyword:fi
+ 13 |     <- 7
+    | keyword:<-  number:7
+ 14 | fi
+    | keyword:fi
+ 16 | task steps(n: int) -> text or int
+    | keyword:task  task:steps  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:text  keyword:or  type-builtin:int
+ 17 |     when n > 10
+    | keyword:when  parameter:n  operator:>  number:10
+ 18 |         <- fail ((n - 10) * 2)
+    | keyword:<-  keyword:fail  punctuation:(  punctuation:(  parameter:n  operator:-  number:10  punctuation:)  operator:*  number:2  punctuation:)
+ 19 |     fi
+    | keyword:fi
+ 20 |     <- "ok"
+    | keyword:<-  string:"ok"
+ 21 | fi
+    | keyword:fi
+ 23 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 24 |     match parse("")
+    | keyword:match  task:parse  punctuation:(  string:""  punctuation:)
+ 25 |     case {v}
+    | keyword:case  punctuation:{  variable:v  punctuation:}
+ 26 |         show(v)
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:)
+ 27 |     case fail p
+    | keyword:case  keyword:fail  variable:p
+ 28 |         show(p.code)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:code  punctuation:)
+ 29 |         show(p.note)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:note  punctuation:)
+ 30 |     fi
+    | keyword:fi
+ 31 |     show(steps(3) { "bad" })
+    | builtin-fn:show  punctuation:(  task:steps  punctuation:(  number:3  punctuation:)  punctuation:{  string:"bad"  punctuation:}  punctuation:)
+ 32 |     show(steps(15) { fail over
+    | builtin-fn:show  punctuation:(  task:steps  punctuation:(  number:15  punctuation:)  punctuation:{  keyword:fail  variable:over
+ 33 |         show(over)
+    | builtin-fn:show  punctuation:(  variable:over  punctuation:)
+ 34 |         "too many" })
+    | string:"too many"  punctuation:}  punctuation:)
+ 35 |     when steps(12) is fail extra
+    | keyword:when  task:steps  punctuation:(  number:12  punctuation:)  keyword:is  keyword:fail  variable:extra
+ 36 |         show(-extra)
+    | builtin-fn:show  punctuation:(  operator:-  variable:extra  punctuation:)
+ 37 |     fi
+    | keyword:fi
+ 38 | fi
+    | keyword:fi

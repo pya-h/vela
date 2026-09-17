@@ -1,0 +1,16 @@
+  1 | # Number literals with `_` between digits, and the `\r` escape in text.
+    | comment:# Number literals with `_` between digits, and the `\r` escape in text.
+  3 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  4 |     show(1_000_000 + 1)
+    | builtin-fn:show  punctuation:(  number:1_000_000  operator:+  number:1  punctuation:)
+  5 |     show(3.141_59)
+    | builtin-fn:show  punctuation:(  number:3.141_59  punctuation:)
+  6 |     show(1_0.5_0)
+    | builtin-fn:show  punctuation:(  number:1_0.5_0  punctuation:)
+  7 |     show("a\rb" == "a\rb")
+    | builtin-fn:show  punctuation:(  string:"a  escape:\r  string:b"  operator:==  string:"a  escape:\r  string:b"  punctuation:)
+  8 |     show("x\ry")
+    | builtin-fn:show  punctuation:(  string:"x  escape:\r  string:y"  punctuation:)
+  9 | fi
+    | keyword:fi

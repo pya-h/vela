@@ -1,0 +1,7 @@
+# error: 2:14: 'geometry.Point' names nothing: 'geometry' is neither a module this file includes nor a kind
+task area(p: geometry.Point) -> float
+    <- 1.0
+fi
+
+task main()
+fi

@@ -171,6 +171,8 @@ fn deep_nesting_is_an_error_not_a_crash() {
     let ok = program(format!("{}1{}", "(".repeat(near), ")".repeat(near)));
     driver::generate_c(&ok).unwrap();
     driver::generate_c(&program(vec!["1"; near].join(" + "))).unwrap();
+    let calls = format!("task id(n: int) -> int\n    <- n\nfi\n{}", program(format!("{}1{}", "id(".repeat(near), ")".repeat(near))));
+    driver::generate_c(&calls).unwrap();
     // Plan Bs nest three levels each (the postfix value, the block, and the
     // statement's expression inside it).
     let plan_bs = format!(
@@ -268,6 +270,29 @@ fn a_module_outside_the_main_folder_keeps_its_path_in_its_names() {
 }
 
 #[test]
+fn a_module_that_cannot_be_read_says_why() {
+    let main = "include lib\n\ntask main()\nfi\n";
+    let mut loader = |_: &Path| -> std::io::Result<String> { Err(std::io::Error::other("Is a directory")) };
+    let error = driver::check_program(Path::new("main.vela"), main, &mut loader).unwrap_err();
+    assert_eq!(error.error.span, Some(Span { line: 1, col: 9, file: 0 }));
+    assert_eq!(error.error.message, "can't read module 'lib' (lib.vela): Is a directory");
+}
+
+#[test]
+fn a_name_the_file_cant_write_is_told_apart_from_one_it_can() {
+    // `maker` returns `c.Thing` of `c.vela`; main names the module `x.vela` `c`.
+    let main = "include maker\ninclude x => c\n\ntask main()\n    bind thing: c.Thing = maker.make()\nfi\n";
+    let files = [
+        ("c.vela", "shape Thing\n    v: int\nfi\n"),
+        ("x.vela", "shape Thing\n    w: int\nfi\n"),
+        ("maker.vela", "include c\n\ntask make() -> c.Thing\n    <- c.Thing { v: 1 }\nfi\n"),
+    ];
+    let asked = std::cell::RefCell::new(Vec::new());
+    let error = driver::check_program(Path::new("main.vela"), main, &mut memory_loader(&files, &asked)).unwrap_err();
+    assert_eq!(error.error.message, "expected type c.Thing, got ./c.Thing");
+}
+
+#[test]
 fn an_error_in_a_module_names_that_file() {
     let main = "include lib\n\ntask main()\n    show(lib.twice(2))\nfi\n";
     let files = [("lib.vela", "task twice(n: int) -> int\n    <- n * \"2\"\nfi\n")];
@@ -304,7 +329,15 @@ fn long_chains_of_modules_are_an_error_not_a_crash() {
         driver::check_program(Path::new("main.vela"), main, &mut memory_loader(&borrowed, &asked))
     };
     let limit = vela::parser::MAX_NESTING;
+    // The main file and `limit - 1` modules: `limit` files in the chain.
     check(limit - 1).unwrap();
-    let error = check(limit + 50).unwrap_err();
-    assert_eq!(error.error.message, format!("modules include one another too deeply (more than {} in a chain)", limit));
+    for length in [limit, limit + 50] {
+        let error = check(length).unwrap_err();
+        assert_eq!(error.error.message, format!("modules include one another too deeply (more than {} in a chain)", limit));
+        // At the include that would make the chain too long, even when the last
+        // module includes nothing.
+        let span = error.error.span.unwrap();
+        let file = error.files.get(span.file).unwrap();
+        assert_eq!((file.path.to_str(), span.line, span.col), (Some(format!("m{}.vela", limit - 1).as_str()), 1, 9));
+    }
 }

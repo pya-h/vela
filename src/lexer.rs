@@ -456,7 +456,7 @@ impl Lexer {
                     self.advance();
                     return invalid(loc, format!("unexpected '{}{}'; Vela writes '{}'", c, c, word));
                 }
-                return invalid(loc, format!("unexpected character '{}'", c));
+                return invalid(loc, format!("unexpected character '{}'; Vela writes '{}'", c, word));
             }
             '<' => {
                 if self.peek() == '=' {

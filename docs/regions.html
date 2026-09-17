@@ -863,7 +863,7 @@ not a digit
       <pre>void vela_main(void) {
     vela__rt__region scratch[1] = { VELA__RT__REGION_EMPTY };
     int64_t* count = ((int64_t*)vela__rt__new(scratch, (int64_t[1]){ 41 }, sizeof(int64_t), _Alignof(int64_t)));
-    (*(count)) = ((*(count)) + 1);
+    (*(count)) = (vela__rt__add((*(count)), 1, "4:21 in task 'main'"));
     vela__rt__show_int((*(count)));
     vela__rt__region_free(scratch);
     return;

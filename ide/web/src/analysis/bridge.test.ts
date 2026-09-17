@@ -86,6 +86,24 @@ describe("VelaAnalysis", () => {
     expect(variants).toEqual(["Square"]);
   });
 
+  it("completes an include line with names alone, and cases with the matched kind's variants", () => {
+    const geometry = "kind Figure\n    Square(side: int)\n    Dot\nfi\n\ntask area(figure: Figure) -> int\n    <- 1\nfi\n";
+    const context = { path: "app/main.vela", modules: { "app/shapes/geometry.vela": geometry } };
+    const listed = analysis.complete("include shapes/geometry (\n", "include shapes/geometry (".length, context).items;
+    expect(listed.map((i) => [i.label, i.snippet, i.apply])).toEqual([
+      ["Figure", undefined, undefined],
+      ["Square", undefined, undefined],
+      ["Dot", undefined, undefined],
+      ["area", undefined, undefined],
+    ]);
+
+    const main = "include shapes/geometry\n\nkind Mark\n    Square(label: text)\nfi\n\ntask main()\n    match geometry.Figure.Dot\n    case geometry.Figure.Square side\n        show(side)\n    case Dot\n        show(0)\n    fi\nfi\n";
+    expect(analysis.file(main, context).diagnostics).toEqual([]);
+    const dot = main.indexOf("Dot\n        show(0)");
+    expect(analysis.hover(main, dot, context)?.code).toBe("geometry.Dot");
+    expect(analysis.definition(main, dot, context)?.path).toBe("app/shapes/geometry.vela");
+  });
+
   it("reports diagnostics, completions, hovers, and definitions", () => {
     const source = "task main()\n    bind count = 1\n    show(count)\n    show(missing)\nfi\n";
     const [diagnostic] = analysis.file(source).diagnostics;

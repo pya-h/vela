@@ -1,0 +1,8 @@
+# error: 3:26: cannot tell the type of this item from none or 'fail …'; give the array a type first
+task pick(n: int) -> float or int
+    <- [fail 10, fail 20][n]
+fi
+
+task main()
+    bind v = pick(1) { 0.0 }
+fi

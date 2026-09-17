@@ -61,6 +61,30 @@ describe("ModuleSources", () => {
     expect(modules.version).toBe(version + 1);
   });
 
+  it("reads a file again once it exists, when told it changed", async () => {
+    const disk: Record<string, string> = {};
+    const files = reader(disk);
+    const modules = new ModuleSources();
+    modules.connect(files.reader);
+    modules.request(["lib/new.vela"]);
+    await files.settle();
+    expect(modules.sources()).toEqual({});
+    // Created: the analyses that asked for it run again...
+    disk["lib/new.vela"] = "task n()\nfi\n";
+    const version = modules.version;
+    modules.changed("lib/new.vela");
+    expect(modules.version).toBe(version + 1);
+    // ...and it is read when they ask for it again.
+    modules.request(["lib/new.vela"]);
+    await files.settle();
+    expect(files.reads).toEqual(["lib/new.vela", "lib/new.vela"]);
+    expect(modules.sources()).toEqual({ "lib/new.vela": "task n()\nfi\n" });
+    // A file that was read isn't read again when it changes: its editor has its text.
+    modules.changed("lib/new.vela");
+    modules.request(["lib/new.vela"]);
+    expect(files.reads).toHaveLength(2);
+  });
+
   it("drops answers to requests made before it forgot", async () => {
     const files = reader({ "lib/a.vela": "old" });
     const modules = new ModuleSources();

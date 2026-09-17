@@ -91,6 +91,18 @@ fn item_level_offers_declarations() {
 }
 
 #[test]
+fn private_offers_the_declarations_it_can_mark() {
+    let after = "task main()\nfi\n\npriv @@";
+    assert_offers(after, &["task", "shape", "kind", "task -> type"], &["priv", "include", "bind"]);
+    // The word being typed is completed too.
+    assert_offers("priv sh@@", &["shape"], &["priv"]);
+    // A shape's private field is a name being declared.
+    assert_eq!(labels("shape S\n    priv @@\nfi\n"), Vec::<String>::new());
+    // Not a statement.
+    assert_eq!(labels(&in_main("priv @@")), Vec::<String>::new());
+}
+
+#[test]
 fn statements_offer_keywords_snippets_and_visible_names() {
     assert_offers(
         PROGRAM,
@@ -191,6 +203,15 @@ fn case_offers_the_variants_not_yet_matched() {
     assert_eq!(item(&marked, "all remaining cases").snippet.as_deref(), Some("Rectangle ${width} ${height}\n\t\ncase Dot\n\t${}"));
     // The bindings after a variant are new names.
     assert_eq!(labels(&in_main("match figure\n    case Rectangle @@\n    fi")), Vec::<String>::new());
+    // A case written through the kind covers its variant too.
+    let through_kind = in_main("match figure\n    case Shape.Circle r\n        show(r)\n    case @@\n    fi");
+    assert_offers(&through_kind, &["Rectangle", "Dot", "all remaining cases"], &["Circle"]);
+    assert_eq!(item(&through_kind, "all remaining cases").snippet.as_deref(), Some("Rectangle ${width} ${height}\n\t\ncase Dot\n\t${}"));
+    // After `case Shape.`, the variants not matched yet, however they were written.
+    let after_kind = in_main("match figure\n    case Circle r\n        show(r)\n    case Shape.Dot\n        show(0)\n    case Shape.@@\n    fi");
+    assert_eq!(labels(&after_kind), ["Rectangle"]);
+    // A `_` written doesn't hide the variants still named.
+    assert_eq!(labels(&in_main("match figure\n    case _\n        show(0)\n    case Shape.@@\n    fi")), ["Circle", "Rectangle", "Dot"]);
 }
 
 #[test]
@@ -282,6 +303,53 @@ fn hover_reads_declared_types_when_the_file_doesnt_check() {
     assert_eq!(hover(&source, "far", 0).code, "bind far: ^Point@points");
     assert_eq!(hover(&source, "made", 0).code, "bind made: Point");
     assert_eq!(hover(&source, "c =", 0).code, "bind c: Shape");
+}
+
+const REGIONAL: &str = "\
+shape Node
+    value: int
+    next: maybe ^Node
+fi
+
+kind Tree
+    Leaf
+    Branch(left: ^Tree, right: ^Tree)
+fi
+
+task main()
+    CHECK
+    region r
+    bind leaf = new Tree(Tree.Leaf) at r
+    bind branch = Tree.Branch(leaf, leaf)
+    bind bare = Branch(leaf, leaf)
+    bind lone = new Node(Node { value: 1, next: none }) at r
+    bind linked = Node { value: 2, next: lone }
+    bind following = linked.next
+    bind count = linked.value
+    match branch
+    case Branch left right
+        show(1)
+    case Leaf
+        show(2)
+    fi
+fi
+";
+
+#[test]
+fn values_holding_pointers_are_in_the_region_of_their_parts_whether_or_not_the_file_checks() {
+    for checks in [true, false] {
+        let source = REGIONAL.replace("CHECK", if checks { "show(0)" } else { "show(missing)" });
+        assert_eq!(Analysis::new(&source).diagnostics().is_empty(), checks);
+        let code = |needle: &str| hover(&source, needle, 0).code;
+        let when = if checks { "checked" } else { "declared" };
+        assert_eq!(code("branch ="), "bind branch: Tree@r", "{}", when);
+        assert_eq!(code("bare ="), "bind bare: Tree@r", "{}", when);
+        assert_eq!(code("lone ="), "bind lone: ^Node@r", "{}", when);
+        assert_eq!(code("linked ="), "bind linked: Node@r", "{}", when);
+        assert_eq!(code("following ="), "bind following: maybe ^Node@r", "{}", when);
+        assert_eq!(code("count ="), "bind count: int", "{}", when);
+        assert_eq!(code("left right"), "left: ^Tree@r", "{}", when);
+    }
 }
 
 #[test]
