@@ -3,7 +3,6 @@
 # frees them together; variants with and without a payload, `is` and plan B to
 # read maybe values, text compared by contents, and a task with two named
 # results.
-
 kind Status
     Todo
     Done

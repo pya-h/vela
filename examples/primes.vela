@@ -1,0 +1,55 @@
+
+task is_prime(n: int) -> bool
+    each i in 2..(n/2 + 1)
+        when n % i == 0
+            <- false
+        fi
+    fi
+    <- true
+fi
+
+task primes_below_no_add(r: region, limit: int) -> [int]@r
+    bind primes: [int]@r = new [int]([0;limit]) at r  #  soon add and remove methods will be added to the slice
+    hold idx = 0
+
+    each i in 2..limit
+        when is_prime(i)
+            primes[idx] = i
+            idx = idx + 1
+        fi
+    fi
+    <- (primes[0..idx])
+fi
+
+task primes_below(r: region, limit: int) -> [int]@r
+    hold results: [int]@r = new [int]() at r
+
+    each i in 2..limit
+        when is_prime(i)
+            results.add(i)
+        fi
+    fi
+    <- results
+fi
+
+priv task main()
+    region r
+    bind primes_limit = 50
+    bind results = primes_below(r, primes_limit)
+    show("Found: ")
+    show(results.len)
+    show("-----------------------")
+    each x in results
+        show(x)
+    fi
+    show("-----------------------")
+
+    hold x = results
+    loop x.len > 0
+        show(x.del())        
+    fi
+    show("-----------------------")
+    show(results.len) # slice was copied, not referenced.
+    show(x.len)
+    # show(x.del())  # throws del on empty slice
+fi
