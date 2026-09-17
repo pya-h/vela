@@ -337,7 +337,7 @@
         </div>
         <div class="card">
           <h3>Text is a C string <span class="badge b-med">Medium</span></h3>
-          <p><code>text</code> is currently <code>const char*</code>. <code>==</code> compares contents, but there is no length, no safe concatenation, and a <code>\0</code> ends the text early.</p>
+          <p><code>text</code> is currently <code>const char*</code>. <code>==</code> compares contents, but there is no length, no safe concatenation, and a <code>\0</code> ends the text early. Text now has a lifetime in its type: <code>text</code> lasts as long as the program, <code>text@r</code> is in a region (<a href="vela.html#text-in-regions">Text in a region</a>), which is what reading input and building text will need.</p>
         </div>
         <div class="card">
           <h3>Undefined integer edge cases <span class="badge b-done">Done</span></h3>
@@ -1150,7 +1150,7 @@ fi</pre>
         <ul>
           <li><strong>Owned pointers <code>^T</code></strong> could be move-only, letting a single value be freed early without dangling copies.</li>
           <li><strong>Borrowed references <code>&T</code></strong> are temporary and cannot be stored. They are valid only within the current scope/region.</li>
-          <li><strong>Regions</strong> (explicit arenas) group allocations and free them in bulk. References cannot escape their region. <em>(Done.)</em> Next for them, from <a href="regions.html#ideas">Vela Regions</a>: easier region passing (<code>push[nodes](…)</code>, with inferred region arguments), shapes with several regions, generated copies into another region, and fixes for the cases the rules reject today.</li>
+          <li><strong>Regions</strong> (explicit arenas) group allocations and free them in bulk. References cannot escape their region. <em>(Done, and text has regions too: <code>text@r</code>.)</em> Next for them, from <a href="regions.html#ideas">Vela Regions</a>: copies into another region (<code>value.copy()</code>, planned), moving a whole region into another, easier region passing (<code>push[nodes](…)</code>, with inferred region arguments), shapes with several regions (and text fields of their own region), tasks that take text of any region without naming it, and fixes for the cases the rules reject today.</li>
           <li><strong>No shared mutable state</strong> by default: either you own it mutably, or you borrow it immutably.</li>
         </ul>
         <p>
@@ -1479,10 +1479,37 @@ show(p.length_squared())</pre>
         <li><strong>Type inference:</strong> let the compiler infer more types without annotations</li>
         <li><strong>Sum-type exhaustiveness:</strong> already present; keep it mandatory</li>
         <li><strong>Compile-time constants:</strong> <code>const MaxSize: int = 1024</code></li>
-        <li><strong>Conversions instead of promotion:</strong> <code>float(n)</code> and <code>int(x)</code>, so
-          <code>1 + 2.5</code> stops being the one place an <code>int</code> quietly becomes a <code>float</code> (and
-          comparisons and arithmetic follow the same rule)</li>
+        <li><strong>Type conversions (casting):</strong> Vela can't convert a value from one type to another yet: not an
+          <code>int</code> to a <code>float</code> (except where <code>1 + 2.5</code> promotes it), not a <code>float</code> to an
+          <code>int</code>, and not text to a number or a number to text. See <a href="#conversions">Type conversions</a>
+          below.</li>
         <li><strong>Type aliases:</strong> <code>alias UserId = int</code></li>
+      </ul>
+
+      <h3 id="conversions">Type conversions (casting)</h3>
+      <p>
+        Every conversion between types is missing today, and reading input makes it pressing: <code>scan</code> will read
+        text, and a program asking for a number has no way to turn <code>"42"</code> into <code>42</code>. (The typed form
+        <code>scan("Age: ", int)</code> waits for this.) The syntax is to be chosen; the questions each spelling must answer are
+        the same:
+      </p>
+      <pre>bind x = float(n)                  # a call named by the type
+bind y = n as float                # a keyword, as in Rust and Swift
+bind age = int("42")               # text to a number can fail: int or ParseError
+bind shown = text(3.5) at r        # a number to text makes text, in a region</pre>
+      <ul>
+        <li><strong>Which conversions.</strong> <code>int</code> ↔ <code>float</code>, <code>bool</code> → <code>int</code>,
+          numbers ↔ <code>text</code>. Shapes, kinds, pointers, and slices don't convert; a task does that.</li>
+        <li><strong>What can fail.</strong> Text to a number can fail (<code>"4x2"</code>), and so can a float to an int
+          (<code>nan</code>, or <code>1e300</code>, which doesn't fit). Vela's own ways apply: a <code>T or E</code> for input
+          that may be wrong (<code>int("42")</code> gives <code>int or ParseError</code>), and stopping the program with a
+          message, as integer overflow does, for a conversion that is a bug when it fails (<code>int(1e300)</code>).</li>
+        <li><strong>Rounding.</strong> A float to an int truncates toward zero, as C does, or rounds; separate conversions
+          (<code>round</code>, <code>floor</code>) keep that explicit.</li>
+        <li><strong>Text needs memory.</strong> A number written as text is new text, so it goes in a region
+          (<code>text@r</code>), written <code>… at r</code> as <code>new</code> and <code>scan</code> are.</li>
+        <li><strong>Promotion.</strong> With conversions, <code>1 + 2.5</code> could become an error that asks for
+          <code>float(1) + 2.5</code>, so that no <code>int</code> becomes a <code>float</code> quietly.</li>
       </ul>
 
       <h3>Tooling & Ecosystem</h3>
@@ -1534,6 +1561,8 @@ show(p.length_squared())</pre>
               (done: <a href="vela.html#results">Several Results</a>, <a href="vela.html#named-results">Named Results</a>)</li>
             <li><s>Defined integer overflow and division by zero</s> (done: <a href="vela.html#int-limits">they stop the program with a message</a>)</li>
             <li><s>Fixed-size arrays and slices, which grow and shrink</s> (done: <a href="vela.html#arrays">arrays</a> and <a href="vela.html#slices">slices</a>), and a real <code>text</code> type</li>
+            <li><s>Text in regions</s> (done: <a href="vela.html#text-in-regions"><code>text@r</code></a>), then reading input
+              (<code>scan</code>), copies into another region (<code>.copy()</code>), and <a href="#conversions">type conversions</a></li>
             <li>Small region improvements: result-only regions, typed patterns, a lint for regions that grow in loops, and a
               chunk cache (<a href="regions.html#ideas">ideas</a>)</li>
             <li>Move-only owned pointers, on top of regions</li>

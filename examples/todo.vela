@@ -15,7 +15,9 @@ shape Item
     next: maybe ^Item
 fi
 
-task describe(s: Status) -> text
+# A status in a region holds its text there, so the task names that region,
+# and so does the text it sends, which may be the reason.
+task describe(s: Status@r) -> text@r
     match s
     case Todo
         <- "todo"

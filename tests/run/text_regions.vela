@@ -1,0 +1,107 @@
+# Text in a region: `text` lasts as long as the program (a literal does), and
+# `text@r` is in region `r`, as the text a value in `r` holds is. Text that
+# lasts fits wherever text of a region is expected. A shape or kind holding
+# text may name a region (`Person@r`), in which its text is, or none
+# (`Person`), when its text lasts; one holding pointers always names one.
+
+shape Person
+    name: text
+    age: int
+fi
+
+kind Status
+    Todo
+    Blocked(reason: text)
+fi
+
+shape Task
+    title: text
+    status: Status
+    owner: Person
+    next: maybe ^Task
+fi
+
+# Reads text of any region; sends text of that region.
+task longer(a: text@r, b: text@r) -> text@r
+    when a == b
+        <- "same"
+    fi
+    <- a
+fi
+
+task describe(s: Status@r) -> text@r
+    match s
+        case Todo
+            <- "todo"
+        case Blocked reason
+            <- reason
+    fi
+fi
+
+# Keeps text in a value in the caller's region, and reads it back: text a
+# value in `r` holds is `text@r`, even when it was a literal.
+task named(r: region, name: text) -> text@r
+    bind boxed = new text(name) at r
+    <- boxed^
+fi
+
+task greet(p: Person@r)
+    show(p.name)
+fi
+
+task main()
+    region r
+    bind lasting = "Ada"
+    bind kept = named(r, lasting)
+    show(kept)
+    show(kept == lasting)
+    show(longer(kept, "Bob"))
+    show(longer("x", "x"))
+
+    # A shape holding text: none of a region, or text of one.
+    bind plain = Person { name: "Cy", age: 3 }
+    bind held: Person@r = Person { name: kept, age: 36 }
+    bind inferred = Person { name: kept, age: 1 }
+    greet(plain)
+    greet(held)
+    show(inferred.age)
+    hold people = new [Person]() at r
+    people.add(plain)
+    people.add(held)
+    show(people[0].name)
+
+    # Text in slices and pointers is in their region.
+    hold names = new [text]() at r
+    names.add(lasting)
+    names.add(kept)
+    names.add("Eve")
+    show(names.del(0))
+    bind first = names[0]
+    show(first)
+    bind note = new text("note") at r
+    note^ = lasting
+    show(note^)
+
+    # A shape holding pointers holds its text in its region.
+    bind job = new Task(Task { title: "write", status: Status.Blocked(kept), owner: held, next: none }) at r
+    show(describe(job^.status))
+    show(describe(Status.Todo))
+    job^.title = names[1]
+    show(job^.title)
+    show(job^.owner.name)
+    match job^.status
+        case Blocked reason
+            show(reason)
+        case Todo
+            show("none")
+    fi
+
+    # maybe and errors of text of a region.
+    hold found: maybe text@r = none
+    found = kept
+    show(found)
+    bind fallback = found { "missing" }
+    show(fallback)
+    bind reasons = [Status.Todo, Status.Blocked(kept)]
+    show(describe(reasons[1]))
+fi

@@ -23,7 +23,7 @@ const BUILTIN_TYPE_DOCS: &[(&str, &str)] = &[
     ("int", "A 64-bit signed integer."),
     ("float", "A 64-bit floating-point number."),
     ("bool", "true or false."),
-    ("text", "Text. == compares contents."),
+    ("text", "Text. == compares contents. text lasts as long as the program, as a literal does; text@r is in region r, as the text of a value in r is."),
     ("unit", "The return type of a task that sends no value."),
 ];
 

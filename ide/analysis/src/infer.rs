@@ -397,7 +397,7 @@ impl<'a> Knowledge<'a> {
         match self.token(q)? {
             Token::Int(_) => Some(Type::Int),
             Token::Float(_) => Some(Type::Float),
-            Token::Text(_) => Some(Type::Text),
+            Token::Text(_) => Some(Type::Text(None)),
             Token::True | Token::False => Some(Type::Bool),
             Token::Ident(name) => exact(q).or_else(|| {
                 // `palette.Red`: a module's variant, recorded at the module's name.
@@ -698,8 +698,8 @@ impl<'a> Knowledge<'a> {
     /// As the checker settles it, a value holding pointers is in their region,
     /// or in any region (`@_`) while it holds none.
     fn value_type(&self, name: &str, fields: Vec<(Option<Type>, (usize, usize))>, depth: usize) -> Type {
-        let regional = self.regional();
-        if !regional.contains(name) {
+        let takes_region = self.takes_region();
+        if !takes_region.contains(name) {
             return Type::named(name);
         }
         // The region of the value itself, as its fields' types name it.
@@ -707,11 +707,16 @@ impl<'a> Knowledge<'a> {
         let mut regions = HashMap::new();
         for (declared, (first, last)) in fields {
             if let (Some(declared), Some(actual)) = (declared, self.span_type(first, last, depth + 1)) {
-                vela::check::unify_regions(&vela::check::in_region(&declared, OWN, &regional), &actual, &mut regions);
+                vela::check::unify_regions(&vela::check::in_region(&declared, OWN, &takes_region), &actual, &mut regions);
             }
         }
-        let region = regions.remove(OWN).unwrap_or_else(|| ANY_REGION.to_string());
-        Type::Named(name.to_string(), Some(region))
+        // A value holding only text that lasts as long as the program names no
+        // region, unless it holds pointers.
+        match regions.remove(OWN) {
+            Some(region) => Type::Named(name.to_string(), Some(region)),
+            None if self.types_holding(holds_pointers).contains(name) => Type::Named(name.to_string(), Some(ANY_REGION.to_string())),
+            None => Type::named(name),
+        }
     }
 
     /// The kind a variant belongs to.
@@ -723,12 +728,21 @@ impl<'a> Knowledge<'a> {
     /// `ty`, a field's type or the type after `new`, in a value of region
     /// `region`, as the checker settles it (see `vela::check::in_region`).
     fn in_region(&self, ty: &Type, region: &str) -> Type {
-        vela::check::in_region(ty, region, &self.regional())
+        vela::check::in_region(ty, region, &self.takes_region())
     }
 
-    /// The shapes and kinds whose fields, as written, hold pointers, found as
-    /// the checker finds them (see `vela::check::regional_types`).
-    fn regional(&self) -> HashSet<String> {
+    /// The shapes and kinds that can be given a region, as the checker finds
+    /// them: those whose fields, as written, hold pointers or text (see
+    /// `vela::check::regional_types` and `vela::check::textual_types`).
+    fn takes_region(&self) -> HashSet<String> {
+        let mut takes = self.types_holding(holds_pointers);
+        takes.extend(self.types_holding(holds_text));
+        takes
+    }
+
+    /// The shapes and kinds with a field, as written, for which `holds` is
+    /// true, given the ones already found.
+    fn types_holding(&self, holds: fn(&Type, &HashSet<String>) -> bool) -> HashSet<String> {
         let symbols = self.symbols();
         // Each shape's or kind's field types (a kind's are its variants' payloads).
         let mut fields: HashMap<usize, Vec<Type>> = HashMap::new();
@@ -757,7 +771,7 @@ impl<'a> Knowledge<'a> {
         let mut pending: Vec<usize> = fields.keys().copied().collect();
         while let Some(owner) = pending.pop() {
             let Some(symbol) = symbols.get(owner) else { continue };
-            let holds = fields.get(&owner).is_some_and(|types| types.iter().any(|ty| holds_pointers(ty, &regional)));
+            let holds = fields.get(&owner).is_some_and(|types| types.iter().any(|ty| holds(ty, &regional)));
             if holds && regional.insert(symbol.name.clone()) {
                 pending.extend(users.get(&symbol.name).into_iter().flatten().copied());
             }
@@ -791,6 +805,18 @@ fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
         Type::Named(name, _) => regional.contains(name),
         Type::Maybe(inner) | Type::Array(inner, _) => holds_pointers(inner, regional),
         Type::Or(value, error) => holds_pointers(value, regional) || holds_pointers(error, regional),
+        _ => false,
+    }
+}
+
+/// Whether a value of type `ty` holds text by value, given the shapes and kinds
+/// in `textual` that do.
+fn holds_text(ty: &Type, textual: &HashSet<String>) -> bool {
+    match ty {
+        Type::Text(_) => true,
+        Type::Named(name, _) => textual.contains(name),
+        Type::Maybe(inner) | Type::Array(inner, _) => holds_text(inner, textual),
+        Type::Or(value, error) => holds_text(value, textual) || holds_text(error, textual),
         _ => false,
     }
 }

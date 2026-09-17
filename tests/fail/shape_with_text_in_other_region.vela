@@ -1,0 +1,12 @@
+# error: 11:9: expected type Person@s, got Person@r; a value can't move to another region: what it holds in region 'r' is never stored in region 's'
+shape Person
+    name: text
+fi
+
+task main()
+    region r
+    region s
+    bind a = new text("a") at r
+    hold p: Person@s = Person { name: "b" }
+    p = Person { name: a^ }
+fi

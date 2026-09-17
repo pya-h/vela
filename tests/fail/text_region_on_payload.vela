@@ -1,0 +1,7 @@
+# error: 3:26: a field lives in the region of the value holding it, so its type names no region; remove '@r'
+kind Status
+    Blocked(reason: text@r)
+fi
+
+task main()
+fi

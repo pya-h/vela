@@ -1009,7 +1009,7 @@ impl Generator {
             };
             let helper = match arg.ty()? {
                 Type::Maybe(_) => show_maybe_helper(arg.ty()?),
-                Type::Int | Type::Float | Type::Bool | Type::Text => show_helper(arg.ty()?),
+                Type::Int | Type::Float | Type::Bool | Type::Text(_) => show_helper(arg.ty()?),
                 other => return Err(Error::internal_at(e.span, format!("show called with type {}", other))),
             };
             let value = self.gen_expr(arg)?;
@@ -1307,7 +1307,7 @@ impl Generator {
                 });
             }
         }
-        if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && *l.ty()? == Type::Text {
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && matches!(l.ty()?, Type::Text(_)) {
             // Text compares by contents, not by address.
             let not = if op == BinaryOp::Ne { "!" } else { "" };
             return Ok(format!("{}vela__rt__text_eq({}, {})", not, left, right));
@@ -1604,10 +1604,9 @@ impl UsedTypes {
                 if name == "show"
                     && let [arg] = args.as_slice()
                     && let Some(ty @ Type::Maybe(_)) = &arg.ty
-                    && !self.shown.contains(ty)
                 {
-                    // `show` takes no pointers, so a shown maybe has no regions.
-                    self.shown.push(ty.clone());
+                    // Its text may name a region, which C doesn't see.
+                    note(&mut self.shown, ty);
                 }
                 args.iter().for_each(|arg| self.expr(arg));
             }
@@ -1904,7 +1903,7 @@ fn c_type(ty: &Type) -> String {
         Type::Int => "int64_t".to_string(),
         Type::Float => "double".to_string(),
         Type::Bool => "bool".to_string(),
-        Type::Text => "const char*".to_string(),
+        Type::Text(_) => "const char*".to_string(),
         Type::Unit => "void".to_string(),
         Type::None => "void*".to_string(),
         Type::Ptr(t, _) => format!("{}*", c_type(t)),
@@ -1942,7 +1941,7 @@ fn type_key(ty: &Type) -> String {
         Type::Int => "int".to_string(),
         Type::Float => "float".to_string(),
         Type::Bool => "bool".to_string(),
-        Type::Text => "text".to_string(),
+        Type::Text(_) => "text".to_string(),
         Type::Unit => "unit".to_string(),
         Type::None => "none".to_string(),
         Type::Named(name, _) => format!("n_{}", c_name(name)),

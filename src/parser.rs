@@ -612,7 +612,7 @@ impl Parser {
             Some(region.clone())
         });
         if !named {
-            return Err(Error::at(region_span, format!("'{}' holds no pointers, so it lives in no region; remove '@{}'", ty, region)));
+            return Err(Error::at(region_span, format!("'{}' holds no pointers or text, so it lives in no region; remove '@{}'", ty, region)));
         }
         Ok(ty)
     }

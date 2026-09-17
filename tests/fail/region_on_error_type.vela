@@ -1,5 +1,5 @@
-# error: 2:25: 'text' holds no pointers, so it lives in no region; remove '@r'
-task f() -> int or text@r
+# error: 2:25: 'bool' holds no pointers or text, so it lives in no region; remove '@r'
+task f() -> int or bool@r
     <- 1
 fi
 

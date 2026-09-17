@@ -8,7 +8,7 @@ use std::io;
 use std::path::Path;
 
 use vela::ast::{Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, Span, Stmt, StmtKind, Target, Type};
-use vela::check::{in_region, regional_types};
+use vela::check::{in_region, regional_types, textual_types};
 use vela::driver;
 use vela::error::Error;
 use vela::modules::{self, SourceFile};
@@ -29,8 +29,9 @@ pub(crate) fn slashed(path: &Path) -> String {
 /// What recording types needs to know about the program's declarations.
 struct Declarations<'a> {
     kinds: HashMap<&'a str, &'a KindDef>,
-    /// The shapes and kinds that hold pointers.
-    regional: HashSet<String>,
+    /// The shapes and kinds that can be given a region: those holding
+    /// pointers or text.
+    takes_region: HashSet<String>,
 }
 
 /// A (line, column) position, as the compiler reports it.
@@ -92,7 +93,7 @@ impl Checked {
                 _ => None,
             })
             .collect();
-        let declarations = Declarations { kinds, regional: regional_types(&items) };
+        let declarations = Declarations { kinds, takes_region: regional_types(&items).union(&textual_types(&items)).cloned().collect() };
         // Positions are recorded for the analyzed file only.
         for item in &items {
             if let Item::Task(task) = item
@@ -201,7 +202,7 @@ impl Checked {
                 let payload = kinds.kinds.get(name.as_str()).and_then(|k| k.variants.iter().find(|v| v.tag == *tag)).map(|v| &v.payload);
                 for ((_, span), field) in binds.iter().zip(payload.into_iter().flatten()) {
                     let ty = match region {
-                        Some(region) => in_region(&field.ty, region, &kinds.regional),
+                        Some(region) => in_region(&field.ty, region, &kinds.takes_region),
                         None => field.ty.clone(),
                     };
                     self.decls.insert(pos(*span), ty);

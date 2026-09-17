@@ -204,7 +204,9 @@
         <li><code class="type">int</code> — 64-bit signed integer</li>
         <li><code class="type">float</code> — 64-bit floating point</li>
         <li><code class="type">bool</code> — true or false</li>
-        <li><code class="type">text</code> — UTF-8 string; <code>==</code> compares contents</li>
+        <li><code class="type">text</code> — UTF-8 string; <code>==</code> compares contents. <code>text</code> lasts as long
+          as the program, as a literal does, and <code>text@r</code> is in region <code>r</code> (see
+          <a href="#text-in-regions">Text in a region</a>)</li>
         <li><code class="type">unit</code> — the return type of a task that returns nothing; it has no values, so it
           can't be the type of a variable, parameter, or field</li>
         <li><code class="type">^T@r</code> — pointer to a T in region <code>r</code>; it always points to something (see <a href="#regions">Memory and Regions</a>)</li>
@@ -1036,6 +1038,55 @@ show(next^)                                <span class="comment"># error: this p
 <span class="keyword">hold</span> first: Node@nodes = Node { value: 1, next: <span class="keyword">none</span> }
 first.next = push(nodes, <span class="keyword">none</span>, 2)                <span class="comment"># fine: first is in nodes</span></pre>
 
+      <h3 id="text-in-regions">Text in a region</h3>
+      <p>
+        Text has a lifetime too. <code>text</code> lasts as long as the program, as a literal does, and
+        <code>text@r</code> is in region <code>r</code>: text a value in <code>r</code> holds (an item of a
+        <code>[text]@r</code>, a field of a <code>Node@r</code>, what a <code>^text@r</code> points to) is in
+        <code>r</code>, whatever it was made from. Text that lasts fits wherever text of a region is expected, and text of a
+        region never goes where it could outlive its region: into a <code>text</code>, or text of another region.
+      </p>
+      <p>
+        A shape or kind holding text, but no pointers, may name a region or not. <code>Person</code> holds text that
+        lasts, and <code>Person@r</code> may hold text in <code>r</code>; a literal takes the region of the text in it,
+        and none when all of its text lasts. A shape holding pointers always names its region, and its text is in it.
+      </p>
+      <pre><span class="keyword">shape</span> Person
+    name: text
+    age: int
+<span class="keyword">fi</span>
+
+<span class="comment"># Takes a Person whose text is in any region, or lasts.</span>
+<span class="keyword">task</span> greet(p: Person@r)
+    show(p.name)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">hold</span> names = <span class="keyword">new</span> [text]() <span class="keyword">at</span> r
+    names.add(<span class="string">"Ada"</span>)                               <span class="comment"># a literal fits text@r</span>
+    <span class="keyword">bind</span> first = names[<span class="number">0</span>]                          <span class="comment"># text@r</span>
+    <span class="keyword">bind</span> plain = Person { name: <span class="string">"Bob"</span>, age: <span class="number">7</span> }    <span class="comment"># Person: its text lasts</span>
+    <span class="keyword">bind</span> held = Person { name: first, age: <span class="number">36</span> }    <span class="comment"># Person@r: its text is in r</span>
+    greet(plain)                                   <span class="comment"># Bob</span>
+    greet(held)                                    <span class="comment"># Ada</span>
+    <span class="keyword">hold</span> lasting = <span class="string">"none yet"</span>
+    lasting = first                                <span class="comment"># error: text@r can&#x27;t become text</span>
+<span class="keyword">fi</span></pre>
+      <ul>
+        <li><strong>Tasks.</strong> A parameter of type <code>text</code> takes text that lasts. To take text of any region,
+          a task names one in its header, as it does for pointers: <code>name: text@r</code> or <code>p: Person@r</code>
+          takes text in <code>r</code>, or text that lasts, and a result of type <code>text@r</code> may send either back.
+          Had <code>greet</code> taken a plain <code>Person</code>, <code>greet(held)</code> would be an error saying to
+          name a region.</li>
+        <li><strong>Comparing and showing.</strong> <code>==</code> compares text of any regions, and <code>show</code>
+          prints any text.</li>
+        <li><strong>Fields.</strong> A field or payload is written <code>text</code>: its text is in the region of the value
+          holding it, when that value names one. A shape's text fields share that one region.</li>
+        <li><strong>C.</strong> Text is a <code>const char*</code> either way; the region is only in the types, checked when
+          compiling.</li>
+      </ul>
+
       <h3 id="slices">Slices</h3>
       <p>
         A slice, <code>[type]@r</code>, is a view of items in region <code>r</code>: in C, a pointer to the first and how
@@ -1149,8 +1200,9 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
       <ul>
         <li>One value can't be freed on its own: memory is released a whole region at a time. For data that changes a
           lot over a long run, use a region per iteration, or copy what survives into a fresh region yourself.</li>
-        <li>Everything one value holds lives in one region: a shape can't hold pointers into two different regions,
-          and a pointer can't be copied into a longer-lived region (copy the value it points to instead).</li>
+        <li>Everything one value holds lives in one region: a shape can't hold pointers into two different regions, or
+          text in two, and a pointer can't be copied into a longer-lived region (copy the value it points to instead).
+          Text of a region can't yet be copied into another region or made to last.</li>
         <li>A task that only names a region in its header can't allocate in it, and a region can't be returned.</li>
         <li>A value holding pointers can't be copied into another region whole, even when its pointers are
           <code>none</code>: rebuild it field by field.</li>

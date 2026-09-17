@@ -36,7 +36,10 @@ pub enum Type {
     Int,
     Float,
     Bool,
-    Text,
+    /// `text`, whose characters last as long as the program (a literal's), or
+    /// `text@r`, whose characters are in the region `r`. Text that lasts as
+    /// long as the program fits wherever text of a region is expected.
+    Text(Option<String>),
     Unit,
     /// The type of the `none` literal: fits any `maybe` type.
     None,
@@ -81,7 +84,7 @@ pub const BUILTIN_TYPES: &[(&str, Type)] = &[
     ("int", Type::Int),
     ("float", Type::Float),
     ("bool", Type::Bool),
-    ("text", Type::Text),
+    ("text", Type::Text(None)),
     ("unit", Type::Unit),
 ];
 
@@ -107,7 +110,10 @@ impl Type {
             Type::Int => write!(f, "int"),
             Type::Float => write!(f, "float"),
             Type::Bool => write!(f, "bool"),
-            Type::Text => write!(f, "text"),
+            Type::Text(region) => {
+                write!(f, "text")?;
+                suffix(f, region)
+            }
             Type::Unit => write!(f, "unit"),
             Type::None => write!(f, "none"),
             Type::Region => write!(f, "region"),
@@ -194,6 +200,7 @@ impl Type {
         match self {
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.as_deref().and_then(&mut *f)),
             Type::Named(name, region) => Type::Named(name.clone(), region.as_deref().and_then(f)),
+            Type::Text(region) => Type::Text(region.as_deref().and_then(f)),
             Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.as_deref().and_then(&mut *f)),
             Type::Range(inner) => Type::Range(boxed(inner, f)),
@@ -222,11 +229,13 @@ impl Type {
         }
     }
 
-    /// The type with a region given to each pointer, slice, and shape or kind
-    /// name that has none, by `f` (which also sees builtin-free types, and decides
-    /// nothing about whether a shape holds pointers).
+    /// The type with a region given to each pointer, slice, text, and shape or
+    /// kind name that has none, by `f`, which is called with the name of a shape
+    /// or kind, and with an empty name for the others (it decides nothing about
+    /// whether a shape holds pointers or text).
     pub fn map_regions_of_names(&self, f: &mut dyn FnMut(&str) -> Option<String>) -> Type {
         match self {
+            Type::Text(None) => Type::Text(f("")),
             Type::Ptr(inner, None) => {
                 let region = f("");
                 Type::Ptr(Box::new(inner.map_regions_of_names(f)), region)
@@ -261,7 +270,7 @@ impl Type {
                 regions.extend(region.as_deref());
                 inner.collect_regions(regions);
             }
-            Type::Named(_, region) => regions.extend(region.as_deref()),
+            Type::Named(_, region) | Type::Text(region) => regions.extend(region.as_deref()),
             Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) => inner.collect_regions(regions),
             Type::Or(value, error) => {
                 value.collect_regions(regions);

@@ -1,0 +1,11 @@
+# error: 6:28: everything a value in region 'r' holds is in 'r', 'Person' too; remove '@s'
+shape Person
+    name: text
+fi
+
+task count(people: [Person@s]@r) -> int
+    <- people.len
+fi
+
+task main()
+fi

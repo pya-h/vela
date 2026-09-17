@@ -164,7 +164,7 @@ fn changes_to_a_slice_have_types_hovers_and_snippets() {
             assert_eq!(Analysis::new(&source).diagnostics(), Vec::new());
         }
         assert_eq!(hover(&source, "names =").0, "hold names: [text]@r", "{}", when);
-        assert_eq!(hover(&source, "taken =").0, "bind taken: text", "{}", when);
+        assert_eq!(hover(&source, "taken =").0, "bind taken: text@r", "{}", when);
         assert_eq!(hover(&source, "last =").0, "bind last: Point", "{}", when);
     }
     let source = program(true, "hold names = new [text]() at r\n    names.add(\"a\")\n    show(names.del())");

@@ -51,6 +51,11 @@ pub struct Checker {
     /// The shapes and kinds that hold pointers, directly or in other shapes and
     /// kinds, so their values live in a region.
     regional: HashSet<String>,
+    /// The shapes and kinds that can be given a region: those in `regional`, and
+    /// those holding text (see `textual_types`), whose text is in the region
+    /// when they name one (`Person@r`) and lasts as long as the program when
+    /// they don't (`Person`).
+    takes_region: HashSet<String>,
     /// Every variant, by its name in the program: its tag, qualified with its
     /// kind's module outside the main file (`geometry.Circle`). Tags are unique
     /// across the kinds of a module.
@@ -201,6 +206,7 @@ impl Checker {
     pub fn check_file(&mut self, items: &mut [Item]) -> Result<()> {
         self.collect_declarations(items)?;
         self.regional = regional_types(items);
+        self.takes_region = textual_types(items).union(&self.regional).cloned().collect();
         self.check_declarations(items)?;
         for item in items.iter_mut() {
             if let Item::Task(t) = item {
@@ -524,13 +530,42 @@ impl Checker {
                 Ok(Type::Slice(Box::new(inner), region.clone()))
             }
             Type::Array(inner, count) => Ok(Type::Array(Box::new(self.resolve_regions(inner, span, place, inside)?), *count)),
+            // Text inside a value of a region is in that region.
+            Type::Text(region) => {
+                given(region)?;
+                if let (Some(region), Some(inside)) = (region, inside)
+                    && region != inside
+                {
+                    return err(
+                        self.place(span, &format!("@{}", region)),
+                        format!("everything a value in region '{0}' holds is in '{0}', its text too; remove '@{1}'", inside, region),
+                    );
+                }
+                Ok(Type::Text(region.clone().or_else(|| inside.map(str::to_string))))
+            }
             Type::Named(name, region) => {
                 given(region)?;
                 if !self.regional.contains(name) {
+                    // A shape or kind holding text may name the region its text
+                    // is in, and is in the region of a value holding it.
+                    if self.takes_region.contains(name) {
+                        if let (Some(region), Some(inside)) = (region, inside)
+                            && region != inside
+                        {
+                            return err(
+                                self.place(span, &format!("@{}", region)),
+                                format!("everything a value in region '{0}' holds is in '{0}', '{2}' too; remove '@{1}'", inside, region, name),
+                            );
+                        }
+                        return Ok(Type::Named(name.clone(), region.clone().or_else(|| inside.map(str::to_string))));
+                    }
                     if let Some(region) = region
                         && inside != Some(region.as_str())
                     {
-                        return err(self.place(span, &format!("@{}", region)), format!("'{}' holds no pointers, so it lives in no region; remove '@{}'", name, region));
+                        return err(
+                            self.place(span, &format!("@{}", region)),
+                            format!("'{}' holds no pointers or text, so it lives in no region; remove '@{}'", name, region),
+                        );
                     }
                     return Ok(Type::named(name));
                 }
@@ -570,7 +605,7 @@ impl Checker {
     /// `new`), as it is in a value of region `region`: its pointers and
     /// regional shapes and kinds get `region`.
     fn in_region(&self, ty: &Type, region: &str) -> Type {
-        in_region(ty, region, &self.regional)
+        in_region(ty, region, &self.takes_region)
     }
 
     /// A type written in the source must be a builtin type, a shape, or a kind.
@@ -605,7 +640,8 @@ impl Checker {
                     Type::Maybe(_) => return err(self.place(span, "or"), "the error type can't be a maybe"),
                     _ => self.check_type(error, span)?,
                 }
-                if value == error {
+                // Text in two regions is still text on both sides.
+                if value == error || matches!((value.as_ref(), error.as_ref()), (Type::Text(_), Type::Text(_))) {
                     return err(self.place(span, "or"), format!("the error type must differ from the value type, as in '{} or ParseError'", value));
                 }
                 Ok(())
@@ -1483,6 +1519,9 @@ impl Checker {
     /// The type a `bind` or `hold` without an annotation gives `name`, from the
     /// type of its value.
     fn inferred_type(&self, name: &str, actual: &Type, at: Span) -> Result<Type> {
+        // Text of no region in particular, and a shape or kind holding only such
+        // text, lasts as long as the program: a value made of literals.
+        let actual = &self.lasting(actual);
         match actual {
             Type::None => err(at, format!("cannot infer the type of '{}' from none; give it a type, such as '{}: maybe int'", name, name)),
             Type::Fail(error) => err(
@@ -1505,6 +1544,22 @@ impl Checker {
                 )
             }
             other => Ok(other.clone()),
+        }
+    }
+
+    /// `ty` with `ANY_REGION` removed from its text and from the shapes and
+    /// kinds that hold text but no pointers: a value in no region holds only
+    /// text that lasts as long as the program. (One holding pointers keeps it,
+    /// since a variable of it must name a region.)
+    fn lasting(&self, ty: &Type) -> Type {
+        let any = Some(ANY_REGION.to_string());
+        match ty {
+            Type::Text(region) if *region == any => Type::Text(None),
+            Type::Named(name, region) if *region == any && !self.regional.contains(name) => Type::Named(name.clone(), None),
+            Type::Maybe(inner) => Type::Maybe(Box::new(self.lasting(inner))),
+            Type::Array(inner, count) => Type::Array(Box::new(self.lasting(inner)), *count),
+            Type::Or(value, error) => Type::Or(Box::new(self.lasting(value)), Box::new(self.lasting(error))),
+            other => other.clone(),
         }
     }
 
@@ -1542,7 +1597,7 @@ impl Checker {
             ExprKind::IntLit(_) => Ok(Type::Int),
             ExprKind::FloatLit(_) => Ok(Type::Float),
             ExprKind::BoolLit(_) => Ok(Type::Bool),
-            ExprKind::TextLit(_) => Ok(Type::Text),
+            ExprKind::TextLit(_) => Ok(Type::Text(None)),
             ExprKind::NoneLit => Ok(Type::None),
             ExprKind::Var(name) => {
                 let ty = self.lookup_or_err(name, span)?.ty.clone();
@@ -1571,7 +1626,7 @@ impl Checker {
                         Type::Maybe(inner) => inner.as_ref(),
                         other => other,
                     };
-                    if !matches!(shown, Type::Int | Type::Float | Type::Bool | Type::Text) {
+                    if !matches!(shown, Type::Int | Type::Float | Type::Bool | Type::Text(_)) {
                         let hint = match &ty {
                             Type::Ptr(..) => "; to show the value it points to, write 'p^'".to_string(),
                             Type::Array(..) | Type::Slice(..) => "; show its items one at a time, as in 'each v in xs'".to_string(),
@@ -1611,7 +1666,7 @@ impl Checker {
                 }
                 let mut values: Vec<&mut Expr> = args.iter_mut().collect();
                 let region = self.check_fields_of_value(&mut values, &variant.payload)?;
-                Ok(Type::Named(kind.clone(), self.regional.contains(kind.as_str()).then_some(region)))
+                Ok(Type::Named(kind.clone(), self.region_of_value(kind, region)))
             }
             ExprKind::New { ty, ty_span, value, region, region_span } => {
                 **ty = self.resolve_type(ty, *ty_span, TypePlace::New)?;
@@ -1681,7 +1736,7 @@ impl Checker {
                 }
                 let mut values: Vec<&mut Expr> = fields.iter_mut().map(|field| &mut field.value).collect();
                 let region = self.check_fields_of_value(&mut values, &declared)?;
-                Ok(Type::Named(name.clone(), self.regional.contains(name.as_str()).then_some(region)))
+                Ok(Type::Named(name.clone(), self.region_of_value(name, region)))
             }
             ExprKind::Range(..) => err(span, "a range can only be used in 'each' or to take part of an array or slice, as in 'xs[1..3]'"),
             ExprKind::Fail(error) => {
@@ -2081,13 +2136,14 @@ impl Checker {
                 if let Some(maybe) = [&lt, &rt].into_iter().find(|t| matches!(t, Type::Maybe(_))) {
                     return err(span, format!("a {} can only be compared with none; extract its value first, as in 'x {{ … }}'", maybe));
                 }
-                // Comparing addresses stores nothing, so pointers into
-                // different regions compare (and are never equal).
+                // Comparing stores nothing, so pointers into different regions
+                // compare (and are never equal), and so do texts in any regions.
                 let pointers = matches!((&lt, &rt), (Type::Ptr(..), Type::Ptr(..))) && lt.without_regions() == rt.without_regions();
-                if !pointers {
+                let texts = matches!((&lt, &rt), (Type::Text(_), Type::Text(_)));
+                if !pointers && !texts {
                     self.expect_type(&rt, &lt, r.span)?;
                 }
-                if !lt.is_numeric() && !matches!(lt, Type::Bool | Type::Text | Type::Ptr(..)) {
+                if !lt.is_numeric() && !matches!(lt, Type::Bool | Type::Text(_) | Type::Ptr(..)) {
                     let symbol = if op == BinaryOp::Eq { "==" } else { "!=" };
                     return err(span, format!("'{}' can't compare values of type {}", symbol, lt));
                 }
@@ -2145,6 +2201,18 @@ impl Checker {
         }
     }
 
+    /// The region of a value of shape or kind `name` whose fields' values are
+    /// in `region` (see `check_fields_of_value`): none for a type that lives in
+    /// no region, and none for a value holding only text that lasts as long as
+    /// the program, which is how a type holding text is written without a
+    /// region.
+    fn region_of_value(&self, name: &str, region: String) -> Option<String> {
+        if self.regional.contains(name) {
+            return Some(region);
+        }
+        (self.takes_region.contains(name) && region != ANY_REGION).then_some(region)
+    }
+
     /// Checks the values given for a shape's fields or a variant's payload,
     /// `declared` in the same order, and returns the region of the value they
     /// make: the region of the pointers among them, or `ANY_REGION` when they
@@ -2191,7 +2259,7 @@ impl Checker {
         let substitute = |ty: &Type| {
             ty.map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| ANY_REGION.to_string())))
         };
-        for (arg, (_, ty)) in args.iter_mut().zip(params) {
+        for (arg, (param, ty)) in args.iter_mut().zip(params) {
             if *ty == Type::Region {
                 continue;
             }
@@ -2199,6 +2267,17 @@ impl Checker {
             let actual = arg.ty()?.clone();
             let same_but_region = [Some(&expected), expected.extracted()].into_iter().flatten().any(|e| actual.without_regions() == e.without_regions());
             match self.coerce(arg, &expected) {
+                // A parameter that holds text of no region, given text of one.
+                Err(_) if same_but_region && expected.regions().is_empty() => {
+                    let example = expected.map_regions_of_names(&mut |_| Some("r".to_string()));
+                    return err(
+                        arg.span,
+                        format!(
+                            "expected type {}, got {}; task '{}' takes text that lasts as long as the program here, as a literal does; to take text of any region, its parameter can name one, as in '{}: {}'",
+                            expected, actual, task, param, example
+                        ),
+                    );
+                }
                 Err(_) if same_but_region && !expected.regions().contains(&ANY_REGION) => {
                     return err(
                         arg.span,
@@ -2321,6 +2400,19 @@ fn extract_hint(types: &[&Type]) -> String {
 /// The shapes and kinds that hold pointers, directly or in other shapes and
 /// kinds by value, so their values live in a region.
 pub fn regional_types(items: &[Item]) -> HashSet<String> {
+    types_holding(items, holds_pointers)
+}
+
+/// The shapes and kinds that hold text, directly or in other shapes and kinds
+/// by value. One may name a region, in which its text is, or none, when its
+/// text lasts as long as the program.
+pub fn textual_types(items: &[Item]) -> HashSet<String> {
+    types_holding(items, holds_text)
+}
+
+/// The shapes and kinds with a field or payload for which `holds` is true,
+/// given the types already found, directly or through other shapes and kinds.
+fn types_holding(items: &[Item], holds: fn(&Type, &HashSet<String>) -> bool) -> HashSet<String> {
     let fields_of = |item: &Item| -> Vec<Type> {
         match item {
             Item::Shape(s) => s.fields.iter().map(|f| f.ty.clone()).collect(),
@@ -2346,7 +2438,7 @@ pub fn regional_types(items: &[Item]) -> HashSet<String> {
             Some(Item::Kind(k)) => &k.name,
             _ => continue,
         };
-        if !regional.contains(name) && items.get(i).map(fields_of).unwrap_or_default().iter().any(|ty| holds_pointers(ty, &regional)) {
+        if !regional.contains(name) && items.get(i).map(fields_of).unwrap_or_default().iter().any(|ty| holds(ty, &regional)) {
             regional.insert(name.clone());
             pending.extend(users.get(name).into_iter().flatten().copied());
         }
@@ -2355,21 +2447,26 @@ pub fn regional_types(items: &[Item]) -> HashSet<String> {
 }
 
 /// A field's type, or the type after `new`, whose regions are unsettled, as it
-/// is in a value of region `region`: its pointers and its shapes and kinds in
-/// `regional` get `region`.
-pub fn in_region(ty: &Type, region: &str, regional: &HashSet<String>) -> Type {
-    ty.map_regions_of_names(&mut |name| (name.is_empty() || regional.contains(name)).then(|| region.to_string()))
+/// is in a value of region `region`: its pointers, slices, and text, and its
+/// shapes and kinds in `takes_region` (see `Checker::takes_region`) get
+/// `region`.
+pub fn in_region(ty: &Type, region: &str, takes_region: &HashSet<String>) -> Type {
+    ty.map_regions_of_names(&mut |name| (name.is_empty() || takes_region.contains(name)).then(|| region.to_string()))
 }
 
 /// Whether a value of type `actual` fits where `expected` is required without
 /// changing: the same type, where `actual` may be of `ANY_REGION` wherever
-/// `expected` names a region.
+/// `expected` names a region. Text, and a shape or kind holding text, that
+/// names no region lasts as long as the program, so it fits any region too. (A
+/// shape or kind holding pointers always has a region once checked.)
 fn fits_regions(actual: &Type, expected: &Type) -> bool {
     let region = |a: &Option<String>, e: &Option<String>| a == e || a.as_deref() == Some(ANY_REGION);
+    let lasting = |a: &Option<String>, e: &Option<String>| region(a, e) || a.is_none();
     match (actual, expected) {
         (Type::Ptr(a, ar), Type::Ptr(e, er)) | (Type::Slice(a, ar), Type::Slice(e, er)) => region(ar, er) && fits_regions(a, e),
         (Type::Array(a, an), Type::Array(e, en)) => an == en && fits_regions(a, e),
-        (Type::Named(a, ar), Type::Named(e, er)) => a == e && region(ar, er),
+        (Type::Text(ar), Type::Text(er)) => lasting(ar, er),
+        (Type::Named(a, ar), Type::Named(e, er)) => a == e && lasting(ar, er),
         (Type::Range(a), Type::Range(e)) | (Type::Maybe(a), Type::Maybe(e)) | (Type::Fail(a), Type::Fail(e)) => fits_regions(a, e),
         (Type::Or(av, ae), Type::Or(ev, ee)) => fits_regions(av, ev) && fits_regions(ae, ee),
         _ => actual == expected,
@@ -2396,6 +2493,7 @@ pub fn unify_regions(pattern: &Type, actual: &Type, regions: &mut HashMap<String
         }
         (Type::Array(p, _), Type::Array(a, _)) => unify_regions(p, a, regions),
         (Type::Named(p, pr), Type::Named(a, ar)) if p == a => record(pr, ar),
+        (Type::Text(pr), Type::Text(ar)) => record(pr, ar),
         (Type::Maybe(p), Type::Maybe(a)) | (Type::Range(p), Type::Range(a)) | (Type::Fail(p), Type::Fail(a)) => unify_regions(p, a, regions),
         (Type::Or(pv, pe), Type::Or(av, ae)) => {
             unify_regions(pv, av, regions);
@@ -2416,6 +2514,18 @@ fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
         Type::Named(name, _) => regional.contains(name),
         Type::Maybe(inner) | Type::Array(inner, _) => holds_pointers(inner, regional),
         Type::Or(value, error) => holds_pointers(value, regional) || holds_pointers(error, regional),
+        _ => false,
+    }
+}
+
+/// Whether a value of type `ty` holds text by value, given the shapes and kinds
+/// in `textual` that do.
+fn holds_text(ty: &Type, textual: &HashSet<String>) -> bool {
+    match ty {
+        Type::Text(_) => true,
+        Type::Named(name, _) => textual.contains(name),
+        Type::Maybe(inner) | Type::Array(inner, _) => holds_text(inner, textual),
+        Type::Or(value, error) => holds_text(value, textual) || holds_text(error, textual),
         _ => false,
     }
 }
@@ -2646,6 +2756,18 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
         (Type::Maybe(inner) | Type::Or(inner, _), _) if fits_regions(inner, expected) => {
             "; extract its value first, as in 'x { … }' or 'when x is {value}'".to_string()
         }
+        (Type::Text(Some(region)), Type::Text(None)) => {
+            format!("; this text is in region '{}', and text here must last as long as the program, as a literal does", region)
+        }
+        (Type::Text(Some(region)), Type::Text(Some(other))) => format!("; this text is in region '{}', and text here is in region '{}'", region, other),
+        // Pointers or text: what a shape or kind holds is in its region.
+        (Type::Named(name, Some(region)), Type::Named(expected_name, Some(other))) if name == expected_name && region != ANY_REGION && other != ANY_REGION => {
+            format!("; a value can't move to another region: what it holds in region '{}' is never stored in region '{}'", region, other)
+        }
+        (Type::Named(name, Some(region)), Type::Named(expected_name, None)) if name == expected_name => format!(
+            "; this value holds text in region '{0}', and a '{1}' here holds text that lasts as long as the program; to keep text of a region, name it, as in '{1}@{0}'",
+            region, name
+        ),
         _ if [Some(expected), expected.extracted()].into_iter().flatten().any(|e| actual.without_regions() == e.without_regions()) => {
             if expected.regions().contains(&ANY_REGION) {
                 "; this place holds a value without pointers (of no region), so it can't take a pointer into one".to_string()

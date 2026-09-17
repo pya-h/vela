@@ -665,6 +665,54 @@ no spare yet
         <code>Tree@r</code>, and <code>leaves(Leaf(5))</code> works. A binding without a written type can't tell which
         region such a value is meant for, so <code>head</code> is written <code>head: Node@trees</code>.
       </p>
+      <p>
+        <strong>Text in a region.</strong> Text has a lifetime as well: <code>text</code> lasts as long as the program, as a
+        literal does, and <code>text@r</code> is in region <code>r</code>. Text a value in a region holds is in that region,
+        whatever it was made from, so the title of an <code>Item@items</code> is a <code>text@items</code>:
+      </p>
+      <pre class="program" data-file="06_text.vela"><span class="comment"># A to-do item in a region holds its text there, whatever the text was made from.</span>
+<span class="keyword">kind</span> Status
+    Todo
+    Blocked(reason: text)
+<span class="keyword">fi</span>
+
+<span class="keyword">shape</span> Item
+    title: text
+    status: Status
+    next: <span class="keyword">maybe</span> ^Item
+<span class="keyword">fi</span>
+
+<span class="comment"># Names the region, so it takes a status of any region, and sends text of it.</span>
+<span class="keyword">task</span> describe(s: Status@r) -&gt; text@r
+    <span class="keyword">match</span> s
+    <span class="keyword">case</span> Todo
+        <span class="keyword">&lt;-</span> <span class="string">"todo"</span>
+    <span class="keyword">case</span> Blocked reason
+        <span class="keyword">&lt;-</span> reason
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> items
+    <span class="keyword">bind</span> first = <span class="keyword">new</span> Item(Item { title: <span class="string">"write"</span>, status: Status.Todo, next: <span class="keyword">none</span> }) <span class="keyword">at</span> items
+    <span class="keyword">bind</span> second = <span class="keyword">new</span> Item(Item { title: <span class="string">"test"</span>, status: Status.Blocked(<span class="string">"no compiler"</span>), next: first }) <span class="keyword">at</span> items
+    show(describe(second^.status))
+    <span class="keyword">bind</span> title = first^.title
+    show(title)
+    <span class="keyword">hold</span> chosen = <span class="string">"nothing"</span>
+    show(chosen == title)
+<span class="keyword">fi</span></pre>
+<pre class="output" aria-label="Output">no compiler
+write
+false</pre>
+      <p>
+        Text that lasts fits wherever text of a region is expected (the literals above go into items), and text of a region
+        never goes where it could outlive the region: <code>chosen = title</code> would be an error, since
+        <code>chosen</code> is a <code>text</code>. A task that reads text of a region names one, as it would for a pointer:
+        <code>describe</code> takes a <code>Status@r</code> and sends a <code>text@r</code>, and still takes
+        <code>Status.Todo</code>, whose text lasts. A shape or kind holding text but no pointers may name a region or not:
+        <code>Person</code> holds text that lasts, <code>Person@r</code> text in <code>r</code>.
+      </p>
 
       <h3 id="lesson-errors">Lesson 7: Regions with errors and maybe values</h3>
       <pre class="program" data-file="07_errors.vela"><span class="keyword">shape</span> Node
@@ -890,10 +938,11 @@ not a digit
           <tr><td><code>a pointer lives in a region, so its type names one</code></td><td>Write the region: <code>^int@r</code>, not <code>^int</code>.</td></tr>
           <tr><td><code>a slice lives in a region, so its type names one</code></td><td>Write the region: <code>[int]@r</code>, not <code>[int]</code>.</td></tr>
           <tr><td><code>a slice points into a region, but this array isn't in one</code></td><td>The array is in a variable. Copy it into a slice with <code>new [int](xs) at r</code>, or allocate the array in a region and slice <code>p^[a..b]</code>.</td></tr>
+          <tr><td><code>expected type text, got text@r; this text is in region 'r', and text here must last as long as the program</code></td><td>Text of a region is going somewhere that outlives the region. Keep it in a <code>text@r</code> (or a <code>Person@r</code>), or, for a task's parameter or result, name the region in the header.</td></tr>
           <tr><td><code>adding to a slice may need more room in its region 'r', which this task only names in its types</code></td><td>The task adds to a slice in a region it wasn't given. Take the region as a parameter, <code>r: region</code>, and pass it from the caller.</td></tr>
           <tr><td><code>'add' changes 'xs', which is immutable</code></td><td>A <code>bind</code> slice or a parameter can't change its length. Keep the slice in a <code>hold</code> variable, or change it through a pointer to what holds it.</td></tr>
           <tr><td><code>'Node' holds pointers, so it lives in a region</code></td><td>Write <code>Node@r</code> where the shape is used.</td></tr>
-          <tr><td><code>'Point' holds no pointers, so it lives in no region</code></td><td>Remove <code>@r</code>: plain values need none.</td></tr>
+          <tr><td><code>'Point' holds no pointers or text, so it lives in no region</code></td><td>Remove <code>@r</code>: plain values need none.</td></tr>
           <tr><td><code>a field lives in the region of the value holding it</code></td><td>In a <code>shape</code> or <code>kind</code>, write <code>^Node</code>, not <code>^Node@r</code>.</td></tr>
           <tr><td><code>unknown region 'r'; declare it with 'region r'</code></td><td>The region isn't visible here: it is declared in another block, later, or not at all.</td></tr>
           <tr><td><code>expected type ^int@outer, got ^int@inner; a value can't move to another region</code></td><td>A pointer would be stored where it could outlive its region, or in a different region. Allocate in the right region, or copy the value (see <a href="#limits">Limitations</a>).</td></tr>
@@ -1020,6 +1069,17 @@ not a digit
     show(p.first^ + p.second^)
 <span class="keyword">fi</span></pre>
 <pre class="output" aria-label="Output">3</pre>
+      </div>
+
+      <div class="limit">
+        <h3 id="limit-text">Text of a region can't become text that lasts, or move to another region</h3>
+        <pre><span class="keyword">hold</span> chosen = <span class="string">"nothing"</span>
+chosen = item^.title
+<span class="comment"># error: expected type text, got text@items; this text is in region 'items', and text here must last as long as the program</span></pre>
+        <p><strong>Workaround:</strong> keep the text where its region is known: a <code>text@items</code> variable, a shape named
+          with the region (<code>Person@items</code>), or a slice in it. A task that reads it names the region in its header
+          (<code>title: text@r</code>). Copying text into another region comes with <code>.copy()</code> (see
+          <a href="#ideas-limits">the ideas</a>).</p>
       </div>
 
       <div class="limit">
@@ -1412,12 +1472,51 @@ head.next = push(nodes, <span class="keyword">none</span>, <span class="number">
         </p>
       </div>
       <div class="idea">
-        <h4>A generated copy: <code>copy value at r</code> <span class="badge b-rec">Recommended</span></h4>
+        <h4>A generated copy: <code>value.copy()</code> <span class="badge b-rec">Planned</span></h4>
         <p>
-          Fixes <a href="#limit-copy">this limitation</a>, and replaces hand-written copy tasks like Lesson 8's. The compiler would
+          Chosen spelling (2026-09-17): <code>value.copy()</code>, which copies into the region the place it goes names, as in
+          <code>node^.title = line.copy()</code>, or <code>value.copy() at r</code> where nothing names one. It also copies
+          text of one region into another.
+          Fixes <a href="#limit-copy">this limitation</a> and <a href="#limit-text">this one</a>, and replaces hand-written copy tasks like Lesson 8's. The compiler would
           generate a deep copy for each type that holds pointers. Linked data can share nodes or even form cycles, so the copy
           must remember what it has already copied (a small table, kept while copying) to keep shared nodes shared and to
           stop at cycles.
+        </p>
+      </div>
+      <div class="idea">
+        <h4>Moving a whole region into another <span class="badge b-maybe">Worth trying</span></h4>
+        <pre><span class="keyword">region</span> kept
+<span class="keyword">each</span> line <span class="keyword">in</span> lines
+    <span class="keyword">region</span> work
+    <span class="keyword">bind</span> parsed = parse(work, line)
+    <span class="keyword">when</span> parsed.ok
+        move work into kept          <span class="comment"># everything in work is in kept now; work can't be used again</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+        <p>
+          A cheaper alternative to copying, in some cases. A value can't be moved out of a region on its own: a region
+          hands out memory in chunks and frees only whole chunks, and other pointers may still reach the value, so freeing it
+          early would leave them dangling. A whole region can move, though. Its chunks would be linked into the longer-lived
+          region's list without copying a byte, and every value of the moved region would count as the other region's from then
+          on. <strong>Rules it needs:</strong> the target must outlive the moved region (it is declared in an enclosing block, or
+          is a region parameter); after the move, no name of the moved region can be used, which is a flow check like the one for
+          named results; and the values that stay in variables are retyped to the target's region. <strong>Cost:</strong>
+          constant time, and no memory is copied, but nothing is freed either: the moved region's scratch data comes along. It
+          suits building a value in a scratch region and keeping it only when the work succeeds, where <code>.copy()</code>
+          would copy what is kept and free the rest.
+        </p>
+      </div>
+      <div class="idea">
+        <h4>Text fields of their own region, and tasks that take text of any region <span class="badge b-maybe">Worth trying</span></h4>
+        <p>
+          Today a shape's text is in the one region of the value holding it, and a task that reads text of a region names that
+          region in its header (<code>name: text@r</code>), as it does for pointers. Two ideas would ease that.
+          <strong>Per-field regions</strong> would let a shape hold text of two regions, or text that lasts inside a value in a
+          region, as part of <em>Shapes with several regions</em> above. <strong>Header elision</strong> would read a
+          <code>text</code> parameter, and a <code>Person</code> holding text, as text of a region the header doesn't name, shared
+          by the header's other unnamed ones, so a task that only reads text needs no <code>@r</code>; its results would need the
+          same rule, as Rust's lifetime elision has. Both were weighed when text got regions (2026-09-17), and the plain rule
+          came first: a region is written where it matters.
         </p>
       </div>
       <div class="idea">

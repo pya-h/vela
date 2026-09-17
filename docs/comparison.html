@@ -376,8 +376,9 @@
         Vela manages memory with <strong>regions</strong>: <code>region r</code> declares an arena,
         <code>new int(42) at r</code> allocates in it, and everything in <code>r</code> is freed at once when the
         block declaring it closes. There is no <code>free</code>. A pointer's type names its region
-        (<code>^int@r</code>), and the checker keeps pointers from being stored anywhere that outlives their region,
-        so use-after-free and double free can't happen, with no garbage collector, reference counts, or borrow
+        (<code>^int@r</code>), as text's does (<code>text@r</code>, where plain <code>text</code> lasts as long as the
+        program, much like Rust's <code>&amp;'static str</code>), and the checker keeps pointers and text from being stored
+        anywhere that outlives their region, so use-after-free and double free can't happen, with no garbage collector, reference counts, or borrow
         checker. The costs: memory is freed a whole region at a time, and one value's pointers all live in one
         region (see <a href="vela.html#regions">Memory and Regions</a>, and <a href="regions.html">Vela Regions</a> for the
         full guide, its limitations, and their workarounds).

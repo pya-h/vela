@@ -1,0 +1,7 @@
+# error: 2:39: the error type must differ from the value type, as in 'text or ParseError'
+task parse(digits: text@r) -> text or text@r
+    <- digits
+fi
+
+task main()
+fi

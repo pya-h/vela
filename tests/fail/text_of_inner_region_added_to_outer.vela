@@ -1,0 +1,10 @@
+# error: 8:23: expected type text@outer, got text@inner; this text is in region 'inner', and text here is in region 'outer'
+task main()
+    region outer
+    hold names = new [text]() at outer
+    each i in 0..2
+        region inner
+        bind made = new text("x") at inner
+        names.add(made^)
+    fi
+fi

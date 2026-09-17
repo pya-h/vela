@@ -1,0 +1,8 @@
+# error: 7:17: expected type text@r, got text@s; this text is in region 's', and text here is in region 'r'
+task main()
+    region r
+    region s
+    hold kept: text@r = new text("a") at r^
+    bind other = new text("b") at s
+    kept = other^
+fi

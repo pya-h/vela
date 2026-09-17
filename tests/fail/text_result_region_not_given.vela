@@ -1,0 +1,7 @@
+# error: 2:34: the result lives in region 'r', which the task isn't given; take it as a parameter, as in 'r: region'
+task copy_of(name: text) -> text@r
+    <- name
+fi
+
+task main()
+fi

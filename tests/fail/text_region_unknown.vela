@@ -1,0 +1,4 @@
+# error: 3:18: unknown region 'q'; declare it with 'region q'
+task main()
+    bind t: text@q = "a"
+fi
