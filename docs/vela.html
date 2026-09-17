@@ -687,7 +687,9 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
           <code>bind slots: [maybe text; 4] = [none; 4]</code>. Arrays go anywhere a type does: fields, payloads,
           parameters, results, <code>maybe [int; 2]</code>, and arrays of shapes (<code>points[1].x = 4</code>). An array
           holds its items by value, so a shape can't hold an array of itself, and an array of pointers lives in a region
-          like a shape holding them (<code>[^Node; 3]@r</code>).</li>
+          like a shape holding them (<code>[^Node; 3]@r</code>). An array keeps no region of its own, so the one written
+          on it is its items' (<code>[text; 2]@r</code> and <code>[text@r; 2]</code> are one type, and so is
+          <code>[text@r; 2]@r</code>); writing two different ones is an error.</li>
         <li><strong>Count.</strong> A count is at least 1 and known before the program runs: a number in a type, and a
           number or arithmetic on numbers (<code>[0; 2 * 8]</code>) in a literal. For a count known only while the
           program runs, make a slice in a region (see <a href="#slices">Slices</a>). A type whose values would take more
@@ -745,11 +747,13 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
           <code>&lt;- a, b</code> is an error for the second, which says to write <code>&lt;- (a, b)</code>. Values
           received from several results can be put in a tuple: <code>bind qr = (q, r)</code>.</li>
         <li><strong>Regions.</strong> An item of text names its own region, <code>(int, text@r)</code>, or the tuple names
-          one for all of them, <code>(int, text)@r</code>; writing a different one on both is an error. Two items may be
+          one for all of them, <code>(int, text)@r</code>; the same one written on both is the same type, and a different
+          one is an error. Two items may be
           text of two regions, <code>(text@r, text@s)</code>. In a field, a slice, or after <code>new</code>, items name
           none: they are in that value's region.</li>
         <li><strong>Comparing.</strong> <code>==</code> and <code>!=</code> compare item by item (text by its characters)
-          when every item is a number, a bool, text, or a tuple of them. <code>show</code> takes one item at a time.</li>
+          when every item is a number, a bool, text, or a tuple of them. <code>&lt;</code> and the other order comparisons
+          are for numbers, so compare items (<code>t.0 &lt; u.0</code>). <code>show</code> takes one item at a time.</li>
         <li><strong>Where they go.</strong> Anywhere a type does: parameters, results, fields, payloads, arrays and slices
           (<code>[(text, int)]@r</code>, whose items are replaced whole, <code>xs[i] = ("Cy", 80)</code>), <code>maybe</code>,
           and after <code>new</code>.</li>
@@ -757,8 +761,9 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
           <code>maybe</code> or a <code>T or E</code> and parentheses take a tuple apart, so
           <code>when found is {(name, age)}</code> does both, as do <code>case {(a, b)}</code> and
           <code>case fail (line, message)</code>. A plain tuple has no other case, so <code>when t is (x, y)</code>
-          always matches: its block runs with the items named, and an <code>else</code> on it, or a
-          <code>loop</code> of it, is an error. <code>hold</code> before a name makes it a variable the block can
+          always matches: its block runs with the items named, so a <code>&lt;-</code> in it sends for certain, and an
+          <code>else</code> on it, a <code>loop</code> of it, or a <code>match</code> on a tuple, is an error that says to
+          use <code>bind</code>. <code>hold</code> before a name makes it a variable the block can
           assign (<code>is hold (x, y)</code>, <code>{hold v}</code>, <code>case Circle hold r</code>); assigning
           it leaves the value matched as it was.</li>
       </ul>
@@ -1331,8 +1336,9 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>What it copies.</strong> Text, a shape or kind holding text, pointers, or slices, a slice, a pointer
-          (with the value it points to), and a <code>maybe</code>, <code>T or E</code>, or array of those. Copying a value that
-          holds none of them (an <code>int</code>, a <code>Point</code> of numbers) is an error: use the value as it is.</li>
+          (with the value it points to), and a <code>maybe</code>, <code>T or E</code>, array, or tuple of those. Copying a
+          value that holds none of them (an <code>int</code>, a <code>Point</code> of numbers) is an error: use the value as
+          it is.</li>
         <li><strong>Shared values and cycles.</strong> Two pointers to one value give two pointers to one copy, so linked
           data keeps its shape, and a cycle is copied as a cycle. A copied slice gets items of its own, so changing it or
           adding to it leaves the original alone.</li>

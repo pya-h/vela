@@ -299,8 +299,11 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         return (Vec::new(), word_start, byte);
     }
     let inside_parens = prev.is_some_and(|q| unclosed_on_line(&k, q, &Token::LParen, &Token::RParen));
+    // A parameter's or payload's name follows, unless the parentheses are a
+    // tuple type's, where an item's type follows.
     if matches!(prev_token, Some(Token::LParen | Token::Comma))
         && inside_parens
+        && prev.and_then(|q| type_paren(&k, q)).is_none()
         && (first_token == Some(&Token::Task) || blocks.last() == Some(&Block::Kind))
     {
         return (Vec::new(), word_start, byte);
@@ -336,8 +339,11 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     let type_context = match (prev, prev_token) {
         (Some(q), Some(Token::Colon)) => !unclosed_on_line(&k, q, &Token::LBrace, &Token::RBrace),
         (_, Some(Token::Arrow | Token::New)) => true,
-        // `-> int, int`: another result type follows the comma.
-        (Some(q), Some(Token::Comma)) => in_result_list(&k, q),
+        // `-> int, int`: another result type follows the comma; so does the
+        // next item of a tuple type, `(int, text)`.
+        (Some(q), Some(Token::Comma)) => in_result_list(&k, q) || type_paren(&k, q).is_some(),
+        // `(int, text)`: the first item's type follows the `(`.
+        (Some(q), Some(Token::LParen)) => starts_type(&k, q),
         // `new@r T`: the type follows the region.
         (Some(q), Some(Token::Ident(_))) => after_new_region(&k, q),
         // A type continues after `^`, `maybe`, and an array's or slice's `[`,
@@ -530,10 +536,13 @@ fn names_a_result(k: &Knowledge, q: usize) -> bool {
 }
 
 /// Whether the comma at position `q` separates the names of a `bind` or
-/// `hold`, so another name follows it.
+/// `hold`, so another name follows it. A comma inside a name's tuple type
+/// separates its items, not names.
 fn in_binding_names(k: &Knowledge, q: usize) -> bool {
     let line = k.line_start(q);
-    matches!(k.token(line), Some(Token::Bind | Token::Hold)) && !(line..q).any(|p| k.token(p) == Some(&Token::Assign))
+    matches!(k.token(line), Some(Token::Bind | Token::Hold))
+        && !(line..q).any(|p| k.token(p) == Some(&Token::Assign))
+        && type_paren(k, q).is_none()
 }
 
 /// Whether the type-starting token at position `q` (a name, `^`, `maybe`, or
@@ -548,13 +557,29 @@ fn starts_type(k: &Knowledge, q: usize) -> bool {
     match p.checked_sub(1).map(|b| (b, k.token(b))) {
         Some((b, Some(Token::Colon))) => !unclosed_on_line(k, b, &Token::LBrace, &Token::RBrace),
         Some((_, Some(Token::Arrow | Token::New))) => true,
-        Some((b, Some(Token::Comma))) => in_result_list(k, b),
+        Some((b, Some(Token::Comma))) => in_result_list(k, b) || type_paren(k, b).is_some(),
+        // `(int, text)`: a tuple type's items are types themselves.
+        Some((b, Some(Token::LParen))) => starts_type(k, b),
         Some((b, Some(Token::Ident(_)))) => after_new_region(k, b),
         Some((b, Some(Token::Or))) => b.checked_sub(1).is_some_and(|end| ends_type(k, end)),
         // `geometry.Point`: the type goes on after the module's name.
         Some((b, Some(Token::Dot))) => b.checked_sub(1).is_some_and(|module| k.module_at(module).is_some() && starts_type(k, module)),
         _ => false,
     }
+}
+
+/// The `(` of a tuple type that position `q` is inside, on its line.
+fn type_paren(k: &Knowledge, q: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for p in (k.line_start(q)..=q).rev() {
+        match k.token(p) {
+            Some(Token::RParen) => depth += 1,
+            Some(Token::LParen) if depth == 0 => return starts_type(k, p).then_some(p),
+            Some(Token::LParen) => depth -= 1,
+            _ => {}
+        }
+    }
+    None
 }
 
 /// The `[` of an array or slice type that position `q` is inside, on its line.

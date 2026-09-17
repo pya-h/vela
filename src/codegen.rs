@@ -1027,6 +1027,7 @@ impl Generator {
     /// block `body`.
     fn gen_pattern_bindings(&mut self, ty: &Type, subject: &str, pattern: &Pattern, body: &[Stmt]) -> Result<()> {
         let mut bindings: Vec<(&str, Type, String)> = Vec::new();
+        let mut named = false;
         match (&pattern.kind, ty) {
             (PatternKind::Value(names), Type::Maybe(inner)) if is_pointer(inner) => {
                 bound_names(names, inner, subject.to_string(), &mut bindings);
@@ -1062,9 +1063,15 @@ impl Generator {
             if name == DISCARD {
                 continue;
             }
+            named = true;
             self.w.line(&format!("{} {} = {};", c_type(&ty), c_ident(name), value));
             // A pattern must name every value, even ones its block never reads.
             self.use_if_unread(name, body);
+        }
+        // A tuple's items always match, so its test reads nothing; with every
+        // item dropped (`is (_, _)`), nothing would read the value at all.
+        if !named && matches!(pattern.kind, PatternKind::Tuple(_)) {
+            self.w.line(&format!("(void){};", subject));
         }
         Ok(())
     }

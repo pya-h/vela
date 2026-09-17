@@ -9,6 +9,9 @@ use crate::lexer::{KEYWORDS, Token};
 /// its WebAssembly module with it) instead of reporting an error.
 pub const MAX_NESTING: usize = 100;
 
+/// What a tuple type needs, for the `(` of one that has too few items.
+const TUPLE_TYPE_ITEMS: &str = "a tuple holds two or more items, as in '(int, text)'; a type isn't written in parentheses alone";
+
 pub struct Parser {
     tokens: Vec<Token>,
     spans: Vec<Span>,
@@ -606,13 +609,18 @@ impl Parser {
         if mentions_region(&ty) {
             return Err(Error::at(span, "a region doesn't live in another region"));
         }
-        // Everything a tuple holds is in the region its `@` names: a region written
-        // on an item must be the same. (The checker reports the other types.)
-        if let Some(inner) = ty.regions().into_iter().find(|inner| *inner != region).filter(|_| holds_tuple(&ty)) {
+        // Everything a value in a region holds is in that region, so a region
+        // written inside must be the same one. A tuple or an array keeps no
+        // region of its own, so only this sees it; the checker reports the
+        // types that keep one, naming what is in the other region.
+        if let Some(inner) = ty.regions().into_iter().find(|inner| *inner != region).filter(|_| keeps_no_region(&ty)) {
             let at = self.type_parts.iter().find(|(part, _)| *part == format!("@{}", inner)).map_or(region_span, |(_, at)| *at);
             return Err(Error::at(at, format!("everything a value in region '{0}' holds is in '{0}'; remove '@{1}'", region, inner)));
         }
-        let mut named = false;
+        // A part that already names the region holds text or pointers itself,
+        // as `(int, text@r)@r` and `[text@r]@r` do, even when nothing is left
+        // to fill in.
+        let mut named = !ty.regions().is_empty();
         let ty = ty.map_regions_of_names(&mut |_| {
             named = true;
             Some(region.clone())
@@ -671,15 +679,22 @@ impl Parser {
 
     /// After a type's `(` at `opened`: `T, U, …)`, a tuple of two or more items.
     fn parse_tuple_type(&mut self, opened: Span) -> Result<Type> {
-        let mut items = vec![self.parse_type_parts()?];
-        while self.match_token(Token::Comma) {
+        let mut items = Vec::new();
+        loop {
+            // `()` and `(int,)`: a missing item, rather than a missing name.
+            if self.check(Token::RParen) {
+                return Err(Error::at(opened, TUPLE_TYPE_ITEMS));
+            }
             items.push(self.parse_type_parts()?);
+            if !self.match_token(Token::Comma) {
+                break;
+            }
         }
         if !self.match_token(Token::RParen) {
             return Err(self.unexpected("',' and another item, or ')' to close the tuple"));
         }
         if items.len() < 2 {
-            return Err(Error::at(opened, "a tuple holds two or more items, as in '(int, text)'; a type isn't written in parentheses alone"));
+            return Err(Error::at(opened, TUPLE_TYPE_ITEMS));
         }
         Ok(Type::Tuple(items))
     }
@@ -1120,7 +1135,6 @@ impl Parser {
         Ok(parts)
     }
 
-    /// A name a pattern binds, or `_`.
     /// A name a binding declares, with its type, or `(a, b, …)`, the names of a
     /// tuple's items.
     fn parse_bound(&mut self) -> Result<Bound> {
@@ -1129,7 +1143,14 @@ impl Parser {
             self.enter()?;
             let parts = self.parse_bound_parts(span);
             self.leave(1);
-            return Ok(Bound { name: String::new(), span, ty: None, ty_span: None, parts: parts? });
+            let parts = parts?;
+            if self.check(Token::Colon) {
+                return Err(Error::at(
+                    self.peek_span(),
+                    "'( … )' takes a tuple apart, so each name in it takes its own type, as in 'bind (a: int, b: text) = t'",
+                ));
+            }
+            return Ok(Bound { name: String::new(), span, ty: None, ty_span: None, parts });
         }
         let (name, name_span) = self.parse_bound_name()?;
         let (ty, ty_span) = if self.match_token(Token::Colon) {
@@ -1694,12 +1715,15 @@ impl Parser {
     }
 }
 
-/// Whether `ty` is a tuple, or holds one by value or behind a pointer.
-fn holds_tuple(ty: &Type) -> bool {
+/// Whether a region written on `ty` belongs to what it holds, because `ty`
+/// keeps none of its own: a tuple or an array, or a `maybe` or `T or E` of one.
+/// (A pointer, a slice, and a shape or kind keep the region they are given, and
+/// the checker reports what such a value holds in another region.)
+fn keeps_no_region(ty: &Type) -> bool {
     match ty {
-        Type::Tuple(_) => true,
-        Type::Ptr(inner, _) | Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => holds_tuple(inner),
-        Type::Or(value, error) => holds_tuple(value) || holds_tuple(error),
+        Type::Tuple(_) | Type::Array(..) => true,
+        Type::Maybe(inner) | Type::Fail(inner) => keeps_no_region(inner),
+        Type::Or(value, error) => keeps_no_region(value) || keeps_no_region(error),
         _ => false,
     }
 }

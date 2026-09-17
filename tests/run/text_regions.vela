@@ -49,6 +49,12 @@ task greet(p: Person@r)
     show(p.name)
 fi
 
+# An array keeps no region of its own, so the one written on it is its text's:
+# writing the same region on both is the same type.
+task pick(pair: [text@r; 2]@r, i: int) -> text@r
+    <- pair[i]
+fi
+
 task main()
     region r
     bind lasting = "Ada"
@@ -69,6 +75,9 @@ task main()
     people.add(plain)
     people.add(held)
     show(people[0].name)
+
+    show(pick([kept, lasting], 0))
+    show(pick([kept, "Bob"], 1))
 
     # Text in slices and pointers is in their region.
     hold names = new [text]() at r

@@ -1,0 +1,6 @@
+# error: 4:16: '( … )' takes a tuple apart, so each name in it takes its own type, as in 'bind (a: int, b: text) = t'
+task main()
+    bind pair = (1, 2)
+    bind (a, b): (int, int) = pair
+    show(a + b)
+fi

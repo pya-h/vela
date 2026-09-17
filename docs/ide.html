@@ -359,7 +359,8 @@ Press Ctrl+C to stop.</pre>
         <div class="card">
           <h4>Completion</h4>
           <p>Only what fits: types after <code>:</code>, <code>-&gt;</code>, <code>^</code>, <code>maybe</code>,
-            <code>new</code>, a type's <code>[</code> and <code>or</code>, and each comma of a header's results (<code>-&gt; int, int</code>), and nothing for an array type's count; variables declared above the cursor; fields after
+            <code>new</code>, a type's <code>[</code> and <code>or</code>, each item of a tuple type
+            (<code>(int, text)</code>), and each comma of a header's results (<code>-&gt; int, int</code>), and nothing for an array type's count; variables declared above the cursor; fields after
             <code>.</code>, a tuple's items by position after its <code>.</code> (<code>0</code>, <code>1</code>, each with its type), and <code>len</code> after an array's or slice's (and <code>add</code> and <code>del</code> after a slice's), and
             <code>copy</code> after a value holding text, a slice, or a pointer; the cases still missing after <code>case</code> and
             <code>case Kind.</code>, including <code>{value}</code>,

@@ -737,6 +737,7 @@ impl Checker {
             Type::Named(name, _) => self.takes_region.contains(name),
             Type::Maybe(inner) | Type::Array(inner, _) => self.fits_any_region(inner),
             Type::Or(value, error) => self.fits_any_region(value) || self.fits_any_region(error),
+            Type::Tuple(items) => items.iter().any(|item| self.fits_any_region(item)),
             _ => false,
         }
     }
@@ -1117,7 +1118,7 @@ impl Checker {
                         Some(annotated) => {
                             match init.get_mut(i).filter(|_| !forwarded) {
                                 Some(value) => self.coerce(value, &annotated)?,
-                                None => fits_or_err(&actual, &annotated, value_span)?,
+                                None => fits_or_err(&actual, &annotated, value_span, given_by(init))?,
                             }
                             annotated
                         }
@@ -1171,7 +1172,7 @@ impl Checker {
                     };
                     match values.get_mut(i).filter(|_| !forwarded) {
                         Some(value) => self.coerce(value, &expected)?,
-                        None => fits_or_err(&actual, &expected, value_span)?,
+                        None => fits_or_err(&actual, &expected, value_span, given_by(values))?,
                     }
                 }
                 Ok(())
@@ -1192,6 +1193,8 @@ impl Checker {
                         self.check_scoped_block(else_b)?;
                         self.branch_state(else_b, &entry)
                     }
+                    // A condition that always holds leaves no other path.
+                    None if always_holds(cond) => None,
                     // Without an `else`, not running the block is a path too.
                     None => Some(entry.clone()),
                 };
@@ -1288,7 +1291,7 @@ impl Checker {
                     let Some(actual) = given.get(i).cloned() else { continue };
                     match values.get_mut(i).filter(|_| !forwarded) {
                         Some(value) => self.coerce(value, want)?,
-                        None => fits_or_err(&actual, want, first)?,
+                        None => fits_or_err(&actual, want, first, Given::Sent)?,
                     }
                 }
                 Ok(())
@@ -1531,6 +1534,10 @@ impl Checker {
             },
             Type::Maybe(_) => vec!["{…}".to_string(), "none".to_string()],
             Type::Or(..) => vec!["{…}".to_string(), "fail …".to_string()],
+            // A tuple has one case, so it is taken apart rather than matched.
+            Type::Tuple(_) => {
+                return err(expr.span, format!("match requires a kind, a maybe, or a 'T or E' value, got {}; take a tuple apart with 'bind', as in 'bind (a, b) = t'", ety));
+            }
             other => return err(expr.span, format!("match requires a kind, a maybe, or a 'T or E' value, got {}", other)),
         };
         let mut seen: Vec<String> = Vec::new();
@@ -1739,7 +1746,7 @@ impl Checker {
             let Some(actual) = given.get(i).cloned() else { continue };
             match values.get_mut(i).filter(|_| !forwarded) {
                 Some(value) => self.coerce(value, want)?,
-                None => fits_or_err(&actual, want, list_span)?,
+                None => fits_or_err(&actual, want, list_span, Given::Sent)?,
             }
         }
         // Set, so the results can be read from here on.
@@ -2511,6 +2518,9 @@ impl Checker {
             }
             BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
                 if !lt.is_numeric() {
+                    if matches!(lt, Type::Tuple(_)) {
+                        return err(span, "comparison requires numeric operands; a tuple is only compared with '==' and '!=', or item by item, as in 't.0 < u.0'");
+                    }
                     return err(span, format!("comparison requires numeric operands{}", extract_hint(&[&lt])));
                 }
                 self.expect_type(&rt, &lt, r.span)?;
@@ -3105,15 +3115,23 @@ fn constructible(ty: &Type, can: &HashSet<&str>) -> bool {
 }
 
 /// Whether running `block` always ends in `<-`: it contains a `<-`, a
-/// `when` whose two branches both always send, or a `match` whose cases all do.
-/// Loops don't count, since their bodies might not run.
+/// `when` whose two branches both always send, a `when` that always holds and
+/// whose block sends, or a `match` whose cases all send. Loops don't count,
+/// since their bodies might not run.
 fn always_sends(block: &Block) -> bool {
     block.iter().any(|stmt| match &stmt.kind {
         StmtKind::Send(_) => true,
         StmtKind::When(_, then_block, Some(else_block)) => always_sends(then_block) && always_sends(else_block),
+        StmtKind::When(cond, then_block, None) => always_holds(cond) && always_sends(then_block),
         StmtKind::Match(_, cases) => cases.iter().all(|case| always_sends(&case.body)),
         _ => false,
     })
+}
+
+/// Whether a condition always holds: `is (x, y)`, whose items always match.
+/// (Every other condition may be false, so its block may not run.)
+fn always_holds(cond: &Condition) -> bool {
+    matches!(&cond.pattern, Some(pattern) if matches!(pattern.kind, PatternKind::Tuple(_)))
 }
 
 /// The value of an int expression written with literals only (`-5`,
@@ -3238,10 +3256,28 @@ fn region_mismatch<'a>(actual: &'a Type, expected: &'a Type) -> Option<(&'a Type
     }
 }
 
-/// Checks that a value of type `actual`, one of the several a call sends, fits
-/// where `expected` is required. Nothing can change it on the way, so unlike a
-/// single value it never becomes a `maybe` or a `T or E` here.
-fn fits_or_err(actual: &Type, expected: &Type, at: Span) -> Result<()> {
+/// Where the values a list receives come from when one value gives them all:
+/// the several a call sends, or the items of one tuple.
+#[derive(Clone, Copy, PartialEq)]
+enum Given {
+    Sent,
+    Items,
+}
+
+/// Whether one value gives them all by being a tuple taken apart, rather than
+/// a call sending several.
+fn given_by(values: &[Expr]) -> Given {
+    match values {
+        [only] if matches!(only.ty, Some(Type::Tuple(_))) => Given::Items,
+        _ => Given::Sent,
+    }
+}
+
+/// Checks that a value of type `actual`, one of the several a call sends or the
+/// items of a tuple (`given`), fits where `expected` is required. Nothing can
+/// change it on the way, so unlike a single value it never becomes a `maybe` or
+/// a `T or E` here.
+fn fits_or_err(actual: &Type, expected: &Type, at: Span, given: Given) -> Result<()> {
     if fits_regions(actual, expected) {
         return Ok(());
     }
@@ -3253,7 +3289,9 @@ fn fits_or_err(actual: &Type, expected: &Type, at: Span) -> Result<()> {
         },
         _ => false,
     };
-    let hint = if wrapping {
+    let hint = if wrapping && given == Given::Items {
+        format!("; a tuple's items are taken as they are, so an item doesn't become a {} on the way", expected)
+    } else if wrapping {
         format!("; a task sends each of its values as it is, so it doesn't become a {} on the way", expected)
     } else {
         mismatch_hint(actual, expected)

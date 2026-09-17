@@ -1,0 +1,7 @@
+# error: 2:25: everything a value in region 'r' holds is in 'r'; remove '@s'
+task first(names: [text@s; 2]@r) -> text@r
+    <- names[0]
+fi
+
+task main()
+fi

@@ -43,6 +43,18 @@ task first_two(names: [text]@r) -> (text, text)@r
     <- (names[0], names[1])
 fi
 
+# A tuple in a region, written on the whole and on an item: the same region.
+task label(t: (int, text@r)@r) -> text@r
+    <- t.1
+fi
+
+# A tuple's items always match, so this block always runs and always sends.
+task total(t: (int, (int, int))) -> sum: int
+    when t is (first, (second, third))
+        sum <- first + second + third
+    fi
+fi
+
 task main()
     region r
     bind pair: (text, int) = ("Ada", 36)
@@ -159,6 +171,10 @@ task main()
         show(name_held)
         show(age_held)
     fi
+    when pair is (_, _)
+        show("dropped")
+    fi
+    show(total((1, (2, 3))))
     when person is {hold changing}
         changing = ("Bob", 1)
         show(changing.0)
@@ -185,4 +201,6 @@ task main()
     show(two)
     bind kept = held.copy() at r
     show(kept.0 == held.0)
+    bind numbered = (held.1, held.0)
+    show(label(numbered))
 fi

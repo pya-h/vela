@@ -70,271 +70,303 @@
     | keyword:<-  punctuation:(  parameter:names  punctuation:[  number:0  punctuation:]  punctuation:,  parameter:names  punctuation:[  number:1  punctuation:]  punctuation:)
  44 | fi
     | keyword:fi
- 46 | task main()
+ 46 | # A tuple in a region, written on the whole and on an item: the same region.
+    | comment:# A tuple in a region, written on the whole and on an item: the same region.
+ 47 | task label(t: (int, text@r)@r) -> text@r
+    | keyword:task  task:label  punctuation:(  parameter:t  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:text  operator:@  region:r  punctuation:)  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 48 |     <- t.1
+    | keyword:<-  parameter:t  punctuation:.  field:1
+ 49 | fi
+    | keyword:fi
+ 51 | # A tuple's items always match, so this block always runs and always sends.
+    | comment:# A tuple's items always match, so this block always runs and always sends.
+ 52 | task total(t: (int, (int, int))) -> sum: int
+    | keyword:task  task:total  punctuation:(  parameter:t  punctuation::  punctuation:(  type-builtin:int  punctuation:,  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:)  punctuation:)  operator:->  variable:sum  punctuation::  type-builtin:int
+ 53 |     when t is (first, (second, third))
+    | keyword:when  parameter:t  keyword:is  punctuation:(  variable:first  punctuation:,  punctuation:(  variable:second  punctuation:,  variable:third  punctuation:)  punctuation:)
+ 54 |         sum <- first + second + third
+    | variable:sum  keyword:<-  variable:first  operator:+  variable:second  operator:+  variable:third
+ 55 |     fi
+    | keyword:fi
+ 56 | fi
+    | keyword:fi
+ 58 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 47 |     region r
+ 59 |     region r
     | keyword:region  region:r
- 48 |     bind pair: (text, int) = ("Ada", 36)
+ 60 |     bind pair: (text, int) = ("Ada", 36)
     | keyword:bind  variable:pair  punctuation::  punctuation:(  type-builtin:text  punctuation:,  type-builtin:int  punctuation:)  operator:=  punctuation:(  string:"Ada"  punctuation:,  number:36  punctuation:)
- 49 |     show(pair.0)
+ 61 |     show(pair.0)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:0  punctuation:)
- 50 |     show(pair.1)
+ 62 |     show(pair.1)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:1  punctuation:)
- 52 |     # Nested tuples, a whole new value for a hold tuple, and items that can't change.
+ 64 |     # Nested tuples, a whole new value for a hold tuple, and items that can't change.
     | comment:# Nested tuples, a whole new value for a hold tuple, and items that can't change.
- 53 |     hold t = (1, (2.5, "deep"))
+ 65 |     hold t = (1, (2.5, "deep"))
     | keyword:hold  variable:t  operator:=  punctuation:(  number:1  punctuation:,  punctuation:(  number:2.5  punctuation:,  string:"deep"  punctuation:)  punctuation:)
- 54 |     show(t.1.1)
+ 66 |     show(t.1.1)
     | builtin-fn:show  punctuation:(  variable:t  punctuation:.  field:1  punctuation:.  field:1  punctuation:)
- 55 |     t = (2, (3.5, "other"))
+ 67 |     t = (2, (3.5, "other"))
     | variable:t  operator:=  punctuation:(  number:2  punctuation:,  punctuation:(  number:3.5  punctuation:,  string:"other"  punctuation:)  punctuation:)
- 56 |     show(t.1.0)
+ 68 |     show(t.1.0)
     | builtin-fn:show  punctuation:(  variable:t  punctuation:.  field:1  punctuation:.  field:0  punctuation:)
- 57 |     show(t.0)
+ 69 |     show(t.0)
     | builtin-fn:show  punctuation:(  variable:t  punctuation:.  field:0  punctuation:)
- 59 |     # Unpacking: a list of names, parentheses, nested parts, and `_`.
+ 71 |     # Unpacking: a list of names, parentheses, nested parts, and `_`.
     | comment:# Unpacking: a list of names, parentheses, nested parts, and `_`.
- 60 |     bind q, rest = divide(17, 5)
+ 72 |     bind q, rest = divide(17, 5)
     | keyword:bind  variable:q  punctuation:,  variable:rest  operator:=  task:divide  punctuation:(  number:17  punctuation:,  number:5  punctuation:)
- 61 |     show(q * 10 + rest)
+ 73 |     show(q * 10 + rest)
     | builtin-fn:show  punctuation:(  variable:q  operator:*  number:10  operator:+  variable:rest  punctuation:)
- 62 |     bind (a, b) = divide(20, 6)
+ 74 |     bind (a, b) = divide(20, 6)
     | keyword:bind  punctuation:(  variable:a  punctuation:,  variable:b  punctuation:)  operator:=  task:divide  punctuation:(  number:20  punctuation:,  number:6  punctuation:)
- 63 |     show(a * 10 + b)
+ 75 |     show(a * 10 + b)
     | builtin-fn:show  punctuation:(  variable:a  operator:*  number:10  operator:+  variable:b  punctuation:)
- 64 |     bind first, (second, third) = t
+ 76 |     bind first, (second, third) = t
     | keyword:bind  variable:first  punctuation:,  punctuation:(  variable:second  punctuation:,  variable:third  punctuation:)  operator:=  variable:t
- 65 |     show(first)
+ 77 |     show(first)
     | builtin-fn:show  punctuation:(  variable:first  punctuation:)
- 66 |     show(second)
+ 78 |     show(second)
     | builtin-fn:show  punctuation:(  variable:second  punctuation:)
- 67 |     show(third)
+ 79 |     show(third)
     | builtin-fn:show  punctuation:(  variable:third  punctuation:)
- 68 |     bind _, (_, only) = t
+ 80 |     bind _, (_, only) = t
     | keyword:bind  keyword:_  punctuation:,  punctuation:(  keyword:_  punctuation:,  variable:only  punctuation:)  operator:=  variable:t
- 69 |     show(only)
+ 81 |     show(only)
     | builtin-fn:show  punctuation:(  variable:only  punctuation:)
- 70 |     bind (_, (_, _)) = t
+ 82 |     bind (_, (_, _)) = t
     | keyword:bind  punctuation:(  keyword:_  punctuation:,  punctuation:(  keyword:_  punctuation:,  keyword:_  punctuation:)  punctuation:)  operator:=  variable:t
- 71 |     (_, _) = divide(1, 1)
+ 83 |     (_, _) = divide(1, 1)
     | punctuation:(  keyword:_  punctuation:,  keyword:_  punctuation:)  operator:=  task:divide  punctuation:(  number:1  punctuation:,  number:1  punctuation:)
- 72 |     bind typed: int, (half: float, label: text) = t
+ 84 |     bind typed: int, (half: float, label: text) = t
     | keyword:bind  variable:typed  punctuation::  type-builtin:int  punctuation:,  punctuation:(  variable:half  punctuation::  type-builtin:float  punctuation:,  variable:label  punctuation::  type-builtin:text  punctuation:)  operator:=  variable:t
- 73 |     show(typed)
+ 85 |     show(typed)
     | builtin-fn:show  punctuation:(  variable:typed  punctuation:)
- 74 |     show(half)
+ 86 |     show(half)
     | builtin-fn:show  punctuation:(  variable:half  punctuation:)
- 75 |     show(label)
+ 87 |     show(label)
     | builtin-fn:show  punctuation:(  variable:label  punctuation:)
- 77 |     # Several results are received as before, and can be put in a tuple.
+ 89 |     # Several results are received as before, and can be put in a tuple.
     | comment:# Several results are received as before, and can be put in a tuple.
- 78 |     bind whole, left = divmod(9, 4)
+ 90 |     bind whole, left = divmod(9, 4)
     | keyword:bind  variable:whole  punctuation:,  variable:left  operator:=  task:divmod  punctuation:(  number:9  punctuation:,  number:4  punctuation:)
- 79 |     bind packed = (whole, left)
+ 91 |     bind packed = (whole, left)
     | keyword:bind  variable:packed  operator:=  punctuation:(  variable:whole  punctuation:,  variable:left  punctuation:)
- 80 |     show(packed.0 + packed.1)
+ 92 |     show(packed.0 + packed.1)
     | builtin-fn:show  punctuation:(  variable:packed  punctuation:.  field:0  operator:+  variable:packed  punctuation:.  field:1  punctuation:)
- 82 |     # Assignment into hold variables: with or without parentheses, nested.
+ 94 |     # Assignment into hold variables: with or without parentheses, nested.
     | comment:# Assignment into hold variables: with or without parentheses, nested.
- 83 |     hold x = 0
+ 95 |     hold x = 0
     | keyword:hold  variable:x  operator:=  number:0
- 84 |     hold y = 0
+ 96 |     hold y = 0
     | keyword:hold  variable:y  operator:=  number:0
- 85 |     x, y = divide(9, 4)
+ 97 |     x, y = divide(9, 4)
     | variable:x  punctuation:,  variable:y  operator:=  task:divide  punctuation:(  number:9  punctuation:,  number:4  punctuation:)
- 86 |     show(x * 10 + y)
+ 98 |     show(x * 10 + y)
     | builtin-fn:show  punctuation:(  variable:x  operator:*  number:10  operator:+  variable:y  punctuation:)
- 87 |     (y, x) = (x, y)
+ 99 |     (y, x) = (x, y)
     | punctuation:(  variable:y  punctuation:,  variable:x  punctuation:)  operator:=  punctuation:(  variable:x  punctuation:,  variable:y  punctuation:)
- 88 |     show(y * 10 + x)
+100 |     show(y * 10 + x)
     | builtin-fn:show  punctuation:(  variable:y  operator:*  number:10  operator:+  variable:x  punctuation:)
- 89 |     hold word = ""
+101 |     hold word = ""
     | keyword:hold  variable:word  operator:=  string:""
- 90 |     hold number = 0.0
+102 |     hold number = 0.0
     | keyword:hold  variable:number  operator:=  number:0.0
- 91 |     _, (number, word) = t
+103 |     _, (number, word) = t
     | keyword:_  punctuation:,  punctuation:(  variable:number  punctuation:,  variable:word  punctuation:)  operator:=  variable:t
- 92 |     show(word)
+104 |     show(word)
     | builtin-fn:show  punctuation:(  variable:word  punctuation:)
- 93 |     show(number)
+105 |     show(number)
     | builtin-fn:show  punctuation:(  variable:number  punctuation:)
- 95 |     # Values that can't change as items: a shape, a kind, maybe, and T or E.
+107 |     # Values that can't change as items: a shape, a kind, maybe, and T or E.
     | comment:# Values that can't change as items: a shape, a kind, maybe, and T or E.
- 96 |     bind grade = Mark(45, "ok")
+108 |     bind grade = Mark(45, "ok")
     | keyword:bind  variable:grade  operator:=  variant:Mark  punctuation:(  number:45  punctuation:,  string:"ok"  punctuation:)
- 97 |     bind mixed: (Point, Grade, maybe text, int or text) = (Point { x: 3, y: 4 }, Pass(90), none, 5)
+109 |     bind mixed: (Point, Grade, maybe text, int or text) = (Point { x: 3, y: 4 }, Pass(90), none, 5)
     | keyword:bind  variable:mixed  punctuation::  punctuation:(  type:Point  punctuation:,  type:Grade  punctuation:,  keyword:maybe  type-builtin:text  punctuation:,  type-builtin:int  keyword:or  type-builtin:text  punctuation:)  operator:=  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:,  variant:Pass  punctuation:(  number:90  punctuation:)  punctuation:,  keyword:none  punctuation:,  number:5  punctuation:)
- 98 |     show(mixed.0.x + mixed.0.y)
+110 |     show(mixed.0.x + mixed.0.y)
     | builtin-fn:show  punctuation:(  variable:mixed  punctuation:.  field:0  punctuation:.  field:x  operator:+  variable:mixed  punctuation:.  field:0  punctuation:.  field:y  punctuation:)
- 99 |     match mixed.1
+111 |     match mixed.1
     | keyword:match  variable:mixed  punctuation:.  field:1
-100 |         case Pass mark
+112 |         case Pass mark
     | keyword:case  variant:Pass  variable:mark
-101 |             show(mark)
+113 |             show(mark)
     | builtin-fn:show  punctuation:(  variable:mark  punctuation:)
-102 |         case Fail
+114 |         case Fail
     | keyword:case  variant:Fail
-103 |             show("fail")
+115 |             show("fail")
     | builtin-fn:show  punctuation:(  string:"fail"  punctuation:)
-104 |     fi
+116 |     fi
     | keyword:fi
-105 |     show(mixed.2 == none)
+117 |     show(mixed.2 == none)
     | builtin-fn:show  punctuation:(  variable:mixed  punctuation:.  field:2  operator:==  keyword:none  punctuation:)
-106 |     show(mixed.3 { 0 })
+118 |     show(mixed.3 { 0 })
     | builtin-fn:show  punctuation:(  variable:mixed  punctuation:.  field:3  punctuation:{  number:0  punctuation:}  punctuation:)
-108 |     # Tuples in a slice, behind a pointer, and in a maybe.
+120 |     # Tuples in a slice, behind a pointer, and in a maybe.
     | comment:# Tuples in a slice, behind a pointer, and in a maybe.
-109 |     hold scores = new [(text, int)]() at r
+121 |     hold scores = new [(text, int)]() at r
     | keyword:hold  variable:scores  operator:=  keyword:new  punctuation:[  punctuation:(  type-builtin:text  punctuation:,  type-builtin:int  punctuation:)  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
-110 |     scores.add(("Ada", 90))
+122 |     scores.add(("Ada", 90))
     | variable:scores  punctuation:.  field:add  punctuation:(  punctuation:(  string:"Ada"  punctuation:,  number:90  punctuation:)  punctuation:)
-111 |     scores.add(("Bob", 75))
+123 |     scores.add(("Bob", 75))
     | variable:scores  punctuation:.  field:add  punctuation:(  punctuation:(  string:"Bob"  punctuation:,  number:75  punctuation:)  punctuation:)
-112 |     each score in scores
+124 |     each score in scores
     | keyword:each  variable:score  keyword:in  variable:scores
-113 |         show(score.0)
+125 |         show(score.0)
     | builtin-fn:show  punctuation:(  variable:score  punctuation:.  field:0  punctuation:)
-114 |     fi
+126 |     fi
     | keyword:fi
-115 |     scores[1] = ("Cy", 80)
+127 |     scores[1] = ("Cy", 80)
     | variable:scores  punctuation:[  number:1  punctuation:]  operator:=  punctuation:(  string:"Cy"  punctuation:,  number:80  punctuation:)
-116 |     show(scores[1].1)
+128 |     show(scores[1].1)
     | builtin-fn:show  punctuation:(  variable:scores  punctuation:[  number:1  punctuation:]  punctuation:.  field:1  punctuation:)
-117 |     bind boxed = new (int, int)((5, 6)) at r
+129 |     bind boxed = new (int, int)((5, 6)) at r
     | keyword:bind  variable:boxed  operator:=  keyword:new  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:(  punctuation:(  number:5  punctuation:,  number:6  punctuation:)  punctuation:)  keyword:at  region:r
-118 |     show(boxed^.1)
+130 |     show(boxed^.1)
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:.  field:1  punctuation:)
-119 |     boxed^ = (7, 8)
+131 |     boxed^ = (7, 8)
     | variable:boxed  operator:^  operator:=  punctuation:(  number:7  punctuation:,  number:8  punctuation:)
-120 |     show(boxed^.0)
+132 |     show(boxed^.0)
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:.  field:0  punctuation:)
-121 |     bind found: maybe (int, text) = (1, "one")
+133 |     bind found: maybe (int, text) = (1, "one")
     | keyword:bind  variable:found  punctuation::  keyword:maybe  punctuation:(  type-builtin:int  punctuation:,  type-builtin:text  punctuation:)  operator:=  punctuation:(  number:1  punctuation:,  string:"one"  punctuation:)
-122 |     bind (id, name) = found { (0, "none") }
+134 |     bind (id, name) = found { (0, "none") }
     | keyword:bind  punctuation:(  variable:id  punctuation:,  variable:name  punctuation:)  operator:=  variable:found  punctuation:{  punctuation:(  number:0  punctuation:,  string:"none"  punctuation:)  punctuation:}
-123 |     show(id)
+135 |     show(id)
     | builtin-fn:show  punctuation:(  variable:id  punctuation:)
-124 |     show(name)
+136 |     show(name)
     | builtin-fn:show  punctuation:(  variable:name  punctuation:)
-126 |     # Equality, item by item, text by its characters.
+138 |     # Equality, item by item, text by its characters.
     | comment:# Equality, item by item, text by its characters.
-127 |     show((1, "a") == (1, "a"))
+139 |     show((1, "a") == (1, "a"))
     | builtin-fn:show  punctuation:(  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)  operator:==  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)  punctuation:)
-128 |     show((1, (2.5, "a")) != (1, (2.5, "b")))
+140 |     show((1, (2.5, "a")) != (1, (2.5, "b")))
     | builtin-fn:show  punctuation:(  punctuation:(  number:1  punctuation:,  punctuation:(  number:2.5  punctuation:,  string:"a"  punctuation:)  punctuation:)  operator:!=  punctuation:(  number:1  punctuation:,  punctuation:(  number:2.5  punctuation:,  string:"b"  punctuation:)  punctuation:)  punctuation:)
-129 |     show(pair == ("Ada", 36))
+141 |     show(pair == ("Ada", 36))
     | builtin-fn:show  punctuation:(  variable:pair  operator:==  punctuation:(  string:"Ada"  punctuation:,  number:36  punctuation:)  punctuation:)
-131 |     # Patterns: braces take the value out, parentheses take the tuple apart,
+143 |     # Patterns: braces take the value out, parentheses take the tuple apart,
     | comment:# Patterns: braces take the value out, parentheses take the tuple apart,
-132 |     # and `hold` names can be assigned.
+144 |     # and `hold` names can be assigned.
     | comment:# and `hold` names can be assigned.
-133 |     bind person: maybe (text, int) = ("Ada", 36)
+145 |     bind person: maybe (text, int) = ("Ada", 36)
     | keyword:bind  variable:person  punctuation::  keyword:maybe  punctuation:(  type-builtin:text  punctuation:,  type-builtin:int  punctuation:)  operator:=  punctuation:(  string:"Ada"  punctuation:,  number:36  punctuation:)
-134 |     when person is {(who, years)}
+146 |     when person is {(who, years)}
     | keyword:when  variable:person  keyword:is  punctuation:{  punctuation:(  variable:who  punctuation:,  variable:years  punctuation:)  punctuation:}
-135 |         show(who)
+147 |         show(who)
     | builtin-fn:show  punctuation:(  variable:who  punctuation:)
-136 |         show(years)
+148 |         show(years)
     | builtin-fn:show  punctuation:(  variable:years  punctuation:)
-137 |     fi
+149 |     fi
     | keyword:fi
-138 |     match parsed(4)
+150 |     match parsed(4)
     | keyword:match  task:parsed  punctuation:(  number:4  punctuation:)
-139 |         case {(value, doubled)}
+151 |         case {(value, doubled)}
     | keyword:case  punctuation:{  punctuation:(  variable:value  punctuation:,  variable:doubled  punctuation:)  punctuation:}
-140 |             show(value + doubled)
+152 |             show(value + doubled)
     | builtin-fn:show  punctuation:(  variable:value  operator:+  variable:doubled  punctuation:)
-141 |         case fail (reason, where_at)
+153 |         case fail (reason, where_at)
     | keyword:case  keyword:fail  punctuation:(  variable:reason  punctuation:,  variable:where_at  punctuation:)
-142 |             show(reason)
+154 |             show(reason)
     | builtin-fn:show  punctuation:(  variable:reason  punctuation:)
-143 |             show(where_at)
+155 |             show(where_at)
     | builtin-fn:show  punctuation:(  variable:where_at  punctuation:)
-144 |     fi
+156 |     fi
     | keyword:fi
-145 |     match parsed(-2)
+157 |     match parsed(-2)
     | keyword:match  task:parsed  punctuation:(  operator:-  number:2  punctuation:)
-146 |         case {(value, doubled)}
+158 |         case {(value, doubled)}
     | keyword:case  punctuation:{  punctuation:(  variable:value  punctuation:,  variable:doubled  punctuation:)  punctuation:}
-147 |             show(value + doubled)
+159 |             show(value + doubled)
     | builtin-fn:show  punctuation:(  variable:value  operator:+  variable:doubled  punctuation:)
-148 |         case fail (reason, where_at)
+160 |         case fail (reason, where_at)
     | keyword:case  keyword:fail  punctuation:(  variable:reason  punctuation:,  variable:where_at  punctuation:)
-149 |             show(reason)
+161 |             show(reason)
     | builtin-fn:show  punctuation:(  variable:reason  punctuation:)
-150 |             show(where_at)
+162 |             show(where_at)
     | builtin-fn:show  punctuation:(  variable:where_at  punctuation:)
-151 |     fi
+163 |     fi
     | keyword:fi
-152 |     when pair is (title, age)
+164 |     when pair is (title, age)
     | keyword:when  variable:pair  keyword:is  punctuation:(  variable:title  punctuation:,  variable:age  punctuation:)
-153 |         show(title)
+165 |         show(title)
     | builtin-fn:show  punctuation:(  variable:title  punctuation:)
-154 |         show(age)
+166 |         show(age)
     | builtin-fn:show  punctuation:(  variable:age  punctuation:)
-155 |     fi
+167 |     fi
     | keyword:fi
-156 |     when pair is hold (name_held, age_held)
+168 |     when pair is hold (name_held, age_held)
     | keyword:when  variable:pair  keyword:is  keyword:hold  punctuation:(  variable:name_held  punctuation:,  variable:age_held  punctuation:)
-157 |         name_held = "Cy"
+169 |         name_held = "Cy"
     | variable:name_held  operator:=  string:"Cy"
-158 |         age_held = age_held + 1
+170 |         age_held = age_held + 1
     | variable:age_held  operator:=  variable:age_held  operator:+  number:1
-159 |         show(name_held)
+171 |         show(name_held)
     | builtin-fn:show  punctuation:(  variable:name_held  punctuation:)
-160 |         show(age_held)
+172 |         show(age_held)
     | builtin-fn:show  punctuation:(  variable:age_held  punctuation:)
-161 |     fi
-    | keyword:fi
-162 |     when person is {hold changing}
-    | keyword:when  variable:person  keyword:is  punctuation:{  keyword:hold  variable:changing  punctuation:}
-163 |         changing = ("Bob", 1)
-    | variable:changing  operator:=  punctuation:(  string:"Bob"  punctuation:,  number:1  punctuation:)
-164 |         show(changing.0)
-    | builtin-fn:show  punctuation:(  variable:changing  punctuation:.  field:0  punctuation:)
-165 |     fi
-    | keyword:fi
-166 |     match grade
-    | keyword:match  variable:grade
-167 |         case Mark hold points note
-    | keyword:case  variant:Mark  keyword:hold  variable:points  variable:note
-168 |             points = points * 2
-    | variable:points  operator:=  variable:points  operator:*  number:2
-169 |             show(points)
-    | builtin-fn:show  punctuation:(  variable:points  punctuation:)
-170 |             show(note)
-    | builtin-fn:show  punctuation:(  variable:note  punctuation:)
-171 |         case Missing
-    | keyword:case  variant:Missing
-172 |             show("missing")
-    | builtin-fn:show  punctuation:(  string:"missing"  punctuation:)
 173 |     fi
     | keyword:fi
-175 |     # Text of a region in a tuple.
+174 |     when pair is (_, _)
+    | keyword:when  variable:pair  keyword:is  punctuation:(  keyword:_  punctuation:,  keyword:_  punctuation:)
+175 |         show("dropped")
+    | builtin-fn:show  punctuation:(  string:"dropped"  punctuation:)
+176 |     fi
+    | keyword:fi
+177 |     show(total((1, (2, 3))))
+    | builtin-fn:show  punctuation:(  task:total  punctuation:(  punctuation:(  number:1  punctuation:,  punctuation:(  number:2  punctuation:,  number:3  punctuation:)  punctuation:)  punctuation:)  punctuation:)
+178 |     when person is {hold changing}
+    | keyword:when  variable:person  keyword:is  punctuation:{  keyword:hold  variable:changing  punctuation:}
+179 |         changing = ("Bob", 1)
+    | variable:changing  operator:=  punctuation:(  string:"Bob"  punctuation:,  number:1  punctuation:)
+180 |         show(changing.0)
+    | builtin-fn:show  punctuation:(  variable:changing  punctuation:.  field:0  punctuation:)
+181 |     fi
+    | keyword:fi
+182 |     match grade
+    | keyword:match  variable:grade
+183 |         case Mark hold points note
+    | keyword:case  variant:Mark  keyword:hold  variable:points  variable:note
+184 |             points = points * 2
+    | variable:points  operator:=  variable:points  operator:*  number:2
+185 |             show(points)
+    | builtin-fn:show  punctuation:(  variable:points  punctuation:)
+186 |             show(note)
+    | builtin-fn:show  punctuation:(  variable:note  punctuation:)
+187 |         case Missing
+    | keyword:case  variant:Missing
+188 |             show("missing")
+    | builtin-fn:show  punctuation:(  string:"missing"  punctuation:)
+189 |     fi
+    | keyword:fi
+191 |     # Text of a region in a tuple.
     | comment:# Text of a region in a tuple.
-176 |     bind line = scan("") at r { "none" }
+192 |     bind line = scan("") at r { "none" }
     | keyword:bind  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r  punctuation:{  string:"none"  punctuation:}
-177 |     bind held = tagged(r, line)
+193 |     bind held = tagged(r, line)
     | keyword:bind  variable:held  operator:=  task:tagged  punctuation:(  region:r  punctuation:,  variable:line  punctuation:)
-178 |     show(held.0)
+194 |     show(held.0)
     | builtin-fn:show  punctuation:(  variable:held  punctuation:.  field:0  punctuation:)
-179 |     show(held.1)
+195 |     show(held.1)
     | builtin-fn:show  punctuation:(  variable:held  punctuation:.  field:1  punctuation:)
-180 |     hold names = new [text]() at r
+196 |     hold names = new [text]() at r
     | keyword:hold  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
-181 |     names.add(line)
+197 |     names.add(line)
     | variable:names  punctuation:.  field:add  punctuation:(  variable:line  punctuation:)
-182 |     names.add("second")
+198 |     names.add("second")
     | variable:names  punctuation:.  field:add  punctuation:(  string:"second"  punctuation:)
-183 |     bind (one, two) = first_two(names)
+199 |     bind (one, two) = first_two(names)
     | keyword:bind  punctuation:(  variable:one  punctuation:,  variable:two  punctuation:)  operator:=  task:first_two  punctuation:(  variable:names  punctuation:)
-184 |     show(one)
+200 |     show(one)
     | builtin-fn:show  punctuation:(  variable:one  punctuation:)
-185 |     show(two)
+201 |     show(two)
     | builtin-fn:show  punctuation:(  variable:two  punctuation:)
-186 |     bind kept = held.copy() at r
+202 |     bind kept = held.copy() at r
     | keyword:bind  variable:kept  operator:=  variable:held  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
-187 |     show(kept.0 == held.0)
+203 |     show(kept.0 == held.0)
     | builtin-fn:show  punctuation:(  variable:kept  punctuation:.  field:0  operator:==  variable:held  punctuation:.  field:0  punctuation:)
-188 | fi
+204 |     bind numbered = (held.1, held.0)
+    | keyword:bind  variable:numbered  operator:=  punctuation:(  variable:held  punctuation:.  field:1  punctuation:,  variable:held  punctuation:.  field:0  punctuation:)
+205 |     show(label(numbered))
+    | builtin-fn:show  punctuation:(  task:label  punctuation:(  variable:numbered  punctuation:)  punctuation:)
+206 | fi
     | keyword:fi

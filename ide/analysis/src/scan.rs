@@ -376,11 +376,9 @@ impl<'a> Tokens<'a> {
         p == 0 || self.before(p) == Some(&Token::Newline)
     }
 
-    /// The trimmed source text after token `p` up to the first token that
-    /// `stop` accepts, a comment, or the end of the line.
-    /// The source after token `p`, up to the end of the line or the first token
-    /// `stop` names outside brackets: a tuple type's commas and its `)` are
-    /// part of it, as in `(int, text)`.
+    /// The trimmed source text after token `p`, up to a comment, the end of the
+    /// line, or the first token `stop` names outside brackets: a tuple type's
+    /// commas and its `)` are part of it, as in `(int, text)`.
     fn text_after(&self, p: usize, stop: fn(&Token) -> bool) -> String {
         let Some(&first) = self.significant.get(p) else { return String::new() };
         let from = self.range(p).end;
