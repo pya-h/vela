@@ -1,4 +1,4 @@
-# error: x
+# error: 2:50: 'hello' is already brought in at 2:35
 include modules/library (greet => hello, card => hello)
 
 task main()

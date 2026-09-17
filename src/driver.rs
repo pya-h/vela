@@ -15,7 +15,7 @@ use crate::ast::Item;
 use crate::check::Checker;
 use crate::codegen::Generator;
 use crate::error::{Error, Result};
-use crate::modules::{self, Loader, SourceFile};
+use crate::modules::{self, Loader, SourceFile, Spelling};
 
 /// The runtime header that generated C includes as `vela_rt.h`.
 pub const RUNTIME_H: &str = include_str!("../runtime/vela_rt.h");
@@ -41,6 +41,9 @@ pub struct Partial {
     pub error: Option<Error>,
     /// The program's files, the main file first; `Span::file` indexes them.
     pub files: Vec<SourceFile>,
+    /// How the main file writes the program's names, whose names in `items`
+    /// start with their module's path (see `modules::Spelling`).
+    pub spelling: Spelling,
 }
 
 /// Like `front_end`, but keeps the program when checking fails, for tools
@@ -54,10 +57,11 @@ pub fn front_end_partial(source: &str) -> Partial {
 pub fn front_end_program(path: &Path, source: &str, loader: &mut Loader) -> Partial {
     let (files, loaded) = modules::load(path, source, loader);
     match loaded {
-        Err(error) => Partial { items: None, error: Some(error), files },
+        Err(error) => Partial { items: None, error: Some(error), files, spelling: Spelling::default() },
         Ok(mut program) => {
             let error = Checker::check_program(&mut program).err();
-            Partial { items: Some(program.items), error, files }
+            let spelling = program.modules.first().map(|main| main.spelling.clone()).unwrap_or_default();
+            Partial { items: Some(program.items), error, files, spelling }
         }
     }
 }

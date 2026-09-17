@@ -1,4 +1,4 @@
-# error: x
+# error: 4:10: 'count.twice' names nothing: 'count' is neither a module this file includes nor a kind, and Vela has no methods
 task main()
     bind count = 1
     show(count.twice(2))

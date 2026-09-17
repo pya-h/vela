@@ -1,0 +1,11 @@
+# Prices of fuel, for tests/run/aliases.vela, in a file with the same name as
+# tests/run/aliases/shop/prices.vela.
+
+kind Size
+    Small
+    Tank(liters: int)
+fi
+
+task price_of(liters: int) -> int
+    <- liters * 180
+fi

@@ -1,4 +1,4 @@
-# error: x
+# error: 5:27: 'library.Card' is a shape, not a kind, so it has no variant 'Hearts'
 include modules/library
 
 task main()

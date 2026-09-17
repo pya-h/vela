@@ -1,4 +1,4 @@
-# error: x
+# error: 8:10: 'Suit' is the name of a kind, so 'Suit.x' would name its variant; choose another name
 kind Suit
     Hearts
     Spades

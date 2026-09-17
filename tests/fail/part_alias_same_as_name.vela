@@ -1,4 +1,4 @@
-# error: x
+# error: 2:35: 'greet' is already named 'greet'; leave out '=> greet'
 include modules/library (greet => greet)
 
 task main()

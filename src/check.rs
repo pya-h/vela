@@ -147,8 +147,11 @@ impl Checker {
         };
         let Some(include) = scope.includes.iter().find(|include| declared(&qualify(&include.id, name))) else { return String::new() };
         let full = qualify(&include.id, name);
-        if let Some((alias, _, at)) = scope.imports.iter().find(|(written, imported, _)| *imported == full && written != name) {
-            return format!("; it is brought in as '{}' at {}:{}", alias, at.line, at.col);
+        match scope.imports.iter().find(|(_, imported, _)| *imported == full) {
+            // Brought in under its own name: the name is known, but not as what was written.
+            Some((written, _, _)) if written == name => return String::new(),
+            Some((alias, _, at)) => return format!("; it is brought in as '{}' at {}:{}", alias, at.line, at.col),
+            None => {}
         }
         match &include.local {
             Some(module) => format!("; module '{}' has one: write '{}', or bring it in with 'include … ({})'", module, full, name),
@@ -1157,7 +1160,7 @@ impl Checker {
             (PatternKind::Any | PatternKind::None, Type::Maybe(_)) => Ok(Vec::new()),
             (PatternKind::Any, _) => Ok(Vec::new()),
             (PatternKind::Variant { kind, tag, binds }, Type::Named(kind_name, region)) if self.kinds.contains_key(kind_name) => {
-                if let Some((written, at)) = kind
+                if let Some((written, at)) = kind.as_deref()
                     && written != kind_name
                 {
                     return err(*at, format!("this pattern names kind '{}', but the value's kind is '{}'", written, kind_name));

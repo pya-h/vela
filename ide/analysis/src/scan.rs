@@ -12,12 +12,12 @@
 //! `each`, the names `case` and `is` patterns bind, the error a plan B names,
 //! and regions), which are only visible after their declaration.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::ops::Range;
 use std::path::Path;
 
 use serde::Serialize;
-use vela::ast::{BUILTIN_TASKS, MODULE_SEPARATOR, Span, Type};
+use vela::ast::{BUILTIN_TASKS, MODULE_SEPARATOR, Span, Type, unqualified};
 use vela::lexer::{ESCAPES, LexKind, LexToken, Token, highlight};
 
 use crate::types::{Context, slashed};
@@ -128,8 +128,12 @@ pub(crate) struct Module {
     pub path: String,
     /// Its text, when the editor gave it.
     pub source: Option<String>,
-    /// Its `include` line's symbol.
+    /// Its `include` line's symbol, named by the name this file names the
+    /// module by (or, when only its parts are included, by its path from this
+    /// file's folder, which no code can write).
     pub symbol: usize,
+    /// Whether this file names the module: not when only its parts are included.
+    pub named: bool,
 }
 
 /// A classified piece of source.
@@ -149,7 +153,8 @@ pub(crate) struct Scan {
     pub tokens: Vec<Classified>,
     /// The modules the file includes, in the order of its `include` lines.
     pub modules: Vec<Module>,
-    /// The names `include m (a, b)` brings in, each with the declaration it names.
+    /// The names `include m (a, b)` brings in, each by the name this file
+    /// writes (its alias, if it has one), with the declaration it names.
     pub imports: HashMap<String, usize>,
 }
 
@@ -159,8 +164,8 @@ pub(crate) struct Scan {
 pub(crate) fn scan(source: &str, field_accesses: &HashMap<(usize, usize), String>, context: Context) -> Scan {
     let lexed = highlight(source);
     let tokens = Tokens::new(source, &lexed);
-    let (mut symbols, declared_at, includes) = declarations(&tokens);
-    let (modules, imports) = included_modules(&mut symbols, &includes, context);
+    let (mut symbols, mut declared_at, includes) = declarations(&tokens);
+    let (modules, imports) = included_modules(&mut symbols, &mut declared_at, &includes, context);
     let classified = Classifier::new(&tokens, symbols, declared_at, field_accesses, imports.clone()).run();
     let (symbols, tokens) = classified;
     Scan { lexed, symbols, tokens, modules, imports }
@@ -170,30 +175,75 @@ pub(crate) fn scan(source: &str, field_accesses: &HashMap<(usize, usize), String
 struct IncludeLine {
     /// The path as written: names and `..`.
     parts: Vec<String>,
-    /// The module's symbol.
+    /// The position of the path's last part.
+    last: usize,
+    /// The module's symbol, declared at its alias if it has one.
     symbol: usize,
-    /// The names in parentheses.
-    names: Vec<String>,
+    /// The names in parentheses or braces.
+    names: Vec<IncludedName>,
+    /// Written with braces: only the names are included.
+    only_parts: bool,
 }
 
-/// Adds the declarations of each module in `includes` to `symbols`, named as this
-/// file names them (`geometry.area`, whose signature says `geometry.Point`),
-/// and returns the modules and the names brought in by name.
-fn included_modules(symbols: &mut Vec<Symbol>, includes: &[IncludeLine], context: Context) -> (Vec<Module>, HashMap<String, usize>) {
+/// A name on an `include` line: `Point`, or `Point => Spot`.
+struct IncludedName {
+    name: String,
+    /// The position of the name.
+    at: usize,
+    /// The name after `=>` and its position.
+    alias: Option<(String, usize)>,
+}
+
+/// Adds the declarations of each module in `includes` to `symbols`, named as
+/// this file names them (`geometry.area`, whose signature says
+/// `geometry.Point`), and returns the modules and the names brought in by name.
+/// Each name on an `include` line is recorded in `declared_at` with the
+/// declaration it names.
+fn included_modules(
+    symbols: &mut Vec<Symbol>,
+    declared_at: &mut HashMap<usize, usize>,
+    includes: &[IncludeLine],
+    context: Context,
+) -> (Vec<Module>, HashMap<String, usize>) {
     let folder = Path::new(context.path).parent().unwrap_or(Path::new(""));
     let mut modules = Vec::new();
     let mut imports = HashMap::new();
     for line in includes {
         let index = modules.len();
-        let path = slashed(&vela::modules::module_file(folder, &line.parts));
+        declared_at.insert(line.last, line.symbol);
+        let file = vela::modules::module_file(folder, &line.parts);
+        let path = slashed(&file);
         let source = context.sources.get(&path).cloned();
-        let name = line.parts.last().cloned().unwrap_or_default();
+        // The name this file names the module by, or its path, which the
+        // compiler names a declaration this file can't write by.
+        let name = if line.only_parts {
+            let id = vela::modules::module_id(folder, &file);
+            if let Some(symbol) = symbols.get_mut(line.symbol) {
+                symbol.name = id.clone();
+            }
+            id
+        } else {
+            symbols.get(line.symbol).map(|s| s.name.clone()).unwrap_or_default()
+        };
+        // Each declaration of the module by its own name.
+        let mut declared: HashMap<String, usize> = HashMap::new();
         if let Some(source) = &source {
             let lexed = highlight(source);
             let tokens = Tokens::new(source, &lexed);
             let (theirs, _, _) = declarations(&tokens);
-            let own_types: HashSet<String> =
-                theirs.iter().filter(|s| matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind)).map(|s| s.name.clone()).collect();
+            let listed = |written: &str| line.names.iter().find(|n| n.name == written);
+            // How this file writes a name of the module: its alias, the name
+            // alone when it is brought in, or through the module.
+            let written_as = |written: &str| match listed(written) {
+                Some(IncludedName { alias: Some((alias, _)), .. }) => alias.clone(),
+                Some(_) => written.to_string(),
+                None => format!("{}{}{}", name, MODULE_SEPARATOR, written),
+            };
+            let types: HashMap<String, String> = theirs
+                .iter()
+                .filter(|s| matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind))
+                .map(|s| (s.name.clone(), written_as(&s.name)))
+                .collect();
             // Their own `include` lines aren't this file's modules; indices move past them.
             let kept: Vec<usize> = (0..theirs.len()).filter(|&i| theirs.get(i).is_some_and(|s| s.kind != SymbolKind::Module)).collect();
             let base = symbols.len();
@@ -201,32 +251,53 @@ fn included_modules(symbols: &mut Vec<Symbol>, includes: &[IncludeLine], context
                 let Some(symbol) = theirs.get(i) else { continue };
                 let mut symbol = symbol.clone();
                 if matches!(symbol.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Variant) {
-                    symbol.name = format!("{}{}{}", name, MODULE_SEPARATOR, symbol.name);
+                    declared.entry(symbol.name.clone()).or_insert(symbols.len());
+                    // A variant keeps its name: only a whole declaration takes an alias.
+                    let kind = symbol.parent.and_then(|parent| theirs.get(parent)).map(|kind| kind.name.as_str());
+                    symbol.name = match symbol.kind {
+                        // Without the module's name, a variant is written alone
+                        // when it is brought in, or else through its kind.
+                        SymbolKind::Variant if line.only_parts && listed(&symbol.name).is_some() => symbol.name.clone(),
+                        SymbolKind::Variant if line.only_parts && kind.is_some_and(|kind| listed(kind).is_some()) => {
+                            format!("{}{}{}", written_as(kind.unwrap_or_default()), MODULE_SEPARATOR, symbol.name)
+                        }
+                        SymbolKind::Variant => format!("{}{}{}", name, MODULE_SEPARATOR, symbol.name),
+                        // Named as written: under its alias, or alone when the module has no name here.
+                        _ if listed(&symbol.name).is_some_and(|n| n.alias.is_some() || line.only_parts) => written_as(&symbol.name),
+                        _ => format!("{}{}{}", name, MODULE_SEPARATOR, symbol.name),
+                    };
                 }
-                symbol.detail = qualify_types(&symbol.detail, &name, &own_types);
+                symbol.detail = qualify_types(&symbol.detail, &types);
                 symbol.parent = symbol.parent.and_then(|parent| kept.iter().position(|&k| k == parent)).map(|p| base + p);
                 symbol.module = Some(index);
                 symbols.push(symbol);
             }
         }
         for written in &line.names {
-            let full = format!("{}{}{}", name, MODULE_SEPARATOR, written);
-            let found = symbols.iter().position(|s| {
-                s.module == Some(index) && s.name == full && !s.private && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Variant)
+            let found = declared.get(&written.name).copied().filter(|&id| {
+                symbols.get(id).is_some_and(|s| !s.private && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Variant))
             });
             if let Some(id) = found {
-                imports.entry(written.clone()).or_insert(id);
+                declared_at.insert(written.at, id);
+                let local = match &written.alias {
+                    Some((alias, at)) => {
+                        declared_at.insert(*at, id);
+                        alias
+                    }
+                    None => &written.name,
+                };
+                imports.entry(local.clone()).or_insert(id);
             }
         }
-        modules.push(Module { path, source, symbol: line.symbol });
+        modules.push(Module { path, source, symbol: line.symbol, named: !line.only_parts });
     }
     (modules, imports)
 }
 
-/// `text`, a declaration's detail written in module `module`, with the names
-/// of that module's shapes and kinds (`own_types`) qualified: `(p: Point)`
+/// `text`, a declaration's detail written in another module, with the names of
+/// that module's shapes and kinds as this file writes them (`types`): `(p: Point)`
 /// becomes `(p: geometry.Point)`.
-fn qualify_types(text: &str, module: &str, own_types: &HashSet<String>) -> String {
+fn qualify_types(text: &str, types: &HashMap<String, String>) -> String {
     let lexed = highlight(text);
     let mut out = String::new();
     let mut at = 0;
@@ -235,12 +306,12 @@ fn qualify_types(text: &str, module: &str, own_types: &HashSet<String>) -> Strin
         let LexKind::Token(Token::Ident(name)) = &token.kind else { continue };
         let before = i.checked_sub(1).and_then(|b| significant.get(b)).map(|t| &t.kind);
         let after = significant.get(i + 1).map(|t| &t.kind);
-        let names_type = own_types.contains(name)
-            && !matches!(before, Some(LexKind::Token(Token::Dot | Token::AtSign)))
-            && !matches!(after, Some(LexKind::Token(Token::Colon)));
-        if names_type {
+        let written = types
+            .get(name)
+            .filter(|_| !matches!(before, Some(LexKind::Token(Token::Dot | Token::AtSign))) && !matches!(after, Some(LexKind::Token(Token::Colon))));
+        if let Some(written) = written {
             out.push_str(text.get(at..token.range.start).unwrap_or_default());
-            out.push_str(&format!("{}{}{}", module, MODULE_SEPARATOR, name));
+            out.push_str(written);
             at = token.range.end;
         }
     }
@@ -379,32 +450,49 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
             continue;
         };
         match token {
-            // `include path/name (a, b)`: declares the module `name`.
+            // `include path/name => alias (a, b => c)` or `include path/name {a}`:
+            // declares the module `name`, or `alias`.
             Token::Include => {
                 let mut parts = Vec::new();
-                let mut names = Vec::new();
+                let mut names: Vec<IncludedName> = Vec::new();
+                let mut last_part = None;
                 let mut alias = None;
                 let mut in_names = false;
+                let mut only_parts = false;
+                let mut after_arrow = false;
                 let mut q = p + 1;
                 while let Some(part) = tokens.token(q) {
                     match part {
                         Token::Newline | Token::Eof => break,
                         Token::LParen => in_names = true,
-                        Token::Ident(name) if in_names => names.push(name.clone()),
+                        Token::LBrace => {
+                            in_names = true;
+                            only_parts = true;
+                        }
+                        Token::FatArrow => after_arrow = true,
+                        Token::Ident(name) if after_arrow => {
+                            after_arrow = false;
+                            match names.last_mut() {
+                                Some(last) if in_names => last.alias = Some((name.clone(), q)),
+                                _ if !in_names => alias = Some(q),
+                                _ => {}
+                            }
+                        }
+                        Token::Ident(name) if in_names => names.push(IncludedName { name: name.clone(), at: q, alias: None }),
                         Token::Ident(name) => {
                             parts.push(name.clone());
-                            alias = Some(q);
+                            last_part = Some(q);
                         }
                         Token::Range if !in_names => parts.push("..".to_string()),
-                        _ => {}
+                        _ => after_arrow = false,
                     }
                     q += 1;
                 }
-                if let Some(alias) = alias.filter(|&a| tokens.token(a + 1) != Some(&Token::Slash)) {
+                if let Some(last) = last_part.filter(|&last| tokens.token(last + 1) != Some(&Token::Slash)) {
                     let written = tokens.text_after(p, never);
-                    let path = written.split('(').next().unwrap_or_default().trim().to_string();
-                    let symbol = declare(&mut symbols, alias, SymbolKind::Module, path, None);
-                    includes.push(IncludeLine { parts, symbol, names });
+                    let path = written.split(['(', '{']).next().unwrap_or_default().trim().to_string();
+                    let symbol = declare(&mut symbols, alias.unwrap_or(last), SymbolKind::Module, path, None);
+                    includes.push(IncludeLine { parts, last, symbol, names, only_parts });
                 }
             }
             // Items only appear at the top level, so a new one also closes
@@ -614,18 +702,21 @@ impl<'a> Classifier<'a> {
                 Token::Eof => {}
                 Token::Int(_) | Token::Float(_) => self.push(range, TokenClass::Number, None),
                 Token::Text(_) => self.string(range),
-                Token::Ident(name) if in_include => {
+                Token::Ident(_) if in_include => {
                     let (class, symbol) = match self.declared_at.get(&p) {
-                        Some(&id) => (TokenClass::Module, Some(id)),
-                        None if in_include_names => {
-                            let id = self.imports.get(name.as_str()).copied();
-                            let class = id.and_then(|id| self.symbols.get(id)).map_or(TokenClass::Variable, |s| s.kind.class());
-                            (class, id)
-                        }
+                        // The module's name or alias, or a name brought in and its alias.
+                        Some(&id) => (self.symbols.get(id).map_or(TokenClass::Variable, |s| s.kind.class()), Some(id)),
+                        // A name the module doesn't declare (or whose file isn't known).
+                        None if in_include_names => (TokenClass::Variable, None),
                         // A folder of the path.
                         None => (TokenClass::Module, None),
                     };
                     self.push(range, class, symbol);
+                }
+                Token::FatArrow => self.push(range, TokenClass::Operator, None),
+                Token::LBrace | Token::RBrace if in_include => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    in_include_names = true;
                 }
                 Token::Ident(name) => {
                     if let Some(type_follows) = region_now {
@@ -833,6 +924,17 @@ impl<'a> Classifier<'a> {
                 None => (TokenClass::Variable, None),
             };
         }
+        // `Shape.Circle`: a kind's variant, after the kind's name.
+        if before == Some(&Token::Dot)
+            && let Some(kind) = self.kind_before()
+        {
+            let variant = self.symbols.iter().position(|s| s.kind == SymbolKind::Variant && s.parent == Some(kind) && unqualified(&s.name) == name);
+            return (TokenClass::Variant, variant);
+        }
+        // `case Shape.Circle`: the kind's name, before its variant.
+        if in_pattern && after == Some(&Token::Dot) && matches!(before, Some(Token::Case | Token::Is)) {
+            return (TokenClass::Type, self.global(name, &[SymbolKind::Kind]));
+        }
         // A name being declared is one even where a type would be written,
         // as a result's name is (`-> total: int`).
         if let Some(intro) = declaring {
@@ -1026,6 +1128,16 @@ impl<'a> Classifier<'a> {
         let own = self.globals.get(name).copied().filter(|&id| self.symbols.get(id).is_some_and(|s| s.module.is_none()));
         own.or_else(|| self.imports.get(name).copied())
             .filter(|&id| self.symbols.get(id).is_some_and(|s| kinds.contains(&s.kind)))
+    }
+
+    /// The kind named just before the `.` last classified, as in `Shape.`.
+    fn kind_before(&self) -> Option<usize> {
+        let mut classified = self.out.iter().rev().filter(|token| token.class != TokenClass::Comment);
+        let dot = classified.next()?;
+        let named = classified.next()?;
+        let text = self.tokens.source.get(dot.range.clone())?;
+        let id = named.symbol.filter(|_| text == ".")?;
+        self.symbols.get(id).is_some_and(|s| s.kind == SymbolKind::Kind).then_some(id)
     }
 
     /// The module the file includes under `name`, unless a variable at byte `at`

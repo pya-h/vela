@@ -12,7 +12,9 @@ never wraps: overflow and division by zero stop the program with a message sayin
 are values held in place, and slices (`[int]@r`) view items in a region, made with `new [int]([0; n]) at r`;
 every index is checked, and `xs.len` is the count. A program can span
 several files: `include shapes/geometry` reads `shapes/geometry.vela`, named as `geometry.area(…)` (or brought in
-with `include shapes/geometry (area)`), and everything a file declares is public unless marked `priv`.
+with `include shapes/geometry (area)`, or only the names with braces, `{area}`), `=>` gives a module or a name
+another name (`include fuel/prices => fuel`), and everything a file declares is public unless marked `priv`. A
+variant can be written through its kind, `Size.Small`.
 
 ```
 task fib(n: int) -> int

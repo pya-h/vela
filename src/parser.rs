@@ -141,11 +141,13 @@ impl Parser {
         Ok(format!("{}{}{}", name, MODULE_SEPARATOR, member))
     }
 
-    /// After a name: `.Variant` when a call follows, giving `Kind.Variant`, as in
-    /// `Shape.Circle(…)` (or `geometry.Shape.Circle(…)`). Vela has no methods,
-    /// so a name, a dot, and a call is a kind's variant. (A function of its own:
-    /// `parse_primary`'s frame is on the stack once per nesting level.)
-    fn variant_called(&mut self, name: String) -> Result<String> {
+    /// `qualified` for a name that starts a value, followed by `.Variant` when a
+    /// call follows, giving `Kind.Variant`, as in `Shape.Circle(…)` (or
+    /// `geometry.Shape.Circle(…)`): Vela has no methods, so a name, a dot, and a
+    /// call is a kind's variant. (One call from `parse_primary`, whose frame is
+    /// on the stack once per nesting level, and grows with each `?` in it.)
+    fn value_name(&mut self, name: String) -> Result<String> {
+        let name = self.qualified(name)?;
         let calls = matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) && self.tokens.get(self.pos + 2) == Some(&Token::LParen);
         if !self.check(Token::Dot) || !calls {
             return Ok(name);
@@ -967,7 +969,7 @@ impl Parser {
                         ),
                     ));
                 }
-                let kind = (!written.is_empty()).then(|| (written.join(&MODULE_SEPARATOR.to_string()), span));
+                let kind = (!written.is_empty()).then(|| Box::new((written.join(&MODULE_SEPARATOR.to_string()), span)));
                 if self.check(Token::LParen) {
                     return Err(Error::at(
                         self.peek_span(),
@@ -1184,8 +1186,7 @@ impl Parser {
             Token::Ident(name) => {
                 let name = name.clone();
                 self.advance();
-                let name = self.qualified(name)?;
-                let name = self.variant_called(name)?;
+                let name = self.value_name(name)?;
                 if self.check(Token::LBrace) && self.at_shape_literal() {
                     self.parse_struct_init(name)?
                 } else if self.check(Token::LParen) {

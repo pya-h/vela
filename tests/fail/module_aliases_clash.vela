@@ -1,4 +1,4 @@
-# error: x
+# error: 3:34: another module named 'lib' is already included at 2:28; a file can't include two modules with one name, so give one of them another name with '=> name'
 include modules/library => lib
 include modules/other/library => lib
 

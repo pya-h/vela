@@ -344,8 +344,10 @@ Press Ctrl+C to stop.</pre>
           <h4>Programs in several files</h4>
           <p>A file's <code>include</code> lines are followed into the files they name, as you type: <code>geometry.area</code>
             is colored as a task, hovers with its signature and module, and jumps into <code>geometry.vela</code> with
-            <kbd>F12</kbd>; completion after <code>geometry.</code> and inside <code>include … (</code> offers what the
-            module declares, without its <code>priv</code> names; and an error in a module, even one not saved yet, is
+            <kbd>F12</kbd>; completion after <code>geometry.</code> and inside <code>include … (</code> or <code>{</code> offers what the
+            module declares, without its <code>priv</code> names; aliases (<code>=&gt;</code>) are followed, so a renamed
+            name hovers, completes, and jumps under its new name, and after <code>Size.</code> completion offers the
+            kind's variants; and an error in a module, even one not saved yet, is
             shown at the <code>include</code> that leads to it, with the module's file and line. An open file counts as
             edited; any other is read from the workspace.</p>
         </div>

@@ -1,4 +1,4 @@
-# error: x
+# error: 5:10: unknown task 'greet'; it is brought in as 'hello' at 2:35
 include modules/library (greet => hello)
 
 task main()

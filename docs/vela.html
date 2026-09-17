@@ -190,7 +190,7 @@
         errors with <code>match</code>, <code>is</code>, and a plan B), <code>regions.vela</code> (a tree in a region, a region
         per loop pass, and copying a result into a longer-lived region), <code>arrays.vela</code> (arrays, and slices
         in a region: sorting and a sieve of primes), <code>shop.vela</code> (a program in three files, with
-        <code>include</code> and <code>priv</code>), and <code>demo.vela</code> (tasks, shapes, pointers, and control flow).
+        <code>include</code>, braces, <code>=&gt;</code>, and <code>priv</code>), and <code>demo.vela</code> (tasks, shapes, pointers, and control flow).
       </p>
       <div class="note">
         Prefer an editor? <a href="ide.html">Vela Studio</a> highlights Vela, shows errors as you type, completes
@@ -259,6 +259,8 @@ true false none  fi   maybe is     fail include priv</pre>
         <tr><td><code>[a, b]</code>, <code>[v; n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
         <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, or variant of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
+        <tr><td><code>Kind.Variant</code></td><td>a variant, named through its kind (see <a href="#kinds">Kinds</a>)</td></tr>
+        <tr><td><code>name =&gt; other</code></td><td>on an <code>include</code> line: the name a module or a name brought in is written with in this file</td></tr>
         <tr><td><code>Name { x: 1 }</code></td><td>a shape literal</td></tr>
         <tr><td><code>0..5</code></td><td>a range, in <code>each</code> and in a slice (<code>xs[1..3]</code>)</td></tr>
         <tr><td><code>=</code></td><td>assignment, and the value of a binding</td></tr>
@@ -575,7 +577,7 @@ show(p.x)</pre>
 q.x = 5                    <span class="comment"># ok</span>
 p.x = 5                    <span class="comment"># error: cannot assign to a field of immutable variable 'p'</span></pre>
 
-      <h3>Kinds</h3>
+      <h3 id="kinds">Kinds</h3>
       <p>
         Kinds are tagged unions with exhaustive pattern matching. Each <code>case</code> binds the variant's payload
         fields in order; the bindings are visible only inside that case, so different cases may reuse names.
@@ -619,6 +621,13 @@ p.x = 5                    <span class="comment"># error: cannot assign to a fie
 <span class="keyword">bind</span> a = Red
 <span class="keyword">bind</span> b = Green()          <span class="comment"># same as Green</span>
 <span class="keyword">bind</span> c = Dimmed(3)</pre>
+      <p>
+        A variant can also be named through its kind: <code>Light.Red</code> and <code>Light.Dimmed(3)</code> are the
+        same values as <code>Red</code> and <code>Dimmed(3)</code>, and a pattern may be written the same way,
+        <code>case Light.Dimmed level</code> (the kind it names must be the value's). It is how another module's
+        variants are named when only their kind is brought in (see <a href="#modules">Modules</a>). Since
+        <code>Light.Red</code> reads like a field, no variable can be named like a kind.
+      </p>
 
       <h3 id="arrays">Arrays</h3>
       <p>
@@ -672,8 +681,8 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
         across different kinds, and none can be named like a builtin (<code>int</code>, <code>float</code>,
         <code>bool</code>, <code>text</code>, <code>unit</code>, <code>show</code>). Another module has names of its own
         (see <a href="#modules">Modules</a>). Every type you write must be a builtin, a shape, or a kind. A variable
-        can't take the name of a variant or of a module the file includes, so a bare <code>Red</code> always means the
-        variant.
+        can't take the name of a variant, a kind, or a module the file includes, so a bare <code>Red</code> always means
+        the variant, and <code>Light.Red</code> a variant of <code>Light</code>.
       </p>
 
       <h3 id="control-flow">Control Flow</h3>
@@ -1119,6 +1128,7 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
     <span class="keyword">fi</span>
     <span class="keyword">bind</span> red: Color = palette.Red           <span class="comment"># Color came in by name</span>
     show(describe(red))                      <span class="comment"># red</span>
+    show(describe(Color.Blue))               <span class="comment"># blue: a variant through its kind</span>
 <span class="keyword">fi</span>
 
 <span class="comment"># shapes/geometry.vela</span>
@@ -1156,13 +1166,27 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         <li><strong>Names.</strong> <code>geometry.area(…)</code> calls a task, <code>geometry.Point { … }</code> builds a
           shape, <code>geometry.Square(3.0)</code> and <code>geometry.Dot</code> make variants, and
           <code>geometry.Point</code> is a type anywhere a type is written (<code>^geometry.Node@r</code>,
-          <code>maybe geometry.Point</code>, <code>new geometry.Point(p) at r</code>). A <code>case</code> or
-          <code>is</code> names a variant alone, as in <code>case Square side</code>, since the value's kind already says
-          which module it is from. Messages name another module's types the same way, as in <em>expected type
-          geometry.Point, got int</em>.</li>
+          <code>maybe geometry.Point</code>, <code>new geometry.Point(p) at r</code>). A variant can also be named
+          through its kind, <code>geometry.Figure.Square(3.0)</code>. A <code>case</code> or <code>is</code> names a
+          variant alone, as in <code>case Square side</code>, since the value's kind already says which module it is
+          from, or through its kind, as in <code>case geometry.Figure.Square side</code>.</li>
         <li><strong>Bringing names in.</strong> <code>include shapes/palette (Color, describe)</code> also lets the file write
           <code>Color</code> and <code>describe</code> without <code>palette.</code>, which still works too. Each name
-          listed must exist in the module, and a kind's variants come in only when listed themselves.</li>
+          listed must exist in the module. A kind's variants come in only when listed themselves; otherwise they are
+          named through the kind, <code>Color.Blue</code>.</li>
+        <li><strong>Only the names listed.</strong> With braces, <code>include shapes/palette {Color, describe}</code>
+          brings in <code>Color</code> and <code>describe</code> but not the module's name: <code>palette</code> names
+          nothing in this file, so nothing else of the module can be reached. The parentheses include the module and
+          the names; the braces, only the names.</li>
+        <li><strong>Other names.</strong> <code>=&gt;</code> gives an included module or name another name, the real
+          name on its left: <code>include shapes/geometry =&gt; geo</code>, or
+          <code>include shapes/palette (Color =&gt; Hue, describe)</code>. From then on the file writes only the new name:
+          <code>geometry.area</code>, <code>Color</code>, and <code>palette.Color</code> are errors that say what to write
+          instead. That is how a file includes two modules whose files have the same name
+          (<code>include shop/prices =&gt; shop</code> and <code>include fuel/prices =&gt; fuel</code>), or two names that
+          would clash. A variant keeps its own name, as a field does, since it belongs to its kind; rename the kind and
+          write its variants through it, as in <code>Hue.Red</code>. Braces can rename names too
+          (<code>{Color =&gt; Hue}</code>), but not the module, which has no name there.</li>
         <li><strong>Private.</strong> Everything a file declares can be used by the files that include it, unless it is
           marked <code>priv</code>: a task, shape, or kind (whose variants are then private too), or a shape's field.
           Another file can't read or assign a private field, or build its shape with a literal, so a module can keep
@@ -1173,18 +1197,25 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
           file, but each module has its own: two modules can both have an <code>area</code>, and a program can have its
           own <code>Red</code> beside <code>palette.Red</code>. A module sees only what it declares and what it includes;
           the main file's names aren't visible to the modules it includes. Only the main file's <code>main</code> starts the
-          program; a module's <code>main</code> is an ordinary task, called as <code>tools.main()</code>.</li>
+          program; a module's <code>main</code> is an ordinary task, called as <code>tools.main()</code>. The program knows
+          a module by its path from the main file's folder, so <code>shop/prices.vela</code> and
+          <code>fuel/prices.vela</code> can both be in one program.</li>
+        <li><strong>Messages.</strong> A message names things as the file with the error writes them: <em>expected type
+          Hue, got int</em> after <code>(Color =&gt; Hue)</code>, <em>expected type geometry.Point, got int</em> through the
+          module's name. Something the file has no way to write is named by its module's path, as in <em>expected type
+          shapes/palette.Color, got int</em>.</li>
         <li><strong>Rules.</strong> Modules can't include one another in a circle (<em>modules can't include one another
-          in a circle: a -&gt; b -&gt; a</em>). A file includes each module once, a module's name can't also be the name of
-          something the file declares, of a name it brings in, or of a variable, and a module can't be named like a
-          builtin type or task. Two modules of one program can't have the same name, even in different folders.</li>
+          in a circle: a -&gt; b -&gt; a</em>). A file includes each module once, and can't include two modules under one
+          name. The name a module is included under can't also be the name of something the file declares, of a name
+          it brings in, or of a variable, and can't be a builtin type or task. A name can't be renamed to itself, or to
+          a builtin.</li>
       </ul>
       <pre><span class="comment"># in main.vela, after include shapes/geometry</span>
 show(geometry.pi())            <span class="comment"># error: 'pi' is private to module 'geometry'</span>
 show(area(square))             <span class="comment"># error: unknown task 'area'; module 'geometry' has one: write 'geometry.area', …</span></pre>
       <p>
         <code>examples/shop.vela</code> is a program in three files. In the generated C, a module's names are
-        prefixed with it (<code>vela_geometry__0__area</code>), so every module's names stay apart.
+        prefixed with its path (<code>vela_shapes__1__geometry__0__area</code>), so every module's names stay apart.
       </p>
     </section>
 
@@ -1217,8 +1248,7 @@ show(area(square))             <span class="comment"># error: unknown task 'area
         <li>There is no way to read input.</li>
         <li>Arrays and slices can't be compared or shown whole, a slice can't grow, and an array's count is known
           before the program runs (see <a href="#arrays">Arrays</a>).</li>
-        <li>Two modules of one program can't have the same name, and a module can't be included under another name
-          (see <a href="#modules">Modules</a>). There are no packages to share modules between programs.</li>
+        <li>There are no packages to share modules between programs (see <a href="#modules">Modules</a>).</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which
           matters only when they call tasks that print, or when more than one of them would stop the program

@@ -1,4 +1,4 @@
-# error: x
+# error: 5:10: 'Suit' is a kind, not a variable; name one of its variants, as in 'Suit.Variant'
 include modules/library (Suit)
 
 task main()

@@ -510,8 +510,9 @@ pub type Binding = (String, Span);
 pub enum PatternKind {
     /// `Circle r` or `Shape.Circle r`: a variant, naming its payload fields in
     /// order. `kind` is the kind written before the variant, if any: the
-    /// value's kind, which the checker makes sure of.
-    Variant { kind: Option<Binding>, tag: String, binds: Vec<Binding> },
+    /// value's kind, which the checker makes sure of. (Boxed: patterns are held
+    /// by value in frames that nest, and are rarely written with a kind.)
+    Variant { kind: Option<Box<Binding>>, tag: String, binds: Vec<Binding> },
     /// `{v}`: the value in a `maybe`, or the success of a `T or E`.
     Value(Binding),
     /// `none`: an empty `maybe`.

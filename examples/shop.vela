@@ -1,21 +1,22 @@
 # A program in several files. `include` loads another file from this file's
-# folder: shop/cart.vela is reached through its name, as `cart.add(…)`, and the
-# names in parentheses from shop/prices.vela are brought in directly. `priv`
-# keeps a task, shape, kind, or field to the file that declares it.
+# folder: shop/cart.vela is reached through its name, as `cart.add(…)`. From
+# shop/prices.vela, the braces bring in only the names listed, one of them
+# under another name with `=>`. `priv` keeps a task, shape, kind, or field to
+# the file that declares it.
 
 include shop/cart
-include shop/prices (Item, price_of)
+include shop/prices {Item => Product, price_of}
 
 task main()
     hold basket = cart.empty()
-    basket = cart.add(basket, prices.Apple, 6)
-    basket = cart.add(basket, prices.Bread, 1)
-    basket = cart.add(basket, prices.Cheese(600), 1)
+    basket = cart.add(basket, Product.Apple, 6)
+    basket = cart.add(basket, Product.Bread, 1)
+    basket = cart.add(basket, Product.Cheese(600), 1)
     show(basket.items)                       # 8
     show(cart.total(basket))                 # 1690 cents
 
-    # Item came in by name; its variants are still named through `prices`.
-    bind snack: Item = prices.Cheese(100)
+    # Item came in as Product; its variants are named through it.
+    bind snack: Product = Product.Cheese(100)
     show(price_of(snack))                    # 300
 
     # `basket.total` would be an error here: the field is private to cart.vela,

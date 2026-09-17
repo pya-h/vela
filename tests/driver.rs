@@ -252,6 +252,22 @@ fn a_program_loads_each_module_once_through_its_loader() {
 }
 
 #[test]
+fn a_module_outside_the_main_folder_keeps_its_path_in_its_names() {
+    let main = "include ../common/text => words\n\ntask main()\n    show(words.twice(2))\nfi\n";
+    let files = [("common/text.vela", "task twice(n: int) -> int\n    <- n * 2\nfi\n")];
+    let asked = std::cell::RefCell::new(Vec::new());
+    let items = driver::check_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
+    let names: Vec<&str> = items.iter().map(|item| match item {
+        Item::Task(t) => t.name.as_str(),
+        _ => "",
+    }).collect();
+    assert_eq!(names, ["../common/text.twice", "main"]);
+    // In C, `..` is `__2__`, each `/` `__1__`, and the `.` before the name `__0__`.
+    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
+    assert!(c.contains("int64_t vela___2____1__common__1__text__0__twice(int64_t n)"), "{}", c);
+}
+
+#[test]
 fn an_error_in_a_module_names_that_file() {
     let main = "include lib\n\ntask main()\n    show(lib.twice(2))\nfi\n";
     let files = [("lib.vela", "task twice(n: int) -> int\n    <- n * \"2\"\nfi\n")];

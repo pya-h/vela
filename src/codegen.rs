@@ -1666,6 +1666,8 @@ fn signature(t: &TaskDef) -> String {
 // other, with the runtime (`vela__rt__*`), or with C:
 //
 //   vela_Point, vela_area         tasks, shapes, kinds          (`mangle`)
+//   vela_shapes__1__geometry__0__area   another module's          (`c_name`)
+//   vela___2____1__common__1__text__0__pad   one above the main file's folder
 //   vela_Shape__Tag               a kind's tag enum type        (`tag_type`)
 //   vela_Shape__tag_Circle        a variant's tag value         (`tag_value`)
 //   vela__int                     a local or field named like C (`c_ident`)

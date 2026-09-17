@@ -410,7 +410,8 @@
         <div class="card">
           <h3>Module system <span class="badge b-done">Done</span></h3>
           <p>A file is a module: <code>include shapes/geometry</code>, then <code>geometry.area(…)</code>, or
-            <code>include shapes/geometry (area)</code>; everything is public unless marked <code>priv</code>.
+            <code>include shapes/geometry (area)</code>, or only the names with braces; <code>=&gt;</code> renames a module
+            or a name; everything is public unless marked <code>priv</code>.
             <a href="vela.html#modules">The language guide describes it</a>; the reasoning is <a href="#modules">below</a>.</p>
         </div>
         <div class="card">
@@ -627,10 +628,13 @@ fi</pre>
       </p>
       <pre>include shapes/geometry           # shapes/geometry.vela, named geometry
 include shapes/palette (Color, describe)
+include fuel/prices =&gt; fuel        # another prices.vela, under another name
+include shop/prices {Item =&gt; Product, price_of}   # only these names
 
 task main()
     show(geometry.area(geometry.Square(3.0)))
-    show(describe(palette.Red))
+    show(describe(Color.Red))         # a variant through its kind
+    show(price_of(Product.Apple))
 fi
 
 # in shapes/geometry.vela
@@ -649,7 +653,15 @@ fi</pre>
         <li><strong>Both <code>m.name</code> and <code>include m (name)</code>.</strong> Qualified names say at every use
           where a name comes from and never collide; a list of names keeps code that uses a few names often short.
           This is the one place where Vela gives two ways to write the same thing, on purpose: a file chooses per
-          name, and the list at the top says which.</li>
+          name, and the list at the top says which. Braces list names without the module's name, for a file that
+          wants only those.</li>
+        <li><strong>Aliases with <code>=&gt;</code>, and the old name gone.</strong> An alias hides the name it replaces,
+          in that file, both <code>cart</code> and <code>prices.Item</code>, so each thing has one spelling per file and
+          nothing needs a search to know which name is meant. The arrow points from the real name to the new one, and
+          doesn't read as a type (<code>:</code>) or an assignment (<code>=</code>). A variant or a field can't be renamed:
+          they are parts of a declaration, and renaming them would redefine it. Instead any variant can be written
+          through its kind (<code>Size.Small</code>, <code>shop.Size.Small</code>), so two kinds with variants of the same
+          name never clash, with no second kind of include.</li>
         <li><strong>Public unless <code>priv</code>.</strong> Most of what a file declares is meant to be used, so
           the rare private helper is the one marked, the reverse of Rust's <code>pub</code>. Fields follow the same
           rule, which is what lets a module keep an invariant: another file can't read, assign, or build a private
@@ -657,23 +669,31 @@ fi</pre>
       </ul>
       <p>
         What building it settled. <strong>Names.</strong> Every task, shape, kind, and variant gets one name in the
-        program: its own in the main file, <code>module.Name</code> in any other. Module names must therefore be
-        unique in a program (two <code>util</code> modules in different folders are an error), which also makes every
-        message's names unambiguous and valid Vela: <em>expected type geometry.Point, got int</em>. In C, the
-        <code>.</code> becomes <code>__0__</code> (<code>vela_geometry__0__area</code>), which no Vela name can contain.
-        <strong>Patterns.</strong> A <code>case</code> names a variant alone even for another module's kind: the matched
-        value's type says whose it is, so <code>case geometry.Square</code> is an error that says so. A kind listed in
-        <code>include m (…)</code> doesn't bring its variants; each is listed on its own. <strong>Visibility.</strong> A
+        program: its own in the main file, and its module's path from the main file's folder with the name in any other
+        (<code>shapes/geometry.Point</code>), so two <code>util</code> modules in different folders are two modules. (At
+        first a module was named by the path's last part, and two <code>util</code>s were an error; aliases made that
+        rule unnecessary, and the path made it wrong.) A message is spelled for the file it is in: each of the
+        program's names in it is written as that file writes it (<em>expected type Product, got int</em>), or by its
+        path when the file can't write it. In C, the <code>.</code> becomes <code>__0__</code>, each <code>/</code>
+        <code>__1__</code>, and each <code>..</code> <code>__2__</code> (<code>vela_shapes__1__geometry__0__area</code>),
+        none of which a Vela name can contain. <strong>Patterns.</strong> A <code>case</code> names a variant alone even
+        for another module's kind, since the matched value's type says whose it is, or through its kind
+        (<code>case Size.Large extra</code>), which must be the value's; <code>case geometry.Square</code> (a module, then a
+        variant) is an error that says so. A kind listed in <code>include m (…)</code> doesn't bring its variants; they
+        are listed on their own or written through the kind. Because <code>Size.Small</code> reads like a field, a
+        variable can't be named like a kind, as it can't be named like a variant or a module. <strong>Visibility.</strong> A
         module sees only what it declares and includes, never the main file's names. What other files see of a public
         item (a task's parameters and results, a shape's public fields, a kind's values) can't mention a private
         type, since they couldn't name it. <strong>Errors.</strong> Include cycles, a missing file, a module included twice,
-        a module named like a builtin, and a module name that clashes with a name the file declares, brings in, or
-        binds are all errors at the <code>include</code> or the name; an error in another module names that file.
+        two modules under one name, a module or alias named like a builtin, an alias of a variant, and a name that
+        clashes with a name the file declares, brings in, or binds are all errors at the <code>include</code> or the
+        name; a name hidden by an alias or by braces is an error that says what the file writes instead; an error in another module names that file.
         <strong>Studio.</strong> Vela Studio follows <code>include</code> lines as you type: the page gives the
         analysis the text of the files a program includes (an open file as edited), and the analysis says which it
         still needs; an error in a module is shown at the <code>include</code> that leads to it. The server builds a
-        program's modules from the workspace only, so an <code>include</code> can't read a file outside it. A way to
-        include a module under another name (<code>include util as text_util</code>), and packages shared between programs, are left for later.
+        program's modules from the workspace only, so an <code>include</code> can't read a file outside it. Hover,
+        completion, and highlighting follow aliases, braces, and <code>Kind.Variant</code>, and name things as the file
+        does. Packages shared between programs are left for later.
       </p>
     </section>
 
@@ -1488,7 +1508,7 @@ show(p.length_squared())</pre>
         <div class="roadmap-phase next">
           <h3>Next — Growth <span class="badge b-med">Medium Risk</span></h3>
           <ul>
-            <li><s>Module system</s> (done: <a href="vela.html#modules">modules</a>), then a package manager</li>
+            <li><s>Module system</s> (done: <a href="vela.html#modules">modules</a>, with aliases and <code>Kind.Variant</code>), then a package manager</li>
             <li>Methods on shapes and kinds (qualified tasks with <code>self</code> / <code>hold self</code>)</li>
             <li>Tuples, then generics</li>
             <li><s>Missing values and error handling</s> (done: <a href="#maybe"><code>maybe T</code>, plan B, <code>T or E</code></a>)</li>

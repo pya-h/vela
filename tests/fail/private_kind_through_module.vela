@@ -1,4 +1,4 @@
-# error: x
+# error: 5:17: 'Lock' is private to module 'library'
 include modules/library
 
 task main()

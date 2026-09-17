@@ -1,0 +1,21 @@
+# Prices in a shop, for tests/run/aliases.vela. tests/run/aliases/fuel has a
+# module named prices too: a module is known by its path.
+
+shape Item
+    name: text
+    cents: int
+fi
+
+kind Size
+    Small
+    Large(extra: int)
+fi
+
+task price_of(item: Item, size: Size) -> int
+    match size
+    case Small
+        <- item.cents
+    case Size.Large extra
+        <- item.cents + extra
+    fi
+fi

@@ -69,6 +69,23 @@ describe("VelaAnalysis", () => {
     expect(labels).toEqual(["area"]);
   });
 
+  it("follows aliases, braces, and variants named through their kind", () => {
+    const source = "include shapes/geometry => geo {Figure => Shape}\n";
+    const bad = analysis.file(source, { path: "app/main.vela", modules: {} });
+    expect(bad.diagnostics[0]?.message).toBe("a module included with only its parts ('{…}') has no name in this file, so it can't be given one with '=>'");
+
+    const main = "include shapes/geometry {Figure => Shape, area}\n\ntask main()\n    show(area(Shape.Square(2)))\n    bind n: int = Shape.Square(1)\nfi\n";
+    const geometry = "kind Figure\n    Square(side: int)\nfi\n\ntask area(figure: Figure) -> int\n    <- 1\nfi\n";
+    const context = { path: "app/main.vela", modules: { "app/shapes/geometry.vela": geometry } };
+    const { tokens, diagnostics } = analysis.file(main, context);
+    expect(diagnostics.map((d) => d.message)).toEqual(["expected type int, got Shape"]);
+    expect(tokens.find((t) => t.from === main.indexOf("=>"))?.class).toBe("operator");
+    expect(tokens.find((t) => t.from === main.indexOf("Square(2)"))?.class).toBe("variant");
+    expect(analysis.hover(main, main.indexOf("area(Shape"), context)?.code).toBe("task area(figure: Shape) -> int");
+    const variants = analysis.complete(main.replace("Square(2)", "(2)"), main.indexOf("Square(2)"), context).items.map((i) => i.label);
+    expect(variants).toEqual(["Square"]);
+  });
+
   it("reports diagnostics, completions, hovers, and definitions", () => {
     const source = "task main()\n    bind count = 1\n    show(count)\n    show(missing)\nfi\n";
     const [diagnostic] = analysis.file(source).diagnostics;

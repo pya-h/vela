@@ -86,16 +86,19 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     let prev_token = prev.and_then(|q| k.token(q));
     let blocks = open_blocks(&k, word_start);
 
-    // On an `include` line: nothing for the path; in its parentheses, the names the
-    // module declares.
+    // On an `include` line: nothing for the path or a name after `=>`; in its
+    // parentheses or braces, the names the module declares.
     if let Some(q) = prev
         && k.token(k.line_start(q)) == Some(&Token::Include)
     {
         let line = k.line_start(q);
-        let items = match (line..=q).find(|&p| k.token(p) == Some(&Token::LParen)) {
-            Some(open) if !(open..=q).any(|p| k.token(p) == Some(&Token::RParen)) && matches!(prev_token, Some(Token::LParen | Token::Comma)) => {
+        let items = match (line..=q).find(|&p| matches!(k.token(p), Some(Token::LParen | Token::LBrace))) {
+            Some(open)
+                if !(open..=q).any(|p| matches!(k.token(p), Some(Token::RParen | Token::RBrace)))
+                    && matches!(prev_token, Some(Token::LParen | Token::LBrace | Token::Comma)) =>
+            {
                 let module = open.checked_sub(1).and_then(|p| k.module_at(p));
-                module.map(|m| member_items(&k, m, false)).unwrap_or_default()
+                module.map(|m| member_items(&k, m, Members::Listed)).unwrap_or_default()
             }
             _ => Vec::new(),
         };
@@ -106,8 +109,17 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
         && let Some(module) = dot.checked_sub(1).and_then(|q| k.module_at(q))
     {
-        let types_only = dot.checked_sub(1).is_some_and(|q| starts_type(&k, q));
-        return (member_items(&k, module, types_only), word_start, byte);
+        let members = if dot.checked_sub(1).is_some_and(|q| starts_type(&k, q)) { Members::Types } else { Members::All };
+        return (member_items(&k, module, members), word_start, byte);
+    }
+
+    // After a kind's name and `.`: its variants, as values or in a pattern.
+    if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
+        && let Some(kind) = dot.checked_sub(1).and_then(|q| k.symbol_at(q)).filter(|&id| k.symbol(id).is_some_and(|s| s.kind == SymbolKind::Kind))
+    {
+        let line = k.line_start(dot);
+        let in_pattern = (line..dot).any(|q| matches!(k.token(q), Some(Token::Case | Token::Is)));
+        return (kind_variant_items(&k, kind, in_pattern), word_start, byte);
     }
 
     // After `.`: fields.
@@ -915,11 +927,38 @@ fn visible_globals<'k>(k: &'k Knowledge, kinds: &[SymbolKind]) -> Vec<(String, &
     own.chain(imported).collect()
 }
 
-/// The modules the file includes, as names to complete.
+/// The variants of `kind`, after `Kind.`: with their values' fields as a
+/// value, or with names for them in a pattern.
+fn kind_variant_items(k: &Knowledge, kind: usize, in_pattern: bool) -> Vec<CompletionItem> {
+    let kind_name = k.symbol(kind).map(|s| s.name.clone()).unwrap_or_default();
+    k.children(kind)
+        .map(|(id, variant)| {
+            let label = unqualified(&variant.name).to_string();
+            let snippet = if in_pattern {
+                Some(case_template(k, id, &mut Vec::new())).filter(|template| *template != label)
+            } else {
+                let fields = parameter_names(&variant.detail);
+                let mut used = Vec::new();
+                (!fields.is_empty()).then(|| format!("{}({})", label, fields.iter().map(|f| format!("${{{}}}", unique(&mut used, f))).collect::<Vec<_>>().join(", ")))
+            };
+            CompletionItem {
+                label,
+                kind: CompletionKind::Variant,
+                detail: format!("{} {}", kind_name, variant.detail).trim().to_string(),
+                apply: None,
+                snippet,
+                boost: GLOBAL,
+            }
+        })
+        .collect()
+}
+
+/// The modules the file names, as names to complete.
 fn module_items(k: &Knowledge) -> Vec<CompletionItem> {
     k.scan
         .modules
         .iter()
+        .filter(|module| module.named)
         .filter_map(|module| {
             let symbol = k.symbol(module.symbol)?;
             Some(CompletionItem {
@@ -934,20 +973,40 @@ fn module_items(k: &Knowledge) -> Vec<CompletionItem> {
         .collect()
 }
 
+/// Which of a module's declarations `member_items` offers.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Members {
+    /// What `m.` reaches: its tasks, shapes, kinds, and variants, except those
+    /// the file brings in under another name.
+    All,
+    /// What `m.` reaches where a type is written: its shapes and kinds.
+    Types,
+    /// What an `include` line can list: all of them, by their own names.
+    Listed,
+}
+
 /// What module `module` (its `include` line's symbol) declares that another file
-/// can use, named without the module: its tasks, shapes, kinds, and variants,
-/// or only its shapes and kinds where a type is written.
-fn member_items(k: &Knowledge, module: usize, types_only: bool) -> Vec<CompletionItem> {
+/// can use, named without the module (see `Members`).
+fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<CompletionItem> {
     let Some(index) = k.scan.modules.iter().position(|m| m.symbol == module) else { return Vec::new() };
+    let types_only = members == Members::Types;
     let kinds: &[SymbolKind] = if types_only { &[SymbolKind::Shape, SymbolKind::Kind] } else { &[SymbolKind::Task, SymbolKind::Shape, SymbolKind::Kind, SymbolKind::Variant] };
+    let module_name = k.symbol(module).map_or("", |s| s.name.as_str());
+    // A declaration's own name, which the file may write another way.
+    let own_name = |s: &crate::scan::Symbol| {
+        let source = k.scan.modules.get(index).and_then(|m| m.source.as_deref());
+        source.and_then(|source| source.get(s.name_range.clone())).map_or_else(|| unqualified(&s.name).to_string(), str::to_string)
+    };
     k.symbols()
         .iter()
         .enumerate()
         .filter(|(_, s)| s.module == Some(index) && !s.private && kinds.contains(&s.kind))
         // A variant is as private as its kind.
         .filter(|(_, s)| s.kind != SymbolKind::Variant || s.parent.and_then(|p| k.symbol(p)).is_none_or(|kind| !kind.private))
+        // A name brought in under another name isn't reached through the module.
+        .filter(|(_, s)| members == Members::Listed || s.name == format!("{}{}{}", module_name, vela::ast::MODULE_SEPARATOR, own_name(s)))
         .map(|(id, s)| {
-            let label = unqualified(&s.name).to_string();
+            let label = own_name(s);
             let (kind, detail, apply, snippet) = match s.kind {
                 SymbolKind::Task => {
                     let params = parameter_names(&s.detail);

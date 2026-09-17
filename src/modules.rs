@@ -389,7 +389,7 @@ impl State {
                 }
                 if let Some((alias, at)) = &part.alias {
                     if entry.what == What::Variant {
-                        let kind = entry.kind.as_deref().unwrap_or("Kind");
+                        let kind = entry.kind.as_deref().map_or("Kind", unqualified);
                         return err(
                             *at,
                             format!("'{0}' is a variant, which keeps its own name; bring in '{0}' as it is, or its kind, and write '{1}.{0}'", part.name, kind),
@@ -483,7 +483,7 @@ fn check_module_name(name: &str, span: Span) -> Result<()> {
 /// The identity of the module in the file at `path`: its path from the main
 /// file's folder `main_folder`, with `/` between the parts and without
 /// `.vela`, as in `shapes/geometry` or `../common/text`.
-fn module_id(main_folder: &Path, path: &Path) -> String {
+pub fn module_id(main_folder: &Path, path: &Path) -> String {
     let folder = normalize(main_folder);
     let folder: Vec<Component> = folder.components().collect();
     let file = normalize(&path.with_extension(""));
@@ -740,13 +740,36 @@ impl Resolver<'_> {
     /// A pattern's kind, as in `case Shape.Circle`, rewritten to its name in the
     /// program.
     fn pattern(&self, pattern: &mut Pattern) -> Result<()> {
-        if let PatternKind::Variant { kind: Some((name, at)), .. } = &mut pattern.kind {
+        if let PatternKind::Variant { kind: Some(kind), .. } = &mut pattern.kind {
+            let (name, at) = &mut **kind;
             match self.kind(name, *at)? {
                 Some(kind) => *name = kind.full,
                 None => return err(*at, format!("'{}' isn't a kind, so a pattern can't name a variant of it", name)),
             }
         }
         Ok(())
+    }
+
+    /// `Shape.Circle` (or `m.Shape.Circle`), a variant read as a field of a
+    /// name, rewritten to the variant; whether `expr` was one. No variable can
+    /// be named like a kind (see `Checker::define`). (A function of its own:
+    /// `expr`'s frame is on the stack once per nesting level.)
+    fn variant_as_field(&self, expr: &mut Expr) -> Result<bool> {
+        let ExprKind::Field(base, tag) = &expr.kind else { return Ok(false) };
+        let ExprKind::Var(name) = &base.kind else { return Ok(false) };
+        if let Some(kind) = self.kind(name, base.span)? {
+            let variant = self.variant(&kind, name, tag, expr.span)?;
+            expr.kind = ExprKind::Var(variant.full);
+            return Ok(true);
+        }
+        // `m.Name.x`, where `m.Name` isn't a kind. (A variable may be named like
+        // a shape or task of this file, so `Name.x` may be a field.)
+        if name.contains(MODULE_SEPARATOR)
+            && let Some(entry) = self.lookup(name, base.span)?
+        {
+            return err(expr.span, format!("'{}' is a {}, not a kind, so it has no variant '{}'", name, entry.what.word(), tag));
+        }
+        Ok(false)
     }
 
     /// A written type, at `span`, with its shape and kind names rewritten.
@@ -817,10 +840,8 @@ impl Resolver<'_> {
             }
             StmtKind::Match(value, cases) => {
                 self.expr(value)?;
-                cases.iter_mut().try_for_each(|case| {
-                    self.pattern(&mut case.pattern)?;
-                    self.block(&mut case.body)
-                })
+                cases.iter_mut().try_for_each(|case| self.pattern(&mut case.pattern))?;
+                cases.iter_mut().try_for_each(|case| self.block(&mut case.body))
             }
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter_mut().try_for_each(|e| self.expr(e)),
             StmtKind::Region(_) => Ok(()),
@@ -829,14 +850,7 @@ impl Resolver<'_> {
 
     fn expr(&self, expr: &mut Expr) -> Result<()> {
         let span = expr.span;
-        // `Shape.Circle` (or `m.Shape.Circle`): a variant, read as a field of a
-        // name. No variable can be named like a kind (see `Checker::define`).
-        if let ExprKind::Field(base, tag) = &expr.kind
-            && let ExprKind::Var(name) = &base.kind
-            && let Some(kind) = self.kind(name, base.span)?
-        {
-            let variant = self.variant(&kind, name, tag, span)?;
-            expr.kind = ExprKind::Var(variant.full);
+        if matches!(&expr.kind, ExprKind::Field(base, _) if matches!(base.kind, ExprKind::Var(_))) && self.variant_as_field(expr)? {
             return Ok(());
         }
         match &mut expr.kind {

@@ -1,0 +1,98 @@
+  1 | # Include aliases: `=>` names an included module or part another way, braces
+    | comment:# Include aliases: `=>` names an included module or part another way, braces
+  2 | # include a module's parts alone, and a variant can be named through its kind.
+    | comment:# include a module's parts alone, and a variant can be named through its kind.
+  3 | # The two modules included here are both files named prices.vela.
+    | comment:# The two modules included here are both files named prices.vela.
+  5 | include aliases/shop/prices => shop (Item => Product, price_of)
+    | keyword:include  module:aliases  operator:/  module:shop  operator:/  module:prices  operator:=>  module:shop  punctuation:(  type:Item  operator:=>  type:Product  punctuation:,  task:price_of  punctuation:)
+  6 | include aliases/fuel/prices {Size => Fuel, price_of => fuel_price}
+    | keyword:include  module:aliases  operator:/  module:fuel  operator:/  module:prices  punctuation:{  type:Size  operator:=>  type:Fuel  punctuation:,  task:price_of  operator:=>  task:fuel_price  punctuation:}
+  8 | kind Mood
+    | keyword:kind  type:Mood
+  9 |     Calm
+    | variant:Calm
+ 10 |     Busy(orders: int)
+    | variant:Busy  punctuation:(  field:orders  punctuation::  type-builtin:int  punctuation:)
+ 11 | fi
+    | keyword:fi
+ 13 | task describe(mood: Mood) -> text
+    | keyword:task  task:describe  punctuation:(  parameter:mood  punctuation::  type:Mood  punctuation:)  operator:->  type-builtin:text
+ 14 |     match mood
+    | keyword:match  parameter:mood
+ 15 |     case Mood.Calm
+    | keyword:case  type:Mood  punctuation:.  variant:Calm
+ 16 |         <- "calm"
+    | keyword:<-  string:"calm"
+ 17 |     case Busy orders
+    | keyword:case  variant:Busy  variable:orders
+ 18 |         when orders > 2
+    | keyword:when  variable:orders  operator:>  number:2
+ 19 |             <- "very busy"
+    | keyword:<-  string:"very busy"
+ 20 |         fi
+    | keyword:fi
+ 21 |         <- "busy"
+    | keyword:<-  string:"busy"
+ 22 |     fi
+    | keyword:fi
+ 23 | fi
+    | keyword:fi
+ 25 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 26 |     # The module under another name, and a part of it under another name.
+    | comment:# The module under another name, and a part of it under another name.
+ 27 |     bind tea: Product = Product { name: "tea", cents: 250 }
+    | keyword:bind  variable:tea  punctuation::  type:Product  operator:=  type:Product  punctuation:{  field:name  punctuation::  string:"tea"  punctuation:,  field:cents  punctuation::  number:250  punctuation:}
+ 28 |     show(price_of(tea, shop.Size.Small))
+    | builtin-fn:show  punctuation:(  task:price_of  punctuation:(  variable:tea  punctuation:,  module:shop  punctuation:.  type:Size  punctuation:.  variant:Small  punctuation:)  punctuation:)
+ 29 |     show(price_of(tea, shop.Size.Large(50)))
+    | builtin-fn:show  punctuation:(  task:price_of  punctuation:(  variable:tea  punctuation:,  module:shop  punctuation:.  type:Size  punctuation:.  variant:Large  punctuation:(  number:50  punctuation:)  punctuation:)  punctuation:)
+ 30 |     bind big = shop.Size.Large(75)
+    | keyword:bind  variable:big  operator:=  module:shop  punctuation:.  type:Size  punctuation:.  variant:Large  punctuation:(  number:75  punctuation:)
+ 31 |     match big
+    | keyword:match  variable:big
+ 32 |     case shop.Size.Large extra
+    | keyword:case  module:shop  punctuation:.  type:Size  punctuation:.  variant:Large  variable:extra
+ 33 |         show(extra)
+    | builtin-fn:show  punctuation:(  variable:extra  punctuation:)
+ 34 |     case Small
+    | keyword:case  variant:Small
+ 35 |         show(0)
+    | builtin-fn:show  punctuation:(  number:0  punctuation:)
+ 36 |     fi
+    | keyword:fi
+ 38 |     # Parts alone, one of them a kind under another name, whose variants are
+    | comment:# Parts alone, one of them a kind under another name, whose variants are
+ 39 |     # named through it.
+    | comment:# named through it.
+ 40 |     bind tank = Fuel.Tank(40)
+    | keyword:bind  variable:tank  operator:=  type:Fuel  punctuation:.  variant:Tank  punctuation:(  number:40  punctuation:)
+ 41 |     when tank is Fuel.Tank liters
+    | keyword:when  variable:tank  keyword:is  type:Fuel  punctuation:.  variant:Tank  variable:liters
+ 42 |         show(fuel_price(liters))
+    | builtin-fn:show  punctuation:(  task:fuel_price  punctuation:(  variable:liters  punctuation:)  punctuation:)
+ 43 |     fi
+    | keyword:fi
+ 44 |     match Fuel.Small
+    | keyword:match  type:Fuel  punctuation:.  variant:Small
+ 45 |     case Fuel.Small
+    | keyword:case  type:Fuel  punctuation:.  variant:Small
+ 46 |         show("a can")
+    | builtin-fn:show  punctuation:(  string:"a can"  punctuation:)
+ 47 |     case Tank liters
+    | keyword:case  variant:Tank  variable:liters
+ 48 |         show(liters)
+    | builtin-fn:show  punctuation:(  variable:liters  punctuation:)
+ 49 |     fi
+    | keyword:fi
+ 51 |     # A kind of this file, through its name and alone.
+    | comment:# A kind of this file, through its name and alone.
+ 52 |     show(describe(Mood.Calm))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  type:Mood  punctuation:.  variant:Calm  punctuation:)  punctuation:)
+ 53 |     show(describe(Mood.Busy(3)))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  type:Mood  punctuation:.  variant:Busy  punctuation:(  number:3  punctuation:)  punctuation:)  punctuation:)
+ 54 |     show(describe(Busy(1)))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variant:Busy  punctuation:(  number:1  punctuation:)  punctuation:)  punctuation:)
+ 55 | fi
+    | keyword:fi

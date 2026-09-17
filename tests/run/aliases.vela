@@ -1,0 +1,55 @@
+# Include aliases: `=>` names an included module or part another way, braces
+# include a module's parts alone, and a variant can be named through its kind.
+# The two modules included here are both files named prices.vela.
+
+include aliases/shop/prices => shop (Item => Product, price_of)
+include aliases/fuel/prices {Size => Fuel, price_of => fuel_price}
+
+kind Mood
+    Calm
+    Busy(orders: int)
+fi
+
+task describe(mood: Mood) -> text
+    match mood
+    case Mood.Calm
+        <- "calm"
+    case Busy orders
+        when orders > 2
+            <- "very busy"
+        fi
+        <- "busy"
+    fi
+fi
+
+task main()
+    # The module under another name, and a part of it under another name.
+    bind tea: Product = Product { name: "tea", cents: 250 }
+    show(price_of(tea, shop.Size.Small))
+    show(price_of(tea, shop.Size.Large(50)))
+    bind big = shop.Size.Large(75)
+    match big
+    case shop.Size.Large extra
+        show(extra)
+    case Small
+        show(0)
+    fi
+
+    # Parts alone, one of them a kind under another name, whose variants are
+    # named through it.
+    bind tank = Fuel.Tank(40)
+    when tank is Fuel.Tank liters
+        show(fuel_price(liters))
+    fi
+    match Fuel.Small
+    case Fuel.Small
+        show("a can")
+    case Tank liters
+        show(liters)
+    fi
+
+    # A kind of this file, through its name and alone.
+    show(describe(Mood.Calm))
+    show(describe(Mood.Busy(3)))
+    show(describe(Busy(1)))
+fi

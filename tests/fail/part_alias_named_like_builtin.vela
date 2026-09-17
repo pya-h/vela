@@ -1,4 +1,4 @@
-# error: x
+# error: 2:35: 'show' is a builtin task, so nothing else can be named so
 include modules/library (greet => show)
 
 task main()

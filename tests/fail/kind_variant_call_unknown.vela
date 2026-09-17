@@ -1,4 +1,4 @@
-# error: x
+# error: 5:14: kind 'library.Suit' has no variant 'Clubs'
 include modules/library
 
 task main()

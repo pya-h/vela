@@ -272,6 +272,16 @@ impl<'a> Knowledge<'a> {
         })
     }
 
+    /// The position of the variant's name in the pattern after the `case` or
+    /// `is` at `case`: `Circle`, `Shape.Circle`, or `m.Shape.Circle`.
+    pub fn pattern_variant_at(&self, case: usize) -> usize {
+        let mut at = case + 1;
+        while self.token(at + 1) == Some(&Token::Dot) && self.ident(at + 2).is_some() {
+            at += 2;
+        }
+        at
+    }
+
     /// The type of a name a `case` or `is` pattern binds: a variant's payload
     /// field, or what `{value}` and `fail e` take from the subject.
     fn case_binding_type(&self, id: usize, depth: usize) -> Option<Type> {
@@ -294,8 +304,9 @@ impl<'a> Knowledge<'a> {
                 _ => None,
             },
             _ => {
-                let index = name.checked_sub(case + 2)?;
-                let tag = self.ident(case + 1)?;
+                let tag_at = self.pattern_variant_at(case);
+                let index = name.checked_sub(tag_at + 1)?;
+                let tag = self.ident(tag_at)?;
                 // The variant of the matched value's kind, which may be another
                 // module's, whose variants the case names alone.
                 let of_subject = match outcome() {
@@ -304,7 +315,8 @@ impl<'a> Knowledge<'a> {
                         .and_then(|kind| self.children(kind).find(|(_, v)| unqualified(&v.name) == tag).map(|(id, _)| id)),
                     _ => None,
                 };
-                let variant = of_subject.or_else(|| self.global(tag, SymbolKind::Variant))?;
+                let named = self.symbol_at(tag_at).filter(|&id| self.symbol(id).is_some_and(|s| s.kind == SymbolKind::Variant));
+                let variant = of_subject.or(named).or_else(|| self.global(tag, SymbolKind::Variant))?;
                 let (_, field) = self.children(variant).nth(index)?;
                 let ty = parse_type(&field.detail)?;
                 // A payload's pointers are in the region of the value matched.
@@ -372,6 +384,10 @@ impl<'a> Knowledge<'a> {
                         let variant = self.global(&full, SymbolKind::Variant)?;
                         self.variant_kind(variant).map(|kind| Type::named(&kind))
                     });
+                }
+                // `Shape.Circle`: a kind's variant.
+                if let Some(variant) = self.symbol_at(q).filter(|&id| self.symbol(id).is_some_and(|s| s.kind == SymbolKind::Variant)) {
+                    return self.variant_kind(variant).map(|kind| Type::named(&kind));
                 }
                 if self.token_before(q) == Some(&Token::Dot) {
                     let base = self.expression_type(q.checked_sub(2)?, depth + 1)?;
@@ -456,6 +472,17 @@ impl<'a> Knowledge<'a> {
                     return self.span_type(open + 1, q.checked_sub(1)?, depth + 1);
                 };
                 let (p, _) = callee;
+                // `Shape.Circle(…)` and `m.Shape.Circle(…)`: a kind's variant,
+                // recorded where its name starts.
+                if let Some(variant) = self.symbol_at(p).filter(|&id| self.symbol(id).is_some_and(|s| s.kind == SymbolKind::Variant))
+                    && self.token_before(p) == Some(&Token::Dot)
+                {
+                    let mut start = p;
+                    while self.token_before(start) == Some(&Token::Dot) && start >= 2 && self.ident(start - 2).is_some() {
+                        start -= 2;
+                    }
+                    return exact(start).or_else(|| self.variant_kind(variant).map(|kind| Type::named(&kind)));
+                }
                 // A module's task or variant is recorded at the module's name.
                 let (name, p) = self.qualified_at(p)?;
                 exact(p).or_else(|| {

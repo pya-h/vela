@@ -1,4 +1,4 @@
-# error: x
+# error: 2:31: expected '}', got end of line
 include modules/library {greet
 
 task main()

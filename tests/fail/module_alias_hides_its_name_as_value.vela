@@ -1,6 +1,6 @@
-# error: x
+# error: 5:17: unknown variable 'library'; module 'modules/library' is included as 'lib'
 include modules/library => lib
 
 task main()
-    bind card = library.card("ada")
+    bind name = library.version
 fi

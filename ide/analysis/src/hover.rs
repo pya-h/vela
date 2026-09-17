@@ -169,7 +169,7 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             Some("case") => {
                 let name = k.at_byte(symbol.name_range.start)?;
                 let case = (k.line_start(name)..name).find(|&q| k.token(q) == Some(&vela::lexer::Token::Case));
-                let variant = case.and_then(|q| k.ident(q + 1));
+                let variant = case.and_then(|q| k.ident(k.pattern_variant_at(q)));
                 let doc = variant.map_or_else(|| "Bound by a case.".to_string(), |v| format!("Bound by case {}.", v));
                 (typed(&symbol.name), doc)
             }

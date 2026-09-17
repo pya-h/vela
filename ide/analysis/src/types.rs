@@ -82,6 +82,7 @@ impl Checked {
         let _ = modules::load(path, source, &mut discover);
         let mut loader = |file: &Path| context.sources.get(&slashed(file)).cloned().ok_or_else(|| io::Error::from(io::ErrorKind::NotFound));
         let partial = driver::front_end_program(path, source, &mut loader);
+        let spelling = partial.spelling;
         let mut checked = Checked { error: partial.error, files: partial.files, missing, ..Checked::default() };
         let Some(items) = partial.items else { return checked };
         let kinds: HashMap<&str, &KindDef> = items
@@ -109,6 +110,14 @@ impl Checked {
                 }
                 checked.block(&task.body, &declarations);
             }
+        }
+        // The program names another module's shapes and kinds by the module's
+        // path (`shapes/geometry.Point`); this file names them as it writes them.
+        for ty in checked.exprs.values_mut().chain(checked.decls.values_mut()) {
+            *ty = spelling.ty(ty);
+        }
+        for shape in checked.field_accesses.values_mut() {
+            *shape = spelling.name(shape);
         }
         checked
     }
@@ -188,7 +197,7 @@ impl Checked {
     fn pattern(&mut self, subject: Option<&Type>, pattern: &Pattern, kinds: &Declarations) {
         let Some(subject) = subject else { return };
         match (&pattern.kind, subject) {
-            (PatternKind::Variant { tag, binds }, Type::Named(name, region)) => {
+            (PatternKind::Variant { tag, binds, .. }, Type::Named(name, region)) => {
                 let payload = kinds.kinds.get(name.as_str()).and_then(|k| k.variants.iter().find(|v| v.tag == *tag)).map(|v| &v.payload);
                 for ((_, span), field) in binds.iter().zip(payload.into_iter().flatten()) {
                     let ty = match region {

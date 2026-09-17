@@ -1,4 +1,4 @@
-# error: x
+# error: 2:28: a module included with only its parts ('{…}') has no name in this file, so it can't be given one with '=>'
 include modules/library => lib {greet}
 
 task main()

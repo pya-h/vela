@@ -1,4 +1,4 @@
-# error: x
+# error: 14:10: this pattern names kind 'Weather', but the value's kind is 'Mood'
 kind Mood
     Calm
     Busy
@@ -6,12 +6,12 @@ fi
 
 kind Weather
     Sunny
-    Calm
+    Rainy
 fi
 
 task main()
     match Mood.Calm
-    case Weather.Calm
+    case Weather.Sunny
         show(1)
     case _
         show(2)

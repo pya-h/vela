@@ -500,7 +500,11 @@
         reads <code>shapes/geometry.vela</code>, whose names are written <code>geometry.area</code>, and
         <code>include shapes/geometry (area)</code> also brings <code>area</code> in, as Python's
         <code>from … import</code> does. The word is C's, but unlike <code>#include</code> it doesn't paste the file's
-        text in: the file keeps its own names, and is read once however many files include it. Where Go exports a
+        text in: the file keeps its own names, and is read once however many files include it. Braces bring in only
+        the names listed, like JavaScript's <code>import {…} from</code>, and <code>=&gt;</code> renames a module or a
+        name, as <code>as</code> does in Rust, Python, and JavaScript; unlike them, the old name then names nothing in
+        that file. A variant keeps its name but can be written through its kind, <code>Size.Small</code>, as in Rust
+        and Swift. Where Go exports a
         name by capitalizing it and Rust by marking it <code>pub</code>, everything in a Vela file is public unless
         marked <code>priv</code>, fields included, so a name's spelling never decides who can use it. There is no
         package manager yet.

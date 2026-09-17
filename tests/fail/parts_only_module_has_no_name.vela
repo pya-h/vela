@@ -1,4 +1,4 @@
-# error: x
+# error: 5:10: 'library.greet' names nothing: 'library' is neither a module this file includes nor a kind; module 'modules/library' is included with only its parts, which are named alone
 include modules/library {greet}
 
 task main()
