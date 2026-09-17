@@ -17,6 +17,13 @@ task named(r: region, line: text@r) -> (text@r, int)
     <- (line, 1)
 fi
 
+task find(id: int) -> (int, text) or (text, int)
+    when id < 0
+        <- fail (\"unknown\", id)
+    fi
+    <- (id, \"found\")
+fi
+
 task main()
     CHECK
     region r
@@ -29,6 +36,24 @@ task main()
     bind age = pair.1
     bind deep = nested.1.1
     show(age + quotient + remainder + whole)
+    hold found: maybe (text, int) = none
+    when found is {(who, years)}
+        show(who)
+        show(years)
+    fi
+    match find(1)
+        case {(code, label)}
+            show(code)
+            show(label)
+        case fail (why, bad)
+            show(why)
+            show(bad)
+    fi
+    when pair is hold (person, count)
+        count = count + 1
+        show(person)
+        show(count)
+    fi
     @@
 fi
 ";
@@ -106,4 +131,46 @@ fn changing_an_item_is_reported() {
     let diagnostics = Analysis::new(&source).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert!(diagnostic.message.starts_with("a tuple's items never change"), "{}", diagnostic.message);
+}
+
+#[test]
+fn names_a_pattern_takes_from_a_tuple_have_types() {
+    for checks in [true, false] {
+        let source = program(checks, "show(part)");
+        let when = if checks { "checked" } else { "declared" };
+        assert_eq!(hover(&source, "who)").0, "who: text", "{}", when);
+        assert_eq!(hover(&source, "years)").0, "years: int", "{}", when);
+        assert_eq!(hover(&source, "code, label").0, "code: int", "{}", when);
+        assert_eq!(hover(&source, "label)").0, "label: text", "{}", when);
+        assert_eq!(hover(&source, "why)").0, "why: text", "{}", when);
+        assert_eq!(hover(&source, "person, count").0, "hold person: text", "{}", when);
+        assert_eq!(hover(&source, "count)").0, "hold count: int", "{}", when);
+    }
+}
+
+#[test]
+fn completion_offers_the_patterns_that_take_a_tuple_apart() {
+    for checks in [true, false] {
+        let items = completions(&program(checks, "when found is @@"));
+        let templates: Vec<(&str, Option<&str>)> = items.iter().map(|item| (item.label.as_str(), item.snippet.as_deref())).collect();
+        assert_eq!(templates, [("{value}", Some("{(${item0}, ${item1})}")), ("none", None)], "checks: {}", checks);
+        let plain = completions(&program(checks, "when pair is @@"));
+        assert_eq!(plain.iter().map(|item| item.snippet.as_deref()).collect::<Vec<_>>(), [Some("(${item0}, ${item1})")], "checks: {}", checks);
+    }
+}
+
+#[test]
+fn a_pattern_that_always_matches_is_reported_where_it_cannot_run() {
+    let source = program(true, "when pair is (a, b)\n        show(a)\n    else\n        show(0)\n    fi");
+    let diagnostics = Analysis::new(&source).diagnostics();
+    let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
+    assert!(diagnostic.message.starts_with("a tuple's items always match"), "{}", diagnostic.message);
+}
+
+#[test]
+fn naming_a_tuples_items_without_parentheses_is_reported() {
+    let source = program(true, "when found is {who, years}\n        show(who)\n    fi");
+    let diagnostics = Analysis::new(&source).diagnostics();
+    let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
+    assert!(diagnostic.message.contains("{(name, age)}"), "{}", diagnostic.message);
 }

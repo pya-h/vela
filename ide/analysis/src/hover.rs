@@ -114,6 +114,14 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
     Some((info, token.range.clone()))
 }
 
+/// A pattern's name, written `hold name` when the pattern can assign it.
+fn pattern_name(k: &Knowledge, at: usize, typed: &str, doc: &str) -> (String, String) {
+    if k.pattern_name_mutable(at) {
+        return (format!("hold {}", typed), format!("{} It can be assigned.", doc));
+    }
+    (typed.to_string(), doc.to_string())
+}
+
 fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
     let symbol = k.symbol(id)?;
     let parent = symbol.parent.and_then(|p| k.symbol(p));
@@ -193,9 +201,12 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 let case = (k.line_start(name)..name).find(|&q| k.token(q) == Some(&vela::lexer::Token::Case));
                 let variant = case.and_then(|q| k.ident(k.pattern_variant_at(q)));
                 let doc = variant.map_or_else(|| "Bound by a case.".to_string(), |v| format!("Bound by case {}.", v));
-                (typed(&symbol.name), doc)
+                pattern_name(k, name, &typed(&symbol.name), &doc)
             }
-            Some("is") => (typed(&symbol.name), "Bound by an is condition.".to_string()),
+            Some("is") => {
+                let name = k.at_byte(symbol.name_range.start)?;
+                pattern_name(k, name, &typed(&symbol.name), "Bound by an is condition.")
+            }
             Some("fail") => (format!("fail {}", typed(&symbol.name)), "The error this plan B handles.".to_string()),
             Some("each") => {
                 let doc = match k.each_items(id) {

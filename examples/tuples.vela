@@ -1,6 +1,6 @@
 # Tuples: values held together, as `(text, int)`, read by position (`t.0`,
-# `t.1`) and taken apart into names. A tuple's items never change; a `hold`
-# tuple can only take a whole new one.
+# `t.1`) and taken apart into names, in a binding or in a pattern. A tuple's
+# items never change; a `hold` tuple can only take a whole new one.
 
 # The lowest and highest score, as one tuple.
 task range_of(scores: [(text, int)]@r) -> (int, int)
@@ -18,8 +18,12 @@ task range_of(scores: [(text, int)]@r) -> (int, int)
     <- (low, high)
 fi
 
-# The name and score of the best entry. Its text is in the slice's region.
-task best(scores: [(text, int)]@r) -> (text, int)@r
+# The name and score of the best entry, or none when there are none. Its text
+# is in the slice's region.
+task best(scores: [(text, int)]@r) -> maybe (text, int)@r
+    when scores.len == 0
+        <- none
+    fi
     hold top = scores[0]
     each entry in scores
         when entry.1 > top.1
@@ -39,11 +43,15 @@ task main()
     bind low, high = range_of(scores)
     show(high - low)                         # 13
 
-    bind (name, score) = best(scores)
-    show(name)                               # Ada
-    show(score)                              # 91
+    # A pattern takes the value out of the maybe and the tuple apart at once.
+    when best(scores) is {(name, score)}
+        show(name)                           # Ada
+        show(score)                          # 91
+    fi
 
     # An entry is replaced whole; its items can't be assigned.
     scores[1] = ("Bob", 95)
-    show(best(scores) == ("Bob", 95))        # true
+    when best(scores) is {(_, top)}
+        show(top)                            # 95
+    fi
 fi

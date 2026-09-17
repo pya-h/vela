@@ -17,7 +17,7 @@ every index is checked, and `xs.len` is the count. `scan("Name: ") at r` shows a
 into a region, giving `none` once the input has ended, and `value.copy()` copies a value (its text, its slices'
 items, and what its pointers point to) into the region where it goes, or `value.copy() at r`. Tuples hold
 values together (`(text, int)`, read as `t.0`), their items never change, and names take them apart
-(`bind name, age = pair`). A program can span
+(`bind name, age = pair`, or `when found is {(name, age)}` in a pattern). A program can span
 several files: `include shapes/geometry` reads `shapes/geometry.vela`, named as `geometry.area(…)` (or brought in
 with `include shapes/geometry (area)`, or only the names with braces, `{area}`), `=>` gives a module or a name
 another name (`include fuel/prices => fuel`), and everything a file declares is public unless marked `priv`. A

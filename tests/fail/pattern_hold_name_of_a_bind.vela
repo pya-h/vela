@@ -1,0 +1,8 @@
+# error: 5:9: cannot assign to immutable variable 'v'
+task main()
+    hold found: maybe int = none
+    when found is {v}
+        v = 2
+        show(v)
+    fi
+fi

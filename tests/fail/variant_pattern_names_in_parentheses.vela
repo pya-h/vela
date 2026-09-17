@@ -1,0 +1,12 @@
+# error: 9:19: a pattern names its bindings without parentheses, as in 'case Both value'
+kind Pair
+    Both(a: int, b: int)
+fi
+
+task main()
+    bind p = Both(1, 2)
+    match p
+        case Both (x, y)
+            show(x + y)
+    fi
+fi

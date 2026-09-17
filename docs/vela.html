@@ -752,7 +752,15 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
           when every item is a number, a bool, text, or a tuple of them. <code>show</code> takes one item at a time.</li>
         <li><strong>Where they go.</strong> Anywhere a type does: parameters, results, fields, payloads, arrays and slices
           (<code>[(text, int)]@r</code>, whose items are replaced whole, <code>xs[i] = ("Cy", 80)</code>), <code>maybe</code>,
-          and after <code>new</code>. Patterns that take a tuple apart in <code>is</code> and <code>case</code> come next.</li>
+          and after <code>new</code>.</li>
+        <li><strong>Patterns.</strong> In <code>is</code> and <code>case</code>, braces take the value out of a
+          <code>maybe</code> or a <code>T or E</code> and parentheses take a tuple apart, so
+          <code>when found is {(name, age)}</code> does both, as do <code>case {(a, b)}</code> and
+          <code>case fail (line, message)</code>. A plain tuple has no other case, so <code>when t is (x, y)</code>
+          always matches: its block runs with the items named, and an <code>else</code> on it, or a
+          <code>loop</code> of it, is an error. <code>hold</code> before a name makes it a variable the block can
+          assign (<code>is hold (x, y)</code>, <code>{hold v}</code>, <code>case Circle hold r</code>); assigning
+          it leaves the value matched as it was.</li>
       </ul>
 
       <h3 id="names">Names</h3>
@@ -800,7 +808,9 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
       <p>
         A condition can also test a pattern with <code>is</code>, the same patterns a <code>case</code> takes. The
         names it binds are visible only in the block it guards (not in the <code>else</code>), and <code>is</code>
-        must be the whole condition: combining it with <code>and</code> or <code>or</code> is an error.
+        must be the whole condition: combining it with <code>and</code> or <code>or</code> is an error. A name is a
+        <code>bind</code> unless the pattern writes <code>hold</code> before it, and parentheses take a tuple apart
+        (see <a href="#tuples">Tuples</a>).
       </p>
       <pre><span class="keyword">when</span> light <span class="keyword">is</span> Dimmed level
     show(level)
@@ -809,6 +819,22 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
 <span class="keyword">loop</span> current <span class="keyword">is</span> {node}      <span class="comment"># while current holds a node</span>
     show(node^.value)
     current = node^.next
+<span class="keyword">fi</span></pre>
+
+      <pre><span class="keyword">bind</span> found: <span class="keyword">maybe</span> (text, int) = (<span class="string">"Ada"</span>, <span class="number">36</span>)
+<span class="keyword">when</span> found <span class="keyword">is</span> {(name, age)}       <span class="comment"># the value, then its items</span>
+    show(name)
+    show(age)
+<span class="keyword">fi</span>
+<span class="keyword">bind</span> pair = (<span class="number">1</span>, <span class="string">"one"</span>)
+<span class="keyword">when</span> pair <span class="keyword">is</span> (number, word)       <span class="comment"># always matches: a tuple has no other case</span>
+    show(number)
+    show(word)
+<span class="keyword">fi</span>
+<span class="keyword">when</span> pair <span class="keyword">is</span> <span class="keyword">hold</span> (n, w)          <span class="comment"># hold: the names can be assigned</span>
+    n = n + <span class="number">1</span>
+    show(n)
+    show(w)
 <span class="keyword">fi</span></pre>
 
       <h3 id="maybe">Maybe and Errors</h3>
@@ -1498,7 +1524,8 @@ show(area(square))             <span class="comment"># error: unknown task 'area
           yet, and no files.</li>
         <li>Arrays and slices can't be compared or shown whole, and an array's count is known before the program runs
           (see <a href="#arrays">Arrays</a>). Tuples can't be shown whole, and <code>is</code> and <code>case</code>
-          can't take them apart yet (see <a href="#tuples">Tuples</a>).</li>
+          are taken apart in <code>is</code> and <code>case</code> only in parentheses, as in <code>{(a, b)}</code>
+          (see <a href="#tuples">Tuples</a>).</li>
         <li>There are no packages to share modules between programs (see <a href="#modules">Modules</a>).</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which

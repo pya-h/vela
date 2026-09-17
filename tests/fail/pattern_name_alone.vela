@@ -1,0 +1,7 @@
+# error: 4:19: unknown variant 'value'
+task main()
+    hold found: maybe int = none
+    when found is value
+        show(value)
+    fi
+fi

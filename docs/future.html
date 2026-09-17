@@ -1453,8 +1453,9 @@ show(p.length_squared())</pre>
         <li><strong>Else-if chains:</strong> <code>when ... else when ... else ... fi</code></li>
         <li><strong>Inclusive ranges:</strong> <code>0..=10</code> or <code>0...10</code></li>
         <li><strong>Tuples:</strong> <code>(int, text)</code> as values that can be stored and passed, beyond <a href="#results">multiple results</a>
-          <em>(done: <a href="vela.html#tuples">Tuples</a>; next, taking them apart in patterns, <code>when found is {(name, age)}</code>,
-          <code>when pair is (x, y)</code>, and <code>hold</code> names in every pattern)</em></li>
+          <em>(done: <a href="vela.html#tuples">Tuples</a>, including patterns that take them apart,
+          <code>when found is {(name, age)}</code> and <code>when pair is (x, y)</code>, and <code>hold</code> names
+          in any pattern)</em></li>
         <li><strong>Named arguments:</strong> <code>resize(width: 2.0, height: 3.0)</code> for task calls, as shape
           literals already name their fields (<code>Point { x: 1, y: 2 }</code>)</li>
         <li><strong>Statements end at a line break:</strong> today <code>show(1) show(2)</code> on one line is accepted;

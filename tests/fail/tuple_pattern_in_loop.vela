@@ -1,0 +1,7 @@
+# error: 4:18: a tuple's items always match, so this loop would never end; take the tuple apart with 'bind' instead
+task main()
+    bind pair = (1, 2)
+    loop pair is (a, b)
+        show(a + b)
+    fi
+fi

@@ -378,15 +378,27 @@ impl<'a> Tokens<'a> {
 
     /// The trimmed source text after token `p` up to the first token that
     /// `stop` accepts, a comment, or the end of the line.
+    /// The source after token `p`, up to the end of the line or the first token
+    /// `stop` names outside brackets: a tuple type's commas and its `)` are
+    /// part of it, as in `(int, text)`.
     fn text_after(&self, p: usize, stop: fn(&Token) -> bool) -> String {
         let Some(&first) = self.significant.get(p) else { return String::new() };
         let from = self.range(p).end;
+        let mut depth = 0usize;
         let to = self
             .all
             .iter()
             .skip(first + 1)
             .find(|t| match &t.kind {
-                LexKind::Token(token) => *token == Token::Newline || *token == Token::Eof || stop(token),
+                LexKind::Token(Token::LParen | Token::LBracket | Token::LBrace) => {
+                    depth += 1;
+                    false
+                }
+                LexKind::Token(Token::RParen | Token::RBracket | Token::RBrace) if depth > 0 => {
+                    depth -= 1;
+                    false
+                }
+                LexKind::Token(token) => *token == Token::Newline || *token == Token::Eof || (depth == 0 && stop(token)),
                 LexKind::Comment => true,
                 LexKind::Invalid(_) => false,
             })
@@ -970,7 +982,9 @@ impl<'a> Classifier<'a> {
         }
         // A name being declared is one even where a type would be written,
         // as a result's name is (`-> total: int`).
-        if let Some(intro) = declaring {
+        // `is hold (x, y)`: the pattern declares the names, `hold` only says they
+        // can be assigned, so they take their types from the value matched.
+        if let Some(intro) = declaring.filter(|intro| !(in_pattern && *intro == "hold")) {
             if intro == "region" {
                 return (TokenClass::Region, Some(self.declare_local(p, SymbolKind::Region, Some(intro), String::new())));
             }

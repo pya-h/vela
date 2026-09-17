@@ -1016,6 +1016,8 @@ impl Generator {
             (PatternKind::Value(_), Type::Or(..)) => format!("{}.ok", subject),
             (PatternKind::Fail(_), Type::Or(..)) => format!("!{}.ok", subject),
             (PatternKind::Variant { tag, .. }, Type::Named(kind, _)) => format!("{}.tag == {}", subject, tag_value(kind, tag)),
+            // A tuple's items always match; the names take them.
+            (PatternKind::Tuple(_), _) => "1".to_string(),
             _ => return Err(Error::internal_at(pattern.span, format!("pattern '{}' on type {}", pattern.label(), ty))),
         };
         Ok(test)
@@ -1026,15 +1028,17 @@ impl Generator {
     fn gen_pattern_bindings(&mut self, ty: &Type, subject: &str, pattern: &Pattern, body: &[Stmt]) -> Result<()> {
         let mut bindings: Vec<(&str, Type, String)> = Vec::new();
         match (&pattern.kind, ty) {
-            (PatternKind::Value((name, _)), Type::Maybe(inner)) if is_pointer(inner) => {
-                bindings.push((name, (**inner).clone(), subject.to_string()));
+            (PatternKind::Value(names), Type::Maybe(inner)) if is_pointer(inner) => {
+                bound_names(names, inner, subject.to_string(), &mut bindings);
             }
-            (PatternKind::Value((name, _)), Type::Maybe(inner) | Type::Or(inner, _)) => {
-                bindings.push((name, (**inner).clone(), format!("{}.value", subject)));
+            (PatternKind::Value(names), Type::Maybe(inner) | Type::Or(inner, _)) => {
+                bound_names(names, inner, format!("{}.value", subject), &mut bindings);
             }
-            (PatternKind::Fail((name, _)), Type::Or(_, error)) => {
-                bindings.push((name, (**error).clone(), format!("{}.error", subject)));
+            (PatternKind::Fail(names), Type::Or(_, error)) => {
+                bound_names(names, error, format!("{}.error", subject), &mut bindings);
             }
+            // `(x, y)`: the items of the tuple itself.
+            (PatternKind::Tuple(names), _) => bound_names(names, ty, subject.to_string(), &mut bindings),
             (PatternKind::Variant { tag, binds, .. }, Type::Named(kind_name, _)) => {
                 let variant = self
                     .kinds
@@ -1047,9 +1051,9 @@ impl Generator {
                         format!("case '{}' has {} bindings (expected {})", tag, binds.len(), variant.payload.len()),
                     ));
                 }
-                for ((name, _), field) in binds.iter().zip(&variant.payload) {
+                for (names, field) in binds.iter().zip(&variant.payload) {
                     let value = format!("{}.data.{}.{}", subject, c_ident(tag), c_ident(&field.name));
-                    bindings.push((name, field.ty.clone(), value));
+                    bound_names(names, &field.ty, value, &mut bindings);
                 }
             }
             _ => {}
@@ -1703,6 +1707,23 @@ fn given_types(wanted: usize, values: &[Expr], span: Span) -> Result<Vec<Type>> 
             other => Err(Error::internal_at(span, format!("a value of type {} received by {} names", other, wanted))),
         },
         _ => Err(Error::internal_at(span, format!("{} values received by {} names", values.len(), wanted))),
+    }
+}
+
+/// The names `names` binds from the value `value` of type `ty`, each with the
+/// C expression that reads it: one name takes the value, and `(a, b)` reads a
+/// tuple's items.
+fn bound_names<'p>(names: &'p Names, ty: &Type, value: String, bindings: &mut Vec<(&'p str, Type, String)>) {
+    let Type::Tuple(items) = ty else {
+        bindings.push((&names.name, ty.clone(), value));
+        return;
+    };
+    if names.parts.is_empty() {
+        bindings.push((&names.name, ty.clone(), value));
+        return;
+    }
+    for (i, (part, item)) in names.parts.iter().zip(items).enumerate() {
+        bound_names(part, item, format!("{}.{}", value, tuple_member(i)), bindings);
     }
 }
 

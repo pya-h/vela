@@ -1006,7 +1006,8 @@ impl Parser {
     }
 
     /// What a `case` or `is` (the `keyword`) matches: `Circle r`, `{value}`,
-    /// `none`, `fail e`, or `_`.
+    /// `none`, `fail e`, `(x, y)`, or `_`. A name it binds may be written
+    /// `hold name`, which makes it a variable that can be assigned.
     fn parse_pattern(&mut self, keyword: &str) -> Result<Pattern> {
         let span = self.peek_span();
         let kind = match self.peek() {
@@ -1020,13 +1021,33 @@ impl Parser {
             }
             Token::LBrace => {
                 self.advance();
-                let bind = self.parse_bound_name()?;
+                let names = self.parse_pattern_names()?;
+                if self.check(Token::Comma) {
+                    return Err(Error::at(
+                        self.peek_span(),
+                        "'{…}' names the one value inside a maybe or a 'T or E'; to take a tuple apart too, write its names in parentheses, as in '{(name, age)}'",
+                    ));
+                }
                 self.expect(Token::RBrace)?;
-                PatternKind::Value(bind)
+                PatternKind::Value(names)
             }
             Token::Fail => {
                 self.advance();
-                PatternKind::Fail(self.parse_bound_name()?)
+                PatternKind::Fail(self.parse_pattern_names()?)
+            }
+            // `(x, y)` or `hold (x, y)`: the items of a tuple.
+            Token::LParen | Token::Hold => {
+                let names = self.parse_pattern_names()?;
+                if names.parts.is_empty() {
+                    return Err(Error::at(
+                        names.span,
+                        format!(
+                            "'{0}' matches a value, so a name alone isn't a pattern: write '{{hold {1}}}' for the value inside a maybe or a 'T or E', or '{0} hold (x, y)' for a tuple's items",
+                            keyword, names.name
+                        ),
+                    ));
+                }
+                PatternKind::Tuple(names)
             }
             Token::Ident(_) => {
                 // `Circle`, `Shape.Circle`, or `geometry.Shape.Circle`.
@@ -1056,14 +1077,47 @@ impl Parser {
                     ));
                 }
                 let mut binds = Vec::new();
-                while matches!(self.peek(), Token::Ident(_) | Token::Underscore) {
-                    binds.push(self.parse_bound_name()?);
+                while matches!(self.peek(), Token::Ident(_) | Token::Underscore | Token::Hold) {
+                    let names = self.parse_pattern_names()?;
+                    if !names.parts.is_empty() {
+                        return Err(Error::at(names.span, format!("a pattern names its bindings without parentheses, as in '{} {} value'", keyword, tag)));
+                    }
+                    binds.push(names);
                 }
                 PatternKind::Variant { kind, tag, binds }
             }
             _ => return Err(self.unexpected("a variant, '{value}', 'none', 'fail e', or '_'")),
         };
         Ok(Pattern { kind, span })
+    }
+
+    /// What a pattern names: `name`, `_`, or `(a, b)`, the names of a tuple's
+    /// items, each of which `hold` may make changeable.
+    fn parse_pattern_names(&mut self) -> Result<Names> {
+        let span = self.peek_span();
+        let mutable = self.match_token(Token::Hold);
+        if !self.check(Token::LParen) {
+            let (name, at) = self.parse_bound_name()?;
+            return Ok(Names::one(name, at, mutable));
+        }
+        self.advance(); // (
+        self.enter()?;
+        let parts = self.parse_pattern_parts(span);
+        self.leave(1);
+        Ok(Names { name: String::new(), span, mutable, parts: parts? })
+    }
+
+    /// After the `(` at `opened` of a pattern's names: the names and `)`.
+    fn parse_pattern_parts(&mut self, opened: Span) -> Result<Vec<Names>> {
+        let mut parts = vec![self.parse_pattern_names()?];
+        while self.match_token(Token::Comma) {
+            parts.push(self.parse_pattern_names()?);
+        }
+        self.expect(Token::RParen)?;
+        if parts.len() < 2 {
+            return Err(Error::at(opened, "a tuple has two or more items, so '( … )' names two or more, as in 'is (x, y)'"));
+        }
+        Ok(parts)
     }
 
     /// A name a pattern binds, or `_`.

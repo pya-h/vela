@@ -13,6 +13,18 @@ kind Grade
     Fail
 fi
 
+kind Score
+    Mark(points: int, note: text)
+    Missing
+fi
+
+task parsed(n: int) -> (int, int) or (text, int)
+    when n < 0
+        <- fail ("negative", n)
+    fi
+    <- (n, n * 2)
+fi
+
 task divide(a: int, b: int) -> (int, int)
     <- (a / b, a % b)
 fi
@@ -81,6 +93,7 @@ task main()
     show(number)
 
     # Values that can't change as items: a shape, a kind, maybe, and T or E.
+    bind grade = Mark(45, "ok")
     bind mixed: (Point, Grade, maybe text, int or text) = (Point { x: 3, y: 4 }, Pass(90), none, 5)
     show(mixed.0.x + mixed.0.y)
     match mixed.1
@@ -114,6 +127,50 @@ task main()
     show((1, "a") == (1, "a"))
     show((1, (2.5, "a")) != (1, (2.5, "b")))
     show(pair == ("Ada", 36))
+
+    # Patterns: braces take the value out, parentheses take the tuple apart,
+    # and `hold` names can be assigned.
+    bind person: maybe (text, int) = ("Ada", 36)
+    when person is {(who, years)}
+        show(who)
+        show(years)
+    fi
+    match parsed(4)
+        case {(value, doubled)}
+            show(value + doubled)
+        case fail (reason, where_at)
+            show(reason)
+            show(where_at)
+    fi
+    match parsed(-2)
+        case {(value, doubled)}
+            show(value + doubled)
+        case fail (reason, where_at)
+            show(reason)
+            show(where_at)
+    fi
+    when pair is (title, age)
+        show(title)
+        show(age)
+    fi
+    when pair is hold (name_held, age_held)
+        name_held = "Cy"
+        age_held = age_held + 1
+        show(name_held)
+        show(age_held)
+    fi
+    when person is {hold changing}
+        changing = ("Bob", 1)
+        show(changing.0)
+    fi
+    match grade
+        case Mark hold points note
+            points = points * 2
+            show(points)
+            show(note)
+        case Missing
+            show("missing")
+    fi
 
     # Text of a region in a tuple.
     bind line = scan("") at r { "none" }

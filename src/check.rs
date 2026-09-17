@@ -33,6 +33,10 @@ enum TargetType {
     Tuple(Vec<TargetType>, Span),
 }
 
+/// A name a pattern or a plan B declares: its name, where it is written, its
+/// type, and whether it can be assigned (`hold` in a pattern).
+type Declared = (String, Span, Type, bool);
+
 /// Where a type is written, which decides the regions it may name.
 #[derive(Clone, Copy, PartialEq)]
 enum TypePlace {
@@ -933,12 +937,12 @@ impl Checker {
 
     /// Checks `block` in a new nested scope that first declares `bindings`
     /// (from a pattern), each immutable. `_` declares nothing.
-    fn check_block_with(&mut self, bindings: Vec<(String, Span, Type)>, block: &mut Block) -> Result<()> {
+    fn check_block_with(&mut self, bindings: Vec<Declared>, block: &mut Block) -> Result<()> {
         self.push_scope();
         let result = bindings
             .into_iter()
-            .filter(|(name, _, _)| name != DISCARD)
-            .try_for_each(|(name, span, ty)| self.define(&name, ty, false, span))
+            .filter(|(name, _, _, _)| name != DISCARD)
+            .try_for_each(|(name, span, ty, mutable)| self.define(&name, ty, mutable, span))
             .and_then(|()| self.check_block(block));
         self.pop_scope();
         result
@@ -1174,6 +1178,12 @@ impl Checker {
             }
             StmtKind::SetResults(names, values) => self.check_set_results(span, names, values),
             StmtKind::When(cond, then_block, else_block) => {
+                // A tuple's items always match, so an `else` could never run.
+                if let (Some(pattern), Some(_)) = (&cond.pattern, else_block.as_ref())
+                    && matches!(pattern.kind, PatternKind::Tuple(_))
+                {
+                    return err(pattern.span, "a tuple's items always match, so this 'when' always holds and its 'else' would never run; take the tuple apart with 'bind' instead");
+                }
                 let entry = self.unset.clone();
                 self.check_condition(cond, then_block)?;
                 let after_then = self.branch_state(then_block, &entry);
@@ -1189,6 +1199,11 @@ impl Checker {
                 Ok(())
             }
             StmtKind::Loop(cond, body) => {
+                if let Some(pattern) = &cond.pattern
+                    && matches!(pattern.kind, PatternKind::Tuple(_))
+                {
+                    return err(pattern.span, "a tuple's items always match, so this loop would never end; take the tuple apart with 'bind' instead");
+                }
                 // A loop's body might not run, so it sets nothing for certain.
                 let entry = self.unset.clone();
                 self.check_condition(cond, body)?;
@@ -1300,15 +1315,15 @@ impl Checker {
     /// Checks that `pattern` can match a value of type `subject`, and returns
     /// the names it binds with their types. `in_case` words messages for a
     /// `case` rather than an `is`.
-    fn pattern_bindings(&self, subject: &Type, pattern: &Pattern, in_case: bool) -> Result<Vec<(String, Span, Type)>> {
+    fn pattern_bindings(&self, subject: &Type, pattern: &Pattern, in_case: bool) -> Result<Vec<Declared>> {
         let span = pattern.span;
-        let bound = |(name, at): &Binding, ty: &Type| vec![(name.clone(), *at, ty.clone())];
         // `fail TooBig` or `{Red}`: a pattern names the whole error or value.
-        if let PatternKind::Value((name, at)) | PatternKind::Fail((name, at)) = &pattern.kind
-            && self.variant_in_scope(name).is_some()
+        if let PatternKind::Value(names) | PatternKind::Fail(names) = &pattern.kind
+            && names.parts.is_empty()
+            && self.variant_in_scope(&names.name).is_some()
         {
             let (keyword, whole) = if matches!(pattern.kind, PatternKind::Fail(_)) { ("fail e", "error") } else { ("{value}", "value") };
-            return err(*at, format!("'{}' is a variant, but '{}' names the whole {}; give it a name, then match on it", name, keyword, whole));
+            return err(names.span, format!("'{}' is a variant, but '{}' names the whole {}; give it a name, then match on it", names.name, keyword, whole));
         }
         match (&pattern.kind, subject) {
             (PatternKind::Any | PatternKind::None, Type::Maybe(_)) => Ok(Vec::new()),
@@ -1326,7 +1341,12 @@ impl Checker {
                     let what = if in_case { format!("case '{}'", tag) } else { format!("'{}'", tag) };
                     return err(span, format!("{} expects {}, got {}", what, count(variant.payload.len(), "binding"), binds.len()));
                 }
-                Ok(binds.iter().zip(&variant.payload).map(|((name, at), field)| (name.clone(), *at, self.field_in(&field.ty, region))).collect())
+                binds
+                    .iter()
+                    .zip(&variant.payload)
+                    .map(|(names, field)| self.bound_names(names, &self.field_in(&field.ty, region), false))
+                    .collect::<Result<Vec<_>>>()
+                    .map(|bound| bound.concat())
             }
             (PatternKind::Variant { kind: Some(written), tag, .. }, other) => {
                 let (kind, at) = &**written;
@@ -1344,14 +1364,16 @@ impl Checker {
                     err(span, format!("unknown variant '{}'", tag))
                 }
             }
-            (PatternKind::Value(bind), Type::Maybe(inner)) => Ok(bound(bind, inner)),
-            (PatternKind::Value(bind), Type::Or(value, _)) => {
-                if **value == Type::Unit && bind.0 != DISCARD {
-                    return err(bind.1, "this success has no value to name; write '{_}'");
+            (PatternKind::Value(names), Type::Maybe(inner)) => self.bound_names(names, inner, false),
+            (PatternKind::Value(names), Type::Or(value, _)) => {
+                if **value == Type::Unit && names.name != DISCARD {
+                    return err(names.span, "this success has no value to name; write '{_}'");
                 }
-                Ok(bound(bind, value))
+                self.bound_names(names, value, false)
             }
-            (PatternKind::Fail(bind), Type::Or(_, error)) => Ok(bound(bind, error)),
+            (PatternKind::Fail(names), Type::Or(_, error)) => self.bound_names(names, error, false),
+            // `(x, y)`: the items of a tuple, which always match.
+            (PatternKind::Tuple(names), _) => self.bound_names(names, subject, false),
             (PatternKind::Value(_), other) => {
                 err(span, format!("'{{…}}' matches the value in a maybe or a 'T or E', but this value is {}", other))
             }
@@ -1361,6 +1383,24 @@ impl Checker {
                 err(span, format!("'fail …' matches the error of a 'T or E', but this value is {}", other))
             }
         }
+    }
+
+    /// The names `names` binds from a value of type `ty`, with their types:
+    /// one name takes the value, and `(a, b)` the items of a tuple. `mutable`
+    /// is a `hold` written around them.
+    fn bound_names(&self, names: &Names, ty: &Type, mutable: bool) -> Result<Vec<Declared>> {
+        let mutable = mutable || names.mutable;
+        if names.parts.is_empty() {
+            return Ok(vec![(names.name.clone(), names.span, ty.clone(), mutable)]);
+        }
+        let items = self.tuple_items(ty, names.parts.len(), names.span)?;
+        names
+            .parts
+            .iter()
+            .zip(&items)
+            .map(|(part, item)| self.bound_names(part, item, mutable))
+            .collect::<Result<Vec<_>>>()
+            .map(|bound| bound.concat())
     }
 
     /// Checks the left side of an assignment and returns its type.
@@ -2350,7 +2390,7 @@ impl Checker {
             if self.variant_in_scope(name).is_some() {
                 return err(*at, format!("'{}' is a variant; to send an error, write '<- fail {}'", name, name));
             }
-            bindings.push((name.clone(), *at, error_ty));
+            bindings.push((name.clone(), *at, error_ty, false));
         }
         // The block runs only when there is nothing to extract, so a result it
         // sets isn't set for certain.
@@ -2358,8 +2398,8 @@ impl Checker {
         self.push_scope();
         let result = bindings
             .into_iter()
-            .filter(|(name, _, _)| name != DISCARD)
-            .try_for_each(|(name, at, ty)| self.define(&name, ty, false, at))
+            .filter(|(name, _, _, _)| name != DISCARD)
+            .try_for_each(|(name, at, ty, mutable)| self.define(&name, ty, mutable, at))
             .and_then(|()| self.check_plan_b_body(span, &extracted, body));
         self.pop_scope();
         self.unset = entry;

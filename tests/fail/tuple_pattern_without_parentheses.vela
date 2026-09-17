@@ -1,0 +1,7 @@
+# error: 4:24: '{…}' names the one value inside a maybe or a 'T or E'; to take a tuple apart too, write its names in parentheses, as in '{(name, age)}'
+task main()
+    hold found: maybe (int, text) = none
+    when found is {code, label}
+        show(code)
+    fi
+fi

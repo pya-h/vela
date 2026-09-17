@@ -627,15 +627,46 @@ pub enum PatternKind {
     /// order. `kind` is the kind written before the variant, if any: the
     /// value's kind, which the checker makes sure of. (Boxed: patterns are held
     /// by value in frames that nest, and are rarely written with a kind.)
-    Variant { kind: Option<Box<Binding>>, tag: String, binds: Vec<Binding> },
+    Variant { kind: Option<Box<Binding>>, tag: String, binds: Vec<Names> },
     /// `{v}`: the value in a `maybe`, or the success of a `T or E`.
-    Value(Binding),
+    Value(Names),
     /// `none`: an empty `maybe`.
     None,
     /// `fail e`: the error of a `T or E`.
-    Fail(Binding),
+    Fail(Names),
+    /// `(x, y)`: the items of a tuple, which always match.
+    Tuple(Names),
     /// `_`: anything the earlier cases didn't match.
     Any,
+}
+
+/// What a pattern names: one name (or `_`), or `(a, b)`, the names of a
+/// tuple's items. `mutable` is `hold` written before it, which makes every
+/// name it binds a variable that can be assigned.
+#[derive(Debug, Clone)]
+pub struct Names {
+    /// Empty for `(a, b)`, which names its parts.
+    pub name: String,
+    /// Position of the name, or of `(`.
+    pub span: Span,
+    pub mutable: bool,
+    /// The names of a tuple's items; empty for one name.
+    pub parts: Vec<Names>,
+}
+
+impl Names {
+    /// One name, at `span`, which `hold` may make changeable.
+    pub fn one(name: String, span: Span, mutable: bool) -> Names {
+        Names { name, span, mutable, parts: Vec::new() }
+    }
+
+    /// Every name it binds, in order, through the tuples it takes apart.
+    pub fn leaves(&self) -> Vec<&Names> {
+        if self.parts.is_empty() {
+            return vec![self];
+        }
+        self.parts.iter().flat_map(Names::leaves).collect()
+    }
 }
 
 impl Pattern {
@@ -647,16 +678,17 @@ impl Pattern {
             PatternKind::Value(_) => "{…}".to_string(),
             PatternKind::None => "none".to_string(),
             PatternKind::Fail(_) => "fail …".to_string(),
+            PatternKind::Tuple(_) => "( … )".to_string(),
             PatternKind::Any => DISCARD.to_string(),
         }
     }
 
     /// The names the pattern binds, in order, including discards.
-    pub fn bindings(&self) -> &[Binding] {
+    pub fn bindings(&self) -> Vec<&Names> {
         match &self.kind {
-            PatternKind::Variant { binds, .. } => binds,
-            PatternKind::Value(bind) | PatternKind::Fail(bind) => std::slice::from_ref(bind),
-            PatternKind::None | PatternKind::Any => &[],
+            PatternKind::Variant { binds, .. } => binds.iter().flat_map(Names::leaves).collect(),
+            PatternKind::Value(names) | PatternKind::Fail(names) | PatternKind::Tuple(names) => names.leaves(),
+            PatternKind::None | PatternKind::Any => Vec::new(),
         }
     }
 }
@@ -667,16 +699,37 @@ impl fmt::Display for Pattern {
         match &self.kind {
             PatternKind::Variant { tag, binds, .. } => {
                 write!(f, "{}", tag)?;
-                for (name, _) in binds {
-                    write!(f, " {}", name)?;
+                for names in binds {
+                    write!(f, " {}", names)?;
                 }
                 Ok(())
             }
-            PatternKind::Value((name, _)) => write!(f, "{{{}}}", name),
+            PatternKind::Value(names) => write!(f, "{{{}}}", names),
             PatternKind::None => write!(f, "none"),
-            PatternKind::Fail((name, _)) => write!(f, "fail {}", name),
+            PatternKind::Fail(names) => write!(f, "fail {}", names),
+            PatternKind::Tuple(names) => write!(f, "{}", names),
             PatternKind::Any => write!(f, "_"),
         }
+    }
+}
+
+impl fmt::Display for Names {
+    /// The names as they are written: `value`, `hold value`, or `(a, b)`.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.mutable {
+            write!(f, "hold ")?;
+        }
+        if self.parts.is_empty() {
+            return write!(f, "{}", self.name);
+        }
+        write!(f, "(")?;
+        for (i, part) in self.parts.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", part)?;
+        }
+        write!(f, ")")
     }
 }
 

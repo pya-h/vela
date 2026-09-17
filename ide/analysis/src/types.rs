@@ -198,21 +198,31 @@ impl Checked {
         match (&pattern.kind, subject) {
             (PatternKind::Variant { tag, binds, .. }, Type::Named(name, region)) => {
                 let payload = kinds.kinds.get(name.as_str()).and_then(|k| k.variants.iter().find(|v| v.tag == *tag)).map(|v| &v.payload);
-                for ((_, span), field) in binds.iter().zip(payload.into_iter().flatten()) {
+                for (names, field) in binds.iter().zip(payload.into_iter().flatten()) {
                     let ty = match region {
                         Some(region) => in_region(&field.ty, region, &kinds.takes_region),
                         None => field.ty.clone(),
                     };
-                    self.decls.insert(pos(*span), ty);
+                    self.pattern_names(names, &ty);
                 }
             }
-            (PatternKind::Value((_, span)), Type::Maybe(inner) | Type::Or(inner, _)) => {
-                self.decls.insert(pos(*span), (**inner).clone());
-            }
-            (PatternKind::Fail((_, span)), Type::Or(_, error)) => {
-                self.decls.insert(pos(*span), (**error).clone());
-            }
+            (PatternKind::Value(names), Type::Maybe(inner) | Type::Or(inner, _)) => self.pattern_names(names, inner),
+            (PatternKind::Fail(names), Type::Or(_, error)) => self.pattern_names(names, error),
+            // `(x, y)`: the items of the tuple itself.
+            (PatternKind::Tuple(names), _) => self.pattern_names(names, subject),
             _ => {}
+        }
+    }
+
+    /// Records the type of each name `names` binds from a value of type `ty`.
+    fn pattern_names(&mut self, names: &vela::ast::Names, ty: &Type) {
+        if names.parts.is_empty() {
+            self.decls.insert(pos(names.span), ty.clone());
+            return;
+        }
+        let Type::Tuple(items) = ty else { return };
+        for (part, item) in names.parts.iter().zip(items) {
+            self.pattern_names(part, item);
         }
     }
 

@@ -911,13 +911,32 @@ fn covered_cases(k: &Knowledge, match_q: usize, case: usize) -> Vec<String> {
 /// The patterns of a `maybe` or `T or E` as `(label, detail, snippet)`: its
 /// value, and `none` or its error.
 fn outcome_patterns(ty: &Type) -> Option<Vec<(String, String, String)>> {
+    // A tuple's items are named in parentheses, `{(a, b)}` and `fail (a, b)`.
+    let items = |extracted: &Type| match extracted {
+        Type::Tuple(items) => Some(format!("({})", (0..items.len()).map(|i| format!("${{item{}}}", i)).collect::<Vec<_>>().join(", "))),
+        _ => None,
+    };
     let value = |extracted: &Type| {
-        let name = if *extracted == Type::Unit { "{_}" } else { "{${value}}" };
-        ("{value}".to_string(), format!("the {}", extracted), name.to_string())
+        let name = match (extracted, items(extracted)) {
+            (Type::Unit, _) => "{_}".to_string(),
+            (_, Some(parts)) => format!("{{{}}}", parts),
+            _ => "{${value}}".to_string(),
+        };
+        ("{value}".to_string(), format!("the {}", extracted), name)
+    };
+    let failure = |error: &Type| {
+        let template = items(error).map_or_else(|| "fail ${e}".to_string(), |parts| format!("fail {}", parts));
+        ("fail e".to_string(), format!("the {} error", error), template)
     };
     match ty {
         Type::Maybe(inner) => Some(vec![value(inner), ("none".to_string(), "no value".to_string(), "none".to_string())]),
-        Type::Or(ok, error) => Some(vec![value(ok), ("fail e".to_string(), format!("the {} error", error), "fail ${e}".to_string())]),
+        Type::Or(ok, error) => Some(vec![value(ok), failure(error)]),
+        // A tuple's items always match, so naming them is the only pattern.
+        Type::Tuple(items) => Some(vec![(
+            "(items)".to_string(),
+            format!("the {} items", items.len()),
+            format!("({})", (0..items.len()).map(|i| format!("${{item{}}}", i)).collect::<Vec<_>>().join(", ")),
+        )]),
         _ => None,
     }
 }

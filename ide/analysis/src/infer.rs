@@ -314,8 +314,64 @@ impl<'a> Knowledge<'a> {
         })
     }
 
+    /// The type of the name at `name` in the pattern starting at `first`, given
+    /// the type `ty` the pattern matches: an item of a tuple for each `( … )`
+    /// the name is inside.
+    fn pattern_item(&self, ty: Type, first: usize, name: usize) -> Option<Type> {
+        let mut path = vec![0usize];
+        for q in first..name {
+            match self.token(q) {
+                Some(Token::LParen) => path.push(0),
+                Some(Token::RParen) => {
+                    path.pop();
+                }
+                Some(Token::Comma) => {
+                    if let Some(last) = path.last_mut() {
+                        *last += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+        // The first entry is the whole value, which `( … )` then takes apart.
+        path.remove(0);
+        path.into_iter().try_fold(ty, |ty, item| match ty {
+            Type::Tuple(items) => items.into_iter().nth(item),
+            _ => None,
+        })
+    }
+
     /// The position of the variant's name in the pattern after the `case` or
     /// `is` at `case`: `Circle`, `Shape.Circle`, or `m.Shape.Circle`.
+    /// Whether the pattern name at `name` was written `hold name`, directly or
+    /// inside a `hold ( … )`, so it can be assigned.
+    pub fn pattern_name_mutable(&self, name: usize) -> bool {
+        let line = self.line_start(name);
+        let mut at = name;
+        loop {
+            if at > line && self.token(at - 1) == Some(&Token::Hold) {
+                return true;
+            }
+            let mut depth = 0usize;
+            // The `(` of the group this name is in, if any.
+            let Some(open) = (line..at).rev().find(|&q| match self.token(q) {
+                Some(Token::RParen) => {
+                    depth += 1;
+                    false
+                }
+                Some(Token::LParen) if depth == 0 => true,
+                Some(Token::LParen) => {
+                    depth -= 1;
+                    false
+                }
+                _ => false,
+            }) else {
+                return false;
+            };
+            at = open;
+        }
+    }
+
     pub fn pattern_variant_at(&self, case: usize) -> usize {
         let mut at = case + 1;
         while self.token(at + 1) == Some(&Token::Dot) && self.ident(at + 2).is_some() {
@@ -365,15 +421,22 @@ impl<'a> Knowledge<'a> {
         let name = self.at_byte(symbol.name_range.start)?;
         let case = (self.line_start(name)..name).rev().find(|&q| matches!(self.token(q), Some(Token::Case | Token::Is)))?;
         let outcome = || self.pattern_subject(case, depth);
-        match self.token(case + 1)? {
-            Token::LBrace => outcome()?.extracted().cloned(),
+        // `hold` before the names makes them changeable; the pattern goes on after it.
+        let start = if self.token(case + 1) == Some(&Token::Hold) { case + 2 } else { case + 1 };
+        match self.token(start)? {
+            // `{v}` and `{(a, b)}`: the value inside, and its items.
+            Token::LBrace => self.pattern_item(outcome()?.extracted().cloned()?, start + 1, name),
+            // `fail e` and `fail (a, b)`.
             Token::Fail => match outcome()? {
-                Type::Or(_, error) => Some(*error),
+                Type::Or(_, error) => self.pattern_item(*error, start + 1, name),
                 _ => None,
             },
+            // `(x, y)`: the items of a tuple, which always match.
+            Token::LParen => self.pattern_item(outcome()?, start, name),
             _ => {
                 let tag_at = self.pattern_variant_at(case);
-                let index = name.checked_sub(tag_at + 1)?;
+                // The names before this one, which `hold` may be written before.
+                let index = (tag_at + 1..name).filter(|&q| matches!(self.token(q), Some(Token::Ident(_) | Token::Underscore))).count();
                 let tag = self.ident(tag_at)?;
                 // The variant of the matched value's kind, which may be another
                 // module's, whose variants the case names alone.
