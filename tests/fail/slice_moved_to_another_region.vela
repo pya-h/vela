@@ -1,0 +1,9 @@
+# error: 7:16: expected type [int]@outer, got [int]@inner; a value can't move to another region: a pointer into one region is never stored in another
+task main()
+    region outer
+    hold kept = new [int]([0; 1]) at outer
+    when true
+        region inner
+        kept = new [int]([1; 2]) at inner
+    fi
+fi

@@ -1,4 +1,4 @@
-# error: 4:11: Vela has no arrays yet, so '[…]' can't index a value
+# error: 4:11: '[…]' reads an item of an array or slice, but this value is int
 task main()
     bind x = 5
     show(x[0])

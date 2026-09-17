@@ -132,6 +132,7 @@ impl Generator {
         for ty in &used.shown {
             self.gen_show_maybe(ty);
         }
+        self.gen_item_helpers(&used);
         self.w.blank();
 
         // Forward declarations for tasks
@@ -216,9 +217,10 @@ impl Generator {
     }
 
     /// The struct of a `maybe T` (`has`, `value`), a `T or E` (`ok`, `value`,
-    /// `error`; no `value` for `unit or E`), or several results (`r0`, `r1`,
-    /// …). A `maybe`'s and an `or`'s members are always initialized, so either
-    /// can be read.
+    /// `error`; no `value` for `unit or E`), several results (`r0`, `r1`, …),
+    /// an array (`items`), or a slice (`items`, a pointer, and `len`). A
+    /// `maybe`'s and an `or`'s members are always initialized, so either can be
+    /// read.
     fn gen_compound(&mut self, ty: &Type) {
         self.w.open(&format!("struct {}", c_type(ty)));
         match ty {
@@ -231,6 +233,11 @@ impl Generator {
                 self.w.line("bool has;");
                 self.w.line(&format!("{} value;", c_type(inner)));
             }
+            Type::Array(items, count) => self.w.line(&format!("{} items[{}];", c_type(items), count)),
+            Type::Slice(items, _) => {
+                self.w.line(&format!("{}* items;", c_type(items)));
+                self.w.line("int64_t len;");
+            }
             Type::Or(value, error) => {
                 self.w.line("bool ok;");
                 if **value != Type::Unit {
@@ -241,6 +248,54 @@ impl Generator {
             _ => {}
         }
         self.w.close_with(";");
+    }
+
+    /// The helpers for arrays and slices that the program uses, each a C
+    /// function so that an array or slice given to it is evaluated once.
+    fn gen_item_helpers(&mut self, used: &UsedTypes) {
+        for slice in &used.slice_at {
+            let (ctype, items) = (c_type(slice), c_type(item_type(slice)));
+            self.w.open(&format!("static {}* {}({} s, int64_t i, const char* at)", items, item_helper("at", slice), ctype));
+            self.w.line("return s.items + vela__rt__index(i, s.len, at);");
+            self.w.close();
+        }
+        for slice in &used.slice_part {
+            let ctype = c_type(slice);
+            self.w.open(&format!("static {0} {1}({0} s, int64_t from, int64_t to, const char* at)", ctype, item_helper("part", slice)));
+            self.w.line("vela__rt__part(from, to, s.len, at);");
+            self.w.line(&format!("return ({}){{ .items = s.items + from, .len = to - from }};", ctype));
+            self.w.close();
+        }
+        for slice in &used.slice_copy {
+            let (ctype, items) = (c_type(slice), c_type(item_type(slice)));
+            self.w.open(&format!("static {0} {1}(vela__rt__region* r, {0} s)", ctype, item_helper("copy", slice)));
+            // The source exists, so its size in bytes can't overflow.
+            self.w.line(&format!("{0}* items = vela__rt__region_alloc(r, (size_t)s.len * sizeof({0}), _Alignof({0}));", items));
+            self.w.line(&format!("memcpy(items, s.items, (size_t)s.len * sizeof({}));", items));
+            self.w.line(&format!("return ({}){{ .items = items, .len = s.len }};", ctype));
+            self.w.close();
+        }
+        for slice in &used.slice_fill {
+            let (ctype, items) = (c_type(slice), c_type(item_type(slice)));
+            self.w.open(&format!("static {0} {1}(vela__rt__region* r, int64_t len, {2} value, const char* at)", ctype, item_helper("fill", slice), items));
+            self.w.line(&format!("{0}* items = vela__rt__region_items(r, len, sizeof({0}), _Alignof({0}), at);", items));
+            self.w.open("for (int64_t i = 0; i < len; i++)");
+            self.w.line("items[i] = value;");
+            self.w.close();
+            self.w.line(&format!("return ({}){{ .items = items, .len = len }};", ctype));
+            self.w.close();
+        }
+        for array in &used.array_fill {
+            let Type::Array(items, count) = array else { continue };
+            let ctype = c_type(array);
+            self.w.open(&format!("static {0} {1}({2} value)", ctype, item_helper("fill", array), c_type(items)));
+            self.w.line(&format!("{} array;", ctype));
+            self.w.open(&format!("for (int64_t i = 0; i < INT64_C({}); i++)", count));
+            self.w.line("array.items[i] = value;");
+            self.w.close();
+            self.w.line("return array;");
+            self.w.close();
+        }
     }
 
     /// `show` for a `maybe` of a type `show` prints: the value, or `none`.
@@ -396,13 +451,13 @@ impl Generator {
                     if has_plan_b(rhs) && !matches!(lhs.kind, ExprKind::Var(_)) {
                         // Find the place before the value's prelude runs, which
                         // might change what the place refers to.
-                        let place = self.gen_expr(lhs)?;
+                        let place = self.gen_place(lhs)?;
                         let pointer = self.fresh_temp("place");
                         self.w.line(&format!("{}* {} = &{};", c_type(lhs.ty()?), pointer, place));
                         let value = self.gen_expr(rhs)?;
                         self.w.line(&format!("*{} = {};", pointer, value));
                     } else {
-                        let l = self.gen_expr(lhs)?;
+                        let l = self.gen_place(lhs)?;
                         let r = self.gen_expr(rhs)?;
                         self.w.line(&format!("{} = {};", l, r));
                     }
@@ -460,6 +515,28 @@ impl Generator {
                     self.w.close();
                 }
             },
+            StmtKind::Each(name, items, body) if !matches!(items.kind, ExprKind::Range(..)) => {
+                // An array is copied, so the loop sees it as it was when it
+                // started; a slice is a view, whose items are read as they are.
+                let ty = items.ty()?.clone();
+                let (item, len) = match &ty {
+                    Type::Array(item, count) => (item, format!("INT64_C({})", count)),
+                    Type::Slice(item, _) => (item, String::new()),
+                    other => return Err(Error::internal_at(items.span, format!("each over a value of type {}", other))),
+                };
+                let value = self.gen_expr(items)?;
+                let walked = self.fresh_temp("items");
+                let index = self.fresh_temp("index");
+                let len = if len.is_empty() { format!("{}.len", walked) } else { len };
+                self.w.open("");
+                self.w.line(&format!("{} {} = {};", c_type(&ty), walked, value));
+                self.w.open(&format!("for (int64_t {0} = 0; {0} < {1}; {0}++)", index, len));
+                self.w.line(&format!("{} {} = {}.items[{}];", c_type(item), c_ident(name), walked, index));
+                self.use_if_unread(name, body);
+                self.gen_block(body)?;
+                self.w.close();
+                self.w.close();
+            }
             StmtKind::Each(name, range, body) => {
                 let (a, b) = self.gen_range(range)?;
                 // The end of the range is evaluated once, before the first
@@ -564,7 +641,7 @@ impl Generator {
             match target {
                 Target::Discard(_) => places.push(None),
                 Target::Place(place) => {
-                    let lvalue = self.gen_expr(place)?;
+                    let lvalue = self.gen_place(place)?;
                     let pointer = self.fresh_temp("place");
                     self.w.line(&format!("{}* {} = &{};", c_type(place.ty()?), pointer, lvalue));
                     places.push(Some(pointer));
@@ -786,9 +863,23 @@ impl Generator {
             ExprKind::Var(name) => Ok(c_ident(name)),
             ExprKind::Field(base, field) => {
                 let b = self.gen_expr(base)?;
-                Ok(format!("({}).{}", b, c_ident(field)))
+                match base.ty()? {
+                    // An array's length is its type's; the array is still read.
+                    Type::Array(_, count) => Ok(format!("((void){}, INT64_C({}))", parenthesized(&b), count)),
+                    Type::Slice(..) => Ok(format!("({}).len", b)),
+                    _ => Ok(format!("({}).{}", b, c_ident(field))),
+                }
             }
-            ExprKind::Index(_base, _index) => Err(Error::internal_at(span, "indexing reached code generation")),
+            ExprKind::Index(base, index) => self.gen_index(e, base, index, None),
+            ExprKind::Array(values) => {
+                let operands: Vec<&Expr> = values.iter().collect();
+                let given = self.gen_operands(&operands)?;
+                Ok(format!("(({}){{ .items = {{ {} }} }})", c_type(e.ty()?), given.join(", ")))
+            }
+            ExprKind::Repeat { value, .. } => {
+                let value = self.gen_expr(value)?;
+                Ok(format!("{}({})", item_helper("fill", e.ty()?), value))
+            }
             ExprKind::Call(name, args) => {
                 if name == "show" {
                     let [arg] = args.as_slice() else {
@@ -853,6 +944,21 @@ impl Generator {
                     mangle(kind), tag_value, c_ident(tag), fields.join(", ")
                 ))
             }
+            ExprKind::New { ty, value, region, .. } if matches!(**ty, Type::Slice(..)) => {
+                let slice = e.ty()?;
+                if let ExprKind::Repeat { value: item, count } = &value.kind {
+                    let [item, count] = <[String; 2]>::try_from(self.gen_operands(&[item, count])?)
+                        .map_err(|_| Error::internal_at(span, "a repeated value without its count"))?;
+                    return Ok(format!("{}({}, {}, {}, {})", item_helper("fill", slice), c_ident(region), count, item, self.location(span)));
+                }
+                let source = self.gen_expr(value)?;
+                let source = match value.ty()? {
+                    // A view of the array, which lives until the copy is made.
+                    Type::Array(_, count) => format!("(({}){{ .items = ({}).items, .len = INT64_C({}) }})", c_type(slice), source, count),
+                    _ => source,
+                };
+                Ok(format!("{}({}, {})", item_helper("copy", slice), c_ident(region), source))
+            }
             ExprKind::New { ty, value, region, .. } => {
                 // Copies the value out of a one-element array compound literal,
                 // which works for every type in standard C.
@@ -888,6 +994,82 @@ impl Generator {
             ExprKind::Fail(error) => self.gen_expr(error),
             ExprKind::Wrap(inner) => self.gen_wrap(e, inner),
             ExprKind::PlanB { value, error, body } => self.gen_plan_b(e, value, error.as_ref(), body),
+        }
+    }
+
+    /// `xs[i]` or `xs[a..b]`, the expression `e`. `place` is the array `base`
+    /// names as a place, already generated, when `e` is assigned to.
+    fn gen_index(&mut self, e: &Expr, base: &Expr, index: &Expr, place: Option<String>) -> Result<String> {
+        let at = self.location(e.span);
+        if let ExprKind::Range(from, to) = &index.kind {
+            let slice = e.ty()?;
+            let source = match base.ty()? {
+                Type::Array(_, count) => {
+                    // The array is in a region: the slice points at its items there.
+                    let array = self.gen_place(base)?;
+                    let items = if has_plan_b(from) || has_plan_b(to) {
+                        let items = self.fresh_temp("items");
+                        self.w.line(&format!("{}* {} = ({}).items;", c_type(item_type(slice)), items, array));
+                        items
+                    } else {
+                        format!("({}).items", array)
+                    };
+                    let [from, to] = <[String; 2]>::try_from(self.gen_operands(&[from, to])?)
+                        .map_err(|_| Error::internal_at(e.span, "a slice without two bounds"))?;
+                    let view = format!("(({}){{ .items = {}, .len = INT64_C({}) }})", c_type(slice), items, count);
+                    return Ok(format!("{}({}, {}, {}, {})", item_helper("part", slice), view, from, to, at));
+                }
+                _ => base,
+            };
+            let [source, from, to] = <[String; 3]>::try_from(self.gen_operands(&[source, from, to])?)
+                .map_err(|_| Error::internal_at(e.span, "a slice without two bounds"))?;
+            return Ok(format!("{}({}, {}, {}, {})", item_helper("part", slice), source, from, to, at));
+        }
+        match base.ty()? {
+            Type::Array(_, count) => {
+                let constant = int_constant(index);
+                let (array, index) = match place {
+                    Some(array) => (array, self.gen_expr(index)?),
+                    None => {
+                        let [array, index] = <[String; 2]>::try_from(self.gen_operands(&[base, index])?)
+                            .map_err(|_| Error::internal_at(e.span, "an index without its array"))?;
+                        (array, index)
+                    }
+                };
+                // The checker has made sure a constant index is in range.
+                let index = match constant {
+                    Some(constant) => constant,
+                    None => format!("vela__rt__index({}, INT64_C({}), {})", index, count, at),
+                };
+                Ok(format!("({}).items[{}]", array, index))
+            }
+            Type::Slice(..) => {
+                let [slice, index] = <[String; 2]>::try_from(self.gen_operands(&[base, index])?)
+                    .map_err(|_| Error::internal_at(e.span, "an index without its slice"))?;
+                Ok(format!("(*{}({}, {}, {}))", item_helper("at", base.ty()?), slice, index, at))
+            }
+            other => Err(Error::internal_at(e.span, format!("an index into a value of type {}", other))),
+        }
+    }
+
+    /// A place an assignment writes to, as a C lvalue. An item of an array is
+    /// part of the array's own place, which is found before the index's
+    /// prelude runs, if it has one.
+    fn gen_place(&mut self, e: &Expr) -> Result<String> {
+        match &e.kind {
+            ExprKind::Field(base, field) if matches!(base.ty, Some(Type::Named(..))) => {
+                Ok(format!("({}).{}", self.gen_place(base)?, c_ident(field)))
+            }
+            ExprKind::Index(base, index) if matches!(base.ty, Some(Type::Array(..))) && !matches!(index.kind, ExprKind::Range(..)) => {
+                let mut array = self.gen_place(base)?;
+                if has_plan_b(index) {
+                    let pointer = self.fresh_temp("place");
+                    self.w.line(&format!("{}* {} = &{};", c_type(base.ty()?), pointer, array));
+                    array = format!("*{}", pointer);
+                }
+                self.gen_index(e, base, index, Some(array))
+            }
+            _ => self.gen_expr(e),
         }
     }
 
@@ -1099,22 +1281,47 @@ fn has_plan_b(e: &Expr) -> bool {
         | ExprKind::Var(_) => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. }
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => has_plan_b(inner),
-        ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => has_plan_b(a) || has_plan_b(b),
-        ExprKind::Call(_, args) | ExprKind::Construct { args, .. } => args.iter().any(has_plan_b),
+        ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
+            has_plan_b(a) || has_plan_b(b)
+        }
+        ExprKind::Call(_, args) | ExprKind::Construct { args, .. } | ExprKind::Array(args) => args.iter().any(has_plan_b),
         ExprKind::StructInit(_, fields) => fields.iter().any(|field| has_plan_b(&field.value)),
     }
 }
 
-/// The `maybe` and `or` types a program uses, which each need a C struct, and
-/// the `maybe` types it shows, which each need a helper.
+/// The `maybe`, `or`, array, and slice types a program uses, which each need a
+/// C struct, and the helpers it needs for them: `show` for a `maybe`; for a
+/// slice, reading an item, slicing, copying into a region, and filling one; for
+/// an array, filling it. Types are kept without regions.
 struct UsedTypes {
     compounds: Vec<Type>,
     shown: Vec<Type>,
+    slice_at: Vec<Type>,
+    slice_part: Vec<Type>,
+    slice_copy: Vec<Type>,
+    slice_fill: Vec<Type>,
+    array_fill: Vec<Type>,
+}
+
+/// Adds `ty`, without regions, to `list` unless it is there.
+fn note(list: &mut Vec<Type>, ty: &Type) {
+    let ty = ty.without_regions();
+    if !list.contains(&ty) {
+        list.push(ty);
+    }
 }
 
 impl UsedTypes {
     fn collect(items: &[Item]) -> UsedTypes {
-        let mut used = UsedTypes { compounds: Vec::new(), shown: Vec::new() };
+        let mut used = UsedTypes {
+            compounds: Vec::new(),
+            shown: Vec::new(),
+            slice_at: Vec::new(),
+            slice_part: Vec::new(),
+            slice_copy: Vec::new(),
+            slice_fill: Vec::new(),
+            array_fill: Vec::new(),
+        };
         for item in items {
             match item {
                 Item::Shape(s) => s.fields.iter().for_each(|f| used.add(&f.ty)),
@@ -1150,6 +1357,12 @@ impl UsedTypes {
             }
             Type::Results(types) => {
                 types.iter().for_each(|result| self.add(result));
+                if !self.compounds.contains(ty) {
+                    self.compounds.push(ty.clone());
+                }
+            }
+            Type::Array(inner, _) | Type::Slice(inner, _) => {
+                self.add(inner);
                 if !self.compounds.contains(ty) {
                     self.compounds.push(ty.clone());
                 }
@@ -1210,9 +1423,41 @@ impl UsedTypes {
         match &e.kind {
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
             | ExprKind::Var(_) => {}
+            ExprKind::New { ty, value, .. } if matches!(**ty, Type::Slice(..)) => {
+                let Some(slice) = &e.ty else { return };
+                match &value.kind {
+                    // The repeated value fills the slice; it makes no array.
+                    ExprKind::Repeat { value: item, count } => {
+                        note(&mut self.slice_fill, slice);
+                        self.expr(item);
+                        self.expr(count);
+                    }
+                    _ => {
+                        note(&mut self.slice_copy, slice);
+                        self.expr(value);
+                    }
+                }
+            }
             ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. }
             | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => self.expr(inner),
-            ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => {
+            ExprKind::Index(base, index) => {
+                match (&index.kind, &base.ty, &e.ty) {
+                    (ExprKind::Range(..), _, Some(slice)) => note(&mut self.slice_part, slice),
+                    (_, Some(slice @ Type::Slice(..)), _) => note(&mut self.slice_at, slice),
+                    _ => {}
+                }
+                self.expr(base);
+                self.expr(index);
+            }
+            ExprKind::Repeat { value, count } => {
+                if let Some(array) = &e.ty {
+                    note(&mut self.array_fill, array);
+                }
+                self.expr(value);
+                self.expr(count);
+            }
+            ExprKind::Array(values) => values.iter().for_each(|value| self.expr(value)),
+            ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => {
                 self.expr(a);
                 self.expr(b);
             }
@@ -1272,6 +1517,9 @@ fn target_reads(target: &Expr, name: &str) -> bool {
     match &target.kind {
         ExprKind::Var(_) => false,
         ExprKind::Field(base, _) => target_reads(base, name),
+        // Writing an item of an array writes the array; a slice is read to
+        // find its item.
+        ExprKind::Index(base, index) if matches!(base.ty, Some(Type::Array(..))) => target_reads(base, name) || expr_reads(index, name),
         _ => expr_reads(target, name),
     }
 }
@@ -1284,10 +1532,12 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::New { value, region, .. } => region == name || expr_reads(value, name),
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner)
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => expr_reads(inner, name),
-        ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => {
+        ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             expr_reads(a, name) || expr_reads(b, name)
         }
-        ExprKind::Call(_, args) | ExprKind::Construct { args, .. } => args.iter().any(|arg| expr_reads(arg, name)),
+        ExprKind::Call(_, args) | ExprKind::Construct { args, .. } | ExprKind::Array(args) => {
+            args.iter().any(|arg| expr_reads(arg, name))
+        }
         ExprKind::StructInit(_, fields) => fields.iter().any(|field| expr_reads(&field.value, name)),
         ExprKind::PlanB { value, body, .. } => expr_reads(value, name) || block_reads(body, name),
     }
@@ -1313,7 +1563,7 @@ fn value_dependencies(ty: &Type) -> Vec<String> {
     match ty {
         Type::Named(name, _) => vec![mangle(name)],
         Type::Maybe(inner) if is_pointer(inner) => Vec::new(),
-        Type::Maybe(_) | Type::Or(..) | Type::Results(_) => vec![c_type(ty)],
+        Type::Maybe(_) | Type::Or(..) | Type::Results(_) | Type::Array(..) | Type::Slice(..) => vec![c_type(ty)],
         _ => Vec::new(),
     }
 }
@@ -1394,6 +1644,7 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
         TypeDef::Compound(Type::Maybe(inner)) => value_dependencies(inner),
         TypeDef::Compound(Type::Or(value, error)) => value_dependencies(value).into_iter().chain(value_dependencies(error)).collect(),
         TypeDef::Compound(Type::Results(types)) => types.iter().flat_map(value_dependencies).collect(),
+        TypeDef::Compound(Type::Array(items, _)) => value_dependencies(items),
         TypeDef::Compound(_) => Vec::new(),
     }
 }
@@ -1421,6 +1672,9 @@ fn signature(t: &TaskDef) -> String {
 //   vela__maybe__int              a `maybe` struct              (`c_type`)
 //   vela__or__int__n_ParseError   an `or` struct                (`c_type`)
 //   vela__show__maybe__int        `show` for a `maybe`          (`show_maybe_helper`)
+//   vela__array__4__int           an array struct               (`c_type`)
+//   vela__slice__int              a slice struct                (`c_type`)
+//   vela__at__slice__int          a helper for a slice or array (`item_helper`)
 //   vela__end__0, vela__empty__   compiler temporaries and members
 //
 // A region is a local or parameter like any other (`c_ident`); regions don't
@@ -1496,8 +1750,22 @@ fn c_type(ty: &Type) -> String {
         Type::Maybe(inner) => format!("vela__maybe__{}", type_key(inner)),
         Type::Or(value, error) => format!("vela__or__{}__{}", type_key(value), type_key(error)),
         Type::Fail(error) => c_type(error),
-        Type::Results(_) => format!("vela__{}", type_key(ty)),
+        Type::Results(_) | Type::Array(..) | Type::Slice(..) => format!("vela__{}", type_key(ty)),
     }
+}
+
+/// The type of the items of an array or slice type.
+fn item_type(ty: &Type) -> &Type {
+    match ty {
+        Type::Array(items, _) | Type::Slice(items, _) => items,
+        other => other,
+    }
+}
+
+/// The C name of a generated helper for an array or slice type:
+/// `vela__at__slice__int`, `vela__fill__array__4__int`.
+fn item_helper(what: &str, ty: &Type) -> String {
+    format!("vela__{}__{}", what, type_key(ty))
 }
 
 /// A type as part of a C name, distinct for distinct types: words separated by
@@ -1518,6 +1786,9 @@ fn type_key(ty: &Type) -> String {
         Type::Maybe(inner) => format!("maybe__{}", type_key(inner)),
         Type::Or(value, error) => format!("or__{}__{}", type_key(value), type_key(error)),
         Type::Fail(error) => format!("fail__{}", type_key(error)),
+        // The count comes first, so it can't read as part of the item's type.
+        Type::Array(items, count) => format!("array__{}__{}", count, type_key(items)),
+        Type::Slice(items, _) => format!("slice__{}", type_key(items)),
         // The count keeps two lists of results apart when the types of one
         // read as the start of the other.
         Type::Results(types) => {

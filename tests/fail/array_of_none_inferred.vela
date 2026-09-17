@@ -1,0 +1,4 @@
+# error: 3:18: cannot infer the type of 'slots' from none or 'fail …' in its value; give it a type, such as 'slots: [maybe int; 2]'
+task main()
+    bind slots = [none, none]
+fi

@@ -47,6 +47,8 @@ pub enum Token {
     LBracket,
     RBracket,
     Colon,
+    /// `;`, which separates an array's type or value from its count: `[int; 4]`.
+    Semicolon,
     Comma,
     Dot,
     Arrow,
@@ -140,6 +142,7 @@ impl Token {
             Token::LBracket => "[",
             Token::RBracket => "]",
             Token::Colon => ":",
+            Token::Semicolon => ";",
             Token::Comma => ",",
             Token::Dot => ".",
             Token::Arrow => "->",
@@ -400,6 +403,7 @@ impl Lexer {
             '[' => Token::LBracket,
             ']' => Token::RBracket,
             ':' => Token::Colon,
+            ';' => Token::Semicolon,
             ',' => Token::Comma,
             '.' => {
                 if self.peek() == '.' {

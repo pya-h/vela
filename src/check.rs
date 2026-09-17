@@ -72,7 +72,14 @@ pub struct Checker {
     unset: HashSet<String>,
     /// Where the parts of written types are, from the parser.
     type_places: TypePlaces,
+    /// At most how many bytes a value of each shape and kind takes, once the
+    /// declarations are checked (see `check_sizes`).
+    sizes: HashMap<String, u128>,
 }
+
+/// The most memory a value may take, in bytes: 1 TiB. A larger type is an
+/// error, so that no C compiler rejects the program for it.
+const MAX_VALUE_BYTES: u128 = 1 << 40;
 
 impl Checker {
     pub fn new() -> Self {
@@ -264,16 +271,48 @@ impl Checker {
             }
         }
         let mut acyclic = HashSet::new();
+        let mut order = Vec::new();
         for item in items.iter() {
             let name = match item {
                 Item::Shape(s) => &s.name,
                 Item::Kind(k) => &k.name,
                 Item::Task(_) => continue,
             };
-            self.check_value_cycle(name, &mut acyclic)?;
+            self.check_value_cycle(name, &mut acyclic, &mut order)?;
         }
         self.current_module.clear();
+        self.check_sizes(&order)?;
         self.check_constructible(items)
+    }
+
+    /// Settles how large a value of each shape and kind can be, in `order`,
+    /// where each comes after the types it holds by value, and rejects one too
+    /// large for memory (see `MAX_VALUE_BYTES`).
+    fn check_sizes(&mut self, order: &[String]) -> Result<()> {
+        for name in order {
+            let (bytes, span) = match (self.shapes.get(name), self.kinds.get(name)) {
+                (Some(shape), _) => (fields_bytes(&shape.fields, &self.sizes), shape.span),
+                (None, Some(kind)) => {
+                    let largest = kind.variants.iter().map(|v| fields_bytes(&v.payload, &self.sizes)).max().unwrap_or(0);
+                    (largest.saturating_add(8), kind.span)
+                }
+                (None, None) => continue,
+            };
+            if bytes > MAX_VALUE_BYTES {
+                return err(span, format!("'{}' is too large: a value of it would take more than 1 TiB of memory", unqualified(name)));
+            }
+            self.sizes.insert(name.clone(), bytes);
+        }
+        Ok(())
+    }
+
+    /// Rejects a type written at `span` whose values would take more than
+    /// `MAX_VALUE_BYTES`, such as `[[int; 1000000]; 1000000]`.
+    fn check_size(&self, ty: &Type, span: Span) -> Result<()> {
+        if value_bytes(ty, &self.sizes) > MAX_VALUE_BYTES {
+            return err(span, format!("{} is too large: a value of it would take more than 1 TiB of memory; a slice in a region can be as long as memory allows", ty));
+        }
+        Ok(())
     }
 
     /// Rejects a private type in what other files see of a public item: a
@@ -403,6 +442,11 @@ impl Checker {
     ///   an error, while the `Point` in `^Point@r` just has its region dropped.
     fn resolve_type(&self, ty: &Type, span: Span, place: TypePlace) -> Result<Type> {
         self.check_type(ty, span)?;
+        // The sizes of shapes and kinds are known inside tasks; fields and
+        // headers are checked for size once they are (see `check_task`).
+        if matches!(place, TypePlace::Body | TypePlace::New) {
+            self.check_size(ty, span)?;
+        }
         self.resolve_regions(ty, span, place, None)
     }
 
@@ -432,6 +476,15 @@ impl Checker {
                 let inner = self.resolve_regions(inner, span, place, region.as_deref())?;
                 Ok(Type::Ptr(Box::new(inner), region.clone()))
             }
+            Type::Slice(inner, region) => {
+                given(region)?;
+                if needs_region && region.is_none() {
+                    return err(span, format!("a slice lives in a region, so its type names one, as in '{}@r'", ty));
+                }
+                let inner = self.resolve_regions(inner, span, place, region.as_deref())?;
+                Ok(Type::Slice(Box::new(inner), region.clone()))
+            }
+            Type::Array(inner, count) => Ok(Type::Array(Box::new(self.resolve_regions(inner, span, place, inside)?), *count)),
             Type::Named(name, region) => {
                 given(region)?;
                 if !self.regional.contains(name) {
@@ -492,6 +545,13 @@ impl Checker {
             // checks each of them on its own.
             Type::Results(_) => err(span, "several types, separated by commas, are only a task's results"),
             Type::Ptr(inner, _) => self.check_type(inner, span),
+            Type::Array(inner, _) | Type::Slice(inner, _) => match inner.as_ref() {
+                Type::Unit => {
+                    let what = if matches!(ty, Type::Array(..)) { "an array" } else { "a slice" };
+                    err(self.place(span, "unit"), format!("{} can't hold unit, which has no value", what))
+                }
+                _ => self.check_type(inner, span),
+            },
             Type::Maybe(inner) => match inner.as_ref() {
                 Type::Maybe(_) => err(span, "a maybe can't hold another maybe"),
                 Type::Unit => err(self.place(span, "unit"), "a maybe can't hold unit, which has no value"),
@@ -523,7 +583,10 @@ impl Checker {
     /// pointer to itself (`maybe ^T`) is fine. `acyclic` holds the types
     /// already known to be free of cycles. The search keeps its own stack, so
     /// a long chain of types can't overflow the compiler's.
-    fn check_value_cycle(&self, root: &str, acyclic: &mut HashSet<String>) -> Result<()> {
+    ///
+    /// Each type found free of cycles is added to `order` after the types it
+    /// contains by value.
+    fn check_value_cycle(&self, root: &str, acyclic: &mut HashSet<String>, order: &mut Vec<String>) -> Result<()> {
         if acyclic.contains(root) {
             return Ok(());
         }
@@ -537,6 +600,7 @@ impl Checker {
                 if let Some((name, _, _)) = path.pop() {
                     on_path.remove(name);
                     acyclic.insert(name.to_string());
+                    order.push(name.to_string());
                 }
                 continue;
             };
@@ -623,6 +687,12 @@ impl Checker {
     }
 
     fn check_task(&mut self, task: &mut TaskDef) -> Result<()> {
+        for param in &task.params {
+            self.check_size(&param.ty, param.ty_span)?;
+        }
+        for (i, result) in task.ret.results().iter().enumerate() {
+            self.check_size(result, task.result_span(i))?;
+        }
         self.current_ret = Some(task.ret.clone());
         // Parameters and the task body share one scope, as in C.
         self.scopes = vec![HashMap::new()];
@@ -939,18 +1009,31 @@ impl Checker {
             StmtKind::Each(name, range, body) => {
                 // A range is only valid here, so it is checked here rather than
                 // as an ordinary expression.
-                let ExprKind::Range(start, end) = &mut range.kind else {
-                    return err(range.span, "each requires a range, such as 0..n");
+                let item = if let ExprKind::Range(start, end) = &mut range.kind {
+                    for bound in [start, end] {
+                        let bty = self.check_expr(bound)?;
+                        self.expect_type(&bty, &Type::Int, bound.span)?;
+                    }
+                    range.ty = Some(Type::Range(Box::new(Type::Int)));
+                    Type::Int
+                } else {
+                    match self.check_expr(range)? {
+                        Type::Array(items, _) | Type::Slice(items, _) if unsettled(&items) => {
+                            return err(range.span, format!("cannot tell the type of '{}' from none or 'fail …'; give the array a type first", name));
+                        }
+                        Type::Array(items, _) | Type::Slice(items, _) => *items,
+                        other => {
+                            return err(
+                                range.span,
+                                format!("each goes through a range, such as 0..n, or the items of an array or slice, but this value is {}{}", other, extract_hint(&[&other])),
+                            );
+                        }
+                    }
                 };
-                for bound in [start, end] {
-                    let bty = self.check_expr(bound)?;
-                    self.expect_type(&bty, &Type::Int, bound.span)?;
-                }
-                range.ty = Some(Type::Range(Box::new(Type::Int)));
                 // The loop variable and the body share one scope.
                 let entry = self.unset.clone();
                 self.push_scope();
-                let result = self.define(name, Type::Int, false, span)
+                let result = self.define(name, item, false, span)
                     .and_then(|()| self.check_block(body));
                 self.pop_scope();
                 self.unset = entry;
@@ -1095,11 +1178,71 @@ impl Checker {
             ExprKind::Field(base, field) => {
                 let base_ty = self.check_field_base(base)?;
                 let ty = self.field_type(&base_ty, field, span)?;
+                match base_ty {
+                    Type::Array(..) => return err(span, "'len' can't be assigned: an array's length is part of its type"),
+                    Type::Slice(..) => return err(span, "'len' can't be assigned: a slice's length changes only by slicing it, as in 'xs = xs[0..2]'"),
+                    _ => {}
+                }
                 expr.ty = Some(ty.clone());
                 Ok(ty)
             }
             ExprKind::Deref(_) => self.check_expr(expr),
-            _ => err(span, "only a variable, a field, or the value a pointer points to (p^) can be assigned"),
+            ExprKind::Index(base, index) => {
+                if matches!(index.kind, ExprKind::Range(..)) {
+                    return err(span, "a slice of values can't be assigned; assign its items one at a time, as in 'xs[i] = v'");
+                }
+                let base_ty = self.check_item_base(base)?;
+                let ty = self.check_index(base, &base_ty, index, span)?;
+                expr.ty = Some(ty.clone());
+                Ok(ty)
+            }
+            _ => err(span, "only a variable, a field, an item of an array or slice, or the value a pointer points to (p^) can be assigned"),
+        }
+    }
+
+    /// Checks the array or slice whose item is assigned, and returns its type.
+    /// An array holds its items, so it must be an assignable place itself; a
+    /// slice's items are in a region, behind a pointer, so they can always be
+    /// written, as through `p^`.
+    fn check_item_base(&mut self, base: &mut Expr) -> Result<Type> {
+        if let ExprKind::Var(name) = &base.kind {
+            let info = self.lookup_or_err(name, base.span)?;
+            if matches!(info.ty, Type::Array(..)) {
+                if info.result {
+                    return err(base.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
+                }
+                if !info.mutable {
+                    return err(base.span, format!("cannot assign to an item of immutable variable '{}'", name));
+                }
+            }
+            return self.check_expr(base);
+        }
+        let ty = self.check_expr(base)?;
+        if matches!(ty, Type::Array(..)) {
+            self.assignable_array(base)?;
+        }
+        Ok(ty)
+    }
+
+    /// Rejects an array, already checked, whose item can't be assigned: one in a
+    /// `bind` variable, a result, or a temporary value.
+    fn assignable_array(&self, place: &Expr) -> Result<()> {
+        match &place.kind {
+            ExprKind::Var(name) => {
+                let info = self.lookup_or_err(name, place.span)?;
+                if info.result {
+                    return err(place.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
+                }
+                if !info.mutable {
+                    return err(place.span, format!("cannot assign to an item of immutable variable '{}'", name));
+                }
+                Ok(())
+            }
+            ExprKind::Deref(_) => Ok(()),
+            ExprKind::Field(base, _) => self.assignable_array(base),
+            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..))) => Ok(()),
+            ExprKind::Index(base, _) => self.assignable_array(base),
+            _ => err(place.span, "cannot assign to an item of a temporary value"),
         }
     }
 
@@ -1118,7 +1261,7 @@ impl Checker {
                 }
                 self.check_expr(base)
             }
-            ExprKind::Field(..) | ExprKind::Deref(_) => self.check_assign_target(base),
+            ExprKind::Field(..) | ExprKind::Deref(_) | ExprKind::Index(..) => self.check_assign_target(base),
             _ => err(span, "cannot assign to a field of a temporary value"),
         }
     }
@@ -1271,6 +1414,10 @@ impl Checker {
                 format!("cannot infer the type of '{}' from 'fail …'; give it a type, such as '{}: int or {}'", name, name, error),
             ),
             Type::Unit => err(at, "this expression has no value (its type is unit)"),
+            other if unsettled(other) => err(
+                at,
+                format!("cannot infer the type of '{0}' from none or 'fail …' in its value; give it a type, such as '{0}: {1}'", name, settled_example(other)),
+            ),
             other if other.regions().contains(&ANY_REGION) => {
                 let example = other.map_regions(&mut |region| Some(if region == ANY_REGION { "r" } else { region }.to_string()));
                 err(
@@ -1332,10 +1479,12 @@ impl Checker {
                 let base_ty = self.check_expr(base)?;
                 self.field_type(&base_ty, field, span)
             }
-            ExprKind::Index(_base, _index) => {
-                // Arrays not supported yet
-                err(span, "Vela has no arrays yet, so '[…]' can't index a value")
+            ExprKind::Index(base, index) => {
+                let base_ty = self.check_expr(base)?;
+                self.check_index(base, &base_ty, index, span)
             }
+            ExprKind::Array(values) => self.check_array(values, span),
+            ExprKind::Repeat { value, count } => self.check_repeat(value, count, span),
             ExprKind::Call(name, args) => {
                 if name == "show" {
                     let [arg] = args.as_mut_slice() else {
@@ -1349,6 +1498,7 @@ impl Checker {
                     if !matches!(shown, Type::Int | Type::Float | Type::Bool | Type::Text) {
                         let hint = match &ty {
                             Type::Ptr(..) => "; to show the value it points to, write 'p^'".to_string(),
+                            Type::Array(..) | Type::Slice(..) => "; show its items one at a time, as in 'each v in xs'".to_string(),
                             Type::Or(..) => extract_hint(&[&ty]),
                             _ => String::new(),
                         };
@@ -1394,6 +1544,13 @@ impl Checker {
                     return err(*ty_span, format!("'new' can't make a pointer to '{}'; extract the value first, or keep it in a shape's field", ty));
                 }
                 self.visible_region(region, *region_span, true)?;
+                // `new [T](…) at r` makes the slice itself, with its items in `r`.
+                if let Type::Slice(items, _) = &**ty {
+                    let items = self.in_region(items, region);
+                    let slice = Type::Slice(Box::new(items.clone()), Some(region.clone()));
+                    self.check_slice_source(value, &items, &slice)?;
+                    return Ok(slice);
+                }
                 let pointee = self.in_region(ty, region);
                 self.check_expr(value)?;
                 self.coerce(value, &pointee)?;
@@ -1411,8 +1568,9 @@ impl Checker {
                 {
                     return err(span, format!("this pointer is a {}, which may be an error; extract it first, as in 'p {{ … }}' or 'match'", ty));
                 }
+                let hint = if matches!(ty, Type::Slice(..)) { "; read an item of a slice with 'xs[i]'" } else { "" };
                 ty.ptr_inner().cloned()
-                    .ok_or_else(|| Error::at(span, format!("'^' reads the value a pointer points to, but this value is {}", ty)))
+                    .ok_or_else(|| Error::at(span, format!("'^' reads the value a pointer points to, but this value is {}{}", ty, hint)))
             }
             ExprKind::StructInit(name, fields) => {
                 if self.sees(name) && self.kinds.contains_key(name.as_str()) {
@@ -1460,6 +1618,158 @@ impl Checker {
             ExprKind::PlanB { value, error, body } => self.check_plan_b(span, value, error.as_ref(), body),
             // Only the checker creates `Wrap`, with its type already set.
             ExprKind::Wrap(_) => expr.ty.clone().ok_or_else(|| Error::internal_at(span, "a wrapped value has no type")),
+        }
+    }
+
+    /// Checks an array literal, `[a, b, c]`, and returns its type. Kept out of
+    /// `infer_expr`, whose stack frame every level of nested code pays for.
+    fn check_array(&mut self, values: &mut [Expr], span: Span) -> Result<Type> {
+        let mut joined: Option<Type> = None;
+        for value in values.iter_mut() {
+            let ty = self.check_expr(value)?;
+            joined = Some(match joined {
+                None => ty,
+                Some(before) => join_types(&before, &ty).ok_or_else(|| {
+                    Error::at(value.span, format!("an array's values have one type, but this one is {} and the ones before it are {}", ty, before))
+                })?,
+            });
+        }
+        let items = joined.unwrap_or(Type::Unit);
+        if items == Type::Unit {
+            return err(span, "an array can't hold unit, which has no value");
+        }
+        // `none` alone, or `fail e`, becomes part of a type an annotation gives.
+        if !unsettled(&items) {
+            for value in values.iter_mut() {
+                self.coerce(value, &items)?;
+            }
+        }
+        let ty = Type::Array(Box::new(items), u64::try_from(values.len()).unwrap_or(u64::MAX));
+        self.check_size(&ty, span)?;
+        Ok(ty)
+    }
+
+    /// Checks `[value; count]` outside `new`, an array, and returns its type.
+    fn check_repeat(&mut self, value: &mut Expr, count: &mut Expr, span: Span) -> Result<Type> {
+        let items = self.check_expr(value)?;
+        if items == Type::Unit {
+            return err(value.span, "an array can't hold unit, which has no value");
+        }
+        let count_ty = self.check_expr(count)?;
+        self.expect_type(&count_ty, &Type::Int, count.span)?;
+        let Some(n) = constant_int(count) else {
+            let written = if unsettled(&items) { "T".to_string() } else { items.to_string() };
+            return err(
+                count.span,
+                format!("an array's count is known before the program runs, as in '[0; 8]'; for a count known only as it runs, make a slice in a region, as in 'new [{}]([…; n]) at r'", written),
+            );
+        };
+        let Some(n) = u64::try_from(n).ok().filter(|n| *n > 0) else {
+            return err(count.span, "an array holds at least one value, so its count is 1 or more");
+        };
+        let ty = Type::Array(Box::new(items), n);
+        self.check_size(&ty, span)?;
+        Ok(ty)
+    }
+
+    /// Checks `xs[i]`, an item, or `xs[a..b]`, a slice, on `base` of type
+    /// `base_ty`, already checked, and returns its type. A constant index or
+    /// bound that is out of range for an array is an error here; the program
+    /// checks the rest as it runs.
+    fn check_index(&mut self, base: &Expr, base_ty: &Type, index: &mut Expr, span: Span) -> Result<Type> {
+        let items = match base_ty {
+            Type::Array(items, _) | Type::Slice(items, _) => (**items).clone(),
+            Type::Ptr(inner, _) if matches!(**inner, Type::Array(..)) => {
+                return err(span, format!("this value is a pointer, {}; index the array it points to, as in 'p^[i]'", base_ty));
+            }
+            other => {
+                return err(span, format!("'[…]' reads an item of an array or slice, but this value is {}{}", other, extract_hint(&[other])));
+            }
+        };
+        let count = match base_ty {
+            Type::Array(_, count) => Some(*count),
+            _ => None,
+        };
+        let out_of_range = |value: i64, at: Span, what: &str| -> Result<()> {
+            let beyond = u64::try_from(value).map_or(true, |value| count.is_some_and(|count| value > count || (what == "index" && value == count)));
+            if !beyond {
+                return Ok(());
+            }
+            match count {
+                Some(count) => err(at, format!("{} {} is out of range 0..{} for {}", what, value, count, base_ty)),
+                None => err(at, format!("{} {} is out of range: it is less than 0", what, value)),
+            }
+        };
+        let ExprKind::Range(from, to) = &mut index.kind else {
+            let ty = self.check_expr(index)?;
+            self.expect_type(&ty, &Type::Int, index.span)?;
+            if let Some(value) = constant_int(index) {
+                out_of_range(value, index.span, "index")?;
+            }
+            return Ok(items);
+        };
+        for bound in [&mut **from, &mut **to] {
+            let ty = self.check_expr(bound)?;
+            self.expect_type(&ty, &Type::Int, bound.span)?;
+        }
+        let (start, end) = (constant_int(from), constant_int(to));
+        for (value, at) in [(start, from.span), (end, to.span)] {
+            if let Some(value) = value {
+                out_of_range(value, at, "slice bound")?;
+            }
+        }
+        if let (Some(start), Some(end)) = (start, end)
+            && end < start
+        {
+            return err(index.span, format!("slice {}..{} ends before it starts", start, end));
+        }
+        index.ty = Some(Type::Range(Box::new(Type::Int)));
+        let region = match base_ty {
+            Type::Slice(_, region) => region.clone(),
+            _ => match place_region(base) {
+                Some(region) => Some(region),
+                None => {
+                    return err(
+                        span,
+                        format!(
+                            "a slice points into a region, but this array isn't in one; copy it into a slice, as in 'new [{}](xs) at r', or keep the array in a region with 'new {}(…) at r'",
+                            items, base_ty
+                        ),
+                    );
+                }
+            },
+        };
+        Ok(Type::Slice(Box::new(items), region))
+    }
+
+    /// Checks the value of `new [T](value) at r`, which gives the slice its
+    /// items, of type `items` in `r`: `[v; n]`, whose count may be known only as
+    /// the program runs, or an array or slice whose items are copied.
+    fn check_slice_source(&mut self, value: &mut Expr, items: &Type, slice: &Type) -> Result<()> {
+        if let ExprKind::Repeat { value: item, count } = &mut value.kind {
+            self.check_expr(item)?;
+            self.coerce(item, items)?;
+            let count_ty = self.check_expr(count)?;
+            self.expect_type(&count_ty, &Type::Int, count.span)?;
+            if let Some(n) = constant_int(count)
+                && n < 0
+            {
+                return err(count.span, format!("count {} is negative", n));
+            }
+            value.ty = Some(slice.clone());
+            return Ok(());
+        }
+        let ty = self.check_expr(value)?;
+        match &ty {
+            Type::Array(_, count) => self.coerce(value, &Type::Array(Box::new(items.clone()), *count)),
+            Type::Slice(source, _) if fits_regions(source, items) => Ok(()),
+            Type::Slice(source, _) => {
+                err(value.span, format!("expected type {}, got {}{}", slice, ty, mismatch_hint(source, items)))
+            }
+            other => err(
+                value.span,
+                format!("'new [{}](…)' makes a slice from '[value; count]', an array, or a slice, but this value is {}", items, other),
+            ),
         }
     }
 
@@ -1629,6 +1939,10 @@ impl Checker {
                 }
                 err(span, format!("shape '{}' has no field '{}'", name, field))
             }
+            Type::Array(..) | Type::Slice(..) if field == "len" => Ok(Type::Int),
+            Type::Array(..) | Type::Slice(..) => {
+                err(span, format!("type {} has no field '{}'; its number of items is '.len'", base, field))
+            }
             Type::Ptr(..) => err(span, format!("type {} has no fields; dereference it first, as in 'p^.{}'", base, field)),
             Type::Maybe(_) | Type::Or(..) => {
                 err(span, format!("type {} has no fields; extract its value first, as in 'when x is {{value}}'", base))
@@ -1726,8 +2040,11 @@ impl Checker {
             expr.ty = Some(expected.clone());
             return Ok(());
         }
+        if self.coerce_items(expr, expected)? {
+            return Ok(());
+        }
         match expected {
-            Type::Maybe(inner) if actual == Type::None || fits_regions(&actual, inner) => {
+            Type::Maybe(inner) if actual == Type::None || fits_regions(&actual, inner) || self.coerce_items(expr, inner)? => {
                 wrap(expr, expected);
                 return Ok(());
             }
@@ -1741,7 +2058,8 @@ impl Checker {
                 }
                 if **value != Type::Unit {
                     let fits_value = fits_regions(&actual, value)
-                        || matches!(value.as_ref(), Type::Maybe(inner) if actual == Type::None || fits_regions(&actual, inner));
+                        || matches!(value.as_ref(), Type::Maybe(inner) if actual == Type::None || fits_regions(&actual, inner))
+                        || self.coerce_items(expr, value)?;
                     if fits_value {
                         self.coerce(expr, value)?;
                         wrap(expr, expected);
@@ -1752,6 +2070,27 @@ impl Checker {
             _ => {}
         }
         err(expr.span, format!("expected type {}, got {}{}", expected, actual, mismatch_hint(&actual, expected)))
+    }
+
+    /// Coerces an array written as a literal item by item, when its values can
+    /// become the items of `expected`, as `[1, none]` or `[none; 4]` become
+    /// arrays of `maybe int`. Whether `expected` is such an array.
+    fn coerce_items(&self, expr: &mut Expr, expected: &Type) -> Result<bool> {
+        let Type::Array(items, count) = expected else { return Ok(false) };
+        let written = match &expr.ty {
+            Some(Type::Array(_, written)) => *written,
+            _ => return Ok(false),
+        };
+        if written != *count {
+            return Ok(false);
+        }
+        match &mut expr.kind {
+            ExprKind::Array(values) => values.iter_mut().try_for_each(|value| self.coerce(value, items))?,
+            ExprKind::Repeat { value, .. } => self.coerce(value, items)?,
+            _ => return Ok(false),
+        }
+        expr.ty = Some(expected.clone());
+        Ok(true)
     }
 
     /// Checks that a value of type `actual` is exactly `expected`, where no
@@ -1834,7 +2173,8 @@ pub fn in_region(ty: &Type, region: &str, regional: &HashSet<String>) -> Type {
 fn fits_regions(actual: &Type, expected: &Type) -> bool {
     let region = |a: &Option<String>, e: &Option<String>| a == e || a.as_deref() == Some(ANY_REGION);
     match (actual, expected) {
-        (Type::Ptr(a, ar), Type::Ptr(e, er)) => region(ar, er) && fits_regions(a, e),
+        (Type::Ptr(a, ar), Type::Ptr(e, er)) | (Type::Slice(a, ar), Type::Slice(e, er)) => region(ar, er) && fits_regions(a, e),
+        (Type::Array(a, an), Type::Array(e, en)) => an == en && fits_regions(a, e),
         (Type::Named(a, ar), Type::Named(e, er)) => a == e && region(ar, er),
         (Type::Range(a), Type::Range(e)) | (Type::Maybe(a), Type::Maybe(e)) | (Type::Fail(a), Type::Fail(e)) => fits_regions(a, e),
         (Type::Or(av, ae), Type::Or(ev, ee)) => fits_regions(av, ev) && fits_regions(ae, ee),
@@ -1856,10 +2196,11 @@ pub fn unify_regions(pattern: &Type, actual: &Type, regions: &mut HashMap<String
         }
     };
     match (pattern, actual) {
-        (Type::Ptr(p, pr), Type::Ptr(a, ar)) => {
+        (Type::Ptr(p, pr), Type::Ptr(a, ar)) | (Type::Slice(p, pr), Type::Slice(a, ar)) => {
             record(pr, ar);
             unify_regions(p, a, regions);
         }
+        (Type::Array(p, _), Type::Array(a, _)) => unify_regions(p, a, regions),
         (Type::Named(p, pr), Type::Named(a, ar)) if p == a => record(pr, ar),
         (Type::Maybe(p), Type::Maybe(a)) | (Type::Range(p), Type::Range(a)) | (Type::Fail(p), Type::Fail(a)) => unify_regions(p, a, regions),
         (Type::Or(pv, pe), Type::Or(av, ae)) => {
@@ -1877,12 +2218,104 @@ pub fn unify_regions(pattern: &Type, actual: &Type, regions: &mut HashMap<String
 /// in `regional` that do.
 fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
     match ty {
-        Type::Ptr(..) => true,
+        Type::Ptr(..) | Type::Slice(..) => true,
         Type::Named(name, _) => regional.contains(name),
-        Type::Maybe(inner) => holds_pointers(inner, regional),
+        Type::Maybe(inner) | Type::Array(inner, _) => holds_pointers(inner, regional),
         Type::Or(value, error) => holds_pointers(value, regional) || holds_pointers(error, regional),
         _ => false,
     }
+}
+
+/// Whether `ty` still holds `none` or `fail …` where a type belongs, as the
+/// array `[none, none]` does until a type written for it settles what it holds.
+fn unsettled(ty: &Type) -> bool {
+    match ty {
+        Type::None | Type::Fail(_) => true,
+        Type::Array(items, _) => unsettled(items),
+        _ => false,
+    }
+}
+
+/// `ty` with a type in place of each `none` and `fail e`, for a message
+/// suggesting an annotation: `[maybe int; 2]` for `[none; 2]`.
+fn settled_example(ty: &Type) -> Type {
+    match ty {
+        Type::None => Type::Maybe(Box::new(Type::Int)),
+        Type::Fail(error) => Type::Or(Box::new(Type::Int), error.clone()),
+        Type::Array(items, count) => Type::Array(Box::new(settled_example(items)), *count),
+        other => other.clone(),
+    }
+}
+
+/// The type the values of types `a` and `b` can both become, for the items of
+/// an array: either, when the other fits it; a `maybe` for `none` and a value;
+/// a `T or E` for `fail e` and a value. `None` when there is none.
+fn join_types(a: &Type, b: &Type) -> Option<Type> {
+    if fits_regions(b, a) {
+        return Some(a.clone());
+    }
+    if fits_regions(a, b) {
+        return Some(b.clone());
+    }
+    let plain = |ty: &Type| !matches!(ty, Type::None | Type::Fail(_) | Type::Unit | Type::Maybe(_) | Type::Or(..));
+    match (a, b) {
+        (Type::Array(x, n), Type::Array(y, m)) if n == m => join_types(x, y).map(|items| Type::Array(Box::new(items), *n)),
+        (Type::None, Type::Maybe(_)) => Some(b.clone()),
+        (Type::Maybe(_), Type::None) => Some(a.clone()),
+        (Type::None, other) | (other, Type::None) if plain(other) => Some(Type::Maybe(Box::new(other.clone()))),
+        (Type::Maybe(inner), other) | (other, Type::Maybe(inner)) if plain(other) => {
+            join_types(inner, other).filter(plain).map(|value| Type::Maybe(Box::new(value)))
+        }
+        (Type::Fail(error), Type::Or(_, known)) | (Type::Or(_, known), Type::Fail(error)) if fits_regions(error, known) => {
+            Some(if matches!(a, Type::Or(..)) { a.clone() } else { b.clone() })
+        }
+        (Type::Fail(error), other) | (other, Type::Fail(error)) if plain(other) || matches!(other, Type::Maybe(_)) => {
+            (!fits_regions(other, error) && !fits_regions(error, other)).then(|| Type::Or(Box::new(other.clone()), error.clone()))
+        }
+        (Type::Or(value, error), other) | (other, Type::Or(value, error)) if !matches!(other, Type::Fail(_)) => {
+            join_types(value, other).filter(|joined| !matches!(joined, Type::Or(..))).map(|joined| Type::Or(Box::new(joined), error.clone()))
+        }
+        _ => None,
+    }
+}
+
+/// The region of the array `place` names, when it is in one: behind a
+/// pointer, or an item of a slice. `None` for an array in a variable or a
+/// temporary value.
+fn place_region(place: &Expr) -> Option<String> {
+    match &place.kind {
+        ExprKind::Deref(pointer) => match pointer.ty.as_ref()? {
+            Type::Ptr(_, region) => region.clone(),
+            _ => None,
+        },
+        ExprKind::Field(base, _) => place_region(base),
+        ExprKind::Index(base, _) => match base.ty.as_ref()? {
+            Type::Slice(_, region) => region.clone(),
+            _ => place_region(base),
+        },
+        _ => None,
+    }
+}
+
+/// At most how many bytes a value of type `ty` takes in C, given `sizes` for
+/// shapes and kinds: each part counts at least 8 bytes, which covers padding.
+fn value_bytes(ty: &Type, sizes: &HashMap<String, u128>) -> u128 {
+    match ty {
+        Type::Unit => 0,
+        Type::Named(name, _) => sizes.get(name).copied().unwrap_or(8),
+        Type::Array(items, count) => value_bytes(items, sizes).saturating_mul(u128::from(*count)),
+        Type::Slice(..) => 16,
+        Type::Maybe(inner) => value_bytes(inner, sizes).saturating_add(8),
+        Type::Or(value, error) => value_bytes(value, sizes).saturating_add(value_bytes(error, sizes)).saturating_add(8),
+        Type::Fail(inner) | Type::Range(inner) => value_bytes(inner, sizes),
+        Type::Results(types) => types.iter().map(|ty| value_bytes(ty, sizes).max(8)).fold(0, u128::saturating_add),
+        _ => 8,
+    }
+}
+
+/// At most how many bytes a shape's fields or a variant's payload take.
+fn fields_bytes(fields: &[Field], sizes: &HashMap<String, u128>) -> u128 {
+    fields.iter().map(|field| value_bytes(&field.ty, sizes).max(8)).fold(8, u128::saturating_add)
 }
 
 /// Whether a task with return type `ret` must send a value: every return type
@@ -1896,7 +2329,7 @@ fn sends_value(ret: &Type) -> bool {
 fn contained_by_value(ty: &Type) -> Vec<&str> {
     match ty {
         Type::Named(name, _) => vec![name.as_str()],
-        Type::Maybe(inner) => contained_by_value(inner),
+        Type::Maybe(inner) | Type::Array(inner, _) => contained_by_value(inner),
         Type::Or(value, error) => {
             let mut names = contained_by_value(value);
             names.extend(contained_by_value(error));
@@ -1910,7 +2343,7 @@ fn contained_by_value(ty: &Type) -> Vec<&str> {
 fn named_types(ty: &Type) -> Vec<&str> {
     match ty {
         Type::Named(name, _) => vec![name.as_str()],
-        Type::Ptr(inner, _) | Type::Maybe(inner) | Type::Fail(inner) => named_types(inner),
+        Type::Ptr(inner, _) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => named_types(inner),
         Type::Or(value, error) => {
             let mut names = named_types(value);
             names.extend(named_types(error));
@@ -1925,7 +2358,7 @@ fn named_types(ty: &Type) -> Vec<&str> {
 fn constructible(ty: &Type, can: &HashSet<&str>) -> bool {
     match ty {
         Type::Named(name, _) => can.contains(name.as_str()),
-        Type::Ptr(inner, _) => constructible(inner, can),
+        Type::Ptr(inner, _) | Type::Array(inner, _) | Type::Slice(inner, _) => constructible(inner, can),
         Type::Or(value, error) => **value == Type::Unit || constructible(value, can) || constructible(error, can),
         _ => true,
     }
@@ -2010,6 +2443,7 @@ fn fits_int(value: i128, span: Span) -> Result<()> {
 fn mismatch_hint(actual: &Type, expected: &Type) -> String {
     match (actual, expected) {
         (Type::None, Type::Ptr(..)) => format!("; a pointer can't be none, so use 'maybe {}'", expected),
+        (Type::None, Type::Slice(..)) => format!("; a slice can't be none, so use 'maybe {}'", expected),
         (Type::None, Type::Or(value, _)) if value.ptr_inner().is_some() => {
             format!("; a pointer can't be none, so use 'maybe {}'", value)
         }

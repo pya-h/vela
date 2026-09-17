@@ -1,0 +1,5 @@
+# error: 4:12: expected type [int; 2], got [int; 3]
+task main()
+    hold days = [1, 2]
+    days = [1, 2, 3]
+fi

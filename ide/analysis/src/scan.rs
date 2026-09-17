@@ -565,6 +565,8 @@ impl<'a> Classifier<'a> {
         let mut in_use = false;
         let mut in_use_names = false;
         let mut braces: Vec<Brace> = Vec::new();
+        // How many `[`s are open in a type, as in `[int; 4]`.
+        let mut type_brackets = 0usize;
 
         let mut p = 0;
         for lexed in tokens.all {
@@ -604,6 +606,7 @@ impl<'a> Classifier<'a> {
                     in_pattern = false;
                     in_results = false;
                     declaring_list = None;
+                    type_brackets = 0;
                     // Shape literals are on one line, so an unclosed literal `{` ends
                     // with it; a plan B's block continues.
                     braces.retain(|brace| *brace == Brace::PlanB);
@@ -679,6 +682,19 @@ impl<'a> Classifier<'a> {
                     if braces.pop() == Some(Brace::PlanB) && self.scopes.last().is_some_and(|s| s.kind == ScopeKind::PlanB) {
                         self.close_scope(at);
                     }
+                }
+                // `[int; 4]` and `[int]@r` in a type: the item's type, then its count.
+                Token::LBracket if was_type => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    type_brackets += 1;
+                    in_type = true;
+                }
+                Token::Semicolon => self.push(range, TokenClass::Punctuation, None),
+                Token::RBracket if type_brackets > 0 => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    type_brackets -= 1;
+                    // `@r` or `or E` may follow the type.
+                    after_type = true;
                 }
                 Token::LParen | Token::RParen | Token::LBracket | Token::RBracket | Token::Dot => {
                     self.push(range, TokenClass::Punctuation, None);

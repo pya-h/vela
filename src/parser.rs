@@ -189,6 +189,7 @@ impl Parser {
             (Token::Assign, _, _) if expected == "an expression" => "; '=' assigns, as a statement of its own".to_string(),
             (Token::Dot, _, Some(Token::Int(n))) => format!("; a number starts with a digit, as in '0.{}'", n),
             (Token::LBrace, Some(Token::Newline) | None, _) => "; a plan B's '{' goes on the line of its value, and blocks close with 'fi'".to_string(),
+            (Token::Semicolon, _, Some(Token::Newline | Token::Eof) | None) => "; a statement ends at the end of its line, without ';'".to_string(),
             _ => String::new(),
         };
         Error::at(self.peek_span(), format!("expected {}, got {}{}", expected, self.peek().describe(), hint))
@@ -566,12 +567,19 @@ impl Parser {
         Ok(ty)
     }
 
-    /// A type without `or` or `@`: a name, after any `^` and `maybe`.
+    /// A type without `or` or `@`: a name, after any `^` and `maybe`, or an
+    /// array or slice in brackets.
     fn parse_prefixed_type(&mut self) -> Result<Type> {
         let span = self.peek_span();
         if self.match_token(Token::Region) {
             self.type_parts.push(("region".to_string(), span));
             return Ok(Type::Region);
+        }
+        if self.match_token(Token::LBracket) {
+            self.enter()?;
+            let items = self.parse_bracketed_type();
+            self.leave(1);
+            return items;
         }
         let prefix = if self.match_token(Token::Caret) {
             Some(Token::Caret)
@@ -591,6 +599,29 @@ impl Parser {
         let name = self.qualified(name)?;
         self.type_parts.push((name.clone(), span));
         Ok(Type::builtin(&name).unwrap_or(Type::Named(name, None)))
+    }
+
+    /// After a type's `[`: `T; count]`, an array, or `T]`, a slice. The item
+    /// type may have its own region and error type (`[^int@r; 4]`).
+    fn parse_bracketed_type(&mut self) -> Result<Type> {
+        let items = Box::new(self.parse_type_parts()?);
+        if self.match_token(Token::RBracket) {
+            return Ok(Type::Slice(items, None));
+        }
+        if !self.match_token(Token::Semicolon) {
+            return Err(self.unexpected("';' and a count, as in '[int; 4]', or ']' for a slice, as in '[int]@r'"));
+        }
+        let count_span = self.peek_span();
+        let count = match self.peek() {
+            Token::Int(n) => *n,
+            _ => return Err(Error::at(count_span, "an array's count is a whole number, as in '[int; 4]'")),
+        };
+        self.advance();
+        let Some(count) = u64::try_from(count).ok().filter(|count| *count > 0) else {
+            return Err(Error::at(count_span, "an array holds at least one value, so its count is 1 or more"));
+        };
+        self.expect(Token::RBracket)?;
+        Ok(Type::Array(items, count))
     }
 
     fn parse_block(&mut self) -> Result<Block> {
@@ -1094,6 +1125,7 @@ impl Parser {
             Token::False => { self.advance(); ExprKind::BoolLit(false) }
             Token::None => { self.advance(); ExprKind::NoneLit }
             Token::New => return self.parse_new(),
+            Token::LBracket => return self.parse_array(),
             Token::LParen => {
                 self.advance();
                 let expr = self.parse_expr()?;
@@ -1116,6 +1148,50 @@ impl Parser {
             _ => return Err(self.unexpected("an expression")),
         };
         Ok(Expr::new(kind, span))
+    }
+
+    /// `[a, b, c]` or `[value; count]`, on one line.
+    fn parse_array(&mut self) -> Result<Expr> {
+        // An array holds its values in a frame of its own, and takes more stack
+        // than most expressions, so it counts as a level of its own.
+        self.enter()?;
+        let result = self.parse_array_inner();
+        self.leave(1);
+        result
+    }
+
+    fn parse_array_inner(&mut self) -> Result<Expr> {
+        let span = self.peek_span();
+        self.advance(); // [
+        if self.check(Token::RBracket) {
+            return Err(Error::at(span, "an array holds at least one value, as in '[0; 4]'"));
+        }
+        let first = self.parse_expr()?;
+        if self.match_token(Token::Semicolon) {
+            let count = self.parse_expr()?;
+            self.expect_array_end(span)?;
+            return Ok(Expr::new(ExprKind::Repeat { value: Box::new(first), count: Box::new(count) }, span));
+        }
+        let mut values = vec![first];
+        while self.match_token(Token::Comma) {
+            if self.check(Token::Newline) {
+                return Err(Error::at(self.peek_span(), "an array is written on one line, as in '[1, 2, 3]'"));
+            }
+            values.push(self.parse_expr()?);
+        }
+        self.expect_array_end(span)?;
+        Ok(Expr::new(ExprKind::Array(values), span))
+    }
+
+    /// The `]` closing the array opened at `opened`.
+    fn expect_array_end(&mut self, opened: Span) -> Result<()> {
+        if self.match_token(Token::RBracket) {
+            return Ok(());
+        }
+        if matches!(self.peek(), Token::Newline | Token::Eof) {
+            return Err(Error::at(self.peek_span(), format!("expected ']' to close the array at {}:{}; an array is written on one line", opened.line, opened.col)));
+        }
+        Err(self.unexpected("']'"))
     }
 
     /// Whether the `{` at the cursor, after a name, opens a shape literal
@@ -1281,7 +1357,7 @@ impl Parser {
 fn mentions_region(ty: &Type) -> bool {
     match ty {
         Type::Region => true,
-        Type::Ptr(inner, _) | Type::Maybe(inner) => mentions_region(inner),
+        Type::Ptr(inner, _) | Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => mentions_region(inner),
         _ => false,
     }
 }

@@ -1,0 +1,5 @@
+# error: 4:21: an array's count is known before the program runs, as in '[0; 8]'; for a count known only as it runs, make a slice in a region, as in 'new [int]([…; n]) at r'
+task main()
+    bind n = 3
+    bind days = [0; n]
+fi

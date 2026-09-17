@@ -357,8 +357,8 @@ Press Ctrl+C to stop.</pre>
         <div class="card">
           <h4>Completion</h4>
           <p>Only what fits: types after <code>:</code>, <code>-&gt;</code>, <code>^</code>, <code>maybe</code>,
-            <code>new</code>, a type's <code>or</code>, and each comma of a header's results (<code>-&gt; int, int</code>); variables declared above the cursor; fields after
-            <code>.</code>; the cases still missing after <code>case</code>, including <code>{value}</code>,
+            <code>new</code>, a type's <code>[</code> and <code>or</code>, and each comma of a header's results (<code>-&gt; int, int</code>), and nothing for an array type's count; variables declared above the cursor; fields after
+            <code>.</code>, and <code>len</code> after an array's or slice's; the cases still missing after <code>case</code>, including <code>{value}</code>,
             <code>none</code>, and <code>fail e</code>; the patterns that fit after <code>is</code>; the regions
             visible after <code>@</code>, and the ones <code>new</code> can allocate in after <code>new@</code> and a
             <code>new</code>'s <code>at</code>, or as the argument for a task's <code>region</code> parameter; and

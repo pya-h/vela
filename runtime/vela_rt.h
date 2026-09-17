@@ -254,11 +254,53 @@ static inline void* vela__rt__region_alloc(vela__rt__region* r, size_t size, siz
     return vela__rt__region_grow(r, size);
 }
 
-/* `new T(value) in r`: copies `size` bytes from `value` into region `r`. */
+/* `new T(value) at r`: copies `size` bytes from `value` into region `r`. */
 static inline void* vela__rt__new(vela__rt__region* r, const void* value, size_t size, size_t align) {
     void* p = vela__rt__region_alloc(r, size, align);
     memcpy(p, value, size);
     return p;
+}
+
+/* Arrays and slices. An index or a slice's bounds out of range stop the
+ * program, as does a negative count of items for a slice, with a message saying
+ * where, which `at` gives as "LINE:COL in task 'NAME'". Ranges are written as in
+ * Vela, `0..4` for the items 0 to 3. */
+
+/* `i`, when it is an index of an array or slice of `len` items. */
+static inline int64_t vela__rt__index(int64_t i, int64_t len, const char* at) {
+    if (i < 0 || i >= len) {
+        fflush(stdout);
+        fprintf(stderr, "vela: index %lld is out of range 0..%lld at %s\n", (long long)i, (long long)len, at);
+        abort();
+    }
+    return i;
+}
+
+/* Checks the bounds of `xs[from..to]`, where `xs` has `len` items. */
+static inline void vela__rt__part(int64_t from, int64_t to, int64_t len, const char* at) {
+    if (to < from) {
+        fflush(stdout);
+        fprintf(stderr, "vela: slice %lld..%lld ends before it starts at %s\n", (long long)from, (long long)to, at);
+        abort();
+    }
+    if (from < 0 || to > len) {
+        fflush(stdout);
+        fprintf(stderr, "vela: slice %lld..%lld is out of range 0..%lld at %s\n", (long long)from, (long long)to, (long long)len, at);
+        abort();
+    }
+}
+
+/* Room for `len` items of `size` bytes aligned to `align` in region `r`. */
+static inline void* vela__rt__region_items(vela__rt__region* r, int64_t len, size_t size, size_t align, const char* at) {
+    if (len < 0) {
+        fflush(stdout);
+        fprintf(stderr, "vela: count %lld is negative at %s\n", (long long)len, at);
+        abort();
+    }
+    if ((uint64_t)len > SIZE_MAX / size) {
+        vela__rt__out_of_memory();
+    }
+    return vela__rt__region_alloc(r, (size_t)len * size, align);
 }
 
 /* Frees everything allocated in `r`, which is then empty again. */

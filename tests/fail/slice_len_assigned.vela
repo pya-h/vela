@@ -1,0 +1,6 @@
+# error: 5:11: 'len' can't be assigned: a slice's length changes only by slicing it, as in 'xs = xs[0..2]'
+task main()
+    region r
+    hold items = new [int]([0; 3]) at r
+    items.len = 2
+fi

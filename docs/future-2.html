@@ -381,8 +381,8 @@ fi</pre>
           <strong>Why it's cool:</strong> regions give Vela a memory model that is safer than C's malloc/free, faster than reference counting, and simpler than a full borrow checker. Named regions make the safety visible in source code.
         </div>
         <div class="note">
-          <strong>Implemented.</strong> Vela now works this way, spelled for the language as it is (it has no arrays or
-          <code>allocate</code> yet): <code>region arena</code> declares a region freed when its block closes;
+          <strong>Implemented.</strong> Vela now works this way, spelled for the language as it is (it has no
+          <code>allocate</code>): <code>region arena</code> declares a region freed when its block closes;
           <code>new T(value) at arena</code> (or <code>new@arena T(value)</code>) allocates in it, giving a
           <code>^T@arena</code>; a task allocates in a parameter <code>arena: region</code> and may return
           <code>-&gt; ^T@arena</code>; a task that only reads names the region in its types
@@ -774,8 +774,10 @@ fi</pre>
           <p><code>assert(x > 0)</code> as a statement, compiled out in release builds or turned into traps.</p>
         </div>
         <div class="card">
-          <h3>Static array slices <span class="badge b-idea">Idea</span></h3>
-          <p><code>[]T</code> as a fat pointer <code>(ptr, len)</code> with bounds checking and no ownership.</p>
+          <h3>Static array slices <span class="badge b-done">Done</span></h3>
+          <p><code>[]T</code> as a fat pointer <code>(ptr, len)</code> with bounds checking and no ownership.
+            <strong>Implemented</strong> as <code>[T]@r</code>, a pointer and a length into a region, with every index
+            checked; see <a href="vela.html#slices">Slices</a>.</p>
         </div>
         <div class="card">
           <h3>Named arguments <span class="badge b-idea">Idea</span></h3>
@@ -815,7 +817,7 @@ fi</pre>
           </thead>
           <tbody>
             <tr><td>1. Safety foundation</td><td><code>defer</code>, static leak checking for resources (null pointers are already gone: <code>maybe ^T</code>)</td><td>Catches the most common bugs with the smallest compiler change</td></tr>
-            <tr><td>2. Borrowed views</td><td><code>[]T</code> slices, <code>read</code> capabilities</td><td>Adds power without changing ownership semantics</td></tr>
+            <tr><td>2. Borrowed views</td><td><code>[]T</code> slices (done, in regions: <code>[T]@r</code>), <code>read</code> capabilities</td><td>Adds power without changing ownership semantics</td></tr>
             <tr><td>3. Regions (done)</td><td>Named arenas and <code>T@region</code></td><td>Bulk allocation + safety, a big win for real programs</td></tr>
             <tr><td>4. Compile time</td><td><code>comptime</code> tasks</td><td>Unlocks generics, derives, and metaprogramming</td></tr>
             <tr><td>5. Concurrency</td><td>Ownership channels or actors</td><td>Only after memory is solid</td></tr>

@@ -57,6 +57,13 @@ pub enum Type {
     Fail(Box<Type>),
     /// `region`: the type of a region parameter, which a task allocates in.
     Region,
+    /// `[T; n]`: `n` values of type `T`, held by value. It holds pointers, and
+    /// lives in a region, when `T` does.
+    Array(Box<Type>, u64),
+    /// `[T]@r`: a view of values of type `T` in the region `r`, as a pointer
+    /// to the first and how many there are. Like a pointer, it names its region
+    /// everywhere but in a field and after `new`.
+    Slice(Box<Type>, Option<String>),
     /// `-> int, int`: the several values a task sends, always two or more.
     /// Only a task's return type, and a call of such a task, ever have this
     /// type: the values are separate, so no variable, field, or operand holds
@@ -111,6 +118,17 @@ impl Type {
             }
             Type::Named(name, region) => {
                 write!(f, "{}", name)?;
+                suffix(f, region)
+            }
+            Type::Array(inner, count) => {
+                write!(f, "[")?;
+                inner.write(f, outer)?;
+                write!(f, "; {}]", count)
+            }
+            Type::Slice(inner, region) => {
+                write!(f, "[")?;
+                inner.write(f, region.as_deref().or(outer))?;
+                write!(f, "]")?;
                 suffix(f, region)
             }
             Type::Range(inner) => {
@@ -176,6 +194,8 @@ impl Type {
         match self {
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.as_deref().and_then(&mut *f)),
             Type::Named(name, region) => Type::Named(name.clone(), region.as_deref().and_then(f)),
+            Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
+            Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.as_deref().and_then(&mut *f)),
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
@@ -185,8 +205,8 @@ impl Type {
         }
     }
 
-    /// The type with a region given to each pointer and shape or kind name
-    /// that has none, by `f` (which also sees builtin-free types, and decides
+    /// The type with a region given to each pointer, slice, and shape or kind
+    /// name that has none, by `f` (which also sees builtin-free types, and decides
     /// nothing about whether a shape holds pointers).
     pub fn map_regions_of_names(&self, f: &mut dyn FnMut(&str) -> Option<String>) -> Type {
         match self {
@@ -196,6 +216,12 @@ impl Type {
             }
             Type::Named(name, None) => Type::Named(name.clone(), f(name)),
             Type::Ptr(inner, region) => Type::Ptr(Box::new(inner.map_regions_of_names(f)), region.clone()),
+            Type::Slice(inner, None) => {
+                let region = f("");
+                Type::Slice(Box::new(inner.map_regions_of_names(f)), region)
+            }
+            Type::Slice(inner, region) => Type::Slice(Box::new(inner.map_regions_of_names(f)), region.clone()),
+            Type::Array(inner, count) => Type::Array(Box::new(inner.map_regions_of_names(f)), *count),
             Type::Range(inner) => Type::Range(Box::new(inner.map_regions_of_names(f))),
             Type::Maybe(inner) => Type::Maybe(Box::new(inner.map_regions_of_names(f))),
             Type::Or(value, error) => Type::Or(Box::new(value.map_regions_of_names(f)), Box::new(error.map_regions_of_names(f))),
@@ -214,12 +240,12 @@ impl Type {
 
     fn collect_regions<'a>(&'a self, regions: &mut Vec<&'a str>) {
         match self {
-            Type::Ptr(inner, region) => {
+            Type::Ptr(inner, region) | Type::Slice(inner, region) => {
                 regions.extend(region.as_deref());
                 inner.collect_regions(regions);
             }
             Type::Named(_, region) => regions.extend(region.as_deref()),
-            Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => inner.collect_regions(regions),
+            Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) => inner.collect_regions(regions),
             Type::Or(value, error) => {
                 value.collect_regions(regions);
                 error.collect_regions(regions);
@@ -309,7 +335,14 @@ pub enum ExprKind {
     NoneLit,
     Var(String),
     Field(Box<Expr>, String),
+    /// `xs[i]`, an item of an array or slice, or `xs[a..b]`, a slice of it.
     Index(Box<Expr>, Box<Expr>),
+    /// `[a, b, c]`: an array of the values.
+    Array(Vec<Expr>),
+    /// `[value; count]`: an array of `count` copies of the value, computed
+    /// once; in `new [T](…) at r`, a slice of them, whose count may be known
+    /// only as the program runs.
+    Repeat { value: Box<Expr>, count: Box<Expr> },
     Call(String, Vec<Expr>),
     Unary(UnaryOp, Box<Expr>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),

@@ -86,6 +86,22 @@ describe("VelaAnalysis", () => {
     expect(labels).toEqual(expect.arrayContaining(["bind", "count", "show", "match"]));
   });
 
+  it("analyzes deeply nested arrays, slices, and parentheses without crashing", () => {
+    // The compiler stops at its nesting limit, well inside the module's stack.
+    const deep = 20_000;
+    const sources = [
+      `task main()\n    bind a = ${"[".repeat(deep)}1${"]".repeat(deep)}\n    show(a)\nfi\n`,
+      `task main()\n    show(${"(".repeat(deep)}1${")".repeat(deep)})\nfi\n`,
+      `task f(a: ${"[".repeat(deep)}int${"; 2]".repeat(deep)})\nfi\n`,
+      `task main()\n    bind a: ${"[".repeat(deep)}int${"]".repeat(deep)}@r = 1\nfi\n`,
+    ];
+    for (const source of sources) {
+      expect(analysis.file(source).diagnostics[0]?.message).toContain("nested too deeply");
+      expect(analysis.hover(source, source.length - 8)).toBeDefined();
+      expect(analysis.complete(source, source.length - 8).items).toBeDefined();
+    }
+  });
+
   it("answers several queries in one request", () => {
     const [tokens, hover, language] = analysis.request("task main()\nfi\n", [
       { kind: "tokens" },

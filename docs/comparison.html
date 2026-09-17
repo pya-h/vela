@@ -441,7 +441,7 @@
         before use (pointers can't be null), and a failure is a <code>T or E</code> whose error can't be ignored by
         accident. Memory is freed through regions, whose pointers the checker keeps from outliving them, so freed
         memory can't be used or freed again. Integer overflow and division by zero stop the program with a message
-        instead of being undefined, as they are in C. There are no arrays or bounds checks yet. It is much safer than C, but its guarantees are narrower than
+        instead of being undefined, as they are in C, and so does an index out of range of an array or slice. It is much safer than C, but its guarantees are narrower than
         Rust's (which also rules out data races) or those of GC'd languages.
       </p>
       <div class="table-wrap">
@@ -503,6 +503,13 @@
         file is public unless marked <code>priv</code>, fields included, so a name's spelling never decides who can use
         it. There is no package manager yet.
       </p>
+      <p>
+        Arrays are written as in Rust, <code>[int; 4]</code>, and are values copied whole, as C's arrays are inside a
+        struct. A slice, <code>[int]@r</code>, is Go's slice or Rust's <code>&amp;[T]</code> as a pointer and a length,
+        but like every Vela pointer it points into a region, so it can't outlive its memory; it doesn't grow, as Go's
+        <code>append</code> does. Every index is checked, as in Go, Rust, and Zig's safe builds, and the length is
+        <code>xs.len</code>, as in Zig.
+      </p>
     </section>
 
     <section>
@@ -515,10 +522,10 @@
       </p>
       <div class="note">
         <strong>When to choose Vela:</strong> learning about compilers and language design, experiments, and
-        small demos where you want C performance without C syntax. (Vela can't yet read input or hold arrays; see
+        small demos where you want C performance without C syntax. (Vela can't yet read input; see
         <a href="vela.html#limits">Current Limits</a>.)
         <br><br>
-        <strong>When to avoid Vela:</strong> production systems, large teams, programs that need arrays, rich
+        <strong>When to avoid Vela:</strong> production systems, large teams, programs that need growable collections, rich
         standard libraries, or concurrency support, and long-running programs whose data changes piece by piece, since
         regions free memory in bulk (see <a href="regions.html#limits">the workarounds</a>).
       </div>

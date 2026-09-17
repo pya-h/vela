@@ -1,0 +1,4 @@
+# error: 3:22: an array holds at least one value, so its count is 1 or more
+task main()
+    bind days: [int; 0] = [1]
+fi

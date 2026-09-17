@@ -1,0 +1,6 @@
+# error: 5:10: a slice of values can't be assigned; assign its items one at a time, as in 'xs[i] = v'
+task main()
+    region r
+    bind items = new [int]([0; 3]) at r
+    items[0..1] = items
+fi

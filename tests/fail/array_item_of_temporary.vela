@@ -1,0 +1,8 @@
+# error: 7:5: cannot assign to an item of a temporary value
+task make() -> [int; 2]
+    <- [1, 2]
+fi
+
+task main()
+    make()[0] = 5
+fi

@@ -34,9 +34,13 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
         "region r",
         "Memory new allocates in r lives until the block declaring r closes. As a parameter's type, r: region lets a task allocate in the caller's region.",
     ),
-    ("new", "new T(value) at r", "Copies the value into region r and gives a ^T@r. Also written new@r T(value)."),
+    (
+        "new",
+        "new T(value) at r",
+        "Copies the value into region r and gives a ^T@r. Also written new@r T(value). With a slice type, new [T](items) at r gives a [T]@r of the items: [v; n], an array, or a slice.",
+    ),
     ("at", "new T(value) at r", "Allocates in region r, the same as new@r T(value) ('@' is 'at')."),
-    ("in", "each i in a..b", "Counts from a up to, but not including, b."),
+    ("in", "each i in a..b", "Counts from a up to, but not including, b. each v in xs goes through the items of an array or slice."),
     ("maybe", "maybe T", "A T, or none. Read it with match, is, or a plan B: x { fallback }."),
     ("none", "none", "The empty maybe. A pointer can't be none; use maybe ^T."),
     ("is", "value is pattern", "The condition holds when the pattern matches; its names are visible in the block."),
@@ -69,6 +73,10 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
         (TokenClass::Keyword, _) => {
             let (_, code, doc) = KEYWORD_DOCS.iter().find(|(word, _, _)| *word == text)?;
             (code.to_string(), doc.to_string())
+        }
+        // `xs.len`, which no shape declares.
+        (TokenClass::Field, None) if text == "len" => {
+            ("len: int".to_string(), "The number of items of an array or slice.".to_string())
         }
         (_, Some(id)) => {
             let (code, doc) = describe(k, id)?;
@@ -167,7 +175,13 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             }
             Some("is") => (typed(&symbol.name), "Bound by an is condition.".to_string()),
             Some("fail") => (format!("fail {}", typed(&symbol.name)), "The error this plan B handles.".to_string()),
-            Some("each") => (format!("each {}", typed(&symbol.name)), "The counter of an each loop.".to_string()),
+            Some("each") => {
+                let doc = match k.each_items(id) {
+                    None => "The counter of an each loop.",
+                    Some(_) => "An item of the array or slice an each loop goes through.",
+                };
+                (format!("each {}", typed(&symbol.name)), doc.to_string())
+            }
             Some("hold") => (format!("hold {}", typed(&symbol.name)), "A mutable variable.".to_string()),
             Some("result") => {
                 let task = k

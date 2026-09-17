@@ -499,6 +499,8 @@ impl Resolver<'_> {
             }
             Type::Ptr(inner, region) => Type::Ptr(Box::new(self.ty(inner, span)?), region.clone()),
             Type::Maybe(inner) => Type::Maybe(Box::new(self.ty(inner, span)?)),
+            Type::Array(inner, count) => Type::Array(Box::new(self.ty(inner, span)?), *count),
+            Type::Slice(inner, region) => Type::Slice(Box::new(self.ty(inner, span)?), region.clone()),
             Type::Range(inner) => Type::Range(Box::new(self.ty(inner, span)?)),
             Type::Fail(inner) => Type::Fail(Box::new(self.ty(inner, span)?)),
             Type::Or(value, error) => Type::Or(Box::new(self.ty(value, span)?), Box::new(self.ty(error, span)?)),
@@ -572,10 +574,11 @@ impl Resolver<'_> {
             }
             ExprKind::Construct { args, .. } => args.iter_mut().try_for_each(|e| self.expr(e)),
             ExprKind::Field(base, _) | ExprKind::Deref(base) | ExprKind::Unary(_, base) | ExprKind::Fail(base) | ExprKind::Wrap(base) => self.expr(base),
-            ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => {
+            ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
                 self.expr(a)?;
                 self.expr(b)
             }
+            ExprKind::Array(values) => values.iter_mut().try_for_each(|e| self.expr(e)),
             ExprKind::New { ty, ty_span, value, .. } => {
                 **ty = self.ty(ty, *ty_span)?;
                 self.expr(value)

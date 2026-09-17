@@ -1,0 +1,4 @@
+# error: 3:21: expected type int, got float
+task main()
+    bind days = [0; 2.5]
+fi

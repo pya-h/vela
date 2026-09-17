@@ -115,6 +115,20 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         let probe = probe(source, context, k.range(dot).start, word_end);
         let exact = Knowledge::new(source, scan, &probe);
         let base = dot.checked_sub(1).and_then(|q| exact.type_ending_at(q));
+        // An array's or slice's only member is its length.
+        let len = |through_pointer: bool| CompletionItem {
+            label: "len".to_string(),
+            kind: CompletionKind::Field,
+            detail: "int, the number of items".to_string(),
+            apply: through_pointer.then(|| "^.len".to_string()),
+            snippet: None,
+            boost: LOCAL,
+        };
+        match &base {
+            Some(Type::Array(..) | Type::Slice(..)) => return (vec![len(false)], word_start, byte),
+            Some(Type::Ptr(inner, _)) if matches!(**inner, Type::Array(..)) => return (vec![len(true)], k.range(dot).start, byte),
+            _ => {}
+        }
         let (shape, through_pointer) = match base {
             Some(Type::Named(shape, _)) => (shape, false),
             Some(Type::Ptr(inner, _)) => match *inner {
@@ -217,6 +231,13 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         return (literal_field_items(&k, brace, word_start), word_start, byte);
     }
 
+    // An array type's count, `[int; 4]`, is a number.
+    if let (Some(q), Some(Token::Semicolon)) = (prev, prev_token)
+        && type_bracket(&k, q).is_some()
+    {
+        return (Vec::new(), word_start, byte);
+    }
+
     // Types.
     let type_context = match (prev, prev_token) {
         (Some(q), Some(Token::Colon)) => !unclosed_on_line(&k, q, &Token::LBrace, &Token::RBrace),
@@ -225,8 +246,9 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         (Some(q), Some(Token::Comma)) => in_result_list(&k, q),
         // `new@r T`: the type follows the region.
         (Some(q), Some(Token::Ident(_))) => after_new_region(&k, q),
-        // A type continues after `^` and `maybe`, and `or` starts the error type.
-        (Some(q), Some(Token::Caret | Token::Maybe)) => starts_type(&k, q),
+        // A type continues after `^`, `maybe`, and an array's or slice's `[`,
+        // and `or` starts the error type.
+        (Some(q), Some(Token::Caret | Token::Maybe | Token::LBracket)) => starts_type(&k, q),
         (Some(q), Some(Token::Or)) => q.checked_sub(1).is_some_and(|end| ends_type(&k, end)),
         _ => false,
     };
@@ -301,7 +323,9 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
 fn ends_value(k: &Knowledge, q: usize) -> bool {
     matches!(
         k.token(q),
-        Some(Token::Ident(_) | Token::Int(_) | Token::Float(_) | Token::Text(_) | Token::True | Token::False | Token::None | Token::RParen | Token::RBrace | Token::Caret)
+        Some(
+            Token::Ident(_) | Token::Int(_) | Token::Float(_) | Token::Text(_) | Token::True | Token::False | Token::None | Token::RParen | Token::RBrace | Token::RBracket | Token::Caret
+        )
     )
 }
 
@@ -394,12 +418,12 @@ fn in_binding_names(k: &Knowledge, q: usize) -> bool {
     matches!(k.token(line), Some(Token::Bind | Token::Hold)) && !(line..q).any(|p| k.token(p) == Some(&Token::Assign))
 }
 
-/// Whether the type-starting token at position `q` (a name, `^`, or `maybe`)
-/// is in a type: before it, after any `^` and `maybe`, comes `:` (outside a
-/// shape literal), `->`, `new`, or `or` after a type.
+/// Whether the type-starting token at position `q` (a name, `^`, `maybe`, or
+/// `[`) is in a type: before it, after any `^`, `maybe`, and `[`, comes `:`
+/// (outside a shape literal), `->`, `new`, or `or` after a type.
 fn starts_type(k: &Knowledge, q: usize) -> bool {
     let mut p = q;
-    while p > 0 && matches!(k.token(p - 1), Some(Token::Caret | Token::Maybe)) {
+    while p > 0 && matches!(k.token(p - 1), Some(Token::Caret | Token::Maybe | Token::LBracket)) {
         p -= 1;
     }
     match p.checked_sub(1).map(|b| (b, k.token(b))) {
@@ -412,6 +436,20 @@ fn starts_type(k: &Knowledge, q: usize) -> bool {
     }
 }
 
+/// The `[` of an array or slice type that position `q` is inside, on its line.
+fn type_bracket(k: &Knowledge, q: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for p in (k.line_start(q)..=q).rev() {
+        match k.token(p) {
+            Some(Token::RBracket) => depth += 1,
+            Some(Token::LBracket) if depth == 0 => return starts_type(k, p).then_some(p),
+            Some(Token::LBracket) => depth -= 1,
+            _ => {}
+        }
+    }
+    None
+}
+
 /// Whether position `q` is the region name of `new@r`, after which its type comes.
 fn after_new_region(k: &Knowledge, q: usize) -> bool {
     k.ident(q).is_some() && k.token_before(q) == Some(&Token::AtSign) && q.checked_sub(2).is_some_and(|new| k.token(new) == Some(&Token::New))
@@ -420,6 +458,11 @@ fn after_new_region(k: &Knowledge, q: usize) -> bool {
 /// Whether the type-ending name at position `q` (a type's name, or the region
 /// after its `@`) ends a type, so that an `or` after it starts the error type.
 fn ends_type(k: &Knowledge, q: usize) -> bool {
+    // `[int; 4]` or `[int]@r`.
+    let closing = if k.token_before(q) == Some(&Token::AtSign) { q.checked_sub(2) } else { Some(q) };
+    if let Some(close) = closing.filter(|&close| k.token(close) == Some(&Token::RBracket)) {
+        return close.checked_sub(1).and_then(|inside| type_bracket(k, inside)).is_some();
+    }
     if k.ident(q).is_none() {
         return false;
     }
@@ -564,15 +607,15 @@ fn unclosed_on_line(k: &Knowledge, q: usize, open: &Token, close: &Token) -> boo
 }
 
 /// The `{` of the shape literal directly around position `q`, if `q` is
-/// inside one and not inside parentheses within it.
+/// inside one and not inside parentheses or brackets within it.
 fn unclosed_brace(k: &Knowledge, q: usize) -> Option<usize> {
     let mut depth = 0usize;
     for p in (k.line_start(q)..=q).rev() {
         match k.token(p) {
-            Some(Token::RParen | Token::RBrace) => depth += 1,
-            Some(Token::LParen) if depth == 0 => return None,
+            Some(Token::RParen | Token::RBrace | Token::RBracket) => depth += 1,
+            Some(Token::LParen | Token::LBracket) if depth == 0 => return None,
             Some(Token::LBrace) if depth == 0 => return Some(p),
-            Some(Token::LParen | Token::LBrace) => depth -= 1,
+            Some(Token::LParen | Token::LBrace | Token::LBracket) => depth -= 1,
             _ => {}
         }
     }

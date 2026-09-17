@@ -313,7 +313,7 @@
         </div>
         <div class="card">
           <h3>No standard library <span class="badge b-high">High</span></h3>
-          <p>Only <code>show</code> exists. No arrays, strings, files, networking, or math utilities.</p>
+          <p>Only <code>show</code> exists. No text operations, files, networking, or math utilities.</p>
         </div>
         <div class="card">
           <h3>No module system <span class="badge b-done">Done</span></h3>
@@ -322,7 +322,9 @@
         </div>
         <div class="card">
           <h3>Limited types <span class="badge b-med">Medium</span></h3>
-          <p>No generics, arrays, slices, or tuples. (Missing values and errors now have types: <code>maybe T</code> and <code>T or E</code>, and a pointer can't be <code>none</code>.)</p>
+          <p>No generics or tuples yet. Arrays (<code>[int; 4]</code>) and slices (<code>[int]@r</code>) are done
+            (<a href="#arrays">details below</a>), and missing values and errors have types: <code>maybe T</code> and
+            <code>T or E</code>, and a pointer can't be <code>none</code>.</p>
         </div>
         <div class="card">
           <h3>No methods <span class="badge b-med">Medium</span></h3>
@@ -381,8 +383,10 @@
           <p>Results with names, <code>-&gt; total: int</code>, set along the way with <code>total &lt;- value</code>; a bare <code>&lt;-</code> or the end of the task sends them. <a href="vela.html#named-results">The language guide describes it</a>; the reasoning is <a href="#named-results">below</a>.</p>
         </div>
         <div class="card">
-          <h3>Built-in arrays & slices <span class="badge b-idea">Idea</span></h3>
-          <p>Add <code>[T; n]</code> fixed arrays and <code>[]T</code> slices with bounds checking.</p>
+          <h3>Built-in arrays & slices <span class="badge b-done">Done</span></h3>
+          <p>Arrays <code>[int; 4]</code> held in place, and slices <code>[int]@r</code> that view items in a region, with
+            every index checked. <a href="vela.html#arrays">The language guide describes them</a>; the reasoning is
+            <a href="#arrays">below</a>.</p>
         </div>
         <div class="card">
           <h3>Real string type <span class="badge b-idea">Idea</span></h3>
@@ -665,6 +669,61 @@ fi</pre>
         error in a module is shown at the <code>use</code> that leads to it. The server builds a program's modules from
         the workspace only, so a <code>use</code> can't read a file outside it. A way to use a module under another name
         (<code>use util as text_util</code>), and packages shared between programs, are left for later.
+      </p>
+    </section>
+
+    <section>
+      <h2 id="arrays"><span class="icon" aria-hidden="true">🧮</span> Arrays and Slices <span class="badge b-done">Done</span></h2>
+      <p>
+        The first step out of the limited types; tuples and then generics come next, each a step of its own. An array
+        is a fixed number of values held in place, and a slice is a view of values in a region (see
+        <a href="vela.html#arrays">Arrays</a> and <a href="vela.html#slices">Slices</a> in the language guide):
+      </p>
+      <pre>bind scores: [int; 4] = [90, 72, 85, 60]
+each score in scores
+    show(score)
+fi
+region r
+bind all = new [int]([0; n]) at r     # [int]@r: n zeros, n known as the program runs
+bind part = all[1..3]                 # the same memory, not a copy
+part[0] = scores.len</pre>
+      <ul>
+        <li><strong><code>[type; count]</code> and <code>[type]</code>.</strong> The item's type comes first, as the type
+          is read (an array of <code>int</code>, four of them), rather than Go's <code>[4]int</code> or C's
+          <code>int a[4]</code>; a slice is the same brackets without a count.</li>
+        <li><strong>A slice lives in a region.</strong> In C, an array is another form of pointer, and a slice is that
+          pointer with a length, so it follows the pointer rules: its type names its region, it is never
+          <code>none</code>, and it can't outlive its region or move to another. A slice of a local array would point
+          at the stack, so that is an error, and copying into a region is written out.</li>
+        <li><strong><code>new [T](…) at r</code>.</strong> The same form as <code>new T(v) at r</code>: the value in
+          parentheses gives the items (<code>[v; n]</code>, an array, or a slice, copied), and the result is the slice
+          itself rather than a pointer to one. A count known only as the program runs is allowed only there, since an
+          array's count is part of its type.</li>
+        <li><strong><code>xs.len</code>, not <code>len(xs)</code>.</strong> The length reads as part of the value, costs
+          nothing (a constant for an array, a stored count for a slice), and takes no name away from tasks.</li>
+        <li><strong>No growable lists.</strong> A list that grows copies itself into bigger memory, and without
+          <code>free</code> every old copy stays in the region until it closes. A program that needs more room makes a
+          longer slice and copies into it, which shows what it costs.</li>
+      </ul>
+      <p>
+        What building it settled. <strong>Values.</strong> Arrays are copied whole, like shapes, and <code>each</code>
+        goes through an array as it was when the loop started (a slice, as it is). A literal's values join into one
+        type: <code>none</code> and a value make a <code>maybe</code>, <code>fail e</code> and a value a
+        <code>T or E</code>, and a literal of only <code>none</code> takes its type from where it goes
+        (<code>bind slots: [maybe int; 4] = [none; 4]</code>). <strong>Checks.</strong> Every index and slice is checked
+        as the program runs and stops it with a message saying where, as integer overflow does (<em>vela: index 4 is out
+        of range 0..4 at 7:12 in task 'main'</em>). A constant index or bound out of range, a count below 1, and a type
+        whose values would take more than 1 TiB are errors when compiling, the last so that every program the compiler
+        accepts also compiles as C. <strong>Places.</strong> An array's item can be assigned where a field could be (in
+        a <code>hold</code>, or behind a pointer); a slice's items can always be written, as through a pointer; neither's
+        <code>len</code> can. An array behind a pointer, or an item of a slice, is in a region, so it can be sliced.
+        <strong>C.</strong> An array is a struct holding a C array, which C can copy and return; a slice is a struct of a
+        pointer and an <code>int64_t</code> length. Reading a slice's item, slicing, copying, and filling go through small
+        generated functions, so each array or slice is evaluated once. <strong>Studio.</strong> Hover shows the types
+        (<code>[int; 4]</code>, <code>[int]@r</code>, and an <code>each</code> item's), and completion offers
+        <code>len</code> after a <code>.</code> and types inside a type's brackets, as the file is typed. Comparing
+        arrays with <code>==</code>, showing them whole, and slices with a bound left out (<code>xs[1..]</code>) are left
+        for later.
       </p>
     </section>
 
@@ -1414,7 +1473,7 @@ show(p.length_squared())</pre>
             <li><s>Multiple results, then named results (<code>-&gt; total: int</code>, set with <code>total &lt;- value</code>)</s>
               (done: <a href="vela.html#results">Several Results</a>, <a href="vela.html#named-results">Named Results</a>)</li>
             <li><s>Defined integer overflow and division by zero</s> (done: <a href="vela.html#int-limits">they stop the program with a message</a>)</li>
-            <li>Fixed-size arrays and a real <code>text</code> type</li>
+            <li><s>Fixed-size arrays and slices</s> (done: <a href="vela.html#arrays">arrays</a> and <a href="vela.html#slices">slices</a>), and a real <code>text</code> type</li>
             <li>Small region improvements: result-only regions, typed patterns, a lint for regions that grow in loops, and a
               chunk cache (<a href="regions.html#ideas">ideas</a>)</li>
             <li>Move-only owned pointers, on top of regions</li>
@@ -1426,7 +1485,7 @@ show(p.length_squared())</pre>
           <ul>
             <li><s>Module system</s> (done: <a href="vela.html#modules">modules</a>), then a package manager</li>
             <li>Methods on shapes and kinds (qualified tasks with <code>self</code> / <code>hold self</code>)</li>
-            <li>Generics</li>
+            <li>Tuples, then generics</li>
             <li><s>Missing values and error handling</s> (done: <a href="#maybe"><code>maybe T</code>, plan B, <code>T or E</code></a>)</li>
             <li>Pattern-match expressions</li>
             <li><s>Region-based allocation</s> (done: <a href="regions.html">regions</a>)</li>
@@ -1450,7 +1509,7 @@ show(p.length_squared())</pre>
       <h2><span class="icon" aria-hidden="true">🎯</span> Conclusion</h2>
       <p>
         Vela's strength is its smallness. The best next steps preserve that smallness while filling the
-        obvious gaps: a real string type and arrays. The memory
+        obvious gaps: a real string type, tuples, and generics, now that arrays and slices are in place. The memory
         model's first step, <strong>scoped regions</strong>, is in place (<a href="regions.html">Vela Regions</a>); <strong>move-only ownership and optional
         temporary borrows</strong> can grow it while keeping Vela fast, simple, and far safer than C without becoming
         Rust.

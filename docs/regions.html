@@ -757,7 +757,60 @@ not a digit
         allocated.
       </p>
 
-      <h3 id="choosing">Lesson 9: Choosing regions</h3>
+      <h3 id="lesson-slices">Lesson 9: Slices in a region</h3>
+      <p>
+        An array in a variable, <code>[int; 4]</code>, is a value like any other and needs no region. When the number of
+        items is known only as the program runs, they go in a region, as a slice: <code>[int]@r</code> is a pointer to the
+        first and a count, and follows every rule a pointer does. <code>new [int](…) at r</code> makes one, copying the
+        items in; <code>xs[a..b]</code> views part of it without copying:
+      </p>
+      <pre class="program" data-file="09_slices.vela"><span class="comment"># The first n Fibonacci numbers, in the caller&#x27;s region.</span>
+<span class="keyword">task</span> fibs(r: <span class="keyword">region</span>, n: int) -&gt; [int]@r
+    <span class="keyword">bind</span> out = <span class="keyword">new</span> [int]([<span class="number">1</span>; n]) <span class="keyword">at</span> r
+    <span class="keyword">each</span> i <span class="keyword">in</span> <span class="number">2</span>..n
+        out[i] = out[i - <span class="number">1</span>] + out[i - <span class="number">2</span>]
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> out
+<span class="keyword">fi</span>
+
+<span class="comment"># Only reads, so it names the region without taking it.</span>
+<span class="keyword">task</span> sum(xs: [int]@r) -&gt; int
+    <span class="keyword">hold</span> total = <span class="number">0</span>
+    <span class="keyword">each</span> x <span class="keyword">in</span> xs
+        total = total + x
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> total
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> kept
+    <span class="keyword">bind</span> numbers = fibs(kept, <span class="number">10</span>)
+    show(numbers[<span class="number">9</span>])
+    <span class="keyword">bind</span> tail = numbers[<span class="number">5</span>..numbers.len]
+    show(sum(tail))
+    <span class="keyword">each</span> round <span class="keyword">in</span> <span class="number">0</span>..<span class="number">2</span>
+        <span class="keyword">region</span> work
+        <span class="keyword">bind</span> scratch = <span class="keyword">new</span> [int](tail) <span class="keyword">at</span> work
+        scratch[<span class="number">0</span>] = <span class="number">0</span>
+        show(sum(scratch))
+    <span class="keyword">fi</span>
+    show(tail[<span class="number">0</span>])
+<span class="keyword">fi</span></pre>
+<pre class="output" aria-label="Output">55
+131
+123
+123
+8</pre>
+      <p>
+        <code>tail</code> is a view of <code>numbers</code>' last five items, in <code>kept</code>. Each pass copies it
+        into <code>work</code>, changes the copy, and frees it at the end of the pass, so <code>tail</code> is unchanged.
+        Storing <code>scratch</code> in a variable of type <code>[int]@kept</code> would be the same error as for a
+        pointer into <code>work</code>. An array in a variable can't be sliced, since it isn't in a region: copy it with
+        <code>new [int](xs) at r</code>, or allocate it there, <code>new [int; 4](xs) at r</code>, and slice what the
+        pointer points to (<code>p^[0..2]</code>).
+      </p>
+
+      <h3 id="choosing">Lesson 10: Choosing regions</h3>
       <p>Rules of thumb:</p>
       <ul>
         <li><strong>Match regions to lifetimes.</strong> Declare a region in the block whose end is when the data stops
@@ -774,12 +827,14 @@ not a digit
           one (Lesson 8).</li>
       </ul>
 
-      <h3 id="messages">Lesson 10: Reading the compiler's messages</h3>
+      <h3 id="messages">Lesson 11: Reading the compiler's messages</h3>
       <div class="table-wrap">
         <table>
           <tr><th>Message (shortened)</th><th>What it means, and the fix</th></tr>
           <tr><td><code>'new' needs a region to allocate in</code></td><td>Add <code>at r</code> (or write <code>new@r</code>).</td></tr>
           <tr><td><code>a pointer lives in a region, so its type names one</code></td><td>Write the region: <code>^int@r</code>, not <code>^int</code>.</td></tr>
+          <tr><td><code>a slice lives in a region, so its type names one</code></td><td>Write the region: <code>[int]@r</code>, not <code>[int]</code>.</td></tr>
+          <tr><td><code>a slice points into a region, but this array isn't in one</code></td><td>The array is in a variable. Copy it into a slice with <code>new [int](xs) at r</code>, or allocate the array in a region and slice <code>p^[a..b]</code>.</td></tr>
           <tr><td><code>'Node' holds pointers, so it lives in a region</code></td><td>Write <code>Node@r</code> where the shape is used.</td></tr>
           <tr><td><code>'Point' holds no pointers, so it lives in no region</code></td><td>Remove <code>@r</code>: plain values need none.</td></tr>
           <tr><td><code>a field lives in the region of the value holding it</code></td><td>In a <code>shape</code> or <code>kind</code>, write <code>^Node</code>, not <code>^Node@r</code>.</td></tr>
@@ -1134,9 +1189,9 @@ list = push[nodes](list, <span class="number">1</span>)</pre>
         <ul>
           <li><strong>The declaration matches the call:</strong> regions go in brackets in both, and ordinary values in
             parentheses. The region stops looking like a value argument.</li>
-          <li><strong>Grammar:</strong> <code>[</code> after a name is unused today (it reports that Vela has no arrays
-            yet). Arrays would later use <code>a[i]</code>, but tasks aren't values, so <code>name[…](…)</code> is a region
-            list when <code>name</code> is a task and an index when it is a variable. Go resolves its generic calls
+          <li><strong>Grammar:</strong> <code>[</code> after a name indexes an array or slice (<code>a[i]</code>), but
+            tasks aren't values, so <code>name[…](…)</code> is a region list when <code>name</code> is a task and an index
+            when it is a variable. Go resolves its generic calls
             (<code>f[int](x)</code>) the same way.</li>
           <li><strong>Room to grow:</strong> the second notebook sketches generics with brackets (<code>task max[T](…)</code>).
             Regions are compile-time parameters too, so a task generic over a type and a region would write

@@ -58,7 +58,8 @@ pub(crate) struct Checked {
     /// The type of each parameter, variable, and region (`Type::Region`), by
     /// the position of its name.
     pub decls: HashMap<Pos, Type>,
-    /// For each field access `a.b`, the shape of `a`, by the position of `b`.
+    /// For each field access `a.b`, the shape of `a`, by the position of `b`;
+    /// an empty name for `xs.len` on an array or slice.
     pub field_accesses: HashMap<Pos, String>,
 }
 
@@ -159,7 +160,16 @@ impl Checked {
                 self.block(body, kinds);
             }
             StmtKind::Each(_, range, body) => {
-                self.decls.insert(pos(stmt.span), Type::Int);
+                // A counter, or an item of an array or slice, once the checker
+                // knows which.
+                let item = match (&range.kind, &range.ty) {
+                    (ExprKind::Range(..), _) => Some(Type::Int),
+                    (_, Some(Type::Array(items, _) | Type::Slice(items, _))) => Some((**items).clone()),
+                    _ => None,
+                };
+                if let Some(item) = item {
+                    self.decls.insert(pos(stmt.span), item);
+                }
                 self.expr(range, kinds);
                 self.block(body, kinds);
             }
@@ -208,19 +218,25 @@ impl Checked {
         }
         match &e.kind {
             ExprKind::Field(base, _) => {
-                if let Some(Type::Named(shape, _)) = &base.ty {
-                    self.field_accesses.insert(pos(e.span), shape.clone());
+                match &base.ty {
+                    Some(Type::Named(shape, _)) => {
+                        self.field_accesses.insert(pos(e.span), shape.clone());
+                    }
+                    Some(Type::Array(..) | Type::Slice(..)) => {
+                        self.field_accesses.insert(pos(e.span), String::new());
+                    }
+                    _ => {}
                 }
                 self.expr(base, kinds);
             }
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
             | ExprKind::Var(_) => {}
             ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. } => self.expr(inner, kinds),
-            ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => {
+            ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
                 self.expr(a, kinds);
                 self.expr(b, kinds);
             }
-            ExprKind::Call(_, args) | ExprKind::Construct { args, .. } => {
+            ExprKind::Call(_, args) | ExprKind::Construct { args, .. } | ExprKind::Array(args) => {
                 for arg in args {
                     self.expr(arg, kinds);
                 }

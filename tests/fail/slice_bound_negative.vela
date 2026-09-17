@@ -1,0 +1,6 @@
+# error: 5:16: slice bound -1 is out of range: it is less than 0
+task main()
+    region r
+    bind items = new [int]([0; 3]) at r
+    show(items[-1..2].len)
+fi

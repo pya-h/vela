@@ -1,0 +1,73 @@
+# Arrays and slices: a week of fixed readings in an array, and primes found
+# with a slice as long as the program decides while it runs.
+
+# The highest of the readings, and their average.
+task summary(readings: [float; 7]) -> high: float, average: float
+    high <- readings[0]
+    hold sum = 0.0
+    each reading in readings
+        sum = sum + reading
+        when reading > high
+            high <- reading
+        fi
+    fi
+    average <- sum / 7.0
+fi
+
+# Sorts the items of a slice in place: a slice writes into the memory it views.
+task sort(items: [int]@r)
+    each i in 1..items.len
+        hold j = i
+        loop j > 0 and items[j - 1] > items[j]
+            items[j - 1], items[j] = items[j], items[j - 1]
+            j = j - 1
+        fi
+    fi
+fi
+
+# The primes below `limit`, by the sieve of Eratosthenes.
+task primes(r: region, limit: int) -> [int]@r
+    region scratch
+    bind composite = new [bool]([false; limit]) at scratch
+    hold found = 0
+    each n in 2..limit
+        when not composite[n]
+            found = found + 1
+            hold multiple = n * n
+            loop multiple < limit
+                composite[multiple] = true
+                multiple = multiple + n
+            fi
+        fi
+    fi
+    # Only the primes outlive the scratch region: they are copied into `r`.
+    bind out = new [int]([0; found]) at r
+    hold next = 0
+    each n in 2..limit
+        when not composite[n]
+            out[next] = n
+            next = next + 1
+        fi
+    fi
+    <- out
+fi
+
+task main()
+    bind week: [float; 7] = [21.5, 23.0, 19.5, 24.5, 22.0, 18.0, 20.5]
+    bind high, average = summary(week)
+    show(high)                               # 24.5
+    show(average)                            # 21.2857
+
+    region r
+    bind scores = new [int]([72, 90, 65, 88, 79]) at r
+    sort(scores)
+    show(scores[0])                          # 65
+    show(scores[scores.len - 1])             # 90
+    # A part of a slice views the same memory, without copying.
+    bind top = scores[3..5]
+    show(top[0] + top[1])                    # 178
+
+    bind small = primes(r, 30)
+    show(small.len)                          # 10
+    show(small[small.len - 1])               # 29
+fi

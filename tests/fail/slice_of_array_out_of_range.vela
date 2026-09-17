@@ -1,0 +1,6 @@
+# error: 5:20: slice bound 5 is out of range 0..4 for [int; 4]
+task main()
+    region r
+    bind boxed = new [int; 4]([1, 2, 3, 4]) at r
+    show(boxed^[1..5].len)
+fi

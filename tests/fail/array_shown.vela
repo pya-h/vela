@@ -1,0 +1,4 @@
+# error: 3:10: show expects int, float, bool, or text; show its items one at a time, as in 'each v in xs'
+task main()
+    show([1, 2])
+fi

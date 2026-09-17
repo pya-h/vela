@@ -156,6 +156,11 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ("nested new", program(format!("{}1{}", "new int(".repeat(deep), ") at r".repeat(deep)))),
         ("nested shape literals", program(format!("{}1{}", "P { x: ".repeat(deep), " }".repeat(deep)))),
         ("region pointer types", format!("task f(p: {}int@r)\nfi\n", "^".repeat(deep))),
+        ("array types", format!("task f(p: {}int{})\nfi\n", "[".repeat(deep), "; 1]".repeat(deep))),
+        ("slice types", format!("task f(p: {}int{}@r)\nfi\n", "[".repeat(deep), "]".repeat(deep))),
+        ("array literals", program(format!("{}1{}", "[".repeat(deep), "]".repeat(deep)))),
+        ("repeated values", program(format!("{}1{}", "[".repeat(deep), "; 1]".repeat(deep)))),
+        ("index chains", program(format!("p{}", "[0]".repeat(deep)))),
     ];
     for (what, source) in cases {
         let error = driver::generate_c(&source).expect_err(what);
@@ -183,6 +188,13 @@ fn deep_nesting_is_an_error_not_a_crash() {
     driver::generate_c(&news).unwrap();
     let literals = format!("shape P\n    x: int\nfi\n{}", program(format!("{}1{}", "P { x: ".repeat(near), " }".repeat(near))));
     assert!(driver::generate_c(&literals).is_err_and(|e| !e.message.contains("nested too deeply")), "a deep literal reaches the checker");
+    // An array literal counts two levels (itself, and its values); nested
+    // just below the limit, arrays are checked and generated, and so is a
+    // chain of indexes as long.
+    let arrays = format!("task main()\n    bind a = {}1{}\n    show(a{}.len)\nfi\n", "[".repeat(near / 2 - 1), "]".repeat(near / 2 - 1), "[0]".repeat(near / 2 - 2));
+    driver::generate_c(&arrays).unwrap();
+    let indexes = format!("task f(a: {}int{})\n    show(a{})\nfi\n", "[".repeat(near), "; 1]".repeat(near), "[0]".repeat(near));
+    driver::generate_c(&indexes).unwrap();
     let fails = format!("task f() -> int or text\n    <- {}\"x\"\nfi\n", "fail ".repeat(near));
     assert!(driver::generate_c(&fails).is_err_and(|e| !e.message.contains("nested too deeply")), "a deep fail chain reaches the checker");
 }

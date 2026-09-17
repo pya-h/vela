@@ -1,0 +1,5 @@
+# error: 4:32: expected type int, got text
+task main()
+    region r
+    bind items = new [int]([0; "three"]) at r
+fi

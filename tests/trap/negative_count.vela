@@ -1,0 +1,9 @@
+# trap: count -1 is negative at 7:18 in task 'main'
+# Making a slice of a count computed as less than zero.
+task main()
+    region r
+    hold n = 0
+    n = n - 1
+    bind items = new [int]([0; n]) at r
+    show(items.len)
+fi

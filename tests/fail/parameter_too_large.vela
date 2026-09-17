@@ -1,0 +1,7 @@
+# error: 2:18: [[bool; 1000000]; 10000000] is too large: a value of it would take more than 1 TiB of memory; a slice in a region can be as long as memory allows
+task fill(cells: [[bool; 1000000]; 10000000]) -> int
+    <- 0
+fi
+
+task main()
+fi

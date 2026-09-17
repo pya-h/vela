@@ -1,0 +1,7 @@
+# error: 6:30: expected type [^int]@b, got [^int]@a; a value can't move to another region: a pointer into one region is never stored in another
+task main()
+    region a
+    region b
+    bind items = new [^int]([new int(1) at a; 2]) at a
+    bind copied = new [^int](items) at b
+fi

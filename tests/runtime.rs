@@ -186,19 +186,24 @@ fn check_sanitized(source: &Path, expected: &Path, name: &str, trap: Option<&str
     None
 }
 
-/// An allocation that can't be satisfied (one whose size overflows, and one
-/// the system refuses) stops the program with a message instead of returning
-/// memory that isn't there.
+/// An allocation that can't be satisfied (one whose size overflows, one the
+/// system refuses, and a slice's items whose size in bytes overflows) stops the
+/// program with a message instead of returning memory that isn't there.
 #[test]
 fn an_impossible_allocation_stops_the_program() {
     let scratch = scratch_dir("runtime-out-of-memory");
-    for (name, size) in [("overflow", "SIZE_MAX - 8"), ("refused", "SIZE_MAX / 2")] {
+    let allocations = [
+        ("overflow", "vela__rt__region_alloc(r, SIZE_MAX - 8, 1)"),
+        ("refused", "vela__rt__region_alloc(r, SIZE_MAX / 2, 1)"),
+        ("items", "vela__rt__region_items(r, INT64_MAX, sizeof(int64_t), _Alignof(int64_t), \"1:1\")"),
+    ];
+    for (name, allocation) in allocations {
         let source = scratch.join(format!("{}.c", name));
         fs::write(
             &source,
             format!(
-                "#include \"vela_rt.h\"\nint main(void) {{\n    vela__rt__region r[1] = {{ VELA__RT__REGION_EMPTY }};\n    unsigned char* p = vela__rt__region_alloc(r, {}, 1);\n    p[0] = 1;\n    puts(\"allocated\");\n    return 0;\n}}\n",
-                size
+                "#include \"vela_rt.h\"\nint main(void) {{\n    vela__rt__region r[1] = {{ VELA__RT__REGION_EMPTY }};\n    unsigned char* p = {};\n    p[0] = 1;\n    puts(\"allocated\");\n    return 0;\n}}\n",
+                allocation
             ),
         )
         .unwrap();
