@@ -1,7 +1,7 @@
-# A stack of numbers in a region, for tests/run/modules.vela. It uses a module
+# A stack of numbers in a region, for tests/run/modules.vela. It includes a module
 # from the folder above.
 
-use ../numbers (add)
+include ../numbers (add)
 
 shape Node
     value: int

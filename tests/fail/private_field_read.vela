@@ -1,5 +1,5 @@
 # error: 6:15: 'pin' is a private field of 'library.Card', which only its own file can use
-use modules/library
+include modules/library
 
 task main()
     bind card = library.card("ada")

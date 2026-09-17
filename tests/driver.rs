@@ -231,14 +231,14 @@ fn memory_loader<'a>(files: &'a [(&'a str, &'a str)], asked: &'a std::cell::RefC
 
 #[test]
 fn a_program_loads_each_module_once_through_its_loader() {
-    let main = "use shapes/geometry\nuse text/labels (label)\n\ntask main()\n    show(label(geometry.area(3)))\nfi\n";
+    let main = "include shapes/geometry\ninclude text/labels (label)\n\ntask main()\n    show(label(geometry.area(3)))\nfi\n";
     let files = [
-        ("app/shapes/geometry.vela", "use ../text/labels\n\ntask area(side: int) -> int\n    <- labels.width(side) * side\nfi\n"),
+        ("app/shapes/geometry.vela", "include ../text/labels\n\ntask area(side: int) -> int\n    <- labels.width(side) * side\nfi\n"),
         ("app/text/labels.vela", "task label(n: int) -> text\n    <- \"shape\"\nfi\n\ntask width(n: int) -> int\n    <- n\nfi\n"),
     ];
     let asked = std::cell::RefCell::new(Vec::new());
     let items = driver::check_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
-    // Paths are relative to the file with the `use`, with `..` settled, and a
+    // Paths are relative to the file with the `include`, with `..` settled, and a
     // module used twice is read once.
     assert_eq!(*asked.borrow(), ["app/shapes/geometry.vela", "app/text/labels.vela"]);
     let names: Vec<&str> = items.iter().map(|item| match item {
@@ -252,7 +252,7 @@ fn a_program_loads_each_module_once_through_its_loader() {
 
 #[test]
 fn an_error_in_a_module_names_that_file() {
-    let main = "use lib\n\ntask main()\n    show(lib.twice(2))\nfi\n";
+    let main = "include lib\n\ntask main()\n    show(lib.twice(2))\nfi\n";
     let files = [("lib.vela", "task twice(n: int) -> int\n    <- n * \"2\"\nfi\n")];
     let asked = std::cell::RefCell::new(Vec::new());
     let error = driver::check_program(Path::new("main.vela"), main, &mut memory_loader(&files, &asked)).unwrap_err();
@@ -269,17 +269,17 @@ fn an_error_in_a_module_names_that_file() {
 
 #[test]
 fn long_chains_of_modules_are_an_error_not_a_crash() {
-    // Module i uses module i + 1: loading follows the chain recursively, on a
+    // Module i includes module i + 1: loading follows the chain recursively, on a
     // test thread's small stack.
     let chain = |length: usize| -> Vec<(String, String)> {
         (1..=length)
             .map(|i| {
-                let uses = if i < length { format!("use m{}\n\n", i + 1) } else { String::new() };
-                (format!("m{}.vela", i), format!("{}task value{}() -> int\n    <- {}\nfi\n", uses, i, i))
+                let includes = if i < length { format!("include m{}\n\n", i + 1) } else { String::new() };
+                (format!("m{}.vela", i), format!("{}task value{}() -> int\n    <- {}\nfi\n", includes, i, i))
             })
             .collect()
     };
-    let main = "use m1\n\ntask main()\n    show(m1.value1())\nfi\n";
+    let main = "include m1\n\ntask main()\n    show(m1.value1())\nfi\n";
     let check = |length: usize| {
         let files = chain(length);
         let borrowed: Vec<(&str, &str)> = files.iter().map(|(name, source)| (name.as_str(), source.as_str())).collect();
@@ -289,5 +289,5 @@ fn long_chains_of_modules_are_an_error_not_a_crash() {
     let limit = vela::parser::MAX_NESTING;
     check(limit - 1).unwrap();
     let error = check(limit + 50).unwrap_err();
-    assert_eq!(error.error.message, format!("modules use one another too deeply (more than {} in a chain)", limit));
+    assert_eq!(error.error.message, format!("modules include one another too deeply (more than {} in a chain)", limit));
 }

@@ -1,5 +1,0 @@
-# error: 2:5: a module is named without quotes or '.vela', as in 'use modules/library'
-use "modules/library.vela"
-
-task main()
-fi

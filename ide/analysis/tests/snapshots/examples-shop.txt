@@ -1,15 +1,15 @@
-  1 | # A program in several files. `use` loads another file from this file's
-    | comment:# A program in several files. `use` loads another file from this file's
-  2 | # folder: shop/cart.vela is used through its name, as `cart.add(…)`, and the
-    | comment:# folder: shop/cart.vela is used through its name, as `cart.add(…)`, and the
+  1 | # A program in several files. `include` loads another file from this file's
+    | comment:# A program in several files. `include` loads another file from this file's
+  2 | # folder: shop/cart.vela is reached through its name, as `cart.add(…)`, and the
+    | comment:# folder: shop/cart.vela is reached through its name, as `cart.add(…)`, and the
   3 | # names in parentheses from shop/prices.vela are brought in directly. `priv`
     | comment:# names in parentheses from shop/prices.vela are brought in directly. `priv`
   4 | # keeps a task, shape, kind, or field to the file that declares it.
     | comment:# keeps a task, shape, kind, or field to the file that declares it.
-  6 | use shop/cart
-    | keyword:use  module:shop  operator:/  module:cart
-  7 | use shop/prices (Item, price_of)
-    | keyword:use  module:shop  operator:/  module:prices  punctuation:(  type:Item  punctuation:,  task:price_of  punctuation:)
+  6 | include shop/cart
+    | keyword:include  module:shop  operator:/  module:cart
+  7 | include shop/prices (Item, price_of)
+    | keyword:include  module:shop  operator:/  module:prices  punctuation:(  type:Item  punctuation:,  task:price_of  punctuation:)
   9 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
  10 |     hold basket = cart.empty()

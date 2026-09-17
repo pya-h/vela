@@ -1,0 +1,5 @@
+# error: 2:9: a module is named without quotes or '.vela', as in 'include modules/library'
+include "modules/library.vela"
+
+task main()
+fi

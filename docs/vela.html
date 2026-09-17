@@ -178,7 +178,7 @@
     show(<span class="string">"Hello, Vela!"</span>)
 <span class="keyword">fi</span></pre>
       <p>
-        A program is a <code>.vela</code> file, with any files it uses (see <a href="#modules">Modules</a>). Compile and
+        A program is a <code>.vela</code> file, with any files it includes (see <a href="#modules">Modules</a>). Compile and
         run it with (the output is <code>a.out</code> unless <code>-o</code> names it):
       </p>
       <pre>cargo run -- examples/hello.vela -o examples/hello
@@ -190,7 +190,7 @@
         errors with <code>match</code>, <code>is</code>, and a plan B), <code>regions.vela</code> (a tree in a region, a region
         per loop pass, and copying a result into a longer-lived region), <code>arrays.vela</code> (arrays, and slices
         in a region: sorting and a sieve of primes), <code>shop.vela</code> (a program in three files, with
-        <code>use</code> and <code>priv</code>), and <code>demo.vela</code> (tasks, shapes, pointers, and control flow).
+        <code>include</code> and <code>priv</code>), and <code>demo.vela</code> (tasks, shapes, pointers, and control flow).
       </p>
       <div class="note">
         Prefer an editor? <a href="ide.html">Vela Studio</a> highlights Vela, shows errors as you type, completes
@@ -235,9 +235,9 @@
 
       <h3>Reserved Words and Symbols</h3>
       <p>These words can't be used as names:</p>
-      <pre>task shape kind  bind hold  when   else loop each
-in   at    match case new   region and  or   not
-true false none  fi   maybe is     fail use  priv</pre>
+      <pre>task shape kind  bind hold  when   else loop    each
+in   at    match case new   region and  or      not
+true false none  fi   maybe is     fail include priv</pre>
       <p>
         <code>show</code> and the builtin types (<code>int</code>, <code>float</code>, <code>bool</code>,
         <code>text</code>, <code>unit</code>) aren't reserved words: no task, shape, kind, or variant can take their
@@ -258,7 +258,7 @@ true false none  fi   maybe is     fail use  priv</pre>
         <tr><td><code>[T; n]</code>, <code>[T]@r</code></td><td>an array type; a slice type (see <a href="#arrays">Arrays</a> and <a href="#slices">Slices</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v; n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
-        <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, or variant of module <code>m</code>; a folder in a <code>use</code> path (see <a href="#modules">Modules</a>)</td></tr>
+        <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, or variant of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
         <tr><td><code>Name { x: 1 }</code></td><td>a shape literal</td></tr>
         <tr><td><code>0..5</code></td><td>a range, in <code>each</code> and in a slice (<code>xs[1..3]</code>)</td></tr>
         <tr><td><code>=</code></td><td>assignment, and the value of a binding</td></tr>
@@ -672,7 +672,7 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
         across different kinds, and none can be named like a builtin (<code>int</code>, <code>float</code>,
         <code>bool</code>, <code>text</code>, <code>unit</code>, <code>show</code>). Another module has names of its own
         (see <a href="#modules">Modules</a>). Every type you write must be a builtin, a shape, or a kind. A variable
-        can't take the name of a variant or of a module the file uses, so a bare <code>Red</code> always means the
+        can't take the name of a variant or of a module the file includes, so a bare <code>Red</code> always means the
         variant.
       </p>
 
@@ -1098,13 +1098,13 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
     <section>
       <h2 id="modules">Modules</h2>
       <p>
-        A program can be split into several files. Each file is a <em>module</em>, and a file uses another with
-        <code>use</code>, naming its path without <code>.vela</code>. What the other file declares is then named through
+        A program can be split into several files. Each file is a <em>module</em>, and a file includes another
+        with <code>include</code>, naming its path without <code>.vela</code>. What the other file declares is then named through
         the module's name, the path's last part:
       </p>
       <pre><span class="comment"># main.vela</span>
-<span class="keyword">use</span> shapes/geometry
-<span class="keyword">use</span> shapes/palette (Color, describe)
+<span class="keyword">include</span> shapes/geometry
+<span class="keyword">include</span> shapes/palette (Color, describe)
 
 <span class="keyword">task</span> main()
     <span class="keyword">bind</span> square = geometry.Square(3.0)
@@ -1145,12 +1145,14 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
     <span class="keyword">&lt;-</span> 3.14159
 <span class="keyword">fi</span></pre>
       <ul>
-        <li><strong>Where.</strong> <code>use</code> lines come first in a file, before any task, shape, or kind. A path
-          is relative to the folder of the file that has the <code>use</code>: <code>use geometry</code> reads
-          <code>geometry.vela</code> next to it, <code>use shapes/geometry</code> reads it from the folder
-          <code>shapes</code>, and <code>..</code> goes up one folder (<code>use ../common/text</code>). The command is
-          the same as for one file: <code>vela main.vela -o program</code> reads every file the program uses, and an
-          error in any of them names that file.</li>
+        <li><strong>Where.</strong> <code>include</code> lines come first in a file, before any task, shape, or kind. A
+          path is relative to the folder of the file that has the <code>include</code>: <code>include geometry</code>
+          reads <code>geometry.vela</code> next to it, <code>include shapes/geometry</code> reads it from the folder
+          <code>shapes</code>, and <code>..</code> goes up one folder (<code>include ../common/text</code>). The command
+          is the same as for one file: <code>vela main.vela -o program</code> reads every file the program includes,
+          and an error in any of them names that file. The word is C's, but an <code>include</code> doesn't paste the
+          file in: the other file stays a module with names of its own, and is read once however many files include
+          it. Writing <code>use</code> or <code>import</code> instead is an error that names <code>include</code>.</li>
         <li><strong>Names.</strong> <code>geometry.area(…)</code> calls a task, <code>geometry.Point { … }</code> builds a
           shape, <code>geometry.Square(3.0)</code> and <code>geometry.Dot</code> make variants, and
           <code>geometry.Point</code> is a type anywhere a type is written (<code>^geometry.Node@r</code>,
@@ -1158,10 +1160,10 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
           <code>is</code> names a variant alone, as in <code>case Square side</code>, since the value's kind already says
           which module it is from. Messages name another module's types the same way, as in <em>expected type
           geometry.Point, got int</em>.</li>
-        <li><strong>Bringing names in.</strong> <code>use shapes/palette (Color, describe)</code> also lets the file write
+        <li><strong>Bringing names in.</strong> <code>include shapes/palette (Color, describe)</code> also lets the file write
           <code>Color</code> and <code>describe</code> without <code>palette.</code>, which still works too. Each name
           listed must exist in the module, and a kind's variants come in only when listed themselves.</li>
-        <li><strong>Private.</strong> Everything a file declares can be used by the files that use it, unless it is
+        <li><strong>Private.</strong> Everything a file declares can be used by the files that include it, unless it is
           marked <code>priv</code>: a task, shape, or kind (whose variants are then private too), or a shape's field.
           Another file can't read or assign a private field, or build its shape with a literal, so a module can keep
           a value's invariants to itself through its tasks. What other files see of a public task (its parameters and
@@ -1169,15 +1171,15 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
           private type, since they couldn't name it.</li>
         <li><strong>Each module's own names.</strong> Tasks, shapes, kinds, and variants share one namespace within a
           file, but each module has its own: two modules can both have an <code>area</code>, and a program can have its
-          own <code>Red</code> beside <code>palette.Red</code>. A module sees only what it declares and what it uses; the
-          main file's names aren't visible to the modules it uses. Only the main file's <code>main</code> starts the
+          own <code>Red</code> beside <code>palette.Red</code>. A module sees only what it declares and what it includes;
+          the main file's names aren't visible to the modules it includes. Only the main file's <code>main</code> starts the
           program; a module's <code>main</code> is an ordinary task, called as <code>tools.main()</code>.</li>
-        <li><strong>Rules.</strong> Modules can't use one another in a circle (<em>modules can't use one another in a
-          circle: a -&gt; b -&gt; a</em>). A file uses each module once, a module's name can't also be the name of
+        <li><strong>Rules.</strong> Modules can't include one another in a circle (<em>modules can't include one another
+          in a circle: a -&gt; b -&gt; a</em>). A file includes each module once, a module's name can't also be the name of
           something the file declares, of a name it brings in, or of a variable, and a module can't be named like a
           builtin type or task. Two modules of one program can't have the same name, even in different folders.</li>
       </ul>
-      <pre><span class="comment"># in main.vela, after use shapes/geometry</span>
+      <pre><span class="comment"># in main.vela, after include shapes/geometry</span>
 show(geometry.pi())            <span class="comment"># error: 'pi' is private to module 'geometry'</span>
 show(area(square))             <span class="comment"># error: unknown task 'area'; module 'geometry' has one: write 'geometry.area', …</span></pre>
       <p>
@@ -1215,7 +1217,7 @@ show(area(square))             <span class="comment"># error: unknown task 'area
         <li>There is no way to read input.</li>
         <li>Arrays and slices can't be compared or shown whole, a slice can't grow, and an array's count is known
           before the program runs (see <a href="#arrays">Arrays</a>).</li>
-        <li>Two modules of one program can't have the same name, and a module can't be used under another name
+        <li>Two modules of one program can't have the same name, and a module can't be included under another name
           (see <a href="#modules">Modules</a>). There are no packages to share modules between programs.</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which
@@ -1246,7 +1248,7 @@ CC=clang ./target/debug/vela program.vela -o program</pre>
         with <code>-o</code>, writes it to that file; a program without <code>main</code> is allowed here), <code>--check</code>
         only checks the program (everything a build checks before running the C compiler, including that it has a
         <code>main</code>), <code>-h</code>/<code>--help</code> prints the usage, and <code>--version</code> prints the
-        compiler's version. The files the program uses are read from the disk, next to it (see
+        compiler's version. The files the program includes are read from the disk, next to it (see
         <a href="#modules">Modules</a>). A file name starting with <code>-</code> goes after <code>--</code>. The exit status is 0 on
         success, 1 when the program can't be read or doesn't compile (in Vela or in C), and 2 for wrong arguments.
       </p>

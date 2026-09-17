@@ -103,11 +103,11 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
         SymbolKind::Module => {
             let module = k.scan.modules.iter().find(|m| m.symbol == id);
             let doc = match module {
-                Some(m) if m.source.is_some() => format!("A module this file uses: the file {}.", m.path),
-                Some(m) => format!("A module this file uses: the file {}, which can't be read.", m.path),
-                None => "A module this file uses.".to_string(),
+                Some(m) if m.source.is_some() => format!("A module this file includes: the file {}.", m.path),
+                Some(m) => format!("A module this file includes: the file {}, which can't be read.", m.path),
+                None => "A module this file includes.".to_string(),
             };
-            (format!("use {}", symbol.detail), doc)
+            (format!("include {}", symbol.detail), doc)
         }
         SymbolKind::Task => (format!("task {}{}", symbol.name, symbol.detail), from_module(k, symbol)),
         SymbolKind::Shape | SymbolKind::Kind => {

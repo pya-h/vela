@@ -79,7 +79,7 @@ describe("problems", () => {
     const closed = collectProblems([], new Map([["main.vela", inModule]]));
     expect(closed.map((f) => f.path)).toEqual(["lib/geometry.vela"]);
     expect(closed[0]?.problems[0]).toMatchObject({ line: 4, source: "build" });
-    // With the program's file open, its analysis shows the error at the `use`.
+    // With the program's file open, its analysis shows the error at the `include`.
     const open = collectProblems([{ path: "main.vela", diagnostics: [diagnostic(1, "lib/geometry.vela:4:5: unknown variable 'x'")] }], new Map([["main.vela", inModule]]));
     expect(problemCount(open)).toBe(1);
   });

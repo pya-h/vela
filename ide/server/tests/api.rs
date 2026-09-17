@@ -328,11 +328,11 @@ async fn symlinks_cannot_lead_out_of_the_workspace() {
 async fn builds_read_modules_from_the_workspace_only() {
     let dir = TempDir::new("modules");
     std::fs::create_dir_all(dir.workspace().join("app/shapes")).unwrap();
-    dir.write("app/main.vela", "use shapes/geometry\n\ntask main()\n    show(geometry.double(21))\nfi\n");
+    dir.write("app/main.vela", "include shapes/geometry\n\ntask main()\n    show(geometry.double(21))\nfi\n");
     dir.write("app/shapes/geometry.vela", "task double(n: int) -> int\n    <- n * 2\nfi\n");
-    dir.write("app/broken.vela", "use shapes/bad\n\ntask main()\n    show(bad.double(21))\nfi\n");
+    dir.write("app/broken.vela", "include shapes/bad\n\ntask main()\n    show(bad.double(21))\nfi\n");
     dir.write("app/shapes/bad.vela", "task double(n: int) -> int\n    <- missing\nfi\n");
-    dir.write("app/escape.vela", "use ../../outside\n\ntask main()\nfi\n");
+    dir.write("app/escape.vela", "include ../../outside\n\ntask main()\nfi\n");
     let (app, studio) = app(config(&dir.workspace(), PORT));
     let build = |path: &'static str| {
         let (app, studio) = (app.clone(), studio.clone());

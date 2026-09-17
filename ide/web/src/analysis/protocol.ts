@@ -113,7 +113,7 @@ export interface Language {
 
 /**
  * Where the analyzed file is, and the text of the other files of its program
- * (the modules it uses) by path. Paths are `/`-separated workspace paths.
+ * (the modules it includes) by path. Paths are `/`-separated workspace paths.
  */
 export interface ProgramContext {
   path: string;
@@ -138,7 +138,7 @@ export interface QueryResults {
   definition: Location | null;
   complete: Completions;
   hover: Hover | null;
-  /** The paths of the files the program uses that the context didn't give. */
+  /** The paths of the files the program includes that the context didn't give. */
   "missing-modules": string[];
   language: Language;
 }

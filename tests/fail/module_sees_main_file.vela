@@ -1,5 +1,5 @@
 # error: modules/sees_main.vela:4:8: unknown task 'helper'
-use modules/sees_main
+include modules/sees_main
 
 task helper() -> int
     <- 1

@@ -1,5 +1,5 @@
-# error: 2:22: module 'library' has no task, shape, kind, or variant named 'library'
-use modules/library (library)
+# error: 2:26: module 'library' has no task, shape, kind, or variant named 'library'
+include modules/library (library)
 
 task main()
 fi

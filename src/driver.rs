@@ -21,7 +21,7 @@ use crate::modules::{self, Loader, SourceFile};
 pub const RUNTIME_H: &str = include_str!("../runtime/vela_rt.h");
 
 /// Lexes, parses, and type-checks `source`, a program in one file, returning
-/// the checked program. A `use` in it can't be loaded; see `check_program`.
+/// the checked program. An `include` in it can't be loaded; see `check_program`.
 pub fn front_end(source: &str) -> Result<Vec<Item>> {
     match front_end_partial(source) {
         Partial { error: Some(error), .. } => Err(error),
@@ -202,7 +202,7 @@ pub fn has_main(items: &[Item]) -> bool {
 /// Compiles `source`, the contents of the file at `input`, into an
 /// executable at `output`, using `cc` as the C compiler command (see
 /// `c_compiler_from_env`). `input` names the generated C file and guards
-/// against overwriting the source. The modules the program uses are read
+/// against overwriting the source. The modules the program includes are read
 /// from the disk, next to `input`.
 pub fn build(source: &str, input: &Path, output: &Path, cc: &str) -> std::result::Result<(), BuildError> {
     build_program(source, input, input, output, cc, &mut read_from_disk)

@@ -118,7 +118,7 @@ impl<'a> Knowledge<'a> {
 
     /// The first top-level declaration of `kind` called `name`: one of this
     /// file's, another module's by its qualified name (`geometry.Point`), or one
-    /// `use` brings in by name.
+    /// `include` brings in by name.
     pub fn global(&self, name: &str, kind: SymbolKind) -> Option<usize> {
         let symbols = &self.scan.symbols;
         let qualified = name.contains(MODULE_SEPARATOR);
@@ -128,7 +128,7 @@ impl<'a> Knowledge<'a> {
             .or_else(|| self.scan.imports.get(name).copied().filter(|&id| symbols.get(id).is_some_and(|s| s.kind == kind)))
     }
 
-    /// The module used under the name at position `q`, when that name is one.
+    /// The module included under the name at position `q`, when that name is one.
     pub fn module_at(&self, q: usize) -> Option<usize> {
         self.symbol_at(q).filter(|&id| self.symbol(id).is_some_and(|s| s.kind == SymbolKind::Module))
     }

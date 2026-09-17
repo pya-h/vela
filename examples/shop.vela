@@ -1,10 +1,10 @@
-# A program in several files. `use` loads another file from this file's
-# folder: shop/cart.vela is used through its name, as `cart.add(…)`, and the
+# A program in several files. `include` loads another file from this file's
+# folder: shop/cart.vela is reached through its name, as `cart.add(…)`, and the
 # names in parentheses from shop/prices.vela are brought in directly. `priv`
 # keeps a task, shape, kind, or field to the file that declares it.
 
-use shop/cart
-use shop/prices (Item, price_of)
+include shop/cart
+include shop/prices (Item, price_of)
 
 task main()
     hold basket = cart.empty()

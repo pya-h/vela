@@ -1,5 +1,0 @@
-# error: 2:12: a module path separates its folders with '/', as in 'use shapes/circle'
-use modules.library
-
-task main()
-fi

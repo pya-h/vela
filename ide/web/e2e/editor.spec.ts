@@ -240,11 +240,11 @@ test("several results: highlighting, hover, and completion of the names", async 
 });
 
 const GEOMETRY = "priv task twice(n: int) -> int\n    <- n * 2\nfi\n\ntask area(side: int) -> int\n    <- side * twice(side) / 2\nfi\n";
-const USES_GEOMETRY = "use shapes/geometry\n\ntask main()\n    show(geometry.area(3))\nfi\n";
+const INCLUDES_GEOMETRY = "include shapes/geometry\n\ntask main()\n    show(geometry.area(3))\nfi\n";
 
 test("modules: highlighting, hover, definitions, errors, and running", async ({ page, studio }) => {
   studio.write("app/shapes/geometry.vela", GEOMETRY);
-  studio.write("app/main.vela", USES_GEOMETRY);
+  studio.write("app/main.vela", INCLUDES_GEOMETRY);
   await launch(page, studio);
   await treeRow(page, "app").click();
   await openFile(page, "app/main.vela");
@@ -277,7 +277,7 @@ test("modules: highlighting, hover, definitions, errors, and running", async ({ 
   await expect(tab(page, "app/shapes/geometry.vela")).toHaveClass(/active/);
   expect(await page.evaluate(() => getSelection()?.toString())).toBe("area");
 
-  // An unsaved error in the module shows in the file that uses it, at its `use`.
+  // An unsaved error in the module shows in the file that includes it, at its `include`.
   await cursorAtEndOf(page, 2);
   await page.keyboard.type(" + missing");
   await tab(page, "app/main.vela").click();

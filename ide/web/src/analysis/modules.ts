@@ -1,4 +1,4 @@
-// The text of the files a Vela file uses (its modules), for the analysis,
+// The text of the files a Vela file includes (its modules), for the analysis,
 // which reads nothing itself. An open file's editor text is used, so unsaved
 // changes count; any other file is fetched once, when an analysis asks for it,
 // and kept until it is forgotten (when files may have changed on disk). No DOM

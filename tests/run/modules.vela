@@ -1,12 +1,12 @@
-# Modules: a program in several files. `use` loads a file from this file's
+# Modules: a program in several files. `include` loads a file from this file's
 # folder; what it declares is named through the module's name (`geometry.area`)
 # or, when listed in parentheses, by its own name. `priv` keeps a task, shape,
 # kind, or field to its own file.
 
-use modules/geometry
-use modules/palette (Color, Custom, describe)
-use modules/bank
-use modules/lists/stack
+include modules/geometry
+include modules/palette (Color, Custom, describe)
+include modules/bank
+include modules/lists/stack
 
 # The same variant name as palette's Red, and the same task name as
 # geometry's area: each module has names of its own.
@@ -43,7 +43,7 @@ task main()
         show("a dot")
     fi
 
-    # Names brought in with `use m (…)`, and the others still through `m.`.
+    # Names brought in with `include m (…)`, and the others still through `m.`.
     bind red: Color = palette.Red
     show(describe(red))
     show(describe(Custom(10, 20, 30)))
@@ -67,7 +67,7 @@ task main()
     }
     show(bank.balance(after))
 
-    # A module in a folder, which uses another through `..`, with regions and
+    # A module in a folder, which includes another through `..`, with regions and
     # named results.
     region r
     hold top: maybe ^stack.Node@r = none

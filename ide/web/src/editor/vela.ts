@@ -28,7 +28,7 @@ export interface FileAnalysis {
   tokens: Token[];
   diagnostics: VelaDiagnostic[];
   outline: OutlineItem[];
-  /** The modules the file's program uses that weren't known yet. */
+  /** The modules the file's program includes that weren't known yet. */
   missing: string[];
 }
 
@@ -57,7 +57,7 @@ export function refreshAnalysis(view: EditorView): void {
  */
 export class Analyzer {
   private readonly cache = new WeakMap<Text, { path: string; modules: number; result: FileAnalysis }>();
-  /** The text of the files Vela files use. */
+  /** The text of the files Vela files include. */
   readonly modules = new ModuleSources();
   /** Shows a definition in another file; the workbench sets it. */
   openDefinition: ((path: string, from: number, to: number) => void) | null = null;

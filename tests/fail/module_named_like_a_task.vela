@@ -1,5 +1,5 @@
-# error: 2:13: the module 'library' has the name of the task defined at 4:6; rename one of them
-use modules/library
+# error: 2:17: the module 'library' has the name of the task defined at 4:6; rename one of them
+include modules/library
 
 task library()
 fi

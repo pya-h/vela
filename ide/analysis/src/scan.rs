@@ -4,9 +4,9 @@
 //! typed.
 //!
 //! It runs in two passes. The first finds the top-level declarations (tasks,
-//! shapes and their fields, kinds and their variants, and the modules `use`
+//! shapes and their fields, kinds and their variants, and the modules `include`
 //! lines name), which may be used before they are declared. The declarations
-//! of each module the file uses are added then too, named as the file names
+//! of each module the file includes are added then too, named as the file names
 //! them (`geometry.area`). The second walks the tokens in order, tracking
 //! blocks and the variables declared in them (parameters, `bind`/`hold`,
 //! `each`, the names `case` and `is` patterns bind, the error a plan B names,
@@ -49,7 +49,7 @@ pub enum TokenClass {
     Punctuation,
     /// Text the compiler rejects.
     Invalid,
-    /// A module's name, and the folders of a `use` path.
+    /// A module's name, and the folders of an `include` path.
     Module,
 }
 
@@ -69,7 +69,7 @@ pub enum SymbolKind {
     /// A region: declared by `region r`, taken as a parameter `r: region`, or
     /// only named in a task header's types (`@r`).
     Region,
-    /// A module the file uses, declared by its `use` line.
+    /// A module the file includes, declared by its `include` line.
     Module,
 }
 
@@ -121,14 +121,14 @@ pub(crate) struct Symbol {
     pub private: bool,
 }
 
-/// A module the file uses.
+/// A module the file includes.
 #[derive(Debug, Clone)]
 pub(crate) struct Module {
     /// Its path, as the editor names files; empty when the file has no path.
     pub path: String,
     /// Its text, when the editor gave it.
     pub source: Option<String>,
-    /// Its `use` line's symbol.
+    /// Its `include` line's symbol.
     pub symbol: usize,
 }
 
@@ -147,27 +147,27 @@ pub(crate) struct Scan {
     pub symbols: Vec<Symbol>,
     /// In source order, without overlaps.
     pub tokens: Vec<Classified>,
-    /// The modules the file uses, in the order of its `use` lines.
+    /// The modules the file includes, in the order of its `include` lines.
     pub modules: Vec<Module>,
-    /// The names `use m (a, b)` brings in, each with the declaration it names.
+    /// The names `include m (a, b)` brings in, each with the declaration it names.
     pub imports: HashMap<String, usize>,
 }
 
 /// `field_accesses` maps the (line, column) of a field name in `a.b` to the
 /// shape of `a`, when the checker knows it. `context` gives the file's path
-/// and the other files it may use.
+/// and the other files it may include.
 pub(crate) fn scan(source: &str, field_accesses: &HashMap<(usize, usize), String>, context: Context) -> Scan {
     let lexed = highlight(source);
     let tokens = Tokens::new(source, &lexed);
-    let (mut symbols, declared_at, uses) = declarations(&tokens);
-    let (modules, imports) = used_modules(&mut symbols, &uses, context);
+    let (mut symbols, declared_at, includes) = declarations(&tokens);
+    let (modules, imports) = included_modules(&mut symbols, &includes, context);
     let classified = Classifier::new(&tokens, symbols, declared_at, field_accesses, imports.clone()).run();
     let (symbols, tokens) = classified;
     Scan { lexed, symbols, tokens, modules, imports }
 }
 
-/// A `use` line found by the first pass.
-struct UseLine {
+/// An `include` line found by the first pass.
+struct IncludeLine {
     /// The path as written: names and `..`.
     parts: Vec<String>,
     /// The module's symbol.
@@ -176,14 +176,14 @@ struct UseLine {
     names: Vec<String>,
 }
 
-/// Adds the declarations of each module in `uses` to `symbols`, named as this
+/// Adds the declarations of each module in `includes` to `symbols`, named as this
 /// file names them (`geometry.area`, whose signature says `geometry.Point`),
 /// and returns the modules and the names brought in by name.
-fn used_modules(symbols: &mut Vec<Symbol>, uses: &[UseLine], context: Context) -> (Vec<Module>, HashMap<String, usize>) {
+fn included_modules(symbols: &mut Vec<Symbol>, includes: &[IncludeLine], context: Context) -> (Vec<Module>, HashMap<String, usize>) {
     let folder = Path::new(context.path).parent().unwrap_or(Path::new(""));
     let mut modules = Vec::new();
     let mut imports = HashMap::new();
-    for line in uses {
+    for line in includes {
         let index = modules.len();
         let path = slashed(&vela::modules::module_file(folder, &line.parts));
         let source = context.sources.get(&path).cloned();
@@ -194,7 +194,7 @@ fn used_modules(symbols: &mut Vec<Symbol>, uses: &[UseLine], context: Context) -
             let (theirs, _, _) = declarations(&tokens);
             let own_types: HashSet<String> =
                 theirs.iter().filter(|s| matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind)).map(|s| s.name.clone()).collect();
-            // Their own `use` lines aren't this file's modules; indices move past them.
+            // Their own `include` lines aren't this file's modules; indices move past them.
             let kept: Vec<usize> = (0..theirs.len()).filter(|&i| theirs.get(i).is_some_and(|s| s.kind != SymbolKind::Module)).collect();
             let base = symbols.len();
             for &i in &kept {
@@ -349,11 +349,11 @@ enum Block {
 }
 
 /// First pass: top-level declarations. Returns the symbols, for each
-/// declaring token its symbol, and the `use` lines.
-fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<UseLine>) {
+/// declaring token its symbol, and the `include` lines.
+fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<IncludeLine>) {
     let mut symbols: Vec<Symbol> = Vec::new();
     let mut declared_at = HashMap::new();
-    let mut uses = Vec::new();
+    let mut includes = Vec::new();
     let mut blocks: Vec<Block> = Vec::new();
     // The open task, shape, or kind, and the variant whose payload is open.
     let mut item: Option<usize> = None;
@@ -379,8 +379,8 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Use
             continue;
         };
         match token {
-            // `use path/name (a, b)`: declares the module `name`.
-            Token::Use => {
+            // `include path/name (a, b)`: declares the module `name`.
+            Token::Include => {
                 let mut parts = Vec::new();
                 let mut names = Vec::new();
                 let mut alias = None;
@@ -404,7 +404,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Use
                     let written = tokens.text_after(p, never);
                     let path = written.split('(').next().unwrap_or_default().trim().to_string();
                     let symbol = declare(&mut symbols, alias, SymbolKind::Module, path, None);
-                    uses.push(UseLine { parts, symbol, names });
+                    includes.push(IncludeLine { parts, symbol, names });
                 }
             }
             // Items only appear at the top level, so a new one also closes
@@ -472,7 +472,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Use
     if let Some(open) = item {
         close(&mut symbols, open, last_end);
     }
-    (symbols, declared_at, uses)
+    (symbols, declared_at, includes)
 }
 
 fn close(symbols: &mut [Symbol], id: usize, end: usize) {
@@ -516,7 +516,7 @@ struct Classifier<'a> {
     /// Tasks, shapes, kinds, variants, and modules by name (the first, if
     /// repeated); another module's by their qualified names (`geometry.area`).
     globals: HashMap<String, usize>,
-    /// The names `use m (a, b)` brings in, with their declarations.
+    /// The names `include m (a, b)` brings in, with their declarations.
     imports: HashMap<String, usize>,
     scopes: Vec<Scope>,
     out: Vec<Classified>,
@@ -561,9 +561,9 @@ impl<'a> Classifier<'a> {
         // In the names of a `bind` or `hold`, where each comma declares
         // another one.
         let mut declaring_list: Option<&'static str> = None;
-        // On a `use` line, and inside its parentheses of names.
-        let mut in_use = false;
-        let mut in_use_names = false;
+        // On an `include` line, and inside its parentheses of names.
+        let mut in_include = false;
+        let mut in_include_names = false;
         let mut braces: Vec<Brace> = Vec::new();
         // How many `[`s are open in a type, as in `[int; 4]`.
         let mut type_brackets = 0usize;
@@ -600,8 +600,8 @@ impl<'a> Classifier<'a> {
 
             match token {
                 Token::Newline => {
-                    in_use = false;
-                    in_use_names = false;
+                    in_include = false;
+                    in_include_names = false;
                     in_task_header = false;
                     in_pattern = false;
                     in_results = false;
@@ -614,10 +614,10 @@ impl<'a> Classifier<'a> {
                 Token::Eof => {}
                 Token::Int(_) | Token::Float(_) => self.push(range, TokenClass::Number, None),
                 Token::Text(_) => self.string(range),
-                Token::Ident(name) if in_use => {
+                Token::Ident(name) if in_include => {
                     let (class, symbol) = match self.declared_at.get(&p) {
                         Some(&id) => (TokenClass::Module, Some(id)),
-                        None if in_use_names => {
+                        None if in_include_names => {
                             let id = self.imports.get(name.as_str()).copied();
                             let class = id.and_then(|id| self.symbols.get(id)).map_or(TokenClass::Variable, |s| s.kind.class());
                             (class, id)
@@ -699,7 +699,7 @@ impl<'a> Classifier<'a> {
                 Token::LParen | Token::RParen | Token::LBracket | Token::RBracket | Token::Dot => {
                     self.push(range, TokenClass::Punctuation, None);
                     match token {
-                        Token::LParen if in_use => in_use_names = true,
+                        Token::LParen if in_include => in_include_names = true,
                         // `geometry.Point`: a type goes on after the module's name.
                         Token::Dot => in_type = was_type,
                         _ => {}
@@ -786,7 +786,7 @@ impl<'a> Classifier<'a> {
                         Token::At => region_next = Some(false),
                         // `region r` declares a region; `r: region` is a parameter's type.
                         Token::Region if !was_type => declaring = Some("region"),
-                        Token::Use => in_use = true,
+                        Token::Include => in_include = true,
                         _ => {}
                     }
                 }
@@ -1021,14 +1021,14 @@ impl<'a> Classifier<'a> {
     }
 
     /// The top-level declaration called `name`, if it is one of `kinds`: one of
-    /// this file's, or one `use` brings in by name.
+    /// this file's, or one `include` brings in by name.
     fn global(&self, name: &str, kinds: &[SymbolKind]) -> Option<usize> {
         let own = self.globals.get(name).copied().filter(|&id| self.symbols.get(id).is_some_and(|s| s.module.is_none()));
         own.or_else(|| self.imports.get(name).copied())
             .filter(|&id| self.symbols.get(id).is_some_and(|s| kinds.contains(&s.kind)))
     }
 
-    /// The module the file uses under `name`, unless a variable at byte `at`
+    /// The module the file includes under `name`, unless a variable at byte `at`
     /// has that name.
     fn module_named(&self, name: &str, at: usize) -> Option<usize> {
         self.global(name, &[SymbolKind::Module]).filter(|_| self.local(name, at).is_none())

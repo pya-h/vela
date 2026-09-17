@@ -86,10 +86,10 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     let prev_token = prev.and_then(|q| k.token(q));
     let blocks = open_blocks(&k, word_start);
 
-    // On a `use` line: nothing for the path; in its parentheses, the names the
+    // On an `include` line: nothing for the path; in its parentheses, the names the
     // module declares.
     if let Some(q) = prev
-        && k.token(k.line_start(q)) == Some(&Token::Use)
+        && k.token(k.line_start(q)) == Some(&Token::Include)
     {
         let line = k.line_start(q);
         let items = match (line..=q).find(|&p| k.token(p) == Some(&Token::LParen)) {
@@ -276,10 +276,10 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     let at_line_start = prev.is_none() || prev_token == Some(&Token::Newline);
     if at_line_start {
         let items = match blocks.first() {
-            // `use` lines come before the file's items.
+            // `include` lines come before the file's items.
             None => {
                 let before_items = !(0..prev.map_or(0, |q| q + 1)).any(|q| matches!(k.token(q), Some(Token::Task | Token::Shape | Token::Kind)));
-                item_level_items().into_iter().filter(|item| before_items || item.label != "use").collect()
+                item_level_items().into_iter().filter(|item| before_items || item.label != "include").collect()
             }
             // A shape's field can be private.
             Some(Block::Shape) => vec![keyword("priv")],
@@ -901,7 +901,7 @@ fn type_items(k: &Knowledge, after_arrow: bool, offer_maybe: bool) -> Vec<Comple
 }
 
 /// The names of the tasks, shapes, kinds, or variants (as `kinds` says) usable
-/// without a module's name: the file's own, and those `use` brings in, with
+/// without a module's name: the file's own, and those `include` brings in, with
 /// the name to write for each.
 fn visible_globals<'k>(k: &'k Knowledge, kinds: &[SymbolKind]) -> Vec<(String, &'k crate::scan::Symbol)> {
     let own = k.symbols().iter().filter(|s| s.module.is_none() && kinds.contains(&s.kind)).map(|s| (s.name.clone(), s));
@@ -915,7 +915,7 @@ fn visible_globals<'k>(k: &'k Knowledge, kinds: &[SymbolKind]) -> Vec<(String, &
     own.chain(imported).collect()
 }
 
-/// The modules the file uses, as names to complete.
+/// The modules the file includes, as names to complete.
 fn module_items(k: &Knowledge) -> Vec<CompletionItem> {
     k.scan
         .modules
@@ -934,7 +934,7 @@ fn module_items(k: &Knowledge) -> Vec<CompletionItem> {
         .collect()
 }
 
-/// What module `module` (its `use` line's symbol) declares that another file
+/// What module `module` (its `include` line's symbol) declares that another file
 /// can use, named without the module: its tasks, shapes, kinds, and variants,
 /// or only its shapes and kinds where a type is written.
 fn member_items(k: &Knowledge, module: usize, types_only: bool) -> Vec<CompletionItem> {
@@ -1005,8 +1005,8 @@ fn item_level_items() -> Vec<CompletionItem> {
         keyword("shape"),
         keyword("kind"),
         keyword("priv"),
-        keyword("use"),
-        snippet("use", "use another file of the program", "use ${module}"),
+        keyword("include"),
+        snippet("include", "include another file of the program", "include ${module}"),
         snippet("task", "a task", "task ${name}(${})\n\t${}\nfi"),
         snippet("task -> type", "a task that sends a value", "task ${name}(${}) -> ${type}\n\t<- ${value}\nfi"),
         snippet("shape", "a shape with a field", "shape ${Name}\n\t${field}: ${type}\nfi"),

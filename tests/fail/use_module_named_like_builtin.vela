@@ -1,5 +1,0 @@
-# error: 2:13: a module can't be named 'int', which is a builtin type
-use modules/int
-
-task main()
-fi

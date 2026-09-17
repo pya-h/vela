@@ -1,5 +1,5 @@
 // Each test gets its own vela-studio server on a fresh copy of examples/ (its
-// programs and the folders of modules they use), and
+// programs and the folders of modules they include), and
 // fails if the page logs an error (including Content-Security-Policy
 // violations, which the page reports as errors).
 

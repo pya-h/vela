@@ -57,7 +57,7 @@ export class VelaAnalysis {
 
   /**
    * Answers several queries about one version of `source` at once, analyzing
-   * it only once. `context` gives the file's path and the modules it may use.
+   * it only once. `context` gives the file's path and the modules it may include.
    * Throws `AnalysisError` if the module rejects the request or crashes; after
    * a crash the module is restarted, so later calls work.
    */
@@ -76,7 +76,7 @@ export class VelaAnalysis {
 
   /**
    * Everything that changes when the text changes, in one call, with the
-   * modules the program uses that `context` didn't give (`missing`).
+   * modules the program includes that `context` didn't give (`missing`).
    */
   file(source: string, context?: ProgramContext): { tokens: Token[]; diagnostics: Diagnostic[]; outline: OutlineItem[]; missing: string[] } {
     const [tokens, diagnostics, outline, missing] = this.request(

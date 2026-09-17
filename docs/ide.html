@@ -342,11 +342,11 @@ Press Ctrl+C to stop.</pre>
         </div>
         <div class="card">
           <h4>Programs in several files</h4>
-          <p>A file's <code>use</code> lines are followed into the files they name, as you type: <code>geometry.area</code>
+          <p>A file's <code>include</code> lines are followed into the files they name, as you type: <code>geometry.area</code>
             is colored as a task, hovers with its signature and module, and jumps into <code>geometry.vela</code> with
-            <kbd>F12</kbd>; completion after <code>geometry.</code> and inside <code>use … (</code> offers what the
+            <kbd>F12</kbd>; completion after <code>geometry.</code> and inside <code>include … (</code> offers what the
             module declares, without its <code>priv</code> names; and an error in a module, even one not saved yet, is
-            shown at the <code>use</code> that leads to it, with the module's file and line. An open file counts as
+            shown at the <code>include</code> that leads to it, with the module's file and line. An open file counts as
             edited; any other is read from the workspace.</p>
         </div>
         <div class="card">
@@ -369,7 +369,7 @@ Press Ctrl+C to stop.</pre>
             of <code>bind q, r = …</code>, and each of those names hovers with the type of the value in its place.
             A task's named results (<code>-&gt; total: int</code>) are offered at the start of a line as
             <code>total &lt;- </code>, and hover as <code>result total: int</code>. After <code>match</code>, only <code>case</code>; <code>new</code> only where a region can
-            be allocated in; <code>use</code> only above a file's tasks, shapes, and kinds; and <code>priv</code> before
+            be allocated in; <code>include</code> only above a file's tasks, shapes, and kinds; and <code>priv</code> before
             those and a shape's fields.</p>
         </div>
         <div class="card">
@@ -425,8 +425,8 @@ Press Ctrl+C to stop.</pre>
         <li><strong>When a build fails,</strong> a Vela error (or a missing <code>task main()</code>) opens
           <strong>Problems</strong>, where clicking it selects the spot (an error in a module is listed under the
           module's file); a failure of the C compiler opens Output with its message. A build error stays listed until
-          that file builds again. A program's modules are read from the workspace only, so a <code>use</code> can't
-          read a file outside it.</li>
+          that file builds again. A program's modules are read from the workspace only, so an <code>include</code>
+          can't read a file outside it.</li>
         <li>Builds happen in a temporary folder that is removed afterwards. Running never writes into your
           folder.</li>
       </ul>

@@ -1,4 +1,4 @@
-//! Analysis of a file that uses other files: the editor gives their text by
+//! Analysis of a file that includes other files: the editor gives their text by
 //! path, and highlighting, diagnostics, hover, definitions, and completion
 //! follow the names into them. In the sources below, `@@` marks the cursor.
 
@@ -10,8 +10,8 @@ use std::collections::HashMap;
 use vela_analysis::{Analysis, LineIndex, Location, TokenClass};
 
 const MAIN: &str = "\
-use shapes/geometry
-use palette (Color, describe)
+include shapes/geometry
+include palette (Color, describe)
 
 task main()
     bind square = geometry.Square(3.0)
@@ -32,7 +32,7 @@ fi
 ";
 
 const GEOMETRY: &str = "\
-use ../numbers
+include ../numbers
 
 shape Point
     x: float
@@ -125,7 +125,7 @@ fn the_modules_a_file_needs_are_listed_until_given() {
     assert_eq!(alone.missing_modules(), ["app/shapes/geometry.vela", "app/palette.vela"]);
     assert_eq!(alone.diagnostics()[0].message, "can't find module 'shapes/geometry': there is no file 'shapes/geometry.vela'");
 
-    // A module's own `use` is found once the module is given, relative to it.
+    // A module's own `include` is found once the module is given, relative to it.
     let mut some = HashMap::new();
     some.insert("app/shapes/geometry.vela".to_string(), GEOMETRY.to_string());
     some.insert("app/palette.vela".to_string(), PALETTE.to_string());
@@ -138,14 +138,14 @@ fn the_modules_a_file_needs_are_listed_until_given() {
 }
 
 #[test]
-fn an_error_in_a_module_is_shown_at_its_use() {
+fn an_error_in_a_module_is_shown_at_its_include() {
     let source = main_with("");
     let mut sources = sources();
     sources.insert("app/numbers.vela".to_string(), "task square(x: float) -> float\n    <- x * \"x\"\nfi\n".to_string());
     let analysis = Analysis::with_modules(&source, "app/main.vela", &sources);
     let diagnostics = analysis.diagnostics();
-    // numbers is used by geometry, which this file uses on its first line.
-    assert_eq!((diagnostics[0].line, diagnostics[0].col), (Some(1), Some(5)));
+    // numbers is included by geometry, which this file includes on its first line.
+    assert_eq!((diagnostics[0].line, diagnostics[0].col), (Some(1), Some(9)));
     assert_eq!(diagnostics[0].message, "app/numbers.vela:2:10: arithmetic requires numeric operands");
 }
 
@@ -184,7 +184,7 @@ fn hover_and_definitions_follow_names_into_modules() {
     assert_eq!(area.code, "task geometry.area(figure: geometry.Figure) -> float");
     assert_eq!(area.doc, "From module geometry (app/shapes/geometry.vela).");
     let module = analysis.hover(at(&source, "geometry.Square", 0)).unwrap();
-    assert_eq!((module.code.as_str(), module.doc.as_str()), ("use shapes/geometry", "A module this file uses: the file app/shapes/geometry.vela."));
+    assert_eq!((module.code.as_str(), module.doc.as_str()), ("include shapes/geometry", "A module this file includes: the file app/shapes/geometry.vela."));
     let point = analysis.hover(at(&source, "Point =", 0)).unwrap();
     assert_eq!(point.code, "shape geometry.Point\n    x: float\n    y: float\nfi");
     let measure = analysis.hover(at(&source, "measure(square)", 0)).unwrap();
@@ -219,11 +219,11 @@ fn completion_offers_what_modules_declare() {
     assert!(!members.iter().any(|name| name == "pi" || name == "square" || name == "x"), "{:?}", members);
     // Where a type is written, only its shapes and kinds.
     assert_eq!(labels(&main_with("bind p: geometry.@@ = corner")), ["Point", "Measure", "Figure"]);
-    // In a `use` line's parentheses, the names a module declares.
-    let listed = labels(&MAIN.replace("use palette (Color, describe)", "use palette (Color, @@)"));
+    // In an `include` line's parentheses, the names a module declares.
+    let listed = labels(&MAIN.replace("include palette (Color, describe)", "include palette (Color, @@)"));
     assert_eq!(listed, ["Color", "Red", "Blue", "describe"]);
 
-    // A value names the modules and what `use` brings in, not another module's
+    // A value names the modules and what `include` brings in, not another module's
     // names on their own.
     let values = labels(&main_with("show(@@)"));
     for name in ["geometry", "palette", "describe", "square", "corner"] {
@@ -240,15 +240,15 @@ fn completion_offers_what_modules_declare() {
     let cases = labels(&MAIN.replace("    case Circle radius\n        show(radius)\n", "    case @@\n"));
     assert!(cases.contains(&"Circle".to_string()) && !cases.iter().any(|c| c.contains('.')), "{:?}", cases);
 
-    // `use` is offered only before the file's items; `priv` before an item.
-    assert!(labels("@@").contains(&"use".to_string()));
+    // `include` is offered only before the file's items; `priv` before an item.
+    assert!(labels("@@").contains(&"include".to_string()));
     let after_items = labels("task a()\nfi\n@@");
-    assert!(after_items.contains(&"priv".to_string()) && !after_items.contains(&"use".to_string()), "{:?}", after_items);
+    assert!(after_items.contains(&"priv".to_string()) && !after_items.contains(&"include".to_string()), "{:?}", after_items);
 }
 
 #[test]
 fn every_request_works_on_every_prefix_of_a_program_and_its_modules() {
-    // Half-typed text in the file or in a module it uses, cut at every character.
+    // Half-typed text in the file or in a module it includes, cut at every character.
     let full = main_with("");
     let every = |source: &str, sources: &HashMap<String, String>| {
         let analysis = Analysis::with_modules(source, "app/main.vela", sources);

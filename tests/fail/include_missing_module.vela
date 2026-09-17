@@ -1,0 +1,5 @@
+# error: 2:9: can't find module 'modules/nowhere': there is no file 'modules/nowhere.vela'
+include modules/nowhere
+
+task main()
+fi

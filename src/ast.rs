@@ -11,7 +11,7 @@ pub type TypePlaces = std::collections::HashMap<(usize, usize, usize), Vec<(Stri
 
 /// A position in a source file (1-based line and column). `file` tells which
 /// file of a program: 0 is the file the program was compiled from, and each
-/// module it uses gets the next number (see `modules::SourceFile`).
+/// module it includes gets the next number (see `modules::SourceFile`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Span {
     pub line: usize,
@@ -559,11 +559,11 @@ pub struct Field {
     pub private: bool,
 }
 
-/// `use shapes/circle` or `use geometry (area, Point)`: another file of the
+/// `include shapes/circle` or `include geometry (area, Point)`: another file of the
 /// program, whose tasks, shapes, and kinds this file names as `circle.area`,
 /// and the names it also brings in unqualified.
 #[derive(Debug, Clone)]
-pub struct Use {
+pub struct Include {
     /// The path as written: names and `..`, the last one the module's name.
     pub path: Vec<String>,
     /// Position of the path's first part.
@@ -574,7 +574,7 @@ pub struct Use {
     pub names: Vec<Binding>,
 }
 
-impl Use {
+impl Include {
     /// The module's name, by which this file refers to it: the path's last part.
     pub fn name(&self) -> &str {
         self.path.last().map_or("", String::as_str)

@@ -1,5 +1,5 @@
 # error: 5:17: 'library.Card' can't be built outside its file, since its field 'pin' is private; a task of its module can build it
-use modules/library
+include modules/library
 
 task main()
     bind card = library.Card { owner: "ada", pin: 1 }

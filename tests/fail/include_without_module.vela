@@ -1,0 +1,5 @@
+# error: 2:8: expected a module after 'include', as in 'include geometry'
+include
+
+task main()
+fi

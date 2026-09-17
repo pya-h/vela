@@ -8,8 +8,8 @@
 //!   the C compiler). Its first line is `# error: LINE:COL: MESSAGE` (or
 //!   `# error: MESSAGE` for an error without a position, or
 //!   `# error: modules/other.vela:LINE:COL: MESSAGE` for one in a module the
-//!   program uses, with its path from the fixture's folder), and the compiler's
-//!   first line of output must be exactly that diagnostic. The modules
+//!   program includes, with its path from the fixture's folder), and the
+//!   compiler's first line of output must be exactly that diagnostic. The modules
 //!   fixtures use are in `tests/fail/modules/`.
 //! - `tests/trap/NAME.vela` must compile, with strict C, and then stop with a
 //!   runtime error: its first line is `# trap: MESSAGE`, the program's stderr

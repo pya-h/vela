@@ -1,5 +1,0 @@
-# error: 2:27: expected ')', got end of line
-use modules/library (greet
-
-task main()
-fi

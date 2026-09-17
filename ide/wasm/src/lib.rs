@@ -15,7 +15,7 @@
 //! with one result per query, in order, or `{"error": "…"}` if the request is
 //! malformed. Offsets are UTF-16, like JavaScript string indices. A request
 //! may also give the file's `path` and `modules`, the text of other files of
-//! its program by path; the `missing-modules` query lists the ones a `use`
+//! its program by path; the `missing-modules` query lists the ones an `include`
 //! needs that weren't given.
 
 use std::collections::HashMap;
@@ -33,7 +33,7 @@ enum Query {
     Definition { offset: usize },
     Complete { offset: usize },
     Hover { offset: usize },
-    /// The paths of the files the program uses that `modules` didn't give.
+    /// The paths of the files the program includes that `modules` didn't give.
     MissingModules,
     /// Keywords and block words; ignores the source.
     Language,

@@ -14,7 +14,7 @@ use vela::error::Error;
 use vela::modules::{self, SourceFile};
 
 /// Where the analyzed file is, and the text of the other files of its program
-/// that the editor has, by path (`/`-separated, as `use` paths resolve).
+/// that the editor has, by path (`/`-separated, as `include` paths resolve).
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Context<'a> {
     pub path: &'a str,
@@ -47,7 +47,7 @@ pub(crate) struct Checked {
     pub error: Option<Error>,
     /// The program's files, the analyzed file first, as far as they loaded.
     pub files: Vec<SourceFile>,
-    /// The files the program uses, directly or through others, that the
+    /// The files the program includes, directly or through others, that the
     /// editor didn't give.
     pub missing: Vec<String>,
     /// The type of each checked expression, by the position of the token that

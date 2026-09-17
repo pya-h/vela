@@ -1,5 +1,0 @@
-# error: 2:5: can't find module 'modules/nowhere': there is no file 'modules/nowhere.vela'
-use modules/nowhere
-
-task main()
-fi

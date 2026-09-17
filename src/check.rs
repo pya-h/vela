@@ -111,7 +111,7 @@ impl Checker {
     }
 
     /// The program's name for `name` written unqualified in the current module:
-    /// what `use` brings in under it, or else a name of the module itself.
+    /// what `include` brings in under it, or else a name of the module itself.
     fn in_module(&self, name: &str) -> String {
         if let Some(full) = self.modules.get(&self.current_module).and_then(|scope| scope.imported(name)) {
             return full.to_string();
@@ -131,22 +131,22 @@ impl Checker {
     }
 
     /// A hint for a name written in the current module that names nothing
-    /// here, but that a module it uses declares: `; it is in module 'm', as 'm.name'`.
+    /// here, but that a module it includes declares: `; it is in module 'm', as 'm.name'`.
     fn elsewhere(&self, name: &str) -> String {
         let Some(scope) = self.modules.get(&self.current_module) else { return String::new() };
         let declared = |full: &str| {
             !self.private.contains(full) && (self.tasks.contains_key(full) || self.shapes.contains_key(full) || self.kinds.contains_key(full) || self.variants.contains_key(full))
         };
-        match scope.uses.iter().find(|(module, _)| declared(&qualify(module, name))) {
-            Some((module, _)) => format!("; module '{0}' has one: write '{0}.{1}', or bring it in with 'use … ({1})'", module, name),
+        match scope.includes.iter().find(|(module, _)| declared(&qualify(module, name))) {
+            Some((module, _)) => format!("; module '{0}' has one: write '{0}.{1}', or bring it in with 'include … ({1})'", module, name),
             None => String::new(),
         }
     }
 
-    /// Where the current module uses the module called `name`, if it does.
+    /// Where the current module includes the module called `name`, if it does.
     fn module_used(&self, name: &str) -> Option<Span> {
         let scope = self.modules.get(&self.current_module)?;
-        scope.uses.iter().find(|(used, _)| used == name).map(|(_, at)| *at)
+        scope.includes.iter().find(|(included, _)| included == name).map(|(_, at)| *at)
     }
 
     /// Where `part` (see `TypePlaces`) is in the type written at `span`, or
@@ -154,7 +154,7 @@ impl Checker {
     fn place(&self, span: Span, part: &str) -> Span {
         let parts = self.type_places.get(&span.place_key());
         // A shape or kind of another module may be written without its module,
-        // as in its own file or after `use m (Name)`.
+        // as in its own file or after `include m (Name)`.
         let found = |part: &str| parts.and_then(|parts| parts.iter().find(|(name, _)| name == part)).map(|(_, at)| *at);
         found(part).or_else(|| found(unqualified(part))).unwrap_or(span)
     }
@@ -796,7 +796,7 @@ impl Checker {
         }
         // Nor may it take a module's name, which `name.x` would read as.
         if let Some(at) = self.module_used(name) {
-            return err(span, format!("'{}' is the name of a module this file uses, at {}:{}", name, at.line, at.col));
+            return err(span, format!("'{}' is the name of a module this file includes, at {}:{}", name, at.line, at.col));
         }
         if let Some(existing) = self.lookup(name) {
             let at = existing.span;

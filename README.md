@@ -11,8 +11,8 @@ several (`-> int, int` … `<- a / b, a % b`), received with `bind q, r = divmod
 never wraps: overflow and division by zero stop the program with a message saying where. Arrays (`[int; 4]`)
 are values held in place, and slices (`[int]@r`) view items in a region, made with `new [int]([0; n]) at r`;
 every index is checked, and `xs.len` is the count. A program can span
-several files: `use shapes/geometry` reads `shapes/geometry.vela`, named as `geometry.area(…)` (or brought in
-with `use shapes/geometry (area)`), and everything a file declares is public unless marked `priv`.
+several files: `include shapes/geometry` reads `shapes/geometry.vela`, named as `geometry.area(…)` (or brought in
+with `include shapes/geometry (area)`), and everything a file declares is public unless marked `priv`.
 
 ```
 task fib(n: int) -> int

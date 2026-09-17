@@ -319,7 +319,7 @@ fn modules_are_read_next_to_the_program() {
     // An error in a module is shown in that module's file.
     let dir = temp_dir("modules");
     std::fs::create_dir_all(dir.join("parts")).unwrap();
-    std::fs::write(dir.join("main.vela"), "use parts/lib\n\ntask main()\n    show(lib.twice(2))\nfi\n").unwrap();
+    std::fs::write(dir.join("main.vela"), "include parts/lib\n\ntask main()\n    show(lib.twice(2))\nfi\n").unwrap();
     std::fs::write(dir.join("parts/lib.vela"), "task twice(n: int) -> int\n    <- n * \"2\"\nfi\n").unwrap();
     let main = dir.join("main.vela");
     let out = vela(&[main.to_str().unwrap(), "--check"]);

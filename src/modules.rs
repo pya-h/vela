@@ -1,9 +1,10 @@
-//! Programs made of several files. A file uses another with `use geometry`,
-//! which loads `geometry.vela` from its folder, and names what it declares as
-//! `geometry.area`; `use geometry (area)` also brings `area` in unqualified.
+//! Programs made of several files. A file includes another with
+//! `include geometry`, which loads `geometry.vela` from its folder, and names
+//! what it declares as `geometry.area`; `include geometry (area)` also brings
+//! `area` in unqualified.
 //!
-//! Loading reads every file a program uses, from the file it is compiled from
-//! (the main file). Resolving then gives every task, shape, and kind one name
+//! Loading reads every file a program includes, from the file it is compiled
+//! from (the main file). Resolving then gives every task, shape, and kind one name
 //! for the whole program: its own name in the main file, and `module.Name` in
 //! any other (`geometry.Point`). Module names are unique in a program, so these
 //! names never collide, and they read as Vela does. Every name written in a
@@ -27,14 +28,14 @@ pub struct SourceFile {
     /// is relative to.
     pub path: PathBuf,
     pub source: String,
-    /// Where the `use` that loaded it is, in another file of the program; none
-    /// for the main file.
-    pub used_at: Option<Span>,
+    /// Where the `include` that loaded it is, in another file of the program;
+    /// none for the main file.
+    pub included_at: Option<Span>,
 }
 
 impl SourceFile {
     /// The position in the main file that leads to `span` in `files`: `span`
-    /// itself in the main file, and otherwise the `use` in the main file
+    /// itself in the main file, and otherwise the `include` in the main file
     /// through which its file was loaded.
     pub fn in_main_file(files: &[SourceFile], span: Span) -> Span {
         let mut at = span;
@@ -43,8 +44,8 @@ impl SourceFile {
             if at.file == 0 {
                 break;
             }
-            match files.get(at.file).and_then(|file| file.used_at) {
-                Some(used) => at = used,
+            match files.get(at.file).and_then(|file| file.included_at) {
+                Some(included) => at = included,
                 None => break,
             }
         }
@@ -52,7 +53,7 @@ impl SourceFile {
     }
 }
 
-/// The file `use` path `parts` names, from a file in `folder`: the parts joined
+/// The file `include` path `parts` names, from a file in `folder`: the parts joined
 /// with `.vela` added, and `.` and `..` settled.
 pub fn module_file(folder: &Path, parts: &[String]) -> PathBuf {
     let mut path = folder.to_path_buf();
@@ -75,16 +76,17 @@ pub struct ModuleScope {
     pub name: String,
     /// The file it is.
     pub file: usize,
-    /// The names of the modules it uses, each with the position of its `use`.
-    pub uses: Vec<Binding>,
-    /// The names `use m (a, b)` brings in unqualified: each as written, the
+    /// The names of the modules it includes, each with the position of its
+    /// `include`.
+    pub includes: Vec<Binding>,
+    /// The names `include m (a, b)` brings in unqualified: each as written, the
     /// name it stands for (`m.a`), and the position where it is brought in.
     pub imports: Vec<(String, String, Span)>,
 }
 
 impl ModuleScope {
     /// The name that `name`, written unqualified in this module, stands for, if
-    /// it is one brought in with `use`.
+    /// it is one brought in with `include`.
     pub fn imported(&self, name: &str) -> Option<&str> {
         self.imports.iter().find(|(written, _, _)| written == name).map(|(_, full, _)| full.as_str())
     }
@@ -101,12 +103,12 @@ pub struct Program {
     pub type_places: TypePlaces,
 }
 
-/// How many modules can use one another in a chain, like `MAX_NESTING` for
+/// How many modules can include one another in a chain, like `MAX_NESTING` for
 /// code: loading follows each chain recursively.
 const MAX_MODULE_DEPTH: usize = MAX_NESTING;
 
 /// Loads the program whose main file is `source`, read from `path`, with every
-/// module it uses, directly or through other modules, read by `loader`. The
+/// module it includes, directly or through other modules, read by `loader`. The
 /// files are returned even when loading fails, so an error in any of them can
 /// be shown with its source line.
 pub fn load(path: &Path, source: &str, loader: &mut Loader) -> (Vec<SourceFile>, Result<Program>) {
@@ -120,9 +122,9 @@ struct Module {
     /// Its name, and the prefix of its items' names; empty for the main file.
     name: String,
     file: usize,
-    uses: Vec<Use>,
-    /// For each of `uses`, the module it loads.
-    used: Vec<usize>,
+    includes: Vec<Include>,
+    /// For each of `includes`, the module it loads.
+    included: Vec<usize>,
     items: Vec<Item>,
 }
 
@@ -132,10 +134,11 @@ struct State {
     modules: Vec<Module>,
     /// Each loaded file's module, by its path with `.` and `..` settled.
     by_path: HashMap<PathBuf, usize>,
-    /// The modules being loaded, outermost first, to find a module that uses
-    /// itself through others.
+    /// The modules being loaded, outermost first, to find a module that
+    /// includes itself through others.
     loading: Vec<usize>,
-    /// The modules whose uses are all loaded, each after the modules it uses.
+    /// The modules whose own modules are all loaded, each after the modules it
+    /// includes.
     order: Vec<usize>,
     type_places: TypePlaces,
 }
@@ -159,49 +162,49 @@ impl State {
     }
 
     /// Lexes and parses `source` as the next file, the module called `name`,
-    /// loaded by the `use` at `used_at`.
-    fn parse(&mut self, name: String, path: &Path, source: String, used_at: Option<Span>) -> Result<usize> {
+    /// loaded by the `include` at `included_at`.
+    fn parse(&mut self, name: String, path: &Path, source: String, included_at: Option<Span>) -> Result<usize> {
         let file = self.files.len();
-        self.files.push(SourceFile { path: path.to_path_buf(), source, used_at });
+        self.files.push(SourceFile { path: path.to_path_buf(), source, included_at });
         let source = self.files.get(file).map_or("", |f| f.source.as_str());
         let (tokens, spans) = Lexer::for_file(source, file).tokenize()?;
         let mut parser = Parser::new(tokens, spans);
         let items = parser.parse_file()?;
         self.type_places.extend(parser.type_places());
-        let uses = parser.uses();
+        let includes = parser.includes();
         let index = self.modules.len();
         self.by_path.insert(normalize(path), index);
-        self.modules.push(Module { name, file, uses, used: Vec::new(), items });
+        self.modules.push(Module { name, file, includes, included: Vec::new(), items });
         Ok(index)
     }
 
-    /// Loads every module that module `index` uses, and theirs, in order.
+    /// Loads every module that module `index` includes, and theirs, in order.
     fn visit(&mut self, index: usize, loader: &mut Loader) -> Result<()> {
         if self.loading.len() >= MAX_MODULE_DEPTH {
-            let span = self.modules.get(index).and_then(|m| m.uses.first()).map_or_else(Span::default, |u| u.span);
-            return err(span, format!("modules use one another too deeply (more than {} in a chain)", MAX_MODULE_DEPTH));
+            let span = self.modules.get(index).and_then(|m| m.includes.first()).map_or_else(Span::default, |u| u.span);
+            return err(span, format!("modules include one another too deeply (more than {} in a chain)", MAX_MODULE_DEPTH));
         }
         self.loading.push(index);
-        let uses = self.modules.get(index).map(|m| m.uses.clone()).unwrap_or_default();
+        let includes = self.modules.get(index).map(|m| m.includes.clone()).unwrap_or_default();
         let folder = self.module_path(index).parent().map(Path::to_path_buf).unwrap_or_default();
-        let mut used = Vec::new();
-        for (i, module_use) in uses.iter().enumerate() {
-            let name = module_use.name();
-            check_module_name(module_use)?;
-            if let Some(earlier) = uses.iter().take(i).find(|earlier| earlier.name() == name) {
+        let mut targets = Vec::new();
+        for (i, include) in includes.iter().enumerate() {
+            let name = include.name();
+            check_module_name(include)?;
+            if let Some(earlier) = includes.iter().take(i).find(|earlier| earlier.name() == name) {
                 let at = earlier.name_span;
-                let message = if earlier.path == module_use.path {
-                    format!("this module is already used at {}:{}; a file uses each module once", at.line, at.col)
+                let message = if earlier.path == include.path {
+                    format!("this module is already included at {}:{}; a file includes each module once", at.line, at.col)
                 } else {
-                    format!("another module named '{}' is already used at {}:{}; a file can't use two modules with one name", name, at.line, at.col)
+                    format!("another module named '{}' is already included at {}:{}; a file can't include two modules with one name", name, at.line, at.col)
                 };
-                return err(module_use.name_span, message);
+                return err(include.name_span, message);
             }
-            let path = module_file(&folder, &module_use.path);
+            let path = module_file(&folder, &include.path);
             let target = match self.by_path.get(&path) {
                 Some(&target) => {
                     if let Some(start) = self.loading.iter().position(|&m| m == target) {
-                        return err(module_use.span, self.cycle(start, target));
+                        return err(include.span, self.cycle(start, target));
                     }
                     target
                 }
@@ -211,7 +214,7 @@ impl State {
                         let main_folder = self.module_path(0).parent().unwrap_or(Path::new(""));
                         let other = self.module_path(other);
                         return err(
-                            module_use.name_span,
+                            include.name_span,
                             format!(
                                 "another module of this program is also named '{}' ({}); modules need different names",
                                 name,
@@ -221,20 +224,20 @@ impl State {
                     }
                     let source = loader(&path).map_err(|error| {
                         let message = match error.kind() {
-                            io::ErrorKind::NotFound => format!("can't find module '{}': there is no file '{}.vela'", module_use.written(), module_use.written()),
-                            _ => format!("can't read module '{}' ({}): {}", module_use.written(), path.display(), error),
+                            io::ErrorKind::NotFound => format!("can't find module '{}': there is no file '{}.vela'", include.written(), include.written()),
+                            _ => format!("can't read module '{}' ({}): {}", include.written(), path.display(), error),
                         };
-                        Error::at(module_use.span, message)
+                        Error::at(include.span, message)
                     })?;
-                    let target = self.parse(name.to_string(), &path, source, Some(module_use.span))?;
+                    let target = self.parse(name.to_string(), &path, source, Some(include.span))?;
                     self.visit(target, loader)?;
                     target
                 }
             };
-            used.push(target);
+            targets.push(target);
         }
         if let Some(module) = self.modules.get_mut(index) {
-            module.used = used;
+            module.included = targets;
         }
         self.loading.pop();
         self.order.push(index);
@@ -245,7 +248,7 @@ impl State {
         self.modules.get(index).and_then(|m| self.files.get(m.file)).map_or(Path::new(""), |f| f.path.as_path())
     }
 
-    /// The message for a module that uses itself: the modules being loaded
+    /// The message for a module that includes itself: the modules being loaded
     /// from `start`, then `target` again.
     fn cycle(&self, start: usize, target: usize) -> String {
         let name = |index: usize| match self.modules.get(index) {
@@ -254,7 +257,7 @@ impl State {
             None => String::new(),
         };
         let chain: Vec<String> = self.loading.iter().skip(start).map(|&m| name(m)).chain([name(target)]).collect();
-        format!("modules can't use one another in a circle: {}", chain.join(" -> "))
+        format!("modules can't include one another in a circle: {}", chain.join(" -> "))
     }
 
     /// Resolves the names in module `index`, and returns what the checker needs
@@ -264,20 +267,20 @@ impl State {
         let own = tables.get(index).cloned().unwrap_or_default();
         let mut resolver = Resolver { own, aliases: HashMap::new(), imports: HashMap::new(), type_places: &self.type_places };
         let mut imports = Vec::new();
-        for (module_use, &target) in module.uses.iter().zip(&module.used) {
-            let name = module_use.name().to_string();
+        for (include, &target) in module.includes.iter().zip(&module.included) {
+            let name = include.name().to_string();
             if let Some(entry) = resolver.own.get(&name) {
                 return err(
-                    module_use.name_span,
+                    include.name_span,
                     format!("the module '{}' has the name of the {} defined at {}:{}; rename one of them", name, entry.what.word(), entry.span.line, entry.span.col),
                 );
             }
             let table = tables.get(target).cloned().unwrap_or_default();
             resolver.aliases.insert(name.clone(), table);
         }
-        for module_use in &module.uses {
-            let module_name = module_use.name();
-            for (written, at) in &module_use.names {
+        for include in &module.includes {
+            let module_name = include.name();
+            for (written, at) in &include.names {
                 let Some(entry) = resolver.aliases.get(module_name).and_then(|table| table.get(written)) else {
                     return err(*at, format!("module '{}' has no task, shape, kind, or variant named '{}'", module_name, written));
                 };
@@ -291,7 +294,7 @@ impl State {
                     return err(*at, format!("'{}' is already brought in at {}:{}", written, earlier.line, earlier.col));
                 }
                 if resolver.aliases.contains_key(written) {
-                    return err(*at, format!("'{}' is the name of a module this file uses", written));
+                    return err(*at, format!("'{}' is the name of a module this file includes", written));
                 }
                 let entry = entry.clone();
                 imports.push((written.clone(), entry.full.clone(), *at));
@@ -301,7 +304,7 @@ impl State {
         let scope = ModuleScope {
             name: module.name.clone(),
             file: module.file,
-            uses: module.uses.iter().map(|u| (u.name().to_string(), u.name_span)).collect(),
+            includes: module.includes.iter().map(|u| (u.name().to_string(), u.name_span)).collect(),
             imports,
         };
         let Some(module) = self.modules.get_mut(index) else { return Ok(scope) };
@@ -318,13 +321,13 @@ impl State {
 
 /// Rejects a module named like a builtin type or task, which its qualified
 /// names would read as.
-fn check_module_name(module_use: &Use) -> Result<()> {
-    let name = module_use.name();
+fn check_module_name(include: &Include) -> Result<()> {
+    let name = include.name();
     if Type::builtin(name).is_some() {
-        return err(module_use.name_span, format!("a module can't be named '{}', which is a builtin type", name));
+        return err(include.name_span, format!("a module can't be named '{}', which is a builtin type", name));
     }
     if BUILTIN_TASKS.contains(&name) {
-        return err(module_use.name_span, format!("a module can't be named '{}', which is a builtin task", name));
+        return err(include.name_span, format!("a module can't be named '{}', which is a builtin task", name));
     }
     Ok(())
 }
@@ -405,9 +408,9 @@ fn own_names(module: &Module) -> Names {
 /// Rewrites the names written in one module to their names in the program.
 struct Resolver<'a> {
     own: Names,
-    /// The declarations of each module this one uses, by the module's name.
+    /// The declarations of each module this one includes, by the module's name.
     aliases: HashMap<String, Names>,
-    /// The names brought in with `use m (a, b)`, with where each is brought in.
+    /// The names brought in with `include m (a, b)`, with where each is brought in.
     imports: HashMap<String, (Entry, Span)>,
     type_places: &'a TypePlaces,
 }
@@ -457,8 +460,8 @@ impl Resolver<'_> {
         self.own.get(name).map_or_else(|| name.to_string(), |entry| entry.full.clone())
     }
 
-    /// The declaration a written name stands for: `m.Name` in a used module,
-    /// or a name of this module or brought in with `use`. `None` for any other
+    /// The declaration a written name stands for: `m.Name` in an included module,
+    /// or a name of this module or brought in with `include`. `None` for any other
     /// name, which the checker reports (or which is a variable). `at` is where
     /// the name is written, for errors.
     fn lookup(&self, written: &str, at: Span) -> Result<Option<Entry>> {

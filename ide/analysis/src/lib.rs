@@ -1,6 +1,6 @@
 //! Language analysis for Vela Studio: highlighting, diagnostics, outline,
 //! go-to-definition, completion, and hover for one Vela source file, with the
-//! other files of its program (the modules it uses) that the editor gives.
+//! other files of its program (the modules it includes) that the editor gives.
 //!
 //! Everything is computed from the compiler itself: tokens come from
 //! `vela::lexer::highlight`, errors from `vela::driver::front_end`, and names
@@ -102,13 +102,13 @@ pub struct Analysis<'a> {
 }
 
 impl<'a> Analysis<'a> {
-    /// The analysis of a file on its own: a module it uses can't be read.
+    /// The analysis of a file on its own: a module it includes can't be read.
     pub fn new(source: &'a str) -> Self {
         Analysis::with_modules(source, "", &NO_SOURCES)
     }
 
     /// The analysis of the file at `path` (`/`-separated), whose program's
-    /// other files are in `sources`, by path. A file it uses that isn't there is
+    /// other files are in `sources`, by path. A file it includes that isn't there is
     /// reported by `missing_modules`, for the editor to fetch.
     pub fn with_modules(source: &'a str, path: &'a str, sources: &'a HashMap<String, String>) -> Self {
         let context = types::Context { path, sources };
@@ -117,7 +117,7 @@ impl<'a> Analysis<'a> {
         Analysis { source, context, index: LineIndex::new(source), scan, checked }
     }
 
-    /// The paths of the files the program uses, directly or through other
+    /// The paths of the files the program includes, directly or through other
     /// modules, that weren't given, in the order they are needed.
     pub fn missing_modules(&self) -> Vec<String> {
         self.checked.missing.clone()
@@ -151,7 +151,7 @@ impl<'a> Analysis<'a> {
                 severity: Severity::Error,
             }];
         };
-        // An error in another file is shown at the `use` that leads to it, with
+        // An error in another file is shown at the `include` that leads to it, with
         // that file's path and position.
         let files: &[SourceFile] = &self.checked.files;
         let span = SourceFile::in_main_file(files, found);
@@ -167,7 +167,7 @@ impl<'a> Analysis<'a> {
                 && t.range.end > start
                 && !matches!(t.kind, LexKind::Token(LexedToken::Newline) | LexKind::Token(LexedToken::Eof))
         });
-        // An error from another file underlines the whole module path of the `use`.
+        // An error from another file underlines the whole module path of the `include`.
         let path_end = (found.file > 0).then(|| {
             let lexed = &self.scan.lexed;
             let first = lexed.iter().position(|t| t.range.start == start)?;

@@ -35,8 +35,8 @@ pub enum Token {
     Maybe,
     Is,
     Fail,
-    /// `use`: makes another file's tasks, shapes, and kinds usable in this one.
-    Use,
+    /// `include`: makes another file's tasks, shapes, and kinds usable in this one.
+    Include,
     /// `priv`: keeps a task, shape, kind, or shape's field to its own file.
     Priv,
     Ident(String),
@@ -106,7 +106,7 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("maybe", Token::Maybe),
     ("is", Token::Is),
     ("fail", Token::Fail),
-    ("use", Token::Use),
+    ("include", Token::Include),
     ("priv", Token::Priv),
 ];
 

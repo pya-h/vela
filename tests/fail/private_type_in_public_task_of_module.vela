@@ -1,5 +1,5 @@
 # error: modules/leaks.vela:7:17: task 'inner' is public, but 'Inner' is private to its file, so other files couldn't name it; make it 'priv' too, or the type public
-use modules/leaks
+include modules/leaks
 
 task main()
 fi

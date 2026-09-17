@@ -1,0 +1,6 @@
+# error: 3:23: another module named 'library' is already included at 2:17; a file can't include two modules with one name
+include modules/library
+include modules/other/library
+
+task main()
+fi

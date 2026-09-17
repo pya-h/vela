@@ -1,0 +1,6 @@
+# error: modules/back_to_main.vela:2:9: modules can't include one another in a circle: include_main_file -> back_to_main -> include_main_file
+include modules/back_to_main
+
+task main()
+    show(back_to_main.back())
+fi

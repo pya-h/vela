@@ -1,5 +1,5 @@
 # error: 5:10: module 'library' has no task, shape, kind, or variant named 'gret'
-use modules/library
+include modules/library
 
 task main()
     show(library.gret())

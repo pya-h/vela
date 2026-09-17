@@ -32,7 +32,7 @@ pub struct Failure {
     /// The error on its own, such as `unknown variable 'x'`.
     pub message: String,
     /// The workspace path of the file the error is in: the file built, or a
-    /// module it uses.
+    /// module it includes.
     pub file: Option<String>,
     pub line: Option<usize>,
     pub col: Option<usize>,

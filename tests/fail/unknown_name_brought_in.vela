@@ -1,5 +1,5 @@
-# error: 2:22: module 'library' has no task, shape, kind, or variant named 'gret'
-use modules/library (gret)
+# error: 2:26: module 'library' has no task, shape, kind, or variant named 'gret'
+include modules/library (gret)
 
 task main()
 fi

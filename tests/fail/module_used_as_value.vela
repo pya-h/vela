@@ -1,5 +1,5 @@
 # error: 5:10: 'library' is a module, not a variable; name something in it, as in 'library.name'
-use modules/library
+include modules/library
 
 task main()
     show(library)

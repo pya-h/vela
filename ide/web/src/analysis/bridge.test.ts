@@ -33,7 +33,7 @@ describe("VelaAnalysis", () => {
   it("covers every non-space character of every example with a token", () => {
     for (const name of readdirSync(examples).filter((f) => f.endsWith(".vela"))) {
       const source = readFileSync(join(examples, name), "utf8");
-      // The modules an example uses are next to it, fetched as the editor does.
+      // The modules an example includes are next to it, fetched as the editor does.
       const context = { path: name, modules: {} as Record<string, string> };
       for (let missing = analysis.file(source, context).missing; missing.length > 0; missing = analysis.file(source, context).missing) {
         for (const path of missing) context.modules[path] = readFileSync(join(examples, path), "utf8");
@@ -50,8 +50,8 @@ describe("VelaAnalysis", () => {
     }
   });
 
-  it("analyzes a file with the modules it uses", () => {
-    const source = "use shapes/geometry\n\ntask main()\n    show(geometry.area(2))\nfi\n";
+  it("analyzes a file with the modules it includes", () => {
+    const source = "include shapes/geometry\n\ntask main()\n    show(geometry.area(2))\nfi\n";
     const geometry = "task area(side: int) -> int\n    <- side * side\nfi\n";
     const alone = analysis.file(source, { path: "app/main.vela", modules: {} });
     expect(alone.missing).toEqual(["app/shapes/geometry.vela"]);

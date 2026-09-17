@@ -261,7 +261,7 @@ export class Workbench {
     doc.state = update.state;
     if (update.docChanged) {
       this.documents.changed();
-      // Files that use this one are analyzed again.
+      // Files that include this one are analyzed again.
       this.analyzer.modules.changed(doc.path);
     }
     if (update.docChanged || update.selectionSet) {

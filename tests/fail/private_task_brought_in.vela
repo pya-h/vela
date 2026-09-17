@@ -1,5 +1,5 @@
-# error: 2:29: 'secret' is private to module 'library'
-use modules/library (greet, secret)
+# error: 2:33: 'secret' is private to module 'library'
+include modules/library (greet, secret)
 
 task main()
 fi

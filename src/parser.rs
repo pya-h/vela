@@ -19,19 +19,19 @@ pub struct Parser {
     type_places: TypePlaces,
     /// The parts of the type being parsed.
     type_parts: Vec<(String, Span)>,
-    /// The file's `use` lines, which come before its items.
-    uses: Vec<Use>,
+    /// The file's `include` lines, which come before its items.
+    includes: Vec<Include>,
 }
 
 impl Parser {
     /// `tokens` and `spans` are parallel, as produced by `Lexer::tokenize`.
     pub fn new(tokens: Vec<Token>, spans: Vec<Span>) -> Self {
-        Parser { tokens, spans, pos: 0, depth: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), uses: Vec::new() }
+        Parser { tokens, spans, pos: 0, depth: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new() }
     }
 
-    /// The `use` lines of the file parsed.
-    pub fn uses(&mut self) -> Vec<Use> {
-        std::mem::take(&mut self.uses)
+    /// The `include` lines of the file parsed.
+    pub fn includes(&mut self) -> Vec<Include> {
+        std::mem::take(&mut self.includes)
     }
 
     /// Where the parts of every type parsed so far are.
@@ -39,18 +39,18 @@ impl Parser {
         std::mem::take(&mut self.type_places)
     }
 
-    /// Parses a whole file: its `use` lines (see `uses`), then its items.
+    /// Parses a whole file: its `include` lines (see `includes`), then its items.
     pub fn parse_file(&mut self) -> Result<Vec<Item>> {
         let mut items = Vec::new();
         self.skip_newlines();
-        while self.check(Token::Use) {
-            let used = self.parse_use()?;
-            self.uses.push(used);
+        while self.check(Token::Include) {
+            let included = self.parse_include()?;
+            self.includes.push(included);
             self.skip_newlines();
         }
         while !self.is_at_end() {
-            if self.check(Token::Use) {
-                return Err(Error::at(self.peek_span(), "'use' lines go at the top of the file, before any task, shape, or kind"));
+            if self.check(Token::Include) {
+                return Err(Error::at(self.peek_span(), "'include' lines go at the top of the file, before any task, shape, or kind"));
             }
             items.push(self.parse_item()?);
             self.skip_newlines();
@@ -58,17 +58,17 @@ impl Parser {
         Ok(items)
     }
 
-    /// `use path` or `use path (name, …)`, where the path is names and `..`
+    /// `include path` or `include path (name, …)`, where the path is names and `..`
     /// separated by `/`.
-    fn parse_use(&mut self) -> Result<Use> {
-        self.advance(); // use
+    fn parse_include(&mut self) -> Result<Include> {
+        self.advance(); // include
         let span = self.peek_span();
         if matches!(self.peek(), Token::Newline | Token::Eof) {
-            return Err(Error::at(span, "expected a module after 'use', as in 'use geometry'"));
+            return Err(Error::at(span, "expected a module after 'include', as in 'include geometry'"));
         }
         if let Token::Text(text) = self.peek() {
             let written = text.strip_suffix(".vela").unwrap_or(text).to_string();
-            return Err(Error::at(span, format!("a module is named without quotes or '.vela', as in 'use {}'", written)));
+            return Err(Error::at(span, format!("a module is named without quotes or '.vela', as in 'include {}'", written)));
         }
         let mut path = Vec::new();
         let name_span = loop {
@@ -76,13 +76,13 @@ impl Parser {
             if self.match_token(Token::Range) {
                 path.push("..".to_string());
                 if !self.match_token(Token::Slash) {
-                    return Err(Error::at(self.peek_span(), "a module path goes on after '..' with '/', as in 'use ../geometry'"));
+                    return Err(Error::at(self.peek_span(), "a module path goes on after '..' with '/', as in 'include ../geometry'"));
                 }
                 continue;
             }
             path.push(self.expect_ident()?);
             if self.check(Token::Dot) {
-                return Err(Error::at(self.peek_span(), "a module path separates its folders with '/', as in 'use shapes/circle'"));
+                return Err(Error::at(self.peek_span(), "a module path separates its folders with '/', as in 'include shapes/circle'"));
             }
             if !self.match_token(Token::Slash) {
                 break part_span;
@@ -100,18 +100,18 @@ impl Parser {
             self.expect(Token::RParen)?;
         }
         if !matches!(self.peek(), Token::Newline | Token::Eof) {
-            return Err(self.unexpected("the end of the 'use' line"));
+            return Err(self.unexpected("the end of the 'include' line"));
         }
-        Ok(Use { path, span, name_span, names })
+        Ok(Include { path, span, name_span, names })
     }
 
-    /// Whether `name` is the name of a module this file uses.
+    /// Whether `name` is the name of a module this file includes.
     fn is_module(&self, name: &str) -> bool {
-        self.uses.iter().any(|used| used.name() == name)
+        self.includes.iter().any(|included| included.name() == name)
     }
 
     /// After a name at the cursor's previous token: `.member` when the name is a
-    /// module this file uses, giving `module.member`; otherwise the name alone.
+    /// module this file includes, giving `module.member`; otherwise the name alone.
     fn qualified(&mut self, name: String) -> Result<String> {
         if !self.is_module(&name) || !self.check(Token::Dot) {
             return Ok(name);
@@ -310,7 +310,7 @@ impl Parser {
     /// inside a block (so a block before it is missing its `fi`).
     fn at_item_start(&self) -> bool {
         match self.peek() {
-            Token::Task | Token::Shape | Token::Kind | Token::Use => true,
+            Token::Task | Token::Shape | Token::Kind | Token::Include => true,
             // `priv` also marks a shape's field.
             Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind)),
             _ => false,
@@ -351,6 +351,14 @@ impl Parser {
             Token::Shape => self.parse_shape().map(Item::Shape),
             Token::Kind => self.parse_kind().map(Item::Kind),
             Token::Fi => Err(Error::at(self.peek_span(), "expected 'task', 'shape', or 'kind', got 'fi'; is there an extra 'fi' above it?")),
+            // `use m` or `import m`, as other languages bring in a file.
+            Token::Ident(word)
+                if (word == "use" || word == "import")
+                    && self.at_line_start()
+                    && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::Range | Token::Text(_))) =>
+            {
+                Err(Error::at(self.peek_span(), format!("expected 'task', 'shape', or 'kind', got name '{}'; another file is brought in with 'include', as in 'include geometry'", word)))
+            }
             token if !matches!(token, Token::Send) || self.at_line_start() => {
                 let statement = matches!(
                     token,

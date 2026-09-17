@@ -1,5 +1,5 @@
-# Uses cycle_b, which uses this module again: a fail fixture.
-use cycle_b
+# Includes cycle_b, which includes this module again: a fail fixture.
+include cycle_b
 
 task a() -> int
     <- 1
