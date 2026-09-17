@@ -137,7 +137,7 @@ impl Checked {
                 self.decls.insert(pos(stmt.span), Type::Region);
             }
             StmtKind::Binding { names, init, .. } => {
-                for bound in names {
+                for bound in names.iter().flat_map(vela::ast::Bound::leaves) {
                     if let Some(ty) = &bound.ty {
                         self.decls.insert(pos(bound.span), ty.clone());
                     }
@@ -146,9 +146,7 @@ impl Checked {
             }
             StmtKind::Assign(targets, values) => {
                 for target in targets {
-                    if let Target::Place(place) = target {
-                        self.expr(place, kinds);
-                    }
+                    self.target(target, kinds);
                 }
                 values.iter().for_each(|value| self.expr(value, kinds));
             }
@@ -218,6 +216,14 @@ impl Checked {
         }
     }
 
+    fn target(&mut self, target: &Target, kinds: &Declarations) {
+        match target {
+            Target::Discard(_) => {}
+            Target::Place(place) => self.expr(place, kinds),
+            Target::Tuple(parts, _) => parts.iter().for_each(|part| self.target(part, kinds)),
+        }
+    }
+
     fn expr(&mut self, e: &Expr, kinds: &Declarations) {
         // A wrapped value keeps its own type at its position.
         if let ExprKind::Wrap(inner) = &e.kind {
@@ -232,7 +238,8 @@ impl Checked {
                     Some(Type::Named(shape, _)) => {
                         self.field_accesses.insert(pos(e.span), shape.clone());
                     }
-                    Some(Type::Array(..) | Type::Slice(..)) => {
+                    // `len`, and a tuple's items: members no declaration names.
+                    Some(Type::Array(..) | Type::Slice(..) | Type::Tuple(_)) => {
                         self.field_accesses.insert(pos(e.span), String::new());
                     }
                     _ => {}
@@ -246,7 +253,7 @@ impl Checked {
                 self.expr(a, kinds);
                 self.expr(b, kinds);
             }
-            ExprKind::Call(_, args) | ExprKind::Construct { args, .. } | ExprKind::Array(args) => {
+            ExprKind::Call(_, args) | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => {
                 for arg in args {
                     self.expr(arg, kinds);
                 }

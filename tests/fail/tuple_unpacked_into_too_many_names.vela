@@ -1,0 +1,4 @@
+# error: 3:20: this tuple has 2 items, but 3 names take them
+task main()
+    bind a, b, c = (1, 2)
+fi

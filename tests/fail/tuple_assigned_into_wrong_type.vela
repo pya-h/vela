@@ -1,0 +1,6 @@
+# error: 5:12: expected type float, got int
+task main()
+    hold x = 1.5
+    hold y = 0
+    x, y = (1, 2)
+fi

@@ -1,0 +1,7 @@
+# error: 2:15: a tuple's items never change, so it can't hold a slice ([int]@r), whose items can change
+task count(t: ([int]@r, int)) -> int
+    <- t.1
+fi
+
+task main()
+fi

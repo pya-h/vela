@@ -183,39 +183,76 @@ impl<'a> Knowledge<'a> {
     /// place decides which value it takes.
     fn initializer_type(&self, symbol: &Symbol, depth: usize) -> Option<Type> {
         let name = self.at_byte(symbol.name_range.start)?;
-        let (index, equals) = self.binding_place(name)?;
+        let (path, names, equals) = self.binding_place(name)?;
+        let (&index, inside) = path.split_first()?;
         let end = self.line_end(name).checked_sub(1)?;
         if end <= equals {
             return None;
         }
         let values = self.value_list(equals + 1, end);
-        let names = (self.line_start(name)..equals).filter(|&q| self.token(q) == Some(&Token::Comma)).count() + 1;
-        if names > 1 && values.len() == 1 {
-            // One call sends every value.
-            let Type::Results(types) = self.expression_type(end, depth + 1)? else { return None };
-            return types.into_iter().nth(index);
-        }
-        let &(first, last) = values.get(index)?;
-        if first > last {
-            return None;
-        }
-        // A plan B spanning lines (`{`, or `{ fail e`) gives the value it extracts.
-        let names_error = self.token(last.checked_sub(1)?) == Some(&Token::Fail)
-            && matches!(self.token(last), Some(Token::Ident(_) | Token::Underscore));
-        let brace = if names_error { last.checked_sub(2)? } else { last };
-        if self.token(brace) == Some(&Token::LBrace) {
-            return self.expression_type(brace.checked_sub(1)?, depth + 1)?.extracted().cloned();
-        }
-        self.span_type(first, last, depth + 1)
+        let value = if names > 1 && values.len() == 1 {
+            // One call sends every value, or one tuple gives its items.
+            match self.expression_type(end, depth + 1)? {
+                Type::Results(types) | Type::Tuple(types) => types.into_iter().nth(index)?,
+                _ => return None,
+            }
+        } else {
+            let &(first, last) = values.get(index)?;
+            if first > last {
+                return None;
+            }
+            // A plan B spanning lines (`{`, or `{ fail e`) gives the value it extracts.
+            let names_error = self.token(last.checked_sub(1)?) == Some(&Token::Fail)
+                && matches!(self.token(last), Some(Token::Ident(_) | Token::Underscore));
+            let brace = if names_error { last.checked_sub(2)? } else { last };
+            if self.token(brace) == Some(&Token::LBrace) {
+                self.expression_type(brace.checked_sub(1)?, depth + 1)?.extracted().cloned()?
+            } else {
+                self.span_type(first, last, depth + 1)?
+            }
+        };
+        // `bind a, (b, c) = …`: the item of each tuple the name is in.
+        inside.iter().try_fold(value, |value, &item| match value {
+            Type::Tuple(items) => items.into_iter().nth(item),
+            _ => None,
+        })
     }
 
     /// Where the `bind` or `hold` name at position `name` is in its list, and
     /// the position of the `=` that ends the names.
-    fn binding_place(&self, name: usize) -> Option<(usize, usize)> {
+    /// Where the `bind` or `hold` name at position `name` is: its place in the
+    /// list and, inside `( … )`, in each tuple it unpacks; how many names the
+    /// list has; and the position of the `=` that ends the names.
+    fn binding_place(&self, name: usize) -> Option<(Vec<usize>, usize, usize)> {
         let end = self.line_end(name);
         let equals = (name..end).find(|&q| self.token(q) == Some(&Token::Assign))?;
-        let index = (self.line_start(name)..name).filter(|&q| self.token(q) == Some(&Token::Comma)).count();
-        Some((index, equals))
+        let mut path = vec![0usize];
+        let mut names = 1;
+        for q in self.line_start(name)..equals {
+            match self.token(q) {
+                Some(Token::LParen) if q < name => path.push(0),
+                Some(Token::RParen) if path.len() > 1 && q < name => {
+                    path.pop();
+                }
+                Some(Token::Comma) if q < name => {
+                    if let Some(last) = path.last_mut() {
+                        *last += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+        // Names after `name` at the top level count too, and the parentheses after it don't matter.
+        let mut depth = 0usize;
+        for q in self.line_start(name)..equals {
+            match self.token(q) {
+                Some(Token::LParen) => depth += 1,
+                Some(Token::RParen) => depth = depth.saturating_sub(1),
+                Some(Token::Comma) if depth == 0 => names += 1,
+                _ => {}
+            }
+        }
+        Some((path, names, equals))
     }
 
     /// The first and last position of each value between `first` and `last`,
@@ -399,6 +436,11 @@ impl<'a> Knowledge<'a> {
         }
         let exact = |p: usize| self.start(p).and_then(|s| self.checked.exprs.get(&(s.line, s.col))).cloned();
         match self.token(q)? {
+            // `t.0`: an item of a tuple, which the checker records at its position.
+            Token::Int(n) if self.token_before(q) == Some(&Token::Dot) => exact(q).or_else(|| {
+                let Type::Tuple(items) = self.expression_type(q.checked_sub(2)?, depth + 1)? else { return None };
+                items.get(usize::try_from(*n).ok()?).cloned()
+            }),
             Token::Int(_) => Some(Type::Int),
             Token::Float(_) => Some(Type::Float),
             Token::Text(_) => Some(Type::Text(None)),
@@ -507,7 +549,12 @@ impl<'a> Knowledge<'a> {
                     });
                 }
                 let Some(callee) = open.checked_sub(1).and_then(|p| self.ident(p).map(|name| (p, name))) else {
-                    // A parenthesized expression.
+                    // A tuple, `(a, b)`, or a parenthesized expression.
+                    let values = self.value_list(open + 1, q.checked_sub(1)?);
+                    if values.len() >= 2 {
+                        let items: Option<Vec<Type>> = values.into_iter().map(|(first, last)| self.span_type(first, last, depth + 1)).collect();
+                        return exact(open).or_else(|| items.map(Type::Tuple));
+                    }
                     return self.span_type(open + 1, q.checked_sub(1)?, depth + 1);
                 };
                 let (p, word) = callee;
@@ -875,17 +922,29 @@ fn parse_type_within(text: &str, depth: usize) -> Option<Type> {
     parse_simple_type(text, depth)
 }
 
-/// The bytes where `needle` starts in `text` outside brackets.
+/// The bytes where `needle` starts in `text` outside brackets and parentheses.
 fn unbracketed<'t>(text: &'t str, needle: &'t str) -> impl Iterator<Item = usize> + 't {
     let mut brackets = 0usize;
     text.char_indices().filter_map(move |(i, c)| {
         match c {
-            '[' => brackets += 1,
-            ']' => brackets = brackets.saturating_sub(1),
+            '[' | '(' => brackets += 1,
+            ']' | ')' => brackets = brackets.saturating_sub(1),
             _ => {}
         }
-        (brackets == 0 && c != ']' && text.get(i..).is_some_and(|rest| rest.starts_with(needle))).then_some(i)
+        (brackets == 0 && c != ']' && c != ')' && text.get(i..).is_some_and(|rest| rest.starts_with(needle))).then_some(i)
     })
+}
+
+/// The parts of `text` between its commas outside brackets and parentheses.
+fn split_list(text: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut start = 0;
+    for at in unbracketed(text, ",") {
+        parts.extend(text.get(start..at));
+        start = at + 1;
+    }
+    parts.extend(text.get(start..));
+    parts
 }
 
 /// A type without `or`: after any `^` and `maybe`, a name or brackets, and
@@ -921,6 +980,11 @@ fn parse_prefixed_type(text: &str, depth: usize) -> Option<Type> {
     }
     let mut ty = match text.trim_end() {
         "region" => Type::Region,
+        // `(T, U)`.
+        parens if parens.starts_with('(') && parens.ends_with(')') => {
+            let items: Option<Vec<Type>> = split_list(parens.get(1..parens.len() - 1)?).into_iter().map(|item| parse_type_within(item, depth + 1)).collect();
+            Type::Tuple(items.filter(|items| items.len() >= 2)?)
+        }
         // `[T; n]` or `[T]`.
         brackets if brackets.starts_with('[') && brackets.ends_with(']') => {
             let inside = brackets.get(1..brackets.len() - 1)?;
@@ -957,7 +1021,7 @@ fn is_name(text: &str) -> bool {
 /// `(a: int, b: int) -> int, int`. A result may be named, `-> total: int`.
 pub(crate) fn return_type(detail: &str) -> Type {
     let Some((_, ret)) = detail.rsplit_once("->") else { return Type::Unit };
-    let written: Vec<&str> = ret.split(',').map(result_type).collect();
+    let written: Vec<&str> = split_list(ret).into_iter().map(result_type).collect();
     if let [only] = written.as_slice() {
         return parse_type(only).unwrap_or(Type::Unit);
     }
@@ -981,9 +1045,19 @@ pub(crate) fn parameter_names(detail: &str) -> Vec<String> {
 
 /// The parameters in a task's detail, with their types where they parse.
 pub(crate) fn parameters(detail: &str) -> Vec<(String, Option<Type>)> {
-    let inside = detail.strip_prefix('(').and_then(|rest| rest.split_once(')')).map_or("", |(params, _)| params);
-    inside
-        .split(',')
+    // The parameters end at the `)` closing the first `(`.
+    let mut depth = 0usize;
+    let close = detail.char_indices().find(|&(_, c)| {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        c == ')' && depth == 0
+    });
+    let inside = close.filter(|_| detail.starts_with('(')).and_then(|(at, _)| detail.get(1..at)).unwrap_or("");
+    split_list(inside)
+        .into_iter()
         .filter_map(|param| param.split_once(':').map(|(name, ty)| (name.trim().to_string(), parse_type(ty))))
         .filter(|(name, _)| !name.is_empty())
         .collect()

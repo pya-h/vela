@@ -212,6 +212,7 @@
         <li><code class="type">^T@r</code> — pointer to a T in region <code>r</code>; it always points to something (see <a href="#regions">Memory and Regions</a>)</li>
         <li><code class="type">[T; n]</code> — an array: <code>n</code> values of type T, held in place (see <a href="#arrays">Arrays</a>)</li>
         <li><code class="type">[T]@r</code> — a slice: a view of values of type T in region <code>r</code> (see <a href="#slices">Slices</a>)</li>
+        <li><code class="type">(T, U)</code> — a tuple: two or more values held together, whose items never change (see <a href="#tuples">Tuples</a>)</li>
         <li><code class="type">maybe T</code> — a T, or <code>none</code> (see <a href="#maybe">Maybe and Errors</a>)</li>
         <li><code class="type">T or E</code> — a T, or an error E, sent by a task that can fail</li>
         <li><code class="type">region</code> — the type of a task's region parameter, <code>r: region</code></li>
@@ -258,6 +259,7 @@ true false none  fi   maybe is     fail include priv</pre>
         <tr><td><code>{v}</code>, <code>_</code></td><td>in a <code>case</code> or <code>is</code>: the value inside, and anything (or a value left unnamed); <code>_</code> also drops a result</td></tr>
         <tr><td><code>a.x</code></td><td>a field of a shape value</td></tr>
         <tr><td><code>[T; n]</code>, <code>[T]@r</code></td><td>an array type; a slice type (see <a href="#arrays">Arrays</a> and <a href="#slices">Slices</a>)</td></tr>
+        <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v; n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
         <tr><td><code>xs.add(v)</code>, <code>xs.add(i, v)</code>, <code>xs.del(i)</code>, <code>xs.del()</code></td><td>add a value to a slice, last or before item <code>i</code>; take item <code>i</code>, or the last, out of it and give it</td></tr>
@@ -339,9 +341,10 @@ true false none  fi   maybe is     fail include priv</pre>
     show(whole)                  <span class="comment"># 2</span>
 <span class="keyword">fi</span></pre>
       <p>
-        The results are separate values, not one value: <code>show(divmod(17, 5))</code> and
+        The results are separate values, not one value, and not a tuple: <code>show(divmod(17, 5))</code> and
         <code>bind pair = divmod(17, 5)</code> are errors that say <em>'divmod' sends 2 values; receive them with
-        'bind a, b = …'</em>. A task with several results can only be called as the whole right side of a list,
+        'bind a, b = …'</em>. A task that sends one tuple says so in its header, <code>-&gt; (int, int)</code> (see
+        <a href="#tuples">Tuples</a>). A task with several results can only be called as the whole right side of a list,
         which includes a <code>&lt;-</code> that sends them on:
       </p>
       <pre><span class="keyword">task</span> halves(n: int) -&gt; int, int
@@ -697,6 +700,59 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
           it is.</li>
         <li><strong>Not yet.</strong> Arrays can't be compared with <code>==</code> or shown whole (show their items one at
           a time), and a part of an array is a slice, which points into a region.</li>
+      </ul>
+
+      <h3 id="tuples">Tuples</h3>
+      <p>
+        A tuple holds two or more values together, each of its own type: <code>(text, int)</code>, written as a value
+        <code>("Ada", 36)</code>. <code>t.0</code>, <code>t.1</code>, … read its items by position, from 0. A tuple is a
+        value, like a shape, and its items never change: a <code>hold</code> tuple takes a whole new tuple, but no item can
+        be assigned. Names take a tuple apart, as a list of names takes a task's several results.
+      </p>
+      <pre><span class="keyword">task</span> divide(a: int, b: int) -&gt; (int, int)
+    <span class="keyword">&lt;-</span> (a / b, a % b)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">bind</span> pair: (text, int) = (<span class="string">"Ada"</span>, <span class="number">36</span>)
+    show(pair.<span class="number">0</span>)                         <span class="comment"># Ada</span>
+    show(pair.<span class="number">1</span>)                         <span class="comment"># 36</span>
+    <span class="keyword">hold</span> point = (<span class="number">1</span>, (<span class="number">2.5</span>, <span class="string">"deep"</span>))      <span class="comment"># (int, (float, text))</span>
+    show(point.<span class="number">1.1</span>)                      <span class="comment"># deep</span>
+    point = (<span class="number">2</span>, (<span class="number">3.5</span>, <span class="string">"other"</span>))          <span class="comment"># a hold tuple takes a whole new tuple</span>
+    <span class="keyword">bind</span> q, r = divide(<span class="number">17</span>, <span class="number">5</span>)            <span class="comment"># unpacks the tuple: 3 and 2</span>
+    <span class="keyword">bind</span> (whole, left) = divide(<span class="number">9</span>, <span class="number">4</span>)    <span class="comment"># the same, in parentheses</span>
+    <span class="keyword">bind</span> first, (half, label) = point    <span class="comment"># a nested part, in parentheses</span>
+    <span class="keyword">hold</span> x = <span class="number">0</span>
+    <span class="keyword">hold</span> y = <span class="number">0</span>
+    x, y = divide(<span class="number">20</span>, <span class="number">6</span>)                 <span class="comment"># into hold variables of the items&#x27; types</span>
+    (y, x) = (x, y)                      <span class="comment"># swapped</span>
+    point.<span class="number">0</span> = <span class="number">5</span>                          <span class="comment"># error: a tuple&#x27;s items never change; …</span>
+    show(pair == (<span class="string">"Ada"</span>, <span class="number">36</span>))            <span class="comment"># true</span>
+<span class="keyword">fi</span></pre>
+      <ul>
+        <li><strong>Items.</strong> Only values that can't change: numbers, bools, text, other tuples, <code>maybe</code>
+          and <code>T or E</code> of those, and shapes and kinds whose fields are all such. A pointer, a slice, or an array
+          (or a shape holding one) is an error, since what it holds could change. <code>(x)</code> is only parentheses, so a
+          tuple has at least two items, and a tuple is written on one line.</li>
+        <li><strong>Taking apart.</strong> <code>bind a, b = t</code> and <code>bind (a, b) = t</code> declare copies of the
+          items; a nested part is written in parentheses (<code>bind a, (b, c) = t</code>), a name may have a type
+          (<code>bind n: int, (f: float, s: text) = t</code>), and <code>_</code> drops an item. Changing <code>a</code>
+          later leaves the tuple as it was. An assignment (<code>x, y = t</code>, <code>(x, y) = t</code>) writes into
+          existing <code>hold</code> variables, whose types must be the items'.</li>
+        <li><strong>Several results are not a tuple.</strong> <code>-&gt; int, int</code> sends two values, and
+          <code>-&gt; (int, int)</code> one tuple: <code>bind qr = divmod(17, 5)</code> stays an error for the first, and
+          <code>&lt;- a, b</code> is an error for the second, which says to write <code>&lt;- (a, b)</code>. Values
+          received from several results can be put in a tuple: <code>bind qr = (q, r)</code>.</li>
+        <li><strong>Regions.</strong> An item of text names its own region, <code>(int, text@r)</code>, or the tuple names
+          one for all of them, <code>(int, text)@r</code>; writing a different one on both is an error. Two items may be
+          text of two regions, <code>(text@r, text@s)</code>. In a field, a slice, or after <code>new</code>, items name
+          none: they are in that value's region.</li>
+        <li><strong>Comparing.</strong> <code>==</code> and <code>!=</code> compare item by item (text by its characters)
+          when every item is a number, a bool, text, or a tuple of them. <code>show</code> takes one item at a time.</li>
+        <li><strong>Where they go.</strong> Anywhere a type does: parameters, results, fields, payloads, arrays and slices
+          (<code>[(text, int)]@r</code>, whose items are replaced whole, <code>xs[i] = ("Cy", 80)</code>), <code>maybe</code>,
+          and after <code>new</code>. Patterns that take a tuple apart in <code>is</code> and <code>case</code> come next.</li>
       </ul>
 
       <h3 id="names">Names</h3>
@@ -1441,7 +1497,8 @@ show(area(square))             <span class="comment"># error: unknown task 'area
         <li>Input is read a line of text at a time with <code>scan</code>; there are no conversions from text to numbers
           yet, and no files.</li>
         <li>Arrays and slices can't be compared or shown whole, and an array's count is known before the program runs
-          (see <a href="#arrays">Arrays</a>).</li>
+          (see <a href="#arrays">Arrays</a>). Tuples can't be shown whole, and <code>is</code> and <code>case</code>
+          can't take them apart yet (see <a href="#tuples">Tuples</a>).</li>
         <li>There are no packages to share modules between programs (see <a href="#modules">Modules</a>).</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which
@@ -1452,7 +1509,7 @@ show(area(square))             <span class="comment"># error: unknown task 'area
         <li>Statements aren't yet required to end at a line break (<code>show(1) show(2)</code> on one line is
           accepted).</li>
         <li>Code may nest at most 100 levels deep (parentheses, operators in a row, blocks inside blocks; a
-          <code>new</code> and an array literal count as two, and a plan B as three); deeper code is an error rather than a crash.</li>
+          <code>new</code>, an array literal, and a tuple count as two, and a plan B as three); deeper code is an error rather than a crash.</li>
       </ul>
     </section>
 

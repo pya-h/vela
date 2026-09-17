@@ -1,0 +1,6 @@
+# error: 5:15: a tuple's items never change, so it can't hold a pointer (^int@r), whose value can change
+task main()
+    region r
+    bind p = new int(1) at r
+    bind t = (p, 2)
+fi

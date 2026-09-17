@@ -185,6 +185,22 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
             items
         };
         match &base {
+            // A tuple's items, by position.
+            Some(Type::Tuple(items)) => {
+                let items = items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, item)| CompletionItem {
+                        label: i.to_string(),
+                        kind: CompletionKind::Field,
+                        detail: item.to_string(),
+                        apply: None,
+                        snippet: None,
+                        boost: LOCAL,
+                    })
+                    .collect();
+                return (with_copy(items, false), word_start, byte);
+            }
             Some(Type::Array(..)) => return (with_copy(members(false, false), false), word_start, byte),
             Some(Type::Slice(..)) => return (with_copy(members(true, false), false), word_start, byte),
             Some(Type::Ptr(inner, _)) if matches!(**inner, Type::Array(..) | Type::Slice(..)) => {

@@ -67,6 +67,11 @@ pub enum Type {
     /// to the first and how many there are. Like a pointer, it names its region
     /// everywhere but in a field and after `new`.
     Slice(Box<Type>, Option<String>),
+    /// `(int, text)`: two or more values held together, read as `t.0`, `t.1`.
+    /// Its items never change, so they are only values that can't change
+    /// (no pointers, slices, or arrays). Each item has its own regions:
+    /// `(int, text)@r` is written for `(int, text@r)`.
+    Tuple(Vec<Type>),
     /// `-> int, int`: the several values a task sends, always two or more.
     /// Only a task's return type, and a call of such a task, ever have this
     /// type: the values are separate, so no variable, field, or operand holds
@@ -168,6 +173,16 @@ impl Type {
                 write!(f, "fail ")?;
                 error.write(f, outer)
             }
+            Type::Tuple(items) => {
+                write!(f, "(")?;
+                for (i, ty) in items.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    ty.write(f, outer)?;
+                }
+                write!(f, ")")
+            }
             Type::Results(types) => {
                 for (i, ty) in types.iter().enumerate() {
                     if i > 0 {
@@ -222,6 +237,7 @@ impl Type {
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
             Type::Fail(error) => Type::Fail(boxed(error, f)),
             Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_regions(&mut *f)).collect()),
+            Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| ty.map_regions(&mut *f)).collect()),
             other => other.clone(),
         }
     }
@@ -239,6 +255,7 @@ impl Type {
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
             Type::Fail(error) => Type::Fail(boxed(error)),
             Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_names(f)).collect()),
+            Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| ty.map_names(f)).collect()),
             other => other.clone(),
         }
     }
@@ -267,6 +284,7 @@ impl Type {
             Type::Or(value, error) => Type::Or(Box::new(value.map_regions_of_names(f)), Box::new(error.map_regions_of_names(f))),
             Type::Fail(error) => Type::Fail(Box::new(error.map_regions_of_names(f))),
             Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_regions_of_names(&mut *f)).collect()),
+            Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| ty.map_regions_of_names(&mut *f)).collect()),
             other => other.clone(),
         }
     }
@@ -290,7 +308,7 @@ impl Type {
                 value.collect_regions(regions);
                 error.collect_regions(regions);
             }
-            Type::Results(types) => types.iter().for_each(|ty| ty.collect_regions(regions)),
+            Type::Results(types) | Type::Tuple(types) => types.iter().for_each(|ty| ty.collect_regions(regions)),
             _ => {}
         }
     }
@@ -379,6 +397,8 @@ pub enum ExprKind {
     Index(Box<Expr>, Box<Expr>),
     /// `[a, b, c]`: an array of the values.
     Array(Vec<Expr>),
+    /// `(a, b)`: a tuple of the values, two or more.
+    Tuple(Vec<Expr>),
     /// `[value; count]`: an array of `count` copies of the value, computed
     /// once; in `new [T](…) at r`, a slice of them, whose count may be known
     /// only as the program runs.
@@ -540,6 +560,20 @@ pub struct Bound {
     pub span: Span,
     pub ty: Option<Type>,
     pub ty_span: Option<Span>,
+    /// For `(a, b)`, which unpacks a tuple: its names, and an empty `name`;
+    /// `span` is the position of `(` and `ty` the tuple's type once checked.
+    /// Empty for a name.
+    pub parts: Vec<Bound>,
+}
+
+impl Bound {
+    /// Every name this binds, in order, through the parts of the tuples it unpacks.
+    pub fn leaves(&self) -> Vec<&Bound> {
+        if self.parts.is_empty() {
+            return vec![self];
+        }
+        self.parts.iter().flat_map(Bound::leaves).collect()
+    }
 }
 
 /// One place an assignment writes to.
@@ -549,12 +583,14 @@ pub enum Target {
     Discard(Span),
     /// A variable, a field, or what a pointer points to.
     Place(Expr),
+    /// `(a, b)`: the places a tuple's items go, at the position of `(`.
+    Tuple(Vec<Target>, Span),
 }
 
 impl Target {
     pub fn span(&self) -> Span {
         match self {
-            Target::Discard(span) => *span,
+            Target::Discard(span) | Target::Tuple(_, span) => *span,
             Target::Place(expr) => expr.span,
         }
     }

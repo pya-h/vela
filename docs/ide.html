@@ -360,7 +360,7 @@ Press Ctrl+C to stop.</pre>
           <h4>Completion</h4>
           <p>Only what fits: types after <code>:</code>, <code>-&gt;</code>, <code>^</code>, <code>maybe</code>,
             <code>new</code>, a type's <code>[</code> and <code>or</code>, and each comma of a header's results (<code>-&gt; int, int</code>), and nothing for an array type's count; variables declared above the cursor; fields after
-            <code>.</code>, and <code>len</code> after an array's or slice's (and <code>add</code> and <code>del</code> after a slice's), and
+            <code>.</code>, a tuple's items by position after its <code>.</code> (<code>0</code>, <code>1</code>, each with its type), and <code>len</code> after an array's or slice's (and <code>add</code> and <code>del</code> after a slice's), and
             <code>copy</code> after a value holding text, a slice, or a pointer; the cases still missing after <code>case</code> and
             <code>case Kind.</code>, including <code>{value}</code>,
             <code>none</code>, and <code>fail e</code>; the patterns that fit after <code>is</code>; the regions
@@ -370,7 +370,8 @@ Press Ctrl+C to stop.</pre>
             (<code>push(nodes, list)</code> gives a <code>^Node@nodes</code>), even while the file has an error. After
             a finished value, only the words that can continue it: <code>is</code>, <code>in</code>, <code>at</code> (after a
             <code>new</code>'s, <code>scan</code>'s, or <code>copy()</code>'s value), <code>or</code>, and <code>and</code>. Nothing is offered where a name is being declared, including the names after the commas
-            of <code>bind q, r = …</code>, and each of those names hovers with the type of the value in its place.
+            of <code>bind q, r = …</code> and inside the parentheses of <code>bind a, (b, c) = …</code>, and each of those names
+            hovers with the type of the value in its place (a tuple's item, for a name that takes one apart).
             A task's named results (<code>-&gt; total: int</code>) are offered at the start of a line as
             <code>total &lt;- </code>, and hover as <code>result total: int</code>. After <code>match</code>, only <code>case</code>; <code>new</code> only where a region can
             be allocated in; <code>include</code> only above a file's tasks, shapes, and kinds; and <code>priv</code> before
@@ -386,7 +387,7 @@ Press Ctrl+C to stop.</pre>
         <div class="card">
           <h4>Hover and go to definition</h4>
           <p>Hover a name to see its type or signature (a region says whether the task can allocate in it, and a
-            type with <code>@_</code> explains it), or <code>maybe</code>, <code>is</code>, <code>fail</code>,
+            type with <code>@_</code> explains it), a tuple's item (<code>t.1</code>) to see its type, or <code>maybe</code>, <code>is</code>, <code>fail</code>,
             <code>none</code>, <code>_</code>, <code>region</code>, <code>new</code>, and <code>in</code> for a reminder
             of what they do. <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it
             is declared (a variant named alone in a <code>case</code> is the matched value's kind's, even another module's); <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> finds a declaration by name.</p>

@@ -25,6 +25,14 @@ struct VarInfo {
     result: bool,
 }
 
+/// What a place an assignment writes to takes: nothing (`_`), a value of a
+/// type, or the items of a tuple, `( … )` at a position.
+enum TargetType {
+    Discard,
+    Place(Type),
+    Tuple(Vec<TargetType>, Span),
+}
+
 /// Where a type is written, which decides the regions it may name.
 #[derive(Clone, Copy, PartialEq)]
 enum TypePlace {
@@ -56,6 +64,10 @@ pub struct Checker {
     /// when they name one (`Person@r`) and lasts as long as the program when
     /// they don't (`Person`).
     takes_region: HashSet<String>,
+    /// The shapes and kinds holding something whose value can change: a
+    /// pointer, a slice, or an array, directly or in other shapes and kinds by
+    /// value. A tuple can't hold them.
+    changeable: HashSet<String>,
     /// Every variant, by its name in the program: its tag, qualified with its
     /// kind's module outside the main file (`geometry.Circle`). Tags are unique
     /// across the kinds of a module.
@@ -213,6 +225,7 @@ impl Checker {
         self.collect_declarations(items)?;
         self.regional = regional_types(items);
         self.takes_region = textual_types(items).union(&self.regional).cloned().collect();
+        self.changeable = types_holding(items, holds_changeable);
         self.check_declarations(items)?;
         for item in items.iter_mut() {
             if let Item::Task(t) = item {
@@ -597,6 +610,7 @@ impl Checker {
                 Ok(ty.clone())
             }
             Type::Maybe(inner) => Ok(Type::Maybe(Box::new(self.resolve_regions(inner, span, place, inside)?))),
+            Type::Tuple(items) => Ok(Type::Tuple(items.iter().map(|item| self.resolve_regions(item, span, place, inside)).collect::<Result<_>>()?)),
             Type::Or(value, error) => Ok(Type::Or(
                 Box::new(self.resolve_regions(value, span, place, inside)?),
                 Box::new(self.resolve_regions(error, span, place, inside)?),
@@ -669,6 +683,15 @@ impl Checker {
                 }
                 Ok(())
             }
+            Type::Tuple(items) => {
+                for item in items {
+                    self.check_type(item, span)?;
+                    if let Some(what) = self.changeable_item(item) {
+                        return err(span, format!("a tuple's items never change, so it can't hold {}", what));
+                    }
+                }
+                Ok(())
+            }
             Type::Named(name, _) if !self.sees(name) || (!self.shapes.contains_key(name) && !self.kinds.contains_key(name)) => {
                 match self.variants.get(name).filter(|_| self.sees(name)) {
                     Some(info) => err(
@@ -679,6 +702,25 @@ impl Checker {
                 }
             }
             _ => Ok(()),
+        }
+    }
+
+    /// What a tuple's item of type `ty` holds whose value can change, for a
+    /// message: a pointer, a slice, an array, or a shape or kind holding one.
+    /// `None` when nothing in it can change.
+    fn changeable_item(&self, ty: &Type) -> Option<String> {
+        match ty {
+            Type::Ptr(..) => Some(format!("a pointer ({}), whose value can change", ty)),
+            Type::Slice(..) => Some(format!("a slice ({}), whose items can change", ty)),
+            Type::Array(..) => Some(format!("an array ({})", ty)),
+            Type::Unit => Some("unit, which has no value".to_string()),
+            Type::Named(name, _) if self.changeable.contains(name) => {
+                Some(format!("'{}', which holds a pointer, a slice, or an array", unqualified(name)))
+            }
+            Type::Maybe(inner) => self.changeable_item(inner),
+            Type::Or(value, error) => self.changeable_item(value).filter(|_| **value != Type::Unit).or_else(|| self.changeable_item(error)),
+            Type::Tuple(items) => items.iter().find_map(|item| self.changeable_item(item)),
+            _ => None,
         }
     }
 
@@ -1050,11 +1092,9 @@ impl Checker {
             }
             StmtKind::Binding { names, mutable, init } => {
                 for bound in names.iter_mut() {
-                    if let Some(annotated) = &mut bound.ty {
-                        *annotated = self.resolve_type(annotated, bound.ty_span.unwrap_or(bound.span), TypePlace::Body)?;
-                    }
+                    self.resolve_bound_types(bound)?;
                 }
-                let given = self.value_types(init, names.len(), span)?;
+                let given = self.value_types(init, names.len(), span, true)?;
                 // A single call sending several values gives them all, and
                 // those values are taken as they are.
                 let forwarded = init.len() < names.len();
@@ -1062,8 +1102,13 @@ impl Checker {
                 let mut declared = Vec::new();
                 for i in 0..names.len() {
                     let Some(actual) = given.get(i).cloned() else { continue };
-                    let Some((name, at, annotated)) = names.get(i).map(|b| (b.name.clone(), b.span, b.ty.clone())) else { continue };
                     let value_span = if forwarded { list_span } else { init.get(i).map_or(span, |value| value.span) };
+                    // `(a, b)`: the names of a tuple's items.
+                    if let Some(group) = names.get_mut(i).filter(|bound| !bound.parts.is_empty()) {
+                        self.unpack_bound(group, &actual, value_span, &mut declared)?;
+                        continue;
+                    }
+                    let Some((name, at, annotated)) = names.get(i).map(|b| (b.name.clone(), b.span, b.ty.clone())) else { continue };
                     let ty = match annotated {
                         Some(annotated) => {
                             match init.get_mut(i).filter(|_| !forwarded) {
@@ -1098,26 +1143,22 @@ impl Checker {
                 let mut places = Vec::new();
                 let mut assigned: HashMap<String, Span> = HashMap::new();
                 for target in targets.iter_mut() {
-                    places.push(match target {
-                        Target::Discard(_) => None,
-                        Target::Place(place) => {
-                            // Each place takes one value, so a variable
-                            // assigned twice would quietly keep the last.
-                            if let ExprKind::Var(name) = &place.kind
-                                && let Some(at) = assigned.insert(name.clone(), place.span)
-                            {
-                                return err(place.span, format!("'{}' is already assigned at {}:{}", name, at.line, at.col));
-                            }
-                            Some(self.check_assign_target(place)?)
-                        }
-                    });
+                    places.push(self.check_target(target, &mut assigned)?);
                 }
-                let given = self.value_types(values, targets.len(), span)?;
+                let given = self.value_types(values, targets.len(), span, true)?;
                 let forwarded = values.len() < targets.len();
                 let list_span = values.first().map_or(span, |value| value.span);
                 for (i, place) in places.into_iter().enumerate() {
                     let Some(actual) = given.get(i).cloned() else { continue };
                     let value_span = if forwarded { list_span } else { values.get(i).map_or(span, |value| value.span) };
+                    let place = match place {
+                        TargetType::Tuple(parts, at) => {
+                            self.unpack_target(&parts, at, &actual, value_span)?;
+                            continue;
+                        }
+                        TargetType::Discard => None,
+                        TargetType::Place(ty) => Some(ty),
+                    };
                     let Some(expected) = place else {
                         if matches!(actual, Type::Or(..)) {
                             return err(value_span, dropped_error(&actual));
@@ -1220,7 +1261,13 @@ impl Checker {
                     return self.coerce(e, &ret);
                 }
                 let expected = expected.to_vec();
-                let given = self.value_types(values, expected.len(), span)?;
+                let given = self.value_types(values, expected.len(), span, false).map_err(|mut error| {
+                    // `-> (int, int)` sends one tuple, and `-> int, int` two values.
+                    if let [Type::Tuple(_)] = expected.as_slice() {
+                        error.message.push_str("; this task sends one tuple, so write its values in parentheses, as in '<- (a, b)'");
+                    }
+                    error
+                })?;
                 let forwarded = values.len() < expected.len();
                 for (i, want) in expected.iter().enumerate() {
                     let Some(actual) = given.get(i).cloned() else { continue };
@@ -1341,6 +1388,9 @@ impl Checker {
                 let base_ty = self.check_field_base(base)?;
                 let ty = self.field_type(&base_ty, field, span)?;
                 match base_ty {
+                    Type::Tuple(_) => {
+                        return err(span, "a tuple's items never change; give the whole tuple a new value instead, as in 't = (1, 2)'");
+                    }
                     Type::Array(..) => return err(span, "'len' can't be assigned: an array's length is part of its type"),
                     Type::Slice(..) => return err(span, "'len' can't be assigned: a slice's length changes with 'xs.add(…)' and 'xs.del(…)', or by slicing it, as in 'xs = xs[0..2]'"),
                     _ => {}
@@ -1507,12 +1557,22 @@ impl Checker {
     /// an assignment — and returns the type of each. A single call that sends
     /// `wanted` values gives them all; otherwise every value gives its own, and
     /// there must be one per name.
-    fn value_types(&mut self, values: &mut [Expr], wanted: usize, span: Span) -> Result<Vec<Type>> {
+    fn value_types(&mut self, values: &mut [Expr], wanted: usize, span: Span, unpacks: bool) -> Result<Vec<Type>> {
         let mut given = Vec::new();
         if let ([only], false) = (&mut *values, wanted == 1) {
             let ty = self.check_expr_multi(only)?;
             match ty {
                 Type::Results(types) => given = types,
+                // `bind a, b = pair`: the items of one tuple.
+                Type::Tuple(items) if unpacks => {
+                    if items.len() != wanted {
+                        return err(only.span, format!("this tuple has {} items, but {} take them", items.len(), count(wanted, "name")));
+                    }
+                    given = items;
+                }
+                Type::Tuple(_) => {
+                    return err(only.span, format!("expected {}, got one tuple; a tuple is one value, so send its items, as in '<- t.0, t.1'", count(wanted, "value")));
+                }
                 other => given.push(other),
             }
         } else {
@@ -1525,6 +1585,97 @@ impl Checker {
             return err(at, format!("expected {}, got {}", count(wanted, "value"), given.len()));
         }
         Ok(given)
+    }
+
+    /// Resolves the types written for the names a binding declares, through the
+    /// parts of the tuples it unpacks.
+    fn resolve_bound_types(&mut self, bound: &mut Bound) -> Result<()> {
+        if let Some(annotated) = &mut bound.ty {
+            *annotated = self.resolve_type(annotated, bound.ty_span.unwrap_or(bound.span), TypePlace::Body)?;
+        }
+        bound.parts.iter_mut().try_for_each(|part| self.resolve_bound_types(part))
+    }
+
+    /// Checks `(a, b)` in a binding, which takes the items of `actual`, the
+    /// value at `at`, and adds the names it declares, with their types, to
+    /// `declared`.
+    fn unpack_bound(&mut self, bound: &mut Bound, actual: &Type, at: Span, declared: &mut Vec<(String, Span, Type)>) -> Result<()> {
+        if bound.parts.is_empty() {
+            let ty = match &bound.ty {
+                Some(annotated) => {
+                    if !fits_regions(actual, annotated) {
+                        return err(at, format!("expected type {}, got {} for '{}'{}", annotated, actual, bound.name, mismatch_hint(actual, annotated)));
+                    }
+                    annotated.clone()
+                }
+                None if bound.name == DISCARD => actual.clone(),
+                None => self.inferred_type(&bound.name, actual, at)?,
+            };
+            if bound.name == DISCARD && matches!(ty, Type::Or(..)) {
+                return err(at, dropped_error(&ty));
+            }
+            bound.ty = Some(ty.clone());
+            declared.push((bound.name.clone(), bound.span, ty));
+            return Ok(());
+        }
+        let items = self.tuple_items(actual, bound.parts.len(), bound.span)?;
+        bound.ty = Some(self.lasting(actual));
+        for (part, item) in bound.parts.iter_mut().zip(&items) {
+            self.unpack_bound(part, item, at, declared)?;
+        }
+        Ok(())
+    }
+
+    /// The items of a value of type `actual` that `( … )` at `at`, with `names`
+    /// parts, unpacks.
+    fn tuple_items(&self, actual: &Type, names: usize, at: Span) -> Result<Vec<Type>> {
+        match actual {
+            Type::Tuple(items) if items.len() == names => Ok(items.clone()),
+            Type::Tuple(items) => err(at, format!("this tuple has {} items, but '( … )' takes {}", items.len(), names)),
+            other => err(at, format!("'( … )' takes the items of a tuple, but this value is {}{}", other, extract_hint(&[other]))),
+        }
+    }
+
+    /// Checks one place an assignment writes to, recording the variables it
+    /// assigns in `assigned`, and returns what it takes.
+    fn check_target(&mut self, target: &mut Target, assigned: &mut HashMap<String, Span>) -> Result<TargetType> {
+        match target {
+            Target::Discard(_) => Ok(TargetType::Discard),
+            Target::Place(place) => {
+                // Each place takes one value, so a variable assigned twice
+                // would quietly keep the last.
+                if let ExprKind::Var(name) = &place.kind
+                    && let Some(at) = assigned.insert(name.clone(), place.span)
+                {
+                    return err(place.span, format!("'{}' is already assigned at {}:{}", name, at.line, at.col));
+                }
+                Ok(TargetType::Place(self.check_assign_target(place)?))
+            }
+            Target::Tuple(parts, at) => {
+                let at = *at;
+                let parts = parts.iter_mut().map(|part| self.check_target(part, assigned)).collect::<Result<_>>()?;
+                Ok(TargetType::Tuple(parts, at))
+            }
+        }
+    }
+
+    /// Checks that the items of `actual`, the value at `value_span`, fit the
+    /// places `( … )` at `at` writes them to.
+    fn unpack_target(&self, parts: &[TargetType], at: Span, actual: &Type, value_span: Span) -> Result<()> {
+        let items = self.tuple_items(actual, parts.len(), at)?;
+        for (part, item) in parts.iter().zip(&items) {
+            match part {
+                TargetType::Discard if matches!(item, Type::Or(..)) => return err(value_span, dropped_error(item)),
+                TargetType::Discard => {}
+                TargetType::Place(expected) => {
+                    if !fits_regions(item, expected) {
+                        return err(value_span, format!("expected type {}, got {}{}", expected, item, mismatch_hint(item, expected)));
+                    }
+                }
+                TargetType::Tuple(inner, inner_at) => self.unpack_target(inner, *inner_at, item, value_span)?,
+            }
+        }
+        Ok(())
     }
 
     /// Checks `total <- value`, which sets named results and keeps going. The
@@ -1541,7 +1692,7 @@ impl Checker {
             };
             expected.push(info.ty.clone());
         }
-        let given = self.value_types(values, expected.len(), span)?;
+        let given = self.value_types(values, expected.len(), span, false)?;
         let forwarded = values.len() < expected.len();
         let list_span = values.first().map_or(span, |value| value.span);
         for (i, want) in expected.iter().enumerate() {
@@ -1660,6 +1811,7 @@ impl Checker {
                 self.check_index(base, &base_ty, index, span)
             }
             ExprKind::Array(values) => self.check_array(values, span),
+            ExprKind::Tuple(values) => self.check_tuple(values),
             ExprKind::Repeat { value, count } => self.check_repeat(value, count, span),
             ExprKind::Call(name, args) => {
                 if name == "show" {
@@ -1675,6 +1827,7 @@ impl Checker {
                         let hint = match &ty {
                             Type::Ptr(..) => "; to show the value it points to, write 'p^'".to_string(),
                             Type::Array(..) | Type::Slice(..) => "; show its items one at a time, as in 'each v in xs'".to_string(),
+                            Type::Tuple(_) => "; show its items one at a time, as in 'show(t.0)'".to_string(),
                             Type::Or(..) => extract_hint(&[&ty]),
                             _ => String::new(),
                         };
@@ -1798,6 +1951,19 @@ impl Checker {
             // Only the checker creates `Wrap`, with its type already set.
             ExprKind::Wrap(_) => expr.ty.clone().ok_or_else(|| Error::internal_at(span, "a wrapped value has no type")),
         }
+    }
+
+    /// Checks a tuple literal, `(a, b)`, and returns its type: its items' types.
+    fn check_tuple(&mut self, values: &mut [Expr]) -> Result<Type> {
+        let mut items = Vec::new();
+        for value in values.iter_mut() {
+            let ty = self.check_expr(value)?;
+            if let Some(what) = self.changeable_item(&ty) {
+                return err(value.span, format!("a tuple's items never change, so it can't hold {}", what));
+            }
+            items.push(ty);
+        }
+        Ok(Type::Tuple(items))
     }
 
     /// Checks an array literal, `[a, b, c]`, and returns its type. Kept out of
@@ -2112,6 +2278,7 @@ impl Checker {
             }
             (ExprKind::Array(values), Type::Array(items, _)) => values.iter_mut().try_for_each(|value| self.settle_copies(value, items)),
             (ExprKind::Repeat { value, .. }, Type::Array(items, _)) => self.settle_copies(value, items),
+            (ExprKind::Tuple(values), Type::Tuple(items)) => values.iter_mut().zip(items).try_for_each(|(value, item)| self.settle_copies(value, item)),
             (ExprKind::Wrap(inner), Type::Maybe(value) | Type::Or(value, _)) => self.settle_copies(inner, value),
             (ExprKind::StructInit(name, fields), Type::Named(_, Some(region))) => {
                 let Some(shape) = self.shapes.get(name.as_str()).cloned() else { return Ok(()) };
@@ -2291,12 +2458,14 @@ impl Checker {
                 // compare (and are never equal), and so do texts in any regions.
                 let pointers = matches!((&lt, &rt), (Type::Ptr(..), Type::Ptr(..))) && lt.without_regions() == rt.without_regions();
                 let texts = matches!((&lt, &rt), (Type::Text(_), Type::Text(_)));
-                if !pointers && !texts {
+                let tuples = matches!((&lt, &rt), (Type::Tuple(_), Type::Tuple(_))) && lt.without_regions() == rt.without_regions();
+                if !pointers && !texts && !tuples {
                     self.expect_type(&rt, &lt, r.span)?;
                 }
-                if !lt.is_numeric() && !matches!(lt, Type::Bool | Type::Text(_) | Type::Ptr(..)) {
+                if !comparable(&lt) {
                     let symbol = if op == BinaryOp::Eq { "==" } else { "!=" };
-                    return err(span, format!("'{}' can't compare values of type {}", symbol, lt));
+                    let hint = if matches!(lt, Type::Tuple(_)) { "; tuples compare item by item when every item is a number, a bool, text, or a tuple of them" } else { "" };
+                    return err(span, format!("'{}' can't compare values of type {}{}", symbol, lt, hint));
                 }
                 Ok(Type::Bool)
             }
@@ -2330,6 +2499,15 @@ impl Checker {
                     }
                 }
                 err(span, format!("shape '{}' has no field '{}'", name, field))
+            }
+            Type::Tuple(items) => match field.parse::<usize>() {
+                Ok(n) => items.get(n).cloned().ok_or_else(|| {
+                    Error::at(span, format!("this tuple has {} items, 't.0' to 't.{}', so it has no item {}", items.len(), items.len() - 1, n))
+                }),
+                Err(_) => err(span, format!("type {} has no field '{}'; a tuple's items are read by position, as in 't.0'", base, field)),
+            },
+            _ if field.parse::<u64>().is_ok() => {
+                err(span, format!("'.{}' reads an item of a tuple, but this value is {}{}", field, base, extract_hint(&[base])))
             }
             Type::Array(..) | Type::Slice(..) if field == "len" => Ok(Type::Int),
             Type::Array(..) | Type::Slice(..) => {
@@ -2498,6 +2676,17 @@ impl Checker {
     /// become the items of `expected`, as `[1, none]` or `[none; 4]` become
     /// arrays of `maybe int`. Whether `expected` is such an array.
     fn coerce_items(&mut self, expr: &mut Expr, expected: &Type) -> Result<bool> {
+        // `(1, none)` as a `(int, maybe int)`: each value becomes its item.
+        if let (Type::Tuple(items), ExprKind::Tuple(values)) = (expected, &mut expr.kind) {
+            if items.len() != values.len() {
+                return Ok(false);
+            }
+            for (value, item) in values.iter_mut().zip(items) {
+                self.coerce(value, item)?;
+            }
+            expr.ty = Some(expected.clone());
+            return Ok(true);
+        }
         let Type::Array(items, count) = expected else { return Ok(false) };
         let written = match &expr.ty {
             Some(Type::Array(_, written)) => *written,
@@ -2566,6 +2755,7 @@ pub fn lasting(ty: &Type, regional: &HashSet<String>) -> Type {
         Type::Maybe(inner) => Type::Maybe(Box::new(lasting(inner, regional))),
         Type::Array(inner, count) => Type::Array(Box::new(lasting(inner, regional)), *count),
         Type::Or(value, error) => Type::Or(Box::new(lasting(value, regional)), Box::new(lasting(error, regional))),
+        Type::Tuple(items) => Type::Tuple(items.iter().map(|item| lasting(item, regional)).collect()),
         other => other.clone(),
     }
 }
@@ -2642,6 +2832,7 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
         (Type::Named(a, ar), Type::Named(e, er)) => a == e && lasting(ar, er),
         (Type::Range(a), Type::Range(e)) | (Type::Maybe(a), Type::Maybe(e)) | (Type::Fail(a), Type::Fail(e)) => fits_regions(a, e),
         (Type::Or(av, ae), Type::Or(ev, ee)) => fits_regions(av, ev) && fits_regions(ae, ee),
+        (Type::Tuple(a), Type::Tuple(e)) => a.len() == e.len() && a.iter().zip(e).all(|(a, e)| fits_regions(a, e)),
         _ => actual == expected,
     }
 }
@@ -2665,6 +2856,7 @@ pub fn unify_regions(pattern: &Type, actual: &Type, regions: &mut HashMap<String
             unify_regions(p, a, regions);
         }
         (Type::Array(p, _), Type::Array(a, _)) => unify_regions(p, a, regions),
+        (Type::Tuple(p), Type::Tuple(a)) => p.iter().zip(a).for_each(|(p, a)| unify_regions(p, a, regions)),
         (Type::Named(p, pr), Type::Named(a, ar)) if p == a => record(pr, ar),
         (Type::Text(pr), Type::Text(ar)) => record(pr, ar),
         (Type::Maybe(p), Type::Maybe(a)) | (Type::Range(p), Type::Range(a)) | (Type::Fail(p), Type::Fail(a)) => unify_regions(p, a, regions),
@@ -2687,6 +2879,30 @@ fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
         Type::Named(name, _) => regional.contains(name),
         Type::Maybe(inner) | Type::Array(inner, _) => holds_pointers(inner, regional),
         Type::Or(value, error) => holds_pointers(value, regional) || holds_pointers(error, regional),
+        Type::Tuple(items) => items.iter().any(|item| holds_pointers(item, regional)),
+        _ => false,
+    }
+}
+
+/// Whether `==` compares values of type `ty`: numbers, bools, text, pointers,
+/// and tuples of them.
+fn comparable(ty: &Type) -> bool {
+    match ty {
+        Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => true,
+        Type::Tuple(items) => items.iter().all(comparable),
+        _ => false,
+    }
+}
+
+/// Whether a value of type `ty` holds a pointer, a slice, or an array, whose
+/// value can change, given the shapes and kinds in `changeable` that do.
+fn holds_changeable(ty: &Type, changeable: &HashSet<String>) -> bool {
+    match ty {
+        Type::Ptr(..) | Type::Slice(..) | Type::Array(..) => true,
+        Type::Named(name, _) => changeable.contains(name),
+        Type::Maybe(inner) => holds_changeable(inner, changeable),
+        Type::Or(value, error) => holds_changeable(value, changeable) || holds_changeable(error, changeable),
+        Type::Tuple(items) => items.iter().any(|item| holds_changeable(item, changeable)),
         _ => false,
     }
 }
@@ -2699,6 +2915,7 @@ fn holds_text(ty: &Type, textual: &HashSet<String>) -> bool {
         Type::Named(name, _) => textual.contains(name),
         Type::Maybe(inner) | Type::Array(inner, _) => holds_text(inner, textual),
         Type::Or(value, error) => holds_text(value, textual) || holds_text(error, textual),
+        Type::Tuple(items) => items.iter().any(|item| holds_text(item, textual)),
         _ => false,
     }
 }
@@ -2709,6 +2926,7 @@ fn unsettled(ty: &Type) -> bool {
     match ty {
         Type::None | Type::Fail(_) => true,
         Type::Array(items, _) => unsettled(items),
+        Type::Tuple(items) => items.iter().any(unsettled),
         _ => false,
     }
 }
@@ -2720,6 +2938,7 @@ fn settled_example(ty: &Type) -> Type {
         Type::None => Type::Maybe(Box::new(Type::Int)),
         Type::Fail(error) => Type::Or(Box::new(Type::Int), error.clone()),
         Type::Array(items, count) => Type::Array(Box::new(settled_example(items)), *count),
+        Type::Tuple(items) => Type::Tuple(items.iter().map(settled_example).collect()),
         other => other.clone(),
     }
 }
@@ -2737,6 +2956,7 @@ fn join_types(a: &Type, b: &Type) -> Option<Type> {
     let plain = |ty: &Type| !matches!(ty, Type::None | Type::Fail(_) | Type::Unit | Type::Maybe(_) | Type::Or(..));
     match (a, b) {
         (Type::Array(x, n), Type::Array(y, m)) if n == m => join_types(x, y).map(|items| Type::Array(Box::new(items), *n)),
+        (Type::Tuple(x), Type::Tuple(y)) if x.len() == y.len() => x.iter().zip(y).map(|(x, y)| join_types(x, y)).collect::<Option<Vec<_>>>().map(Type::Tuple),
         (Type::None, Type::Maybe(_)) => Some(b.clone()),
         (Type::Maybe(_), Type::None) => Some(a.clone()),
         (Type::None, other) | (other, Type::None) if plain(other) => Some(Type::Maybe(Box::new(other.clone()))),
@@ -2785,7 +3005,7 @@ fn value_bytes(ty: &Type, sizes: &HashMap<String, u128>) -> u128 {
         Type::Maybe(inner) => value_bytes(inner, sizes).saturating_add(8),
         Type::Or(value, error) => value_bytes(value, sizes).saturating_add(value_bytes(error, sizes)).saturating_add(8),
         Type::Fail(inner) | Type::Range(inner) => value_bytes(inner, sizes),
-        Type::Results(types) => types.iter().map(|ty| value_bytes(ty, sizes).max(8)).fold(0, u128::saturating_add),
+        Type::Results(types) | Type::Tuple(types) => types.iter().map(|ty| value_bytes(ty, sizes).max(8)).fold(0, u128::saturating_add),
         _ => 8,
     }
 }
@@ -2807,6 +3027,7 @@ fn contained_by_value(ty: &Type) -> Vec<&str> {
     match ty {
         Type::Named(name, _) => vec![name.as_str()],
         Type::Maybe(inner) | Type::Array(inner, _) => contained_by_value(inner),
+        Type::Tuple(items) => items.iter().flat_map(contained_by_value).collect(),
         Type::Or(value, error) => {
             let mut names = contained_by_value(value);
             names.extend(contained_by_value(error));
@@ -2821,6 +3042,7 @@ fn named_types(ty: &Type) -> Vec<&str> {
     match ty {
         Type::Named(name, _) => vec![name.as_str()],
         Type::Ptr(inner, _) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => named_types(inner),
+        Type::Tuple(items) => items.iter().flat_map(named_types).collect(),
         Type::Or(value, error) => {
             let mut names = named_types(value);
             names.extend(named_types(error));
@@ -2837,6 +3059,7 @@ fn constructible(ty: &Type, can: &HashSet<&str>) -> bool {
         Type::Named(name, _) => can.contains(name.as_str()),
         Type::Ptr(inner, _) | Type::Array(inner, _) | Type::Slice(inner, _) => constructible(inner, can),
         Type::Or(value, error) => **value == Type::Unit || constructible(value, can) || constructible(error, can),
+        Type::Tuple(items) => items.iter().all(|item| constructible(item, can)),
         _ => true,
     }
 }
@@ -2970,6 +3193,7 @@ fn region_mismatch<'a>(actual: &'a Type, expected: &'a Type) -> Option<(&'a Type
         (Type::Text(a), Type::Text(e)) | (Type::Named(_, a), Type::Named(_, e)) => (a != e).then_some((actual, expected)),
         (Type::Maybe(a), Type::Maybe(e)) | (Type::Array(a, _), Type::Array(e, _)) | (Type::Fail(a), Type::Fail(e)) => region_mismatch(a, e),
         (Type::Or(av, ae), Type::Or(ev, ee)) => region_mismatch(av, ev).or_else(|| region_mismatch(ae, ee)),
+        (Type::Tuple(a), Type::Tuple(e)) => a.iter().zip(e).find_map(|(a, e)| region_mismatch(a, e)),
         _ => None,
     }
 }

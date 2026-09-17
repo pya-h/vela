@@ -1,0 +1,9 @@
+# error: 7:20: expected type text, got text@inner; this text is in region 'inner', and text here must last as long as the program, as a literal does
+task main()
+    hold keep: (int, text) = (0, "x")
+    when true
+        region inner
+        bind line = scan("") at inner { "" }
+        keep = (1, line)
+    fi
+fi

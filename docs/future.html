@@ -322,7 +322,8 @@
         </div>
         <div class="card">
           <h3>Limited types <span class="badge b-med">Medium</span></h3>
-          <p>No generics or tuples yet. Arrays (<code>[int; 4]</code>) and slices (<code>[int]@r</code>, which grow with
+          <p>No generics yet. Tuples (<code>(text, int)</code>, whose items never change) are done
+            (<a href="vela.html#tuples">Tuples</a>), and so are arrays (<code>[int; 4]</code>) and slices (<code>[int]@r</code>, which grow with
             <code>xs.add(v)</code> and shrink with <code>xs.del(i)</code>) are done (<a href="#arrays">details below</a>),
             and missing values and errors have types: <code>maybe T</code> and <code>T or E</code>, and a pointer can't
             be <code>none</code>.</p>
@@ -464,7 +465,8 @@ fi</pre>
         <li><strong>Results aren't one value.</strong> <code>show(divmod(17, 5))</code> and
           <code>bind pair = divmod(17, 5)</code> are errors: <em>'divmod' sends 2 values; receive them with
           'bind a, b = …'</em>. A task with several results can only be called as the whole right side of a list.
-          First-class tuples are a separate, larger idea.</li>
+          Tuples came later as a type of their own (<code>-&gt; (int, int)</code> sends one tuple; see
+          <a href="vela.html#tuples">Tuples</a>), and several results stay separate from them.</li>
         <li><strong>Regions:</strong> each result type follows today's rule, so <code>-&gt; ^Node@r, int</code> needs a
           parameter that names <code>r</code>, and the results' regions are inferred at the call like a single result's.</li>
         <li><strong>Plain lists too:</strong> the same form works with ordinary values, and the right side is
@@ -701,7 +703,8 @@ fi</pre>
     <section>
       <h2 id="arrays"><span class="icon" aria-hidden="true">🧮</span> Arrays and Slices <span class="badge b-done">Done</span></h2>
       <p>
-        The first step out of the limited types; tuples and then generics come next, each a step of its own. An array
+        The first step out of the limited types; tuples came next (<a href="vela.html#tuples">Tuples</a>), and generics
+        follow, each a step of its own. An array
         is a fixed number of values held in place, and a slice is a view of values in a region (see
         <a href="vela.html#arrays">Arrays</a> and <a href="vela.html#slices">Slices</a> in the language guide):
       </p>
@@ -783,7 +786,8 @@ show(names.del(1))                    # takes item 1 out: b</pre>
       </p>
       <p>
         Left for later: comparing arrays with <code>==</code>, showing them whole, slices with a bound left out
-        (<code>xs[1..]</code>), and making a slice with room reserved ahead for a count known in advance. When generics
+        (<code>xs[1..]</code>), and making a slice with room reserved ahead for a count known in advance. A slice that never reuses the space
+        <code>del</code> gives back is a <a href="#slices-without-reuse">lower-priority idea</a>. When generics
         come, other collections whose size changes will get the same <code>add</code> and <code>del</code>.
       </p>
     </section>
@@ -1448,7 +1452,9 @@ show(p.length_squared())</pre>
         <li><strong>Guards in patterns:</strong> <code>case Circle r when r &gt; 0.0</code></li>
         <li><strong>Else-if chains:</strong> <code>when ... else when ... else ... fi</code></li>
         <li><strong>Inclusive ranges:</strong> <code>0..=10</code> or <code>0...10</code></li>
-        <li><strong>Tuples:</strong> <code>(int, text)</code> as values that can be stored and passed, beyond <a href="#results">multiple results</a></li>
+        <li><strong>Tuples:</strong> <code>(int, text)</code> as values that can be stored and passed, beyond <a href="#results">multiple results</a>
+          <em>(done: <a href="vela.html#tuples">Tuples</a>; next, taking them apart in patterns, <code>when found is {(name, age)}</code>,
+          <code>when pair is (x, y)</code>, and <code>hold</code> names in every pattern)</em></li>
         <li><strong>Named arguments:</strong> <code>resize(width: 2.0, height: 3.0)</code> for task calls, as shape
           literals already name their fields (<code>Point { x: 1, y: 2 }</code>)</li>
         <li><strong>Statements end at a line break:</strong> today <code>show(1) show(2)</code> on one line is accepted;
@@ -1482,6 +1488,10 @@ show(p.length_squared())</pre>
         <li><strong>Type inference:</strong> let the compiler infer more types without annotations</li>
         <li><strong>Sum-type exhaustiveness:</strong> already present; keep it mandatory</li>
         <li><strong>Compile-time constants:</strong> <code>const MaxSize: int = 1024</code></li>
+        <li><strong>Compile-time use of tuples:</strong> a tuple's items never change, so a tuple built from constants
+          (<code>bind limits = (0, 100)</code>) is itself a constant: the compiler could compute <code>limits.1 - limits.0</code>
+          when compiling, pass small tuples in registers, and share one copy of a constant tuple, with no check that it
+          changed</li>
         <li><strong>Type conversions (casting):</strong> Vela can't convert a value from one type to another yet: not an
           <code>int</code> to a <code>float</code> (except where <code>1 + 2.5</code> promotes it), not a <code>float</code> to an
           <code>int</code>, and not text to a number or a number to text. See <a href="#conversions">Type conversions</a>
@@ -1549,6 +1559,17 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
         <li><strong>WebAssembly:</strong> run Vela in browsers and edge environments</li>
         <li><strong>Embedded targets:</strong> bare-metal output with no runtime</li>
       </ul>
+
+      <h3 id="lower-priority">Lower priority <span class="badge b-low">Low</span></h3>
+      <p>Ideas kept for later, each waiting for a decision on whether Vela wants it at all, and on its syntax.</p>
+      <ul>
+        <li id="slices-without-reuse"><strong>Slices that don't reuse taken-out space:</strong> today, taking the last item
+          out of a slice with <code>del</code> gives its space back, and the next <code>add</code> of that slice goes there,
+          which keeps memory use low; a copy made before the <code>del</code> sees the new item (see
+          <a href="vela.html#slice-changes">Adding and taking out items</a>). A second kind of slice could never reuse that
+          space and always grow into new room in its region, so no older copy ever sees another's items, at the cost of
+          memory. That behavior stays as it is; this would be a separate kind of slice, with syntax still to be chosen.</li>
+      </ul>
     </section>
 
     <section>
@@ -1577,7 +1598,7 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
           <ul>
             <li><s>Module system</s> (done: <a href="vela.html#modules">modules</a>, with aliases and <code>Kind.Variant</code>), then a package manager</li>
             <li>Methods on shapes and kinds (qualified tasks with <code>self</code> / <code>hold self</code>)</li>
-            <li>Tuples, then generics</li>
+            <li><s>Tuples</s> (done: <a href="vela.html#tuples">tuples</a>), then generics</li>
             <li><s>Missing values and error handling</s> (done: <a href="#maybe"><code>maybe T</code>, plan B, <code>T or E</code></a>)</li>
             <li>Pattern-match expressions</li>
             <li><s>Region-based allocation</s> (done: <a href="regions.html">regions</a>)</li>
@@ -1601,7 +1622,7 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
       <h2><span class="icon" aria-hidden="true">🎯</span> Conclusion</h2>
       <p>
         Vela's strength is its smallness. The best next steps preserve that smallness while filling the
-        obvious gaps: a real string type, tuples, and generics, now that arrays and slices are in place. The memory
+        obvious gaps: a real string type and generics, now that arrays, slices, and tuples are in place. The memory
         model's first step, <strong>scoped regions</strong>, is in place (<a href="regions.html">Vela Regions</a>); <strong>move-only ownership and optional
         temporary borrows</strong> can grow it while keeping Vela fast, simple, and far safer than C without becoming
         Rust.

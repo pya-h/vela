@@ -1,0 +1,6 @@
+# error: 2:25: '(int, int)' holds no pointers or text, so it lives in no region; remove '@r'
+task keep(t: (int, int)@r)
+fi
+
+task main()
+fi

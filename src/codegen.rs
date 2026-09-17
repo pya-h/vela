@@ -148,6 +148,7 @@ impl Generator {
             self.gen_show_maybe(ty);
         }
         self.gen_item_helpers(&used);
+        self.gen_tuple_eq(&used.tuple_eq);
         self.gen_copies(&used.copied);
         self.w.blank();
 
@@ -244,6 +245,11 @@ impl Generator {
             Type::Results(types) => {
                 for (i, result) in types.iter().enumerate() {
                     self.w.line(&format!("{} {};", c_type(result), result_member(i)));
+                }
+            }
+            Type::Tuple(items) => {
+                for (i, item) in items.iter().enumerate() {
+                    self.w.line(&format!("{} {};", c_type(item), tuple_member(i)));
                 }
             }
             Type::Maybe(inner) => {
@@ -366,6 +372,29 @@ impl Generator {
         }
     }
 
+    /// `vela__eq__K` for each tuple type compared with `==` or `!=`: whether
+    /// two tuples' items are equal, item by item.
+    fn gen_tuple_eq(&mut self, tuples: &[Type]) {
+        for tuple in tuples {
+            let Type::Tuple(items) = tuple else { continue };
+            self.w.open(&format!("static bool {0}({1} a, {1} b)", copy_helper("eq", tuple), c_type(tuple)));
+            let tests: Vec<String> = items
+                .iter()
+                .enumerate()
+                .map(|(i, item)| {
+                    let (a, b) = (format!("a.{}", tuple_member(i)), format!("b.{}", tuple_member(i)));
+                    match item {
+                        Type::Text(_) => format!("vela__rt__text_eq({}, {})", a, b),
+                        Type::Tuple(_) => format!("{}({}, {})", copy_helper("eq", item), a, b),
+                        _ => format!("{} == {}", a, b),
+                    }
+                })
+                .collect();
+            self.w.line(&format!("return {};", tests.join(" && ")));
+            self.w.close();
+        }
+    }
+
     /// For each type a program copies (`x.copy() at r`), `vela__copied__K`, which
     /// copies a value into a region; and for each type a copy goes through,
     /// `vela__fix__K`, which replaces what a value copied byte for byte holds
@@ -408,6 +437,7 @@ impl Generator {
             Type::Named(name, _) => self.copied_through.contains(name),
             Type::Maybe(inner) | Type::Array(inner, _) => self.needs_fix(inner),
             Type::Or(value, error) => self.needs_fix(value) || self.needs_fix(error),
+            Type::Tuple(items) => items.iter().any(|item| self.needs_fix(item)),
             _ => false,
         }
     }
@@ -418,6 +448,7 @@ impl Generator {
         match ty {
             Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Maybe(inner) | Type::Array(inner, _) => vec![(**inner).clone()],
             Type::Or(value, error) => vec![(**value).clone(), (**error).clone()],
+            Type::Tuple(items) => items.clone(),
             Type::Named(name, _) => match (self.shapes.get(name), self.kinds.get(name)) {
                 (Some(shape), _) => shape.fields.iter().map(|f| f.ty.without_regions()).collect(),
                 (_, Some(kind)) => kind.variants.iter().flat_map(|v| &v.payload).map(|f| f.ty.without_regions()).collect(),
@@ -474,6 +505,12 @@ impl Generator {
                     self.w.line(&format!("{}(c, &v->error);", copy_helper("fix", &fix_type(error))));
                 }
                 self.w.close();
+            }
+            Type::Tuple(items) => {
+                let fixed: Vec<(usize, &Type)> = items.iter().enumerate().filter(|(_, item)| self.needs_fix(item)).collect();
+                for (i, item) in fixed {
+                    self.w.line(&format!("{}(c, &v->{});", copy_helper("fix", &fix_type(item)), tuple_member(i)));
+                }
             }
             Type::Named(name, _) => {
                 if let Some(shape) = self.shapes.get(name).cloned() {
@@ -606,7 +643,7 @@ impl Generator {
         for (i, stmt) in stmts.iter().enumerate() {
             self.gen_stmt(stmt)?;
             if let StmtKind::Binding { names, .. } = &stmt.kind {
-                for bound in names.iter().filter(|bound| bound.name != DISCARD) {
+                for bound in names.iter().flat_map(Bound::leaves).filter(|bound| bound.name != DISCARD) {
                     self.use_if_unread(&bound.name, scope.get(i + 1..).unwrap_or_default());
                 }
             }
@@ -650,7 +687,15 @@ impl Generator {
                         .ty
                         .as_ref()
                         .ok_or_else(|| Error::internal_at(bound.span, format!("binding '{}' has no type", bound.name)))?;
-                    if bound.name == DISCARD {
+                    if !bound.parts.is_empty() && bound.leaves().iter().all(|leaf| leaf.name == DISCARD) {
+                        // `(_, _)`: nothing to declare.
+                        self.drop_value(&value);
+                    } else if !bound.parts.is_empty() {
+                        // The tuple is kept once, and each name takes its item.
+                        let tuple = self.fresh_temp("tuple");
+                        self.w.line(&format!("{} {} = {};", c_type(ty), tuple, value));
+                        self.gen_unpacked(bound, &tuple)?;
+                    } else if bound.name == DISCARD {
                         // Nothing to declare: the value is computed and dropped.
                         self.drop_value(&value);
                     } else {
@@ -834,17 +879,56 @@ impl Generator {
             }
             return Ok(given);
         }
-        // One call, giving every value.
+        // One call giving every value, or one tuple giving its items.
         let [call] = values else {
             return Err(Error::internal_at(span, format!("{} values received by {} names", values.len(), wanted)));
         };
-        let Type::Results(types) = call.ty()?.clone() else {
-            return Err(Error::internal_at(span, format!("a value of type {} received by {} names", call.ty()?, wanted)));
+        let ty = call.ty()?.clone();
+        let (count, member): (usize, fn(usize) -> String) = match &ty {
+            Type::Results(types) => (types.len(), result_member),
+            Type::Tuple(items) => (items.len(), tuple_member),
+            other => return Err(Error::internal_at(span, format!("a value of type {} received by {} names", other, wanted))),
         };
         let value = self.gen_expr(call)?;
         let results = self.fresh_temp("results");
-        self.w.line(&format!("{} {} = {};", c_type(&Type::Results(types.clone())), results, value));
-        Ok((0..types.len()).map(|i| format!("{}.{}", results, result_member(i))).collect())
+        self.w.line(&format!("{} {} = {};", c_type(&ty), results, value));
+        Ok((0..count).map(|i| format!("{}.{}", results, member(i))).collect())
+    }
+
+    /// Declares the names `( … )` takes from the tuple `tuple`, a C expression
+    /// read without effects.
+    fn gen_unpacked(&mut self, group: &Bound, tuple: &str) -> Result<()> {
+        for (i, part) in group.parts.iter().enumerate() {
+            let item = format!("{}.{}", tuple, tuple_member(i));
+            if !part.parts.is_empty() {
+                self.gen_unpacked(part, &item)?;
+            } else if part.name != DISCARD {
+                let ty = part.ty.as_ref().ok_or_else(|| Error::internal_at(part.span, format!("binding '{}' has no type", part.name)))?;
+                self.w.line(&format!("{} {} = {};", c_type(ty), c_ident(&part.name), item));
+            }
+        }
+        Ok(())
+    }
+
+    /// The pointers to the places `target` writes to, with how each is read from
+    /// the value given (a member path of tuples, empty for the value itself),
+    /// found before any value is computed.
+    fn gen_target_places(&mut self, target: &Target, path: String, places: &mut Vec<(Option<String>, String)>) -> Result<()> {
+        match target {
+            Target::Discard(_) => places.push((None, path)),
+            Target::Place(place) => {
+                let lvalue = self.gen_place(place)?;
+                let pointer = self.fresh_temp("place");
+                self.w.line(&format!("{}* {} = &{};", c_type(place.ty()?), pointer, lvalue));
+                places.push((Some(pointer), path));
+            }
+            Target::Tuple(parts, _) => {
+                for (i, part) in parts.iter().enumerate() {
+                    self.gen_target_places(part, format!("{}.{}", path, tuple_member(i)), places)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Writes `value`, which is received by a `_`, as a statement that drops it.
@@ -861,21 +945,33 @@ impl Generator {
         // by a later value.
         let mut places = Vec::new();
         for target in targets {
-            match target {
-                Target::Discard(_) => places.push(None),
-                Target::Place(place) => {
-                    let lvalue = self.gen_place(place)?;
-                    let pointer = self.fresh_temp("place");
-                    self.w.line(&format!("{}* {} = &{};", c_type(place.ty()?), pointer, lvalue));
-                    places.push(Some(pointer));
-                }
-            }
+            let mut parts = Vec::new();
+            self.gen_target_places(target, String::new(), &mut parts)?;
+            places.push(parts);
         }
+        let types = given_types(targets.len(), values, span)?;
         let given = self.gen_value_list(targets.len(), values, span)?;
-        for (place, value) in places.into_iter().zip(given) {
-            match place {
-                Some(pointer) => self.w.line(&format!("*{} = {};", pointer, value)),
-                None => self.drop_value(&value),
+        for (((parts, target), value), ty) in places.into_iter().zip(targets).zip(given).zip(types) {
+            // A tuple taken apart is kept once, and each place takes its item.
+            let value = match target {
+                Target::Tuple(..) if parts.iter().all(|(place, _)| place.is_none()) => {
+                    // `(_, _)`: nothing is written.
+                    self.drop_value(&value);
+                    continue;
+                }
+                Target::Tuple(..) => {
+                    let tuple = self.fresh_temp("tuple");
+                    self.w.line(&format!("{} {} = {};", c_type(&ty), tuple, value));
+                    tuple
+                }
+                _ => value,
+            };
+            for (place, path) in parts {
+                match place {
+                    Some(pointer) => self.w.line(&format!("*{} = {}{};", pointer, value, path)),
+                    None if path.is_empty() => self.drop_value(&value),
+                    None => {}
+                }
             }
         }
         Ok(())
@@ -1096,6 +1192,7 @@ impl Generator {
             ExprKind::Field(base, field) => self.gen_field(base, field),
             ExprKind::Index(base, index) => self.gen_index(e, base, index, None),
             ExprKind::Array(values) => self.gen_array(e, values),
+            ExprKind::Tuple(values) => self.gen_tuple(e, values),
             ExprKind::Repeat { value, .. } => self.gen_repeat(e, value),
             ExprKind::Call(name, args) => self.gen_call(e, name, args),
             ExprKind::Unary(op, operand) => self.gen_unary(e, *op, operand),
@@ -1186,6 +1283,10 @@ impl Generator {
             // An array's length is its type's; the array is still read.
             Type::Array(_, count) => Ok(format!("((void){}, INT64_C({}))", parenthesized(&b), count)),
             Type::Slice(..) => Ok(format!("({}).len", b)),
+            Type::Tuple(_) => {
+                let i = field.parse::<usize>().map_err(|_| Error::internal_at(base.span, format!("a tuple's item '{}'", field)))?;
+                Ok(format!("({}).{}", b, tuple_member(i)))
+            }
             _ => Ok(format!("({}).{}", b, c_ident(field))),
         }
     }
@@ -1195,6 +1296,14 @@ impl Generator {
         let operands: Vec<&Expr> = values.iter().collect();
         let given = self.gen_operands(&operands)?;
         Ok(format!("(({}){{ .items = {{ {} }} }})", c_type(e.ty()?), given.join(", ")))
+    }
+
+    /// `(a, b)`, the expression `e`.
+    fn gen_tuple(&mut self, e: &Expr, values: &[Expr]) -> Result<String> {
+        let operands: Vec<&Expr> = values.iter().collect();
+        let given = self.gen_operands(&operands)?;
+        let items: Vec<String> = given.iter().enumerate().map(|(i, value)| format!(".{} = {}", tuple_member(i), value)).collect();
+        Ok(format!("(({}){{ {} }})", c_type(e.ty()?), items.join(", ")))
     }
 
     /// `[value; count]`, the expression `e`.
@@ -1509,6 +1618,10 @@ impl Generator {
                 });
             }
         }
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && matches!(l.ty()?, Type::Tuple(_)) {
+            let not = if op == BinaryOp::Ne { "!" } else { "" };
+            return Ok(format!("{}{}({}, {})", not, copy_helper("eq", l.ty()?), left, right));
+        }
         if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && matches!(l.ty()?, Type::Text(_)) {
             // Text compares by contents, not by address.
             let not = if op == BinaryOp::Ne { "!" } else { "" };
@@ -1578,6 +1691,26 @@ fn is_pointer(ty: &Type) -> bool {
 }
 
 /// The member of a result struct holding result `i`.
+/// The types of the `wanted` values `values` give: one each, or the several a
+/// call sends, or a tuple's items.
+fn given_types(wanted: usize, values: &[Expr], span: Span) -> Result<Vec<Type>> {
+    if values.len() == wanted {
+        return values.iter().map(|value| value.ty().cloned()).collect();
+    }
+    match values {
+        [one] => match one.ty()? {
+            Type::Results(types) | Type::Tuple(types) => Ok(types.clone()),
+            other => Err(Error::internal_at(span, format!("a value of type {} received by {} names", other, wanted))),
+        },
+        _ => Err(Error::internal_at(span, format!("{} values received by {} names", values.len(), wanted))),
+    }
+}
+
+/// The C member holding item `i` of a tuple: `i0`, `i1`, ….
+fn tuple_member(i: usize) -> String {
+    format!("i{}", i)
+}
+
 fn result_member(i: usize) -> String {
     format!("r{}", i)
 }
@@ -1615,7 +1748,7 @@ fn has_prelude(e: &Expr) -> bool {
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             has_prelude(a) || has_prelude(b)
         }
-        ExprKind::Call(_, args) | ExprKind::Construct { args, .. } | ExprKind::Array(args) => args.iter().any(has_prelude),
+        ExprKind::Call(_, args) | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => args.iter().any(has_prelude),
         ExprKind::StructInit(_, fields) => fields.iter().any(|field| has_prelude(&field.value)),
     }
 }
@@ -1638,6 +1771,8 @@ struct UsedTypes {
     array_fill: Vec<Type>,
     /// The types of the values the program copies with `copy()`.
     copied: Vec<Type>,
+    /// The tuple types compared with `==` or `!=`, each after the tuples it holds.
+    tuple_eq: Vec<Type>,
     /// Whether the program calls `scan`.
     scans: bool,
 }
@@ -1665,6 +1800,7 @@ impl UsedTypes {
             slice_pop: Vec::new(),
             array_fill: Vec::new(),
             copied: Vec::new(),
+            tuple_eq: Vec::new(),
             scans: false,
         };
         for item in items {
@@ -1700,8 +1836,8 @@ impl UsedTypes {
                     self.compounds.push(ty.clone());
                 }
             }
-            Type::Results(types) => {
-                types.iter().for_each(|result| self.add(result));
+            Type::Results(types) | Type::Tuple(types) => {
+                types.iter().for_each(|item| self.add(item));
                 if !self.compounds.contains(ty) {
                     self.compounds.push(ty.clone());
                 }
@@ -1716,6 +1852,31 @@ impl UsedTypes {
         }
     }
 
+    /// Records that tuples of type `tuple` are compared, and so are the tuples
+    /// in it, which come first.
+    fn note_tuple_eq(&mut self, tuple: &Type) {
+        let Type::Tuple(items) = tuple.without_regions() else { return };
+        items.iter().for_each(|item| self.note_tuple_eq(item));
+        note(&mut self.tuple_eq, tuple);
+    }
+
+    /// Records the types of the names a binding declares, and of the tuples it unpacks.
+    fn bound(&mut self, bound: &Bound) {
+        if let Some(ty) = &bound.ty {
+            self.add(ty);
+        }
+        bound.parts.iter().for_each(|part| self.bound(part));
+    }
+
+    /// Records what the places of an assignment read.
+    fn target(&mut self, target: &Target) {
+        match target {
+            Target::Discard(_) => {}
+            Target::Place(place) => self.expr(place),
+            Target::Tuple(parts, _) => parts.iter().for_each(|part| self.target(part)),
+        }
+    }
+
     fn block(&mut self, block: &[Stmt]) {
         for stmt in block {
             match &stmt.kind {
@@ -1723,19 +1884,11 @@ impl UsedTypes {
                 StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter().for_each(|value| self.expr(value)),
                 StmtKind::Region(_) => {}
                 StmtKind::Binding { names, init, .. } => {
-                    for bound in names {
-                        if let Some(ty) = &bound.ty {
-                            self.add(ty);
-                        }
-                    }
+                    names.iter().for_each(|bound| self.bound(bound));
                     init.iter().for_each(|value| self.expr(value));
                 }
                 StmtKind::Assign(targets, values) => {
-                    for target in targets {
-                        if let Target::Place(place) = target {
-                            self.expr(place);
-                        }
-                    }
+                    targets.iter().for_each(|target| self.target(target));
                     values.iter().for_each(|value| self.expr(value));
                 }
                 StmtKind::When(cond, then_b, else_b) => {
@@ -1803,8 +1956,17 @@ impl UsedTypes {
                 self.expr(value);
                 self.expr(count);
             }
-            ExprKind::Array(values) => values.iter().for_each(|value| self.expr(value)),
-            ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => {
+            ExprKind::Array(values) | ExprKind::Tuple(values) => values.iter().for_each(|value| self.expr(value)),
+            ExprKind::Binary(op, a, b) => {
+                if matches!(op, BinaryOp::Eq | BinaryOp::Ne)
+                    && let Some(tuple @ Type::Tuple(_)) = &a.ty
+                {
+                    self.note_tuple_eq(tuple);
+                }
+                self.expr(a);
+                self.expr(b);
+            }
+            ExprKind::Range(a, b) => {
                 self.expr(a);
                 self.expr(b);
             }
@@ -1870,10 +2032,7 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
         StmtKind::Region(_) => false,
         StmtKind::Binding { init, .. } => init.iter().any(expr),
         StmtKind::Assign(targets, values) => {
-            targets.iter().any(|target| match target {
-                Target::Discard(_) => false,
-                Target::Place(place) => target_reads(place, name),
-            }) || values.iter().any(expr)
+            targets.iter().any(|target| target_reads(target, name)) || values.iter().any(expr)
         }
         StmtKind::When(cond, then_b, else_b) => expr(&cond.value) || body(then_b) || else_b.as_ref().is_some_and(body),
         StmtKind::Loop(cond, b) => expr(&cond.value) || body(b),
@@ -1884,13 +2043,22 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
 
 /// Whether assigning to `target` reads `name`. Writing to a variable or its
 /// fields doesn't read it; writing through a pointer (`p^ = …`) reads `p`.
-fn target_reads(target: &Expr, name: &str) -> bool {
+fn target_reads(target: &Target, name: &str) -> bool {
+    match target {
+        Target::Discard(_) => false,
+        Target::Place(place) => place_reads(place, name),
+        Target::Tuple(parts, _) => parts.iter().any(|part| target_reads(part, name)),
+    }
+}
+
+/// Whether assigning to the place `target` reads `name`.
+fn place_reads(target: &Expr, name: &str) -> bool {
     match &target.kind {
         ExprKind::Var(_) => false,
-        ExprKind::Field(base, _) => target_reads(base, name),
+        ExprKind::Field(base, _) => place_reads(base, name),
         // Writing an item of an array writes the array; a slice is read to
         // find its item.
-        ExprKind::Index(base, index) if matches!(base.ty, Some(Type::Array(..))) => target_reads(base, name) || expr_reads(index, name),
+        ExprKind::Index(base, index) if matches!(base.ty, Some(Type::Array(..))) => place_reads(base, name) || expr_reads(index, name),
         _ => expr_reads(target, name),
     }
 }
@@ -1906,7 +2074,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             expr_reads(a, name) || expr_reads(b, name)
         }
-        ExprKind::Call(_, args) | ExprKind::Construct { args, .. } | ExprKind::Array(args) => {
+        ExprKind::Call(_, args) | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => {
             args.iter().any(|arg| expr_reads(arg, name))
         }
         ExprKind::StructInit(_, fields) => fields.iter().any(|field| expr_reads(&field.value, name)),
@@ -1946,7 +2114,7 @@ fn value_dependencies(ty: &Type) -> Vec<String> {
     match ty {
         Type::Named(name, _) => vec![mangle(name)],
         Type::Maybe(inner) if is_pointer(inner) => Vec::new(),
-        Type::Maybe(_) | Type::Or(..) | Type::Results(_) | Type::Array(..) | Type::Slice(..) => vec![c_type(ty)],
+        Type::Maybe(_) | Type::Or(..) | Type::Results(_) | Type::Tuple(_) | Type::Array(..) | Type::Slice(..) => vec![c_type(ty)],
         _ => Vec::new(),
     }
 }
@@ -2026,7 +2194,7 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
         TypeDef::Item(Item::Task(_)) => Vec::new(),
         TypeDef::Compound(Type::Maybe(inner)) => value_dependencies(inner),
         TypeDef::Compound(Type::Or(value, error)) => value_dependencies(value).into_iter().chain(value_dependencies(error)).collect(),
-        TypeDef::Compound(Type::Results(types)) => types.iter().flat_map(value_dependencies).collect(),
+        TypeDef::Compound(Type::Results(types) | Type::Tuple(types)) => types.iter().flat_map(value_dependencies).collect(),
         TypeDef::Compound(Type::Array(items, _)) => value_dependencies(items),
         TypeDef::Compound(_) => Vec::new(),
     }
@@ -2139,7 +2307,7 @@ fn c_type(ty: &Type) -> String {
         Type::Maybe(inner) => format!("vela__maybe__{}", type_key(inner)),
         Type::Or(value, error) => format!("vela__or__{}__{}", type_key(value), type_key(error)),
         Type::Fail(error) => c_type(error),
-        Type::Results(_) | Type::Array(..) | Type::Slice(..) => format!("vela__{}", type_key(ty)),
+        Type::Results(_) | Type::Tuple(_) | Type::Array(..) | Type::Slice(..) => format!("vela__{}", type_key(ty)),
     }
 }
 
@@ -2198,6 +2366,10 @@ fn type_key(ty: &Type) -> String {
         Type::Results(types) => {
             let keys: Vec<String> = types.iter().map(type_key).collect();
             format!("results__{}__{}", types.len(), keys.join("__"))
+        }
+        Type::Tuple(items) => {
+            let keys: Vec<String> = items.iter().map(type_key).collect();
+            format!("tuple__{}__{}", items.len(), keys.join("__"))
         }
     }
 }

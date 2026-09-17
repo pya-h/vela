@@ -1,0 +1,9 @@
+# error: 8:7: a tuple's items never change; give the whole tuple a new value instead, as in 't = (1, 2)'
+shape Point
+    x: int
+fi
+
+task main()
+    hold t = (Point { x: 1 }, 2)
+    t.0.x = 5
+fi

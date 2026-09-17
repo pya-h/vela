@@ -606,6 +606,12 @@ impl Parser {
         if mentions_region(&ty) {
             return Err(Error::at(span, "a region doesn't live in another region"));
         }
+        // Everything a tuple holds is in the region its `@` names: a region written
+        // on an item must be the same. (The checker reports the other types.)
+        if let Some(inner) = ty.regions().into_iter().find(|inner| *inner != region).filter(|_| holds_tuple(&ty)) {
+            let at = self.type_parts.iter().find(|(part, _)| *part == format!("@{}", inner)).map_or(region_span, |(_, at)| *at);
+            return Err(Error::at(at, format!("everything a value in region '{0}' holds is in '{0}'; remove '@{1}'", region, inner)));
+        }
         let mut named = false;
         let ty = ty.map_regions_of_names(&mut |_| {
             named = true;
@@ -628,6 +634,12 @@ impl Parser {
         if self.match_token(Token::LBracket) {
             self.enter()?;
             let items = self.parse_bracketed_type();
+            self.leave(1);
+            return items;
+        }
+        if self.match_token(Token::LParen) {
+            self.enter()?;
+            let items = self.parse_tuple_type(span);
             self.leave(1);
             return items;
         }
@@ -655,6 +667,21 @@ impl Parser {
         }
         self.type_parts.push((name.clone(), span));
         Ok(Type::builtin(&name).unwrap_or(Type::Named(name, None)))
+    }
+
+    /// After a type's `(` at `opened`: `T, U, …)`, a tuple of two or more items.
+    fn parse_tuple_type(&mut self, opened: Span) -> Result<Type> {
+        let mut items = vec![self.parse_type_parts()?];
+        while self.match_token(Token::Comma) {
+            items.push(self.parse_type_parts()?);
+        }
+        if !self.match_token(Token::RParen) {
+            return Err(self.unexpected("',' and another item, or ')' to close the tuple"));
+        }
+        if items.len() < 2 {
+            return Err(Error::at(opened, "a tuple holds two or more items, as in '(int, text)'; a type isn't written in parentheses alone"));
+        }
+        Ok(Type::Tuple(items))
     }
 
     /// After a type's `[`: `T; count]`, an array, or `T]`, a slice. The item
@@ -735,8 +762,9 @@ impl Parser {
         if self.at_result_update() {
             return self.parse_set_results(span);
         }
-        // `_` only takes a value, so a line starting with it is an assignment.
-        if self.check(Token::Underscore) {
+        // `_` only takes a value, and `(a, b) =` unpacks a tuple, so a line
+        // starting with either is an assignment.
+        if self.check(Token::Underscore) || self.at_target_group(true) {
             let first = self.parse_target()?;
             return self.parse_assignment(span, first);
         }
@@ -798,13 +826,60 @@ impl Parser {
         Ok(Stmt::new(StmtKind::SetResults(names, values), span))
     }
 
-    /// One place an assignment writes to, or `_`.
+    /// One place an assignment writes to, `_`, or `(a, b, …)`, the places of a
+    /// tuple's items.
     fn parse_target(&mut self) -> Result<Target> {
         let span = self.peek_span();
         if self.match_token(Token::Underscore) {
             return Ok(Target::Discard(span));
         }
+        if self.at_target_group(false) {
+            self.advance(); // (
+            self.enter()?;
+            let parts = self.parse_target_parts(span);
+            self.leave(1);
+            return Ok(Target::Tuple(parts?, span));
+        }
         Ok(Target::Place(self.parse_expr()?))
+    }
+
+    /// After the `(` at `opened` of places unpacking a tuple: the places and `)`.
+    fn parse_target_parts(&mut self, opened: Span) -> Result<Vec<Target>> {
+        let mut parts = vec![self.parse_target()?];
+        while self.match_token(Token::Comma) {
+            parts.push(self.parse_target()?);
+        }
+        self.expect(Token::RParen)?;
+        if parts.len() < 2 {
+            return Err(Error::at(opened, "a tuple has two or more items, so '( … )' names two or more places, as in '(a, b) = pair'"));
+        }
+        Ok(parts)
+    }
+
+    /// Whether the cursor is at `(` of places unpacking a tuple: parentheses on
+    /// one line with a comma directly inside, and, at the start of a statement
+    /// (`statement`), followed by `=` or `,`.
+    fn at_target_group(&self, statement: bool) -> bool {
+        if !self.check(Token::LParen) {
+            return false;
+        }
+        let mut depth = 0usize;
+        let mut comma = false;
+        for p in self.pos.. {
+            match self.tokens.get(p) {
+                Some(Token::LParen | Token::LBracket | Token::LBrace) => depth += 1,
+                Some(Token::RParen | Token::RBracket | Token::RBrace) => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return comma && (!statement || matches!(self.tokens.get(p + 1), Some(Token::Assign | Token::Comma)));
+                    }
+                }
+                Some(Token::Comma) if depth == 1 => comma = true,
+                Some(Token::Newline | Token::Eof) | None => return false,
+                _ => {}
+            }
+        }
+        false
     }
 
     /// One value, or several separated by commas.
@@ -849,19 +924,9 @@ impl Parser {
     fn parse_binding(&mut self, immutable: bool) -> Result<Stmt> {
         self.advance(); // bind / hold
         let span = self.peek_span();
-        let mut names = Vec::new();
-        loop {
-            let (name, name_span) = self.parse_bound_name()?;
-            let (ty, ty_span) = if self.match_token(Token::Colon) {
-                let ty_span = self.peek_span();
-                (Some(self.parse_type()?), Some(ty_span))
-            } else {
-                (None, None)
-            };
-            names.push(Bound { name, span: name_span, ty, ty_span });
-            if !self.match_token(Token::Comma) {
-                break;
-            }
+        let mut names = vec![self.parse_bound()?];
+        while self.match_token(Token::Comma) {
+            names.push(self.parse_bound()?);
         }
         self.expect(Token::Assign)?;
         let init = self.parse_value_list()?;
@@ -1002,6 +1067,39 @@ impl Parser {
     }
 
     /// A name a pattern binds, or `_`.
+    /// A name a binding declares, with its type, or `(a, b, …)`, the names of a
+    /// tuple's items.
+    fn parse_bound(&mut self) -> Result<Bound> {
+        let span = self.peek_span();
+        if self.match_token(Token::LParen) {
+            self.enter()?;
+            let parts = self.parse_bound_parts(span);
+            self.leave(1);
+            return Ok(Bound { name: String::new(), span, ty: None, ty_span: None, parts: parts? });
+        }
+        let (name, name_span) = self.parse_bound_name()?;
+        let (ty, ty_span) = if self.match_token(Token::Colon) {
+            let ty_span = self.peek_span();
+            (Some(self.parse_type()?), Some(ty_span))
+        } else {
+            (None, None)
+        };
+        Ok(Bound { name, span: name_span, ty, ty_span, parts: Vec::new() })
+    }
+
+    /// After the `(` at `opened` of names unpacking a tuple: the names and `)`.
+    fn parse_bound_parts(&mut self, opened: Span) -> Result<Vec<Bound>> {
+        let mut parts = vec![self.parse_bound()?];
+        while self.match_token(Token::Comma) {
+            parts.push(self.parse_bound()?);
+        }
+        self.expect(Token::RParen)?;
+        if parts.len() < 2 {
+            return Err(Error::at(opened, "a tuple has two or more items, so '( … )' names two or more, as in 'bind (a, b) = pair'"));
+        }
+        Ok(parts)
+    }
+
     fn parse_bound_name(&mut self) -> Result<Binding> {
         let span = self.peek_span();
         if self.match_token(Token::Underscore) {
@@ -1170,6 +1268,12 @@ impl Parser {
             Token::Dot => {
                 self.advance();
                 let span = self.peek_span();
+                // `t.0`: an item of a tuple.
+                if let Token::Int(n) = self.peek() {
+                    let item = n.to_string();
+                    self.advance();
+                    return Ok(Expr::new(ExprKind::Field(Box::new(expr), item), span));
+                }
                 let field = self.expect_ident()?;
                 let expr = Expr::new(ExprKind::Field(Box::new(expr), field), span);
                 if self.check(Token::LParen) || (self.check(Token::LBrace) && self.at_shape_literal()) {
@@ -1201,12 +1305,7 @@ impl Parser {
             Token::None => { self.advance(); ExprKind::NoneLit }
             Token::New => return self.parse_new(),
             Token::LBracket => return self.parse_array(),
-            Token::LParen => {
-                self.advance();
-                let expr = self.parse_expr()?;
-                self.expect(Token::RParen)?;
-                return Ok(expr);
-            }
+            Token::LParen => return self.parse_parenthesized(),
             Token::Ident(name) => {
                 let name = name.clone();
                 self.advance();
@@ -1242,6 +1341,34 @@ impl Parser {
         let region_span = self.peek_span();
         let region = self.expect_ident()?;
         Ok(Expr::new(ExprKind::Scan { args, region, region_span }, span))
+    }
+
+    /// `(value)`, or a tuple, `(a, b, …)`, on one line.
+    fn parse_parenthesized(&mut self) -> Result<Expr> {
+        let span = self.peek_span();
+        self.advance(); // (
+        let first = self.parse_expr()?;
+        if !self.check(Token::Comma) {
+            self.expect(Token::RParen)?;
+            return Ok(first);
+        }
+        // A tuple holds its values in a frame of its own, as an array does.
+        self.enter()?;
+        let mut values = vec![first];
+        let result = loop {
+            if !self.match_token(Token::Comma) {
+                break self.expect(Token::RParen);
+            }
+            if self.check(Token::Newline) {
+                break Err(Error::at(self.peek_span(), "a tuple is written on one line, as in '(1, \"Ada\")'"));
+            }
+            match self.parse_expr() {
+                Ok(value) => values.push(value),
+                Err(error) => break Err(error),
+            }
+        };
+        self.leave(1);
+        result.map(|()| Expr::new(ExprKind::Tuple(values), span))
     }
 
     /// `[a, b, c]` or `[value; count]`, on one line.
@@ -1513,11 +1640,22 @@ impl Parser {
     }
 }
 
+/// Whether `ty` is a tuple, or holds one by value or behind a pointer.
+fn holds_tuple(ty: &Type) -> bool {
+    match ty {
+        Type::Tuple(_) => true,
+        Type::Ptr(inner, _) | Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => holds_tuple(inner),
+        Type::Or(value, error) => holds_tuple(value) || holds_tuple(error),
+        _ => false,
+    }
+}
+
 /// Whether `ty` is `region`, or holds it (as `maybe region` would).
 fn mentions_region(ty: &Type) -> bool {
     match ty {
         Type::Region => true,
         Type::Ptr(inner, _) | Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => mentions_region(inner),
+        Type::Tuple(items) => items.iter().any(mentions_region),
         _ => false,
     }
 }

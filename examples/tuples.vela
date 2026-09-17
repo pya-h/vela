@@ -1,0 +1,49 @@
+# Tuples: values held together, as `(text, int)`, read by position (`t.0`,
+# `t.1`) and taken apart into names. A tuple's items never change; a `hold`
+# tuple can only take a whole new one.
+
+# The lowest and highest score, as one tuple.
+task range_of(scores: [(text, int)]@r) -> (int, int)
+    hold low = scores[0].1
+    hold high = scores[0].1
+    each entry in scores
+        bind _, score = entry
+        when score < low
+            low = score
+        fi
+        when score > high
+            high = score
+        fi
+    fi
+    <- (low, high)
+fi
+
+# The name and score of the best entry. Its text is in the slice's region.
+task best(scores: [(text, int)]@r) -> (text, int)@r
+    hold top = scores[0]
+    each entry in scores
+        when entry.1 > top.1
+            top = entry
+        fi
+    fi
+    <- top
+fi
+
+task main()
+    region r
+    hold scores = new [(text, int)]() at r
+    scores.add(("Ada", 91))
+    scores.add(("Bob", 78))
+    scores.add(("Cy", 85))
+
+    bind low, high = range_of(scores)
+    show(high - low)                         # 13
+
+    bind (name, score) = best(scores)
+    show(name)                               # Ada
+    show(score)                              # 91
+
+    # An entry is replaced whole; its items can't be assigned.
+    scores[1] = ("Bob", 95)
+    show(best(scores) == ("Bob", 95))        # true
+fi

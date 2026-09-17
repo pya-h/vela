@@ -886,6 +886,7 @@ impl Resolver<'_> {
             Type::Fail(inner) => Type::Fail(Box::new(self.ty(inner, span)?)),
             Type::Or(value, error) => Type::Or(Box::new(self.ty(value, span)?), Box::new(self.ty(error, span)?)),
             Type::Results(types) => Type::Results(types.iter().map(|t| self.ty(t, span)).collect::<Result<_>>()?),
+            Type::Tuple(items) => Type::Tuple(items.iter().map(|t| self.ty(t, span)).collect::<Result<_>>()?),
             other => other.clone(),
         })
     }
@@ -894,23 +895,32 @@ impl Resolver<'_> {
         block.iter_mut().try_for_each(|stmt| self.stmt(stmt))
     }
 
+    /// A name a binding declares, with its written type, or the names of a tuple's items.
+    fn bound(&self, bound: &mut Bound) -> Result<()> {
+        if let (Some(ty), Some(at)) = (&bound.ty, bound.ty_span) {
+            bound.ty = Some(self.ty(ty, at)?);
+        }
+        bound.parts.iter_mut().try_for_each(|part| self.bound(part))
+    }
+
+    /// A place an assignment writes to, or the places of a tuple's items.
+    fn target(&self, target: &mut Target) -> Result<()> {
+        match target {
+            Target::Discard(_) => Ok(()),
+            Target::Place(e) => self.expr(e),
+            Target::Tuple(parts, _) => parts.iter_mut().try_for_each(|part| self.target(part)),
+        }
+    }
+
     fn stmt(&self, stmt: &mut Stmt) -> Result<()> {
         match &mut stmt.kind {
             StmtKind::Expr(e) => self.expr(e),
             StmtKind::Binding { names, init, .. } => {
-                for bound in names.iter_mut() {
-                    if let (Some(ty), Some(at)) = (&bound.ty, bound.ty_span) {
-                        bound.ty = Some(self.ty(ty, at)?);
-                    }
-                }
+                names.iter_mut().try_for_each(|bound| self.bound(bound))?;
                 init.iter_mut().try_for_each(|e| self.expr(e))
             }
             StmtKind::Assign(targets, values) => {
-                for target in targets.iter_mut() {
-                    if let Target::Place(e) = target {
-                        self.expr(e)?;
-                    }
-                }
+                targets.iter_mut().try_for_each(|target| self.target(target))?;
                 values.iter_mut().try_for_each(|e| self.expr(e))
             }
             StmtKind::When(cond, then_block, else_block) => {
@@ -968,7 +978,7 @@ impl Resolver<'_> {
                 self.expr(a)?;
                 self.expr(b)
             }
-            ExprKind::Array(values) => values.iter_mut().try_for_each(|e| self.expr(e)),
+            ExprKind::Array(values) | ExprKind::Tuple(values) => values.iter_mut().try_for_each(|e| self.expr(e)),
             ExprKind::New { ty, ty_span, value, .. } => {
                 **ty = self.ty(ty, *ty_span)?;
                 self.expr(value)

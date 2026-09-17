@@ -655,6 +655,8 @@ impl<'a> Classifier<'a> {
         let mut braces: Vec<Brace> = Vec::new();
         // How many `[`s are open in a type, as in `[int; 4]`.
         let mut type_brackets = 0usize;
+        // How many `(`s of tuple types are open, as in `(int, text)`.
+        let mut type_parens = 0usize;
 
         let mut p = 0;
         for lexed in tokens.all {
@@ -695,11 +697,14 @@ impl<'a> Classifier<'a> {
                     in_results = false;
                     declaring_list = None;
                     type_brackets = 0;
+                    type_parens = 0;
                     // Shape literals are on one line, so an unclosed literal `{` ends
                     // with it; a plan B's block continues.
                     braces.retain(|brace| *brace == Brace::PlanB);
                 }
                 Token::Eof => {}
+                // `t.0`: a tuple's item.
+                Token::Int(_) if p > 0 && tokens.token(p - 1) == Some(&Token::Dot) => self.push(range, TokenClass::Field, None),
                 Token::Int(_) | Token::Float(_) => self.push(range, TokenClass::Number, None),
                 Token::Text(_) => self.string(range),
                 Token::Ident(_) if in_include => {
@@ -787,6 +792,23 @@ impl<'a> Classifier<'a> {
                     // `@r` or `or E` may follow the type.
                     after_type = true;
                 }
+                // `(int, text)` in a type: each item's type.
+                Token::LParen if was_type => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    type_parens += 1;
+                    in_type = true;
+                }
+                Token::RParen if type_parens > 0 => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    type_parens -= 1;
+                    // `@r` or `or E` may follow the type.
+                    after_type = true;
+                }
+                // `bind a, (b, c) = t`: the names of a tuple's items.
+                Token::LParen if declaring_now.is_some() => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    declaring = declaring_now;
+                }
                 Token::LParen | Token::RParen | Token::LBracket | Token::RBracket | Token::Dot => {
                     self.push(range, TokenClass::Punctuation, None);
                     match token {
@@ -796,6 +818,10 @@ impl<'a> Classifier<'a> {
                         Token::Dot => in_type = was_after_type,
                         _ => {}
                     }
+                }
+                Token::Comma if type_parens > 0 => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    in_type = true;
                 }
                 Token::Comma => {
                     self.push(range, TokenClass::Punctuation, None);

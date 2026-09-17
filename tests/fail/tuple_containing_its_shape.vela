@@ -1,0 +1,7 @@
+# error: 3:12: 'Tree' contains itself by value (Tree -> Tree); use a pointer such as 'maybe ^Tree'
+shape Tree
+    parts: (int, Tree)
+fi
+
+task main()
+fi

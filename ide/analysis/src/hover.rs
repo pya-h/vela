@@ -82,6 +82,12 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
         (TokenClass::Field, None) if text == "len" => {
             ("len: int".to_string(), "The number of items of an array or slice.".to_string())
         }
+        // `t.0`: an item of a tuple.
+        (TokenClass::Field, None) if text.parse::<usize>().is_ok() => {
+            let ty = k.at_byte(token.range.start).and_then(|q| k.type_ending_at(q));
+            let code = ty.map_or_else(|| format!("item {}", text), |ty| format!("item {}: {}", text, ty));
+            (code, "An item of a tuple, by its position from 0. A tuple's items never change.".to_string())
+        }
         (TokenClass::Field, None) if text == vela::ast::COPY => (
             "copy() at r or copy()@r".to_string(),
             "Copies a value into a region: its text, its slices' items, and what its pointers point to, all the way down (shared nodes stay shared, and cycles stay cycles). Without a region, the copy goes into the region of the place it is put in.".to_string(),

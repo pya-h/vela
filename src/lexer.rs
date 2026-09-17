@@ -530,7 +530,17 @@ impl Lexer {
                 }
             }
         };
+        // A tuple's item right after a dot, as in `t.1.0`, is a whole number:
+        // its own `.` starts the next item. (After `..`, a range's end may be a float.)
+        let before = |back: usize| self.pos.checked_sub(back).and_then(|at| self.source.get(at)).copied();
+        let item = before(1) == Some('.') && before(2) != Some('.');
         digits(self, &mut s, &mut raw);
+        if item && !(self.peek().is_ascii_alphabetic() || self.peek() == '_') {
+            return match s.parse::<i64>() {
+                Ok(val) => LexKind::Token(Token::Int(val)),
+                Err(_) => invalid(loc, format!("integer literal '{}' is too large", raw)),
+            };
+        }
         let is_float = self.peek() == '.' && self.peek2().is_ascii_digit();
         // `1.` is not a float (and `1..5` is a range).
         if self.peek() == '.' && !self.peek2().is_ascii_digit() && self.peek2() != '.' && !self.peek2().is_ascii_alphabetic() {

@@ -1,0 +1,4 @@
+# error: 3:14: cannot infer the type of 't' from none or 'fail …' in its value; give it a type, such as 't: (maybe int, int)'
+task main()
+    bind t = (none, 1)
+fi

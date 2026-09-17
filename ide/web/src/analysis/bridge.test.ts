@@ -143,6 +143,14 @@ describe("VelaAnalysis", () => {
     expect(analysis.hover(source, source.indexOf("copy()"))?.code).toBe("copy() at r or copy()@r");
   });
 
+  it("describes tuples, their items, and the names taking them apart", () => {
+    const source = "task main()\n    bind pair = (\"Ada\", 36)\n    bind name, age = pair\n    show(pair.1 + age)\n    show(name)\nfi\n";
+    expect(analysis.file(source).diagnostics).toEqual([]);
+    expect(analysis.hover(source, source.indexOf("pair ="))?.code).toBe("bind pair: (text, int)");
+    expect(analysis.hover(source, source.indexOf("age ="))?.code).toBe("bind age: int");
+    expect(analysis.hover(source, source.indexOf("1 + age"))?.code).toBe("item 1: int");
+  });
+
   it("analyzes deeply nested arrays, slices, and parentheses without crashing", () => {
     // The compiler stops at its nesting limit, well inside the module's stack.
     const deep = 20_000;

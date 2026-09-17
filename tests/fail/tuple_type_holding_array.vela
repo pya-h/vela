@@ -1,0 +1,7 @@
+# error: 2:15: a tuple's items never change, so it can't hold an array ([int; 2])
+task count(t: ([int; 2], int)) -> int
+    <- t.1
+fi
+
+task main()
+fi

@@ -1,0 +1,86 @@
+  1 | # Tuples: values held together, as `(text, int)`, read by position (`t.0`,
+    | comment:# Tuples: values held together, as `(text, int)`, read by position (`t.0`,
+  2 | # `t.1`) and taken apart into names. A tuple's items never change; a `hold`
+    | comment:# `t.1`) and taken apart into names. A tuple's items never change; a `hold`
+  3 | # tuple can only take a whole new one.
+    | comment:# tuple can only take a whole new one.
+  5 | # The lowest and highest score, as one tuple.
+    | comment:# The lowest and highest score, as one tuple.
+  6 | task range_of(scores: [(text, int)]@r) -> (int, int)
+    | keyword:task  task:range_of  punctuation:(  parameter:scores  punctuation::  punctuation:[  punctuation:(  type-builtin:text  punctuation:,  type-builtin:int  punctuation:)  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)
+  7 |     hold low = scores[0].1
+    | keyword:hold  variable:low  operator:=  parameter:scores  punctuation:[  number:0  punctuation:]  punctuation:.  field:1
+  8 |     hold high = scores[0].1
+    | keyword:hold  variable:high  operator:=  parameter:scores  punctuation:[  number:0  punctuation:]  punctuation:.  field:1
+  9 |     each entry in scores
+    | keyword:each  variable:entry  keyword:in  parameter:scores
+ 10 |         bind _, score = entry
+    | keyword:bind  keyword:_  punctuation:,  variable:score  operator:=  variable:entry
+ 11 |         when score < low
+    | keyword:when  variable:score  operator:<  variable:low
+ 12 |             low = score
+    | variable:low  operator:=  variable:score
+ 13 |         fi
+    | keyword:fi
+ 14 |         when score > high
+    | keyword:when  variable:score  operator:>  variable:high
+ 15 |             high = score
+    | variable:high  operator:=  variable:score
+ 16 |         fi
+    | keyword:fi
+ 17 |     fi
+    | keyword:fi
+ 18 |     <- (low, high)
+    | keyword:<-  punctuation:(  variable:low  punctuation:,  variable:high  punctuation:)
+ 19 | fi
+    | keyword:fi
+ 21 | # The name and score of the best entry. Its text is in the slice's region.
+    | comment:# The name and score of the best entry. Its text is in the slice's region.
+ 22 | task best(scores: [(text, int)]@r) -> (text, int)@r
+    | keyword:task  task:best  punctuation:(  parameter:scores  punctuation::  punctuation:[  punctuation:(  type-builtin:text  punctuation:,  type-builtin:int  punctuation:)  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:(  type-builtin:text  punctuation:,  type-builtin:int  punctuation:)  operator:@  region:r
+ 23 |     hold top = scores[0]
+    | keyword:hold  variable:top  operator:=  parameter:scores  punctuation:[  number:0  punctuation:]
+ 24 |     each entry in scores
+    | keyword:each  variable:entry  keyword:in  parameter:scores
+ 25 |         when entry.1 > top.1
+    | keyword:when  variable:entry  punctuation:.  field:1  operator:>  variable:top  punctuation:.  field:1
+ 26 |             top = entry
+    | variable:top  operator:=  variable:entry
+ 27 |         fi
+    | keyword:fi
+ 28 |     fi
+    | keyword:fi
+ 29 |     <- top
+    | keyword:<-  variable:top
+ 30 | fi
+    | keyword:fi
+ 32 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 33 |     region r
+    | keyword:region  region:r
+ 34 |     hold scores = new [(text, int)]() at r
+    | keyword:hold  variable:scores  operator:=  keyword:new  punctuation:[  punctuation:(  type-builtin:text  punctuation:,  type-builtin:int  punctuation:)  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 35 |     scores.add(("Ada", 91))
+    | variable:scores  punctuation:.  field:add  punctuation:(  punctuation:(  string:"Ada"  punctuation:,  number:91  punctuation:)  punctuation:)
+ 36 |     scores.add(("Bob", 78))
+    | variable:scores  punctuation:.  field:add  punctuation:(  punctuation:(  string:"Bob"  punctuation:,  number:78  punctuation:)  punctuation:)
+ 37 |     scores.add(("Cy", 85))
+    | variable:scores  punctuation:.  field:add  punctuation:(  punctuation:(  string:"Cy"  punctuation:,  number:85  punctuation:)  punctuation:)
+ 39 |     bind low, high = range_of(scores)
+    | keyword:bind  variable:low  punctuation:,  variable:high  operator:=  task:range_of  punctuation:(  variable:scores  punctuation:)
+ 40 |     show(high - low)                         # 13
+    | builtin-fn:show  punctuation:(  variable:high  operator:-  variable:low  punctuation:)  comment:# 13
+ 42 |     bind (name, score) = best(scores)
+    | keyword:bind  punctuation:(  variable:name  punctuation:,  variable:score  punctuation:)  operator:=  task:best  punctuation:(  variable:scores  punctuation:)
+ 43 |     show(name)                               # Ada
+    | builtin-fn:show  punctuation:(  variable:name  punctuation:)  comment:# Ada
+ 44 |     show(score)                              # 91
+    | builtin-fn:show  punctuation:(  variable:score  punctuation:)  comment:# 91
+ 46 |     # An entry is replaced whole; its items can't be assigned.
+    | comment:# An entry is replaced whole; its items can't be assigned.
+ 47 |     scores[1] = ("Bob", 95)
+    | variable:scores  punctuation:[  number:1  punctuation:]  operator:=  punctuation:(  string:"Bob"  punctuation:,  number:95  punctuation:)
+ 48 |     show(best(scores) == ("Bob", 95))        # true
+    | builtin-fn:show  punctuation:(  task:best  punctuation:(  variable:scores  punctuation:)  operator:==  punctuation:(  string:"Bob"  punctuation:,  number:95  punctuation:)  punctuation:)  comment:# true
+ 49 | fi
+    | keyword:fi

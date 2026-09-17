@@ -164,6 +164,11 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ("slice changes", program(format!("{}0{}", "xs.del(".repeat(deep), ")".repeat(deep)))),
         ("scans", program(format!("{}\"\"{}", "scan(".repeat(deep), ") at r".repeat(deep)))),
         ("copies", program(format!("line{}", ".copy() at r".repeat(deep)))),
+        ("tuples", program(format!("{}1{}", "(".repeat(deep), ", 1)".repeat(deep)))),
+        ("tuple types", format!("task f(p: {}int{})\nfi\n", "(".repeat(deep), ", int)".repeat(deep))),
+        ("tuple items", program(format!("t{}", ".0".repeat(deep)))),
+        ("unpacked names", format!("task main()\n    bind {}a{} = t\nfi\n", "(".repeat(deep), ", b)".repeat(deep))),
+        ("unpacked places", format!("task main()\n    {}a{} = t\nfi\n", "(".repeat(deep), ", b)".repeat(deep))),
     ];
     for (what, source) in cases {
         let error = driver::generate_c(&source).expect_err(what);
@@ -208,6 +213,16 @@ fn deep_nesting_is_an_error_not_a_crash() {
     // plan B, and its block.
     let scans = format!("task main()\n    region r\n    show({}\"\"{})\nfi\n", "scan(".repeat(near / 3), ") at r { \"\" }".repeat(near / 3));
     driver::generate_c(&scans).unwrap();
+    // Tuples in tuples, read back item by item, and unpacked into names.
+    let tuples = format!(
+        "task main()\n    bind t = {}1{}\n    show(t{})\n    bind {}a{} = t\n    show(a)\nfi\n",
+        "(".repeat(near / 2 - 1),
+        ", 1)".repeat(near / 2 - 1),
+        ".0".repeat(near / 2 - 1),
+        "(".repeat(near / 2 - 1),
+        ", _)".repeat(near / 2 - 1)
+    );
+    driver::generate_c(&tuples).unwrap();
     // A copy of a copy, each in the region: every one counts a level.
     let copies = format!("task main()\n    region r\n    bind line = scan(\"\") at r {{ \"\" }}\n    show(line{})\nfi\n", ".copy() at r".repeat(near));
     driver::generate_c(&copies).unwrap();
