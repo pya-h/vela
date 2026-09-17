@@ -1,0 +1,10 @@
+# error: 9:5: 'add' can't change a field of immutable variable 'bag'
+shape Bag
+    items: [int]
+fi
+
+task main()
+    region r
+    bind bag = Bag { items: new [int]() at r }
+    bag.items.add(1)
+fi

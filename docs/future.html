@@ -322,9 +322,10 @@
         </div>
         <div class="card">
           <h3>Limited types <span class="badge b-med">Medium</span></h3>
-          <p>No generics or tuples yet. Arrays (<code>[int; 4]</code>) and slices (<code>[int]@r</code>) are done
-            (<a href="#arrays">details below</a>), and missing values and errors have types: <code>maybe T</code> and
-            <code>T or E</code>, and a pointer can't be <code>none</code>.</p>
+          <p>No generics or tuples yet. Arrays (<code>[int; 4]</code>) and slices (<code>[int]@r</code>, which grow with
+            <code>xs.add(v)</code> and shrink with <code>xs.del(i)</code>) are done (<a href="#arrays">details below</a>),
+            and missing values and errors have types: <code>maybe T</code> and <code>T or E</code>, and a pointer can't
+            be <code>none</code>.</p>
         </div>
         <div class="card">
           <h3>No methods <span class="badge b-med">Medium</span></h3>
@@ -711,7 +712,11 @@ fi
 region r
 bind all = new [int]([0; n]) at r     # [int]@r: n zeros, n known as the program runs
 bind part = all[1..3]                 # the same memory, not a copy
-part[0] = scores.len</pre>
+part[0] = scores.len
+hold names = new [text]() at r        # no items yet
+names.add("b")                        # last
+names.add(0, "a")                     # before item 0
+show(names.del(1))                    # takes item 1 out: b</pre>
       <ul>
         <li><strong><code>[type; count]</code> and <code>[type]</code>.</strong> The item's type comes first, as the type
           is read (an array of <code>int</code>, four of them), rather than Go's <code>[4]int</code> or C's
@@ -726,13 +731,20 @@ part[0] = scores.len</pre>
           array's count is part of its type.</li>
         <li><strong><code>xs.len</code>, not <code>len(xs)</code>.</strong> The length reads as part of the value, costs
           nothing (a constant for an array, a stored count for a slice), and takes no name away from tasks.</li>
-        <li><strong>No growable lists.</strong> A list that grows copies itself into bigger memory, and without
-          <code>free</code> every old copy stays in the region until it closes. A program that needs more room makes a
-          longer slice and copies into it, which shows what it costs.</li>
+        <li><strong>A slice's length changes; an array's doesn't.</strong> First there were no growable lists: a list
+          that grows copies itself into bigger memory, and without <code>free</code> every old copy stays in the region
+          until it closes. Then (2026-09-17) the length that can change became what sets a slice apart from an array, so
+          a slice grows and shrinks itself, with no separate list type: <code>xs.add(v)</code>, <code>xs.add(i, v)</code>,
+          <code>xs.del(i)</code>, and <code>xs.del()</code>, one word for each direction and the form chosen by how many
+          arguments are given (rather than <code>push</code>, <code>insert</code>, <code>remove</code>, and
+          <code>pop</code>). <code>new [T]() at r</code> makes an empty one. They read like methods, but they are
+          built-in changes, as <code>len</code> is a built-in member: <code>add</code> takes its region from the slice's
+          type, so nothing is passed for it.</li>
       </ul>
       <p>
         What building it settled. <strong>Values.</strong> Arrays are copied whole, like shapes, and <code>each</code>
-        goes through an array as it was when the loop started (a slice, as it is). A literal's values join into one
+        goes through an array as it was when the loop started (a slice's items as they are, up to the count it had
+        then). A literal's values join into one
         type: <code>none</code> and a value make a <code>maybe</code>, <code>fail e</code> and a value a
         <code>T or E</code>, and a literal of only <code>none</code> takes its type from where it goes
         (<code>bind slots: [maybe int; 4] = [none; 4]</code>). <strong>Checks.</strong> Every index and slice is checked
@@ -743,12 +755,33 @@ part[0] = scores.len</pre>
         a <code>hold</code>, or behind a pointer); a slice's items can always be written, as through a pointer; neither's
         <code>len</code> can. An array behind a pointer, or an item of a slice, is in a region, so it can be sliced.
         <strong>C.</strong> An array is a struct holding a C array, which C can copy and return; a slice is a struct of a
-        pointer and an <code>int64_t</code> length. Reading a slice's item, slicing, copying, and filling go through small
-        generated functions, so each array or slice is evaluated once. <strong>Studio.</strong> Hover shows the types
-        (<code>[int; 4]</code>, <code>[int]@r</code>, and an <code>each</code> item's), and completion offers
-        <code>len</code> after a <code>.</code> and types inside a type's brackets, as the file is typed. Comparing
-        arrays with <code>==</code>, showing them whole, and slices with a bound left out (<code>xs[1..]</code>) are left
-        for later.
+        pointer, an <code>int64_t</code> length, and its room. Reading a slice's item, slicing, copying, and filling go
+        through small generated functions, so each array or slice is evaluated once. <strong>Studio.</strong> Hover
+        shows the types (<code>[int; 4]</code>, <code>[int]@r</code>, and an <code>each</code> item's), and completion
+        offers <code>len</code> after a <code>.</code> (and <code>add</code> and <code>del</code> on a slice) and types
+        inside a type's brackets, as the file is typed.
+      </p>
+      <p>
+        What growing settled. <strong>Where.</strong> A change is written to the slice where it is kept, so the slice
+        must be in a place that can be assigned (a <code>hold</code> variable, a field of one, anything behind a pointer,
+        an item of another slice), and <code>add</code> needs the slice's region itself (declared, or an
+        <code>r: region</code> parameter), as <code>new</code> does. <strong>Room.</strong> A slice carries a pointer to
+        its room: a block of its region holding its items and free space after them. A full block is replaced by one
+        twice as large, or grows in place when it ends where the region hands out memory next, so adding is amortized
+        constant time, and a slice of <em>n</em> items has taken at most about 4<em>n</em> items of memory in its
+        region. Only a slice whose items end where the room's free space begins adds in place, so a copy or a part of a
+        slice never writes over items another one counts; taking out the last item gives its space back.
+        <strong>Order.</strong> A change inside an expression happens in order with the rest, left to right, since
+        <code>xs.del() - xs.del()</code> must mean one thing. <strong>Speed.</strong> In a test of 20 million
+        <code>add</code>s (gcc <code>-O2</code>), one into room took about 2 nanoseconds, close to a hand-written C array;
+        the whole run took about 5 times as long as C with <code>realloc</code>, because doubling copies the items into
+        new memory that must be touched, where <code>realloc</code> of a large block can move pages instead. Hand-written
+        C that doubles by copying, as regions must, took about as long as Vela.
+      </p>
+      <p>
+        Left for later: comparing arrays with <code>==</code>, showing them whole, slices with a bound left out
+        (<code>xs[1..]</code>), and making a slice with room reserved ahead for a count known in advance. When generics
+        come, other collections whose size changes will get the same <code>add</code> and <code>del</code>.
       </p>
     </section>
 
@@ -1385,7 +1418,8 @@ show(p.length_squared())</pre>
             are today: <code>task Node.length(self) -&gt; int</code> works on a <code>Node@r</code> in any region, and a method
             that allocates takes a region parameter. Settle this design before any region shortcut that uses a dot, such
             as <code>nodes.push(list, 1)</code> (see <a href="regions.html#ideas-passing">Easier region passing</a>), since both
-            would give meaning to <code>value.name(…)</code>.</li>
+            would give meaning to <code>value.name(…)</code>. A slice's built-in changes, <code>xs.add(…)</code> and
+            <code>xs.del(…)</code>, already do, and methods must keep them.</li>
           <li><strong>Generated C</strong> stays collision-free: <code>vela_Point__method_length_squared(vela_Point self)</code>
             and <code>vela_Point__method_shift(vela_Point* self, double dx)</code>.</li>
           <li><strong>Later, interfaces</strong> can be satisfied implicitly, as in Go: a type that has the right
@@ -1499,7 +1533,7 @@ show(p.length_squared())</pre>
             <li><s>Multiple results, then named results (<code>-&gt; total: int</code>, set with <code>total &lt;- value</code>)</s>
               (done: <a href="vela.html#results">Several Results</a>, <a href="vela.html#named-results">Named Results</a>)</li>
             <li><s>Defined integer overflow and division by zero</s> (done: <a href="vela.html#int-limits">they stop the program with a message</a>)</li>
-            <li><s>Fixed-size arrays and slices</s> (done: <a href="vela.html#arrays">arrays</a> and <a href="vela.html#slices">slices</a>), and a real <code>text</code> type</li>
+            <li><s>Fixed-size arrays and slices, which grow and shrink</s> (done: <a href="vela.html#arrays">arrays</a> and <a href="vela.html#slices">slices</a>), and a real <code>text</code> type</li>
             <li>Small region improvements: result-only regions, typed patterns, a lint for regions that grow in loops, and a
               chunk cache (<a href="regions.html#ideas">ideas</a>)</li>
             <li>Move-only owned pointers, on top of regions</li>

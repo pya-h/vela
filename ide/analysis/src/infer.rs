@@ -500,7 +500,18 @@ impl<'a> Knowledge<'a> {
                     // A parenthesized expression.
                     return self.span_type(open + 1, q.checked_sub(1)?, depth + 1);
                 };
-                let (p, _) = callee;
+                let (p, word) = callee;
+                // `xs.add(…)` gives nothing, and `xs.del(…)` the item it takes
+                // out, which the checker records at the word.
+                if self.token_before(p) == Some(&Token::Dot)
+                    && let Some(op) = vela::ast::EditOp::from_word(word)
+                    && let Some(Type::Slice(items, _)) = p.checked_sub(2).and_then(|base| self.expression_type(base, depth + 1))
+                {
+                    return exact(p).or(Some(match op {
+                        vela::ast::EditOp::Add => Type::Unit,
+                        vela::ast::EditOp::Del => *items,
+                    }));
+                }
                 // `Shape.Circle(…)` and `m.Shape.Circle(…)`: a kind's variant,
                 // recorded where its name starts.
                 if let Some(variant) = self.symbol_at(p).filter(|&id| self.symbol(id).is_some_and(|s| s.kind == SymbolKind::Variant))

@@ -1,0 +1,6 @@
+# error: 5:5: 'xs.push' names nothing: 'xs' is neither a module this file includes nor a kind, and Vela has no methods; a slice adds an item with 'add', as in 'xs.add(v)' or 'xs.add(i, v)'
+task main()
+    region r
+    hold xs = new [int]() at r
+    xs.push(1)
+fi

@@ -952,11 +952,12 @@ impl Checker {
                     return err(e.span, format!("'fail {0}' names the error only on the first line of a plan B; to send an error, write '<- fail {0}'", name));
                 }
                 self.check_expr(e)?;
-                // Of all expressions, only a call can have an effect, and so
-                // can a plan B on a call, or one that gives no value.
+                // Of all expressions, only a call or a change to a slice can
+                // have an effect, and so can a plan B on a call, or one that
+                // gives no value.
                 match &e.kind {
                     ExprKind::Call(name, _) if matches!(e.ty, Some(Type::Or(..))) => err(e.span, ignored_error(name)),
-                    ExprKind::Call(..) => Ok(()),
+                    ExprKind::Call(..) | ExprKind::Edit { .. } => Ok(()),
                     ExprKind::PlanB { value, .. } if e.ty == Some(Type::Unit) || matches!(value.kind, ExprKind::Call(..)) => Ok(()),
                     ExprKind::Binary(BinaryOp::Eq, ..) => err(e.span, "the result of '==' is unused; use '=' to assign"),
                     _ => err(e.span, "this value is unused; only a task call can be used as a statement"),
@@ -1252,7 +1253,7 @@ impl Checker {
                 let ty = self.field_type(&base_ty, field, span)?;
                 match base_ty {
                     Type::Array(..) => return err(span, "'len' can't be assigned: an array's length is part of its type"),
-                    Type::Slice(..) => return err(span, "'len' can't be assigned: a slice's length changes only by slicing it, as in 'xs = xs[0..2]'"),
+                    Type::Slice(..) => return err(span, "'len' can't be assigned: a slice's length changes with 'xs.add(…)' and 'xs.del(…)', or by slicing it, as in 'xs = xs[0..2]'"),
                     _ => {}
                 }
                 expr.ty = Some(ty.clone());
@@ -1691,6 +1692,7 @@ impl Checker {
                 Ok(Type::Fail(Box::new(ty)))
             }
             ExprKind::PlanB { value, error, body } => self.check_plan_b(span, value, error.as_ref(), body),
+            ExprKind::Edit { items, op, args } => self.check_edit(span, items, *op, args),
             // Only the checker creates `Wrap`, with its type already set.
             ExprKind::Wrap(_) => expr.ty.clone().ok_or_else(|| Error::internal_at(span, "a wrapped value has no type")),
         }
@@ -1824,6 +1826,102 @@ impl Checker {
         Ok(Type::Slice(Box::new(items), region))
     }
 
+    /// Checks `items.add(…)` or `items.del(…)`, a change to a slice at `span`,
+    /// and returns its type: `unit` for `add`, the item taken out for `del`.
+    /// The slice must be in a place that can be assigned, since its length
+    /// changes, and `add` needs to allocate in the slice's region, which may
+    /// need more room.
+    fn check_edit(&mut self, span: Span, items: &mut Expr, op: EditOp, args: &mut [Expr]) -> Result<Type> {
+        let word = op.word();
+        let ty = match &items.kind {
+            ExprKind::Var(name) => {
+                let name = name.clone();
+                let info = self.lookup_or_err(&name, items.span)?;
+                if info.result {
+                    return err(items.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
+                }
+                if !info.mutable && matches!(info.ty, Type::Slice(..)) {
+                    return err(items.span, format!("'{}' changes '{}', which is immutable; keep the slice in a 'hold' variable to change it", word, name));
+                }
+                self.check_expr(items)?
+            }
+            ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => {
+                self.check_expr(items)?;
+                return err(
+                    items.span,
+                    format!("'{}' changes the slice where it is kept, so it can't change a part taken of one; keep the part in a variable first, as in 'hold part = xs[a..b]'", word),
+                );
+            }
+            // The place is checked as an assignment's is: the slice is written.
+            ExprKind::Field(..) | ExprKind::Deref(_) | ExprKind::Index(..) => self.check_assign_target(items).map_err(|mut error| {
+                // Said of this change rather than of an assignment.
+                if let Some(rest) = error.message.strip_prefix("cannot assign to ") {
+                    error.message = format!("'{}' can't change {}", word, rest);
+                } else if error.message.starts_with("'len' can't be assigned") {
+                    error.message = format!("'{}' changes a slice, but this value is int", word);
+                }
+                error
+            })?,
+            _ => {
+                let ty = self.check_expr(items)?;
+                if matches!(ty, Type::Slice(..)) {
+                    return err(
+                        items.span,
+                        format!("'{}' changes the slice where it is kept, so it needs a variable, a field, or an item holding the slice, not a temporary value", word),
+                    );
+                }
+                ty
+            }
+        };
+        let (item, region) = match &ty {
+            Type::Slice(item, region) => ((**item).clone(), region.clone()),
+            Type::Array(..) => {
+                return err(
+                    span,
+                    format!("an array's length is part of its type, so '{}' can't change it; make a slice in a region, as in 'new [{}](xs) at r'", word, item_type_example(&ty)),
+                );
+            }
+            other => {
+                return err(span, format!("'{}' changes a slice, but this value is {}{}", word, other, extract_hint(&[other])));
+            }
+        };
+        let (index, value) = match (op, &mut *args) {
+            (EditOp::Add, [value]) => (None, Some(value)),
+            (EditOp::Add, [index, value]) => (Some(index), Some(value)),
+            (EditOp::Del, []) => (None, None),
+            (EditOp::Del, [index]) => (Some(index), None),
+            (EditOp::Add, _) => {
+                return err(span, format!("'add' takes the value, or an index and the value, as in 'xs.add(v)' or 'xs.add(i, v)', got {}", count(args.len(), "argument")));
+            }
+            (EditOp::Del, _) => {
+                return err(span, format!("'del' takes an index, or nothing for the last item, as in 'xs.del(i)' or 'xs.del()', got {}", count(args.len(), "argument")));
+            }
+        };
+        if let Some(index) = index {
+            let index_ty = self.check_expr(index)?;
+            self.expect_type(&index_ty, &Type::Int, index.span)?;
+            if let Some(n) = constant_int(index)
+                && n < 0
+            {
+                return err(index.span, format!("index {} is out of range: it is less than 0", n));
+            }
+        }
+        let Some(value) = value else { return Ok(item) };
+        self.check_expr(value)?;
+        self.coerce(value, &item)?;
+        // Adding may need more room, which comes from the slice's region.
+        match region.as_deref() {
+            Some(region) if region != ANY_REGION => match self.lookup(region) {
+                Some(info) if info.ty == Type::Region && !info.allocates => err(
+                    span,
+                    format!("adding to a slice may need more room in its region '{0}', which this task only names in its types; take it as a parameter, '{0}: region'", region),
+                ),
+                _ => self.visible_region(region, span, true).map(|()| Type::Unit),
+            },
+            _ => Err(Error::internal_at(span, format!("a slice of type {} added to has no region", ty))),
+        }
+    }
+
     /// Checks the value of `new [T](value) at r`, which gives the slice its
     /// items, of type `items` in `r`: `[v; n]`, whose count may be known only as
     /// the program runs, or an array or slice whose items are copied.
@@ -1838,6 +1936,11 @@ impl Checker {
             {
                 return err(count.span, format!("count {} is negative", n));
             }
+            value.ty = Some(slice.clone());
+            return Ok(());
+        }
+        // `new [T]()`: no items yet.
+        if matches!(&value.kind, ExprKind::Array(values) if values.is_empty()) {
             value.ty = Some(slice.clone());
             return Ok(());
         }
@@ -2186,6 +2289,15 @@ impl Checker {
     }
 }
 
+/// The type of the items of an array type, as a message writes it for a
+/// slice made from the array: without regions.
+fn item_type_example(array: &Type) -> Type {
+    match array {
+        Type::Array(items, _) => items.without_regions(),
+        other => other.without_regions(),
+    }
+}
+
 /// Replaces `expr` with a `Wrap` of itself, of type `ty`.
 fn wrap(expr: &mut Expr, ty: &Type) {
     let span = expr.span;
@@ -2386,7 +2498,7 @@ fn value_bytes(ty: &Type, sizes: &HashMap<String, u128>) -> u128 {
         Type::Unit => 0,
         Type::Named(name, _) => sizes.get(name).copied().unwrap_or(8),
         Type::Array(items, count) => value_bytes(items, sizes).saturating_mul(u128::from(*count)),
-        Type::Slice(..) => 16,
+        Type::Slice(..) => 24,
         Type::Maybe(inner) => value_bytes(inner, sizes).saturating_add(8),
         Type::Or(value, error) => value_bytes(value, sizes).saturating_add(value_bytes(error, sizes)).saturating_add(8),
         Type::Fail(inner) | Type::Range(inner) => value_bytes(inner, sizes),

@@ -96,10 +96,10 @@ fn a_counter_and_an_item_are_described_apart() {
 }
 
 #[test]
-fn completion_offers_len_on_arrays_and_slices() {
+fn completion_offers_len_on_arrays_and_len_add_and_del_on_slices() {
     for checks in [true, false] {
         assert_eq!(labels(&program(checks, "show(scores.@@)")), ["len"], "checks: {}", checks);
-        assert_eq!(labels(&program(checks, "show(points.@@)")), ["len"], "checks: {}", checks);
+        assert_eq!(labels(&program(checks, "show(points.@@)")), ["len", "add", "del"], "checks: {}", checks);
         let fields = labels(&program(checks, "show(points[0].@@)"));
         assert!(fields.contains(&"x".to_string()) && fields.contains(&"y".to_string()), "{:?}", fields);
     }
@@ -152,4 +152,38 @@ fn completion_continues_array_and_slice_expressions() {
         // After its name, only `in`.
         assert_eq!(labels(&program(checks, "each v @@")), ["in"], "{}", when);
     }
+}
+
+#[test]
+fn changes_to_a_slice_have_types_hovers_and_snippets() {
+    for checks in [true, false] {
+        let when = if checks { "checked" } else { "declared" };
+        let code = "hold names = new [text]() at r\n    names.add(\"a\")\n    names.add(0, \"b\")\n    bind taken = names.del(1)\n    hold moving = points\n    bind last = moving.del()\n    show(taken)\n    show(last.x)";
+        let source = program(checks, code);
+        if checks {
+            assert_eq!(Analysis::new(&source).diagnostics(), Vec::new());
+        }
+        assert_eq!(hover(&source, "names =").0, "hold names: [text]@r", "{}", when);
+        assert_eq!(hover(&source, "taken =").0, "bind taken: text", "{}", when);
+        assert_eq!(hover(&source, "last =").0, "bind last: Point", "{}", when);
+    }
+    let source = program(true, "hold names = new [text]() at r\n    names.add(\"a\")\n    show(names.del())");
+    let (code, doc) = hover(&source, "add(");
+    assert_eq!(code, "add(value) or add(index, value)");
+    assert!(doc.starts_with("Adds a value to a slice"), "{}", doc);
+    let (code, doc) = hover(&source, "del(");
+    assert_eq!(code, "del(index) or del()");
+    assert!(doc.starts_with("Takes the item at the index out"), "{}", doc);
+    let items = completions(&program(true, "points.@@"));
+    let snippets: Vec<(&str, Option<&str>)> = items.iter().map(|item| (item.label.as_str(), item.snippet.as_deref())).collect();
+    assert_eq!(snippets, [("len", None), ("add", Some("add(${value})")), ("del", Some("del(${index})"))]);
+    // An array can't change its length.
+    assert_eq!(labels(&program(true, "scores.@@")), ["len"]);
+}
+
+#[test]
+fn a_variant_named_like_a_change_is_still_a_variant() {
+    let source = "kind Step\n    add(amount: int)\n    del\nfi\n\ntask main()\n    bind a = Step.add(2)\n    bind b = Step.del\n    match a\n        case add n\n            show(n)\n        case del\n            show(0)\n    fi\nfi\n";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_eq!(hover(source, "a =").0, "bind a: Step");
 }

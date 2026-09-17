@@ -398,6 +398,42 @@ pub enum ExprKind {
     /// `T or E`: a plain value, `none`, or `fail e`. The node's `ty` is the
     /// type it becomes.
     Wrap(Box<Expr>),
+    /// `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, or `xs.del()`: a change to the
+    /// slice `items` names, a place that holds it. Not a method (Vela has none):
+    /// the builtin changes a slice can have. The node's span is the word
+    /// after the dot.
+    Edit {
+        items: Box<Expr>,
+        op: EditOp,
+        args: Vec<Expr>,
+    },
+}
+
+/// A change `ExprKind::Edit` makes to a slice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditOp {
+    /// `add(v)` puts a value at the end, `add(i, v)` before item `i`.
+    Add,
+    /// `del(i)` takes item `i` out, `del()` the last item; either gives it.
+    Del,
+}
+
+impl EditOp {
+    /// The change written after a dot: `add` or `del`.
+    pub fn from_word(word: &str) -> Option<EditOp> {
+        match word {
+            "add" => Some(EditOp::Add),
+            "del" => Some(EditOp::Del),
+            _ => None,
+        }
+    }
+
+    pub fn word(self) -> &'static str {
+        match self {
+            EditOp::Add => "add",
+            EditOp::Del => "del",
+        }
+    }
 }
 
 /// One `name: value` in a shape literal.

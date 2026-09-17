@@ -1,4 +1,4 @@
-# error: 11:27: only a task or a variant can be called, and Vela has no methods; pass the value to a task, as in 'f(value)'
+# error: 11:22: only a task or a variant can be called, and Vela has no methods; pass the value to a task, as in 'f(value)'
 shape Point
     x: int
 fi

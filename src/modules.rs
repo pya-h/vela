@@ -719,7 +719,7 @@ impl Resolver<'_> {
                     Some(kind) if kind.what == What::Kind => self.variant(&kind, first, member, at).map(Some),
                     _ => {
                         let hint = match self.kind_hint(first) {
-                            hint if hint.is_empty() => self.unnamed_hint(first, calls),
+                            hint if hint.is_empty() => self.unnamed_hint(written, first, calls),
                             hint => hint,
                         };
                         err(at, format!("'{}' names nothing: '{}' is neither a module this file includes nor a kind{}", written, first, hint))
@@ -728,7 +728,7 @@ impl Resolver<'_> {
             },
             [module_name, kind_name, variant] => {
                 let Some(module) = self.modules.get(*module_name) else {
-                    return err(at, format!("'{}' names nothing: '{}' isn't a module this file includes{}", written, module_name, self.unnamed_hint(module_name, calls)));
+                    return err(at, format!("'{}' names nothing: '{}' isn't a module this file includes{}", written, module_name, self.unnamed_hint(written, module_name, calls)));
                 };
                 let kind = self.member(module_name, module, kind_name, at)?;
                 if kind.what != What::Kind {
@@ -737,7 +737,7 @@ impl Resolver<'_> {
                 self.variant(&kind, &format!("{}{}{}", module_name, MODULE_SEPARATOR, kind_name), variant, at).map(Some)
             }
             [first, ..] if !self.modules.contains_key(*first) => {
-                err(at, format!("'{}' names nothing: '{}' isn't a module this file includes{}", written, first, self.unnamed_hint(first, calls)))
+                err(at, format!("'{}' names nothing: '{}' isn't a module this file includes{}", written, first, self.unnamed_hint(written, first, calls)))
             }
             _ => err(at, format!("'{}' names nothing: a variant of a module is named with three names, as in 'geometry.Figure.Square'", written)),
         }
@@ -760,14 +760,19 @@ impl Resolver<'_> {
             })
     }
 
-    /// The end of a "names nothing" error for `first`, a name this file doesn't
-    /// give a module or kind: how the module with that file name is included,
-    /// if it is, or for a call, that Vela has no methods.
-    fn unnamed_hint(&self, first: &str, calls: bool) -> String {
+    /// The end of a "names nothing" error for `written`, whose first name
+    /// `first` this file doesn't give a module or kind: how the module with that
+    /// file name is included, if it is, or for a call, that Vela has no methods
+    /// (and the change to a slice it may mean).
+    fn unnamed_hint(&self, written: &str, first: &str, calls: bool) -> String {
         match self.unnamed.iter().find(|(file_name, _, _)| file_name == first) {
             Some((_, Some(alias), path)) => format!("; module '{}' is included as '{}'", path, alias),
             Some((_, None, path)) => format!("; module '{}' is included with only its parts, which are named alone", path),
-            None if calls => ", and Vela has no methods".to_string(),
+            None if calls => match unqualified(written) {
+                "push" | "append" | "insert" => ", and Vela has no methods; a slice adds an item with 'add', as in 'xs.add(v)' or 'xs.add(i, v)'".to_string(),
+                "pop" | "remove" | "delete" => ", and Vela has no methods; a slice takes an item out with 'del', as in 'xs.del(i)' or 'xs.del()'".to_string(),
+                _ => ", and Vela has no methods".to_string(),
+            },
             None => String::new(),
         }
     }
@@ -827,7 +832,7 @@ impl Resolver<'_> {
                 Some(kind) => *name = kind.full,
                 None => match name.split_once(MODULE_SEPARATOR) {
                     Some((first, _)) if !self.modules.contains_key(first) => {
-                        return err(*at, format!("'{}' names nothing: '{}' isn't a module this file includes{}", name, first, self.unnamed_hint(first, false)));
+                        return err(*at, format!("'{}' names nothing: '{}' isn't a module this file includes{}", name, first, self.unnamed_hint(name, first, false)));
                     }
                     _ => return err(*at, format!("'{}' isn't a kind, so a pattern can't name a variant of it{}", name, self.kind_hint(name))),
                 },
@@ -941,6 +946,9 @@ impl Resolver<'_> {
         if matches!(&expr.kind, ExprKind::Field(base, _) if matches!(base.kind, ExprKind::Var(_))) && self.variant_as_field(expr)? {
             return Ok(());
         }
+        if matches!(expr.kind, ExprKind::Edit { .. }) && self.edit_as_variant(expr)? {
+            return Ok(());
+        }
         match &mut expr.kind {
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit => Ok(()),
             // A variable keeps its name. No variable can be named like a variant
@@ -969,7 +977,30 @@ impl Resolver<'_> {
                 self.expr(value)?;
                 self.block(body)
             }
+            ExprKind::Edit { items, args, .. } => {
+                self.expr(items)?;
+                args.iter_mut().try_for_each(|e| self.expr(e))
+            }
         }
+    }
+
+    /// `Kind.add(…)` or `Kind.del(…)`, which the parser reads as a change to a
+    /// slice, rewritten to the call of the kind's variant; whether `expr` was
+    /// one. No variable can be named like a kind (see `Checker::define`). (A
+    /// function of its own: `expr`'s frame is on the stack once per nesting
+    /// level.)
+    fn edit_as_variant(&self, expr: &mut Expr) -> Result<bool> {
+        let ExprKind::Edit { items, op, args } = &mut expr.kind else { return Ok(false) };
+        let ExprKind::Var(name) = &items.kind else { return Ok(false) };
+        if self.kind(name, items.span)?.is_none() {
+            return Ok(false);
+        }
+        let written = format!("{}{}{}", name, MODULE_SEPARATOR, op.word());
+        // Where the kind is written, as for any `Kind.Variant(…)`.
+        expr.span = items.span;
+        expr.kind = ExprKind::Call(written, std::mem::take(args));
+        self.expr(expr)?;
+        Ok(true)
     }
 }
 

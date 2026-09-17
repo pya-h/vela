@@ -1,0 +1,28 @@
+# A stack kept in a region, changed by the tasks of this module, and a kind
+# whose variants are named like the changes to a slice.
+
+kind Op
+    add(amount: int)
+    del
+fi
+
+shape Stack
+    items: [int]
+fi
+
+task push(r: region, s: ^Stack@r, v: int)
+    s^.items.add(v)
+fi
+
+task pop(s: ^Stack@r) -> int
+    <- s^.items.del()
+fi
+
+task apply(r: region, s: ^Stack@r, op: Op)
+    match op
+        case add amount
+            push(r, s, amount)
+        case del
+            _ = pop(s)
+    fi
+fi

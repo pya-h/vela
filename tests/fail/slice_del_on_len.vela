@@ -1,0 +1,6 @@
+# error: 5:13: 'del' changes a slice, but this value is int
+task main()
+    region r
+    hold xs = new [int]([1]) at r
+    show(xs.len.del())
+fi

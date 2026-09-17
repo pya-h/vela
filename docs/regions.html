@@ -809,6 +809,61 @@ not a digit
         <code>new [int](xs) at r</code>, or allocate it there, <code>new [int; 4](xs) at r</code>, and slice what the
         pointer points to (<code>p^[0..2]</code>).
       </p>
+      <p>
+        A slice can also grow and shrink: <code>xs.add(v)</code> puts a value last, <code>xs.add(i, v)</code> before item
+        <code>i</code>, and <code>xs.del(i)</code> and <code>xs.del()</code> take an item out and give it.
+        <code>new [int]() at r</code> starts with no items. Adding may need more memory, which comes from the slice's
+        own region, so a task that adds needs that region, as one that calls <code>new</code> does:
+      </p>
+      <pre class="program" data-file="09_growing.vela"><span class="comment"># The primes below n, added as they are found, in the caller&#x27;s region.</span>
+<span class="keyword">task</span> primes(r: <span class="keyword">region</span>, n: int) -&gt; [int]@r
+    <span class="keyword">hold</span> found = <span class="keyword">new</span> [int]() <span class="keyword">at</span> r
+    <span class="keyword">each</span> candidate <span class="keyword">in</span> 2..n
+        <span class="keyword">hold</span> prime = <span class="keyword">true</span>
+        <span class="keyword">each</span> p <span class="keyword">in</span> found
+            <span class="keyword">when</span> candidate % p == <span class="number">0</span>
+                prime = <span class="keyword">false</span>
+            <span class="keyword">fi</span>
+        <span class="keyword">fi</span>
+        <span class="keyword">when</span> prime
+            found.add(candidate)
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> found
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> kept
+    <span class="keyword">hold</span> numbers = primes(kept, <span class="number">30</span>)
+    show(numbers.len)
+    show(numbers.del())
+    numbers.add(<span class="number">0</span>, <span class="number">1</span>)
+    show(numbers[<span class="number">0</span>] + numbers[<span class="number">1</span>])
+    <span class="keyword">each</span> round <span class="keyword">in</span> 0..<span class="number">2</span>
+        <span class="keyword">region</span> work
+        <span class="keyword">hold</span> stack = <span class="keyword">new</span> [int](numbers) <span class="keyword">at</span> work
+        <span class="keyword">loop</span> stack.len &gt; <span class="number">1</span>
+            stack.add(stack.del() + stack.del())
+        <span class="keyword">fi</span>
+        show(stack[<span class="number">0</span>])
+    <span class="keyword">fi</span>
+    show(numbers.len)
+<span class="keyword">fi</span></pre>
+<pre class="output" aria-label="Output">10
+29
+3
+101
+101
+10</pre>
+      <p>
+        <code>found</code> gets its items in <code>kept</code>, the region <code>primes</code> is given. Its first
+        <code>add</code> makes a block with room for more, and later ones fill that room; a full block is replaced by one
+        twice as large, whose items are copied in, and the old one stays in the region until the region is freed (or
+        grows in place, when nothing was allocated after it). Each pass builds <code>stack</code> in <code>work</code>, so
+        its blocks are freed with the pass, and <code>numbers</code> is unchanged: a copy into another region never shares
+        items. A <code>bind</code> slice, a parameter, or a part <code>xs[a..b]</code> can't change its length; a task
+        changes its caller's slice through a pointer to what holds it, as in <code>bag^.items.add(v)</code>.
+      </p>
 
       <h3 id="choosing">Lesson 10: Choosing regions</h3>
       <p>Rules of thumb:</p>
@@ -835,6 +890,8 @@ not a digit
           <tr><td><code>a pointer lives in a region, so its type names one</code></td><td>Write the region: <code>^int@r</code>, not <code>^int</code>.</td></tr>
           <tr><td><code>a slice lives in a region, so its type names one</code></td><td>Write the region: <code>[int]@r</code>, not <code>[int]</code>.</td></tr>
           <tr><td><code>a slice points into a region, but this array isn't in one</code></td><td>The array is in a variable. Copy it into a slice with <code>new [int](xs) at r</code>, or allocate the array in a region and slice <code>p^[a..b]</code>.</td></tr>
+          <tr><td><code>adding to a slice may need more room in its region 'r', which this task only names in its types</code></td><td>The task adds to a slice in a region it wasn't given. Take the region as a parameter, <code>r: region</code>, and pass it from the caller.</td></tr>
+          <tr><td><code>'add' changes 'xs', which is immutable</code></td><td>A <code>bind</code> slice or a parameter can't change its length. Keep the slice in a <code>hold</code> variable, or change it through a pointer to what holds it.</td></tr>
           <tr><td><code>'Node' holds pointers, so it lives in a region</code></td><td>Write <code>Node@r</code> where the shape is used.</td></tr>
           <tr><td><code>'Point' holds no pointers, so it lives in no region</code></td><td>Remove <code>@r</code>: plain values need none.</td></tr>
           <tr><td><code>a field lives in the region of the value holding it</code></td><td>In a <code>shape</code> or <code>kind</code>, write <code>^Node</code>, not <code>^Node@r</code>.</td></tr>

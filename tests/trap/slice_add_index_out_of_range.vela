@@ -1,0 +1,10 @@
+# trap: index 4 is out of range 0..4 at 9:11 in task 'main'
+# Adding before an index past the end: the index may be the length (adding
+# last), but not more.
+task main()
+    region r
+    hold items = new [int]([1, 2]) at r
+    items.add(items.len, 3)
+    show(items[2])
+    items.add(4, 9)
+fi

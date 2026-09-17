@@ -1,0 +1,6 @@
+# error: 5:8: 'add' takes the value, or an index and the value, as in 'xs.add(v)' or 'xs.add(i, v)', got 3 arguments
+task main()
+    region r
+    hold xs = new [int]() at r
+    xs.add(0, 1, 2)
+fi

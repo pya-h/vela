@@ -1,0 +1,9 @@
+# error: 8:5: 'add' changes the slice where it is kept, so it needs a variable, a field, or an item holding the slice, not a temporary value
+task make(r: region) -> [int]@r
+    <- new [int]() at r
+fi
+
+task main()
+    region r
+    make(r).add(1)
+fi

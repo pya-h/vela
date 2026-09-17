@@ -1,4 +1,4 @@
-# error: 5:11: 'len' can't be assigned: a slice's length changes only by slicing it, as in 'xs = xs[0..2]'
+# error: 5:11: 'len' can't be assigned: a slice's length changes with 'xs.add(…)' and 'xs.del(…)', or by slicing it, as in 'xs = xs[0..2]'
 task main()
     region r
     hold items = new [int]([0; 3]) at r

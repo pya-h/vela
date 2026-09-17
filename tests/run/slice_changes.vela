@@ -1,0 +1,184 @@
+# Changing a slice's items: `xs.add(v)` puts a value last, `xs.add(i, v)`
+# before item `i`, `xs.del(i)` takes item `i` out and gives it, and `xs.del()`
+# the last one. `new [T]() at r` makes a slice with no items. A slice grows in
+# its region: in place while its block has room, otherwise into a bigger block
+# (tests/runtime.rs also runs this under sanitizers, which check that no copy or
+# part of a slice writes over another's items).
+
+shape Point
+    x: int
+    y: int
+fi
+
+shape Bag
+    items: [int]
+fi
+
+kind Step
+    add(amount: int)
+    del
+fi
+
+task show_all(xs: [int]@r)
+    each x in xs
+        show(x)
+    fi
+fi
+
+# Adds through a pointer, so the caller's slice changes; it allocates, so it
+# takes the region.
+task fill(r: region, bag: ^Bag@r, n: int)
+    each i in 0..n
+        bag^.items.add(i * 10)
+    fi
+fi
+
+# A slice kept in a variable of its own can change, and be sent back.
+task evens(r: region, n: int) -> [int]@r
+    hold out = new [int]() at r
+    each i in 0..n
+        when i % 2 == 0
+            out.add(i)
+        fi
+    fi
+    <- out
+fi
+
+task value_of(step: Step) -> int
+    match step
+        case add n
+            <- n
+        case del
+            <- -1
+    fi
+fi
+
+task main()
+    region r
+    hold xs = new [int]() at r
+    show(xs.len)
+    xs.add(1)
+    xs.add(3)
+    xs.add(1, 2)
+    xs.add(0, 0)
+    xs.add(xs.len, 4)
+    show_all(xs)
+
+    # Taking items out gives them.
+    show(xs.del())
+    show(xs.del(0))
+    xs.del(1)
+    show_all(xs)
+
+    # Arguments run left to right.
+    xs.add(5)
+    xs.add(6)
+    show(xs.del() - xs.del())
+
+    # A copy shares the items, but adding to one never writes over the other's.
+    hold copy = xs
+    xs.add(7)
+    copy.add(8)
+    show(xs[xs.len - 1])
+    show(copy[copy.len - 1])
+
+    # A part ending where the slice ends, and one ending before it.
+    hold numbers = new [int]([1, 2, 3, 4]) at r
+    numbers.add(5)
+    hold tail = numbers[3..5]
+    hold head = numbers[0..2]
+    head.add(9)
+    tail.add(6)
+    show(numbers[2])
+    show(numbers.len)
+    show(tail[2])
+    numbers.add(7)
+    show(tail[2])
+    show(numbers[5])
+
+    # A slice made from an array in a region, or copied, grows too.
+    bind boxed = new [int; 3]([1, 2, 3]) at r
+    hold view = boxed^[0..2]
+    view.add(10)
+    show(boxed^[2])
+    show(view[2])
+
+    # Many items, with other allocations in between.
+    hold many = new [int]() at r
+    hold pointers = new [^int]() at r
+    each i in 0..20000
+        many.add(i)
+        pointers.add(new int(i) at r)
+    fi
+    hold total = 0
+    loop many.len > 0
+        total = total + many.del()
+    fi
+    show(total)
+    show(pointers[19999]^)
+    many.add(0, 1)
+    show(many.len)
+
+    # Through a pointer, a field, and an item of another slice.
+    bind bag = new Bag(Bag { items: new [int]() at r }) at r
+    fill(r, bag, 4)
+    show(bag^.items.del(1))
+    hold kept = Bag { items: new [int]([1]) at r }
+    kept.items.add(2)
+    show(kept.items.len)
+    hold rows = new [[int]]([new [int]() at r; 2]) at r
+    rows[1].add(5)
+    rows[1].add(0, 4)
+    show(rows[1][0] + rows[1][1])
+    show(rows[0].len)
+
+    # Items of other types.
+    hold names = new [text]() at r
+    names.add("b")
+    names.add(0, "a")
+    show(names.del(0))
+    hold points = new [Point]() at r
+    points.add(Point { x: 1, y: 2 })
+    show(points.del().y)
+    hold maybes = new [maybe int]() at r
+    maybes.add(none)
+    maybes.add(3)
+    show(maybes.del())
+    show(maybes.del())
+
+    # In conditions: the right side of 'and' runs only when needed.
+    hold left = new [int]([1, 2]) at r
+    when left.len > 5 and left.del() == 2
+        show(0)
+    fi
+    show(left.len)
+    loop left.len > 0 and left.del() > 0
+        show(left.len)
+    fi
+
+    # Adding while walking: the walk counts the items it started with.
+    hold walked = new [int]([1, 2]) at r
+    each w in walked
+        walked.add(w * 10)
+    fi
+    show(walked.len)
+
+    # A region inside a loop frees what was added on every pass.
+    each pass in 0..3
+        region scratch
+        hold temporary = new [int]() at scratch
+        temporary.add(pass)
+        show(temporary.del())
+    fi
+
+    # Dropped values, and plan B values as arguments.
+    _ = xs.del()
+    bind _ = copy.del()
+    bind missing: maybe int = none
+    xs.add(missing { 42 })
+    show(xs.del())
+
+    # A kind's variants may be named 'add' and 'del'.
+    show(value_of(Step.add(3)) + value_of(Step.del))
+    show(evens(r, 7).len)
+fi

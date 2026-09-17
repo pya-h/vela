@@ -258,6 +258,7 @@ true false none  fi   maybe is     fail include priv</pre>
         <tr><td><code>[T; n]</code>, <code>[T]@r</code></td><td>an array type; a slice type (see <a href="#arrays">Arrays</a> and <a href="#slices">Slices</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v; n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
+        <tr><td><code>xs.add(v)</code>, <code>xs.add(i, v)</code>, <code>xs.del(i)</code>, <code>xs.del()</code></td><td>add a value to a slice, last or before item <code>i</code>; take item <code>i</code>, or the last, out of it and give it</td></tr>
         <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, or variant of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
         <tr><td><code>Kind.Variant</code></td><td>a variant, named through its kind (see <a href="#kinds">Kinds</a>)</td></tr>
         <tr><td><code>name =&gt; other</code></td><td>on an <code>include</code> line: the name a module or a name brought in is written with in this file</td></tr>
@@ -664,7 +665,8 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
           compiler (<em>vela: index 4 is out of range 0..4 at 7:12 in task 'main'</em>); a constant index out of
           range is an error when compiling.</li>
         <li><strong>each.</strong> <code>each v in xs</code> goes through the items in order. An array is gone through as
-          it was when the loop started, even if the loop changes it.</li>
+          it was when the loop started, even if the loop changes it; a slice, as many items as it had then, each read as
+          it is.</li>
         <li><strong>Not yet.</strong> Arrays can't be compared with <code>==</code> or shown whole (show their items one at
           a time), and a part of an array is a slice, which points into a region.</li>
       </ul>
@@ -1041,7 +1043,8 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         be), its type names its region except in a field and after <code>new</code>, it can't be stored in another
         region, and a task sends one only into a region it is given. <code>new [T](items) at r</code> makes a slice by
         copying the items into <code>r</code>: <code>[v; n]</code> for <code>n</code> copies of <code>v</code>, where
-        <code>n</code> may be known only as the program runs, an array, or another slice.
+        <code>n</code> may be known only as the program runs, an array, or another slice. <code>new [T]() at r</code>
+        makes one with no items.
       </p>
       <pre><span class="keyword">task</span> squares(r: region, n: int) -&gt; [int]@r
     <span class="keyword">bind</span> out = <span class="keyword">new</span> [int]([0; n]) <span class="keyword">at</span> r
@@ -1070,11 +1073,65 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
           range 0..4</em>, <em>vela: slice 3..1 ends before it starts</em>), and so is a count for <code>new [T]([v; n])</code>
           (<em>vela: count -2 is negative</em>).</li>
         <li><strong>Writing.</strong> A slice's items can always be written, like what a pointer points to; its
-          <code>len</code> can't be, since a slice's length changes only by slicing it into another.</li>
-        <li><strong>Growing.</strong> A slice can't grow: to add items, make a longer slice and copy them into it. Its
-          items live in its region, so <code>new [^Node](nodes) at other</code> is an error when the pointers are in
-          another region, as copying a pointer there would be.</li>
+          <code>len</code> can't be: it changes as items are added and taken out, or by slicing.</li>
+        <li><strong>Regions.</strong> A slice's items live in its region, so <code>new [^Node](nodes) at other</code> is an
+          error when the pointers are in another region, as copying a pointer there would be.</li>
       </ul>
+
+      <h3 id="slice-changes">Adding and taking out items</h3>
+      <p>
+        A slice's length can change; an array's can't, since it is part of the array's type. Four changes are built in:
+      </p>
+      <pre><span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">hold</span> queue = <span class="keyword">new</span> [text]() <span class="keyword">at</span> r   <span class="comment"># no items yet</span>
+    queue.add(<span class="string">"b"</span>)                       <span class="comment"># last: b</span>
+    queue.add(<span class="string">"d"</span>)                       <span class="comment"># b d</span>
+    queue.add(0, <span class="string">"a"</span>)                    <span class="comment"># before item 0: a b d</span>
+    queue.add(2, <span class="string">"c"</span>)                    <span class="comment"># a b c d</span>
+    show(queue.del(1))                  <span class="comment"># b; now a c d</span>
+    show(queue.del())                   <span class="comment"># d, the last; now a c</span>
+    show(queue.len)                     <span class="comment"># 2</span>
+<span class="keyword">fi</span></pre>
+      <ul>
+        <li><strong>The four changes.</strong> <code>xs.add(v)</code> puts <code>v</code> last and <code>xs.add(i, v)</code>
+          before item <code>i</code>, where <code>i</code> may be the length (last). <code>xs.del(i)</code> takes item
+          <code>i</code> out and <code>xs.del()</code> the last item; both give the item, which can also be dropped
+          (<code>xs.del(0)</code> as a statement). The items after the change move to close or open the gap. They aren't
+          methods, which Vela doesn't have: they are what a slice can do, as <code>len</code> is what it has.</li>
+        <li><strong>Where.</strong> The slice changes where it is kept, so it must be in a place that can be assigned: a
+          <code>hold</code> variable, a field of one, anything behind a pointer (<code>bag^.items.add(v)</code>), or an item of
+          another slice. A <code>bind</code>, a parameter, a result, a call's value, and a part taken with
+          <code>xs[a..b]</code> can't change; keep them in a <code>hold</code> variable first. To change a caller's slice,
+          a task takes a pointer to what holds it.</li>
+        <li><strong>The region.</strong> <code>add</code> may need more room, which it takes from the slice's region, so the
+          task needs that region itself: a <code>region r</code> it declares, or an <code>r: region</code> parameter (as
+          <code>new</code> does). <code>del</code> needs no region.</li>
+        <li><strong>Checks.</strong> An index out of range stops the program (<em>vela: index 5 is out of range 0..3</em>;
+          for <code>add</code>, the range includes the length), and so does <code>del()</code> on a slice with no items
+          (<em>vela: del() on an empty slice</em>).</li>
+        <li><strong>Evaluation.</strong> The slice's place is found first, then the arguments, left to right; a change
+          inside a larger expression happens in order with the rest (<code>xs.del() - xs.del()</code> takes the last item
+          first).</li>
+      </ul>
+      <p>
+        <strong>How it runs.</strong> A slice also knows its <em>room</em>: after the first <code>add</code>, its items are
+        in a block of the region with free space after them, and an <code>add</code> is a copy into that space. A full
+        block is replaced by one twice as large, the items copied into it; when the block ends where the region hands out
+        memory next, it grows in place instead, without copying. Old blocks stay in the region until it is freed, like
+        any memory there, so a slice that grows to <em>n</em> items has used at most about four times their size in the
+        region. <code>del</code> moves the items after the one taken out, and taking out the last item gives its space
+        back to the room. To take the first item out without moving the rest, read it and slice:
+        <code>bind first = xs[0]</code>, then <code>xs = xs[1..xs.len]</code>.
+      </p>
+      <p>
+        <strong>Copies and parts.</strong> A copy of a slice (<code>hold ys = xs</code>) and a part of one
+        (<code>xs[1..3]</code>) are views of the same items. Adding to one never writes over an item another counts:
+        only the slice whose items end where the room begins adds in place, and the others copy their items into a
+        block of their own first. Writing an item, <code>del</code>, and <code>add</code> in the middle move items in
+        that shared memory, which the other views then see, as they see <code>xs[i] = v</code>. After changing a slice,
+        use the slice you changed.
+      </p>
 
       <h3>How it runs</h3>
       <p>
@@ -1250,14 +1307,14 @@ show(area(square))             <span class="comment"># error: unknown task 'area
         <li><code>text</code> is a C string, so a <code>\0</code> ends it; there are no text operations besides
           <code>==</code>, <code>!=</code>, and <code>show</code>.</li>
         <li>There is no way to read input.</li>
-        <li>Arrays and slices can't be compared or shown whole, a slice can't grow, and an array's count is known
-          before the program runs (see <a href="#arrays">Arrays</a>).</li>
+        <li>Arrays and slices can't be compared or shown whole, and an array's count is known before the program runs
+          (see <a href="#arrays">Arrays</a>).</li>
         <li>There are no packages to share modules between programs (see <a href="#modules">Modules</a>).</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which
           matters only when they call tasks that print, or when more than one of them would stop the program
-          (see <a href="#int-limits">Numbers</a>), which decides the message. (Where one of them contains a plan B,
-          they are evaluated left to right.)</li>
+          (see <a href="#int-limits">Numbers</a>), which decides the message. (Where one of them contains a plan B or a
+          change to a slice, they are evaluated left to right.)</li>
         <li>An expression, including a shape literal or a call's arguments, must be written on one line.</li>
         <li>Statements aren't yet required to end at a line break (<code>show(1) show(2)</code> on one line is
           accepted).</li>

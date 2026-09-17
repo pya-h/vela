@@ -9,7 +9,8 @@ plan B (`x { fallback }`). Blocks close with `fi`, and a task sends its results 
 several (`-> int, int` … `<- a / b, a % b`), received with `bind q, r = divmod(17, 5)`. Results can be named
 (`-> total: int`), set along the way with `total <- value` and sent by reaching the end of the task. An `int`
 never wraps: overflow and division by zero stop the program with a message saying where. Arrays (`[int; 4]`)
-are values held in place, and slices (`[int]@r`) view items in a region, made with `new [int]([0; n]) at r`;
+are values held in place, and slices (`[int]@r`) view items in a region, made with `new [int]([0; n]) at r`
+(or empty, `new [int]() at r`) and changed with `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, and `xs.del()`;
 every index is checked, and `xs.len` is the count. A program can span
 several files: `include shapes/geometry` reads `shapes/geometry.vela`, named as `geometry.area(…)` (or brought in
 with `include shapes/geometry (area)`, or only the names with braces, `{area}`), `=>` gives a module or a name

@@ -1,0 +1,7 @@
+# error: 3:8: 'del' changes 'xs', which is immutable; keep the slice in a 'hold' variable to change it
+task last(xs: [int]@r) -> int
+    <- xs.del()
+fi
+
+task main()
+fi

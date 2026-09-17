@@ -78,6 +78,14 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
         (TokenClass::Field, None) if text == "len" => {
             ("len: int".to_string(), "The number of items of an array or slice.".to_string())
         }
+        (TokenClass::Field, None) if text == "add" => (
+            "add(value) or add(index, value)".to_string(),
+            "Adds a value to a slice: last, or before the item at the index (which may be the length). The slice must be in a place that can change, and the task must have its region; the items stay in that region.".to_string(),
+        ),
+        (TokenClass::Field, None) if text == "del" => (
+            "del(index) or del()".to_string(),
+            "Takes the item at the index out of a slice, or the last item, and gives it. The items after it move down.".to_string(),
+        ),
         (_, Some(id)) => {
             let (code, doc) = describe(k, id)?;
             if code.contains(&format!("@{}", vela::ast::ANY_REGION)) {

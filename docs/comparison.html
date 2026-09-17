@@ -512,8 +512,11 @@
       <p>
         Arrays are written as in Rust, <code>[int; 4]</code>, and are values copied whole, as C's arrays are inside a
         struct. A slice, <code>[int]@r</code>, is Go's slice or Rust's <code>&amp;[T]</code> as a pointer and a length,
-        but like every Vela pointer it points into a region, so it can't outlive its memory; it doesn't grow, as Go's
-        <code>append</code> does. Every index is checked, as in Go, Rust, and Zig's safe builds, and the length is
+        but like every Vela pointer it points into a region, so it can't outlive its memory. It grows and shrinks, as
+        Go's with <code>append</code> or Rust's <code>Vec</code> do, with <code>xs.add(v)</code> and
+        <code>xs.del(i)</code>; like Go's, it grows by copying into a bigger block, but the old block stays in the region
+        until the region is freed, and adding to one copy of a slice never writes over another's items, which Go's
+        <code>append</code> can. Every index is checked, as in Go, Rust, and Zig's safe builds, and the length is
         <code>xs.len</code>, as in Zig.
       </p>
     </section>
@@ -531,7 +534,7 @@
         small demos where you want C performance without C syntax. (Vela can't yet read input; see
         <a href="vela.html#limits">Current Limits</a>.)
         <br><br>
-        <strong>When to avoid Vela:</strong> production systems, large teams, programs that need growable collections, rich
+        <strong>When to avoid Vela:</strong> production systems, large teams, programs that need maps or sets, rich
         standard libraries, or concurrency support, and long-running programs whose data changes piece by piece, since
         regions free memory in bulk (see <a href="regions.html#limits">the workarounds</a>).
       </div>

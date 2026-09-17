@@ -1,0 +1,6 @@
+# error: 5:17: index -1 is out of range: it is less than 0
+task main()
+    region r
+    hold xs = new [int]([1, 2, 3]) at r
+    show(xs.del(-1))
+fi

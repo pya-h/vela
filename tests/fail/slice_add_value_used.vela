@@ -1,0 +1,6 @@
+# error: 5:23: this expression has no value (its type is unit)
+task main()
+    region r
+    hold xs = new [int]() at r
+    bind nothing = xs.add(1)
+fi

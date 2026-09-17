@@ -1,0 +1,11 @@
+# error: 7:19: only a task or a variant can be called, and Vela has no methods; a slice takes an item out with 'del', as in 'xs.del(i)' or 'xs.del()'
+shape Bag
+    items: [int]
+fi
+
+task last(bag: ^Bag@r) -> int
+    <- bag^.items.pop()
+fi
+
+task main()
+fi

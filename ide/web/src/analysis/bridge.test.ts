@@ -121,6 +121,14 @@ describe("VelaAnalysis", () => {
     expect(labels).toEqual(expect.arrayContaining(["bind", "count", "show", "match"]));
   });
 
+  it("completes and describes the changes a slice has", () => {
+    const source = "task main()\n    region r\n    hold names = new [text]() at r\n    names.add(\"a\")\n    bind last = names.del()\n    show(last)\n    names.\nfi\n";
+    const members = analysis.complete(source, source.indexOf("names.\nfi") + "names.".length).items;
+    expect(members.map((item) => [item.label, item.snippet])).toEqual([["len", undefined], ["add", "add(${value})"], ["del", "del(${index})"]]);
+    expect(analysis.hover(source, source.indexOf("last ="))?.code).toBe("bind last: text");
+    expect(analysis.hover(source, source.indexOf("add("))?.code).toBe("add(value) or add(index, value)");
+  });
+
   it("analyzes deeply nested arrays, slices, and parentheses without crashing", () => {
     // The compiler stops at its nesting limit, well inside the module's stack.
     const deep = 20_000;

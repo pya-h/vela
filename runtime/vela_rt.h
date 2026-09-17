@@ -303,6 +303,114 @@ static inline void* vela__rt__region_items(vela__rt__region* r, int64_t len, siz
     return vela__rt__region_alloc(r, (size_t)len * size, align);
 }
 
+/* The items of `new [T]() at r`, which has none: any address will do, as long as
+ * it is aligned for any type; nothing is ever read or written there. */
+static inline void* vela__rt__no_items(void) {
+    static _Alignas(max_align_t) char none[1];
+    return none;
+}
+
+/* Slices that grow and shrink: `xs.add(…)` and `xs.del(…)`.
+ *
+ * A slice is its items' address, its length, and its room: a block in a region
+ * that `add` made, which holds the slice's items followed by free space. `end`
+ * is where the items end (the next item goes there) and `limit` where the block
+ * does. A slice made another way (by `new`, or a part of an array) has no room
+ * yet, and its first `add` copies its items into one.
+ *
+ * Only a slice whose items end exactly at `end` adds in place; any other slice
+ * sharing the block (an older copy of it, or a part of it) sees a different end
+ * and copies its items into a block of its own first, so an `add` never writes
+ * over items another slice counts. Taking out the last item of the block gives
+ * its space back to the room. Blocks double in size, and a block that ends
+ * where its region's newest chunk hands out memory grows in place instead. */
+
+typedef struct vela__rt__room {
+    char* end;
+    char* limit;
+} vela__rt__room;
+
+static inline _Noreturn void vela__rt__empty_trap(const char* at) {
+    fflush(stdout);
+    fprintf(stderr, "vela: del() on an empty slice at %s\n", at);
+    abort();
+}
+
+/* Checks that a slice of `len` items has an item to take out with `del()`. */
+static inline void vela__rt__not_empty(int64_t len, const char* at) {
+    if (len == 0) {
+        vela__rt__empty_trap(at);
+    }
+}
+
+/* Grows `room`, whose block ends where the newest chunk of `r` hands out memory,
+ * in place: by `wanted` bytes (the size of its items, so it doubles), or by as
+ * many whole items of `size` bytes as the chunk still has. */
+static inline void vela__rt__room_extend(vela__rt__region* r, vela__rt__room* room, size_t wanted, size_t size) {
+    vela__rt__chunk* chunk = r->newest;
+    if (chunk == NULL || room->limit != (char*)chunk->data + chunk->used) {
+        return;
+    }
+    size_t spare = chunk->size - chunk->used;
+    size_t more = wanted < size ? size : wanted;
+    if (more > spare) {
+        more = spare - spare % size;
+    }
+    chunk->used += more;
+    room->limit += more;
+}
+
+/* Makes a gap for one item before item `index` (0 to `len`) of a slice with
+ * `len` items of `size` bytes aligned to `align` at `items`, whose room is
+ * `*room`, and returns the address of the items, which may have moved into a
+ * new block of region `r` (then `*room` is that block's). The gap is left for
+ * the caller to fill. */
+static inline void* vela__rt__items_insert(vela__rt__region* r, void* items, int64_t len, vela__rt__room** room, int64_t index,
+                                           size_t size, size_t align) {
+    char* old = items;
+    size_t n = (size_t)len;
+    size_t i = (size_t)index;
+    vela__rt__room* own = *room;
+    if (own != NULL && old + n * size == own->end) {
+        if ((size_t)(own->limit - own->end) < size) {
+            vela__rt__room_extend(r, own, n * size, size);
+        }
+        if ((size_t)(own->limit - own->end) >= size) {
+            memmove(old + (i + 1) * size, old + i * size, (n - i) * size);
+            own->end += size;
+            return old;
+        }
+    }
+    size_t header = (sizeof(vela__rt__room) + align - 1) & ~(align - 1);
+    if (n > (SIZE_MAX - header) / size / 2 - 4) {
+        vela__rt__out_of_memory();
+    }
+    size_t capacity = n < 4 ? 4 : 2 * n;
+    size_t block_align = align > _Alignof(vela__rt__room) ? align : _Alignof(vela__rt__room);
+    char* block = vela__rt__region_alloc(r, header + capacity * size, block_align);
+    char* fresh = block + header;
+    memcpy(fresh, old, i * size);
+    memcpy(fresh + (i + 1) * size, old + i * size, (n - i) * size);
+    vela__rt__room* made = (vela__rt__room*)(void*)block;
+    made->end = fresh + (n + 1) * size;
+    made->limit = fresh + capacity * size;
+    *room = made;
+    return fresh;
+}
+
+/* Closes the gap item `index` of a slice with `len` items of `size` bytes at
+ * `items` leaves when it is taken out, moving the items after it down; the
+ * slice's length is then one less. */
+static inline void vela__rt__items_remove(void* items, int64_t len, vela__rt__room* room, int64_t index, size_t size) {
+    char* at = items;
+    size_t n = (size_t)len;
+    size_t i = (size_t)index;
+    memmove(at + i * size, at + (i + 1) * size, (n - i - 1) * size);
+    if (room != NULL && at + n * size == room->end) {
+        room->end -= size;
+    }
+}
+
 /* Frees everything allocated in `r`, which is then empty again. */
 static inline void vela__rt__region_free(vela__rt__region* r) {
     vela__rt__chunk* chunk = r->newest;

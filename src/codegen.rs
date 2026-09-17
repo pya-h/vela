@@ -59,8 +59,9 @@ impl CWriter {
 /// checker guarantee is reported as an internal compiler error.
 ///
 /// An expression is normally one C expression. One that contains a plan B
-/// (`x { … }`) needs statements, so generating it writes those statements
-/// ("the prelude") before the line that uses its value; see `gen_operands`.
+/// (`x { … }`) or a change to a slice (`xs.del()`) needs statements, so
+/// generating it writes those statements ("the prelude") before the line that
+/// uses its value; see `gen_operands`.
 ///
 /// A `region r` is an arena, `vela__rt__region r[1]`: as an array, `r` is a
 /// pointer to it, like a region parameter. Every block frees the regions it
@@ -218,7 +219,8 @@ impl Generator {
 
     /// The struct of a `maybe T` (`has`, `value`), a `T or E` (`ok`, `value`,
     /// `error`; no `value` for `unit or E`), several results (`r0`, `r1`, …),
-    /// an array (`items`), or a slice (`items`, a pointer, and `len`). A
+    /// an array (`items`), or a slice (`items`, a pointer, `len`, and `room`,
+    /// where `add` puts more items; see `vela__rt__items_insert`). A
     /// `maybe`'s and an `or`'s members are always initialized, so either can be
     /// read.
     fn gen_compound(&mut self, ty: &Type) {
@@ -237,6 +239,7 @@ impl Generator {
             Type::Slice(items, _) => {
                 self.w.line(&format!("{}* items;", c_type(items)));
                 self.w.line("int64_t len;");
+                self.w.line("vela__rt__room* room;");
             }
             Type::Or(value, error) => {
                 self.w.line("bool ok;");
@@ -263,7 +266,8 @@ impl Generator {
             let ctype = c_type(slice);
             self.w.open(&format!("static {0} {1}({0} s, int64_t from, int64_t to, const char* at)", ctype, item_helper("part", slice)));
             self.w.line("vela__rt__part(from, to, s.len, at);");
-            self.w.line(&format!("return ({}){{ .items = s.items + from, .len = to - from }};", ctype));
+            // A part ending where the slice's room is used up can grow into it.
+            self.w.line(&format!("return ({}){{ .items = s.items + from, .len = to - from, .room = s.room }};", ctype));
             self.w.close();
         }
         for slice in &used.slice_copy {
@@ -283,6 +287,45 @@ impl Generator {
             self.w.line("items[i] = value;");
             self.w.close();
             self.w.line(&format!("return ({}){{ .items = items, .len = len }};", ctype));
+            self.w.close();
+        }
+        for slice in &used.slice_add {
+            let (ctype, items) = (c_type(slice), c_type(item_type(slice)));
+            self.w.open(&format!("static void {}(vela__rt__region* r, {}* s, {} value)", item_helper("add", slice), ctype, items));
+            self.w.line(&format!("{0}* items = vela__rt__items_insert(r, s->items, s->len, &s->room, s->len, sizeof({0}), _Alignof({0}));", items));
+            self.w.line("items[s->len] = value;");
+            self.w.line("s->items = items;");
+            self.w.line("s->len += 1;");
+            self.w.close();
+        }
+        for slice in &used.slice_insert {
+            let (ctype, items) = (c_type(slice), c_type(item_type(slice)));
+            self.w.open(&format!("static void {}(vela__rt__region* r, {}* s, int64_t i, {} value, const char* at)", item_helper("insert", slice), ctype, items));
+            // Any index from 0 to the length: the item goes before item `i`, or last.
+            self.w.line("vela__rt__index(i, s->len + 1, at);");
+            self.w.line(&format!("{0}* items = vela__rt__items_insert(r, s->items, s->len, &s->room, i, sizeof({0}), _Alignof({0}));", items));
+            self.w.line("items[i] = value;");
+            self.w.line("s->items = items;");
+            self.w.line("s->len += 1;");
+            self.w.close();
+        }
+        for slice in &used.slice_del {
+            let (ctype, items) = (c_type(slice), c_type(item_type(slice)));
+            self.w.open(&format!("static {0} {1}({2}* s, int64_t i, const char* at)", items, item_helper("del", slice), ctype));
+            self.w.line(&format!("{} item = s->items[vela__rt__index(i, s->len, at)];", items));
+            self.w.line(&format!("vela__rt__items_remove(s->items, s->len, s->room, i, sizeof({}));", items));
+            self.w.line("s->len -= 1;");
+            self.w.line("return item;");
+            self.w.close();
+        }
+        for slice in &used.slice_pop {
+            let (ctype, items) = (c_type(slice), c_type(item_type(slice)));
+            self.w.open(&format!("static {0} {1}({2}* s, const char* at)", items, item_helper("pop", slice), ctype));
+            self.w.line("vela__rt__not_empty(s->len, at);");
+            self.w.line(&format!("{} item = s->items[s->len - 1];", items));
+            self.w.line(&format!("vela__rt__items_remove(s->items, s->len, s->room, s->len - 1, sizeof({}));", items));
+            self.w.line("s->len -= 1;");
+            self.w.line("return item;");
             self.w.close();
         }
         for array in &used.array_fill {
@@ -419,6 +462,10 @@ impl Generator {
 
     fn gen_stmt(&mut self, stmt: &Stmt) -> Result<()> {
         match &stmt.kind {
+            // A change to a slice drops the item `del` gives.
+            StmtKind::Expr(Expr { kind: ExprKind::Edit { items, op, args }, span, .. }) => {
+                self.gen_edit(*span, items, *op, args, true)?;
+            }
             StmtKind::Expr(e) => {
                 let expr = self.gen_expr(e)?;
                 // A plan B that gives no value is all prelude, and one that
@@ -448,7 +495,7 @@ impl Generator {
                 // The checker guarantees every place is a variable, field, or
                 // deref, all of which generate valid C lvalues.
                 if let ([Target::Place(lhs)], [rhs]) = (targets.as_slice(), values.as_slice()) {
-                    if has_plan_b(rhs) && !matches!(lhs.kind, ExprKind::Var(_)) {
+                    if has_prelude(rhs) && !matches!(lhs.kind, ExprKind::Var(_)) {
                         // Find the place before the value's prelude runs, which
                         // might change what the place refers to.
                         let place = self.gen_place(lhs)?;
@@ -487,7 +534,7 @@ impl Generator {
                 self.w.close();
             }
             StmtKind::Loop(cond, body) => match &cond.pattern {
-                None if !has_plan_b(&cond.value) => {
+                None if !has_prelude(&cond.value) => {
                     let c = self.gen_condition(&cond.value)?;
                     self.w.open(&format!("while ({})", c));
                     self.gen_block(body)?;
@@ -605,8 +652,11 @@ impl Generator {
                 // assigned here may be read by a later value.
                 for (value, expr) in given.iter_mut().zip(values) {
                     if matches!(expr.ty()?, Type::Unit) {
-                        // A call that sends nothing, received by `_`: it runs here.
-                        self.w.line(&format!("{};", value));
+                        // A call that sends nothing, received by `_`: it runs here
+                        // (or already has, as a prelude, when it wrote nothing).
+                        if !value.is_empty() {
+                            self.w.line(&format!("{};", value));
+                        }
                         value.clear();
                         continue;
                     }
@@ -836,7 +886,7 @@ impl Generator {
     /// (the prelude may call tasks or change variables), and so is every other
     /// operand but the last, since C evaluates the rest in no fixed order.
     fn gen_operands(&mut self, operands: &[&Expr]) -> Result<Vec<String>> {
-        let last_prelude = operands.iter().rposition(|e| has_plan_b(e));
+        let last_prelude = operands.iter().rposition(|e| has_prelude(e));
         let mut values = Vec::new();
         for (i, operand) in operands.iter().enumerate() {
             let value = self.gen_expr(operand)?;
@@ -885,7 +935,46 @@ impl Generator {
             ExprKind::Fail(error) => self.gen_expr(error),
             ExprKind::Wrap(inner) => self.gen_wrap(e, inner),
             ExprKind::PlanB { value, error, body } => self.gen_plan_b(e, value, error.as_ref(), body),
+            ExprKind::Edit { items, op, args } => self.gen_edit(e.span, items, *op, args, false),
         }
+    }
+
+    /// `items.add(…)` or `items.del(…)`, at `span`, which it writes as a
+    /// prelude: the C expression for the item `del` gives, or nothing for
+    /// `add`, or when the change is a `statement` of its own. The slice's
+    /// place is found before the arguments are evaluated, as an assignment's.
+    fn gen_edit(&mut self, span: Span, items: &Expr, op: EditOp, args: &[Expr], statement: bool) -> Result<String> {
+        let slice = items.ty()?.clone();
+        let place = match &items.kind {
+            ExprKind::Var(name) => format!("&{}", c_ident(name)),
+            _ => {
+                let place = self.gen_place(items)?;
+                let pointer = self.fresh_temp("place");
+                self.w.line(&format!("{}* {} = &{};", c_type(&slice), pointer, place));
+                pointer
+            }
+        };
+        let operands: Vec<&Expr> = args.iter().collect();
+        let values = self.gen_operands(&operands)?;
+        let at = self.location(span);
+        let call = match (op, values.as_slice(), &slice) {
+            (EditOp::Add, [value], Type::Slice(_, Some(region))) => {
+                format!("{}({}, {}, {})", item_helper("add", &slice), c_ident(region), place, value)
+            }
+            (EditOp::Add, [index, value], Type::Slice(_, Some(region))) => {
+                format!("{}({}, {}, {}, {}, {})", item_helper("insert", &slice), c_ident(region), place, index, value, at)
+            }
+            (EditOp::Del, [], _) => format!("{}({}, {})", item_helper("pop", &slice), place, at),
+            (EditOp::Del, [index], _) => format!("{}({}, {}, {})", item_helper("del", &slice), place, index, at),
+            _ => return Err(Error::internal_at(span, format!("'{}' with {} arguments on a value of type {}", op.word(), values.len(), slice))),
+        };
+        if statement || op == EditOp::Add {
+            self.w.line(&format!("{};", call));
+            return Ok(String::new());
+        }
+        let item = self.fresh_temp("item");
+        self.w.line(&format!("{} {} = {};", c_type(item_type(&slice)), item, call));
+        Ok(item)
     }
 
     /// `base.field`, or an array's or slice's `len`.
@@ -984,6 +1073,11 @@ impl Generator {
         let span = e.span;
         if matches!(ty, Type::Slice(..)) {
             let slice = e.ty()?;
+            if matches!(&value.kind, ExprKind::Array(values) if values.is_empty()) {
+                // No items, and no room until the first `add`. The region is
+                // still named, so a region parameter counts as used.
+                return Ok(format!("((void){}, ({}){{ .items = vela__rt__no_items(), .len = 0 }})", c_ident(region), c_type(slice)));
+            }
             if let ExprKind::Repeat { value: item, count } = &value.kind {
                 let [item, count] = <[String; 2]>::try_from(self.gen_operands(&[item, count])?)
                     .map_err(|_| Error::internal_at(span, "a repeated value without its count"))?;
@@ -1067,7 +1161,7 @@ impl Generator {
             Type::Array(_, count) => {
                 // The array is in a region: the slice points at its items there.
                 let array = self.gen_place(base)?;
-                let items = if has_plan_b(from) || has_plan_b(to) {
+                let items = if has_prelude(from) || has_prelude(to) {
                     let items = self.fresh_temp("items");
                     self.w.line(&format!("{}* {} = ({}).items;", c_type(item_type(slice)), items, array));
                     items
@@ -1096,7 +1190,7 @@ impl Generator {
             }
             ExprKind::Index(base, index) if matches!(base.ty, Some(Type::Array(..))) && !matches!(index.kind, ExprKind::Range(..)) => {
                 let mut array = self.gen_place(base)?;
-                if has_plan_b(index) {
+                if has_prelude(index) {
                     let pointer = self.fresh_temp("place");
                     self.w.line(&format!("{}* {} = &{};", c_type(base.ty()?), pointer, array));
                     array = format!("*{}", pointer);
@@ -1181,7 +1275,7 @@ impl Generator {
 
     /// A binary operation without surrounding parentheses.
     fn gen_binary(&mut self, e: &Expr, op: BinaryOp, l: &Expr, r: &Expr) -> Result<String> {
-        if matches!(op, BinaryOp::And | BinaryOp::Or) && has_plan_b(r) {
+        if matches!(op, BinaryOp::And | BinaryOp::Or) && has_prelude(r) {
             // The right side's prelude must only run when the left side
             // doesn't decide the result.
             let left = self.gen_expr(l)?;
@@ -1307,19 +1401,20 @@ fn show_maybe_helper(ty: &Type) -> String {
     format!("vela__show__{}", c_type(ty).trim_start_matches("vela__"))
 }
 
-/// Whether the expression contains a plan B, so generating it writes a prelude.
-fn has_plan_b(e: &Expr) -> bool {
+/// Whether the expression contains a plan B or a change to a slice, so
+/// generating it writes a prelude.
+fn has_prelude(e: &Expr) -> bool {
     match &e.kind {
-        ExprKind::PlanB { .. } => true,
+        ExprKind::PlanB { .. } | ExprKind::Edit { .. } => true,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
         | ExprKind::Var(_) => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. }
-        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => has_plan_b(inner),
+        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => has_prelude(inner),
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
-            has_plan_b(a) || has_plan_b(b)
+            has_prelude(a) || has_prelude(b)
         }
-        ExprKind::Call(_, args) | ExprKind::Construct { args, .. } | ExprKind::Array(args) => args.iter().any(has_plan_b),
-        ExprKind::StructInit(_, fields) => fields.iter().any(|field| has_plan_b(&field.value)),
+        ExprKind::Call(_, args) | ExprKind::Construct { args, .. } | ExprKind::Array(args) => args.iter().any(has_prelude),
+        ExprKind::StructInit(_, fields) => fields.iter().any(|field| has_prelude(&field.value)),
     }
 }
 
@@ -1334,6 +1429,10 @@ struct UsedTypes {
     slice_part: Vec<Type>,
     slice_copy: Vec<Type>,
     slice_fill: Vec<Type>,
+    slice_add: Vec<Type>,
+    slice_insert: Vec<Type>,
+    slice_del: Vec<Type>,
+    slice_pop: Vec<Type>,
     array_fill: Vec<Type>,
 }
 
@@ -1354,6 +1453,10 @@ impl UsedTypes {
             slice_part: Vec::new(),
             slice_copy: Vec::new(),
             slice_fill: Vec::new(),
+            slice_add: Vec::new(),
+            slice_insert: Vec::new(),
+            slice_del: Vec::new(),
+            slice_pop: Vec::new(),
             array_fill: Vec::new(),
         };
         for item in items {
@@ -1466,6 +1569,8 @@ impl UsedTypes {
                         self.expr(item);
                         self.expr(count);
                     }
+                    // `new [T]()` copies nothing.
+                    ExprKind::Array(values) if values.is_empty() => {}
                     _ => {
                         note(&mut self.slice_copy, slice);
                         self.expr(value);
@@ -1511,6 +1616,19 @@ impl UsedTypes {
             ExprKind::PlanB { value, body, .. } => {
                 self.expr(value);
                 self.block(body);
+            }
+            ExprKind::Edit { items, op, args } => {
+                if let Some(slice @ Type::Slice(..)) = &items.ty {
+                    let list = match (op, args.len()) {
+                        (EditOp::Add, 1) => &mut self.slice_add,
+                        (EditOp::Add, _) => &mut self.slice_insert,
+                        (EditOp::Del, 0) => &mut self.slice_pop,
+                        (EditOp::Del, _) => &mut self.slice_del,
+                    };
+                    note(list, slice);
+                }
+                self.expr(items);
+                args.iter().for_each(|arg| self.expr(arg));
             }
         }
     }
@@ -1574,6 +1692,14 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         }
         ExprKind::StructInit(_, fields) => fields.iter().any(|field| expr_reads(&field.value, name)),
         ExprKind::PlanB { value, body, .. } => expr_reads(value, name) || block_reads(body, name),
+        // `add` reads the region it may allocate in.
+        ExprKind::Edit { items, op, args } => {
+            let region = match &items.ty {
+                Some(Type::Slice(_, Some(region))) if *op == EditOp::Add => region == name,
+                _ => false,
+            };
+            region || expr_reads(items, name) || args.iter().any(|arg| expr_reads(arg, name))
+        }
     }
 }
 

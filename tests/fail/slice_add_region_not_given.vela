@@ -1,0 +1,11 @@
+# error: 7:16: adding to a slice may need more room in its region 'r', which this task only names in its types; take it as a parameter, 'r: region'
+shape Bag
+    items: [int]
+fi
+
+task put(bag: ^Bag@r)
+    bag^.items.add(1)
+fi
+
+task main()
+fi

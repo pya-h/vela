@@ -1,0 +1,6 @@
+# error: 5:12: expected type int, got bool
+task main()
+    region r
+    hold xs = new [int]() at r
+    xs.add(true, 1)
+fi

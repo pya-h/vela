@@ -135,18 +135,44 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         let probe = probe(source, context, k.range(dot).start, word_end);
         let exact = Knowledge::new(source, scan, &probe);
         let base = dot.checked_sub(1).and_then(|q| exact.type_ending_at(q));
-        // An array's or slice's only member is its length.
-        let len = |through_pointer: bool| CompletionItem {
-            label: "len".to_string(),
-            kind: CompletionKind::Field,
-            detail: "int, the number of items".to_string(),
-            apply: through_pointer.then(|| "^.len".to_string()),
-            snippet: None,
-            boost: LOCAL,
+        // An array's member is its length; a slice's are its length and its
+        // changes, `add` and `del`.
+        let members = |slice: bool, through_pointer: bool| {
+            let prefix = if through_pointer { "^." } else { "" };
+            let mut items = vec![CompletionItem {
+                label: "len".to_string(),
+                kind: CompletionKind::Field,
+                detail: "int, the number of items".to_string(),
+                apply: through_pointer.then(|| "^.len".to_string()),
+                snippet: None,
+                boost: LOCAL,
+            }];
+            if slice {
+                items.push(CompletionItem {
+                    label: "add".to_string(),
+                    kind: CompletionKind::BuiltinFn,
+                    detail: "add(value) or add(index, value)".to_string(),
+                    apply: None,
+                    snippet: Some(format!("{}add(${{value}})", prefix)),
+                    boost: LOCAL,
+                });
+                items.push(CompletionItem {
+                    label: "del".to_string(),
+                    kind: CompletionKind::BuiltinFn,
+                    detail: "del(index) or del(), gives the item".to_string(),
+                    apply: None,
+                    snippet: Some(format!("{}del(${{index}})", prefix)),
+                    boost: LOCAL,
+                });
+            }
+            items
         };
         match &base {
-            Some(Type::Array(..) | Type::Slice(..)) => return (vec![len(false)], word_start, byte),
-            Some(Type::Ptr(inner, _)) if matches!(**inner, Type::Array(..)) => return (vec![len(true)], k.range(dot).start, byte),
+            Some(Type::Array(..)) => return (members(false, false), word_start, byte),
+            Some(Type::Slice(..)) => return (members(true, false), word_start, byte),
+            Some(Type::Ptr(inner, _)) if matches!(**inner, Type::Array(..) | Type::Slice(..)) => {
+                return (members(matches!(**inner, Type::Slice(..)), true), k.range(dot).start, byte);
+            }
             _ => {}
         }
         let (shape, through_pointer) = match base {

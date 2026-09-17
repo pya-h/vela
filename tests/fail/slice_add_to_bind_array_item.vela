@@ -1,0 +1,6 @@
+# error: 5:5: 'add' can't change an item of immutable variable 'rows'
+task main()
+    region r
+    bind rows = [new [int]() at r, new [int]() at r]
+    rows[0].add(1)
+fi

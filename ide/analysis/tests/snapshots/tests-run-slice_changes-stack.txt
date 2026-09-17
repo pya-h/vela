@@ -1,0 +1,46 @@
+  1 | # A stack kept in a region, changed by the tasks of this module, and a kind
+    | comment:# A stack kept in a region, changed by the tasks of this module, and a kind
+  2 | # whose variants are named like the changes to a slice.
+    | comment:# whose variants are named like the changes to a slice.
+  4 | kind Op
+    | keyword:kind  type:Op
+  5 |     add(amount: int)
+    | variant:add  punctuation:(  field:amount  punctuation::  type-builtin:int  punctuation:)
+  6 |     del
+    | variant:del
+  7 | fi
+    | keyword:fi
+  9 | shape Stack
+    | keyword:shape  type:Stack
+ 10 |     items: [int]
+    | field:items  punctuation::  punctuation:[  type-builtin:int  punctuation:]
+ 11 | fi
+    | keyword:fi
+ 13 | task push(r: region, s: ^Stack@r, v: int)
+    | keyword:task  task:push  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:s  punctuation::  operator:^  type:Stack  operator:@  region:r  punctuation:,  parameter:v  punctuation::  type-builtin:int  punctuation:)
+ 14 |     s^.items.add(v)
+    | parameter:s  operator:^  punctuation:.  field:items  punctuation:.  field:add  punctuation:(  parameter:v  punctuation:)
+ 15 | fi
+    | keyword:fi
+ 17 | task pop(s: ^Stack@r) -> int
+    | keyword:task  task:pop  punctuation:(  parameter:s  punctuation::  operator:^  type:Stack  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 18 |     <- s^.items.del()
+    | keyword:<-  parameter:s  operator:^  punctuation:.  field:items  punctuation:.  field:del  punctuation:(  punctuation:)
+ 19 | fi
+    | keyword:fi
+ 21 | task apply(r: region, s: ^Stack@r, op: Op)
+    | keyword:task  task:apply  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:s  punctuation::  operator:^  type:Stack  operator:@  region:r  punctuation:,  parameter:op  punctuation::  type:Op  punctuation:)
+ 22 |     match op
+    | keyword:match  parameter:op
+ 23 |         case add amount
+    | keyword:case  variant:add  variable:amount
+ 24 |             push(r, s, amount)
+    | task:push  punctuation:(  region:r  punctuation:,  parameter:s  punctuation:,  variable:amount  punctuation:)
+ 25 |         case del
+    | keyword:case  variant:del
+ 26 |             _ = pop(s)
+    | keyword:_  operator:=  task:pop  punctuation:(  parameter:s  punctuation:)
+ 27 |     fi
+    | keyword:fi
+ 28 | fi
+    | keyword:fi

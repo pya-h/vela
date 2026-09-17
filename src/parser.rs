@@ -147,11 +147,14 @@ impl Parser {
     /// `qualified` for a name that starts a value, followed by `.Variant` when a
     /// call follows, giving `Kind.Variant`, as in `Shape.Circle(…)` (or
     /// `geometry.Shape.Circle(…)`): Vela has no methods, so a name, a dot, and a
-    /// call is a kind's variant. (One call from `parse_primary`, whose frame is
-    /// on the stack once per nesting level, and grows with each `?` in it.)
+    /// call is a kind's variant, unless the call is a change to a slice, as in
+    /// `xs.add(…)` (which the resolver reads as a variant when the name is a
+    /// kind's). (One call from `parse_primary`, whose frame is on the stack once
+    /// per nesting level, and grows with each `?` in it.)
     fn value_name(&mut self, name: String) -> Result<String> {
         let name = self.qualified(name)?;
-        let calls = matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) && self.tokens.get(self.pos + 2) == Some(&Token::LParen);
+        let calls = matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(member)) if EditOp::from_word(member).is_none())
+            && self.tokens.get(self.pos + 2) == Some(&Token::LParen);
         if !self.check(Token::Dot) || !calls {
             return Ok(name);
         }
@@ -1270,15 +1273,30 @@ impl Parser {
     /// `geometry.Point { x: 1 }` where `geometry` isn't a module this file
     /// includes (`value_name` joins the names that are): one dotted name, which
     /// the resolver reports as naming nothing. Vela has no methods, so a call
-    /// on any other value is an error here. (A function of its own:
-    /// `parse_postfix`'s frame is on the stack once per nesting level.)
+    /// on any other value is an error here, except a change to a slice,
+    /// `xs.add(…)` or `xs.del(…)`. (A function of its own: `parse_postfix`'s
+    /// frame is on the stack once per nesting level.)
     fn dotted_name_use(&mut self, expr: Expr) -> Result<Expr> {
+        if let ExprKind::Field(_, word) = &expr.kind
+            && let Some(op) = EditOp::from_word(word)
+            && self.check(Token::LParen)
+        {
+            let args = self.parse_arg_list()?;
+            let ExprKind::Field(items, _) = expr.kind else { return Err(Error::internal_at(expr.span, "a change without its slice")) };
+            return Ok(Expr::new(ExprKind::Edit { items, op, args }, expr.span));
+        }
         let Some((name, span)) = dotted_name(&expr) else {
             if self.check(Token::LParen) {
-                return Err(Error::at(
-                    self.peek_span(),
-                    "only a task or a variant can be called, and Vela has no methods; pass the value to a task, as in 'f(value)'",
-                ));
+                let hint = match &expr.kind {
+                    ExprKind::Field(_, word) if matches!(word.as_str(), "push" | "append" | "insert") => {
+                        "; a slice adds an item with 'add', as in 'xs.add(v)' or 'xs.add(i, v)'"
+                    }
+                    ExprKind::Field(_, word) if matches!(word.as_str(), "pop" | "remove" | "delete") => {
+                        "; a slice takes an item out with 'del', as in 'xs.del(i)' or 'xs.del()'"
+                    }
+                    _ => "; pass the value to a task, as in 'f(value)'",
+                };
+                return Err(Error::at(expr.span, format!("only a task or a variant can be called, and Vela has no methods{}", hint)));
             }
             return Ok(expr);
         };
@@ -1356,7 +1374,18 @@ impl Parser {
         let ty_span = self.peek_span();
         let ty = self.parse_type()?;
         self.expect(Token::LParen)?;
-        let value = self.parse_expr()?;
+        // `new [T]() at r` makes an empty slice; its value is an array of no
+        // values, which no literal can write.
+        let value = if self.check(Token::RParen) && matches!(ty, Type::Slice(..)) {
+            Expr::new(ExprKind::Array(Vec::new()), self.peek_span())
+        } else if self.check(Token::RParen) {
+            return Err(Error::at(
+                self.peek_span(),
+                format!("'new' needs the value to put in the region, as in 'new {}(…) at r'; only a slice can be made empty, as in 'new [int]() at r'", ty),
+            ));
+        } else {
+            self.parse_expr()?
+        };
         self.expect(Token::RParen)?;
         if self.check(Token::In) {
             return Err(Error::at(self.peek_span(), "a 'new' names its region with 'at', as in 'new T(v) at r' (or 'new@r T(v)'); 'in' counts through a range"));

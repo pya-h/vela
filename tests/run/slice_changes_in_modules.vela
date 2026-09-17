@@ -1,0 +1,15 @@
+# Changes to a slice written in a module, and `m.Kind.add(…)`, which names a
+# variant of a kind in a module rather than a change to a slice.
+
+include slice_changes/stack (Op)
+
+task main()
+    region r
+    bind s = new stack.Stack(stack.Stack { items: new [int]() at r }) at r
+    stack.apply(r, s, stack.Op.add(4))
+    stack.apply(r, s, Op.add(5))
+    stack.apply(r, s, Op.add(6))
+    stack.apply(r, s, Op.del)
+    show(s^.items.len)
+    show(stack.pop(s))
+fi

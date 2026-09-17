@@ -1,0 +1,26 @@
+  1 | # Changes to a slice written in a module, and `m.Kind.add(…)`, which names a
+    | comment:# Changes to a slice written in a module, and `m.Kind.add(…)`, which names a
+  2 | # variant of a kind in a module rather than a change to a slice.
+    | comment:# variant of a kind in a module rather than a change to a slice.
+  4 | include slice_changes/stack (Op)
+    | keyword:include  module:slice_changes  operator:/  module:stack  punctuation:(  type:Op  punctuation:)
+  6 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  7 |     region r
+    | keyword:region  region:r
+  8 |     bind s = new stack.Stack(stack.Stack { items: new [int]() at r }) at r
+    | keyword:bind  variable:s  operator:=  keyword:new  module:stack  punctuation:.  type:Stack  punctuation:(  module:stack  punctuation:.  type:Stack  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:)  keyword:at  region:r
+  9 |     stack.apply(r, s, stack.Op.add(4))
+    | module:stack  punctuation:.  task:apply  punctuation:(  region:r  punctuation:,  variable:s  punctuation:,  module:stack  punctuation:.  type:Op  punctuation:.  variant:add  punctuation:(  number:4  punctuation:)  punctuation:)
+ 10 |     stack.apply(r, s, Op.add(5))
+    | module:stack  punctuation:.  task:apply  punctuation:(  region:r  punctuation:,  variable:s  punctuation:,  type:Op  punctuation:.  variant:add  punctuation:(  number:5  punctuation:)  punctuation:)
+ 11 |     stack.apply(r, s, Op.add(6))
+    | module:stack  punctuation:.  task:apply  punctuation:(  region:r  punctuation:,  variable:s  punctuation:,  type:Op  punctuation:.  variant:add  punctuation:(  number:6  punctuation:)  punctuation:)
+ 12 |     stack.apply(r, s, Op.del)
+    | module:stack  punctuation:.  task:apply  punctuation:(  region:r  punctuation:,  variable:s  punctuation:,  type:Op  punctuation:.  variant:del  punctuation:)
+ 13 |     show(s^.items.len)
+    | builtin-fn:show  punctuation:(  variable:s  operator:^  punctuation:.  field:items  punctuation:.  field:len  punctuation:)
+ 14 |     show(stack.pop(s))
+    | builtin-fn:show  punctuation:(  module:stack  punctuation:.  task:pop  punctuation:(  variable:s  punctuation:)  punctuation:)
+ 15 | fi
+    | keyword:fi

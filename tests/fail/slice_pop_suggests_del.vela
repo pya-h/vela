@@ -1,0 +1,6 @@
+# error: 5:10: 'xs.pop' names nothing: 'xs' is neither a module this file includes nor a kind, and Vela has no methods; a slice takes an item out with 'del', as in 'xs.del(i)' or 'xs.del()'
+task main()
+    region r
+    hold xs = new [int]([1]) at r
+    show(xs.pop())
+fi

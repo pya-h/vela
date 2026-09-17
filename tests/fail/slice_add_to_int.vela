@@ -1,0 +1,5 @@
+# error: 4:7: 'add' changes a slice, but this value is int
+task main()
+    hold n = 1
+    n.add(4)
+fi
