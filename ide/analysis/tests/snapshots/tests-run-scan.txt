@@ -66,8 +66,8 @@
     | builtin-fn:show  punctuation:(  variable:long  operator:==  string:"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"  punctuation:)
  40 |     show(scan("") at r { "" })
     | builtin-fn:show  punctuation:(  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r  punctuation:{  string:""  punctuation:}  punctuation:)
- 42 |     # A prompt in a region, arguments read left to right, and a line dropped.
-    | comment:# A prompt in a region, arguments read left to right, and a line dropped.
+ 42 |     # A prompt in a region, arguments read left to right, and lines dropped.
+    | comment:# A prompt in a region, arguments read left to right, and lines dropped.
  43 |     hold prompt = new [text]() at r
     | keyword:hold  variable:prompt  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  44 |     prompt.add("Two lines: ")
@@ -76,29 +76,31 @@
     | task:both  punctuation:(  builtin-fn:scan  punctuation:(  variable:prompt  punctuation:[  number:0  punctuation:]  punctuation:)  keyword:at  region:r  punctuation:,  builtin-fn:scan  punctuation:(  string:""  punctuation:)  operator:@  region:r  punctuation:)
  46 |     scan("skipped ")@r
     | builtin-fn:scan  punctuation:(  string:"skipped "  punctuation:)  operator:@  region:r
- 48 |     # Every line left, each in a region freed on its pass.
+ 47 |     scan("")@r { "" }
+    | builtin-fn:scan  punctuation:(  string:""  punctuation:)  operator:@  region:r  punctuation:{  string:""  punctuation:}
+ 49 |     # Every line left, each in a region freed on its pass.
     | comment:# Every line left, each in a region freed on its pass.
- 49 |     hold count = 0
+ 50 |     hold count = 0
     | keyword:hold  variable:count  operator:=  number:0
- 50 |     loop true
+ 51 |     loop true
     | keyword:loop  keyword:true
- 51 |         region line_memory
+ 52 |         region line_memory
     | keyword:region  region:line_memory
- 52 |         bind line = scan("") at line_memory { "" }
+ 53 |         bind line = scan("") at line_memory { "" }
     | keyword:bind  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:line_memory  punctuation:{  string:""  punctuation:}
- 53 |         when line == ""
+ 54 |         when line == ""
     | keyword:when  variable:line  operator:==  string:""
- 54 |             show(count)
+ 55 |             show(count)
     | builtin-fn:show  punctuation:(  variable:count  punctuation:)
- 55 |             <-
+ 56 |             <-
     | keyword:<-
- 56 |         fi
+ 57 |         fi
     | keyword:fi
- 57 |         show(line)
+ 58 |         show(line)
     | builtin-fn:show  punctuation:(  variable:line  punctuation:)
- 58 |         count = count + 1
+ 59 |         count = count + 1
     | variable:count  operator:=  variable:count  operator:+  number:1
- 59 |     fi
+ 60 |     fi
     | keyword:fi
- 60 | fi
+ 61 | fi
     | keyword:fi

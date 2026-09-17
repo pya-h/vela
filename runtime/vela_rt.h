@@ -411,6 +411,146 @@ static inline void vela__rt__items_remove(void* items, int64_t len, vela__rt__ro
     }
 }
 
+/* Copies: `value.copy() at r` copies what a value holds in regions into region
+ * `r`: its text, its slices' items, and what its pointers point to, all the
+ * way down. A generated `fix` function for each type replaces, in a value
+ * already copied byte for byte, each of those with a copy. A value that two
+ * pointers share is copied once, and both copies point to it, so a cycle is
+ * copied as a cycle: `table` maps each address copied to its copy. Pointed-to
+ * values wait in `pending` until the one before them is fixed, so a long list
+ * doesn't take a C stack frame per node. */
+
+struct vela__rt__copy;
+
+/* Fixes the value of some type at `value`, whose bytes are already copied. */
+typedef void vela__rt__fix(struct vela__rt__copy* c, void* value);
+
+typedef struct vela__rt__copied {
+    const void* from;
+    void* to;
+} vela__rt__copied;
+
+typedef struct vela__rt__pending {
+    void* value;
+    vela__rt__fix* fix;
+} vela__rt__pending;
+
+typedef struct vela__rt__copy {
+    vela__rt__region* r;
+    /* Open addressing; a free slot has a NULL `from`. Its capacity is a power
+     * of two, or 0 before the first pointer. */
+    vela__rt__copied* table;
+    size_t capacity;
+    size_t count;
+    vela__rt__pending* pending;
+    size_t waiting;
+    size_t room;
+} vela__rt__copy;
+
+/* Text of `r` holding the characters of `text`. */
+static inline const char* vela__rt__copy_text(vela__rt__copy* c, const char* text) {
+    size_t size = strlen(text) + 1;
+    char* copy = vela__rt__region_alloc(c->r, size, 1);
+    memcpy(copy, text, size);
+    return copy;
+}
+
+/* A copy in `r` of the `len` items of `size` bytes aligned to `align` at
+ * `items`, byte for byte: the caller fixes each. */
+static inline void* vela__rt__copy_items(vela__rt__copy* c, const void* items, int64_t len, size_t size, size_t align) {
+    if (len == 0) {
+        return vela__rt__no_items();
+    }
+    /* The items exist, so their size in bytes can't overflow. */
+    void* copy = vela__rt__region_alloc(c->r, (size_t)len * size, align);
+    memcpy(copy, items, (size_t)len * size);
+    return copy;
+}
+
+static inline size_t vela__rt__copy_slot(const void* from, size_t capacity) {
+    uint64_t hash = (uint64_t)(uintptr_t)from * UINT64_C(0x9E3779B97F4A7C15);
+    return (size_t)(hash >> 32) & (capacity - 1);
+}
+
+/* Makes the table twice as large (at least 64 slots). */
+static inline void vela__rt__copy_grow(vela__rt__copy* c) {
+    size_t capacity = c->capacity == 0 ? 64 : c->capacity;
+    if (c->capacity != 0) {
+        if (capacity > SIZE_MAX / 2 / sizeof(vela__rt__copied)) {
+            vela__rt__out_of_memory();
+        }
+        capacity *= 2;
+    }
+    vela__rt__copied* table = calloc(capacity, sizeof(vela__rt__copied));
+    if (table == NULL) {
+        vela__rt__out_of_memory();
+    }
+    for (size_t i = 0; i < c->capacity; i++) {
+        if (c->table[i].from != NULL) {
+            size_t slot = vela__rt__copy_slot(c->table[i].from, capacity);
+            while (table[slot].from != NULL) {
+                slot = (slot + 1) & (capacity - 1);
+            }
+            table[slot] = c->table[i];
+        }
+    }
+    free(c->table);
+    c->table = table;
+    c->capacity = capacity;
+}
+
+/* The copy of the value of `size` bytes aligned to `align` that `from` points
+ * to (NULL for NULL), made when it isn't made yet; `fix` (NULL when the value
+ * holds nothing to copy) fixes it later. */
+static inline void* vela__rt__copy_pointer(vela__rt__copy* c, const void* from, size_t size, size_t align, vela__rt__fix* fix) {
+    if (from == NULL) {
+        return NULL;
+    }
+    if (2 * (c->count + 1) > c->capacity) {
+        vela__rt__copy_grow(c);
+    }
+    size_t slot = vela__rt__copy_slot(from, c->capacity);
+    while (c->table[slot].from != NULL) {
+        if (c->table[slot].from == from) {
+            return c->table[slot].to;
+        }
+        slot = (slot + 1) & (c->capacity - 1);
+    }
+    void* to = vela__rt__region_alloc(c->r, size, align);
+    memcpy(to, from, size);
+    c->table[slot] = (vela__rt__copied){ .from = from, .to = to };
+    c->count++;
+    if (fix != NULL) {
+        if (c->waiting == c->room) {
+            size_t room = c->room == 0 ? 64 : c->room;
+            if (c->room != 0) {
+                if (room > SIZE_MAX / 2 / sizeof(vela__rt__pending)) {
+                    vela__rt__out_of_memory();
+                }
+                room *= 2;
+            }
+            vela__rt__pending* pending = realloc(c->pending, room * sizeof(vela__rt__pending));
+            if (pending == NULL) {
+                vela__rt__out_of_memory();
+            }
+            c->pending = pending;
+            c->room = room;
+        }
+        c->pending[c->waiting++] = (vela__rt__pending){ .value = to, .fix = fix };
+    }
+    return to;
+}
+
+/* Fixes the values still waiting, and frees what copying used. */
+static inline void vela__rt__copy_finish(vela__rt__copy* c) {
+    while (c->waiting > 0) {
+        vela__rt__pending next = c->pending[--c->waiting];
+        next.fix(c, next.value);
+    }
+    free(c->table);
+    free(c->pending);
+}
+
 /* Input. `scan(prompt) at r` shows the prompt (flushing the output, which may
  * be waiting for a newline) and reads one line from the standard input into
  * region `r`, without its line break (a Windows "\r\n" included). A line is as

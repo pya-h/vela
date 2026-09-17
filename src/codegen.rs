@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
+use crate::check;
 use crate::error::{Error, Result};
 
 /// Accumulates C source line by line and tracks indentation. Appending to a
@@ -71,6 +72,10 @@ pub struct Generator {
     w: CWriter,
     temp_counter: u64,
     kinds: HashMap<String, KindDef>,
+    shapes: HashMap<String, ShapeDef>,
+    /// The shapes and kinds holding text or pointers, whose values a copy
+    /// goes through (see `check::regional_types` and `check::textual_types`).
+    copied_through: HashSet<String>,
     /// The return type of the task being generated.
     ret: Type,
     /// The regions declared in each block being generated, outermost first.
@@ -83,7 +88,7 @@ pub struct Generator {
 
 impl Default for Generator {
     fn default() -> Self {
-        Generator { w: CWriter::default(), temp_counter: 0, kinds: HashMap::new(), ret: Type::Unit, regions: Vec::new(), results: Vec::new(), task: String::new() }
+        Generator { w: CWriter::default(), temp_counter: 0, kinds: HashMap::new(), shapes: HashMap::new(), copied_through: HashSet::new(), ret: Type::Unit, regions: Vec::new(), results: Vec::new(), task: String::new() }
     }
 }
 
@@ -94,11 +99,20 @@ impl Generator {
 
     pub fn generate(&mut self, items: &[Item]) -> Result<String> {
         self.kinds.clear();
+        self.shapes.clear();
         for item in items {
-            if let Item::Kind(k) = item {
-                self.kinds.insert(k.name.clone(), k.clone());
+            match item {
+                Item::Kind(k) => {
+                    self.kinds.insert(k.name.clone(), k.clone());
+                }
+                Item::Shape(s) => {
+                    self.shapes.insert(s.name.clone(), s.clone());
+                }
+                Item::Task(_) => {}
             }
         }
+        self.copied_through = check::regional_types(items);
+        self.copied_through.extend(check::textual_types(items));
         let used = UsedTypes::collect(items);
 
         self.w = CWriter::default();
@@ -134,6 +148,7 @@ impl Generator {
             self.gen_show_maybe(ty);
         }
         self.gen_item_helpers(&used);
+        self.gen_copies(&used.copied);
         self.w.blank();
 
         // Forward declarations for tasks
@@ -349,6 +364,145 @@ impl Generator {
             self.w.line("return array;");
             self.w.close();
         }
+    }
+
+    /// For each type a program copies (`x.copy() at r`), `vela__copied__K`, which
+    /// copies a value into a region; and for each type a copy goes through,
+    /// `vela__fix__K`, which replaces what a value copied byte for byte holds
+    /// in regions with copies (see `vela__rt__copy` in the runtime).
+    fn gen_copies(&mut self, copied: &[Type]) {
+        let mut fixed: Vec<Type> = Vec::new();
+        let mut waiting: Vec<Type> = copied.iter().map(fix_type).collect();
+        while let Some(ty) = waiting.pop() {
+            if fixed.contains(&ty) || !self.needs_fix(&ty) {
+                continue;
+            }
+            waiting.extend(self.fix_parts(&ty).into_iter().map(|part| fix_type(&part)));
+            fixed.push(ty);
+        }
+        for ty in &fixed {
+            self.w.line(&format!("static void {}(vela__rt__copy* c, void* at);", copy_helper("fix", ty)));
+        }
+        for ty in &fixed {
+            self.gen_fix(ty);
+        }
+        for ty in copied {
+            if !self.needs_fix(&fix_type(ty)) {
+                continue;
+            }
+            let ctype = c_type(ty);
+            self.w.open(&format!("static {0} {1}(vela__rt__region* r, {0} value)", ctype, copy_helper("copied", ty)));
+            self.w.line("vela__rt__copy c = { .r = r };");
+            self.w.line(&format!("{}(&c, &value);", copy_helper("fix", &fix_type(ty))));
+            self.w.line("vela__rt__copy_finish(&c);");
+            self.w.line("return value;");
+            self.w.close();
+        }
+    }
+
+    /// Whether a value of type `ty` holds anything in a region that a copy
+    /// replaces: text, a slice, or a pointer, directly or by value.
+    fn needs_fix(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Text(_) | Type::Ptr(..) | Type::Slice(..) => true,
+            Type::Named(name, _) => self.copied_through.contains(name),
+            Type::Maybe(inner) | Type::Array(inner, _) => self.needs_fix(inner),
+            Type::Or(value, error) => self.needs_fix(value) || self.needs_fix(error),
+            _ => false,
+        }
+    }
+
+    /// The types whose values a value of type `ty` holds, directly or behind
+    /// a pointer or slice, which its fix may need to fix too.
+    fn fix_parts(&self, ty: &Type) -> Vec<Type> {
+        match ty {
+            Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Maybe(inner) | Type::Array(inner, _) => vec![(**inner).clone()],
+            Type::Or(value, error) => vec![(**value).clone(), (**error).clone()],
+            Type::Named(name, _) => match (self.shapes.get(name), self.kinds.get(name)) {
+                (Some(shape), _) => shape.fields.iter().map(|f| f.ty.without_regions()).collect(),
+                (_, Some(kind)) => kind.variants.iter().flat_map(|v| &v.payload).map(|f| f.ty.without_regions()).collect(),
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
+        }
+    }
+
+    /// `vela__fix__K` for `ty`, which `needs_fix`.
+    fn gen_fix(&mut self, ty: &Type) {
+        let ctype = c_type(ty);
+        self.w.open(&format!("static void {}(vela__rt__copy* c, void* at)", copy_helper("fix", ty)));
+        self.w.line(&format!("{0}* v = at;", ctype));
+        match ty {
+            Type::Text(_) => self.w.line("*v = vela__rt__copy_text(c, *v);"),
+            Type::Ptr(inner, _) => {
+                let fix = if self.needs_fix(&fix_type(inner)) { copy_helper("fix", &fix_type(inner)) } else { "NULL".to_string() };
+                let pointee = c_type(inner);
+                self.w.line(&format!("*v = vela__rt__copy_pointer(c, *v, sizeof({0}), _Alignof({0}), {1});", pointee, fix));
+            }
+            Type::Slice(inner, _) => {
+                let items = c_type(inner);
+                self.w.line(&format!("v->items = vela__rt__copy_items(c, v->items, v->len, sizeof({0}), _Alignof({0}));", items));
+                self.w.line("v->room = NULL;");
+                if self.needs_fix(&fix_type(inner)) {
+                    self.w.open("for (int64_t i = 0; i < v->len; i++)");
+                    self.w.line(&format!("{}(c, &v->items[i]);", copy_helper("fix", &fix_type(inner))));
+                    self.w.close();
+                }
+            }
+            Type::Array(inner, count) => {
+                self.w.open(&format!("for (int64_t i = 0; i < INT64_C({}); i++)", count));
+                self.w.line(&format!("{}(c, &v->items[i]);", copy_helper("fix", &fix_type(inner))));
+                self.w.close();
+            }
+            Type::Maybe(inner) => {
+                self.w.open("if (v->has)");
+                self.w.line(&format!("{}(c, &v->value);", copy_helper("fix", &fix_type(inner))));
+                self.w.close();
+            }
+            Type::Or(value, error) => {
+                let fix_value = **value != Type::Unit && self.needs_fix(value);
+                if fix_value {
+                    self.w.open("if (v->ok)");
+                    self.w.line(&format!("{}(c, &v->value);", copy_helper("fix", &fix_type(value))));
+                }
+                if self.needs_fix(error) {
+                    if fix_value {
+                        self.w.reopen("else");
+                    } else {
+                        self.w.open("if (!v->ok)");
+                    }
+                    self.w.line(&format!("{}(c, &v->error);", copy_helper("fix", &fix_type(error))));
+                }
+                self.w.close();
+            }
+            Type::Named(name, _) => {
+                if let Some(shape) = self.shapes.get(name).cloned() {
+                    let fields: Vec<&Field> = shape.fields.iter().filter(|f| self.needs_fix(&fix_type(&f.ty))).collect();
+                    for field in fields {
+                        self.w.line(&format!("{}(c, &v->{});", copy_helper("fix", &fix_type(&field.ty)), c_ident(&field.name)));
+                    }
+                } else if let Some(kind) = self.kinds.get(name).cloned() {
+                    self.w.open("switch (v->tag)");
+                    for variant in &kind.variants {
+                        let fields: Vec<&Field> = variant.payload.iter().filter(|f| self.needs_fix(&fix_type(&f.ty))).collect();
+                        if fields.is_empty() {
+                            continue;
+                        }
+                        self.w.open(&format!("case {}:", tag_value(name, &variant.tag)));
+                        for field in fields {
+                            self.w.line(&format!("{}(c, &v->data.{}.{});", copy_helper("fix", &fix_type(&field.ty)), c_ident(&variant.tag), c_ident(&field.name)));
+                        }
+                        self.w.line("break;");
+                        self.w.close();
+                    }
+                    self.w.line("default:");
+                    self.w.line("    break;");
+                    self.w.close();
+                }
+            }
+            _ => {}
+        }
+        self.w.close();
     }
 
     /// `show` for a `maybe` of a type `show` prints: the value, or `none`.
@@ -910,7 +1064,14 @@ impl Generator {
             // A variable after the last prelude reads the same value whenever C reads it.
             let variable = matches!(operand.kind, ExprKind::Var(_));
             let in_order = last_prelude.is_some_and(|last| i < last || (i + 1 < operands.len() && !variable));
-            if in_order && !constant {
+            // A value-less operand (`xs.add(v)`, or a call of a task sending
+            // nothing, in a list of values) runs in order as a statement.
+            if in_order && *operand.ty()? == Type::Unit {
+                if !value.is_empty() {
+                    self.w.line(&format!("{};", value));
+                }
+                values.push(String::new());
+            } else if in_order && !constant {
                 let tmp = self.fresh_temp("arg");
                 self.w.line(&format!("{} {} = {};", c_type(operand.ty()?), tmp, value));
                 values.push(tmp);
@@ -950,7 +1111,15 @@ impl Generator {
             ExprKind::PlanB { value, error, body } => self.gen_plan_b(e, value, error.as_ref(), body),
             ExprKind::Edit { items, op, args } => self.gen_edit(e.span, items, *op, args, false),
             ExprKind::Scan { args, region, .. } => self.gen_scan(e.span, args, region, false),
+            ExprKind::Copy { value, region, .. } => self.gen_copy(e, value, region.as_deref()),
         }
+    }
+
+    /// `value.copy() at region`, the expression `e`.
+    fn gen_copy(&mut self, e: &Expr, value: &Expr, region: Option<&str>) -> Result<String> {
+        let region = region.ok_or_else(|| Error::internal_at(e.span, "a copy whose region isn't settled reached code generation"))?;
+        let copied = self.gen_expr(value)?;
+        Ok(format!("{}({}, {})", copy_helper("copied", value.ty()?), c_ident(region), copied))
     }
 
     /// `scan(prompt) at region`, at `span`, which it writes as a prelude, so it
@@ -1442,7 +1611,7 @@ fn has_prelude(e: &Expr) -> bool {
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
         | ExprKind::Var(_) => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. }
-        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => has_prelude(inner),
+        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Copy { value: inner, .. } => has_prelude(inner),
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             has_prelude(a) || has_prelude(b)
         }
@@ -1467,6 +1636,8 @@ struct UsedTypes {
     slice_del: Vec<Type>,
     slice_pop: Vec<Type>,
     array_fill: Vec<Type>,
+    /// The types of the values the program copies with `copy()`.
+    copied: Vec<Type>,
     /// Whether the program calls `scan`.
     scans: bool,
 }
@@ -1493,6 +1664,7 @@ impl UsedTypes {
             slice_del: Vec::new(),
             slice_pop: Vec::new(),
             array_fill: Vec::new(),
+            copied: Vec::new(),
             scans: false,
         };
         for item in items {
@@ -1652,6 +1824,12 @@ impl UsedTypes {
                 self.expr(value);
                 self.block(body);
             }
+            ExprKind::Copy { value, .. } => {
+                if let Some(ty) = &value.ty {
+                    note(&mut self.copied, ty);
+                }
+                self.expr(value);
+            }
             ExprKind::Scan { args, .. } => {
                 self.scans = true;
                 // Its `maybe text` has a struct even when it isn't kept.
@@ -1735,6 +1913,8 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::PlanB { value, body, .. } => expr_reads(value, name) || block_reads(body, name),
         // `scan` reads the region it keeps the line in.
         ExprKind::Scan { args, region, .. } => region == name || args.iter().any(|arg| expr_reads(arg, name)),
+        // `copy` reads the region it copies into.
+        ExprKind::Copy { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
         // `add` reads the region it may allocate in.
         ExprKind::Edit { items, op, args } => {
             let region = match &items.ty {
@@ -1975,6 +2155,21 @@ fn item_type(ty: &Type) -> &Type {
 /// `vela__at__slice__int`, `vela__fill__array__4__int`.
 fn item_helper(what: &str, ty: &Type) -> String {
     format!("vela__{}__{}", what, type_key(ty))
+}
+
+/// The C name of a generated helper for copies of values of type `ty`:
+/// `vela__copied__ptr__n_Node`, `vela__fix__text`.
+fn copy_helper(what: &str, ty: &Type) -> String {
+    format!("vela__{}__{}", what, type_key(&ty.without_regions()))
+}
+
+/// The type whose fix a value of type `ty` takes: a `maybe` pointer is the
+/// pointer itself in C, `NULL` for none.
+fn fix_type(ty: &Type) -> Type {
+    match ty.without_regions() {
+        Type::Maybe(inner) if is_pointer(&inner) => *inner,
+        other => other,
+    }
 }
 
 /// A type as part of a C name, distinct for distinct types: words separated by

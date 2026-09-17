@@ -35,15 +35,15 @@
  22 |     bool.unit = twice(bool.unit, 1)
     | variable:bool  punctuation:.  field:unit  operator:=  task:twice  punctuation:(  variable:bool  punctuation:.  field:unit  punctuation:,  number:1  punctuation:)
  23 |     show(bool.unit)
-    | variable:show  punctuation:(  variable:bool  punctuation:.  field:unit  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:bool  punctuation:.  field:unit  punctuation:)
  24 |     show(bool.show)
-    | variable:show  punctuation:(  variable:bool  punctuation:.  field:show  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:bool  punctuation:.  field:show  punctuation:)
  25 |     bind l = Light.Red()
     | keyword:bind  variable:l  operator:=  type:Light  punctuation:.  variant:Red  punctuation:(  punctuation:)
  26 |     when l is Light.Red
     | keyword:when  variable:l  keyword:is  type:Light  punctuation:.  variant:Red
  27 |         show("red")
-    | variable:show  punctuation:(  string:"red"  punctuation:)
+    | builtin-fn:show  punctuation:(  string:"red"  punctuation:)
  28 |     fi
     | keyword:fi
  29 | fi

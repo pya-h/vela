@@ -172,37 +172,41 @@ impl<'a> Knowledge<'a> {
             (SymbolKind::Variable, Some("case" | "is")) => self.case_binding_type(id, depth + 1),
             (SymbolKind::Variable, Some("fail")) => self.plan_b_error_type(id, depth + 1),
             (SymbolKind::Variable, _) if !symbol.detail.is_empty() => parse_type(&symbol.detail),
-            (SymbolKind::Variable, _) => {
-                // The initializer's type: `bind x = Point { … }`, `bind ok = a < b`.
-                // In a list, the name's place decides which value it takes.
-                let name = self.at_byte(symbol.name_range.start)?;
-                let (index, equals) = self.binding_place(name)?;
-                let end = self.line_end(name).checked_sub(1)?;
-                if end <= equals {
-                    return None;
-                }
-                let values = self.value_list(equals + 1, end);
-                let names = (self.line_start(name)..equals).filter(|&q| self.token(q) == Some(&Token::Comma)).count() + 1;
-                if names > 1 && values.len() == 1 {
-                    // One call sends every value.
-                    let Type::Results(types) = self.expression_type(end, depth + 1)? else { return None };
-                    return types.into_iter().nth(index);
-                }
-                let &(first, last) = values.get(index)?;
-                if first > last {
-                    return None;
-                }
-                // A plan B spanning lines (`{`, or `{ fail e`) gives the value it extracts.
-                let names_error = self.token(last.checked_sub(1)?) == Some(&Token::Fail)
-                    && matches!(self.token(last), Some(Token::Ident(_) | Token::Underscore));
-                let brace = if names_error { last.checked_sub(2)? } else { last };
-                if self.token(brace) == Some(&Token::LBrace) {
-                    return self.expression_type(brace.checked_sub(1)?, depth + 1)?.extracted().cloned();
-                }
-                self.span_type(first, last, depth + 1)
-            }
+            // Text of no region in particular lasts, as the checker settles it.
+            (SymbolKind::Variable, _) => self.initializer_type(symbol, depth).map(|ty| vela::check::lasting(&ty, &self.types_holding(holds_pointers))),
             _ => None,
         }
+    }
+
+    /// The type of the value a `bind` or `hold` without a written type gives
+    /// `symbol`: `bind x = Point { … }`, `bind ok = a < b`. In a list, the name's
+    /// place decides which value it takes.
+    fn initializer_type(&self, symbol: &Symbol, depth: usize) -> Option<Type> {
+        let name = self.at_byte(symbol.name_range.start)?;
+        let (index, equals) = self.binding_place(name)?;
+        let end = self.line_end(name).checked_sub(1)?;
+        if end <= equals {
+            return None;
+        }
+        let values = self.value_list(equals + 1, end);
+        let names = (self.line_start(name)..equals).filter(|&q| self.token(q) == Some(&Token::Comma)).count() + 1;
+        if names > 1 && values.len() == 1 {
+            // One call sends every value.
+            let Type::Results(types) = self.expression_type(end, depth + 1)? else { return None };
+            return types.into_iter().nth(index);
+        }
+        let &(first, last) = values.get(index)?;
+        if first > last {
+            return None;
+        }
+        // A plan B spanning lines (`{`, or `{ fail e`) gives the value it extracts.
+        let names_error = self.token(last.checked_sub(1)?) == Some(&Token::Fail)
+            && matches!(self.token(last), Some(Token::Ident(_) | Token::Underscore));
+        let brace = if names_error { last.checked_sub(2)? } else { last };
+        if self.token(brace) == Some(&Token::LBrace) {
+            return self.expression_type(brace.checked_sub(1)?, depth + 1)?.extracted().cloned();
+        }
+        self.span_type(first, last, depth + 1)
     }
 
     /// Where the `bind` or `hold` name at position `name` is in its list, and
@@ -426,6 +430,10 @@ impl<'a> Knowledge<'a> {
                 // `new T(v) at r`: a pointer into `r`, or a slice for `new [T](…) at r`;
                 // `scan(…) at r` or `scan(…)@r`: a line in `r`.
                 if matches!(self.token_before(q), Some(Token::At | Token::AtSign)) && q >= 2 && self.token(q - 2) == Some(&Token::RParen) {
+                    // `x.copy() at r`: the value's type, in `r`.
+                    if let Some(value) = self.copied_value(q - 2) {
+                        return Some(self.in_region(&self.expression_type(value, depth + 1)?.without_regions(), name));
+                    }
                     return match self.expression_type(q - 2, depth + 1)? {
                         Type::Ptr(pointee, _) => Some(Type::Ptr(Box::new(self.in_region(&pointee, name)), Some(name.to_string()))),
                         Type::Slice(items, _) => Some(Type::Slice(Box::new(self.in_region(&items, name)), Some(name.to_string()))),
@@ -507,6 +515,11 @@ impl<'a> Knowledge<'a> {
                 if word == vela::ast::SCAN && self.token_before(p) != Some(&Token::Dot) {
                     return Some(Type::Maybe(Box::new(Type::Text(None))));
                 }
+                // `x.copy()`, before its region: the value's type, in the region
+                // the place it goes names, which the checker records at the word.
+                if let Some(value) = self.copied_value(q) {
+                    return exact(p).or_else(|| Some(self.in_region(&self.expression_type(value, depth + 1)?.without_regions(), ANY_REGION)));
+                }
                 // `xs.add(…)` gives nothing, and `xs.del(…)` the item it takes
                 // out, which the checker records at the word.
                 if self.token_before(p) == Some(&Token::Dot)
@@ -571,9 +584,10 @@ impl<'a> Knowledge<'a> {
             };
             return Some(Type::Array(Box::new(item), count));
         }
+        // The items' type: text of a region, rather than a literal's, which fits it.
         let values = self.value_list(first, last);
-        let &(start, end) = values.first()?;
-        let item = self.span_type(start, end, depth + 1)?;
+        let types: Vec<Type> = values.iter().filter_map(|&(start, end)| self.span_type(start, end, depth + 1)).collect();
+        let item = types.iter().find(|ty| ty.regions().iter().any(|region| *region != ANY_REGION)).or(types.first())?.clone();
         Some(Type::Array(Box::new(item), u64::try_from(values.len()).ok()?))
     }
 
@@ -668,8 +682,21 @@ impl<'a> Knowledge<'a> {
         return_type(detail).map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| ANY_REGION.to_string())))
     }
 
+    /// When the `)` at `q` ends `x.copy()`, the position where `x` ends.
+    pub fn copied_value(&self, q: usize) -> Option<usize> {
+        let word = self.matching_open(q, &Token::LParen, &Token::RParen)?.checked_sub(1)?;
+        (q == word + 2 && self.ident(word) == Some(vela::ast::COPY) && self.token_before(word) == Some(&Token::Dot)).then_some(word.checked_sub(2)?)
+    }
+
+    /// Whether a value of type `ty` holds what `copy()` copies: text, a slice,
+    /// or a pointer, directly or in shapes and kinds by value.
+    pub fn can_copy(&self, ty: &Type) -> bool {
+        let takes_region = self.takes_region();
+        holds_pointers(ty, &takes_region) || holds_text(ty, &takes_region)
+    }
+
     /// The position of the bracket that `close` at `q` closes, on the same line.
-    fn matching_open(&self, q: usize, open: &Token, close: &Token) -> Option<usize> {
+    pub fn matching_open(&self, q: usize, open: &Token, close: &Token) -> Option<usize> {
         let mut depth = 0usize;
         for p in (0..q).rev() {
             match self.token(p) {

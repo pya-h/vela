@@ -14,7 +14,8 @@ never wraps: overflow and division by zero stop the program with a message sayin
 are values held in place, and slices (`[int]@r`) view items in a region, made with `new [int]([0; n]) at r`
 (or empty, `new [int]() at r`) and changed with `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, and `xs.del()`;
 every index is checked, and `xs.len` is the count. `scan("Name: ") at r` shows a prompt and reads a line
-into a region, giving `none` once the input has ended. A program can span
+into a region, giving `none` once the input has ended, and `value.copy()` copies a value (its text, its slices'
+items, and what its pointers point to) into the region where it goes, or `value.copy() at r`. A program can span
 several files: `include shapes/geometry` reads `shapes/geometry.vela`, named as `geometry.area(…)` (or brought in
 with `include shapes/geometry (area)`, or only the names with braces, `{area}`), `=>` gives a module or a name
 another name (`include fuel/prices => fuel`), and everything a file declares is public unless marked `priv`. A
@@ -67,7 +68,7 @@ cargo test --workspace                  # the compiler and Vela Studio's crates
 cargo clippy --workspace --all-targets
 ```
 
-Programs in `tests/run/` must print their `.out` files, programs in `tests/fail/` must be rejected with
+Programs in `tests/run/` must print their `.out` files (reading `NAME.in` as their input, when there is one), programs in `tests/fail/` must be rejected with
 the error in their first line, programs in `tests/trap/` must print their `.out` files and then stop with
 the runtime error in their first line, and every file in `examples/` is checked against `tests/examples/`.
 

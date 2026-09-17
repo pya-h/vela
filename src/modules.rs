@@ -946,7 +946,7 @@ impl Resolver<'_> {
         if matches!(&expr.kind, ExprKind::Field(base, _) if matches!(base.kind, ExprKind::Var(_))) && self.variant_as_field(expr)? {
             return Ok(());
         }
-        if matches!(expr.kind, ExprKind::Edit { .. }) && self.edit_as_variant(expr)? {
+        if matches!(expr.kind, ExprKind::Edit { .. } | ExprKind::Copy { region: None, .. }) && self.edit_as_variant(expr)? {
             return Ok(());
         }
         match &mut expr.kind {
@@ -982,24 +982,33 @@ impl Resolver<'_> {
                 args.iter_mut().try_for_each(|e| self.expr(e))
             }
             ExprKind::Scan { args, .. } => args.iter_mut().try_for_each(|e| self.expr(e)),
+            ExprKind::Copy { value, .. } => self.expr(value),
         }
     }
 
-    /// `Kind.add(…)` or `Kind.del(…)`, which the parser reads as a change to a
-    /// slice, rewritten to the call of the kind's variant; whether `expr` was
-    /// one. No variable can be named like a kind (see `Checker::define`). (A
-    /// function of its own: `expr`'s frame is on the stack once per nesting
-    /// level.)
+    /// `Kind.add(…)`, `Kind.del(…)`, or `Kind.copy()`, which the parser reads as
+    /// a change to a slice or a copy, rewritten to the call of the kind's
+    /// variant; whether `expr` was one. No variable can be named like a kind
+    /// (see `Checker::define`). (A function of its own: `expr`'s frame is on the
+    /// stack once per nesting level.)
     fn edit_as_variant(&self, expr: &mut Expr) -> Result<bool> {
-        let ExprKind::Edit { items, op, args } = &mut expr.kind else { return Ok(false) };
+        let (items, word) = match &expr.kind {
+            ExprKind::Edit { items, op, .. } => (items, op.word()),
+            ExprKind::Copy { value, region: None, .. } => (value, COPY),
+            _ => return Ok(false),
+        };
         let ExprKind::Var(name) = &items.kind else { return Ok(false) };
         if self.kind(name, items.span)?.is_none() {
             return Ok(false);
         }
-        let written = format!("{}{}{}", name, MODULE_SEPARATOR, op.word());
+        let written = format!("{}{}{}", name, MODULE_SEPARATOR, word);
         // Where the kind is written, as for any `Kind.Variant(…)`.
         expr.span = items.span;
-        expr.kind = ExprKind::Call(written, std::mem::take(args));
+        let args = match &mut expr.kind {
+            ExprKind::Edit { args, .. } => std::mem::take(args),
+            _ => Vec::new(),
+        };
+        expr.kind = ExprKind::Call(written, args);
         self.expr(expr)?;
         Ok(true)
     }

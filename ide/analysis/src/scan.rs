@@ -993,7 +993,11 @@ impl<'a> Classifier<'a> {
         if literal_follows && self.local(name, tokens.range(p).start).is_none() {
             return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind]));
         }
-        // A call always names a task or a variant, even when a variable has the same name.
+        // A call always names a task or a variant, even when a variable has the
+        // same name, and `show(` and `scan(` always the builtin tasks.
+        if after == Some(&Token::LParen) && BUILTIN_TASKS.contains(&name) {
+            return (TokenClass::BuiltinFn, None);
+        }
         if after == Some(&Token::LParen)
             && let Some(id) = self.global(name, &[SymbolKind::Task, SymbolKind::Variant])
         {

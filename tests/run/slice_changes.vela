@@ -2,8 +2,8 @@
 # before item `i`, `xs.del(i)` takes item `i` out and gives it, and `xs.del()`
 # the last one. `new [T]() at r` makes a slice with no items. A slice grows in
 # its region: in place while its block has room, otherwise into a bigger block
-# (tests/runtime.rs also runs this under sanitizers, which check that no copy or
-# part of a slice writes over another's items).
+# (tests/runtime.rs also runs this under sanitizers). Adding to a copy or a part
+# doesn't write over items another counts, unless it took its last items out.
 
 shape Point
     x: int
@@ -170,6 +170,22 @@ task main()
         temporary.add(pass)
         show(temporary.del())
     fi
+
+    # Taking the last item out gives its space back to that slice, even when a
+    # copy made before still counts the item: the copy sees the next add.
+    hold older = new [int]([1, 2, 3]) at r
+    older.add(4)
+    hold newer = older
+    _ = newer.del()
+    newer.add(5)
+    show(older[3])
+
+    # Changes without a value among values taken in order.
+    hold taken = 0
+    _, taken = older.add(6), older.del()
+    show(taken)
+    bind _, again = older.add(7), older.del()
+    show(again)
 
     # Dropped values, and plan B values as arguments.
     _ = xs.del()

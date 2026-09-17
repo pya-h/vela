@@ -179,6 +179,7 @@
     .b-later { background: rgba(167,139,250,0.15); color: #c4b5fd; }
     .b-no { background: rgba(248,113,113,0.15); color: #fca5a5; }
     .b-now { background: rgba(148,163,184,0.15); color: #cbd5e1; }
+    .b-done { background: rgba(148,163,184,0.15); color: #cbd5e1; }
     .table-wrap { overflow-x: auto; margin: 1rem 0; }
     table { width: 100%; border-collapse: collapse; font-size: 0.93rem; }
     th, td {
@@ -774,14 +775,6 @@ not a digit
     <span class="keyword">&lt;-</span> total
 <span class="keyword">fi</span>
 
-<span class="comment"># Copies a list, node by node, into another region.</span>
-<span class="keyword">task</span> copy(to: <span class="keyword">region</span>, list: <span class="keyword">maybe</span> ^Node@from) -&gt; <span class="keyword">maybe</span> ^Node@to
-    <span class="keyword">when</span> list <span class="keyword">is</span> {node}
-        <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: node^.value, next: copy(to, node^.next) }) <span class="keyword">at</span> to
-    <span class="keyword">fi</span>
-    <span class="keyword">&lt;-</span> <span class="keyword">none</span>
-<span class="keyword">fi</span>
-
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> kept
     <span class="keyword">hold</span> best: <span class="keyword">maybe</span> ^Node@kept = <span class="keyword">none</span>
@@ -792,7 +785,7 @@ not a digit
             draft = push(work, draft, i)
         <span class="keyword">fi</span>
         <span class="keyword">when</span> sum(draft) &gt; sum(best)
-            best = copy(kept, draft)
+            best = draft.copy()                    <span class="comment"># every node, into kept</span>
         <span class="keyword">fi</span>
     <span class="keyword">fi</span>
     show(sum(best))
@@ -800,10 +793,12 @@ not a digit
 <pre class="output" aria-label="Output">6</pre>
       <p>
         A pointer into <code>work</code> can't be stored in <code>best</code>, which lives in <code>kept</code> (that would
-        leave <code>best</code> pointing at freed memory after the pass). So <code>copy</code> rebuilds the list in
-        <code>kept</code>, node by node. It takes the region to copy into as a parameter, and names the region it reads
-        from in its types. Each pass's draft is freed at the end of the pass, so only the lists that were copied stay
-        allocated.
+        leave <code>best</code> pointing at freed memory after the pass). So <code>draft.copy()</code> copies the list into
+        <code>kept</code>, the region <code>best</code> names: every node, following the pointers. Each pass's draft is freed
+        at the end of the pass, so only the lists that were copied stay allocated. A copy keeps a node two pointers share as
+        one node, and copies a cycle as a cycle; where nothing names the region to copy into, write it:
+        <code>draft.copy() at kept</code> (or <code>draft.copy()@kept</code>). See
+        <a href="vela.html#copy">Copying into another region</a> for what a copy covers.
       </p>
 
       <h3 id="lesson-slices">Lesson 9: Slices in a region</h3>
@@ -928,7 +923,7 @@ not a digit
         <li><strong>Prefer plain values when you can.</strong> A <code>Point</code> or a small shape passed by value needs
           no region at all. Reach for pointers when data is linked, shared, or must be changed by another task.</li>
         <li><strong>Copy out to keep a little of a lot.</strong> Build in a scratch region, copy the result into a longer-lived
-          one (Lesson 8).</li>
+          one with <code>.copy()</code> (Lesson 8).</li>
       </ul>
 
       <h3 id="messages">Lesson 11: Reading the compiler's messages</h3>
@@ -946,7 +941,9 @@ not a digit
           <tr><td><code>'Point' holds no pointers or text, so it lives in no region</code></td><td>Remove <code>@r</code>: plain values need none.</td></tr>
           <tr><td><code>a field lives in the region of the value holding it</code></td><td>In a <code>shape</code> or <code>kind</code>, write <code>^Node</code>, not <code>^Node@r</code>.</td></tr>
           <tr><td><code>unknown region 'r'; declare it with 'region r'</code></td><td>The region isn't visible here: it is declared in another block, later, or not at all.</td></tr>
-          <tr><td><code>expected type ^int@outer, got ^int@inner; a value can't move to another region</code></td><td>A pointer would be stored where it could outlive its region, or in a different region. Allocate in the right region, or copy the value (see <a href="#limits">Limitations</a>).</td></tr>
+          <tr><td><code>expected type ^int@outer, got ^int@inner; a value can't move to another region</code></td><td>A pointer would be stored where it could outlive its region, or in a different region. Allocate in the right region, or store a copy: <code>p.copy()</code>.</td></tr>
+          <tr><td><code>can't tell which region to copy into</code></td><td>Nothing the copy goes into names a region (a <code>bind</code> without a type, a comparison). Name it: <code>x.copy() at r</code>.</td></tr>
+          <tr><td><code>'copy' copies what a value holds in a region, but this value is int</code></td><td>The value holds no text, slice, or pointer, so it needs no copy: use it as it is.</td></tr>
           <tr><td><code>this task can't allocate in 'r', which it only names in its types</code></td><td>Take the region as a parameter: <code>r: region</code>.</td></tr>
           <tr><td><code>the result lives in region 'r', which the task isn't given</code></td><td>A result can't point into the task's own region; take <code>r: region</code> from the caller.</td></tr>
           <tr><td><code>cannot tell which region 'x' lives in</code></td><td>The value holds no pointers yet; write the binding's type, <code>x: Node@r</code>.</td></tr>
@@ -977,7 +974,10 @@ not a digit
 }</pre>
       <p>
         A region parameter is a plain <code>vela__rt__region*</code>; region names in types disappear, since C doesn't need
-        them. The allocator is about a hundred lines in <code>runtime/vela_rt.h</code>, and the test suite runs the region
+        them. A copy (<code>value.copy()</code>) is a generated function per type that copies the value's bytes, then its
+        text, its slices' items, and what its pointers point to; each pointed-to value is copied once, remembered in a table,
+        and waits in a list rather than in a C call, so a long list copies without deep recursion. The allocator is about a
+        hundred lines in <code>runtime/vela_rt.h</code>, and the test suite runs the region
         programs in <code>tests/run</code> and <code>examples</code> under AddressSanitizer and UndefinedBehaviorSanitizer, with
         leak detection.
       </p>
@@ -1028,7 +1028,7 @@ not a digit
     latest = <span class="keyword">new</span> int(i) <span class="keyword">at</span> long        <span class="comment"># a million ints stay allocated until long is freed</span>
 <span class="keyword">fi</span></pre>
         <p><strong>Workaround:</strong> change the value in place through its pointer, or allocate per-pass values in a region
-          inside the loop and copy out only what survives (Lesson 8).</p>
+          inside the loop and copy out only what survives with <code>.copy()</code> (Lesson 8).</p>
         <pre class="program" data-file="w_replace.vela"><span class="keyword">task</span> main()
     <span class="keyword">region</span> long
     <span class="keyword">bind</span> latest = <span class="keyword">new</span> int(<span class="number">0</span>) <span class="keyword">at</span> long
@@ -1073,14 +1073,14 @@ not a digit
       </div>
 
       <div class="limit">
-        <h3 id="limit-text">Text of a region can't become text that lasts, or move to another region</h3>
+        <h3 id="limit-text">Text of a region can't become text that lasts</h3>
         <pre><span class="keyword">hold</span> chosen = <span class="string">"nothing"</span>
 chosen = item^.title
 <span class="comment"># error: expected type text, got text@items; this text is in region 'items', and text here must last as long as the program</span></pre>
         <p><strong>Workaround:</strong> keep the text where its region is known: a <code>text@items</code> variable, a shape named
           with the region (<code>Person@items</code>), or a slice in it. A task that reads it names the region in its header
-          (<code>title: text@r</code>). Copying text into another region comes with <code>.copy()</code> (see
-          <a href="#ideas-limits">the ideas</a>).</p>
+          (<code>title: text@r</code>). To keep it longer, copy it into a region that lives longer:
+          <code>kept_title = item^.title.copy()</code>, where <code>kept_title</code> is a <code>text@kept</code>.</p>
       </div>
 
       <div class="limit">
@@ -1096,8 +1096,8 @@ chosen = item^.title
     <span class="keyword">bind</span> leaf = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: root }) <span class="keyword">at</span> inner
     <span class="comment"># error: expected type Node@inner, got Node@outer; a value can't move to another region</span>
 <span class="keyword">fi</span></pre>
-        <p><strong>Workaround:</strong> rebuild the older value in the younger region (as below, or with a copy task like
-          Lesson 8's), or allocate the younger data in the older region.</p>
+        <p><strong>Workaround:</strong> copy the older value into the younger region (<code>root.copy() at inner</code>, as
+          below), or allocate the younger data in the older region.</p>
         <pre class="program" data-file="w_younger.vela"><span class="keyword">shape</span> Node
     value: int
     next: <span class="keyword">maybe</span> ^Node
@@ -1108,23 +1108,13 @@ chosen = item^.title
     <span class="keyword">bind</span> root = <span class="keyword">new</span> Node(Node { value: <span class="number">1</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> outer
     <span class="keyword">when</span> root^.value &gt; <span class="number">0</span>
         <span class="keyword">region</span> inner
-        <span class="comment"># Rebuild the value in the younger region, field by field.</span>
-        <span class="keyword">bind</span> copy = <span class="keyword">new</span> Node(Node { value: root^.value, next: <span class="keyword">none</span> }) <span class="keyword">at</span> inner
-        <span class="keyword">bind</span> leaf = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: copy }) <span class="keyword">at</span> inner
-        show(leaf^.value + copy^.value)
+        <span class="comment"># Copy the older value into the younger region.</span>
+        <span class="keyword">bind</span> older = root.copy() <span class="keyword">at</span> inner
+        <span class="keyword">bind</span> leaf = <span class="keyword">new</span> Node(Node { value: <span class="number">2</span>, next: older }) <span class="keyword">at</span> inner
+        show(leaf^.value + older^.value)
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></pre>
 <pre class="output" aria-label="Output">3</pre>
-      </div>
-
-      <div class="limit">
-        <h3 id="limit-copy">A value that holds pointers can't be copied to another region whole</h3>
-        <p>
-          Even when its pointers are all <code>none</code>, a <code>Node@outer</code> is in <code>outer</code>:
-          <code>new Node(root^) at inner</code> is an error.
-        </p>
-        <p><strong>Workaround:</strong> build a new value field by field (<code>Node { value: root^.value, next: none }</code>),
-          or write a copy task that follows the pointers (Lesson 8).</p>
       </div>
 
       <div class="limit">
@@ -1473,15 +1463,15 @@ head.next = push(nodes, <span class="keyword">none</span>, <span class="number">
         </p>
       </div>
       <div class="idea">
-        <h4>A generated copy: <code>value.copy()</code> <span class="badge b-rec">Planned</span></h4>
+        <h4>A generated copy: <code>value.copy()</code> <span class="badge b-done">Done</span></h4>
         <p>
-          Chosen spelling (2026-09-17): <code>value.copy()</code>, which copies into the region the place it goes names, as in
-          <code>node^.title = line.copy()</code>, or <code>value.copy() at r</code> where nothing names one. It also copies
-          text of one region into another.
-          Fixes <a href="#limit-copy">this limitation</a> and <a href="#limit-text">this one</a>, and replaces hand-written copy tasks like Lesson 8's. The compiler would
-          generate a deep copy for each type that holds pointers. Linked data can share nodes or even form cycles, so the copy
-          must remember what it has already copied (a small table, kept while copying) to keep shared nodes shared and to
-          stop at cycles.
+          Done (2026-09-17): <code>value.copy()</code> copies into the region the place it goes names, as in
+          <code>node^.title = line.copy()</code>, or into <code>r</code> with <code>value.copy() at r</code> (or
+          <code>value.copy()@r</code>) where nothing names one; see <a href="vela.html#copy">Copying into another region</a>.
+          It copies text, slices' items, and what pointers point to, all the way down, and lifted the limit that a value
+          holding pointers couldn't be copied to another region whole. The compiler generates a copy for each type the
+          program copies; linked data can share nodes or form cycles, so a copy keeps a table of what it has already copied
+          (freed when it ends) to keep shared nodes shared and to stop at cycles.
         </p>
       </div>
       <div class="idea">

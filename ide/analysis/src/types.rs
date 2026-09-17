@@ -269,6 +269,11 @@ impl Checked {
                     self.expr(arg, kinds);
                 }
             }
+            // `x.copy()`: the word is a member of every value, as `len` is of a slice.
+            ExprKind::Copy { value, .. } => {
+                self.field_accesses.insert(pos(e.span), String::new());
+                self.expr(value, kinds);
+            }
             // `xs.add(…)` and `xs.del(…)`: the word is a slice's member, as `len` is.
             ExprKind::Edit { items, args, .. } => {
                 if matches!(items.ty, Some(Type::Slice(..))) {

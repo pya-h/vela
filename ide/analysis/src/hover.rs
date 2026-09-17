@@ -82,6 +82,10 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
         (TokenClass::Field, None) if text == "len" => {
             ("len: int".to_string(), "The number of items of an array or slice.".to_string())
         }
+        (TokenClass::Field, None) if text == vela::ast::COPY => (
+            "copy() at r or copy()@r".to_string(),
+            "Copies a value into a region: its text, its slices' items, and what its pointers point to, all the way down (shared nodes stay shared, and cycles stay cycles). Without a region, the copy goes into the region of the place it is put in.".to_string(),
+        ),
         (TokenClass::Field, None) if text == "add" => (
             "add(value) or add(index, value)".to_string(),
             "Adds a value to a slice: last, or before the item at the index (which may be the length). The slice must be in a place that can change, and the task must have its region; the items stay in that region.".to_string(),

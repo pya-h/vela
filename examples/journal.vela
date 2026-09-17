@@ -1,15 +1,21 @@
 # Notes read from input: `scan` shows a prompt and reads a line into a region,
-# giving none once the input ends. The notes are kept in a slice that grows,
-# and shown back last first. Run it and type a few lines (an empty line or
+# giving none once the input ends. Each line is read into a region of its own,
+# and only the notes kept are copied into the slice's region with `copy()`. The
+# notes are shown back last first. Run it and type a few lines (an empty line or
 # Ctrl-D ends them), or give it a file: `./journal < notes.txt`.
 
 task read_notes(r: region) -> [text]@r
     hold notes = new [text]() at r
-    loop scan("note> ") at r is {line}
+    hold reading = true
+    loop reading
+        # Freed at the end of every pass, with the line read into it.
+        region line_memory
+        bind line = scan("note> ") at line_memory { "" }
         when line == ""
-            <- notes
+            reading = false
+        else
+            notes.add(line.copy())
         fi
-        notes.add(line)
     fi
     <- notes
 fi

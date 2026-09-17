@@ -261,6 +261,7 @@ true false none  fi   maybe is     fail include priv</pre>
         <tr><td><code>[a, b]</code>, <code>[v; n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
         <tr><td><code>xs.add(v)</code>, <code>xs.add(i, v)</code>, <code>xs.del(i)</code>, <code>xs.del()</code></td><td>add a value to a slice, last or before item <code>i</code>; take item <code>i</code>, or the last, out of it and give it</td></tr>
+        <tr><td><code>x.copy()</code>, <code>x.copy() at r</code></td><td>a copy of a value in the region where it goes, or in <code>r</code> (also <code>x.copy()@r</code>; see <a href="#copy">Copying into another region</a>)</td></tr>
         <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, or variant of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
         <tr><td><code>Kind.Variant</code></td><td>a variant, named through its kind (see <a href="#kinds">Kinds</a>)</td></tr>
         <tr><td><code>name =&gt; other</code></td><td>on an <code>include</code> line: the name a module or a name brought in is written with in this file</td></tr>
@@ -1096,7 +1097,7 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
     greet(plain)                                   <span class="comment"># Bob</span>
     greet(held)                                    <span class="comment"># Ada</span>
     <span class="keyword">hold</span> lasting = <span class="string">"none yet"</span>
-    lasting = first                                <span class="comment"># error: text@r can&#x27;t become text</span>
+    lasting = first                                <span class="comment"># error: expected type text, got text@r; …</span>
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>Tasks.</strong> A parameter of type <code>text</code> takes text that lasts. To take text of any region,
@@ -1202,12 +1203,67 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
       </p>
       <p>
         <strong>Copies and parts.</strong> A copy of a slice (<code>hold ys = xs</code>) and a part of one
-        (<code>xs[1..3]</code>) are views of the same items. Adding to one never writes over an item another counts:
+        (<code>xs[1..3]</code>) are views of the same items. Adding to one doesn't write over an item another counts:
         only the slice whose items end where the room begins adds in place, and the others copy their items into a
         block of their own first. Writing an item, <code>del</code>, and <code>add</code> in the middle move items in
-        that shared memory, which the other views then see, as they see <code>xs[i] = v</code>. After changing a slice,
-        use the slice you changed.
+        that shared memory, which the other views then see, as they see <code>xs[i] = v</code>. So does
+        <code>del</code> at the end: it gives the item's space back to the room, and the next <code>add</code> to that
+        slice goes there, over the item a copy made before the <code>del</code> may still count. After changing a
+        slice, use the slice you changed, and give a copy that must keep its items items of its own:
+        <code>new [T](xs) at r</code>.
       </p>
+
+      <h3 id="copy">Copying into another region</h3>
+      <p>
+        A value can't move to a region that outlives its own, but a copy can go there. <code>value.copy()</code> copies
+        what a value holds in regions (its text, its slices' items, and what its pointers point to, all the way down)
+        into the region of the place the copy goes: the slice it is added to, the variable or field it is assigned to, the
+        parameter it is passed as (when the call shows that parameter's region), or the result it is sent as. Where nothing names a region (a <code>bind</code> without a
+        type, a comparison), the copy names one: <code>value.copy() at r</code>, or <code>value.copy()@r</code>.
+      </p>
+      <pre><span class="keyword">shape</span> Note
+    title: text
+    tags: [text]
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> kept
+    <span class="keyword">hold</span> titles = <span class="keyword">new</span> [text]() <span class="keyword">at</span> kept
+    <span class="keyword">hold</span> first: <span class="keyword">maybe</span> ^Note@kept = <span class="keyword">none</span>
+    <span class="keyword">each</span> pass <span class="keyword">in</span> <span class="number">0</span>..<span class="number">2</span>
+        <span class="keyword">region</span> work                                 <span class="comment"># freed at the end of every pass</span>
+        <span class="keyword">bind</span> line = scan(<span class="string">"Title: "</span>) <span class="keyword">at</span> work { <span class="string">"none"</span> }
+        <span class="keyword">hold</span> tags = <span class="keyword">new</span> [text]() <span class="keyword">at</span> work
+        tags.add(line)
+        <span class="keyword">bind</span> note = <span class="keyword">new</span> Note(Note { title: line, tags: tags }) <span class="keyword">at</span> work
+        titles.add(line.copy())                     <span class="comment"># into kept, the slice&#x27;s region</span>
+        <span class="keyword">when</span> first <span class="keyword">is</span> <span class="keyword">none</span>
+            first = note.copy()                     <span class="comment"># the note, its title, its tags</span>
+        <span class="keyword">fi</span>
+        <span class="keyword">bind</span> shout = line.copy() <span class="keyword">at</span> kept            <span class="comment"># nothing here names a region</span>
+        show(shout)
+    <span class="keyword">fi</span>
+    show(titles[<span class="number">0</span>])                                 <span class="comment"># Ada</span>
+    <span class="keyword">bind</span> kept_note = first { <span class="keyword">&lt;-</span> }
+    show(kept_note^.tags[<span class="number">0</span>])                        <span class="comment"># Ada</span>
+<span class="keyword">fi</span></pre>
+      <ul>
+        <li><strong>What it copies.</strong> Text, a shape or kind holding text, pointers, or slices, a slice, a pointer
+          (with the value it points to), and a <code>maybe</code>, <code>T or E</code>, or array of those. Copying a value that
+          holds none of them (an <code>int</code>, a <code>Point</code> of numbers) is an error: use the value as it is.</li>
+        <li><strong>Shared values and cycles.</strong> Two pointers to one value give two pointers to one copy, so linked
+          data keeps its shape, and a cycle is copied as a cycle. A copied slice gets items of its own, so changing it or
+          adding to it leaves the original alone.</li>
+        <li><strong>The region.</strong> The copy allocates, so the task needs its region as a <code>region</code>
+          parameter or its own <code>region</code>, as for <code>new</code>. A copy can't go into text that lasts
+          (<code>hold kept: text = line.copy()</code> is an error): lasting text is only a literal's.</li>
+        <li><strong>Inside literals.</strong> A copy in a shape literal, a variant, or an array gets its region from where
+          the whole value goes: <code>people.add(Person { name: line.copy(), age: 36 })</code> copies into the slice's region.</li>
+        <li><strong>Cost.</strong> Time and memory in proportion to what is copied. Text is copied with its characters, and
+          a slice's items in one block. Pointers are followed with a list of the values still to copy rather than the C
+          stack, so a list of a million nodes copies without running out of stack, and a table of the values already copied
+          (freed when the copy is done) keeps shared values shared.</li>
+      </ul>
 
       <h3>How it runs</h3>
       <p>
@@ -1224,13 +1280,12 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
       <h3>What regions don't do (yet)</h3>
       <ul>
         <li>One value can't be freed on its own: memory is released a whole region at a time. For data that changes a
-          lot over a long run, use a region per iteration, or copy what survives into a fresh region yourself.</li>
+          lot over a long run, use a region per iteration, and copy what survives into a longer-lived region
+          (<a href="#copy"><code>.copy()</code></a>).</li>
         <li>Everything one value holds lives in one region: a shape can't hold pointers into two different regions, or
-          text in two, and a pointer can't be copied into a longer-lived region (copy the value it points to instead).
-          Text of a region can't yet be copied into another region or made to last.</li>
+          text in two, and a pointer can't be stored in a longer-lived region (store a copy instead:
+          <code>p.copy()</code>). Text of a region can't be made to last.</li>
         <li>A task that only names a region in its header can't allocate in it, and a region can't be returned.</li>
-        <li>A value holding pointers can't be copied into another region whole, even when its pointers are
-          <code>none</code>: rebuild it field by field.</li>
         <li>A task can't send a pointer-free value of a type that holds pointers (<code>-&gt; Tree@r</code> sending
           <code>Leaf(1)</code>) unless a parameter names that region, and a name bound from a value in no region
           (<code>@_</code>, as <code>when first(none) is {n}</code>) can't be given a pointer.</li>
@@ -1432,7 +1487,7 @@ cc -std=c11 -I runtime program.c -o program -lm   # the C includes runtime/vela_
       <pre>cargo test
 CC=clang cargo test</pre>
       <p>
-        Tests are plain Vela programs: <code>tests/run/</code> holds programs with their expected output,
+        Tests are plain Vela programs: <code>tests/run/</code> holds programs with their expected output (and a <code>.in</code> file as their input, when they read any),
         <code>tests/fail/</code> holds programs the compiler must reject, <code>tests/trap/</code> holds programs that
         must stop with a runtime error (such as an integer overflow or an index out of range) after printing their expected output, and every file in
         <code>examples/</code> is checked against <code>tests/examples/</code>, as is every complete program in

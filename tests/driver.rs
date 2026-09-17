@@ -163,6 +163,7 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ("index chains", program(format!("p{}", "[0]".repeat(deep)))),
         ("slice changes", program(format!("{}0{}", "xs.del(".repeat(deep), ")".repeat(deep)))),
         ("scans", program(format!("{}\"\"{}", "scan(".repeat(deep), ") at r".repeat(deep)))),
+        ("copies", program(format!("line{}", ".copy() at r".repeat(deep)))),
     ];
     for (what, source) in cases {
         let error = driver::generate_c(&source).expect_err(what);
@@ -207,6 +208,9 @@ fn deep_nesting_is_an_error_not_a_crash() {
     // plan B, and its block.
     let scans = format!("task main()\n    region r\n    show({}\"\"{})\nfi\n", "scan(".repeat(near / 3), ") at r { \"\" }".repeat(near / 3));
     driver::generate_c(&scans).unwrap();
+    // A copy of a copy, each in the region: every one counts a level.
+    let copies = format!("task main()\n    region r\n    bind line = scan(\"\") at r {{ \"\" }}\n    show(line{})\nfi\n", ".copy() at r".repeat(near));
+    driver::generate_c(&copies).unwrap();
     let fails = format!("task f() -> int or text\n    <- {}\"x\"\nfi\n", "fail ".repeat(near));
     assert!(driver::generate_c(&fails).is_err_and(|e| !e.message.contains("nested too deeply")), "a deep fail chain reaches the checker");
 }

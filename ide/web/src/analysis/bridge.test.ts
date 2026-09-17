@@ -124,7 +124,7 @@ describe("VelaAnalysis", () => {
   it("completes and describes the changes a slice has", () => {
     const source = "task main()\n    region r\n    hold names = new [text]() at r\n    names.add(\"a\")\n    bind last = names.del()\n    show(last)\n    names.\nfi\n";
     const members = analysis.complete(source, source.indexOf("names.\nfi") + "names.".length).items;
-    expect(members.map((item) => [item.label, item.snippet])).toEqual([["len", undefined], ["add", "add(${value})"], ["del", "del(${index})"]]);
+    expect(members.map((item) => [item.label, item.snippet])).toEqual([["len", undefined], ["add", "add(${value})"], ["del", "del(${index})"], ["copy", "copy()"]]);
     expect(analysis.hover(source, source.indexOf("last ="))?.code).toBe("bind last: text@r");
     expect(analysis.hover(source, source.indexOf("add("))?.code).toBe("add(value) or add(index, value)");
   });
@@ -134,6 +134,13 @@ describe("VelaAnalysis", () => {
     expect(analysis.file(source).diagnostics).toEqual([]);
     expect(analysis.hover(source, source.indexOf("name ="))?.code).toBe("bind name: text@lines");
     expect(analysis.hover(source, source.indexOf("scan("))?.code).toBe("task scan(prompt: text) at r -> maybe text@r");
+  });
+
+  it("describes a copy into a region", () => {
+    const source = "task main()\n    region kept\n    region work\n    bind line = scan(\"\") at work { \"\" }\n    hold place: text@kept = \"\"\n    place = line.copy()\n    bind short = line.copy()@kept\n    show(place)\nfi\n";
+    expect(analysis.file(source).diagnostics).toEqual([]);
+    expect(analysis.hover(source, source.indexOf("short ="))?.code).toBe("bind short: text@kept");
+    expect(analysis.hover(source, source.indexOf("copy()"))?.code).toBe("copy() at r or copy()@r");
   });
 
   it("analyzes deeply nested arrays, slices, and parentheses without crashing", () => {

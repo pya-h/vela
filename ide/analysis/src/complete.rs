@@ -167,11 +167,28 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
             }
             items
         };
+        // Every value holding text, a slice, or a pointer can be copied; a
+        // pointer's other members replace from the dot, and so does its copy.
+        let can_copy = base.as_ref().is_some_and(|ty| exact.can_copy(ty));
+        let copy = |from_dot: bool| {
+            can_copy.then(|| CompletionItem {
+                label: vela::ast::COPY.to_string(),
+                kind: CompletionKind::BuiltinFn,
+                detail: "copy() at r, a copy in a region".to_string(),
+                apply: None,
+                snippet: Some(format!("{}copy()", if from_dot { "." } else { "" })),
+                boost: LOCAL,
+            })
+        };
+        let with_copy = |mut items: Vec<CompletionItem>, from_dot: bool| {
+            items.extend(copy(from_dot));
+            items
+        };
         match &base {
-            Some(Type::Array(..)) => return (members(false, false), word_start, byte),
-            Some(Type::Slice(..)) => return (members(true, false), word_start, byte),
+            Some(Type::Array(..)) => return (with_copy(members(false, false), false), word_start, byte),
+            Some(Type::Slice(..)) => return (with_copy(members(true, false), false), word_start, byte),
             Some(Type::Ptr(inner, _)) if matches!(**inner, Type::Array(..) | Type::Slice(..)) => {
-                return (members(matches!(**inner, Type::Slice(..)), true), k.range(dot).start, byte);
+                return (with_copy(members(matches!(**inner, Type::Slice(..)), true), true), k.range(dot).start, byte);
             }
             _ => {}
         }
@@ -179,12 +196,12 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
             Some(Type::Named(shape, _)) => (shape, false),
             Some(Type::Ptr(inner, _)) => match *inner {
                 Type::Named(shape, _) => (shape, true),
-                _ => return (Vec::new(), word_start, byte),
+                _ => return (with_copy(Vec::new(), false), word_start, byte),
             },
-            _ => return (Vec::new(), word_start, byte),
+            _ => return (with_copy(Vec::new(), false), word_start, byte),
         };
-        let Some(shape_id) = k.global(&shape, SymbolKind::Shape) else { return (Vec::new(), word_start, byte) };
-        let items = k
+        let Some(shape_id) = k.global(&shape, SymbolKind::Shape) else { return (with_copy(Vec::new(), false), word_start, byte) };
+        let mut items: Vec<CompletionItem> = k
             .children(shape_id)
             // Another module's private fields can't be used here.
             .filter(|(_, field)| field.module.is_none() || !field.private)
@@ -198,6 +215,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 boost: LOCAL,
             })
             .collect();
+        items.extend(copy(through_pointer));
         let from = if through_pointer { k.range(dot).start } else { word_start };
         return (items, from, byte);
     }
@@ -389,6 +407,30 @@ fn ends_value(k: &Knowledge, q: usize) -> bool {
     )
 }
 
+/// Whether the `)` at position `q` ends a value that names its region after
+/// it, with `at`: a `new T(…)` (not `new@r T(…)`), a `scan(…)`, or a
+/// `x.copy()`.
+fn names_region_after(k: &Knowledge, q: usize) -> bool {
+    if k.copied_value(q).is_some() {
+        return true;
+    }
+    let Some(before) = k.matching_open(q, &Token::LParen, &Token::RParen).and_then(|open| open.checked_sub(1)) else { return false };
+    if k.ident(before) == Some(vela::ast::SCAN) {
+        return k.token_before(before) != Some(&Token::Dot);
+    }
+    // The type between `new` and `(`.
+    let mut p = before;
+    loop {
+        match k.token(p) {
+            Some(Token::New) => return k.token(p + 1) != Some(&Token::AtSign),
+            Some(Token::Ident(_) | Token::Dot | Token::LBracket | Token::RBracket | Token::Semicolon | Token::Int(_) | Token::Caret | Token::Maybe) => {}
+            _ => return false,
+        }
+        let Some(previous) = p.checked_sub(1) else { return false };
+        p = previous;
+    }
+}
+
 /// The words that can follow the finished value, type, or name ending at
 /// position `q`: `in` after an `each`'s name or a `new`'s value, `or` after a
 /// written type, `is` in a condition, and `and`/`or` after a value.
@@ -402,8 +444,7 @@ fn continuation_items(k: &Knowledge, q: usize) -> Vec<CompletionItem> {
         return if on_line(&Token::Or) { Vec::new() } else { vec![keyword("or")] };
     }
     let mut items = Vec::new();
-    let scans = (line..=q).any(|p| k.ident(p) == Some(vela::ast::SCAN) && k.token(p + 1) == Some(&Token::LParen));
-    if k.token(q) == Some(&Token::RParen) && (on_line(&Token::New) || scans) && !on_line(&Token::At) {
+    if names_region_after(k, q) {
         items.push(keyword("at"));
     }
     if matches!(k.token(line), Some(Token::When | Token::Loop)) && !on_line(&Token::Is) {

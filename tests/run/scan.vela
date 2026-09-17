@@ -39,11 +39,12 @@ task main()
     show(long == "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789")
     show(scan("") at r { "" })
 
-    # A prompt in a region, arguments read left to right, and a line dropped.
+    # A prompt in a region, arguments read left to right, and lines dropped.
     hold prompt = new [text]() at r
     prompt.add("Two lines: ")
     both(scan(prompt[0]) at r, scan("")@r)
     scan("skipped ")@r
+    scan("")@r { "" }
 
     # Every line left, each in a region freed on its pass.
     hold count = 0

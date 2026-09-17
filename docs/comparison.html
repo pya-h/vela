@@ -379,8 +379,9 @@
         (<code>^int@r</code>), as text's does (<code>text@r</code>, where plain <code>text</code> lasts as long as the
         program, much like Rust's <code>&amp;'static str</code>), and the checker keeps pointers and text from being stored
         anywhere that outlives their region, so use-after-free and double free can't happen, with no garbage collector, reference counts, or borrow
-        checker. The costs: memory is freed a whole region at a time, and one value's pointers all live in one
-        region (see <a href="vela.html#regions">Memory and Regions</a>, and <a href="regions.html">Vela Regions</a> for the
+        checker. To keep a value longer than its region, a program copies it into a longer-lived one with
+        <code>value.copy()</code>, which follows pointers and keeps shared values shared, much like a deep clone. The costs:
+        memory is freed a whole region at a time, and one value's pointers all live in one region (see <a href="vela.html#regions">Memory and Regions</a>, and <a href="regions.html">Vela Regions</a> for the
         full guide, its limitations, and their workarounds).
       </p>
       <div class="table-wrap">
@@ -516,8 +517,8 @@
         but like every Vela pointer it points into a region, so it can't outlive its memory. It grows and shrinks, as
         Go's with <code>append</code> or Rust's <code>Vec</code> do, with <code>xs.add(v)</code> and
         <code>xs.del(i)</code>; like Go's, it grows by copying into a bigger block, but the old block stays in the region
-        until the region is freed, and adding to one copy of a slice never writes over another's items, which Go's
-        <code>append</code> can. Every index is checked, as in Go, Rust, and Zig's safe builds, and the length is
+        until the region is freed. Adding to a copy of a slice doesn't write over items another copy counts, which Go's
+        <code>append</code> can, unless that copy took its last items out with <code>del</code> first. Every index is checked, as in Go, Rust, and Zig's safe builds, and the length is
         <code>xs.len</code>, as in Zig.
       </p>
     </section>

@@ -360,15 +360,16 @@ Press Ctrl+C to stop.</pre>
           <h4>Completion</h4>
           <p>Only what fits: types after <code>:</code>, <code>-&gt;</code>, <code>^</code>, <code>maybe</code>,
             <code>new</code>, a type's <code>[</code> and <code>or</code>, and each comma of a header's results (<code>-&gt; int, int</code>), and nothing for an array type's count; variables declared above the cursor; fields after
-            <code>.</code>, and <code>len</code> after an array's or slice's (and <code>add</code> and <code>del</code> after a slice's); the cases still missing after <code>case</code> and
+            <code>.</code>, and <code>len</code> after an array's or slice's (and <code>add</code> and <code>del</code> after a slice's), and
+            <code>copy</code> after a value holding text, a slice, or a pointer; the cases still missing after <code>case</code> and
             <code>case Kind.</code>, including <code>{value}</code>,
             <code>none</code>, and <code>fail e</code>; the patterns that fit after <code>is</code>; the regions
-            visible after <code>@</code>, and the ones <code>new</code> or <code>scan</code> can allocate in after <code>new@</code>, <code>scan(…)@</code>, and a
-            <code>new</code>'s or <code>scan</code>'s <code>at</code>, or as the argument for a task's <code>region</code> parameter; and
+            visible after <code>@</code>, and the ones <code>new</code>, <code>scan</code>, or <code>copy</code> can allocate in after <code>new@</code>, <code>scan(…)@</code>,
+            <code>copy()@</code>, and a <code>new</code>'s, <code>scan</code>'s, or <code>copy</code>'s <code>at</code>, or as the argument for a task's <code>region</code> parameter; and
             <code>region</code> as a statement or a parameter's type. A call's result shows the caller's regions
             (<code>push(nodes, list)</code> gives a <code>^Node@nodes</code>), even while the file has an error. After
-            a finished value, only the words that can continue it: <code>is</code>, <code>in</code>, <code>or</code>,
-            <code>and</code>. Nothing is offered where a name is being declared, including the names after the commas
+            a finished value, only the words that can continue it: <code>is</code>, <code>in</code>, <code>at</code> (after a
+            <code>new</code>'s, <code>scan</code>'s, or <code>copy()</code>'s value), <code>or</code>, and <code>and</code>. Nothing is offered where a name is being declared, including the names after the commas
             of <code>bind q, r = …</code>, and each of those names hovers with the type of the value in its place.
             A task's named results (<code>-&gt; total: int</code>) are offered at the start of a line as
             <code>total &lt;- </code>, and hover as <code>result total: int</code>. After <code>match</code>, only <code>case</code>; <code>new</code> only where a region can
@@ -378,7 +379,7 @@ Press Ctrl+C to stop.</pre>
         <div class="card">
           <h4>Snippets</h4>
           <p><code>task</code>, <code>shape</code>, <code>kind</code>, <code>when</code>, <code>loop</code>,
-            <code>each</code>, <code>when … is</code>, <code>loop … is</code>, <code>new … at</code>, and <code>match</code>, which expands to
+            <code>each</code>, <code>when … is</code>, <code>loop … is</code>, <code>new … at</code>, <code>scan(…) at</code>, and <code>match</code>, which expands to
             one <code>case</code> per variant (or <code>{value}</code> and <code>none</code> for a maybe), with its
             bindings. <kbd>Tab</kbd> moves between the fields.</p>
         </div>

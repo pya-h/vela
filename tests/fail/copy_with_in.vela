@@ -1,0 +1,6 @@
+# error: 5:29: a copy names its region with 'at', as in 'x.copy() at r' (or 'x.copy()@r'); 'in' counts through a range
+task main()
+    region r
+    bind line = scan("") at r { "" }
+    bind kept = line.copy() in r
+fi

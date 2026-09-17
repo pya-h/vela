@@ -1,0 +1,5 @@
+# error: 4:10: cannot tell the type of this value from none or 'fail …', so it can't be copied; give it a type first, as in 'x: [maybe int; 2]'
+task main()
+    region r
+    show([none, none].copy() at r)
+fi

@@ -95,6 +95,16 @@ pub const BUILTIN_TASKS: &[&str] = &["show", "scan"];
 /// The builtin task that reads a line of input: `scan(prompt) at r`.
 pub const SCAN: &str = "scan";
 
+/// The word of `value.copy()`, written after a dot like `add` and `del`.
+pub const COPY: &str = "copy";
+
+/// Whether `word`, written after a dot and followed by `(`, is one of the
+/// builtins every value or slice has rather than a kind's variant or a
+/// module's task: `add`, `del`, or `copy`.
+pub fn is_builtin_member(word: &str) -> bool {
+    EditOp::from_word(word).is_some() || word == COPY
+}
+
 impl fmt::Display for Type {
     /// Formats the type as it is written in Vela source, naming each region
     /// once: `^Node@r`, not `^Node@r@r`.
@@ -418,6 +428,17 @@ pub enum ExprKind {
     Scan {
         args: Vec<Expr>,
         region: String,
+        region_span: Span,
+    },
+    /// `value.copy()`, `value.copy() at r`, or `value.copy()@r`: a copy of what
+    /// the value holds in regions (its text, its slices' items, and what its
+    /// pointers point to, all the way down) in region `r`. Without a region
+    /// written, the checker sets `region` to the region of the place the copy
+    /// goes. The node's span is the word `copy`; `region_span` is the position
+    /// of `r`, or of `copy` when none is written.
+    Copy {
+        value: Box<Expr>,
+        region: Option<String>,
         region_span: Span,
     },
     /// `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, or `xs.del()`: a change to the

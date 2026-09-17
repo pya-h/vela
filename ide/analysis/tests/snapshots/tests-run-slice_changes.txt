@@ -6,10 +6,10 @@
     | comment:# the last one. `new [T]() at r` makes a slice with no items. A slice grows in
   4 | # its region: in place while its block has room, otherwise into a bigger block
     | comment:# its region: in place while its block has room, otherwise into a bigger block
-  5 | # (tests/runtime.rs also runs this under sanitizers, which check that no copy or
-    | comment:# (tests/runtime.rs also runs this under sanitizers, which check that no copy or
-  6 | # part of a slice writes over another's items).
-    | comment:# part of a slice writes over another's items).
+  5 | # (tests/runtime.rs also runs this under sanitizers). Adding to a copy or a part
+    | comment:# (tests/runtime.rs also runs this under sanitizers). Adding to a copy or a part
+  6 | # doesn't write over items another counts, unless it took its last items out.
+    | comment:# doesn't write over items another counts, unless it took its last items out.
   8 | shape Point
     | keyword:shape  type:Point
   9 |     x: int
@@ -304,23 +304,51 @@
     | builtin-fn:show  punctuation:(  variable:temporary  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)
 172 |     fi
     | keyword:fi
-174 |     # Dropped values, and plan B values as arguments.
+174 |     # Taking the last item out gives its space back to that slice, even when a
+    | comment:# Taking the last item out gives its space back to that slice, even when a
+175 |     # copy made before still counts the item: the copy sees the next add.
+    | comment:# copy made before still counts the item: the copy sees the next add.
+176 |     hold older = new [int]([1, 2, 3]) at r
+    | keyword:hold  variable:older  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)  keyword:at  region:r
+177 |     older.add(4)
+    | variable:older  punctuation:.  field:add  punctuation:(  number:4  punctuation:)
+178 |     hold newer = older
+    | keyword:hold  variable:newer  operator:=  variable:older
+179 |     _ = newer.del()
+    | keyword:_  operator:=  variable:newer  punctuation:.  field:del  punctuation:(  punctuation:)
+180 |     newer.add(5)
+    | variable:newer  punctuation:.  field:add  punctuation:(  number:5  punctuation:)
+181 |     show(older[3])
+    | builtin-fn:show  punctuation:(  variable:older  punctuation:[  number:3  punctuation:]  punctuation:)
+183 |     # Changes without a value among values taken in order.
+    | comment:# Changes without a value among values taken in order.
+184 |     hold taken = 0
+    | keyword:hold  variable:taken  operator:=  number:0
+185 |     _, taken = older.add(6), older.del()
+    | keyword:_  punctuation:,  variable:taken  operator:=  variable:older  punctuation:.  field:add  punctuation:(  number:6  punctuation:)  punctuation:,  variable:older  punctuation:.  field:del  punctuation:(  punctuation:)
+186 |     show(taken)
+    | builtin-fn:show  punctuation:(  variable:taken  punctuation:)
+187 |     bind _, again = older.add(7), older.del()
+    | keyword:bind  keyword:_  punctuation:,  variable:again  operator:=  variable:older  punctuation:.  field:add  punctuation:(  number:7  punctuation:)  punctuation:,  variable:older  punctuation:.  field:del  punctuation:(  punctuation:)
+188 |     show(again)
+    | builtin-fn:show  punctuation:(  variable:again  punctuation:)
+190 |     # Dropped values, and plan B values as arguments.
     | comment:# Dropped values, and plan B values as arguments.
-175 |     _ = xs.del()
+191 |     _ = xs.del()
     | keyword:_  operator:=  variable:xs  punctuation:.  field:del  punctuation:(  punctuation:)
-176 |     bind _ = copy.del()
+192 |     bind _ = copy.del()
     | keyword:bind  keyword:_  operator:=  variable:copy  punctuation:.  field:del  punctuation:(  punctuation:)
-177 |     bind missing: maybe int = none
+193 |     bind missing: maybe int = none
     | keyword:bind  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
-178 |     xs.add(missing { 42 })
+194 |     xs.add(missing { 42 })
     | variable:xs  punctuation:.  field:add  punctuation:(  variable:missing  punctuation:{  number:42  punctuation:}  punctuation:)
-179 |     show(xs.del())
+195 |     show(xs.del())
     | builtin-fn:show  punctuation:(  variable:xs  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)
-181 |     # A kind's variants may be named 'add' and 'del'.
+197 |     # A kind's variants may be named 'add' and 'del'.
     | comment:# A kind's variants may be named 'add' and 'del'.
-182 |     show(value_of(Step.add(3)) + value_of(Step.del))
+198 |     show(value_of(Step.add(3)) + value_of(Step.del))
     | builtin-fn:show  punctuation:(  task:value_of  punctuation:(  type:Step  punctuation:.  variant:add  punctuation:(  number:3  punctuation:)  punctuation:)  operator:+  task:value_of  punctuation:(  type:Step  punctuation:.  variant:del  punctuation:)  punctuation:)
-183 |     show(evens(r, 7).len)
+199 |     show(evens(r, 7).len)
     | builtin-fn:show  punctuation:(  task:evens  punctuation:(  region:r  punctuation:,  number:7  punctuation:)  punctuation:.  field:len  punctuation:)
-184 | fi
+200 | fi
     | keyword:fi

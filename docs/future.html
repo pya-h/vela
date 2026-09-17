@@ -337,7 +337,7 @@
         </div>
         <div class="card">
           <h3>Text is a C string <span class="badge b-med">Medium</span></h3>
-          <p><code>text</code> is currently <code>const char*</code>. <code>==</code> compares contents, but there is no length, no safe concatenation, and a <code>\0</code> ends the text early. Text now has a lifetime in its type: <code>text</code> lasts as long as the program, <code>text@r</code> is in a region (<a href="vela.html#text-in-regions">Text in a region</a>), which is what reading input and building text will need.</p>
+          <p><code>text</code> is currently <code>const char*</code>. <code>==</code> compares contents, but there is no length, no safe concatenation, and a <code>\0</code> ends the text early. Text now has a lifetime in its type: <code>text</code> lasts as long as the program, <code>text@r</code> is in a region (<a href="vela.html#text-in-regions">Text in a region</a>), which reading input (<a href="vela.html#input"><code>scan</code></a>) uses, and building text will need.</p>
         </div>
         <div class="card">
           <h3>Undefined integer edge cases <span class="badge b-done">Done</span></h3>
@@ -724,7 +724,8 @@ show(names.del(1))                    # takes item 1 out: b</pre>
         <li><strong>A slice lives in a region.</strong> In C, an array is another form of pointer, and a slice is that
           pointer with a length, so it follows the pointer rules: its type names its region, it is never
           <code>none</code>, and it can't outlive its region or move to another. A slice of a local array would point
-          at the stack, so that is an error, and copying into a region is written out.</li>
+          at the stack, so that is an error, and copying into a region is written out (<code>new [T](xs) at r</code>, or
+          <code>xs.copy() at r</code>, which also copies what the items hold).</li>
         <li><strong><code>new [T](…) at r</code>.</strong> The same form as <code>new T(v) at r</code>: the value in
           parentheses gives the items (<code>[v; n]</code>, an array, or a slice, copied), and the result is the slice
           itself rather than a pointer to one. A count known only as the program runs is allowed only there, since an
@@ -769,8 +770,10 @@ show(names.del(1))                    # takes item 1 out: b</pre>
         its room: a block of its region holding its items and free space after them. A full block is replaced by one
         twice as large, or grows in place when it ends where the region hands out memory next, so adding is amortized
         constant time, and a slice of <em>n</em> items has taken at most about 4<em>n</em> items of memory in its
-        region. Only a slice whose items end where the room's free space begins adds in place, so a copy or a part of a
-        slice never writes over items another one counts; taking out the last item gives its space back.
+        region. Only a slice whose items end where the room's free space begins adds in place, so adding to a copy or a
+        part of a slice doesn't write over items another one counts; taking out the last item gives its space back, to
+        the next <code>add</code> of that slice, even when an older copy still counts that item (as moving items in the
+        middle is seen by the copies).
         <strong>Order.</strong> A change inside an expression happens in order with the rest, left to right, since
         <code>xs.del() - xs.del()</code> must mean one thing. <strong>Speed.</strong> In a test of 20 million
         <code>add</code>s (gcc <code>-O2</code>), one into room took about 2 nanoseconds, close to a hand-written C array;
@@ -1150,7 +1153,7 @@ fi</pre>
         <ul>
           <li><strong>Owned pointers <code>^T</code></strong> could be move-only, letting a single value be freed early without dangling copies.</li>
           <li><strong>Borrowed references <code>&T</code></strong> are temporary and cannot be stored. They are valid only within the current scope/region.</li>
-          <li><strong>Regions</strong> (explicit arenas) group allocations and free them in bulk. References cannot escape their region. <em>(Done, and text has regions too: <code>text@r</code>.)</em> Next for them, from <a href="regions.html#ideas">Vela Regions</a>: copies into another region (<code>value.copy()</code>, planned), moving a whole region into another, easier region passing (<code>push[nodes](…)</code>, with inferred region arguments), shapes with several regions (and text fields of their own region), tasks that take text of any region without naming it, and fixes for the cases the rules reject today.</li>
+          <li><strong>Regions</strong> (explicit arenas) group allocations and free them in bulk. References cannot escape their region. <em>(Done, and text has regions too: <code>text@r</code>.)</em> Next for them, from <a href="regions.html#ideas">Vela Regions</a>: copies into another region (done: <a href="vela.html#copy"><code>value.copy()</code></a>), moving a whole region into another, easier region passing (<code>push[nodes](…)</code>, with inferred region arguments), shapes with several regions (and text fields of their own region), tasks that take text of any region without naming it, and fixes for the cases the rules reject today.</li>
           <li><strong>No shared mutable state</strong> by default: either you own it mutably, or you borrow it immutably.</li>
         </ul>
         <p>
@@ -1562,7 +1565,7 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
             <li><s>Defined integer overflow and division by zero</s> (done: <a href="vela.html#int-limits">they stop the program with a message</a>)</li>
             <li><s>Fixed-size arrays and slices, which grow and shrink</s> (done: <a href="vela.html#arrays">arrays</a> and <a href="vela.html#slices">slices</a>), and a real <code>text</code> type</li>
             <li><s>Text in regions</s> (done: <a href="vela.html#text-in-regions"><code>text@r</code></a>), <s>reading input</s>
-              (done: <a href="vela.html#input"><code>scan</code></a>), then copies into another region (<code>.copy()</code>), and <a href="#conversions">type conversions</a></li>
+              (done: <a href="vela.html#input"><code>scan</code></a>), <s>copies into another region</s> (done: <a href="vela.html#copy"><code>.copy()</code></a>), then <a href="#conversions">type conversions</a></li>
             <li>Small region improvements: result-only regions, typed patterns, a lint for regions that grow in loops, and a
               chunk cache (<a href="regions.html#ideas">ideas</a>)</li>
             <li>Move-only owned pointers, on top of regions</li>
@@ -1578,7 +1581,7 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
             <li><s>Missing values and error handling</s> (done: <a href="#maybe"><code>maybe T</code>, plan B, <code>T or E</code></a>)</li>
             <li>Pattern-match expressions</li>
             <li><s>Region-based allocation</s> (done: <a href="regions.html">regions</a>)</li>
-            <li>Region brackets with inferred region arguments, and generated copies between regions</li>
+            <li>Region brackets with inferred region arguments (<s>generated copies between regions</s>: done, <a href="vela.html#copy"><code>.copy()</code></a>)</li>
           </ul>
         </div>
         <div class="roadmap-phase later">

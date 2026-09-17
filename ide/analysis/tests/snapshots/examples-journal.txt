@@ -1,48 +1,60 @@
   1 | # Notes read from input: `scan` shows a prompt and reads a line into a region,
     | comment:# Notes read from input: `scan` shows a prompt and reads a line into a region,
-  2 | # giving none once the input ends. The notes are kept in a slice that grows,
-    | comment:# giving none once the input ends. The notes are kept in a slice that grows,
-  3 | # and shown back last first. Run it and type a few lines (an empty line or
-    | comment:# and shown back last first. Run it and type a few lines (an empty line or
-  4 | # Ctrl-D ends them), or give it a file: `./journal < notes.txt`.
+  2 | # giving none once the input ends. Each line is read into a region of its own,
+    | comment:# giving none once the input ends. Each line is read into a region of its own,
+  3 | # and only the notes kept are copied into the slice's region with `copy()`. The
+    | comment:# and only the notes kept are copied into the slice's region with `copy()`. The
+  4 | # notes are shown back last first. Run it and type a few lines (an empty line or
+    | comment:# notes are shown back last first. Run it and type a few lines (an empty line or
+  5 | # Ctrl-D ends them), or give it a file: `./journal < notes.txt`.
     | comment:# Ctrl-D ends them), or give it a file: `./journal < notes.txt`.
-  6 | task read_notes(r: region) -> [text]@r
+  7 | task read_notes(r: region) -> [text]@r
     | keyword:task  task:read_notes  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r
-  7 |     hold notes = new [text]() at r
+  8 |     hold notes = new [text]() at r
     | keyword:hold  variable:notes  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
-  8 |     loop scan("note> ") at r is {line}
-    | keyword:loop  builtin-fn:scan  punctuation:(  string:"note> "  punctuation:)  keyword:at  region:r  keyword:is  punctuation:{  variable:line  punctuation:}
-  9 |         when line == ""
+  9 |     hold reading = true
+    | keyword:hold  variable:reading  operator:=  keyword:true
+ 10 |     loop reading
+    | keyword:loop  variable:reading
+ 11 |         # Freed at the end of every pass, with the line read into it.
+    | comment:# Freed at the end of every pass, with the line read into it.
+ 12 |         region line_memory
+    | keyword:region  region:line_memory
+ 13 |         bind line = scan("note> ") at line_memory { "" }
+    | keyword:bind  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:"note> "  punctuation:)  keyword:at  region:line_memory  punctuation:{  string:""  punctuation:}
+ 14 |         when line == ""
     | keyword:when  variable:line  operator:==  string:""
- 10 |             <- notes
+ 15 |             reading = false
+    | variable:reading  operator:=  keyword:false
+ 16 |         else
+    | keyword:else
+ 17 |             notes.add(line.copy())
+    | variable:notes  punctuation:.  field:add  punctuation:(  variable:line  punctuation:.  field:copy  punctuation:(  punctuation:)  punctuation:)
+ 18 |         fi
+    | keyword:fi
+ 19 |     fi
+    | keyword:fi
+ 20 |     <- notes
     | keyword:<-  variable:notes
- 11 |         fi
+ 21 | fi
     | keyword:fi
- 12 |         notes.add(line)
-    | variable:notes  punctuation:.  field:add  punctuation:(  variable:line  punctuation:)
- 13 |     fi
-    | keyword:fi
- 14 |     <- notes
-    | keyword:<-  variable:notes
- 15 | fi
-    | keyword:fi
- 17 | task main()
+ 23 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 18 |     region kept
+ 24 |     region kept
     | keyword:region  region:kept
- 19 |     bind name = scan("Your name: ") at kept { "stranger" }
+ 25 |     bind name = scan("Your name: ") at kept { "stranger" }
     | keyword:bind  variable:name  operator:=  builtin-fn:scan  punctuation:(  string:"Your name: "  punctuation:)  keyword:at  region:kept  punctuation:{  string:"stranger"  punctuation:}
- 20 |     show(name)
+ 26 |     show(name)
     | builtin-fn:show  punctuation:(  variable:name  punctuation:)
- 21 |     hold notes = read_notes(kept)
+ 27 |     hold notes = read_notes(kept)
     | keyword:hold  variable:notes  operator:=  task:read_notes  punctuation:(  region:kept  punctuation:)
- 22 |     show(notes.len)
+ 28 |     show(notes.len)
     | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  field:len  punctuation:)
- 23 |     loop notes.len > 0
+ 29 |     loop notes.len > 0
     | keyword:loop  variable:notes  punctuation:.  field:len  operator:>  number:0
- 24 |         show(notes.del())
+ 30 |         show(notes.del())
     | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)
- 25 |     fi
+ 31 |     fi
     | keyword:fi
- 26 | fi
+ 32 | fi
     | keyword:fi

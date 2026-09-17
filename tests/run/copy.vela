@@ -1,0 +1,172 @@
+# Copies into a region: `value.copy() at r` (or `value.copy()@r`) copies what a
+# value holds in regions (its text, its slices' items, and what its pointers
+# point to, all the way down) into `r`. Without a region, the copy goes into the
+# region of the place it is put in. Each value here is made in a region freed
+# before it is read again, so the sanitizers (tests/runtime.rs) catch a copy
+# that still points into it. Its input is `copy.in`.
+
+shape Person
+    name: text
+    age: int
+fi
+
+shape Node
+    label: text
+    next: maybe ^Node
+    other: maybe ^Node
+fi
+
+kind Entry
+    Note(line: text)
+    Numbers(title: text, values: [int])
+    Empty
+fi
+
+shape Bag
+    names: [text]
+    first: maybe text
+fi
+
+kind Problem
+    Missing(what: text)
+fi
+
+# A copy sent back: the result's region names where it goes.
+task keep(r: region, line: text@s) -> text@r
+    <- line.copy()
+fi
+
+# A copy in a task's named result.
+task kept_twice(r: region, line: text@s) -> both: [text; 2]@r
+    both <- [line.copy(), line.copy()]
+fi
+
+task parse(r: region, line: text@s) -> int or Problem@r
+    when line == ""
+        <- fail Missing(line).copy()
+    fi
+    <- 1
+fi
+
+task build(r: region, n: int) -> ^Node@r
+    hold head = new Node(Node { label: "last", next: none, other: none }) at r
+    each i in 0..n
+        head = new Node(Node { label: "node", next: head, other: none }) at r
+    fi
+    <- head
+fi
+
+task count(list: ^Node@r) -> int
+    hold n = 1
+    hold node = list
+    loop node^.next is {next}
+        n = n + 1
+        node = next
+    fi
+    <- n
+fi
+
+task main()
+    region kept
+    hold people = new [Person]() at kept
+    hold entries = new [Entry]() at kept
+    hold lines = new [text]() at kept
+    hold named: maybe text@kept = none
+    hold list: maybe ^Node@kept = none
+    hold bag = Bag { names: new [text]() at kept, first: none }
+    hold both: [text; 2]@kept = ["", ""]
+    hold result: int or Problem@kept = 0
+    each pass in 0..1
+        region work
+        bind line = scan("") at work { "nobody" }
+
+        # Text, into the place it goes, or into the region written.
+        lines.add(line.copy())
+        named = line.copy()
+        bind at_kept = line.copy() at kept
+        bind short = line.copy()@kept
+        lines.add(at_kept)
+        lines.add(short)
+        lines.add(keep(kept, line))
+        both = kept_twice(kept, line)
+
+        # Shapes and kinds, and copies inside their literals.
+        people.add(Person { name: line.copy(), age: 36 })
+        bind worker: Person@work = Person { name: line, age: 7 }
+        people.add(worker.copy())
+        bind numbers = new [int]([1, 2, 3]) at work
+        entries.add(Entry.Numbers(line, numbers).copy())
+        entries.add(Note(line.copy()))
+        entries.add(Empty.copy()@kept)
+        result = parse(kept, scan("") at work { "" })
+
+        # A slice in a shape, and a maybe.
+        hold names = new [text]() at work
+        names.add(line)
+        names.add("literal")
+        bind held: Bag@work = Bag { names: names, first: line }
+        bag = held.copy()
+        names[0] = "changed"
+
+        # Linked nodes: one shared by two pointers, and a cycle.
+        bind nodes = build(work, 5)
+        bind second = nodes^.next { nodes }
+        nodes^.other = second
+        second^.other = nodes
+        list = nodes.copy()
+    fi
+
+    each shown in lines
+        show(shown)
+    fi
+    show(named { "none" })
+    show(both[0] == both[1])
+    each person in people
+        show(person.name)
+    fi
+    each entry in entries
+        match entry
+            case Note line
+                show(line)
+            case Numbers title values
+                show(title)
+                show(values[0] + values[1] + values[2])
+            case Empty
+                show("empty")
+        fi
+    fi
+    match result
+        case {value}
+            show(value)
+        case fail problem
+            match problem
+                case Missing what
+                    show(what == "")
+            fi
+    fi
+    show(bag.names[0])
+    show(bag.names[1])
+    show(bag.first { "none" })
+
+    when list is {head}
+        show(count(head))
+        # The copy of the shared node is shared: a change through one pointer
+        # shows through the other, and the cycle leads back to the copy.
+        bind second = head^.other { head }
+        second^.label = "shared"
+        show(head^.next { head }^.label)
+        show(second^.other { second }^.label)
+    fi
+
+    # A long list, copied into the region it is in, and a copy's items are its own.
+    region big
+    bind long = build(big, 100000)
+    bind again = long.copy() at big
+    show(count(again))
+    hold values = new [int]([1, 2]) at big
+    hold copied = values.copy()@big
+    copied[0] = 5
+    copied.add(3)
+    show(values[0])
+    show(copied.len)
+fi

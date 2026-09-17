@@ -24,6 +24,10 @@ task named(r: region, name: text) -> text@r
     <- boxed^
 fi
 
+task longer(a: text@r, b: text@r) -> text@r
+    <- a
+fi
+
 task main()
     CHECK
     region r
@@ -35,6 +39,8 @@ task main()
     bind first = names[0]
     bind node = new Node(Node { label: lasting, next: none }) at r
     bind label = node^.label
+    bind either = longer(\"a\", \"b\")
+    bind both = [lasting, kept]
     show(kept)
 fi
 ";
@@ -66,6 +72,10 @@ fn hover_shows_text_and_shapes_in_regions_whether_or_not_the_file_checks() {
         assert_eq!(hover_code(&source, "held ="), "bind held: Person@r", "{}", when);
         assert_eq!(hover_code(&source, "first ="), "bind first: text@r", "{}", when);
         assert_eq!(hover_code(&source, "label ="), "bind label: text@r", "{}", when);
+        // Text of no region in particular lasts, and an array takes a region
+        // any of its items has.
+        assert_eq!(hover_code(&source, "either ="), "bind either: text", "{}", when);
+        assert_eq!(hover_code(&source, "both ="), "bind both: [text@r; 2]", "{}", when);
     }
 }
 

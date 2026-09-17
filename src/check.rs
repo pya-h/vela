@@ -80,7 +80,13 @@ pub struct Checker {
     /// At most how many bytes a value of each shape and kind takes, once the
     /// declarations are checked (see `check_sizes`).
     sizes: HashMap<String, u128>,
+    /// Where each `copy()` without a written region is, until the place it goes
+    /// gives it one (see `settle_copies`). A statement must settle the ones it has.
+    unsettled_copies: Vec<Span>,
 }
+
+/// The error for a `copy()` whose region nothing names.
+const UNSETTLED_COPY: &str = "can't tell which region to copy into, since nothing this copy goes into names one; name it, as in 'x.copy() at r' or 'x.copy()@r'";
 
 /// The most memory a value may take, in bytes: 1 TiB. A larger type is an
 /// error, so that no C compiler rejects the program for it.
@@ -518,6 +524,14 @@ impl Checker {
                 if needs_region && region.is_none() {
                     return err(span, format!("a pointer lives in a region, so its type names one, as in '{}@r'", ty));
                 }
+                if let (Some(region), Some(inside)) = (region, inside)
+                    && region != inside
+                {
+                    return err(
+                        self.place(span, &format!("@{}", region)),
+                        format!("everything a value in region '{0}' holds is in '{0}', its pointers too; write '@{0}' for '@{1}'", inside, region),
+                    );
+                }
                 let inner = self.resolve_regions(inner, span, place, region.as_deref())?;
                 Ok(Type::Ptr(Box::new(inner), region.clone()))
             }
@@ -525,6 +539,14 @@ impl Checker {
                 given(region)?;
                 if needs_region && region.is_none() {
                     return err(span, format!("a slice lives in a region, so its type names one, as in '{}@r'", ty));
+                }
+                if let (Some(region), Some(inside)) = (region, inside)
+                    && region != inside
+                {
+                    return err(
+                        self.place(span, &format!("@{}", region)),
+                        format!("everything a value in region '{0}' holds is in '{0}', its slices too; write '@{0}' for '@{1}'", inside, region),
+                    );
                 }
                 let inner = self.resolve_regions(inner, span, place, region.as_deref())?;
                 Ok(Type::Slice(Box::new(inner), region.clone()))
@@ -640,8 +662,9 @@ impl Checker {
                     Type::Maybe(_) => return err(self.place(span, "or"), "the error type can't be a maybe"),
                     _ => self.check_type(error, span)?,
                 }
-                // Text in two regions is still text on both sides.
-                if value == error || matches!((value.as_ref(), error.as_ref()), (Type::Text(_), Type::Text(_))) {
+                // Text in two regions is still text on both sides, and a value
+                // of no region in particular (a literal) would fit both.
+                if value == error || (value.without_regions() == error.without_regions() && self.fits_any_region(value)) {
                     return err(self.place(span, "or"), format!("the error type must differ from the value type, as in '{} or ParseError'", value));
                 }
                 Ok(())
@@ -656,6 +679,19 @@ impl Checker {
                 }
             }
             _ => Ok(()),
+        }
+    }
+
+    /// Whether a value of type `ty` can be of no region in particular, as a
+    /// literal is, and so fit the same type in any region: text, and a shape or
+    /// kind that can be given a region, held by value.
+    fn fits_any_region(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Text(_) => true,
+            Type::Named(name, _) => self.takes_region.contains(name),
+            Type::Maybe(inner) | Type::Array(inner, _) => self.fits_any_region(inner),
+            Type::Or(value, error) => self.fits_any_region(value) || self.fits_any_region(error),
+            _ => false,
         }
     }
 
@@ -976,7 +1012,20 @@ impl Checker {
         Ok(())
     }
 
+    /// Checks a statement, whose copies must all know their regions when it ends.
     fn check_stmt(&mut self, stmt: &mut Stmt) -> Result<()> {
+        let before = self.unsettled_copies.len();
+        let result = self.check_stmt_kind(stmt);
+        let unsettled = self.unsettled_copies.get(before).copied();
+        self.unsettled_copies.truncate(before);
+        result?;
+        match unsettled {
+            Some(at) => err(at, UNSETTLED_COPY),
+            None => Ok(()),
+        }
+    }
+
+    fn check_stmt_kind(&mut self, stmt: &mut Stmt) -> Result<()> {
         let span = stmt.span;
         match &mut stmt.kind {
             StmtKind::Expr(e) => {
@@ -989,12 +1038,12 @@ impl Checker {
                 }
                 self.check_expr(e)?;
                 // Of all expressions, only a call, a change to a slice, or a
-                // `scan` can have an effect, and so can a plan B on a call, or
-                // one that gives no value.
+                // `scan` can have an effect, and so can a plan B on a call or a
+                // `scan`, or one that gives no value.
                 match &e.kind {
                     ExprKind::Call(name, _) if matches!(e.ty, Some(Type::Or(..))) => err(e.span, ignored_error(name)),
                     ExprKind::Call(..) | ExprKind::Edit { .. } | ExprKind::Scan { .. } => Ok(()),
-                    ExprKind::PlanB { value, .. } if e.ty == Some(Type::Unit) || matches!(value.kind, ExprKind::Call(..)) => Ok(()),
+                    ExprKind::PlanB { value, .. } if e.ty == Some(Type::Unit) || matches!(value.kind, ExprKind::Call(..) | ExprKind::Scan { .. }) => Ok(()),
                     ExprKind::Binary(BinaryOp::Eq, ..) => err(e.span, "the result of '==' is unused; use '=' to assign"),
                     _ => err(e.span, "this value is unused; only a task call can be used as a statement"),
                 }
@@ -1024,6 +1073,10 @@ impl Checker {
                             annotated
                         }
                         None if name == DISCARD => actual,
+                        // A variable without a type names no region for a copy.
+                        None if matches!(init.get(i).filter(|_| !forwarded).map(|value| &value.kind), Some(ExprKind::Copy { region: None, .. })) => {
+                            return err(value_span, UNSETTLED_COPY);
+                        }
                         None => self.inferred_type(&name, &actual, value_span)?,
                     };
                     if name == DISCARD && matches!(ty, Type::Or(..)) {
@@ -1552,15 +1605,7 @@ impl Checker {
     /// text that lasts as long as the program. (One holding pointers keeps it,
     /// since a variable of it must name a region.)
     fn lasting(&self, ty: &Type) -> Type {
-        let any = Some(ANY_REGION.to_string());
-        match ty {
-            Type::Text(region) if *region == any => Type::Text(None),
-            Type::Named(name, region) if *region == any && !self.regional.contains(name) => Type::Named(name.clone(), None),
-            Type::Maybe(inner) => Type::Maybe(Box::new(self.lasting(inner))),
-            Type::Array(inner, count) => Type::Array(Box::new(self.lasting(inner)), *count),
-            Type::Or(value, error) => Type::Or(Box::new(self.lasting(value)), Box::new(self.lasting(error))),
-            other => other.clone(),
-        }
+        lasting(ty, &self.regional)
     }
 
     /// Rewrites a variant used as a value, `Empty`, or called, `Circle(1.0)`,
@@ -1749,6 +1794,7 @@ impl Checker {
             ExprKind::PlanB { value, error, body } => self.check_plan_b(span, value, error.as_ref(), body),
             ExprKind::Edit { items, op, args } => self.check_edit(span, items, *op, args),
             ExprKind::Scan { args, region, region_span } => self.check_scan(span, args, region, *region_span),
+            ExprKind::Copy { value, region, region_span } => self.check_copy(span, value, region.as_deref(), *region_span),
             // Only the checker creates `Wrap`, with its type already set.
             ExprKind::Wrap(_) => expr.ty.clone().ok_or_else(|| Error::internal_at(span, "a wrapped value has no type")),
         }
@@ -1974,7 +2020,13 @@ impl Checker {
                 ),
                 _ => self.visible_region(region, span, true).map(|()| Type::Unit),
             },
-            _ => Err(Error::internal_at(span, format!("a slice of type {} added to has no region", ty))),
+            _ => err(
+                span,
+                format!(
+                    "adding to a slice may need more room in its region, but which region this slice is in isn't known here; keep it in a variable whose type names the region, as in 'hold xs: {}@r = …'",
+                    Type::Slice(Box::new(item.without_regions()), None)
+                ),
+            ),
         }
     }
 
@@ -1999,6 +2051,81 @@ impl Checker {
         }
         self.visible_region(region, region_span, true)?;
         Ok(Type::Maybe(Box::new(Type::Text(Some(region.to_string())))))
+    }
+
+    /// Checks `value.copy()`, at `span`, into `region` when one is written, and
+    /// returns its type: the value's, in that region. Without one, the copy is
+    /// of `ANY_REGION` and waits for the place it goes to settle its region.
+    fn check_copy(&mut self, span: Span, value: &mut Expr, region: Option<&str>, region_span: Span) -> Result<Type> {
+        let ty = self.check_expr(value)?;
+        if unsettled(&ty) {
+            return err(value.span, format!("cannot tell the type of this value from none or 'fail …', so it can't be copied; give it a type first, as in 'x: {}'", settled_example(&ty)));
+        }
+        if !holds_pointers(&ty, &self.regional) && !holds_text(&ty, &self.takes_region) {
+            let what = match ty {
+                Type::Unit => "this has no value".to_string(),
+                _ => format!("this value is {}, which holds no text, slice, or pointer; use it as it is", ty),
+            };
+            return err(span, format!("'copy' copies what a value holds in a region, but {}", what));
+        }
+        let bare = ty.without_regions();
+        match region {
+            Some(region) => {
+                self.visible_region(region, region_span, true)?;
+                Ok(self.in_region(&bare, region))
+            }
+            None => {
+                self.unsettled_copies.push(span);
+                Ok(self.in_region(&bare, ANY_REGION))
+            }
+        }
+    }
+
+    /// Gives a `copy()` that `expr` is the region of `expected`, the type of the
+    /// place it goes, when that type names one region; otherwise the copy stays
+    /// unsettled, which its statement reports. Copies in an array, shape, or
+    /// variant literal, and in a value becoming a `maybe` or a `T or E`, go
+    /// where their part of `expected` does.
+    fn settle_copies(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
+        match (&mut expr.kind, expected) {
+            (ExprKind::Copy { region: region @ None, .. }, _) => {
+                let mut regions = expected.regions();
+                regions.sort_unstable();
+                regions.dedup();
+                match regions.as_slice() {
+                    [] => err(
+                        expr.span,
+                        format!("'copy' makes its copy in a region, but a {} here lasts as long as the program, as a literal does; give the place a region, as in '{}'", expected, expected.map_regions_of_names(&mut |_| Some("r".to_string()))),
+                    ),
+                    [one] if *one != ANY_REGION => {
+                        let one = one.to_string();
+                        self.visible_region(&one, expr.span, true)?;
+                        if let Some(at) = self.unsettled_copies.iter().rposition(|at| *at == expr.span) {
+                            self.unsettled_copies.remove(at);
+                        }
+                        *region = Some(one);
+                        expr.ty = Some(expected.clone());
+                        Ok(())
+                    }
+                    _ => Ok(()),
+                }
+            }
+            (ExprKind::Array(values), Type::Array(items, _)) => values.iter_mut().try_for_each(|value| self.settle_copies(value, items)),
+            (ExprKind::Repeat { value, .. }, Type::Array(items, _)) => self.settle_copies(value, items),
+            (ExprKind::Wrap(inner), Type::Maybe(value) | Type::Or(value, _)) => self.settle_copies(inner, value),
+            (ExprKind::StructInit(name, fields), Type::Named(_, Some(region))) => {
+                let Some(shape) = self.shapes.get(name.as_str()).cloned() else { return Ok(()) };
+                fields.iter_mut().try_for_each(|field| match shape.fields.iter().find(|f| f.name == field.name) {
+                    Some(declared) => self.settle_copies(&mut field.value, &self.in_region(&declared.ty, region)),
+                    None => Ok(()),
+                })
+            }
+            (ExprKind::Construct { kind, tag, args }, Type::Named(_, Some(region))) => {
+                let Some(variant) = self.kinds.get(kind.as_str()).and_then(|k| k.variants.iter().find(|v| v.tag == *tag)).cloned() else { return Ok(()) };
+                args.iter_mut().zip(&variant.payload).try_for_each(|(arg, field)| self.settle_copies(arg, &self.in_region(&field.ty, region)))
+            }
+            _ => Ok(()),
+        }
     }
 
     /// Checks the value of `new [T](value) at r`, which gives the slice its
@@ -2322,24 +2449,31 @@ impl Checker {
     /// A value built without pointers (of `ANY_REGION`) fits the same type in
     /// any region, and takes that region; any other value must be of exactly
     /// the expected regions.
-    fn coerce(&self, expr: &mut Expr, expected: &Type) -> Result<()> {
+    fn coerce(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
         let actual = expr.ty()?.clone();
         if fits_regions(&actual, expected) {
             expr.ty = Some(expected.clone());
-            return Ok(());
+            return self.settle_copies(expr, expected);
         }
         if self.coerce_items(expr, expected)? {
             return Ok(());
         }
         match expected {
             Type::Maybe(inner) if actual == Type::None || fits_regions(&actual, inner) || self.coerce_items(expr, inner)? => {
+                if fits_regions(&actual, inner) {
+                    expr.ty = Some((**inner).clone());
+                    self.settle_copies(expr, inner)?;
+                }
                 wrap(expr, expected);
                 return Ok(());
             }
             Type::Or(value, error) => {
                 if let Type::Fail(given) = &actual {
                     if !fits_regions(given, error) {
-                        return err(expr.span, format!("expected an error of type {}, got {}", error, given));
+                        return err(expr.span, format!("expected an error of type {}, got {}{}", error, given, mismatch_hint(given, error)));
+                    }
+                    if let ExprKind::Fail(inner) = &mut expr.kind {
+                        self.settle_copies(inner, error)?;
                     }
                     wrap(expr, expected);
                     return Ok(());
@@ -2363,7 +2497,7 @@ impl Checker {
     /// Coerces an array written as a literal item by item, when its values can
     /// become the items of `expected`, as `[1, none]` or `[none; 4]` become
     /// arrays of `maybe int`. Whether `expected` is such an array.
-    fn coerce_items(&self, expr: &mut Expr, expected: &Type) -> Result<bool> {
+    fn coerce_items(&mut self, expr: &mut Expr, expected: &Type) -> Result<bool> {
         let Type::Array(items, count) = expected else { return Ok(false) };
         let written = match &expr.ty {
             Some(Type::Array(_, written)) => *written,
@@ -2418,6 +2552,21 @@ fn extract_hint(types: &[&Type]) -> String {
         }
         Some(ty) => format!("; the value in this {} must be extracted first, as in 'x {{ … }}' or 'when x is {{value}}'", ty),
         None => String::new(),
+    }
+}
+
+/// `ty` with `ANY_REGION` removed from its text and from the shapes and kinds
+/// that hold text but no pointers (not in `regional`), as a variable without a
+/// written type takes it: see `Checker::lasting`.
+pub fn lasting(ty: &Type, regional: &HashSet<String>) -> Type {
+    let any = Some(ANY_REGION.to_string());
+    match ty {
+        Type::Text(region) if *region == any => Type::Text(None),
+        Type::Named(name, region) if *region == any && !regional.contains(name) => Type::Named(name.clone(), None),
+        Type::Maybe(inner) => Type::Maybe(Box::new(lasting(inner, regional))),
+        Type::Array(inner, count) => Type::Array(Box::new(lasting(inner, regional)), *count),
+        Type::Or(value, error) => Type::Or(Box::new(lasting(value, regional)), Box::new(lasting(error, regional))),
+        other => other.clone(),
     }
 }
 
@@ -2793,6 +2942,17 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
             region, name
         ),
         _ if [Some(expected), expected.extracted()].into_iter().flatten().any(|e| actual.without_regions() == e.without_regions()) => {
+            // Text, or a shape or kind, inside what is given says it best.
+            let inner = [Some(expected), expected.extracted()]
+                .into_iter()
+                .flatten()
+                .find_map(|e| region_mismatch(actual, e))
+                .filter(|(a, e)| !std::ptr::eq(*a, actual) || !std::ptr::eq(*e, expected))
+                .map(|(a, e)| mismatch_hint(a, e))
+                .filter(|hint| !hint.is_empty());
+            if let Some(hint) = inner {
+                return hint;
+            }
             if expected.regions().contains(&ANY_REGION) {
                 "; this place holds a value without pointers (of no region), so it can't take a pointer into one".to_string()
             } else {
@@ -2800,6 +2960,17 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
             }
         }
         _ => String::new(),
+    }
+}
+
+/// The first text, or shape or kind, in `actual` whose region differs from the
+/// region of the one in the same place in `expected`, with that one.
+fn region_mismatch<'a>(actual: &'a Type, expected: &'a Type) -> Option<(&'a Type, &'a Type)> {
+    match (actual, expected) {
+        (Type::Text(a), Type::Text(e)) | (Type::Named(_, a), Type::Named(_, e)) => (a != e).then_some((actual, expected)),
+        (Type::Maybe(a), Type::Maybe(e)) | (Type::Array(a, _), Type::Array(e, _)) | (Type::Fail(a), Type::Fail(e)) => region_mismatch(a, e),
+        (Type::Or(av, ae), Type::Or(ev, ee)) => region_mismatch(av, ev).or_else(|| region_mismatch(ae, ee)),
+        _ => None,
     }
 }
 

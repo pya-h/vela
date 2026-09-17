@@ -1,0 +1,6 @@
+# error: 5:32: unknown region 'elsewhere'; declare it with 'region elsewhere'
+task main()
+    region r
+    bind line = scan("") at r { "" }
+    bind kept = line.copy() at elsewhere
+fi

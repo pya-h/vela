@@ -1,0 +1,10 @@
+# error: 8:23: the error type must differ from the value type, as in 'Person or ParseError'
+shape Person
+    name: text
+fi
+
+task main()
+    region r
+    hold x: Person or Person@r = Person { name: "a" }
+    show(x { "b" }.name)
+fi
