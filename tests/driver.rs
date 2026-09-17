@@ -239,15 +239,16 @@ fn a_program_loads_each_module_once_through_its_loader() {
     let asked = std::cell::RefCell::new(Vec::new());
     let items = driver::check_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
     // Paths are relative to the file with the `include`, with `..` settled, and a
-    // module used twice is read once.
+    // module used twice is read once. A module's names in the program start with
+    // its path from the main file's folder.
     assert_eq!(*asked.borrow(), ["app/shapes/geometry.vela", "app/text/labels.vela"]);
     let names: Vec<&str> = items.iter().map(|item| match item {
         Item::Task(t) => t.name.as_str(),
         _ => "",
     }).collect();
-    assert_eq!(names, ["labels.label", "labels.width", "geometry.area", "main"]);
+    assert_eq!(names, ["text/labels.label", "text/labels.width", "shapes/geometry.area", "main"]);
     let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
-    assert!(c.contains("int64_t vela_geometry__0__area(int64_t side)"), "{}", c);
+    assert!(c.contains("int64_t vela_shapes__1__geometry__0__area(int64_t side)"), "{}", c);
 }
 
 #[test]

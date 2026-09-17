@@ -1,0 +1,9 @@
+# error: x
+kind Suit
+    Hearts
+    Spades
+fi
+
+task main()
+    bind Suit = 1
+fi

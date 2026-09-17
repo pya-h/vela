@@ -1,0 +1,6 @@
+# error: x
+include modules/library
+
+task main()
+    bind lock = library.Lock.Open
+fi

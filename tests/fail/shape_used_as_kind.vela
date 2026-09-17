@@ -1,0 +1,6 @@
+# error: x
+include modules/library
+
+task main()
+    bind s = library.Card.Hearts
+fi

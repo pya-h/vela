@@ -1,4 +1,4 @@
-# error: 2:17: the module 'library' has the name of the task defined at 4:6; rename one of them
+# error: 2:17: the module 'library' has the name of the task defined at 4:6; rename one of them, or give the module another name with '=> name'
 include modules/library
 
 task library()

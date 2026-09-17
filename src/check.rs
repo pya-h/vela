@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
 use crate::error::{Error, Result};
-use crate::modules::{ModuleScope, Program};
+use crate::modules::{IncludeScope, ModuleScope, Program};
 
 #[derive(Clone)]
 struct VariantInfo {
@@ -99,7 +99,13 @@ impl Checker {
         checker.modules = program.modules.iter().map(|scope| (scope.name.clone(), scope.clone())).collect();
         let result = checker.check_file(&mut program.items);
         program.type_places = checker.type_places;
-        result
+        // Names in a message are written as the file with the error writes them.
+        result.map_err(|mut error| {
+            if let Some(scope) = error.span.and_then(|span| program.modules.iter().find(|scope| scope.file == span.file)) {
+                error.message = scope.spelling.text(&error.message);
+            }
+            error
+        })
     }
 
     /// Whether a task, shape, kind, or variant name written in the current
@@ -131,22 +137,40 @@ impl Checker {
     }
 
     /// A hint for a name written in the current module that names nothing
-    /// here, but that a module it includes declares: `; it is in module 'm', as 'm.name'`.
+    /// here, but that a module it includes declares: `; module 'm' has one: …`.
+    /// Names of the program in it are written as the program names them, and
+    /// the message is spelled for the file later (see `check_program`).
     fn elsewhere(&self, name: &str) -> String {
         let Some(scope) = self.modules.get(&self.current_module) else { return String::new() };
         let declared = |full: &str| {
             !self.private.contains(full) && (self.tasks.contains_key(full) || self.shapes.contains_key(full) || self.kinds.contains_key(full) || self.variants.contains_key(full))
         };
-        match scope.includes.iter().find(|(module, _)| declared(&qualify(module, name))) {
-            Some((module, _)) => format!("; module '{0}' has one: write '{0}.{1}', or bring it in with 'include … ({1})'", module, name),
+        let Some(include) = scope.includes.iter().find(|include| declared(&qualify(&include.id, name))) else { return String::new() };
+        let full = qualify(&include.id, name);
+        if let Some((alias, _, at)) = scope.imports.iter().find(|(written, imported, _)| *imported == full && written != name) {
+            return format!("; it is brought in as '{}' at {}:{}", alias, at.line, at.col);
+        }
+        match &include.local {
+            Some(module) => format!("; module '{}' has one: write '{}', or bring it in with 'include … ({})'", module, full, name),
+            None => format!("; module '{}' has one: list it in 'include {} {{…}}'", include.written, include.written),
+        }
+    }
+
+    /// A hint for a variable name that names nothing, but that a module the
+    /// current module includes would be named by, without its alias or braces.
+    fn module_elsewhere(&self, name: &str) -> String {
+        let Some(scope) = self.modules.get(&self.current_module) else { return String::new() };
+        match scope.includes.iter().find(|include| include.file_name == name && include.local.as_deref() != Some(name)) {
+            Some(IncludeScope { local: Some(alias), written, .. }) => format!("; module '{}' is included as '{}'", written, alias),
+            Some(include) => format!("; module '{}' is included with only its parts, which are named alone", include.written),
             None => String::new(),
         }
     }
 
-    /// Where the current module includes the module called `name`, if it does.
+    /// Where the current module includes the module it names `name`, if it does.
     fn module_used(&self, name: &str) -> Option<Span> {
         let scope = self.modules.get(&self.current_module)?;
-        scope.includes.iter().find(|(included, _)| included == name).map(|(_, at)| *at)
+        scope.included(name).map(|include| include.span)
     }
 
     /// Where `part` (see `TypePlaces`) is in the type written at `span`, or
@@ -156,7 +180,8 @@ impl Checker {
         // A shape or kind of another module may be written without its module,
         // as in its own file or after `include m (Name)`.
         let found = |part: &str| parts.and_then(|parts| parts.iter().find(|(name, _)| name == part)).map(|(_, at)| *at);
-        found(part).or_else(|| found(unqualified(part))).unwrap_or(span)
+        let spelled = self.modules.get(&self.current_module).map(|scope| scope.spelling.name(part));
+        found(part).or_else(|| spelled.and_then(|spelled| found(&spelled))).or_else(|| found(unqualified(part))).unwrap_or(span)
     }
 
     pub fn check_file(&mut self, items: &mut [Item]) -> Result<()> {
@@ -792,7 +817,14 @@ impl Checker {
         // A variable named like a variant would make a bare `Empty` ambiguous.
         if let Some(info) = self.variant_in_scope(name) {
             let at = info.variant.span;
+            if at.file != span.file {
+                return err(span, format!("'{}' is already the name of a variant of kind '{}'", name, info.kind));
+            }
             return err(span, format!("'{}' is already defined at {}:{}", name, at.line, at.col));
+        }
+        // Nor like a kind, which `Kind.Variant` would read as.
+        if self.kinds.contains_key(&self.in_module(name)) {
+            return err(span, format!("'{0}' is the name of a kind, so '{0}.x' would name its variant; choose another name", name));
         }
         // Nor may it take a module's name, which `name.x` would read as.
         if let Some(at) = self.module_used(name) {
@@ -862,6 +894,8 @@ impl Checker {
                 Error::at(span, format!("'{}' is a variant, not a variable", name))
             } else if self.module_used(name).is_some() {
                 Error::at(span, format!("'{0}' is a module, not a variable; name something in it, as in '{0}.name'", name))
+            } else if self.kinds.contains_key(&self.full_name(name)) {
+                Error::at(span, format!("'{0}' is a kind, not a variable; name one of its variants, as in '{0}.Variant'", name))
             } else if let Some(shape) = self.shapes.get(&self.full_name(name)) {
                 // Most likely a shape literal the parser read as a plan B.
                 let example = match shape.fields.first() {
@@ -870,7 +904,11 @@ impl Checker {
                 };
                 Error::at(span, format!("'{}' is a shape, not a variable; a literal names its fields on one line, as in '{}'", name, example))
             } else {
-                Error::at(span, format!("unknown variable '{}'{}", name, self.elsewhere(name)))
+                let hint = match self.module_elsewhere(name) {
+                    hint if hint.is_empty() => self.elsewhere(name),
+                    hint => hint,
+                };
+                Error::at(span, format!("unknown variable '{}'{}", name, hint))
             }
         })
     }
@@ -1118,7 +1156,12 @@ impl Checker {
         match (&pattern.kind, subject) {
             (PatternKind::Any | PatternKind::None, Type::Maybe(_)) => Ok(Vec::new()),
             (PatternKind::Any, _) => Ok(Vec::new()),
-            (PatternKind::Variant { tag, binds }, Type::Named(kind_name, region)) if self.kinds.contains_key(kind_name) => {
+            (PatternKind::Variant { kind, tag, binds }, Type::Named(kind_name, region)) if self.kinds.contains_key(kind_name) => {
+                if let Some((written, at)) = kind
+                    && written != kind_name
+                {
+                    return err(*at, format!("this pattern names kind '{}', but the value's kind is '{}'", written, kind_name));
+                }
                 let variant = self.kinds.get(kind_name)
                     .and_then(|kind| kind.variants.iter().find(|v| v.tag == *tag))
                     .ok_or_else(|| Error::at(span, format!("kind '{}' has no variant '{}'", kind_name, tag)))?;

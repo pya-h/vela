@@ -314,7 +314,7 @@ fn modules_are_read_next_to_the_program() {
     assert!(out.status.success(), "{}", stderr(&out));
     let out = vela(&[&example("shop"), "--emit-c"]);
     assert!(out.status.success(), "{}", stderr(&out));
-    assert!(String::from_utf8_lossy(&out.stdout).contains("vela_cart__0__add("));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("vela_shop__1__cart__0__add("));
 
     // An error in a module is shown in that module's file.
     let dir = temp_dir("modules");

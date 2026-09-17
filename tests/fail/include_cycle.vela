@@ -1,4 +1,4 @@
-# error: modules/cycle_b.vela:2:9: modules can't include one another in a circle: cycle_a -> cycle_b -> cycle_a
+# error: modules/cycle_b.vela:2:9: modules can't include one another in a circle: modules/cycle_a -> modules/cycle_b -> modules/cycle_a
 include modules/cycle_a
 
 task main()

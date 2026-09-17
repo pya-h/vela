@@ -1,0 +1,6 @@
+# error: x
+include modules/library => lib {greet}
+
+task main()
+    show(greet())
+fi

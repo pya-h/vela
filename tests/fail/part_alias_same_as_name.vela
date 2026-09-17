@@ -1,0 +1,5 @@
+# error: x
+include modules/library (greet => greet)
+
+task main()
+fi

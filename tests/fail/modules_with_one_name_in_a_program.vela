@@ -1,7 +1,0 @@
-# error: modules/includes_other.vela:2:15: another module of this program is also named 'library' (modules/library.vela); modules need different names
-include modules/library
-include modules/includes_other
-
-task main()
-    show(includes_other.greeting())
-fi

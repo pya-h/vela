@@ -1,4 +1,4 @@
-# error: 6:10: a pattern names the variant alone, as in 'case Hearts': the value's kind tells which module it is from
+# error: 6:10: a pattern names the variant alone or after its kind, as in 'case Hearts' or 'case Kind.Hearts': the value's kind tells which module it is from
 include modules/library
 
 task main()

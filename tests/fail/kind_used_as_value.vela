@@ -1,0 +1,6 @@
+# error: x
+include modules/library (Suit)
+
+task main()
+    show(Suit)
+fi

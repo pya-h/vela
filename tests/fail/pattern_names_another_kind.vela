@@ -1,0 +1,19 @@
+# error: x
+kind Mood
+    Calm
+    Busy
+fi
+
+kind Weather
+    Sunny
+    Calm
+fi
+
+task main()
+    match Mood.Calm
+    case Weather.Calm
+        show(1)
+    case _
+        show(2)
+    fi
+fi

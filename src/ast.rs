@@ -205,6 +205,23 @@ impl Type {
         }
     }
 
+    /// The type with each shape or kind name replaced by what `f` gives for it.
+    pub fn map_names(&self, f: &dyn Fn(&str) -> String) -> Type {
+        let boxed = |t: &Type| Box::new(t.map_names(f));
+        match self {
+            Type::Named(name, region) => Type::Named(f(name), region.clone()),
+            Type::Ptr(inner, region) => Type::Ptr(boxed(inner), region.clone()),
+            Type::Array(inner, count) => Type::Array(boxed(inner), *count),
+            Type::Slice(inner, region) => Type::Slice(boxed(inner), region.clone()),
+            Type::Range(inner) => Type::Range(boxed(inner)),
+            Type::Maybe(inner) => Type::Maybe(boxed(inner)),
+            Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
+            Type::Fail(error) => Type::Fail(boxed(error)),
+            Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_names(f)).collect()),
+            other => other.clone(),
+        }
+    }
+
     /// The type with a region given to each pointer, slice, and shape or kind
     /// name that has none, by `f` (which also sees builtin-free types, and decides
     /// nothing about whether a shape holds pointers).
@@ -491,8 +508,10 @@ pub type Binding = (String, Span);
 
 #[derive(Debug, Clone)]
 pub enum PatternKind {
-    /// `Circle r`: a variant, naming its payload fields in order.
-    Variant { tag: String, binds: Vec<Binding> },
+    /// `Circle r` or `Shape.Circle r`: a variant, naming its payload fields in
+    /// order. `kind` is the kind written before the variant, if any: the
+    /// value's kind, which the checker makes sure of.
+    Variant { kind: Option<Binding>, tag: String, binds: Vec<Binding> },
     /// `{v}`: the value in a `maybe`, or the success of a `T or E`.
     Value(Binding),
     /// `none`: an empty `maybe`.
@@ -530,7 +549,7 @@ impl fmt::Display for Pattern {
     /// The pattern as it is written, with its names, as in `{value}`.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.kind {
-            PatternKind::Variant { tag, binds } => {
+            PatternKind::Variant { tag, binds, .. } => {
                 write!(f, "{}", tag)?;
                 for (name, _) in binds {
                     write!(f, " {}", name)?;
@@ -559,9 +578,11 @@ pub struct Field {
     pub private: bool,
 }
 
-/// `include shapes/circle` or `include geometry (area, Point)`: another file of the
-/// program, whose tasks, shapes, and kinds this file names as `circle.area`,
-/// and the names it also brings in unqualified.
+/// `include shapes/circle`, `include shapes/circle => round`,
+/// `include geometry (area, Point => Spot)`, or `include geometry {area}`:
+/// another file of the program, whose tasks, shapes, and kinds this file names
+/// through the module's name (`circle.area`), and the parts it also brings in
+/// by name.
 #[derive(Debug, Clone)]
 pub struct Include {
     /// The path as written: names and `..`, the last one the module's name.
@@ -570,14 +591,55 @@ pub struct Include {
     pub span: Span,
     /// Position of the module's name, the path's last part.
     pub name_span: Span,
-    /// The names in parentheses, each with its position.
-    pub names: Vec<Binding>,
+    /// The name after `=>`, which this file names the module by instead.
+    pub alias: Option<Binding>,
+    /// The parts in parentheses or braces.
+    pub parts: Vec<Part>,
+    /// Written with braces: only the parts are included, and the module
+    /// itself has no name in this file.
+    pub only_parts: bool,
+}
+
+/// A task, shape, kind, or variant an `include` brings in by name, maybe
+/// under another name: `Point` or `Point => Spot`.
+#[derive(Debug, Clone)]
+pub struct Part {
+    pub name: String,
+    pub span: Span,
+    /// The name after `=>`, which this file names the part by instead.
+    pub alias: Option<Binding>,
+}
+
+impl Part {
+    /// The name this file writes for the part: its alias, or else its own.
+    pub fn local_name(&self) -> &str {
+        self.alias.as_ref().map_or(self.name.as_str(), |(alias, _)| alias.as_str())
+    }
+
+    /// Where the name this file writes for the part is.
+    pub fn local_span(&self) -> Span {
+        self.alias.as_ref().map_or(self.span, |(_, at)| *at)
+    }
 }
 
 impl Include {
-    /// The module's name, by which this file refers to it: the path's last part.
-    pub fn name(&self) -> &str {
+    /// The name the path gives the module: its last part.
+    pub fn file_name(&self) -> &str {
         self.path.last().map_or("", String::as_str)
+    }
+
+    /// The name this file names the module by: its alias, or the path's last
+    /// part; none when only its parts are included.
+    pub fn local_name(&self) -> Option<&str> {
+        if self.only_parts {
+            return None;
+        }
+        Some(self.alias.as_ref().map_or(self.file_name(), |(alias, _)| alias.as_str()))
+    }
+
+    /// Where the name this file names the module by is written.
+    pub fn local_span(&self) -> Span {
+        self.alias.as_ref().map_or(self.name_span, |(_, at)| *at)
     }
 
     /// The path as written, as in `../shapes/circle`.

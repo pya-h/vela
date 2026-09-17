@@ -1,0 +1,11 @@
+# error: x
+kind Mood
+    Calm
+fi
+
+task main()
+    match Mood.Calm
+    case a.Mood.Calm
+        show(1)
+    fi
+fi

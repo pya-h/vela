@@ -716,7 +716,7 @@ impl Generator {
             (PatternKind::Fail((name, _)), Type::Or(_, error)) => {
                 bindings.push((name, (**error).clone(), format!("{}.error", subject)));
             }
-            (PatternKind::Variant { tag, binds }, Type::Named(kind_name, _)) => {
+            (PatternKind::Variant { tag, binds, .. }, Type::Named(kind_name, _)) => {
                 let variant = self
                     .kinds
                     .get(kind_name)
@@ -1694,11 +1694,15 @@ fn tag_value(kind: &str, tag: &str) -> String {
 }
 
 /// A task, shape, or kind name as part of a C name. A name from a module other
-/// than the main file's has the module before a `.`, which becomes `__0__`:
-/// no Vela name contains `__`, and none starts with a digit, so the result
-/// can't be any other name, or read as a word the generated names use.
+/// than the main file's has the module's path before a `.`: the `.` becomes
+/// `__0__`, each `/` of the path `__1__`, and each `..` in it `__2__`
+/// (`shapes/geometry.area` is `shapes__1__geometry__0__area`). No Vela name
+/// contains `__`, and none starts with a digit, so the result can't be any
+/// other name, or read as a word the generated names use.
 fn c_name(name: &str) -> String {
-    name.replace(MODULE_SEPARATOR, "__0__")
+    let Some((module, own)) = name.rsplit_once(MODULE_SEPARATOR) else { return name.to_string() };
+    let path: Vec<&str> = module.split('/').map(|part| if part == ".." { "__2__" } else { part }).collect();
+    format!("{}__0__{}", path.join("__1__"), own)
 }
 
 /// The C name of a local, parameter, field, or variant union member: the Vela

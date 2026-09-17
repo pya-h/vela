@@ -1,0 +1,6 @@
+# error: x
+include modules/library {card}
+
+task main()
+    bind count: int = card("ada")
+fi

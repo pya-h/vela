@@ -1,0 +1,6 @@
+# error: x
+include modules/library (Suit, Hearts)
+
+task main()
+    bind Hearts = 1
+fi

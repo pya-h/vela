@@ -1,0 +1,6 @@
+# error: x
+include modules/library => lib
+include modules/other/library => lib
+
+task main()
+fi

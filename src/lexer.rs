@@ -52,6 +52,9 @@ pub enum Token {
     Comma,
     Dot,
     Arrow,
+    /// `=>`, which gives an included module or name another name:
+    /// `include shop/cart => basket`.
+    FatArrow,
     Range,
     Plus,
     Minus,
@@ -146,6 +149,7 @@ impl Token {
             Token::Comma => ",",
             Token::Dot => ".",
             Token::Arrow => "->",
+            Token::FatArrow => "=>",
             Token::Send => "<-",
             Token::Range => "..",
             Token::Plus => "+",
@@ -431,6 +435,9 @@ impl Lexer {
                 if self.peek() == '=' {
                     self.advance();
                     Token::Eq
+                } else if self.peek() == '>' {
+                    self.advance();
+                    Token::FatArrow
                 } else {
                     Token::Assign
                 }

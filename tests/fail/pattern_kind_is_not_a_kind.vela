@@ -1,0 +1,15 @@
+# error: x
+shape Point
+    x: int
+fi
+
+kind Mood
+    Calm
+fi
+
+task main()
+    match Mood.Calm
+    case Point.Calm
+        show(1)
+    fi
+fi

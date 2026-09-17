@@ -1,0 +1,6 @@
+# error: x
+include modules/library => lib
+
+task main()
+    bind card = library.card("ada")
+fi

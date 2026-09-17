@@ -1,0 +1,9 @@
+# error: x
+kind Suit
+    Hearts
+    Spades
+fi
+
+task main()
+    bind s = Suit.Clubs
+fi

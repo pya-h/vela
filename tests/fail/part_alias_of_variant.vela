@@ -1,0 +1,5 @@
+# error: x
+include modules/library (Suit, Hearts => Red)
+
+task main()
+fi

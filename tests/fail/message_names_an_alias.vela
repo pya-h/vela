@@ -1,0 +1,6 @@
+# error: x
+include modules/library (Card => Ticket, card)
+
+task main()
+    bind ticket: Ticket = 1
+fi

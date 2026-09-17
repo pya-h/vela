@@ -72,16 +72,36 @@ pub type Loader<'a> = dyn FnMut(&Path) -> io::Result<String> + 'a;
 /// What the checker needs to know about one module of a program.
 #[derive(Debug, Clone, Default)]
 pub struct ModuleScope {
-    /// The module's name, the prefix of its items' names; empty for the main file.
+    /// The module's identity, the prefix of its items' names in the program:
+    /// its path from the main file's folder, without `.vela` (`shapes/geometry`);
+    /// empty for the main file.
     pub name: String,
     /// The file it is.
     pub file: usize,
-    /// The names of the modules it includes, each with the position of its
-    /// `include`.
-    pub includes: Vec<Binding>,
-    /// The names `include m (a, b)` brings in unqualified: each as written, the
-    /// name it stands for (`m.a`), and the position where it is brought in.
+    /// The modules it includes.
+    pub includes: Vec<IncludeScope>,
+    /// The names its `include` lines bring in by name: each as this file writes
+    /// it (its alias, if it has one), the name it stands for (`m.a`), and the
+    /// position where it is brought in.
     pub imports: Vec<(String, String, Span)>,
+    /// How this file writes the names of the program.
+    pub spelling: Spelling,
+}
+
+/// A module that another includes.
+#[derive(Debug, Clone, Default)]
+pub struct IncludeScope {
+    /// The name the including file names it by, if any: its alias or the
+    /// path's last part; none when only its parts are included.
+    pub local: Option<String>,
+    /// Its identity (see `ModuleScope::name`).
+    pub id: String,
+    /// The path's last part, which names it unless it has an alias.
+    pub file_name: String,
+    /// The path as written.
+    pub written: String,
+    /// Where the name it is named by is written (or its path's last part).
+    pub span: Span,
 }
 
 impl ModuleScope {
@@ -89,6 +109,65 @@ impl ModuleScope {
     /// it is one brought in with `include`.
     pub fn imported(&self, name: &str) -> Option<&str> {
         self.imports.iter().find(|(written, _, _)| written == name).map(|(_, full, _)| full.as_str())
+    }
+
+    /// The module this one includes under the name `name`.
+    pub fn included(&self, name: &str) -> Option<&IncludeScope> {
+        self.includes.iter().find(|include| include.local.as_deref() == Some(name))
+    }
+}
+
+/// How one file writes the names of the program's tasks, shapes, kinds, and
+/// variants. A name of the program is its module's identity, a `.`, and its
+/// own name (`shapes/geometry.Point`), or its own name alone in the main file.
+/// A file writes it as its own name when it declares it or brings it in by
+/// name (or by the alias it gives it), through its module's name otherwise
+/// (`geometry.Point`), or through its kind's name for a variant (`Shape.Circle`).
+/// A name the file has no way to write keeps the program's name.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Spelling {
+    names: HashMap<String, String>,
+}
+
+impl Spelling {
+    /// How the file writes the program's name `full`.
+    pub fn name(&self, full: &str) -> String {
+        self.names.get(full).cloned().unwrap_or_else(|| full.to_string())
+    }
+
+    /// `ty` with its shape and kind names as the file writes them.
+    pub fn ty(&self, ty: &Type) -> Type {
+        ty.map_names(&|name| self.name(name))
+    }
+
+    /// `text`, a message, with each of the program's names in it as the file
+    /// writes it. A name is a whole word of letters, digits, `_`, `.`, and `/`,
+    /// which no other part of a message is written with.
+    pub fn text(&self, text: &str) -> String {
+        if self.names.is_empty() {
+            return text.to_string();
+        }
+        let in_word = |c: char| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '/');
+        let mut out = String::with_capacity(text.len());
+        let mut rest = text;
+        while let Some(start) = rest.find(in_word) {
+            let (before, from) = rest.split_at(start);
+            out.push_str(before);
+            let end = from.find(|c: char| !in_word(c)).unwrap_or(from.len());
+            let (word, after) = from.split_at(end);
+            // A word may end a sentence, as in "… Point.".
+            let trimmed = word.trim_end_matches('.');
+            match self.names.get(trimmed) {
+                Some(spelled) => {
+                    out.push_str(spelled);
+                    out.push_str(word.get(trimmed.len()..).unwrap_or_default());
+                }
+                None => out.push_str(word),
+            }
+            rest = after;
+        }
+        out.push_str(rest);
+        out
     }
 }
 
@@ -119,8 +198,8 @@ pub fn load(path: &Path, source: &str, loader: &mut Loader) -> (Vec<SourceFile>,
 
 /// A module being loaded.
 struct Module {
-    /// Its name, and the prefix of its items' names; empty for the main file.
-    name: String,
+    /// Its identity (see `ModuleScope::name`); empty for the main file.
+    id: String,
     file: usize,
     includes: Vec<Include>,
     /// For each of `includes`, the module it loads.
@@ -148,9 +227,10 @@ impl State {
         let main = self.parse(String::new(), path, source.to_string(), None)?;
         self.visit(main, loader)?;
         let tables: Vec<Names> = self.modules.iter().map(own_names).collect();
+        let variants = variants_of_kinds(&tables);
         let mut scopes = Vec::new();
         for index in 0..self.modules.len() {
-            scopes.push(self.resolve(index, &tables)?);
+            scopes.push(self.resolve(index, &tables, &variants)?);
         }
         let mut items = Vec::new();
         for index in std::mem::take(&mut self.order) {
@@ -161,9 +241,9 @@ impl State {
         Ok(Program { items, modules: scopes, type_places: std::mem::take(&mut self.type_places) })
     }
 
-    /// Lexes and parses `source` as the next file, the module called `name`,
-    /// loaded by the `include` at `included_at`.
-    fn parse(&mut self, name: String, path: &Path, source: String, included_at: Option<Span>) -> Result<usize> {
+    /// Lexes and parses `source` as the next file, the module with identity
+    /// `id`, loaded by the `include` at `included_at`.
+    fn parse(&mut self, id: String, path: &Path, source: String, included_at: Option<Span>) -> Result<usize> {
         let file = self.files.len();
         self.files.push(SourceFile { path: path.to_path_buf(), source, included_at });
         let source = self.files.get(file).map_or("", |f| f.source.as_str());
@@ -174,7 +254,7 @@ impl State {
         let includes = parser.includes();
         let index = self.modules.len();
         self.by_path.insert(normalize(path), index);
-        self.modules.push(Module { name, file, includes, included: Vec::new(), items });
+        self.modules.push(Module { id, file, includes, included: Vec::new(), items });
         Ok(index)
     }
 
@@ -187,20 +267,30 @@ impl State {
         self.loading.push(index);
         let includes = self.modules.get(index).map(|m| m.includes.clone()).unwrap_or_default();
         let folder = self.module_path(index).parent().map(Path::to_path_buf).unwrap_or_default();
+        let main_folder = self.module_path(0).parent().map(Path::to_path_buf).unwrap_or_default();
         let mut targets = Vec::new();
         for (i, include) in includes.iter().enumerate() {
-            let name = include.name();
-            check_module_name(include)?;
-            if let Some(earlier) = includes.iter().take(i).find(|earlier| earlier.name() == name) {
-                let at = earlier.name_span;
-                let message = if earlier.path == include.path {
-                    format!("this module is already included at {}:{}; a file includes each module once", at.line, at.col)
-                } else {
-                    format!("another module named '{}' is already included at {}:{}; a file can't include two modules with one name", name, at.line, at.col)
-                };
-                return err(include.name_span, message);
+            if let Some(local) = include.local_name() {
+                check_module_name(local, include.local_span())?;
             }
             let path = module_file(&folder, &include.path);
+            let earlier = includes.iter().take(i);
+            if let Some(earlier) = earlier.clone().find(|earlier| module_file(&folder, &earlier.path) == path) {
+                let at = earlier.name_span;
+                return err(include.name_span, format!("this module is already included at {}:{}; a file includes each module once", at.line, at.col));
+            }
+            if let Some(local) = include.local_name()
+                && let Some(earlier) = earlier.clone().find(|earlier| earlier.local_name() == Some(local))
+            {
+                let at = earlier.local_span();
+                return err(
+                    include.local_span(),
+                    format!(
+                        "another module named '{}' is already included at {}:{}; a file can't include two modules with one name, so give one of them another name with '=> name'",
+                        local, at.line, at.col
+                    ),
+                );
+            }
             let target = match self.by_path.get(&path) {
                 Some(&target) => {
                     if let Some(start) = self.loading.iter().position(|&m| m == target) {
@@ -209,19 +299,6 @@ impl State {
                     target
                 }
                 None => {
-                    if let Some(other) = self.modules.iter().position(|m| !m.name.is_empty() && m.name == name) {
-                        // Named from the main file's folder, as the program's paths are.
-                        let main_folder = self.module_path(0).parent().unwrap_or(Path::new(""));
-                        let other = self.module_path(other);
-                        return err(
-                            include.name_span,
-                            format!(
-                                "another module of this program is also named '{}' ({}); modules need different names",
-                                name,
-                                other.strip_prefix(main_folder).unwrap_or(other).display()
-                            ),
-                        );
-                    }
                     let source = loader(&path).map_err(|error| {
                         let message = match error.kind() {
                             io::ErrorKind::NotFound => format!("can't find module '{}': there is no file '{}.vela'", include.written(), include.written()),
@@ -229,7 +306,7 @@ impl State {
                         };
                         Error::at(include.span, message)
                     })?;
-                    let target = self.parse(name.to_string(), &path, source, Some(include.span))?;
+                    let target = self.parse(module_id(&main_folder, &path), &path, source, Some(include.span))?;
                     self.visit(target, loader)?;
                     target
                 }
@@ -249,11 +326,12 @@ impl State {
     }
 
     /// The message for a module that includes itself: the modules being loaded
-    /// from `start`, then `target` again.
+    /// from `start`, then `target` again, each by its path from the main file's
+    /// folder (the main file by its name).
     fn cycle(&self, start: usize, target: usize) -> String {
         let name = |index: usize| match self.modules.get(index) {
-            Some(module) if module.name.is_empty() => self.module_path(index).file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned()),
-            Some(module) => module.name.clone(),
+            Some(module) if module.id.is_empty() => self.module_path(index).file_stem().map_or_else(String::new, |s| s.to_string_lossy().into_owned()),
+            Some(module) => module.id.clone(),
             None => String::new(),
         };
         let chain: Vec<String> = self.loading.iter().skip(start).map(|&m| name(m)).chain([name(target)]).collect();
@@ -262,51 +340,88 @@ impl State {
 
     /// Resolves the names in module `index`, and returns what the checker needs
     /// to know about it.
-    fn resolve(&mut self, index: usize, tables: &[Names]) -> Result<ModuleScope> {
+    fn resolve(&mut self, index: usize, tables: &[Names], variants: &Variants) -> Result<ModuleScope> {
         let Some(module) = self.modules.get(index) else { return Ok(ModuleScope::default()) };
         let own = tables.get(index).cloned().unwrap_or_default();
-        let mut resolver = Resolver { own, aliases: HashMap::new(), imports: HashMap::new(), type_places: &self.type_places };
+        let mut resolver = Resolver { own, modules: HashMap::new(), imports: HashMap::new(), unnamed: Vec::new(), variants, type_places: &self.type_places };
+        let mut includes = Vec::new();
+        for (include, &target) in module.includes.iter().zip(&module.included) {
+            let id = self.modules.get(target).map(|m| m.id.clone()).unwrap_or_default();
+            if let Some(local) = include.local_name() {
+                if let Some(entry) = resolver.own.get(local) {
+                    return err(
+                        include.local_span(),
+                        format!(
+                            "the module '{}' has the name of the {} defined at {}:{}; rename one of them, or give the module another name with '=> name'",
+                            local,
+                            entry.what.word(),
+                            entry.span.line,
+                            entry.span.col
+                        ),
+                    );
+                }
+                // A part given another name is named only by it.
+                let hidden = include.parts.iter().filter_map(|part| part.alias.clone().map(|alias| (part.name.clone(), alias))).collect();
+                let names = tables.get(target).cloned().unwrap_or_default();
+                resolver.modules.insert(local.to_string(), ModuleNames { names, hidden });
+            }
+            if include.local_name() != Some(include.file_name()) {
+                resolver.unnamed.push((include.file_name().to_string(), include.local_name().map(str::to_string), include.written()));
+            }
+            includes.push(IncludeScope {
+                local: include.local_name().map(str::to_string),
+                id,
+                file_name: include.file_name().to_string(),
+                written: include.written(),
+                span: include.local_span(),
+            });
+        }
         let mut imports = Vec::new();
         for (include, &target) in module.includes.iter().zip(&module.included) {
-            let name = include.name().to_string();
-            if let Some(entry) = resolver.own.get(&name) {
-                return err(
-                    include.name_span,
-                    format!("the module '{}' has the name of the {} defined at {}:{}; rename one of them", name, entry.what.word(), entry.span.line, entry.span.col),
-                );
-            }
-            let table = tables.get(target).cloned().unwrap_or_default();
-            resolver.aliases.insert(name.clone(), table);
-        }
-        for include in &module.includes {
-            let module_name = include.name();
-            for (written, at) in &include.names {
-                let Some(entry) = resolver.aliases.get(module_name).and_then(|table| table.get(written)) else {
-                    return err(*at, format!("module '{}' has no task, shape, kind, or variant named '{}'", module_name, written));
+            let label = include.local_name().map_or_else(|| include.written(), str::to_string);
+            let table = tables.get(target);
+            for part in &include.parts {
+                let Some(entry) = table.and_then(|table| table.get(&part.name)) else {
+                    return err(part.span, format!("module '{}' has no task, shape, kind, or variant named '{}'", label, part.name));
                 };
                 if entry.private {
-                    return err(*at, format!("'{}' is private to module '{}'", written, module_name));
+                    return err(part.span, format!("'{}' is private to module '{}'", part.name, label));
                 }
+                if let Some((alias, at)) = &part.alias {
+                    if entry.what == What::Variant {
+                        let kind = entry.kind.as_deref().unwrap_or("Kind");
+                        return err(
+                            *at,
+                            format!("'{0}' is a variant, which keeps its own name; bring in '{0}' as it is, or its kind, and write '{1}.{0}'", part.name, kind),
+                        );
+                    }
+                    if *alias == part.name {
+                        return err(*at, format!("'{0}' is already named '{0}'; leave out '=> {0}'", alias));
+                    }
+                    if Type::builtin(alias).is_some() {
+                        return err(*at, format!("'{}' is a builtin type, so nothing else can be named so", alias));
+                    }
+                    if BUILTIN_TASKS.contains(&alias.as_str()) {
+                        return err(*at, format!("'{}' is a builtin task, so nothing else can be named so", alias));
+                    }
+                }
+                let (written, at) = (part.local_name(), part.local_span());
                 if let Some(own) = resolver.own.get(written) {
-                    return err(*at, format!("'{}' is brought in here, but this file also defines a {} with that name at {}:{}", written, own.what.word(), own.span.line, own.span.col));
+                    return err(at, format!("'{}' is brought in here, but this file also defines a {} with that name at {}:{}", written, own.what.word(), own.span.line, own.span.col));
                 }
                 if let Some((_, earlier)) = resolver.imports.get(written) {
-                    return err(*at, format!("'{}' is already brought in at {}:{}", written, earlier.line, earlier.col));
+                    return err(at, format!("'{}' is already brought in at {}:{}", written, earlier.line, earlier.col));
                 }
-                if resolver.aliases.contains_key(written) {
-                    return err(*at, format!("'{}' is the name of a module this file includes", written));
+                if resolver.modules.contains_key(written) {
+                    return err(at, format!("'{}' is the name of a module this file includes", written));
                 }
                 let entry = entry.clone();
-                imports.push((written.clone(), entry.full.clone(), *at));
-                resolver.imports.insert(written.clone(), (entry, *at));
+                imports.push((written.to_string(), entry.full.clone(), at));
+                resolver.imports.insert(written.to_string(), (entry, at));
             }
         }
-        let scope = ModuleScope {
-            name: module.name.clone(),
-            file: module.file,
-            includes: module.includes.iter().map(|u| (u.name().to_string(), u.name_span)).collect(),
-            imports,
-        };
+        let spelling = spelling(module, tables.get(index), tables, variants, &imports);
+        let scope = ModuleScope { name: module.id.clone(), file: module.file, includes, imports, spelling };
         let Some(module) = self.modules.get_mut(index) else { return Ok(scope) };
         let mut items = std::mem::take(&mut module.items);
         for item in &mut items {
@@ -319,17 +434,65 @@ impl State {
     }
 }
 
-/// Rejects a module named like a builtin type or task, which its qualified
-/// names would read as.
-fn check_module_name(include: &Include) -> Result<()> {
-    let name = include.name();
+/// How module `module`, which declares `own`, writes the program's names (see
+/// `Spelling`), given the names its `include` lines bring in (`imports`, as in
+/// `ModuleScope`).
+fn spelling(module: &Module, own: Option<&Names>, tables: &[Names], variants: &Variants, imports: &[(String, String, Span)]) -> Spelling {
+    let mut names = HashMap::new();
+    if let Some(own) = own {
+        for (written, entry) in own {
+            names.insert(entry.full.clone(), written.clone());
+        }
+    }
+    for (include, &target) in module.includes.iter().zip(&module.included) {
+        let (Some(local), Some(table)) = (include.local_name(), tables.get(target)) else { continue };
+        for (written, entry) in table {
+            let renamed = include.parts.iter().any(|part| part.name == *written && part.alias.is_some());
+            if !entry.private && !renamed {
+                names.entry(entry.full.clone()).or_insert_with(|| format!("{}{}{}", local, MODULE_SEPARATOR, written));
+            }
+        }
+    }
+    for (written, full, _) in imports {
+        names.insert(full.clone(), written.clone());
+    }
+    // A variant not written otherwise is written through its kind.
+    for (kind, tags) in variants {
+        let Some(kind) = names.get(kind).cloned() else { continue };
+        for (tag, entry) in tags {
+            names.entry(entry.full.clone()).or_insert_with(|| format!("{}{}{}", kind, MODULE_SEPARATOR, tag));
+        }
+    }
+    // The main file's names are already written as the program names them.
+    names.retain(|full, written| full != written);
+    Spelling { names }
+}
+
+/// Rejects a module named like a builtin type or task in a file, `name` written
+/// at `span`, which its qualified names would read as.
+fn check_module_name(name: &str, span: Span) -> Result<()> {
     if Type::builtin(name).is_some() {
-        return err(include.name_span, format!("a module can't be named '{}', which is a builtin type", name));
+        return err(span, format!("a module can't be named '{}', which is a builtin type", name));
     }
     if BUILTIN_TASKS.contains(&name) {
-        return err(include.name_span, format!("a module can't be named '{}', which is a builtin task", name));
+        return err(span, format!("a module can't be named '{}', which is a builtin task", name));
     }
     Ok(())
+}
+
+/// The identity of the module in the file at `path`: its path from the main
+/// file's folder `main_folder`, with `/` between the parts and without
+/// `.vela`, as in `shapes/geometry` or `../common/text`.
+fn module_id(main_folder: &Path, path: &Path) -> String {
+    let folder = normalize(main_folder);
+    let folder: Vec<Component> = folder.components().collect();
+    let file = normalize(&path.with_extension(""));
+    let parts: Vec<Component> = file.components().collect();
+    let common = folder.iter().zip(&parts).take_while(|(a, b)| a == b).count();
+    let ups = folder.len().saturating_sub(common);
+    let mut id: Vec<String> = vec!["..".to_string(); ups];
+    id.extend(parts.iter().skip(common).map(|part| part.as_os_str().to_string_lossy().into_owned()));
+    id.join("/")
 }
 
 /// `path` with `.` removed and each `..` taking away the folder before it,
@@ -371,33 +534,40 @@ impl What {
 /// A task, shape, kind, or variant declared in a module.
 #[derive(Debug, Clone)]
 struct Entry {
-    /// Its name in the whole program: `geometry.area`, or `area` in the main file.
+    /// Its name in the whole program: `shapes/geometry.area`, or `area` in the
+    /// main file.
     full: String,
     what: What,
     /// Whether it is `priv`; a variant is as private as its kind.
     private: bool,
     span: Span,
+    /// For a variant, its kind's name in the program.
+    kind: Option<String>,
 }
 
 /// A module's declarations, by the names they are written with.
 type Names = HashMap<String, Entry>;
 
+/// The variants of every kind of the program, by the kind's name in the
+/// program, then the variant's own name.
+type Variants = HashMap<String, HashMap<String, Entry>>;
+
 /// The names module `module` declares. When two items share a name, the first
 /// is kept; the checker reports the second.
 fn own_names(module: &Module) -> Names {
-    let full = |name: &str| if module.name.is_empty() { name.to_string() } else { format!("{}{}{}", module.name, MODULE_SEPARATOR, name) };
+    let full = |name: &str| if module.id.is_empty() { name.to_string() } else { format!("{}{}{}", module.id, MODULE_SEPARATOR, name) };
     let mut names = Names::new();
-    let mut add = |name: &str, what: What, private: bool, span: Span| {
-        names.entry(name.to_string()).or_insert(Entry { full: full(name), what, private, span });
+    let mut add = |name: &str, what: What, private: bool, span: Span, kind: Option<String>| {
+        names.entry(name.to_string()).or_insert(Entry { full: full(name), what, private, span, kind });
     };
     for item in &module.items {
         match item {
-            Item::Task(t) => add(&t.name, What::Task, t.private, t.span),
-            Item::Shape(s) => add(&s.name, What::Shape, s.private, s.span),
+            Item::Task(t) => add(&t.name, What::Task, t.private, t.span, None),
+            Item::Shape(s) => add(&s.name, What::Shape, s.private, s.span, None),
             Item::Kind(k) => {
-                add(&k.name, What::Kind, k.private, k.span);
+                add(&k.name, What::Kind, k.private, k.span, None);
                 for variant in &k.variants {
-                    add(&variant.tag, What::Variant, k.private, variant.span);
+                    add(&variant.tag, What::Variant, k.private, variant.span, Some(full(&k.name)));
                 }
             }
         }
@@ -405,13 +575,37 @@ fn own_names(module: &Module) -> Names {
     names
 }
 
+/// The variants of every kind in `tables` (see `Variants`).
+fn variants_of_kinds(tables: &[Names]) -> Variants {
+    let mut variants = Variants::new();
+    for (tag, entry) in tables.iter().flatten() {
+        if let (What::Variant, Some(kind)) = (entry.what, &entry.kind) {
+            variants.entry(kind.clone()).or_default().entry(tag.clone()).or_insert_with(|| entry.clone());
+        }
+    }
+    variants
+}
+
+/// What a file can name of a module it includes under a name.
+struct ModuleNames {
+    names: Names,
+    /// The parts brought in under another name, which the module's name can't
+    /// reach: each part's name, with its alias and where that is written.
+    hidden: HashMap<String, Binding>,
+}
+
 /// Rewrites the names written in one module to their names in the program.
 struct Resolver<'a> {
     own: Names,
-    /// The declarations of each module this one includes, by the module's name.
-    aliases: HashMap<String, Names>,
-    /// The names brought in with `include m (a, b)`, with where each is brought in.
+    /// The modules this one includes, by the name it names each by.
+    modules: HashMap<String, ModuleNames>,
+    /// The names brought in by name, by the name this file writes (an alias if
+    /// there is one), with where each is brought in.
     imports: HashMap<String, (Entry, Span)>,
+    /// The modules this one includes that its path's last part doesn't name:
+    /// that part, the name it is included under (if any), and the path.
+    unnamed: Vec<(String, Option<String>, String)>,
+    variants: &'a Variants,
     type_places: &'a TypePlaces,
 }
 
@@ -460,21 +654,77 @@ impl Resolver<'_> {
         self.own.get(name).map_or_else(|| name.to_string(), |entry| entry.full.clone())
     }
 
-    /// The declaration a written name stands for: `m.Name` in an included module,
-    /// or a name of this module or brought in with `include`. `None` for any other
-    /// name, which the checker reports (or which is a variable). `at` is where
-    /// the name is written, for errors.
+    /// The declaration a written name stands for: a name of this module or one
+    /// brought in by name; `m.Name` in a module this file includes;
+    /// `Kind.Variant` or `m.Kind.Variant`. `None` for an undotted name that
+    /// names none of them, which the checker reports (or which is a variable).
+    /// `at` is where the name is written, for errors.
     fn lookup(&self, written: &str, at: Span) -> Result<Option<Entry>> {
-        let Some((module, member)) = written.split_once(MODULE_SEPARATOR) else {
-            return Ok(self.own.get(written).or_else(|| self.imports.get(written).map(|(entry, _)| entry)).cloned());
-        };
-        let Some(entry) = self.aliases.get(module).and_then(|table| table.get(member)) else {
-            return err(at, format!("module '{}' has no task, shape, kind, or variant named '{}'", module, member));
+        let parts: Vec<&str> = written.split(MODULE_SEPARATOR).collect();
+        match parts.as_slice() {
+            [name] => Ok(self.own.get(*name).or_else(|| self.imports.get(*name).map(|(entry, _)| entry)).cloned()),
+            [first, member] => match self.modules.get(*first) {
+                Some(module) => self.member(first, module, member, at).map(Some),
+                None => match self.lookup(first, at)? {
+                    Some(kind) if kind.what == What::Kind => self.variant(&kind, first, member, at).map(Some),
+                    _ => {
+                        let hint = match self.unnamed.iter().find(|(file_name, _, _)| file_name == first) {
+                            Some((_, Some(alias), path)) => format!("; module '{}' is included as '{}'", path, alias),
+                            Some((_, None, path)) => format!("; module '{}' is included with only its parts, which are named alone", path),
+                            None => ", and Vela has no methods".to_string(),
+                        };
+                        err(at, format!("'{}' names nothing: '{}' is neither a module this file includes nor a kind{}", written, first, hint))
+                    }
+                },
+            },
+            [module_name, kind_name, variant] => {
+                let Some(module) = self.modules.get(*module_name) else {
+                    return err(at, format!("'{}' names nothing: '{}' isn't a module this file includes", written, module_name));
+                };
+                let kind = self.member(module_name, module, kind_name, at)?;
+                if kind.what != What::Kind {
+                    return err(at, format!("'{}{}{}' is a {}, not a kind, so it has no variant '{}'", module_name, MODULE_SEPARATOR, kind_name, kind.what.word(), variant));
+                }
+                self.variant(&kind, &format!("{}{}{}", module_name, MODULE_SEPARATOR, kind_name), variant, at).map(Some)
+            }
+            _ => err(at, format!("'{}' names nothing", written)),
+        }
+    }
+
+    /// `member` of the module this file names `module_name`.
+    fn member(&self, module_name: &str, module: &ModuleNames, member: &str, at: Span) -> Result<Entry> {
+        if let Some((alias, brought)) = module.hidden.get(member) {
+            return err(
+                at,
+                format!(
+                    "'{}{}{}' is brought in as '{}' at {}:{}, so this file names it '{}'",
+                    module_name, MODULE_SEPARATOR, member, alias, brought.line, brought.col, alias
+                ),
+            );
+        }
+        let Some(entry) = module.names.get(member) else {
+            return err(at, format!("module '{}' has no task, shape, kind, or variant named '{}'", module_name, member));
         };
         if entry.private {
-            return err(at, format!("'{}' is private to module '{}'", member, module));
+            return err(at, format!("'{}' is private to module '{}'", member, module_name));
         }
-        Ok(Some(entry.clone()))
+        Ok(entry.clone())
+    }
+
+    /// The variant `tag` of `kind`, which this file writes `kind_name`.
+    fn variant(&self, kind: &Entry, kind_name: &str, tag: &str, at: Span) -> Result<Entry> {
+        match self.variants.get(&kind.full).and_then(|tags| tags.get(tag)) {
+            Some(entry) => Ok(entry.clone()),
+            None => err(at, format!("kind '{}' has no variant '{}'", kind_name, tag)),
+        }
+    }
+
+    /// The kind `name` (as written, maybe `m.Kind`) stands for, if it names one.
+    fn kind(&self, name: &str, at: Span) -> Result<Option<Entry>> {
+        if !name.contains(MODULE_SEPARATOR) || name.split(MODULE_SEPARATOR).count() == 2 && self.modules.contains_key(module_of(name)) {
+            return Ok(self.lookup(name, at)?.filter(|entry| entry.what == What::Kind));
+        }
+        Ok(None)
     }
 
     /// `name` rewritten, when it stands for a declaration of one of the kinds `whats`.
@@ -483,6 +733,18 @@ impl Resolver<'_> {
             && (whats.contains(&entry.what) || name.contains(MODULE_SEPARATOR))
         {
             *name = entry.full;
+        }
+        Ok(())
+    }
+
+    /// A pattern's kind, as in `case Shape.Circle`, rewritten to its name in the
+    /// program.
+    fn pattern(&self, pattern: &mut Pattern) -> Result<()> {
+        if let PatternKind::Variant { kind: Some((name, at)), .. } = &mut pattern.kind {
+            match self.kind(name, *at)? {
+                Some(kind) => *name = kind.full,
+                None => return err(*at, format!("'{}' isn't a kind, so a pattern can't name a variant of it", name)),
+            }
         }
         Ok(())
     }
@@ -537,6 +799,7 @@ impl Resolver<'_> {
             }
             StmtKind::When(cond, then_block, else_block) => {
                 self.expr(&mut cond.value)?;
+                cond.pattern.iter_mut().try_for_each(|pattern| self.pattern(pattern))?;
                 self.block(then_block)?;
                 match else_block {
                     Some(block) => self.block(block),
@@ -545,6 +808,7 @@ impl Resolver<'_> {
             }
             StmtKind::Loop(cond, body) => {
                 self.expr(&mut cond.value)?;
+                cond.pattern.iter_mut().try_for_each(|pattern| self.pattern(pattern))?;
                 self.block(body)
             }
             StmtKind::Each(_, range, body) => {
@@ -553,7 +817,10 @@ impl Resolver<'_> {
             }
             StmtKind::Match(value, cases) => {
                 self.expr(value)?;
-                cases.iter_mut().try_for_each(|case| self.block(&mut case.body))
+                cases.iter_mut().try_for_each(|case| {
+                    self.pattern(&mut case.pattern)?;
+                    self.block(&mut case.body)
+                })
             }
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter_mut().try_for_each(|e| self.expr(e)),
             StmtKind::Region(_) => Ok(()),
@@ -562,6 +829,16 @@ impl Resolver<'_> {
 
     fn expr(&self, expr: &mut Expr) -> Result<()> {
         let span = expr.span;
+        // `Shape.Circle` (or `m.Shape.Circle`): a variant, read as a field of a
+        // name. No variable can be named like a kind (see `Checker::define`).
+        if let ExprKind::Field(base, tag) = &expr.kind
+            && let ExprKind::Var(name) = &base.kind
+            && let Some(kind) = self.kind(name, base.span)?
+        {
+            let variant = self.variant(&kind, name, tag, span)?;
+            expr.kind = ExprKind::Var(variant.full);
+            return Ok(());
+        }
         match &mut expr.kind {
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit => Ok(()),
             // A variable keeps its name. No variable can be named like a variant

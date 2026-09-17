@@ -1,6 +1,0 @@
-# Includes the library module in modules/other, for a fail fixture.
-include other/library
-
-task greeting() -> text
-    <- library.greet()
-fi

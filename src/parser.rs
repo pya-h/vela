@@ -58,8 +58,9 @@ impl Parser {
         Ok(items)
     }
 
-    /// `include path` or `include path (name, …)`, where the path is names and `..`
-    /// separated by `/`.
+    /// `include path`, `include path => alias`, `include path (part, …)`, or
+    /// `include path {part, …}`, where the path is names and `..` separated by
+    /// `/`, and a part is a name, maybe followed by `=> alias`.
     fn parse_include(&mut self) -> Result<Include> {
         self.advance(); // include
         let span = self.peek_span();
@@ -88,26 +89,45 @@ impl Parser {
                 break part_span;
             }
         };
-        let mut names = Vec::new();
-        if self.match_token(Token::LParen) {
+        let alias = self.parse_alias()?;
+        let mut parts = Vec::new();
+        let only_parts = self.check(Token::LBrace);
+        if only_parts && let Some((_, at)) = &alias {
+            return Err(Error::at(
+                *at,
+                "a module included with only its parts ('{…}') has no name in this file, so it can't be given one with '=>'",
+            ));
+        }
+        if self.match_token(Token::LParen) || self.match_token(Token::LBrace) {
+            let close = if only_parts { Token::RBrace } else { Token::RParen };
             loop {
                 let at = self.peek_span();
-                names.push((self.expect_ident()?, at));
+                let name = self.expect_ident()?;
+                parts.push(Part { name, span: at, alias: self.parse_alias()? });
                 if !self.match_token(Token::Comma) {
                     break;
                 }
             }
-            self.expect(Token::RParen)?;
+            self.expect(close)?;
         }
         if !matches!(self.peek(), Token::Newline | Token::Eof) {
             return Err(self.unexpected("the end of the 'include' line"));
         }
-        Ok(Include { path, span, name_span, names })
+        Ok(Include { path, span, name_span, alias, parts, only_parts })
+    }
+
+    /// `=> name` after an included module or part, if it is there.
+    fn parse_alias(&mut self) -> Result<Option<Binding>> {
+        if !self.match_token(Token::FatArrow) {
+            return Ok(None);
+        }
+        let at = self.peek_span();
+        Ok(Some((self.expect_ident()?, at)))
     }
 
     /// Whether `name` is the name of a module this file includes.
     fn is_module(&self, name: &str) -> bool {
-        self.includes.iter().any(|included| included.name() == name)
+        self.includes.iter().any(|included| included.local_name() == Some(name))
     }
 
     /// After a name at the cursor's previous token: `.member` when the name is a
@@ -119,6 +139,20 @@ impl Parser {
         self.advance(); // .
         let member = self.expect_ident()?;
         Ok(format!("{}{}{}", name, MODULE_SEPARATOR, member))
+    }
+
+    /// After a name: `.Variant` when a call follows, giving `Kind.Variant`, as in
+    /// `Shape.Circle(…)` (or `geometry.Shape.Circle(…)`). Vela has no methods,
+    /// so a name, a dot, and a call is a kind's variant. (A function of its own:
+    /// `parse_primary`'s frame is on the stack once per nesting level.)
+    fn variant_called(&mut self, name: String) -> Result<String> {
+        let calls = matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) && self.tokens.get(self.pos + 2) == Some(&Token::LParen);
+        if !self.check(Token::Dot) || !calls {
+            return Ok(name);
+        }
+        self.advance(); // .
+        let variant = self.expect_ident()?;
+        Ok(format!("{}{}{}", name, MODULE_SEPARATOR, variant))
     }
 
     fn peek(&self) -> &Token {
@@ -916,17 +950,24 @@ impl Parser {
                 PatternKind::Fail(self.parse_bound_name()?)
             }
             Token::Ident(_) => {
-                let tag = self.expect_ident()?;
-                if self.check(Token::Dot) && self.is_module(&tag) {
-                    let variant = match self.tokens.get(self.pos + 1) {
-                        Some(Token::Ident(variant)) => variant.clone(),
-                        _ => "Circle".to_string(),
-                    };
+                // `Circle`, `Shape.Circle`, or `geometry.Shape.Circle`.
+                let mut written = vec![self.expect_ident()?];
+                while self.check(Token::Dot) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
+                    self.advance(); // .
+                    written.push(self.expect_ident()?);
+                }
+                let module_first = written.first().is_some_and(|first| self.is_module(first));
+                let tag = written.pop().unwrap_or_default();
+                if written.len() > 2 || (written.len() == 1 && module_first) || (written.len() == 2 && !module_first) {
                     return Err(Error::at(
                         span,
-                        format!("a pattern names the variant alone, as in '{} {}': the value's kind tells which module it is from", keyword, variant),
+                        format!(
+                            "a pattern names the variant alone or after its kind, as in '{0} {1}' or '{0} Kind.{1}': the value's kind tells which module it is from",
+                            keyword, tag
+                        ),
                     ));
                 }
+                let kind = (!written.is_empty()).then(|| (written.join(&MODULE_SEPARATOR.to_string()), span));
                 if self.check(Token::LParen) {
                     return Err(Error::at(
                         self.peek_span(),
@@ -937,7 +978,7 @@ impl Parser {
                 while matches!(self.peek(), Token::Ident(_) | Token::Underscore) {
                     binds.push(self.parse_bound_name()?);
                 }
-                PatternKind::Variant { tag, binds }
+                PatternKind::Variant { kind, tag, binds }
             }
             _ => return Err(self.unexpected("a variant, '{value}', 'none', 'fail e', or '_'")),
         };
@@ -1144,6 +1185,7 @@ impl Parser {
                 let name = name.clone();
                 self.advance();
                 let name = self.qualified(name)?;
+                let name = self.variant_called(name)?;
                 if self.check(Token::LBrace) && self.at_shape_literal() {
                     self.parse_struct_init(name)?
                 } else if self.check(Token::LParen) {
