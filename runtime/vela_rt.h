@@ -411,6 +411,55 @@ static inline void vela__rt__items_remove(void* items, int64_t len, vela__rt__ro
     }
 }
 
+/* Input. `scan(prompt) at r` shows the prompt (flushing the output, which may
+ * be waiting for a newline) and reads one line from the standard input into
+ * region `r`, without its line break (a Windows "\r\n" included). A line is as
+ * long as the input makes it. The line is NULL when the input has ended (or
+ * can't be read) before its first character; a last line without a line break
+ * is still a line. A `\0` in the line ends the text there, as text is a C
+ * string. */
+static inline const char* vela__rt__scan(vela__rt__region* r, const char* prompt) {
+    if (prompt[0] != '\0') {
+        fputs(prompt, stdout);
+    }
+    fflush(stdout);
+    size_t capacity = 128;
+    size_t size = 0;
+    char* buffer = malloc(capacity);
+    if (buffer == NULL) {
+        vela__rt__out_of_memory();
+    }
+    int c;
+    while ((c = getchar()) != EOF && c != '\n') {
+        if (size + 1 == capacity) {
+            if (capacity > SIZE_MAX / 2) {
+                free(buffer);
+                vela__rt__out_of_memory();
+            }
+            char* bigger = realloc(buffer, capacity * 2);
+            if (bigger == NULL) {
+                free(buffer);
+                vela__rt__out_of_memory();
+            }
+            buffer = bigger;
+            capacity *= 2;
+        }
+        buffer[size++] = (char)c;
+    }
+    if (c == EOF && size == 0) {
+        free(buffer);
+        return NULL;
+    }
+    if (size > 0 && buffer[size - 1] == '\r') {
+        size--;
+    }
+    char* line = vela__rt__region_alloc(r, size + 1, 1);
+    memcpy(line, buffer, size);
+    line[size] = '\0';
+    free(buffer);
+    return line;
+}
+
 /* Frees everything allocated in `r`, which is then empty again. */
 static inline void vela__rt__region_free(vela__rt__region* r) {
     vela__rt__chunk* chunk = r->newest;

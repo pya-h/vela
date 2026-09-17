@@ -241,7 +241,7 @@
 in   at    match case new   region and  or      not
 true false none  fi   maybe is     fail include priv</pre>
       <p>
-        <code>show</code> and the builtin types (<code>int</code>, <code>float</code>, <code>bool</code>,
+        <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>, <code>bool</code>,
         <code>text</code>, <code>unit</code>) aren't reserved words: no task, shape, kind, or variant can take their
         names, but a variable, parameter, or field can (see <a href="#names">Names</a>). The symbols:
       </p>
@@ -515,18 +515,43 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         <tr><td><code>a.x</code>, <code>p^</code>, <code>xs[i]</code>, <code>f(x)</code>, <code>x { … }</code></td><td><code>p^.x</code> reads a field through a pointer; <code>x { 0 } * 2</code> is <code>(x { 0 }) * 2</code></td></tr>
       </table>
 
-      <h3>Text, Output, and Logic</h3>
+      <h3>Text, Output, Input, and Logic</h3>
       <p>
         Text literals use double quotes and support the escapes <code>\n</code>, <code>\t</code>, <code>\r</code>,
         <code>\\</code>, <code>\"</code>, and <code>\0</code>. A <code>#</code> starts a comment that runs to the end
         of the line. A text literal ends on the line it starts (a line break in it is written <code>\n</code>). Text holds
         any UTF-8, but a <code>\0</code> ends it early (<code>"ab\0cd"</code> shows as
-        <code>ab</code>). <code>show</code> is the only builtin task: it prints an <code>int</code>, <code>float</code>,
+        <code>ab</code>). <code>show</code> prints an <code>int</code>, <code>float</code>,
         <code>bool</code>, or <code>text</code> followed by a newline (or a <code>maybe</code> of one: its value, or
         <code>none</code>). Floats print with up to 6 significant digits,
         switching to exponent form for very large or small values (<code>123456789.0</code> shows as
         <code>1.23457e+08</code>), and <code>0.0 / 0.0</code> and <code>1.0 / 0.0</code> show as <code>nan</code> and
         <code>inf</code>.
+      </p>
+      <p id="input">
+        <code>scan(prompt) at r</code>, or <code>scan(prompt)@r</code>, reads input: it shows the prompt (as it is, with
+        no newline added; <code>""</code> shows nothing), then reads one line into region <code>r</code>, without its line
+        break (a Windows <code>\r\n</code> too). The line is new text, so it goes in a region, as <code>new</code>'s values
+        do (see <a href="#text-in-regions">Text in a region</a>), and the task needs that region itself. It gives a
+        <code>maybe text@r</code>: <code>none</code> once the input has ended (Ctrl-D, or the end of a file given as input),
+        so reading every line is a <code>loop … is {line}</code>. A last line without a line break is still a line, a
+        line can be as long as memory allows, and a <code>\0</code> in it ends the text there. As a statement,
+        <code>scan("Press Enter")@r</code> reads a line and drops it.
+      </p>
+      <pre><span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">bind</span> name = scan(<span class="string">"Your name: "</span>) <span class="keyword">at</span> r { <span class="string">"stranger"</span> }   <span class="comment"># text@r; "stranger" when input has ended</span>
+    show(name)
+    <span class="keyword">hold</span> count = <span class="number">0</span>
+    <span class="keyword">loop</span> scan(<span class="string">""</span>)@r <span class="keyword">is</span> {line}                              <span class="comment"># every line left</span>
+        count = count + <span class="number">1</span>
+    <span class="keyword">fi</span>
+    show(count)
+<span class="keyword">fi</span></pre>
+      <p>
+        <code>scan</code> reads text only. Reading a number, as in <code>scan("Age: ", int)</code>, waits for conversions
+        between types (see <a href="future.html#conversions">Future Directions</a>). A loop that reads for a long time
+        can keep each line in a region declared inside it, which is freed on every pass.
       </p>
       <p>
         Logic uses words: <code>and</code>, <code>or</code>, and <code>not</code> work on <code>bool</code>, and
@@ -683,7 +708,7 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
       <p>
         Tasks, shapes, kinds, and variants share one namespace in a file: no two of them can have the same name, even
         across different kinds, and none can be named like a builtin (<code>int</code>, <code>float</code>,
-        <code>bool</code>, <code>text</code>, <code>unit</code>, <code>show</code>). Another module has names of its own
+        <code>bool</code>, <code>text</code>, <code>unit</code>, <code>show</code>, <code>scan</code>). Another module has names of its own
         (see <a href="#modules">Modules</a>). Every type you write must be a builtin, a shape, or a kind. A variable
         can't take the name of a variant, a kind, or a module the file includes, so a bare <code>Red</code> always means
         the variant, and <code>Light.Red</code> a variant of <code>Light</code>.
@@ -1357,16 +1382,17 @@ show(area(square))             <span class="comment"># error: unknown task 'area
         <li>Memory is freed a whole region at a time, and a value holds pointers into one region only (see
           <a href="#regions">Memory and Regions</a>).</li>
         <li><code>text</code> is a C string, so a <code>\0</code> ends it; there are no text operations besides
-          <code>==</code>, <code>!=</code>, and <code>show</code>.</li>
-        <li>There is no way to read input.</li>
+          <code>==</code>, <code>!=</code>, <code>show</code>, and reading it with <code>scan</code>.</li>
+        <li>Input is read a line of text at a time with <code>scan</code>; there are no conversions from text to numbers
+          yet, and no files.</li>
         <li>Arrays and slices can't be compared or shown whole, and an array's count is known before the program runs
           (see <a href="#arrays">Arrays</a>).</li>
         <li>There are no packages to share modules between programs (see <a href="#modules">Modules</a>).</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which
           matters only when they call tasks that print, or when more than one of them would stop the program
-          (see <a href="#int-limits">Numbers</a>), which decides the message. (Where one of them contains a plan B or a
-          change to a slice, they are evaluated left to right.)</li>
+          (see <a href="#int-limits">Numbers</a>), which decides the message. (Where one of them contains a plan B, a
+          change to a slice, or a <code>scan</code>, they are evaluated left to right.)</li>
         <li>An expression, including a shape literal or a call's arguments, must be written on one line.</li>
         <li>Statements aren't yet required to end at a line break (<code>show(1) show(2)</code> on one line is
           accepted).</li>

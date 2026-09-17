@@ -363,8 +363,8 @@ Press Ctrl+C to stop.</pre>
             <code>.</code>, and <code>len</code> after an array's or slice's (and <code>add</code> and <code>del</code> after a slice's); the cases still missing after <code>case</code> and
             <code>case Kind.</code>, including <code>{value}</code>,
             <code>none</code>, and <code>fail e</code>; the patterns that fit after <code>is</code>; the regions
-            visible after <code>@</code>, and the ones <code>new</code> can allocate in after <code>new@</code> and a
-            <code>new</code>'s <code>at</code>, or as the argument for a task's <code>region</code> parameter; and
+            visible after <code>@</code>, and the ones <code>new</code> or <code>scan</code> can allocate in after <code>new@</code>, <code>scan(…)@</code>, and a
+            <code>new</code>'s or <code>scan</code>'s <code>at</code>, or as the argument for a task's <code>region</code> parameter; and
             <code>region</code> as a statement or a parameter's type. A call's result shows the caller's regions
             (<code>push(nodes, list)</code> gives a <code>^Node@nodes</code>), even while the file has an error. After
             a finished value, only the words that can continue it: <code>is</code>, <code>in</code>, <code>or</code>,
@@ -421,7 +421,8 @@ Press Ctrl+C to stop.</pre>
       <ul>
         <li><kbd>F5</kbd> (or <kbd>Ctrl</kbd>+<kbd>Enter</kbd>) saves every file with changes (a program may use any
           of them as a module), builds the current <code>.vela</code> file, and runs it in the <strong>Output</strong>
-          tab. Output is a real terminal: colors work, and what you type goes to the program.</li>
+          tab. Output is a real terminal: colors work, and what you type goes to the program, so <code>scan</code> reads
+          it a line at a time (<kbd>Ctrl</kbd>+<kbd>D</kbd> ends the input).</li>
         <li>The run ends with a summary line, <code>── exited with code 0 · 3 ms ──</code>, and the status bar keeps
           the result. <kbd>Shift</kbd>+<kbd>F5</kbd> or the Stop button ends a program; running again replaces the
           one that is running, even when the new build fails.</li>

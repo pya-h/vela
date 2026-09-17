@@ -1,0 +1,9 @@
+# error: 7:33: expected type text@outer, got text@pass; this text is in region 'pass', and text here is in region 'outer'
+task main()
+    region outer
+    hold last = scan("") at outer { "" }
+    each i in 0..2
+        region pass
+        last = scan("") at pass { "" }
+    fi
+fi

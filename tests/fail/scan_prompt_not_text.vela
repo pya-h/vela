@@ -1,0 +1,5 @@
+# error: 4:22: 'scan' shows a text prompt, as in 'scan("Name: ") at r', but this value is int
+task main()
+    region r
+    bind line = scan(3) at r
+fi

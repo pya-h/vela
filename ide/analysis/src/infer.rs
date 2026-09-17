@@ -423,11 +423,13 @@ impl<'a> Knowledge<'a> {
                         None => ty,
                     });
                 }
-                // `new T(v) at r`: a pointer into `r`, or a slice for `new [T](…) at r`.
-                if self.token_before(q) == Some(&Token::At) && q >= 2 && self.token(q - 2) == Some(&Token::RParen) {
+                // `new T(v) at r`: a pointer into `r`, or a slice for `new [T](…) at r`;
+                // `scan(…) at r` or `scan(…)@r`: a line in `r`.
+                if matches!(self.token_before(q), Some(Token::At | Token::AtSign)) && q >= 2 && self.token(q - 2) == Some(&Token::RParen) {
                     return match self.expression_type(q - 2, depth + 1)? {
                         Type::Ptr(pointee, _) => Some(Type::Ptr(Box::new(self.in_region(&pointee, name)), Some(name.to_string()))),
                         Type::Slice(items, _) => Some(Type::Slice(Box::new(self.in_region(&items, name)), Some(name.to_string()))),
+                        Type::Maybe(line) if matches!(*line, Type::Text(_)) => Some(Type::Maybe(Box::new(Type::Text(Some(name.to_string()))))),
                         _ => None,
                     };
                 }
@@ -501,6 +503,10 @@ impl<'a> Knowledge<'a> {
                     return self.span_type(open + 1, q.checked_sub(1)?, depth + 1);
                 };
                 let (p, word) = callee;
+                // `scan(…)`, before its region.
+                if word == vela::ast::SCAN && self.token_before(p) != Some(&Token::Dot) {
+                    return Some(Type::Maybe(Box::new(Type::Text(None))));
+                }
                 // `xs.add(…)` gives nothing, and `xs.del(…)` the item it takes
                 // out, which the checker records at the word.
                 if self.token_before(p) == Some(&Token::Dot)

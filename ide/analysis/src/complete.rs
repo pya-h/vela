@@ -239,7 +239,8 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     if let Some(q) = prev
         && (prev_token == Some(&Token::AtSign) || prev_token == Some(&Token::At))
     {
-        let allocating = prev_token == Some(&Token::At) || k.token_before(q) == Some(&Token::New);
+        // `scan(…)@r` allocates too.
+        let allocating = prev_token == Some(&Token::At) || matches!(k.token_before(q), Some(Token::New | Token::RParen));
         return (region_items(&k, word_start, allocating), word_start, byte);
     }
     // After `is`: patterns. Names a pattern or plan B declares (`is {v}`,
@@ -401,7 +402,8 @@ fn continuation_items(k: &Knowledge, q: usize) -> Vec<CompletionItem> {
         return if on_line(&Token::Or) { Vec::new() } else { vec![keyword("or")] };
     }
     let mut items = Vec::new();
-    if k.token(q) == Some(&Token::RParen) && on_line(&Token::New) && !on_line(&Token::At) {
+    let scans = (line..=q).any(|p| k.ident(p) == Some(vela::ast::SCAN) && k.token(p + 1) == Some(&Token::LParen));
+    if k.token(q) == Some(&Token::RParen) && (on_line(&Token::New) || scans) && !on_line(&Token::At) {
         items.push(keyword("at"));
     }
     if matches!(k.token(line), Some(Token::When | Token::Loop)) && !on_line(&Token::Is) {
@@ -1365,13 +1367,14 @@ fn task_items(k: &Knowledge) -> Vec<CompletionItem> {
             CompletionItem { label, kind: CompletionKind::Task, detail: task.detail.clone(), apply, snippet, boost: GLOBAL }
         })
         .collect();
-    items.extend(BUILTIN_TASKS.iter().map(|name| CompletionItem {
-        label: name.to_string(),
-        kind: CompletionKind::BuiltinFn,
-        detail: "(value: int | float | bool | text | maybe)".to_string(),
-        apply: None,
-        snippet: Some(format!("{}(${{value}})", name)),
-        boost: GLOBAL,
+    items.extend(BUILTIN_TASKS.iter().map(|name| {
+        // `scan` names the region it reads into after its call.
+        let (detail, snippet) = if *name == vela::ast::SCAN {
+            ("(prompt: text) at r -> maybe text@r", format!("{}(${{prompt}}) at ${{region}}", name))
+        } else {
+            ("(value: int | float | bool | text | maybe)", format!("{}(${{value}})", name))
+        };
+        CompletionItem { label: name.to_string(), kind: CompletionKind::BuiltinFn, detail: detail.to_string(), apply: None, snippet: Some(snippet), boost: GLOBAL }
     }));
     items
 }

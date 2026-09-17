@@ -1,0 +1,5 @@
+# error: 4:17: 'scan' takes the prompt it shows, as in 'scan("Name: ") at r', got 0 arguments
+task main()
+    region r
+    bind line = scan() at r
+fi

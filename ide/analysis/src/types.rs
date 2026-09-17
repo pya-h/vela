@@ -264,6 +264,11 @@ impl Checked {
                 }
                 self.block(body, kinds);
             }
+            ExprKind::Scan { args, .. } => {
+                for arg in args {
+                    self.expr(arg, kinds);
+                }
+            }
             // `xs.add(…)` and `xs.del(…)`: the word is a slice's member, as `len` is.
             ExprKind::Edit { items, args, .. } => {
                 if matches!(items.ty, Some(Type::Slice(..))) {

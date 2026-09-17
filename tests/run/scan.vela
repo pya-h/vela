@@ -1,0 +1,60 @@
+# Reading input: `scan(prompt) at r` (or `scan(prompt)@r`) shows the prompt,
+# then reads one line into region `r`, without its line break, and gives a
+# `maybe text@r`: none once the input has ended. Its input is `scan.in`.
+
+shape Person
+    name: text
+    age: int
+fi
+
+# Asks in the caller's region, so it takes the region.
+task ask(r: region, question: text) -> text@r
+    <- scan(question) at r { "no answer" }
+fi
+
+task both(first: maybe text@r, second: maybe text@r)
+    show(first { "-" })
+    show(second { "-" })
+fi
+
+task main()
+    region r
+    bind name = ask(r, "Name? ")
+    show(name)
+    bind person: Person@r = Person { name: name, age: 36 }
+    show(person.name == "Ada")
+
+    # A Windows line break, and a line of nothing.
+    bind windows = scan("")@r { "none" }
+    show(windows == "crlf")
+    match scan("") at r
+        case {line}
+            show(line == "")
+        case none
+            show("ended too early")
+    fi
+
+    # A line longer than any buffer, and one holding a zero byte, which ends it.
+    bind long = scan("") at r { "" }
+    show(long == "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789")
+    show(scan("") at r { "" })
+
+    # A prompt in a region, arguments read left to right, and a line dropped.
+    hold prompt = new [text]() at r
+    prompt.add("Two lines: ")
+    both(scan(prompt[0]) at r, scan("")@r)
+    scan("skipped ")@r
+
+    # Every line left, each in a region freed on its pass.
+    hold count = 0
+    loop true
+        region line_memory
+        bind line = scan("") at line_memory { "" }
+        when line == ""
+            show(count)
+            <-
+        fi
+        show(line)
+        count = count + 1
+    fi
+fi

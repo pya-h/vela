@@ -66,6 +66,10 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
             let (name, doc) = BUILTIN_TYPE_DOCS.iter().find(|(name, _)| *name == text)?;
             (name.to_string(), doc.to_string())
         }
+        (TokenClass::BuiltinFn, _) if text == vela::ast::SCAN => (
+            "task scan(prompt: text) at r -> maybe text@r".to_string(),
+            "Shows the prompt, then reads one line of input into region r (also written scan(prompt)@r), without its line break. Gives none when the input has ended.".to_string(),
+        ),
         (TokenClass::BuiltinFn, _) => (
             format!("task {}(value: int | float | bool | text | maybe)", text),
             "Prints the value followed by a newline; a maybe prints its value or none.".to_string(),

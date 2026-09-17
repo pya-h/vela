@@ -17,6 +17,8 @@
 //!   equal `tests/trap/NAME.out`.
 //! - `examples/NAME.vela` must compile and run, with strict C, and its stdout
 //!   must equal `tests/examples/NAME.out`.
+//! - A program reads `NAME.in` next to its `NAME.out`, if there is one, as its
+//!   standard input; otherwise its input is empty.
 
 // A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
@@ -86,7 +88,8 @@ fn check_run(source: &Path, expected_path: &Path, trap: Option<&str>, scratch: &
     if let Some(failure) = check_strict_c(source, scratch) {
         return Some(failure);
     }
-    let run = match run_with_timeout(&exe) {
+    let input = fs::read(expected_path.with_extension("in")).unwrap_or_default();
+    let run = match run_with_timeout(&exe, input) {
         Some(run) => run,
         None => return Some(format!("{}: still running after {} seconds", name, RUN_TIMEOUT.as_secs())),
     };
@@ -119,10 +122,17 @@ fn check_run(source: &Path, expected_path: &Path, trap: Option<&str>, scratch: &
 /// test instead of hanging the suite.
 const RUN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
-/// Runs `exe`, capturing its output; `None` (after killing it) if it runs too long.
-fn run_with_timeout(exe: &Path) -> Option<std::process::Output> {
+/// Runs `exe` with `input` as its standard input, capturing its output; `None`
+/// (after killing it) if it runs too long.
+fn run_with_timeout(exe: &Path, input: Vec<u8>) -> Option<std::process::Output> {
     use std::process::Stdio;
-    let mut child = Command::new(exe).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let mut child = Command::new(exe).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    // Written on a thread, and closed after, so the program sees the input end;
+    // a program that stops reading early closes the pipe, which isn't an error.
+    let mut stdin = child.stdin.take().unwrap();
+    let writer = std::thread::spawn(move || {
+        let _ = std::io::Write::write_all(&mut stdin, &input);
+    });
     // Read the output on threads, so a program writing a lot doesn't block on a full pipe.
     let mut stdout = child.stdout.take().unwrap();
     let mut stderr = child.stderr.take().unwrap();
@@ -146,6 +156,7 @@ fn run_with_timeout(exe: &Path) -> Option<std::process::Output> {
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
     };
+    writer.join().unwrap();
     Some(std::process::Output { status, stdout: out.join().unwrap(), stderr: err.join().unwrap() })
 }
 

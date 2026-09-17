@@ -1,0 +1,5 @@
+# error: 4:30: 'scan' reads text; reading a value of another type, as in 'scan("Age: ", int)', waits for conversions between types, which Vela doesn't have yet
+task main()
+    region r
+    bind age = scan("Age: ", int) at r
+fi

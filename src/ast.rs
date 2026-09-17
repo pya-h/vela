@@ -88,8 +88,12 @@ pub const BUILTIN_TYPES: &[(&str, Type)] = &[
     ("unit", Type::Unit),
 ];
 
-/// The builtin tasks, which user code calls like its own tasks.
-pub const BUILTIN_TASKS: &[&str] = &["show"];
+/// The builtin tasks, which user code calls like its own tasks (`scan` names
+/// a region after its call, as `new` does).
+pub const BUILTIN_TASKS: &[&str] = &["show", "scan"];
+
+/// The builtin task that reads a line of input: `scan(prompt) at r`.
+pub const SCAN: &str = "scan";
 
 impl fmt::Display for Type {
     /// Formats the type as it is written in Vela source, naming each region
@@ -407,6 +411,15 @@ pub enum ExprKind {
     /// `T or E`: a plain value, `none`, or `fail e`. The node's `ty` is the
     /// type it becomes.
     Wrap(Box<Expr>),
+    /// `scan(prompt) at r` or `scan(prompt)@r`: shows the prompt, and reads a
+    /// line of input into region `r`, giving `none` when the input has ended.
+    /// `args` are as written (the prompt, for a correct call); `region_span`
+    /// is the position of `r`.
+    Scan {
+        args: Vec<Expr>,
+        region: String,
+        region_span: Span,
+    },
     /// `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, or `xs.del()`: a change to the
     /// slice `items` names, a place that holds it. Not a method (Vela has none):
     /// the builtin changes a slice can have. The node's span is the word

@@ -59,7 +59,7 @@ impl CWriter {
 /// checker guarantee is reported as an internal compiler error.
 ///
 /// An expression is normally one C expression. One that contains a plan B
-/// (`x { … }`) or a change to a slice (`xs.del()`) needs statements, so
+/// (`x { … }`), a change to a slice (`xs.del()`), or a `scan` needs statements, so
 /// generating it writes those statements ("the prelude") before the line that
 /// uses its value; see `gen_operands`.
 ///
@@ -328,6 +328,16 @@ impl Generator {
             self.w.line("return item;");
             self.w.close();
         }
+        if used.scans {
+            let maybe = c_type(&Type::Maybe(Box::new(Type::Text(None))));
+            self.w.open(&format!("static {} vela__scan(vela__rt__region* r, const char* prompt)", maybe));
+            self.w.line("const char* line = vela__rt__scan(r, prompt);");
+            self.w.open("if (line == NULL)");
+            self.w.line(&format!("return ({}){{ .has = false }};", maybe));
+            self.w.close();
+            self.w.line(&format!("return ({}){{ .has = true, .value = line }};", maybe));
+            self.w.close();
+        }
         for array in &used.array_fill {
             let Type::Array(items, count) = array else { continue };
             let ctype = c_type(array);
@@ -462,9 +472,12 @@ impl Generator {
 
     fn gen_stmt(&mut self, stmt: &Stmt) -> Result<()> {
         match &stmt.kind {
-            // A change to a slice drops the item `del` gives.
+            // A change to a slice drops the item `del` gives, and a `scan` the line.
             StmtKind::Expr(Expr { kind: ExprKind::Edit { items, op, args }, span, .. }) => {
                 self.gen_edit(*span, items, *op, args, true)?;
+            }
+            StmtKind::Expr(Expr { kind: ExprKind::Scan { args, region, .. }, span, .. }) => {
+                self.gen_scan(*span, args, region, true)?;
             }
             StmtKind::Expr(e) => {
                 let expr = self.gen_expr(e)?;
@@ -936,7 +949,27 @@ impl Generator {
             ExprKind::Wrap(inner) => self.gen_wrap(e, inner),
             ExprKind::PlanB { value, error, body } => self.gen_plan_b(e, value, error.as_ref(), body),
             ExprKind::Edit { items, op, args } => self.gen_edit(e.span, items, *op, args, false),
+            ExprKind::Scan { args, region, .. } => self.gen_scan(e.span, args, region, false),
         }
+    }
+
+    /// `scan(prompt) at region`, at `span`, which it writes as a prelude, so it
+    /// reads in order with the rest of the expression around it: the C
+    /// expression for the `maybe text` it gives, or nothing when it is a
+    /// `statement` of its own.
+    fn gen_scan(&mut self, span: Span, args: &[Expr], region: &str, statement: bool) -> Result<String> {
+        let [prompt] = args else {
+            return Err(Error::internal_at(span, format!("scan with {} arguments", args.len())));
+        };
+        let prompt = self.gen_expr(prompt)?;
+        let call = format!("vela__scan({}, {})", c_ident(region), prompt);
+        if statement {
+            self.w.line(&format!("{};", call));
+            return Ok(String::new());
+        }
+        let line = self.fresh_temp("line");
+        self.w.line(&format!("{} {} = {};", c_type(&Type::Maybe(Box::new(Type::Text(None)))), line, call));
+        Ok(line)
     }
 
     /// `items.add(…)` or `items.del(…)`, at `span`, which it writes as a
@@ -1401,11 +1434,11 @@ fn show_maybe_helper(ty: &Type) -> String {
     format!("vela__show__{}", c_type(ty).trim_start_matches("vela__"))
 }
 
-/// Whether the expression contains a plan B or a change to a slice, so
-/// generating it writes a prelude.
+/// Whether the expression contains a plan B, a change to a slice, or a `scan`,
+/// so generating it writes a prelude.
 fn has_prelude(e: &Expr) -> bool {
     match &e.kind {
-        ExprKind::PlanB { .. } | ExprKind::Edit { .. } => true,
+        ExprKind::PlanB { .. } | ExprKind::Edit { .. } | ExprKind::Scan { .. } => true,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
         | ExprKind::Var(_) => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. }
@@ -1434,6 +1467,8 @@ struct UsedTypes {
     slice_del: Vec<Type>,
     slice_pop: Vec<Type>,
     array_fill: Vec<Type>,
+    /// Whether the program calls `scan`.
+    scans: bool,
 }
 
 /// Adds `ty`, without regions, to `list` unless it is there.
@@ -1458,6 +1493,7 @@ impl UsedTypes {
             slice_del: Vec::new(),
             slice_pop: Vec::new(),
             array_fill: Vec::new(),
+            scans: false,
         };
         for item in items {
             match item {
@@ -1616,6 +1652,12 @@ impl UsedTypes {
                 self.expr(value);
                 self.block(body);
             }
+            ExprKind::Scan { args, .. } => {
+                self.scans = true;
+                // Its `maybe text` has a struct even when it isn't kept.
+                self.add(&Type::Maybe(Box::new(Type::Text(None))));
+                args.iter().for_each(|arg| self.expr(arg));
+            }
             ExprKind::Edit { items, op, args } => {
                 if let Some(slice @ Type::Slice(..)) = &items.ty {
                     let list = match (op, args.len()) {
@@ -1691,6 +1733,8 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         }
         ExprKind::StructInit(_, fields) => fields.iter().any(|field| expr_reads(&field.value, name)),
         ExprKind::PlanB { value, body, .. } => expr_reads(value, name) || block_reads(body, name),
+        // `scan` reads the region it keeps the line in.
+        ExprKind::Scan { args, region, .. } => region == name || args.iter().any(|arg| expr_reads(arg, name)),
         // `add` reads the region it may allocate in.
         ExprKind::Edit { items, op, args } => {
             let region = match &items.ty {

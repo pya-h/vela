@@ -981,6 +981,7 @@ impl Resolver<'_> {
                 self.expr(items)?;
                 args.iter_mut().try_for_each(|e| self.expr(e))
             }
+            ExprKind::Scan { args, .. } => args.iter_mut().try_for_each(|e| self.expr(e)),
         }
     }
 

@@ -129,6 +129,13 @@ describe("VelaAnalysis", () => {
     expect(analysis.hover(source, source.indexOf("add("))?.code).toBe("add(value) or add(index, value)");
   });
 
+  it("describes scan and the line it reads", () => {
+    const source = "task main()\n    region lines\n    bind name = scan(\"Name: \") at lines { \"nobody\" }\n    show(name)\nfi\n";
+    expect(analysis.file(source).diagnostics).toEqual([]);
+    expect(analysis.hover(source, source.indexOf("name ="))?.code).toBe("bind name: text@lines");
+    expect(analysis.hover(source, source.indexOf("scan("))?.code).toBe("task scan(prompt: text) at r -> maybe text@r");
+  });
+
   it("analyzes deeply nested arrays, slices, and parentheses without crashing", () => {
     // The compiler stops at its nesting limit, well inside the module's stack.
     const deep = 20_000;

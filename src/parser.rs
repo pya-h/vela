@@ -1211,6 +1211,9 @@ impl Parser {
                 let name = name.clone();
                 self.advance();
                 let name = self.value_name(name)?;
+                if name == SCAN && self.check(Token::LParen) {
+                    return self.parse_scan(span);
+                }
                 if self.check(Token::LBrace) && self.at_shape_literal() {
                     self.parse_struct_init(name)?
                 } else if self.check(Token::LParen) {
@@ -1223,6 +1226,22 @@ impl Parser {
             _ => return Err(self.unexpected("an expression")),
         };
         Ok(Expr::new(kind, span))
+    }
+
+    /// `scan(prompt) at r` or `scan(prompt)@r`, with the cursor at `(`. (A
+    /// function of its own: `parse_primary`'s frame is on the stack once per
+    /// nesting level.)
+    fn parse_scan(&mut self, span: Span) -> Result<Expr> {
+        let args = self.parse_arg_list()?;
+        if !self.match_token(Token::At) && !self.match_token(Token::AtSign) {
+            return Err(Error::at(
+                self.peek_span(),
+                "'scan' keeps the line it reads in a region, so it names one, as in 'scan(\"Name: \") at r' or 'scan(\"Name: \")@r'",
+            ));
+        }
+        let region_span = self.peek_span();
+        let region = self.expect_ident()?;
+        Ok(Expr::new(ExprKind::Scan { args, region, region_span }, span))
     }
 
     /// `[a, b, c]` or `[value; count]`, on one line.

@@ -1,0 +1,26 @@
+# Notes read from input: `scan` shows a prompt and reads a line into a region,
+# giving none once the input ends. The notes are kept in a slice that grows,
+# and shown back last first. Run it and type a few lines (an empty line or
+# Ctrl-D ends them), or give it a file: `./journal < notes.txt`.
+
+task read_notes(r: region) -> [text]@r
+    hold notes = new [text]() at r
+    loop scan("note> ") at r is {line}
+        when line == ""
+            <- notes
+        fi
+        notes.add(line)
+    fi
+    <- notes
+fi
+
+task main()
+    region kept
+    bind name = scan("Your name: ") at kept { "stranger" }
+    show(name)
+    hold notes = read_notes(kept)
+    show(notes.len)
+    loop notes.len > 0
+        show(notes.del())
+    fi
+fi

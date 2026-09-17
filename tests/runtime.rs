@@ -5,7 +5,8 @@
 //! - Programs must be free of undefined behavior, and free all their memory:
 //!   where the C compiler supports AddressSanitizer and UndefinedBehaviorSanitizer,
 //!   the runtime tests and every `tests/run` and `examples` program run under
-//!   them (with leak checks on Linux), and must print their expected output.
+//!   them (with leak checks on Linux), and must print their expected output
+//!   (reading `NAME.in`, if there is one, as their input).
 //!   Each `tests/trap` program must stop with its message and no sanitizer
 //!   report, so nothing undefined happens before an integer check stops it.
 
@@ -71,13 +72,27 @@ fn compile_c(source: &Path, exe: &Path, flags: &[&str]) -> Result<(), String> {
     if output.status.success() { Ok(()) } else { Err(String::from_utf8_lossy(&output.stderr).into_owned()) }
 }
 
-/// Runs `exe` with the sanitizers' options, returning its output.
+/// Runs `exe` with the sanitizers' options, returning its output. Its input is
+/// empty.
 fn run(exe: &Path) -> std::process::Output {
+    run_with_input(exe, Vec::new())
+}
+
+/// `run`, with `input` as the program's standard input.
+fn run_with_input(exe: &Path, input: Vec<u8>) -> std::process::Output {
+    use std::process::Stdio;
     let mut command = Command::new(exe);
     // Leak checking is part of AddressSanitizer only on Linux.
     let leaks = if cfg!(target_os = "linux") { "detect_leaks=1" } else { "detect_leaks=0" };
     command.env("ASAN_OPTIONS", format!("{}:abort_on_error=0", leaks));
-    command.output().unwrap()
+    let mut child = command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let writer = std::thread::spawn(move || {
+        let _ = std::io::Write::write_all(&mut stdin, &input);
+    });
+    let output = child.wait_with_output().unwrap();
+    writer.join().unwrap();
+    output
 }
 
 /// Whether the C compiler can build and run a sanitized program here.
@@ -170,7 +185,7 @@ fn check_sanitized(source: &Path, expected: &Path, name: &str, trap: Option<&str
     if let Err(errors) = compile_c(&c_path, &exe, SANITIZER_FLAGS) {
         return Some(format!("{}: {}", name, errors));
     }
-    let output = run(&exe);
+    let output = run_with_input(&exe, fs::read(expected.with_extension("in")).unwrap_or_default());
     let stderr = String::from_utf8_lossy(&output.stderr);
     match trap {
         None if !output.status.success() => return Some(format!("{}:\n{}", name, stderr)),

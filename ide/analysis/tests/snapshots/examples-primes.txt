@@ -1,0 +1,96 @@
+  2 | task is_prime(n: int) -> bool
+    | keyword:task  task:is_prime  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
+  3 |     each i in 2..(n/2 + 1)
+    | keyword:each  variable:i  keyword:in  number:2  operator:..  punctuation:(  parameter:n  operator:/  number:2  operator:+  number:1  punctuation:)
+  4 |         when n % i == 0
+    | keyword:when  parameter:n  operator:%  variable:i  operator:==  number:0
+  5 |             <- false
+    | keyword:<-  keyword:false
+  6 |         fi
+    | keyword:fi
+  7 |     fi
+    | keyword:fi
+  8 |     <- true
+    | keyword:<-  keyword:true
+  9 | fi
+    | keyword:fi
+ 11 | task primes_below_no_add(r: region, limit: int) -> [int]@r
+    | keyword:task  task:primes_below_no_add  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
+ 12 |     bind primes: [int]@r = new [int]([0;limit]) at r  #  soon add and remove methods will be added to the slice
+    | keyword:bind  variable:primes  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:;  parameter:limit  punctuation:]  punctuation:)  keyword:at  region:r  comment:#  soon add and remove methods will be added to the slice
+ 13 |     hold idx = 0
+    | keyword:hold  variable:idx  operator:=  number:0
+ 15 |     each i in 2..limit
+    | keyword:each  variable:i  keyword:in  number:2  operator:..  parameter:limit
+ 16 |         when is_prime(i)
+    | keyword:when  task:is_prime  punctuation:(  variable:i  punctuation:)
+ 17 |             primes[idx] = i
+    | variable:primes  punctuation:[  variable:idx  punctuation:]  operator:=  variable:i
+ 18 |             idx = idx + 1
+    | variable:idx  operator:=  variable:idx  operator:+  number:1
+ 19 |         fi
+    | keyword:fi
+ 20 |     fi
+    | keyword:fi
+ 21 |     <- (primes[0..idx])
+    | keyword:<-  punctuation:(  variable:primes  punctuation:[  number:0  operator:..  variable:idx  punctuation:]  punctuation:)
+ 22 | fi
+    | keyword:fi
+ 24 | task primes_below(r: region, limit: int) -> [int]@r
+    | keyword:task  task:primes_below  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
+ 25 |     hold results: [int]@r = new [int]() at r
+    | keyword:hold  variable:results  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 27 |     each i in 2..limit
+    | keyword:each  variable:i  keyword:in  number:2  operator:..  parameter:limit
+ 28 |         when is_prime(i)
+    | keyword:when  task:is_prime  punctuation:(  variable:i  punctuation:)
+ 29 |             results.add(i)
+    | variable:results  punctuation:.  field:add  punctuation:(  variable:i  punctuation:)
+ 30 |         fi
+    | keyword:fi
+ 31 |     fi
+    | keyword:fi
+ 32 |     <- results
+    | keyword:<-  variable:results
+ 33 | fi
+    | keyword:fi
+ 35 | priv task main()
+    | keyword:priv  keyword:task  task:main  punctuation:(  punctuation:)
+ 36 |     region r
+    | keyword:region  region:r
+ 37 |     bind primes_limit = 50
+    | keyword:bind  variable:primes_limit  operator:=  number:50
+ 38 |     bind results = primes_below(r, primes_limit)
+    | keyword:bind  variable:results  operator:=  task:primes_below  punctuation:(  region:r  punctuation:,  variable:primes_limit  punctuation:)
+ 39 |     show("Found: ")
+    | builtin-fn:show  punctuation:(  string:"Found: "  punctuation:)
+ 40 |     show(results.len)
+    | builtin-fn:show  punctuation:(  variable:results  punctuation:.  field:len  punctuation:)
+ 41 |     show("-----------------------")
+    | builtin-fn:show  punctuation:(  string:"-----------------------"  punctuation:)
+ 42 |     each x in results
+    | keyword:each  variable:x  keyword:in  variable:results
+ 43 |         show(x)
+    | builtin-fn:show  punctuation:(  variable:x  punctuation:)
+ 44 |     fi
+    | keyword:fi
+ 45 |     show("-----------------------")
+    | builtin-fn:show  punctuation:(  string:"-----------------------"  punctuation:)
+ 47 |     hold x = results
+    | keyword:hold  variable:x  operator:=  variable:results
+ 48 |     loop x.len > 0
+    | keyword:loop  variable:x  punctuation:.  field:len  operator:>  number:0
+ 49 |         show(x.del())        
+    | builtin-fn:show  punctuation:(  variable:x  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)
+ 50 |     fi
+    | keyword:fi
+ 51 |     show("-----------------------")
+    | builtin-fn:show  punctuation:(  string:"-----------------------"  punctuation:)
+ 52 |     show(results.len) # slice was copied, not referenced.
+    | builtin-fn:show  punctuation:(  variable:results  punctuation:.  field:len  punctuation:)  comment:# slice was copied, not referenced.
+ 53 |     show(x.len)
+    | builtin-fn:show  punctuation:(  variable:x  punctuation:.  field:len  punctuation:)
+ 54 |     # show(x.del())  # throws del on empty slice
+    | comment:# show(x.del())  # throws del on empty slice
+ 55 | fi
+    | keyword:fi

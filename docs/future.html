@@ -313,7 +313,7 @@
         </div>
         <div class="card">
           <h3>No standard library <span class="badge b-high">High</span></h3>
-          <p>Only <code>show</code> exists. No text operations, files, networking, or math utilities.</p>
+          <p>Only <code>show</code> and <code>scan</code> (which reads a line of input) exist. No text operations, conversions, files, networking, or math utilities.</p>
         </div>
         <div class="card">
           <h3>No module system <span class="badge b-done">Done</span></h3>
@@ -1488,7 +1488,7 @@ show(p.length_squared())</pre>
 
       <h3 id="conversions">Type conversions (casting)</h3>
       <p>
-        Every conversion between types is missing today, and reading input makes it pressing: <code>scan</code> will read
+        Every conversion between types is missing today, and reading input makes it pressing: <code>scan</code> reads
         text, and a program asking for a number has no way to turn <code>"42"</code> into <code>42</code>. (The typed form
         <code>scan("Age: ", int)</code> waits for this.) The syntax is to be chosen; the questions each spelling must answer are
         the same:
@@ -1561,8 +1561,8 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
               (done: <a href="vela.html#results">Several Results</a>, <a href="vela.html#named-results">Named Results</a>)</li>
             <li><s>Defined integer overflow and division by zero</s> (done: <a href="vela.html#int-limits">they stop the program with a message</a>)</li>
             <li><s>Fixed-size arrays and slices, which grow and shrink</s> (done: <a href="vela.html#arrays">arrays</a> and <a href="vela.html#slices">slices</a>), and a real <code>text</code> type</li>
-            <li><s>Text in regions</s> (done: <a href="vela.html#text-in-regions"><code>text@r</code></a>), then reading input
-              (<code>scan</code>), copies into another region (<code>.copy()</code>), and <a href="#conversions">type conversions</a></li>
+            <li><s>Text in regions</s> (done: <a href="vela.html#text-in-regions"><code>text@r</code></a>), <s>reading input</s>
+              (done: <a href="vela.html#input"><code>scan</code></a>), then copies into another region (<code>.copy()</code>), and <a href="#conversions">type conversions</a></li>
             <li>Small region improvements: result-only regions, typed patterns, a lint for regions that grow in loops, and a
               chunk cache (<a href="regions.html#ideas">ideas</a>)</li>
             <li>Move-only owned pointers, on top of regions</li>

@@ -1,0 +1,7 @@
+# error: 2:6: 'scan' is a builtin task and cannot be redefined
+task scan(prompt: text) -> text
+    <- prompt
+fi
+
+task main()
+fi

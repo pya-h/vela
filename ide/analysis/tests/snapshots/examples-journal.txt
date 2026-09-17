@@ -1,0 +1,48 @@
+  1 | # Notes read from input: `scan` shows a prompt and reads a line into a region,
+    | comment:# Notes read from input: `scan` shows a prompt and reads a line into a region,
+  2 | # giving none once the input ends. The notes are kept in a slice that grows,
+    | comment:# giving none once the input ends. The notes are kept in a slice that grows,
+  3 | # and shown back last first. Run it and type a few lines (an empty line or
+    | comment:# and shown back last first. Run it and type a few lines (an empty line or
+  4 | # Ctrl-D ends them), or give it a file: `./journal < notes.txt`.
+    | comment:# Ctrl-D ends them), or give it a file: `./journal < notes.txt`.
+  6 | task read_notes(r: region) -> [text]@r
+    | keyword:task  task:read_notes  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r
+  7 |     hold notes = new [text]() at r
+    | keyword:hold  variable:notes  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+  8 |     loop scan("note> ") at r is {line}
+    | keyword:loop  builtin-fn:scan  punctuation:(  string:"note> "  punctuation:)  keyword:at  region:r  keyword:is  punctuation:{  variable:line  punctuation:}
+  9 |         when line == ""
+    | keyword:when  variable:line  operator:==  string:""
+ 10 |             <- notes
+    | keyword:<-  variable:notes
+ 11 |         fi
+    | keyword:fi
+ 12 |         notes.add(line)
+    | variable:notes  punctuation:.  field:add  punctuation:(  variable:line  punctuation:)
+ 13 |     fi
+    | keyword:fi
+ 14 |     <- notes
+    | keyword:<-  variable:notes
+ 15 | fi
+    | keyword:fi
+ 17 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 18 |     region kept
+    | keyword:region  region:kept
+ 19 |     bind name = scan("Your name: ") at kept { "stranger" }
+    | keyword:bind  variable:name  operator:=  builtin-fn:scan  punctuation:(  string:"Your name: "  punctuation:)  keyword:at  region:kept  punctuation:{  string:"stranger"  punctuation:}
+ 20 |     show(name)
+    | builtin-fn:show  punctuation:(  variable:name  punctuation:)
+ 21 |     hold notes = read_notes(kept)
+    | keyword:hold  variable:notes  operator:=  task:read_notes  punctuation:(  region:kept  punctuation:)
+ 22 |     show(notes.len)
+    | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  field:len  punctuation:)
+ 23 |     loop notes.len > 0
+    | keyword:loop  variable:notes  punctuation:.  field:len  operator:>  number:0
+ 24 |         show(notes.del())
+    | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)
+ 25 |     fi
+    | keyword:fi
+ 26 | fi
+    | keyword:fi

@@ -988,12 +988,12 @@ impl Checker {
                     return err(e.span, format!("'fail {0}' names the error only on the first line of a plan B; to send an error, write '<- fail {0}'", name));
                 }
                 self.check_expr(e)?;
-                // Of all expressions, only a call or a change to a slice can
-                // have an effect, and so can a plan B on a call, or one that
-                // gives no value.
+                // Of all expressions, only a call, a change to a slice, or a
+                // `scan` can have an effect, and so can a plan B on a call, or
+                // one that gives no value.
                 match &e.kind {
                     ExprKind::Call(name, _) if matches!(e.ty, Some(Type::Or(..))) => err(e.span, ignored_error(name)),
-                    ExprKind::Call(..) | ExprKind::Edit { .. } => Ok(()),
+                    ExprKind::Call(..) | ExprKind::Edit { .. } | ExprKind::Scan { .. } => Ok(()),
                     ExprKind::PlanB { value, .. } if e.ty == Some(Type::Unit) || matches!(value.kind, ExprKind::Call(..)) => Ok(()),
                     ExprKind::Binary(BinaryOp::Eq, ..) => err(e.span, "the result of '==' is unused; use '=' to assign"),
                     _ => err(e.span, "this value is unused; only a task call can be used as a statement"),
@@ -1748,6 +1748,7 @@ impl Checker {
             }
             ExprKind::PlanB { value, error, body } => self.check_plan_b(span, value, error.as_ref(), body),
             ExprKind::Edit { items, op, args } => self.check_edit(span, items, *op, args),
+            ExprKind::Scan { args, region, region_span } => self.check_scan(span, args, region, *region_span),
             // Only the checker creates `Wrap`, with its type already set.
             ExprKind::Wrap(_) => expr.ty.clone().ok_or_else(|| Error::internal_at(span, "a wrapped value has no type")),
         }
@@ -1975,6 +1976,29 @@ impl Checker {
             },
             _ => Err(Error::internal_at(span, format!("a slice of type {} added to has no region", ty))),
         }
+    }
+
+    /// Checks `scan(prompt) at region`, at `span`, and returns its type: a
+    /// `maybe text` in the region, which is `none` when the input has ended.
+    fn check_scan(&mut self, span: Span, args: &mut [Expr], region: &str, region_span: Span) -> Result<Type> {
+        let prompt = match args {
+            [prompt] => prompt,
+            [_, ty] if matches!(&ty.kind, ExprKind::Var(name) if Type::builtin(name).is_some()) => {
+                return err(
+                    ty.span,
+                    "'scan' reads text; reading a value of another type, as in 'scan(\"Age: \", int)', waits for conversions between types, which Vela doesn't have yet",
+                );
+            }
+            _ => {
+                return err(span, format!("'scan' takes the prompt it shows, as in 'scan(\"Name: \") at r', got {}", count(args.len(), "argument")));
+            }
+        };
+        let ty = self.check_expr(prompt)?;
+        if !matches!(ty, Type::Text(_)) {
+            return err(prompt.span, format!("'scan' shows a text prompt, as in 'scan(\"Name: \") at r', but this value is {}{}", ty, extract_hint(&[&ty])));
+        }
+        self.visible_region(region, region_span, true)?;
+        Ok(Type::Maybe(Box::new(Type::Text(Some(region.to_string())))))
     }
 
     /// Checks the value of `new [T](value) at r`, which gives the slice its

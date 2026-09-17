@@ -1,0 +1,5 @@
+# error: 4:26: 'scan' keeps the line it reads in a region, so it names one, as in 'scan("Name: ") at r' or 'scan("Name: ")@r'
+task main()
+    region r
+    bind line = scan("") in r
+fi

@@ -1,0 +1,104 @@
+  1 | # Reading input: `scan(prompt) at r` (or `scan(prompt)@r`) shows the prompt,
+    | comment:# Reading input: `scan(prompt) at r` (or `scan(prompt)@r`) shows the prompt,
+  2 | # then reads one line into region `r`, without its line break, and gives a
+    | comment:# then reads one line into region `r`, without its line break, and gives a
+  3 | # `maybe text@r`: none once the input has ended. Its input is `scan.in`.
+    | comment:# `maybe text@r`: none once the input has ended. Its input is `scan.in`.
+  5 | shape Person
+    | keyword:shape  type:Person
+  6 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  7 |     age: int
+    | field:age  punctuation::  type-builtin:int
+  8 | fi
+    | keyword:fi
+ 10 | # Asks in the caller's region, so it takes the region.
+    | comment:# Asks in the caller's region, so it takes the region.
+ 11 | task ask(r: region, question: text) -> text@r
+    | keyword:task  task:ask  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:question  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 12 |     <- scan(question) at r { "no answer" }
+    | keyword:<-  builtin-fn:scan  punctuation:(  parameter:question  punctuation:)  keyword:at  region:r  punctuation:{  string:"no answer"  punctuation:}
+ 13 | fi
+    | keyword:fi
+ 15 | task both(first: maybe text@r, second: maybe text@r)
+    | keyword:task  task:both  punctuation:(  parameter:first  punctuation::  keyword:maybe  type-builtin:text  operator:@  region:r  punctuation:,  parameter:second  punctuation::  keyword:maybe  type-builtin:text  operator:@  region:r  punctuation:)
+ 16 |     show(first { "-" })
+    | builtin-fn:show  punctuation:(  parameter:first  punctuation:{  string:"-"  punctuation:}  punctuation:)
+ 17 |     show(second { "-" })
+    | builtin-fn:show  punctuation:(  parameter:second  punctuation:{  string:"-"  punctuation:}  punctuation:)
+ 18 | fi
+    | keyword:fi
+ 20 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 21 |     region r
+    | keyword:region  region:r
+ 22 |     bind name = ask(r, "Name? ")
+    | keyword:bind  variable:name  operator:=  task:ask  punctuation:(  region:r  punctuation:,  string:"Name? "  punctuation:)
+ 23 |     show(name)
+    | builtin-fn:show  punctuation:(  variable:name  punctuation:)
+ 24 |     bind person: Person@r = Person { name: name, age: 36 }
+    | keyword:bind  variable:person  punctuation::  type:Person  operator:@  region:r  operator:=  type:Person  punctuation:{  field:name  punctuation::  variable:name  punctuation:,  field:age  punctuation::  number:36  punctuation:}
+ 25 |     show(person.name == "Ada")
+    | builtin-fn:show  punctuation:(  variable:person  punctuation:.  field:name  operator:==  string:"Ada"  punctuation:)
+ 27 |     # A Windows line break, and a line of nothing.
+    | comment:# A Windows line break, and a line of nothing.
+ 28 |     bind windows = scan("")@r { "none" }
+    | keyword:bind  variable:windows  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  operator:@  region:r  punctuation:{  string:"none"  punctuation:}
+ 29 |     show(windows == "crlf")
+    | builtin-fn:show  punctuation:(  variable:windows  operator:==  string:"crlf"  punctuation:)
+ 30 |     match scan("") at r
+    | keyword:match  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r
+ 31 |         case {line}
+    | keyword:case  punctuation:{  variable:line  punctuation:}
+ 32 |             show(line == "")
+    | builtin-fn:show  punctuation:(  variable:line  operator:==  string:""  punctuation:)
+ 33 |         case none
+    | keyword:case  keyword:none
+ 34 |             show("ended too early")
+    | builtin-fn:show  punctuation:(  string:"ended too early"  punctuation:)
+ 35 |     fi
+    | keyword:fi
+ 37 |     # A line longer than any buffer, and one holding a zero byte, which ends it.
+    | comment:# A line longer than any buffer, and one holding a zero byte, which ends it.
+ 38 |     bind long = scan("") at r { "" }
+    | keyword:bind  variable:long  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r  punctuation:{  string:""  punctuation:}
+ 39 |     show(long == "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789")
+    | builtin-fn:show  punctuation:(  variable:long  operator:==  string:"0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"  punctuation:)
+ 40 |     show(scan("") at r { "" })
+    | builtin-fn:show  punctuation:(  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r  punctuation:{  string:""  punctuation:}  punctuation:)
+ 42 |     # A prompt in a region, arguments read left to right, and a line dropped.
+    | comment:# A prompt in a region, arguments read left to right, and a line dropped.
+ 43 |     hold prompt = new [text]() at r
+    | keyword:hold  variable:prompt  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 44 |     prompt.add("Two lines: ")
+    | variable:prompt  punctuation:.  field:add  punctuation:(  string:"Two lines: "  punctuation:)
+ 45 |     both(scan(prompt[0]) at r, scan("")@r)
+    | task:both  punctuation:(  builtin-fn:scan  punctuation:(  variable:prompt  punctuation:[  number:0  punctuation:]  punctuation:)  keyword:at  region:r  punctuation:,  builtin-fn:scan  punctuation:(  string:""  punctuation:)  operator:@  region:r  punctuation:)
+ 46 |     scan("skipped ")@r
+    | builtin-fn:scan  punctuation:(  string:"skipped "  punctuation:)  operator:@  region:r
+ 48 |     # Every line left, each in a region freed on its pass.
+    | comment:# Every line left, each in a region freed on its pass.
+ 49 |     hold count = 0
+    | keyword:hold  variable:count  operator:=  number:0
+ 50 |     loop true
+    | keyword:loop  keyword:true
+ 51 |         region line_memory
+    | keyword:region  region:line_memory
+ 52 |         bind line = scan("") at line_memory { "" }
+    | keyword:bind  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:line_memory  punctuation:{  string:""  punctuation:}
+ 53 |         when line == ""
+    | keyword:when  variable:line  operator:==  string:""
+ 54 |             show(count)
+    | builtin-fn:show  punctuation:(  variable:count  punctuation:)
+ 55 |             <-
+    | keyword:<-
+ 56 |         fi
+    | keyword:fi
+ 57 |         show(line)
+    | builtin-fn:show  punctuation:(  variable:line  punctuation:)
+ 58 |         count = count + 1
+    | variable:count  operator:=  variable:count  operator:+  number:1
+ 59 |     fi
+    | keyword:fi
+ 60 | fi
+    | keyword:fi

@@ -1,0 +1,5 @@
+# error: 4:25: expected type text@r, got maybe text@r; extract its value first, as in 'x { … }' or 'when x is {value}'
+task main()
+    region r
+    bind line: text@r = scan("") at r
+fi
