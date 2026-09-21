@@ -1,6 +1,7 @@
-//! Generic tasks in the editor: the types a task takes, the words that say what
-//! they must allow, the types a call gives, and what each of them hovers,
-//! colors, and completes as. In the sources below, `@@` marks the cursor.
+//! Generic tasks and shapes in the editor: the types a declaration takes, the
+//! words that say what they must allow, the types a use gives, and what each of
+//! them hovers, colors, and completes as. In the sources below, `@@` marks the
+//! cursor.
 
 // A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
@@ -180,4 +181,145 @@ fi
     let diagnostics = Analysis::new(source).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert!(diagnostic.message.contains("already means 'fixed'"), "{}", diagnostic.message);
+}
+
+const SHAPES: &str = "\
+shape Box<T: fixed>
+    value: T
+fi
+
+shape Pair<A: fixed, B: fixed>
+    left: A
+    right: B
+fi
+
+task valueOf<T: fixed>(b: Box<T>@r) -> T
+    <- b.value
+fi
+
+task main()
+    region r
+    bind kept: Box<text>@r = Box { value: \"ada\".copy() at r }
+    bind count = Box<int> { value: 2 }
+    bind pair: Pair<int, text> = Pair { left: 1, right: \"one\" }
+    show(valueOf(count))
+    show(kept.value)
+    show(pair.right)
+    @@
+fi
+";
+
+fn shapes(code: &str) -> String {
+    SHAPES.replace("    @@\n", &format!("    {}\n", code))
+}
+
+#[test]
+fn the_shapes_program_used_by_these_tests_compiles() {
+    assert_eq!(Analysis::new(&shapes("show(1)")).diagnostics(), Vec::new());
+}
+
+#[test]
+fn a_value_of_a_shape_given_types_hovers_as_the_program_writes_it() {
+    let source = shapes("show(1)");
+    // The shape the compiler makes for the types is never shown: the type reads
+    // as it is written.
+    assert_eq!(hover(&source, "kept:").0, "bind kept: Box<text>@r");
+    assert_eq!(hover(&source, "count =").0, "bind count: Box<int>");
+    assert_eq!(hover(&source, "pair:").0, "bind pair: Pair<int, text>");
+    let (code, doc) = hover(&source, "Box<text>@r");
+    assert_eq!(code, "shape Box<T: fixed>\n    value: T\nfi");
+    assert_eq!(doc, "");
+    let (_, doc) = hover(&source, "T: fixed");
+    assert!(doc.starts_with("A type shape Box takes"), "{}", doc);
+}
+
+#[test]
+fn a_shape_and_the_types_it_takes_are_outlined_together() {
+    let outline = Analysis::new(&shapes("show(1)")).outline();
+    let box_shape = outline.first().expect("the first shape");
+    assert_eq!((box_shape.name.as_str(), box_shape.kind, box_shape.detail.as_str()), ("Box", SymbolKind::Shape, "<T: fixed>"));
+    let members: Vec<(&str, SymbolKind, &str)> = box_shape.children.iter().map(|c| (c.name.as_str(), c.kind, c.detail.as_str())).collect();
+    assert_eq!(members, [("T", SymbolKind::TypeParam, "fixed"), ("value", SymbolKind::Field, "T")]);
+}
+
+#[test]
+fn the_types_a_shape_is_given_are_colored_as_types() {
+    let source = shapes("show(1)");
+    let analysis = Analysis::new(&source);
+    let class_at = |needle: &str| {
+        let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
+        analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
+    };
+    // In a written type, in a literal, and in the header of the shape itself.
+    assert_eq!(class_at("text>@r"), Some(TokenClass::TypeBuiltin));
+    assert_eq!(class_at("int> { value: 2 }"), Some(TokenClass::TypeBuiltin));
+    assert_eq!(class_at("T: fixed"), Some(TokenClass::Type));
+    assert_eq!(class_at("fixed>"), Some(TokenClass::Keyword));
+    assert_eq!(class_at("Box<text>"), Some(TokenClass::Type));
+}
+
+#[test]
+fn completion_offers_types_where_a_shape_is_given_them() {
+    let types = ["int", "float", "bool", "text", "Box", "Pair", "maybe"];
+    // In a written type, and in a literal.
+    assert_eq!(labels(&shapes("bind other: Box<@@> = count")), types);
+    assert_eq!(labels(&shapes("bind other = Box<@@> { value: 1 }")), types);
+    // A type the shape takes is a type inside its own fields.
+    assert_eq!(labels("shape Box<T>\n    value: @@\nfi\n"), ["int", "float", "bool", "text", "T", "Box", "maybe"]);
+    // The words a type can be asked to allow, and nothing where a name is
+    // being declared.
+    assert_eq!(labels("shape Box<T: @@>\n    value: T\nfi\n"), ["fixed", "same", "shown", "ordered"]);
+    assert!(labels("shape Box<@@>\n    value: int\nfi\n").is_empty());
+}
+
+#[test]
+fn a_shape_used_without_the_types_it_takes_is_reported() {
+    let diagnostics = Analysis::new(&shapes("bind plain: Box = count")).diagnostics();
+    let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
+    assert_eq!(diagnostic.message, "shape 'Box' takes 1 type, so name it, as in 'Box<T>'");
+}
+
+#[test]
+fn a_literal_whose_types_nothing_names_is_reported() {
+    let diagnostics = Analysis::new(&shapes("bind empty = Box { value: none }")).diagnostics();
+    let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
+    assert!(diagnostic.message.starts_with("can't tell which type 'T' is for this 'Box'"), "{}", diagnostic.message);
+}
+
+#[test]
+fn a_shape_made_for_its_types_is_named_as_written_from_a_plain_header() {
+    // A declaration that takes no types of its own may name a shape given a
+    // set of them, and one given types may be given to another. The editor
+    // names both as the program writes them, never as the shape made for them.
+    let source = "\
+shape Box<T: fixed>
+    value: T
+fi
+
+shape Pair<A: fixed, B: fixed>
+    left: A
+    right: B
+fi
+
+task textOf(b: Box<text>@r) -> text@r
+    <- b.value
+fi
+
+task leftText(p: Pair<Box<text>, int>@r) -> text@r
+    <- p.left.value
+fi
+
+task main()
+    region r
+    bind kept: Box<text>@r = Box { value: \"ada\".copy() at r }
+    bind paired: Pair<Box<text>, int>@r = Pair { left: kept, right: 1 }
+    show(textOf(kept))
+    show(leftText(paired))
+fi
+";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_eq!(hover(source, "b: Box<text>@r").0, "b: Box<text>@r");
+    assert_eq!(hover(source, "paired:").0, "bind paired: Pair<Box<text>, int>@r");
+    assert_eq!(hover(source, "textOf(b").0, "task textOf(b: Box<text>@r) -> text@r");
+    assert_eq!(hover(source, "leftText(p").0, "task leftText(p: Pair<Box<text>, int>@r) -> text@r");
 }

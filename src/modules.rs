@@ -688,9 +688,11 @@ impl Resolver<'_> {
             }
             Item::Shape(s) => {
                 s.name = self.own_full(&s.name);
+                self.enter_type_params(&s.types, "shape", &s.name)?;
                 for field in &mut s.fields {
                     field.ty = self.ty(&field.ty, field.ty_span)?;
                 }
+                self.params.clear();
                 Ok(())
             }
             Item::Kind(k) => {
@@ -896,6 +898,17 @@ impl Resolver<'_> {
             // A type the declaration takes, not a shape or kind (see
             // `enter_type_params`).
             Type::Named(name, _) if self.params.contains(name) => ty.clone(),
+            Type::Applied(applied) => {
+                let at = self
+                    .type_places
+                    .get(&span.place_key())
+                    .and_then(|parts| parts.iter().find(|(part, _)| *part == applied.name))
+                    .map_or(span, |(_, at)| *at);
+                let mut name = applied.name.clone();
+                self.rename(&mut name, at, &[What::Shape, What::Kind])?;
+                let types = applied.types.iter().map(|ty| self.ty(ty, span)).collect::<Result<_>>()?;
+                Type::Applied(Box::new(Applied { name, types, region: applied.region.clone() }))
+            }
             Type::Named(name, region) => {
                 let at = self
                     .type_places
@@ -999,8 +1012,12 @@ impl Resolver<'_> {
                 }
                 args.iter_mut().try_for_each(|e| self.expr(e))
             }
-            ExprKind::StructInit(name, fields) => {
+            ExprKind::StructInit { name, types, fields } => {
                 self.rename(name, span, &[What::Shape, What::Kind])?;
+                // The types a literal names are written types too.
+                for (ty, at) in types.iter_mut() {
+                    *ty = self.ty(&ty.clone(), *at)?;
+                }
                 fields.iter_mut().try_for_each(|field| self.expr(&mut field.value))
             }
             ExprKind::Construct { args, .. } => args.iter_mut().try_for_each(|e| self.expr(e)),

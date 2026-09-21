@@ -105,9 +105,13 @@ impl Generator {
                 Item::Kind(k) => {
                     self.kinds.insert(k.name.clone(), k.clone());
                 }
-                Item::Shape(s) => {
+                // A shape that takes types generates nothing: the shape made
+                // for each set of types it is given is generated in its place
+                // (see the checker's `shape_instance`).
+                Item::Shape(s) if s.types.is_empty() => {
                     self.shapes.insert(s.name.clone(), s.clone());
                 }
+                Item::Shape(_) => {}
                 Item::Task(_) => {}
             }
         }
@@ -1217,7 +1221,7 @@ impl Generator {
             ExprKind::Construct { kind, tag, args } => self.gen_construct(e, kind, tag, args),
             ExprKind::New { ty, value, region, .. } => self.gen_new(e, ty, value, region),
             ExprKind::Deref(inner) => self.gen_expr(inner).map(|expr| format!("(*({}))", expr)),
-            ExprKind::StructInit(name, fields) => self.gen_struct_init(name, fields),
+            ExprKind::StructInit { name, fields, .. } => self.gen_struct_init(name, fields),
             ExprKind::Range(_, _) => Err(Error::internal_at(e.span, "range outside 'each' reached code generation")),
             // The error value itself; `Wrap` makes it part of a `T or E`.
             ExprKind::Fail(error) => self.gen_expr(error),
@@ -1791,7 +1795,7 @@ fn has_prelude(e: &Expr) -> bool {
             has_prelude(a) || has_prelude(b)
         }
         ExprKind::Call { args, .. } | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => args.iter().any(has_prelude),
-        ExprKind::StructInit(_, fields) => fields.iter().any(|field| has_prelude(&field.value)),
+        ExprKind::StructInit { fields, .. } => fields.iter().any(|field| has_prelude(&field.value)),
     }
 }
 
@@ -1847,7 +1851,10 @@ impl UsedTypes {
         };
         for item in items {
             match item {
-                Item::Shape(s) => s.fields.iter().for_each(|f| used.add(&f.ty)),
+                // The fields of a shape that takes types hold `T`, which no C
+                // type answers; the shapes made from it hold the types given.
+                Item::Shape(s) if s.types.is_empty() => s.fields.iter().for_each(|f| used.add(&f.ty)),
+                Item::Shape(_) => {}
                 Item::Kind(k) => k.variants.iter().flat_map(|v| &v.payload).for_each(|f| used.add(&f.ty)),
                 // A generic task's own types hold `T`, which no C type
                 // answers; the tasks made from it hold the types it is given.
@@ -2026,7 +2033,7 @@ impl UsedTypes {
                 args.iter().for_each(|arg| self.expr(arg));
             }
             ExprKind::Construct { args, .. } => args.iter().for_each(|arg| self.expr(arg)),
-            ExprKind::StructInit(_, fields) => fields.iter().for_each(|field| self.expr(&field.value)),
+            ExprKind::StructInit { fields, .. } => fields.iter().for_each(|field| self.expr(&field.value)),
             ExprKind::PlanB { value, body, .. } => {
                 self.expr(value);
                 self.block(body);
@@ -2122,7 +2129,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::Call { args, .. } | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => {
             args.iter().any(|arg| expr_reads(arg, name))
         }
-        ExprKind::StructInit(_, fields) => fields.iter().any(|field| expr_reads(&field.value, name)),
+        ExprKind::StructInit { fields, .. } => fields.iter().any(|field| expr_reads(&field.value, name)),
         ExprKind::PlanB { value, body, .. } => expr_reads(value, name) || block_reads(body, name),
         // `scan` reads the region it keeps the line in.
         ExprKind::Scan { args, region, .. } => region == name || args.iter().any(|arg| expr_reads(arg, name)),
@@ -2141,6 +2148,8 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
 
 fn type_name(item: &Item) -> Option<&str> {
     match item {
+        // A shape that takes types is not a C type: see `generate`.
+        Item::Shape(s) if !s.types.is_empty() => None,
         Item::Shape(s) => Some(&s.name),
         Item::Kind(k) => Some(&k.name),
         Item::Task(_) => None,
@@ -2334,8 +2343,10 @@ const C_RESERVED: &[&str] = &[
 fn c_type(ty: &Type) -> String {
     match ty {
         // A generic declaration is never generated: each use is generated with
-        // the type it gives, so this would be a compiler bug (see `instances`).
+        // the type it gives, so these would be compiler bugs (see `instances`
+        // and `shape_instance`).
         Type::Param(name) => format!("/*type {}*/", name),
+        Type::Applied(applied) => format!("/*shape {}*/", applied.name),
         Type::Int => "int64_t".to_string(),
         Type::Float => "double".to_string(),
         Type::Bool => "bool".to_string(),

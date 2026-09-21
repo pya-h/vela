@@ -1,0 +1,10 @@
+# error: 8:22: 'Box<int>' holds no pointers or text, so it lives in no region; remove '@r'
+shape Box<T>
+    value: T
+fi
+
+task main()
+    region r
+    bind b: Box<int>@r = Box { value: 1 }
+    show(b.value)
+fi

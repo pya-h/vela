@@ -46,3 +46,23 @@
     | keyword:<-  parameter:b
  29 | fi
     | keyword:fi
+ 31 | # A shape that takes types, used from another file, and a task that makes one.
+    | comment:# A shape that takes types, used from another file, and a task that makes one.
+ 32 | shape Tally<T: shown>
+    | keyword:shape  type:Tally  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>
+ 33 |     value: T
+    | field:value  punctuation::  type:T
+ 34 |     count: int
+    | field:count  punctuation::  type-builtin:int
+ 35 | fi
+    | keyword:fi
+ 37 | # A shape given types names the region its values live in, since the type given
+    | comment:# A shape given types names the region its values live in, since the type given
+ 38 | # may hold text or pointers, so the task takes the region to name.
+    | comment:# may hold text or pointers, so the task takes the region to name.
+ 39 | task tallyOf<T: shown>(r: region, value: T) -> Tally<T>@r
+    | keyword:task  task:tallyOf  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:value  punctuation::  type:T  punctuation:)  operator:->  type:Tally  punctuation:<  type:T  punctuation:>  operator:@  region:r
+ 40 |     <- Tally { value: value, count: 1 }
+    | keyword:<-  type:Tally  punctuation:{  field:value  punctuation::  parameter:value  punctuation:,  field:count  punctuation::  number:1  punctuation:}
+ 41 | fi
+    | keyword:fi

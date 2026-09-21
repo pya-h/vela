@@ -77,11 +77,39 @@ pub enum Type {
     /// type: the values are separate, so no variable, field, or operand holds
     /// one.
     Results(Vec<Type>),
+    /// `Box<int>` or `Box<T>`: a shape with the types it is given, written where
+    /// a type goes. A shape that takes types is never generated: each set of
+    /// types becomes a shape of its own (see the checker's `shape_instance`), so
+    /// a checked type names that shape instead, and this is left only inside a
+    /// declaration that takes types itself, where a type given is not known yet.
+    /// The types given name no region, as a shape's fields don't: they are in the
+    /// region of the value holding them, which the whole type names.
+    ///
+    /// Boxed so that a `Type` stays small: they are held by the thousand while
+    /// a program is checked, and deeply nested ones are checked on a small stack.
+    Applied(Box<Applied>),
     /// `T`: a type a generic declaration takes, standing for the type given at
     /// each use. It appears only inside the declaration that names it; a use is
     /// checked with the type itself in its place. Its regions are the given
     /// type's, so it holds no region of its own.
     Param(String),
+}
+
+/// A shape with the types it is given, `Box<int>` (see `Type::Applied`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Applied {
+    pub name: String,
+    /// The types it is given, always at least one.
+    pub types: Vec<Type>,
+    /// The region its values live in, when it holds anything in one.
+    pub region: Option<String>,
+}
+
+impl Applied {
+    /// The same shape, given `types`.
+    pub fn with_types(&self, types: Vec<Type>) -> Applied {
+        Applied { name: self.name.clone(), types, region: self.region.clone() }
+    }
 }
 
 /// The region of a value built without pointers, such as `Node { next: none }`:
@@ -149,6 +177,17 @@ impl Type {
             Type::Named(name, region) => {
                 write!(f, "{}", name)?;
                 suffix(f, region)
+            }
+            Type::Applied(applied) => {
+                write!(f, "{}<", applied.name)?;
+                for (i, ty) in applied.types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    ty.write(f, None)?;
+                }
+                write!(f, ">")?;
+                suffix(f, &applied.region)
             }
             Type::Param(name) => write!(f, "{}", name),
             Type::Array(inner, count) => {
@@ -235,6 +274,11 @@ impl Type {
         match self {
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.as_deref().and_then(&mut *f)),
             Type::Named(name, region) => Type::Named(name.clone(), region.as_deref().and_then(f)),
+            Type::Applied(applied) => Type::Applied(Box::new(Applied {
+                name: applied.name.clone(),
+                types: applied.types.iter().map(|ty| ty.map_regions(&mut *f)).collect(),
+                region: applied.region.as_deref().and_then(&mut *f),
+            })),
             Type::Text(region) => Type::Text(region.as_deref().and_then(f)),
             Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.as_deref().and_then(&mut *f)),
@@ -253,6 +297,11 @@ impl Type {
         let boxed = |t: &Type| Box::new(t.map_names(f));
         match self {
             Type::Named(name, region) => Type::Named(f(name), region.clone()),
+            Type::Applied(applied) => Type::Applied(Box::new(Applied {
+                name: f(&applied.name),
+                types: applied.types.iter().map(|ty| ty.map_names(f)).collect(),
+                region: applied.region.clone(),
+            })),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner), region.clone()),
@@ -278,6 +327,14 @@ impl Type {
                 Type::Ptr(Box::new(inner.map_regions_of_names(f)), region)
             }
             Type::Named(name, None) => Type::Named(name.clone(), f(name)),
+            Type::Applied(applied) => {
+                let region = applied.region.clone().or_else(|| f(&applied.name));
+                Type::Applied(Box::new(Applied {
+                    name: applied.name.clone(),
+                    types: applied.types.iter().map(|ty| ty.map_regions_of_names(&mut *f)).collect(),
+                    region,
+                }))
+            }
             Type::Ptr(inner, region) => Type::Ptr(Box::new(inner.map_regions_of_names(f)), region.clone()),
             Type::Slice(inner, None) => {
                 let region = f("");
@@ -301,6 +358,11 @@ impl Type {
         let boxed = |t: &Type, f: &mut dyn FnMut(&str) -> Option<Type>| Box::new(t.map_params(f));
         match self {
             Type::Param(name) => f(name).unwrap_or_else(|| self.clone()),
+            Type::Applied(applied) => Type::Applied(Box::new(Applied {
+                name: applied.name.clone(),
+                types: applied.types.iter().map(|ty| ty.map_params(&mut *f)).collect(),
+                region: applied.region.clone(),
+            })),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.clone()),
@@ -324,6 +386,7 @@ impl Type {
     fn collect_params<'a>(&'a self, names: &mut Vec<&'a str>) {
         match self {
             Type::Param(name) => names.push(name),
+            Type::Applied(applied) => applied.types.iter().for_each(|ty| ty.collect_params(names)),
             Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) => {
                 inner.collect_params(names)
             }
@@ -350,6 +413,10 @@ impl Type {
                 inner.collect_regions(regions);
             }
             Type::Named(_, region) | Type::Text(region) => regions.extend(region.as_deref()),
+            Type::Applied(applied) => {
+                regions.extend(applied.region.as_deref());
+                applied.types.iter().for_each(|ty| ty.collect_regions(regions));
+            }
             Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) => inner.collect_regions(regions),
             Type::Or(value, error) => {
                 value.collect_regions(regions);
@@ -468,7 +535,10 @@ pub enum ExprKind {
         region_span: Span,
     },
     Deref(Box<Expr>),
-    StructInit(String, Vec<FieldInit>),
+    /// `Point { x: 1 }`, or `Box<int> { value: none }` for a shape that takes
+    /// types: `types` holds the ones the literal names, empty when the values it
+    /// gives say which they are.
+    StructInit { name: String, types: Vec<TypeArg>, fields: Vec<FieldInit> },
     /// A variant constructor, `Circle(1.0)` or `Empty`. The parser produces
     /// `Call` or `Var` for these; the checker rewrites them into `Construct`.
     Construct {
@@ -943,6 +1013,7 @@ pub fn type_word(ty: &Type) -> String {
         Type::Region => "region".to_string(),
         Type::Named(name, _) => format!("n_{}", flat_name(name)),
         Type::Param(name) => format!("param__{}", name),
+        Type::Applied(applied) => format!("n_{}", flat_name(&instance_name(&applied.name, &applied.types))),
         Type::Ptr(inner, _) => format!("ptr__{}", type_word(inner)),
         Type::Range(inner) => format!("range__{}", type_word(inner)),
         Type::Maybe(inner) => format!("maybe__{}", type_word(inner)),
@@ -1065,6 +1136,15 @@ impl TaskDef {
 #[derive(Debug, Clone)]
 pub struct ShapeDef {
     pub name: String,
+    /// `shape Box<T: fixed>`: the types the shape takes, empty for an ordinary
+    /// shape. Its fields are checked once with these in place of types, and one
+    /// shape is made for each set of types it is given (see the checker's
+    /// `shape_instance`).
+    pub types: Vec<TypeParam>,
+    /// The types this shape was made for, when it is one use of a shape that
+    /// takes types; empty otherwise. Such a shape's `types` is empty: every `T`
+    /// in it has been replaced.
+    pub given: Vec<Type>,
     pub fields: Vec<Field>,
     /// Position of the shape name.
     pub span: Span,

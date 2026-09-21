@@ -154,5 +154,19 @@
     | builtin-fn:show  punctuation:(  module:numbers  punctuation:.  task:larger  punctuation:(  number:3  punctuation:,  number:8  punctuation:)  punctuation:)
  86 |     show(numbers.larger<float>(1.5, 0.5))
     | builtin-fn:show  punctuation:(  module:numbers  punctuation:.  task:larger  punctuation:<  type-builtin:float  punctuation:>  punctuation:(  number:1.5  punctuation:,  number:0.5  punctuation:)  punctuation:)
- 87 | fi
+ 88 |     # A shape from another module that takes types, built here and there.
+    | comment:# A shape from another module that takes types, built here and there.
+ 89 |     bind tally: numbers.Tally<int> = numbers.Tally { value: 5, count: 2 }
+    | keyword:bind  variable:tally  punctuation::  module:numbers  punctuation:.  type:Tally  punctuation:<  type-builtin:int  punctuation:>  operator:=  module:numbers  punctuation:.  type:Tally  punctuation:{  field:value  punctuation::  number:5  punctuation:,  field:count  punctuation::  number:2  punctuation:}
+ 90 |     show(tally.value)
+    | builtin-fn:show  punctuation:(  variable:tally  punctuation:.  field:value  punctuation:)
+ 91 |     show(tally.count)
+    | builtin-fn:show  punctuation:(  variable:tally  punctuation:.  field:count  punctuation:)
+ 92 |     bind counted = numbers.tallyOf(r, "once")
+    | keyword:bind  variable:counted  operator:=  module:numbers  punctuation:.  task:tallyOf  punctuation:(  region:r  punctuation:,  string:"once"  punctuation:)
+ 93 |     show(counted.value)
+    | builtin-fn:show  punctuation:(  variable:counted  punctuation:.  field:value  punctuation:)
+ 94 |     show(counted.count)
+    | builtin-fn:show  punctuation:(  variable:counted  punctuation:.  field:count  punctuation:)
+ 95 | fi
     | keyword:fi

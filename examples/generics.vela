@@ -58,6 +58,29 @@ task copyOf<T>(r: region, xs: [T]@r) -> [T]@r
     <- made
 fi
 
+# Shapes take types too: one `Labelled` works for a number, a name, or anything
+# else. The types given name no region, as a shape's fields don't: the value
+# names the region they live in, `Labelled<text>@r`.
+shape Labelled<T: shown>
+    label: text
+    value: T
+fi
+
+# Every labelled value, one to a line.
+task tellEach<T: shown>(entries: [Labelled<T>]@r)
+    each entry in entries
+        show(entry.label)
+        show(entry.value)
+    fi
+fi
+
+# A declaration that takes no types of its own may name a shape given a set of
+# them, since the shape made for `Labelled<text>` is one type with it.
+task tellName(entry: Labelled<text>@r)
+    show(entry.label)
+    show(entry.value)
+fi
+
 # The two values as one tuple: a tuple's items never change, so both types must
 # be `fixed`.
 task pairUp<A: fixed, B: fixed>(a: A, b: B) -> (A, B)
@@ -98,4 +121,15 @@ task main()
     bind entry: (text@r, int) = pairUp(names[0], scores[0])
     show(entry.0)
     show(entry.1)
+
+    # A shape given types: written out, or worked out from the values given.
+    bind best: Labelled<int> = Labelled<int> { label: "best score", value: 91 }
+    show(best.label)
+    show(best.value)
+    bind named: Labelled<text>@r = Labelled { label: "best name", value: names[0] }
+    tellName(named)
+    hold labelled = new [Labelled<int>]() at r
+    labelled.add(Labelled { label: "first", value: scores[0] })
+    labelled.add(Labelled { label: "second", value: scores[1] })
+    tellEach(labelled)
 fi

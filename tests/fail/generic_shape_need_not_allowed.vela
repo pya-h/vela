@@ -1,0 +1,11 @@
+# error: 9:14: shape 'Shown' takes a type that is 'shown' as 'T', and [int]@r can't be shown
+shape Shown<T: shown>
+    value: T
+fi
+
+task main()
+    region r
+    bind xs: [int]@r = new [int]([1]) at r
+    bind b = Shown { value: xs }
+    show(1)
+fi

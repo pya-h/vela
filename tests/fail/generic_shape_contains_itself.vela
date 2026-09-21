@@ -1,0 +1,9 @@
+# error: 3:12: 'Bad' contains itself by value (Bad -> Bad); use a pointer such as 'maybe ^Bad<T>'
+shape Bad<T>
+    inner: Bad<T>
+fi
+
+task main()
+    bind b = Bad { inner: 1 }
+    show(1)
+fi

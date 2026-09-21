@@ -553,6 +553,7 @@ impl Parser {
         self.advance(); // shape
         let span = self.peek_span();
         let name = self.expect_ident()?;
+        let types = self.parse_type_params()?;
         self.skip_newlines();
         let mut fields = Vec::new();
         while !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() {
@@ -566,7 +567,7 @@ impl Parser {
             self.skip_newlines();
         }
         self.expect_fi("shape", opened)?;
-        Ok(ShapeDef { name, fields, span, private: false })
+        Ok(ShapeDef { name, types, given: Vec::new(), fields, span, private: false })
     }
 
     fn parse_kind(&mut self) -> Result<KindDef> {
@@ -574,6 +575,12 @@ impl Parser {
         self.advance(); // kind
         let span = self.peek_span();
         let name = self.expect_ident()?;
+        if self.check(Token::Lt) {
+            return Err(Error::at(
+                self.peek_span(),
+                format!("a kind takes no types yet, so '{}' can't be given any; a task or a shape can, as in 'shape {}<T>'", name, name),
+            ));
+        }
         self.skip_newlines();
         let mut variants = Vec::new();
         while !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() {
@@ -733,7 +740,39 @@ impl Parser {
             name = format!("{}{}{}", name, MODULE_SEPARATOR, self.expect_ident()?);
         }
         self.type_parts.push((name.clone(), span));
+        if self.check(Token::Lt) {
+            if Type::builtin(&name).is_some() {
+                return Err(Error::at(self.peek_span(), format!("'{}' takes no types, so '< … >' has nothing to name", name)));
+            }
+            let types = self.parse_given_types()?;
+            return Ok(Type::Applied(Box::new(Applied { name, types, region: None })));
+        }
         Ok(Type::builtin(&name).unwrap_or(Type::Named(name, None)))
+    }
+
+    /// After the `<` of the types a shape is given, inside a written type: the
+    /// types and `>`. (The parts of these types belong to the type being read,
+    /// so they are read with `parse_type_parts` rather than `parse_type`, which
+    /// would start a written type of its own.)
+    fn parse_given_types(&mut self) -> Result<Vec<Type>> {
+        self.advance(); // <
+        let mut types = Vec::new();
+        loop {
+            if self.check(Token::Gt) {
+                return Err(Error::at(self.peek_span(), "'< … >' names the types a shape is given, as in '<int>'; leave it out for a shape that takes none"));
+            }
+            self.enter()?;
+            let ty = self.parse_type_parts();
+            self.leave(1);
+            types.push(ty?);
+            if !self.match_token(Token::Comma) {
+                break;
+            }
+        }
+        if !self.match_token(Token::Gt) {
+            return Err(self.unexpected("',' and another type, or '>' to close the types"));
+        }
+        Ok(types)
     }
 
     /// After a type's `(` at `opened`: `T, U, …)`, a tuple of two or more items.
@@ -1447,13 +1486,18 @@ impl Parser {
                 if name == SCAN && self.check(Token::LParen) {
                     return self.parse_scan(span);
                 }
-                // The types a call gives are read only where a call follows
-                // them (see `at_type_args`), so `(` comes next for certain.
+                // The types a use gives are read only where a call or a shape
+                // literal follows them (see `at_type_args`), so one of `(` and
+                // `{` comes next for certain.
                 if self.at_type_args() {
                     let types = self.parse_type_args()?;
-                    ExprKind::Call { name, types, args: self.parse_arg_list()? }
+                    if self.check(Token::LParen) {
+                        ExprKind::Call { name, types, args: self.parse_arg_list()? }
+                    } else {
+                        self.parse_struct_init(name, types)?
+                    }
                 } else if self.check(Token::LBrace) && self.at_shape_literal() {
-                    self.parse_struct_init(name)?
+                    self.parse_struct_init(name, Vec::new())?
                 } else if self.check(Token::LParen) {
                     ExprKind::Call { name, types: Vec::new(), args: self.parse_arg_list()? }
                 } else {
@@ -1587,23 +1631,29 @@ impl Parser {
             }
             return Ok(expr);
         };
-        // `first<text>(names)`: the types a call gives a generic task, told from
-        // a comparison by the `(` that must follow the closing `>`.
+        // `first<text>(names)` and `m.Box<int> { … }`: the types a use gives,
+        // told from a comparison by the `(` or `{` that must follow the closing
+        // `>`.
         let kind = if self.at_type_args() {
             let types = self.parse_type_args()?;
-            ExprKind::Call { name, types, args: self.parse_arg_list()? }
+            if self.check(Token::LParen) {
+                ExprKind::Call { name, types, args: self.parse_arg_list()? }
+            } else {
+                self.parse_struct_init(name, types)?
+            }
         } else if self.check(Token::LParen) {
             ExprKind::Call { name, types: Vec::new(), args: self.parse_arg_list()? }
         } else {
-            self.parse_struct_init(name)?
+            self.parse_struct_init(name, Vec::new())?
         };
         Ok(Expr::new(kind, span))
     }
 
-    /// Whether the cursor is at the `<` of the types a call gives: a `<` whose
-    /// matching `>` is followed by `(`, with only what a type is written with in
-    /// between. Comparisons never look like that: `a < b > (c)` would compare a
-    /// bool with `>`, which is an error either way.
+    /// Whether the cursor is at the `<` of the types a use gives: a `<` whose
+    /// matching `>` is followed by `(` (a call) or `{` (a shape literal), with
+    /// only what a type is written with in between. Comparisons never look like
+    /// that: `a < b > (c)` would compare a bool with `>`, and `a < b > {` has no
+    /// value after the `>` at all, so both are errors either way.
     fn at_type_args(&self) -> bool {
         if !self.check(Token::Lt) {
             return false;
@@ -1612,7 +1662,9 @@ impl Parser {
         for p in self.pos + 1.. {
             match self.tokens.get(p) {
                 // `>` closes the types, or, nested, one type's own.
-                Some(Token::Gt) if depth == 0 => return self.tokens.get(p + 1) == Some(&Token::LParen),
+                // A call follows the types a task is given, and a literal the
+                // types a shape is given; nothing else can follow a `>`.
+                Some(Token::Gt) if depth == 0 => return matches!(self.tokens.get(p + 1), Some(Token::LParen | Token::LBrace)),
                 Some(Token::Lt) => depth += 1,
                 Some(Token::Gt) => depth -= 1,
                 Some(token) if token.writes_type() => {}
@@ -1769,7 +1821,9 @@ impl Parser {
         Ok(Expr::new(ExprKind::New { ty: Box::new(ty), ty_span, value: Box::new(value), region, region_span }, span))
     }
 
-    fn parse_struct_init(&mut self, name: String) -> Result<ExprKind> {
+    /// `Point { x: 1 }`, or `Box<int> { value: none }` with `types` the ones the
+    /// literal names, with the cursor at `{`.
+    fn parse_struct_init(&mut self, name: String, types: Vec<TypeArg>) -> Result<ExprKind> {
         let shape_name = name.clone();
         self.advance(); // {
         let mut fields = Vec::new();
@@ -1792,7 +1846,7 @@ impl Parser {
             }
         }
         self.expect(Token::RBrace)?;
-        Ok(ExprKind::StructInit(name, fields))
+        Ok(ExprKind::StructInit { name, types, fields })
     }
 
     fn parse_arg_list(&mut self) -> Result<Vec<Expr>> {

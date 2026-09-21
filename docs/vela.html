@@ -216,7 +216,8 @@
         <li><code class="type">maybe T</code> — a T, or <code>none</code> (see <a href="#maybe">Maybe and Errors</a>)</li>
         <li><code class="type">T or E</code> — a T, or an error E, sent by a task that can fail</li>
         <li><code class="type">region</code> — the type of a task's region parameter, <code>r: region</code></li>
-        <li><code class="type">T</code> — a type a task takes, standing for the type each call gives it (see <a href="#generics">Tasks that take types</a>)</li>
+        <li><code class="type">T</code> — a type a task or shape takes, standing for the type each use gives it (see <a href="#generics">Types a declaration takes</a>)</li>
+        <li><code class="type">Box&lt;int&gt;</code> — a shape with the types it is given, in the region its values live in when it holds anything there (<code>Box&lt;text&gt;@r</code>)</li>
         <li>User-defined shapes and kinds</li>
       </ul>
     </section>
@@ -260,8 +261,8 @@ true false none  fi   maybe is     fail include priv</pre>
         <tr><td><code>{v}</code>, <code>_</code></td><td>in a <code>case</code> or <code>is</code>: the value inside, and anything (or a value left unnamed); <code>_</code> also drops a result</td></tr>
         <tr><td><code>a.x</code></td><td>a field of a shape value</td></tr>
         <tr><td><code>[T; n]</code>, <code>[T]@r</code></td><td>an array type; a slice type (see <a href="#arrays">Arrays</a> and <a href="#slices">Slices</a>)</td></tr>
-        <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Tasks that take types</a>)</td></tr>
-        <tr><td><code>first&lt;int&gt;(xs)</code></td><td>the types a call gives a task that takes them</td></tr>
+        <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task or shape takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
+        <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v; n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
@@ -771,13 +772,14 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
           it leaves the value matched as it was.</li>
       </ul>
 
-      <h3 id="generics">Tasks that take types</h3>
+      <h3 id="generics">Types a declaration takes</h3>
       <p>
         A task can take types as well as values: <code>task first&lt;T&gt;(xs: [T]@r) -&gt; maybe T</code> works for a
         slice of anything. The names in <code>&lt; &gt;</code> after the task's name are the types it takes, and
         <code>T</code> in its header and body means the type each call gives it. The body is checked once, with
         <code>T</code> standing for that type, and the compiler then makes one task for each set of types the program
-        uses it with, so a call costs nothing more than an ordinary one.
+        uses it with, so a call costs nothing more than an ordinary one. A shape takes types the same way
+        (<a href="#generic-shapes">Shapes that take types</a>); a kind can't yet.
       </p>
       <p>
         A word after a type's <code>:</code> says what every type given for it must allow, and so what the body may do
@@ -855,10 +857,78 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
           <code>priv</code>, used from another module (<code>numbers.larger(3, 8)</code>), and can use another such task,
           giving it the type it was given itself. A name in <code>&lt; &gt;</code> can't be a builtin type or a type the
           file already names, and <code>main</code> takes no types.</li>
-        <li><strong>Only tasks, for now.</strong> Shapes and kinds don't take types yet, so there is no
-          <code>Box&lt;T&gt;</code>. A call that gives a type built from its own (<code>f&lt;(T, int)&gt;</code> inside
+        <li><strong>Not kinds, for now.</strong> A kind can't take types yet, so there is no
+          <code>kind Result&lt;T&gt;</code>; <code>maybe T</code> and <code>T or E</code> cover what most such kinds
+          would be for. A call that gives a type built from its own (<code>f&lt;(T, int)&gt;</code> inside
           <code>f&lt;T&gt;</code>) would never stop, so a type built up more than 24 types deep, or a task used with
           more than 500 sets of types, is an error.</li>
+      </ul>
+
+      <h3 id="generic-shapes">Shapes that take types</h3>
+      <p>
+        A shape takes types in the same <code>&lt; &gt;</code>, with the same words:
+        <code>shape Box&lt;T&gt;</code>, <code>shape Pair&lt;A: fixed, B: fixed&gt;</code>. Its fields are read once,
+        with <code>T</code> standing for the type each value of it is given, and the compiler makes one shape for each
+        set of types the program uses, so <code>Box&lt;int&gt;</code> is a struct holding an <code>int64_t</code> and
+        nothing more.
+      </p>
+      <p>
+        The types given name no region, as a shape's fields don't: they are in the region of the value holding them,
+        which the whole type names. So <code>Box&lt;text&gt;@r</code> is a box whose text is in <code>r</code>, one
+        shape serves every region, and <code>Box&lt;int&gt;</code> names no region at all, since it holds nothing in
+        one.
+      </p>
+      <pre><span class="keyword">shape</span> Box&lt;T&gt;
+    value: T
+<span class="keyword">fi</span>
+
+<span class="comment"># A field may name the shape again, with the types it takes, behind a pointer.</span>
+<span class="keyword">shape</span> Node&lt;T&gt;
+    value: T
+    next: <span class="keyword">maybe</span> ^Node&lt;T&gt;
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> valueOf&lt;T&gt;(b: Box&lt;T&gt;@r) -&gt; T
+    <span class="keyword">&lt;-</span> b.value
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">bind</span> count = Box { value: <span class="number">1</span> }          <span class="comment"># Box&lt;int&gt;: the value says which type</span>
+    <span class="keyword">bind</span> empty = Box&lt;<span class="keyword">maybe</span> int&gt; { value: <span class="keyword">none</span> }  <span class="comment"># written, since none says nothing</span>
+    <span class="keyword">bind</span> kept: Box&lt;text&gt;@r = Box { value: <span class="string">"ada"</span>.copy() <span class="keyword">at</span> r }
+    show(valueOf(count))                   <span class="comment"># 1</span>
+    show(kept.value)                       <span class="comment"># ada</span>
+    <span class="keyword">bind</span> tail: ^Node&lt;int&gt;@r = <span class="keyword">new</span> Node&lt;int&gt;(Node { value: <span class="number">3</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> r
+    <span class="keyword">bind</span> head: ^Node&lt;int&gt;@r = <span class="keyword">new</span> Node&lt;int&gt;(Node { value: <span class="number">2</span>, next: tail }) <span class="keyword">at</span> r
+    show(head^.value)                      <span class="comment"># 2</span>
+<span class="keyword">fi</span></pre>
+      <ul>
+        <li><strong>Literals.</strong> <code>Box { value: 1 }</code> works out the types from the values it gives, as a
+          call does from its arguments; <code>Box&lt;int&gt; { value: none }</code> writes them, for when a value says
+          nothing (<code>none</code>, <code>fail e</code>). Writing them is all or nothing, and a shape that takes no
+          types has none to name.</li>
+        <li><strong>Where they go.</strong> Anywhere a type does: a field, a parameter, a result, an array or slice
+          (<code>[Box&lt;int&gt;]@r</code>), a tuple, a <code>maybe</code>, a kind's payload, after <code>new</code>
+          (<code>new Box&lt;int&gt;(Box { value: 1 }) at r</code>), and inside another shape's types
+          (<code>Box&lt;Box&lt;int&gt;&gt;</code>, <code>Pair&lt;Box&lt;text&gt;, int&gt;@r</code>). A declaration
+          that takes no types of its own may name one, as a
+          <code>task textOf(b: Box&lt;text&gt;@r) -&gt; text@r</code> does, since the shape made for a set of types is
+          one type with the shape given them. A shape that takes types is not a type on its own:
+          <code>Box</code> alone is an error that says to name them.</li>
+        <li><strong>Regions.</strong> A type given names no region (<code>Box&lt;text&gt;@r</code>, not
+          <code>Box&lt;text@r&gt;</code>), and a shape given types names one exactly when its values hold something
+          there: <code>Box&lt;text&gt;@r</code> and <code>Box&lt;int&gt;</code>. Inside a task that takes types, where
+          the type given isn't known yet, that can't be told apart, so <code>Box&lt;T&gt;</code> names a region
+          (<code>b: Box&lt;T&gt;@r</code>) and the region is dropped for the uses that don't need one.</li>
+        <li><strong>Recursion.</strong> A field may name the shape again with the types it takes, behind a pointer
+          (<code>next: maybe ^Node&lt;T&gt;</code>), as a shape may name itself. One that gives it a type built from
+          its own (<code>^Grow&lt;Grow&lt;T&gt;&gt;</code>) would need an endless line of shapes, so that is an error
+          after 24 of them, as is a shape containing itself by value.</li>
+        <li><strong>Words.</strong> The same four words, meaning the same things:
+          <code>shape Shown&lt;T: shown&gt;</code> may only be given a type that <code>show</code> takes. A task
+          passing its own type on must ask for at least as much: a <code>task tell&lt;T&gt;(b: Shown&lt;T&gt;@r)</code>
+          is an error that says to require <code>shown</code> too.</li>
       </ul>
 
       <h3 id="names">Names</h3>
@@ -1625,8 +1695,8 @@ show(area(square))             <span class="comment"># error: unknown task 'area
           (see <a href="#arrays">Arrays</a>). Tuples can't be shown whole, and <code>is</code> and <code>case</code>
           are taken apart in <code>is</code> and <code>case</code> only in parentheses, as in <code>{(a, b)}</code>
           (see <a href="#tuples">Tuples</a>).</li>
-        <li>Only tasks take types: there is no <code>shape Box&lt;T&gt;</code> yet, and no word asks a type for
-          arithmetic (see <a href="#generics">Tasks that take types</a>).</li>
+        <li>Tasks and shapes take types; a kind can't yet, and no word asks a type for arithmetic (see
+          <a href="#generics">Types a declaration takes</a>).</li>
         <li>There are no packages to share modules between programs (see <a href="#modules">Modules</a>).</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which

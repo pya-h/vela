@@ -128,6 +128,27 @@ describe("VelaAnalysis", () => {
     expect(types.map((i) => i.label)).toEqual(["int", "float", "bool", "text", "maybe"]);
   });
 
+  it("reads a shape that takes types: highlighting, outline, hover, and completion", () => {
+    const source =
+      "shape Box<T: fixed>\n    value: T\nfi\n\ntask main()\n    region r\n    bind kept: Box<text>@r = Box { value: \"ada\".copy() at r }\n    bind count = Box<int> { value: 2 }\n    show(count.value)\nfi\n";
+    const { tokens, diagnostics, outline } = analysis.file(source);
+    expect(diagnostics).toEqual([]);
+    expect(tokens.find((t) => t.from === source.indexOf("text>@r"))?.class).toBe("type-builtin");
+    expect(tokens.find((t) => t.from === source.indexOf("value: 2"))?.class).toBe("field");
+    const [shape] = outline;
+    expect([shape?.name, shape?.kind, shape?.detail]).toEqual(["Box", "shape", "<T: fixed>"]);
+    expect(shape?.children.map((child) => [child.name, child.kind, child.detail])).toEqual([
+      ["T", "type-param", "fixed"],
+      ["value", "field", "T"],
+    ]);
+    // The shape the compiler makes for the types never shows: the type reads as
+    // the program writes it.
+    expect(analysis.hover(source, source.indexOf("kept:"))?.code).toBe("bind kept: Box<text>@r");
+    expect(analysis.hover(source, source.indexOf("count ="))?.code).toBe("bind count: Box<int>");
+    const types = analysis.complete(source.replace("Box<int>", "Box<>"), source.indexOf("Box<int>") + "Box<".length).items;
+    expect(types.map((i) => i.label)).toEqual(["int", "float", "bool", "text", "Box", "maybe"]);
+  });
+
   it("reports what a type given to a task doesn't allow", () => {
     const source = "task biggest<T: ordered>(a: T, b: T) -> T\n    when a > b\n        <- a\n    fi\n    <- b\nfi\n\ntask main()\n    show(biggest(\"a\", \"b\"))\nfi\n";
     const [diagnostic] = analysis.file(source).diagnostics;

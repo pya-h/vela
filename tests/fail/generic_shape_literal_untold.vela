@@ -1,0 +1,9 @@
+# error: 7:14: can't tell which type 'T' is for this 'Box', since no field it is given names one; write it, as in 'Box<int> { … }'
+shape Box<T>
+    value: T
+fi
+
+task main()
+    bind b = Box { value: none }
+    show(1)
+fi

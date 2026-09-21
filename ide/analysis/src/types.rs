@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::Path;
 
-use vela::ast::{Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, Span, Stmt, StmtKind, Target, Type};
+use vela::ast::{Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, ShapeDef, Span, Stmt, StmtKind, Target, Type};
 use vela::check::{in_region, regional_types, textual_types};
 use vela::driver;
 use vela::error::Error;
@@ -19,6 +19,46 @@ use vela::modules::{self, SourceFile};
 pub(crate) struct Context<'a> {
     pub path: &'a str,
     pub sources: &'a HashMap<String, String>,
+}
+
+/// A type as the program writes it: a shape the compiler made for the types it
+/// was given (`Box__of__int`) reads as those types (`Box<int>`), and so do the
+/// types inside it.
+fn as_written(ty: &Type, made: &HashMap<&str, &ShapeDef>) -> Type {
+    match ty {
+        Type::Named(name, region) => match made.get(name.as_str()) {
+            Some(shape) => Type::Applied(Box::new(Applied {
+                name: as_written_name(name, made),
+                types: shape.given.iter().map(|ty| as_written(ty, made)).collect(),
+                region: region.clone(),
+            })),
+            None => ty.clone(),
+        },
+        Type::Ptr(inner, region) => Type::Ptr(Box::new(as_written(inner, made)), region.clone()),
+        Type::Slice(inner, region) => Type::Slice(Box::new(as_written(inner, made)), region.clone()),
+        Type::Array(inner, count) => Type::Array(Box::new(as_written(inner, made)), *count),
+        Type::Range(inner) => Type::Range(Box::new(as_written(inner, made))),
+        Type::Maybe(inner) => Type::Maybe(Box::new(as_written(inner, made))),
+        Type::Fail(inner) => Type::Fail(Box::new(as_written(inner, made))),
+        Type::Or(value, error) => Type::Or(Box::new(as_written(value, made)), Box::new(as_written(error, made))),
+        Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| as_written(ty, made)).collect()),
+        Type::Results(types) => Type::Results(types.iter().map(|ty| as_written(ty, made)).collect()),
+        Type::Applied(applied) => Type::Applied(Box::new(Applied {
+            name: as_written_name(&applied.name, made),
+            types: applied.types.iter().map(|ty| as_written(ty, made)).collect(),
+            region: applied.region.clone(),
+        })),
+        other => other.clone(),
+    }
+}
+
+/// The name of the shape a made one was made from: everything before the
+/// `__of__` the compiler joins its types with (no Vela name holds `__`).
+fn as_written_name(name: &str, made: &HashMap<&str, &ShapeDef>) -> String {
+    match made.contains_key(name) {
+        true => name.split("__of__").next().unwrap_or(name).to_string(),
+        false => name.to_string(),
+    }
 }
 
 /// A path as the editor names files: `/`-separated.
@@ -116,13 +156,22 @@ impl Checked {
                 checked.block(&task.body, &declarations);
             }
         }
+        // A shape the compiler made for the types it was given is written as
+        // those types (`Box<int>`), the way the program writes it.
+        let made: HashMap<&str, &ShapeDef> = items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Shape(s) if !s.given.is_empty() => Some((s.name.as_str(), s)),
+                _ => None,
+            })
+            .collect();
         // The program names another module's shapes and kinds by the module's
         // path (`shapes/geometry.Point`); this file names them as it writes them.
         for ty in checked.exprs.values_mut().chain(checked.decls.values_mut()) {
-            *ty = spelling.ty(ty);
+            *ty = spelling.ty(&as_written(ty, &made));
         }
         for shape in checked.field_accesses.values_mut() {
-            *shape = spelling.name(shape);
+            *shape = spelling.name(&as_written_name(shape, &made));
         }
         checked
     }
@@ -272,7 +321,7 @@ impl Checked {
                     self.expr(arg, kinds);
                 }
             }
-            ExprKind::StructInit(_, fields) => {
+            ExprKind::StructInit { fields, .. } => {
                 for field in fields {
                     self.expr(&field.value, kinds);
                 }

@@ -1,0 +1,12 @@
+# error: 6:18: 'Box<T>' may hold text or pointers, since the types given may, so it names the region its values live in: write 'Box<T>@r', with 'r' a region the header names (such as an 'r: region' parameter)
+shape Box<T>
+    value: T
+fi
+
+task first<T>(b: Box<T>) -> T
+    <- b.value
+fi
+
+task main()
+    show(first(Box { value: 1 }))
+fi

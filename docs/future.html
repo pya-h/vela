@@ -322,8 +322,8 @@
         </div>
         <div class="card">
           <h3>Limited types <span class="badge b-med">Medium</span></h3>
-          <p>Tasks now take types (<code>task first&lt;T&gt;(xs: [T]@r)</code>, <a href="#generics">details below</a>);
-            shapes and kinds don't yet, so there is no <code>Box&lt;T&gt;</code>. Tuples (<code>(text, int)</code>, whose items never change) are done
+          <p>Tasks and shapes now take types (<code>task first&lt;T&gt;(xs: [T]@r)</code>,
+            <code>shape Box&lt;T&gt;</code>, <a href="#generics">details below</a>); a kind can't yet. Tuples (<code>(text, int)</code>, whose items never change) are done
             (<a href="vela.html#tuples">Tuples</a>), and so are arrays (<code>[int; 4]</code>) and slices (<code>[int]@r</code>, which grow with
             <code>xs.add(v)</code> and shrink with <code>xs.del(i)</code>) are done (<a href="#arrays">details below</a>),
             and missing values and errors have types: <code>maybe T</code> and <code>T or E</code>, and a pointer can't
@@ -788,19 +788,21 @@ show(names.del(1))                    # takes item 1 out: b</pre>
       <p>
         Left for later: comparing arrays with <code>==</code>, showing them whole, slices with a bound left out
         (<code>xs[1..]</code>), and making a slice with room reserved ahead for a count known in advance. A slice that never reuses the space
-        <code>del</code> gives back is a <a href="#slices-without-reuse">lower-priority idea</a>. When shapes take
-        types as tasks now do (<a href="#generics">below</a>), other collections whose size changes will get the same
-        <code>add</code> and <code>del</code>.
+        <code>del</code> gives back is a <a href="#slices-without-reuse">lower-priority idea</a>. Shapes take types
+        now (<a href="#generics">below</a>), so a collection of anything can be written as one; only a slice grows and
+        shrinks with <code>add</code> and <code>del</code>, which stay built in rather than tasks a shape could
+        provide (methods would come first, see above).
       </p>
     </section>
 
     <section>
-      <h2 id="generics"><span class="icon" aria-hidden="true">🧬</span> Tasks That Take Types <span class="badge b-done">Done</span></h2>
+      <h2 id="generics"><span class="icon" aria-hidden="true">🧬</span> Types a Declaration Takes <span class="badge b-done">Done</span></h2>
       <p>
-        The step after tuples: a task can take types as well as values, so one <code>first</code> works for a slice of
-        anything (see <a href="vela.html#generics">Tasks that take types</a> in the language guide). The types go in
-        <code>&lt; &gt;</code> after the task's name, and a word after a type's <code>:</code> says what the body may do
-        with its values:
+        The step after tuples: a task or a shape can take types as well as values, so one <code>first</code> works for a
+        slice of anything and one <code>Box&lt;T&gt;</code> holds anything (see
+        <a href="vela.html#generics">Types a declaration takes</a> in the language guide). The types go in
+        <code>&lt; &gt;</code> after the name, and a word after a type's <code>:</code> says what the body may do with
+        its values:
       </p>
       <pre>task first&lt;T&gt;(xs: [T]@r) -&gt; maybe T
     each v in xs
@@ -816,9 +818,15 @@ task biggest&lt;T: ordered&gt;(a: T, b: T) -&gt; T
     &lt;- b
 fi
 
+shape Box&lt;T&gt;
+    value: T
+fi
+
 show(first(ns))                 # 4 — the argument says T is int
 show(first&lt;text@r&gt;(names))       # Ada — or the call writes it out
 bind empty: maybe int = nothing()   # or the place the value goes says it
+bind count = Box { value: 1 }   # Box&lt;int&gt;: the value given says which type
+bind kept: Box&lt;text&gt;@r = Box { value: name }   # its text is in r
 show(biggest("a", "b"))         # error: task 'biggest' takes a type that is 'ordered' …</pre>
       <ul>
         <li><strong>Angle brackets, as in the header.</strong> <code>&lt;T&gt;</code> declares the types, and a call that
@@ -860,9 +868,18 @@ show(biggest("a", "b"))         # error: task 'biggest' takes a type that is 'or
         sets of types, is an error.
       </p>
       <p>
-        Left for later: types for shapes, so a <code>Box&lt;T&gt;</code> and collections of anything can be written;
-        types for kinds, an <a href="#undecided-generic-kinds">undecided idea</a>; and a word for arithmetic, which would
-        let one task add numbers of either type.
+        Shapes came next, in the same brackets and with the same words: <code>shape Box&lt;T&gt;</code>,
+        <code>shape Pair&lt;A: fixed, B: fixed&gt;</code>, and <code>shape Node&lt;T&gt;</code> whose field names the
+        shape again behind a pointer. The types given name no region, as a shape's fields don't
+        (<code>Box&lt;text&gt;@r</code>, one shape for every region), and a literal works its types out from the values
+        it gives (<code>Box { value: 1 }</code>) or names them (<code>Box&lt;int&gt; { value: none }</code>). One shape
+        is generated per set of types, so <code>Box&lt;int&gt;</code> is a struct holding an <code>int64_t</code>.
+      </p>
+      <p>
+        Left for later: types for kinds, an <a href="#undecided-generic-kinds">undecided idea</a>; a word for
+        arithmetic, which would let one task add numbers of either type; and working out the region a shape given types
+        lives in, so that a task returning <code>Box&lt;T&gt;</code> needn't take a region for the uses whose type
+        holds nothing in one.
       </p>
     </section>
 
@@ -1557,8 +1574,8 @@ show(p.length_squared())</pre>
 
       <h3>Type System</h3>
       <ul>
-        <li><strong>Generics:</strong> tasks take types today (<code>task first&lt;T&gt;(…)</code>,
-          <a href="#generics">below</a>); shapes come next, and kinds are an
+        <li><strong>Generics:</strong> tasks and shapes take types today (<code>task first&lt;T&gt;(…)</code>,
+          <code>shape Box&lt;T&gt;</code>, <a href="#generics">below</a>); kinds are an
           <a href="#undecided-generic-kinds">undecided idea</a>. Tasks are also generic over regions
           (<code>list: maybe ^Node@r</code>), which stay implicit rather than written in the same
           <code>&lt; &gt;</code> (see <a href="regions.html#ideas-passing">region brackets</a>)</li>
@@ -1614,7 +1631,7 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
         <li><strong>Which operations.</strong> And, or, exclusive or, not, and shifts in both directions, at least.</li>
         <li><strong>Spelling.</strong> C's <code>&amp; | ^ ~ &lt;&lt; &gt;&gt;</code> are familiar but taken or close to
           taken in Vela: <code>^</code> is a pointer, <code>&amp;</code> joins the words a type must allow
-          (<a href="#generics">Tasks That Take Types</a>), <code>|</code> is an error that says to write <code>or</code>,
+          (<a href="#generics">Types a Declaration Takes</a>), <code>|</code> is an error that says to write <code>or</code>,
           and <code>&gt;&gt;</code> already lexes as two <code>&gt;</code>. Words (<code>bitand</code>,
           <code>shl</code>) or member-like forms (<code>n.shiftLeft(3)</code>, as <code>xs.len</code> and
           <code>xs.add</code> read) avoid every clash. Vela writes <code>and</code> and <code>or</code> for logic, so the
@@ -1682,15 +1699,15 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
         would cost, and the decision is to build it or drop it.
       </p>
       <ul>
-        <li id="undecided-generic-kinds"><strong>Types for kinds:</strong> tasks take types today, and shapes come next
-          (<a href="#generics">Tasks That Take Types</a>), which would leave kinds as the one declaration that can't:
+        <li id="undecided-generic-kinds"><strong>Types for kinds:</strong> tasks and shapes take types today
+          (<a href="#generics">Types a Declaration Takes</a>), which leaves kinds as the one declaration that can't:
           no <code>kind Result&lt;T&gt;</code> with <code>Ok(value: T)</code> and <code>Err(message: text)</code>, and no
           <code>kind Tree&lt;T&gt;</code>. It would fit the same syntax and the same words, and be made the same way (one
           kind per set of types), so the cost is not the idea but its reach: a kind's variants, their payloads, every
           <code>match</code> and <code>case</code>, and the patterns Studio offers all follow the types, and
           <code>maybe T</code> and <code>T or E</code> already cover what most generic kinds would be used for. The
-          question to decide is whether a program that has generic shapes and tasks still needs generic kinds often
-          enough to pay for that reach.</li>
+          question to decide is whether a program that has shapes and tasks taking types still needs kinds taking them
+          often enough to pay for that reach.</li>
       </ul>
     </section>
 
@@ -1720,8 +1737,9 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
           <ul>
             <li><s>Module system</s> (done: <a href="vela.html#modules">modules</a>, with aliases and <code>Kind.Variant</code>), then a package manager</li>
             <li>Methods on shapes and kinds (qualified tasks with <code>self</code> / <code>hold self</code>)</li>
-            <li><s>Tuples</s> (done: <a href="vela.html#tuples">tuples</a>), <s>generics for tasks</s>
-              (done: <a href="vela.html#generics">tasks that take types</a>), then types for shapes</li>
+            <li><s>Tuples</s> (done: <a href="vela.html#tuples">tuples</a>), <s>generics for tasks and shapes</s>
+              (done: <a href="vela.html#generics">types a declaration takes</a>), then perhaps
+              <a href="#undecided-generic-kinds">for kinds</a></li>
             <li><s>Missing values and error handling</s> (done: <a href="#maybe"><code>maybe T</code>, plan B, <code>T or E</code></a>)</li>
             <li>Pattern-match expressions</li>
             <li><s>Region-based allocation</s> (done: <a href="regions.html">regions</a>)</li>
@@ -1745,15 +1763,15 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
       <h2><span class="icon" aria-hidden="true">🎯</span> Conclusion</h2>
       <p>
         Vela's strength is its smallness. The best next steps preserve that smallness while filling the
-        obvious gaps: a real string type, and types for shapes, now that arrays, slices, tuples, and tasks that take
-        types are in place. The memory
+        obvious gaps: a real string type and a standard library, now that arrays, slices, tuples, and the types a
+        task or shape takes are in place. The memory
         model's first step, <strong>scoped regions</strong>, is in place (<a href="regions.html">Vela Regions</a>); <strong>move-only ownership and optional
         temporary borrows</strong> can grow it while keeping Vela fast, simple, and far safer than C without becoming
         Rust.
       </p>
       <p>
-        Beyond memory, Vela should grow carefully: methods as qualified tasks, shapes that take types, and packages
-        built on its modules before concurrency or a self-hosted compiler. The goal is not to be everything; it is to be a small,
+        Beyond memory, Vela should grow carefully: methods as qualified tasks, and packages built on its modules,
+        before concurrency or a self-hosted compiler. The goal is not to be everything; it is to be a small,
         beautiful, fast language that proves you do not need a massive toolchain to write safe systems code.
       </p>
     </section>

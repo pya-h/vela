@@ -106,69 +106,129 @@
     | keyword:<-  variable:made
  59 | fi
     | keyword:fi
- 61 | # The two values as one tuple: a tuple's items never change, so both types must
-    | comment:# The two values as one tuple: a tuple's items never change, so both types must
- 62 | # be `fixed`.
-    | comment:# be `fixed`.
- 63 | task pairUp<A: fixed, B: fixed>(a: A, b: B) -> (A, B)
-    | keyword:task  task:pairUp  punctuation:<  type:A  punctuation::  keyword:fixed  punctuation:,  type:B  punctuation::  keyword:fixed  punctuation:>  punctuation:(  parameter:a  punctuation::  type:A  punctuation:,  parameter:b  punctuation::  type:B  punctuation:)  operator:->  punctuation:(  type:A  punctuation:,  type:B  punctuation:)
- 64 |     <- (a, b)
-    | keyword:<-  punctuation:(  parameter:a  punctuation:,  parameter:b  punctuation:)
- 65 | fi
+ 61 | # Shapes take types too: one `Labelled` works for a number, a name, or anything
+    | comment:# Shapes take types too: one `Labelled` works for a number, a name, or anything
+ 62 | # else. The types given name no region, as a shape's fields don't: the value
+    | comment:# else. The types given name no region, as a shape's fields don't: the value
+ 63 | # names the region they live in, `Labelled<text>@r`.
+    | comment:# names the region they live in, `Labelled<text>@r`.
+ 64 | shape Labelled<T: shown>
+    | keyword:shape  type:Labelled  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>
+ 65 |     label: text
+    | field:label  punctuation::  type-builtin:text
+ 66 |     value: T
+    | field:value  punctuation::  type:T
+ 67 | fi
     | keyword:fi
- 67 | task main()
+ 69 | # Every labelled value, one to a line.
+    | comment:# Every labelled value, one to a line.
+ 70 | task tellEach<T: shown>(entries: [Labelled<T>]@r)
+    | keyword:task  task:tellEach  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:entries  punctuation::  punctuation:[  type:Labelled  punctuation:<  type:T  punctuation:>  punctuation:]  operator:@  region:r  punctuation:)
+ 71 |     each entry in entries
+    | keyword:each  variable:entry  keyword:in  parameter:entries
+ 72 |         show(entry.label)
+    | builtin-fn:show  punctuation:(  variable:entry  punctuation:.  field:label  punctuation:)
+ 73 |         show(entry.value)
+    | builtin-fn:show  punctuation:(  variable:entry  punctuation:.  field:value  punctuation:)
+ 74 |     fi
+    | keyword:fi
+ 75 | fi
+    | keyword:fi
+ 77 | # A declaration that takes no types of its own may name a shape given a set of
+    | comment:# A declaration that takes no types of its own may name a shape given a set of
+ 78 | # them, since the shape made for `Labelled<text>` is one type with it.
+    | comment:# them, since the shape made for `Labelled<text>` is one type with it.
+ 79 | task tellName(entry: Labelled<text>@r)
+    | keyword:task  task:tellName  punctuation:(  parameter:entry  punctuation::  type:Labelled  punctuation:<  type-builtin:text  punctuation:>  operator:@  region:r  punctuation:)
+ 80 |     show(entry.label)
+    | builtin-fn:show  punctuation:(  parameter:entry  punctuation:.  field:label  punctuation:)
+ 81 |     show(entry.value)
+    | builtin-fn:show  punctuation:(  parameter:entry  punctuation:.  field:value  punctuation:)
+ 82 | fi
+    | keyword:fi
+ 84 | # The two values as one tuple: a tuple's items never change, so both types must
+    | comment:# The two values as one tuple: a tuple's items never change, so both types must
+ 85 | # be `fixed`.
+    | comment:# be `fixed`.
+ 86 | task pairUp<A: fixed, B: fixed>(a: A, b: B) -> (A, B)
+    | keyword:task  task:pairUp  punctuation:<  type:A  punctuation::  keyword:fixed  punctuation:,  type:B  punctuation::  keyword:fixed  punctuation:>  punctuation:(  parameter:a  punctuation::  type:A  punctuation:,  parameter:b  punctuation::  type:B  punctuation:)  operator:->  punctuation:(  type:A  punctuation:,  type:B  punctuation:)
+ 87 |     <- (a, b)
+    | keyword:<-  punctuation:(  parameter:a  punctuation:,  parameter:b  punctuation:)
+ 88 | fi
+    | keyword:fi
+ 90 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 68 |     region r
+ 91 |     region r
     | keyword:region  region:r
- 69 |     hold scores = new [int]() at r
+ 92 |     hold scores = new [int]() at r
     | keyword:hold  variable:scores  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
- 70 |     scores.add(91)
+ 93 |     scores.add(91)
     | variable:scores  punctuation:.  field:add  punctuation:(  number:91  punctuation:)
- 71 |     scores.add(78)
+ 94 |     scores.add(78)
     | variable:scores  punctuation:.  field:add  punctuation:(  number:78  punctuation:)
- 72 |     scores.add(91)
+ 95 |     scores.add(91)
     | variable:scores  punctuation:.  field:add  punctuation:(  number:91  punctuation:)
- 74 |     hold names = new [text]() at r
+ 97 |     hold names = new [text]() at r
     | keyword:hold  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
- 75 |     names.add("Ada".copy() at r)
+ 98 |     names.add("Ada".copy() at r)
     | variable:names  punctuation:.  field:add  punctuation:(  string:"Ada"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
- 76 |     names.add("Bo".copy() at r)
+ 99 |     names.add("Bo".copy() at r)
     | variable:names  punctuation:.  field:add  punctuation:(  string:"Bo"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
- 78 |     # The arguments say which type each call is for.
+101 |     # The arguments say which type each call is for.
     | comment:# The arguments say which type each call is for.
- 79 |     show(first(scores))
+102 |     show(first(scores))
     | builtin-fn:show  punctuation:(  task:first  punctuation:(  variable:scores  punctuation:)  punctuation:)
- 80 |     show(first(names))
+103 |     show(first(names))
     | builtin-fn:show  punctuation:(  task:first  punctuation:(  variable:names  punctuation:)  punctuation:)
- 81 |     show(largest(scores))
+104 |     show(largest(scores))
     | builtin-fn:show  punctuation:(  task:largest  punctuation:(  variable:scores  punctuation:)  punctuation:)
- 82 |     show(countOf(scores, 91))
+105 |     show(countOf(scores, 91))
     | builtin-fn:show  punctuation:(  task:countOf  punctuation:(  variable:scores  punctuation:,  number:91  punctuation:)  punctuation:)
- 84 |     # A slice of text needs its region named when the type is written out.
+107 |     # A slice of text needs its region named when the type is written out.
     | comment:# A slice of text needs its region named when the type is written out.
- 85 |     show(first<text@r>(names))
+108 |     show(first<text@r>(names))
     | builtin-fn:show  punctuation:(  task:first  punctuation:<  type-builtin:text  operator:@  region:r  punctuation:>  punctuation:(  variable:names  punctuation:)  punctuation:)
- 87 |     tellAll("scores:", scores)
+110 |     tellAll("scores:", scores)
     | task:tellAll  punctuation:(  string:"scores:"  punctuation:,  variable:scores  punctuation:)
- 88 |     tellAll("names:", names)
+111 |     tellAll("names:", names)
     | task:tellAll  punctuation:(  string:"names:"  punctuation:,  variable:names  punctuation:)
- 90 |     # Nothing in the arguments says what an empty answer holds, so the place the
+113 |     # Nothing in the arguments says what an empty answer holds, so the place the
     | comment:# Nothing in the arguments says what an empty answer holds, so the place the
- 91 |     # value goes does.
+114 |     # value goes does.
     | comment:# value goes does.
- 92 |     bind none_yet: maybe int = first(new [int]() at r)
+115 |     bind none_yet: maybe int = first(new [int]() at r)
     | keyword:bind  variable:none_yet  punctuation::  keyword:maybe  type-builtin:int  operator:=  task:first  punctuation:(  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
- 93 |     show(none_yet)
+116 |     show(none_yet)
     | builtin-fn:show  punctuation:(  variable:none_yet  punctuation:)
- 95 |     bind copies = copyOf(r, names)
+118 |     bind copies = copyOf(r, names)
     | keyword:bind  variable:copies  operator:=  task:copyOf  punctuation:(  region:r  punctuation:,  variable:names  punctuation:)
- 96 |     show(copies[1])
+119 |     show(copies[1])
     | builtin-fn:show  punctuation:(  variable:copies  punctuation:[  number:1  punctuation:]  punctuation:)
- 98 |     bind entry: (text@r, int) = pairUp(names[0], scores[0])
+121 |     bind entry: (text@r, int) = pairUp(names[0], scores[0])
     | keyword:bind  variable:entry  punctuation::  punctuation:(  type-builtin:text  operator:@  region:r  punctuation:,  type-builtin:int  punctuation:)  operator:=  task:pairUp  punctuation:(  variable:names  punctuation:[  number:0  punctuation:]  punctuation:,  variable:scores  punctuation:[  number:0  punctuation:]  punctuation:)
- 99 |     show(entry.0)
+122 |     show(entry.0)
     | builtin-fn:show  punctuation:(  variable:entry  punctuation:.  field:0  punctuation:)
-100 |     show(entry.1)
+123 |     show(entry.1)
     | builtin-fn:show  punctuation:(  variable:entry  punctuation:.  field:1  punctuation:)
-101 | fi
+125 |     # A shape given types: written out, or worked out from the values given.
+    | comment:# A shape given types: written out, or worked out from the values given.
+126 |     bind best: Labelled<int> = Labelled<int> { label: "best score", value: 91 }
+    | keyword:bind  variable:best  punctuation::  type:Labelled  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Labelled  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:label  punctuation::  string:"best score"  punctuation:,  field:value  punctuation::  number:91  punctuation:}
+127 |     show(best.label)
+    | builtin-fn:show  punctuation:(  variable:best  punctuation:.  field:label  punctuation:)
+128 |     show(best.value)
+    | builtin-fn:show  punctuation:(  variable:best  punctuation:.  field:value  punctuation:)
+129 |     bind named: Labelled<text>@r = Labelled { label: "best name", value: names[0] }
+    | keyword:bind  variable:named  punctuation::  type:Labelled  punctuation:<  type-builtin:text  punctuation:>  operator:@  region:r  operator:=  type:Labelled  punctuation:{  field:label  punctuation::  string:"best name"  punctuation:,  field:value  punctuation::  variable:names  punctuation:[  number:0  punctuation:]  punctuation:}
+130 |     tellName(named)
+    | task:tellName  punctuation:(  variable:named  punctuation:)
+131 |     hold labelled = new [Labelled<int>]() at r
+    | keyword:hold  variable:labelled  operator:=  keyword:new  punctuation:[  type:Labelled  punctuation:<  type-builtin:int  punctuation:>  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+132 |     labelled.add(Labelled { label: "first", value: scores[0] })
+    | variable:labelled  punctuation:.  field:add  punctuation:(  type:Labelled  punctuation:{  field:label  punctuation::  string:"first"  punctuation:,  field:value  punctuation::  variable:scores  punctuation:[  number:0  punctuation:]  punctuation:}  punctuation:)
+133 |     labelled.add(Labelled { label: "second", value: scores[1] })
+    | variable:labelled  punctuation:.  field:add  punctuation:(  type:Labelled  punctuation:{  field:label  punctuation::  string:"second"  punctuation:,  field:value  punctuation::  variable:scores  punctuation:[  number:1  punctuation:]  punctuation:}  punctuation:)
+134 |     tellEach(labelled)
+    | task:tellEach  punctuation:(  variable:labelled  punctuation:)
+135 | fi
     | keyword:fi

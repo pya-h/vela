@@ -1,0 +1,9 @@
+# error: 7:13: shape 'Point' takes no types, so '< … >' has nothing to name
+shape Point
+    x: int
+fi
+
+task main()
+    bind p: Point<int> = Point { x: 1 }
+    show(p.x)
+fi

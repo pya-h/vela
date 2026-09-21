@@ -598,16 +598,26 @@ fn type_angle(k: &Knowledge, q: usize) -> Option<usize> {
 }
 
 /// Whether the `<` at `p` opens types: one right after the name of a `task` or
-/// `shape`, or one whose matching `>` is followed by `(`, as the parser reads
-/// them.
+/// `shape`, one after the name of a shape that takes types in a written type, or
+/// one whose matching `>` is followed by `(` (a call) or `{` (a shape literal),
+/// as the parser reads them.
 fn opens_types(k: &Knowledge, p: usize) -> bool {
     if p >= 2 && k.ident(p - 1).is_some() && matches!(k.token(p - 2), Some(Token::Task | Token::Shape)) {
+        return true;
+    }
+    // `Box<` in a written type, where the name is a shape that takes types: the
+    // `>` may not be typed yet.
+    if let Some(name) = p.checked_sub(1).and_then(|q| k.ident(q))
+        && k.global(name, SymbolKind::Shape).is_some_and(|id| k.symbols().get(id).is_some_and(|shape| shape.detail.starts_with('<')))
+    {
         return true;
     }
     let mut depth = 0usize;
     for q in p + 1.. {
         match k.token(q) {
-            Some(Token::Gt) if depth == 0 => return k.token(q + 1) == Some(&Token::LParen),
+            // A call follows the types a task is given, and a literal the types
+            // a shape is given.
+            Some(Token::Gt) if depth == 0 => return matches!(k.token(q + 1), Some(Token::LParen | Token::LBrace)),
             Some(Token::Lt) => depth += 1,
             Some(Token::Gt) => depth -= 1,
             Some(token) if token.writes_type() => {}
@@ -1129,7 +1139,8 @@ fn type_items(k: &Knowledge, at: usize, after_arrow: bool, offer_maybe: bool) ->
 /// The types the declaration around the cursor takes (`<T: ordered>`), which
 /// are types inside it.
 fn type_params_here(k: &Knowledge, at: usize) -> Vec<CompletionItem> {
-    let Some((item, _)) = k.symbols().iter().enumerate().find(|(_, s)| s.kind == SymbolKind::Task && s.range.contains(&at)) else {
+    let declares = |kind: SymbolKind| matches!(kind, SymbolKind::Task | SymbolKind::Shape);
+    let Some((item, _)) = k.symbols().iter().enumerate().find(|(_, s)| declares(s.kind) && s.range.contains(&at)) else {
         return Vec::new();
     };
     k.symbols()
@@ -1138,7 +1149,7 @@ fn type_params_here(k: &Knowledge, at: usize) -> Vec<CompletionItem> {
         .map(|s| CompletionItem {
             label: s.name.clone(),
             kind: CompletionKind::Type,
-            detail: if s.detail.is_empty() { "a type this task takes".to_string() } else { format!("a type this task takes: {}", s.detail) },
+            detail: if s.detail.is_empty() { "a type this declaration takes".to_string() } else { format!("a type this declaration takes: {}", s.detail) },
             apply: None,
             snippet: None,
             boost: LOCAL,

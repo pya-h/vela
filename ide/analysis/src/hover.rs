@@ -141,6 +141,10 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
         }
         SymbolKind::Task => (format!("task {}{}", symbol.name, symbol.detail), from_module(k, symbol)),
         SymbolKind::TypeParam => {
+            let what = match parent.map(|p| p.kind) {
+                Some(SymbolKind::Shape) => "shape",
+                _ => "task",
+            };
             let task = parent.map(|p| p.name.as_str()).unwrap_or("?");
             let code = if symbol.detail.is_empty() { symbol.name.clone() } else { format!("{}: {}", symbol.name, symbol.detail) };
             let allows = match symbol.detail.as_str() {
@@ -151,13 +155,20 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 "fixed" => "Every type given for it never changes, so it can be a tuple's item.".to_string(),
                 other => format!("Every type given for it must be '{}'.", other),
             };
-            (code, format!("A type task {} takes, standing for the type each call gives it. {}", task, allows))
+            let gives = if what == "shape" { "each value of it is given" } else { "each call gives it" };
+            (code, format!("A type {} {} takes, standing for the type {}. {}", what, task, gives, allows))
         }
         SymbolKind::Shape | SymbolKind::Kind => {
             let keyword = if symbol.kind == SymbolKind::Shape { "shape" } else { "kind" };
             let private = if symbol.private { "priv " } else { "" };
-            let mut code = format!("{}{} {}\n", private, keyword, symbol.name);
+            // The types a shape takes go on its own line, as written; its
+            // fields and a kind's variants each go on a line of their own.
+            let takes = if symbol.detail.starts_with('<') { symbol.detail.as_str() } else { "" };
+            let mut code = format!("{}{} {}{}\n", private, keyword, symbol.name, takes);
             for (_, member) in k.children(id) {
+                if member.kind == SymbolKind::TypeParam {
+                    continue;
+                }
                 let separator = if member.kind == SymbolKind::Field { ": " } else { "" };
                 let private = if member.private { "priv " } else { "" };
                 code.push_str(&format!("    {}{}{}{}\n", private, vela::ast::unqualified(&member.name), separator, member.detail));

@@ -111,6 +111,22 @@ pub struct Checker {
     /// name of the task made for them, the generic task's name, the types, and
     /// where the call that needs it is.
     instances: Vec<(String, String, Vec<Type>, Span)>,
+    /// The shapes being made for their types, innermost last: a field of one may
+    /// name a shape given types of its own, which needs that shape made first
+    /// (see `shape_instance`).
+    making_shapes: Vec<String>,
+    /// For each shape made for a set of types, the shape and the types it was
+    /// made for (`Box__of__int` is `Box` given `int`), so a use of a declaration
+    /// that takes types can tell what a value's type gives it (see
+    /// `unify_params`).
+    made_of: HashMap<String, Applied>,
+    /// The shapes made for one set of types each (see `shape_instance`), to add
+    /// to the program's items.
+    made_shapes: Vec<Item>,
+    /// How each shape made for a set of types is written in a program
+    /// (`lib/util.Box<int>` for `lib/util.Box__of__int`), so an error names it as
+    /// the program writes it. Applied to every message (see `check_program`).
+    written_names: HashMap<String, String>,
     /// For each generic task, the copies its body makes of values of the types
     /// it takes into a region its header doesn't keep them in: the type's name,
     /// the region the copy goes into, whether the header names that region at
@@ -161,10 +177,22 @@ impl Checker {
         checker.modules = program.modules.iter().map(|scope| (scope.name.clone(), scope.clone())).collect();
         let result = checker
             .check_file(&mut program.items)
-            .and_then(|()| checker.expand_instances(&mut program.items));
+            .and_then(|()| checker.expand_instances(&mut program.items))
+            .map(|()| program.items.extend(std::mem::take(&mut checker.made_shapes)));
         program.type_places = checker.type_places;
         // Names in a message are written as the file with the error writes them.
+        let written = std::mem::take(&mut checker.written_names);
         result.map_err(|mut error| {
+            // A shape made for one set of types is named as the program gives
+            // them: `Box<int>`, not the name the compiler made for it. The
+            // longest name first, so one whose name starts another is not cut.
+            let mut made: Vec<(&String, &String)> = written.iter().collect();
+            made.sort_by_key(|(name, _)| std::cmp::Reverse(name.len()));
+            for (name, form) in made {
+                if error.message.contains(name.as_str()) {
+                    error.message = error.message.replace(name.as_str(), form);
+                }
+            }
             if let Some(scope) = error.span.and_then(|span| program.modules.iter().find(|scope| scope.file == span.file)) {
                 error.message = scope.spelling.text(&error.message);
             }
@@ -359,7 +387,7 @@ impl Checker {
             task.given = types.clone();
             let given: HashMap<String, Type> = source.types.iter().map(|param| param.name.clone()).zip(types).collect();
             let mut made = Made::default();
-            substitute_task(&mut task, &given, &mut made);
+            self.substitute_task(&mut task, &given, &mut made)?;
             for (name, types, at) in made.needed {
                 queue.push((instance_name(&name, &types), name, types, at));
             }
@@ -444,13 +472,29 @@ impl Checker {
             self.current_module = module_of(name).to_string();
             self.check_private_types(item)?;
             match item {
-                Item::Shape(s) => self.check_fields(&s.fields)?,
+                Item::Shape(s) => {
+                    // A shape's own types are in scope while its fields are
+                    // read, as a task's are while its header and body are.
+                    self.enter_type_params(&s.types);
+                    let fields = self.check_fields(&mut s.fields);
+                    self.type_params.clear();
+                    fields?;
+                    // The fields as they were read, with their regions settled,
+                    // so the shape made for one set of types (see
+                    // `shape_instance`) substitutes into them.
+                    if let Some(shape) = self.shapes.get_mut(&s.name) {
+                        shape.fields = s.fields.clone();
+                    }
+                }
                 Item::Kind(k) => {
                     if k.variants.is_empty() {
                         return err(k.span, format!("kind '{}' has no variants", k.name));
                     }
-                    for v in &k.variants {
-                        self.check_fields(&v.payload)?;
+                    for v in &mut k.variants {
+                        self.check_fields(&mut v.payload)?;
+                    }
+                    if let Some(kind) = self.kinds.get_mut(&k.name) {
+                        kind.variants = k.variants.clone();
                     }
                 }
                 Item::Task(t) => {
@@ -541,14 +585,403 @@ impl Checker {
     }
 
     /// Checks a shape's fields or a variant's payload.
-    fn check_fields(&self, fields: &[Field]) -> Result<()> {
-        let mut seen: HashMap<&str, Span> = HashMap::new();
-        for field in fields {
-            if let Some(at) = seen.get(field.name.as_str()) {
+    /// A shape literal, `Point { x: 1 }` or `Box<int> { value: none }`: every
+    /// field given exactly once, and the region of the value they make.
+    fn check_struct_init(&mut self, span: Span, name: &mut String, written: &mut Vec<TypeArg>, fields: &mut [FieldInit]) -> Result<Type> {
+        if self.sees(name) && self.kinds.contains_key(name.as_str()) {
+            return err(span, format!("'{}' is a kind, not a shape; create its values with its variants", name));
+        }
+        let mut shape = self.shapes.get(name.as_str()).filter(|_| self.sees(name)).ok_or_else(|| self.unknown_shape(span, name))?.clone();
+        // A literal of a shape that takes types is a literal of the shape made
+        // for them, so the rest reads as any other literal. Inside a declaration
+        // that takes types, where a type given isn't known yet, it stays a
+        // literal of the shape with the types it is given (see `substitute_expr`).
+        let mut given_types: Option<Vec<Type>> = None;
+        if !shape.types.is_empty() {
+            let types = self.literal_types(span, name, written, &shape, fields)?;
+            if types.iter().any(|ty| !ty.params().is_empty()) {
+                *written = types.iter().map(|ty| (ty.clone(), span)).collect();
+                given_types = Some(types);
+            } else {
+                let made = self.shape_instance(name, &types, span)?;
+                *name = made.clone();
+                written.clear();
+                shape = self.shapes.get(&made).cloned().unwrap_or(shape);
+            }
+        } else if let Some((ty, at)) = written.first() {
+            return err(*at, format!("shape '{}' takes no types, so '< … >' has nothing to name; write '{}' alone", unqualified(name), ty));
+        }
+        if module_of(name) != self.current_module
+            && let Some(hidden) = shape.fields.iter().find(|f| f.private)
+        {
+            return err(
+                span,
+                format!("'{}' can't be built outside its file, since its field '{}' is private; a task of its module can build it", name, hidden.name),
+            );
+        }
+        // Fields may be given in any order, each exactly once.
+        let mut seen: HashMap<String, Span> = HashMap::new();
+        let mut declared = Vec::new();
+        for field in fields.iter() {
+            let Some(field_def) = shape.fields.iter().find(|f| f.name == field.name) else {
+                return err(field.span, format!("shape '{}' has no field '{}'", name, field.name));
+            };
+            if let Some(at) = seen.get(&field.name) {
+                return err(field.span, format!("field '{}' is already given at {}:{}", field.name, at.line, at.col));
+            }
+            seen.insert(field.name.clone(), field.span);
+            declared.push(field_def.clone());
+        }
+        if let Some(missing) = shape.fields.iter().find(|f| !seen.contains_key(&f.name)) {
+            return err(span, format!("missing field '{}' in '{}'", missing.name, name));
+        }
+        // The types given in place of the names the shape takes, for a literal
+        // whose types aren't all known yet.
+        if let Some(types) = &given_types {
+            let given: HashMap<&str, &Type> = shape.types.iter().map(|param| param.name.as_str()).zip(types).collect();
+            for field in &mut declared {
+                field.ty = field.ty.map_params(&mut |name| given.get(name).map(|ty| (*ty).clone()));
+            }
+        }
+        let mut values: Vec<&mut Expr> = fields.iter_mut().map(|field| &mut field.value).collect();
+        let region = self.check_fields_of_value(&mut values, &declared)?;
+        match given_types {
+            Some(types) => {
+                let region = self.region_of_applied(name, &shape, region);
+                Ok(Type::Applied(Box::new(Applied { name: name.clone(), types, region })))
+            }
+            None => Ok(Type::Named(name.clone(), self.region_of_value(name, region))),
+        }
+    }
+
+    /// The region of a value of a shape given types not all known yet: the one
+    /// its values hold something in, when any type it may be given could.
+    fn region_of_applied(&self, name: &str, shape: &ShapeDef, region: String) -> Option<String> {
+        let may_hold = self.takes_region.contains(name) || shape.fields.iter().any(|field| !field.ty.params().is_empty());
+        may_hold.then_some(region)
+    }
+
+    /// A written `Box<int>`: the shape made for those types, in the region the
+    /// type names. Inside a declaration that takes types, where a type given
+    /// isn't known yet (`Box<T>`), the application is kept as it is until the
+    /// declaration is used.
+    fn resolve_applied(&mut self, applied: &Applied, span: Span, place: TypePlace, inside: Option<&str>) -> Result<Type> {
+
+        let name = &applied.name;
+        let at = self.place(span, name);
+        if self.type_param(name).is_some() {
+            return err(at, format!("'{}' is a type this declaration takes, so it takes no types of its own", name));
+        }
+        if self.sees(name) && self.kinds.contains_key(name.as_str()) {
+            return err(at, format!("'{}' is a kind, and a kind takes no types yet, so it can't be given any", unqualified(name)));
+        }
+        let Some(def) = self.shapes.get(name.as_str()).filter(|_| self.sees(name)).cloned() else {
+            return Err(self.unknown_shape(at, name));
+        };
+        if def.types.is_empty() {
+            return err(at, format!("shape '{}' takes no types, so '< … >' has nothing to name", unqualified(name)));
+        }
+        if def.types.len() != applied.types.len() {
+            let names: Vec<&str> = def.types.iter().map(|param| param.name.as_str()).collect();
+            return err(
+                at,
+                format!(
+                    "shape '{}' takes {}, so name {}, as in '{}<{}>'",
+                    unqualified(name),
+                    count(def.types.len(), "type"),
+                    if def.types.len() == 1 { "it" } else { "all of them" },
+                    unqualified(name),
+                    names.join(", ")
+                ),
+            );
+        }
+        // The types it is given are in the region of the value holding them, as
+        // a shape's fields are, so they take the region written on the whole
+        // type (or the one around it).
+        let region = applied.region.as_deref().or(inside);
+        let mut types = Vec::new();
+        for ty in &applied.types {
+            types.push(self.resolve_regions(ty, span, place, region)?);
+        }
+        for (param, ty) in def.types.iter().zip(&types) {
+            self.check_need("shape", name, param, ty, at)?;
+        }
+        if types.iter().any(|ty| !ty.params().is_empty()) {
+            // A shape given a type this declaration takes: whether its values
+            // live in a region depends on the types given, so it names one
+            // wherever any of them could.
+            let may_hold = self.takes_region.contains(name.as_str()) || def.fields.iter().any(|field| !field.ty.params().is_empty());
+            if may_hold && region.is_none() && matches!(place, TypePlace::Header | TypePlace::Body) {
+                return err(
+                    at,
+                    format!(
+                        "'{0}<{1}>' may hold text or pointers, since the types given may, so it names the region its values live in: write '{0}<{1}>@r', with 'r' a region the header names (such as an 'r: region' parameter)",
+                        unqualified(name),
+                        types.iter().map(Type::to_string).collect::<Vec<_>>().join(", ")
+                    ),
+                );
+            }
+            return Ok(Type::Applied(Box::new(applied.with_types(types))));
+        }
+        let key = self.shape_instance(name, &types, at)?;
+        self.resolve_regions(&Type::Named(key, applied.region.clone()), span, place, inside)
+    }
+
+    /// The shape made for the types `types` give the shape `name`, made on the
+    /// first use. The types name no region, as a shape's fields don't, so one
+    /// shape serves every region: the field of `Box<text>` is `text`, which is
+    /// in the region of the value holding it, so `Box<text>@r` and
+    /// `Box<text>@s` are that one shape in two regions.
+    fn shape_instance(&mut self, name: &str, types: &[Type], at: Span) -> Result<String> {
+        let types: Vec<Type> = types.iter().map(Type::without_regions).collect();
+        let key = instance_name(name, &types);
+        if self.shapes.contains_key(&key) {
+            return Ok(key);
+        }
+        let Some(source) = self.shapes.get(name).cloned() else {
+            return Err(Error::internal_at(at, format!("no shape '{}' to make for {} types", name, types.len())));
+        };
+        if types.iter().any(|ty| type_depth(ty) > MAX_TYPE_DEPTH) {
+            return err(
+                at,
+                format!(
+                    "this use of '{}' gives a type built up more than {} types deep; a shape whose field gives it a type built from its own never stops",
+                    unqualified(name),
+                    MAX_TYPE_DEPTH
+                ),
+            );
+        }
+        if self.made_shapes.len() >= MAX_INSTANCES {
+            return err(
+                at,
+                format!(
+                    "more than {} shapes are made for the types they are given, which no program needs; a shape whose field gives it a type built from its own never stops",
+                    MAX_INSTANCES
+                ),
+            );
+        }
+        // A field naming the same shape with the same types is the shape itself,
+        // however deep the pointers go; one that gives it a type built from its
+        // own (`Grow<Grow<T>>` in `Grow<T>`) would need an endless line of them.
+        if self.making_shapes.len() >= MAX_TYPE_DEPTH {
+            let names = source.types.iter().map(|param| param.name.clone()).collect::<Vec<_>>().join(", ");
+            return err(
+                at,
+                format!(
+                    "'{0}' would need more than {1} shapes made for it, one inside the next: a field of it gives it a type built from its own, which never stops. A field can name the shape with the types it takes, as in 'maybe ^{0}<{2}>'",
+                    unqualified(name),
+                    MAX_TYPE_DEPTH,
+                    names
+                ),
+            );
+        }
+        // The name is registered before the fields are read, so a field naming
+        // the same shape again (behind a pointer) is this shape rather than an
+        // endless line of them.
+        let written = format!("{}<{}>", name, types.iter().map(Type::to_string).collect::<Vec<_>>().join(", "));
+        self.written_names.insert(key.clone(), written);
+        self.made_of.insert(key.clone(), Applied { name: name.to_string(), types: types.clone(), region: None });
+        let made = ShapeDef { name: key.clone(), types: Vec::new(), given: types.clone(), fields: Vec::new(), span: source.span, private: source.private };
+        self.shapes.insert(key.clone(), made);
+        self.making_shapes.push(key.clone());
+        let fields = self.instance_fields(&source, types);
+        self.making_shapes.pop();
+        let fields = fields?;
+        if let Some(shape) = self.shapes.get_mut(&key) {
+            shape.fields = fields.clone();
+        }
+        // What its values hold, and how large they are, as for a shape the
+        // program declares (see `check_file` and `check_sizes`).
+        if fields.iter().any(|field| holds_pointers(&field.ty, &self.regional)) {
+            self.regional.insert(key.clone());
+        }
+        if self.regional.contains(&key) || fields.iter().any(|field| holds_text(&field.ty, &self.takes_region)) {
+            self.takes_region.insert(key.clone());
+        }
+        if fields.iter().any(|field| holds_changeable(&field.ty, &self.changeable)) {
+            self.changeable.insert(key.clone());
+        }
+        let bytes = fields_bytes(&fields, &self.sizes);
+        if bytes > MAX_VALUE_BYTES {
+            return err(at, format!("'{}' is too large: a value of it would take more than 1 TiB of memory", key));
+        }
+        self.sizes.insert(key.clone(), bytes);
+        self.check_value_cycle(&key, &mut HashSet::new(), &mut Vec::new())?;
+        if let Some(shape) = self.shapes.get(&key) {
+            self.made_shapes.push(Item::Shape(shape.clone()));
+        }
+        Ok(key)
+    }
+
+    /// The shape a literal of a shape that takes types is of: the types the
+    /// literal names (`Box<int> { … }`), or the ones the values it gives show
+    /// (`Box { value: 1 }`).
+    fn literal_types(&mut self, span: Span, name: &str, written: &mut [TypeArg], shape: &ShapeDef, fields: &mut [FieldInit]) -> Result<Vec<Type>> {
+        let mut given: HashMap<String, Type> = HashMap::new();
+        if let Some((_, at)) = written.first() {
+            if written.len() != shape.types.len() {
+                let names: Vec<&str> = shape.types.iter().map(|param| param.name.as_str()).collect();
+                return err(
+                    *at,
+                    format!(
+                        "shape '{}' takes {}, so name all of them, as in '{}<{}> {{ … }}'",
+                        unqualified(name),
+                        count(shape.types.len(), "type"),
+                        unqualified(name),
+                        names.join(", ")
+                    ),
+                );
+            }
+            for ((ty, at), param) in written.iter_mut().zip(&shape.types) {
+                // The types a shape is given name no region, as its fields
+                // don't: the region comes from the values, as for any literal.
+                *ty = self.resolve_type(ty, *at, TypePlace::Field)?;
+                self.check_need("shape", name, param, ty, *at)?;
+                given.insert(param.name.clone(), ty.clone());
+            }
+            return Ok(shape.types.iter().filter_map(|param| given.get(&param.name).cloned()).collect());
+        }
+        // Nothing written: the values say which types they are. They are checked
+        // again with the shape made for them, so what this check left to settle
+        // is left to that one.
+        let copies = self.unsettled_copies.len();
+        let untold = self.unsettled_types.len();
+        let mut found = Ok(());
+        for field in fields.iter_mut() {
+            let Some(declared) = shape.fields.iter().find(|f| f.name == field.name) else { continue };
+            match self.check_expr(&mut field.value) {
+                Ok(ty) => {
+                    self.match_params(&declared.ty, &ty, &mut given);
+                }
+                Err(error) => {
+                    found = Err(error);
+                    break;
+                }
+            }
+        }
+        self.unsettled_copies.truncate(copies);
+        self.unsettled_types.truncate(untold);
+        found?;
+        let mut types = Vec::new();
+        for param in &shape.types {
+            let Some(ty) = given.get(&param.name) else {
+                return err(
+                    span,
+                    format!(
+                        "can't tell which type '{}' is for this '{}', since no field it is given names one; write it, as in '{}<int> {{ … }}'",
+                        param.name,
+                        unqualified(name),
+                        unqualified(name)
+                    ),
+                );
+            };
+            self.check_need("shape", name, param, ty, span)?;
+            types.push(ty.clone());
+        }
+        Ok(types)
+    }
+
+    /// The fields of the shape made for `types`: the shape's own, with those
+    /// types in place of the names it takes, and each shape they give types to
+    /// made in turn.
+    fn instance_fields(&mut self, source: &ShapeDef, types: Vec<Type>) -> Result<Vec<Field>> {
+        let given: HashMap<String, Type> = source.types.iter().map(|param| param.name.clone()).zip(types).collect();
+        let mut fields = Vec::new();
+        for field in &source.fields {
+            let ty = field.ty.map_params(&mut |param| given.get(param).cloned());
+            let ty = self.resolve_type(&ty, field.ty_span, TypePlace::Field)?;
+            fields.push(Field { ty, ..field.clone() });
+        }
+        Ok(fields)
+    }
+
+    /// The type with each shape made for a set of types written as that shape
+    /// given them (`Box__of__int` as `Box<int>`), so that a header naming
+    /// `Box<T>` and a value of `Box<int>` can be matched up (see `unify_params`
+    /// and `unify_regions`). It is the checker's own reading; the types in the
+    /// program stay as the shapes made for them.
+    fn unmade(&self, ty: &Type) -> Type {
+        let boxed = |ty: &Type| Box::new(self.unmade(ty));
+        match ty {
+            Type::Named(name, region) => match self.made_of.get(name) {
+                Some(made) => Type::Applied(Box::new(Applied {
+                    name: made.name.clone(),
+                    types: made.types.iter().map(|ty| self.unmade(ty)).collect(),
+                    region: region.clone(),
+                })),
+                None => ty.clone(),
+            },
+            Type::Applied(applied) => Type::Applied(Box::new(Applied {
+                name: applied.name.clone(),
+                types: applied.types.iter().map(|ty| self.unmade(ty)).collect(),
+                region: applied.region.clone(),
+            })),
+            Type::Ptr(inner, region) => Type::Ptr(boxed(inner), region.clone()),
+            Type::Slice(inner, region) => Type::Slice(boxed(inner), region.clone()),
+            Type::Array(inner, count) => Type::Array(boxed(inner), *count),
+            Type::Range(inner) => Type::Range(boxed(inner)),
+            Type::Maybe(inner) => Type::Maybe(boxed(inner)),
+            Type::Fail(inner) => Type::Fail(boxed(inner)),
+            Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
+            Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| self.unmade(ty)).collect()),
+            Type::Results(types) => Type::Results(types.iter().map(|ty| self.unmade(ty)).collect()),
+            other => other.clone(),
+        }
+    }
+
+    /// Matches a type a declaration names against the type a value is, with
+    /// both read the same way (see `unmade`), and records which region of the
+    /// caller each region the declaration names stands for. A shape made for
+    /// its types is one type with the shape given them, so a header naming
+    /// `Box<text>@r` is matched by a value of the shape made for `Box<text>`.
+    fn match_regions(&self, named: &Type, value: &Type, regions: &mut HashMap<String, String>) {
+        unify_regions(&self.unmade(named), &self.unmade(value), regions);
+    }
+
+    /// Matches as `match_regions` does, and records which type each name the
+    /// declaration takes stands for.
+    fn match_params(&self, named: &Type, value: &Type, given: &mut HashMap<String, Type>) {
+        unify_params(&self.unmade(named), &self.unmade(value), given);
+    }
+
+    /// Puts the shape made for its types in place of every application in `ty`
+    /// whose types are all known, which is what a use of a declaration that
+    /// takes types leaves behind (see `expand_instances`).
+    fn settle_applications(&mut self, ty: &mut Type, at: Span) -> Result<()> {
+        match ty {
+            Type::Applied(applied) => {
+                for ty in &mut applied.types {
+                    self.settle_applications(ty, at)?;
+                }
+                if applied.types.iter().any(|ty| !ty.params().is_empty()) {
+                    return Ok(());
+                }
+                let applied = applied.clone();
+                let key = self.shape_instance(&applied.name, &applied.types, at)?;
+                let region = applied.region.filter(|_| self.takes_region.contains(&key));
+                *ty = Type::Named(key, region);
+                Ok(())
+            }
+            Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Array(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => {
+                self.settle_applications(inner, at)
+            }
+            Type::Or(value, error) => {
+                self.settle_applications(value, at)?;
+                self.settle_applications(error, at)
+            }
+            Type::Tuple(types) | Type::Results(types) => types.iter_mut().try_for_each(|ty| self.settle_applications(ty, at)),
+            _ => Ok(()),
+        }
+    }
+
+    fn check_fields(&mut self, fields: &mut [Field]) -> Result<()> {
+        let mut seen: HashMap<String, Span> = HashMap::new();
+        for field in fields.iter_mut() {
+            if let Some(at) = seen.get(&field.name) {
                 return err(field.span, format!("field '{}' is already defined at {}:{}", field.name, at.line, at.col));
             }
-            seen.insert(&field.name, field.span);
-            self.resolve_type(&field.ty, field.ty_span, TypePlace::Field)?;
+            seen.insert(field.name.clone(), field.span);
+            field.ty = self.resolve_type(&field.ty, field.ty_span, TypePlace::Field)?;
         }
         Ok(())
     }
@@ -654,7 +1087,7 @@ impl Checker {
     ///   which inside a task must be a region visible there;
     /// - a shape or kind without pointers lives in no region, so `Point@r` is
     ///   an error, while the `Point` in `^Point@r` just has its region dropped.
-    fn resolve_type(&self, ty: &Type, span: Span, place: TypePlace) -> Result<Type> {
+    fn resolve_type(&mut self, ty: &Type, span: Span, place: TypePlace) -> Result<Type> {
         self.check_type(ty, span)?;
         // The sizes of shapes and kinds are known inside tasks; fields and
         // headers are checked for size once they are (see `check_task`).
@@ -665,7 +1098,7 @@ impl Checker {
     }
 
     /// `resolve_type` for `ty` inside a pointer of region `inside`.
-    fn resolve_regions(&self, ty: &Type, span: Span, place: TypePlace, inside: Option<&str>) -> Result<Type> {
+    fn resolve_regions(&mut self, ty: &Type, span: Span, place: TypePlace, inside: Option<&str>) -> Result<Type> {
         let given = |region: &Option<String>| -> Result<()> {
             match (place, region) {
                 (TypePlace::Field, Some(region)) => err(
@@ -682,6 +1115,11 @@ impl Checker {
         };
         let needs_region = matches!(place, TypePlace::Header | TypePlace::Body);
         match ty {
+            // `Box<int>`: the shape made for those types (see `resolve_applied`).
+            Type::Applied(applied) => {
+                let applied = applied.clone();
+                self.resolve_applied(&applied, span, place, inside)
+            }
             Type::Ptr(inner, region) => {
                 given(region)?;
                 if needs_region && region.is_none() {
@@ -744,6 +1182,20 @@ impl Checker {
                 Ok(Type::Param(name.clone()))
             }
             Type::Named(name, region) => {
+                if let Some(shape) = self.shapes.get(name).filter(|shape| !shape.types.is_empty()) {
+                    let names: Vec<&str> = shape.types.iter().map(|param| param.name.as_str()).collect();
+                    return err(
+                        self.place(span, name),
+                        format!(
+                            "shape '{}' takes {}, so name {}, as in '{}<{}>'",
+                            unqualified(name),
+                            count(shape.types.len(), "type"),
+                            if shape.types.len() == 1 { "it" } else { "all of them" },
+                            unqualified(name),
+                            names.join(", ")
+                        ),
+                    );
+                }
                 given(region)?;
                 if !self.regional.contains(name) {
                     // A shape or kind holding text may name the region its text
@@ -859,6 +1311,9 @@ impl Checker {
             }
             // `T`: the type each use of a generic declaration gives it.
             Type::Named(name, _) if self.type_param(name).is_some() => Ok(()),
+            // `Box<int>`: what it is given is checked with it (see
+            // `resolve_applied`), which also reports a name that is no shape.
+            Type::Applied(applied) => applied.types.iter().try_for_each(|ty| self.check_type(ty, span)),
             Type::Named(name, _) if !self.sees(name) || (!self.shapes.contains_key(name) && !self.kinds.contains_key(name)) => {
                 match self.variants.get(name).filter(|_| self.sees(name)) {
                     Some(info) => err(
@@ -877,6 +1332,15 @@ impl Checker {
     /// `None` when nothing in it can change.
     fn changeable_item(&self, ty: &Type) -> Option<String> {
         match ty {
+            // A shape given types: what its fields hold, with those types in
+            // place of the names it takes.
+            Type::Applied(applied) => {
+                let shape = self.shapes.get(&applied.name)?;
+                let given: HashMap<&str, &Type> = shape.types.iter().map(|param| param.name.as_str()).zip(&applied.types).collect();
+                let fields: Vec<Type> = shape.fields.iter().map(|field| field.ty.map_params(&mut |name| given.get(name).map(|ty| (*ty).clone()))).collect();
+                let found = fields.iter().find_map(|ty| self.changeable_item(ty))?;
+                Some(format!("'{}', which holds {}", ty, found))
+            }
             // Only a type required to be `fixed` is known never to change.
             Type::Param(name) if !self.allows(Need::Fixed, ty) => {
                 Some(format!("'{0}', which may be any type here; require it, as in '<{0}: {1}>'", name, Need::Fixed.word()))
@@ -939,7 +1403,16 @@ impl Checker {
             if on_path.contains(target) {
                 let start = path.iter().position(|(name, _, _)| *name == target).unwrap_or_default();
                 let chain: Vec<&str> = path.iter().skip(start).map(|(name, _, _)| *name).chain([target]).collect();
-                return err(span, format!("'{}' contains itself by value ({}); use a pointer such as 'maybe ^{}'", target, chain.join(" -> "), target));
+                // A shape that takes types keeps them in the pointer that
+                // breaks the cycle: `maybe ^Node<T>`.
+                let takes = self.shapes.get(target).map_or(String::new(), |shape| match shape.types.is_empty() {
+                    true => String::new(),
+                    false => format!("<{}>", shape.types.iter().map(|param| param.name.clone()).collect::<Vec<_>>().join(", ")),
+                });
+                return err(
+                    span,
+                    format!("'{}' contains itself by value ({}); use a pointer such as 'maybe ^{}{}'", target, chain.join(" -> "), target, takes),
+                );
             }
             if !acyclic.contains(target) {
                 on_path.insert(target);
@@ -1060,7 +1533,7 @@ impl Checker {
         // every use must fit that (see `check_copies_of`).
         if !task.types.is_empty() {
             let mut made = Made::default();
-            substitute_task(task, &HashMap::new(), &mut made);
+            self.substitute_task(task, &HashMap::new(), &mut made)?;
             let kept = keeps_params(task);
             let named = header_regions(task);
             let loose: Vec<(String, String, bool, Span)> = made
@@ -2024,7 +2497,7 @@ impl Checker {
     /// Rewrites `name {}` into an empty plan B when `name` is a variable rather
     /// than a shape: the parser reads both as a shape literal.
     fn resolve_empty_plan_b(&self, expr: &mut Expr) {
-        let ExprKind::StructInit(name, fields) = &mut expr.kind else { return };
+        let ExprKind::StructInit { name, fields, .. } = &mut expr.kind else { return };
         if !fields.is_empty() || (self.sees(name) && self.shapes.contains_key(name.as_str())) || self.lookup(name).is_none() {
             return;
         }
@@ -2150,41 +2623,7 @@ impl Checker {
                 ty.ptr_inner().cloned()
                     .ok_or_else(|| Error::at(span, format!("'^' reads the value a pointer points to, but this value is {}{}", ty, hint)))
             }
-            ExprKind::StructInit(name, fields) => {
-                if self.sees(name) && self.kinds.contains_key(name.as_str()) {
-                    return err(span, format!("'{}' is a kind, not a shape; create its values with its variants", name));
-                }
-                let shape = self.shapes.get(name.as_str()).filter(|_| self.sees(name))
-                    .ok_or_else(|| self.unknown_shape(span, name))?
-                    .clone();
-                if module_of(name) != self.current_module
-                    && let Some(hidden) = shape.fields.iter().find(|f| f.private)
-                {
-                    return err(
-                        span,
-                        format!("'{}' can't be built outside its file, since its field '{}' is private; a task of its module can build it", name, hidden.name),
-                    );
-                }
-                // Fields may be given in any order, each exactly once.
-                let mut given: HashMap<String, Span> = HashMap::new();
-                let mut declared = Vec::new();
-                for field in fields.iter() {
-                    let Some(field_def) = shape.fields.iter().find(|f| f.name == field.name) else {
-                        return err(field.span, format!("shape '{}' has no field '{}'", name, field.name));
-                    };
-                    if let Some(at) = given.get(&field.name) {
-                        return err(field.span, format!("field '{}' is already given at {}:{}", field.name, at.line, at.col));
-                    }
-                    given.insert(field.name.clone(), field.span);
-                    declared.push(field_def.clone());
-                }
-                if let Some(missing) = shape.fields.iter().find(|f| !given.contains_key(&f.name)) {
-                    return err(span, format!("missing field '{}' in '{}'", missing.name, name));
-                }
-                let mut values: Vec<&mut Expr> = fields.iter_mut().map(|field| &mut field.value).collect();
-                let region = self.check_fields_of_value(&mut values, &declared)?;
-                Ok(Type::Named(name.clone(), self.region_of_value(name, region)))
-            }
+            ExprKind::StructInit { name, types, fields } => self.check_struct_init(span, name, types, fields),
             ExprKind::Range(..) => err(span, "a range can only be used in 'each' or to take part of an array or slice, as in 'xs[1..3]'"),
             ExprKind::Fail(error) => {
                 let ty = self.check_expr(error)?;
@@ -2529,7 +2968,7 @@ impl Checker {
             (ExprKind::Repeat { value, .. }, Type::Array(items, _)) => self.settle_copies(value, items),
             (ExprKind::Tuple(values), Type::Tuple(items)) => values.iter_mut().zip(items).try_for_each(|(value, item)| self.settle_copies(value, item)),
             (ExprKind::Wrap(inner), Type::Maybe(value) | Type::Or(value, _)) => self.settle_copies(inner, value),
-            (ExprKind::StructInit(name, fields), Type::Named(_, Some(region))) => {
+            (ExprKind::StructInit { name, fields, .. }, Type::Named(_, Some(region))) => {
                 let Some(shape) = self.shapes.get(name.as_str()).cloned() else { return Ok(()) };
                 fields.iter_mut().try_for_each(|field| match shape.fields.iter().find(|f| f.name == field.name) {
                     Some(declared) => self.settle_copies(&mut field.value, &self.in_region(&declared.ty, region)),
@@ -2656,7 +3095,7 @@ impl Checker {
             // goes (see `settle_types`).
             if extracted.params().iter().any(|name| self.type_param(name).is_none()) {
                 let mut given = HashMap::new();
-                unify_params(extracted, &ty, &mut given);
+                self.match_params(extracted, &ty, &mut given);
                 let settled = extracted.map_params(&mut |name| given.get(name).cloned());
                 if settled != *extracted {
                     return self.coerce(e, &settled).map(|()| Some((settled, e.span)));
@@ -2664,7 +3103,7 @@ impl Checker {
             }
             if extracted.regions().contains(&ANY_REGION) {
                 let mut regions = HashMap::new();
-                unify_regions(extracted, &ty, &mut regions);
+                self.match_regions(extracted, &ty, &mut regions);
                 let settled = extracted.map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| region.to_string())));
                 if settled != *extracted {
                     return self.coerce(e, &settled).map(|()| Some((settled, e.span)));
@@ -2789,6 +3228,22 @@ impl Checker {
 
     fn field_type(&self, base: &Type, field: &str, span: Span) -> Result<Type> {
         match base {
+            // A shape given a type this declaration takes: its field's type is
+            // the shape's with the types given in place of the names it takes.
+            Type::Applied(applied) => {
+                let Some(shape) = self.shapes.get(&applied.name) else {
+                    return err(span, format!("type {} has no fields", base));
+                };
+                let Some(found) = shape.fields.iter().find(|f| f.name == field) else {
+                    return err(span, format!("shape '{}' has no field '{}'", unqualified(&applied.name), field));
+                };
+                if found.private && module_of(&applied.name) != self.current_module {
+                    return err(span, format!("'{}' is a private field of '{}', which only its own file can use", field, unqualified(&applied.name)));
+                }
+                let given: HashMap<&str, &Type> = shape.types.iter().map(|param| param.name.as_str()).zip(&applied.types).collect();
+                let ty = found.ty.map_params(&mut |name| given.get(name).map(|ty| (*ty).clone()));
+                Ok(self.field_in(&ty, &applied.region))
+            }
             Type::Named(name, region) => {
                 let Some(shape) = self.shapes.get(name) else {
                     return err(span, format!("'{}' is a kind and has no fields; use match to read its values", name));
@@ -2854,7 +3309,7 @@ impl Checker {
         let mut regions = HashMap::new();
         for (value, field) in values.iter_mut().zip(declared) {
             let ty = self.check_expr(value)?;
-            unify_regions(&self.in_region(&field.ty, OWN), &ty, &mut regions);
+            self.match_regions(&self.in_region(&field.ty, OWN), &ty, &mut regions);
         }
         let region = regions.remove(OWN).unwrap_or_else(|| ANY_REGION.to_string());
         for (value, field) in values.iter_mut().zip(declared) {
@@ -2884,10 +3339,13 @@ impl Checker {
         let mut regions: HashMap<String, String> = HashMap::new();
         for (arg, (param, ty)) in args.iter_mut().zip(params) {
             if *ty != Type::Region {
+                // A value of a shape made for its types is read as that shape
+                // given them, so a header naming `Box<T>` matches it (see
+                // `match_regions`).
                 let actual = self.check_expr(arg)?;
-                unify_regions(ty, &actual, &mut regions);
-                unify_params(ty, &actual, &mut given);
-                unify_params(ty, &actual, &mut shown);
+                self.match_regions(ty, &actual, &mut regions);
+                self.match_params(ty, &actual, &mut given);
+                self.match_params(ty, &actual, &mut shown);
                 continue;
             }
             let ExprKind::Var(region) = &arg.kind else {
@@ -2922,36 +3380,19 @@ impl Checker {
         // it, and the types it names are put in place of the parameters.
         for (param, at) in info.types.iter().zip(&places) {
             if let Some(ty) = given.get(&param.name) {
-                self.check_need(task, param, ty, *at)?;
+                self.check_need("task", task, param, ty, *at)?;
             }
         }
-        // The header's own region names first: the types put in place of the
-        // parameters carry the regions of the values given, which are already
-        // the caller's.
-        let substitute = |ty: &Type| {
-            let ty = ty.map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| ANY_REGION.to_string())));
-            ty.map_params(&mut |name| given.get(name).cloned())
-        };
         // Everything a value in a region holds is in that region, so a type
         // given for a `T` must be of the region the header keeps it in.
         if !info.types.is_empty() {
-            for ty in params.iter().map(|(_, ty)| substitute(ty)).chain([substitute(ret)]) {
-                if let Some((outer, inner)) = region_conflict(&ty, None) {
-                    return err(
-                        span,
-                        format!(
-                            "'{0}' would keep this in region '{1}' and in region '{2}', but everything a value in a region holds is in that region; copy it into '{1}' first, as in 'value.copy() at {1}'",
-                            unqualified(task), outer, inner
-                        ),
-                    );
-                }
-            }
+            self.check_kept_regions(span, task, info, &regions, &given)?;
         }
         for (arg, (param, ty)) in args.iter_mut().zip(params) {
             if *ty == Type::Region {
                 continue;
             }
-            let expected = substitute(ty);
+            let expected = self.settled_type(ty, &regions, &given, span)?;
             let actual = arg.ty()?.clone();
             let same_but_region = [Some(&expected), expected.extracted()].into_iter().flatten().any(|e| actual.without_regions() == e.without_regions());
             match self.coerce(arg, &expected) {
@@ -2975,7 +3416,7 @@ impl Checker {
                 result => result?,
             }
         }
-        let sent = substitute(ret);
+        let sent = self.settled_type(ret, &regions, &given, span)?;
         // A type no argument names is worked out from the place the value goes
         // (see `settle_types`), or written at the call.
         let missing: Vec<&TypeParam> = info.types.iter().filter(|param| !given.contains_key(&param.name)).collect();
@@ -2993,6 +3434,35 @@ impl Checker {
             .collect();
         self.note_instance(span, task, written);
         Ok(sent)
+    }
+
+    /// One type of a task's header as the call sees it: the caller's regions in
+    /// place of the header's own names, the types the call gives in place of the
+    /// names it takes, and the shape made for those types in place of a shape
+    /// given them (see `settle_applications`).
+    fn settled_type(&mut self, ty: &Type, regions: &HashMap<String, String>, given: &HashMap<String, Type>, at: Span) -> Result<Type> {
+        let ty = ty.map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| ANY_REGION.to_string())));
+        let mut ty = ty.map_params(&mut |name| given.get(name).cloned());
+        self.settle_applications(&mut ty, at)?;
+        Ok(ty)
+    }
+
+    /// Rejects a call whose types would make the task keep a value of one region
+    /// inside a value of another, which no value can do.
+    fn check_kept_regions(&mut self, span: Span, task: &str, info: &TaskInfo, regions: &HashMap<String, String>, given: &HashMap<String, Type>) -> Result<()> {
+        for ty in info.params.iter().map(|(_, ty)| ty.clone()).chain([info.ret.clone()]) {
+            let ty = self.settled_type(&ty, regions, given, span)?;
+            if let Some((outer, inner)) = region_conflict(&ty, None) {
+                return err(
+                    span,
+                    format!(
+                        "'{0}' would keep this in region '{1}' and in region '{2}', but everything a value in a region holds is in that region; copy it into '{1}' first, as in 'value.copy() at {1}'",
+                        unqualified(task), outer, inner
+                    ),
+                );
+            }
+        }
+        Ok(())
     }
 
     /// The types written after a call's name, by the name of the type each one
@@ -3021,7 +3491,7 @@ impl Checker {
 
     /// Checks that `ty`, given for the type parameter `param`, allows what the
     /// task's header asks of it.
-    fn check_need(&self, task: &str, param: &TypeParam, ty: &Type, at: Span) -> Result<()> {
+    fn check_need(&self, what: &str, task: &str, param: &TypeParam, ty: &Type, at: Span) -> Result<()> {
         let Some((need, _)) = param.need else { return Ok(()) };
         if self.allows(need, ty) {
             return Ok(());
@@ -3029,7 +3499,8 @@ impl Checker {
         err(
             at,
             format!(
-                "task '{}' takes a type that is '{}' as '{}', and {} {}",
+                "{} '{}' takes a type that is '{}' as '{}', and {} {}",
+                what,
                 unqualified(task),
                 need.word(),
                 param.name,
@@ -3180,7 +3651,7 @@ impl Checker {
         let name = name.clone();
         let sent = expr.ty.clone().unwrap_or(Type::Unit);
         let mut given: HashMap<String, Type> = HashMap::new();
-        unify_params(&sent, expected, &mut given);
+        self.match_params(&sent, expected, &mut given);
         if given.is_empty() {
             return Ok(());
         }
@@ -3198,7 +3669,7 @@ impl Checker {
         }
         if let Some(info) = self.tasks.get(&name).cloned() {
             for (param, (ty, at)) in info.types.iter().zip(&types) {
-                self.check_need(&name, param, ty, *at)?;
+                self.check_need("task", &name, param, ty, *at)?;
             }
         }
         self.note_instance(expr.span, &name, &types);
@@ -3285,6 +3756,9 @@ pub fn lasting(ty: &Type, regional: &HashSet<String>) -> Type {
     match ty {
         Type::Text(region) if *region == any => Type::Text(None),
         Type::Named(name, region) if *region == any && !regional.contains(name) => Type::Named(name.clone(), None),
+        Type::Applied(applied) if applied.region == any && !regional.contains(&applied.name) => {
+            Type::Applied(Box::new(Applied { region: None, ..(**applied).clone() }))
+        }
         Type::Maybe(inner) => Type::Maybe(Box::new(lasting(inner, regional))),
         Type::Array(inner, count) => Type::Array(Box::new(lasting(inner, regional)), *count),
         Type::Or(value, error) => Type::Or(Box::new(lasting(value, regional)), Box::new(lasting(error, regional))),
@@ -3361,6 +3835,10 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
     match (actual, expected) {
         (Type::Ptr(a, ar), Type::Ptr(e, er)) | (Type::Slice(a, ar), Type::Slice(e, er)) => region(ar, er) && fits_regions(a, e),
         (Type::Array(a, an), Type::Array(e, en)) => an == en && fits_regions(a, e),
+        // A shape given types: the same shape and types, of a fitting region.
+        (Type::Applied(a), Type::Applied(e)) if a.name == e.name && a.types.len() == e.types.len() => {
+            lasting(&a.region, &e.region) && a.types.iter().zip(&e.types).all(|(a, e)| fits_regions(a, e))
+        }
         (Type::Text(ar), Type::Text(er)) => lasting(ar, er),
         (Type::Named(a, ar), Type::Named(e, er)) => a == e && lasting(ar, er),
         (Type::Range(a), Type::Range(e)) | (Type::Maybe(a), Type::Maybe(e)) | (Type::Fail(a), Type::Fail(e)) => fits_regions(a, e),
@@ -3390,6 +3868,10 @@ fn region_conflict(ty: &Type, inside: Option<&str>) -> Option<(String, String)> 
             None => region_conflict(inner, inside),
         },
         Type::Text(Some(region)) | Type::Named(_, Some(region)) => conflict(region),
+        Type::Applied(applied) => match applied.region.as_deref() {
+            Some(region) => conflict(region).or_else(|| applied.types.iter().find_map(|ty| region_conflict(ty, Some(region)))),
+            None => applied.types.iter().find_map(|ty| region_conflict(ty, inside)),
+        },
         Type::Maybe(inner) | Type::Array(inner, _) | Type::Fail(inner) | Type::Range(inner) => region_conflict(inner, inside),
         Type::Or(value, error) => region_conflict(value, inside).or_else(|| region_conflict(error, inside)),
         Type::Tuple(types) | Type::Results(types) => types.iter().find_map(|ty| region_conflict(ty, inside)),
@@ -3404,6 +3886,7 @@ fn type_depth(ty: &Type) -> usize {
             type_depth(inner)
         }
         Type::Or(value, error) => type_depth(value).max(type_depth(error)),
+        Type::Applied(applied) => applied.types.iter().map(type_depth).max().unwrap_or(0),
         Type::Tuple(types) | Type::Results(types) => types.iter().map(type_depth).max().unwrap_or(0),
         _ => 0,
     };
@@ -3449,144 +3932,169 @@ fn keeps_params_of(ty: &Type, inside: Option<&str>, kept: &mut HashMap<String, H
     }
 }
 
-/// Puts the types `given` in place of the type parameters of a copy of a
-/// generic task made for one use, and points its calls of generic tasks at the
-/// ones made for them (see `Made`).
 /// What walking a generic task's body turns up: the uses of generic tasks in it
 /// that need tasks of their own, and the copies it makes of values whose types
-/// name the types it takes (see `Checker::param_copies`).
+/// name the types it takes (see `Checker::loose_copies`).
 #[derive(Default)]
 struct Made {
     needed: Vec<(String, Vec<Type>, Span)>,
     copies: Vec<(String, String, Span)>,
 }
 
-/// Puts the types `given` in place of the type parameters of `task`. With no
-/// types given it changes nothing, and only fills `made`, which is how the
-/// checker reads a generic task's copies.
-fn substitute_task(task: &mut TaskDef, given: &HashMap<String, Type>, made: &mut Made) {
-    let settle = |ty: &mut Type| *ty = ty.map_params(&mut |name| given.get(name).cloned());
-    for param in &mut task.params {
-        settle(&mut param.ty);
+impl Checker {
+    /// Puts the types `given` in place of the type parameters of `task`, a copy
+    /// of a generic task made for one use, points its calls of generic tasks at
+    /// the ones made for them, and puts the shape made for its types in place of
+    /// every shape given them (see `Made` and `settle_applications`). With no
+    /// types given it changes nothing, and only fills `made`, which is how the
+    /// checker reads a generic task's copies.
+    fn substitute_task(&mut self, task: &mut TaskDef, given: &HashMap<String, Type>, made: &mut Made) -> Result<()> {
+        for param in &mut task.params {
+            self.substitute_type(&mut param.ty, given, param.ty_span)?;
+        }
+        let at = task.span;
+        self.substitute_type(&mut task.ret, given, at)?;
+        self.substitute_block(&mut task.body, given, made)
     }
-    settle(&mut task.ret);
-    substitute_block(&mut task.body, given, made);
-}
 
-fn substitute_block(block: &mut Block, given: &HashMap<String, Type>, made: &mut Made) {
-    for stmt in block {
-        substitute_stmt(stmt, given, made);
-    }
-}
-
-fn substitute_stmt(stmt: &mut Stmt, given: &HashMap<String, Type>, made: &mut Made) {
-    match &mut stmt.kind {
-        StmtKind::Expr(e) => substitute_expr(e, given, made),
-        StmtKind::Send(values) | StmtKind::SetResults(_, values) => {
-            values.iter_mut().for_each(|value| substitute_expr(value, given, made))
-        }
-        StmtKind::Region(_) => {}
-        StmtKind::Binding { names, init, .. } => {
-            for bound in names.iter_mut() {
-                substitute_bound(bound, given);
-            }
-            init.iter_mut().for_each(|value| substitute_expr(value, given, made));
-        }
-        StmtKind::Assign(targets, values) => {
-            for target in targets.iter_mut() {
-                substitute_target(target, given, made);
-            }
-            values.iter_mut().for_each(|value| substitute_expr(value, given, made));
-        }
-        StmtKind::When(cond, then_block, else_block) => {
-            substitute_expr(&mut cond.value, given, made);
-            substitute_block(then_block, given, made);
-            if let Some(else_block) = else_block {
-                substitute_block(else_block, given, made);
-            }
-        }
-        StmtKind::Loop(cond, body) => {
-            substitute_expr(&mut cond.value, given, made);
-            substitute_block(body, given, made);
-        }
-        StmtKind::Each(_, range, body) => {
-            substitute_expr(range, given, made);
-            substitute_block(body, given, made);
-        }
-        StmtKind::Match(subject, cases) => {
-            substitute_expr(subject, given, made);
-            for case in cases.iter_mut() {
-                substitute_block(&mut case.body, given, made);
-            }
-        }
-    }
-}
-
-fn substitute_bound(bound: &mut Bound, given: &HashMap<String, Type>) {
-    if let Some(ty) = &mut bound.ty {
+    /// One type of a task made for a set of types: the types given in place of
+    /// the names it takes, and the shape made for them in place of a shape given
+    /// them.
+    fn substitute_type(&mut self, ty: &mut Type, given: &HashMap<String, Type>, at: Span) -> Result<()> {
         *ty = ty.map_params(&mut |name| given.get(name).cloned());
+        self.settle_applications(ty, at)
     }
-    for part in &mut bound.parts {
-        substitute_bound(part, given);
-    }
-}
 
-fn substitute_target(target: &mut Target, given: &HashMap<String, Type>, made: &mut Made) {
-    match target {
-        Target::Discard(_) => {}
-        Target::Place(place) => substitute_expr(place, given, made),
-        Target::Tuple(parts, _) => parts.iter_mut().for_each(|part| substitute_target(part, given, made)),
+    fn substitute_block(&mut self, block: &mut Block, given: &HashMap<String, Type>, made: &mut Made) -> Result<()> {
+        block.iter_mut().try_for_each(|stmt| self.substitute_stmt(stmt, given, made))
     }
-}
 
-fn substitute_expr(e: &mut Expr, given: &HashMap<String, Type>, made: &mut Made) {
-    // A copy of a value whose type names a type the task takes, read before the
-    // types are put in place of the names: the copy is a value of the region it
-    // goes into, so a use must give a type that lives there (see
-    // `Checker::loose_copies`).
-    if let ExprKind::Copy { region: Some(region), .. } = &e.kind
-        && let Some(ty) = &e.ty
-    {
-        for param in ty.params() {
-            made.copies.push((param.to_string(), region.clone(), e.span));
+    fn substitute_stmt(&mut self, stmt: &mut Stmt, given: &HashMap<String, Type>, made: &mut Made) -> Result<()> {
+        let at = stmt.span;
+        match &mut stmt.kind {
+            StmtKind::Expr(e) => self.substitute_expr(e, given, made),
+            StmtKind::Send(values) | StmtKind::SetResults(_, values) => {
+                values.iter_mut().try_for_each(|value| self.substitute_expr(value, given, made))
+            }
+            StmtKind::Region(_) => Ok(()),
+            StmtKind::Binding { names, init, .. } => {
+                for bound in names.iter_mut() {
+                    self.substitute_bound(bound, given, at)?;
+                }
+                init.iter_mut().try_for_each(|value| self.substitute_expr(value, given, made))
+            }
+            StmtKind::Assign(targets, values) => {
+                for target in targets.iter_mut() {
+                    self.substitute_target(target, given, made)?;
+                }
+                values.iter_mut().try_for_each(|value| self.substitute_expr(value, given, made))
+            }
+            StmtKind::When(cond, then_block, else_block) => {
+                self.substitute_expr(&mut cond.value, given, made)?;
+                self.substitute_block(then_block, given, made)?;
+                match else_block {
+                    Some(else_block) => self.substitute_block(else_block, given, made),
+                    None => Ok(()),
+                }
+            }
+            StmtKind::Loop(cond, body) => {
+                self.substitute_expr(&mut cond.value, given, made)?;
+                self.substitute_block(body, given, made)
+            }
+            StmtKind::Each(_, range, body) => {
+                self.substitute_expr(range, given, made)?;
+                self.substitute_block(body, given, made)
+            }
+            StmtKind::Match(subject, cases) => {
+                self.substitute_expr(subject, given, made)?;
+                cases.iter_mut().try_for_each(|case| self.substitute_block(&mut case.body, given, made))
+            }
         }
     }
-    if let Some(ty) = &mut e.ty {
-        *ty = ty.map_params(&mut |name| given.get(name).cloned());
+
+    fn substitute_bound(&mut self, bound: &mut Bound, given: &HashMap<String, Type>, at: Span) -> Result<()> {
+        if let Some(ty) = &mut bound.ty {
+            *ty = ty.map_params(&mut |name| given.get(name).cloned());
+            self.settle_applications(ty, at)?;
+        }
+        bound.parts.iter_mut().try_for_each(|part| self.substitute_bound(part, given, at))
     }
-    match &mut e.kind {
-        ExprKind::Call { name, types, args } => {
-            for (ty, _) in types.iter_mut() {
-                *ty = ty.map_params(&mut |name| given.get(name).cloned());
+
+    fn substitute_target(&mut self, target: &mut Target, given: &HashMap<String, Type>, made: &mut Made) -> Result<()> {
+        match target {
+            Target::Discard(_) => Ok(()),
+            Target::Place(place) => self.substitute_expr(place, given, made),
+            Target::Tuple(parts, _) => parts.iter_mut().try_for_each(|part| self.substitute_target(part, given, made)),
+        }
+    }
+
+    fn substitute_expr(&mut self, e: &mut Expr, given: &HashMap<String, Type>, made: &mut Made) -> Result<()> {
+        // A copy of a value whose type names a type the task takes, read before
+        // the types are put in place of the names: the copy is a value of the
+        // region it goes into, so a use must give a type that lives there (see
+        // `Checker::loose_copies`).
+        if let ExprKind::Copy { region: Some(region), .. } = &e.kind
+            && let Some(ty) = &e.ty
+        {
+            for param in ty.params() {
+                made.copies.push((param.to_string(), region.clone(), e.span));
             }
-            if !types.is_empty() {
-                made.needed.push((name.clone(), types.iter().map(|(ty, _)| ty.clone()).collect(), e.span));
+        }
+        let at = e.span;
+        if let Some(ty) = &mut e.ty {
+            *ty = ty.map_params(&mut |name| given.get(name).cloned());
+            self.settle_applications(ty, at)?;
+        }
+        match &mut e.kind {
+            ExprKind::Call { name, types, args } => {
+                for (ty, _) in types.iter_mut() {
+                    self.substitute_type(ty, given, at)?;
+                }
+                if !types.is_empty() {
+                    made.needed.push((name.clone(), types.iter().map(|(ty, _)| ty.clone()).collect(), at));
+                }
+                args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made))
             }
-            args.iter_mut().for_each(|arg| substitute_expr(arg, given, made));
-        }
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) => {}
-        ExprKind::Unary(_, inner)
-        | ExprKind::Deref(inner)
-        | ExprKind::Field(inner, _)
-        | ExprKind::Fail(inner)
-        | ExprKind::Wrap(inner)
-        | ExprKind::New { value: inner, .. }
-        | ExprKind::Copy { value: inner, .. } => substitute_expr(inner, given, made),
-        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
-            substitute_expr(a, given, made);
-            substitute_expr(b, given, made);
-        }
-        ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) | ExprKind::Scan { args, .. } => {
-            args.iter_mut().for_each(|arg| substitute_expr(arg, given, made))
-        }
-        ExprKind::StructInit(_, fields) => fields.iter_mut().for_each(|field| substitute_expr(&mut field.value, given, made)),
-        ExprKind::PlanB { value, body, .. } => {
-            substitute_expr(value, given, made);
-            substitute_block(body, given, made);
-        }
-        ExprKind::Edit { items, args, .. } => {
-            substitute_expr(items, given, made);
-            args.iter_mut().for_each(|arg| substitute_expr(arg, given, made));
+            // A literal of a shape given the types this task takes becomes a
+            // literal of the shape made for them (see `shape_instance`).
+            ExprKind::StructInit { name, types, fields } => {
+                for (ty, _) in types.iter_mut() {
+                    self.substitute_type(ty, given, at)?;
+                }
+                if !types.is_empty() && types.iter().all(|(ty, _)| ty.params().is_empty()) {
+                    let made_types: Vec<Type> = types.iter().map(|(ty, _)| ty.clone()).collect();
+                    *name = self.shape_instance(&name.clone(), &made_types, at)?;
+                    types.clear();
+                }
+                fields.iter_mut().try_for_each(|field| self.substitute_expr(&mut field.value, given, made))
+            }
+            ExprKind::New { ty, ty_span, value, .. } => {
+                let ty_span = *ty_span;
+                self.substitute_type(ty, given, ty_span)?;
+                self.substitute_expr(value, given, made)
+            }
+            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) => Ok(()),
+            ExprKind::Unary(_, inner)
+            | ExprKind::Deref(inner)
+            | ExprKind::Field(inner, _)
+            | ExprKind::Fail(inner)
+            | ExprKind::Wrap(inner)
+            | ExprKind::Copy { value: inner, .. } => self.substitute_expr(inner, given, made),
+            ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
+                self.substitute_expr(a, given, made)?;
+                self.substitute_expr(b, given, made)
+            }
+            ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) | ExprKind::Scan { args, .. } => {
+                args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made))
+            }
+            ExprKind::PlanB { value, body, .. } => {
+                self.substitute_expr(value, given, made)?;
+                self.substitute_block(body, given, made)
+            }
+            ExprKind::Edit { items, args, .. } => {
+                self.substitute_expr(items, given, made)?;
+                args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made))
+            }
         }
     }
 }
@@ -3604,6 +4112,12 @@ fn unify_params(pattern: &Type, actual: &Type, given: &mut HashMap<String, Type>
         }
         (Type::Ptr(p, _), Type::Ptr(a, _)) | (Type::Slice(p, _), Type::Slice(a, _)) | (Type::Array(p, _), Type::Array(a, _)) => {
             unify_params(p, a, given)
+        }
+        // A shape given types: the same shape, whose types stand for each other
+        // (a value of a shape made for its types is read as one, see
+        // `Checker::unmade`).
+        (Type::Applied(p), Type::Applied(a)) if p.name == a.name && p.types.len() == a.types.len() => {
+            p.types.iter().zip(&a.types).for_each(|(p, a)| unify_params(p, a, given));
         }
         (Type::Tuple(p), Type::Tuple(a)) | (Type::Results(p), Type::Results(a)) if p.len() == a.len() => {
             p.iter().zip(a).for_each(|(p, a)| unify_params(p, a, given))
@@ -3636,6 +4150,10 @@ pub fn unify_regions(pattern: &Type, actual: &Type, regions: &mut HashMap<String
         (Type::Array(p, _), Type::Array(a, _)) => unify_regions(p, a, regions),
         (Type::Tuple(p), Type::Tuple(a)) => p.iter().zip(a).for_each(|(p, a)| unify_regions(p, a, regions)),
         (Type::Named(p, pr), Type::Named(a, ar)) if p == a => record(pr, ar),
+        (Type::Applied(p), Type::Applied(a)) if p.name == a.name && p.types.len() == a.types.len() => {
+            record(&p.region, &a.region);
+            p.types.iter().zip(&a.types).for_each(|(p, a)| unify_regions(p, a, regions));
+        }
         (Type::Text(pr), Type::Text(ar)) => record(pr, ar),
         (Type::Maybe(p), Type::Maybe(a)) | (Type::Range(p), Type::Range(a)) | (Type::Fail(p), Type::Fail(a)) => unify_regions(p, a, regions),
         (Type::Or(pv, pe), Type::Or(av, ae)) => {
@@ -3655,6 +4173,11 @@ fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
     match ty {
         Type::Ptr(..) | Type::Slice(..) => true,
         Type::Named(name, _) => regional.contains(name),
+        // A shape given types holds what its own fields hold and what the types
+        // given hold, since a field may be one of them.
+        Type::Applied(applied) => {
+            regional.contains(&applied.name) || applied.types.iter().any(|ty| holds_pointers(ty, regional))
+        }
         Type::Maybe(inner) | Type::Array(inner, _) => holds_pointers(inner, regional),
         Type::Or(value, error) => holds_pointers(value, regional) || holds_pointers(error, regional),
         Type::Tuple(items) => items.iter().any(|item| holds_pointers(item, regional)),
@@ -3678,6 +4201,9 @@ fn holds_changeable(ty: &Type, changeable: &HashSet<String>) -> bool {
     match ty {
         Type::Ptr(..) | Type::Slice(..) | Type::Array(..) => true,
         Type::Named(name, _) => changeable.contains(name),
+        Type::Applied(applied) => {
+            changeable.contains(&applied.name) || applied.types.iter().any(|ty| holds_changeable(ty, changeable))
+        }
         Type::Maybe(inner) => holds_changeable(inner, changeable),
         Type::Or(value, error) => holds_changeable(value, changeable) || holds_changeable(error, changeable),
         Type::Tuple(items) => items.iter().any(|item| holds_changeable(item, changeable)),
@@ -3691,6 +4217,9 @@ fn holds_text(ty: &Type, textual: &HashSet<String>) -> bool {
     match ty {
         Type::Text(_) => true,
         Type::Named(name, _) => textual.contains(name),
+        Type::Applied(applied) => {
+            textual.contains(&applied.name) || applied.types.iter().any(|ty| holds_text(ty, textual))
+        }
         Type::Maybe(inner) | Type::Array(inner, _) => holds_text(inner, textual),
         Type::Or(value, error) => holds_text(value, textual) || holds_text(error, textual),
         Type::Tuple(items) => items.iter().any(|item| holds_text(item, textual)),
@@ -3778,6 +4307,9 @@ fn value_bytes(ty: &Type, sizes: &HashMap<String, u128>) -> u128 {
     match ty {
         Type::Unit => 0,
         Type::Named(name, _) => sizes.get(name).copied().unwrap_or(8),
+        // A shape given types is as large as the shape itself, whose fields of a
+        // type it takes are counted as a word each (see `check_sizes`).
+        Type::Applied(applied) => sizes.get(&applied.name).copied().unwrap_or(8),
         Type::Array(items, count) => value_bytes(items, sizes).saturating_mul(u128::from(*count)),
         Type::Slice(..) => 24,
         Type::Maybe(inner) => value_bytes(inner, sizes).saturating_add(8),
@@ -3804,6 +4336,13 @@ fn sends_value(ret: &Type) -> bool {
 fn contained_by_value(ty: &Type) -> Vec<&str> {
     match ty {
         Type::Named(name, _) => vec![name.as_str()],
+        // A shape given types contains that shape by value: a field of it
+        // naming the same shape again is a cycle either way.
+        Type::Applied(applied) => {
+            let mut names = vec![applied.name.as_str()];
+            names.extend(applied.types.iter().flat_map(contained_by_value));
+            names
+        }
         Type::Maybe(inner) | Type::Array(inner, _) => contained_by_value(inner),
         Type::Tuple(items) => items.iter().flat_map(contained_by_value).collect(),
         Type::Or(value, error) => {
@@ -3819,6 +4358,11 @@ fn contained_by_value(ty: &Type) -> Vec<&str> {
 fn named_types(ty: &Type) -> Vec<&str> {
     match ty {
         Type::Named(name, _) => vec![name.as_str()],
+        Type::Applied(applied) => {
+            let mut names = vec![applied.name.as_str()];
+            names.extend(applied.types.iter().flat_map(named_types));
+            names
+        }
         Type::Ptr(inner, _) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => named_types(inner),
         Type::Tuple(items) => items.iter().flat_map(named_types).collect(),
         Type::Or(value, error) => {
@@ -3835,6 +4379,7 @@ fn named_types(ty: &Type) -> Vec<&str> {
 fn constructible(ty: &Type, can: &HashSet<&str>) -> bool {
     match ty {
         Type::Named(name, _) => can.contains(name.as_str()),
+        Type::Applied(applied) => can.contains(applied.name.as_str()),
         Type::Ptr(inner, _) | Type::Array(inner, _) | Type::Slice(inner, _) => constructible(inner, can),
         Type::Or(value, error) => **value == Type::Unit || constructible(value, can) || constructible(error, can),
         Type::Tuple(items) => items.iter().all(|item| constructible(item, can)),

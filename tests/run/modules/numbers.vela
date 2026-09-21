@@ -27,3 +27,15 @@ priv task biggest<T: ordered>(a: T, b: T) -> T
     fi
     <- b
 fi
+
+# A shape that takes types, used from another file, and a task that makes one.
+shape Tally<T: shown>
+    value: T
+    count: int
+fi
+
+# A shape given types names the region its values live in, since the type given
+# may hold text or pointers, so the task takes the region to name.
+task tallyOf<T: shown>(r: region, value: T) -> Tally<T>@r
+    <- Tally { value: value, count: 1 }
+fi

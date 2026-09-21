@@ -375,8 +375,9 @@ impl<'a> Tokens<'a> {
     }
 
     /// Whether the `<` at position `p` opens the types a declaration takes or a
-    /// call gives: one right after the name of a `task` or `shape`, or one whose
-    /// matching `>` is followed by `(`, as the parser reads them.
+    /// use gives: one right after the name of a `task` or `shape`, or one whose
+    /// matching `>` is followed by `(` (a call) or `{` (a shape literal), as the
+    /// parser reads them.
     fn opens_types(&self, p: usize) -> bool {
         if self.token(p) != Some(&Token::Lt) {
             return false;
@@ -388,7 +389,9 @@ impl<'a> Tokens<'a> {
         let mut depth = 0usize;
         for q in p + 1.. {
             match self.token(q) {
-                Some(Token::Gt) if depth == 0 => return self.token(q + 1) == Some(&Token::LParen),
+                // A call follows the types a task is given, and a literal the
+                // types a shape is given.
+                Some(Token::Gt) if depth == 0 => return matches!(self.token(q + 1), Some(Token::LParen | Token::LBrace)),
                 Some(Token::Lt) => depth += 1,
                 Some(Token::Gt) => depth -= 1,
                 Some(token) if token.writes_type() => {}
@@ -396,6 +399,27 @@ impl<'a> Tokens<'a> {
             }
         }
         false
+    }
+
+    /// The shape whose literal opens with the `{` at `p`: the name before it, or,
+    /// for a shape given types (`Box<int> { … }`), the name before those.
+    fn literal_shape(&self, p: usize) -> Option<&'a str> {
+        let mut before = p.checked_sub(1)?;
+        if self.token(before) == Some(&Token::Gt) {
+            let mut depth = 0usize;
+            loop {
+                before = before.checked_sub(1)?;
+                match self.token(before) {
+                    Some(Token::Lt) if depth == 0 => break,
+                    Some(Token::Lt) => depth -= 1,
+                    Some(Token::Gt) => depth += 1,
+                    Some(_) => {}
+                    None => return None,
+                }
+            }
+            before = before.checked_sub(1)?;
+        }
+        self.ident(before)
     }
 
     /// Whether position `p` starts a line.
@@ -551,7 +575,9 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                 };
                 blocks.push(block);
                 if tokens.ident(p + 1).is_some() {
-                    let detail = if block == Block::Task { tokens.text_after(p + 1, never) } else { String::new() };
+                    // A shape's line holds the types it takes, if any; a
+                    // task's holds its parameters and results too.
+                    let detail = if block == Block::Kind { String::new() } else { tokens.text_after(p + 1, never) };
                     let id = declare(&mut symbols, p + 1, kind, detail, None);
                     if let Some(symbol) = symbols.get_mut(id) {
                         symbol.range.start = tokens.range(p).start;
@@ -847,7 +873,7 @@ impl<'a> Classifier<'a> {
                         // `case {value}`: the name inside is declared by the pattern.
                         braces.push(Brace::Literal(None));
                     } else if literal {
-                        braces.push(Brace::Literal(p.checked_sub(1).and_then(|q| tokens.ident(q)).map(str::to_string)));
+                        braces.push(Brace::Literal(tokens.literal_shape(p).map(str::to_string)));
                     } else {
                         braces.push(Brace::PlanB);
                         self.open(ScopeKind::PlanB);
@@ -904,9 +930,9 @@ impl<'a> Classifier<'a> {
                     self.push(range, TokenClass::Punctuation, None);
                     in_type = true;
                 }
-                // `<T: ordered>` and `first<int>(…)`: the types a declaration
-                // takes, or the ones a call gives it.
-                Token::Lt if tokens.opens_types(p) => {
+                // `<T: ordered>`, `first<int>(…)`, and `Box<int>` in a type:
+                // the types a declaration takes, or the ones a use gives it.
+                Token::Lt if was_after_type || tokens.opens_types(p) => {
                     self.push(range, TokenClass::Punctuation, None);
                     type_angles += 1;
                     in_type = true;
