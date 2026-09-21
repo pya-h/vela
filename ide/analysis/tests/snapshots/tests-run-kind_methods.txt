@@ -76,117 +76,119 @@
     | punctuation:.  field:this  operator:=  variant:Amber  punctuation:(  variable:seconds  punctuation:)
  44 |     fi
     | keyword:fi
- 46 |     waits() -> int
-    | task:waits  punctuation:(  punctuation:)  operator:->  type-builtin:int
- 47 |         match .this
+ 46 |     # Only this file may call a method marked priv.
+    | comment:# Only this file may call a method marked priv.
+ 47 |     priv waits() -> int
+    | keyword:priv  task:waits  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 48 |         match .this
     | keyword:match  punctuation:.  field:this
- 48 |             case Amber s
+ 49 |             case Amber s
     | keyword:case  variant:Amber  variable:s
- 49 |                 <- s
+ 50 |                 <- s
     | keyword:<-  variable:s
- 50 |             case _
+ 51 |             case _
     | keyword:case  keyword:_
- 51 |                 <- 0
+ 52 |                 <- 0
     | keyword:<-  number:0
- 52 |         fi
+ 53 |         fi
     | keyword:fi
- 53 |     fi
+ 54 |     fi
     | keyword:fi
- 55 |     # A method of a kind may name the value's own region too, though a kind of
+ 56 |     # A method of a kind may name the value's own region too, though a kind of
     | comment:# A method of a kind may name the value's own region too, though a kind of
- 56 |     # values that hold nothing in one never has a region to name.
+ 57 |     # values that hold nothing in one never has a region to name.
     | comment:# values that hold nothing in one never has a region to name.
- 57 |     sameAs(other: Light) -> bool
+ 58 |     sameAs(other: Light) -> bool
     | task:sameAs  punctuation:(  variable:other  punctuation::  type:Light  punctuation:)  operator:->  type-builtin:bool
- 58 |         <- .waits() == other.waits()
+ 59 |         <- .waits() == other.waits()
     | keyword:<-  punctuation:.  field:waits  punctuation:(  punctuation:)  operator:==  variable:other  punctuation:.  field:waits  punctuation:(  punctuation:)
- 59 |     fi
+ 60 |     fi
     | keyword:fi
- 60 | fi
+ 61 | fi
     | keyword:fi
- 62 | # A kind holding text lives in a region, so its methods may send that text.
+ 63 | # A kind holding text lives in a region, so its methods may send that text.
     | comment:# A kind holding text lives in a region, so its methods may send that text.
- 63 | kind Label
+ 64 | kind Label
     | keyword:kind  type:Label
- 64 |     Empty
+ 65 |     Empty
     | variant:Empty
- 65 |     Word(text: text)
+ 66 |     Word(text: text)
     | variant:Word  punctuation:(  field:text  punctuation::  type-builtin:text  punctuation:)
- 67 |     wordOf() -> maybe text@this
+ 68 |     wordOf() -> maybe text@this
     | variant:wordOf  punctuation:(  punctuation:)  operator:->  keyword:maybe  type-builtin:text  operator:@  region:this
- 68 |         match .this
+ 69 |         match .this
     | keyword:match  punctuation:.  field:this
- 69 |             case Empty
+ 70 |             case Empty
     | keyword:case  variant:Empty
- 70 |                 <- none
+ 71 |                 <- none
     | keyword:<-  keyword:none
- 71 |             case Word w
+ 72 |             case Word w
     | keyword:case  variant:Word  variable:w
- 72 |                 <- w
+ 73 |                 <- w
     | keyword:<-  variable:w
- 73 |         fi
+ 74 |         fi
     | keyword:fi
- 74 |     fi
+ 75 |     fi
     | keyword:fi
- 76 |     alters clear()
+ 77 |     alters clear()
     | variable:alters  task:clear  punctuation:(  punctuation:)
- 77 |         .this = Empty
+ 78 |         .this = Empty
     | punctuation:.  field:this  operator:=  variant:Empty
- 78 |     fi
+ 79 |     fi
     | keyword:fi
- 79 | fi
+ 80 | fi
     | keyword:fi
- 81 | task main()
+ 82 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 82 |     hold light = Red
+ 83 |     hold light = Red
     | keyword:hold  variable:light  operator:=  variant:Red
- 83 |     light.tell()
+ 84 |     light.tell()
     | variable:light  punctuation:.  field:tell  punctuation:(  punctuation:)
- 84 |     light.flip()
+ 85 |     light.flip()
     | variable:light  punctuation:.  field:flip  punctuation:(  punctuation:)
- 85 |     light.tell()
+ 86 |     light.tell()
     | variable:light  punctuation:.  field:tell  punctuation:(  punctuation:)
- 86 |     light.flip()
+ 87 |     light.flip()
     | variable:light  punctuation:.  field:flip  punctuation:(  punctuation:)
- 87 |     light.tell()
+ 88 |     light.tell()
     | variable:light  punctuation:.  field:tell  punctuation:(  punctuation:)
- 89 |     light.hold_for(5)
+ 90 |     light.hold_for(5)
     | variable:light  punctuation:.  field:hold_for  punctuation:(  number:5  punctuation:)
- 90 |     light.tell()
+ 91 |     light.tell()
     | variable:light  punctuation:.  field:tell  punctuation:(  punctuation:)
- 91 |     show(light.waits())
+ 92 |     show(light.waits())
     | builtin-fn:show  punctuation:(  variable:light  punctuation:.  field:waits  punctuation:(  punctuation:)  punctuation:)
- 92 |     light.hold_for(2)
+ 93 |     light.hold_for(2)
     | variable:light  punctuation:.  field:hold_for  punctuation:(  number:2  punctuation:)
- 93 |     light.tell()
+ 94 |     light.tell()
     | variable:light  punctuation:.  field:tell  punctuation:(  punctuation:)
- 94 |     show(light.sameAs(Amber(2)))
+ 95 |     show(light.sameAs(Amber(2)))
     | builtin-fn:show  punctuation:(  variable:light  punctuation:.  field:sameAs  punctuation:(  variant:Amber  punctuation:(  number:2  punctuation:)  punctuation:)  punctuation:)
- 95 |     show(light.sameAs(Red))
+ 96 |     show(light.sameAs(Red))
     | builtin-fn:show  punctuation:(  variable:light  punctuation:.  field:sameAs  punctuation:(  variant:Red  punctuation:)  punctuation:)
- 97 |     # A method that changes nothing is called on a `bind` too.
+ 98 |     # A method that changes nothing is called on a `bind` too.
     | comment:# A method that changes nothing is called on a `bind` too.
- 98 |     bind fixed = Green
+ 99 |     bind fixed = Green
     | keyword:bind  variable:fixed  operator:=  variant:Green
- 99 |     show(fixed.shown())
+100 |     show(fixed.shown())
     | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  field:shown  punctuation:(  punctuation:)  punctuation:)
-101 |     region r
+102 |     region r
     | keyword:region  region:r
-102 |     hold word: Label@r = Word("a word".copy() at r)
+103 |     hold word: Label@r = Word("a word".copy() at r)
     | keyword:hold  variable:word  punctuation::  type:Label  operator:@  region:r  operator:=  variant:Word  punctuation:(  string:"a word"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
-103 |     show(word.wordOf())
+104 |     show(word.wordOf())
     | builtin-fn:show  punctuation:(  variable:word  punctuation:.  field:wordOf  punctuation:(  punctuation:)  punctuation:)
-104 |     word.clear()
+105 |     word.clear()
     | variable:word  punctuation:.  field:clear  punctuation:(  punctuation:)
-105 |     show(word.wordOf())
+106 |     show(word.wordOf())
     | builtin-fn:show  punctuation:(  variable:word  punctuation:.  field:wordOf  punctuation:(  punctuation:)  punctuation:)
-107 |     # Through a pointer into a region.
+108 |     # Through a pointer into a region.
     | comment:# Through a pointer into a region.
-108 |     hold here = new Light(Red) at r
+109 |     hold here = new Light(Red) at r
     | keyword:hold  variable:here  operator:=  keyword:new  type:Light  punctuation:(  variant:Red  punctuation:)  keyword:at  region:r
-109 |     here^.flip()
+110 |     here^.flip()
     | variable:here  operator:^  punctuation:.  field:flip  punctuation:(  punctuation:)
-110 |     here^.tell()
+111 |     here^.tell()
     | variable:here  operator:^  punctuation:.  field:tell  punctuation:(  punctuation:)
-111 | fi
+112 | fi
     | keyword:fi

@@ -43,7 +43,8 @@ kind Light
         .this = Amber(seconds)
     fi
 
-    waits() -> int
+    # Only this file may call a method marked priv.
+    priv waits() -> int
         match .this
             case Amber s
                 <- s

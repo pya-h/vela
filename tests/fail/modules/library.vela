@@ -17,6 +17,15 @@ fi
 kind Suit
     Hearts
     Spades(rank: int)
+
+    priv strength() -> int
+        match .this
+            case Spades rank
+                <- rank
+            case _
+                <- 0
+        fi
+    fi
 fi
 
 task greet() -> text

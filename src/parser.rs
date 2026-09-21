@@ -701,13 +701,11 @@ impl Parser {
                 self.reject_stray_end()?;
             }
             let variant_span = self.peek_span();
-            let private = self.check(Token::Priv);
+            // `priv` goes before a method, whose name is what the checks below read.
+            let private = self.match_token(Token::Priv);
             // A variant carries its values in parentheses, as a method takes its
             // parameters, so `alters` or a `->` after them tells them apart.
             if self.at_method() && !self.at_variant_payload(&methods) {
-                if private {
-                    self.advance();
-                }
                 let method = self.parse_method(&name, "kind", &[], private, &[], &methods)?;
                 methods.push(method);
                 self.skip_newlines();

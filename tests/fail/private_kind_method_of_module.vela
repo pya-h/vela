@@ -1,0 +1,7 @@
+# error: 6:15: 'strength' is a private method of 'Suit', which only its own file can use
+include modules/library
+
+task main()
+    bind suit = library.Suit.Hearts
+    show(suit.strength())
+fi
