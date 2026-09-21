@@ -1,4 +1,4 @@
-# error: 11:22: only a task or a variant can be called, and Vela has no methods; pass the value to a task, as in 'f(value)'
+# error: 11:19: shape 'Point' has no methods; they are written inside it, below its fields
 shape Point
     x: int
 fi
@@ -8,5 +8,5 @@ task origin() -> Point
 fi
 
 task main()
-    show(origin()[0].twice())
+    show(origin().twice())
 fi

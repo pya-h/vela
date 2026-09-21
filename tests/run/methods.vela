@@ -1,0 +1,169 @@
+# Methods of a shape: written inside it, below its fields, and called on a value.
+# A member of the value is written with a dot, `.x`; a method that changes the
+# value says `alters` before its name, and only a place that can change may call
+# one. `.this` is the whole value, and `@this` the region it lives in.
+
+shape Counter
+    label: text
+    count: int
+
+    total() -> int
+        <- .count
+    fi
+
+    # What the value holds in its own region, sent out of the method.
+    nameOf() -> text@this
+        <- .label
+    fi
+
+    alters step()
+        .count = .count + 1
+        .cap()
+    fi
+
+    alters by(n: int)
+        hold left = n
+        loop left > 0
+            .step()
+            left = left - 1
+        fi
+    fi
+
+    # Only its own file may call this one.
+    priv alters cap()
+        when .count > 3
+            .count = 3
+        fi
+    fi
+
+    # The whole value, given to a task, and a new one in its place. The task
+    # names the region, since the value the method is called on lives in one.
+    beats(other: Counter@this) -> bool
+        <- higher(.this, other)
+    fi
+
+    alters reset()
+        .this = Counter { label: .label, count: 0 }
+    fi
+fi
+
+task higher(a: Counter@r, b: Counter@r) -> bool
+    <- a.total() > b.total()
+fi
+
+shape Point
+    x: int
+    y: int
+
+    lengthSquared() -> int
+        <- .x * .x + .y * .y
+    fi
+
+    alters shift(dx: int, dy: int)
+        .x = .x + dx
+        .y = .y + dy
+    fi
+
+    # A method calling itself, on a value it makes.
+    stepsTo(goal: int) -> int
+        when .x >= goal
+            <- 0
+        fi
+        bind next = Point { x: .x + 1, y: .y }
+        <- 1 + next.stepsTo(goal)
+    fi
+fi
+
+shape Row
+    here: Point
+    items: [Point]
+
+    firstLength() -> int
+        <- .items[0].lengthSquared()
+    fi
+
+    # A method of a value a field points to, and one of a field's own.
+    farthest(other: ^Point@this) -> int
+        when other^.lengthSquared() > .here.lengthSquared()
+            <- other^.lengthSquared()
+        fi
+        <- .here.lengthSquared()
+    fi
+fi
+
+# A method may send a maybe, and be called where its value goes.
+shape Bag
+    items: [int]
+
+    firstOf() -> maybe int
+        each item in .items
+            <- item
+        fi
+        <- none
+    fi
+fi
+
+task main()
+    hold c: Counter = Counter { label: "clicks", count: 0 }
+    c.step()
+    show(c.total())
+    c.by(5)
+    show(c.total())
+    show(c.nameOf())
+    show(c.beats(Counter { label: "other", count: 1 }))
+    c.reset()
+    show(c.total())
+
+    # A method that changes nothing is called on anything, a `bind` too.
+    bind fixed = Counter { label: "once", count: 1 }
+    show(fixed.total())
+    show(fixed.nameOf())
+
+    hold p = Point { x: 3, y: 4 }
+    show(p.lengthSquared())
+    p.shift(1, 1)
+    show(p.lengthSquared())
+    show(p.stepsTo(7))
+
+    region r
+    # Through a pointer, which is where a task changes a value of its own.
+    hold q = new Point(Point { x: 1, y: 1 }) at r
+    q^.shift(2, 2)
+    show(q^.lengthSquared())
+
+    # A field of a `hold`, and an item of a slice, are places that can change.
+    hold items = new [Point]() at r
+    items.add(Point { x: 6, y: 8 })
+    hold row = Row { here: Point { x: 1, y: 2 }, items: items }
+    show(row.firstLength())
+    row.here.shift(10, 0)
+    show(row.here.lengthSquared())
+    show(row.farthest(q))
+    items[0].shift(1, 0)
+    show(items[0].lengthSquared())
+
+    # A method on the value a call sends.
+    show(made().total())
+
+    bind bag = Bag { items: items_of(r) }
+    show(bag.firstOf())
+    bind empty = Bag { items: new [int]() at r }
+    show(empty.firstOf())
+
+    # The text a method sends is in the region the value is in.
+    hold named: Counter@r = Counter { label: "in a region".copy() at r, count: 2 }
+    bind held: text@r = named.nameOf()
+    show(held)
+    named.step()
+    show(named.total())
+fi
+
+task made() -> Counter
+    <- Counter { label: "made", count: 9 }
+fi
+
+task items_of(r: region) -> [int]@r
+    hold xs = new [int]() at r
+    xs.add(41)
+    <- xs
+fi

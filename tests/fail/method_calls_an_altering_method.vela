@@ -1,0 +1,18 @@
+# error: 10:9: calling 'Counter.step' changes the value this method is called on, so 'alters' goes before its name, as in 'alters twice(…)'
+shape Counter
+    count: int
+
+    alters step()
+        .count = .count + 1
+    fi
+
+    twice()
+        .step()
+        .step()
+    fi
+fi
+
+task main()
+    hold c = Counter { count: 0 }
+    show(c.count)
+fi

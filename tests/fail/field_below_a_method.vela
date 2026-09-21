@@ -1,0 +1,14 @@
+# error: 9:5: every field of a shape goes above its methods, and method 'twice' is declared at 5:5
+shape Point
+    x: int
+
+    twice() -> int
+        <- .x * 2
+    fi
+
+    y: int
+fi
+
+task main()
+    show(1)
+fi

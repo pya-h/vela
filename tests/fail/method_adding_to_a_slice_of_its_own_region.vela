@@ -1,0 +1,12 @@
+# error: 6:16: adding to a slice may need more room in its region, and '@this' is the region the value this method is called on lives in, which a method isn't given, so it can't allocate there; do it where the value is, or take a region to allocate in, as in 'r: region'
+shape Bag
+    items: [int]
+
+    alters put(v: int)
+        .items.add(v)
+    fi
+fi
+
+task main()
+    show(1)
+fi

@@ -1,0 +1,111 @@
+# Methods of a kind. A kind has no fields, so its methods read the value itself
+# with `.this`, and take it apart with `match .this`; a method marked `alters`
+# moves the value to another variant with `.this = Other`.
+
+kind Light
+    Red
+    Green
+    Amber(seconds: int)
+
+    shown() -> text
+        match .this
+            case Red
+                <- "red"
+            case Green
+                <- "green"
+            case Amber s
+                when s > 3
+                    <- "long amber"
+                fi
+                <- "amber"
+        fi
+    fi
+
+    # A method that takes no parameters and sends nothing: `()` alone is enough
+    # to tell it from a variant.
+    tell()
+        show(.shown())
+    fi
+
+    alters flip()
+        match .this
+            case Red
+                .this = Green
+            case Green
+                .this = Red
+            case Amber _
+                .this = Red
+        fi
+    fi
+
+    # A method taking parameters, below one that says what it sends.
+    alters hold_for(seconds: int)
+        .this = Amber(seconds)
+    fi
+
+    waits() -> int
+        match .this
+            case Amber s
+                <- s
+            case _
+                <- 0
+        fi
+    fi
+
+    # A method of a kind may name the value's own region too, though a kind of
+    # values that hold nothing in one never has a region to name.
+    sameAs(other: Light) -> bool
+        <- .waits() == other.waits()
+    fi
+fi
+
+# A kind holding text lives in a region, so its methods may send that text.
+kind Label
+    Empty
+    Word(text: text)
+
+    wordOf() -> maybe text@this
+        match .this
+            case Empty
+                <- none
+            case Word w
+                <- w
+        fi
+    fi
+
+    alters clear()
+        .this = Empty
+    fi
+fi
+
+task main()
+    hold light = Red
+    light.tell()
+    light.flip()
+    light.tell()
+    light.flip()
+    light.tell()
+
+    light.hold_for(5)
+    light.tell()
+    show(light.waits())
+    light.hold_for(2)
+    light.tell()
+    show(light.sameAs(Amber(2)))
+    show(light.sameAs(Red))
+
+    # A method that changes nothing is called on a `bind` too.
+    bind fixed = Green
+    show(fixed.shown())
+
+    region r
+    hold word: Label@r = Word("a word".copy() at r)
+    show(word.wordOf())
+    word.clear()
+    show(word.wordOf())
+
+    # Through a pointer into a region.
+    hold here = new Light(Red) at r
+    here^.flip()
+    here^.tell()
+fi

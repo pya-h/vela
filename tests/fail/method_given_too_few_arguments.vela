@@ -1,0 +1,13 @@
+# error: 12:12: method 'Point.plus' expects 1 argument, got 0
+shape Point
+    x: int
+
+    plus(n: int) -> int
+        <- .x + n
+    fi
+fi
+
+task main()
+    bind p = Point { x: 1 }
+    show(p.plus())
+fi

@@ -1,0 +1,16 @@
+# error: 14:12: expected type text, got text@r; this text is in region 'r', and text here must last as long as the program, as a literal does
+shape Box<T>
+    value: T
+fi
+
+task valueOf<T>(b: Box<T>@r) -> T
+    <- b.value
+fi
+
+task main()
+    hold kept: text = "safe"
+    region r
+    bind b: Box<text>@r = Box { value: "in a region".copy() at r }
+    kept = valueOf(b)
+    show(kept)
+fi

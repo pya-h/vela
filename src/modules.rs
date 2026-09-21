@@ -737,6 +737,12 @@ impl Resolver<'_> {
     /// `at` is where the name is written, for errors, and `calls` whether it is
     /// called.
     fn lookup(&self, written: &str, at: Span, calls: bool) -> Result<Option<Entry>> {
+        // The value a method is called on is named `.this`, which is no
+        // declaration of any file and holds a `.` no name of one can (see
+        // `ast::THIS`).
+        if written == THIS {
+            return Ok(None);
+        }
         let parts: Vec<&str> = written.split(MODULE_SEPARATOR).collect();
         match parts.as_slice() {
             [name] => Ok(self.own.get(*name).or_else(|| self.imports.get(*name).map(|(entry, _)| entry)).cloned()),
@@ -866,6 +872,25 @@ impl Resolver<'_> {
             }
         }
         Ok(())
+    }
+
+    /// `Light.Red(…)` or `m.f(…)`, a variant or a module's task read as a method
+    /// called on a value, rewritten to the call it is; whether `expr` was one. A
+    /// name before the dot is a module this file includes or a kind, and
+    /// anything else is a value with a method. (A function of its own: `expr`'s
+    /// frame is on the stack once per nesting level.)
+    fn call_as_name(&self, expr: &mut Expr) -> Result<bool> {
+        let ExprKind::MethodCall { dotted: Some(dotted), .. } = &expr.kind else { return Ok(false) };
+        let first = dotted.split(MODULE_SEPARATOR).next().unwrap_or(dotted);
+        if !self.modules.contains_key(first) && self.kind(first, expr.span)?.is_none() {
+            return Ok(false);
+        }
+        let mut name = dotted.clone();
+        self.rename(&mut name, expr.span, &[What::Task, What::Variant])?;
+        let ExprKind::MethodCall { args, .. } = &mut expr.kind else { return Ok(false) };
+        let args = std::mem::take(args);
+        expr.kind = ExprKind::Call { name, types: Vec::new(), args };
+        Ok(true)
     }
 
     /// `Shape.Circle` (or `m.Shape.Circle`), a variant read as a field of a
@@ -1000,6 +1025,12 @@ impl Resolver<'_> {
         if matches!(expr.kind, ExprKind::Edit { .. } | ExprKind::Copy { region: None, .. }) && self.edit_as_variant(expr)? {
             return Ok(());
         }
+        // A name of the program is written once; looking the result up again, as
+        // if the file had written it, would not find it.
+        if matches!(expr.kind, ExprKind::MethodCall { .. }) && self.call_as_name(expr)? {
+            let ExprKind::Call { args, .. } = &mut expr.kind else { return Ok(()) };
+            return args.iter_mut().try_for_each(|arg| self.expr(arg));
+        }
         match &mut expr.kind {
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit => Ok(()),
             // A variable keeps its name. No variable can be named like a variant
@@ -1010,6 +1041,12 @@ impl Resolver<'_> {
                 for (ty, at) in types.iter_mut() {
                     *ty = self.ty(&ty.clone(), *at)?;
                 }
+                args.iter_mut().try_for_each(|e| self.expr(e))
+            }
+            // A method is named by the type of the value it is called on, which
+            // only the checker knows, so nothing here is renamed.
+            ExprKind::MethodCall { value, args, .. } => {
+                self.expr(value)?;
                 args.iter_mut().try_for_each(|e| self.expr(e))
             }
             ExprKind::StructInit { name, types, fields } => {

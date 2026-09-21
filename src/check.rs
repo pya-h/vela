@@ -23,6 +23,8 @@ struct VarInfo {
     allocates: bool,
     /// Whether this is a named result, which only `<-` sets.
     result: bool,
+    /// Whether the task's header declares it, which no code can change.
+    param: bool,
 }
 
 /// What a place an assignment writes to takes: nothing (`_`), a value of a
@@ -64,6 +66,9 @@ pub struct Checker {
     /// The type parameters of the task being checked, with what each requires.
     /// Empty for an ordinary task.
     type_params: Vec<TypeParam>,
+    /// What the task being checked is a method of, when it is one: its own name
+    /// and whether it may change the value it is called on.
+    current_method: Option<Owner>,
     /// The shapes and kinds that hold pointers, directly or in other shapes and
     /// kinds, so their values live in a region.
     regional: HashSet<String>,
@@ -137,12 +142,13 @@ pub struct Checker {
 }
 
 /// What a call needs to know about a task: the types it takes, its parameters,
-/// and what it sends.
+/// what it sends, and what it is a method of, when it is one.
 #[derive(Clone)]
 struct TaskInfo {
     types: Vec<TypeParam>,
     params: Vec<(String, Type)>,
     ret: Type,
+    owner: Option<Owner>,
 }
 
 /// The error for a `copy()` whose region nothing names.
@@ -295,6 +301,11 @@ impl Checker {
         self.regional = regional_types(items);
         self.takes_region = textual_types(items).union(&self.regional).cloned().collect();
         self.changeable = types_holding(items, holds_changeable);
+        for item in items.iter_mut() {
+            if let Item::Task(t) = item {
+                self.settle_receiver(t);
+            }
+        }
         self.check_declarations(items)?;
         for item in items.iter_mut() {
             if let Item::Task(t) = item {
@@ -451,8 +462,18 @@ impl Checker {
                 }
                 Item::Task(t) => {
                     declare(&t.name, t.span)?;
+                    // A method is written as a member of its shape or kind, so
+                    // every message names it that way (see `written_names`).
+                    if let Some(owner) = &t.owner
+                        && let Some(ty) = t.owner_type()
+                    {
+                        let written = format!("{}{}{}", ty, MODULE_SEPARATOR, owner.name);
+                        self.written_names.insert(t.name.clone(), written);
+                        let short = method_name(unqualified(ty), &owner.name);
+                        self.written_names.insert(short, format!("{}{}{}", unqualified(ty), MODULE_SEPARATOR, owner.name));
+                    }
                     let params = t.params.iter().map(|p| (p.name.clone(), p.ty.clone())).collect();
-                    self.tasks.insert(t.name.clone(), TaskInfo { types: t.types.clone(), params, ret: t.ret.clone() });
+                    self.tasks.insert(t.name.clone(), TaskInfo { types: t.types.clone(), params, ret: t.ret.clone(), owner: t.owner.clone() });
                 }
             }
         }
@@ -560,6 +581,13 @@ impl Checker {
     /// payloads. Code using the item couldn't name the type.
     fn check_private_types(&self, item: &Item) -> Result<()> {
         let (private, what, name, fields): (bool, &str, &str, Vec<&Field>) = match item {
+            // A method is reached only through a value of its shape or kind, so
+            // a private one keeps its methods private, and the type of the value
+            // they are called on gives nothing away.
+            Item::Task(t) if t.owner.is_some() => {
+                let hidden = t.owner_type().is_some_and(|ty| self.private.contains(ty));
+                (t.private || hidden, "method", &t.name, t.params.iter().skip(1).collect())
+            }
             Item::Task(t) => (t.private, "task", &t.name, t.params.iter().collect()),
             Item::Shape(s) => (s.private, "shape", &s.name, s.fields.iter().filter(|f| !f.private).collect()),
             Item::Kind(k) => (k.private, "kind", &k.name, k.variants.iter().flat_map(|v| &v.payload).collect()),
@@ -906,7 +934,22 @@ impl Checker {
             Type::Named(name, region) => match self.made_of.get(name) {
                 Some(made) => Type::Applied(Box::new(Applied {
                     name: made.name.clone(),
-                    types: made.types.iter().map(|ty| self.unmade(ty)).collect(),
+                    // One shape serves every region, so the types it was made
+                    // for hold none (see `shape_instance`). Everything a value
+                    // in a region holds is in that region, its types given
+                    // included, so reading the shape back gives them the region
+                    // of the value, as a field takes it (see `field_in`).
+                    types: made
+                        .types
+                        .iter()
+                        .map(|ty| {
+                            let ty = self.unmade(ty);
+                            match region {
+                                Some(region) => self.in_region(&ty, region),
+                                None => ty,
+                            }
+                        })
+                        .collect(),
                     region: region.clone(),
                 })),
                 None => ty.clone(),
@@ -986,6 +1029,21 @@ impl Checker {
         Ok(())
     }
 
+    /// Drops the region named on the value a method is called on where its shape
+    /// or kind lives in none: the parser writes `@this` on every receiver, since
+    /// only the whole file says which types hold something in a region. A shape
+    /// given types keeps it, and the shape made for each set of types settles it
+    /// (see `settle_applications`).
+    fn settle_receiver(&self, task: &mut TaskDef) {
+        if task.owner.is_none() {
+            return;
+        }
+        let Some(Type::Named(name, region)) = task.params.first_mut().map(|param| &mut param.ty) else { return };
+        if !self.takes_region.contains(name.as_str()) {
+            *region = None;
+        }
+    }
+
     /// Checks a task's parameters and result types, and settles their regions.
     /// A region the header names without a `region` parameter is one the task
     /// only reads or links pointers in (it can't allocate there), and each
@@ -1063,7 +1121,7 @@ impl Checker {
             param.ty = ty;
         }
         let params = t.params.iter().map(|p| (p.name.clone(), p.ty.clone())).collect();
-        self.tasks.insert(t.name.clone(), TaskInfo { types: t.types.clone(), params, ret: t.ret.clone() });
+        self.tasks.insert(t.name.clone(), TaskInfo { types: t.types.clone(), params, ret: t.ret.clone(), owner: t.owner.clone() });
         self.type_params.clear();
         Ok(())
     }
@@ -1242,6 +1300,9 @@ impl Checker {
         match self.lookup(name) {
             Some(info) if info.ty == Type::Region => {
                 if allocating && !info.allocates {
+                    if name == THIS_WORD && self.current_method.is_some() {
+                        return err(span, self.cannot_allocate_in_this());
+                    }
                     return err(
                         span,
                         format!("this task can't allocate in '{0}', which it only names in its types; take it as a parameter, '{0}: region'", name),
@@ -1499,13 +1560,16 @@ impl Checker {
             self.check_size(result, task.result_span(i))?;
         }
         self.current_ret = Some(task.ret.clone());
+        self.current_method = task.owner.clone();
         // Parameters and the task body share one scope, as in C.
         self.scopes = vec![HashMap::new()];
         for param in &task.params {
             if param.ty == Type::Region {
                 self.define_region(&param.name, param.span, true)?;
             } else {
-                self.define(&param.name, param.ty.clone(), false, param.span)?;
+                // Only the value a method marked `alters` is called on changes.
+                let alters = param.name == THIS && task.owner.as_ref().is_some_and(|owner| owner.alters);
+                self.define_param(&param.name, param.ty.clone(), alters, param.span)?;
             }
         }
         // The regions the header only names in its types.
@@ -1551,6 +1615,7 @@ impl Checker {
         }
         self.scopes.clear();
         self.current_ret = None;
+        self.current_method = None;
         if self.result_names.is_empty() {
             if sends_value(&task.ret) && !always_sends(&task.body) {
                 return err(task.span, format!("task '{}' can finish without sending a value", task.name));
@@ -1647,7 +1712,17 @@ impl Checker {
             return Err(Error::internal(format!("'{}' defined outside of a task", name)));
         };
         let allocates = ty == Type::Region;
-        scope.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false });
+        scope.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false, param: false });
+        Ok(())
+    }
+
+    /// Declares a parameter, which the task's header gives it. Only the value a
+    /// method marked `alters` is called on can change.
+    fn define_param(&mut self, name: &str, ty: Type, mutable: bool, span: Span) -> Result<()> {
+        self.define(name, ty, mutable, span)?;
+        if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.get_mut(name)) {
+            info.param = true;
+        }
         Ok(())
     }
 
@@ -1694,7 +1769,9 @@ impl Checker {
             return err(span, format!("'{0}' is a region, not a value; allocate in it with 'new T(…) at {0}'", name));
         }
         self.lookup(name).ok_or_else(|| {
-            if self.sees(name) && self.variants.contains_key(name) {
+            if name == THIS {
+                Error::at(span, self.not_a_method(THIS))
+            } else if self.sees(name) && self.variants.contains_key(name) {
                 Error::at(span, format!("'{}' is a variant, not a variable", name))
             } else if self.module_used(name).is_some() {
                 Error::at(span, format!("'{0}' is a module, not a variable; name something in it, as in '{0}.name'", name))
@@ -2092,6 +2169,9 @@ impl Checker {
                     return err(span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
                 if !info.mutable {
+                    if name == THIS {
+                        return Err(self.this_cannot_change(span, &format!("assigning '{}'", THIS)));
+                    }
                     return err(span, format!("cannot assign to immutable variable '{}'", name));
                 }
                 let ty = info.ty.clone();
@@ -2099,6 +2179,11 @@ impl Checker {
                 Ok(ty)
             }
             ExprKind::Field(base, field) => {
+                // A member of the value a method is called on, which only a
+                // method marked `alters` may change.
+                if matches!(&base.kind, ExprKind::Var(name) if name == THIS) && !self.lookup(THIS).is_some_and(|info| info.mutable) {
+                    return Err(self.this_cannot_change(span, &format!("assigning '{}{}'", MODULE_SEPARATOR, field)));
+                }
                 let base_ty = self.check_field_base(base)?;
                 let ty = self.field_type(&base_ty, field, span)?;
                 match base_ty {
@@ -2180,8 +2265,14 @@ impl Checker {
             ExprKind::Var(name) => {
                 let info = self.lookup_or_err(name, span)?;
                 // Only a shape has fields to assign; for anything else (a pointer,
-                // a kind) the field error from `field_type` is the useful one.
-                let is_shape = matches!(&info.ty, Type::Named(ty, _) if self.shapes.contains_key(ty));
+                // a kind) the field error from `field_type` is the useful one. A
+                // shape given types counts, whether it has been made for them
+                // yet or not.
+                let is_shape = match &info.ty {
+                    Type::Named(ty, _) => self.shapes.contains_key(ty),
+                    Type::Applied(applied) => self.shapes.contains_key(&applied.name),
+                    _ => false,
+                };
                 if is_shape && info.result {
                     return err(span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
@@ -2507,6 +2598,11 @@ impl Checker {
 
     fn infer_expr(&mut self, expr: &mut Expr) -> Result<Type> {
         let span = expr.span;
+        // A method call becomes the call of the task the method is, which the
+        // rest of this checks as it checks any call.
+        if matches!(expr.kind, ExprKind::MethodCall { .. }) {
+            self.check_method_call(expr)?;
+        }
         match &mut expr.kind {
             ExprKind::IntLit(_) => Ok(Type::Int),
             ExprKind::FloatLit(_) => Ok(Type::Float),
@@ -2521,6 +2617,10 @@ impl Checker {
                 Ok(ty)
             }
             ExprKind::Field(base, field) => {
+                // `.x` outside a method, named as it is written.
+                if self.current_method.is_none() && matches!(&base.kind, ExprKind::Var(name) if name == THIS) {
+                    return err(span, self.not_a_method(&format!("{}{}", MODULE_SEPARATOR, field)));
+                }
                 let base_ty = self.check_expr(base)?;
                 self.field_type(&base_ty, field, span)
             }
@@ -2638,6 +2738,8 @@ impl Checker {
             ExprKind::Copy { value, region, region_span } => self.check_copy(span, value, region.as_deref(), *region_span),
             // Only the checker creates `Wrap`, with its type already set.
             ExprKind::Wrap(_) => expr.ty.clone().ok_or_else(|| Error::internal_at(span, "a wrapped value has no type")),
+            // `check_method_call` above has made this the call it is.
+            ExprKind::MethodCall { name, .. } => Err(Error::internal_at(span, format!("the method call '{}' was not rewritten", name))),
         }
     }
 
@@ -2868,6 +2970,9 @@ impl Checker {
         // Adding may need more room, which comes from the slice's region.
         match region.as_deref() {
             Some(region) if region != ANY_REGION => match self.lookup(region) {
+                Some(info) if info.ty == Type::Region && !info.allocates && region == THIS_WORD && self.current_method.is_some() => {
+                    err(span, format!("adding to a slice may need more room in its region, and {}", self.cannot_allocate_in_this()))
+                }
                 Some(info) if info.ty == Type::Region && !info.allocates => err(
                     span,
                     format!("adding to a slice may need more room in its region '{0}', which this task only names in its types; take it as a parameter, '{0}: region'", region),
@@ -3316,6 +3421,169 @@ impl Checker {
             self.coerce(value, &self.in_region(&field.ty, &region))?;
         }
         Ok(region)
+    }
+
+    /// The shape or kind whose methods a value of type `ty` has: its name, with
+    /// a shape made for a set of types read as the shape itself (see `unmade`),
+    /// since a made shape has the methods the shape it was made from has.
+    fn owner_of(&self, ty: &Type) -> Option<String> {
+        match self.unmade(ty) {
+            Type::Named(name, _) => Some(name),
+            Type::Applied(applied) => Some(applied.name.clone()),
+            _ => None,
+        }
+    }
+
+    /// The methods of the shape or kind `owner`, in no particular order.
+    fn methods_of(&self, owner: &str) -> Vec<&str> {
+        let prefix = method_name(owner, "");
+        self.tasks.keys().filter_map(|name| name.strip_prefix(prefix.as_str())).collect()
+    }
+
+    /// The error for `value.name(…)` where a value of type `base` has no method
+    /// `name`.
+    fn no_method(&self, base: &Type, name: &str, span: Span) -> Error {
+        // A slice's built-in changes are what these usually mean.
+        let instead = match name {
+            "push" | "append" | "insert" => "; a slice adds an item with 'add', as in 'xs.add(v)' or 'xs.add(i, v)'",
+            "pop" | "remove" | "delete" => "; a slice takes an item out with 'del', as in 'xs.del(i)' or 'xs.del()'",
+            LEN => "; how many items a slice holds is read without '(…)', as in 'xs.len'",
+            _ => "",
+        };
+        if let Some(owner) = self.owner_of(base).filter(|owner| self.shapes.contains_key(owner) || self.kinds.contains_key(owner)) {
+            let what = if self.kinds.contains_key(&owner) { "kind" } else { "shape" };
+            let written = unqualified(&owner);
+            if self.shapes.get(&owner).is_some_and(|shape| shape.fields.iter().any(|field| field.name == name)) {
+                return Error::at(span, format!("'{}' is a field of {} '{}', not a method, so it is read without '(…)'", name, what, written));
+            }
+            if self.methods_of(&owner).is_empty() {
+                return Error::at(span, format!("{} '{}' has no methods; they are written inside it, below its {}", what, written, if what == "kind" { "variants" } else { "fields" }));
+            }
+            return Error::at(span, format!("{} '{}' has no method '{}'", what, written, name));
+        }
+        match base {
+            Type::Ptr(..) => Error::at(span, format!("type {} has no methods; call it on the value it points to, as in 'p^.{}(…)'", base, name)),
+            Type::Maybe(_) | Type::Or(..) => {
+                Error::at(span, format!("type {} has no methods; extract its value first, as in 'when x is {{value}}'", base))
+            }
+            _ => Error::at(span, format!("type {} has no methods{}", base, instead)),
+        }
+    }
+
+    /// Checks `value.name(…)` and rewrites it into the call of the task the
+    /// method is (see `method_name`), with the value as its first argument. The
+    /// value says which method it is, so it is checked first; the call checks it
+    /// again, as a shape literal checks its values again (see `literal_types`).
+    fn check_method_call(&mut self, expr: &mut Expr) -> Result<()> {
+        let span = expr.span;
+        let ExprKind::MethodCall { value, name, args, .. } = &mut expr.kind else { return Ok(()) };
+        let name = name.clone();
+        let given = args.len();
+        let copies = self.unsettled_copies.len();
+        let untold = self.unsettled_types.len();
+        let found = self.check_expr(value);
+        self.unsettled_copies.truncate(copies);
+        self.unsettled_types.truncate(untold);
+        let ty = found?;
+        let owner = self.owner_of(&ty).ok_or_else(|| self.no_method(&ty, &name, span))?;
+        let full = method_name(&owner, &name);
+        let info = self.tasks.get(&full).filter(|_| self.sees(&full)).cloned().ok_or_else(|| self.no_method(&ty, &name, span))?;
+        let written = format!("{}{}{}", unqualified(&owner), MODULE_SEPARATOR, name);
+        if self.private.contains(&full) && module_of(&owner) != self.current_module {
+            return err(span, format!("'{}' is a private method of '{}', which only its own file can use", name, unqualified(&owner)));
+        }
+        // The value it is called on is the first parameter, not an argument.
+        if given + 1 != info.params.len() {
+            return err(span, format!("method '{}' expects {}, got {}", written, count(info.params.len() - 1, "argument"), given));
+        }
+        if info.owner.as_ref().is_some_and(|owner| owner.alters) {
+            let ExprKind::MethodCall { value, .. } = &expr.kind else { return Ok(()) };
+            self.altered_place(value, &written)?;
+        }
+        let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+        let ExprKind::MethodCall { value, args, .. } = taken else {
+            return Err(Error::internal_at(span, "a method call that is no longer one"));
+        };
+        let mut all = Vec::with_capacity(args.len() + 1);
+        all.push(*value);
+        all.extend(args);
+        expr.kind = ExprKind::Call { name: full, types: Vec::new(), args: all };
+        Ok(())
+    }
+
+    /// Checks that the value a method marked `alters` is called on can change:
+    /// the same places an assignment writes to. Its type is already checked, so
+    /// this only says why a place can't.
+    fn altered_place(&self, value: &Expr, method: &str) -> Result<()> {
+        let refuse = |what: String| err(value.span, format!("'{}' changes the value it is called on, so {}", method, what));
+        match &value.kind {
+            ExprKind::Var(name) => {
+                let info = self.lookup_or_err(name, value.span)?;
+                if info.mutable {
+                    return Ok(());
+                }
+                if name == THIS {
+                    return Err(self.this_cannot_change(value.span, &format!("calling '{}'", method)));
+                }
+                if info.result {
+                    return refuse(format!("it needs a place that can change, and '{}' is a result, which only '<-' sets", name));
+                }
+                if info.param {
+                    return refuse(format!(
+                        "it needs a place that can change, and '{0}' is a parameter, which never does; take a pointer to it, as in '{0}: ^{1}@r', and call the method on '{0}^'",
+                        name,
+                        info.ty.without_regions()
+                    ));
+                }
+                refuse(format!(
+                    "it needs a place that can change, and '{}' never does (declared at {}:{}); a value declared with 'hold' can",
+                    name, info.span.line, info.span.col
+                ))
+            }
+            ExprKind::Field(base, _) => self.altered_place(base, method),
+            // A slice's items are in a region, behind a pointer, so they can
+            // always be written, as what a pointer points to can.
+            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..))) => Ok(()),
+            ExprKind::Index(base, _) => self.altered_place(base, method),
+            ExprKind::Deref(_) => Ok(()),
+            _ => refuse("it needs a place that can change, such as a 'hold' variable, a field or item of one, or what a pointer points to, and not a value made here".to_string()),
+        }
+    }
+
+    /// The error for changing the value a method is called on where the method
+    /// doesn't say it may: `what` is what changes it.
+    fn needs_alters(&self, span: Span, what: &str, owner: &Owner) -> Error {
+        Error::at(
+            span,
+            format!(
+                "{} changes the value this method is called on, so '{1}' goes before its name, as in '{1} {2}(…)'",
+                what, ALTERS, owner.name
+            ),
+        )
+    }
+
+    /// The error for assigning what a method is called on, or a member of it,
+    /// where the method doesn't say it may change it.
+    fn this_cannot_change(&self, span: Span, what: &str) -> Error {
+        match &self.current_method {
+            Some(owner) => self.needs_alters(span, what, owner),
+            None => Error::at(span, self.not_a_method(THIS)),
+        }
+    }
+
+    /// Why a method can't allocate in the region the value it is called on lives
+    /// in: nothing gives a method that region, only the type of the value.
+    fn cannot_allocate_in_this(&self) -> String {
+        format!(
+            "'@{0}' is the region the value this method is called on lives in, which a method isn't given, so it can't allocate there; do it where the value is, or take a region to allocate in, as in 'r: region'",
+            THIS_WORD
+        )
+    }
+
+    /// The error for `.this` or `.x` in a task that is no method.
+    fn not_a_method(&self, written: &str) -> String {
+        let names = if written == THIS { "is the value a method is called on" } else { "names a member of the value a method is called on" };
+        format!("'{}' {}, and this is a task, which is called on no value", written, names)
     }
 
     /// Checks a call's arguments against the task's `params`, and returns the
@@ -4095,6 +4363,9 @@ impl Checker {
                 self.substitute_expr(items, given, made)?;
                 args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made))
             }
+            // Every method call became the call of the task the method is while
+            // the body was checked (see `check_method_call`).
+            ExprKind::MethodCall { name, .. } => Err(Error::internal_at(at, format!("the method call '{}' was never rewritten", name))),
         }
     }
 }

@@ -1,0 +1,16 @@
+# error: 15:5: 'Counter.step' changes the value it is called on, so it needs a place that can change, such as a 'hold' variable, a field or item of one, or what a pointer points to, and not a value made here
+shape Counter
+    count: int
+
+    alters step()
+        .count = .count + 1
+    fi
+fi
+
+task made() -> Counter
+    <- Counter { count: 0 }
+fi
+
+task main()
+    made().step()
+fi

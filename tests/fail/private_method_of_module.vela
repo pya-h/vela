@@ -1,0 +1,7 @@
+# error: 6:15: 'checked' is a private method of 'Card', which only its own file can use
+include modules/library
+
+task main()
+    bind card = library.card("ada")
+    show(card.checked())
+fi

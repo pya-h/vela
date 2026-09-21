@@ -1,0 +1,13 @@
+# error: 6:10: assigning '.count' changes the value this method is called on, so 'alters' goes before its name, as in 'alters step(…)'
+shape Counter
+    count: int
+
+    step()
+        .count = .count + 1
+    fi
+fi
+
+task main()
+    hold c = Counter { count: 0 }
+    show(c.count)
+fi

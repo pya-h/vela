@@ -1,0 +1,14 @@
+# error: 13:12: type ^Point@r has no methods; call it on the value it points to, as in 'p^.twice(…)'
+shape Point
+    x: int
+
+    twice() -> int
+        <- .x * 2
+    fi
+fi
+
+task main()
+    region r
+    bind p = new Point(Point { x: 1 }) at r
+    show(p.twice())
+fi

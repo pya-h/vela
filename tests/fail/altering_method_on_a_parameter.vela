@@ -1,0 +1,17 @@
+# error: 11:5: 'Counter.step' changes the value it is called on, so it needs a place that can change, and 'c' is a parameter, which never does; take a pointer to it, as in 'c: ^Counter@r', and call the method on 'c^'
+shape Counter
+    count: int
+
+    alters step()
+        .count = .count + 1
+    fi
+fi
+
+task bump(c: Counter)
+    c.step()
+fi
+
+task main()
+    hold c = Counter { count: 0 }
+    bump(c)
+fi

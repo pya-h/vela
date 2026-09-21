@@ -1,0 +1,8 @@
+# error: 7:11: '.x' names a member of the value a method is called on, and this is a task, which is called on no value
+shape Point
+    x: int
+fi
+
+task main()
+    show(.x)
+fi

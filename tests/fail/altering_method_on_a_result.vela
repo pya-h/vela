@@ -1,0 +1,17 @@
+# error: 12:5: 'Counter.step' changes the value it is called on, so it needs a place that can change, and 'made' is a result, which only '<-' sets
+shape Counter
+    count: int
+
+    alters step()
+        .count = .count + 1
+    fi
+fi
+
+task made() -> made: Counter
+    made <- Counter { count: 0 }
+    made.step()
+fi
+
+task main()
+    show(made().count)
+fi

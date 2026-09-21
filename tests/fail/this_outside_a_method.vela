@@ -1,0 +1,4 @@
+# error: 3:10: '.this' is the value a method is called on, and this is a task, which is called on no value
+task main()
+    show(.this)
+fi

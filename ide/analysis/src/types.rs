@@ -344,6 +344,18 @@ impl Checked {
                 self.field_accesses.insert(pos(e.span), String::new());
                 self.expr(value, kinds);
             }
+            // `p.area()`: the checker turns a method call into the call of the
+            // task the method is, so one is left only where a file doesn't
+            // check. The name after the dot is a member of the value's type.
+            ExprKind::MethodCall { value, args, .. } => {
+                if let Some(Type::Named(owner, _)) = &value.ty {
+                    self.field_accesses.insert(pos(e.span), owner.clone());
+                }
+                self.expr(value, kinds);
+                for arg in args {
+                    self.expr(arg, kinds);
+                }
+            }
             // `xs.add(…)` and `xs.del(…)`: the word is a slice's member, as `len` is.
             ExprKind::Edit { items, args, .. } => {
                 if matches!(items.ty, Some(Type::Slice(..))) {

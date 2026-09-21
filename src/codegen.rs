@@ -84,11 +84,29 @@ pub struct Generator {
     results: Vec<String>,
     /// The name of the task being generated, for runtime messages.
     task: String,
+    /// The methods that change the value they are called on, which take it by
+    /// pointer (see `signature`), by the name of the task each is.
+    altering: HashSet<String>,
+    /// Whether the task being generated is one of them, so that the value it is
+    /// called on is read through its pointer.
+    alters: bool,
 }
 
 impl Default for Generator {
     fn default() -> Self {
-        Generator { w: CWriter::default(), temp_counter: 0, kinds: HashMap::new(), shapes: HashMap::new(), copied_through: HashSet::new(), ret: Type::Unit, regions: Vec::new(), results: Vec::new(), task: String::new() }
+        Generator {
+            w: CWriter::default(),
+            temp_counter: 0,
+            kinds: HashMap::new(),
+            shapes: HashMap::new(),
+            copied_through: HashSet::new(),
+            ret: Type::Unit,
+            regions: Vec::new(),
+            results: Vec::new(),
+            task: String::new(),
+            altering: HashSet::new(),
+            alters: false,
+        }
     }
 }
 
@@ -100,7 +118,16 @@ impl Generator {
     pub fn generate(&mut self, items: &[Item]) -> Result<String> {
         self.kinds.clear();
         self.shapes.clear();
+        self.altering.clear();
         for item in items {
+            if let Item::Task(t) = item
+                && t.owner.as_ref().is_some_and(|owner| owner.alters)
+            {
+                // One task is generated for each set of types a method of a
+                // shape that takes them is used with, and each is an item of
+                // its own, so every one of them is listed here.
+                self.altering.insert(t.name.clone());
+            }
             match item {
                 Item::Kind(k) => {
                     self.kinds.insert(k.name.clone(), k.clone());
@@ -163,7 +190,7 @@ impl Generator {
             if let Item::Task(t) = item
                 && t.types.is_empty()
             {
-                self.w.line(&format!("{};", signature(t)));
+                self.w.line(&format!("{};", signature(t, self.altering.contains(&t.name))));
             }
         }
         self.w.blank();
@@ -567,10 +594,16 @@ impl Generator {
 
     fn gen_task(&mut self, t: &TaskDef) -> Result<()> {
         self.ret = t.ret.clone();
+        self.alters = self.altering.contains(&t.name);
         self.regions.clear();
         self.results = t.result_names().map(|(name, _)| name.clone()).collect();
-        self.task = t.name.clone();
-        self.w.open(&signature(t));
+        // A method is named in a runtime message as the program writes it,
+        // through the shape or kind it belongs to.
+        self.task = match method_parts(&t.name) {
+            Some((owner, method)) if t.owner.is_some() => format!("{}{}{}", owner, MODULE_SEPARATOR, method),
+            _ => t.name.clone(),
+        };
+        self.w.open(&signature(t, self.alters));
         for param in &t.params {
             self.use_if_unread(&param.name, &t.body);
         }
@@ -593,7 +626,7 @@ impl Generator {
                 let results = self.current_results();
                 self.w.line(&format!("return {};", results));
             }
-            _ => self.w.line(&format!("vela__rt__missing_send(\"{}\");", t.name)),
+            _ => self.w.line(&format!("vela__rt__missing_send(\"{}\");", escape_c_string(&self.task))),
         }
         self.w.close();
         self.results.clear();
@@ -1209,6 +1242,7 @@ impl Generator {
             ExprKind::BoolLit(b) => Ok(if *b { "true".to_string() } else { "false".to_string() }),
             ExprKind::TextLit(s) => Ok(format!("\"{}\"", escape_c_string(s))),
             ExprKind::NoneLit => Ok("NULL".to_string()),
+            ExprKind::Var(name) if self.alters && name == THIS => Ok(format!("(*{})", c_ident(name))),
             ExprKind::Var(name) => Ok(c_ident(name)),
             ExprKind::Field(base, field) => self.gen_field(base, field),
             ExprKind::Index(base, index) => self.gen_index(e, base, index, None),
@@ -1230,6 +1264,9 @@ impl Generator {
             ExprKind::Edit { items, op, args } => self.gen_edit(e.span, items, *op, args, false),
             ExprKind::Scan { args, region, .. } => self.gen_scan(e.span, args, region, false),
             ExprKind::Copy { value, region, .. } => self.gen_copy(e, value, region.as_deref()),
+            // The checker turns every method call into the call of the task the
+            // method is (see `Checker::check_method_call`).
+            ExprKind::MethodCall { name, .. } => Err(Error::internal_at(e.span, format!("the method call '{}' reached code generation", name))),
         }
     }
 
@@ -1353,11 +1390,38 @@ impl Generator {
             let value = self.gen_expr(arg)?;
             return Ok(format!("{}({})", helper, value));
         }
-        let args: Vec<&Expr> = args.iter().collect();
-        let values = self.gen_operands(&args)?;
         // A call of a generic task calls the one made for the types it gives.
         let given: Vec<Type> = types.iter().map(|(ty, _)| ty.clone()).collect();
-        Ok(format!("{}({})", mangle(&instance_name(name, &given)), values.join(", ")))
+        let called = instance_name(name, &given);
+        // A method that changes the value it is called on is given the place it
+        // is in, found before the arguments are read, as an assignment's is.
+        let (first, rest) = match args.split_first() {
+            Some((value, rest)) if self.altering.contains(&called) => (Some(self.gen_receiver(value)?), rest),
+            _ => (None, args),
+        };
+        let rest: Vec<&Expr> = rest.iter().collect();
+        let mut values = self.gen_operands(&rest)?;
+        if let Some(first) = first {
+            values.insert(0, first);
+        }
+        Ok(format!("{}({})", mangle(&called), values.join(", ")))
+    }
+
+    /// The address of the place a method that changes the value it is called on
+    /// is called on, which the checker has made sure can change.
+    fn gen_receiver(&mut self, value: &Expr) -> Result<String> {
+        if let ExprKind::Var(name) = &value.kind {
+            // The value a method is called on is already a pointer in a method
+            // that changes it, so calling another one passes it on.
+            if self.alters && name == THIS {
+                return Ok(c_ident(name));
+            }
+            return Ok(format!("&{}", c_ident(name)));
+        }
+        let place = self.gen_place(value)?;
+        let pointer = self.fresh_temp("place");
+        self.w.line(&format!("{}* {} = &{};", c_type(value.ty()?), pointer, place));
+        Ok(pointer)
     }
 
     /// `-operand` or `not operand`, the expression `e`.
@@ -1796,6 +1860,9 @@ fn has_prelude(e: &Expr) -> bool {
         }
         ExprKind::Call { args, .. } | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => args.iter().any(has_prelude),
         ExprKind::StructInit { fields, .. } => fields.iter().any(|field| has_prelude(&field.value)),
+        // The checker rewrites a method call into a call; read as one anyway,
+        // so nothing here depends on that having happened.
+        ExprKind::MethodCall { value, args, .. } => has_prelude(value) || args.iter().any(has_prelude),
     }
 }
 
@@ -2032,6 +2099,10 @@ impl UsedTypes {
                 }
                 args.iter().for_each(|arg| self.expr(arg));
             }
+            ExprKind::MethodCall { value, args, .. } => {
+                self.expr(value);
+                args.iter().for_each(|arg| self.expr(arg));
+            }
             ExprKind::Construct { args, .. } => args.iter().for_each(|arg| self.expr(arg)),
             ExprKind::StructInit { fields, .. } => fields.iter().for_each(|field| self.expr(&field.value)),
             ExprKind::PlanB { value, body, .. } => {
@@ -2129,6 +2200,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::Call { args, .. } | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => {
             args.iter().any(|arg| expr_reads(arg, name))
         }
+        ExprKind::MethodCall { value, args, .. } => expr_reads(value, name) || args.iter().any(|arg| expr_reads(arg, name)),
         ExprKind::StructInit { fields, .. } => fields.iter().any(|field| expr_reads(&field.value, name)),
         ExprKind::PlanB { value, body, .. } => expr_reads(value, name) || block_reads(body, name),
         // `scan` reads the region it keeps the line in.
@@ -2255,11 +2327,18 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
 }
 
 /// The C declarator of a task, e.g. `int64_t vela_add(int64_t a, int64_t b)`.
-fn signature(t: &TaskDef) -> String {
+fn signature(t: &TaskDef, alters: bool) -> String {
     let params: Vec<String> = t
         .params
         .iter()
-        .map(|p| format!("{} {}", c_type(&p.ty), c_ident(&p.name)))
+        .map(|p| {
+            // A method that changes the value it is called on is given the
+            // place it is in, so what it writes is what the caller holds.
+            if alters && p.name == THIS {
+                return format!("{}* {}", c_type(&p.ty), c_ident(&p.name));
+            }
+            format!("{} {}", c_type(&p.ty), c_ident(&p.name))
+        })
         .collect();
     // `()` in C declares a function with unspecified parameters; `(void)` means none.
     let params = if params.is_empty() { "void".to_string() } else { params.join(", ") };
@@ -2312,6 +2391,11 @@ fn c_name(name: &str) -> String {
 /// name itself, unless C could read it as something else, such as a keyword
 /// or a macro from a standard header.
 fn c_ident(name: &str) -> String {
+    // The value a method is called on is named `.this`, which no Vela name can
+    // be (see `ast::THIS`), so C needs a name for it.
+    if name == THIS {
+        return "vela__this".to_string();
+    }
     if collides_with_c(name) {
         format!("vela__{}", name)
     } else {

@@ -1,0 +1,18 @@
+# trap: integer overflow at 8:25 in task 'Counter.step'
+# A method that changes the value it is called on, until the count no longer
+# fits in an int.
+shape Counter
+    count: int
+
+    alters step()
+        .count = .count + .count
+    fi
+fi
+
+task main()
+    hold c = Counter { count: 1_152_921_504_606_846_976 }
+    loop true
+        show(c.count)
+        c.step()
+    fi
+fi

@@ -1,0 +1,13 @@
+# error: 12:12: method 'Point.twice' expects 0 arguments, got 1
+shape Point
+    x: int
+
+    twice() -> int
+        <- .x * 2
+    fi
+fi
+
+task main()
+    bind p = Point { x: 1 }
+    show(p.twice(2))
+fi

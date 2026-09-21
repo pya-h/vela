@@ -136,6 +136,37 @@ pub const SCAN: &str = "scan";
 /// The word of `value.copy()`, written after a dot like `add` and `del`.
 pub const COPY: &str = "copy";
 
+/// How many items an array or slice holds, read after a dot as a field.
+pub const LEN: &str = "len";
+
+/// The word before a method that changes the value it is called on, written
+/// inside a shape or a kind (`alters step()`). Not a keyword: it marks a member
+/// and means nothing anywhere else, so a task or a variable may still use it.
+pub const ALTERS: &str = "alters";
+
+/// The word after the dot for the whole value a method is called on (`.this`),
+/// and the name of the region that value lives in (`text@this`).
+pub const THIS_WORD: &str = "this";
+
+/// The name of the parameter holding the value a method is called on, which the
+/// body writes `.this` and a member of it `.x`. No Vela name holds a `.`, so
+/// nothing can shadow it or be written in its place, and a message that names
+/// it reads as the program writes it.
+pub const THIS: &str = ".this";
+
+/// The name of the task a method becomes: `Counter__on__step` for the method
+/// `step` of `Counter`. No Vela name holds `__`, so it can be no declaration of
+/// a program, and a module's path stays in front of it
+/// (`shapes/counter.Counter__on__step`).
+pub fn method_name(owner: &str, method: &str) -> String {
+    format!("{}__on__{}", owner, method)
+}
+
+/// The shape or kind, and the method, in the name of the task a method becomes.
+pub fn method_parts(name: &str) -> Option<(&str, &str)> {
+    name.split_once("__on__")
+}
+
 /// Whether `word`, written after a dot and followed by `(`, is one of the
 /// builtins every value or slice has rather than a kind's variant or a
 /// module's task: `add`, `del`, or `copy`.
@@ -581,10 +612,22 @@ pub enum ExprKind {
         region: Option<String>,
         region_span: Span,
     },
+    /// `c.step(…)`, or `.step(…)` inside a method: a method called on a value.
+    /// `dotted` is the whole thing read as one name, when the value is a name
+    /// too (`Light.Red(…)` is a variant and `m.f(…)` a module's task, which
+    /// look the same until the file's names are known); the resolver settles
+    /// which, and the checker rewrites a method call into the call of the task
+    /// the method is, with the value as its first argument.
+    MethodCall {
+        value: Box<Expr>,
+        name: String,
+        args: Vec<Expr>,
+        dotted: Option<String>,
+    },
     /// `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, or `xs.del()`: a change to the
-    /// slice `items` names, a place that holds it. Not a method (Vela has none):
-    /// the builtin changes a slice can have. The node's span is the word
-    /// after the dot.
+    /// slice `items` names, a place that holds it. Not a method: the builtin
+    /// changes every slice has, which no method may take the name of. The
+    /// node's span is the word after the dot.
     Edit {
         items: Box<Expr>,
         op: EditOp,
@@ -983,6 +1026,34 @@ pub struct TaskDef {
     pub span: Span,
     /// `priv task`: only its own file can call it.
     pub private: bool,
+    /// What makes this task a method of a shape or a kind, and not a task the
+    /// program can name; `None` for a task.
+    pub owner: Option<Owner>,
+}
+
+/// What makes a task a method: it is written inside a shape or a kind, and its
+/// first parameter is the value it is called on (named `THIS`, written `.this`).
+#[derive(Debug, Clone)]
+pub struct Owner {
+    /// The method's own name, which a call writes after a dot (`step`).
+    pub name: String,
+    /// `alters`: the method may change the value it is called on, so the call
+    /// must name a place that can change and the value is given by pointer.
+    pub alters: bool,
+    /// Position of `alters`, when it is written.
+    pub alters_span: Option<Span>,
+}
+
+impl TaskDef {
+    /// The shape or kind whose method this is: the type of its first parameter,
+    /// which holds the value the method is called on. `None` for a task.
+    pub fn owner_type(&self) -> Option<&str> {
+        self.owner.as_ref().and_then(|_| self.params.first()).and_then(|param| match &param.ty {
+            Type::Named(name, _) => Some(name.as_str()),
+            Type::Applied(applied) => Some(applied.name.as_str()),
+            _ => None,
+        })
+    }
 }
 
 /// The name of the task made for one set of types: `first<int, text>` becomes

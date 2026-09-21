@@ -1,0 +1,14 @@
+# error: 9:5: every variant of a kind goes above its methods, and method 'shown' is declared at 5:5
+kind Light
+    Red
+
+    shown() -> text
+        <- "red"
+    fi
+
+    Green
+fi
+
+task main()
+    show(1)
+fi

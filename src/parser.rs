@@ -24,12 +24,15 @@ pub struct Parser {
     type_parts: Vec<(String, Span)>,
     /// The file's `include` lines, which come before its items.
     includes: Vec<Include>,
+    /// The methods of the shape or kind just read, each a task of its own (see
+    /// `method_name`), which the file's items take in after it.
+    methods: Vec<Item>,
 }
 
 impl Parser {
     /// `tokens` and `spans` are parallel, as produced by `Lexer::tokenize`.
     pub fn new(tokens: Vec<Token>, spans: Vec<Span>) -> Self {
-        Parser { tokens, spans, pos: 0, depth: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new() }
+        Parser { tokens, spans, pos: 0, depth: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), methods: Vec::new() }
     }
 
     /// The `include` lines of the file parsed.
@@ -56,6 +59,8 @@ impl Parser {
                 return Err(Error::at(self.peek_span(), "'include' lines go at the top of the file, before any task, shape, or kind"));
             }
             items.push(self.parse_item()?);
+            // The methods of a shape or a kind are tasks of the file, after it.
+            items.append(&mut self.methods);
             self.skip_newlines();
         }
         Ok(items)
@@ -147,23 +152,13 @@ impl Parser {
         Ok(format!("{}{}{}", name, MODULE_SEPARATOR, member))
     }
 
-    /// `qualified` for a name that starts a value, followed by `.Variant` when a
-    /// call follows, giving `Kind.Variant`, as in `Shape.Circle(…)` (or
-    /// `geometry.Shape.Circle(…)`): Vela has no methods, so a name, a dot, and a
-    /// call is a kind's variant, unless the call is a change to a slice, as in
-    /// `xs.add(…)`, or a copy, `x.copy()` (which the resolver reads as a
-    /// variant when the name is a kind's). (One call from `parse_primary`, whose frame is on the stack once
-    /// per nesting level, and grows with each `?` in it.)
+    /// `qualified` for a name that starts a value. A name, a dot, and a call is
+    /// a kind's variant (`Shape.Circle(…)`, or `geometry.Shape.Circle(…)`) or a
+    /// method called on a value (`p.area(…)`), which look the same until the
+    /// file's names are known; `parse_suffix` reads the dot and the call, and
+    /// keeps both readings for the resolver (see `ExprKind::MethodCall`).
     fn value_name(&mut self, name: String) -> Result<String> {
-        let name = self.qualified(name)?;
-        let calls = matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(member)) if !is_builtin_member(member))
-            && self.tokens.get(self.pos + 2) == Some(&Token::LParen);
-        if !self.check(Token::Dot) || !calls {
-            return Ok(name);
-        }
-        self.advance(); // .
-        let variant = self.expect_ident()?;
-        Ok(format!("{}{}{}", name, MODULE_SEPARATOR, variant))
+        self.qualified(name)
     }
 
     fn peek(&self) -> &Token {
@@ -443,7 +438,7 @@ impl Parser {
         self.skip_newlines();
         let body = self.parse_block()?;
         self.expect_fi("task", opened)?;
-        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body, span, private: false })
+        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body, span, private: false, owner: None })
     }
 
     /// `<T, U: ordered>` after a declaration's name: the types it takes, with
@@ -556,18 +551,131 @@ impl Parser {
         let types = self.parse_type_params()?;
         self.skip_newlines();
         let mut fields = Vec::new();
+        let mut methods: Vec<TaskDef> = Vec::new();
         while !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() {
             self.skip_newlines();
             if self.check(Token::Fi) || self.at_item_start() { break; }
             self.reject_stray_end()?;
             let private = self.match_token(Token::Priv);
+            if self.at_method() {
+                let method = self.parse_method(&name, "shape", &types, private, &fields, &methods)?;
+                methods.push(method);
+                self.skip_newlines();
+                continue;
+            }
+            self.reject_field_below_method(&methods, "shape")?;
             let mut field = self.parse_field()?;
+            reject_member_named_this(&field.name, field.span, "a field")?;
             field.private = private;
             fields.push(field);
             self.skip_newlines();
         }
         self.expect_fi("shape", opened)?;
+        self.methods.extend(methods.into_iter().map(Item::Task));
         Ok(ShapeDef { name, types, given: Vec::new(), fields, span, private: false })
+    }
+
+    /// Rejects a field written below a method: a shape's or a kind's block reads
+    /// as its values and then what they do.
+    fn reject_field_below_method(&self, methods: &[TaskDef], what: &str) -> Result<()> {
+        let Some(first) = methods.first() else { return Ok(()) };
+        let name = first.owner.as_ref().map_or("", |owner| owner.name.as_str());
+        let of = if what == "kind" { "variant" } else { "field" };
+        Err(Error::at(
+            self.peek_span(),
+            format!(
+                "every {} of a {} goes above its methods, and method '{}' is declared at {}:{}",
+                of, what, name, first.span.line, first.span.col
+            ),
+        ))
+    }
+
+    /// Whether the cursor is at a member of a shape or a kind that is a method
+    /// rather than a field or a variant: a name followed by `(`, or by `<` for
+    /// one that names types (which `parse_method` refuses), with `alters` allowed
+    /// before it.
+    fn at_method(&self) -> bool {
+        let mut pos = self.pos;
+        if matches!(self.tokens.get(pos), Some(Token::Ident(word)) if word == ALTERS) && matches!(self.tokens.get(pos + 1), Some(Token::Ident(_))) {
+            pos += 1;
+        }
+        matches!(self.tokens.get(pos), Some(Token::Ident(_))) && matches!(self.tokens.get(pos + 1), Some(Token::LParen | Token::Lt))
+    }
+
+    /// A method of the shape or kind `owner`, which takes `types`: its name, its
+    /// parameters, what it sends, and its body, with `alters` before it when it
+    /// changes the value it is called on. It becomes a task whose first parameter
+    /// holds that value (see `method_name` and `THIS`).
+    fn parse_method(&mut self, owner: &str, what: &str, types: &[TypeParam], private: bool, fields: &[Field], methods: &[TaskDef]) -> Result<TaskDef> {
+        let opened = self.peek_span();
+        let alters_span = match self.peek() {
+            Token::Ident(word) if word == ALTERS => {
+                self.advance();
+                Some(opened)
+            }
+            _ => None,
+        };
+        let span = self.peek_span();
+        let name = self.expect_ident()?;
+        reject_member_named_this(&name, span, "a method")?;
+        if is_builtin_member(&name) || name == LEN {
+            return Err(Error::at(
+                span,
+                format!(
+                    "'{0}' is what every value or slice already answers to, so a method can't be called that; name it something else, as in '{0}Of'",
+                    name
+                ),
+            ));
+        }
+        if let Some(field) = fields.iter().find(|field| field.name == name) {
+            return Err(Error::at(
+                span,
+                format!(
+                    "'{0}' is already a field of '{1}', at {2}:{3}; both are written '.{0}', so a field and a method can't share a name",
+                    name, owner, field.span.line, field.span.col
+                ),
+            ));
+        }
+        if let Some(before) = methods.iter().find(|before| before.owner.as_ref().is_some_and(|before| before.name == name)) {
+            return Err(Error::at(span, format!("method '{}' is already defined at {}:{}", name, before.span.line, before.span.col)));
+        }
+        if self.check(Token::Lt) {
+            let takes = if types.is_empty() { String::new() } else { format!(" ('{}' already gives it {})", owner, type_param_list(types)) };
+            return Err(Error::at(
+                self.peek_span(),
+                format!("a method takes no types of its own yet{}; write a task that takes them, and call it from here", takes),
+            ));
+        }
+        let mut params = vec![receiver(owner, types, span)];
+        let read = self.parse_field_list();
+        params.extend(if what == "kind" { read.map_err(Parser::kind_member)? } else { read? });
+        if let Some(param) = params.iter().skip(1).find(|param| param.ty == Type::Region && param.name == THIS_WORD) {
+            return Err(Error::at(param.span, format!("'{0}' is the region the value this method is called on lives in, written '@{0}', so a region parameter can't take the name", THIS_WORD)));
+        }
+        let mut results = Vec::new();
+        let ret = if self.match_token(Token::Arrow) {
+            self.parse_results(&mut results)?
+        } else {
+            Type::Unit
+        };
+        if self.check(Token::LBrace) {
+            return Err(Error::at(self.peek_span(), "a method's body starts on the line after its header, and closes with 'fi'"));
+        }
+        self.skip_newlines();
+        let body = self.parse_block()?;
+        self.expect_fi("method", opened)?;
+        Ok(TaskDef {
+            name: method_name(owner, &name),
+            types: types.to_vec(),
+            given: Vec::new(),
+            params,
+            ret,
+            results,
+            body,
+            span,
+            private,
+            owner: Some(Owner { name, alters: alters_span.is_some(), alters_span }),
+        })
     }
 
     fn parse_kind(&mut self) -> Result<KindDef> {
@@ -583,6 +691,7 @@ impl Parser {
         }
         self.skip_newlines();
         let mut variants = Vec::new();
+        let mut methods: Vec<TaskDef> = Vec::new();
         while !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() {
             self.skip_newlines();
             if self.check(Token::Fi) || self.at_item_start() { break; }
@@ -592,12 +701,25 @@ impl Parser {
                 self.reject_stray_end()?;
             }
             let variant_span = self.peek_span();
-            if self.check(Token::Priv) {
+            let private = self.check(Token::Priv);
+            // A variant carries its values in parentheses, as a method takes its
+            // parameters, so `alters` or a `->` after them tells them apart.
+            if self.at_method() && !self.at_variant_payload(&methods) {
+                if private {
+                    self.advance();
+                }
+                let method = self.parse_method(&name, "kind", &[], private, &[], &methods)?;
+                methods.push(method);
+                self.skip_newlines();
+                continue;
+            }
+            if private {
                 return Err(Error::at(variant_span, "a variant can't be 'priv': every variant is as visible as its kind"));
             }
+            self.reject_field_below_method(&methods, "kind")?;
             let tag = self.expect_ident()?;
             let payload = if self.check(Token::LParen) {
-                self.parse_field_list()?
+                self.parse_field_list().map_err(Parser::kind_member)?
             } else {
                 Vec::new()
             };
@@ -605,7 +727,55 @@ impl Parser {
             self.skip_newlines();
         }
         self.expect_fi("kind", opened)?;
+        self.methods.extend(methods.into_iter().map(Item::Task));
         Ok(KindDef { name, variants, span, private: false })
+    }
+
+    /// Whether the `(` after a name inside a kind holds a variant's values rather
+    /// than a method's parameters, which are written the same way. A variant's
+    /// line ends after them and it carries at least one; a method is told by
+    /// `alters`, by naming what it sends, by taking no parameters, or by another
+    /// method above it. A kind's first method that takes parameters and sends
+    /// nothing is the one thing this can't tell apart: it names `-> unit`.
+    fn at_variant_payload(&self, methods: &[TaskDef]) -> bool {
+        if !methods.is_empty() || matches!(self.peek(), Token::Ident(word) if word == ALTERS) {
+            return false;
+        }
+        let mut depth = 0usize;
+        let mut named = false;
+        for pos in self.pos + 1.. {
+            match self.tokens.get(pos) {
+                Some(Token::LParen) => depth += 1,
+                Some(Token::RParen) => {
+                    depth = match depth.checked_sub(1) {
+                        // A variant's line ends after its values.
+                        Some(0) => return named && matches!(self.tokens.get(pos + 1), Some(Token::Newline | Token::Eof) | None),
+                        Some(left) => left,
+                        None => return false,
+                    };
+                }
+                // A variant carries named values, `Circle(r: float)`.
+                Some(Token::Colon) if depth == 1 => named = true,
+                Some(_) => {}
+                None => return false,
+            }
+        }
+        false
+    }
+
+    /// A failure to read the values in parentheses inside a kind, where a
+    /// variant and a method are written alike, with what tells them apart.
+    fn kind_member(error: Error) -> Error {
+        if !error.message.starts_with("expected ':'") {
+            return error;
+        }
+        Error {
+            message: format!(
+                "{}; inside a kind a name with values in parentheses is a variant, which carries named values, so a method that takes values says what it sends, as in 'name(…) -> unit'",
+                error.message
+            ),
+            ..error
+        }
     }
 
     /// `name: type`
@@ -1449,7 +1619,10 @@ impl Parser {
                 }
                 let field = self.expect_ident()?;
                 let expr = Expr::new(ExprKind::Field(Box::new(expr), field), span);
-                if self.check(Token::LParen) || (self.check(Token::LBrace) && self.at_shape_literal()) {
+                // A `<` here opens the types a use gives (a method takes none of
+                // its own, which `dotted_name_use` says), never a comparison:
+                // see `at_type_args`.
+                if self.check(Token::LParen) || self.at_type_args() || (self.check(Token::LBrace) && self.at_shape_literal()) {
                     return self.dotted_name_use(expr);
                 }
                 Ok(expr)
@@ -1479,6 +1652,25 @@ impl Parser {
             Token::New => return self.parse_new(),
             Token::LBracket => return self.parse_array(),
             Token::LParen => return self.parse_parenthesized(),
+            // `.this`, `.field`, or `.method(…)`: the value a method is called
+            // on, and what it holds. Only a method has one, which the checker
+            // says; here it is a value like any other.
+            Token::Dot if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) => {
+                self.advance(); // .
+                let at = self.peek_span();
+                let member = self.expect_ident()?;
+                let value = Expr::new(ExprKind::Var(THIS.to_string()), span);
+                if member == THIS_WORD {
+                    return Ok(value);
+                }
+                let expr = Expr::new(ExprKind::Field(Box::new(value), member), at);
+                // A `{` after it is a plan B on the member, which `parse_suffix`
+                // reads: no shape is named `.x`.
+                if self.check(Token::LParen) || self.at_type_args() {
+                    return self.dotted_name_use(expr);
+                }
+                return Ok(expr);
+            }
             Token::Ident(name) => {
                 let name = name.clone();
                 self.advance();
@@ -1597,13 +1789,15 @@ impl Parser {
         Err(self.unexpected("']'"))
     }
 
-    /// A call or shape literal after a field, as in `p.x.f()` or
+    /// A call or shape literal after a field, as in `p.area()`, `p.x.f()`, or
     /// `geometry.Point { x: 1 }` where `geometry` isn't a module this file
-    /// includes (`value_name` joins the names that are): one dotted name, which
-    /// the resolver reports as naming nothing. Vela has no methods, so a call
-    /// on any other value is an error here, except a change to a slice,
-    /// `xs.add(…)` or `xs.del(…)`, and a copy, `x.copy()`. (A function of its
-    /// own: `parse_postfix`'s frame is on the stack once per nesting level.)
+    /// includes (`value_name` joins the names that are). A call is a method
+    /// called on the value, which keeps the reading as one dotted name too when
+    /// the value is a name: `Light.Red(…)` is a variant and `m.f(…)` a module's
+    /// task, and only the file's names tell them apart (see the resolver). A
+    /// change to a slice, `xs.add(…)` or `xs.del(…)`, and a copy, `x.copy()`,
+    /// are neither. (A function of its own: `parse_postfix`'s frame is on the
+    /// stack once per nesting level.)
     fn dotted_name_use(&mut self, expr: Expr) -> Result<Expr> {
         if matches!(&expr.kind, ExprKind::Field(_, word) if word == COPY) && self.check(Token::LParen) {
             return self.parse_copy(expr);
@@ -1616,33 +1810,35 @@ impl Parser {
             let ExprKind::Field(items, _) = expr.kind else { return Err(Error::internal_at(expr.span, "a change without its slice")) };
             return Ok(Expr::new(ExprKind::Edit { items, op, args }, expr.span));
         }
-        let Some((name, span)) = dotted_name(&expr) else {
-            if self.check(Token::LParen) {
-                let hint = match &expr.kind {
-                    ExprKind::Field(_, word) if matches!(word.as_str(), "push" | "append" | "insert") => {
-                        "; a slice adds an item with 'add', as in 'xs.add(v)' or 'xs.add(i, v)'"
-                    }
-                    ExprKind::Field(_, word) if matches!(word.as_str(), "pop" | "remove" | "delete") => {
-                        "; a slice takes an item out with 'del', as in 'xs.del(i)' or 'xs.del()'"
-                    }
-                    _ => "; pass the value to a task, as in 'f(value)'",
-                };
-                return Err(Error::at(expr.span, format!("only a task or a variant can be called, and Vela has no methods{}", hint)));
-            }
-            return Ok(expr);
-        };
-        // `first<text>(names)` and `m.Box<int> { … }`: the types a use gives,
-        // told from a comparison by the `(` or `{` that must follow the closing
-        // `>`.
+        // `p.pick<int>(…)`: a task of a module is named before its types (see
+        // `value_name`), so what is left here is a method, which takes none of
+        // its own yet, or a variant, which takes none at all.
+        let dotted = dotted_name(&expr);
+        if self.at_type_args()
+            && let ExprKind::Field(_, member) = &expr.kind
+        {
+            return Err(Error::at(
+                self.peek_span(),
+                format!(
+                    "a method takes no types of its own yet, and a variant takes none at all, so '{0}' is given none; call it as '{0}(…)'",
+                    member
+                ),
+            ));
+        }
+        if self.check(Token::LParen) {
+            let span = expr.span;
+            let ExprKind::Field(value, name) = expr.kind else { return Err(Error::internal_at(span, "a call without the value it is on")) };
+            // `dotted_name` has read the whole of it, the method's name too.
+            let dotted = dotted.map(|(whole, _)| whole);
+            let args = self.parse_arg_list()?;
+            return Ok(Expr::new(ExprKind::MethodCall { value, name, args, dotted }, span));
+        }
+        let Some((name, span)) = dotted else { return Ok(expr) };
+        // `m.Box<int> { … }`: the types a use gives, told from a comparison by
+        // the `{` that must follow the closing `>`.
         let kind = if self.at_type_args() {
             let types = self.parse_type_args()?;
-            if self.check(Token::LParen) {
-                ExprKind::Call { name, types, args: self.parse_arg_list()? }
-            } else {
-                self.parse_struct_init(name, types)?
-            }
-        } else if self.check(Token::LParen) {
-            ExprKind::Call { name, types: Vec::new(), args: self.parse_arg_list()? }
+            self.parse_struct_init(name, types)?
         } else {
             self.parse_struct_init(name, Vec::new())?
         };
@@ -1932,8 +2128,44 @@ fn mentions_region(ty: &Type) -> bool {
 }
 
 /// `a.b.c` for a chain of fields on a variable, with where `a` is written.
+/// The parameter that holds the value a method of `owner` is called on, at the
+/// position of the method's name. The value names the region it lives in
+/// (`@this`), which the checker drops where the shape or kind lives in none; a
+/// shape that takes types is named with them, as its own fields name them.
+fn receiver(owner: &str, types: &[TypeParam], span: Span) -> Field {
+    let region = Some(THIS_WORD.to_string());
+    let ty = if types.is_empty() {
+        Type::Named(owner.to_string(), region)
+    } else {
+        let given = types.iter().map(|param| Type::Named(param.name.clone(), None)).collect();
+        Type::Applied(Box::new(Applied { name: owner.to_string(), types: given, region }))
+    };
+    Field { name: THIS.to_string(), ty, span, ty_span: span, private: false }
+}
+
+/// Refuses a member named `this`, which is the whole value inside a method, so
+/// nothing written after a dot could reach it.
+fn reject_member_named_this(name: &str, span: Span, what: &str) -> Result<()> {
+    if name != THIS_WORD {
+        return Ok(());
+    }
+    Err(Error::at(
+        span,
+        format!("'{0}' is the value a method is called on, written '{1}', so {2} can't take the name", THIS_WORD, THIS, what),
+    ))
+}
+
+/// The types a declaration takes, as they are written: `<T, U>`.
+fn type_param_list(types: &[TypeParam]) -> String {
+    let names: Vec<&str> = types.iter().map(|param| param.name.as_str()).collect();
+    format!("'<{}>'", names.join(", "))
+}
+
 fn dotted_name(expr: &Expr) -> Option<(String, Span)> {
     match &expr.kind {
+        // The value a method is called on is no part of a name: `.this` and
+        // `.x` are its own, and `.x.f(…)` calls a method on the field.
+        ExprKind::Var(name) if name == THIS => None,
         ExprKind::Var(name) => Some((name.clone(), expr.span)),
         ExprKind::Field(base, field) => dotted_name(base).map(|(name, span)| (format!("{}{}{}", name, MODULE_SEPARATOR, field), span)),
         _ => None,

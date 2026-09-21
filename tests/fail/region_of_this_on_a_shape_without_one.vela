@@ -1,0 +1,12 @@
+# error: 5:18: 'int' holds no pointers or text, so it lives in no region; remove '@this'
+shape Point
+    x: int
+
+    xOf() -> int@this
+        <- .x
+    fi
+fi
+
+task main()
+    show(1)
+fi

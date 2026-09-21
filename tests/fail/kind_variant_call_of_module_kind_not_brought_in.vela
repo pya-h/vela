@@ -1,4 +1,4 @@
-# error: 5:17: 'Suit.Spades' names nothing: 'Suit' is neither a module this file includes nor a kind; module 'library' has one: write 'library.Suit', or bring it in with 'include … (Suit)'
+# error: 5:17: unknown variable 'Suit'; module 'library' has one: write 'library.Suit', or bring it in with 'include … (Suit)'
 include modules/library
 
 task main()

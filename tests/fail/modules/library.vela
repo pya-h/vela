@@ -4,6 +4,14 @@
 shape Card
     owner: text
     priv pin: int
+
+    ownerOf() -> text@this
+        <- .owner
+    fi
+
+    priv checked() -> bool
+        <- .pin > 0
+    fi
 fi
 
 kind Suit

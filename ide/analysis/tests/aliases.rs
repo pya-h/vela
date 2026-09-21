@@ -183,7 +183,9 @@ fn messages_name_things_as_the_file_writes_them() {
     assert_eq!(messages("bind n: int = tank"), ["expected type int, got Fuel"]);
     assert_eq!(messages("bind n: int = big"), ["expected type int, got shop.Size"]);
     assert_eq!(messages("show(Item)"), ["unknown variable 'Item'; it is brought in as 'Product' at 1:38"]);
-    assert_eq!(messages("show(prices.price_of(tea, big))"), ["'prices.price_of' names nothing: 'prices' is neither a module this file includes nor a kind; module 'shop/prices' is included as 'shop'"]);
+    // A name before a dot that is neither a module nor a kind is a value with a
+    // method, so an unknown one is reported as the value it would be.
+    assert_eq!(messages("show(prices.price_of(tea, big))"), ["unknown variable 'prices'; module 'shop/prices' is included as 'shop'"]);
 }
 
 #[test]
