@@ -235,6 +235,8 @@ impl Parser {
             (Token::Dot, _, Some(Token::Int(n))) => format!("; a number starts with a digit, as in '0.{}'", n),
             (Token::LBrace, Some(Token::Newline) | None, _) => "; a plan B's '{' goes on the line of its value, and blocks close with 'fi'".to_string(),
             (Token::Semicolon, _, Some(Token::Newline | Token::Eof) | None) => "; a statement ends at the end of its line, without ';'".to_string(),
+            // `&` joins the words after a type's `:` and means nothing else.
+            (Token::Amp, _, _) => "; Vela writes 'and' for both at once ('&' only joins the words a generic type must allow)".to_string(),
             _ => String::new(),
         };
         Error::at(self.peek_span(), format!("expected {}, got {}{}", expected, self.peek().describe(), hint))
@@ -427,6 +429,7 @@ impl Parser {
         self.advance(); // task
         let span = self.peek_span();
         let name = self.expect_ident()?;
+        let types = self.parse_type_params()?;
         let params = self.parse_field_list()?;
         let mut results = Vec::new();
         let ret = if self.match_token(Token::Arrow) {
@@ -440,7 +443,63 @@ impl Parser {
         self.skip_newlines();
         let body = self.parse_block()?;
         self.expect_fi("task", opened)?;
-        Ok(TaskDef { name, params, ret, results, body, span, private: false })
+        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body, span, private: false })
+    }
+
+    /// `<T, U: ordered>` after a declaration's name: the types it takes, with
+    /// what each one must allow. Empty for a declaration that takes none.
+    fn parse_type_params(&mut self) -> Result<Vec<TypeParam>> {
+        if !self.match_token(Token::Lt) {
+            return Ok(Vec::new());
+        }
+        let mut params: Vec<TypeParam> = Vec::new();
+        loop {
+            if self.check(Token::Gt) {
+                return Err(Error::at(self.peek_span(), "'< … >' names the types a declaration takes, as in '<T>'; leave it out when it takes none"));
+            }
+            let span = self.peek_span();
+            let name = self.expect_ident()?;
+            if Type::builtin(&name).is_some() {
+                return Err(Error::at(span, format!("'{}' is a builtin type, so it can't name a type a declaration takes; use another name, as in '<T>'", name)));
+            }
+            if let Some(before) = params.iter().find(|param| param.name == name) {
+                return Err(Error::at(span, format!("'{}' is already taken at {}:{}", name, before.span.line, before.span.col)));
+            }
+            let need = if self.match_token(Token::Colon) { self.parse_needs()? } else { None };
+            params.push(TypeParam { name, span, need });
+            if !self.match_token(Token::Comma) {
+                break;
+            }
+        }
+        if !self.match_token(Token::Gt) {
+            return Err(self.unexpected("',' and another type, or '>' to close the types"));
+        }
+        Ok(params)
+    }
+
+    /// The words after a type's `:`, joined by `&`: what every type given for it
+    /// must allow. A word another already means is an error, since it says
+    /// nothing new.
+    fn parse_needs(&mut self) -> Result<Option<(Need, Span)>> {
+        let mut kept: Option<(Need, Span)> = None;
+        loop {
+            let span = self.peek_span();
+            let word = self.expect_ident().map_err(|_| Error::at(span, format!("expected what the type must allow: {}", needs_list())))?;
+            let Some(need) = Need::from_word(&word) else {
+                return Err(Error::at(span, format!("'{}' isn't something a type can be asked to allow; the words are {}", word, needs_list())));
+            };
+            if let Some((before, _)) = kept {
+                let (wider, narrower) = if before.means(need) { (need, before) } else { (before, need) };
+                if wider == narrower {
+                    return Err(Error::at(span, format!("'{}' is written twice", need.word())));
+                }
+                return Err(Error::at(span, format!("{}, so '{}' already means '{}'; write '{}' alone", why_means(narrower, wider), narrower.word(), wider.word(), narrower.word())));
+            }
+            kept = Some((need, span));
+            if !self.match_token(Token::Amp) {
+                return Ok(kept);
+            }
+        }
     }
 
     /// The results after a task's `->`: one, or several separated by commas,
@@ -1388,11 +1447,15 @@ impl Parser {
                 if name == SCAN && self.check(Token::LParen) {
                     return self.parse_scan(span);
                 }
-                if self.check(Token::LBrace) && self.at_shape_literal() {
+                // The types a call gives are read only where a call follows
+                // them (see `at_type_args`), so `(` comes next for certain.
+                if self.at_type_args() {
+                    let types = self.parse_type_args()?;
+                    ExprKind::Call { name, types, args: self.parse_arg_list()? }
+                } else if self.check(Token::LBrace) && self.at_shape_literal() {
                     self.parse_struct_init(name)?
                 } else if self.check(Token::LParen) {
-                    let args = self.parse_arg_list()?;
-                    ExprKind::Call(name, args)
+                    ExprKind::Call { name, types: Vec::new(), args: self.parse_arg_list()? }
                 } else {
                     ExprKind::Var(name)
                 }
@@ -1524,8 +1587,59 @@ impl Parser {
             }
             return Ok(expr);
         };
-        let kind = if self.check(Token::LParen) { ExprKind::Call(name, self.parse_arg_list()?) } else { self.parse_struct_init(name)? };
+        // `first<text>(names)`: the types a call gives a generic task, told from
+        // a comparison by the `(` that must follow the closing `>`.
+        let kind = if self.at_type_args() {
+            let types = self.parse_type_args()?;
+            ExprKind::Call { name, types, args: self.parse_arg_list()? }
+        } else if self.check(Token::LParen) {
+            ExprKind::Call { name, types: Vec::new(), args: self.parse_arg_list()? }
+        } else {
+            self.parse_struct_init(name)?
+        };
         Ok(Expr::new(kind, span))
+    }
+
+    /// Whether the cursor is at the `<` of the types a call gives: a `<` whose
+    /// matching `>` is followed by `(`, with only what a type is written with in
+    /// between. Comparisons never look like that: `a < b > (c)` would compare a
+    /// bool with `>`, which is an error either way.
+    fn at_type_args(&self) -> bool {
+        if !self.check(Token::Lt) {
+            return false;
+        }
+        let mut depth = 0usize;
+        for p in self.pos + 1.. {
+            match self.tokens.get(p) {
+                // `>` closes the types, or, nested, one type's own.
+                Some(Token::Gt) if depth == 0 => return self.tokens.get(p + 1) == Some(&Token::LParen),
+                Some(Token::Lt) => depth += 1,
+                Some(Token::Gt) => depth -= 1,
+                Some(token) if token.writes_type() => {}
+                _ => return false,
+            }
+        }
+        false
+    }
+
+    /// After the `<` of the types a call gives: the types and `>`.
+    fn parse_type_args(&mut self) -> Result<Vec<TypeArg>> {
+        self.advance(); // <
+        let mut types = Vec::new();
+        loop {
+            let at = self.peek_span();
+            self.enter()?;
+            let ty = self.parse_type();
+            self.leave(1);
+            types.push((ty?, at));
+            if !self.match_token(Token::Comma) {
+                break;
+            }
+        }
+        if !self.match_token(Token::Gt) {
+            return Err(self.unexpected("',' and another type, or '>' to close the types"));
+        }
+        Ok(types)
     }
 
     /// `value.copy()`, with the cursor at `(` and `expr` the field `copy` of the
@@ -1713,6 +1827,31 @@ impl Parser {
             None => self.unexpected("a name"),
         }
     }
+}
+
+/// The words a generic type can be asked to allow, for a message, from what
+/// most types allow to what fewest do.
+fn needs_list() -> String {
+    let words: Vec<String> = [Need::Fixed, Need::Same, Need::Shown, Need::Ordered].iter().map(|need| format!("'{}'", need.word())).collect();
+    words.join(", ")
+}
+
+/// Why `narrower` already means `wider`, for the message that says to write one
+/// word alone.
+fn why_means(narrower: Need, wider: Need) -> String {
+    let value = match narrower {
+        Need::Ordered => "a value with an order is a number, which",
+        Need::Shown => "a value that can be shown",
+        Need::Same => "a value that can be compared",
+        Need::Fixed => "a value that never changes",
+    };
+    let also = match wider {
+        Need::Ordered => "has an order",
+        Need::Shown => "can be shown",
+        Need::Same => "can be compared",
+        Need::Fixed => "never changes",
+    };
+    format!("{} {}", value, also)
 }
 
 /// Whether a region written on `ty` belongs to what it holds, because `ty`

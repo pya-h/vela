@@ -1,0 +1,8 @@
+# error: 2:17: 'sortable' isn't something a type can be asked to allow; the words are 'fixed', 'same', 'shown', 'ordered'
+task biggest<T: sortable>(a: T, b: T) -> T
+    <- a
+fi
+
+task main()
+    show(biggest(1, 2))
+fi

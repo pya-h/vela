@@ -58,8 +58,12 @@ enum TypePlace {
 pub struct Checker {
     shapes: HashMap<String, ShapeDef>,
     kinds: HashMap<String, KindDef>,
-    /// Every task's parameters (names and types) and return type.
-    tasks: HashMap<String, (Vec<(String, Type)>, Type)>,
+    /// Every task's type parameters, parameters (names and types), and return
+    /// type.
+    tasks: HashMap<String, TaskInfo>,
+    /// The type parameters of the task being checked, with what each requires.
+    /// Empty for an ordinary task.
+    type_params: Vec<TypeParam>,
     /// The shapes and kinds that hold pointers, directly or in other shapes and
     /// kinds, so their values live in a region.
     regional: HashSet<String>,
@@ -99,10 +103,41 @@ pub struct Checker {
     /// Where each `copy()` without a written region is, until the place it goes
     /// gives it one (see `settle_copies`). A statement must settle the ones it has.
     unsettled_copies: Vec<Span>,
+    /// Where each call of a generic task whose types aren't all worked out yet
+    /// is, with the task's name and the first type still unknown, until the
+    /// place its value goes names it (see `settle_types`).
+    unsettled_types: Vec<(Span, String, String)>,
+    /// One task to make for each set of types a call gives a generic task: the
+    /// name of the task made for them, the generic task's name, the types, and
+    /// where the call that needs it is.
+    instances: Vec<(String, String, Vec<Type>, Span)>,
+    /// For each generic task, the copies its body makes of values of the types
+    /// it takes into a region its header doesn't keep them in: the type's name,
+    /// the region the copy goes into, whether the header names that region at
+    /// all, and where the copy is written. Such a copy is only the value itself,
+    /// so every use must give a type that holds nothing in a region (see
+    /// `check_copies_of`).
+    loose_copies: HashMap<String, Vec<(String, String, bool, Span)>>,
+}
+
+/// What a call needs to know about a task: the types it takes, its parameters,
+/// and what it sends.
+#[derive(Clone)]
+struct TaskInfo {
+    types: Vec<TypeParam>,
+    params: Vec<(String, Type)>,
+    ret: Type,
 }
 
 /// The error for a `copy()` whose region nothing names.
 const UNSETTLED_COPY: &str = "can't tell which region to copy into, since nothing this copy goes into names one; name it, as in 'x.copy() at r' or 'x.copy()@r'";
+
+/// At most how many tasks one generic task may be made into, and how deeply a
+/// type given to one may be built up. A generic task whose call gives a type
+/// built from its own (`f<(T, int)>` inside `f<T>`) would need an endless
+/// number of them, so it stops at these.
+const MAX_INSTANCES: usize = 500;
+const MAX_TYPE_DEPTH: usize = 24;
 
 /// The most memory a value may take, in bytes: 1 TiB. A larger type is an
 /// error, so that no C compiler rejects the program for it.
@@ -124,7 +159,9 @@ impl Checker {
     pub fn check_program(program: &mut Program) -> Result<()> {
         let mut checker = Checker::with_type_places(std::mem::take(&mut program.type_places));
         checker.modules = program.modules.iter().map(|scope| (scope.name.clone(), scope.clone())).collect();
-        let result = checker.check_file(&mut program.items);
+        let result = checker
+            .check_file(&mut program.items)
+            .and_then(|()| checker.expand_instances(&mut program.items));
         program.type_places = checker.type_places;
         // Names in a message are written as the file with the error writes them.
         result.map_err(|mut error| {
@@ -241,6 +278,97 @@ impl Checker {
         Ok(())
     }
 
+    /// Checks the types one use gives a generic task against the copies its body
+    /// makes of the values of those types (see `loose_copies`): a copy is a
+    /// value of the region it is made in, and nothing in the header keeps a
+    /// value of that type there, so the copy is only the value itself and the
+    /// type given must hold nothing in a region. `at` is the use.
+    fn check_copies_of(&self, task: &str, types: &[Type], at: Span) -> Result<()> {
+        let Some(copies) = self.loose_copies.get(task) else { return Ok(()) };
+        let Some(info) = self.tasks.get(task) else { return Ok(()) };
+        let given: HashMap<&str, &Type> = info.types.iter().map(|param| param.name.as_str()).zip(types).collect();
+        for (param, region, in_header, copy_at) in copies {
+            let Some(ty) = given.get(param.as_str()) else { continue };
+            let Some(lives) = ty.regions().into_iter().find(|region| *region != ANY_REGION) else { continue };
+            let what = if *in_header {
+                format!("nothing in its header keeps a '{}' in '{}', so that copy is only the value itself", param, region)
+            } else {
+                format!("'{}' is declared inside '{}' and freed when it ends, so that copy is only the value itself", region, unqualified(task))
+            };
+            let fix = if *in_header {
+                format!("name the region in a parameter's type, as in 'xs: [{}]@{}', or write '{}' for {} itself", param, region, unqualified(task), ty)
+            } else {
+                format!("copy the value before the call, or write '{}' for {} itself", unqualified(task), ty)
+            };
+            return err(
+                at,
+                format!(
+                    "'{}' copies a '{}' into region '{}' at {}:{}, and {}; this use gives {}, which is in region '{}'. So {}",
+                    unqualified(task),
+                    param,
+                    region,
+                    copy_at.line,
+                    copy_at.col,
+                    what,
+                    ty,
+                    lives,
+                    fix
+                ),
+            );
+        }
+        Ok(())
+    }
+
+    /// Makes one task for each set of types a call gives a generic task, with
+    /// the types in place of its type parameters, and points every such call at
+    /// the one made for it. A generic task itself generates nothing: its body is
+    /// checked once, with `T` standing for the type each use gives.
+    ///
+    /// Making one can need another (a generic task calling a generic task), so
+    /// they are made from a list until it is empty. A task whose call gives a
+    /// type built from its own (`f<(T, int)>` inside `f<T>`) would never stop,
+    /// so a type nested too deeply, or too many tasks, is an error.
+    fn expand_instances(&mut self, items: &mut Vec<Item>) -> Result<()> {
+        let generic: HashMap<String, TaskDef> = items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Task(t) if !t.types.is_empty() => Some((t.name.clone(), t.clone())),
+                _ => None,
+            })
+            .collect();
+        let mut made: HashSet<String> = HashSet::new();
+        let mut queue: Vec<(String, String, Vec<Type>, Span)> = self.instances.drain(..).collect();
+        let mut tasks: Vec<Item> = Vec::new();
+        while let Some((key, name, types, at)) = queue.pop() {
+            if !made.insert(key.clone()) {
+                continue;
+            }
+            if made.len() > MAX_INSTANCES {
+                return err(at, format!("'{}' is used with more than {} different types, which no program needs; a generic task whose call gives a type built from its own never stops", unqualified(&name), MAX_INSTANCES));
+            }
+            let Some(source) = generic.get(&name) else {
+                return Err(Error::internal_at(at, format!("no generic task '{}' to make for {} types", name, types.len())));
+            };
+            self.check_copies_of(&name, &types, at)?;
+            if types.iter().any(|ty| type_depth(ty) > MAX_TYPE_DEPTH) {
+                return err(at, format!("this use of '{}' gives a type built up more than {} types deep; a generic task whose call gives a type built from its own never stops", unqualified(&name), MAX_TYPE_DEPTH));
+            }
+            let mut task = source.clone();
+            task.name = key;
+            task.types = Vec::new();
+            task.given = types.clone();
+            let given: HashMap<String, Type> = source.types.iter().map(|param| param.name.clone()).zip(types).collect();
+            let mut made = Made::default();
+            substitute_task(&mut task, &given, &mut made);
+            for (name, types, at) in made.needed {
+                queue.push((instance_name(&name, &types), name, types, at));
+            }
+            tasks.push(Item::Task(task));
+        }
+        items.extend(tasks);
+        Ok(())
+    }
+
     /// Registers every task, shape, kind, and variant. They share one
     /// namespace: no two may have the same name, and none may use the name of
     /// a builtin type or task.
@@ -296,7 +424,7 @@ impl Checker {
                 Item::Task(t) => {
                     declare(&t.name, t.span)?;
                     let params = t.params.iter().map(|p| (p.name.clone(), p.ty.clone())).collect();
-                    self.tasks.insert(t.name.clone(), (params, t.ret.clone()));
+                    self.tasks.insert(t.name.clone(), TaskInfo { types: t.types.clone(), params, ret: t.ret.clone() });
                 }
             }
         }
@@ -430,6 +558,10 @@ impl Checker {
     /// only reads or links pointers in (it can't allocate there), and each
     /// result's regions must be regions the task is given.
     fn check_header(&mut self, t: &mut TaskDef) -> Result<()> {
+        self.enter_type_params(&t.types);
+        if t.name == "main" && !t.types.is_empty() {
+            return err(t.span, "'main' is where the program starts, so it takes no types");
+        }
         let region_params: Vec<&str> = t.params.iter().filter(|p| p.ty == Type::Region).map(|p| p.name.as_str()).collect();
         let mut named: Vec<String> = region_params.iter().map(|name| name.to_string()).collect();
         let mut resolved = Vec::new();
@@ -498,8 +630,22 @@ impl Checker {
             param.ty = ty;
         }
         let params = t.params.iter().map(|p| (p.name.clone(), p.ty.clone())).collect();
-        self.tasks.insert(t.name.clone(), (params, t.ret.clone()));
+        self.tasks.insert(t.name.clone(), TaskInfo { types: t.types.clone(), params, ret: t.ret.clone() });
+        self.type_params.clear();
         Ok(())
+    }
+
+    /// Makes the types a declaration takes visible while its header and body are
+    /// checked: `T` in them means the type each use gives. A name that is
+    /// already a type is reported when the file's names are resolved (see
+    /// `Resolver::enter_type_params`).
+    fn enter_type_params(&mut self, types: &[TypeParam]) {
+        self.type_params = types.to_vec();
+    }
+
+    /// What the type parameter called `name` requires, if it is one here.
+    fn type_param(&self, name: &str) -> Option<&TypeParam> {
+        self.type_params.iter().find(|param| param.name == name)
     }
 
     /// Checks a written type and settles its regions for `place`:
@@ -581,6 +727,21 @@ impl Checker {
                     );
                 }
                 Ok(Type::Text(region.clone().or_else(|| inside.map(str::to_string))))
+            }
+            // A type parameter's regions are the given type's, so it names none
+            // of its own.
+            Type::Named(name, region) if self.type_param(name).is_some() => {
+                // A slice or pointer around it gives it their region (`[T]@r`),
+                // which a parameter simply takes; a region written on the
+                // parameter itself says nothing, since what a `T` holds is in
+                // the region of the type given for it.
+                if let Some(region) = region.as_deref().filter(|region| inside != Some(region)) {
+                    return err(
+                        self.place(span, &format!("@{}", region)),
+                        format!("'{0}' is a type this task takes, and what a '{0}' holds is in the region of the type given for it, so it names none; remove '@{1}'", name, region),
+                    );
+                }
+                Ok(Type::Param(name.clone()))
             }
             Type::Named(name, region) => {
                 given(region)?;
@@ -696,6 +857,8 @@ impl Checker {
                 }
                 Ok(())
             }
+            // `T`: the type each use of a generic declaration gives it.
+            Type::Named(name, _) if self.type_param(name).is_some() => Ok(()),
             Type::Named(name, _) if !self.sees(name) || (!self.shapes.contains_key(name) && !self.kinds.contains_key(name)) => {
                 match self.variants.get(name).filter(|_| self.sees(name)) {
                     Some(info) => err(
@@ -714,6 +877,10 @@ impl Checker {
     /// `None` when nothing in it can change.
     fn changeable_item(&self, ty: &Type) -> Option<String> {
         match ty {
+            // Only a type required to be `fixed` is known never to change.
+            Type::Param(name) if !self.allows(Need::Fixed, ty) => {
+                Some(format!("'{0}', which may be any type here; require it, as in '<{0}: {1}>'", name, Need::Fixed.word()))
+            }
             Type::Ptr(..) => Some(format!("a pointer ({}), whose value can change", ty)),
             Type::Slice(..) => Some(format!("a slice ({}), whose items can change", ty)),
             Type::Array(..) => Some(format!("an array ({})", ty)),
@@ -851,6 +1018,7 @@ impl Checker {
     }
 
     fn check_task(&mut self, task: &mut TaskDef) -> Result<()> {
+        self.enter_type_params(&task.types);
         for param in &task.params {
             self.check_size(&param.ty, param.ty_span)?;
         }
@@ -884,6 +1052,30 @@ impl Checker {
             }
         }
         self.check_block(&mut task.body)?;
+        // The copies the body makes of the values of the types the task takes
+        // (substituting no types changes nothing and only reads the body). A
+        // copy into a region the header keeps that type in is the value's own
+        // region, since a use must give a type of that region (see
+        // `region_conflict` at a call); any other is only the value itself, and
+        // every use must fit that (see `check_copies_of`).
+        if !task.types.is_empty() {
+            let mut made = Made::default();
+            substitute_task(task, &HashMap::new(), &mut made);
+            let kept = keeps_params(task);
+            let named = header_regions(task);
+            let loose: Vec<(String, String, bool, Span)> = made
+                .copies
+                .into_iter()
+                .filter(|(param, region, _)| !kept.get(param).is_some_and(|regions| regions.contains(region)))
+                .map(|(param, region, at)| {
+                    let in_header = named.contains(&region);
+                    (param, region, in_header, at)
+                })
+                .collect();
+            if !loose.is_empty() {
+                self.loose_copies.insert(task.name.clone(), loose);
+            }
+        }
         self.scopes.clear();
         self.current_ret = None;
         if self.result_names.is_empty() {
@@ -1062,12 +1254,18 @@ impl Checker {
     /// Checks a statement, whose copies must all know their regions when it ends.
     fn check_stmt(&mut self, stmt: &mut Stmt) -> Result<()> {
         let before = self.unsettled_copies.len();
+        let types_before = self.unsettled_types.len();
         let result = self.check_stmt_kind(stmt);
         let unsettled = self.unsettled_copies.get(before).copied();
+        let untold = self.unsettled_types.get(types_before).cloned();
         self.unsettled_copies.truncate(before);
+        self.unsettled_types.truncate(types_before);
         result?;
-        match unsettled {
-            Some(at) => err(at, UNSETTLED_COPY),
+        if let Some(at) = unsettled {
+            return err(at, UNSETTLED_COPY);
+        }
+        match untold {
+            Some((at, task, param)) => err(at, self.untold_type(&task, &param)),
             None => Ok(()),
         }
     }
@@ -1088,9 +1286,9 @@ impl Checker {
                 // `scan` can have an effect, and so can a plan B on a call or a
                 // `scan`, or one that gives no value.
                 match &e.kind {
-                    ExprKind::Call(name, _) if matches!(e.ty, Some(Type::Or(..))) => err(e.span, ignored_error(name)),
-                    ExprKind::Call(..) | ExprKind::Edit { .. } | ExprKind::Scan { .. } => Ok(()),
-                    ExprKind::PlanB { value, .. } if e.ty == Some(Type::Unit) || matches!(value.kind, ExprKind::Call(..) | ExprKind::Scan { .. }) => Ok(()),
+                    ExprKind::Call { name, .. } if matches!(e.ty, Some(Type::Or(..))) => err(e.span, ignored_error(name)),
+                    ExprKind::Call { .. } | ExprKind::Edit { .. } | ExprKind::Scan { .. } => Ok(()),
+                    ExprKind::PlanB { value, .. } if e.ty == Some(Type::Unit) || matches!(value.kind, ExprKind::Call { .. } | ExprKind::Scan { .. }) => Ok(()),
                     ExprKind::Binary(BinaryOp::Eq, ..) => err(e.span, "the result of '==' is unused; use '=' to assign"),
                     _ => err(e.span, "this value is unused; only a task call can be used as a statement"),
                 }
@@ -1582,7 +1780,7 @@ impl Checker {
         let ty = self.check_expr_multi(expr)?;
         let Type::Results(types) = &ty else { return Ok(ty) };
         let what = match &expr.kind {
-            ExprKind::Call(name, _) => format!("'{}'", name),
+            ExprKind::Call { name, .. } => format!("'{}'", name),
             _ => "this call".to_string(),
         };
         err(
@@ -1815,7 +2013,7 @@ impl Checker {
         };
         let resolved = match &mut expr.kind {
             ExprKind::Var(name) if self.lookup(name).is_none() => variant(name).map(|(kind, tag)| (kind, tag, Vec::new())),
-            ExprKind::Call(name, args) => variant(name).map(|(kind, tag)| (kind, tag, std::mem::take(args))),
+            ExprKind::Call { name, args, .. } => variant(name).map(|(kind, tag)| (kind, tag, std::mem::take(args))),
             _ => None,
         };
         if let Some((kind, tag, args)) = resolved {
@@ -1860,7 +2058,7 @@ impl Checker {
             ExprKind::Array(values) => self.check_array(values, span),
             ExprKind::Tuple(values) => self.check_tuple(values),
             ExprKind::Repeat { value, count } => self.check_repeat(value, count, span),
-            ExprKind::Call(name, args) => {
+            ExprKind::Call { name, types, args } => {
                 if name == "show" {
                     let [arg] = args.as_mut_slice() else {
                         return err(span, "show expects 1 argument");
@@ -1870,8 +2068,12 @@ impl Checker {
                         Type::Maybe(inner) => inner.as_ref(),
                         other => other,
                     };
-                    if !matches!(shown, Type::Int | Type::Float | Type::Bool | Type::Text(_)) {
+                    if !matches!(shown, Type::Int | Type::Float | Type::Bool | Type::Text(_)) && !self.allows(Need::Shown, shown) {
+                        if let Some(untold) = self.untold_param(&ty) {
+                            return err(arg.span, untold);
+                        }
                         let hint = match &ty {
+                            Type::Param(_) => format!("; {} {}", ty, self.why_not(Need::Shown, &ty)),
                             Type::Ptr(..) => "; to show the value it points to, write 'p^'".to_string(),
                             Type::Array(..) | Type::Slice(..) => "; show its items one at a time, as in 'each v in xs'".to_string(),
                             Type::Tuple(_) => "; show its items one at a time, as in 'show(t.0)'".to_string(),
@@ -1882,7 +2084,7 @@ impl Checker {
                     }
                     return Ok(Type::Unit);
                 }
-                let (params, ret) = self.tasks.get(name.as_str()).filter(|_| self.sees(name))
+                let info = self.tasks.get(name.as_str()).filter(|_| self.sees(name))
                     .ok_or_else(|| {
                         // `send (x)` written the old way reads as a call.
                         let hint = match name.as_str() {
@@ -1894,10 +2096,10 @@ impl Checker {
                         Error::at(span, format!("unknown task '{}'{}", name, hint))
                     })?
                     .clone();
-                if args.len() != params.len() {
-                    return err(span, format!("task '{}' expects {}, got {}", name, count(params.len(), "argument"), args.len()));
+                if args.len() != info.params.len() {
+                    return err(span, format!("task '{}' expects {}, got {}", name, count(info.params.len(), "argument"), args.len()));
                 }
-                self.check_call_args(name, args, &params, &ret)
+                self.check_call_args(span, name, types, args, &info)
             }
             ExprKind::Unary(op, e) => self.check_unary(*op, e, span),
             ExprKind::Binary(op, l, r) => self.check_binary(*op, l, r, span),
@@ -2274,7 +2476,7 @@ impl Checker {
         if unsettled(&ty) {
             return err(value.span, format!("cannot tell the type of this value from none or 'fail …', so it can't be copied; give it a type first, as in 'x: {}'", settled_example(&ty)));
         }
-        if !holds_pointers(&ty, &self.regional) && !holds_text(&ty, &self.takes_region) {
+        if !holds_pointers(&ty, &self.regional) && !holds_text(&ty, &self.takes_region) && ty.params().is_empty() {
             let what = match ty {
                 Type::Unit => "this has no value".to_string(),
                 _ => format!("this value is {}, which holds no text, slice, or pointer; use it as it is", ty),
@@ -2416,6 +2618,16 @@ impl Checker {
         if let Some(region) = settled.regions().into_iter().find(|region| *region != ANY_REGION && self.lookup(region).is_none()) {
             return err(at, format!("this value is in region '{}', which is freed when the plan B ends, so it can't be the plan B's value", region));
         }
+        // A plan B is a place the value goes, so a call whose types it settled
+        // (see `check_plan_b_body`) learns them from it.
+        if !value_ty.params().is_empty() {
+            let told = match &value_ty {
+                Type::Maybe(_) => Type::Maybe(Box::new(settled.clone())),
+                Type::Or(_, error) => Type::Or(Box::new(settled.clone()), error.clone()),
+                other => other.clone(),
+            };
+            self.settle_types(value, &told)?;
+        }
         Ok(settled)
     }
 
@@ -2438,6 +2650,17 @@ impl Checker {
             let ty = self.check_expr(e)?;
             if ty == Type::Unit {
                 return err(e.span, format!("the last line of a plan B gives its value, but this has none; expected a value of type {}", extracted));
+            }
+            // A plan B on a call that isn't told which type it is: the
+            // fallback's type is the one to use, since it is where the value
+            // goes (see `settle_types`).
+            if extracted.params().iter().any(|name| self.type_param(name).is_none()) {
+                let mut given = HashMap::new();
+                unify_params(extracted, &ty, &mut given);
+                let settled = extracted.map_params(&mut |name| given.get(name).cloned());
+                if settled != *extracted {
+                    return self.coerce(e, &settled).map(|()| Some((settled, e.span)));
+                }
             }
             if extracted.regions().contains(&ANY_REGION) {
                 let mut regions = HashMap::new();
@@ -2481,6 +2704,23 @@ impl Checker {
         match op {
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
                 if !lt.is_numeric() || !rt.is_numeric() {
+                    if let Some(untold) = self.untold_param(&lt).or_else(|| self.untold_param(&rt)) {
+                        return err(span, untold);
+                    }
+                    // No word asks a type for arithmetic (see `Need`), so a
+                    // task that adds its values is written for numbers.
+                    if let Some(name) = [&lt, &rt].iter().find_map(|ty| match ty {
+                        Type::Param(name) => Some(name),
+                        _ => None,
+                    }) {
+                        return err(
+                            span,
+                            format!(
+                                "arithmetic requires numeric operands; '{}' is a type this task takes, and no word asks a type for arithmetic, so a task that does it takes numbers ('int' or 'float') rather than a type it is given",
+                                name
+                            ),
+                        );
+                    }
                     return err(span, format!("arithmetic requires numeric operands{}", extract_hint(&[&lt, &rt])));
                 }
                 // Mixing int and float promotes the result to float.
@@ -2509,15 +2749,28 @@ impl Checker {
                 if !pointers && !texts && !tuples {
                     self.expect_type(&rt, &lt, r.span)?;
                 }
-                if !comparable(&lt) {
+                if !comparable(&lt) && !self.allows(Need::Same, &lt) {
+                    if let Some(untold) = self.untold_param(&lt).or_else(|| self.untold_param(&rt)) {
+                        return err(span, untold);
+                    }
                     let symbol = if op == BinaryOp::Eq { "==" } else { "!=" };
-                    let hint = if matches!(lt, Type::Tuple(_)) { "; tuples compare item by item when every item is a number, a bool, text, or a tuple of them" } else { "" };
+                    let hint = match &lt {
+                        Type::Tuple(_) => "; tuples compare item by item when every item is a number, a bool, text, or a tuple of them".to_string(),
+                        Type::Param(_) => format!("; it {}", self.why_not(Need::Same, &lt)),
+                        _ => String::new(),
+                    };
                     return err(span, format!("'{}' can't compare values of type {}{}", symbol, lt, hint));
                 }
                 Ok(Type::Bool)
             }
             BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
-                if !lt.is_numeric() {
+                if !lt.is_numeric() && !self.allows(Need::Ordered, &lt) {
+                    if let Some(untold) = self.untold_param(&lt).or_else(|| self.untold_param(&rt)) {
+                        return err(span, untold);
+                    }
+                    if let Type::Param(_) = &lt {
+                        return err(span, format!("comparison requires numeric operands; {} {}", lt, self.why_not(Need::Ordered, &lt)));
+                    }
                     if matches!(lt, Type::Tuple(_)) {
                         return err(span, "comparison requires numeric operands; a tuple is only compared with '==' and '!=', or item by item, as in 't.0 < u.0'");
                     }
@@ -2615,12 +2868,26 @@ impl Checker {
     /// allocate in. The task's other regions stand for the caller's regions
     /// that the arguments' types show; one that no argument shows (as for
     /// `none`) becomes `ANY_REGION`.
-    fn check_call_args(&mut self, task: &str, args: &mut [Expr], params: &[(String, Type)], ret: &Type) -> Result<Type> {
+    fn check_call_args(&mut self, span: Span, task: &str, written: &mut Vec<TypeArg>, args: &mut [Expr], info: &TaskInfo) -> Result<Type> {
+        let params = &info.params;
+        let ret = &info.ret;
+        // The types the call gives: written after the name, or worked out from
+        // the arguments below (and from the place the value goes, later).
+        let mut given = self.written_types(span, task, written, info)?;
+        // What the arguments show each type to be, kept apart from the types
+        // written at the call so one written without its region is reported as
+        // that, rather than as an argument of the wrong type.
+        let mut shown: HashMap<String, Type> = HashMap::new();
+        // Where each type the call gives is written: the call itself, for one
+        // worked out rather than written.
+        let places: Vec<Span> = info.types.iter().enumerate().map(|(i, _)| written.get(i).map_or(span, |(_, at)| *at)).collect();
         let mut regions: HashMap<String, String> = HashMap::new();
         for (arg, (param, ty)) in args.iter_mut().zip(params) {
             if *ty != Type::Region {
                 let actual = self.check_expr(arg)?;
                 unify_regions(ty, &actual, &mut regions);
+                unify_params(ty, &actual, &mut given);
+                unify_params(ty, &actual, &mut shown);
                 continue;
             }
             let ExprKind::Var(region) = &arg.kind else {
@@ -2635,9 +2902,51 @@ impl Checker {
             regions.insert(param.clone(), region.clone());
             arg.ty = Some(Type::Region);
         }
+        // A written type names its regions, as a written type does everywhere
+        // else, so one that an argument shows to be of a region names it too.
+        for ((param, at), (ty, _)) in info.types.iter().zip(&places).zip(written.iter()) {
+            if let Some(held) = shown.get(&param.name)
+                && held.without_regions() == ty.without_regions()
+                && !fits_regions(held, ty)
+            {
+                return err(
+                    *at,
+                    format!(
+                        "task '{0}' is given {1} as '{2}', but its argument holds {3}; a written type names its regions, so write '{0}<{3}>(…)'",
+                        task, ty, param.name, held
+                    ),
+                );
+            }
+        }
+        // Every type the call gives must allow what the task's header asks of
+        // it, and the types it names are put in place of the parameters.
+        for (param, at) in info.types.iter().zip(&places) {
+            if let Some(ty) = given.get(&param.name) {
+                self.check_need(task, param, ty, *at)?;
+            }
+        }
+        // The header's own region names first: the types put in place of the
+        // parameters carry the regions of the values given, which are already
+        // the caller's.
         let substitute = |ty: &Type| {
-            ty.map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| ANY_REGION.to_string())))
+            let ty = ty.map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| ANY_REGION.to_string())));
+            ty.map_params(&mut |name| given.get(name).cloned())
         };
+        // Everything a value in a region holds is in that region, so a type
+        // given for a `T` must be of the region the header keeps it in.
+        if !info.types.is_empty() {
+            for ty in params.iter().map(|(_, ty)| substitute(ty)).chain([substitute(ret)]) {
+                if let Some((outer, inner)) = region_conflict(&ty, None) {
+                    return err(
+                        span,
+                        format!(
+                            "'{0}' would keep this in region '{1}' and in region '{2}', but everything a value in a region holds is in that region; copy it into '{1}' first, as in 'value.copy() at {1}'",
+                            unqualified(task), outer, inner
+                        ),
+                    );
+                }
+            }
+        }
         for (arg, (param, ty)) in args.iter_mut().zip(params) {
             if *ty == Type::Region {
                 continue;
@@ -2666,7 +2975,140 @@ impl Checker {
                 result => result?,
             }
         }
-        Ok(substitute(ret))
+        let sent = substitute(ret);
+        // A type no argument names is worked out from the place the value goes
+        // (see `settle_types`), or written at the call.
+        let missing: Vec<&TypeParam> = info.types.iter().filter(|param| !given.contains_key(&param.name)).collect();
+        if let Some(param) = missing.first() {
+            if !sent.params().contains(&param.name.as_str()) {
+                return err(span, self.untold_type(task, &param.name));
+            }
+            self.unsettled_types.push((span, task.to_string(), param.name.clone()));
+        }
+        *written = info
+            .types
+            .iter()
+            .zip(&places)
+            .map(|(param, at)| (given.get(&param.name).cloned().unwrap_or_else(|| Type::Param(param.name.clone())), *at))
+            .collect();
+        self.note_instance(span, task, written);
+        Ok(sent)
+    }
+
+    /// The types written after a call's name, by the name of the type each one
+    /// is given for. Writing them is all or nothing.
+    fn written_types(&mut self, span: Span, task: &str, written: &mut [TypeArg], info: &TaskInfo) -> Result<HashMap<String, Type>> {
+        if written.is_empty() {
+            return Ok(HashMap::new());
+        }
+        if info.types.is_empty() {
+            return err(span, format!("task '{}' takes no types, so '< … >' has nothing to name", task));
+        }
+        if written.len() != info.types.len() {
+            let names: Vec<&str> = info.types.iter().map(|param| param.name.as_str()).collect();
+            return err(
+                span,
+                format!("task '{}' takes {}, so name all of them, as in '{}<{}>(…)'", task, count(info.types.len(), "type"), unqualified(task), names.join(", ")),
+            );
+        }
+        let mut given = HashMap::new();
+        for ((ty, at), param) in written.iter_mut().zip(&info.types) {
+            *ty = self.resolve_type(ty, *at, TypePlace::Body)?;
+            given.insert(param.name.clone(), ty.clone());
+        }
+        Ok(given)
+    }
+
+    /// Checks that `ty`, given for the type parameter `param`, allows what the
+    /// task's header asks of it.
+    fn check_need(&self, task: &str, param: &TypeParam, ty: &Type, at: Span) -> Result<()> {
+        let Some((need, _)) = param.need else { return Ok(()) };
+        if self.allows(need, ty) {
+            return Ok(());
+        }
+        err(
+            at,
+            format!(
+                "task '{}' takes a type that is '{}' as '{}', and {} {}",
+                unqualified(task),
+                need.word(),
+                param.name,
+                ty,
+                self.why_not(need, ty)
+            ),
+        )
+    }
+
+    /// Whether values of type `ty` allow what `need` asks: a type parameter
+    /// allows it when its own word already does.
+    fn allows(&self, need: Need, ty: &Type) -> bool {
+        if let Type::Param(name) = ty {
+            return self.type_param(name).and_then(|param| param.need).is_some_and(|(own, _)| own.means(need));
+        }
+        match need {
+            Need::Ordered => ty.is_numeric(),
+            Need::Shown => matches!(ty, Type::Int | Type::Float | Type::Bool | Type::Text(_)),
+            Need::Same => comparable(ty),
+            Need::Fixed => self.changeable_item(ty).is_none(),
+        }
+    }
+
+    /// Why a type doesn't allow what `need` asks, for the end of a message.
+    fn why_not(&self, need: Need, ty: &Type) -> String {
+        if let Type::Param(name) = ty {
+            let own = self.type_param(name).and_then(|param| param.need);
+            return match own {
+                Some((own, _)) => format!("is only '{}' here; require it, as in '<{}: {}>'", own.word(), name, need.word()),
+                None => format!("is any type here; require it, as in '<{}: {}>'", name, need.word()),
+            };
+        }
+        match need {
+            Need::Ordered => "has no order, so '<' can't compare it".to_string(),
+            Need::Shown => "can't be shown".to_string(),
+            Need::Same => "can't be compared with '=='".to_string(),
+            Need::Fixed => match self.changeable_item(ty) {
+                Some(what) => format!("holds {}", what),
+                None => "can change".to_string(),
+            },
+        }
+    }
+
+    /// The error for a type a call neither names nor shows in its arguments or
+    /// in the place its value goes.
+    fn untold_type(&self, task: &str, param: &str) -> String {
+        format!(
+            "can't tell which type '{}' is for this call of '{}', since no argument and nothing this value goes into names one; write it, as in '{}<int>(…)'",
+            param,
+            unqualified(task),
+            unqualified(task)
+        )
+    }
+
+    /// The error for a value whose type names a type no task here takes: it is
+    /// a generic task's, and the call it came from was never told which type to
+    /// use, so that is what to say rather than anything about the type itself.
+    fn untold_param(&self, ty: &Type) -> Option<String> {
+        let name = ty.params().into_iter().find(|name| self.type_param(name).is_none())?;
+        let (_, task, _) = self
+            .unsettled_types
+            .iter()
+            .rev()
+            .find(|(_, task, param)| param == name || self.tasks.get(task).is_some_and(|info| info.types.iter().any(|p| p.name == name)))?;
+        Some(self.untold_type(task, name))
+    }
+
+    /// Records that a use of the generic task `task` with the types `given` is
+    /// needed, so one made for them is generated (see `instances`). `at` is the
+    /// call, for the errors about a task used with too many types.
+    fn note_instance(&mut self, at: Span, task: &str, given: &[TypeArg]) {
+        if given.is_empty() || given.iter().any(|(ty, _)| !ty.params().is_empty()) {
+            return;
+        }
+        let types: Vec<Type> = given.iter().map(|(ty, _)| ty.clone()).collect();
+        let key = instance_name(task, &types);
+        if !self.instances.iter().any(|(name, ..)| *name == key) {
+            self.instances.push((key, task.to_string(), types, at));
+        }
     }
 
     /// Checks that the value of `expr` fits where `expected` is required, and
@@ -2678,6 +3120,7 @@ impl Checker {
     /// any region, and takes that region; any other value must be of exactly
     /// the expected regions.
     fn coerce(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
+        self.settle_types(expr, expected)?;
         let actual = expr.ty()?.clone();
         if fits_regions(&actual, expected) {
             expr.ty = Some(expected.clone());
@@ -2719,7 +3162,47 @@ impl Checker {
             }
             _ => {}
         }
+        if let Some(untold) = self.untold_param(expected) {
+            return err(expr.span, untold);
+        }
         err(expr.span, format!("expected type {}, got {}{}", expected, actual, mismatch_hint(&actual, expected)))
+    }
+
+    /// Gives a call of a generic task the types no argument named, from the type
+    /// of the place its value goes: `bind a: maybe int = nothing()` says that
+    /// `nothing`'s `T` is `int`. A call whose types are all known already, and
+    /// any other expression, is left as it is.
+    fn settle_types(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
+        let ExprKind::Call { name, types, .. } = &expr.kind else { return Ok(()) };
+        if types.iter().all(|(ty, _)| ty.params().is_empty()) {
+            return Ok(());
+        }
+        let name = name.clone();
+        let sent = expr.ty.clone().unwrap_or(Type::Unit);
+        let mut given: HashMap<String, Type> = HashMap::new();
+        unify_params(&sent, expected, &mut given);
+        if given.is_empty() {
+            return Ok(());
+        }
+        let ExprKind::Call { types, .. } = &mut expr.kind else { return Ok(()) };
+        for (ty, _) in types.iter_mut() {
+            *ty = ty.map_params(&mut |param| given.get(param).cloned());
+        }
+        let types = types.clone();
+        expr.ty = Some(sent.map_params(&mut |param| given.get(param).cloned()));
+        if types.iter().any(|(ty, _)| !ty.params().is_empty()) {
+            return Ok(());
+        }
+        if let Some(at) = self.unsettled_types.iter().rposition(|(at, _, _)| *at == expr.span) {
+            self.unsettled_types.remove(at);
+        }
+        if let Some(info) = self.tasks.get(&name).cloned() {
+            for (param, (ty, at)) in info.types.iter().zip(&types) {
+                self.check_need(&name, param, ty, *at)?;
+            }
+        }
+        self.note_instance(expr.span, &name, &types);
+        Ok(())
     }
 
     /// Coerces an array written as a literal item by item, when its values can
@@ -2892,6 +3375,251 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
 /// (`maybe`, `T or E`, `fail`). A region already recorded, or one `actual`
 /// doesn't show, is left as it is; checking the value against the settled type
 /// then reports any mismatch.
+/// The two regions of a type that keeps a value of one region inside a value of
+/// another, which no value can do: the region around it and the one inside.
+/// `None` when every part of `ty` is in one region, or lasts as long as the
+/// program (a literal's text, which fits any region).
+fn region_conflict(ty: &Type, inside: Option<&str>) -> Option<(String, String)> {
+    let conflict = |region: &str| -> Option<(String, String)> {
+        let inside = inside?;
+        (region != inside && region != ANY_REGION && inside != ANY_REGION).then(|| (inside.to_string(), region.to_string()))
+    };
+    match ty {
+        Type::Ptr(inner, region) | Type::Slice(inner, region) => match region.as_deref() {
+            Some(region) => conflict(region).or_else(|| region_conflict(inner, Some(region))),
+            None => region_conflict(inner, inside),
+        },
+        Type::Text(Some(region)) | Type::Named(_, Some(region)) => conflict(region),
+        Type::Maybe(inner) | Type::Array(inner, _) | Type::Fail(inner) | Type::Range(inner) => region_conflict(inner, inside),
+        Type::Or(value, error) => region_conflict(value, inside).or_else(|| region_conflict(error, inside)),
+        Type::Tuple(types) | Type::Results(types) => types.iter().find_map(|ty| region_conflict(ty, inside)),
+        _ => None,
+    }
+}
+
+/// How deeply a type is built up: `int` is 1, `maybe int` 2, `(int, maybe int)` 3.
+fn type_depth(ty: &Type) -> usize {
+    let inner = match ty {
+        Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Array(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => {
+            type_depth(inner)
+        }
+        Type::Or(value, error) => type_depth(value).max(type_depth(error)),
+        Type::Tuple(types) | Type::Results(types) => types.iter().map(type_depth).max().unwrap_or(0),
+        _ => 0,
+    };
+    inner + 1
+}
+
+/// The regions a task's header names: a `r: region` parameter, and the regions
+/// written in its parameters' and results' types.
+fn header_regions(task: &TaskDef) -> HashSet<String> {
+    let mut regions: HashSet<String> = task.params.iter().filter(|param| param.ty == Type::Region).map(|param| param.name.clone()).collect();
+    for ty in task.params.iter().map(|param| &param.ty).chain(task.ret.results()) {
+        regions.extend(ty.regions().into_iter().map(str::to_string));
+    }
+    regions
+}
+
+/// For each type a task takes, the regions its header keeps values of that type
+/// in: `xs: [T]@r` and `-> ^T@r` keep a `T` in `r`, and a use must give a type of
+/// that region, since everything a value in a region holds is in that region.
+fn keeps_params(task: &TaskDef) -> HashMap<String, HashSet<String>> {
+    let mut kept: HashMap<String, HashSet<String>> = HashMap::new();
+    for ty in task.params.iter().map(|param| &param.ty).chain(task.ret.results()) {
+        keeps_params_of(ty, None, &mut kept);
+    }
+    kept
+}
+
+fn keeps_params_of(ty: &Type, inside: Option<&str>, kept: &mut HashMap<String, HashSet<String>>) {
+    match ty {
+        Type::Param(name) => {
+            if let Some(region) = inside {
+                kept.entry(name.clone()).or_default().insert(region.to_string());
+            }
+        }
+        Type::Ptr(inner, region) | Type::Slice(inner, region) => keeps_params_of(inner, region.as_deref().or(inside), kept),
+        Type::Array(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => keeps_params_of(inner, inside, kept),
+        Type::Or(value, error) => {
+            keeps_params_of(value, inside, kept);
+            keeps_params_of(error, inside, kept);
+        }
+        Type::Tuple(types) | Type::Results(types) => types.iter().for_each(|ty| keeps_params_of(ty, inside, kept)),
+        _ => {}
+    }
+}
+
+/// Puts the types `given` in place of the type parameters of a copy of a
+/// generic task made for one use, and points its calls of generic tasks at the
+/// ones made for them (see `Made`).
+/// What walking a generic task's body turns up: the uses of generic tasks in it
+/// that need tasks of their own, and the copies it makes of values whose types
+/// name the types it takes (see `Checker::param_copies`).
+#[derive(Default)]
+struct Made {
+    needed: Vec<(String, Vec<Type>, Span)>,
+    copies: Vec<(String, String, Span)>,
+}
+
+/// Puts the types `given` in place of the type parameters of `task`. With no
+/// types given it changes nothing, and only fills `made`, which is how the
+/// checker reads a generic task's copies.
+fn substitute_task(task: &mut TaskDef, given: &HashMap<String, Type>, made: &mut Made) {
+    let settle = |ty: &mut Type| *ty = ty.map_params(&mut |name| given.get(name).cloned());
+    for param in &mut task.params {
+        settle(&mut param.ty);
+    }
+    settle(&mut task.ret);
+    substitute_block(&mut task.body, given, made);
+}
+
+fn substitute_block(block: &mut Block, given: &HashMap<String, Type>, made: &mut Made) {
+    for stmt in block {
+        substitute_stmt(stmt, given, made);
+    }
+}
+
+fn substitute_stmt(stmt: &mut Stmt, given: &HashMap<String, Type>, made: &mut Made) {
+    match &mut stmt.kind {
+        StmtKind::Expr(e) => substitute_expr(e, given, made),
+        StmtKind::Send(values) | StmtKind::SetResults(_, values) => {
+            values.iter_mut().for_each(|value| substitute_expr(value, given, made))
+        }
+        StmtKind::Region(_) => {}
+        StmtKind::Binding { names, init, .. } => {
+            for bound in names.iter_mut() {
+                substitute_bound(bound, given);
+            }
+            init.iter_mut().for_each(|value| substitute_expr(value, given, made));
+        }
+        StmtKind::Assign(targets, values) => {
+            for target in targets.iter_mut() {
+                substitute_target(target, given, made);
+            }
+            values.iter_mut().for_each(|value| substitute_expr(value, given, made));
+        }
+        StmtKind::When(cond, then_block, else_block) => {
+            substitute_expr(&mut cond.value, given, made);
+            substitute_block(then_block, given, made);
+            if let Some(else_block) = else_block {
+                substitute_block(else_block, given, made);
+            }
+        }
+        StmtKind::Loop(cond, body) => {
+            substitute_expr(&mut cond.value, given, made);
+            substitute_block(body, given, made);
+        }
+        StmtKind::Each(_, range, body) => {
+            substitute_expr(range, given, made);
+            substitute_block(body, given, made);
+        }
+        StmtKind::Match(subject, cases) => {
+            substitute_expr(subject, given, made);
+            for case in cases.iter_mut() {
+                substitute_block(&mut case.body, given, made);
+            }
+        }
+    }
+}
+
+fn substitute_bound(bound: &mut Bound, given: &HashMap<String, Type>) {
+    if let Some(ty) = &mut bound.ty {
+        *ty = ty.map_params(&mut |name| given.get(name).cloned());
+    }
+    for part in &mut bound.parts {
+        substitute_bound(part, given);
+    }
+}
+
+fn substitute_target(target: &mut Target, given: &HashMap<String, Type>, made: &mut Made) {
+    match target {
+        Target::Discard(_) => {}
+        Target::Place(place) => substitute_expr(place, given, made),
+        Target::Tuple(parts, _) => parts.iter_mut().for_each(|part| substitute_target(part, given, made)),
+    }
+}
+
+fn substitute_expr(e: &mut Expr, given: &HashMap<String, Type>, made: &mut Made) {
+    // A copy of a value whose type names a type the task takes, read before the
+    // types are put in place of the names: the copy is a value of the region it
+    // goes into, so a use must give a type that lives there (see
+    // `Checker::loose_copies`).
+    if let ExprKind::Copy { region: Some(region), .. } = &e.kind
+        && let Some(ty) = &e.ty
+    {
+        for param in ty.params() {
+            made.copies.push((param.to_string(), region.clone(), e.span));
+        }
+    }
+    if let Some(ty) = &mut e.ty {
+        *ty = ty.map_params(&mut |name| given.get(name).cloned());
+    }
+    match &mut e.kind {
+        ExprKind::Call { name, types, args } => {
+            for (ty, _) in types.iter_mut() {
+                *ty = ty.map_params(&mut |name| given.get(name).cloned());
+            }
+            if !types.is_empty() {
+                made.needed.push((name.clone(), types.iter().map(|(ty, _)| ty.clone()).collect(), e.span));
+            }
+            args.iter_mut().for_each(|arg| substitute_expr(arg, given, made));
+        }
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) => {}
+        ExprKind::Unary(_, inner)
+        | ExprKind::Deref(inner)
+        | ExprKind::Field(inner, _)
+        | ExprKind::Fail(inner)
+        | ExprKind::Wrap(inner)
+        | ExprKind::New { value: inner, .. }
+        | ExprKind::Copy { value: inner, .. } => substitute_expr(inner, given, made),
+        ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
+            substitute_expr(a, given, made);
+            substitute_expr(b, given, made);
+        }
+        ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) | ExprKind::Scan { args, .. } => {
+            args.iter_mut().for_each(|arg| substitute_expr(arg, given, made))
+        }
+        ExprKind::StructInit(_, fields) => fields.iter_mut().for_each(|field| substitute_expr(&mut field.value, given, made)),
+        ExprKind::PlanB { value, body, .. } => {
+            substitute_expr(value, given, made);
+            substitute_block(body, given, made);
+        }
+        ExprKind::Edit { items, args, .. } => {
+            substitute_expr(items, given, made);
+            args.iter_mut().for_each(|arg| substitute_expr(arg, given, made));
+        }
+    }
+}
+
+/// Records what each type parameter of `pattern` stands for in `actual`, the
+/// type of a value given where `pattern` is expected. A parameter takes the
+/// first type found for it; `none`, which fits any `maybe`, names nothing.
+fn unify_params(pattern: &Type, actual: &Type, given: &mut HashMap<String, Type>) {
+    if *actual == Type::None || matches!(actual, Type::Fail(_)) {
+        return;
+    }
+    match (pattern, actual) {
+        (Type::Param(name), _) => {
+            given.entry(name.clone()).or_insert_with(|| actual.clone());
+        }
+        (Type::Ptr(p, _), Type::Ptr(a, _)) | (Type::Slice(p, _), Type::Slice(a, _)) | (Type::Array(p, _), Type::Array(a, _)) => {
+            unify_params(p, a, given)
+        }
+        (Type::Tuple(p), Type::Tuple(a)) | (Type::Results(p), Type::Results(a)) if p.len() == a.len() => {
+            p.iter().zip(a).for_each(|(p, a)| unify_params(p, a, given))
+        }
+        (Type::Maybe(p), Type::Maybe(a)) | (Type::Range(p), Type::Range(a)) | (Type::Fail(p), Type::Fail(a)) => unify_params(p, a, given),
+        (Type::Or(pv, pe), Type::Or(av, ae)) => {
+            unify_params(pv, av, given);
+            unify_params(pe, ae, given);
+        }
+        // A plain value given where a `maybe` or a `T or E` is expected becomes
+        // one, so it names the type inside.
+        (Type::Maybe(p), a) | (Type::Or(p, _), a) => unify_params(p, a, given),
+        _ => {}
+    }
+}
+
 pub fn unify_regions(pattern: &Type, actual: &Type, regions: &mut HashMap<String, String>) {
     let mut record = |p: &Option<String>, a: &Option<String>| {
         if let (Some(p), Some(a)) = (p, a)

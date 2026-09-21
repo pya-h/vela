@@ -1,0 +1,19 @@
+
+task oddOrNone(x: int) -> maybe int
+    when x % 2 == 0
+        <- none
+    fi
+    <- x
+fi
+
+task itself(x: int) -> int
+    <- x
+fi
+
+task main()
+    bind x: maybe int = oddOrNone(2)
+    bind y: maybe int = itself(1)
+    bind z: int = oddOrNone(3) { 0 }
+    show(x)
+    show(y)
+fi

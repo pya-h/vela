@@ -1,0 +1,32 @@
+  2 | task oddOrNone(x: int) -> maybe int
+    | keyword:task  task:oddOrNone  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int
+  3 |     when x % 2 == 0
+    | keyword:when  parameter:x  operator:%  number:2  operator:==  number:0
+  4 |         <- none
+    | keyword:<-  keyword:none
+  5 |     fi
+    | keyword:fi
+  6 |     <- x
+    | keyword:<-  parameter:x
+  7 | fi
+    | keyword:fi
+  9 | task itself(x: int) -> int
+    | keyword:task  task:itself  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 10 |     <- x
+    | keyword:<-  parameter:x
+ 11 | fi
+    | keyword:fi
+ 13 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 14 |     bind x: maybe int = oddOrNone(2)
+    | keyword:bind  variable:x  punctuation::  keyword:maybe  type-builtin:int  operator:=  task:oddOrNone  punctuation:(  number:2  punctuation:)
+ 15 |     bind y: maybe int = itself(1)
+    | keyword:bind  variable:y  punctuation::  keyword:maybe  type-builtin:int  operator:=  task:itself  punctuation:(  number:1  punctuation:)
+ 16 |     bind z: int = oddOrNone(3) { 0 }
+    | keyword:bind  variable:z  punctuation::  type-builtin:int  operator:=  task:oddOrNone  punctuation:(  number:3  punctuation:)  punctuation:{  number:0  punctuation:}
+ 17 |     show(x)
+    | builtin-fn:show  punctuation:(  variable:x  punctuation:)
+ 18 |     show(y)
+    | builtin-fn:show  punctuation:(  variable:y  punctuation:)
+ 19 | fi
+    | keyword:fi

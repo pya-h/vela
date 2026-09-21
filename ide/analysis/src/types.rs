@@ -94,10 +94,14 @@ impl Checked {
             })
             .collect();
         let declarations = Declarations { kinds, takes_region: regional_types(&items).union(&textual_types(&items)).cloned().collect() };
-        // Positions are recorded for the analyzed file only.
+        // Positions are recorded for the analyzed file only. A task made from a
+        // generic one holds the positions of the generic task's body with the
+        // types of one use in place of its own, so the editor reads the generic
+        // task itself, where `T` is a type it takes.
         for item in &items {
             if let Item::Task(task) = item
                 && task.span.file == 0
+                && task.given.is_empty()
             {
                 for param in &task.params {
                     checked.decls.insert(pos(param.span), param.ty.clone());
@@ -263,7 +267,7 @@ impl Checked {
                 self.expr(a, kinds);
                 self.expr(b, kinds);
             }
-            ExprKind::Call(_, args) | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => {
+            ExprKind::Call { args, .. } | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => {
                 for arg in args {
                     self.expr(arg, kinds);
                 }

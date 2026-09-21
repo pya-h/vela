@@ -216,6 +216,7 @@
         <li><code class="type">maybe T</code> — a T, or <code>none</code> (see <a href="#maybe">Maybe and Errors</a>)</li>
         <li><code class="type">T or E</code> — a T, or an error E, sent by a task that can fail</li>
         <li><code class="type">region</code> — the type of a task's region parameter, <code>r: region</code></li>
+        <li><code class="type">T</code> — a type a task takes, standing for the type each call gives it (see <a href="#generics">Tasks that take types</a>)</li>
         <li>User-defined shapes and kinds</li>
       </ul>
     </section>
@@ -259,6 +260,8 @@ true false none  fi   maybe is     fail include priv</pre>
         <tr><td><code>{v}</code>, <code>_</code></td><td>in a <code>case</code> or <code>is</code>: the value inside, and anything (or a value left unnamed); <code>_</code> also drops a result</td></tr>
         <tr><td><code>a.x</code></td><td>a field of a shape value</td></tr>
         <tr><td><code>[T; n]</code>, <code>[T]@r</code></td><td>an array type; a slice type (see <a href="#arrays">Arrays</a> and <a href="#slices">Slices</a>)</td></tr>
+        <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Tasks that take types</a>)</td></tr>
+        <tr><td><code>first&lt;int&gt;(xs)</code></td><td>the types a call gives a task that takes them</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v; n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
@@ -766,6 +769,96 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
           use <code>bind</code>. <code>hold</code> before a name makes it a variable the block can
           assign (<code>is hold (x, y)</code>, <code>{hold v}</code>, <code>case Circle hold r</code>); assigning
           it leaves the value matched as it was.</li>
+      </ul>
+
+      <h3 id="generics">Tasks that take types</h3>
+      <p>
+        A task can take types as well as values: <code>task first&lt;T&gt;(xs: [T]@r) -&gt; maybe T</code> works for a
+        slice of anything. The names in <code>&lt; &gt;</code> after the task's name are the types it takes, and
+        <code>T</code> in its header and body means the type each call gives it. The body is checked once, with
+        <code>T</code> standing for that type, and the compiler then makes one task for each set of types the program
+        uses it with, so a call costs nothing more than an ordinary one.
+      </p>
+      <p>
+        A word after a type's <code>:</code> says what every type given for it must allow, and so what the body may do
+        with its values. Without a word, values of that type can only be stored, passed, and sent.
+      </p>
+      <table>
+        <tr><th>Word</th><th>What the body may do</th><th>Types that fit</th></tr>
+        <tr><td><code>fixed</code></td><td>put a value in a tuple, whose items never change</td><td>numbers, bools, text, tuples of them, and shapes and kinds whose fields are all such</td></tr>
+        <tr><td><code>same</code></td><td><code>==</code> and <code>!=</code></td><td>numbers, bools, text, and tuples of them</td></tr>
+        <tr><td><code>shown</code></td><td><code>show</code></td><td>numbers, bools, and text</td></tr>
+        <tr><td><code>ordered</code></td><td><code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td><td>numbers</td></tr>
+      </table>
+      <p>
+        Each word allows everything the words above it do, since fewer types have an order than can be shown, fewer can
+        be shown than compared, and fewer can be compared than never change: <code>&lt;T: ordered&gt;</code> may compare
+        and show its values too. <code>&amp;</code> joins words (<code>&lt;T: same &amp; shown&gt;</code>), which is read
+        today but never needed yet: every pair of these four is an error saying which one to keep, since each already
+        means the wider ones. It is there for words that may come. No word asks a type for arithmetic: a task that adds
+        its values takes numbers.
+      </p>
+      <pre><span class="keyword">task</span> first&lt;T&gt;(xs: [T]@r) -&gt; <span class="keyword">maybe</span> T
+    <span class="keyword">each</span> v <span class="keyword">in</span> xs
+        <span class="keyword">&lt;-</span> v
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> <span class="keyword">none</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> biggest&lt;T: ordered&gt;(a: T, b: T) -&gt; T
+    <span class="keyword">when</span> a &gt; b
+        <span class="keyword">&lt;-</span> a
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> b
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> nothing&lt;T&gt;() -&gt; <span class="keyword">maybe</span> T
+    <span class="keyword">&lt;-</span> <span class="keyword">none</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">bind</span> ns: [int]@r = <span class="keyword">new</span> [int]([<span class="number">4</span>, <span class="number">5</span>]) <span class="keyword">at</span> r
+    <span class="keyword">hold</span> names: [text@r]@r = <span class="keyword">new</span> [text]() <span class="keyword">at</span> r
+    names.add(<span class="string">"Ada"</span>.copy() <span class="keyword">at</span> r)
+    show(first(ns))                      <span class="comment"># 4 — the argument says T is int</span>
+    show(first&lt;text@r&gt;(names))            <span class="comment"># Ada — or the call writes it out</span>
+    show(biggest(<span class="number">2</span>, <span class="number">5</span>))                   <span class="comment"># 5</span>
+    show(biggest(<span class="number">1.5</span>, <span class="number">0.5</span>))               <span class="comment"># 1.5 — the same task, made for float too</span>
+    <span class="keyword">bind</span> empty: <span class="keyword">maybe</span> int = nothing()    <span class="comment"># the place the value goes says T is int</span>
+    <span class="keyword">bind</span> fallback: text = nothing() { <span class="string">"none"</span> }
+    show(biggest(<span class="string">"a"</span>, <span class="string">"b"</span>))               <span class="comment"># error: task 'biggest' takes a type that is 'ordered' …</span>
+<span class="keyword">fi</span></pre>
+      <ul>
+        <li><strong>Which type a call is for.</strong> From its arguments, from the place its value goes (a binding's
+          written type, a parameter, a field, a <code>&lt;-</code>, or a plan B's value), or written in
+          <code>&lt; &gt;</code> after the name, as in the header. Writing them is all or nothing: a task that takes two
+          types is given both. When nothing says which type it is, the compiler asks for it:
+          <code>can't tell which type 'T' is for this call of 'nothing' …</code>.</li>
+        <li><strong>Reading <code>&lt;</code>.</strong> A <code>&lt;</code> after a name starts the types of a call only
+          when the matching <code>&gt;</code> is followed by <code>(</code>, so <code>a &lt; b</code> is still a
+          comparison. (<code>a &lt; b &gt; (c)</code> was never valid Vela: <code>&gt;</code> doesn't compare bools.)</li>
+        <li><strong>Regions.</strong> A type a task takes names no region of its own: what a <code>T</code> holds is in
+          the region of the type given for it, so <code>T@r</code> is an error. A slice or pointer around it names one as
+          usual (<code>[T]@r</code>), and then the type given must live in that region — a call that would keep a value
+          of one region inside a value of another is an error that says to copy it first. A written type names its
+          regions, as a written type does everywhere else: <code>first&lt;text@r&gt;(names)</code>, not
+          <code>first&lt;text&gt;(names)</code>.</li>
+        <li><strong>Copies.</strong> <code>v.copy() at r</code> works on a <code>T</code>, whatever it turns out to be.
+          A copy lives where it is made, so it is a <code>T</code> only where the header already keeps a <code>T</code> in
+          that region — as a parameter <code>xs: [T]@r</code> or <code>p: ^T@r</code> does, since a use must then give a
+          type of that region. A copy into any other region (one the task declares itself, or one nothing ties to
+          <code>T</code>) is only the value itself, so every use must give a type that holds no text, slice, or pointer;
+          otherwise the compiler says so, naming the copy.</li>
+        <li><strong>Shapes, kinds, and modules.</strong> Any type fits a <code>T</code>: numbers, text, tuples, arrays,
+          slices, pointers, <code>maybe</code>, shapes, and kinds. A task that takes types can be public or
+          <code>priv</code>, used from another module (<code>numbers.larger(3, 8)</code>), and can use another such task,
+          giving it the type it was given itself. A name in <code>&lt; &gt;</code> can't be a builtin type or a type the
+          file already names, and <code>main</code> takes no types.</li>
+        <li><strong>Only tasks, for now.</strong> Shapes and kinds don't take types yet, so there is no
+          <code>Box&lt;T&gt;</code>. A call that gives a type built from its own (<code>f&lt;(T, int)&gt;</code> inside
+          <code>f&lt;T&gt;</code>) would never stop, so a type built up more than 24 types deep, or a task used with
+          more than 500 sets of types, is an error.</li>
       </ul>
 
       <h3 id="names">Names</h3>
@@ -1532,6 +1625,8 @@ show(area(square))             <span class="comment"># error: unknown task 'area
           (see <a href="#arrays">Arrays</a>). Tuples can't be shown whole, and <code>is</code> and <code>case</code>
           are taken apart in <code>is</code> and <code>case</code> only in parentheses, as in <code>{(a, b)}</code>
           (see <a href="#tuples">Tuples</a>).</li>
+        <li>Only tasks take types: there is no <code>shape Box&lt;T&gt;</code> yet, and no word asks a type for
+          arithmetic (see <a href="#generics">Tasks that take types</a>).</li>
         <li>There are no packages to share modules between programs (see <a href="#modules">Modules</a>).</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which

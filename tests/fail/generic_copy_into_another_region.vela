@@ -1,0 +1,11 @@
+# error: 9:29: 'keepIn' copies a 'T' into region 'r' at 3:10, and nothing in its header keeps a 'T' in 'r', so that copy is only the value itself; this use gives text@outer, which is in region 'outer'. So name the region in a parameter's type, as in 'xs: [T]@r', or write 'keepIn' for text@outer itself
+task keepIn<T>(r: region, v: T) -> T
+    <- v.copy() at r
+fi
+
+task main()
+    region outer
+    bind s: text@outer = "hi".copy() at outer
+    bind kept: text@outer = keepIn(outer, s)
+    show(kept)
+fi

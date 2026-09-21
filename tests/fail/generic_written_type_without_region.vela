@@ -1,0 +1,13 @@
+# error: 12:16: task 'first' is given text as 'T', but its argument holds text@r; a written type names its regions, so write 'first<text@r>(…)'
+task first<T>(xs: [T]@r) -> maybe T
+    each v in xs
+        <- v
+    fi
+    <- none
+fi
+
+task main()
+    region r
+    bind names: [text]@r = new [text](["ada"]) at r
+    show(first<text>(names))
+fi

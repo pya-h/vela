@@ -140,6 +140,19 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             (format!("include {}", symbol.detail), doc)
         }
         SymbolKind::Task => (format!("task {}{}", symbol.name, symbol.detail), from_module(k, symbol)),
+        SymbolKind::TypeParam => {
+            let task = parent.map(|p| p.name.as_str()).unwrap_or("?");
+            let code = if symbol.detail.is_empty() { symbol.name.clone() } else { format!("{}: {}", symbol.name, symbol.detail) };
+            let allows = match symbol.detail.as_str() {
+                "" => "Its values can be stored, passed, and sent, and nothing else.".to_string(),
+                "ordered" => "Every type given for it has an order, so '<' and '>' compare its values.".to_string(),
+                "shown" => "Every type given for it can be shown.".to_string(),
+                "same" => "Every type given for it can be compared with '=='.".to_string(),
+                "fixed" => "Every type given for it never changes, so it can be a tuple's item.".to_string(),
+                other => format!("Every type given for it must be '{}'.", other),
+            };
+            (code, format!("A type task {} takes, standing for the type each call gives it. {}", task, allows))
+        }
         SymbolKind::Shape | SymbolKind::Kind => {
             let keyword = if symbol.kind == SymbolKind::Shape { "shape" } else { "kind" };
             let private = if symbol.private { "priv " } else { "" };

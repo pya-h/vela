@@ -1,0 +1,8 @@
+# error: 2:22: 'shown' is written twice
+task tell<T: shown & shown>(value: T)
+    show(value)
+fi
+
+task main()
+    tell(1)
+fi

@@ -7,6 +7,8 @@ include modules/geometry
 include modules/palette (Color, Custom, describe)
 include modules/bank
 include modules/lists/stack
+# The same module the stack includes, brought in here for its generic task.
+include modules/numbers
 
 # The same variant name as palette's Red, and the same task name as
 # geometry's area: each module has names of its own.
@@ -77,4 +79,9 @@ task main()
     bind total, count = stack.sum(top)
     show(total)
     show(count)
+
+    # A task from another module that takes a type, with the type worked out
+    # from the arguments and written at the call.
+    show(numbers.larger(3, 8))
+    show(numbers.larger<float>(1.5, 0.5))
 fi

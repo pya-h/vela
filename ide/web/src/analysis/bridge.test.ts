@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { AnalysisError, VelaAnalysis, wellFormed } from "./bridge";
+import { SYMBOL_BADGES } from "../workbench/outline";
 import { examplesFolder as examples, wasmBytes } from "./test-module";
 
 let analysis: VelaAnalysis;
@@ -102,6 +103,35 @@ describe("VelaAnalysis", () => {
     const dot = main.indexOf("Dot\n        show(0)");
     expect(analysis.hover(main, dot, context)?.code).toBe("geometry.Dot");
     expect(analysis.definition(main, dot, context)?.path).toBe("app/shapes/geometry.vela");
+  });
+
+  it("reads the types a task takes: highlighting, outline, hover, and completion", () => {
+    const source =
+      "task first<T: ordered>(xs: [T]@r) -> maybe T\n    each v in xs\n        <- v\n    fi\n    <- none\nfi\n\ntask main()\n    region r\n    bind ns: [int]@r = new [int]([2, 3]) at r\n    show(first<int>(ns))\nfi\n";
+    const { tokens, diagnostics, outline } = analysis.file(source);
+    expect(diagnostics).toEqual([]);
+    // The type is a type wherever it is written, and the word is the language's.
+    expect(tokens.find((t) => t.from === source.indexOf("T: ordered"))?.class).toBe("type");
+    expect(tokens.find((t) => t.from === source.indexOf("ordered"))?.class).toBe("keyword");
+    expect(tokens.find((t) => t.from === source.indexOf("T]@r"))?.class).toBe("type");
+    expect(tokens.find((t) => t.from === source.indexOf("int>"))?.class).toBe("type-builtin");
+    // The outline lists it under the task, with the word it must allow.
+    const [task] = outline;
+    expect(task?.detail).toBe("<T: ordered>(xs: [T]@r) -> maybe T");
+    expect(task?.children.map((child) => [child.name, child.kind, child.detail])).toEqual([["T", "type-param", "ordered"]]);
+    expect(SYMBOL_BADGES[task?.children[0]?.kind ?? "task"].text).toBe("T");
+    expect(analysis.hover(source, source.indexOf("T]@r"))?.doc).toContain("A type task first takes");
+    // The words after a type's ':', and types where a call names them.
+    const words = analysis.complete(source.replace("T: ordered", "T: "), source.indexOf("T: ") + 3).items.map((i) => i.label);
+    expect(words).toEqual(["fixed", "same", "shown", "ordered"]);
+    const types = analysis.complete(source.replace("first<int>", "first<>"), source.indexOf("first<int>") + "first<".length).items;
+    expect(types.map((i) => i.label)).toEqual(["int", "float", "bool", "text", "maybe"]);
+  });
+
+  it("reports what a type given to a task doesn't allow", () => {
+    const source = "task biggest<T: ordered>(a: T, b: T) -> T\n    when a > b\n        <- a\n    fi\n    <- b\nfi\n\ntask main()\n    show(biggest(\"a\", \"b\"))\nfi\n";
+    const [diagnostic] = analysis.file(source).diagnostics;
+    expect(diagnostic?.message).toContain("takes a type that is 'ordered'");
   });
 
   it("reports diagnostics, completions, hovers, and definitions", () => {

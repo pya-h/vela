@@ -77,6 +77,11 @@ pub enum Type {
     /// type: the values are separate, so no variable, field, or operand holds
     /// one.
     Results(Vec<Type>),
+    /// `T`: a type a generic declaration takes, standing for the type given at
+    /// each use. It appears only inside the declaration that names it; a use is
+    /// checked with the type itself in its place. Its regions are the given
+    /// type's, so it holds no region of its own.
+    Param(String),
 }
 
 /// The region of a value built without pointers, such as `Node { next: none }`:
@@ -145,6 +150,7 @@ impl Type {
                 write!(f, "{}", name)?;
                 suffix(f, region)
             }
+            Type::Param(name) => write!(f, "{}", name),
             Type::Array(inner, count) => {
                 write!(f, "[")?;
                 inner.write(f, outer)?;
@@ -289,6 +295,47 @@ impl Type {
         }
     }
 
+    /// The type with each type parameter replaced by what `f` gives for it; a
+    /// parameter `f` has no type for is left as it is.
+    pub fn map_params(&self, f: &mut dyn FnMut(&str) -> Option<Type>) -> Type {
+        let boxed = |t: &Type, f: &mut dyn FnMut(&str) -> Option<Type>| Box::new(t.map_params(f));
+        match self {
+            Type::Param(name) => f(name).unwrap_or_else(|| self.clone()),
+            Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.clone()),
+            Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
+            Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.clone()),
+            Type::Range(inner) => Type::Range(boxed(inner, f)),
+            Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
+            Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
+            Type::Fail(error) => Type::Fail(boxed(error, f)),
+            Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_params(&mut *f)).collect()),
+            Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| ty.map_params(&mut *f)).collect()),
+            other => other.clone(),
+        }
+    }
+
+    /// Every type parameter the type names, in order, with repeats.
+    pub fn params(&self) -> Vec<&str> {
+        let mut names = Vec::new();
+        self.collect_params(&mut names);
+        names
+    }
+
+    fn collect_params<'a>(&'a self, names: &mut Vec<&'a str>) {
+        match self {
+            Type::Param(name) => names.push(name),
+            Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) => {
+                inner.collect_params(names)
+            }
+            Type::Or(value, error) => {
+                value.collect_params(names);
+                error.collect_params(names);
+            }
+            Type::Results(types) | Type::Tuple(types) => types.iter().for_each(|ty| ty.collect_params(names)),
+            _ => {}
+        }
+    }
+
     /// Every region the type names, in order, with repeats.
     pub fn regions(&self) -> Vec<&str> {
         let mut regions = Vec::new();
@@ -403,7 +450,10 @@ pub enum ExprKind {
     /// once; in `new [T](…) at r`, a slice of them, whose count may be known
     /// only as the program runs.
     Repeat { value: Box<Expr>, count: Box<Expr> },
-    Call(String, Vec<Expr>),
+    /// `first(xs)`, or `first<text>(xs)` for a task that takes types: `types`
+    /// holds what the call gives it, written or worked out from the arguments
+    /// and the place the value goes (empty for an ordinary task).
+    Call { name: String, types: Vec<TypeArg>, args: Vec<Expr> },
     Unary(UnaryOp, Box<Expr>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
     /// `new T(value) at r` or `new@r T(value)`; `ty_span` is the position of
@@ -843,6 +893,15 @@ pub enum Item {
 #[derive(Debug, Clone)]
 pub struct TaskDef {
     pub name: String,
+    /// `task first<T: ordered>(…)`: the types the task takes, empty for an
+    /// ordinary task. Its body is checked once with these in place of types,
+    /// and once more for each set of types a call gives it (see the checker's
+    /// instances).
+    pub types: Vec<TypeParam>,
+    /// The types this task was made for, when it is one use of a generic task
+    /// (see the checker's `instances`); empty otherwise. Such a task's `types`
+    /// is empty: every `T` in it has been replaced.
+    pub given: Vec<Type>,
     pub params: Vec<Field>,
     /// What the task sends: `unit` for nothing, one type, or `Type::Results`
     /// for several.
@@ -854,6 +913,120 @@ pub struct TaskDef {
     pub span: Span,
     /// `priv task`: only its own file can call it.
     pub private: bool,
+}
+
+/// The name of the task made for one set of types: `first<int, text>` becomes
+/// `first__of__int__and__text`. No Vela name contains `__`, so an instance's
+/// name can't be any other declaration's, and a module's path stays in front
+/// of it (`shapes/geometry.first__of__int`). Regions are left out, since a
+/// value's C type never depends on them, so one instance serves every region.
+pub fn instance_name(name: &str, given: &[Type]) -> String {
+    if given.is_empty() {
+        return name.to_string();
+    }
+    let words: Vec<String> = given.iter().map(type_word).collect();
+    format!("{}__of__{}", name, words.join("__and__"))
+}
+
+/// A type as one word of a name, distinct for distinct types: words separated
+/// by `__`, with a shape or kind name marked `n_` so it can't read as a builtin
+/// or as `ptr`, `maybe`, or `or`, and a count before the types of a tuple or a
+/// list of results so one can't read as the start of another.
+pub fn type_word(ty: &Type) -> String {
+    match ty {
+        Type::Int => "int".to_string(),
+        Type::Float => "float".to_string(),
+        Type::Bool => "bool".to_string(),
+        Type::Text(_) => "text".to_string(),
+        Type::Unit => "unit".to_string(),
+        Type::None => "none".to_string(),
+        Type::Region => "region".to_string(),
+        Type::Named(name, _) => format!("n_{}", flat_name(name)),
+        Type::Param(name) => format!("param__{}", name),
+        Type::Ptr(inner, _) => format!("ptr__{}", type_word(inner)),
+        Type::Range(inner) => format!("range__{}", type_word(inner)),
+        Type::Maybe(inner) => format!("maybe__{}", type_word(inner)),
+        Type::Or(value, error) => format!("or__{}__{}", type_word(value), type_word(error)),
+        Type::Fail(error) => format!("fail__{}", type_word(error)),
+        Type::Array(items, count) => format!("array__{}__{}", count, type_word(items)),
+        Type::Slice(items, _) => format!("slice__{}", type_word(items)),
+        Type::Results(types) => format!("results__{}__{}", types.len(), types.iter().map(type_word).collect::<Vec<_>>().join("__")),
+        Type::Tuple(items) => format!("tuple__{}__{}", items.len(), items.iter().map(type_word).collect::<Vec<_>>().join("__")),
+    }
+}
+
+/// A declaration's name as one word: the name itself, or, for a name from
+/// another module, the module's path before a `.` with the `.` written
+/// `__0__`, each `/` of the path `__1__`, and each `..` in it `__2__`
+/// (`shapes/geometry.area` is `shapes__1__geometry__0__area`).
+pub fn flat_name(name: &str) -> String {
+    let Some((module, own)) = name.rsplit_once(MODULE_SEPARATOR) else { return name.to_string() };
+    let path: Vec<&str> = module.split('/').map(|part| if part == ".." { "__2__" } else { part }).collect();
+    format!("{}__0__{}", path.join("__1__"), own)
+}
+
+/// A type given to a generic task at a call, and where it is written (the call
+/// itself, for one worked out rather than written).
+pub type TypeArg = (Type, Span);
+
+/// One type a generic declaration takes, `T` or `T: ordered`.
+#[derive(Debug, Clone)]
+pub struct TypeParam {
+    pub name: String,
+    /// Position of the name.
+    pub span: Span,
+    /// What every type given for it must allow, and where the word is written.
+    /// `None` lets any type fit, and its values can only be stored, passed,
+    /// and sent.
+    pub need: Option<(Need, Span)>,
+}
+
+/// What a generic declaration requires of a type given to it, written after the
+/// type's name (`<T: ordered>`). Each word names what the body may do with a
+/// value of that type; a word also allows everything the words after it do,
+/// since fewer types have an order than can be shown, fewer can be shown than
+/// compared, and fewer can be compared than never change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Need {
+    /// `< > <= >=`, and so `==` and `show` too: a number.
+    Ordered,
+    /// `show`: a number, a bool, or text.
+    Shown,
+    /// `==` and `!=`: what those compare (a number, a bool, text, or a tuple
+    /// of them).
+    Same,
+    /// A value that never changes, so it can be a tuple's item.
+    Fixed,
+}
+
+impl Need {
+    /// The words, from the fewest types to the most.
+    pub const ALL: [Need; 4] = [Need::Ordered, Need::Shown, Need::Same, Need::Fixed];
+
+    pub fn word(self) -> &'static str {
+        match self {
+            Need::Ordered => "ordered",
+            Need::Shown => "shown",
+            Need::Same => "same",
+            Need::Fixed => "fixed",
+        }
+    }
+
+    pub fn from_word(word: &str) -> Option<Need> {
+        Need::ALL.into_iter().find(|need| need.word() == word)
+    }
+
+    /// How many types the word admits, counted from the fewest: a word allows
+    /// everything a wider one does.
+    fn rank(self) -> usize {
+        Need::ALL.iter().position(|need| *need == self).unwrap_or(0)
+    }
+
+    /// Whether this word already means `other`, so writing both says nothing
+    /// new: `ordered` means `shown`, which means `same`, which means `fixed`.
+    pub fn means(self, other: Need) -> bool {
+        self.rank() <= other.rank()
+    }
 }
 
 /// One result in a task's header, `int` or `total: int`. Either every result

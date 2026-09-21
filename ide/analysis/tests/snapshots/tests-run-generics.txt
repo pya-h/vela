@@ -1,0 +1,288 @@
+  1 | # Generic tasks: `task first<T>(…)` takes types as well as values. Its body is
+    | comment:# Generic tasks: `task first<T>(…)` takes types as well as values. Its body is
+  2 | # checked once, with `T` standing for the type each use gives it, and one task is
+    | comment:# checked once, with `T` standing for the type each use gives it, and one task is
+  3 | # made for each set of types the program uses it with. A word after a type's `:`
+    | comment:# made for each set of types the program uses it with. A word after a type's `:`
+  4 | # says what every type given for it must allow: `ordered`, `shown`, `same`, or
+    | comment:# says what every type given for it must allow: `ordered`, `shown`, `same`, or
+  5 | # `fixed`. The type comes from the arguments, from the place the value goes, or
+    | comment:# `fixed`. The type comes from the arguments, from the place the value goes, or
+  6 | # written in `< >` at the call.
+    | comment:# written in `< >` at the call.
+  8 | task first<T>(xs: [T]@r) -> maybe T
+    | keyword:task  task:first  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:)  operator:->  keyword:maybe  type:T
+  9 |     each v in xs
+    | keyword:each  variable:v  keyword:in  parameter:xs
+ 10 |         <- v
+    | keyword:<-  variable:v
+ 11 |     fi
+    | keyword:fi
+ 12 |     <- none
+    | keyword:<-  keyword:none
+ 13 | fi
+    | keyword:fi
+ 15 | task last<T>(xs: [T]@r) -> maybe T
+    | keyword:task  task:last  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:)  operator:->  keyword:maybe  type:T
+ 16 |     hold seen: maybe T = none
+    | keyword:hold  variable:seen  punctuation::  keyword:maybe  type:T  operator:=  keyword:none
+ 17 |     each v in xs
+    | keyword:each  variable:v  keyword:in  parameter:xs
+ 18 |         seen = v
+    | variable:seen  operator:=  variable:v
+ 19 |     fi
+    | keyword:fi
+ 20 |     <- seen
+    | keyword:<-  variable:seen
+ 21 | fi
+    | keyword:fi
+ 23 | task nothing<T>() -> maybe T
+    | keyword:task  task:nothing  punctuation:<  type:T  punctuation:>  punctuation:(  punctuation:)  operator:->  keyword:maybe  type:T
+ 24 |     <- none
+    | keyword:<-  keyword:none
+ 25 | fi
+    | keyword:fi
+ 27 | task biggest<T: ordered>(a: T, b: T) -> T
+    | keyword:task  task:biggest  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 28 |     when a > b
+    | keyword:when  parameter:a  operator:>  parameter:b
+ 29 |         <- a
+    | keyword:<-  parameter:a
+ 30 |     fi
+    | keyword:fi
+ 31 |     <- b
+    | keyword:<-  parameter:b
+ 32 | fi
+    | keyword:fi
+ 34 | task tell<T: shown>(label: text, value: T)
+    | keyword:task  task:tell  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:value  punctuation::  type:T  punctuation:)
+ 35 |     show(label)
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:)
+ 36 |     show(value)
+    | builtin-fn:show  punctuation:(  parameter:value  punctuation:)
+ 37 | fi
+    | keyword:fi
+ 39 | task alike<T: same>(a: T, b: T) -> bool
+    | keyword:task  task:alike  punctuation:<  type:T  punctuation::  keyword:same  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type-builtin:bool
+ 40 |     <- a == b
+    | keyword:<-  parameter:a  operator:==  parameter:b
+ 41 | fi
+    | keyword:fi
+ 43 | task pairUp<A: fixed, B: fixed>(a: A, b: B) -> (A, B)
+    | keyword:task  task:pairUp  punctuation:<  type:A  punctuation::  keyword:fixed  punctuation:,  type:B  punctuation::  keyword:fixed  punctuation:>  punctuation:(  parameter:a  punctuation::  type:A  punctuation:,  parameter:b  punctuation::  type:B  punctuation:)  operator:->  punctuation:(  type:A  punctuation:,  type:B  punctuation:)
+ 44 |     <- (a, b)
+    | keyword:<-  punctuation:(  parameter:a  punctuation:,  parameter:b  punctuation:)
+ 45 | fi
+    | keyword:fi
+ 47 | task twoOf<T>(v: T) -> T, T
+    | keyword:task  task:twoOf  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:v  punctuation::  type:T  punctuation:)  operator:->  type:T  punctuation:,  type:T
+ 48 |     <- v, v
+    | keyword:<-  parameter:v  punctuation:,  parameter:v
+ 49 | fi
+    | keyword:fi
+ 51 | # A generic task can use another, giving it the type it was given itself.
+    | comment:# A generic task can use another, giving it the type it was given itself.
+ 52 | task middle<T>(a: T, b: T) -> T
+    | keyword:task  task:middle  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 53 |     <- second(a, b)
+    | keyword:<-  task:second  punctuation:(  parameter:a  punctuation:,  parameter:b  punctuation:)
+ 54 | fi
+    | keyword:fi
+ 56 | task second<T>(a: T, b: T) -> T
+    | keyword:task  task:second  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 57 |     <- b
+    | keyword:<-  parameter:b
+ 58 | fi
+    | keyword:fi
+ 60 | # A task made from this one calls itself with the same type, which needs one
+    | comment:# A task made from this one calls itself with the same type, which needs one
+ 61 | # task, not an endless line of them.
+    | comment:# task, not an endless line of them.
+ 62 | task countDown<T>(v: T, times: int) -> T
+    | keyword:task  task:countDown  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:v  punctuation::  type:T  punctuation:,  parameter:times  punctuation::  type-builtin:int  punctuation:)  operator:->  type:T
+ 63 |     when times <= 0
+    | keyword:when  parameter:times  operator:<=  number:0
+ 64 |         <- v
+    | keyword:<-  parameter:v
+ 65 |     fi
+    | keyword:fi
+ 66 |     <- countDown(v, times - 1)
+    | keyword:<-  task:countDown  punctuation:(  parameter:v  punctuation:,  parameter:times  operator:-  number:1  punctuation:)
+ 67 | fi
+    | keyword:fi
+ 69 | # The region a generic task is given is where it builds.
+    | comment:# The region a generic task is given is where it builds.
+ 70 | task listOf<T>(r: region, a: T, b: T) -> [T]@r
+    | keyword:task  task:listOf  punctuation:<  type:T  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  punctuation:[  type:T  punctuation:]  operator:@  region:r
+ 71 |     hold made: [T]@r = new [T]() at r
+    | keyword:hold  variable:made  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type:T  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 72 |     made.add(a)
+    | variable:made  punctuation:.  field:add  punctuation:(  parameter:a  punctuation:)
+ 73 |     made.add(b)
+    | variable:made  punctuation:.  field:add  punctuation:(  parameter:b  punctuation:)
+ 74 |     <- made
+    | keyword:<-  variable:made
+ 75 | fi
+    | keyword:fi
+ 77 | # A copy of a value of the type the task takes goes into a region the header
+    | comment:# A copy of a value of the type the task takes goes into a region the header
+ 78 | # keeps that type in (`[T]@r` here), so a use may give any type.
+    | comment:# keeps that type in (`[T]@r` here), so a use may give any type.
+ 79 | task copiedInto<T>(r: region, xs: [T]@r) -> [T]@r
+    | keyword:task  task:copiedInto  punctuation:<  type:T  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:[  type:T  punctuation:]  operator:@  region:r
+ 80 |     hold made: [T]@r = new [T]() at r
+    | keyword:hold  variable:made  punctuation::  punctuation:[  type:T  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type:T  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 81 |     each v in xs
+    | keyword:each  variable:v  keyword:in  parameter:xs
+ 82 |         made.add(v.copy() at r)
+    | variable:made  punctuation:.  field:add  punctuation:(  variable:v  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 83 |     fi
+    | keyword:fi
+ 84 |     <- made
+    | keyword:<-  variable:made
+ 85 | fi
+    | keyword:fi
+ 87 | # A copy into any other region is only the value itself, so a use must give a
+    | comment:# A copy into any other region is only the value itself, so a use must give a
+ 88 | # type that holds nothing in a region (`int` here).
+    | comment:# type that holds nothing in a region (`int` here).
+ 89 | task kept<T>(r: region, v: T) -> T
+    | keyword:task  task:kept  punctuation:<  type:T  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:v  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 90 |     <- v.copy() at r
+    | keyword:<-  parameter:v  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 91 | fi
+    | keyword:fi
+ 93 | shape Point
+    | keyword:shape  type:Point
+ 94 |     x: int
+    | field:x  punctuation::  type-builtin:int
+ 95 |     y: int
+    | field:y  punctuation::  type-builtin:int
+ 96 | fi
+    | keyword:fi
+ 98 | kind Shade
+    | keyword:kind  type:Shade
+ 99 |     Light
+    | variant:Light
+100 |     Dark(level: int)
+    | variant:Dark  punctuation:(  field:level  punctuation::  type-builtin:int  punctuation:)
+101 | fi
+    | keyword:fi
+103 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+104 |     region r
+    | keyword:region  region:r
+105 |     bind ns: [int]@r = new [int]([4, 5, 6]) at r
+    | keyword:bind  variable:ns  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:4  punctuation:,  number:5  punctuation:,  number:6  punctuation:]  punctuation:)  keyword:at  region:r
+106 |     bind names: [text@r]@r = new [text](["ada", "bo"]) at r
+    | keyword:bind  variable:names  punctuation::  punctuation:[  type-builtin:text  operator:@  region:r  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:[  string:"ada"  punctuation:,  string:"bo"  punctuation:]  punctuation:)  keyword:at  region:r
+108 |     # The type comes from the arguments.
+    | comment:# The type comes from the arguments.
+109 |     show(first(ns))
+    | builtin-fn:show  punctuation:(  task:first  punctuation:(  variable:ns  punctuation:)  punctuation:)
+110 |     show(last(ns))
+    | builtin-fn:show  punctuation:(  task:last  punctuation:(  variable:ns  punctuation:)  punctuation:)
+111 |     show(first(names))
+    | builtin-fn:show  punctuation:(  task:first  punctuation:(  variable:names  punctuation:)  punctuation:)
+113 |     # Or it is written, in `< >` as in the header.
+    | comment:# Or it is written, in `< >` as in the header.
+114 |     show(first<int>(ns))
+    | builtin-fn:show  punctuation:(  task:first  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  variable:ns  punctuation:)  punctuation:)
+115 |     show(first<text@r>(names))
+    | builtin-fn:show  punctuation:(  task:first  punctuation:<  type-builtin:text  operator:@  region:r  punctuation:>  punctuation:(  variable:names  punctuation:)  punctuation:)
+117 |     # Or from the place the value goes, including through a plan B.
+    | comment:# Or from the place the value goes, including through a plan B.
+118 |     bind nothingYet: maybe int = nothing()
+    | keyword:bind  variable:nothingYet  punctuation::  keyword:maybe  type-builtin:int  operator:=  task:nothing  punctuation:(  punctuation:)
+119 |     show(nothingYet)
+    | builtin-fn:show  punctuation:(  variable:nothingYet  punctuation:)
+120 |     bind fallback: text = nothing() { "nothing there" }
+    | keyword:bind  variable:fallback  punctuation::  type-builtin:text  operator:=  task:nothing  punctuation:(  punctuation:)  punctuation:{  string:"nothing there"  punctuation:}
+121 |     show(fallback)
+    | builtin-fn:show  punctuation:(  variable:fallback  punctuation:)
+123 |     # A word says what the body may do with the values.
+    | comment:# A word says what the body may do with the values.
+124 |     show(biggest(2, 5))
+    | builtin-fn:show  punctuation:(  task:biggest  punctuation:(  number:2  punctuation:,  number:5  punctuation:)  punctuation:)
+125 |     show(biggest(1.5, 0.5))
+    | builtin-fn:show  punctuation:(  task:biggest  punctuation:(  number:1.5  punctuation:,  number:0.5  punctuation:)  punctuation:)
+126 |     tell("count", 7)
+    | task:tell  punctuation:(  string:"count"  punctuation:,  number:7  punctuation:)
+127 |     tell("who", "ada")
+    | task:tell  punctuation:(  string:"who"  punctuation:,  string:"ada"  punctuation:)
+128 |     show(alike(2, 2))
+    | builtin-fn:show  punctuation:(  task:alike  punctuation:(  number:2  punctuation:,  number:2  punctuation:)  punctuation:)
+129 |     show(alike("a", "b"))
+    | builtin-fn:show  punctuation:(  task:alike  punctuation:(  string:"a"  punctuation:,  string:"b"  punctuation:)  punctuation:)
+131 |     # Two types at once, and results that are both of one type.
+    | comment:# Two types at once, and results that are both of one type.
+132 |     bind pair: (int, text) = pairUp(1, "two")
+    | keyword:bind  variable:pair  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:text  punctuation:)  operator:=  task:pairUp  punctuation:(  number:1  punctuation:,  string:"two"  punctuation:)
+133 |     show(pair.0)
+    | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:0  punctuation:)
+134 |     show(pair.1)
+    | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:1  punctuation:)
+135 |     bind a, b = twoOf(true)
+    | keyword:bind  variable:a  punctuation:,  variable:b  operator:=  task:twoOf  punctuation:(  keyword:true  punctuation:)
+136 |     show(a)
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:)
+137 |     show(b)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:)
+139 |     # Shapes, kinds, tuples, slices, and pointers are types like any other.
+    | comment:# Shapes, kinds, tuples, slices, and pointers are types like any other.
+140 |     bind place = second(Point { x: 1, y: 2 }, Point { x: 3, y: 4 })
+    | keyword:bind  variable:place  operator:=  task:second  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:)
+141 |     show(place.x)
+    | builtin-fn:show  punctuation:(  variable:place  punctuation:.  field:x  punctuation:)
+142 |     bind shade = middle(Shade.Light, Shade.Dark(7))
+    | keyword:bind  variable:shade  operator:=  task:middle  punctuation:(  type:Shade  punctuation:.  variant:Light  punctuation:,  type:Shade  punctuation:.  variant:Dark  punctuation:(  number:7  punctuation:)  punctuation:)
+143 |     match shade
+    | keyword:match  variable:shade
+144 |         case Light
+    | keyword:case  variant:Light
+145 |             show(0)
+    | builtin-fn:show  punctuation:(  number:0  punctuation:)
+146 |         case Dark level
+    | keyword:case  variant:Dark  variable:level
+147 |             show(level)
+    | builtin-fn:show  punctuation:(  variable:level  punctuation:)
+148 |     fi
+    | keyword:fi
+149 |     bind both = second((1, "one"), (2, "two"))
+    | keyword:bind  variable:both  operator:=  task:second  punctuation:(  punctuation:(  number:1  punctuation:,  string:"one"  punctuation:)  punctuation:,  punctuation:(  number:2  punctuation:,  string:"two"  punctuation:)  punctuation:)
+150 |     show(both.1)
+    | builtin-fn:show  punctuation:(  variable:both  punctuation:.  field:1  punctuation:)
+151 |     bind rows = second<[int]@r>(ns, ns)
+    | keyword:bind  variable:rows  operator:=  task:second  punctuation:<  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:>  punctuation:(  variable:ns  punctuation:,  variable:ns  punctuation:)
+152 |     show(rows.len)
+    | builtin-fn:show  punctuation:(  variable:rows  punctuation:.  field:len  punctuation:)
+153 |     bind held: ^int@r = new int(9) at r
+    | keyword:bind  variable:held  punctuation::  operator:^  type-builtin:int  operator:@  region:r  operator:=  keyword:new  type-builtin:int  punctuation:(  number:9  punctuation:)  keyword:at  region:r
+154 |     show(second(held, held)^)
+    | builtin-fn:show  punctuation:(  task:second  punctuation:(  variable:held  punctuation:,  variable:held  punctuation:)  operator:^  punctuation:)
+155 |     show(countDown("still here", 3))
+    | builtin-fn:show  punctuation:(  task:countDown  punctuation:(  string:"still here"  punctuation:,  number:3  punctuation:)  punctuation:)
+157 |     # A slice built in the region the task is given, and a copy made there.
+    | comment:# A slice built in the region the task is given, and a copy made there.
+158 |     bind made = listOf(r, 10, 20)
+    | keyword:bind  variable:made  operator:=  task:listOf  punctuation:(  region:r  punctuation:,  number:10  punctuation:,  number:20  punctuation:)
+159 |     show(made[0] + made[1])
+    | builtin-fn:show  punctuation:(  variable:made  punctuation:[  number:0  punctuation:]  operator:+  variable:made  punctuation:[  number:1  punctuation:]  punctuation:)
+160 |     bind words = listOf(r, "one".copy() at r, "two".copy() at r)
+    | keyword:bind  variable:words  operator:=  task:listOf  punctuation:(  region:r  punctuation:,  string:"one"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  string:"two"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+161 |     show(words[1])
+    | builtin-fn:show  punctuation:(  variable:words  punctuation:[  number:1  punctuation:]  punctuation:)
+162 |     show(kept(r, 3))
+    | builtin-fn:show  punctuation:(  task:kept  punctuation:(  region:r  punctuation:,  number:3  punctuation:)  punctuation:)
+163 |     show(kept(r, "a literal is in no region"))
+    | builtin-fn:show  punctuation:(  task:kept  punctuation:(  region:r  punctuation:,  string:"a literal is in no region"  punctuation:)  punctuation:)
+164 |     bind copies = copiedInto(r, names)
+    | keyword:bind  variable:copies  operator:=  task:copiedInto  punctuation:(  region:r  punctuation:,  variable:names  punctuation:)
+165 |     show(copies[0])
+    | builtin-fn:show  punctuation:(  variable:copies  punctuation:[  number:0  punctuation:]  punctuation:)
+166 |     bind alsoCopies = copiedInto(r, ns)
+    | keyword:bind  variable:alsoCopies  operator:=  task:copiedInto  punctuation:(  region:r  punctuation:,  variable:ns  punctuation:)
+167 |     show(alsoCopies[2])
+    | builtin-fn:show  punctuation:(  variable:alsoCopies  punctuation:[  number:2  punctuation:]  punctuation:)
+168 | fi
+    | keyword:fi

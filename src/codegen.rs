@@ -152,9 +152,13 @@ impl Generator {
         self.gen_copies(&used.copied);
         self.w.blank();
 
-        // Forward declarations for tasks
+        // Forward declarations for tasks. A generic task generates nothing: one
+        // task per set of types a call gives it is generated in its place (see
+        // the checker's `expand_instances`).
         for item in items {
-            if let Item::Task(t) = item {
+            if let Item::Task(t) = item
+                && t.types.is_empty()
+            {
                 self.w.line(&format!("{};", signature(t)));
             }
         }
@@ -163,7 +167,9 @@ impl Generator {
         // Task definitions
         let mut has_main = false;
         for item in items {
-            if let Item::Task(t) = item {
+            if let Item::Task(t) = item
+                && t.types.is_empty()
+            {
                 if t.name == "main" {
                     has_main = true;
                 }
@@ -1205,7 +1211,7 @@ impl Generator {
             ExprKind::Array(values) => self.gen_array(e, values),
             ExprKind::Tuple(values) => self.gen_tuple(e, values),
             ExprKind::Repeat { value, .. } => self.gen_repeat(e, value),
-            ExprKind::Call(name, args) => self.gen_call(e, name, args),
+            ExprKind::Call { name, types, args } => self.gen_call(e, name, types, args),
             ExprKind::Unary(op, operand) => self.gen_unary(e, *op, operand),
             ExprKind::Binary(op, l, r) => self.gen_binary(e, *op, l, r).map(|binary| parenthesized(&binary)),
             ExprKind::Construct { kind, tag, args } => self.gen_construct(e, kind, tag, args),
@@ -1227,6 +1233,12 @@ impl Generator {
     fn gen_copy(&mut self, e: &Expr, value: &Expr, region: Option<&str>) -> Result<String> {
         let region = region.ok_or_else(|| Error::internal_at(e.span, "a copy whose region isn't settled reached code generation"))?;
         let copied = self.gen_expr(value)?;
+        // A value that holds nothing in a region is its own copy, as `int` is
+        // for a task made from a generic one that copies its values. The region
+        // is still read, so C doesn't warn about a parameter this leaves unused.
+        if !self.needs_fix(&fix_type(value.ty()?)) {
+            return Ok(format!("((void){}, {})", c_ident(region), parenthesized(&copied)));
+        }
         Ok(format!("{}({}, {})", copy_helper("copied", value.ty()?), c_ident(region), copied))
     }
 
@@ -1324,7 +1336,7 @@ impl Generator {
     }
 
     /// A call of a task, or of `show`, the expression `e`.
-    fn gen_call(&mut self, e: &Expr, name: &str, args: &[Expr]) -> Result<String> {
+    fn gen_call(&mut self, e: &Expr, name: &str, types: &[TypeArg], args: &[Expr]) -> Result<String> {
         if name == "show" {
             let [arg] = args else {
                 return Err(Error::internal_at(e.span, format!("show called with {} arguments", args.len())));
@@ -1339,7 +1351,9 @@ impl Generator {
         }
         let args: Vec<&Expr> = args.iter().collect();
         let values = self.gen_operands(&args)?;
-        Ok(format!("{}({})", mangle(name), values.join(", ")))
+        // A call of a generic task calls the one made for the types it gives.
+        let given: Vec<Type> = types.iter().map(|(ty, _)| ty.clone()).collect();
+        Ok(format!("{}({})", mangle(&instance_name(name, &given)), values.join(", ")))
     }
 
     /// `-operand` or `not operand`, the expression `e`.
@@ -1776,7 +1790,7 @@ fn has_prelude(e: &Expr) -> bool {
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             has_prelude(a) || has_prelude(b)
         }
-        ExprKind::Call(_, args) | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => args.iter().any(has_prelude),
+        ExprKind::Call { args, .. } | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => args.iter().any(has_prelude),
         ExprKind::StructInit(_, fields) => fields.iter().any(|field| has_prelude(&field.value)),
     }
 }
@@ -1835,11 +1849,14 @@ impl UsedTypes {
             match item {
                 Item::Shape(s) => s.fields.iter().for_each(|f| used.add(&f.ty)),
                 Item::Kind(k) => k.variants.iter().flat_map(|v| &v.payload).for_each(|f| used.add(&f.ty)),
-                Item::Task(t) => {
+                // A generic task's own types hold `T`, which no C type
+                // answers; the tasks made from it hold the types it is given.
+                Item::Task(t) if t.types.is_empty() => {
                     t.params.iter().for_each(|p| used.add(&p.ty));
                     used.add(&t.ret);
                     used.block(&t.body);
                 }
+                Item::Task(_) => {}
             }
         }
         used
@@ -1998,7 +2015,7 @@ impl UsedTypes {
                 self.expr(a);
                 self.expr(b);
             }
-            ExprKind::Call(name, args) => {
+            ExprKind::Call { name, args, .. } => {
                 if name == "show"
                     && let [arg] = args.as_slice()
                     && let Some(ty @ Type::Maybe(_)) = &arg.ty
@@ -2102,7 +2119,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             expr_reads(a, name) || expr_reads(b, name)
         }
-        ExprKind::Call(_, args) | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => {
+        ExprKind::Call { args, .. } | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => {
             args.iter().any(|arg| expr_reads(arg, name))
         }
         ExprKind::StructInit(_, fields) => fields.iter().any(|field| expr_reads(&field.value, name)),
@@ -2274,16 +2291,12 @@ fn tag_value(kind: &str, tag: &str) -> String {
     format!("vela_{}__tag_{}", c_name(kind), tag)
 }
 
-/// A task, shape, or kind name as part of a C name. A name from a module other
-/// than the main file's has the module's path before a `.`: the `.` becomes
-/// `__0__`, each `/` of the path `__1__`, and each `..` in it `__2__`
-/// (`shapes/geometry.area` is `shapes__1__geometry__0__area`). No Vela name
-/// contains `__`, and none starts with a digit, so the result can't be any
-/// other name, or read as a word the generated names use.
+/// A task, shape, or kind name as part of a C name: the name with its module's
+/// path folded into it (see `flat_name`). No Vela name contains `__`, and none
+/// starts with a digit, so the result can't be any other name, or read as a
+/// word the generated names use.
 fn c_name(name: &str) -> String {
-    let Some((module, own)) = name.rsplit_once(MODULE_SEPARATOR) else { return name.to_string() };
-    let path: Vec<&str> = module.split('/').map(|part| if part == ".." { "__2__" } else { part }).collect();
-    format!("{}__0__{}", path.join("__1__"), own)
+    flat_name(name)
 }
 
 /// The C name of a local, parameter, field, or variant union member: the Vela
@@ -2320,6 +2333,9 @@ const C_RESERVED: &[&str] = &[
 
 fn c_type(ty: &Type) -> String {
     match ty {
+        // A generic declaration is never generated: each use is generated with
+        // the type it gives, so this would be a compiler bug (see `instances`).
+        Type::Param(name) => format!("/*type {}*/", name),
         Type::Int => "int64_t".to_string(),
         Type::Float => "double".to_string(),
         Type::Bool => "bool".to_string(),
@@ -2332,10 +2348,10 @@ fn c_type(ty: &Type) -> String {
         Type::Range(t) => format!("/*range<{}>*/", c_type(t)),
         // A `maybe` pointer is the pointer itself, with `NULL` for none.
         Type::Maybe(inner) if is_pointer(inner) => c_type(inner),
-        Type::Maybe(inner) => format!("vela__maybe__{}", type_key(inner)),
-        Type::Or(value, error) => format!("vela__or__{}__{}", type_key(value), type_key(error)),
+        Type::Maybe(inner) => format!("vela__maybe__{}", type_word(inner)),
+        Type::Or(value, error) => format!("vela__or__{}__{}", type_word(value), type_word(error)),
         Type::Fail(error) => c_type(error),
-        Type::Results(_) | Type::Tuple(_) | Type::Array(..) | Type::Slice(..) => format!("vela__{}", type_key(ty)),
+        Type::Results(_) | Type::Tuple(_) | Type::Array(..) | Type::Slice(..) => format!("vela__{}", type_word(ty)),
     }
 }
 
@@ -2350,13 +2366,13 @@ fn item_type(ty: &Type) -> &Type {
 /// The C name of a generated helper for an array or slice type:
 /// `vela__at__slice__int`, `vela__fill__array__4__int`.
 fn item_helper(what: &str, ty: &Type) -> String {
-    format!("vela__{}__{}", what, type_key(ty))
+    format!("vela__{}__{}", what, type_word(ty))
 }
 
 /// The C name of a generated helper for copies of values of type `ty`:
 /// `vela__copied__ptr__n_Node`, `vela__fix__text`.
 fn copy_helper(what: &str, ty: &Type) -> String {
-    format!("vela__{}__{}", what, type_key(&ty.without_regions()))
+    format!("vela__{}__{}", what, type_word(&ty.without_regions()))
 }
 
 /// The type whose fix a value of type `ty` takes: a `maybe` pointer is the
@@ -2365,40 +2381,6 @@ fn fix_type(ty: &Type) -> Type {
     match ty.without_regions() {
         Type::Maybe(inner) if is_pointer(&inner) => *inner,
         other => other,
-    }
-}
-
-/// A type as part of a C name, distinct for distinct types: words separated by
-/// `__`, which no Vela name contains, with a shape or kind name marked `n_` so
-/// it can't read as a builtin or as `ptr`, `maybe`, or `or`.
-fn type_key(ty: &Type) -> String {
-    match ty {
-        Type::Int => "int".to_string(),
-        Type::Float => "float".to_string(),
-        Type::Bool => "bool".to_string(),
-        Type::Text(_) => "text".to_string(),
-        Type::Unit => "unit".to_string(),
-        Type::None => "none".to_string(),
-        Type::Named(name, _) => format!("n_{}", c_name(name)),
-        Type::Region => "region".to_string(),
-        Type::Ptr(inner, _) => format!("ptr__{}", type_key(inner)),
-        Type::Range(inner) => format!("range__{}", type_key(inner)),
-        Type::Maybe(inner) => format!("maybe__{}", type_key(inner)),
-        Type::Or(value, error) => format!("or__{}__{}", type_key(value), type_key(error)),
-        Type::Fail(error) => format!("fail__{}", type_key(error)),
-        // The count comes first, so it can't read as part of the item's type.
-        Type::Array(items, count) => format!("array__{}__{}", count, type_key(items)),
-        Type::Slice(items, _) => format!("slice__{}", type_key(items)),
-        // The count keeps two lists of results apart when the types of one
-        // read as the start of the other.
-        Type::Results(types) => {
-            let keys: Vec<String> = types.iter().map(type_key).collect();
-            format!("results__{}__{}", types.len(), keys.join("__"))
-        }
-        Type::Tuple(items) => {
-            let keys: Vec<String> = items.iter().map(type_key).collect();
-            format!("tuple__{}__{}", items.len(), keys.join("__"))
-        }
     }
 }
 

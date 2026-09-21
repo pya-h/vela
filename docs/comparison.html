@@ -492,6 +492,17 @@
         <code>t.0 = 1</code> is an error even in a <code>hold</code> tuple, which can only take a whole new one.
       </p>
       <p>
+        A Vela task can take types as well as values — <code>task first&lt;T&gt;(xs: [T]@r) -&gt; maybe T</code> — and one
+        task is made for each set of types used, as C++ templates and Rust generics are. What a type must allow is said
+        with one of four words rather than a system of its own: <code>fixed</code>, <code>same</code>,
+        <code>shown</code>, and <code>ordered</code>, where Rust has traits and <code>impl</code> blocks, C++ concepts (or
+        nothing, and errors deep inside a template), and Go interfaces used as constraints. That makes generic code
+        readable and its errors short, and it is the limit too: there is no way to ask for a type that can be added, or
+        for one that has a method, so a task that needs more than the four words takes concrete types. Go's generics
+        arrived late and Vela's are small on purpose; C++ and Rust go much further, with the compile times and the error
+        messages that come with it.
+      </p>
+      <p>
         Results can also be named, as in Go: <code>-&gt; total: int</code>, set with <code>total &lt;- value</code>
         and sent by reaching the end of the task. Go gives a named result its zero value, so forgetting to set it is
         silent; Vela has no zero values, so the compiler rejects a path that reads one, or ends, without setting it.

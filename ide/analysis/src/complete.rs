@@ -7,7 +7,7 @@
 //! used whenever the rest of the file allows it.
 
 use serde::Serialize;
-use vela::ast::{BUILTIN_TASKS, BUILTIN_TYPES, Type, unqualified};
+use vela::ast::{BUILTIN_TASKS, BUILTIN_TYPES, Need, Type, unqualified};
 use vela::lexer::{LexKind, Token};
 
 use crate::infer::{Knowledge, parameter_names, parameters};
@@ -298,6 +298,18 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     if declares_name {
         return (Vec::new(), word_start, byte);
     }
+    // Inside `< … >`: the types a declaration takes, or the ones a call gives.
+    if let Some(open) = prev.and_then(|q| type_angle(&k, q)) {
+        let declares = open.checked_sub(2).is_some_and(|before| matches!(k.token(before), Some(Token::Task | Token::Shape)));
+        if declares {
+            return match prev_token {
+                // `<T: ` and `<T: fixed & `: what the type must allow.
+                Some(Token::Colon | Token::Amp) => (need_items(), word_start, byte),
+                // A name is being declared.
+                _ => (Vec::new(), word_start, byte),
+            };
+        }
+    }
     let inside_parens = prev.is_some_and(|q| unclosed_on_line(&k, q, &Token::LParen, &Token::RParen));
     // A parameter's or payload's name follows, unless the parentheses are a
     // tuple type's, where an item's type follows.
@@ -341,9 +353,11 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         (_, Some(Token::Arrow | Token::New)) => true,
         // `-> int, int`: another result type follows the comma; so does the
         // next item of a tuple type, `(int, text)`.
-        (Some(q), Some(Token::Comma)) => in_result_list(&k, q) || type_paren(&k, q).is_some(),
+        (Some(q), Some(Token::Comma)) => in_result_list(&k, q) || type_paren(&k, q).is_some() || type_angle(&k, q).is_some(),
         // `(int, text)`: the first item's type follows the `(`.
         (Some(q), Some(Token::LParen)) => starts_type(&k, q),
+        // `first<int>(…)`: the types a call gives a generic task.
+        (Some(q), Some(Token::Lt)) => opens_types(&k, q),
         // `new@r T`: the type follows the region.
         (Some(q), Some(Token::Ident(_))) => after_new_region(&k, q),
         // A type continues after `^`, `maybe`, and an array's or slice's `[`,
@@ -356,7 +370,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         let after_arrow = prev_token == Some(&Token::Arrow);
         // A maybe can't hold a maybe, and an error type can't be one.
         let offer_maybe = !matches!(prev_token, Some(Token::Maybe | Token::Or));
-        let mut items = type_items(&k, after_arrow, offer_maybe);
+        let mut items = type_items(&k, byte, after_arrow, offer_maybe);
         // A parameter can be a region the task allocates in; a result can't,
         // since a task never sends one.
         if prev_token == Some(&Token::Colon) && first_token == Some(&Token::Task) && inside_parens {
@@ -566,6 +580,41 @@ fn starts_type(k: &Knowledge, q: usize) -> bool {
         Some((b, Some(Token::Dot))) => b.checked_sub(1).is_some_and(|module| k.module_at(module).is_some() && starts_type(k, module)),
         _ => false,
     }
+}
+
+/// The `<` of the types a declaration takes, or a call gives, that position `q`
+/// is inside, on its line.
+fn type_angle(k: &Knowledge, q: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for p in (k.line_start(q)..=q).rev() {
+        match k.token(p) {
+            Some(Token::Gt) => depth += 1,
+            Some(Token::Lt) if depth == 0 => return opens_types(k, p).then_some(p),
+            Some(Token::Lt) => depth -= 1,
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Whether the `<` at `p` opens types: one right after the name of a `task` or
+/// `shape`, or one whose matching `>` is followed by `(`, as the parser reads
+/// them.
+fn opens_types(k: &Knowledge, p: usize) -> bool {
+    if p >= 2 && k.ident(p - 1).is_some() && matches!(k.token(p - 2), Some(Token::Task | Token::Shape)) {
+        return true;
+    }
+    let mut depth = 0usize;
+    for q in p + 1.. {
+        match k.token(q) {
+            Some(Token::Gt) if depth == 0 => return k.token(q + 1) == Some(&Token::LParen),
+            Some(Token::Lt) => depth += 1,
+            Some(Token::Gt) => depth -= 1,
+            Some(token) if token.writes_type() => {}
+            _ => return false,
+        }
+    }
+    false
 }
 
 /// The `(` of a tuple type that position `q` is inside, on its line.
@@ -1036,7 +1085,8 @@ fn unique(used: &mut Vec<String>, name: &str) -> String {
     candidate
 }
 
-fn type_items(k: &Knowledge, after_arrow: bool, offer_maybe: bool) -> Vec<CompletionItem> {
+fn type_items(k: &Knowledge, at: usize, after_arrow: bool, offer_maybe: bool) -> Vec<CompletionItem> {
+    let taken = type_params_here(k, at);
     let descriptions = [
         ("int", "64-bit signed integer"),
         ("float", "64-bit floating point"),
@@ -1073,7 +1123,48 @@ fn type_items(k: &Knowledge, after_arrow: bool, offer_maybe: bool) -> Vec<Comple
         snippet: None,
         boost: SNIPPET,
     });
-    builtin.chain(declared).chain(modules).chain(maybe).collect()
+    builtin.chain(taken).chain(declared).chain(modules).chain(maybe).collect()
+}
+
+/// The types the declaration around the cursor takes (`<T: ordered>`), which
+/// are types inside it.
+fn type_params_here(k: &Knowledge, at: usize) -> Vec<CompletionItem> {
+    let Some((item, _)) = k.symbols().iter().enumerate().find(|(_, s)| s.kind == SymbolKind::Task && s.range.contains(&at)) else {
+        return Vec::new();
+    };
+    k.symbols()
+        .iter()
+        .filter(|s| s.kind == SymbolKind::TypeParam && s.parent == Some(item))
+        .map(|s| CompletionItem {
+            label: s.name.clone(),
+            kind: CompletionKind::Type,
+            detail: if s.detail.is_empty() { "a type this task takes".to_string() } else { format!("a type this task takes: {}", s.detail) },
+            apply: None,
+            snippet: None,
+            boost: LOCAL,
+        })
+        .collect()
+}
+
+/// The words a type a declaration takes can be asked to allow.
+fn need_items() -> Vec<CompletionItem> {
+    let words = [
+        (Need::Fixed, "never changes, so it can be a tuple's item"),
+        (Need::Same, "can be compared with == and !="),
+        (Need::Shown, "can be shown"),
+        (Need::Ordered, "has an order, so < and > compare it"),
+    ];
+    words
+        .into_iter()
+        .map(|(need, detail)| CompletionItem {
+            label: need.word().to_string(),
+            kind: CompletionKind::Keyword,
+            detail: detail.to_string(),
+            apply: None,
+            snippet: None,
+            boost: SNIPPET,
+        })
+        .collect()
 }
 
 /// The names of the tasks, shapes, kinds, or variants (as `kinds` says) usable

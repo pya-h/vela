@@ -1,18 +1,48 @@
-  1 | # Arithmetic, for tests/run/modules/lists/stack.vela.
-    | comment:# Arithmetic, for tests/run/modules/lists/stack.vela.
-  3 | shape Sum
+  1 | # Arithmetic, for tests/run/modules/lists/stack.vela, and a task that takes a
+    | comment:# Arithmetic, for tests/run/modules/lists/stack.vela, and a task that takes a
+  2 | # type, used from tests/run/modules.vela.
+    | comment:# type, used from tests/run/modules.vela.
+  4 | shape Sum
     | keyword:shape  type:Sum
-  4 |     value: int
+  5 |     value: int
     | field:value  punctuation::  type-builtin:int
-  5 | fi
+  6 | fi
     | keyword:fi
-  7 | task add(a: int, b: int) -> int
+  8 | task add(a: int, b: int) -> int
     | keyword:task  task:add  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
-  8 |     # A variable may have the name of a shape, as in any file.
+  9 |     # A variable may have the name of a shape, as in any file.
     | comment:# A variable may have the name of a shape, as in any file.
-  9 |     bind Sum = a + b
+ 10 |     bind Sum = a + b
     | keyword:bind  variable:Sum  operator:=  parameter:a  operator:+  parameter:b
- 10 |     <- Sum
+ 11 |     <- Sum
     | keyword:<-  variable:Sum
- 11 | fi
+ 12 | fi
+    | keyword:fi
+ 14 | # A generic task another file uses, and a private one it uses itself: the task
+    | comment:# A generic task another file uses, and a private one it uses itself: the task
+ 15 | # made for each set of types a use gives belongs to this module too.
+    | comment:# made for each set of types a use gives belongs to this module too.
+ 16 | task larger<T: ordered>(a: T, b: T) -> T
+    | keyword:task  task:larger  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 17 |     <- pickFirst(biggest(a, b), a)
+    | keyword:<-  task:pickFirst  punctuation:(  task:biggest  punctuation:(  parameter:a  punctuation:,  parameter:b  punctuation:)  punctuation:,  parameter:a  punctuation:)
+ 18 | fi
+    | keyword:fi
+ 20 | priv task pickFirst<T>(a: T, b: T) -> T
+    | keyword:priv  keyword:task  task:pickFirst  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 21 |     <- a
+    | keyword:<-  parameter:a
+ 22 | fi
+    | keyword:fi
+ 24 | priv task biggest<T: ordered>(a: T, b: T) -> T
+    | keyword:priv  keyword:task  task:biggest  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 25 |     when a > b
+    | keyword:when  parameter:a  operator:>  parameter:b
+ 26 |         <- a
+    | keyword:<-  parameter:a
+ 27 |     fi
+    | keyword:fi
+ 28 |     <- b
+    | keyword:<-  parameter:b
+ 29 | fi
     | keyword:fi

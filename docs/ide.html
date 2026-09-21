@@ -318,7 +318,8 @@ Press Ctrl+C to stop.</pre>
           spinner while building and Stop while the program runs), open a file by name, and the light/dark theme. A
           <em>No C compiler</em> warning appears here when <code>cc</code> or <code>$CC</code> can't be started.</li>
         <li><strong>Sidebar:</strong> the Explorer (the folder's files) and the Outline (the open file's tasks,
-          shapes, and kinds; the one under the cursor is highlighted). Drag its edge to resize it; double-click the
+          shapes, and kinds, with a shape's fields, a kind's variants, and the types a task takes under it; the one
+          under the cursor is highlighted). Drag its edge to resize it; double-click the
           edge to reset.</li>
         <li><strong>Tabs and editor:</strong> one tab per open file; a dot marks unsaved changes. With no file open,
           a welcome screen lists the folder's programs and the main shortcuts.</li>
@@ -338,7 +339,8 @@ Press Ctrl+C to stop.</pre>
         <div class="card">
           <h4>Highlighting that knows names</h4>
           <p>Tasks, shapes and kinds, variants, parameters, variables, fields, regions, and modules each get their own
-            color, even in a half-typed line.</p>
+            color, even in a half-typed line. The types a task takes (<code>&lt;T: ordered&gt;</code>) are colored as
+            types wherever they are written, and the word asked of one as a word of the language.</p>
         </div>
         <div class="card">
           <h4>Programs in several files</h4>
@@ -360,7 +362,11 @@ Press Ctrl+C to stop.</pre>
           <h4>Completion</h4>
           <p>Only what fits: types after <code>:</code>, <code>-&gt;</code>, <code>^</code>, <code>maybe</code>,
             <code>new</code>, a type's <code>[</code> and <code>or</code>, each item of a tuple type
-            (<code>(int, text)</code>), and each comma of a header's results (<code>-&gt; int, int</code>), and nothing for an array type's count; variables declared above the cursor; fields after
+            (<code>(int, text)</code>), each comma of a header's results (<code>-&gt; int, int</code>), and each type a call
+            gives a task that takes them (<code>first&lt;int&gt;(xs)</code>), and nothing for an array type's count;
+            the types a task takes are offered as types in its own header and body (<code>T</code>), and after a
+            type's <code>:</code> or <code>&amp;</code> the words it can be asked to allow (<code>fixed</code>,
+            <code>same</code>, <code>shown</code>, <code>ordered</code>); variables declared above the cursor; fields after
             <code>.</code>, a tuple's items by position after its <code>.</code> (<code>0</code>, <code>1</code>, each with its type), and <code>len</code> after an array's or slice's (and <code>add</code> and <code>del</code> after a slice's), and
             <code>copy</code> after a value holding text, a slice, or a pointer; the cases still missing after <code>case</code> and
             <code>case Kind.</code>, including <code>{value}</code>,
@@ -371,7 +377,8 @@ Press Ctrl+C to stop.</pre>
             (<code>push(nodes, list)</code> gives a <code>^Node@nodes</code>), even while the file has an error. After
             a finished value, only the words that can continue it: <code>is</code>, <code>in</code>, <code>at</code> (after a
             <code>new</code>'s, <code>scan</code>'s, or <code>copy()</code>'s value), <code>or</code>, and <code>and</code>. Nothing is offered where a name is being declared, including the names after the commas
-            of <code>bind q, r = …</code> and inside the parentheses of <code>bind a, (b, c) = …</code>, and each of those names
+            of <code>bind q, r = …</code>, inside the parentheses of <code>bind a, (b, c) = …</code>, and in the
+            <code>&lt; &gt;</code> of <code>task first&lt;T&gt;</code>, and each of those names
             hovers with the type of the value in its place (a tuple's item, for a name that takes one apart).
             A task's named results (<code>-&gt; total: int</code>) are offered at the start of a line as
             <code>total &lt;- </code>, and hover as <code>result total: int</code>. After <code>match</code>, only <code>case</code>; <code>new</code> only where a region can
@@ -388,7 +395,8 @@ Press Ctrl+C to stop.</pre>
         <div class="card">
           <h4>Hover and go to definition</h4>
           <p>Hover a name to see its type or signature (a region says whether the task can allocate in it, and a
-            type with <code>@_</code> explains it), a tuple's item (<code>t.1</code>) to see its type, or <code>maybe</code>, <code>is</code>, <code>fail</code>,
+            type with <code>@_</code> explains it), a type a task takes (<code>T</code>), which says what the word
+            after its <code>:</code> allows, a tuple's item (<code>t.1</code>) to see its type, or <code>maybe</code>, <code>is</code>, <code>fail</code>,
             <code>none</code>, <code>_</code>, <code>region</code>, <code>new</code>, and <code>in</code> for a reminder
             of what they do. <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it
             is declared (a variant named alone in a <code>case</code> is the matched value's kind's, even another module's); <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> finds a declaration by name.</p>

@@ -351,7 +351,8 @@ impl State {
     fn resolve(&mut self, index: usize, tables: &[Names], variants: &Variants) -> Result<ModuleScope> {
         let Some(module) = self.modules.get(index) else { return Ok(ModuleScope::default()) };
         let own = tables.get(index).cloned().unwrap_or_default();
-        let mut resolver = Resolver { own, modules: HashMap::new(), imports: HashMap::new(), unnamed: Vec::new(), variants, type_places: &self.type_places };
+        let mut resolver =
+            Resolver { own, modules: HashMap::new(), imports: HashMap::new(), unnamed: Vec::new(), variants, type_places: &self.type_places, params: Vec::new() };
         let mut includes = Vec::new();
         for (include, &target) in module.includes.iter().zip(&module.included) {
             let id = self.modules.get(target).map(|m| m.id.clone()).unwrap_or_default();
@@ -656,6 +657,9 @@ struct Resolver<'a> {
     unnamed: Vec<(String, Option<String>, String)>,
     variants: &'a Variants,
     type_places: &'a TypePlaces,
+    /// The names of the types the declaration being walked takes: they name no
+    /// shape or kind, so a written type naming one is left as it is.
+    params: Vec<String>,
 }
 
 impl Resolver<'_> {
@@ -663,6 +667,7 @@ impl Resolver<'_> {
         match item {
             Item::Task(t) => {
                 t.name = self.own_full(&t.name);
+                self.enter_type_params(&t.types, "task", &t.name)?;
                 for param in &mut t.params {
                     param.ty = self.ty(&param.ty, param.ty_span)?;
                 }
@@ -677,7 +682,9 @@ impl Resolver<'_> {
                     }
                     other => self.ty(other, spans.first().copied().unwrap_or(t.span))?,
                 };
-                self.block(&mut t.body)
+                let result = self.block(&mut t.body);
+                self.params.clear();
+                result
             }
             Item::Shape(s) => {
                 s.name = self.own_full(&s.name);
@@ -696,6 +703,24 @@ impl Resolver<'_> {
                 Ok(())
             }
         }
+    }
+
+    /// Brings the types a declaration takes into scope, so the types written in
+    /// it name them rather than a shape or kind of the same name, which would be
+    /// two types under one name.
+    fn enter_type_params(&mut self, types: &[TypeParam], what: &str, name: &str) -> Result<()> {
+        for param in types {
+            if let Some(entry) = self.lookup(&param.name, param.span, false)?
+                && matches!(entry.what, What::Shape | What::Kind)
+            {
+                return err(
+                    param.span,
+                    format!("'{}' is already a type, so it can't name a type {} '{}' takes; use another name, as in '<T>'", param.name, what, unqualified(name)),
+                );
+            }
+        }
+        self.params = types.iter().map(|param| param.name.clone()).collect();
+        Ok(())
     }
 
     /// The program's name for an item this module declares.
@@ -868,6 +893,9 @@ impl Resolver<'_> {
     /// A written type, at `span`, with its shape and kind names rewritten.
     fn ty(&self, ty: &Type, span: Span) -> Result<Type> {
         Ok(match ty {
+            // A type the declaration takes, not a shape or kind (see
+            // `enter_type_params`).
+            Type::Named(name, _) if self.params.contains(name) => ty.clone(),
             Type::Named(name, region) => {
                 let at = self
                     .type_places
@@ -964,8 +992,11 @@ impl Resolver<'_> {
             // A variable keeps its name. No variable can be named like a variant
             // (see `Checker::define`), so a variant written as a value is renamed.
             ExprKind::Var(name) => self.rename(name, span, &[What::Variant]),
-            ExprKind::Call(name, args) => {
+            ExprKind::Call { name, types, args } => {
                 self.rename(name, span, &[What::Task, What::Variant])?;
+                for (ty, at) in types.iter_mut() {
+                    *ty = self.ty(&ty.clone(), *at)?;
+                }
                 args.iter_mut().try_for_each(|e| self.expr(e))
             }
             ExprKind::StructInit(name, fields) => {
@@ -1018,7 +1049,7 @@ impl Resolver<'_> {
             ExprKind::Edit { args, .. } => std::mem::take(args),
             _ => Vec::new(),
         };
-        expr.kind = ExprKind::Call(written, args);
+        expr.kind = ExprKind::Call { name: written, types: Vec::new(), args };
         self.expr(expr)?;
         Ok(true)
     }

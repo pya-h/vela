@@ -71,6 +71,8 @@ pub enum SymbolKind {
     Region,
     /// A module the file includes, declared by its `include` line.
     Module,
+    /// A type a generic declaration takes, `T` in `task first<T>(…)`.
+    TypeParam,
 }
 
 impl SymbolKind {
@@ -84,6 +86,7 @@ impl SymbolKind {
             SymbolKind::Variable => TokenClass::Variable,
             SymbolKind::Region => TokenClass::Region,
             SymbolKind::Module => TokenClass::Module,
+            SymbolKind::TypeParam => TokenClass::Type,
         }
     }
 }
@@ -371,6 +374,30 @@ impl<'a> Tokens<'a> {
         matches!(self.token(end), Some(Token::Newline | Token::Eof) | None)
     }
 
+    /// Whether the `<` at position `p` opens the types a declaration takes or a
+    /// call gives: one right after the name of a `task` or `shape`, or one whose
+    /// matching `>` is followed by `(`, as the parser reads them.
+    fn opens_types(&self, p: usize) -> bool {
+        if self.token(p) != Some(&Token::Lt) {
+            return false;
+        }
+        let declares = p >= 2 && self.ident(p - 1).is_some() && matches!(self.token(p - 2), Some(Token::Task | Token::Shape));
+        if declares {
+            return true;
+        }
+        let mut depth = 0usize;
+        for q in p + 1.. {
+            match self.token(q) {
+                Some(Token::Gt) if depth == 0 => return self.token(q + 1) == Some(&Token::LParen),
+                Some(Token::Lt) => depth += 1,
+                Some(Token::Gt) => depth -= 1,
+                Some(token) if token.writes_type() => {}
+                _ => return false,
+            }
+        }
+        false
+    }
+
     /// Whether position `p` starts a line.
     fn starts_line(&self, p: usize) -> bool {
         p == 0 || self.before(p) == Some(&Token::Newline)
@@ -418,6 +445,11 @@ fn never(_: &Token) -> bool {
 
 fn ends_field(token: &Token) -> bool {
     matches!(token, Token::Comma | Token::RParen)
+}
+
+/// What ends the words a type a declaration takes must allow.
+fn ends_type_param(token: &Token) -> bool {
+    matches!(token, Token::Comma | Token::Gt)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -525,6 +557,30 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                         symbol.range.start = tokens.range(p).start;
                     }
                     item = Some(id);
+                    // `task first<T: ordered>(…)`: the types the task takes,
+                    // each with the words it must allow.
+                    let mut q = p + 2;
+                    if tokens.token(q) == Some(&Token::Lt) {
+                        let mut names = true;
+                        while let Some(token) = tokens.token(q) {
+                            match token {
+                                Token::Gt | Token::Newline | Token::Eof | Token::LParen => break,
+                                Token::Lt | Token::Comma => names = true,
+                                Token::Colon | Token::Amp => names = false,
+                                Token::Ident(_) if names => {
+                                    names = false;
+                                    let word = if tokens.token(q + 1) == Some(&Token::Colon) {
+                                        tokens.text_after(q + 1, ends_type_param)
+                                    } else {
+                                        String::new()
+                                    };
+                                    declare(&mut symbols, q, SymbolKind::TypeParam, word, Some(id));
+                                }
+                                _ => {}
+                            }
+                            q += 1;
+                        }
+                    }
                 }
             }
             Token::When | Token::Loop | Token::Each | Token::Match => blocks.push(Block::Inner),
@@ -667,6 +723,10 @@ impl<'a> Classifier<'a> {
         let mut type_brackets = 0usize;
         // How many `(`s of tuple types are open, as in `(int, text)`.
         let mut type_parens = 0usize;
+        // How many `<`s of the types a declaration takes, or a call gives, are
+        // open; and whether the next name is a word a type must allow.
+        let mut type_angles = 0usize;
+        let mut needs_word = false;
 
         let mut p = 0;
         for lexed in tokens.all {
@@ -708,6 +768,8 @@ impl<'a> Classifier<'a> {
                     declaring_list = None;
                     type_brackets = 0;
                     type_parens = 0;
+                    type_angles = 0;
+                    needs_word = false;
                     // Shape literals are on one line, so an unclosed literal `{` ends
                     // with it; a plan B's block continues.
                     braces.retain(|brace| *brace == Brace::PlanB);
@@ -733,6 +795,11 @@ impl<'a> Classifier<'a> {
                     self.push(range, TokenClass::Punctuation, None);
                     in_include_names = true;
                 }
+                // `<T: ordered>`: what the type must allow.
+                Token::Ident(_) if needs_word => {
+                    needs_word = false;
+                    self.push(range, TokenClass::Keyword, None);
+                }
                 Token::Ident(name) => {
                     if let Some(type_follows) = region_now {
                         let symbol = self.region(p, name, in_task_header);
@@ -753,6 +820,10 @@ impl<'a> Classifier<'a> {
                 Token::AtSign => {
                     self.push(range, TokenClass::Operator, None);
                     region_next = Some(was_type);
+                }
+                Token::Colon if type_angles > 0 => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    needs_word = true;
                 }
                 Token::Colon => {
                     self.push(range, TokenClass::Punctuation, None);
@@ -829,9 +900,25 @@ impl<'a> Classifier<'a> {
                         _ => {}
                     }
                 }
-                Token::Comma if type_parens > 0 => {
+                Token::Comma if type_parens > 0 || type_angles > 0 => {
                     self.push(range, TokenClass::Punctuation, None);
                     in_type = true;
+                }
+                // `<T: ordered>` and `first<int>(…)`: the types a declaration
+                // takes, or the ones a call gives it.
+                Token::Lt if tokens.opens_types(p) => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    type_angles += 1;
+                    in_type = true;
+                }
+                Token::Gt if type_angles > 0 => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    type_angles -= 1;
+                    after_type = true;
+                }
+                Token::Amp if type_angles > 0 => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    needs_word = true;
                 }
                 Token::Comma => {
                     self.push(range, TokenClass::Punctuation, None);
@@ -999,7 +1086,7 @@ impl<'a> Classifier<'a> {
             if Type::builtin(name).is_some() {
                 return (TokenClass::TypeBuiltin, None);
             }
-            return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind]));
+            return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind, SymbolKind::TypeParam]));
         }
         if in_task_header && after == Some(&Token::Colon) && matches!(before, Some(Token::LParen | Token::Comma)) {
             let detail = tokens.text_after(p + 1, ends_field);

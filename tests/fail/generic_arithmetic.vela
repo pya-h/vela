@@ -1,0 +1,8 @@
+# error: 3:10: arithmetic requires numeric operands; 'T' is a type this task takes, and no word asks a type for arithmetic, so a task that does it takes numbers ('int' or 'float') rather than a type it is given
+task sum<T: ordered>(a: T, b: T) -> T
+    <- a + b
+fi
+
+task main()
+    show(sum(1, 2))
+fi

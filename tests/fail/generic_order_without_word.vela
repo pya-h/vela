@@ -1,0 +1,11 @@
+# error: 3:12: comparison requires numeric operands; T is any type here; require it, as in '<T: ordered>'
+task biggest<T>(a: T, b: T) -> T
+    when a > b
+        <- a
+    fi
+    <- b
+fi
+
+task main()
+    show(biggest(1, 2))
+fi

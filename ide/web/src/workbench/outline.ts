@@ -1,5 +1,6 @@
-// The outline of the open file: tasks, shapes and their fields, kinds and
-// their variants. The declaration around the cursor is highlighted.
+// The outline of the open file: tasks and the types they take, shapes and their
+// fields, kinds and their variants. The declaration around the cursor is
+// highlighted.
 
 import type { OutlineItem, SymbolKind } from "../analysis/protocol";
 import { h } from "./dom";
@@ -13,6 +14,7 @@ export const SYMBOL_BADGES: Record<SymbolKind, { text: string; className: string
   parameter: { text: "P", className: "kind-parameter" },
   variable: { text: "B", className: "kind-variable" },
   region: { text: "R", className: "kind-region" },
+  "type-param": { text: "T", className: "kind-type-param" },
   // The outline lists a file's own declarations, never a module it uses.
   module: { text: "M", className: "kind-module" },
 };

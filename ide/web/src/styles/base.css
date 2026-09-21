@@ -333,6 +333,10 @@ kbd {
   background: color-mix(in srgb, var(--syn-region) 16%, transparent);
   color: var(--syn-region);
 }
+.kind-type-param {
+  background: color-mix(in srgb, var(--syn-type) 12%, transparent);
+  color: var(--syn-type);
+}
 .kind-module {
   background: color-mix(in srgb, var(--syn-module) 16%, transparent);
   color: var(--syn-module);

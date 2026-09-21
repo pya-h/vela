@@ -1,4 +1,5 @@
-# Arithmetic, for tests/run/modules/lists/stack.vela.
+# Arithmetic, for tests/run/modules/lists/stack.vela, and a task that takes a
+# type, used from tests/run/modules.vela.
 
 shape Sum
     value: int
@@ -8,4 +9,21 @@ task add(a: int, b: int) -> int
     # A variable may have the name of a shape, as in any file.
     bind Sum = a + b
     <- Sum
+fi
+
+# A generic task another file uses, and a private one it uses itself: the task
+# made for each set of types a use gives belongs to this module too.
+task larger<T: ordered>(a: T, b: T) -> T
+    <- pickFirst(biggest(a, b), a)
+fi
+
+priv task pickFirst<T>(a: T, b: T) -> T
+    <- a
+fi
+
+priv task biggest<T: ordered>(a: T, b: T) -> T
+    when a > b
+        <- a
+    fi
+    <- b
 fi

@@ -1,0 +1,101 @@
+# Tasks that take types: `task first<T>(…)` works for a slice of anything, and
+# `task biggest<T: ordered>(…)` for anything with an order. The word after a
+# type's `:` says what the body may do with its values: `ordered` compares them
+# with `<` and `>`, `shown` shows them, `same` compares them with `==`, and
+# `fixed` lets them be a tuple's items. The type comes from the arguments, from
+# the place the value goes, or written in `< >` at the call.
+
+# The first item of a slice, whatever it holds.
+task first<T>(xs: [T]@r) -> maybe T
+    each v in xs
+        <- v
+    fi
+    <- none
+fi
+
+# The largest item, or none when there are none.
+task largest<T: ordered>(xs: [T]@r) -> maybe T
+    hold top: maybe T = none
+    each v in xs
+        when top is {best}
+            when v > best
+                top = v
+            fi
+        else
+            top = v
+        fi
+    fi
+    <- top
+fi
+
+# How many items equal a value.
+task countOf<T: same>(xs: [T]@r, wanted: T) -> int
+    hold seen = 0
+    each v in xs
+        when v == wanted
+            seen = seen + 1
+        fi
+    fi
+    <- seen
+fi
+
+# Every item, one to a line, with a label in front of the first.
+task tellAll<T: shown>(label: text, xs: [T]@r)
+    show(label)
+    each v in xs
+        show(v)
+    fi
+fi
+
+# A copy of every item in the region the slice is in: a copy of a value of the
+# type the task takes goes into a region the header keeps that type in, `[T]@r`
+# here, so this works for text as well as numbers.
+task copyOf<T>(r: region, xs: [T]@r) -> [T]@r
+    hold made: [T]@r = new [T]() at r
+    each v in xs
+        made.add(v.copy() at r)
+    fi
+    <- made
+fi
+
+# The two values as one tuple: a tuple's items never change, so both types must
+# be `fixed`.
+task pairUp<A: fixed, B: fixed>(a: A, b: B) -> (A, B)
+    <- (a, b)
+fi
+
+task main()
+    region r
+    hold scores = new [int]() at r
+    scores.add(91)
+    scores.add(78)
+    scores.add(91)
+
+    hold names = new [text]() at r
+    names.add("Ada".copy() at r)
+    names.add("Bo".copy() at r)
+
+    # The arguments say which type each call is for.
+    show(first(scores))
+    show(first(names))
+    show(largest(scores))
+    show(countOf(scores, 91))
+
+    # A slice of text needs its region named when the type is written out.
+    show(first<text@r>(names))
+
+    tellAll("scores:", scores)
+    tellAll("names:", names)
+
+    # Nothing in the arguments says what an empty answer holds, so the place the
+    # value goes does.
+    bind none_yet: maybe int = first(new [int]() at r)
+    show(none_yet)
+
+    bind copies = copyOf(r, names)
+    show(copies[1])
+
+    bind entry: (text@r, int) = pairUp(names[0], scores[0])
+    show(entry.0)
+    show(entry.1)
+fi

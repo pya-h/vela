@@ -1,0 +1,8 @@
+# error: 2:21: a value that can be compared never changes, so 'same' already means 'fixed'; write 'same' alone
+task tell<T: same & fixed>(value: T) -> T
+    <- value
+fi
+
+task main()
+    show(tell(1))
+fi

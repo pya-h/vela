@@ -1,0 +1,8 @@
+# error: 2:12: 'int' is a builtin type, so it can't name a type a declaration takes; use another name, as in '<T>'
+task first<int>(x: int) -> int
+    <- x
+fi
+
+task main()
+    show(first(1))
+fi

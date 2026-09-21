@@ -1,0 +1,8 @@
+# error: 3:10: show expects int, float, bool, or text; T is any type here; require it, as in '<T: shown>'
+task tell<T>(value: T)
+    show(value)
+fi
+
+task main()
+    tell(1)
+fi

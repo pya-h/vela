@@ -31,6 +31,9 @@ pub enum Token {
     And,
     Or,
     Not,
+    /// `&`, which joins the words a generic type must allow (`<T: same & shown>`).
+    /// Vela writes `and` for both conditions at once.
+    Amp,
     Fi,
     Maybe,
     Is,
@@ -125,6 +128,29 @@ pub const ESCAPES: &[(char, char)] = &[
 ];
 
 impl Token {
+    /// Whether the token can be part of a type written inside the `< … >` of the
+    /// types a declaration takes or a call gives. Reading a `<` as the start of
+    /// those types rather than as a comparison looks for the matching `>`
+    /// through these (see `Parser::at_type_args`).
+    pub fn writes_type(&self) -> bool {
+        matches!(
+            self,
+            Token::Ident(_)
+                | Token::Comma
+                | Token::Caret
+                | Token::Maybe
+                | Token::Or
+                | Token::AtSign
+                | Token::LBracket
+                | Token::RBracket
+                | Token::LParen
+                | Token::RParen
+                | Token::Semicolon
+                | Token::Int(_)
+                | Token::Dot
+        )
+    }
+
     /// A human-readable description for diagnostics, e.g. `'fi'` or
     /// `identifier 'x'`.
     pub fn describe(&self) -> String {
@@ -161,6 +187,7 @@ impl Token {
             Token::Ne => "!=",
             Token::Lt => "<",
             Token::Gt => ">",
+            Token::Amp => "&",
             Token::Le => "<=",
             Token::Ge => ">=",
             Token::Assign => "=",
@@ -456,7 +483,12 @@ impl Lexer {
                     self.advance();
                     return invalid(loc, format!("unexpected '{}{}'; Vela writes '{}'", c, c, word));
                 }
-                return invalid(loc, format!("unexpected character '{}'; Vela writes '{}'", c, word));
+                if c == '|' {
+                    return invalid(loc, format!("unexpected character '{}'; Vela writes '{}'", c, word));
+                }
+                // A single `&` joins the words a generic type must allow; the
+                // parser reports it as 'and' anywhere else.
+                Token::Amp
             }
             '<' => {
                 if self.peek() == '=' {

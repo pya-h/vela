@@ -38,7 +38,18 @@ export interface Diagnostic {
   severity: "error";
 }
 
-export type SymbolKind = "task" | "shape" | "kind" | "variant" | "field" | "parameter" | "variable" | "region" | "module";
+export type SymbolKind =
+  | "task"
+  | "shape"
+  | "kind"
+  | "variant"
+  | "field"
+  | "parameter"
+  | "variable"
+  | "region"
+  | "module"
+  /** A type a task takes, `T` in `task first<T>(…)`. */
+  | "type-param";
 
 export interface OutlineItem {
   name: string;
