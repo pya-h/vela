@@ -150,133 +150,159 @@
     | keyword:fi
  92 | fi
     | keyword:fi
- 94 | # A method may send a maybe, and be called where its value goes.
+ 94 | # An `alters` method keeping a pointer into the region its value lives in.
+    | comment:# An `alters` method keeping a pointer into the region its value lives in.
+ 95 | shape Holder
+    | keyword:shape  type:Holder
+ 96 |     held: ^Point
+    | field:held  punctuation::  operator:^  type:Point
+ 98 |     alters keep(p: ^Point@this)
+    | variable:alters  task:keep  punctuation:(  variable:p  punctuation::  operator:^  type:Point  operator:@  region:this  punctuation:)
+ 99 |         .held = p
+    | punctuation:.  field:held  operator:=  variable:p
+100 |     fi
+    | keyword:fi
+102 |     heldLength() -> int
+    | task:heldLength  punctuation:(  punctuation:)  operator:->  type-builtin:int
+103 |         <- .held^.lengthSquared()
+    | keyword:<-  punctuation:.  field:held  operator:^  punctuation:.  field:lengthSquared  punctuation:(  punctuation:)
+104 |     fi
+    | keyword:fi
+105 | fi
+    | keyword:fi
+107 | # A method may send a maybe, and be called where its value goes.
     | comment:# A method may send a maybe, and be called where its value goes.
- 95 | shape Bag
+108 | shape Bag
     | keyword:shape  type:Bag
- 96 |     items: [int]
+109 |     items: [int]
     | field:items  punctuation::  punctuation:[  type-builtin:int  punctuation:]
- 98 |     firstOf() -> maybe int
+111 |     firstOf() -> maybe int
     | task:firstOf  punctuation:(  punctuation:)  operator:->  keyword:maybe  type-builtin:int
- 99 |         each item in .items
+112 |         each item in .items
     | keyword:each  variable:item  keyword:in  punctuation:.  field:items
-100 |             <- item
+113 |             <- item
     | keyword:<-  variable:item
-101 |         fi
+114 |         fi
     | keyword:fi
-102 |         <- none
+115 |         <- none
     | keyword:<-  keyword:none
-103 |     fi
+116 |     fi
     | keyword:fi
-104 | fi
+117 | fi
     | keyword:fi
-106 | task main()
+119 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
-107 |     hold c: Counter = Counter { label: "clicks", count: 0 }
+120 |     hold c: Counter = Counter { label: "clicks", count: 0 }
     | keyword:hold  variable:c  punctuation::  type:Counter  operator:=  type:Counter  punctuation:{  field:label  punctuation::  string:"clicks"  punctuation:,  field:count  punctuation::  number:0  punctuation:}
-108 |     c.step()
+121 |     c.step()
     | variable:c  punctuation:.  field:step  punctuation:(  punctuation:)
-109 |     show(c.total())
+122 |     show(c.total())
     | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:total  punctuation:(  punctuation:)  punctuation:)
-110 |     c.by(5)
+123 |     c.by(5)
     | variable:c  punctuation:.  field:by  punctuation:(  number:5  punctuation:)
-111 |     show(c.total())
+124 |     show(c.total())
     | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:total  punctuation:(  punctuation:)  punctuation:)
-112 |     show(c.nameOf())
+125 |     show(c.nameOf())
     | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:nameOf  punctuation:(  punctuation:)  punctuation:)
-113 |     show(c.beats(Counter { label: "other", count: 1 }))
+126 |     show(c.beats(Counter { label: "other", count: 1 }))
     | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:beats  punctuation:(  type:Counter  punctuation:{  field:label  punctuation::  string:"other"  punctuation:,  field:count  punctuation::  number:1  punctuation:}  punctuation:)  punctuation:)
-114 |     c.reset()
+127 |     c.reset()
     | variable:c  punctuation:.  field:reset  punctuation:(  punctuation:)
-115 |     show(c.total())
+128 |     show(c.total())
     | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:total  punctuation:(  punctuation:)  punctuation:)
-117 |     # A method that changes nothing is called on anything, a `bind` too.
+130 |     # A method that changes nothing is called on anything, a `bind` too.
     | comment:# A method that changes nothing is called on anything, a `bind` too.
-118 |     bind fixed = Counter { label: "once", count: 1 }
+131 |     bind fixed = Counter { label: "once", count: 1 }
     | keyword:bind  variable:fixed  operator:=  type:Counter  punctuation:{  field:label  punctuation::  string:"once"  punctuation:,  field:count  punctuation::  number:1  punctuation:}
-119 |     show(fixed.total())
+132 |     show(fixed.total())
     | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  field:total  punctuation:(  punctuation:)  punctuation:)
-120 |     show(fixed.nameOf())
+133 |     show(fixed.nameOf())
     | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  field:nameOf  punctuation:(  punctuation:)  punctuation:)
-122 |     hold p = Point { x: 3, y: 4 }
+135 |     hold p = Point { x: 3, y: 4 }
     | keyword:hold  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}
-123 |     show(p.lengthSquared())
+136 |     show(p.lengthSquared())
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:lengthSquared  punctuation:(  punctuation:)  punctuation:)
-124 |     p.shift(1, 1)
+137 |     p.shift(1, 1)
     | variable:p  punctuation:.  field:shift  punctuation:(  number:1  punctuation:,  number:1  punctuation:)
-125 |     show(p.lengthSquared())
+138 |     show(p.lengthSquared())
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:lengthSquared  punctuation:(  punctuation:)  punctuation:)
-126 |     show(p.stepsTo(7))
+139 |     show(p.stepsTo(7))
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:stepsTo  punctuation:(  number:7  punctuation:)  punctuation:)
-128 |     region r
+141 |     region r
     | keyword:region  region:r
-129 |     # Through a pointer, which is where a task changes a value of its own.
+142 |     # Through a pointer, which is where a task changes a value of its own.
     | comment:# Through a pointer, which is where a task changes a value of its own.
-130 |     hold q = new Point(Point { x: 1, y: 1 }) at r
+143 |     hold q = new Point(Point { x: 1, y: 1 }) at r
     | keyword:hold  variable:q  operator:=  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:1  punctuation:}  punctuation:)  keyword:at  region:r
-131 |     q^.shift(2, 2)
+144 |     q^.shift(2, 2)
     | variable:q  operator:^  punctuation:.  field:shift  punctuation:(  number:2  punctuation:,  number:2  punctuation:)
-132 |     show(q^.lengthSquared())
+145 |     show(q^.lengthSquared())
     | builtin-fn:show  punctuation:(  variable:q  operator:^  punctuation:.  field:lengthSquared  punctuation:(  punctuation:)  punctuation:)
-134 |     # A field of a `hold`, and an item of a slice, are places that can change.
+147 |     # A field of a `hold`, and an item of a slice, are places that can change.
     | comment:# A field of a `hold`, and an item of a slice, are places that can change.
-135 |     hold items = new [Point]() at r
+148 |     hold items = new [Point]() at r
     | keyword:hold  variable:items  operator:=  keyword:new  punctuation:[  type:Point  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
-136 |     items.add(Point { x: 6, y: 8 })
+149 |     items.add(Point { x: 6, y: 8 })
     | variable:items  punctuation:.  field:add  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:6  punctuation:,  field:y  punctuation::  number:8  punctuation:}  punctuation:)
-137 |     hold row = Row { here: Point { x: 1, y: 2 }, items: items }
+150 |     hold row = Row { here: Point { x: 1, y: 2 }, items: items }
     | keyword:hold  variable:row  operator:=  type:Row  punctuation:{  field:here  punctuation::  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:,  field:items  punctuation::  variable:items  punctuation:}
-138 |     show(row.firstLength())
+151 |     show(row.firstLength())
     | builtin-fn:show  punctuation:(  variable:row  punctuation:.  field:firstLength  punctuation:(  punctuation:)  punctuation:)
-139 |     row.here.shift(10, 0)
+152 |     row.here.shift(10, 0)
     | variable:row  punctuation:.  field:here  punctuation:.  field:shift  punctuation:(  number:10  punctuation:,  number:0  punctuation:)
-140 |     show(row.here.lengthSquared())
+153 |     show(row.here.lengthSquared())
     | builtin-fn:show  punctuation:(  variable:row  punctuation:.  field:here  punctuation:.  field:lengthSquared  punctuation:(  punctuation:)  punctuation:)
-141 |     show(row.farthest(q))
+154 |     show(row.farthest(q))
     | builtin-fn:show  punctuation:(  variable:row  punctuation:.  field:farthest  punctuation:(  variable:q  punctuation:)  punctuation:)
-142 |     items[0].shift(1, 0)
+155 |     items[0].shift(1, 0)
     | variable:items  punctuation:[  number:0  punctuation:]  punctuation:.  field:shift  punctuation:(  number:1  punctuation:,  number:0  punctuation:)
-143 |     show(items[0].lengthSquared())
+156 |     show(items[0].lengthSquared())
     | builtin-fn:show  punctuation:(  variable:items  punctuation:[  number:0  punctuation:]  punctuation:.  field:lengthSquared  punctuation:(  punctuation:)  punctuation:)
-145 |     # A method on the value a call sends.
+158 |     # A method on the value a call sends.
     | comment:# A method on the value a call sends.
-146 |     show(made().total())
+159 |     show(made().total())
     | builtin-fn:show  punctuation:(  task:made  punctuation:(  punctuation:)  punctuation:.  field:total  punctuation:(  punctuation:)  punctuation:)
-148 |     bind bag = Bag { items: items_of(r) }
+161 |     bind bag = Bag { items: items_of(r) }
     | keyword:bind  variable:bag  operator:=  type:Bag  punctuation:{  field:items  punctuation::  task:items_of  punctuation:(  region:r  punctuation:)  punctuation:}
-149 |     show(bag.firstOf())
+162 |     show(bag.firstOf())
     | builtin-fn:show  punctuation:(  variable:bag  punctuation:.  field:firstOf  punctuation:(  punctuation:)  punctuation:)
-150 |     bind empty = Bag { items: new [int]() at r }
+163 |     bind empty = Bag { items: new [int]() at r }
     | keyword:bind  variable:empty  operator:=  type:Bag  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
-151 |     show(empty.firstOf())
+164 |     show(empty.firstOf())
     | builtin-fn:show  punctuation:(  variable:empty  punctuation:.  field:firstOf  punctuation:(  punctuation:)  punctuation:)
-153 |     # The text a method sends is in the region the value is in.
+166 |     # The text a method sends is in the region the value is in.
     | comment:# The text a method sends is in the region the value is in.
-154 |     hold named: Counter@r = Counter { label: "in a region".copy() at r, count: 2 }
+167 |     hold named: Counter@r = Counter { label: "in a region".copy() at r, count: 2 }
     | keyword:hold  variable:named  punctuation::  type:Counter  operator:@  region:r  operator:=  type:Counter  punctuation:{  field:label  punctuation::  string:"in a region"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  field:count  punctuation::  number:2  punctuation:}
-155 |     bind held: text@r = named.nameOf()
+168 |     bind held: text@r = named.nameOf()
     | keyword:bind  variable:held  punctuation::  type-builtin:text  operator:@  region:r  operator:=  variable:named  punctuation:.  field:nameOf  punctuation:(  punctuation:)
-156 |     show(held)
+169 |     show(held)
     | builtin-fn:show  punctuation:(  variable:held  punctuation:)
-157 |     named.step()
+170 |     named.step()
     | variable:named  punctuation:.  field:step  punctuation:(  punctuation:)
-158 |     show(named.total())
+171 |     show(named.total())
     | builtin-fn:show  punctuation:(  variable:named  punctuation:.  field:total  punctuation:(  punctuation:)  punctuation:)
-159 | fi
+173 |     hold holder: Holder@r = Holder { held: q }
+    | keyword:hold  variable:holder  punctuation::  type:Holder  operator:@  region:r  operator:=  type:Holder  punctuation:{  field:held  punctuation::  variable:q  punctuation:}
+174 |     holder.keep(new Point(Point { x: 0, y: 5 }) at r)
+    | variable:holder  punctuation:.  field:keep  punctuation:(  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:5  punctuation:}  punctuation:)  keyword:at  region:r  punctuation:)
+175 |     show(holder.heldLength())
+    | builtin-fn:show  punctuation:(  variable:holder  punctuation:.  field:heldLength  punctuation:(  punctuation:)  punctuation:)
+176 | fi
     | keyword:fi
-161 | task made() -> Counter
+178 | task made() -> Counter
     | keyword:task  task:made  punctuation:(  punctuation:)  operator:->  type:Counter
-162 |     <- Counter { label: "made", count: 9 }
+179 |     <- Counter { label: "made", count: 9 }
     | keyword:<-  type:Counter  punctuation:{  field:label  punctuation::  string:"made"  punctuation:,  field:count  punctuation::  number:9  punctuation:}
-163 | fi
+180 | fi
     | keyword:fi
-165 | task items_of(r: region) -> [int]@r
+182 | task items_of(r: region) -> [int]@r
     | keyword:task  task:items_of  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
-166 |     hold xs = new [int]() at r
+183 |     hold xs = new [int]() at r
     | keyword:hold  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
-167 |     xs.add(41)
+184 |     xs.add(41)
     | variable:xs  punctuation:.  field:add  punctuation:(  number:41  punctuation:)
-168 |     <- xs
+185 |     <- xs
     | keyword:<-  variable:xs
-169 | fi
+186 | fi
     | keyword:fi

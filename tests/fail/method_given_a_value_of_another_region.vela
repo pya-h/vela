@@ -1,0 +1,19 @@
+# error: 18:12: expected type ^Node@r, got ^Node@s; method 'Holder.keep' takes 'p' in '@this', the region the value it is called on lives in, so it must be in that region too
+shape Node
+    value: int
+fi
+
+shape Holder
+    held: ^Node
+
+    alters keep(p: ^Node@this)
+        .held = p
+    fi
+fi
+
+task main()
+    region r
+    hold h: Holder@r = Holder { held: new Node(Node { value: 1 }) at r }
+    region s
+    h.keep(new Node(Node { value: 9 }) at s)
+fi

@@ -3656,6 +3656,7 @@ impl Checker {
         if !info.types.is_empty() {
             self.check_kept_regions(span, task, info, &regions, &given)?;
         }
+        let what = if info.owner.is_some() { "method" } else { "task" };
         for (arg, (param, ty)) in args.iter_mut().zip(params) {
             if *ty == Type::Region {
                 continue;
@@ -3670,15 +3671,25 @@ impl Checker {
                     return err(
                         arg.span,
                         format!(
-                            "expected type {}, got {}; task '{}' takes text that lasts as long as the program here, as a literal does; to take text of any region, its parameter can name one, as in '{}: {}'",
-                            expected, actual, task, param, example
+                            "expected type {}, got {}; {} '{}' takes text that lasts as long as the program here, as a literal does; to take text of any region, its parameter can name one, as in '{}: {}'",
+                            expected, actual, what, task, param, example
+                        ),
+                    );
+                }
+                // A method's parameter in `@this`, given a value of another region.
+                Err(_) if same_but_region && info.owner.is_some() && ty.regions().contains(&THIS_WORD) => {
+                    return err(
+                        arg.span,
+                        format!(
+                            "expected type {}, got {}; method '{}' takes '{}' in '@{}', the region the value it is called on lives in, so it must be in that region too",
+                            expected, actual, task, param, THIS_WORD
                         ),
                     );
                 }
                 Err(_) if same_but_region && !expected.regions().contains(&ANY_REGION) => {
                     return err(
                         arg.span,
-                        format!("expected type {}, got {}; task '{}' names one region for this and another argument, so they must be in the same region", expected, actual, task),
+                        format!("expected type {}, got {}; {} '{}' names one region for this and another argument, so they must be in the same region", expected, actual, what, task),
                     );
                 }
                 result => result?,

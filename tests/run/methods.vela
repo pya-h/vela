@@ -91,6 +91,19 @@ shape Row
     fi
 fi
 
+# An `alters` method keeping a pointer into the region its value lives in.
+shape Holder
+    held: ^Point
+
+    alters keep(p: ^Point@this)
+        .held = p
+    fi
+
+    heldLength() -> int
+        <- .held^.lengthSquared()
+    fi
+fi
+
 # A method may send a maybe, and be called where its value goes.
 shape Bag
     items: [int]
@@ -156,6 +169,10 @@ task main()
     show(held)
     named.step()
     show(named.total())
+
+    hold holder: Holder@r = Holder { held: q }
+    holder.keep(new Point(Point { x: 0, y: 5 }) at r)
+    show(holder.heldLength())
 fi
 
 task made() -> Counter
