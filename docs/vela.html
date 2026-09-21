@@ -920,7 +920,9 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
           <code>Box&lt;text@r&gt;</code>), and a shape given types names one exactly when its values hold something
           there: <code>Box&lt;text&gt;@r</code> and <code>Box&lt;int&gt;</code>. Inside a task that takes types, where
           the type given isn't known yet, that can't be told apart, so <code>Box&lt;T&gt;</code> names a region
-          (<code>b: Box&lt;T&gt;@r</code>) and the region is dropped for the uses that don't need one.</li>
+          (<code>b: Box&lt;T&gt;@r</code>) and the region is dropped for the uses that don't need one, which leaves a task
+          sending one back taking a region some of its uses have no use for (<a
+          href="future.html#undecided-generic-region">an open question</a>).</li>
         <li><strong>Recursion.</strong> A field may name the shape again with the types it takes, behind a pointer
           (<code>next: maybe ^Node&lt;T&gt;</code>), as a shape may name itself. One that gives it a type built from
           its own (<code>^Grow&lt;Grow&lt;T&gt;&gt;</code>) would need an endless line of shapes, so that is an error
@@ -1692,11 +1694,16 @@ show(area(square))             <span class="comment"># error: unknown task 'area
         <li>Input is read a line of text at a time with <code>scan</code>; there are no conversions from text to numbers
           yet, and no files.</li>
         <li>Arrays and slices can't be compared or shown whole, and an array's count is known before the program runs
-          (see <a href="#arrays">Arrays</a>). Tuples can't be shown whole, and <code>is</code> and <code>case</code>
-          are taken apart in <code>is</code> and <code>case</code> only in parentheses, as in <code>{(a, b)}</code>
+          (see <a href="#arrays">Arrays</a>). Tuples can't be shown whole, and are taken apart in
+          <code>is</code> and <code>case</code> only in parentheses, as in <code>{(a, b)}</code>
           (see <a href="#tuples">Tuples</a>).</li>
         <li>Tasks and shapes take types; a kind can't yet, and no word asks a type for arithmetic (see
           <a href="#generics">Types a declaration takes</a>).</li>
+        <li>Every task stands on its own: a shape or a kind has no tasks of its own (<a
+          href="future.html#methods">an idea with the syntax still to pick</a>), so behaviour for a type is
+          written as a task taking it (<code>area(c)</code>, not <code>c.area()</code>). Only a slice has calls of its
+          own, <code>xs.add(…)</code> and <code>xs.del(…)</code>, and only <code>.copy()</code> and <code>.len</code>
+          read that way.</li>
         <li>There are no packages to share modules between programs (see <a href="#modules">Modules</a>).</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which

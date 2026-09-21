@@ -373,7 +373,7 @@
             <li>Lifetimes are blocks you can see, named in types you can read</li>
             <li>Few rules to learn; no lifetime annotations beyond a region's name</li>
             <li>Tasks that only read are generic over regions for free (no extra argument), as they are over the types
-              they take (<a href="vela.html#generics">Tasks that take types</a>)</li>
+              they take (<a href="vela.html#generics">Types a declaration takes</a>)</li>
             <li>A natural fit for work that happens in phases: a request, a frame, a loop pass, a compiler pass</li>
           </ul>
         </div>
@@ -1302,9 +1302,10 @@ list = push[nodes](list, <span class="number">1</span>)</pre>
             tasks aren't values, so <code>name[…](…)</code> is a region list when <code>name</code> is a task and an index
             when it is a variable. Go resolves its generic calls
             (<code>f[int](x)</code>) the same way.</li>
-          <li><strong>Room to grow:</strong> a task takes types in angle brackets today
-            (<code>task first&lt;T&gt;(…)</code>, see <a href="vela.html#generics">Tasks that take types</a>), and a type
-            it takes names no region of its own. Regions are compile-time parameters too, so a task that wrote both
+          <li><strong>Room to grow:</strong> a task or a shape takes types in angle brackets today
+            (<code>task first&lt;T&gt;(…)</code>, <code>shape Box&lt;T&gt;</code>, see
+            <a href="vela.html#generics">Types a declaration takes</a>), and a type it takes names no region of its
+            own; a shape given types names the one its values live in, <code>Box&lt;text&gt;@r</code>. Regions are compile-time parameters too, so a task that wrote both
             would have two lists, <code>task find&lt;T&gt;[r](…)</code>, or one that holds types and regions together.
             Shapes could take several regions the same way (see below).</li>
           <li><strong>Safer headers:</strong> <code>task sum[r](…)</code> declares the regions a task only names. Today a

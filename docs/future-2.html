@@ -499,7 +499,10 @@ bind table: [int; 10] = comptime build_lookup_table()</pre>
           <code>comptime</code> tasks run in the compiler using the same interpreter (or the same code generator targeting a small VM). They have no I/O and no mutable global state. The result must be a constant value.
         </p>
         <div class="note">
-          <strong>Why it's cool:</strong> generics, metaprogramming, and zero-cost abstractions all become possible without a separate macro language. Vela stays one language from runtime to compile time.
+          <strong>Why it's cool:</strong> metaprogramming and zero-cost abstractions become possible without a
+          separate macro language (types a declaration takes are already there, see
+          <a href="vela.html#generics">Types a declaration takes</a>). Vela stays one language from runtime to compile
+          time.
         </div>
       </div>
 
@@ -564,16 +567,21 @@ fi</pre>
       <div class="option">
         <h3><span aria-hidden="true">🧬</span> Monomorphization Hints</h3>
         <p>
-          A way to ask the compiler to specialize a generic task for specific types at specific call sites, or conversely to share code when binary size matters more than speed.
+          Vela already makes one task or shape for every set of types a program uses
+          (<a href="vela.html#generics">Types a declaration takes</a>), which is the fast choice and the only one. This
+          would let a declaration ask for the other: share one body when binary size matters more than speed.
         </p>
-        <pre>task max[T](a: T, b: T) -> T inline
+        <pre>task max&lt;T: ordered&gt;(a: T, b: T) -> T inline
     when a > b
         <- a
     fi
     <- b
 fi</pre>
         <p>
-          <code>inline</code> on a generic task means "generate a separate copy for every concrete type." <code>shared</code> would mean "use one implementation via type-erased pointers." The default is a heuristic.
+          <code>inline</code> names what Vela does today: a separate copy for every set of types.
+          <code>shared</code> would mean one body reached through type-erased pointers, paying a call and losing the
+          copy per type. Sharing only works where the body never needs a value's size, so the words a type is asked to
+          allow would have to say which of them a shared body may use.
         </p>
         <div class="note">
           <strong>Why it's cool:</strong> generic code often hits a tension between speed and size. Letting the programmer decide, rather than the compiler guessing, is a rare power feature.
@@ -635,21 +643,24 @@ fi</pre>
       <div class="option">
         <h3><span aria-hidden="true">🚦</span> Typestate / Session Types</h3>
         <p>
-          Encode state machines in the type system. A file handle can be <code>File[Open]</code> or <code>File[Closed]</code>; calling <code>read</code> on a closed file is a compile error.
+          Encode state machines in the type system. A file handle can be <code>File&lt;Open&gt;</code> or
+          <code>File&lt;Closed&gt;</code>; calling <code>read</code> on a closed file is a compile error. A shape takes
+          types already (<a href="vela.html#generic-shapes">Shapes that take types</a>), so what this needs on top is
+          types that stand for a state and hold no values, and a rule that a value of one is used once.
         </p>
-        <pre>shape File[State]
+        <pre>shape File&lt;State&gt;
     fd: int
 fi
 
-task open(path: text) -> File[Open]
+task open(path: text) -> File&lt;Open&gt;
     # ...
 fi
 
-task close(f: File[Open]) -> File[Closed]
+task close(f: File&lt;Open&gt;) -> File&lt;Closed&gt;
     # ...
 fi
 
-task read(f: File[Open]) -> text
+task read(f: File&lt;Open&gt;) -> text
     # ...
 fi</pre>
         <p>

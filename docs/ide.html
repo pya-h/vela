@@ -378,10 +378,13 @@ Press Ctrl+C to stop.</pre>
             <code>region</code> as a statement or a parameter's type. A call's result shows the caller's regions
             (<code>push(nodes, list)</code> gives a <code>^Node@nodes</code>), even while the file has an error. After
             a finished value, only the words that can continue it: <code>is</code>, <code>in</code>, <code>at</code> (after a
-            <code>new</code>'s, <code>scan</code>'s, or <code>copy()</code>'s value), <code>or</code>, and <code>and</code>. Nothing is offered where a name is being declared, including the names after the commas
-            of <code>bind q, r = …</code>, inside the parentheses of <code>bind a, (b, c) = …</code>, and in the
-            <code>&lt; &gt;</code> of <code>task first&lt;T&gt;</code> and <code>shape Box&lt;T&gt;</code>, and each of those names
-            hovers with the type of the value in its place (a tuple's item, for a name that takes one apart).
+            <code>new</code>'s, <code>scan</code>'s, or <code>copy()</code>'s value), <code>or</code>, and <code>and</code>. Nothing is offered where a name is being declared: the names after the commas
+            of <code>bind q, r = …</code> and inside the parentheses of <code>bind a, (b, c) = …</code>, which each
+            hover with the type of the value in their place (a tuple's item, for a name that takes one apart), and the
+            names in the <code>&lt; &gt;</code> of <code>task first&lt;T&gt;</code> and
+            <code>shape Box&lt;T&gt;</code>. After a <code>:</code> or an <code>&amp;</code> inside those
+            <code>&lt; &gt;</code>, only the four words a type can be asked to allow are offered, and inside the
+            <code>&lt; &gt;</code> of a call or of a shape given types, the types are.
             A task's named results (<code>-&gt; total: int</code>) are offered at the start of a line as
             <code>total &lt;- </code>, and hover as <code>result total: int</code>. After <code>match</code>, only <code>case</code>; <code>new</code> only where a region can
             be allocated in; <code>include</code> only above a file's tasks, shapes, and kinds; and <code>priv</code> before

@@ -345,6 +345,70 @@ fn docs_programs() {
     report("docs/regions.html", failures);
 }
 
+/// Every `<pre>` in a docs page that holds a whole program, which a `task main()`
+/// on its own line marks, with the `# error: TEXT` comment that says the page
+/// means it to be refused, if it has one.
+fn guide_programs(page: &str) -> Vec<(String, Option<String>)> {
+    let mut programs = Vec::new();
+    let mut rest = page;
+    while let Some(start) = rest.find("<pre") {
+        rest = rest[start..].split_once('>').map_or("", |(_, after)| after);
+        let Some((code, after)) = rest.split_once("</pre>") else { break };
+        rest = after;
+        let code = html_text(code) + "\n";
+        if !code.lines().any(|line| line == "task main()") {
+            continue;
+        }
+        // A line the page marks with `# error:` is one it shows being refused;
+        // the message is cut short there with an ellipsis.
+        let wanted = code
+            .lines()
+            .find_map(|line| line.split_once("# error: "))
+            .map(|(_, message)| message.trim().trim_end_matches('…').trim().to_string());
+        programs.push((code, wanted));
+    }
+    programs
+}
+
+/// Every whole program in `docs/vela.html` still says what the page says it
+/// does: one the page shows plainly compiles, with strict C, and one it marks
+/// with `# error:` is refused with that message. The page shows what each line
+/// gives in comments rather than as output, so these are not run.
+#[test]
+fn docs_guide_programs() {
+    let page = fs::read_to_string(project_root().join("docs/vela.html")).unwrap();
+    let programs = guide_programs(&page);
+    assert!(programs.len() >= 15, "found only {} whole programs in docs/vela.html", programs.len());
+    let scratch = scratch_dir("guide");
+    let mut failures = Vec::new();
+    for (i, (code, wanted)) in programs.iter().enumerate() {
+        // A program that includes a module needs the module's file, which the
+        // page shows separately; `tests/run/modules.vela` covers those.
+        if code.lines().any(|line| line.trim_start().starts_with("include ")) {
+            continue;
+        }
+        let source = scratch.join(format!("guide{:02}.vela", i));
+        fs::write(&source, code).unwrap();
+        match wanted {
+            None => failures.extend(check_strict_c(&source, &scratch)),
+            Some(wanted) => {
+                let out = Command::new(VELA).arg(&source).arg("--emit-c").output().unwrap();
+                let printed = String::from_utf8_lossy(&out.stderr).to_string();
+                // Only the message itself, since the lines under it quote the
+                // source, comment and all, and would match anything the page says.
+                let said = printed.lines().next().unwrap_or_default().split_once(": error: ").map(|(_, message)| message);
+                if out.status.success() {
+                    failures.push(format!("guide{:02}: the page shows this refused, but it compiled", i));
+                } else if !said.is_some_and(|said| said.contains(wanted.as_str())) {
+                    failures.push(format!("guide{:02}: the page says\n{}\ngot:\n{}", i, wanted, printed));
+                }
+            }
+        }
+    }
+    let _ = fs::remove_dir_all(&scratch);
+    report("docs/vela.html", failures);
+}
+
 /// The generated C that `docs/regions.html` shows for Lesson 1's `main` is what
 /// the compiler writes for it.
 #[test]

@@ -323,11 +323,12 @@
         <div class="card">
           <h3>Limited types <span class="badge b-med">Medium</span></h3>
           <p>Tasks and shapes now take types (<code>task first&lt;T&gt;(xs: [T]@r)</code>,
-            <code>shape Box&lt;T&gt;</code>, <a href="#generics">details below</a>); a kind can't yet. Tuples (<code>(text, int)</code>, whose items never change) are done
-            (<a href="vela.html#tuples">Tuples</a>), and so are arrays (<code>[int; 4]</code>) and slices (<code>[int]@r</code>, which grow with
-            <code>xs.add(v)</code> and shrink with <code>xs.del(i)</code>) are done (<a href="#arrays">details below</a>),
-            and missing values and errors have types: <code>maybe T</code> and <code>T or E</code>, and a pointer can't
-            be <code>none</code>.</p>
+            <code>shape Box&lt;T&gt;</code>, <a href="#generics">details below</a>); a kind can't yet. Tuples
+            (<code>(text, int)</code>, whose items never change, <a href="vela.html#tuples">Tuples</a>), arrays
+            (<code>[int; 4]</code>), and slices (<code>[int]@r</code>, which grow with <code>xs.add(v)</code> and
+            shrink with <code>xs.del(i)</code>) are all done (<a href="#arrays">details below</a>), and missing values
+            and errors have types: <code>maybe T</code> and <code>T or E</code>, and a pointer can't be
+            <code>none</code>.</p>
         </div>
         <div class="card">
           <h3>No methods <span class="badge b-med">Medium</span></h3>
@@ -1260,7 +1261,7 @@ fi</pre>
     </section>
 
     <section>
-      <h2><span class="icon" aria-hidden="true">🧩</span> Methods: Behavior for Shapes and Kinds</h2>
+      <h2 id="methods"><span class="icon" aria-hidden="true">🧩</span> Methods: Behavior for Shapes and Kinds</h2>
       <p>
         Vela keeps data and behavior apart: shapes and kinds hold data, and tasks act on it. That separation is a
         good default, but today it has real costs:
@@ -1518,6 +1519,13 @@ show(p.length_squared())</pre>
             as <code>nodes.push(list, 1)</code> (see <a href="regions.html#ideas-passing">Easier region passing</a>), since both
             would give meaning to <code>value.name(…)</code>. A slice's built-in changes, <code>xs.add(…)</code> and
             <code>xs.del(…)</code>, already do, and methods must keep them.</li>
+          <li><strong>Shapes that take types:</strong> a method of <a href="vela.html#generic-shapes"><code>shape
+            Box&lt;T&gt;</code></a> names the shape without them, <code>task Box.valueOf(self) -&gt; T</code>, and
+            <code>T</code> stands for the type the receiver is given, as it does in the fields. One method is made for
+            each shape the compiler makes (<code>Box&lt;int&gt;</code>, <code>Box&lt;text&gt;</code>), as a task that
+            takes types is today, and a method may take types of its own in its own <code>&lt; &gt;</code> after the
+            name. A word the shape asks for (<code>shape Shown&lt;T: shown&gt;</code>) already holds inside every
+            method of it, so the body may rely on it without saying so again.</li>
           <li><strong>Generated C</strong> stays collision-free: <code>vela_Point__method_length_squared(vela_Point self)</code>
             and <code>vela_Point__method_shift(vela_Point* self, double dx)</code>.</li>
           <li><strong>Later, interfaces</strong> can be satisfied implicitly, as in Go: a type that has the right
@@ -1699,6 +1707,17 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
         would cost, and the decision is to build it or drop it.
       </p>
       <ul>
+        <li id="undecided-generic-region"><strong>A region a shape given types may not need:</strong> whether the
+          values of a shape given types hold anything in a region depends on the types given
+          (<code>Box&lt;text&gt;@r</code> does, <code>Box&lt;int&gt;</code> does not), and inside a declaration that takes
+          types that cannot be told apart yet. So <code>Box&lt;T&gt;</code> always names a region, and a task sending one
+          back has to take one, <code>task boxOf&lt;T&gt;(r: region, v: T) -&gt; Box&lt;T&gt;@r</code>, even where every
+          use gives <code>T</code> a type that lives in no region: the region is dropped from the type made for that use,
+          but the parameter stays, and the caller has to pass a region it has no use for. Two ways out: check the header
+          again for each set of types and drop a region parameter nothing needs, which makes one declaration into headers
+          that differ by their types; or let a header say a region is only needed for some types, which is a new rule to
+          learn. Doing neither leaves the wart. The question to decide is whether real programs write enough of these
+          tasks for the noise to be worth a rule (see <a href="vela.html#generic-shapes">Shapes that take types</a>).</li>
         <li id="undecided-generic-kinds"><strong>Types for kinds:</strong> tasks and shapes take types today
           (<a href="#generics">Types a Declaration Takes</a>), which leaves kinds as the one declaration that can't:
           no <code>kind Result&lt;T&gt;</code> with <code>Ok(value: T)</code> and <code>Err(message: text)</code>, and no
