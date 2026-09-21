@@ -339,7 +339,7 @@
           <p>No threads, channels, async, or actors. Vela is strictly single-threaded today.</p>
         </div>
         <div class="card">
-          <h3>Text is a C string <span class="badge b-med">Medium</span></h3>
+          <h3 id="text-is-a-c-string">Text is a C string <span class="badge b-med">Medium</span></h3>
           <p><code>text</code> is currently <code>const char*</code>. <code>==</code> compares contents, but there is no length, no safe concatenation, and a <code>\0</code> ends the text early. Text now has a lifetime in its type: <code>text</code> lasts as long as the program, <code>text@r</code> is in a region (<a href="vela.html#text-in-regions">Text in a region</a>), which reading input (<a href="vela.html#input"><code>scan</code></a>) uses, and building text will need.</p>
         </div>
         <div class="card">
@@ -1261,7 +1261,7 @@ fi</pre>
     </section>
 
     <section>
-      <h2 id="methods"><span class="icon" aria-hidden="true">🧩</span> Methods: Behavior for Shapes and Kinds</h2>
+      <h2 id="methods"><span class="icon" aria-hidden="true">🧩</span> Methods: Behavior for Shapes and Kinds <span class="badge b-done">Decided</span></h2>
       <p>
         Vela keeps data and behavior apart: shapes and kinds hold data, and tasks act on it. That separation is a
         good default, but today it has real costs:
@@ -1398,7 +1398,9 @@ fi</pre>
           </div>
         </div>
         <div class="note">
-          <strong>Verdict:</strong> Convenient, but it changes what a shape is. Not a good fit.
+          <strong>Verdict:</strong> This is the one Vela took, with the second objection answered: a member is written
+          with a dot in front of it, <code>.x</code>, so nothing is in scope implicitly and a plain <code>x</code>
+          still means a variable or a task. See <a href="#methods-decided">what Vela does</a> below.
         </div>
       </div>
 
@@ -1490,54 +1492,147 @@ show(p.length_squared())</pre>
           <tbody>
             <tr><td>A. Receiver tasks</td><td>Receiver before the name</td><td>Yes</td><td>Only through <code>^</code></td><td>Partly</td></tr>
             <tr><td>B. <code>extend</code> blocks</td><td>Keyword + block + <code>self</code></td><td>Yes</td><td><code>hold self</code></td><td>Heavy</td></tr>
-            <tr><td>C. Inside the shape</td><td>Tasks in shapes</td><td>Yes</td><td>Implicit</td><td>No</td></tr>
+            <tr><td>C. Inside the shape</td><td>Tasks in shapes</td><td>Yes</td><td><code>alters</code></td><td>Chosen</td></tr>
             <tr><td>D. Uniform calls</td><td>None</td><td>No</td><td>Only through <code>^</code></td><td>Partly</td></tr>
             <tr><td>E. Qualified tasks</td><td><code>Type.</code> + <code>self</code></td><td>Yes</td><td><code>hold self</code></td><td>Best</td></tr>
           </tbody>
         </table>
       </div>
 
-      <div class="recommendation">
-        <h3>💡 Recommended Path for Vela</h3>
-        <p>Adopt <strong>qualified tasks</strong> (option E), with these rules:</p>
+      <div class="recommendation" id="methods-decided">
+        <h3>💡 What Vela Does</h3>
+        <p>
+          <strong>Methods go inside the shape or the kind</strong> (option C), with every member written after a dot.
+          The dot is what makes the option work: it answers the "is <code>x</code> a field or a variable?" objection
+          outright, and it needs no new receiver syntax, no second block, and no word before the name.
+        </p>
+        <pre>shape Counter
+    label: text
+    count: int
+
+    total() -&gt; int
+        &lt;- .count
+    fi
+
+    alters step()
+        .count = .count + 1
+        .cap()
+    fi
+
+    priv alters cap()
+        when .count &gt; 100
+            .count = 100
+        fi
+    fi
+fi
+
+hold c: Counter = Counter { label: "clicks", count: 0 }
+c.step()
+show(c.total())</pre>
         <ul>
-          <li><strong>Receivers are explicit.</strong> <code>self</code> is an immutable copy, like any parameter;
-            <code>hold self</code> may change the receiver, and its call must be on something assignable (a
-            <code>hold</code> variable, one of its fields, or <code>p^</code>). The compiler passes that place's
-            address in the generated C, but Vela code never sees a pointer, so it can't dangle.</li>
-          <li><strong>No <code>self</code> means a type-level task</strong>, called as <code>Point.origin()</code>:
-            constructors without a new concept.</li>
-          <li><strong>Kinds get methods too</strong>: <code>task Shape.area(self) -> float</code> with
-            <code>match self</code> inside, which replaces today's free <code>area(s)</code>.</li>
-          <li><strong>Names:</strong> a type's methods and fields share its namespace, so a method can't reuse a field
-            name; method names don't clash with top-level tasks or with other types' methods.</li>
-          <li><strong>No automatic dereference</strong>, as with fields: a method on a pointer's target is called as
-            <code>p^.length_squared()</code>.</li>
-          <li><strong>Regions:</strong> a method of a shape that holds pointers is generic over its receiver's region, as tasks
-            are today: <code>task Node.length(self) -&gt; int</code> works on a <code>Node@r</code> in any region, and a method
-            that allocates takes a region parameter. Settle this design before any region shortcut that uses a dot, such
-            as <code>nodes.push(list, 1)</code> (see <a href="regions.html#ideas-passing">Easier region passing</a>), since both
-            would give meaning to <code>value.name(…)</code>. A slice's built-in changes, <code>xs.add(…)</code> and
-            <code>xs.del(…)</code>, already do, and methods must keep them.</li>
+          <li><strong>Fields first, then methods.</strong> A shape's or a kind's block reads as its data and then its
+            behavior; a field after a method is refused.</li>
+          <li><strong>No <code>task</code> before a method.</strong> Inside the block, a name followed by
+            <code>(</code> is a method and a name followed by <code>:</code> is a field, so the word would say nothing.</li>
+          <li><strong>A member is written with a dot:</strong> <code>.count</code> is the field and
+            <code>.cap()</code> the method, while <code>count</code> and <code>cap()</code> still mean a variable
+            and a task. Nothing is in scope implicitly, so no rule is needed for a field and a variable of one name.</li>
+          <li><strong><code>alters</code> marks a method that changes the value</strong> it is called on. A method
+            without it that assigns a field is refused, with the fix named. Only a changeable place can call one (a
+            <code>hold</code> variable, a field of one, an item of a slice, or <code>p^</code>): a <code>bind</code>
+            value never changes, and neither does a parameter, so <code>c.step()</code> on either is refused. The
+            compiler passes the place's address in the generated C, and Vela code never sees a pointer.</li>
+          <li><strong><code>.this</code> is the whole value.</strong> A kind has no fields, so its methods read it with
+            <code>.this</code> and take it apart with <code>match .this</code>; an <code>alters</code> method of a kind
+            moves the value to another variant with <code>.this = Other</code>. A shape's methods have it too.</li>
+          <li><strong><code>@this</code> is the region the value lives in.</strong> A method may send what the value
+            holds there, <code>nameOf() -&gt; text@this</code>, and take more of it,
+            <code>alters keep(p: ^Node@this)</code>; each call works the region out from the value, so one method serves
+            every region. A method that allocates takes a region parameter, as a task does.</li>
+          <li><strong>Names:</strong> a type's fields and methods share its namespace, so a method can't reuse a field's
+            name; method names clash with nothing outside the type. A method can't be called <code>add</code>,
+            <code>del</code>, <code>copy</code>, or <code>len</code>, which every value or slice already answers to.</li>
+          <li><strong>No automatic dereference</strong>, as with fields: a method of a pointer's target is called
+            <code>p^.total()</code>.</li>
+          <li><strong><code>priv</code> marks a method</strong> only its own file may call, as it marks a field.</li>
           <li><strong>Shapes that take types:</strong> a method of <a href="vela.html#generic-shapes"><code>shape
-            Box&lt;T&gt;</code></a> names the shape without them, <code>task Box.valueOf(self) -&gt; T</code>, and
-            <code>T</code> stands for the type the receiver is given, as it does in the fields. One method is made for
-            each shape the compiler makes (<code>Box&lt;int&gt;</code>, <code>Box&lt;text&gt;</code>), as a task that
-            takes types is today, and a method may take types of its own in its own <code>&lt; &gt;</code> after the
-            name. A word the shape asks for (<code>shape Shown&lt;T: shown&gt;</code>) already holds inside every
-            method of it, so the body may rely on it without saying so again.</li>
-          <li><strong>Generated C</strong> stays collision-free: <code>vela_Point__method_length_squared(vela_Point self)</code>
-            and <code>vela_Point__method_shift(vela_Point* self, double dx)</code>.</li>
-          <li><strong>Later, interfaces</strong> can be satisfied implicitly, as in Go: a type that has the right
-            qualified tasks fits a <code>contract</code>, with no extra declaration.</li>
+            Box&lt;T&gt;</code></a> names no types of its own, and <code>T</code> in it stands for the type the value is
+            given, as it does in the fields. One method is made for each shape the compiler makes
+            (<code>Box&lt;int&gt;</code>, <code>Box&lt;text&gt;</code>), as a task that takes types is today, and a word
+            the shape asks for (<code>shape Shown&lt;T: shown&gt;</code>) holds inside every method of it, so a body may
+            rely on it without saying so again.</li>
+          <li><strong>Generated C</strong> stays collision-free: <code>vela_Counter__on__total(vela_Counter self)</code>
+            and <code>vela_Counter__on__step(vela_Counter* self)</code>.</li>
         </ul>
         <p>
-          The work is contained: the parser accepts <code>task Type.name</code> and <code>value.name(…)</code> calls,
-          the checker keeps a method table per type and checks receiver modes, and codegen mangles names and passes
-          <code>hold self</code> by address. In Vela Studio, completion after <code>p.</code> would list fields and
-          methods together.
+          What option E offered and this design does not: a task of the type itself, <code>Point.origin()</code>, and
+          methods spread across a file. Both are below, with the rest of the room this leaves. Settle any region
+          shortcut that uses a dot, such as <code>nodes.push(list, 1)</code> (see
+          <a href="regions.html#ideas-passing">Easier region passing</a>), against this design, since both give meaning
+          to <code>value.name(…)</code>; a slice's built-in changes, <code>xs.add(…)</code> and <code>xs.del(…)</code>,
+          already do, and methods keep them.
         </p>
       </div>
+
+      <h3 id="methods-later">Room to grow</h3>
+      <ul>
+        <li id="methods-on-pointers"><strong>A method written for a pointer:</strong> Go lets a receiver be
+          <code>*T</code>, so a type can have one behavior for a value and another for a pointer to it. Vela's
+          <code>alters</code> already gives a method the place it is called on, so a pointer receiver is not needed for
+          changing a value; what it would add is a method that only makes sense behind a pointer, such as one that
+          walks a list, or one that hands the pointer on. Written as
+          <code>alters ^insert(next: ^Node@this)</code>, or in a second block, <code>shape ^Node … fi</code>. The
+          question to answer first is which one <code>p^.name()</code> and <code>p.name()</code> each pick, and whether
+          a value without a pointer can call the pointer's method at all.</li>
+        <li id="methods-property"><strong><code>property</code>: a member read without <code>()</code>.</strong> A
+          method of no parameters that reads like a field, <code>property area() -&gt; float</code> read as
+          <code>c.area</code>, so a field can become computed (or the other way) without touching the code that reads
+          it. It needs a rule against work hiding behind a read: a property that allocates, reads input, or traps is a
+          surprise where a field was. Perhaps a property may only read the value's own members, never
+          <code>alters</code>, and never take a region.</li>
+        <li id="methods-derived"><strong>Members that don't recompute.</strong> A value a method works out from fields
+          that have not changed could be worked out once. Vela already does this where it counts:
+          <code>xs.len</code> is a field of the slice, read in one machine instruction, and an array's length is part of
+          its type, so it is a constant (see <a href="vela.html#slices">Slices</a>) — neither ever counts the items.
+          <span class="badge b-done">Done</span> What is left is the general case: a <code>property</code> whose answer
+          is kept until a field it reads is assigned, which needs the compiler to know which fields each property
+          reads, and an <code>alters</code> method to clear what it invalidates. Text is the one place a length would
+          still cost: <code>text</code> is a C string today, so any <code>len</code> for it must either count the
+          bytes or come with a new representation (see <a href="#text-is-a-c-string">Text is a C string</a> above).</li>
+        <li id="methods-kind-order"><strong>Moving along a kind's variants:</strong> a kind's variants are written in an
+          order, so <code>.next()</code> and <code>.prev()</code> could be there without writing them —
+          <code>alters</code> methods a kind gets for free, which move the value to the variant after or before this
+          one. The questions: what the last variant's <code>.next()</code> does (wrap around, stay, or give
+          <code>maybe</code>), what happens when a variant carries values and the next one needs different ones (only
+          variants without values could take part, or <code>.next()</code> could need them given), and whether a kind
+          opts in, since for many kinds the order is an accident of writing rather than a meaning. A first cut: a kind
+          whose variants all carry nothing gets <code>.next()</code> and <code>.prev()</code> giving
+          <code>maybe</code>, and a <code>.first</code>/<code>.last</code> of the kind itself.</li>
+        <li id="methods-of-the-type"><strong>A task of the type itself:</strong> option E's <code>Point.origin()</code>,
+          a member that makes a value rather than acting on one. Inside the block it would be a method that never
+          names <code>.this</code>, marked so the reader can tell: <code>shared origin() -&gt; Point</code>, called
+          <code>Point.origin()</code>. It would give Vela constructors without a new concept, and a home for the
+          <code>Kind.of(text)</code> kind of task. It needs a rule for the name, since <code>Point.origin</code> is
+          already how a kind's variant is written.</li>
+        <li id="methods-shown-same"><strong>Letting a shape answer <code>show</code> and <code>==</code>:</strong> today
+          only builtin types can be shown or compared, so <code>show(p)</code> and a <code>T: shown</code> task are
+          closed to every shape and kind. A method of the right name and header would open them: a
+          <code>shown() -&gt; text@this</code> makes <code>show(p)</code> work and makes the type fit
+          <code>&lt;T: shown&gt;</code>, and a <code>same(other: This) -&gt; bool</code> does the same for
+          <code>==</code>. It is also the smallest step towards interfaces, which Vela has no design for yet, since it
+          is the same question asked of one method at a time: does this type have a member of this name and header?</li>
+        <li id="methods-elsewhere"><strong>Methods from another module:</strong> a shape's block holds every method it
+          has, so a module can't add one to a type it includes. That keeps a type honest — everything it does is in one
+          place — at the cost of the "extension method" that makes a foreign type fit local code. If Vela ever wants
+          them, the rule to settle is which module's method wins where two add the same name, and whether a method
+          added elsewhere may read a <code>priv</code> field (it must not).</li>
+        <li id="methods-own-types"><strong>A method that takes types of its own:</strong> a method names no
+          <code>&lt; &gt;</code> today, so a <code>Box&lt;T&gt;</code> can't have a
+          <code>mapped&lt;U&gt;() -&gt; Box&lt;U&gt;</code>. The types a call gives would have to say which list they
+          belong to, since the value already gives the shape's: either the method's own come second,
+          <code>b.mapped&lt;text&gt;()</code> with the shape's worked out from <code>b</code>, or the two lists are
+          written apart. Worth doing once the first list is proven.</li>
+      </ul>
     </section>
 
     <section>
