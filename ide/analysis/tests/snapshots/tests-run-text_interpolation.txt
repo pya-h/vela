@@ -1,0 +1,142 @@
+  1 | # Text holding values: `"n = {n}" at r` is new text in `r`, each value turned
+    | comment:# Text holding values: `"n = {n}" at r` is new text in `r`, each value turned
+  2 | # into text as `str` does. `\{` and `\}` write braces, and text holding no
+    | comment:# into text as `str` does. `\{` and `\}` write braces, and text holding no
+  3 | # value needs no region.
+    | comment:# value needs no region.
+  5 | shape Point
+    | keyword:shape  type:Point
+  6 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  7 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  8 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+  9 |         <- "({.x}, {.y})" at r
+    | keyword:<-  string:"({  punctuation:.  field:x  string:}, {  punctuation:.  field:y  string:})"  keyword:at  region:r
+ 10 |     fi
+    | keyword:fi
+ 11 | fi
+    | keyword:fi
+ 13 | kind Light
+    | keyword:kind  type:Light
+ 14 |     Red
+    | variant:Red
+ 15 |     Green
+    | variant:Green
+ 16 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 17 |         match .this
+    | keyword:match  punctuation:.  keyword:this
+ 18 |         case Red
+    | keyword:case  variant:Red
+ 19 |             <- "red"
+    | keyword:<-  string:"red"
+ 20 |         case Green
+    | keyword:case  variant:Green
+ 21 |             <- "green"
+    | keyword:<-  string:"green"
+ 22 |         fi
+    | keyword:fi
+ 23 |     fi
+    | keyword:fi
+ 24 | fi
+    | keyword:fi
+ 26 | task twice(n: int) -> int
+    | keyword:task  task:twice  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 27 |     <- n * 2
+    | keyword:<-  parameter:n  operator:*  number:2
+ 28 | fi
+    | keyword:fi
+ 30 | task labelled<T: shown>(label: text, value: T, r: region) -> text@r
+    | keyword:task  task:labelled  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:value  punctuation::  type:T  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 31 |     <- "{label}: {value}" at r
+    | keyword:<-  string:"{  parameter:label  string:}: {  parameter:value  string:}"  keyword:at  region:r
+ 32 | fi
+    | keyword:fi
+ 34 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 35 |     region r
+    | keyword:region  region:r
+ 36 |     bind n = 5
+    | keyword:bind  variable:n  operator:=  number:5
+ 37 |     bind name = "Ada"
+    | keyword:bind  variable:name  operator:=  string:"Ada"
+ 38 |     # Every kind of value, and a value at either end or alone.
+    | comment:# Every kind of value, and a value at either end or alone.
+ 39 |     show("n = {n}" at r)
+    | builtin-fn:show  punctuation:(  string:"n = {  variable:n  string:}"  keyword:at  region:r  punctuation:)
+ 40 |     show("{n}" at r)
+    | builtin-fn:show  punctuation:(  string:"{  variable:n  string:}"  keyword:at  region:r  punctuation:)
+ 41 |     show("{n} left" at r)
+    | builtin-fn:show  punctuation:(  string:"{  variable:n  string:} left"  keyword:at  region:r  punctuation:)
+ 42 |     show("{name} has {n} cats, {twice(n)} paws" at r)
+    | builtin-fn:show  punctuation:(  string:"{  variable:name  string:} has {  variable:n  string:} cats, {  task:twice  punctuation:(  variable:n  punctuation:)  string:} paws"  keyword:at  region:r  punctuation:)
+ 43 |     show("pi is about {3.25}, big is {n > 2}, small is {n < 2}" at r)
+    | builtin-fn:show  punctuation:(  string:"pi is about {  number:3.25  string:}, big is {  variable:n  operator:>  number:2  string:}, small is {  variable:n  operator:<  number:2  string:}"  keyword:at  region:r  punctuation:)
+ 44 |     show("{-9223372036854775807 - 1}" at r)
+    | builtin-fn:show  punctuation:(  string:"{  operator:-  number:9223372036854775807  operator:-  number:1  string:}"  keyword:at  region:r  punctuation:)
+ 45 |     show("{Point { x: 1, y: -2 }} and {Light.Green}" at r)
+    | builtin-fn:show  punctuation:(  string:"{  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  operator:-  number:2  punctuation:}  string:} and {  type:Light  punctuation:.  variant:Green  string:}"  keyword:at  region:r  punctuation:)
+ 46 |     # `@r` names the region too.
+    | comment:# `@r` names the region too.
+ 47 |     show("{name}!"@r)
+    | builtin-fn:show  punctuation:(  string:"{  variable:name  string:}!"  operator:@  region:r  punctuation:)
+ 48 |     # Values that are text: literals, parts, and text holding values itself.
+    | comment:# Values that are text: literals, parts, and text holding values itself.
+ 49 |     show("[{"x"}] [{name[1..3]}] [{"{n}{n}"}]" at r)
+    | builtin-fn:show  punctuation:(  string:"[{  string:"x"  string:}] [{  variable:name  punctuation:[  number:1  operator:..  number:3  punctuation:]  string:}] [{  string:"{  variable:n  string:}{  variable:n  string:}"  string:}]"  keyword:at  region:r  punctuation:)
+ 50 |     # A plan B, a call, and a method call inside the braces.
+    | comment:# A plan B, a call, and a method call inside the braces.
+ 51 |     bind missing: maybe int = none
+    | keyword:bind  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 52 |     show("got {missing { 7 }}, {twice(twice(n))}, {Point { x: n, y: n }.str() at r}" at r)
+    | builtin-fn:show  punctuation:(  string:"got {  variable:missing  punctuation:{  number:7  punctuation:}  string:}, {  task:twice  punctuation:(  task:twice  punctuation:(  variable:n  punctuation:)  punctuation:)  string:}, {  type:Point  punctuation:{  field:x  punctuation::  variable:n  punctuation:,  field:y  punctuation::  variable:n  punctuation:}  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  string:}"  keyword:at  region:r  punctuation:)
+ 53 |     # Spaces inside the braces are not part of the text.
+    | comment:# Spaces inside the braces are not part of the text.
+ 54 |     show("a { n } b" at r)
+    | builtin-fn:show  punctuation:(  string:"a {  variable:n  string:} b"  keyword:at  region:r  punctuation:)
+ 55 |     # Braces written with escapes, with and without values.
+    | comment:# Braces written with escapes, with and without values.
+ 56 |     show("\{n\} is {n}" at r)
+    | builtin-fn:show  punctuation:(  string:"  escape:\{  string:n  escape:\}  string: is {  variable:n  string:}"  keyword:at  region:r  punctuation:)
+ 57 |     show("plain \{ brace \}")
+    | builtin-fn:show  punctuation:(  string:"plain   escape:\{  string: brace   escape:\}  string:"  punctuation:)
+ 58 |     # In a join, text holding values takes the join's region.
+    | comment:# In a join, text holding values takes the join's region.
+ 59 |     show("Hi " + "{name}!" at r)
+    | builtin-fn:show  punctuation:(  string:"Hi "  operator:+  string:"{  variable:name  string:}!"  keyword:at  region:r  punctuation:)
+ 60 |     show(("{n}" + "!")@r)
+    | builtin-fn:show  punctuation:(  punctuation:(  string:"{  variable:n  string:}"  operator:+  string:"!"  punctuation:)  operator:@  region:r  punctuation:)
+ 61 |     show("{n}" + " and " + "{n + 1}" at r)
+    | builtin-fn:show  punctuation:(  string:"{  variable:n  string:}"  operator:+  string:" and "  operator:+  string:"{  variable:n  operator:+  number:1  string:}"  keyword:at  region:r  punctuation:)
+ 62 |     # The result is text like any other.
+    | comment:# The result is text like any other.
+ 63 |     bind line = "{name}={n}" at r
+    | keyword:bind  variable:line  operator:=  string:"{  variable:name  string:}={  variable:n  string:}"  keyword:at  region:r
+ 64 |     show(line.len)
+    | builtin-fn:show  punctuation:(  variable:line  punctuation:.  field:len  punctuation:)
+ 65 |     show(line == "Ada=5")
+    | builtin-fn:show  punctuation:(  variable:line  operator:==  string:"Ada=5"  punctuation:)
+ 66 |     show("{n}" at r < "6")
+    | builtin-fn:show  punctuation:(  string:"{  variable:n  string:}"  keyword:at  region:r  punctuation:<  string:"6"  punctuation:)
+ 67 |     show(labelled("count", n, r))
+    | builtin-fn:show  punctuation:(  task:labelled  punctuation:(  string:"count"  punctuation:,  variable:n  punctuation:,  region:r  punctuation:)  punctuation:)
+ 68 |     show(labelled("name", name, r))
+    | builtin-fn:show  punctuation:(  task:labelled  punctuation:(  string:"name"  punctuation:,  variable:name  punctuation:,  region:r  punctuation:)  punctuation:)
+ 69 |     # Text in another region, kept in `r`.
+    | comment:# Text in another region, kept in `r`.
+ 70 |     region q
+    | keyword:region  region:q
+ 71 |     bind other = "{n * 10}" at q
+    | keyword:bind  variable:other  operator:=  string:"{  variable:n  operator:*  number:10  string:}"  keyword:at  region:q
+ 72 |     bind kept = "kept {other}" at r
+    | keyword:bind  variable:kept  operator:=  string:"kept {  variable:other  string:}"  keyword:at  region:r
+ 73 |     show(kept)
+    | builtin-fn:show  punctuation:(  variable:kept  punctuation:)
+ 74 |     # Multi-byte characters around and inside values.
+    | comment:# Multi-byte characters around and inside values.
+ 75 |     show("café {"é"} ☕ {n}" at r)
+    | builtin-fn:show  punctuation:(  string:"café {  string:"é"  string:} ☕ {  variable:n  string:}"  keyword:at  region:r  punctuation:)
+ 76 | fi
+    | keyword:fi

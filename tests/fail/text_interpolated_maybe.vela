@@ -1,0 +1,7 @@
+# error: 6:16: type maybe int can't be turned into text; extract its value first, as in 'when x is {value}'
+task main()
+    region r
+    bind n = 5
+    bind m: maybe int = none
+    show("m = {m}" at r)
+fi

@@ -1,4 +1,5 @@
-//! Text in the editor: its length, `t.len`, and its parts, `t[a..b]`, with
+//! Text in the editor: its length, `t.len`, its parts, `t[a..b]`, joins,
+//! `str`, and text holding values, `"n = {n}" at r`, with
 //! the compiler's types and with the types read from the declarations while
 //! the file doesn't check. In the sources below, `@@` marks the cursor.
 
@@ -39,6 +40,8 @@ task main()
     bind given = count.str(r)
     bind cast = text(count)@r
     bind point = Point { x: 1 }.str() at r
+    bind said = \"{name} is {count}\" at r
+    bind shouted = \"{name}!\"@r
     @@
 fi
 ";
@@ -163,4 +166,56 @@ fn numbers_bools_and_text_complete_str() {
     let at = source.find("count.str").unwrap() + "count.".len();
     let hover = Analysis::new(&source).hover(LineIndex::new(&source).utf16_of(at)).unwrap();
     assert_eq!(hover.code, "str() at r or str(r) -> text@r");
+}
+
+#[test]
+fn text_holding_values_is_text_of_its_region_whether_or_not_the_file_checks() {
+    for checks in [true, false] {
+        let source = program(checks, "show(0)");
+        let when = if checks { "checked" } else { "declared" };
+        assert_eq!(hover(&source, "said =").0, "bind said: text@r", "{}", when);
+        assert_eq!(hover(&source, "shouted =").0, "bind shouted: text@r", "{}", when);
+    }
+}
+
+#[test]
+fn names_inside_braces_are_names_like_any() {
+    let source = program(true, "show(0)");
+    let analysis = Analysis::new(&source);
+    let index = LineIndex::new(&source);
+    let inside = source.find("{count}").unwrap() + 1;
+    assert_eq!(hover(&source, "count}\" at").0, "bind count: int");
+    let target = analysis.definition(index.utf16_of(inside)).expect("a definition");
+    assert_eq!(index.byte_of_utf16(target.from), source.find("count =").unwrap());
+    // The text around the values is text, braces and all; the values are code.
+    let line = source.find("\"{name} is").unwrap();
+    let classes: Vec<(&str, String)> = analysis
+        .tokens()
+        .into_iter()
+        .filter(|t| index.byte_of_utf16(t.from) >= line && index.byte_of_utf16(t.to) <= line + "\"{name} is {count}\"".len())
+        .map(|t| (&source[index.byte_of_utf16(t.from)..index.byte_of_utf16(t.to)], format!("{:?}", t.class)))
+        .collect();
+    let classes: Vec<(&str, &str)> = classes.iter().map(|(text, class)| (*text, class.as_str())).collect();
+    assert_eq!(classes, [("\"{", "String"), ("name", "Variable"), ("} is {", "String"), ("count", "Variable"), ("}\"", "String")]);
+}
+
+#[test]
+fn names_complete_inside_braces_and_not_in_the_text_around_them() {
+    for checks in [true, false] {
+        let when = if checks { "checked" } else { "declared" };
+        let items = completions(&program(checks, "show(\"n = {co@@}\" at r)"));
+        assert!(items.iter().any(|item| item.label == "count"), "{}: {:?}", when, items);
+        let items = completions(&program(checks, "show(\"{name.@@}\" at r)"));
+        let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(labels, ["len", "str", "copy"], "{}", when);
+        assert_eq!(completions(&program(checks, "show(\"co@@ {count}\" at r)")), Vec::new(), "{}", when);
+        assert_eq!(completions(&program(checks, "show(\"{count} co@@\" at r)")), Vec::new(), "{}", when);
+    }
+}
+
+#[test]
+fn text_holding_values_without_a_region_says_how_to_name_one() {
+    let source = "task main()\n    bind n = 1\n    show(\"n = {n}\")\nfi\n";
+    let messages: Vec<String> = Analysis::new(source).diagnostics().into_iter().map(|d| d.message).collect();
+    assert_eq!(messages, ["text holding values is new text, so it names the region it goes in, as in '\"n = {n}\" at r' or '\"n = {n}\"@r'"]);
 }

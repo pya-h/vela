@@ -272,6 +272,7 @@ true false none  fi   maybe is     fail include priv</pre>
         <tr><td><code>t[a..b]</code>, <code>t.len</code></td><td>a part of text, the same bytes (see <a href="#text-parts">Parts of text</a>); how many bytes it has</td></tr>
         <tr><td><code>a + b at r</code>, <code>(a + b)@r</code></td><td>text joined into new text in region <code>r</code> (see <a href="#joining">Joining text</a>)</td></tr>
         <tr><td><code>x.str() at r</code>, <code>x.str(r)</code>, <code>text(x) at r</code></td><td>a value as text in region <code>r</code> (see <a href="#str">Values as text</a>)</td></tr>
+        <tr><td><code>"n = {n}" at r</code>, <code>"n = {n}"@r</code></td><td>text holding values, in region <code>r</code>; <code>\{</code> and <code>\}</code> write braces (see <a href="#interpolation">Text holding values</a>)</td></tr>
         <tr><td><code>xs.add(v)</code>, <code>xs.add(i, v)</code>, <code>xs.del(i)</code>, <code>xs.del()</code></td><td>add a value to a slice, last or before item <code>i</code>; take item <code>i</code>, or the last, out of it and give it</td></tr>
         <tr><td><code>x.copy()</code>, <code>x.copy() at r</code></td><td>a copy of a value in the region where it goes, or in <code>r</code> (also <code>x.copy()@r</code>; see <a href="#copy">Copying into another region</a>)</td></tr>
         <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, or variant of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
@@ -532,7 +533,8 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
       <h3>Text, Output, Input, and Logic</h3>
       <p>
         Text literals use double quotes and support the escapes <code>\n</code>, <code>\t</code>, <code>\r</code>,
-        <code>\\</code>, <code>\"</code>, and <code>\0</code>. A <code>#</code> starts a comment that runs to the end
+        <code>\\</code>, <code>\"</code>, <code>\0</code>, and <code>\{</code> and <code>\}</code> for braces, since a
+        brace in text holds a value (see <a href="#interpolation">Text holding values</a>). A <code>#</code> starts a comment that runs to the end
         of the line. A text literal ends on the line it starts (a line break in it is written <code>\n</code>). Text holds
         any UTF-8 and knows how long it is: <code>t.len</code> is how many bytes it has, read without counting them.
         A character outside ASCII takes more than one byte (<code>"é".len</code> is 2, <code>"Ada".len</code> is 3), and a
@@ -619,7 +621,8 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         comes after the last part of a chain, <code>first + " " + last at r</code>, or after parentheses,
         <code>(first + " " + last)@r</code>; the parts may be text of any regions, or text that lasts. <code>+</code> on text
         without a region is an error that says to name one (<code>joining text makes new text, which goes in a region …</code>),
-        and <code>+</code> joins only text: <code>"n = " + 5 at r</code> is an error.
+        and <code>+</code> joins only text: <code>"n = " + 5 at r</code> is an error. Text that mixes in values reads better
+        written as <a href="#interpolation">text holding values</a>, <code>"n = {n}" at r</code>.
       </p>
       <pre><span class="keyword">task</span> full_name(first: text, last: text, r: region) -&gt; text@r
     <span class="keyword">&lt;-</span> first + <span class="string">" "</span> + last <span class="keyword">at</span> r
@@ -667,6 +670,36 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
     <span class="keyword">bind</span> p = Point { x: <span class="number">3</span>, y: <span class="number">-4</span> }
     show(<span class="string">"p = "</span> + p.str(r) <span class="keyword">at</span> r)                  <span class="comment"># p = (3, -4)</span>
     show(<span class="string">"n = "</span> + <span class="number">5</span> <span class="keyword">at</span> r)                        <span class="comment"># error: '+' joins text, but this value is int; turn it into text first …</span>
+<span class="keyword">fi</span></pre>
+      <p id="interpolation">
+        <strong>Text holding values.</strong> A value in braces inside text, <code>"n = {n}" at r</code>, is turned into
+        text as <code>n.str()</code> does and put in its place: <code>"{name} is {age}" at r</code> is new text in
+        <code>r</code>, so it names its region as a join does, after the text (<code>"…" at r</code>) or with
+        <code>@</code> (<code>"…"@r</code>). The braces may hold any value that has <code>str</code>: a name, a call,
+        arithmetic, a field, a plan B, even text holding values of its own (<code>"{f("x")}"</code>); spaces inside them
+        don't count. A value without <code>str</code> is the same error as its <code>str</code> would be. Text holding no
+        value is a literal as always and needs no region, and <code>\{</code> and <code>\}</code> write braces. In a join
+        the text takes the join's region: <code>"Dear " + "{name}," at r</code>. Written without a region, it is an error
+        that says to name one (<code>text holding values is new text, so it names the region it goes in …</code>); so are
+        an unclosed <code>{</code>, a <code>}</code> alone, and empty braces, each saying how to write a brace instead.
+      </p>
+      <pre><span class="keyword">shape</span> Point
+    x: int
+    y: int
+    str(r: <span class="keyword">region</span>) -&gt; text@r
+        <span class="keyword">&lt;-</span> <span class="string">"({.x}, {.y})"</span> <span class="keyword">at</span> r
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">bind</span> name = <span class="string">"Ada"</span>
+    <span class="keyword">bind</span> n = <span class="number">3</span>
+    show(<span class="string">"{name} has {n} cats"</span> <span class="keyword">at</span> r)             <span class="comment"># Ada has 3 cats</span>
+    show(<span class="string">"{n} * 2 = {n * 2}, big: {n &gt; 2}"</span>@r)     <span class="comment"># 3 * 2 = 6, big: true</span>
+    show(<span class="string">"at {Point { x: n, y: -n }}"</span> <span class="keyword">at</span> r)       <span class="comment"># at (3, -3), from Point's str</span>
+    show(<span class="string">"\{name\} is {name[0..1]}…"</span> <span class="keyword">at</span> r)          <span class="comment"># {name} is A…</span>
+    show(<span class="string">"n = {n}"</span>)                             <span class="comment"># error: text holding values is new text, so it names the region it goes in …</span>
 <span class="keyword">fi</span></pre>
       <pre><span class="comment"># greet the user</span>
 show(<span class="string">"say \"hi\""</span>)       <span class="comment"># say "hi"</span>

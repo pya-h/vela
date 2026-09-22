@@ -1,0 +1,6 @@
+# error: 5:18: arithmetic requires numeric operands
+task main()
+    region r
+    bind n = 5
+    show("n = {n + true}" at r)
+fi

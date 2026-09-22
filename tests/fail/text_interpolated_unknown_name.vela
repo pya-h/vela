@@ -1,0 +1,6 @@
+# error: 5:16: unknown variable 'count'
+task main()
+    region r
+    bind n = 5
+    show("n = {count}" at r)
+fi

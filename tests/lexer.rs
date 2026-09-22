@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use vela::ast::{BUILTIN_TYPES, Span, Type};
 use vela::error::Error;
-use vela::lexer::{self, KEYWORDS, LexKind, LexToken, Lexer, Token, highlight};
+use vela::lexer::{self, KEYWORDS, LexKind, LexToken, Lexer, Piece, Token, highlight};
 
 fn vela_files(dir: &str) -> Vec<PathBuf> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(dir);
@@ -119,6 +119,8 @@ fn agrees_with_the_compiler_on_malformed_input() {
         "task main()\n    show(\"unterminated)\nfi\n", "\"bad \\q then\nunterminated",
         "x\r\ny", "# comment\r\nfi", "\"a\\\r\nb\"", "\u{feff}task", "1.", "1..5", "a && b", "!x",
         "1__000", "1_", "1_000abc", "_", "a _ b", "{_}", "_é", "__", "case _\n", "^Node@r", "new@r int(1) in r", "@", "region",
+        "\"{", "\"{\"", "\"{n\"", "\"{n\" at r)\nfi", "\"{}\"", "\"}\"", "\"{n # c}\"", "\"{\"{n}\"}\"", "\"\\{\\}\"",
+        "\"{x {0}}\"", "\"{\"a\nb", "\"{n!}\" x", "\"a {\"b} c\"", "\"{n}\r\n\"", "\"{é}\"", "\"{{n}}\"",
     ];
     for source in cases {
         check_agreement(source, &format!("{:?}", source));
@@ -307,4 +309,77 @@ fn common_mistakes_get_hints() {
     // Floats are described as Vela writes them.
     assert_eq!(Token::Float(1e20).describe(), "float 100000000000000000000.0");
     assert_eq!(Token::Float(2.5).describe(), "float 2.5");
+}
+
+/// The pieces of text holding values: its text, and for each value the
+/// tokens between its braces.
+fn pieces(source: &str) -> Vec<(bool, String)> {
+    let first = highlight(source).into_iter().next().unwrap();
+    let LexKind::Token(Token::Interpolated(pieces)) = first.kind else { panic!("{:?}: {:?}", source, first.kind) };
+    pieces
+        .into_iter()
+        .map(|piece| match piece {
+            Piece::Text(text) => (false, text),
+            Piece::Value { tokens, .. } => (true, tokens.iter().map(|t| &source[t.range.clone()]).collect::<Vec<_>>().join(" ")),
+        })
+        .collect()
+}
+
+#[test]
+fn text_holding_values_is_split_into_its_pieces() {
+    let text = |s: &str| (false, s.to_string());
+    let value = |s: &str| (true, s.to_string());
+    assert_eq!(pieces("\"n = {n}!\""), [text("n = "), value("n"), text("!")]);
+    assert_eq!(pieces("\"{a}{b}\""), [value("a"), value("b")]);
+    // Escapes are read in the text; `\{` and `\}` are braces.
+    assert_eq!(pieces("\"\\{{n}\\}\\n\""), [text("{"), value("n"), text("}\n")]);
+    // A value may hold text, even text holding values, and a plan B's braces.
+    assert_eq!(pieces("\"{f(\"x\")} {\"{n}\"}\""), [value("f ( \"x\" )"), text(" "), value("\"{n}\"")]);
+    assert_eq!(pieces("\"{m { 0 }}\""), [value("m { 0 }")]);
+    // Text without values stays a plain literal.
+    assert_eq!(kinds("\"\\{ \\}\""), [token(Token::Text("{ }".into())), token(Token::Eof)]);
+}
+
+#[test]
+fn a_value_s_tokens_have_their_places_in_the_file() {
+    let tokens = highlight("x = \"a {bc + 1}\"");
+    let LexKind::Token(Token::Interpolated(pieces)) = &tokens[2].kind else { panic!("{:?}", tokens[2]) };
+    let Some(Piece::Value { open, tokens: inside, close }) = pieces.get(1) else { panic!("{:?}", pieces) };
+    assert_eq!((open.range.clone(), open.start), (7..8, Span::new(1, 8)));
+    assert_eq!((inside[0].range.clone(), inside[0].start), (8..10, Span::new(1, 9)));
+    assert_eq!((inside[2].range.clone(), inside[2].start), (13..14, Span::new(1, 14)));
+    assert_eq!((close.range.clone(), close.start), (14..15, Span::new(1, 15)));
+    assert_eq!(tokens[2].range, 4..16);
+}
+
+const UNCLOSED_VALUE: &str = "a '{' in text opens a value, which ends with '}' on the same line; to write a brace, write '\\{'";
+
+#[test]
+fn braces_in_text_that_hold_no_value_are_errors() {
+    assert_eq!(kinds("\"n = {n\"")[0], invalid(1, 6, UNCLOSED_VALUE));
+    // The quote meant to end the text starts text inside the value; the brace is still what is missing.
+    assert_eq!(kinds("\"n = {n\" at r)")[0], invalid(1, 6, UNCLOSED_VALUE));
+    assert_eq!(kinds("\"a {} b\"")[0], invalid(1, 4, "'{}' in text holds no value; put one inside, as in '{n}', or write a brace as '\\{'"));
+    assert_eq!(kinds("\"a } b\"")[0], invalid(1, 4, "a '}' in text closes a value opened with '{'; to write a brace, write '\\}'"));
+    assert_eq!(kinds("\"{n # note}\"")[0], invalid(1, 5, "a value in text can't hold a comment"));
+    // An error inside a value is the literal's error.
+    assert_eq!(kinds("\"{n!}\"")[0], invalid(1, 4, "unexpected '!'; Vela negates with 'not'"));
+    // The literal ends with its line, and the next line lexes as usual.
+    let tokens = kinds("show(\"{n)\nfi\n");
+    assert_eq!(tokens[2], invalid(1, 7, UNCLOSED_VALUE));
+    assert_eq!(tokens[3..], [token(Token::Newline), token(Token::Fi), token(Token::Newline), token(Token::Eof)]);
+}
+
+#[test]
+fn values_nested_too_deeply_are_an_error_not_a_crash() {
+    let deep = |levels: usize| format!("{}n{}", "\"{".repeat(levels), "}\"".repeat(levels));
+    // Lexed on a small stack, like the threads Vela Studio lexes on.
+    let run = move || {
+        assert!(matches!(kinds(&deep(32))[0], LexKind::Token(Token::Interpolated(_))));
+        for levels in [33, 5000] {
+            let LexKind::Invalid(error) = &kinds(&deep(levels))[0] else { panic!("{} levels", levels) };
+            assert_eq!(error.message, "text holds values nested too deeply");
+        }
+    };
+    std::thread::Builder::new().stack_size(1 << 20).spawn(run).unwrap().join().unwrap();
 }

@@ -75,6 +75,11 @@ describe("plan B braces", () => {
     expect(indentOfLast('task main()\n    show("use { # like this")\n')).toBe(4);
     expect(indentOfLast('task main()\n    show("\\" {")\n')).toBe(4);
     expect(indentOfLast('task main()\n    bind n = m {  # "quoted" {\n')).toBe(8);
+    // Values in a string may hold strings, and braces, of their own.
+    expect(indentOfLast('task main()\n    bind n = m("{"#"}") {\n')).toBe(8);
+    expect(indentOfLast('task main()\n    bind n = m("{k { 0 }} {f("}")}") {\n')).toBe(8);
+    expect(indentOfLast('task main()\n    show("{n} {")\n')).toBe(4);
+    expect(indentOfLast('task main()\n    show("\\{ {n}")\n')).toBe(4);
     expect(indentOfLast("task main()\n    bind n = m {\n        show(1)  # uses {\n        0\n        }")).toBe(4);
     // A line closing one plan B and opening another.
     expect(indentOfLast("task main()\n    bind x = a {\n        0\n    } + b {\n")).toBe(8);

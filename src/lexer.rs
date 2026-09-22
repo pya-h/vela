@@ -8,6 +8,8 @@ pub enum Token {
     Int(i64),
     Float(f64),
     Text(String),
+    /// Text holding values, `"n = {n}"`: its pieces in order.
+    Interpolated(Vec<Piece>),
     True,
     False,
     None,
@@ -125,7 +127,23 @@ pub const ESCAPES: &[(char, char)] = &[
     ('\\', '\\'),
     ('"', '"'),
     ('0', '\0'),
+    ('{', '{'),
+    ('}', '}'),
 ];
+
+/// How deeply text may hold values holding text holding values: each level
+/// is lexed inside the one around it, so without a limit the lexer's own
+/// recursion could overflow the stack (see `parser::MAX_NESTING`).
+const MAX_TEXT_NESTING: usize = 32;
+
+/// A piece of text holding values (`Token::Interpolated`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Piece {
+    /// Text as written, its escapes read.
+    Text(String),
+    /// A value, `{…}`: its tokens, between its `{` and its `}`.
+    Value { open: Box<LexToken>, tokens: Vec<LexToken>, close: Box<LexToken> },
+}
 
 impl Token {
     /// Whether the token can be part of a type written inside the `< … >` of the
@@ -160,7 +178,7 @@ impl Token {
         let symbol = match self {
             Token::Int(n) => return format!("integer {}", n),
             Token::Float(n) => return format!("float {}", float_text(*n)),
-            Token::Text(_) => return "text literal".to_string(),
+            Token::Text(_) | Token::Interpolated(_) => return "text literal".to_string(),
             Token::Ident(s) => return format!("identifier '{}'", s),
             Token::Newline => return "end of line".to_string(),
             Token::Eof => return "end of file".to_string(),
@@ -257,6 +275,11 @@ pub struct Lexer {
     col: usize,
     /// The file the source is, for the positions of its tokens (see `Span::file`).
     file: usize,
+    /// How many values in text the lexer is inside (see `MAX_TEXT_NESTING`).
+    nesting: usize,
+    /// Whether the text being read holds values nested too deeply, the error
+    /// reported for it whatever else is wrong.
+    too_deep: bool,
 }
 
 /// A saved lexer position, for backing up.
@@ -281,6 +304,8 @@ impl Lexer {
             line: 1,
             col: 1,
             file: 0,
+            nesting: 0,
+            too_deep: false,
         }
     }
 
@@ -607,13 +632,17 @@ impl Lexer {
         }
     }
 
-    /// A text literal. An invalid one is still read up to its closing quote,
-    /// reporting its first bad escape. One whose line ends before its closing
-    /// quote is an error; as a token it ends with its line, so the lines after
-    /// it are lexed normally.
+    /// A text literal, which may hold values (`"n = {n}"`). An invalid one is
+    /// still read up to its closing quote, reporting its first error. One whose
+    /// line ends before its closing quote is an error; as a token it ends with
+    /// its line, so the lines after it are lexed normally.
     fn string(&mut self, loc: Span) -> LexKind {
         self.advance(); // opening "
+        if self.nesting == 0 {
+            self.too_deep = false;
+        }
         let mut s = String::new();
+        let mut pieces = Vec::new();
         let mut error = None;
         // Where the literal's first line ends, in case it is unterminated.
         let mut line_end = None;
@@ -623,8 +652,38 @@ impl Lexer {
                     self.advance();
                     return match error {
                         Some(error) => LexKind::Invalid(error),
-                        None => LexKind::Token(Token::Text(s)),
+                        None if pieces.is_empty() => LexKind::Token(Token::Text(s)),
+                        None => {
+                            if !s.is_empty() {
+                                pieces.push(Piece::Text(s));
+                            }
+                            LexKind::Token(Token::Interpolated(pieces))
+                        }
                     };
+                }
+                '{' if self.nesting >= MAX_TEXT_NESTING => {
+                    self.too_deep = true;
+                    error.get_or_insert(Error::at(self.location(), "text holds values nested too deeply"));
+                    while !self.at_end() && !self.at_line_end() {
+                        self.advance();
+                    }
+                }
+                '{' => {
+                    if !s.is_empty() {
+                        pieces.push(Piece::Text(std::mem::take(&mut s)));
+                    }
+                    self.nesting += 1;
+                    let value = self.value(&mut error);
+                    self.nesting -= 1;
+                    match value {
+                        Some(value) => pieces.push(value),
+                        None => break, // the line ended inside the value
+                    }
+                }
+                '}' => {
+                    let at = self.location();
+                    self.advance();
+                    error.get_or_insert(Error::at(at, "a '}' in text closes a value opened with '{'; to write a brace, write '\\}'"));
                 }
                 '\\' => {
                     let escape_loc = self.location();
@@ -668,6 +727,56 @@ impl Lexer {
             self.reset(mark);
         }
         LexKind::Invalid(error.unwrap_or_else(|| Error::at(loc, "text isn't closed on its line; end it with '\"' (a line break in text is written '\\n')")))
+    }
+
+    /// A value in text, `{…}`, with the cursor at its `{`: its tokens, up to the
+    /// `}` that closes it (the braces of a plan B inside it pair up). Records
+    /// its first error in `error`, and returns `None` when the line ends first.
+    fn value(&mut self, error: &mut Option<Error>) -> Option<Piece> {
+        let open = self.next_item();
+        let mut tokens = Vec::new();
+        let mut depth = 0usize;
+        // An error inside a value the line ends in is most likely from the
+        // missing `}` (`"n = {n" at r` reads `" at r)` as text), so that is
+        // reported instead.
+        let erred_before = error.is_some();
+        loop {
+            self.skip_whitespace();
+            if self.at_end() || self.at_line_end() {
+                if !erred_before && !self.too_deep {
+                    *error = None;
+                }
+                error.get_or_insert(Error::at(
+                    open.start,
+                    "a '{' in text opens a value, which ends with '}' on the same line; to write a brace, write '\\{'",
+                ));
+                return None;
+            }
+            if self.peek() == '#' {
+                error.get_or_insert(Error::at(self.location(), "a value in text can't hold a comment"));
+                self.advance();
+                continue;
+            }
+            let token = self.next_item();
+            match &token.kind {
+                LexKind::Token(Token::LBrace) => depth += 1,
+                LexKind::Token(Token::RBrace) if depth == 0 => {
+                    if tokens.is_empty() {
+                        error.get_or_insert(Error::at(
+                            open.start,
+                            "'{}' in text holds no value; put one inside, as in '{n}', or write a brace as '\\{'",
+                        ));
+                    }
+                    return Some(Piece::Value { open: Box::new(open), tokens, close: Box::new(token) });
+                }
+                LexKind::Token(Token::RBrace) => depth -= 1,
+                LexKind::Invalid(invalid) => {
+                    error.get_or_insert(invalid.clone());
+                }
+                _ => {}
+            }
+            tokens.push(token);
+        }
     }
 }
 

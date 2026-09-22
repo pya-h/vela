@@ -713,8 +713,8 @@ false</pre>
         <code>chosen</code> is a <code>text</code>. A task that reads text of a region names one, as it would for a pointer:
         <code>describe</code> takes a <code>Status@r</code> and sends a <code>text@r</code>, and still takes
         <code>Status.Todo</code>, whose text lasts. Text read with <code>scan("…") at r</code> is new text, so it is in the
-        region <code>scan</code> names, and so is text joined with <code>a + b at r</code> or made from a value with
-        <code>n.str() at r</code>; a part of text,
+        region <code>scan</code> names, and so is text joined with <code>a + b at r</code>, made from a value with
+        <code>n.str() at r</code>, or holding values, <code>"{name} is {age}" at r</code>; a part of text,
         <code>t[a..b]</code>, is the same bytes, so it stays in the region the text is in. A shape or kind holding text but no pointers may name a region or not:
         <code>Person</code> holds text that lasts, <code>Person@r</code> text in <code>r</code>.
       </p>

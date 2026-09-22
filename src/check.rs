@@ -3049,9 +3049,17 @@ impl Checker {
         Ok(Type::Maybe(Box::new(Type::Text(Some(region.to_string())))))
     }
 
-    /// Checks `a + b at region`, text joined into `region`, and returns its type,
+    /// Checks `a + b at region` or `"n = {n}" at region`, text joined into
+    /// `region`, and returns its type,
     /// `text@region`. Every part is text, of any region or lasting.
     fn check_join(&mut self, parts: &mut [Expr], region: &str, region_span: Span) -> Result<Type> {
+        // Text holding values that no `at r` followed (see `Parser::parse_interpolated`).
+        if region.is_empty() {
+            return err(
+                region_span,
+                "text holding values is new text, so it names the region it goes in, as in '\"n = {n}\" at r' or '\"n = {n}\"@r'",
+            );
+        }
         let mut numbers = true;
         let mut other = None;
         for part in parts.iter_mut() {

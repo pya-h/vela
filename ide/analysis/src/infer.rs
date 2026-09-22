@@ -572,6 +572,10 @@ impl<'a> Knowledge<'a> {
                         None => ty,
                     });
                 }
+                // `"n = {n}" at r` or `"n = {n}"@r`: text holding values, in `r`.
+                if matches!(self.token_before(q), Some(Token::At | Token::AtSign)) && q >= 2 && self.closes_values(q - 2) {
+                    return Some(Type::Text(Some(name.to_string())));
+                }
                 // `new T(v) at r`: a pointer into `r`, or a slice for `new [T](…) at r`;
                 // `scan(…) at r` or `scan(…)@r`: a line in `r`.
                 if matches!(self.token_before(q), Some(Token::At | Token::AtSign)) && q >= 2 && self.token(q - 2) == Some(&Token::RParen) {
@@ -778,7 +782,7 @@ impl<'a> Knowledge<'a> {
         if let (Some(at), Some(region)) = (last.checked_sub(1), self.ident(last))
             && self.token(at) == Some(&Token::At)
             && at > first
-            && self.joins(first, at - 1)
+            && (self.joins(first, at - 1) || self.closes_values(at - 1))
         {
             return Some(Type::Text(Some(region.to_string())));
         }
@@ -837,6 +841,12 @@ impl<'a> Knowledge<'a> {
             }
         }
         false
+    }
+
+    /// Whether the token at `p` is the last piece of text holding values, from
+    /// its last value's `}` to its closing quote (see `scan::spread`).
+    fn closes_values(&self, p: usize) -> bool {
+        matches!(self.token(p), Some(Token::Text(_))) && self.source.get(self.range(p)).is_some_and(|text| text.starts_with('}'))
     }
 
     /// The type a call of the task with signature `detail` gives, where its

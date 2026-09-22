@@ -18,7 +18,7 @@ use std::path::Path;
 
 use serde::Serialize;
 use vela::ast::{ALTERS, BUILTIN_TASKS, MODULE_SEPARATOR, Span, THIS_WORD, Type, unqualified};
-use vela::lexer::{ESCAPES, LexKind, LexToken, Token, highlight};
+use vela::lexer::{ESCAPES, LexKind, LexToken, Piece, Token, highlight};
 
 use crate::types::{Context, slashed};
 
@@ -173,13 +173,43 @@ pub(crate) struct Scan {
 /// shape of `a`, when the checker knows it. `context` gives the file's path
 /// and the other files it may include.
 pub(crate) fn scan(source: &str, field_accesses: &HashMap<(usize, usize), String>, context: Context) -> Scan {
-    let lexed = highlight(source);
+    let lexed = spread(highlight(source));
     let tokens = Tokens::new(source, &lexed);
     let (mut symbols, mut declared_at, includes) = declarations(&tokens);
     let (modules, imports) = included_modules(&mut symbols, &mut declared_at, &includes, context);
     let classified = Classifier::new(&tokens, symbols, declared_at, field_accesses, imports.clone()).run();
     let (symbols, tokens) = classified;
     Scan { lexed, symbols, tokens, modules, imports }
+}
+
+/// `lexed` with each text holding values spread into its pieces: its text as
+/// text tokens, each taking the braces next to it, and each value's own tokens
+/// between them, so the analysis sees the names in a value as it sees any.
+pub(crate) fn spread(lexed: Vec<LexToken>) -> Vec<LexToken> {
+    let mut out = Vec::with_capacity(lexed.len());
+    for token in lexed {
+        spread_into(token, &mut out);
+    }
+    out
+}
+
+fn spread_into(token: LexToken, out: &mut Vec<LexToken>) {
+    let LexKind::Token(Token::Interpolated(pieces)) = token.kind else {
+        out.push(token);
+        return;
+    };
+    let text = |start, end, range| LexToken { kind: LexKind::Token(Token::Text(String::new())), start, end, range };
+    // Where the text before the next value starts.
+    let (mut start, mut from) = (token.start, token.range.start);
+    for piece in pieces {
+        let Piece::Value { open, tokens, close } = piece else { continue };
+        out.push(text(start, open.end, from..open.range.end));
+        for inner in tokens {
+            spread_into(inner, out);
+        }
+        (start, from) = (close.start, close.range.start);
+    }
+    out.push(text(start, token.end, from..token.range.end));
 }
 
 /// An `include` line found by the first pass.
@@ -239,7 +269,7 @@ fn included_modules(
         // Each declaration of the module by its own name.
         let mut declared: HashMap<String, usize> = HashMap::new();
         if let Some(source) = &source {
-            let lexed = highlight(source);
+            let lexed = spread(highlight(source));
             let tokens = Tokens::new(source, &lexed);
             let (theirs, _, _) = declarations(&tokens);
             let listed = |written: &str| line.names.iter().find(|n| n.name == written);

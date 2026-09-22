@@ -1,0 +1,5 @@
+# error: 4:8: expected type text, got text@r; this text is in region 'r', and text here must last as long as the program, as a literal does
+task f() -> text
+    region r
+    <- "{1}" at r
+fi

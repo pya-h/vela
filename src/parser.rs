@@ -1,6 +1,6 @@
 use crate::ast::*;
 use crate::error::{Error, Result};
-use crate::lexer::{KEYWORDS, Token};
+use crate::lexer::{KEYWORDS, LexKind, LexToken, Piece, Token};
 
 /// How deeply code may nest: parentheses, operators in a row, unary
 /// operators, `^` in types, and blocks inside blocks each add a level. Every
@@ -262,6 +262,7 @@ impl Parser {
                         | Token::Int(_)
                         | Token::Float(_)
                         | Token::Text(_)
+                        | Token::Interpolated(_)
                         | Token::True
                         | Token::False
                         | Token::None
@@ -1186,6 +1187,7 @@ impl Parser {
                 | Token::Int(_)
                 | Token::Float(_)
                 | Token::Text(_)
+                | Token::Interpolated(_)
                 | Token::Ident(_)
                 | Token::True
                 | Token::False
@@ -1528,16 +1530,33 @@ impl Parser {
     /// Precedence of `..`: between comparisons and `+`/`-`.
     const RANGE_PRECEDENCE: u8 = 5;
 
+    /// Precedence of `+`, whose chains `at r` joins.
+    const ADD_PRECEDENCE: u8 = 6;
+
     /// Parses operators of precedence `min` or higher by precedence climbing,
     /// left-associative, with each node's span at its operator. `a..b` takes one
     /// `..` (`a..b..c` is not a range). Climbing keeps the recursion per
     /// parenthesis shallow, which matters for `MAX_NESTING`.
     fn parse_binary(&mut self, min: u8) -> Result<Expr> {
-        let mut left = self.parse_unary()?;
+        let left = self.parse_unary()?;
+        self.parse_operators(left, min)
+    }
+
+    /// The operators of precedence `min` or higher after `left`, the first
+    /// operand `parse_binary` read. (A function of its own: `parse_binary`'s
+    /// frame is on the stack once per nesting level, and a debug build gives a
+    /// frame room for everything its function could hold at once.)
+    fn parse_operators(&mut self, mut left: Expr, min: u8) -> Result<Expr> {
         // Each operator deepens the tree by one level, like a parenthesis.
         let mut levels = 0;
         let mut ranged = false;
         loop {
+            // `a + b at r` or `"n = {n}" at r`: the `+` chain or the text holding
+            // values just read is joined into `r`. The right operand of a `+`
+            // leaves its `at` to the whole chain.
+            if self.check(Token::At) && min <= Self::ADD_PRECEDENCE && joins(&left) {
+                left = self.parse_join(left)?;
+            }
             let span = self.peek_span();
             if self.check(Token::Range) && min <= Self::RANGE_PRECEDENCE && !ranged {
                 self.enter()?;
@@ -1561,17 +1580,15 @@ impl Parser {
             self.advance();
             let right = self.parse_binary(precedence + 1)?;
             left = Expr::new(ExprKind::Binary(op, Box::new(left), Box::new(right)), span);
-            // `a + b at r`: the `+` chain just read joins text into `r`.
-            if self.check(Token::At) && matches!(left.kind, ExprKind::Binary(BinaryOp::Add, ..)) {
-                left = self.parse_join(left)?;
-            }
         }
         self.leave(levels);
         Ok(left)
     }
 
-    /// `a + b + c at r`, or `(a + b)@r`, with `chain` the `+` chain read and
-    /// the cursor at `at` or `@`: new text in `r` holding the chain's operands.
+    /// `a + b + c at r`, `(a + b)@r`, `"n = {n}" at r`, or `"n = {n}"@r`, with
+    /// `chain` the `+` chain or the text holding values read, and the cursor at
+    /// `at` or `@`: new text in `r` holding the chain's operands, or the text's
+    /// pieces, each value turned into text in `r`.
     fn parse_join(&mut self, chain: Expr) -> Result<Expr> {
         self.advance(); // `at` or `@`
         let region_span = self.peek_span();
@@ -1587,13 +1604,65 @@ impl Parser {
                     waiting.push(*right);
                     waiting.push(*left);
                 }
+                ExprKind::Join { parts: pieces, region: ref missing, .. } if missing.is_empty() => {
+                    interpolated_parts(pieces, &region, region_span, &mut parts);
+                }
                 _ => parts.push(expr),
             }
         }
         Ok(Expr::new(ExprKind::Join { parts, region, region_span }, span))
     }
 
+    /// Text holding values, `"n = {n}"`, at `span` and the cursor: a join of
+    /// its pieces whose region is still to come (`at r` or `@r`, which
+    /// `parse_join` reads), so it is left empty; the checker asks for one where
+    /// none comes. (A function of its own: `parse_primary`'s frame is on the
+    /// stack once per nesting level.)
+    fn parse_interpolated(&mut self, span: Span) -> Result<Expr> {
+        let Token::Interpolated(pieces) = self.advance() else { return Err(Error::internal_at(span, "text holding values that isn't")) };
+        let mut parts = Vec::new();
+        for piece in pieces {
+            match piece {
+                Piece::Text(text) => parts.push(Expr::new(ExprKind::TextLit(text), span)),
+                Piece::Value { tokens, close, .. } => parts.push(self.parse_text_value(tokens, &close)?),
+            }
+        }
+        Ok(Expr::new(ExprKind::Join { parts, region: String::new(), region_span: span }, span))
+    }
+
+    /// The value inside `{…}` in text, from its `tokens` and its closing `}`:
+    /// read by this parser, on those tokens in place of the file's, so nesting
+    /// counts as anywhere else.
+    fn parse_text_value(&mut self, tokens: Vec<LexToken>, close: &LexToken) -> Result<Expr> {
+        let (mut kinds, mut spans) = (Vec::new(), Vec::new());
+        for token in tokens {
+            if let LexKind::Token(kind) = token.kind {
+                kinds.push(kind);
+                spans.push(token.start);
+            }
+        }
+        kinds.extend([Token::RBrace, Token::Eof]);
+        spans.extend([close.start, close.end]);
+        let file_tokens = std::mem::replace(&mut self.tokens, kinds);
+        let file_spans = std::mem::replace(&mut self.spans, spans);
+        let file_pos = std::mem::replace(&mut self.pos, 0);
+        let value = self.parse_expr().and_then(|value| if self.check(Token::RBrace) { Ok(value) } else { Err(self.unexpected("'}' to end the value")) });
+        self.tokens = file_tokens;
+        self.spans = file_spans;
+        self.pos = file_pos;
+        value
+    }
+
     fn parse_unary(&mut self) -> Result<Expr> {
+        if matches!(self.peek(), Token::Fail | Token::Minus | Token::Not) {
+            return self.parse_prefixed();
+        }
+        self.parse_postfix()
+    }
+
+    /// `fail e`, `-x`, or `not x`. (A function of its own: `parse_unary`'s frame
+    /// is on the stack once per nesting level.)
+    fn parse_prefixed(&mut self) -> Result<Expr> {
         let span = self.peek_span();
         if self.match_token(Token::Fail) {
             self.enter()?;
@@ -1616,9 +1685,17 @@ impl Parser {
 
     fn parse_postfix(&mut self) -> Result<Expr> {
         let parenthesized = self.check(Token::LParen);
-        let mut expr = self.parse_primary()?;
-        // `(a + b)@r`: text joined into `r`.
-        if parenthesized && self.check(Token::AtSign) && matches!(expr.kind, ExprKind::Binary(BinaryOp::Add, ..)) {
+        let expr = self.parse_primary()?;
+        self.parse_suffixes(expr, parenthesized)
+    }
+
+    /// What follows `expr`, read by `parse_postfix` (and `parenthesized` when
+    /// written in parentheses): a region its text is joined into, fields,
+    /// items, `^`, and plan Bs. (A function of its own: `parse_postfix`'s frame
+    /// is on the stack once per nesting level.)
+    fn parse_suffixes(&mut self, mut expr: Expr, parenthesized: bool) -> Result<Expr> {
+        // `(a + b)@r` or `"n = {n}"@r`: text joined into `r`.
+        if self.check(Token::AtSign) && (pending_region(&expr) || (parenthesized && joins(&expr))) {
             expr = self.parse_join(expr)?;
         }
         let mut levels = 0;
@@ -1631,7 +1708,7 @@ impl Parser {
         if self.check(Token::AtSign) {
             return Err(Error::at(
                 self.peek_span(),
-                "'@r' after a value names the region text is joined into only after parentheses, as in '(a + b)@r'; or write 'a + b at r'",
+                "'@r' after a value names the region text is joined into only after parentheses or text holding values, as in '(a + b)@r' or '\"n = {n}\"@r'; or write 'a + b at r'",
             ));
         }
         Ok(expr)
@@ -1682,6 +1759,7 @@ impl Parser {
             Token::Int(n) => { let v = *n; self.advance(); ExprKind::IntLit(v) }
             Token::Float(n) => { let v = *n; self.advance(); ExprKind::FloatLit(v) }
             Token::Text(s) => { let v = s.clone(); self.advance(); ExprKind::TextLit(v) }
+            Token::Interpolated(_) => return self.parse_interpolated(span),
             Token::True => { self.advance(); ExprKind::BoolLit(true) }
             Token::False => { self.advance(); ExprKind::BoolLit(false) }
             Token::None => { self.advance(); ExprKind::NoneLit }
@@ -1689,53 +1767,62 @@ impl Parser {
             Token::LBracket => return self.parse_array(),
             Token::LParen => return self.parse_parenthesized(),
             // `.this`, `.field`, or `.method(…)`: the value a method is called
-            // on, and what it holds. Only a method has one, which the checker
-            // says; here it is a value like any other.
-            Token::Dot if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) => {
-                self.advance(); // .
-                let at = self.peek_span();
-                let member = self.expect_ident()?;
-                let value = Expr::new(ExprKind::Var(THIS.to_string()), span);
-                if member == THIS_WORD {
-                    return Ok(value);
-                }
-                let expr = Expr::new(ExprKind::Field(Box::new(value), member), at);
-                // A `{` after it is a plan B on the member, which `parse_suffix`
-                // reads: no shape is named `.x`.
-                if self.check(Token::LParen) || self.at_type_args() {
-                    return self.dotted_name_use(expr);
-                }
-                return Ok(expr);
-            }
-            Token::Ident(name) => {
-                let name = name.clone();
-                self.advance();
-                let name = self.value_name(name)?;
-                if name == SCAN && self.check(Token::LParen) {
-                    return self.parse_scan(span);
-                }
-                if name == TEXT_CAST && self.check(Token::LParen) {
-                    return self.parse_text_cast(span);
-                }
-                // The types a use gives are read only where a call or a shape
-                // literal follows them (see `at_type_args`), so one of `(` and
-                // `{` comes next for certain.
-                if self.at_type_args() {
-                    let types = self.parse_type_args()?;
-                    if self.check(Token::LParen) {
-                        ExprKind::Call { name, types, args: self.parse_arg_list()? }
-                    } else {
-                        self.parse_struct_init(name, types)?
-                    }
-                } else if self.check(Token::LBrace) && self.at_shape_literal() {
-                    self.parse_struct_init(name, Vec::new())?
-                } else if self.check(Token::LParen) {
-                    ExprKind::Call { name, types: Vec::new(), args: self.parse_arg_list()? }
-                } else {
-                    ExprKind::Var(name)
-                }
-            }
+            // on, and what it holds.
+            Token::Dot if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) => return self.parse_member_of_this(span),
+            Token::Ident(_) => return self.parse_name_use(span),
             _ => return Err(self.unexpected("an expression")),
+        };
+        Ok(Expr::new(kind, span))
+    }
+
+    /// `.this`, `.field`, or `.method(…)` at `span`, with the cursor at the
+    /// dot: the value a method is called on, and what it holds. Only a method
+    /// has one, which the checker says; here it is a value like any other.
+    fn parse_member_of_this(&mut self, span: Span) -> Result<Expr> {
+        self.advance(); // .
+        let at = self.peek_span();
+        let member = self.expect_ident()?;
+        let value = Expr::new(ExprKind::Var(THIS.to_string()), span);
+        if member == THIS_WORD {
+            return Ok(value);
+        }
+        let expr = Expr::new(ExprKind::Field(Box::new(value), member), at);
+        // A `{` after it is a plan B on the member, which `parse_suffix`
+        // reads: no shape is named `.x`.
+        if self.check(Token::LParen) || self.at_type_args() {
+            return self.dotted_name_use(expr);
+        }
+        Ok(expr)
+    }
+
+    /// A value that starts with a name, at `span` and the cursor: a variable,
+    /// a call, or a shape literal. (A function of its own: `parse_primary`'s
+    /// frame is on the stack once per nesting level.)
+    fn parse_name_use(&mut self, span: Span) -> Result<Expr> {
+        let name = self.expect_ident()?;
+        let name = self.value_name(name)?;
+        if name == SCAN && self.check(Token::LParen) {
+            return self.parse_scan(span);
+        }
+        if name == TEXT_CAST && self.check(Token::LParen) {
+            return self.parse_text_cast(span);
+        }
+        // The types a use gives are read only where a call or a shape
+        // literal follows them (see `at_type_args`), so one of `(` and
+        // `{` comes next for certain.
+        let kind = if self.at_type_args() {
+            let types = self.parse_type_args()?;
+            if self.check(Token::LParen) {
+                ExprKind::Call { name, types, args: self.parse_arg_list()? }
+            } else {
+                self.parse_struct_init(name, types)?
+            }
+        } else if self.check(Token::LBrace) && self.at_shape_literal() {
+            self.parse_struct_init(name, Vec::new())?
+        } else if self.check(Token::LParen) {
+            ExprKind::Call { name, types: Vec::new(), args: self.parse_arg_list()? }
+        } else {
+            ExprKind::Var(name)
         };
         Ok(Expr::new(kind, span))
     }
@@ -2260,5 +2347,38 @@ fn dotted_name(expr: &Expr) -> Option<(String, Span)> {
         ExprKind::Var(name) => Some((name.clone(), expr.span)),
         ExprKind::Field(base, field) => dotted_name(base).map(|(name, span)| (format!("{}{}{}", name, MODULE_SEPARATOR, field), span)),
         _ => None,
+    }
+}
+
+/// Whether `expr` is joined by an `at r` after it: a `+` chain, or text
+/// holding values that has no region yet.
+fn joins(expr: &Expr) -> bool {
+    matches!(expr.kind, ExprKind::Binary(BinaryOp::Add, ..)) || pending_region(expr)
+}
+
+/// Whether `expr` is text holding values whose region is still to come (see
+/// `Parser::parse_interpolated`).
+fn pending_region(expr: &Expr) -> bool {
+    matches!(&expr.kind, ExprKind::Join { region, .. } if region.is_empty())
+}
+
+/// The `pieces` of text holding values, joined into `region`, added to
+/// `parts`: its text as it is, and each value turned into text in the region.
+/// A value that is itself text holding values gives its own pieces.
+fn interpolated_parts(pieces: Vec<Expr>, region: &str, region_span: Span, parts: &mut Vec<Expr>) {
+    for piece in pieces {
+        if pending_region(&piece) {
+            if let ExprKind::Join { parts: inner, .. } = piece.kind {
+                interpolated_parts(inner, region, region_span, parts);
+            }
+            continue;
+        }
+        if matches!(piece.kind, ExprKind::TextLit(_)) {
+            parts.push(piece);
+            continue;
+        }
+        let span = piece.span;
+        let into = Expr::new(ExprKind::Var(region.to_string()), region_span);
+        parts.push(Expr::new(ExprKind::MethodCall { value: Box::new(piece), name: STR.to_string(), args: vec![into], dotted: None }, span));
     }
 }

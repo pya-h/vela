@@ -342,8 +342,8 @@
           <p>No threads, channels, async, or actors. Vela is strictly single-threaded today.</p>
         </div>
         <div class="card">
-          <h3 id="text-is-a-c-string">Text is a C string <span class="badge b-med">Medium</span></h3>
-          <p><code>text</code> was a C string, <code>const char*</code>, in which a <code>\0</code> ended the text early. It is now its bytes and how many there are: <code>t.len</code> reads the length without counting, and a <code>\0</code> is a byte like any other. Parts, <code>t[a..b]</code>, are views of the same bytes, and <code>&lt;</code> orders text by them. Joining, <code>a + b at r</code>, makes new text in a region. A value becomes text with <code>n.str() at r</code> or <code>text(n) at r</code>. What text still lacks is values written inside it, <code>"{name} is {age}" at r</code> (see <a href="#real-text">Real text type</a>). Text has a lifetime in its type: <code>text</code> lasts as long as the program, <code>text@r</code> is in a region (<a href="vela.html#text-in-regions">Text in a region</a>), which reading input (<a href="vela.html#input"><code>scan</code></a>) uses, and building text will need.</p>
+          <h3 id="text-is-a-c-string">Text is a C string <span class="badge b-done">Done</span></h3>
+          <p><code>text</code> was a C string, <code>const char*</code>, in which a <code>\0</code> ended the text early. It is now its bytes and how many there are: <code>t.len</code> reads the length without counting, and a <code>\0</code> is a byte like any other. Parts, <code>t[a..b]</code>, are views of the same bytes, and <code>&lt;</code> orders text by them. Joining, <code>a + b at r</code>, makes new text in a region. A value becomes text with <code>n.str() at r</code> or <code>text(n) at r</code>, and text holds values written inside it, <code>"{name} is {age}" at r</code> (see <a href="vela.html#interpolation">Text holding values</a>, and <a href="#real-text">Real text type</a>). Text has a lifetime in its type: <code>text</code> lasts as long as the program, <code>text@r</code> is in a region (<a href="vela.html#text-in-regions">Text in a region</a>), which reading input (<a href="vela.html#input"><code>scan</code></a>) uses, and building text will need.</p>
         </div>
         <div class="card">
           <h3>Undefined integer edge cases <span class="badge b-done">Done</span></h3>
@@ -403,12 +403,13 @@
             them</a>; the reasoning is <a href="#methods">below</a>.</p>
         </div>
         <div class="card">
-          <h3 id="real-text">Real text type <span class="badge b-idea">Idea</span></h3>
+          <h3 id="real-text">Real text type <span class="badge b-done">Done</span></h3>
           <p>Replace C strings with a <code>(ptr, len)</code> struct and safe operations. The struct is in:
             <code>t.len</code> is a field, and a <code>\0</code> no longer ends text. So are parts,
             <code>t[a..b]</code>, which never cut a character, <code>&lt;</code> on text, and joining,
-            <code>a + b at r</code>, and values as text, <code>n.str() at r</code> or <code>text(n) at r</code>. The rest
-            is chosen and next: <code>"{name} is {age}" at r</code>.</p>
+            <code>a + b at r</code>, values as text, <code>n.str() at r</code> or <code>text(n) at r</code>, and text
+            holding values, <code>"{name} is {age}" at r</code>. <a href="vela.html#text-parts">The language guide
+            describes them</a>.</p>
         </div>
         <div class="card">
           <h3>Regions <span class="badge b-done">Done</span></h3>
@@ -1869,7 +1870,7 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region (d
             <li><s>Multiple results, then named results (<code>-&gt; total: int</code>, set with <code>total &lt;- value</code>)</s>
               (done: <a href="vela.html#results">Several Results</a>, <a href="vela.html#named-results">Named Results</a>)</li>
             <li><s>Defined integer overflow and division by zero</s> (done: <a href="vela.html#int-limits">they stop the program with a message</a>)</li>
-            <li><s>Fixed-size arrays and slices, which grow and shrink</s> (done: <a href="vela.html#arrays">arrays</a> and <a href="vela.html#slices">slices</a>), and a real <code>text</code> type</li>
+            <li><s>Fixed-size arrays and slices, which grow and shrink</s> (done: <a href="vela.html#arrays">arrays</a> and <a href="vela.html#slices">slices</a>), <s>and a real <code>text</code> type</s> (done: <a href="vela.html#text-parts">lengths, parts, joins</a>, <a href="vela.html#interpolation"><code>"{n}" at r</code></a>)</li>
             <li><s>Text in regions</s> (done: <a href="vela.html#text-in-regions"><code>text@r</code></a>), <s>reading input</s>
               (done: <a href="vela.html#input"><code>scan</code></a>), <s>copies into another region</s> (done: <a href="vela.html#copy"><code>.copy()</code></a>), then <a href="#conversions">type conversions</a> (to text done: <a href="vela.html#str"><code>text(n) at r</code></a>; <code>int(x)</code> and <code>float(n)</code> next)</li>
             <li>Small region improvements: result-only regions, typed patterns, a lint for regions that grow in loops, and a

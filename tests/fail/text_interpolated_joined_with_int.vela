@@ -1,0 +1,6 @@
+# error: 5:22: '+' joins text, but this value is int; turn it into text first, as in 'n.str() at r'
+task main()
+    region r
+    bind n = 5
+    show("n = {n}" + n at r)
+fi

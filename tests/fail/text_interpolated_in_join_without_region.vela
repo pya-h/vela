@@ -1,0 +1,6 @@
+# error: 5:10: text holding values is new text, so it names the region it goes in, as in '"n = {n}" at r' or '"n = {n}"@r'
+task main()
+    region r
+    bind n = 5
+    show("n = {n}" + "!")
+fi

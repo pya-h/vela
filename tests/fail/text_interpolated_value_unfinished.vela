@@ -1,0 +1,6 @@
+# error: 5:15: expected an expression, got '}'
+task main()
+    region r
+    bind n = 5
+    show("{n +}" at r)
+fi

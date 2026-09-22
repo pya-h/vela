@@ -48,15 +48,44 @@ function code(line: string): string {
     const char = line[i];
     if (char === "#") break;
     if (char === '"') {
-      for (i++; i < line.length && line[i] !== '"'; i++) {
-        if (line[i] === "\\") i++;
-      }
+      i = afterText(line, i) - 1;
       out += '""';
       continue;
     }
     out += char;
   }
   return out;
+}
+
+/**
+ * The index just after the string whose opening quote is at `start`, skipping
+ * the values in it (`"n = {n}"`), which may hold strings of their own.
+ */
+function afterText(line: string, start: number): number {
+  let i = start + 1;
+  while (i < line.length && line[i] !== '"') {
+    if (line[i] === "\\") i += 2;
+    else if (line[i] === "{") i = afterValue(line, i + 1);
+    else i++;
+  }
+  return i + 1;
+}
+
+/** The index just after the `}` closing a value in a string, from just after its `{`. */
+function afterValue(line: string, start: number): number {
+  let depth = 0;
+  let i = start;
+  while (i < line.length) {
+    const char = line[i];
+    if (char === '"') i = afterText(line, i);
+    else if (char === "}" && depth === 0) return i + 1;
+    else {
+      if (char === "{") depth++;
+      if (char === "}") depth--;
+      i++;
+    }
+  }
+  return i;
 }
 
 /**
