@@ -1,0 +1,9 @@
+# error: 3:10: 'str' turns a value into text, and T is only 'same' here; require it, as in '<T: shown>'
+task label<T: same>(v: T, r: region) -> text@r
+    <- v.str() at r
+fi
+
+task main()
+    region r
+    show(label(1, r))
+fi

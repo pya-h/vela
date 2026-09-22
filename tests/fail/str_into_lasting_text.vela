@@ -1,0 +1,6 @@
+# error: 4:22: expected type text, got text@r; this text is in region 'r', and text here must last as long as the program, as a literal does
+task main()
+    region r
+    bind t: text = 5.str() at r
+    show(t)
+fi

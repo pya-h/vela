@@ -50,6 +50,11 @@ task main()
     show(describe(red))
     show(describe(Custom(10, 20, 30)))
     show(describe(palette.Blue))
+    # A method of a module's kind, called on a variant named through the module.
+    region colors
+    show(palette.Blue.str() at colors)
+    show(palette.Color.Red.str(colors))
+    show(text(red) at colors)
     match Dark(3)
     case Red
         show("red shade")

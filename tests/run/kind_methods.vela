@@ -98,6 +98,9 @@ task main()
     # A method that changes nothing is called on a `bind` too.
     bind fixed = Green
     show(fixed.shown())
+    # And on a variant as it is written.
+    show(Light.Amber(1).shown())
+    show(Light.Red.shown())
 
     region r
     hold word: Label@r = Word("a word".copy() at r)

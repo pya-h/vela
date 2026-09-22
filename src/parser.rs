@@ -1714,6 +1714,9 @@ impl Parser {
                 if name == SCAN && self.check(Token::LParen) {
                     return self.parse_scan(span);
                 }
+                if name == TEXT_CAST && self.check(Token::LParen) {
+                    return self.parse_text_cast(span);
+                }
                 // The types a use gives are read only where a call or a shape
                 // literal follows them (see `at_type_args`), so one of `(` and
                 // `{` comes next for certain.
@@ -1838,6 +1841,9 @@ impl Parser {
         if matches!(&expr.kind, ExprKind::Field(_, word) if word == COPY) && self.check(Token::LParen) {
             return self.parse_copy(expr);
         }
+        if matches!(&expr.kind, ExprKind::Field(_, word) if word == STR) && self.check(Token::LParen) {
+            return self.parse_str(expr);
+        }
         if let ExprKind::Field(_, word) = &expr.kind
             && let Some(op) = EditOp::from_word(word)
             && self.check(Token::LParen)
@@ -1924,6 +1930,55 @@ impl Parser {
             return Err(self.unexpected("',' and another type, or '>' to close the types"));
         }
         Ok(types)
+    }
+
+    /// `value.str() at r`, `value.str()@r`, or `value.str(r)`, with the cursor at
+    /// `(` and `expr` the field `str` of the value: the method call `str`, given
+    /// the region as its argument.
+    fn parse_str(&mut self, expr: Expr) -> Result<Expr> {
+        let dotted = dotted_name(&expr).map(|(whole, _)| whole);
+        let span = expr.span;
+        let ExprKind::Field(value, name) = expr.kind else { return Err(Error::internal_at(span, "a 'str' without its value")) };
+        let mut args = self.parse_arg_list()?;
+        // With the region given in the parentheses, an `at` after them is a
+        // join's: `a.str(r) + b at r`.
+        if !args.is_empty() {
+            return Ok(Expr::new(ExprKind::MethodCall { value, name, args, dotted }, span));
+        }
+        if let Some(region) = self.parse_text_region()? {
+            args.push(region);
+        } else {
+            return Err(Error::at(
+                self.peek_span(),
+                "'str' makes new text, so it names the region the text goes in, as in 'x.str() at r', 'x.str()@r', or 'x.str(r)'",
+            ));
+        }
+        Ok(Expr::new(ExprKind::MethodCall { value, name, args, dotted }, span))
+    }
+
+    /// `text(value) at r` or `text(value)@r`, at `span`, with the cursor at `(`:
+    /// the method call `str` on the value, given the region.
+    fn parse_text_cast(&mut self, span: Span) -> Result<Expr> {
+        let args = self.parse_arg_list()?;
+        let [value] = <[Expr; 1]>::try_from(args).map_err(|args| {
+            let got = if args.len() == 1 { "1 value".to_string() } else { format!("{} values", args.len()) };
+            Error::at(span, format!("'text(…)' turns one value into text, as in 'text(n) at r', got {}", got))
+        })?;
+        let Some(region) = self.parse_text_region()? else {
+            return Err(Error::at(self.peek_span(), "'text(…)' makes new text, so it names the region the text goes in, as in 'text(n) at r' or 'text(n)@r'"));
+        };
+        Ok(Expr::new(ExprKind::MethodCall { value: Box::new(value), name: STR.to_string(), args: vec![region], dotted: None }, span))
+    }
+
+    /// `at r` or `@r` after the parentheses of `str` or `text(…)`: the region,
+    /// as the name it is.
+    fn parse_text_region(&mut self) -> Result<Option<Expr>> {
+        if !self.match_token(Token::At) && !self.match_token(Token::AtSign) {
+            return Ok(None);
+        }
+        let span = self.peek_span();
+        let region = self.expect_ident()?;
+        Ok(Some(Expr::new(ExprKind::Var(region), span)))
     }
 
     /// `value.copy()`, with the cursor at `(` and `expr` the field `copy` of the

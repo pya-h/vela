@@ -1,0 +1,6 @@
+# error: 5:13: type [int]@r can't be turned into text; numbers, bools, text, and shapes and kinds with a method 'str' can
+task main()
+    region r
+    bind xs = new [int]([1, 2]) at r
+    show(xs.str() at r)
+fi

@@ -1,0 +1,4 @@
+# error: 3:17: 'str' makes new text, so it names the region the text goes in, as in 'x.str() at r', 'x.str()@r', or 'x.str(r)'
+task main()
+    show(5.str())
+fi

@@ -4,6 +4,9 @@ kind Color
     Red
     Blue
     Custom(red: int, green: int, blue: int)
+    str(r: region) -> text@r
+        <- describe(.this).str() at r
+    fi
 fi
 
 task describe(color: Color) -> text

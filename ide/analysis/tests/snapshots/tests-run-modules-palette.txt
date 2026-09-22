@@ -8,37 +8,43 @@
     | variant:Blue
   6 |     Custom(red: int, green: int, blue: int)
     | variant:Custom  punctuation:(  field:red  punctuation::  type-builtin:int  punctuation:,  field:green  punctuation::  type-builtin:int  punctuation:,  field:blue  punctuation::  type-builtin:int  punctuation:)
-  7 | fi
+  7 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+  8 |         <- describe(.this).str() at r
+    | keyword:<-  task:describe  punctuation:(  punctuation:.  keyword:this  punctuation:)  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r
+  9 |     fi
     | keyword:fi
-  9 | task describe(color: Color) -> text
+ 10 | fi
+    | keyword:fi
+ 12 | task describe(color: Color) -> text
     | keyword:task  task:describe  punctuation:(  parameter:color  punctuation::  type:Color  punctuation:)  operator:->  type-builtin:text
- 10 |     match color
+ 13 |     match color
     | keyword:match  parameter:color
- 11 |     case Red
+ 14 |     case Red
     | keyword:case  variant:Red
- 12 |         <- "red"
+ 15 |         <- "red"
     | keyword:<-  string:"red"
- 13 |     case Blue
+ 16 |     case Blue
     | keyword:case  variant:Blue
- 14 |         <- "blue"
+ 17 |         <- "blue"
     | keyword:<-  string:"blue"
- 15 |     case Custom r g b
+ 18 |     case Custom r g b
     | keyword:case  variant:Custom  variable:r  variable:g  variable:b
- 16 |         <- mix(r, g, b)
+ 19 |         <- mix(r, g, b)
     | keyword:<-  task:mix  punctuation:(  variable:r  punctuation:,  variable:g  punctuation:,  variable:b  punctuation:)
- 17 |     fi
+ 20 |     fi
     | keyword:fi
- 18 | fi
+ 21 | fi
     | keyword:fi
- 20 | priv task mix(r: int, g: int, b: int) -> text
+ 23 | priv task mix(r: int, g: int, b: int) -> text
     | keyword:priv  keyword:task  task:mix  punctuation:(  parameter:r  punctuation::  type-builtin:int  punctuation:,  parameter:g  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:text
- 21 |     when r + g + b > 50
+ 24 |     when r + g + b > 50
     | keyword:when  parameter:r  operator:+  parameter:g  operator:+  parameter:b  operator:>  number:50
- 22 |         <- "light"
+ 25 |         <- "light"
     | keyword:<-  string:"light"
- 23 |     fi
+ 26 |     fi
     | keyword:fi
- 24 |     <- "dark"
+ 27 |     <- "dark"
     | keyword:<-  string:"dark"
- 25 | fi
+ 28 | fi
     | keyword:fi

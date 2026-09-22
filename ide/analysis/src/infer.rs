@@ -589,6 +589,8 @@ impl<'a> Knowledge<'a> {
                         Type::Ptr(pointee, _) => Some(Type::Ptr(Box::new(self.in_region(&pointee, name)), Some(name.to_string()))),
                         Type::Slice(items, _) => Some(Type::Slice(Box::new(self.in_region(&items, name)), Some(name.to_string()))),
                         Type::Maybe(line) if matches!(*line, Type::Text(_)) => Some(Type::Maybe(Box::new(Type::Text(Some(name.to_string()))))),
+                        // `n.str() at r` and `text(n) at r`.
+                        Type::Text(_) => Some(Type::Text(Some(name.to_string()))),
                         _ => None,
                     };
                 }
@@ -670,6 +672,13 @@ impl<'a> Knowledge<'a> {
                 // `scan(…)`, before its region.
                 if word == vela::ast::SCAN && self.token_before(p) != Some(&Token::Dot) {
                     return Some(Type::Maybe(Box::new(Type::Text(None))));
+                }
+                // `n.str(r)`: text in `r`; `n.str()` and `text(n)`, text before
+                // their region.
+                let cast = word == vela::ast::TEXT_CAST && self.token_before(p) != Some(&Token::Dot);
+                if cast || (word == vela::ast::STR && self.token_before(p) == Some(&Token::Dot)) {
+                    let region = (!cast && open + 2 == q).then(|| self.ident(open + 1)).flatten();
+                    return Some(Type::Text(region.map(str::to_string)));
                 }
                 // `x.copy()`, before its region: the value's type, in the region
                 // the place it goes names, which the checker records at the word.

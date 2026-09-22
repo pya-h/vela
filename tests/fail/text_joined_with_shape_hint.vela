@@ -1,0 +1,12 @@
+# error: 11:19: '+' joins text, but this value is Point; turn it into text first, as in 'n.str() at r'
+shape Point
+    x: int
+    str(r: region) -> text@r
+        <- .x.str() at r
+    fi
+fi
+
+task main()
+    region r
+    show("p = " + Point { x: 1 } at r)
+fi

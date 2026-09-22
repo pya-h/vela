@@ -1120,6 +1120,9 @@ impl Checker {
         for (param, ty) in t.params.iter_mut().zip(resolved) {
             param.ty = ty;
         }
+        if t.owner.as_ref().is_some_and(|owner| owner.name == STR) {
+            check_str_method(t)?;
+        }
         let params = t.params.iter().map(|p| (p.name.clone(), p.ty.clone())).collect();
         self.tasks.insert(t.name.clone(), TaskInfo { types: t.types.clone(), params, ret: t.ret.clone(), owner: t.owner.clone() });
         self.type_params.clear();
@@ -2740,6 +2743,7 @@ impl Checker {
             ExprKind::Edit { items, op, args } => self.check_edit(span, items, *op, args),
             ExprKind::Scan { args, region, region_span } => self.check_scan(span, args, region, *region_span),
             ExprKind::Join { parts, region, region_span } => self.check_join(parts, region, *region_span),
+            ExprKind::ToText { value, region, region_span } => self.check_to_text(value, region, *region_span),
             ExprKind::Copy { value, region, region_span } => self.check_copy(span, value, region.as_deref(), *region_span),
             // Only the checker creates `Wrap`, with its type already set.
             ExprKind::Wrap(_) => expr.ty.clone().ok_or_else(|| Error::internal_at(span, "a wrapped value has no type")),
@@ -3061,10 +3065,20 @@ impl Checker {
             return err(region_span, format!("numbers are added without a region; 'at {}' after '+' is for joining text", region));
         }
         if let Some((ty, at)) = other {
-            return err(at, format!("'+' joins text, but this value is {}{}", ty, extract_hint(&[&ty])));
+            return err(at, format!("'+' joins text, but this value is {}{}", ty, self.to_text_hint(&ty)));
         }
         self.visible_region(region, region_span, true)?;
         Ok(Type::Text(Some(region.to_string())))
+    }
+
+    /// The end of a message about a value of type `ty` where text is wanted: how
+    /// to turn it into text, when it can be.
+    fn to_text_hint(&self, ty: &Type) -> String {
+        let has_str = self.owner_of(ty).is_some_and(|owner| self.tasks.contains_key(&method_name(&owner, STR)));
+        if self.has_builtin_str(ty) || has_str {
+            return "; turn it into text first, as in 'n.str() at r'".to_string();
+        }
+        extract_hint(&[ty])
     }
 
     /// Checks `value.copy()`, at `span`, into `region` when one is written, and
@@ -3303,7 +3317,7 @@ impl Checker {
         match op {
             BinaryOp::Add if matches!(lt, Type::Text(_)) || matches!(rt, Type::Text(_)) => {
                 if let Some(other) = [&lt, &rt].into_iter().find(|ty| !matches!(ty, Type::Text(_))) {
-                    return err(span, format!("'+' joins text to text, but the other value is {}{}", other, extract_hint(&[other])));
+                    return err(span, format!("'+' joins text to text, but the other value is {}{}", other, self.to_text_hint(other)));
                 }
                 err(span, "joining text makes new text, which goes in a region; name it after the last part, as in 'a + b at r', or after parentheses, as in '(a + b)@r'")
             }
@@ -3525,6 +3539,12 @@ impl Checker {
         if let Some(owner) = self.owner_of(base).filter(|owner| self.shapes.contains_key(owner) || self.kinds.contains_key(owner)) {
             let what = if self.kinds.contains_key(&owner) { "kind" } else { "shape" };
             let written = unqualified(&owner);
+            if name == STR {
+                return Error::at(
+                    span,
+                    format!("{} '{}' has no method 'str', which turns its values into text; give it one, written 'str(r: region) -> text@r'", what, written),
+                );
+            }
             if self.shapes.get(&owner).is_some_and(|shape| shape.fields.iter().any(|field| field.name == name)) {
                 return Error::at(span, format!("'{}' is a field of {} '{}', not a method, so it is read without '(…)'", name, what, written));
             }
@@ -3534,6 +3554,15 @@ impl Checker {
             return Error::at(span, format!("{} '{}' has no method '{}'", what, written, name));
         }
         match base {
+            Type::Param(_) if name == STR => Error::at(span, format!("'str' turns a value into text, and {} {}", base, self.why_not(Need::Shown, base))),
+            Type::Ptr(..) if name == STR => Error::at(span, format!("type {} can't be turned into text; turn the value it points to into text, as in 'p^.str() at r'", base)),
+            Type::Maybe(_) | Type::Or(..) if name == STR => {
+                Error::at(span, format!("type {} can't be turned into text; extract its value first, as in 'when x is {{value}}'", base))
+            }
+            _ if name == STR => Error::at(
+                span,
+                format!("type {} can't be turned into text; numbers, bools, text, and shapes and kinds with a method 'str' can", base),
+            ),
             Type::Ptr(..) => Error::at(span, format!("type {} has no methods; call it on the value it points to, as in 'p^.{}(…)'", base, name)),
             Type::Maybe(_) | Type::Or(..) => {
                 Error::at(span, format!("type {} has no methods; extract its value first, as in 'when x is {{value}}'", base))
@@ -3557,6 +3586,9 @@ impl Checker {
         self.unsettled_copies.truncate(copies);
         self.unsettled_types.truncate(untold);
         let ty = found?;
+        if name == STR && self.has_builtin_str(&ty) {
+            return self.builtin_str(expr);
+        }
         let owner = self.owner_of(&ty).ok_or_else(|| self.no_method(&ty, &name, span))?;
         let full = method_name(&owner, &name);
         let info = self.tasks.get(&full).filter(|_| self.sees(&full)).cloned().ok_or_else(|| self.no_method(&ty, &name, span))?;
@@ -3581,6 +3613,39 @@ impl Checker {
         all.extend(args);
         expr.kind = ExprKind::Call { name: full, types: Vec::new(), args: all };
         Ok(())
+    }
+
+    /// Whether values of type `ty` have `str` built in: numbers, bools, text,
+    /// and a type a declaration takes that is `shown`, which is one of those.
+    fn has_builtin_str(&self, ty: &Type) -> bool {
+        matches!(ty, Type::Int | Type::Float | Type::Bool | Type::Text(_)) || (matches!(ty, Type::Param(_)) && self.allows(Need::Shown, ty))
+    }
+
+    /// Rewrites `value.str(r)`, a method call on a value with `str` built in,
+    /// into the `ToText` it is, which the rest of the checker checks.
+    fn builtin_str(&mut self, expr: &mut Expr) -> Result<()> {
+        let span = expr.span;
+        let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+        let ExprKind::MethodCall { value, args, .. } = taken else {
+            return Err(Error::internal_at(span, "a 'str' that is no longer a method call"));
+        };
+        let region = match <[Expr; 1]>::try_from(args) {
+            Ok([Expr { kind: ExprKind::Var(region), span: region_span, .. }]) => (region, region_span),
+            Ok([other]) => return err(other.span, "'str' takes the region the text goes in, as in 'x.str(r)' or 'x.str() at r'"),
+            Err(args) => {
+                return err(span, format!("'str' takes the region the text goes in, as in 'x.str(r)' or 'x.str() at r', got {}", count(args.len(), "argument")));
+            }
+        };
+        expr.kind = ExprKind::ToText { value, region: region.0, region_span: region.1 };
+        Ok(())
+    }
+
+    /// Checks `value.str() at region` on a value with `str` built in, and
+    /// returns its type, `text@region`.
+    fn check_to_text(&mut self, value: &mut Expr, region: &str, region_span: Span) -> Result<Type> {
+        self.check_expr(value)?;
+        self.visible_region(region, region_span, true)?;
+        Ok(Type::Text(Some(region.to_string())))
     }
 
     /// Checks that the value a method marked `alters` is called on can change:
@@ -4432,7 +4497,8 @@ impl Checker {
             | ExprKind::Field(inner, _)
             | ExprKind::Fail(inner)
             | ExprKind::Wrap(inner)
-            | ExprKind::Copy { value: inner, .. } => self.substitute_expr(inner, given, made),
+            | ExprKind::Copy { value: inner, .. }
+            | ExprKind::ToText { value: inner, .. } => self.substitute_expr(inner, given, made),
             ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
                 self.substitute_expr(a, given, made)?;
                 self.substitute_expr(b, given, made)
@@ -4944,6 +5010,24 @@ fn dropped_error(ty: &Type) -> String {
 fn example_names(n: usize) -> String {
     let names: Vec<String> = (0..n.min(3)).filter_map(|i| u8::try_from(i).ok()).map(|i| char::from(b'a' + i).to_string()).collect();
     if n > 3 { format!("{}, …", names.join(", ")) } else { names.join(", ") }
+}
+
+/// Checks the header of a method named `str`, which turns the value it is
+/// called on into text for `x.str() at r` (and `text(x) at r`), so it has the
+/// one header those can call.
+fn check_str_method(t: &TaskDef) -> Result<()> {
+    let written = "a method named 'str' turns the value it is called on into text, so it is written 'str(r: region) -> text@r'";
+    if let Some(at) = t.owner.as_ref().and_then(|owner| owner.alters_span) {
+        return err(at, "a method named 'str' turns the value it is called on into text without changing it, so it isn't marked 'alters'");
+    }
+    let region = match t.params.get(1..) {
+        Some([param]) if param.ty == Type::Region => &param.name,
+        _ => return err(t.span, written),
+    };
+    if t.ret != Type::Text(Some(region.clone())) {
+        return err(t.span, written);
+    }
+    Ok(())
 }
 
 /// `1 argument`, `2 arguments`.

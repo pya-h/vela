@@ -795,16 +795,16 @@ impl Resolver<'_> {
 
     /// The end of a "names nothing" error for `written`, whose first name
     /// `first` this file doesn't give a module or kind: how the module with that
-    /// file name is included, if it is, or for a call, that Vela has no methods
-    /// (and the change to a slice it may mean).
+    /// file name is included, if it is, or for a call, the change to a slice it
+    /// may mean.
     fn unnamed_hint(&self, written: &str, first: &str, calls: bool) -> String {
         match self.unnamed.iter().find(|(file_name, _, _)| file_name == first) {
             Some((_, Some(alias), path)) => format!("; module '{}' is included as '{}'", path, alias),
             Some((_, None, path)) => format!("; module '{}' is included with only its parts, which are named alone", path),
             None if calls => match unqualified(written) {
-                "push" | "append" | "insert" => ", and Vela has no methods; a slice adds an item with 'add', as in 'xs.add(v)' or 'xs.add(i, v)'".to_string(),
-                "pop" | "remove" | "delete" => ", and Vela has no methods; a slice takes an item out with 'del', as in 'xs.del(i)' or 'xs.del()'".to_string(),
-                _ => ", and Vela has no methods".to_string(),
+                "push" | "append" | "insert" => "; a slice adds an item with 'add', as in 'xs.add(v)' or 'xs.add(i, v)'".to_string(),
+                "pop" | "remove" | "delete" => "; a slice takes an item out with 'del', as in 'xs.del(i)' or 'xs.del()'".to_string(),
+                _ => String::new(),
             },
             None => String::new(),
         }
@@ -877,12 +877,23 @@ impl Resolver<'_> {
     /// `Light.Red(…)` or `m.f(…)`, a variant or a module's task read as a method
     /// called on a value, rewritten to the call it is; whether `expr` was one. A
     /// name before the dot is a module this file includes or a kind, and
-    /// anything else is a value with a method. (A function of its own: `expr`'s
+    /// anything else, or anything longer, is a value with a method. (A function of its own: `expr`'s
     /// frame is on the stack once per nesting level.)
     fn call_as_name(&self, expr: &mut Expr) -> Result<bool> {
         let ExprKind::MethodCall { dotted: Some(dotted), .. } = &expr.kind else { return Ok(false) };
-        let first = dotted.split(MODULE_SEPARATOR).next().unwrap_or(dotted);
-        if !self.modules.contains_key(first) && self.kind(first, expr.span)?.is_none() {
+        let parts: Vec<&str> = dotted.split(MODULE_SEPARATOR).collect();
+        // A name is `Kind.Variant`, `m.f`, or `m.Kind.Variant`; more after it
+        // is a method called on the variant, as in `Suit.Spades.name()`.
+        let named = match parts.as_slice() {
+            [module, _] if self.modules.contains_key(*module) => true,
+            // `m.Blue.str()` is a method called on the variant `m.Blue`.
+            [module, second, _] if self.modules.contains_key(*module) => {
+                !self.modules.get(*module).and_then(|names| names.names.get(*second)).is_some_and(|entry| entry.what == What::Variant)
+            }
+            [kind, _] => self.kind(kind, expr.span)?.is_some(),
+            _ => false,
+        };
+        if !named {
             return Ok(false);
         }
         let mut name = dotted.clone();
@@ -1077,7 +1088,7 @@ impl Resolver<'_> {
                 args.iter_mut().try_for_each(|e| self.expr(e))
             }
             ExprKind::Scan { args, .. } | ExprKind::Join { parts: args, .. } => args.iter_mut().try_for_each(|e| self.expr(e)),
-            ExprKind::Copy { value, .. } => self.expr(value),
+            ExprKind::Copy { value, .. } | ExprKind::ToText { value, .. } => self.expr(value),
         }
     }
 

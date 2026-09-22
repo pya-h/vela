@@ -357,6 +357,14 @@ impl Checked {
                 self.field_accesses.insert(pos(e.span), String::new());
                 self.expr(value, kinds);
             }
+            // `n.str() at r` is a member too, written after its value; `text(n)
+            // at r` is written before it, and its word is the type.
+            ExprKind::ToText { value, .. } => {
+                if (value.span.line, value.span.col) < (e.span.line, e.span.col) {
+                    self.field_accesses.insert(pos(e.span), String::new());
+                }
+                self.expr(value, kinds);
+            }
             // `p.area()`: the checker turns a method call into the call of the
             // task the method is, so one is left only where a file doesn't
             // check. The name after the dot is a member of the value's type.

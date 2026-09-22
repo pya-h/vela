@@ -1274,6 +1274,10 @@ impl<'a> Classifier<'a> {
         if after == Some(&Token::LParen) && BUILTIN_TASKS.contains(&name) {
             return (TokenClass::BuiltinFn, None);
         }
+        // `text(n) at r`: the type, turning a value into it.
+        if after == Some(&Token::LParen) && name == vela::ast::TEXT_CAST {
+            return (TokenClass::TypeBuiltin, None);
+        }
         if after == Some(&Token::LParen)
             && let Some(id) = self.global(name, &[SymbolKind::Task, SymbolKind::Variant])
         {

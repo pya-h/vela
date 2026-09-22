@@ -172,23 +172,29 @@
     | keyword:bind  variable:fixed  operator:=  variant:Green
 100 |     show(fixed.shown())
     | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  method:shown  punctuation:(  punctuation:)  punctuation:)
-102 |     region r
+101 |     # And on a variant as it is written.
+    | comment:# And on a variant as it is written.
+102 |     show(Light.Amber(1).shown())
+    | builtin-fn:show  punctuation:(  type:Light  punctuation:.  variant:Amber  punctuation:(  number:1  punctuation:)  punctuation:.  method:shown  punctuation:(  punctuation:)  punctuation:)
+103 |     show(Light.Red.shown())
+    | builtin-fn:show  punctuation:(  type:Light  punctuation:.  variant:Red  punctuation:.  method:shown  punctuation:(  punctuation:)  punctuation:)
+105 |     region r
     | keyword:region  region:r
-103 |     hold word: Label@r = Word("a word".copy() at r)
+106 |     hold word: Label@r = Word("a word".copy() at r)
     | keyword:hold  variable:word  punctuation::  type:Label  operator:@  region:r  operator:=  variant:Word  punctuation:(  string:"a word"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
-104 |     show(word.wordOf())
+107 |     show(word.wordOf())
     | builtin-fn:show  punctuation:(  variable:word  punctuation:.  method:wordOf  punctuation:(  punctuation:)  punctuation:)
-105 |     word.clear()
+108 |     word.clear()
     | variable:word  punctuation:.  method:clear  punctuation:(  punctuation:)
-106 |     show(word.wordOf())
+109 |     show(word.wordOf())
     | builtin-fn:show  punctuation:(  variable:word  punctuation:.  method:wordOf  punctuation:(  punctuation:)  punctuation:)
-108 |     # Through a pointer into a region.
+111 |     # Through a pointer into a region.
     | comment:# Through a pointer into a region.
-109 |     hold here = new Light(Red) at r
+112 |     hold here = new Light(Red) at r
     | keyword:hold  variable:here  operator:=  keyword:new  type:Light  punctuation:(  variant:Red  punctuation:)  keyword:at  region:r
-110 |     here^.flip()
+113 |     here^.flip()
     | variable:here  operator:^  punctuation:.  method:flip  punctuation:(  punctuation:)
-111 |     here^.tell()
+114 |     here^.tell()
     | variable:here  operator:^  punctuation:.  method:tell  punctuation:(  punctuation:)
-112 | fi
+115 | fi
     | keyword:fi

@@ -136,6 +136,14 @@ pub const SCAN: &str = "scan";
 /// The word of `value.copy()`, written after a dot like `add` and `del`.
 pub const COPY: &str = "copy";
 
+/// The method that turns a value into text in a region, `n.str() at r` (also
+/// `n.str(r)`, and `text(n) at r`). Numbers, bools, and text have it built in,
+/// and a shape or kind gives its own, `str(r: region) -> text@r`.
+pub const STR: &str = "str";
+
+/// The type whose name, called, turns a value into text: `text(n) at r`.
+pub const TEXT_CAST: &str = "text";
+
 /// How many items an array or slice holds, read after a dot as a field.
 pub const LEN: &str = "len";
 
@@ -607,6 +615,17 @@ pub enum ExprKind {
     /// span is the first `+`, and `region_span` the position of `r`.
     Join {
         parts: Vec<Expr>,
+        region: String,
+        region_span: Span,
+    },
+    /// `n.str() at r`, `n.str(r)`, or `text(n) at r` on a number, a bool, or
+    /// text: the value written as text, new text in region `r`. The parser
+    /// reads each as the method call `str` given the region, and the checker
+    /// makes one of these from it where the value has `str` built in (a shape
+    /// or kind with its own stays the call of its method); `region_span` is the
+    /// position of `r`.
+    ToText {
+        value: Box<Expr>,
         region: String,
         region_span: Span,
     },

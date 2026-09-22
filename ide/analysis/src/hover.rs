@@ -23,7 +23,7 @@ const BUILTIN_TYPE_DOCS: &[(&str, &str)] = &[
     ("int", "A 64-bit signed integer."),
     ("float", "A 64-bit floating-point number."),
     ("bool", "true or false."),
-    ("text", "UTF-8 text. t.len is how many bytes it has and t[a..b] a part of it, the same bytes; == and < compare contents, and a + b at r joins text into region r. text lasts as long as the program, as a literal does; text@r is in region r, as the text of a value in r is."),
+    ("text", "UTF-8 text. t.len is how many bytes it has and t[a..b] a part of it, the same bytes; == and < compare contents, and a + b at r joins text into region r. text(n) at r turns a value into text, as n.str() at r does. text lasts as long as the program, as a literal does; text@r is in region r, as the text of a value in r is."),
     ("unit", "The return type of a task that sends no value."),
 ];
 
@@ -105,6 +105,10 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
             let code = ty.map_or_else(|| format!("item {}", text), |ty| format!("item {}: {}", text, ty));
             (code, "An item of a tuple, by its position from 0. A tuple's items never change.".to_string())
         }
+        (TokenClass::Field, None) if text == vela::ast::STR => (
+            "str() at r or str(r) -> text@r".to_string(),
+            "Turns a number, a bool, or text into text in region r, written as show writes it (also str()@r, and text(n) at r). A shape or kind gives its own with a method str(r: region) -> text@r.".to_string(),
+        ),
         (TokenClass::Field, None) if text == vela::ast::COPY => (
             "copy() at r or copy()@r".to_string(),
             "Copies a value into a region: its text, its slices' items, and what its pointers point to, all the way down (shared nodes stay shared, and cycles stay cycles). Without a region, the copy goes into the region of the place it is put in.".to_string(),

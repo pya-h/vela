@@ -1,0 +1,4 @@
+# error: 3:17: 'text(…)' makes new text, so it names the region the text goes in, as in 'text(n) at r' or 'text(n)@r'
+task main()
+    show(text(5))
+fi

@@ -190,6 +190,15 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
             }
             items
         };
+        // A number, a bool, or text turned into text in a region.
+        let to_text = || CompletionItem {
+            label: vela::ast::STR.to_string(),
+            kind: CompletionKind::BuiltinFn,
+            detail: "str() at r, the value as text in a region".to_string(),
+            apply: None,
+            snippet: Some(format!("{}() at ${{r}}", vela::ast::STR)),
+            boost: LOCAL,
+        };
         // Every value holding text, a slice, or a pointer can be copied; a
         // pointer's other members replace from the dot, and so does its copy.
         let can_copy = base.as_ref().is_some_and(|ty| exact.can_copy(ty));
@@ -225,7 +234,8 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 return (with_copy(items, false), word_start, byte);
             }
             Some(Type::Array(..)) => return (with_copy(members(false, false), false), word_start, byte),
-            // Text's member is its length in bytes.
+            // Text's members are its length in bytes and `str`; a number's
+            // and a bool's, `str`.
             Some(Type::Text(_)) => {
                 let len = CompletionItem {
                     label: vela::ast::LEN.to_string(),
@@ -235,8 +245,9 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                     snippet: None,
                     boost: LOCAL,
                 };
-                return (with_copy(vec![len], false), word_start, byte);
+                return (with_copy(vec![len, to_text()], false), word_start, byte);
             }
+            Some(Type::Int | Type::Float | Type::Bool) => return (vec![to_text()], word_start, byte),
             Some(Type::Slice(..)) => return (with_copy(members(true, false), false), word_start, byte),
             Some(Type::Ptr(inner, _)) if matches!(**inner, Type::Array(..) | Type::Slice(..)) => {
                 return (with_copy(members(matches!(**inner, Type::Slice(..)), true), true), k.range(dot).start, byte);

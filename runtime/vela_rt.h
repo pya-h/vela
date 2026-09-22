@@ -480,6 +480,44 @@ static inline vela__rt__text vela__rt__join(vela__rt__region* r, const vela__rt_
     return (vela__rt__text){ bytes, (int64_t)len };
 }
 
+/* `x.str() at r`: a value written as text, new text in `r`, as `show` writes
+ * it. */
+
+/* Text in `r` holding the `len` bytes at `bytes`. */
+static inline vela__rt__text vela__rt__text_in(vela__rt__region* r, const char* bytes, size_t len) {
+    char* copy = vela__rt__region_alloc(r, len, 1);
+    if (len > 0) {
+        memcpy(copy, bytes, len);
+    }
+    return (vela__rt__text){ copy, (int64_t)len };
+}
+
+static inline vela__rt__text vela__rt__int_str(vela__rt__region* r, int64_t x) {
+    char digits[24];
+    int len = snprintf(digits, sizeof digits, "%lld", (long long)x);
+    return vela__rt__text_in(r, digits, (size_t)len);
+}
+
+static inline vela__rt__text vela__rt__float_str(vela__rt__region* r, double x) {
+    if (isnan(x)) {
+        return vela__rt__text_in(r, "nan", 3);
+    }
+    char digits[32];
+    int len = snprintf(digits, sizeof digits, "%g", x);
+    return vela__rt__text_in(r, digits, (size_t)len);
+}
+
+/* `true` and `false` are text of the program, which fits text of `r`. */
+static inline vela__rt__text vela__rt__bool_str(vela__rt__region* r, bool x) {
+    (void)r;
+    return x ? VELA__RT__TEXT("true") : VELA__RT__TEXT("false");
+}
+
+/* Text turned into text is a copy of it in `r`. */
+static inline vela__rt__text vela__rt__text_str(vela__rt__region* r, vela__rt__text x) {
+    return vela__rt__text_in(r, x.bytes, (size_t)x.len);
+}
+
 /* Copies: `value.copy() at r` copies what a value holds in regions into region
  * `r`: its text, its slices' items, and what its pointers point to, all the
  * way down. A generated `fix` function for each type replaces, in a value

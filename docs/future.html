@@ -313,7 +313,7 @@
         </div>
         <div class="card">
           <h3>No standard library <span class="badge b-high">High</span></h3>
-          <p>Only <code>show</code> and <code>scan</code> (which reads a line of input) exist. No text operations, conversions, files, networking, or math utilities.</p>
+          <p>Only <code>show</code> and <code>scan</code> (which reads a line of input) exist, with text's own operations (<a href="vela.html#text-parts">parts</a>, <a href="vela.html#joining">joining</a>, and <a href="vela.html#str">values as text</a>). No conversions between numbers, files, networking, or math utilities.</p>
         </div>
         <div class="card">
           <h3>No module system <span class="badge b-done">Done</span></h3>
@@ -343,7 +343,7 @@
         </div>
         <div class="card">
           <h3 id="text-is-a-c-string">Text is a C string <span class="badge b-med">Medium</span></h3>
-          <p><code>text</code> was a C string, <code>const char*</code>, in which a <code>\0</code> ended the text early. It is now its bytes and how many there are: <code>t.len</code> reads the length without counting, and a <code>\0</code> is a byte like any other. Parts, <code>t[a..b]</code>, are views of the same bytes, and <code>&lt;</code> orders text by them. Joining, <code>a + b at r</code>, makes new text in a region. What text still lacks is text from numbers (see <a href="#real-text">Real text type</a>). Text has a lifetime in its type: <code>text</code> lasts as long as the program, <code>text@r</code> is in a region (<a href="vela.html#text-in-regions">Text in a region</a>), which reading input (<a href="vela.html#input"><code>scan</code></a>) uses, and building text will need.</p>
+          <p><code>text</code> was a C string, <code>const char*</code>, in which a <code>\0</code> ended the text early. It is now its bytes and how many there are: <code>t.len</code> reads the length without counting, and a <code>\0</code> is a byte like any other. Parts, <code>t[a..b]</code>, are views of the same bytes, and <code>&lt;</code> orders text by them. Joining, <code>a + b at r</code>, makes new text in a region. A value becomes text with <code>n.str() at r</code> or <code>text(n) at r</code>. What text still lacks is values written inside it, <code>"{name} is {age}" at r</code> (see <a href="#real-text">Real text type</a>). Text has a lifetime in its type: <code>text</code> lasts as long as the program, <code>text@r</code> is in a region (<a href="vela.html#text-in-regions">Text in a region</a>), which reading input (<a href="vela.html#input"><code>scan</code></a>) uses, and building text will need.</p>
         </div>
         <div class="card">
           <h3>Undefined integer edge cases <span class="badge b-done">Done</span></h3>
@@ -407,8 +407,8 @@
           <p>Replace C strings with a <code>(ptr, len)</code> struct and safe operations. The struct is in:
             <code>t.len</code> is a field, and a <code>\0</code> no longer ends text. So are parts,
             <code>t[a..b]</code>, which never cut a character, <code>&lt;</code> on text, and joining,
-            <code>a + b at r</code>. The rest is chosen and next: <code>n.str() at r</code> and
-            <code>"{name} is {age}" at r</code>.</p>
+            <code>a + b at r</code>, and values as text, <code>n.str() at r</code> or <code>text(n) at r</code>. The rest
+            is chosen and next: <code>"{name} is {age}" at r</code>.</p>
         </div>
         <div class="card">
           <h3>Regions <span class="badge b-done">Done</span></h3>
@@ -1716,24 +1716,29 @@ show(c.total())</pre>
           (<code>bind limits = (0, 100)</code>) is itself a constant: the compiler could compute <code>limits.1 - limits.0</code>
           when compiling, pass small tuples in registers, and share one copy of a constant tuple, with no check that it
           changed</li>
-        <li><strong>Type conversions (casting):</strong> Vela can't convert a value from one type to another yet: not an
-          <code>int</code> to a <code>float</code> (except where <code>1 + 2.5</code> promotes it), not a <code>float</code> to an
-          <code>int</code>, and not text to a number or a number to text. See <a href="#conversions">Type conversions</a>
-          below.</li>
+        <li><strong>Type conversions (casting):</strong> Vela turns a value into text (<code>text(n) at r</code>, or
+          <code>n.str() at r</code>), but can't convert it to another type yet: not an <code>int</code> to a
+          <code>float</code> (except where <code>1 + 2.5</code> promotes it), not a <code>float</code> to an
+          <code>int</code>, and not text to a number. See <a href="#conversions">Type conversions</a> below.</li>
         <li><strong>Type aliases:</strong> <code>alias UserId = int</code></li>
       </ul>
 
       <h3 id="conversions">Type conversions (casting)</h3>
       <p>
-        Every conversion between types is missing today, and reading input makes it pressing: <code>scan</code> reads
-        text, and a program asking for a number has no way to turn <code>"42"</code> into <code>42</code>. (The typed form
-        <code>scan("Age: ", int)</code> waits for this.) The syntax is to be chosen; the questions each spelling must answer are
-        the same:
+        <span class="badge b-done">Done</span> for text: <code>text(x) at r</code> turns a number, a bool, or text into
+        text, and so do <code>x.str() at r</code> and <code>x.str(r)</code>; a shape or kind gives its own with a method
+        <code>str(r: region) -&gt; text@r</code> (see <a href="vela.html#str">Values as text</a>).
       </p>
-      <pre>bind x = float(n)                  # a call named by the type
-bind y = n as float                # a keyword, as in Rust and Swift
+      <p>
+        <strong>Chosen, and next:</strong> the other conversions are calls named by the type, as <code>text(x)</code> is, so
+        they read alike: <code>float(n)</code> and <code>int(x)</code>. They are what reading input still needs:
+        <code>scan</code> reads text, and a program asking for a number has no way to turn <code>"42"</code> into
+        <code>42</code>. (The typed form <code>scan("Age: ", int)</code> waits for this.) The questions they must answer:
+      </p>
+      <pre>bind x = float(n)                  # an int as a float
+bind whole = int(2.9)              # a float as an int: 2, truncated toward zero
 bind age = int("42")               # text to a number can fail: int or ParseError
-bind shown = text(3.5) at r        # a number to text makes text, in a region</pre>
+bind shown = text(3.5) at r        # a number to text makes text, in a region (done)</pre>
       <ul>
         <li><strong>Which conversions.</strong> <code>int</code> ↔ <code>float</code>, <code>bool</code> → <code>int</code>,
           numbers ↔ <code>text</code>. Shapes, kinds, pointers, and slices don't convert; a task does that.</li>
@@ -1744,7 +1749,7 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
         <li><strong>Rounding.</strong> A float to an int truncates toward zero, as C does, or rounds; separate conversions
           (<code>round</code>, <code>floor</code>) keep that explicit.</li>
         <li><strong>Text needs memory.</strong> A number written as text is new text, so it goes in a region
-          (<code>text@r</code>), written <code>… at r</code> as <code>new</code> and <code>scan</code> are.</li>
+          (<code>text@r</code>), written <code>… at r</code> as <code>new</code> and <code>scan</code> are. Done this way.</li>
         <li><strong>Promotion.</strong> With conversions, <code>1 + 2.5</code> could become an error that asks for
           <code>float(1) + 2.5</code>, so that no <code>int</code> becomes a <code>float</code> quietly.</li>
       </ul>
@@ -1866,7 +1871,7 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
             <li><s>Defined integer overflow and division by zero</s> (done: <a href="vela.html#int-limits">they stop the program with a message</a>)</li>
             <li><s>Fixed-size arrays and slices, which grow and shrink</s> (done: <a href="vela.html#arrays">arrays</a> and <a href="vela.html#slices">slices</a>), and a real <code>text</code> type</li>
             <li><s>Text in regions</s> (done: <a href="vela.html#text-in-regions"><code>text@r</code></a>), <s>reading input</s>
-              (done: <a href="vela.html#input"><code>scan</code></a>), <s>copies into another region</s> (done: <a href="vela.html#copy"><code>.copy()</code></a>), then <a href="#conversions">type conversions</a></li>
+              (done: <a href="vela.html#input"><code>scan</code></a>), <s>copies into another region</s> (done: <a href="vela.html#copy"><code>.copy()</code></a>), then <a href="#conversions">type conversions</a> (to text done: <a href="vela.html#str"><code>text(n) at r</code></a>; <code>int(x)</code> and <code>float(n)</code> next)</li>
             <li>Small region improvements: result-only regions, typed patterns, a lint for regions that grow in loops, and a
               chunk cache (<a href="regions.html#ideas">ideas</a>)</li>
             <li>Move-only owned pointers, on top of regions</li>

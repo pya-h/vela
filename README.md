@@ -14,7 +14,8 @@ never wraps: overflow and division by zero stop the program with a message sayin
 are values held in place, and slices (`[int]@r`) view items in a region, made with `new [int]([0; n]) at r`
 (or empty, `new [int]() at r`) and changed with `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, and `xs.del()`;
 every index is checked, and `xs.len` is the count. Text knows its length in bytes, `t.len`, has parts that
-are views of the same bytes, `t[0..3]`, is ordered by `<`, and is joined into a region with `a + b at r`.
+are views of the same bytes, `t[0..3]`, is ordered by `<`, and is joined into a region with `a + b at r`; `n.str() at r` (or `text(n) at r`)
+writes a value as text, and a shape or kind gives its own with a method `str`.
 `scan("Name: ") at r` shows a prompt and reads a line into a region, giving `none` once the input has ended, and `value.copy()` copies a value (its text, its slices'
 items, and what its pointers point to) into the region where it goes, or `value.copy() at r`. Tuples hold
 values together (`(text, int)`, read as `t.0`), their items never change, and names take them apart

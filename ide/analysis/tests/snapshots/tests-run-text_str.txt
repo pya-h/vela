@@ -1,0 +1,124 @@
+  1 | # Turning a value into text: `x.str() at r`, `x.str()@r`, `x.str(r)`, and
+    | comment:# Turning a value into text: `x.str() at r`, `x.str()@r`, `x.str(r)`, and
+  2 | # `text(x) at r` are the same. Numbers, bools, and text have it built in, and
+    | comment:# `text(x) at r` are the same. Numbers, bools, and text have it built in, and
+  3 | # write a value as `show` does; a shape or kind gives its own with a method
+    | comment:# write a value as `show` does; a shape or kind gives its own with a method
+  4 | # `str(r: region) -> text@r`, which all four forms call.
+    | comment:# `str(r: region) -> text@r`, which all four forms call.
+  6 | shape Point
+    | keyword:shape  type:Point
+  7 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  8 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  9 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 10 |         <- "(" + .x.str() at r + ", " + .y.str(r) + ")" at r
+    | keyword:<-  string:"("  operator:+  punctuation:.  field:x  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  operator:+  string:", "  operator:+  punctuation:.  field:y  punctuation:.  field:str  punctuation:(  region:r  punctuation:)  operator:+  string:")"  keyword:at  region:r
+ 11 |     fi
+    | keyword:fi
+ 12 | fi
+    | keyword:fi
+ 14 | kind Suit
+    | keyword:kind  type:Suit
+ 15 |     Hearts
+    | variant:Hearts
+ 16 |     Spades
+    | variant:Spades
+ 17 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 18 |         match .this
+    | keyword:match  punctuation:.  keyword:this
+ 19 |         case Hearts
+    | keyword:case  variant:Hearts
+ 20 |             <- "♥"
+    | keyword:<-  string:"♥"
+ 21 |         case Spades
+    | keyword:case  variant:Spades
+ 22 |             <- "♠"
+    | keyword:<-  string:"♠"
+ 23 |         fi
+    | keyword:fi
+ 24 |     fi
+    | keyword:fi
+ 25 | fi
+    | keyword:fi
+ 27 | # A type that is `shown` is a number, a bool, or text, which all have `str`.
+    | comment:# A type that is `shown` is a number, a bool, or text, which all have `str`.
+ 28 | task labelled<T: shown>(label: text, value: T, r: region) -> text@r
+    | keyword:task  task:labelled  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:value  punctuation::  type:T  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 29 |     <- label + ": " + value.str() at r at r
+    | keyword:<-  parameter:label  operator:+  string:": "  operator:+  parameter:value  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  keyword:at  region:r
+ 30 | fi
+    | keyword:fi
+ 32 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 33 |     region r
+    | keyword:region  region:r
+ 34 |     show(42.str() at r)
+    | builtin-fn:show  punctuation:(  number:42  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 35 |     show((-7).str()@r)
+    | builtin-fn:show  punctuation:(  punctuation:(  operator:-  number:7  punctuation:)  punctuation:.  field:str  punctuation:(  punctuation:)  operator:@  region:r  punctuation:)
+ 36 |     show(2.5.str(r))
+    | builtin-fn:show  punctuation:(  number:2.5  punctuation:.  field:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 37 |     show(text(100000000000000000000.0) at r)
+    | builtin-fn:show  punctuation:(  type-builtin:text  punctuation:(  number:100000000000000000000.0  punctuation:)  keyword:at  region:r  punctuation:)
+ 38 |     show(text(0.1 + 0.2)@r)
+    | builtin-fn:show  punctuation:(  type-builtin:text  punctuation:(  number:0.1  operator:+  number:0.2  punctuation:)  operator:@  region:r  punctuation:)
+ 39 |     show((0.0 / 0.0).str() at r)
+    | builtin-fn:show  punctuation:(  punctuation:(  number:0.0  operator:/  number:0.0  punctuation:)  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 40 |     show(true.str() at r)
+    | builtin-fn:show  punctuation:(  keyword:true  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 41 |     show(text(false) at r)
+    | builtin-fn:show  punctuation:(  type-builtin:text  punctuation:(  keyword:false  punctuation:)  keyword:at  region:r  punctuation:)
+ 42 |     bind word = "word"
+    | keyword:bind  variable:word  operator:=  string:"word"
+ 43 |     show(word.str() at r == word)
+    | builtin-fn:show  punctuation:(  variable:word  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  operator:==  variable:word  punctuation:)
+ 44 |     show(text(word) at r)
+    | builtin-fn:show  punctuation:(  type-builtin:text  punctuation:(  variable:word  punctuation:)  keyword:at  region:r  punctuation:)
+ 45 |     bind n = 9223372036854775807
+    | keyword:bind  variable:n  operator:=  number:9223372036854775807
+ 46 |     show(n.str() at r)
+    | builtin-fn:show  punctuation:(  variable:n  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 47 |     show(text(-n - 1) at r)
+    | builtin-fn:show  punctuation:(  type-builtin:text  punctuation:(  operator:-  variable:n  operator:-  number:1  punctuation:)  keyword:at  region:r  punctuation:)
+ 48 |     show((n.str() at r).len)
+    | builtin-fn:show  punctuation:(  punctuation:(  variable:n  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)  punctuation:.  field:len  punctuation:)
+ 49 |     show("n = " + n.str() at r at r)
+    | builtin-fn:show  punctuation:(  string:"n = "  operator:+  variable:n  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  keyword:at  region:r  punctuation:)
+ 50 |     bind p = Point { x: 3, y: -4 }
+    | keyword:bind  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  operator:-  number:4  punctuation:}
+ 51 |     show(p.str() at r)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 52 |     show(text(p) at r)
+    | builtin-fn:show  punctuation:(  type-builtin:text  punctuation:(  variable:p  punctuation:)  keyword:at  region:r  punctuation:)
+ 53 |     show(p.str(r).len)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:.  field:len  punctuation:)
+ 54 |     show(Suit.Spades.str() at r + Suit.Hearts.str(r) at r)
+    | builtin-fn:show  punctuation:(  type:Suit  punctuation:.  variant:Spades  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  operator:+  type:Suit  punctuation:.  variant:Hearts  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  keyword:at  region:r  punctuation:)
+ 55 |     show(labelled("count", 3, r))
+    | builtin-fn:show  punctuation:(  task:labelled  punctuation:(  string:"count"  punctuation:,  number:3  punctuation:,  region:r  punctuation:)  punctuation:)
+ 56 |     show(labelled("ok", true, r))
+    | builtin-fn:show  punctuation:(  task:labelled  punctuation:(  string:"ok"  punctuation:,  keyword:true  punctuation:,  region:r  punctuation:)  punctuation:)
+ 57 |     show(labelled("name", "Ada", r))
+    | builtin-fn:show  punctuation:(  task:labelled  punctuation:(  string:"name"  punctuation:,  string:"Ada"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 58 |     # Text a region holds, kept in another region.
+    | comment:# Text a region holds, kept in another region.
+ 59 |     hold kept = new [text]() at r
+    | keyword:hold  variable:kept  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 60 |     loop kept.len < 3
+    | keyword:loop  variable:kept  punctuation:.  field:len  operator:<  number:3
+ 61 |         region pass
+    | keyword:region  region:pass
+ 62 |         bind shown = (kept.len * 10).str() at pass
+    | keyword:bind  variable:shown  operator:=  punctuation:(  variable:kept  punctuation:.  field:len  operator:*  number:10  punctuation:)  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:pass
+ 63 |         kept.add(shown.str() at r)
+    | variable:kept  punctuation:.  field:add  punctuation:(  variable:shown  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 64 |     fi
+    | keyword:fi
+ 65 |     show(kept[0] + kept[1] + kept[2] at r)
+    | builtin-fn:show  punctuation:(  variable:kept  punctuation:[  number:0  punctuation:]  operator:+  variable:kept  punctuation:[  number:1  punctuation:]  operator:+  variable:kept  punctuation:[  number:2  punctuation:]  keyword:at  region:r  punctuation:)
+ 66 | fi
+    | keyword:fi

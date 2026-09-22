@@ -12,6 +12,13 @@ shape Person
     name: text
 fi
 
+shape Point
+    x: int
+    str(r: region) -> text@r
+        <- .x.str() at r
+    fi
+fi
+
 task main()
     CHECK
     region r
@@ -28,6 +35,10 @@ task main()
     bind joined = name + \" \" + line at r
     bind wrapped = (\"<\" + name + \">\")@r
     bind sum = count + 1
+    bind digits = count.str() at r
+    bind given = count.str(r)
+    bind cast = text(count)@r
+    bind point = Point { x: 1 }.str() at r
     @@
 fi
 ";
@@ -87,13 +98,13 @@ fn a_part_of_text_is_text_where_the_text_is_whether_or_not_the_file_checks() {
 }
 
 #[test]
-fn text_completes_its_length_and_its_copy() {
+fn text_completes_its_length_str_and_copy() {
     for checks in [true, false] {
         let when = if checks { "checked" } else { "declared" };
         for value in ["name", "person.name", "line"] {
             let items = completions(&program(checks, &format!("show({}.@@)", value)));
             let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
-            assert_eq!(labels, ["len", "copy"], "{} {}", value, when);
+            assert_eq!(labels, ["len", "str", "copy"], "{} {}", value, when);
             assert_eq!(items[0].detail, "int, the number of bytes", "{} {}", value, when);
         }
     }
@@ -125,4 +136,31 @@ fn joining_without_a_region_says_how_to_name_one() {
         messages,
         ["joining text makes new text, which goes in a region; name it after the last part, as in 'a + b at r', or after parentheses, as in '(a + b)@r'"]
     );
+}
+
+#[test]
+fn a_value_turned_into_text_is_text_of_its_region_whether_or_not_the_file_checks() {
+    for checks in [true, false] {
+        let source = program(checks, "show(0)");
+        let when = if checks { "checked" } else { "declared" };
+        for name in ["digits", "given", "cast", "point"] {
+            assert_eq!(hover(&source, &format!("{} =", name)).0, format!("bind {}: text@r", name), "{} {}", name, when);
+        }
+    }
+}
+
+#[test]
+fn numbers_bools_and_text_complete_str() {
+    for checks in [true, false] {
+        let when = if checks { "checked" } else { "declared" };
+        for (value, wanted) in [("count", vec!["str"]), ("true", vec!["str"]), ("name", vec!["len", "str", "copy"])] {
+            let items = completions(&program(checks, &format!("show({}.@@)", value)));
+            let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
+            assert_eq!(labels, wanted, "{} {}", value, when);
+        }
+    }
+    let source = program(true, "show(0)");
+    let at = source.find("count.str").unwrap() + "count.".len();
+    let hover = Analysis::new(&source).hover(LineIndex::new(&source).utf16_of(at)).unwrap();
+    assert_eq!(hover.code, "str() at r or str(r) -> text@r");
 }

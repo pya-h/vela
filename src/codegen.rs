@@ -1262,6 +1262,7 @@ impl Generator {
             ExprKind::Edit { items, op, args } => self.gen_edit(e.span, items, *op, args, false),
             ExprKind::Scan { args, region, .. } => self.gen_scan(e.span, args, region, false),
             ExprKind::Join { parts, region, .. } => self.gen_join(parts, region),
+            ExprKind::ToText { value, region, .. } => self.gen_to_text(e, value, region),
             ExprKind::Copy { value, region, .. } => self.gen_copy(e, value, region.as_deref()),
             // The checker turns every method call into the call of the task the
             // method is (see `Checker::check_method_call`).
@@ -1274,6 +1275,19 @@ impl Generator {
         let parts: Vec<&Expr> = parts.iter().collect();
         let values = self.gen_operands(&parts)?;
         Ok(format!("vela__rt__join({}, (vela__rt__text[]){{ {} }}, {})", c_ident(region), values.join(", "), values.len()))
+    }
+
+    /// `value.str() at region`, the expression `e`, on a value with `str` built in.
+    fn gen_to_text(&mut self, e: &Expr, value: &Expr, region: &str) -> Result<String> {
+        let helper = match value.ty()? {
+            Type::Int => "int",
+            Type::Float => "float",
+            Type::Bool => "bool",
+            Type::Text(_) => "text",
+            other => return Err(Error::internal_at(e.span, format!("'str' on a value of type {}", other))),
+        };
+        let value = self.gen_expr(value)?;
+        Ok(format!("vela__rt__{}_str({}, {})", helper, c_ident(region), value))
     }
 
     /// `value.copy() at region`, the expression `e`.
@@ -1876,7 +1890,9 @@ fn has_prelude(e: &Expr) -> bool {
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
         | ExprKind::Var(_) => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. }
-        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Copy { value: inner, .. } => has_prelude(inner),
+        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Copy { value: inner, .. } | ExprKind::ToText { value: inner, .. } => {
+            has_prelude(inner)
+        }
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             has_prelude(a) || has_prelude(b)
         }
@@ -2143,6 +2159,7 @@ impl UsedTypes {
                 self.expr(value);
             }
             ExprKind::Join { parts, .. } => parts.iter().for_each(|part| self.expr(part)),
+            ExprKind::ToText { value, .. } => self.expr(value),
             ExprKind::Scan { args, .. } => {
                 self.scans = true;
                 // Its `maybe text` has a struct even when it isn't kept.
@@ -2233,8 +2250,9 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::PlanB { value, body, .. } => expr_reads(value, name) || block_reads(body, name),
         // `scan` reads the region it keeps the line in.
         ExprKind::Scan { args, region, .. } => region == name || args.iter().any(|arg| expr_reads(arg, name)),
-        // Joining text reads the region the text goes in.
+        // Joining text, and a value turned into text, read the region the text goes in.
         ExprKind::Join { parts, region, .. } => region == name || parts.iter().any(|part| expr_reads(part, name)),
+        ExprKind::ToText { value, region, .. } => region == name || expr_reads(value, name),
         // `copy` reads the region it copies into.
         ExprKind::Copy { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
         // `add` reads the region it may allocate in.

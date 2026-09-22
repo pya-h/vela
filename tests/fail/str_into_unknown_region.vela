@@ -1,0 +1,4 @@
+# error: 3:21: unknown region 'q'; declare it with 'region q'
+task main()
+    show(5.str() at q)
+fi

@@ -92,81 +92,91 @@
     | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variant:Custom  punctuation:(  number:10  punctuation:,  number:20  punctuation:,  number:30  punctuation:)  punctuation:)  punctuation:)
  52 |     show(describe(palette.Blue))
     | builtin-fn:show  punctuation:(  task:describe  punctuation:(  module:palette  punctuation:.  variant:Blue  punctuation:)  punctuation:)
- 53 |     match Dark(3)
+ 53 |     # A method of a module's kind, called on a variant named through the module.
+    | comment:# A method of a module's kind, called on a variant named through the module.
+ 54 |     region colors
+    | keyword:region  region:colors
+ 55 |     show(palette.Blue.str() at colors)
+    | builtin-fn:show  punctuation:(  module:palette  punctuation:.  variant:Blue  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:colors  punctuation:)
+ 56 |     show(palette.Color.Red.str(colors))
+    | builtin-fn:show  punctuation:(  module:palette  punctuation:.  type:Color  punctuation:.  variant:Red  punctuation:.  field:str  punctuation:(  region:colors  punctuation:)  punctuation:)
+ 57 |     show(text(red) at colors)
+    | builtin-fn:show  punctuation:(  type-builtin:text  punctuation:(  variable:red  punctuation:)  keyword:at  region:colors  punctuation:)
+ 58 |     match Dark(3)
     | keyword:match  variant:Dark  punctuation:(  number:3  punctuation:)
- 54 |     case Red
+ 59 |     case Red
     | keyword:case  variant:Red
- 55 |         show("red shade")
+ 60 |         show("red shade")
     | builtin-fn:show  punctuation:(  string:"red shade"  punctuation:)
- 56 |     case Dark level
+ 61 |     case Dark level
     | keyword:case  variant:Dark  variable:level
- 57 |         show(level)
+ 62 |         show(level)
     | builtin-fn:show  punctuation:(  variable:level  punctuation:)
- 58 |     fi
+ 63 |     fi
     | keyword:fi
- 60 |     # A private field, set and read through its module's tasks.
+ 65 |     # A private field, set and read through its module's tasks.
     | comment:# A private field, set and read through its module's tasks.
- 61 |     hold account = bank.open("ada", 100)
+ 66 |     hold account = bank.open("ada", 100)
     | keyword:hold  variable:account  operator:=  module:bank  punctuation:.  task:open  punctuation:(  string:"ada"  punctuation:,  number:100  punctuation:)
- 62 |     account = bank.deposit(account, 50)
+ 67 |     account = bank.deposit(account, 50)
     | variable:account  operator:=  module:bank  punctuation:.  task:deposit  punctuation:(  variable:account  punctuation:,  number:50  punctuation:)
- 63 |     show(account.owner)
+ 68 |     show(account.owner)
     | builtin-fn:show  punctuation:(  variable:account  punctuation:.  field:owner  punctuation:)
- 64 |     show(bank.balance(account))
+ 69 |     show(bank.balance(account))
     | builtin-fn:show  punctuation:(  module:bank  punctuation:.  task:balance  punctuation:(  variable:account  punctuation:)  punctuation:)
- 65 |     bind after = bank.withdraw(account, 500) {
+ 70 |     bind after = bank.withdraw(account, 500) {
     | keyword:bind  variable:after  operator:=  module:bank  punctuation:.  task:withdraw  punctuation:(  variable:account  punctuation:,  number:500  punctuation:)  punctuation:{
- 66 |         fail problem
+ 71 |         fail problem
     | keyword:fail  variable:problem
- 67 |         show(bank.explain(problem))
+ 72 |         show(bank.explain(problem))
     | builtin-fn:show  punctuation:(  module:bank  punctuation:.  task:explain  punctuation:(  variable:problem  punctuation:)  punctuation:)
- 68 |         account
+ 73 |         account
     | variable:account
- 69 |     }
+ 74 |     }
     | punctuation:}
- 70 |     show(bank.balance(after))
+ 75 |     show(bank.balance(after))
     | builtin-fn:show  punctuation:(  module:bank  punctuation:.  task:balance  punctuation:(  variable:after  punctuation:)  punctuation:)
- 72 |     # A module in a folder, which includes another through `..`, with regions and
+ 77 |     # A module in a folder, which includes another through `..`, with regions and
     | comment:# A module in a folder, which includes another through `..`, with regions and
- 73 |     # named results.
+ 78 |     # named results.
     | comment:# named results.
- 74 |     region r
+ 79 |     region r
     | keyword:region  region:r
- 75 |     hold top: maybe ^stack.Node@r = none
+ 80 |     hold top: maybe ^stack.Node@r = none
     | keyword:hold  variable:top  punctuation::  keyword:maybe  operator:^  module:stack  punctuation:.  type:Node  operator:@  region:r  operator:=  keyword:none
- 76 |     each i in 1..4
+ 81 |     each i in 1..4
     | keyword:each  variable:i  keyword:in  number:1  operator:..  number:4
- 77 |         top = stack.push(r, top, i * 10)
+ 82 |         top = stack.push(r, top, i * 10)
     | variable:top  operator:=  module:stack  punctuation:.  task:push  punctuation:(  region:r  punctuation:,  variable:top  punctuation:,  variable:i  operator:*  number:10  punctuation:)
- 78 |     fi
+ 83 |     fi
     | keyword:fi
- 79 |     bind total, count = stack.sum(top)
+ 84 |     bind total, count = stack.sum(top)
     | keyword:bind  variable:total  punctuation:,  variable:count  operator:=  module:stack  punctuation:.  task:sum  punctuation:(  variable:top  punctuation:)
- 80 |     show(total)
+ 85 |     show(total)
     | builtin-fn:show  punctuation:(  variable:total  punctuation:)
- 81 |     show(count)
+ 86 |     show(count)
     | builtin-fn:show  punctuation:(  variable:count  punctuation:)
- 83 |     # A task from another module that takes a type, with the type worked out
+ 88 |     # A task from another module that takes a type, with the type worked out
     | comment:# A task from another module that takes a type, with the type worked out
- 84 |     # from the arguments and written at the call.
+ 89 |     # from the arguments and written at the call.
     | comment:# from the arguments and written at the call.
- 85 |     show(numbers.larger(3, 8))
+ 90 |     show(numbers.larger(3, 8))
     | builtin-fn:show  punctuation:(  module:numbers  punctuation:.  task:larger  punctuation:(  number:3  punctuation:,  number:8  punctuation:)  punctuation:)
- 86 |     show(numbers.larger<float>(1.5, 0.5))
+ 91 |     show(numbers.larger<float>(1.5, 0.5))
     | builtin-fn:show  punctuation:(  module:numbers  punctuation:.  task:larger  punctuation:<  type-builtin:float  punctuation:>  punctuation:(  number:1.5  punctuation:,  number:0.5  punctuation:)  punctuation:)
- 88 |     # A shape from another module that takes types, built here and there.
+ 93 |     # A shape from another module that takes types, built here and there.
     | comment:# A shape from another module that takes types, built here and there.
- 89 |     bind tally: numbers.Tally<int> = numbers.Tally { value: 5, count: 2 }
+ 94 |     bind tally: numbers.Tally<int> = numbers.Tally { value: 5, count: 2 }
     | keyword:bind  variable:tally  punctuation::  module:numbers  punctuation:.  type:Tally  punctuation:<  type-builtin:int  punctuation:>  operator:=  module:numbers  punctuation:.  type:Tally  punctuation:{  field:value  punctuation::  number:5  punctuation:,  field:count  punctuation::  number:2  punctuation:}
- 90 |     show(tally.value)
+ 95 |     show(tally.value)
     | builtin-fn:show  punctuation:(  variable:tally  punctuation:.  field:value  punctuation:)
- 91 |     show(tally.count)
+ 96 |     show(tally.count)
     | builtin-fn:show  punctuation:(  variable:tally  punctuation:.  field:count  punctuation:)
- 92 |     bind counted = numbers.tallyOf(r, "once")
+ 97 |     bind counted = numbers.tallyOf(r, "once")
     | keyword:bind  variable:counted  operator:=  module:numbers  punctuation:.  task:tallyOf  punctuation:(  region:r  punctuation:,  string:"once"  punctuation:)
- 93 |     show(counted.value)
+ 98 |     show(counted.value)
     | builtin-fn:show  punctuation:(  variable:counted  punctuation:.  field:value  punctuation:)
- 94 |     show(counted.count)
+ 99 |     show(counted.count)
     | builtin-fn:show  punctuation:(  variable:counted  punctuation:.  field:count  punctuation:)
- 95 | fi
+100 | fi
     | keyword:fi

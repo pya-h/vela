@@ -1,0 +1,66 @@
+# Turning a value into text: `x.str() at r`, `x.str()@r`, `x.str(r)`, and
+# `text(x) at r` are the same. Numbers, bools, and text have it built in, and
+# write a value as `show` does; a shape or kind gives its own with a method
+# `str(r: region) -> text@r`, which all four forms call.
+
+shape Point
+    x: int
+    y: int
+    str(r: region) -> text@r
+        <- "(" + .x.str() at r + ", " + .y.str(r) + ")" at r
+    fi
+fi
+
+kind Suit
+    Hearts
+    Spades
+    str(r: region) -> text@r
+        match .this
+        case Hearts
+            <- "♥"
+        case Spades
+            <- "♠"
+        fi
+    fi
+fi
+
+# A type that is `shown` is a number, a bool, or text, which all have `str`.
+task labelled<T: shown>(label: text, value: T, r: region) -> text@r
+    <- label + ": " + value.str() at r at r
+fi
+
+task main()
+    region r
+    show(42.str() at r)
+    show((-7).str()@r)
+    show(2.5.str(r))
+    show(text(100000000000000000000.0) at r)
+    show(text(0.1 + 0.2)@r)
+    show((0.0 / 0.0).str() at r)
+    show(true.str() at r)
+    show(text(false) at r)
+    bind word = "word"
+    show(word.str() at r == word)
+    show(text(word) at r)
+    bind n = 9223372036854775807
+    show(n.str() at r)
+    show(text(-n - 1) at r)
+    show((n.str() at r).len)
+    show("n = " + n.str() at r at r)
+    bind p = Point { x: 3, y: -4 }
+    show(p.str() at r)
+    show(text(p) at r)
+    show(p.str(r).len)
+    show(Suit.Spades.str() at r + Suit.Hearts.str(r) at r)
+    show(labelled("count", 3, r))
+    show(labelled("ok", true, r))
+    show(labelled("name", "Ada", r))
+    # Text a region holds, kept in another region.
+    hold kept = new [text]() at r
+    loop kept.len < 3
+        region pass
+        bind shown = (kept.len * 10).str() at pass
+        kept.add(shown.str() at r)
+    fi
+    show(kept[0] + kept[1] + kept[2] at r)
+fi

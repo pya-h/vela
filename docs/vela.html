@@ -271,6 +271,7 @@ true false none  fi   maybe is     fail include priv</pre>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
         <tr><td><code>t[a..b]</code>, <code>t.len</code></td><td>a part of text, the same bytes (see <a href="#text-parts">Parts of text</a>); how many bytes it has</td></tr>
         <tr><td><code>a + b at r</code>, <code>(a + b)@r</code></td><td>text joined into new text in region <code>r</code> (see <a href="#joining">Joining text</a>)</td></tr>
+        <tr><td><code>x.str() at r</code>, <code>x.str(r)</code>, <code>text(x) at r</code></td><td>a value as text in region <code>r</code> (see <a href="#str">Values as text</a>)</td></tr>
         <tr><td><code>xs.add(v)</code>, <code>xs.add(i, v)</code>, <code>xs.del(i)</code>, <code>xs.del()</code></td><td>add a value to a slice, last or before item <code>i</code>; take item <code>i</code>, or the last, out of it and give it</td></tr>
         <tr><td><code>x.copy()</code>, <code>x.copy() at r</code></td><td>a copy of a value in the region where it goes, or in <code>r</code> (also <code>x.copy()@r</code>; see <a href="#copy">Copying into another region</a>)</td></tr>
         <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, or variant of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
@@ -640,6 +641,33 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         again and again keeps every step until then. A loop that runs long can build in a region declared inside it, and
         copy what it keeps out (see <a href="#copy">Copying into another region</a>).
       </p>
+      <p id="str">
+        <code>x.str() at r</code> turns a value into text: new text in region <code>r</code>, written as <code>show</code>
+        writes the value (<code>2.5</code>, <code>1e+20</code>, <code>true</code>). The region can also follow as
+        <code>x.str()@r</code>, or be given in the parentheses, <code>x.str(r)</code>, and <code>text(x) at r</code> (or
+        <code>text(x)@r</code>) is the same, named by the type the value becomes. Numbers, bools, and text have
+        <code>str</code> built in; text turned into text is a copy of it in <code>r</code>. A shape or a kind gives its own with
+        a method written <code>str(r: region) -&gt; text@r</code>, and every one of these forms calls it. A value without
+        <code>str</code> (a slice, a <code>maybe</code>, a pointer, a shape without the method) is an error saying what
+        can be turned into text, and so is a <code>str</code> without a region. <code>+</code> never turns a value into text
+        by itself: <code>"n = " + 5 at r</code> is an error that says to turn it into text first.
+      </p>
+      <pre><span class="keyword">shape</span> Point
+    x: int
+    y: int
+    str(r: <span class="keyword">region</span>) -&gt; text@r
+        <span class="keyword">&lt;-</span> <span class="string">"("</span> + .x.str() <span class="keyword">at</span> r + <span class="string">", "</span> + .y.str(r) + <span class="string">")"</span> <span class="keyword">at</span> r
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    show(<span class="number">42</span>.str() <span class="keyword">at</span> r)                          <span class="comment"># 42</span>
+    show(text(<span class="number">2.5</span>) <span class="keyword">at</span> r)                         <span class="comment"># 2.5, as show writes it</span>
+    <span class="keyword">bind</span> p = Point { x: <span class="number">3</span>, y: <span class="number">-4</span> }
+    show(<span class="string">"p = "</span> + p.str(r) <span class="keyword">at</span> r)                  <span class="comment"># p = (3, -4)</span>
+    show(<span class="string">"n = "</span> + <span class="number">5</span> <span class="keyword">at</span> r)                        <span class="comment"># error: '+' joins text, but this value is int; turn it into text first …</span>
+<span class="keyword">fi</span></pre>
       <pre><span class="comment"># greet the user</span>
 show(<span class="string">"say \"hi\""</span>)       <span class="comment"># say "hi"</span>
 show(2.0 / 3.0)            <span class="comment"># 0.666667</span>
@@ -837,7 +865,9 @@ light.tell(<span class="string">"now:"</span>)         <span class="comment"># n
           goes above its methods, and method 'total' is declared at 5:5</code>.</li>
         <li><strong>Names.</strong> A field and a method are both written <code>.name</code>, so they can't share a
           name, and neither can be called <code>this</code>. No method can be called <code>add</code>, <code>del</code>,
-          <code>copy</code>, or <code>len</code>, which every value or slice already answers to. A method's name clashes
+          <code>copy</code>, or <code>len</code>, which every value or slice already answers to. A method called
+          <code>str</code> turns the value into text for <code>x.str() at r</code> and <code>text(x) at r</code>, so it is
+          written <code>str(r: region) -&gt; text@r</code> (see <a href="#str">Values as text</a>). A method's name clashes
           with nothing outside its type, so two shapes can each have a <code>total</code>. <code>alters</code> and
           <code>this</code> are not reserved words: a variable can be called either.</li>
         <li><strong><code>priv</code></strong> marks a method only its own file may call, as it marks a field.</li>
@@ -1922,8 +1952,9 @@ show(area(square))             <span class="comment"># error: unknown task 'area
         <li>Memory is freed a whole region at a time, and a value holds pointers into one region only (see
           <a href="#regions">Memory and Regions</a>).</li>
         <li>Text has <code>==</code>, <code>&lt;</code> and the other comparisons, <code>.len</code>, parts
-          (<code>t[a..b]</code>), joining (<code>a + b at r</code>), <code>show</code>, and <code>scan</code>, and nothing
-          more yet: it can't be made from a number.</li>
+          (<code>t[a..b]</code>), joining (<code>a + b at r</code>), values turned into it (<code>n.str() at r</code>),
+          <code>show</code>, and <code>scan</code>. Text can't be read as a number yet (see
+          <a href="future.html#conversions">Type conversions</a>).</li>
         <li>Input is read a line of text at a time with <code>scan</code>; there are no conversions from text to numbers
           yet, and no files.</li>
         <li>Arrays and slices can't be compared or shown whole, and an array's count is known before the program runs
