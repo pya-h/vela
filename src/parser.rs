@@ -1551,11 +1551,20 @@ impl Parser {
         let mut levels = 0;
         let mut ranged = false;
         loop {
-            // `a + b at r` or `"n = {n}" at r`: the `+` chain or the text holding
-            // values just read is joined into `r`. The right operand of a `+`
-            // leaves its `at` to the whole chain.
-            if self.check(Token::At) && min <= Self::ADD_PRECEDENCE && joins(&left) {
-                left = self.parse_join(left)?;
+            // `a + b at r` or `"n = {n}" at r`: the `+` chain just read, or the
+            // text holding values, is joined into `r`. The right operand of a
+            // `+` leaves its `at` to the whole chain.
+            if self.check(Token::At) && min <= Self::ADD_PRECEDENCE {
+                let added = matches!(left.kind, ExprKind::Binary(BinaryOp::Add, ..));
+                if (added && levels > 0) || pending_region(&left) {
+                    left = self.parse_join(left)?;
+                } else if added {
+                    // A chain in parentheses names its region with `@`.
+                    return Err(Error::at(
+                        self.peek_span(),
+                        "a '+' chain in parentheses names its region with '@', as in '(a + b)@r'; without them, write 'a + b at r'",
+                    ));
+                }
             }
             let span = self.peek_span();
             if self.check(Token::Range) && min <= Self::RANGE_PRECEDENCE && !ranged {
@@ -1666,7 +1675,7 @@ impl Parser {
         let span = self.peek_span();
         if self.match_token(Token::Fail) {
             self.enter()?;
-            let error = self.parse_unary()?;
+            let error = self.parse_operand()?;
             self.leave(1);
             return Ok(Expr::new(ExprKind::Fail(Box::new(error)), span));
         }
@@ -1678,9 +1687,20 @@ impl Parser {
             return self.parse_postfix();
         };
         self.enter()?;
-        let expr = self.parse_unary()?;
+        let expr = self.parse_operand()?;
         self.leave(1);
         Ok(Expr::new(ExprKind::Unary(op, Box::new(expr)), span))
+    }
+
+    /// The value after `fail`, `-`, or `not`, which takes only the value right
+    /// after it, and text holding values with its region: `fail "{n} is
+    /// negative" at r`.
+    fn parse_operand(&mut self) -> Result<Expr> {
+        let operand = self.parse_unary()?;
+        if self.check(Token::At) && pending_region(&operand) {
+            return self.parse_join(operand);
+        }
+        Ok(operand)
     }
 
     fn parse_postfix(&mut self) -> Result<Expr> {
@@ -1695,7 +1715,7 @@ impl Parser {
     /// is on the stack once per nesting level.)
     fn parse_suffixes(&mut self, mut expr: Expr, parenthesized: bool) -> Result<Expr> {
         // `(a + b)@r` or `"n = {n}"@r`: text joined into `r`.
-        if self.check(Token::AtSign) && (pending_region(&expr) || (parenthesized && joins(&expr))) {
+        if self.check(Token::AtSign) && (pending_region(&expr) || (parenthesized && matches!(expr.kind, ExprKind::Binary(BinaryOp::Add, ..)))) {
             expr = self.parse_join(expr)?;
         }
         let mut levels = 0;
@@ -2348,12 +2368,6 @@ fn dotted_name(expr: &Expr) -> Option<(String, Span)> {
         ExprKind::Field(base, field) => dotted_name(base).map(|(name, span)| (format!("{}{}{}", name, MODULE_SEPARATOR, field), span)),
         _ => None,
     }
-}
-
-/// Whether `expr` is joined by an `at r` after it: a `+` chain, or text
-/// holding values that has no region yet.
-fn joins(expr: &Expr) -> bool {
-    matches!(expr.kind, ExprKind::Binary(BinaryOp::Add, ..)) || pending_region(expr)
 }
 
 /// Whether `expr` is text holding values whose region is still to come (see

@@ -320,8 +320,8 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     if let Some(q) = prev
         && (prev_token == Some(&Token::AtSign) || prev_token == Some(&Token::At))
     {
-        // `scan(…)@r` allocates too.
-        let allocating = prev_token == Some(&Token::At) || matches!(k.token_before(q), Some(Token::New | Token::RParen));
+        // `scan(…)@r` and `"n = {n}"@r` allocate too: both make new text.
+        let allocating = prev_token == Some(&Token::At) || matches!(k.token_before(q), Some(Token::New | Token::RParen | Token::Text(_)));
         return (region_items(&k, word_start, allocating), word_start, byte);
     }
     // After `is`: patterns. Names a pattern or plan B declares (`is {v}`,

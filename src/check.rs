@@ -3076,12 +3076,27 @@ impl Checker {
             return err(at, format!("'+' joins text, but this value is {}{}", ty, self.to_text_hint(&ty)));
         }
         self.visible_region(region, region_span, true)?;
+        // A part that is text turned into text ('"{name}"', or 't.str() at r'
+        // written in a chain) is joined as it is: the join copies its bytes into
+        // the region, so copying them there first would be for nothing.
+        for part in parts.iter_mut() {
+            let ExprKind::ToText { value, .. } = &part.kind else { continue };
+            if matches!(value.ty, Some(Type::Text(_))) {
+                let ExprKind::ToText { value, .. } = std::mem::replace(&mut part.kind, ExprKind::NoneLit) else { continue };
+                *part = *value;
+            }
+        }
         Ok(Type::Text(Some(region.to_string())))
     }
 
     /// The end of a message about a value of type `ty` where text is wanted: how
     /// to turn it into text, when it can be.
     fn to_text_hint(&self, ty: &Type) -> String {
+        // This hint is for text being joined, which goes in a region, so the
+        // parentheses `fail` needs are followed by one.
+        if matches!(ty, Type::Fail(_)) {
+            return "; 'fail' takes only the value right after it, so write 'fail (a + b)@r'".to_string();
+        }
         let has_str = self.owner_of(ty).is_some_and(|owner| self.tasks.contains_key(&method_name(&owner, STR)));
         if self.has_builtin_str(ty) || has_str {
             return "; turn it into text first, as in 'n.str() at r'".to_string();

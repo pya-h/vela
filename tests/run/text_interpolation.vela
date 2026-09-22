@@ -31,6 +31,15 @@ task labelled<T: shown>(label: text, value: T, r: region) -> text@r
     <- "{label}: {value}" at r
 fi
 
+# `fail` takes the value right after it, text holding values and its region
+# with it.
+task checked(n: int, r: region) -> int or text@r
+    when n < 0
+        <- fail "{n} is below zero" at r
+    fi
+    <- n
+fi
+
 task main()
     region r
     bind n = 5
@@ -73,4 +82,11 @@ task main()
     show(kept)
     # Multi-byte characters around and inside values.
     show("café {"é"} ☕ {n}" at r)
+    # An error made of text holding values, read with a plan B.
+    show(checked(n, r) { 0 })
+    bind low = checked(-n, r) { fail e
+        show(e)
+        0
+    }
+    show(low)
 fi

@@ -214,6 +214,18 @@ fn names_complete_inside_braces_and_not_in_the_text_around_them() {
 }
 
 #[test]
+fn a_region_completes_after_the_at_sign_of_text_holding_values() {
+    // The text is new, so a region the task only takes in its types, which it
+    // cannot allocate in, is not offered. (The cursor is found by hand: the
+    // `@@` marker would run into the `@` naming the region.)
+    let source = "task where(t: text@q) -> text@q\n    bind n = 1\n    region here\n    <- \"{n}\"@\nfi\n";
+    let at = source.find("\"@").unwrap() + "\"@".len();
+    let items = Analysis::new(source).complete(LineIndex::new(source).utf16_of(at)).items;
+    let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
+    assert_eq!(labels, ["here"]);
+}
+
+#[test]
 fn text_holding_values_without_a_region_says_how_to_name_one() {
     let source = "task main()\n    bind n = 1\n    show(\"n = {n}\")\nfi\n";
     let messages: Vec<String> = Analysis::new(source).diagnostics().into_iter().map(|d| d.message).collect();

@@ -1,0 +1,6 @@
+# error: 5:20: a '+' chain in parentheses names its region with '@', as in '(a + b)@r'; without them, write 'a + b at r'
+task main()
+    region r
+    bind a = "a"
+    show((a + "b") at r)
+fi

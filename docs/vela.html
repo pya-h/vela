@@ -675,9 +675,9 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         <strong>Text holding values.</strong> A value in braces inside text, <code>"n = {n}" at r</code>, is turned into
         text as <code>n.str()</code> does and put in its place: <code>"{name} is {age}" at r</code> is new text in
         <code>r</code>, so it names its region as a join does, after the text (<code>"…" at r</code>) or with
-        <code>@</code> (<code>"…"@r</code>). The braces may hold any value that has <code>str</code>: a name, a call,
-        arithmetic, a field, a plan B, even text holding values of its own (<code>"{f("x")}"</code>); spaces inside them
-        don't count. A value without <code>str</code> is the same error as its <code>str</code> would be. Text holding no
+        <code>@</code> (<code>"…"@r</code>). The braces may hold any value that has <code>str</code>: a name, a call
+        with text of its own (<code>"{f("x")}"</code>), arithmetic, a field, a plan B, even text holding values
+        (<code>"{"{n}"}"</code>, which takes the region of the text around it); spaces inside them don't count. A value without <code>str</code> is the same error as its <code>str</code> would be. Text holding no
         value is a literal as always and needs no region, and <code>\{</code> and <code>\}</code> write braces. In a join
         the text takes the join's region: <code>"Dear " + "{name}," at r</code>. Written without a region, it is an error
         that says to name one (<code>text holding values is new text, so it names the region it goes in …</code>); so are
