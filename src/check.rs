@@ -2739,6 +2739,7 @@ impl Checker {
             ExprKind::PlanB { value, error, body } => self.check_plan_b(span, value, error.as_ref(), body),
             ExprKind::Edit { items, op, args } => self.check_edit(span, items, *op, args),
             ExprKind::Scan { args, region, region_span } => self.check_scan(span, args, region, *region_span),
+            ExprKind::Join { parts, region, region_span } => self.check_join(parts, region, *region_span),
             ExprKind::Copy { value, region, region_span } => self.check_copy(span, value, region.as_deref(), *region_span),
             // Only the checker creates `Wrap`, with its type already set.
             ExprKind::Wrap(_) => expr.ty.clone().ok_or_else(|| Error::internal_at(span, "a wrapped value has no type")),
@@ -3044,6 +3045,28 @@ impl Checker {
         Ok(Type::Maybe(Box::new(Type::Text(Some(region.to_string())))))
     }
 
+    /// Checks `a + b at region`, text joined into `region`, and returns its type,
+    /// `text@region`. Every part is text, of any region or lasting.
+    fn check_join(&mut self, parts: &mut [Expr], region: &str, region_span: Span) -> Result<Type> {
+        let mut numbers = true;
+        let mut other = None;
+        for part in parts.iter_mut() {
+            let ty = self.check_expr(part)?;
+            numbers &= ty.is_numeric();
+            if !matches!(ty, Type::Text(_)) && other.is_none() {
+                other = Some((ty, part.span));
+            }
+        }
+        if numbers {
+            return err(region_span, format!("numbers are added without a region; 'at {}' after '+' is for joining text", region));
+        }
+        if let Some((ty, at)) = other {
+            return err(at, format!("'+' joins text, but this value is {}{}", ty, extract_hint(&[&ty])));
+        }
+        self.visible_region(region, region_span, true)?;
+        Ok(Type::Text(Some(region.to_string())))
+    }
+
     /// Checks `value.copy()`, at `span`, into `region` when one is written, and
     /// returns its type: the value's, in that region. Without one, the copy is
     /// of `ANY_REGION` and waits for the place it goes to settle its region.
@@ -3278,6 +3301,12 @@ impl Checker {
         let lt = self.check_expr(l)?;
         let rt = self.check_expr(r)?;
         match op {
+            BinaryOp::Add if matches!(lt, Type::Text(_)) || matches!(rt, Type::Text(_)) => {
+                if let Some(other) = [&lt, &rt].into_iter().find(|ty| !matches!(ty, Type::Text(_))) {
+                    return err(span, format!("'+' joins text to text, but the other value is {}{}", other, extract_hint(&[other])));
+                }
+                err(span, "joining text makes new text, which goes in a region; name it after the last part, as in 'a + b at r', or after parentheses, as in '(a + b)@r'")
+            }
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
                 if !lt.is_numeric() || !rt.is_numeric() {
                     if let Some(untold) = self.untold_param(&lt).or_else(|| self.untold_param(&rt)) {
@@ -4408,9 +4437,11 @@ impl Checker {
                 self.substitute_expr(a, given, made)?;
                 self.substitute_expr(b, given, made)
             }
-            ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) | ExprKind::Scan { args, .. } => {
-                args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made))
-            }
+            ExprKind::Construct { args, .. }
+            | ExprKind::Array(args)
+            | ExprKind::Tuple(args)
+            | ExprKind::Scan { args, .. }
+            | ExprKind::Join { parts: args, .. } => args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made)),
             ExprKind::PlanB { value, body, .. } => {
                 self.substitute_expr(value, given, made)?;
                 self.substitute_block(body, given, made)

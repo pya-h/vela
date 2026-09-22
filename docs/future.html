@@ -343,7 +343,7 @@
         </div>
         <div class="card">
           <h3 id="text-is-a-c-string">Text is a C string <span class="badge b-med">Medium</span></h3>
-          <p><code>text</code> was a C string, <code>const char*</code>, in which a <code>\0</code> ended the text early. It is now its bytes and how many there are: <code>t.len</code> reads the length without counting, and a <code>\0</code> is a byte like any other. Parts, <code>t[a..b]</code>, are views of the same bytes, and <code>&lt;</code> orders text by them. What text still lacks are the ways to make more of it: joining, and text from numbers (see <a href="#real-text">Real text type</a>). Text has a lifetime in its type: <code>text</code> lasts as long as the program, <code>text@r</code> is in a region (<a href="vela.html#text-in-regions">Text in a region</a>), which reading input (<a href="vela.html#input"><code>scan</code></a>) uses, and building text will need.</p>
+          <p><code>text</code> was a C string, <code>const char*</code>, in which a <code>\0</code> ended the text early. It is now its bytes and how many there are: <code>t.len</code> reads the length without counting, and a <code>\0</code> is a byte like any other. Parts, <code>t[a..b]</code>, are views of the same bytes, and <code>&lt;</code> orders text by them. Joining, <code>a + b at r</code>, makes new text in a region. What text still lacks is text from numbers (see <a href="#real-text">Real text type</a>). Text has a lifetime in its type: <code>text</code> lasts as long as the program, <code>text@r</code> is in a region (<a href="vela.html#text-in-regions">Text in a region</a>), which reading input (<a href="vela.html#input"><code>scan</code></a>) uses, and building text will need.</p>
         </div>
         <div class="card">
           <h3>Undefined integer edge cases <span class="badge b-done">Done</span></h3>
@@ -406,8 +406,9 @@
           <h3 id="real-text">Real text type <span class="badge b-idea">Idea</span></h3>
           <p>Replace C strings with a <code>(ptr, len)</code> struct and safe operations. The struct is in:
             <code>t.len</code> is a field, and a <code>\0</code> no longer ends text. So are parts,
-            <code>t[a..b]</code>, which never cut a character, and <code>&lt;</code> on text. The rest is chosen and
-            next: <code>a + b at r</code>, <code>n.str() at r</code>, and <code>"{name} is {age}" at r</code>.</p>
+            <code>t[a..b]</code>, which never cut a character, <code>&lt;</code> on text, and joining,
+            <code>a + b at r</code>. The rest is chosen and next: <code>n.str() at r</code> and
+            <code>"{name} is {age}" at r</code>.</p>
         </div>
         <div class="card">
           <h3>Regions <span class="badge b-done">Done</span></h3>

@@ -270,6 +270,7 @@ true false none  fi   maybe is     fail include priv</pre>
         <tr><td><code>[a, b]</code>, <code>[v; n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
         <tr><td><code>t[a..b]</code>, <code>t.len</code></td><td>a part of text, the same bytes (see <a href="#text-parts">Parts of text</a>); how many bytes it has</td></tr>
+        <tr><td><code>a + b at r</code>, <code>(a + b)@r</code></td><td>text joined into new text in region <code>r</code> (see <a href="#joining">Joining text</a>)</td></tr>
         <tr><td><code>xs.add(v)</code>, <code>xs.add(i, v)</code>, <code>xs.del(i)</code>, <code>xs.del()</code></td><td>add a value to a slice, last or before item <code>i</code>; take item <code>i</code>, or the last, out of it and give it</td></tr>
         <tr><td><code>x.copy()</code>, <code>x.copy() at r</code></td><td>a copy of a value in the region where it goes, or in <code>r</code> (also <code>x.copy()@r</code>; see <a href="#copy">Copying into another region</a>)</td></tr>
         <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, or variant of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
@@ -610,6 +611,34 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         be compared (they are never equal). A <code>maybe</code> compares only with
         <code>none</code>. <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, and <code>&gt;=</code> work on
         numbers and text.
+      </p>
+      <p id="joining">
+        <code>a + b at r</code> joins text: new text holding the bytes of <code>a</code> and then of <code>b</code>. It is new
+        text, so it goes in a region, as a line <code>scan</code> reads does, and its type is <code>text@r</code>. The region
+        comes after the last part of a chain, <code>first + " " + last at r</code>, or after parentheses,
+        <code>(first + " " + last)@r</code>; the parts may be text of any regions, or text that lasts. <code>+</code> on text
+        without a region is an error that says to name one (<code>joining text makes new text, which goes in a region …</code>),
+        and <code>+</code> joins only text: <code>"n = " + 5 at r</code> is an error.
+      </p>
+      <pre><span class="keyword">task</span> full_name(first: text, last: text, r: region) -&gt; text@r
+    <span class="keyword">&lt;-</span> first + <span class="string">" "</span> + last <span class="keyword">at</span> r
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">bind</span> name = full_name(<span class="string">"Ada"</span>, <span class="string">"Lovelace"</span>, r)   <span class="comment"># text@r</span>
+    show((<span class="string">"&lt;"</span> + name + <span class="string">"&gt;"</span>)@r)                  <span class="comment"># &lt;Ada Lovelace&gt;</span>
+    <span class="keyword">hold</span> line = <span class="string">""</span>.copy() <span class="keyword">at</span> r
+    <span class="keyword">each</span> word <span class="keyword">in</span> [<span class="string">"one"</span>, <span class="string">"two"</span>]
+        line = line + word + <span class="string">";"</span> <span class="keyword">at</span> r                 <span class="comment"># one;two; — each join is new text in r</span>
+    <span class="keyword">fi</span>
+    show(line)
+    show(<span class="string">"Ada"</span> + <span class="string">"!"</span>)                           <span class="comment"># error: joining text makes new text, which goes in a region …</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        Each join makes new text in its region, and a region only frees memory when its block closes, so a loop that joins
+        again and again keeps every step until then. A loop that runs long can build in a region declared inside it, and
+        copy what it keeps out (see <a href="#copy">Copying into another region</a>).
       </p>
       <pre><span class="comment"># greet the user</span>
 show(<span class="string">"say \"hi\""</span>)       <span class="comment"># say "hi"</span>
@@ -1893,8 +1922,8 @@ show(area(square))             <span class="comment"># error: unknown task 'area
         <li>Memory is freed a whole region at a time, and a value holds pointers into one region only (see
           <a href="#regions">Memory and Regions</a>).</li>
         <li>Text has <code>==</code>, <code>&lt;</code> and the other comparisons, <code>.len</code>, parts
-          (<code>t[a..b]</code>), <code>show</code>, and <code>scan</code>, and nothing more yet: it can't be joined or
-          made from a number.</li>
+          (<code>t[a..b]</code>), joining (<code>a + b at r</code>), <code>show</code>, and <code>scan</code>, and nothing
+          more yet: it can't be made from a number.</li>
         <li>Input is read a line of text at a time with <code>scan</code>; there are no conversions from text to numbers
           yet, and no files.</li>
         <li>Arrays and slices can't be compared or shown whole, and an array's count is known before the program runs

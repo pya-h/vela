@@ -1,0 +1,5 @@
+# error: 4:19: '+' joins text, but this value is int
+task main()
+    region r
+    show("n = " + 1 at r)
+fi

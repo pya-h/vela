@@ -1261,11 +1261,19 @@ impl Generator {
             ExprKind::PlanB { value, error, body } => self.gen_plan_b(e, value, error.as_ref(), body),
             ExprKind::Edit { items, op, args } => self.gen_edit(e.span, items, *op, args, false),
             ExprKind::Scan { args, region, .. } => self.gen_scan(e.span, args, region, false),
+            ExprKind::Join { parts, region, .. } => self.gen_join(parts, region),
             ExprKind::Copy { value, region, .. } => self.gen_copy(e, value, region.as_deref()),
             // The checker turns every method call into the call of the task the
             // method is (see `Checker::check_method_call`).
             ExprKind::MethodCall { name, .. } => Err(Error::internal_at(e.span, format!("the method call '{}' reached code generation", name))),
         }
+    }
+
+    /// `a + b at region`: the parts, evaluated in order, joined into new text.
+    fn gen_join(&mut self, parts: &[Expr], region: &str) -> Result<String> {
+        let parts: Vec<&Expr> = parts.iter().collect();
+        let values = self.gen_operands(&parts)?;
+        Ok(format!("vela__rt__join({}, (vela__rt__text[]){{ {} }}, {})", c_ident(region), values.join(", "), values.len()))
     }
 
     /// `value.copy() at region`, the expression `e`.
@@ -1872,7 +1880,11 @@ fn has_prelude(e: &Expr) -> bool {
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             has_prelude(a) || has_prelude(b)
         }
-        ExprKind::Call { args, .. } | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => args.iter().any(has_prelude),
+        ExprKind::Call { args, .. }
+        | ExprKind::Construct { args, .. }
+        | ExprKind::Array(args)
+        | ExprKind::Tuple(args)
+        | ExprKind::Join { parts: args, .. } => args.iter().any(has_prelude),
         ExprKind::StructInit { fields, .. } => fields.iter().any(|field| has_prelude(&field.value)),
         // The checker rewrites a method call into a call; read as one anyway,
         // so nothing here depends on that having happened.
@@ -2130,6 +2142,7 @@ impl UsedTypes {
                 }
                 self.expr(value);
             }
+            ExprKind::Join { parts, .. } => parts.iter().for_each(|part| self.expr(part)),
             ExprKind::Scan { args, .. } => {
                 self.scans = true;
                 // Its `maybe text` has a struct even when it isn't kept.
@@ -2220,6 +2233,8 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::PlanB { value, body, .. } => expr_reads(value, name) || block_reads(body, name),
         // `scan` reads the region it keeps the line in.
         ExprKind::Scan { args, region, .. } => region == name || args.iter().any(|arg| expr_reads(arg, name)),
+        // Joining text reads the region the text goes in.
+        ExprKind::Join { parts, region, .. } => region == name || parts.iter().any(|part| expr_reads(part, name)),
         // `copy` reads the region it copies into.
         ExprKind::Copy { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
         // `add` reads the region it may allocate in.

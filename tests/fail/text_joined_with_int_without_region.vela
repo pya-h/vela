@@ -1,0 +1,4 @@
+# error: 3:17: '+' joins text to text, but the other value is int
+task main()
+    show("n = " + 1)
+fi

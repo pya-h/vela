@@ -601,6 +601,15 @@ pub enum ExprKind {
         region: String,
         region_span: Span,
     },
+    /// `a + b + c at r`, or `(a + b)@r`: new text in region `r` holding the
+    /// bytes of each of `parts` in turn. The parser makes one from a chain of
+    /// `+` followed by a region, every operand of the chain a part; the node's
+    /// span is the first `+`, and `region_span` the position of `r`.
+    Join {
+        parts: Vec<Expr>,
+        region: String,
+        region_span: Span,
+    },
     /// `value.copy()`, `value.copy() at r`, or `value.copy()@r`: a copy of what
     /// the value holds in regions (its text, its slices' items, and what its
     /// pointers point to, all the way down) in region `r`. Without a region

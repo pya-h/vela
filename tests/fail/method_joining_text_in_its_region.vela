@@ -1,0 +1,12 @@
+# error: 5:34: '@this' is the region the value this method is called on lives in, which a method isn't given, so it can't allocate there, and a region it takes is another one, which the value can't point into; allocate where the value is kept, and give the method what you made
+shape Label
+    words: text
+    alters grow()
+        .words = .words + "!" at this
+    fi
+fi
+
+task main()
+    hold label = Label { words: "hi" }
+    label.grow()
+fi

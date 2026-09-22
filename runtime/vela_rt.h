@@ -456,6 +456,30 @@ static inline void vela__rt__items_remove(void* items, int64_t len, vela__rt__ro
     }
 }
 
+/* `a + b + c at r`: new text in `r` holding the bytes of each of the `count`
+ * `parts` in turn. */
+static inline vela__rt__text vela__rt__join(vela__rt__region* r, const vela__rt__text* parts, size_t count) {
+    uint64_t len = 0;
+    for (size_t i = 0; i < count; i++) {
+        if ((uint64_t)parts[i].len > (uint64_t)INT64_MAX - len) {
+            vela__rt__out_of_memory();
+        }
+        len += (uint64_t)parts[i].len;
+    }
+    if (len > SIZE_MAX) {
+        vela__rt__out_of_memory();
+    }
+    char* bytes = vela__rt__region_alloc(r, (size_t)len, 1);
+    size_t at = 0;
+    for (size_t i = 0; i < count; i++) {
+        if (parts[i].len > 0) {
+            memcpy(bytes + at, parts[i].bytes, (size_t)parts[i].len);
+            at += (size_t)parts[i].len;
+        }
+    }
+    return (vela__rt__text){ bytes, (int64_t)len };
+}
+
 /* Copies: `value.copy() at r` copies what a value holds in regions into region
  * `r`: its text, its slices' items, and what its pointers point to, all the
  * way down. A generated `fix` function for each type replaces, in a value

@@ -1561,9 +1561,36 @@ impl Parser {
             self.advance();
             let right = self.parse_binary(precedence + 1)?;
             left = Expr::new(ExprKind::Binary(op, Box::new(left), Box::new(right)), span);
+            // `a + b at r`: the `+` chain just read joins text into `r`.
+            if self.check(Token::At) && matches!(left.kind, ExprKind::Binary(BinaryOp::Add, ..)) {
+                left = self.parse_join(left)?;
+            }
         }
         self.leave(levels);
         Ok(left)
+    }
+
+    /// `a + b + c at r`, or `(a + b)@r`, with `chain` the `+` chain read and
+    /// the cursor at `at` or `@`: new text in `r` holding the chain's operands.
+    fn parse_join(&mut self, chain: Expr) -> Result<Expr> {
+        self.advance(); // `at` or `@`
+        let region_span = self.peek_span();
+        let region = self.expect_ident()?;
+        let span = chain.span;
+        let mut parts = Vec::new();
+        let mut waiting = vec![chain];
+        // Operands left to right: the right operand of each `+` waits until
+        // everything on its left is taken.
+        while let Some(expr) = waiting.pop() {
+            match expr.kind {
+                ExprKind::Binary(BinaryOp::Add, left, right) => {
+                    waiting.push(*right);
+                    waiting.push(*left);
+                }
+                _ => parts.push(expr),
+            }
+        }
+        Ok(Expr::new(ExprKind::Join { parts, region, region_span }, span))
     }
 
     fn parse_unary(&mut self) -> Result<Expr> {
@@ -1588,7 +1615,12 @@ impl Parser {
     }
 
     fn parse_postfix(&mut self) -> Result<Expr> {
+        let parenthesized = self.check(Token::LParen);
         let mut expr = self.parse_primary()?;
+        // `(a + b)@r`: text joined into `r`.
+        if parenthesized && self.check(Token::AtSign) && matches!(expr.kind, ExprKind::Binary(BinaryOp::Add, ..)) {
+            expr = self.parse_join(expr)?;
+        }
         let mut levels = 0;
         while matches!(self.peek(), Token::Dot | Token::LBracket | Token::Caret | Token::LBrace) {
             self.enter()?;
@@ -1596,6 +1628,12 @@ impl Parser {
             expr = self.parse_suffix(expr)?;
         }
         self.leave(levels);
+        if self.check(Token::AtSign) {
+            return Err(Error::at(
+                self.peek_span(),
+                "'@r' after a value names the region text is joined into only after parentheses, as in '(a + b)@r'; or write 'a + b at r'",
+            ));
+        }
         Ok(expr)
     }
 

@@ -575,6 +575,12 @@ impl<'a> Knowledge<'a> {
                 // `new T(v) at r`: a pointer into `r`, or a slice for `new [T](…) at r`;
                 // `scan(…) at r` or `scan(…)@r`: a line in `r`.
                 if matches!(self.token_before(q), Some(Token::At | Token::AtSign)) && q >= 2 && self.token(q - 2) == Some(&Token::RParen) {
+                    // `(a + b)@r`: text joined into `r`.
+                    let open = self.matching_open(q - 2, &Token::LParen, &Token::RParen)?;
+                    let bare = open.checked_sub(1).is_none_or(|before| !matches!(self.token(before), Some(Token::Ident(_) | Token::RParen | Token::RBracket)));
+                    if bare && self.joins(open + 1, q - 3) {
+                        return Some(Type::Text(Some(name.to_string())));
+                    }
                     // `x.copy() at r`: the value's type, in `r`.
                     if let Some(value) = self.copied_value(q - 2) {
                         return Some(self.in_region(&self.expression_type(value, depth + 1)?.without_regions(), name));
@@ -759,6 +765,14 @@ impl<'a> Knowledge<'a> {
         if first > last || depth > MAX_DEPTH {
             return None;
         }
+        // `a + b at r`: text joined into `r`.
+        if let (Some(at), Some(region)) = (last.checked_sub(1), self.ident(last))
+            && self.token(at) == Some(&Token::At)
+            && at > first
+            && self.joins(first, at - 1)
+        {
+            return Some(Type::Text(Some(region.to_string())));
+        }
         let mut brackets = 0usize;
         // The end of each operand of the arithmetic, if there is any.
         let mut operand_ends = Vec::new();
@@ -798,6 +812,22 @@ impl<'a> Knowledge<'a> {
             }
         }
         all_int.then_some(Type::Int)
+    }
+
+    /// Whether the tokens from `first` to `last` are a chain of `+`: a `+`
+    /// outside any brackets, which a region after them makes a join.
+    fn joins(&self, first: usize, last: usize) -> bool {
+        let mut brackets = 0usize;
+        for p in first..=last {
+            match self.token(p) {
+                Some(Token::LParen | Token::LBrace | Token::LBracket) => brackets += 1,
+                Some(Token::RParen | Token::RBrace | Token::RBracket) => brackets = brackets.saturating_sub(1),
+                Some(Token::Plus) if brackets == 0 => return true,
+                None => return false,
+                _ => {}
+            }
+        }
+        false
     }
 
     /// The type a call of the task with signature `detail` gives, where its

@@ -1,0 +1,5 @@
+# error: 4:23: unknown region 'q'; declare it with 'region q'
+task main()
+    region r
+    show("a" + "b" at q)
+fi

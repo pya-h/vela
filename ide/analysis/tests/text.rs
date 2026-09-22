@@ -25,6 +25,9 @@ task main()
     bind kept = line[1..line.len]
     bind inside = person.name[0..1][0..1]
     bind before = name < \"Bob\"
+    bind joined = name + \" \" + line at r
+    bind wrapped = (\"<\" + name + \">\")@r
+    bind sum = count + 1
     @@
 fi
 ";
@@ -101,4 +104,25 @@ fn a_misspelled_length_says_what_text_has() {
     let source = "task main()\n    bind name = \"Ada\"\n    show(name.size)\n    show(name.len())\nfi\n";
     let messages: Vec<String> = Analysis::new(source).diagnostics().into_iter().map(|d| d.message).collect();
     assert_eq!(messages, ["type text has no field 'size'; how many bytes it has is '.len'"]);
+}
+
+#[test]
+fn joined_text_is_text_of_its_region_whether_or_not_the_file_checks() {
+    for checks in [true, false] {
+        let source = program(checks, "show(0)");
+        let when = if checks { "checked" } else { "declared" };
+        assert_eq!(hover(&source, "joined =").0, "bind joined: text@r", "{}", when);
+        assert_eq!(hover(&source, "wrapped =").0, "bind wrapped: text@r", "{}", when);
+        assert_eq!(hover(&source, "sum =").0, "bind sum: int", "{}", when);
+    }
+}
+
+#[test]
+fn joining_without_a_region_says_how_to_name_one() {
+    let source = "task main()\n    bind name = \"Ada\" + \"!\"\n    show(name)\nfi\n";
+    let messages: Vec<String> = Analysis::new(source).diagnostics().into_iter().map(|d| d.message).collect();
+    assert_eq!(
+        messages,
+        ["joining text makes new text, which goes in a region; name it after the last part, as in 'a + b at r', or after parentheses, as in '(a + b)@r'"]
+    );
 }

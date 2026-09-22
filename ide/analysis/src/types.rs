@@ -347,7 +347,7 @@ impl Checked {
                 }
                 self.block(body, kinds);
             }
-            ExprKind::Scan { args, .. } => {
+            ExprKind::Scan { args, .. } | ExprKind::Join { parts: args, .. } => {
                 for arg in args {
                     self.expr(arg, kinds);
                 }

@@ -23,7 +23,7 @@ const BUILTIN_TYPE_DOCS: &[(&str, &str)] = &[
     ("int", "A 64-bit signed integer."),
     ("float", "A 64-bit floating-point number."),
     ("bool", "true or false."),
-    ("text", "Text. == compares contents. text lasts as long as the program, as a literal does; text@r is in region r, as the text of a value in r is."),
+    ("text", "UTF-8 text. t.len is how many bytes it has and t[a..b] a part of it, the same bytes; == and < compare contents, and a + b at r joins text into region r. text lasts as long as the program, as a literal does; text@r is in region r, as the text of a value in r is."),
     ("unit", "The return type of a task that sends no value."),
 ];
 
@@ -39,7 +39,7 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
         "new T(value) at r",
         "Copies the value into region r and gives a ^T@r. Also written new@r T(value). With a slice type, new [T](items) at r gives a [T]@r of the items: [v; n], an array, or a slice.",
     ),
-    ("at", "new T(value) at r", "Allocates in region r, the same as new@r T(value) ('@' is 'at')."),
+    ("at", "new T(value) at r", "Allocates in region r, the same as new@r T(value) ('@' is 'at'). It also names where new text goes: a + b at r joins text, as (a + b)@r does, and scan(prompt) at r reads a line."),
     ("in", "each i in a..b", "Counts from a up to, but not including, b. each v in xs goes through the items of an array or slice."),
     ("maybe", "maybe T", "A T, or none. Read it with match, is, or a plan B: x { fallback }."),
     ("none", "none", "The empty maybe. A pointer can't be none; use maybe ^T."),

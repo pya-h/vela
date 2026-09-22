@@ -1076,7 +1076,7 @@ impl Resolver<'_> {
                 self.expr(items)?;
                 args.iter_mut().try_for_each(|e| self.expr(e))
             }
-            ExprKind::Scan { args, .. } => args.iter_mut().try_for_each(|e| self.expr(e)),
+            ExprKind::Scan { args, .. } | ExprKind::Join { parts: args, .. } => args.iter_mut().try_for_each(|e| self.expr(e)),
             ExprKind::Copy { value, .. } => self.expr(value),
         }
     }
