@@ -22,10 +22,10 @@ int main(void) {
     check(vela__rt__index(INT64_MAX - 1, INT64_MAX, "1:1") == INT64_MAX - 1, "the largest index");
 
     /* Slice bounds may be equal, and may reach the end. */
-    vela__rt__part(0, 0, 0, "1:1");
-    vela__rt__part(0, 4, 4, "1:1");
-    vela__rt__part(4, 4, 4, "1:1");
-    vela__rt__part(1, 3, 4, "1:1");
+    vela__rt__part(0, 0, 0, "slice", "1:1");
+    vela__rt__part(0, 4, 4, "slice", "1:1");
+    vela__rt__part(4, 4, 4, "slice", "1:1");
+    vela__rt__part(1, 3, 4, "slice", "1:1");
 
     /* Room for items: none, a few (aligned), and more than a chunk holds. */
     vela__rt__region r[1] = { VELA__RT__REGION_EMPTY };

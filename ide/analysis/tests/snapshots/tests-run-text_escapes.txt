@@ -22,8 +22,8 @@
     | builtin-fn:show  punctuation:(  string:"héllo, wörld ✓7"  punctuation:)
  12 |     show("100% sure")
     | builtin-fn:show  punctuation:(  string:"100% sure"  punctuation:)
- 13 |     # Text is a C string, so it ends at a NUL (a known limitation).
-    | comment:# Text is a C string, so it ends at a NUL (a known limitation).
+ 13 |     # A NUL is a byte of the text like any other.
+    | comment:# A NUL is a byte of the text like any other.
  14 |     show("ab\0cd")
     | builtin-fn:show  punctuation:(  string:"ab  escape:\0  string:cd"  punctuation:)
  15 | fi

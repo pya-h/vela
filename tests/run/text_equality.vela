@@ -8,8 +8,10 @@ task main()
     show("apple" == "apple")
     show("apple" == "apples")
     show("apple" != "pear")
-    # Equal contents at different addresses (text ends at the NUL).
+    # A NUL is one of the bytes compared, not the end of the text.
     show(same("ab\0x", "ab\0y"))
+    show(same("ab\0x", "ab\0x"))
+    show(same("ab", "ab\0"))
     bind word = "hello"
     show(word == "hello")
 fi

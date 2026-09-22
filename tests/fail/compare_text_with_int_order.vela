@@ -1,0 +1,4 @@
+# error: 3:17: expected type text, got int
+task main()
+    show("a" >= 1)
+fi

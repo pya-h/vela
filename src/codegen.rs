@@ -323,7 +323,7 @@ impl Generator {
         for slice in &used.slice_part {
             let ctype = c_type(slice);
             self.w.open(&format!("static {0} {1}({0} s, int64_t from, int64_t to, const char* at)", ctype, item_helper("part", slice)));
-            self.w.line("vela__rt__part(from, to, s.len, at);");
+            self.w.line("vela__rt__part(from, to, s.len, \"slice\", at);");
             // A part ending where the slice's room is used up can grow into it.
             self.w.line(&format!("return ({}){{ .items = s.items + from, .len = to - from, .room = s.room }};", ctype));
             self.w.close();
@@ -388,12 +388,10 @@ impl Generator {
         }
         if used.scans {
             let maybe = c_type(&Type::Maybe(Box::new(Type::Text(None))));
-            self.w.open(&format!("static {} vela__scan(vela__rt__region* r, const char* prompt)", maybe));
-            self.w.line("const char* line = vela__rt__scan(r, prompt);");
-            self.w.open("if (line == NULL)");
-            self.w.line(&format!("return ({}){{ .has = false }};", maybe));
-            self.w.close();
-            self.w.line(&format!("return ({}){{ .has = true, .value = line }};", maybe));
+            self.w.open(&format!("static {} vela__scan(vela__rt__region* r, vela__rt__text prompt)", maybe));
+            self.w.line(&format!("{} line = {{ .has = false }};", maybe));
+            self.w.line("line.has = vela__rt__scan(r, prompt, &line.value);");
+            self.w.line("return line;");
             self.w.close();
         }
         for array in &used.array_fill {
@@ -1240,7 +1238,7 @@ impl Generator {
             ExprKind::IntLit(n) => Ok(n.to_string()),
             ExprKind::FloatLit(n) => Ok(c_float_literal(*n)),
             ExprKind::BoolLit(b) => Ok(if *b { "true".to_string() } else { "false".to_string() }),
-            ExprKind::TextLit(s) => Ok(format!("\"{}\"", escape_c_string(s))),
+            ExprKind::TextLit(s) => Ok(format!("VELA__RT__TEXT(\"{}\")", escape_c_string(s))),
             ExprKind::NoneLit => Ok("NULL".to_string()),
             ExprKind::Var(name) if self.alters && name == THIS => Ok(format!("(*{})", c_ident(name))),
             ExprKind::Var(name) => Ok(c_ident(name)),
@@ -1346,7 +1344,7 @@ impl Generator {
         match base.ty()? {
             // An array's length is its type's; the array is still read.
             Type::Array(_, count) => Ok(format!("((void){}, INT64_C({}))", parenthesized(&b), count)),
-            Type::Slice(..) => Ok(format!("({}).len", b)),
+            Type::Slice(..) | Type::Text(_) => Ok(format!("({}).len", b)),
             Type::Tuple(_) => {
                 let i = field.parse::<usize>().map_err(|_| Error::internal_at(base.span, format!("a tuple's item '{}'", field)))?;
                 Ok(format!("({}).{}", b, tuple_member(i)))
@@ -1557,9 +1555,14 @@ impl Generator {
         }
     }
 
-    /// `base[from..to]`, the expression `e`: a slice.
+    /// `base[from..to]`, the expression `e`: a slice, or a part of text.
     fn gen_slice(&mut self, e: &Expr, base: &Expr, from: &Expr, to: &Expr) -> Result<String> {
         let at = self.location(e.span);
+        if matches!(base.ty()?, Type::Text(_)) {
+            let [text, from, to] = <[String; 3]>::try_from(self.gen_operands(&[base, from, to])?)
+                .map_err(|_| Error::internal_at(e.span, "a part of text without two bounds"))?;
+            return Ok(format!("vela__rt__text_part({}, {}, {}, {})", text, from, to, at));
+        }
         let slice = e.ty()?;
         let source = match base.ty()? {
             Type::Array(_, count) => {
@@ -1719,6 +1722,17 @@ impl Generator {
             // Text compares by contents, not by address.
             let not = if op == BinaryOp::Ne { "!" } else { "" };
             return Ok(format!("{}vela__rt__text_eq({}, {})", not, left, right));
+        }
+        if matches!(l.ty()?, Type::Text(_)) {
+            // Text is ordered by its bytes.
+            let symbol = match op {
+                BinaryOp::Lt => "<",
+                BinaryOp::Gt => ">",
+                BinaryOp::Le => "<=",
+                BinaryOp::Ge => ">=",
+                other => return Err(Error::internal_at(e.span, format!("text operator {:?}", other))),
+            };
+            return Ok(format!("vela__rt__text_order({}, {}) {} 0", left, right, symbol));
         }
         if op == BinaryOp::Mod && *e.ty()? == Type::Float {
             // C's `%` is integer-only.
@@ -2061,7 +2075,8 @@ impl UsedTypes {
             | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => self.expr(inner),
             ExprKind::Index(base, index) => {
                 match (&index.kind, &base.ty, &e.ty) {
-                    (ExprKind::Range(..), _, Some(slice)) => note(&mut self.slice_part, slice),
+                    // A part of text needs no helper of its own.
+                    (ExprKind::Range(..), _, Some(slice @ Type::Slice(..))) => note(&mut self.slice_part, slice),
                     (_, Some(slice @ Type::Slice(..)), _) => note(&mut self.slice_at, slice),
                     _ => {}
                 }
@@ -2434,7 +2449,7 @@ fn c_type(ty: &Type) -> String {
         Type::Int => "int64_t".to_string(),
         Type::Float => "double".to_string(),
         Type::Bool => "bool".to_string(),
-        Type::Text(_) => "const char*".to_string(),
+        Type::Text(_) => "vela__rt__text".to_string(),
         Type::Unit => "void".to_string(),
         Type::None => "void*".to_string(),
         Type::Ptr(t, _) => format!("{}*", c_type(t)),

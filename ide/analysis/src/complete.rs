@@ -225,6 +225,18 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 return (with_copy(items, false), word_start, byte);
             }
             Some(Type::Array(..)) => return (with_copy(members(false, false), false), word_start, byte),
+            // Text's member is its length in bytes.
+            Some(Type::Text(_)) => {
+                let len = CompletionItem {
+                    label: vela::ast::LEN.to_string(),
+                    kind: CompletionKind::Field,
+                    detail: "int, the number of bytes".to_string(),
+                    apply: None,
+                    snippet: None,
+                    boost: LOCAL,
+                };
+                return (with_copy(vec![len], false), word_start, byte);
+            }
             Some(Type::Slice(..)) => return (with_copy(members(true, false), false), word_start, byte),
             Some(Type::Ptr(inner, _)) if matches!(**inner, Type::Array(..) | Type::Slice(..)) => {
                 return (with_copy(members(matches!(**inner, Type::Slice(..)), true), true), k.range(dot).start, byte);

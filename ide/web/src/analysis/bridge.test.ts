@@ -179,7 +179,7 @@ describe("VelaAnalysis", () => {
   });
 
   it("reports what a type given to a task doesn't allow", () => {
-    const source = "task biggest<T: ordered>(a: T, b: T) -> T\n    when a > b\n        <- a\n    fi\n    <- b\nfi\n\ntask main()\n    show(biggest(\"a\", \"b\"))\nfi\n";
+    const source = "task biggest<T: ordered>(a: T, b: T) -> T\n    when a > b\n        <- a\n    fi\n    <- b\nfi\n\ntask main()\n    show(biggest(true, false))\nfi\n";
     const [diagnostic] = analysis.file(source).diagnostics;
     expect(diagnostic?.message).toContain("takes a type that is 'ordered'");
   });

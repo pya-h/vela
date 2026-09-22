@@ -13,8 +13,9 @@ several (`-> int, int` … `<- a / b, a % b`), received with `bind q, r = divmod
 never wraps: overflow and division by zero stop the program with a message saying where. Arrays (`[int; 4]`)
 are values held in place, and slices (`[int]@r`) view items in a region, made with `new [int]([0; n]) at r`
 (or empty, `new [int]() at r`) and changed with `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, and `xs.del()`;
-every index is checked, and `xs.len` is the count. `scan("Name: ") at r` shows a prompt and reads a line
-into a region, giving `none` once the input has ended, and `value.copy()` copies a value (its text, its slices'
+every index is checked, and `xs.len` is the count. Text knows its length in bytes, `t.len`, has parts that
+are views of the same bytes, `t[0..3]`, and is ordered by `<`. `scan("Name: ") at r` shows a prompt and reads
+a line into a region, giving `none` once the input has ended, and `value.copy()` copies a value (its text, its slices'
 items, and what its pointers point to) into the region where it goes, or `value.copy() at r`. Tuples hold
 values together (`(text, int)`, read as `t.0`), their items never change, and names take them apart
 (`bind name, age = pair`, or `when found is {(name, age)}` in a pattern). A task or a shape can take types as well as

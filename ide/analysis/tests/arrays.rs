@@ -85,7 +85,7 @@ fn hover_shows_array_and_slice_types_whether_or_not_the_file_checks() {
         assert_eq!(code("point in"), "each point: Point", "{}", when);
     }
     let source = program(true, "show(0)");
-    assert_eq!(hover(&source, "len"), ("len: int".to_string(), "The number of items of an array or slice.".to_string()));
+    assert_eq!(hover(&source, "len"), ("len: int".to_string(), "The number of items of an array or slice, or the number of bytes of text.".to_string()));
 }
 
 #[test]

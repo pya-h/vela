@@ -1,0 +1,5 @@
+# error: 4:15: text bound -1 is out of range: it is less than 0
+task main()
+    bind name = "Ada"
+    show(name[-1..2])
+fi

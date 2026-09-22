@@ -1,0 +1,7 @@
+# error: 5:28: expected type text, got text@r; this text is in region 'r', and text here must last as long as the program, as a literal does
+task main()
+    region r
+    bind line = "Ada".copy() at r
+    bind first: text = line[0..1]
+    show(first)
+fi

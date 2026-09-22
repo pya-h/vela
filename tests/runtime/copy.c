@@ -18,7 +18,7 @@ static void check(bool ok, const char* what) {
 typedef struct Node Node;
 struct Node {
     int64_t value;
-    const char* label;
+    vela__rt__text label;
     Node* next;
     Node* other;
 };
@@ -31,7 +31,7 @@ static void fix_node(vela__rt__copy* c, void* at) {
     node->other = vela__rt__copy_pointer(c, node->other, sizeof(Node), _Alignof(Node), fix_node);
 }
 
-static Node* make(vela__rt__region* r, int64_t value, const char* label, Node* next) {
+static Node* make(vela__rt__region* r, int64_t value, vela__rt__text label, Node* next) {
     Node node = { value, label, next, NULL };
     return vela__rt__new(r, &node, sizeof node, _Alignof(Node));
 }
@@ -40,12 +40,12 @@ int main(void) {
     vela__rt__region from[1] = { VELA__RT__REGION_EMPTY };
     vela__rt__region to[1] = { VELA__RT__REGION_EMPTY };
 
-    /* Text: the same characters, in the other region. */
+    /* Text: the same bytes, a NUL among them, in the other region. */
     vela__rt__copy c = { .r = to };
-    const char* text = vela__rt__copy_text(&c, "hello");
-    check(strcmp(text, "hello") == 0, "text keeps its characters");
-    check(to->newest != NULL && (char*)text >= (char*)to->newest->data, "text is in the region copied into");
-    check(vela__rt__copy_text(&c, "")[0] == '\0', "empty text");
+    vela__rt__text text = vela__rt__copy_text(&c, VELA__RT__TEXT("he\0lo"));
+    check(text.len == 5 && memcmp(text.bytes, "he\0lo", 5) == 0, "text keeps its bytes");
+    check(to->newest != NULL && (const char*)text.bytes >= (char*)to->newest->data, "text is in the region copied into");
+    check(vela__rt__copy_text(&c, VELA__RT__TEXT("")).len == 0, "empty text");
     vela__rt__copy_finish(&c);
 
     /* Items: byte for byte, and no items at all. */
@@ -59,8 +59,8 @@ int main(void) {
 
     /* Two pointers to one node give two pointers to one copy, and a cycle
      * stays a cycle. */
-    Node* shared = make(from, 7, "shared", NULL);
-    Node* first = make(from, 1, "first", shared);
+    Node* shared = make(from, 7, VELA__RT__TEXT("shared"), NULL);
+    Node* first = make(from, 1, VELA__RT__TEXT("first"), shared);
     first->other = shared;
     shared->other = first;
     c = (vela__rt__copy){ .r = to };
@@ -69,14 +69,14 @@ int main(void) {
     check(copied != first && copied->value == 1, "a pointer gives a copy of its node");
     check(copied->next == copied->other && copied->next != shared, "a shared node is copied once");
     check(copied->next->other == copied, "a cycle comes back to the copy");
-    check(strcmp(copied->next->label, "shared") == 0 && copied->next->label != shared->label, "text in nodes is copied");
+    check(vela__rt__text_eq(copied->next->label, VELA__RT__TEXT("shared")) && copied->next->label.bytes != shared->label.bytes, "text in nodes is copied");
 
     /* A long list: copied without a C stack frame per node, with the table
      * growing many times; the original's region is freed first. */
     Node* head = NULL;
     int64_t count = 300000;
     for (int64_t i = 0; i < count; i++) {
-        head = make(from, i, "item", head);
+        head = make(from, i, VELA__RT__TEXT("item"), head);
     }
     c = (vela__rt__copy){ .r = to };
     Node* list = vela__rt__copy_pointer(&c, head, sizeof(Node), _Alignof(Node), fix_node);

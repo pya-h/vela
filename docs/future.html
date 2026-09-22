@@ -343,7 +343,7 @@
         </div>
         <div class="card">
           <h3 id="text-is-a-c-string">Text is a C string <span class="badge b-med">Medium</span></h3>
-          <p><code>text</code> is currently <code>const char*</code>. <code>==</code> compares contents, but there is no length, no safe concatenation, and a <code>\0</code> ends the text early. Text now has a lifetime in its type: <code>text</code> lasts as long as the program, <code>text@r</code> is in a region (<a href="vela.html#text-in-regions">Text in a region</a>), which reading input (<a href="vela.html#input"><code>scan</code></a>) uses, and building text will need.</p>
+          <p><code>text</code> was a C string, <code>const char*</code>, in which a <code>\0</code> ended the text early. It is now its bytes and how many there are: <code>t.len</code> reads the length without counting, and a <code>\0</code> is a byte like any other. Parts, <code>t[a..b]</code>, are views of the same bytes, and <code>&lt;</code> orders text by them. What text still lacks are the ways to make more of it: joining, and text from numbers (see <a href="#real-text">Real text type</a>). Text has a lifetime in its type: <code>text</code> lasts as long as the program, <code>text@r</code> is in a region (<a href="vela.html#text-in-regions">Text in a region</a>), which reading input (<a href="vela.html#input"><code>scan</code></a>) uses, and building text will need.</p>
         </div>
         <div class="card">
           <h3>Undefined integer edge cases <span class="badge b-done">Done</span></h3>
@@ -403,8 +403,11 @@
             them</a>; the reasoning is <a href="#methods">below</a>.</p>
         </div>
         <div class="card">
-          <h3>Real string type <span class="badge b-idea">Idea</span></h3>
-          <p>Replace C strings with a <code>(ptr, len)</code> struct and safe operations.</p>
+          <h3 id="real-text">Real text type <span class="badge b-idea">Idea</span></h3>
+          <p>Replace C strings with a <code>(ptr, len)</code> struct and safe operations. The struct is in:
+            <code>t.len</code> is a field, and a <code>\0</code> no longer ends text. So are parts,
+            <code>t[a..b]</code>, which never cut a character, and <code>&lt;</code> on text. The rest is chosen and
+            next: <code>a + b at r</code>, <code>n.str() at r</code>, and <code>"{name} is {age}" at r</code>.</p>
         </div>
         <div class="card">
           <h3>Regions <span class="badge b-done">Done</span></h3>
@@ -839,7 +842,7 @@ show(first&lt;text@r&gt;(names))       # Ada — or the call writes it out
 bind empty: maybe int = nothing()   # or the place the value goes says it
 bind count = Box { value: 1 }   # Box&lt;int&gt;: the value given says which type
 bind kept: Box&lt;text&gt;@r = Box { value: name }   # its text is in r
-show(biggest("a", "b"))         # error: task 'biggest' takes a type that is 'ordered' …</pre>
+show(biggest(true, false))      # error: task 'biggest' takes a type that is 'ordered' …</pre>
       <ul>
         <li><strong>Angle brackets, as in the header.</strong> <code>&lt;T&gt;</code> declares the types, and a call that
           writes them uses the same brackets, <code>first&lt;int&gt;(xs)</code>. Brackets (<code>[T]</code>) would read as
@@ -1609,9 +1612,9 @@ show(c.total())</pre>
           its type, so it is a constant (see <a href="vela.html#slices">Slices</a>) — neither ever counts the items.
           <span class="badge b-done">Done</span> What is left is the general case: a <code>property</code> whose answer
           is kept until a field it reads is assigned, which needs the compiler to know which fields each property
-          reads, and an <code>alters</code> method to clear what it invalidates. Text is the one place a length would
-          still cost: <code>text</code> is a C string today, so any <code>len</code> for it must either count the
-          bytes or come with a new representation (see <a href="#text-is-a-c-string">Text is a C string</a> above).</li>
+          reads, and an <code>alters</code> method to clear what it invalidates. Text was the one place a length
+          would still cost, as a C string, and it now keeps its length too: <code>t.len</code> is a field (see
+          <a href="#text-is-a-c-string">Text is a C string</a> above).</li>
         <li id="methods-kind-order"><strong>Moving along a kind's variants:</strong> a kind's variants are written in an
           order, so <code>.next()</code> and <code>.prev()</code> could be there without writing them —
           <code>alters</code> methods a kind gets for free, which move the value to the variant after or before this

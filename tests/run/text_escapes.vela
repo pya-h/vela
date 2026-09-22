@@ -10,6 +10,6 @@ task main()
     show("é1")
     show("héllo, wörld ✓7")
     show("100% sure")
-    # Text is a C string, so it ends at a NUL (a known limitation).
+    # A NUL is a byte of the text like any other.
     show("ab\0cd")
 fi

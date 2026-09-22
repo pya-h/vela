@@ -31,8 +31,21 @@ static inline void vela__rt__show_bool(bool x) {
     printf("%s\n", x ? "true" : "false");
 }
 
-static inline void vela__rt__show_text(const char* x) {
-    printf("%s\n", x);
+/* Text: its bytes, which aren't followed by a `\0` and may hold one, and how
+ * many there are. The bytes of text of the program are a C string literal's;
+ * the bytes of `text@r` are in region `r`. */
+typedef struct vela__rt__text {
+    const char* bytes;
+    int64_t len;
+} vela__rt__text;
+
+/* The text of a C string literal, which may hold a `\0`: its length is the
+ * literal's size, less the `\0` C adds. */
+#define VELA__RT__TEXT(literal) ((vela__rt__text){ (literal), (int64_t)sizeof(literal) - 1 })
+
+static inline void vela__rt__show_text(vela__rt__text x) {
+    fwrite(x.bytes, 1, (size_t)x.len, stdout);
+    putchar('\n');
 }
 
 /* `show` on an empty `maybe`. */
@@ -41,8 +54,21 @@ static inline void vela__rt__show_none(void) {
 }
 
 /* `==` on text compares contents. */
-static inline bool vela__rt__text_eq(const char* a, const char* b) {
-    return strcmp(a, b) == 0;
+static inline bool vela__rt__text_eq(vela__rt__text a, vela__rt__text b) {
+    return a.len == b.len && (a.len == 0 || memcmp(a.bytes, b.bytes, (size_t)a.len) == 0);
+}
+
+/* `<` and the other orders on text: below 0 when `a` comes first, 0 when both
+ * are the same, above 0 when `b` does. Bytes compare as unsigned numbers, which
+ * orders UTF-8 as Unicode does, and text that is the start of other text comes
+ * first. */
+static inline int vela__rt__text_order(vela__rt__text a, vela__rt__text b) {
+    int64_t shorter = a.len < b.len ? a.len : b.len;
+    int order = shorter == 0 ? 0 : memcmp(a.bytes, b.bytes, (size_t)shorter);
+    if (order != 0) {
+        return order;
+    }
+    return (a.len > b.len) - (a.len < b.len);
 }
 
 /* Integer arithmetic. An `int` doesn't wrap: an operation whose result doesn't
@@ -276,18 +302,37 @@ static inline int64_t vela__rt__index(int64_t i, int64_t len, const char* at) {
     return i;
 }
 
-/* Checks the bounds of `xs[from..to]`, where `xs` has `len` items. */
-static inline void vela__rt__part(int64_t from, int64_t to, int64_t len, const char* at) {
+/* Checks the bounds of `xs[from..to]`, where `xs` has `len` items; `what`
+ * names it in the message, "slice" or "text". */
+static inline void vela__rt__part(int64_t from, int64_t to, int64_t len, const char* what, const char* at) {
     if (to < from) {
         fflush(stdout);
-        fprintf(stderr, "vela: slice %lld..%lld ends before it starts at %s\n", (long long)from, (long long)to, at);
+        fprintf(stderr, "vela: %s %lld..%lld ends before it starts at %s\n", what, (long long)from, (long long)to, at);
         abort();
     }
     if (from < 0 || to > len) {
         fflush(stdout);
-        fprintf(stderr, "vela: slice %lld..%lld is out of range 0..%lld at %s\n", (long long)from, (long long)to, (long long)len, at);
+        fprintf(stderr, "vela: %s %lld..%lld is out of range 0..%lld at %s\n", what, (long long)from, (long long)to, (long long)len, at);
         abort();
     }
+}
+
+/* `text[from..to]`: the same bytes, not a copy. Its bounds are checked as a
+ * slice's are, and each must fall between two characters: a byte that
+ * continues a UTF-8 character (0b10xxxxxx) can't start or follow a part. */
+static inline vela__rt__text vela__rt__text_part(vela__rt__text text, int64_t from, int64_t to, const char* at) {
+    vela__rt__part(from, to, text.len, "text", at);
+    int64_t bounds[2] = { from, to };
+    for (int i = 0; i < 2; i++) {
+        int64_t bound = bounds[i];
+        if (bound < text.len && ((unsigned char)text.bytes[bound] & 0xC0) == 0x80) {
+            fflush(stdout);
+            fprintf(stderr, "vela: text %lld..%lld cuts through a character at byte %lld at %s\n", (long long)from, (long long)to,
+                    (long long)bound, at);
+            abort();
+        }
+    }
+    return (vela__rt__text){ text.bytes + from, to - from };
 }
 
 /* Room for `len` items of `size` bytes aligned to `align` in region `r`. */
@@ -447,12 +492,13 @@ typedef struct vela__rt__copy {
     size_t room;
 } vela__rt__copy;
 
-/* Text of `r` holding the characters of `text`. */
-static inline const char* vela__rt__copy_text(vela__rt__copy* c, const char* text) {
-    size_t size = strlen(text) + 1;
-    char* copy = vela__rt__region_alloc(c->r, size, 1);
-    memcpy(copy, text, size);
-    return copy;
+/* Text of `r` holding the bytes of `text`. */
+static inline vela__rt__text vela__rt__copy_text(vela__rt__copy* c, vela__rt__text text) {
+    char* copy = vela__rt__region_alloc(c->r, (size_t)text.len, 1);
+    if (text.len > 0) {
+        memcpy(copy, text.bytes, (size_t)text.len);
+    }
+    return (vela__rt__text){ copy, text.len };
 }
 
 /* A copy in `r` of the `len` items of `size` bytes aligned to `align` at
@@ -554,14 +600,12 @@ static inline void vela__rt__copy_finish(vela__rt__copy* c) {
 /* Input. `scan(prompt) at r` shows the prompt (flushing the output, which may
  * be waiting for a newline) and reads one line from the standard input into
  * region `r`, without its line break (a Windows "\r\n" included). A line is as
- * long as the input makes it. The line is NULL when the input has ended (or
- * can't be read) before its first character; a last line without a line break
- * is still a line. A `\0` in the line ends the text there, as text is a C
- * string. */
-static inline const char* vela__rt__scan(vela__rt__region* r, const char* prompt) {
-    if (prompt[0] != '\0') {
-        fputs(prompt, stdout);
-    }
+ * long as the input makes it, and a `\0` in it is one of its bytes. There is
+ * no line, and this gives false, when the input has ended (or can't be read)
+ * before its first character; a last line without a line break is still a
+ * line. */
+static inline bool vela__rt__scan(vela__rt__region* r, vela__rt__text prompt, vela__rt__text* line) {
+    fwrite(prompt.bytes, 1, (size_t)prompt.len, stdout);
     fflush(stdout);
     size_t capacity = 128;
     size_t size = 0;
@@ -588,16 +632,16 @@ static inline const char* vela__rt__scan(vela__rt__region* r, const char* prompt
     }
     if (c == EOF && size == 0) {
         free(buffer);
-        return NULL;
+        return false;
     }
     if (size > 0 && buffer[size - 1] == '\r') {
         size--;
     }
-    char* line = vela__rt__region_alloc(r, size + 1, 1);
-    memcpy(line, buffer, size);
-    line[size] = '\0';
+    char* bytes = vela__rt__region_alloc(r, size, 1);
+    memcpy(bytes, buffer, size);
     free(buffer);
-    return line;
+    *line = (vela__rt__text){ bytes, (int64_t)size };
+    return true;
 }
 
 /* Frees everything allocated in `r`, which is then empty again. */

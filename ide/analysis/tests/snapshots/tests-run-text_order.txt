@@ -1,0 +1,76 @@
+  1 | # `<`, `>`, `<=`, and `>=` order text by its bytes, which is the order of
+    | comment:# `<`, `>`, `<=`, and `>=` order text by its bytes, which is the order of
+  2 | # Unicode for UTF-8: capitals before small letters, and text that starts other
+    | comment:# Unicode for UTF-8: capitals before small letters, and text that starts other
+  3 | # text before it. Text of any regions compares, and text is `ordered`.
+    | comment:# text before it. Text of any regions compares, and text is `ordered`.
+  5 | task biggest<T: ordered>(a: T, b: T) -> T
+    | keyword:task  task:biggest  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type:T
+  6 |     when a > b
+    | keyword:when  parameter:a  operator:>  parameter:b
+  7 |         <- a
+    | keyword:<-  parameter:a
+  8 |     fi
+    | keyword:fi
+  9 |     <- b
+    | keyword:<-  parameter:b
+ 10 | fi
+    | keyword:fi
+ 12 | shape Best<T: ordered>
+    | keyword:shape  type:Best  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:>
+ 13 |     value: T
+    | field:value  punctuation::  type:T
+ 14 |     alters offer(other: T)
+    | keyword:alters  method:offer  punctuation:(  parameter:other  punctuation::  type:T  punctuation:)
+ 15 |         when other > .value
+    | keyword:when  parameter:other  operator:>  punctuation:.  field:value
+ 16 |             .value = other
+    | punctuation:.  field:value  operator:=  parameter:other
+ 17 |         fi
+    | keyword:fi
+ 18 |     fi
+    | keyword:fi
+ 19 | fi
+    | keyword:fi
+ 21 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 22 |     show("apple" < "banana")
+    | builtin-fn:show  punctuation:(  string:"apple"  operator:<  string:"banana"  punctuation:)
+ 23 |     show("banana" < "apple")
+    | builtin-fn:show  punctuation:(  string:"banana"  operator:<  string:"apple"  punctuation:)
+ 24 |     show("app" < "apple")
+    | builtin-fn:show  punctuation:(  string:"app"  operator:<  string:"apple"  punctuation:)
+ 25 |     show("apple" <= "apple")
+    | builtin-fn:show  punctuation:(  string:"apple"  operator:<=  string:"apple"  punctuation:)
+ 26 |     show("apple" >= "apples")
+    | builtin-fn:show  punctuation:(  string:"apple"  operator:>=  string:"apples"  punctuation:)
+ 27 |     show("B" < "a")
+    | builtin-fn:show  punctuation:(  string:"B"  operator:<  string:"a"  punctuation:)
+ 28 |     show("" < "a")
+    | builtin-fn:show  punctuation:(  string:""  operator:<  string:"a"  punctuation:)
+ 29 |     show("" <= "")
+    | builtin-fn:show  punctuation:(  string:""  operator:<=  string:""  punctuation:)
+ 30 |     show("z" < "é")
+    | builtin-fn:show  punctuation:(  string:"z"  operator:<  string:"é"  punctuation:)
+ 31 |     show("ab\0" > "ab")
+    | builtin-fn:show  punctuation:(  string:"ab  escape:\0  string:"  operator:>  string:"ab"  punctuation:)
+ 32 |     show(biggest("pear", "fig"))
+    | builtin-fn:show  punctuation:(  task:biggest  punctuation:(  string:"pear"  punctuation:,  string:"fig"  punctuation:)  punctuation:)
+ 33 |     show(biggest(3, 9))
+    | builtin-fn:show  punctuation:(  task:biggest  punctuation:(  number:3  punctuation:,  number:9  punctuation:)  punctuation:)
+ 34 |     region r
+    | keyword:region  region:r
+ 35 |     bind read = "kiwi".copy() at r
+    | keyword:bind  variable:read  operator:=  string:"kiwi"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 36 |     show(read > "kiwano")
+    | builtin-fn:show  punctuation:(  variable:read  operator:>  string:"kiwano"  punctuation:)
+ 37 |     hold best = Best { value: "m" }
+    | keyword:hold  variable:best  operator:=  type:Best  punctuation:{  field:value  punctuation::  string:"m"  punctuation:}
+ 38 |     best.offer("x")
+    | variable:best  punctuation:.  method:offer  punctuation:(  string:"x"  punctuation:)
+ 39 |     best.offer("c")
+    | variable:best  punctuation:.  method:offer  punctuation:(  string:"c"  punctuation:)
+ 40 |     show(best.value)
+    | builtin-fn:show  punctuation:(  variable:best  punctuation:.  field:value  punctuation:)
+ 41 | fi
+    | keyword:fi

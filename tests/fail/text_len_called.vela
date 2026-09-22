@@ -1,0 +1,5 @@
+# error: 4:15: type text has no methods; how many bytes text has is read without '(…)', as in 't.len'
+task main()
+    bind name = "Ada"
+    show(name.len())
+fi

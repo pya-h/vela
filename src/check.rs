@@ -2192,6 +2192,7 @@ impl Checker {
                     }
                     Type::Array(..) => return err(span, "'len' can't be assigned: an array's length is part of its type"),
                     Type::Slice(..) => return err(span, "'len' can't be assigned: a slice's length changes with 'xs.add(…)' and 'xs.del(…)', or by slicing it, as in 'xs = xs[0..2]'"),
+                    Type::Text(_) => return err(span, "'len' can't be assigned: it is how many bytes the text has, and text never changes; give the variable other text instead"),
                     _ => {}
                 }
                 expr.ty = Some(ty.clone());
@@ -2200,6 +2201,9 @@ impl Checker {
             ExprKind::Deref(_) => self.check_expr(expr),
             ExprKind::Index(base, index) => {
                 if matches!(index.kind, ExprKind::Range(..)) {
+                    if matches!(self.check_expr(base)?, Type::Text(_)) {
+                        return err(span, "a part of text can't be assigned, since text never changes; give the variable other text instead, as in 't = t[0..2]'");
+                    }
                     return err(span, "a slice of values can't be assigned; assign its items one at a time, as in 'xs[i] = v'");
                 }
                 let base_ty = self.check_item_base(base)?;
@@ -2808,11 +2812,39 @@ impl Checker {
         Ok(ty)
     }
 
+    /// Checks `t[a..b]`, a part of text of `region`: the same bytes, so it is
+    /// text of that region too. Text has no items to read one at a time.
+    fn check_text_part(&mut self, region: &Option<String>, index: &mut Expr, span: Span) -> Result<Type> {
+        let ExprKind::Range(from, to) = &mut index.kind else {
+            return err(span, "text has no items to read one at a time; a part of it is 't[a..b]', as in 't[i..i + 1]' for the byte at 'i'");
+        };
+        for bound in [&mut **from, &mut **to] {
+            let ty = self.check_expr(bound)?;
+            self.expect_type(&ty, &Type::Int, bound.span)?;
+        }
+        let (start, end) = (constant_int(from), constant_int(to));
+        for (value, at) in [(start, from.span), (end, to.span)] {
+            if let Some(value) = value.filter(|value| *value < 0) {
+                return err(at, format!("text bound {} is out of range: it is less than 0", value));
+            }
+        }
+        if let (Some(start), Some(end)) = (start, end)
+            && end < start
+        {
+            return err(index.span, format!("text {}..{} ends before it starts", start, end));
+        }
+        index.ty = Some(Type::Range(Box::new(Type::Int)));
+        Ok(Type::Text(region.clone()))
+    }
+
     /// Checks `xs[i]`, an item, or `xs[a..b]`, a slice, on `base` of type
     /// `base_ty`, already checked, and returns its type. A constant index or
     /// bound that is out of range for an array is an error here; the program
     /// checks the rest as it runs.
     fn check_index(&mut self, base: &Expr, base_ty: &Type, index: &mut Expr, span: Span) -> Result<Type> {
+        if let Type::Text(region) = base_ty {
+            return self.check_text_part(region, index, span);
+        }
         let items = match base_ty {
             // `[none, none][i]`: an item that is only a literal can be wrapped
             // where a `maybe` or `T or E` is expected, but not one read out.
@@ -3308,19 +3340,28 @@ impl Checker {
                 Ok(Type::Bool)
             }
             BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => {
-                if !lt.is_numeric() && !self.allows(Need::Ordered, &lt) {
+                let symbol = match op {
+                    BinaryOp::Lt => "<",
+                    BinaryOp::Gt => ">",
+                    BinaryOp::Le => "<=",
+                    _ => ">=",
+                };
+                if !self.allows(Need::Ordered, &lt) {
                     if let Some(untold) = self.untold_param(&lt).or_else(|| self.untold_param(&rt)) {
                         return err(span, untold);
                     }
                     if let Type::Param(_) = &lt {
-                        return err(span, format!("comparison requires numeric operands; {} {}", lt, self.why_not(Need::Ordered, &lt)));
+                        return err(span, format!("'{}' compares numbers or text; {} {}", symbol, lt, self.why_not(Need::Ordered, &lt)));
                     }
                     if matches!(lt, Type::Tuple(_)) {
-                        return err(span, "comparison requires numeric operands; a tuple is only compared with '==' and '!=', or item by item, as in 't.0 < u.0'");
+                        return err(span, format!("'{}' compares numbers or text; a tuple is only compared with '==' and '!=', or item by item, as in 't.0 < u.0'", symbol));
                     }
-                    return err(span, format!("comparison requires numeric operands{}", extract_hint(&[&lt])));
+                    return err(span, format!("'{}' compares numbers or text, not {}{}", symbol, lt, extract_hint(&[&lt])));
                 }
-                self.expect_type(&rt, &lt, r.span)?;
+                // Comparing stores nothing, so texts in any regions compare.
+                if !matches!((&lt, &rt), (Type::Text(_), Type::Text(_))) {
+                    self.expect_type(&rt, &lt, r.span)?;
+                }
                 Ok(Type::Bool)
             }
             BinaryOp::And | BinaryOp::Or => {
@@ -3372,7 +3413,8 @@ impl Checker {
             _ if field.parse::<u64>().is_ok() => {
                 err(span, format!("'.{}' reads an item of a tuple, but this value is {}{}", field, base, extract_hint(&[base])))
             }
-            Type::Array(..) | Type::Slice(..) if field == "len" => Ok(Type::Int),
+            Type::Array(..) | Type::Slice(..) | Type::Text(_) if field == LEN => Ok(Type::Int),
+            Type::Text(_) => err(span, format!("type {} has no field '{}'; how many bytes it has is '.len'", base, field)),
             Type::Array(..) | Type::Slice(..) => {
                 err(span, format!("type {} has no field '{}'; its number of items is '.len'", base, field))
             }
@@ -3447,6 +3489,7 @@ impl Checker {
         let instead = match name {
             "push" | "append" | "insert" => "; a slice adds an item with 'add', as in 'xs.add(v)' or 'xs.add(i, v)'",
             "pop" | "remove" | "delete" => "; a slice takes an item out with 'del', as in 'xs.del(i)' or 'xs.del()'",
+            LEN if matches!(base, Type::Text(_)) => "; how many bytes text has is read without '(…)', as in 't.len'",
             LEN => "; how many items a slice holds is read without '(…)', as in 'xs.len'",
             _ => "",
         };
@@ -3798,7 +3841,7 @@ impl Checker {
             return self.type_param(name).and_then(|param| param.need).is_some_and(|(own, _)| own.means(need));
         }
         match need {
-            Need::Ordered => ty.is_numeric(),
+            Need::Ordered => ty.is_numeric() || matches!(ty, Type::Text(_)),
             Need::Shown => matches!(ty, Type::Int | Type::Float | Type::Bool | Type::Text(_)),
             Need::Same => comparable(ty),
             Need::Fixed => self.changeable_item(ty).is_none(),

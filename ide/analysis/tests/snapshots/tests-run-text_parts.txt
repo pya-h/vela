@@ -1,0 +1,86 @@
+  1 | # `t[a..b]` is a part of text: the bytes from `a` up to, but not including,
+    | comment:# `t[a..b]` is a part of text: the bytes from `a` up to, but not including,
+  2 | # `b`, the same bytes rather than a copy, so it lives where the text does.
+    | comment:# `b`, the same bytes rather than a copy, so it lives where the text does.
+  4 | shape Person
+    | keyword:shape  type:Person
+  5 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  6 | fi
+    | keyword:fi
+  8 | task first_word(line: text@r) -> text@r
+    | keyword:task  task:first_word  punctuation:(  parameter:line  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+  9 |     hold i = 0
+    | keyword:hold  variable:i  operator:=  number:0
+ 10 |     loop i < line.len
+    | keyword:loop  variable:i  operator:<  parameter:line  punctuation:.  field:len
+ 11 |         when line[i..i + 1] == " "
+    | keyword:when  parameter:line  punctuation:[  variable:i  operator:..  variable:i  operator:+  number:1  punctuation:]  operator:==  string:" "
+ 12 |             <- line[0..i]
+    | keyword:<-  parameter:line  punctuation:[  number:0  operator:..  variable:i  punctuation:]
+ 13 |         fi
+    | keyword:fi
+ 14 |         i = i + 1
+    | variable:i  operator:=  variable:i  operator:+  number:1
+ 15 |     fi
+    | keyword:fi
+ 16 |     <- line
+    | keyword:<-  parameter:line
+ 17 | fi
+    | keyword:fi
+ 19 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 20 |     bind name = "Ada Lovelace"
+    | keyword:bind  variable:name  operator:=  string:"Ada Lovelace"
+ 21 |     show(name[0..3])
+    | builtin-fn:show  punctuation:(  variable:name  punctuation:[  number:0  operator:..  number:3  punctuation:]  punctuation:)
+ 22 |     show(name[4..name.len])
+    | builtin-fn:show  punctuation:(  variable:name  punctuation:[  number:4  operator:..  variable:name  punctuation:.  field:len  punctuation:]  punctuation:)
+ 23 |     show(name[4..12][0..4])
+    | builtin-fn:show  punctuation:(  variable:name  punctuation:[  number:4  operator:..  number:12  punctuation:]  punctuation:[  number:0  operator:..  number:4  punctuation:]  punctuation:)
+ 24 |     show(name[3..3] == "")
+    | builtin-fn:show  punctuation:(  variable:name  punctuation:[  number:3  operator:..  number:3  punctuation:]  operator:==  string:""  punctuation:)
+ 25 |     show(name[0..name.len] == name)
+    | builtin-fn:show  punctuation:(  variable:name  punctuation:[  number:0  operator:..  variable:name  punctuation:.  field:len  punctuation:]  operator:==  variable:name  punctuation:)
+ 26 |     # A part of text of the program is text of the program.
+    | comment:# A part of text of the program is text of the program.
+ 27 |     bind short: text = name[0..3]
+    | keyword:bind  variable:short  punctuation::  type-builtin:text  operator:=  variable:name  punctuation:[  number:0  operator:..  number:3  punctuation:]
+ 28 |     show(short.len)
+    | builtin-fn:show  punctuation:(  variable:short  punctuation:.  field:len  punctuation:)
+ 29 |     # Whole characters, however many bytes each takes.
+    | comment:# Whole characters, however many bytes each takes.
+ 30 |     bind word = "café ✓"
+    | keyword:bind  variable:word  operator:=  string:"café ✓"
+ 31 |     show(word[0..3])
+    | builtin-fn:show  punctuation:(  variable:word  punctuation:[  number:0  operator:..  number:3  punctuation:]  punctuation:)
+ 32 |     show(word[3..5])
+    | builtin-fn:show  punctuation:(  variable:word  punctuation:[  number:3  operator:..  number:5  punctuation:]  punctuation:)
+ 33 |     show(word[6..9])
+    | builtin-fn:show  punctuation:(  variable:word  punctuation:[  number:6  operator:..  number:9  punctuation:]  punctuation:)
+ 34 |     show(word[3..5].len)
+    | builtin-fn:show  punctuation:(  variable:word  punctuation:[  number:3  operator:..  number:5  punctuation:]  punctuation:.  field:len  punctuation:)
+ 35 |     # A part of text in a region is in that region.
+    | comment:# A part of text in a region is in that region.
+ 36 |     region r
+    | keyword:region  region:r
+ 37 |     bind line = "Grace Hopper".copy() at r
+    | keyword:bind  variable:line  operator:=  string:"Grace Hopper"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 38 |     show(first_word(line))
+    | builtin-fn:show  punctuation:(  task:first_word  punctuation:(  variable:line  punctuation:)  punctuation:)
+ 39 |     show(first_word("single"))
+    | builtin-fn:show  punctuation:(  task:first_word  punctuation:(  string:"single"  punctuation:)  punctuation:)
+ 40 |     bind person = Person { name: line[6..12] }
+    | keyword:bind  variable:person  operator:=  type:Person  punctuation:{  field:name  punctuation::  variable:line  punctuation:[  number:6  operator:..  number:12  punctuation:]  punctuation:}
+ 41 |     show(person.name)
+    | builtin-fn:show  punctuation:(  variable:person  punctuation:.  field:name  punctuation:)
+ 42 |     hold names = new [text]() at r
+    | keyword:hold  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 43 |     names.add(line[0..5])
+    | variable:names  punctuation:.  field:add  punctuation:(  variable:line  punctuation:[  number:0  operator:..  number:5  punctuation:]  punctuation:)
+ 44 |     show(names[0])
+    | builtin-fn:show  punctuation:(  variable:names  punctuation:[  number:0  punctuation:]  punctuation:)
+ 45 |     show(names[0][1..3] < "s")
+    | builtin-fn:show  punctuation:(  variable:names  punctuation:[  number:0  punctuation:]  punctuation:[  number:1  operator:..  number:3  punctuation:]  operator:<  string:"s"  punctuation:)
+ 46 | fi
+    | keyword:fi

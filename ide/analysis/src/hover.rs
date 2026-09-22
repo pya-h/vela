@@ -95,9 +95,9 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
         }
         // `@this` in a method's body, which its header didn't name.
         (TokenClass::Region, None) if text == vela::ast::THIS_WORD => (format!("region {}", text), THIS_REGION_DOC.to_string()),
-        // `xs.len`, which no shape declares.
+        // `xs.len` and `t.len`, which no shape declares.
         (TokenClass::Field, None) if text == "len" => {
-            ("len: int".to_string(), "The number of items of an array or slice.".to_string())
+            ("len: int".to_string(), "The number of items of an array or slice, or the number of bytes of text.".to_string())
         }
         // `t.0`: an item of a tuple.
         (TokenClass::Field, None) if text.parse::<usize>().is_ok() => {

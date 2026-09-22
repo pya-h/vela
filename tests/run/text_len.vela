@@ -1,0 +1,40 @@
+# `t.len` is how many bytes text has: a field, read without counting. A
+# character outside ASCII takes more than one byte, and a NUL is one of them.
+
+shape Person
+    name: text
+fi
+
+task longer(a: text, b: text) -> text
+    when a.len >= b.len
+        <- a
+    fi
+    <- b
+fi
+
+task main()
+    show("".len)
+    show("Ada".len)
+    show("é".len)
+    show("✓".len)
+    show("ab\0cd".len)
+    show("tab\there".len)
+    bind person = Person { name: "Grace" }
+    show(person.name.len)
+    show(longer("Ada", "Grace"))
+    region r
+    bind line = ("Lovelace".copy() at r)
+    show(line.len)
+    hold names = new [text]() at r
+    names.add("x")
+    names.add("yz")
+    hold total = 0
+    each name in names
+        total = total + name.len
+    fi
+    show(total)
+    bind maybe_name: maybe text = "Hopper"
+    when maybe_name is {found}
+        show(found.len)
+    fi
+fi

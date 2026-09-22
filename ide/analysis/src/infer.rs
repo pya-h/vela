@@ -562,7 +562,7 @@ impl<'a> Knowledge<'a> {
                 }
                 if self.token_before(q) == Some(&Token::Dot) {
                     let base = self.expression_type(q.checked_sub(2)?, depth + 1)?;
-                    if name == "len" && matches!(base, Type::Array(..) | Type::Slice(..)) {
+                    if name == "len" && matches!(base, Type::Array(..) | Type::Slice(..) | Type::Text(_)) {
                         return Some(Type::Int);
                     }
                     let Type::Named(shape, region) = base else { return None };
@@ -729,6 +729,8 @@ impl<'a> Knowledge<'a> {
                 (Type::Array(items, _) | Type::Slice(items, _), false) => Some(*items),
                 (Type::Slice(items, region), true) => Some(Type::Slice(items, region)),
                 (Type::Array(items, _), true) => Some(Type::Slice(items, None)),
+                // A part of text is text where the text is.
+                (text @ Type::Text(_), true) => Some(text),
                 _ => None,
             };
         }

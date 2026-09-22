@@ -1,0 +1,41 @@
+# `<`, `>`, `<=`, and `>=` order text by its bytes, which is the order of
+# Unicode for UTF-8: capitals before small letters, and text that starts other
+# text before it. Text of any regions compares, and text is `ordered`.
+
+task biggest<T: ordered>(a: T, b: T) -> T
+    when a > b
+        <- a
+    fi
+    <- b
+fi
+
+shape Best<T: ordered>
+    value: T
+    alters offer(other: T)
+        when other > .value
+            .value = other
+        fi
+    fi
+fi
+
+task main()
+    show("apple" < "banana")
+    show("banana" < "apple")
+    show("app" < "apple")
+    show("apple" <= "apple")
+    show("apple" >= "apples")
+    show("B" < "a")
+    show("" < "a")
+    show("" <= "")
+    show("z" < "é")
+    show("ab\0" > "ab")
+    show(biggest("pear", "fig"))
+    show(biggest(3, 9))
+    region r
+    bind read = "kiwi".copy() at r
+    show(read > "kiwano")
+    hold best = Best { value: "m" }
+    best.offer("x")
+    best.offer("c")
+    show(best.value)
+fi

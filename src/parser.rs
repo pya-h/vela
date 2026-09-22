@@ -2088,7 +2088,7 @@ fn needs_list() -> String {
 /// word alone.
 fn why_means(narrower: Need, wider: Need) -> String {
     let value = match narrower {
-        Need::Ordered => "a value with an order is a number, which",
+        Need::Ordered => "a value with an order is a number or text, which",
         Need::Shown => "a value that can be shown",
         Need::Same => "a value that can be compared",
         Need::Fixed => "a value that never changes",

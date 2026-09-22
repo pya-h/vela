@@ -205,7 +205,7 @@
         <li><code class="type">int</code> — 64-bit signed integer</li>
         <li><code class="type">float</code> — 64-bit floating point</li>
         <li><code class="type">bool</code> — true or false</li>
-        <li><code class="type">text</code> — UTF-8 string; <code>==</code> compares contents. <code>text</code> lasts as long
+        <li><code class="type">text</code> — UTF-8 text that knows its length, <code>t.len</code>, in bytes; <code>==</code> compares contents. <code>text</code> lasts as long
           as the program, as a literal does, and <code>text@r</code> is in region <code>r</code> (see
           <a href="#text-in-regions">Text in a region</a>)</li>
         <li><code class="type">unit</code> — the return type of a task that returns nothing; it has no values, so it
@@ -269,6 +269,7 @@ true false none  fi   maybe is     fail include priv</pre>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v; n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
+        <tr><td><code>t[a..b]</code>, <code>t.len</code></td><td>a part of text, the same bytes (see <a href="#text-parts">Parts of text</a>); how many bytes it has</td></tr>
         <tr><td><code>xs.add(v)</code>, <code>xs.add(i, v)</code>, <code>xs.del(i)</code>, <code>xs.del()</code></td><td>add a value to a slice, last or before item <code>i</code>; take item <code>i</code>, or the last, out of it and give it</td></tr>
         <tr><td><code>x.copy()</code>, <code>x.copy() at r</code></td><td>a copy of a value in the region where it goes, or in <code>r</code> (also <code>x.copy()@r</code>; see <a href="#copy">Copying into another region</a>)</td></tr>
         <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, or variant of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
@@ -531,14 +532,50 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         Text literals use double quotes and support the escapes <code>\n</code>, <code>\t</code>, <code>\r</code>,
         <code>\\</code>, <code>\"</code>, and <code>\0</code>. A <code>#</code> starts a comment that runs to the end
         of the line. A text literal ends on the line it starts (a line break in it is written <code>\n</code>). Text holds
-        any UTF-8, but a <code>\0</code> ends it early (<code>"ab\0cd"</code> shows as
-        <code>ab</code>). <code>show</code> prints an <code>int</code>, <code>float</code>,
+        any UTF-8 and knows how long it is: <code>t.len</code> is how many bytes it has, read without counting them.
+        A character outside ASCII takes more than one byte (<code>"é".len</code> is 2, <code>"Ada".len</code> is 3), and a
+        <code>\0</code> is a byte like any other (<code>"ab\0cd".len</code> is 5, and it shows all five).
+        <code>show</code> prints an <code>int</code>, <code>float</code>,
         <code>bool</code>, or <code>text</code> followed by a newline (or a <code>maybe</code> of one: its value, or
         <code>none</code>). Floats print with up to 6 significant digits,
         switching to exponent form for very large or small values (<code>123456789.0</code> shows as
         <code>1.23457e+08</code>), and <code>0.0 / 0.0</code> and <code>1.0 / 0.0</code> show as <code>nan</code> and
         <code>inf</code>.
       </p>
+      <p id="text-parts">
+        <code>t[a..b]</code> is a part of text: its bytes from <code>a</code> up to, but not including, <code>b</code>. A part
+        is the same bytes, not a copy, so it lives where the text does: a part of <code>text</code> is <code>text</code>, and a
+        part of <code>text@r</code> is <code>text@r</code>. Its bounds are checked as a slice's are, and each must fall between
+        two characters: <code>"café"[0..4]</code> would end inside the two bytes of <code>é</code>, so it stops the
+        program (<em>vela: text 0..4 cuts through a character at byte 4</em>). Text has no items to read one at a time,
+        so <code>t[i]</code> is an error; the byte at <code>i</code> is the part <code>t[i..i + 1]</code>. Text never
+        changes, so a part can't be assigned either.
+      </p>
+      <p>
+        <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, and <code>&gt;=</code> order text by its bytes, which is
+        the order of Unicode: capitals come before small letters (<code>"B" &lt; "a"</code>), and text that starts
+        other text comes before it (<code>"app" &lt; "apple"</code>). Text of any regions compares.
+      </p>
+      <pre><span class="keyword">task</span> first_word(line: text@r) -&gt; text@r
+    <span class="keyword">hold</span> i = <span class="number">0</span>
+    <span class="keyword">loop</span> i &lt; line.len
+        <span class="keyword">when</span> line[i..i + <span class="number">1</span>] == <span class="string">" "</span>
+            <span class="keyword">&lt;-</span> line[<span class="number">0</span>..i]              <span class="comment"># a part: text@r, like the line</span>
+        <span class="keyword">fi</span>
+        i = i + <span class="number">1</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> line
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">bind</span> name = <span class="string">"Ada Lovelace"</span>
+    show(name.len)                        <span class="comment"># 12</span>
+    show(name[<span class="number">4</span>..name.len])               <span class="comment"># Lovelace</span>
+    show(first_word(name))                <span class="comment"># Ada</span>
+    show(<span class="string">"café"</span>.len)                      <span class="comment"># 5: é takes two bytes</span>
+    show(<span class="string">"café"</span>[<span class="number">3</span>..<span class="number">5</span>])                   <span class="comment"># é</span>
+    show(<span class="string">"apple"</span> &lt; <span class="string">"banana"</span>)            <span class="comment"># true</span>
+<span class="keyword">fi</span></pre>
       <p id="input">
         <code>scan(prompt) at r</code>, or <code>scan(prompt)@r</code>, reads input: it shows the prompt (as it is, with
         no newline added; <code>""</code> shows nothing), then reads one line into region <code>r</code>, without its line
@@ -546,7 +583,7 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         do (see <a href="#text-in-regions">Text in a region</a>), and the task needs that region itself. It gives a
         <code>maybe text@r</code>: <code>none</code> once the input has ended (Ctrl-D, or the end of a file given as input),
         so reading every line is a <code>loop … is {line}</code>. A last line without a line break is still a line, a
-        line can be as long as memory allows, and a <code>\0</code> in it ends the text there. As a statement,
+        line can be as long as memory allows, and a <code>\0</code> in it is one of its bytes. As a statement,
         <code>scan("Press Enter")@r</code> reads a line and drops it.
       </p>
       <pre><span class="keyword">task</span> main()
@@ -571,7 +608,8 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         <code>==</code> and <code>!=</code> work on numbers, <code>bool</code>, <code>text</code> (by contents), and
         pointers (by address); both sides must have the same type, except that pointers into different regions can
         be compared (they are never equal). A <code>maybe</code> compares only with
-        <code>none</code>.
+        <code>none</code>. <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, and <code>&gt;=</code> work on
+        numbers and text.
       </p>
       <pre><span class="comment"># greet the user</span>
 show(<span class="string">"say \"hi\""</span>)       <span class="comment"># say "hi"</span>
@@ -912,7 +950,7 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
         <tr><td><code>fixed</code></td><td>put a value in a tuple, whose items never change</td><td>numbers, bools, text, tuples of them, and shapes and kinds whose fields are all such</td></tr>
         <tr><td><code>same</code></td><td><code>==</code> and <code>!=</code></td><td>numbers, bools, text, and tuples of them</td></tr>
         <tr><td><code>shown</code></td><td><code>show</code></td><td>numbers, bools, and text</td></tr>
-        <tr><td><code>ordered</code></td><td><code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td><td>numbers</td></tr>
+        <tr><td><code>ordered</code></td><td><code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td><td>numbers and text</td></tr>
       </table>
       <p>
         Each word allows everything the words above it do, since fewer types have an order than can be shown, fewer can
@@ -951,7 +989,8 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
     show(biggest(<span class="number">1.5</span>, <span class="number">0.5</span>))               <span class="comment"># 1.5 — the same task, made for float too</span>
     <span class="keyword">bind</span> empty: <span class="keyword">maybe</span> int = nothing()    <span class="comment"># the place the value goes says T is int</span>
     <span class="keyword">bind</span> fallback: text = nothing() { <span class="string">"none"</span> }
-    show(biggest(<span class="string">"a"</span>, <span class="string">"b"</span>))               <span class="comment"># error: task 'biggest' takes a type that is 'ordered' …</span>
+    show(biggest(<span class="string">"fig"</span>, <span class="string">"pear"</span>))          <span class="comment"># pear — text has an order too</span>
+    show(biggest(<span class="keyword">true</span>, <span class="keyword">false</span>))            <span class="comment"># error: task 'biggest' takes a type that is 'ordered' …</span>
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>Which type a call is for.</strong> From its arguments, from the place its value goes (a binding's
@@ -1483,8 +1522,8 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
           prints any text.</li>
         <li><strong>Fields.</strong> A field or payload is written <code>text</code>: its text is in the region of the value
           holding it, when that value names one. A shape's text fields share that one region.</li>
-        <li><strong>C.</strong> Text is a <code>const char*</code> either way; the region is only in the types, checked when
-          compiling.</li>
+        <li><strong>C.</strong> Text is its bytes' address and how many there are, either way; the region is only in the
+          types, checked when compiling.</li>
       </ul>
 
       <h3 id="slices">Slices</h3>
@@ -1853,8 +1892,9 @@ show(area(square))             <span class="comment"># error: unknown task 'area
         <li>The compiler reports the first error in a program, not all of them.</li>
         <li>Memory is freed a whole region at a time, and a value holds pointers into one region only (see
           <a href="#regions">Memory and Regions</a>).</li>
-        <li><code>text</code> is a C string, so a <code>\0</code> ends it; there are no text operations besides
-          <code>==</code>, <code>!=</code>, <code>show</code>, and reading it with <code>scan</code>.</li>
+        <li>Text has <code>==</code>, <code>&lt;</code> and the other comparisons, <code>.len</code>, parts
+          (<code>t[a..b]</code>), <code>show</code>, and <code>scan</code>, and nothing more yet: it can't be joined or
+          made from a number.</li>
         <li>Input is read a line of text at a time with <code>scan</code>; there are no conversions from text to numbers
           yet, and no files.</li>
         <li>Arrays and slices can't be compared or shown whole, and an array's count is known before the program runs

@@ -1,0 +1,6 @@
+# trap: text 2..1 ends before it starts at 5:15 in task 'main'
+# A part of text whose end comes before its start.
+task main()
+    hold start = 2
+    show("Ada"[start..1])
+fi

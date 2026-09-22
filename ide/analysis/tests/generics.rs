@@ -144,7 +144,7 @@ fn completion_offers_types_where_a_call_names_them() {
 
 #[test]
 fn a_type_that_does_not_allow_what_a_task_asks_is_reported() {
-    let source = program(true, "show(biggest(\"a\", \"b\"))");
+    let source = program(true, "show(biggest(true, false))");
     let diagnostics = Analysis::new(&source).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert!(diagnostic.message.contains("takes a type that is 'ordered'"), "{}", diagnostic.message);

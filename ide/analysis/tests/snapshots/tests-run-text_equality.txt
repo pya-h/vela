@@ -14,13 +14,17 @@
     | builtin-fn:show  punctuation:(  string:"apple"  operator:==  string:"apples"  punctuation:)
  10 |     show("apple" != "pear")
     | builtin-fn:show  punctuation:(  string:"apple"  operator:!=  string:"pear"  punctuation:)
- 11 |     # Equal contents at different addresses (text ends at the NUL).
-    | comment:# Equal contents at different addresses (text ends at the NUL).
+ 11 |     # A NUL is one of the bytes compared, not the end of the text.
+    | comment:# A NUL is one of the bytes compared, not the end of the text.
  12 |     show(same("ab\0x", "ab\0y"))
     | builtin-fn:show  punctuation:(  task:same  punctuation:(  string:"ab  escape:\0  string:x"  punctuation:,  string:"ab  escape:\0  string:y"  punctuation:)  punctuation:)
- 13 |     bind word = "hello"
+ 13 |     show(same("ab\0x", "ab\0x"))
+    | builtin-fn:show  punctuation:(  task:same  punctuation:(  string:"ab  escape:\0  string:x"  punctuation:,  string:"ab  escape:\0  string:x"  punctuation:)  punctuation:)
+ 14 |     show(same("ab", "ab\0"))
+    | builtin-fn:show  punctuation:(  task:same  punctuation:(  string:"ab"  punctuation:,  string:"ab  escape:\0  string:"  punctuation:)  punctuation:)
+ 15 |     bind word = "hello"
     | keyword:bind  variable:word  operator:=  string:"hello"
- 14 |     show(word == "hello")
+ 16 |     show(word == "hello")
     | builtin-fn:show  punctuation:(  variable:word  operator:==  string:"hello"  punctuation:)
- 15 | fi
+ 17 | fi
     | keyword:fi
