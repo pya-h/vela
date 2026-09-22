@@ -3438,8 +3438,17 @@ impl Checker {
                     }
                     return err(span, format!("arithmetic requires numeric operands{}", extract_hint(&[&lt, &rt])));
                 }
-                // Mixing int and float promotes the result to float.
-                if lt == Type::Float || rt == Type::Float {
+                // An int doesn't become a float on its own: the writer says so
+                // with `float(n)`, as every other place a number goes (a
+                // binding, an argument, a field, an item) already asks.
+                if lt != rt {
+                    let at = if lt == Type::Int { l.span } else { r.span };
+                    return err(
+                        at,
+                        "an int and a float don't mix in arithmetic: turn one into the other first, as in 'float(n) + 2.5' (or 'n + int(2.5)', which truncates)",
+                    );
+                }
+                if lt == Type::Float {
                     return Ok(Type::Float);
                 }
                 check_constant_arithmetic(op, l, r, span)?;

@@ -1,58 +1,60 @@
-  1 | # Float literals, mixed int/float arithmetic, and float remainder
-    | comment:# Float literals, mixed int/float arithmetic, and float remainder
-  3 | shape Vec1
+  1 | # Float literals, arithmetic in floats, and float remainder. An int doesn't
+    | comment:# Float literals, arithmetic in floats, and float remainder. An int doesn't
+  2 | # become a float on its own, so every int taking part is written 'float(n)'.
+    | comment:# become a float on its own, so every int taking part is written 'float(n)'.
+  4 | shape Vec1
     | keyword:shape  type:Vec1
-  4 |     x: float
+  5 |     x: float
     | field:x  punctuation::  type-builtin:float
-  5 | fi
+  6 | fi
     | keyword:fi
-  7 | task half(n: int) -> float
+  8 | task half(n: int) -> float
     | keyword:task  task:half  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:float
-  8 |     <- n / 2.0
-    | keyword:<-  parameter:n  operator:/  number:2.0
-  9 | fi
+  9 |     <- float(n) / 2.0
+    | keyword:<-  type-builtin:float  punctuation:(  parameter:n  punctuation:)  operator:/  number:2.0
+ 10 | fi
     | keyword:fi
- 11 | task main()
+ 12 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 12 |     show(3.0 / 2.0)
+ 13 |     show(3.0 / 2.0)
     | builtin-fn:show  punctuation:(  number:3.0  operator:/  number:2.0  punctuation:)
- 13 |     show(1 + 2.5)
-    | builtin-fn:show  punctuation:(  number:1  operator:+  number:2.5  punctuation:)
- 14 |     bind x = 1 + 2.5
-    | keyword:bind  variable:x  operator:=  number:1  operator:+  number:2.5
- 15 |     show(x)
+ 14 |     show(float(1) + 2.5)
+    | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  number:1  punctuation:)  operator:+  number:2.5  punctuation:)
+ 15 |     bind x = float(1) + 2.5
+    | keyword:bind  variable:x  operator:=  type-builtin:float  punctuation:(  number:1  punctuation:)  operator:+  number:2.5
+ 16 |     show(x)
     | builtin-fn:show  punctuation:(  variable:x  punctuation:)
- 16 |     bind y = 7 / 2.0
-    | keyword:bind  variable:y  operator:=  number:7  operator:/  number:2.0
- 17 |     show(y)
+ 17 |     bind y = float(7) / 2.0
+    | keyword:bind  variable:y  operator:=  type-builtin:float  punctuation:(  number:7  punctuation:)  operator:/  number:2.0
+ 18 |     show(y)
     | builtin-fn:show  punctuation:(  variable:y  punctuation:)
- 18 |     show(7 / 2)
+ 19 |     show(7 / 2)
     | builtin-fn:show  punctuation:(  number:7  operator:/  number:2  punctuation:)
- 19 |     show(5.5 % 2.0)
+ 20 |     show(5.5 % 2.0)
     | builtin-fn:show  punctuation:(  number:5.5  operator:%  number:2.0  punctuation:)
- 20 |     show(7 % 2.5)
-    | builtin-fn:show  punctuation:(  number:7  operator:%  number:2.5  punctuation:)
- 21 |     show(-7.5 % 2.0)
+ 21 |     show(float(7) % 2.5)
+    | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  number:7  punctuation:)  operator:%  number:2.5  punctuation:)
+ 22 |     show(-7.5 % 2.0)
     | builtin-fn:show  punctuation:(  operator:-  number:7.5  operator:%  number:2.0  punctuation:)
- 22 |     show(7 % 3)
+ 23 |     show(7 % 3)
     | builtin-fn:show  punctuation:(  number:7  operator:%  number:3  punctuation:)
- 23 |     show(0.1 + 0.2)
+ 24 |     show(0.1 + 0.2)
     | builtin-fn:show  punctuation:(  number:0.1  operator:+  number:0.2  punctuation:)
- 24 |     show(1000000000000000000000.0)
+ 25 |     show(1000000000000000000000.0)
     | builtin-fn:show  punctuation:(  number:1000000000000000000000.0  punctuation:)
- 25 |     show(-2.5 * 2)
-    | builtin-fn:show  punctuation:(  operator:-  number:2.5  operator:*  number:2  punctuation:)
- 27 |     hold f = 0.0
+ 26 |     show(-2.5 * float(2))
+    | builtin-fn:show  punctuation:(  operator:-  number:2.5  operator:*  type-builtin:float  punctuation:(  number:2  punctuation:)  punctuation:)
+ 28 |     hold f = 0.0
     | keyword:hold  variable:f  operator:=  number:0.0
- 28 |     f = f + 1
-    | variable:f  operator:=  variable:f  operator:+  number:1
- 29 |     show(f)
+ 29 |     f = f + float(1)
+    | variable:f  operator:=  variable:f  operator:+  type-builtin:float  punctuation:(  number:1  punctuation:)
+ 30 |     show(f)
     | builtin-fn:show  punctuation:(  variable:f  punctuation:)
- 31 |     bind v = Vec1 { x: 2.0 }
+ 32 |     bind v = Vec1 { x: 2.0 }
     | keyword:bind  variable:v  operator:=  type:Vec1  punctuation:{  field:x  punctuation::  number:2.0  punctuation:}
- 32 |     show(v.x * 2)
-    | builtin-fn:show  punctuation:(  variable:v  punctuation:.  field:x  operator:*  number:2  punctuation:)
- 33 |     show(half(3))
+ 33 |     show(v.x * float(2))
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:.  field:x  operator:*  type-builtin:float  punctuation:(  number:2  punctuation:)  punctuation:)
+ 34 |     show(half(3))
     | builtin-fn:show  punctuation:(  task:half  punctuation:(  number:3  punctuation:)  punctuation:)
- 34 | fi
+ 35 | fi
     | keyword:fi

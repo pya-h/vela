@@ -1,0 +1,4 @@
+# error: 3:10: an int and a float don't mix in arithmetic: turn one into the other first, as in 'float(n) + 2.5' (or 'n + int(2.5)', which truncates)
+task main()
+    show(1 + 2.5)
+fi

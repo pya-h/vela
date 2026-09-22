@@ -1767,9 +1767,9 @@ bind age = int("42")               # text to a number can fail: int or ParseErro
         <li><strong>Text needs memory.</strong> A number written as text is new text, so it goes in a region
           (<code>text@r</code>), written <code>… at r</code> as <code>new</code> and <code>scan</code> are. Done this way.
           The conversions between numbers make no memory, so they name no region at all.</li>
-        <li><strong>Promotion.</strong> Refused, once <code>float(n)</code> exists: <code>1 + 2.5</code> is an error that
-          asks for <code>float(1) + 2.5</code>, so that no <code>int</code> becomes a <code>float</code> quietly, and
-          arithmetic agrees with assignment, which already refused <code>bind x: float = 3</code>.</li>
+        <li><strong>Promotion.</strong> <span class="badge b-done">Done</span> — refused: <code>1 + 2.5</code> is an
+          error that asks for <code>float(1) + 2.5</code>, so no <code>int</code> becomes a <code>float</code> quietly,
+          and arithmetic agrees with assignment, which already refused <code>bind x: float = 3</code>.</li>
       </ul>
 
       <h3 id="bitwise">Bitwise operators</h3>

@@ -32,8 +32,8 @@
     | builtin-fn:show  punctuation:(  number:9223372036854775807  punctuation:)
  18 |     show(4611686018427387904 - 1 + 4611686018427387904)
     | builtin-fn:show  punctuation:(  number:4611686018427387904  operator:-  number:1  operator:+  number:4611686018427387904  punctuation:)
- 19 |     show(1 + 2.5)
-    | builtin-fn:show  punctuation:(  number:1  operator:+  number:2.5  punctuation:)
+ 19 |     show(float(1) + 2.5)
+    | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  number:1  punctuation:)  operator:+  number:2.5  punctuation:)
  20 |     show(7 % 3)
     | builtin-fn:show  punctuation:(  number:7  operator:%  number:3  punctuation:)
  21 | fi

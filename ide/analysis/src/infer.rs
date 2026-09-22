@@ -822,15 +822,18 @@ impl<'a> Knowledge<'a> {
             return self.expression_type(last, depth);
         }
         operand_ends.push(last);
-        let mut all_int = true;
+        // Arithmetic works on two numbers of the same type: an int and a float
+        // don't mix (see `check::check_binary`), so a chain of one of them has
+        // that type, and one that mixes them, or holds anything else, has none
+        // to read.
+        let mut number: Option<Type> = None;
         for end in operand_ends {
             match self.expression_type(end, depth + 1) {
-                Some(Type::Float) => return Some(Type::Float),
-                Some(Type::Int) => {}
-                _ => all_int = false,
+                Some(ty @ (Type::Int | Type::Float)) if number.as_ref().is_none_or(|seen| *seen == ty) => number = Some(ty),
+                _ => return None,
             }
         }
-        all_int.then_some(Type::Int)
+        number
     }
 
     /// Whether the tokens from `first` to `last` are a chain of `+`: a `+`

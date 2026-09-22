@@ -406,13 +406,15 @@ fn hover_reads_operators_in_initializers_when_the_file_doesnt_check() {
     let source = PROGRAM.replace(
         "    @@\n",
         "    show(missing)\n    bind less = total < 2\n    bind wrapped = (total == 1)\n    bind both = not less and wrapped\n    \
-         bind mixed = 1 + 2.5\n    bind whole = 2 * total - -(total % 3)\n    bind inner = (total)\n    bind unknown = total + missing\n",
+         bind mixed = float(1) + 2.5\n    bind whole = 2 * total - -(total % 3)\n    bind inner = (total)\n    bind unknown = total + missing\n    bind crossed = 1 + 2.5\n",
     );
     for (needle, code) in [
         ("less =", "bind less: bool"),
         ("wrapped =", "bind wrapped: bool"),
         ("both =", "bind both: bool"),
         ("mixed =", "bind mixed: float"),
+        // An int and a float don't mix, so the arithmetic has no type to read.
+        ("crossed =", "bind crossed"),
         ("whole =", "bind whole: int"),
         ("inner =", "bind inner: int"),
         // An operand of unknown type leaves the arithmetic's type unknown.

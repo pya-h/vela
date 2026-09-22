@@ -481,9 +481,13 @@ show(label)                <span class="comment"># error: unknown variable 'labe
 
       <h3>Numbers</h3>
       <p>
-        Arithmetic (<code>+ - * / %</code>) works on <code>int</code> and <code>float</code>. If either operand is a
-        <code>float</code>, the result is a <code>float</code>; two <code>int</code>s give an <code>int</code>, with
-        division truncating toward zero. <code>%</code> on floats keeps the sign of the dividend.
+        Arithmetic (<code>+ - * / %</code>) works on <code>int</code> and <code>float</code>, on two numbers of the same
+        type: two <code>int</code>s give an <code>int</code>, with division truncating toward zero, and two
+        <code>float</code>s give a <code>float</code>. An <code>int</code> and a <code>float</code> don't mix, so
+        <code>n + 2.5</code> is an error that asks for <a href="#conversions"><code>float(n) + 2.5</code></a> (or
+        <code>n + int(2.5)</code>, which truncates); no <code>int</code> becomes a <code>float</code> quietly, as
+        a binding (<code>bind x: float = 3</code>), an argument, and a field already ask for one.
+        <code>%</code> on floats keeps the sign of the dividend.
         On <code>int</code>s too, <code>%</code> keeps the sign of the dividend (<code>-7 % 3</code> is
         <code>-1</code>). Comparisons (<code>&lt; &lt;= &gt; &gt;=</code>) work on numbers of the same type.
         Number literals are decimal digits with an optional fraction (<code>42</code>, <code>3.14</code>), and
@@ -492,9 +496,10 @@ show(label)                <span class="comment"># error: unknown variable 'labe
         <code>9223372036854775807</code>, so the smallest <code>int</code> is written
         <code>-9223372036854775807 - 1</code>.
       </p>
-      <pre>show(7 / 2)       <span class="comment"># 3</span>
-show(7 / 2.0)     <span class="comment"># 3.5</span>
-show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
+      <pre>show(<span class="number">7</span> / <span class="number">2</span>)              <span class="comment"># 3, two ints</span>
+show(float(<span class="number">7</span>) / <span class="number">2.0</span>)     <span class="comment"># 3.5, two floats</span>
+show(<span class="number">5.5</span> % <span class="number">2.0</span>)          <span class="comment"># 1.5</span>
+show(<span class="number">7</span> / <span class="number">2.0</span>)            <span class="comment"># error: an int and a float don't mix in arithmetic …</span></pre>
       <p id="int-limits">
         An <code>int</code> never wraps around. An operation whose result doesn't fit in an <code>int</code>, and a
         division or remainder by zero, stop the program with a message saying where, on every C compiler:

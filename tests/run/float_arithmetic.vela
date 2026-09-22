@@ -1,34 +1,35 @@
-# Float literals, mixed int/float arithmetic, and float remainder
+# Float literals, arithmetic in floats, and float remainder. An int doesn't
+# become a float on its own, so every int taking part is written 'float(n)'.
 
 shape Vec1
     x: float
 fi
 
 task half(n: int) -> float
-    <- n / 2.0
+    <- float(n) / 2.0
 fi
 
 task main()
     show(3.0 / 2.0)
-    show(1 + 2.5)
-    bind x = 1 + 2.5
+    show(float(1) + 2.5)
+    bind x = float(1) + 2.5
     show(x)
-    bind y = 7 / 2.0
+    bind y = float(7) / 2.0
     show(y)
     show(7 / 2)
     show(5.5 % 2.0)
-    show(7 % 2.5)
+    show(float(7) % 2.5)
     show(-7.5 % 2.0)
     show(7 % 3)
     show(0.1 + 0.2)
     show(1000000000000000000000.0)
-    show(-2.5 * 2)
+    show(-2.5 * float(2))
 
     hold f = 0.0
-    f = f + 1
+    f = f + float(1)
     show(f)
 
     bind v = Vec1 { x: 2.0 }
-    show(v.x * 2)
+    show(v.x * float(2))
     show(half(3))
 fi
