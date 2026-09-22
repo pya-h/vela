@@ -13,9 +13,9 @@
   8 |     Amber(seconds: int)
     | variant:Amber  punctuation:(  field:seconds  punctuation::  type-builtin:int  punctuation:)
  10 |     shown() -> text
-    | variant:shown  punctuation:(  punctuation:)  operator:->  type-builtin:text
+    | method:shown  punctuation:(  punctuation:)  operator:->  type-builtin:text
  11 |         match .this
-    | keyword:match  punctuation:.  field:this
+    | keyword:match  punctuation:.  keyword:this
  12 |             case Red
     | keyword:case  variant:Red
  13 |                 <- "red"
@@ -43,27 +43,27 @@
  25 |     # to tell it from a variant.
     | comment:# to tell it from a variant.
  26 |     tell()
-    | task:tell  punctuation:(  punctuation:)
+    | method:tell  punctuation:(  punctuation:)
  27 |         show(.shown())
-    | builtin-fn:show  punctuation:(  punctuation:.  field:shown  punctuation:(  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  punctuation:.  method:shown  punctuation:(  punctuation:)  punctuation:)
  28 |     fi
     | keyword:fi
  30 |     alters flip()
-    | variable:alters  task:flip  punctuation:(  punctuation:)
+    | keyword:alters  method:flip  punctuation:(  punctuation:)
  31 |         match .this
-    | keyword:match  punctuation:.  field:this
+    | keyword:match  punctuation:.  keyword:this
  32 |             case Red
     | keyword:case  variant:Red
  33 |                 .this = Green
-    | punctuation:.  field:this  operator:=  variant:Green
+    | punctuation:.  keyword:this  operator:=  variant:Green
  34 |             case Green
     | keyword:case  variant:Green
  35 |                 .this = Red
-    | punctuation:.  field:this  operator:=  variant:Red
+    | punctuation:.  keyword:this  operator:=  variant:Red
  36 |             case Amber _
     | keyword:case  variant:Amber  keyword:_
  37 |                 .this = Red
-    | punctuation:.  field:this  operator:=  variant:Red
+    | punctuation:.  keyword:this  operator:=  variant:Red
  38 |         fi
     | keyword:fi
  39 |     fi
@@ -71,17 +71,17 @@
  41 |     # A method taking parameters, below one that says what it sends.
     | comment:# A method taking parameters, below one that says what it sends.
  42 |     alters hold_for(seconds: int)
-    | variable:alters  task:hold_for  punctuation:(  variable:seconds  punctuation::  type-builtin:int  punctuation:)
+    | keyword:alters  method:hold_for  punctuation:(  parameter:seconds  punctuation::  type-builtin:int  punctuation:)
  43 |         .this = Amber(seconds)
-    | punctuation:.  field:this  operator:=  variant:Amber  punctuation:(  variable:seconds  punctuation:)
+    | punctuation:.  keyword:this  operator:=  variant:Amber  punctuation:(  parameter:seconds  punctuation:)
  44 |     fi
     | keyword:fi
  46 |     # Only this file may call a method marked priv.
     | comment:# Only this file may call a method marked priv.
  47 |     priv waits() -> int
-    | keyword:priv  task:waits  punctuation:(  punctuation:)  operator:->  type-builtin:int
+    | keyword:priv  method:waits  punctuation:(  punctuation:)  operator:->  type-builtin:int
  48 |         match .this
-    | keyword:match  punctuation:.  field:this
+    | keyword:match  punctuation:.  keyword:this
  49 |             case Amber s
     | keyword:case  variant:Amber  variable:s
  50 |                 <- s
@@ -99,9 +99,9 @@
  57 |     # values that hold nothing in one never has a region to name.
     | comment:# values that hold nothing in one never has a region to name.
  58 |     sameAs(other: Light) -> bool
-    | task:sameAs  punctuation:(  variable:other  punctuation::  type:Light  punctuation:)  operator:->  type-builtin:bool
+    | method:sameAs  punctuation:(  parameter:other  punctuation::  type:Light  punctuation:)  operator:->  type-builtin:bool
  59 |         <- .waits() == other.waits()
-    | keyword:<-  punctuation:.  field:waits  punctuation:(  punctuation:)  operator:==  variable:other  punctuation:.  field:waits  punctuation:(  punctuation:)
+    | keyword:<-  punctuation:.  method:waits  punctuation:(  punctuation:)  operator:==  parameter:other  punctuation:.  method:waits  punctuation:(  punctuation:)
  60 |     fi
     | keyword:fi
  61 | fi
@@ -115,9 +115,9 @@
  66 |     Word(text: text)
     | variant:Word  punctuation:(  field:text  punctuation::  type-builtin:text  punctuation:)
  68 |     wordOf() -> maybe text@this
-    | variant:wordOf  punctuation:(  punctuation:)  operator:->  keyword:maybe  type-builtin:text  operator:@  region:this
+    | method:wordOf  punctuation:(  punctuation:)  operator:->  keyword:maybe  type-builtin:text  operator:@  region:this
  69 |         match .this
-    | keyword:match  punctuation:.  field:this
+    | keyword:match  punctuation:.  keyword:this
  70 |             case Empty
     | keyword:case  variant:Empty
  71 |                 <- none
@@ -131,9 +131,9 @@
  75 |     fi
     | keyword:fi
  77 |     alters clear()
-    | variable:alters  task:clear  punctuation:(  punctuation:)
+    | keyword:alters  method:clear  punctuation:(  punctuation:)
  78 |         .this = Empty
-    | punctuation:.  field:this  operator:=  variant:Empty
+    | punctuation:.  keyword:this  operator:=  variant:Empty
  79 |     fi
     | keyword:fi
  80 | fi
@@ -143,52 +143,52 @@
  83 |     hold light = Red
     | keyword:hold  variable:light  operator:=  variant:Red
  84 |     light.tell()
-    | variable:light  punctuation:.  field:tell  punctuation:(  punctuation:)
+    | variable:light  punctuation:.  method:tell  punctuation:(  punctuation:)
  85 |     light.flip()
-    | variable:light  punctuation:.  field:flip  punctuation:(  punctuation:)
+    | variable:light  punctuation:.  method:flip  punctuation:(  punctuation:)
  86 |     light.tell()
-    | variable:light  punctuation:.  field:tell  punctuation:(  punctuation:)
+    | variable:light  punctuation:.  method:tell  punctuation:(  punctuation:)
  87 |     light.flip()
-    | variable:light  punctuation:.  field:flip  punctuation:(  punctuation:)
+    | variable:light  punctuation:.  method:flip  punctuation:(  punctuation:)
  88 |     light.tell()
-    | variable:light  punctuation:.  field:tell  punctuation:(  punctuation:)
+    | variable:light  punctuation:.  method:tell  punctuation:(  punctuation:)
  90 |     light.hold_for(5)
-    | variable:light  punctuation:.  field:hold_for  punctuation:(  number:5  punctuation:)
+    | variable:light  punctuation:.  method:hold_for  punctuation:(  number:5  punctuation:)
  91 |     light.tell()
-    | variable:light  punctuation:.  field:tell  punctuation:(  punctuation:)
+    | variable:light  punctuation:.  method:tell  punctuation:(  punctuation:)
  92 |     show(light.waits())
-    | builtin-fn:show  punctuation:(  variable:light  punctuation:.  field:waits  punctuation:(  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:light  punctuation:.  method:waits  punctuation:(  punctuation:)  punctuation:)
  93 |     light.hold_for(2)
-    | variable:light  punctuation:.  field:hold_for  punctuation:(  number:2  punctuation:)
+    | variable:light  punctuation:.  method:hold_for  punctuation:(  number:2  punctuation:)
  94 |     light.tell()
-    | variable:light  punctuation:.  field:tell  punctuation:(  punctuation:)
+    | variable:light  punctuation:.  method:tell  punctuation:(  punctuation:)
  95 |     show(light.sameAs(Amber(2)))
-    | builtin-fn:show  punctuation:(  variable:light  punctuation:.  field:sameAs  punctuation:(  variant:Amber  punctuation:(  number:2  punctuation:)  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:light  punctuation:.  method:sameAs  punctuation:(  variant:Amber  punctuation:(  number:2  punctuation:)  punctuation:)  punctuation:)
  96 |     show(light.sameAs(Red))
-    | builtin-fn:show  punctuation:(  variable:light  punctuation:.  field:sameAs  punctuation:(  variant:Red  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:light  punctuation:.  method:sameAs  punctuation:(  variant:Red  punctuation:)  punctuation:)
  98 |     # A method that changes nothing is called on a `bind` too.
     | comment:# A method that changes nothing is called on a `bind` too.
  99 |     bind fixed = Green
     | keyword:bind  variable:fixed  operator:=  variant:Green
 100 |     show(fixed.shown())
-    | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  field:shown  punctuation:(  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  method:shown  punctuation:(  punctuation:)  punctuation:)
 102 |     region r
     | keyword:region  region:r
 103 |     hold word: Label@r = Word("a word".copy() at r)
     | keyword:hold  variable:word  punctuation::  type:Label  operator:@  region:r  operator:=  variant:Word  punctuation:(  string:"a word"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
 104 |     show(word.wordOf())
-    | builtin-fn:show  punctuation:(  variable:word  punctuation:.  field:wordOf  punctuation:(  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:word  punctuation:.  method:wordOf  punctuation:(  punctuation:)  punctuation:)
 105 |     word.clear()
-    | variable:word  punctuation:.  field:clear  punctuation:(  punctuation:)
+    | variable:word  punctuation:.  method:clear  punctuation:(  punctuation:)
 106 |     show(word.wordOf())
-    | builtin-fn:show  punctuation:(  variable:word  punctuation:.  field:wordOf  punctuation:(  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:word  punctuation:.  method:wordOf  punctuation:(  punctuation:)  punctuation:)
 108 |     # Through a pointer into a region.
     | comment:# Through a pointer into a region.
 109 |     hold here = new Light(Red) at r
     | keyword:hold  variable:here  operator:=  keyword:new  type:Light  punctuation:(  variant:Red  punctuation:)  keyword:at  region:r
 110 |     here^.flip()
-    | variable:here  operator:^  punctuation:.  field:flip  punctuation:(  punctuation:)
+    | variable:here  operator:^  punctuation:.  method:flip  punctuation:(  punctuation:)
 111 |     here^.tell()
-    | variable:here  operator:^  punctuation:.  field:tell  punctuation:(  punctuation:)
+    | variable:here  operator:^  punctuation:.  method:tell  punctuation:(  punctuation:)
 112 | fi
     | keyword:fi

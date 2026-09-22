@@ -318,7 +318,8 @@ Press Ctrl+C to stop.</pre>
           spinner while building and Stop while the program runs), open a file by name, and the light/dark theme. A
           <em>No C compiler</em> warning appears here when <code>cc</code> or <code>$CC</code> can't be started.</li>
         <li><strong>Sidebar:</strong> the Explorer (the folder's files) and the Outline (the open file's tasks,
-          shapes, and kinds, with a shape's fields, a kind's variants, and the types a task or shape takes under it;
+          shapes, and kinds, with a shape's fields, a kind's variants, the methods of both, and the types a task or
+          shape takes under it;
           the one under the cursor is highlighted). Drag its edge to resize it; double-click the
           edge to reset.</li>
         <li><strong>Tabs and editor:</strong> one tab per open file; a dot marks unsaved changes. With no file open,
@@ -341,7 +342,10 @@ Press Ctrl+C to stop.</pre>
           <p>Tasks, shapes and kinds, variants, parameters, variables, fields, regions, and modules each get their own
             color, even in a half-typed line. The types a task or shape takes (<code>&lt;T: ordered&gt;</code>) are
             colored as types wherever they are written, as are the ones a use gives (<code>Box&lt;int&gt;</code>), and
-            the word asked of one as a word of the language.</p>
+            the word asked of one as a word of the language. A method is colored as a task where it is declared and
+            wherever it is called (<code>c.step(2)</code>, <code>.cap()</code>), even a kind's, whose members are
+            written as its variants are; <code>alters</code> and the <code>this</code> of <code>.this</code> are words of the
+            language, <code>@this</code> is a region, and a method's parameters are parameters.</p>
         </div>
         <div class="card">
           <h4>Programs in several files</h4>
@@ -368,8 +372,10 @@ Press Ctrl+C to stop.</pre>
             <code>Box&lt;int&gt; { … }</code>), and nothing for an array type's count;
             the types a task or shape takes are offered as types inside it (<code>T</code>), and after a
             type's <code>:</code> or <code>&amp;</code> the words it can be asked to allow (<code>fixed</code>,
-            <code>same</code>, <code>shown</code>, <code>ordered</code>); variables declared above the cursor; fields after
-            <code>.</code>, a tuple's items by position after its <code>.</code> (<code>0</code>, <code>1</code>, each with its type), and <code>len</code> after an array's or slice's (and <code>add</code> and <code>del</code> after a slice's), and
+            <code>same</code>, <code>shown</code>, <code>ordered</code>); variables declared above the cursor; fields and
+            methods after <code>.</code> (a method with its parameters to fill in, and a pointer's through
+            <code>^.</code>), and inside a method, after a <code>.</code> starting a value, <code>this</code> and the fields and
+            methods of the value it is called on; a tuple's items by position after its <code>.</code> (<code>0</code>, <code>1</code>, each with its type), and <code>len</code> after an array's or slice's (and <code>add</code> and <code>del</code> after a slice's), and
             <code>copy</code> after a value holding text, a slice, or a pointer; the cases still missing after <code>case</code> and
             <code>case Kind.</code>, including <code>{value}</code>,
             <code>none</code>, and <code>fail e</code>; the patterns that fit after <code>is</code> (a tuple's names among them); the regions
@@ -387,8 +393,10 @@ Press Ctrl+C to stop.</pre>
             <code>&lt; &gt;</code> of a call or of a shape given types, the types are.
             A task's named results (<code>-&gt; total: int</code>) are offered at the start of a line as
             <code>total &lt;- </code>, and hover as <code>result total: int</code>. After <code>match</code>, only <code>case</code>; <code>new</code> only where a region can
-            be allocated in; <code>include</code> only above a file's tasks, shapes, and kinds; and <code>priv</code> before
-            those and a shape's fields, with <code>task</code>, <code>shape</code>, and <code>kind</code> after it.</p>
+            be allocated in; <code>include</code> only above a file's tasks, shapes, and kinds; <code>priv</code> before
+            those and a shape's fields, with <code>task</code>, <code>shape</code>, and <code>kind</code> after it; and
+            <code>priv</code> and <code>alters</code> at the start of a shape's or a kind's member, with
+            <code>alters</code> after its <code>priv</code>. A method's body completes as a task's does.</p>
         </div>
         <div class="card">
           <h4>Snippets</h4>
@@ -403,15 +411,17 @@ Press Ctrl+C to stop.</pre>
             type with <code>@_</code> explains it), a type a task or shape takes (<code>T</code>), which says what the
             word after its <code>:</code> allows, a tuple's item (<code>t.1</code>) to see its type, or <code>maybe</code>, <code>is</code>, <code>fail</code>,
             <code>none</code>, <code>_</code>, <code>region</code>, <code>new</code>, and <code>in</code> for a reminder
-            of what they do. <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it
+            of what they do. A method shows its header, which shape or kind it belongs to, and whether it changes the
+            value it is called on; <code>.this</code> shows that value's type, and <code>alters</code> and
+            <code>@this</code> what they mean. <kbd>F12</kbd> or <kbd>Ctrl</kbd>+click jumps to where it
             is declared (a variant named alone in a <code>case</code> is the matched value's kind's, even another module's); <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> finds a declaration by name.</p>
         </div>
         <div class="card">
           <h4>Blocks that indent themselves</h4>
-          <p>Enter indents after a block's first line, and after a line ending with a plan B's <code>{</code> (or
+          <p>Enter indents after a block's first line (a method's header among them), and after a line ending with a plan B's <code>{</code> (or
             <code>{ fail e</code>); typing
-            <code>fi</code>, <code>else</code>, <code>case</code>, or <code>}</code> lines it up with its block. Blocks
-            fold from the gutter.</p>
+            <code>fi</code>, <code>else</code>, <code>case</code>, or <code>}</code> lines it up with its block. Blocks,
+            a method's among them, fold from the gutter.</p>
         </div>
       </div>
       <p>

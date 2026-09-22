@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { type BlockWords, closingLine, firstWord, indentWidth, indentation } from "./blocks";
+import { type BlockWords, closingLine, firstWord, indentWidth, indentation, methodLines } from "./blocks";
 
 const WORDS: BlockWords = {
   blockOpeners: ["task", "shape", "kind", "when", "loop", "each", "match"],
   blockModifiers: ["priv"],
   branchKeywords: ["else", "case"],
   blockCloser: "fi",
+  methodMarker: "alters",
 };
 
 /** The indentation for the last line of `source`, as columns. */
@@ -125,5 +126,71 @@ describe("closingLine", () => {
   it("is null for lines that open nothing and for unclosed blocks", () => {
     expect(closingLine(source, source.length, 2, WORDS)).toBeNull();
     expect(closingLine(source, source.length, 7, WORDS)).toBeNull();
+  });
+});
+
+describe("methods", () => {
+  const counter = [
+    "shape Counter",
+    "    count: int",
+    "",
+    "    total() -> int",
+    "        <- .count",
+    "    fi",
+    "",
+    "    priv alters step(by: int)",
+    "        when by > 0",
+    "            .count = .count + by",
+    "        fi",
+    "    fi",
+    "fi",
+    "task main()",
+    "    show(1)",
+    "fi",
+  ];
+
+  it("finds a method's line among a shape's members, and never a call in a body", () => {
+    expect([...methodLines(counter, WORDS)]).toEqual([3, 7]);
+    expect([...methodLines(["task main()", "    show(1)", "    step(2)", "fi"], WORDS)]).toEqual([]);
+  });
+
+  it("reads a kind's member as a variant or a method as the parser does", () => {
+    const light = [
+      "kind Light",
+      "    Red",
+      "    Amber(seconds: int)",
+      "    shown() -> text",
+      "        <- \"\"",
+      "    fi",
+      "    wait(seconds: int)",
+      "    fi",
+      "fi",
+    ];
+    // A variant carries named values; a method after another is one whatever it takes.
+    expect([...methodLines(light, WORDS)]).toEqual([3, 6]);
+    const first = ["kind K", "    A", "    tell(prefix: text) -> unit", "    fi", "    alters set(to: int)", "    fi", "fi"];
+    expect([...methodLines(first, WORDS)]).toEqual([2, 4]);
+    // Without anything above it saying otherwise, a kind's first member with
+    // named values and nothing after them is a variant, as the parser reads it.
+    expect([...methodLines(["kind K", "    tell(prefix: text)", "fi"], WORDS)]).toEqual([]);
+  });
+
+  it("indents a method's body and lines its fi up with its header", () => {
+    expect(indentOfLast(counter.slice(0, 4).join("\n") + "\n")).toBe(8);
+    expect(indentOfLast(counter.slice(0, 8).join("\n") + "\n")).toBe(8);
+    expect(indentOfLast(counter.slice(0, 5).join("\n") + "\n        fi")).toBe(4);
+    expect(indentOfLast(counter.slice(0, 11).join("\n") + "\n            fi")).toBe(4);
+    // The shape's own fi, below its methods, lines up with the shape.
+    expect(indentOfLast(counter.slice(0, 12).join("\n") + "\n    fi")).toBe(0);
+    // After a method, the next member is at the shape's level.
+    expect(indentOfLast(counter.slice(0, 6).join("\n") + "\n")).toBe(4);
+  });
+
+  it("folds a method up to its fi, and a shape up to its own", () => {
+    expect(closingLine(counter, counter.length, 0, WORDS)).toBe(12);
+    expect(closingLine(counter, counter.length, 3, WORDS)).toBe(5);
+    expect(closingLine(counter, counter.length, 7, WORDS)).toBe(11);
+    expect(closingLine(counter, counter.length, 8, WORDS)).toBe(10);
+    expect(closingLine(counter, counter.length, 14, WORDS)).toBeNull();
   });
 });

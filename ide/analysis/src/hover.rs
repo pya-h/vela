@@ -46,7 +46,15 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     ("is", "value is pattern", "The condition holds when the pattern matches; its names are visible in the block."),
     ("fail", "fail error", "An error, for a task that sends T or E. In a plan B, a first line fail e names the error."),
     ("_", "_", "Matches anything left, or drops a value without naming it."),
+    (
+        "alters",
+        "alters name(…)",
+        "Marks a method that changes the value it is called on: it may assign .this and what the value holds. Only a place that can change may call it: a hold variable, a field or item of one, or what a pointer points to.",
+    ),
 ];
+
+/// What `@this` is, in a method's header or body.
+const THIS_REGION_DOC: &str = "The region the value this method is called on lives in. The method may send what the value holds there and take values in it, but can't allocate in it, since nothing gives a method the region.";
 
 /// The hover for the classified token covering `byte`, as `(code, doc)` and
 /// the token's byte range.
@@ -74,10 +82,19 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
             format!("task {}(value: int | float | bool | text | maybe)", text),
             "Prints the value followed by a newline; a maybe prints its value or none.".to_string(),
         ),
+        // `.this`: the value the method around it is called on.
+        (TokenClass::Keyword, _) if text == vela::ast::THIS_WORD => {
+            let owner = owner_around(k, token.range.start);
+            let code = owner.map_or_else(|| format!(".{}", text), |owner| format!(".{}: {}", text, owner.name));
+            let doc = "The value this method is called on. A kind's method takes it apart with match .this, and a method marked alters may assign it.";
+            (code, doc.to_string())
+        }
         (TokenClass::Keyword, _) => {
             let (_, code, doc) = KEYWORD_DOCS.iter().find(|(word, _, _)| *word == text)?;
             (code.to_string(), doc.to_string())
         }
+        // `@this` in a method's body, which its header didn't name.
+        (TokenClass::Region, None) if text == vela::ast::THIS_WORD => (format!("region {}", text), THIS_REGION_DOC.to_string()),
         // `xs.len`, which no shape declares.
         (TokenClass::Field, None) if text == "len" => {
             ("len: int".to_string(), "The number of items of an array or slice.".to_string())
@@ -140,6 +157,23 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             (format!("include {}", symbol.detail), doc)
         }
         SymbolKind::Task => (format!("task {}{}", symbol.name, symbol.detail), from_module(k, symbol)),
+        SymbolKind::Method => {
+            let private = if symbol.private { "priv " } else { "" };
+            let alters = symbol.intro.map_or(String::new(), |word| format!("{} ", word));
+            let (what, owner) = match parent {
+                Some(p) if p.kind == SymbolKind::Kind => ("kind", p.name.as_str()),
+                Some(p) => ("shape", p.name.as_str()),
+                None => ("shape", "?"),
+            };
+            let changes = if symbol.intro.is_some() {
+                " It changes the value it is called on, so only a place that can change may call it."
+            } else {
+                ""
+            };
+            let doc = format!("A method of {} {}, called on a value of it: value.{}(…).{}", what, owner, symbol.name, changes);
+            let module = from_module(k, symbol);
+            (format!("{}{}{}{}", private, alters, symbol.name, symbol.detail), if module.is_empty() { doc } else { format!("{} {}", doc, module) })
+        }
         SymbolKind::TypeParam => {
             let what = match parent.map(|p| p.kind) {
                 Some(SymbolKind::Shape) => "shape",
@@ -171,7 +205,8 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 }
                 let separator = if member.kind == SymbolKind::Field { ": " } else { "" };
                 let private = if member.private { "priv " } else { "" };
-                code.push_str(&format!("    {}{}{}{}\n", private, vela::ast::unqualified(&member.name), separator, member.detail));
+                let alters = if member.kind == SymbolKind::Method { member.intro.map_or(String::new(), |word| format!("{} ", word)) } else { String::new() };
+                code.push_str(&format!("    {}{}{}{}{}\n", private, alters, vela::ast::unqualified(&member.name), separator, member.detail));
             }
             code.push_str("fi");
             (code, from_module(k, symbol))
@@ -191,19 +226,14 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             (format!("{}: {}", symbol.name, symbol.detail), doc)
         }
         SymbolKind::Parameter => {
-            let task = k
-                .symbols()
-                .iter()
-                .find(|s| s.kind == SymbolKind::Task && s.range.start <= symbol.name_range.start && symbol.name_range.end <= s.range.end);
-            let doc = task.map(|t| format!("A parameter of task {}.", t.name)).unwrap_or_default();
+            let doc = task_around(k, symbol.name_range.start).map(|task| format!("A parameter of {}.", task)).unwrap_or_default();
             (typed(&symbol.name), doc)
         }
+        SymbolKind::Region if symbol.name == vela::ast::THIS_WORD && symbol.intro == Some("@") && is_in_method(k, symbol.name_range.start) => {
+            (format!("region {}", symbol.name), THIS_REGION_DOC.to_string())
+        }
         SymbolKind::Region => {
-            let task = k
-                .symbols()
-                .iter()
-                .find(|s| s.kind == SymbolKind::Task && s.range.start <= symbol.name_range.start && symbol.name_range.end <= s.range.end);
-            let task = task.map_or("this task".to_string(), |t| format!("task {}", t.name));
+            let task = task_around(k, symbol.name_range.start).unwrap_or_else(|| "this task".to_string());
             match symbol.intro {
                 Some("region") => (
                     format!("region {}", symbol.name),
@@ -241,12 +271,8 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             }
             Some("hold") => (format!("hold {}", typed(&symbol.name)), "A mutable variable.".to_string()),
             Some("result") => {
-                let task = k
-                    .symbols()
-                    .iter()
-                    .find(|s| s.kind == SymbolKind::Task && s.range.start <= symbol.name_range.start && symbol.name_range.end <= s.range.end);
-                let doc = match task {
-                    Some(task) => format!("A result of task {}, which reaching the end of the task sends.", task.name),
+                let doc = match task_around(k, symbol.name_range.start) {
+                    Some(task) => format!("A result of {}, which reaching its end sends.", task),
                     None => "A result of this task, which reaching its end sends.".to_string(),
                 };
                 (format!("result {}", typed(&symbol.name)), format!("{} Set it with '{} <- …'.", doc, symbol.name))
@@ -254,6 +280,30 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             _ => (format!("bind {}", typed(&symbol.name)), "An immutable variable.".to_string()),
         },
     })
+}
+
+/// The shape or kind of this file whose block holds `byte`.
+fn owner_around<'a>(k: &Knowledge<'a>, byte: usize) -> Option<&'a crate::scan::Symbol> {
+    k.symbols()
+        .iter()
+        .find(|s| s.module.is_none() && matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind) && s.range.start <= byte && byte < s.range.end)
+}
+
+/// Whether `byte` is inside a method of this file.
+fn is_in_method(k: &Knowledge, byte: usize) -> bool {
+    k.symbols().iter().any(|s| s.module.is_none() && s.kind == SymbolKind::Method && s.range.start <= byte && byte < s.range.end)
+}
+
+/// The task or method of this file around `byte`, as a message names it:
+/// `task fib`, or `method Counter.step`.
+fn task_around(k: &Knowledge, byte: usize) -> Option<String> {
+    let around = |s: &&crate::scan::Symbol| s.module.is_none() && s.range.start <= byte && byte < s.range.end;
+    let symbols = k.symbols();
+    if let Some(method) = symbols.iter().filter(around).find(|s| s.kind == SymbolKind::Method) {
+        let owner = method.parent.and_then(|p| k.symbol(p)).map_or("?", |p| p.name.as_str());
+        return Some(format!("method {}.{}", owner, method.name));
+    }
+    symbols.iter().filter(around).find(|s| s.kind == SymbolKind::Task).map(|task| format!("task {}", task.name))
 }
 
 /// For a declaration of another file, which module it is from.

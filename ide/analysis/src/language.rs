@@ -3,7 +3,7 @@
 //! from the compiler's own tables.
 
 use serde::Serialize;
-use vela::ast::{BUILTIN_TASKS, BUILTIN_TYPES};
+use vela::ast::{ALTERS, BUILTIN_TASKS, BUILTIN_TYPES};
 use vela::lexer::KEYWORDS;
 
 /// Keywords that start a block closed by `fi`.
@@ -25,6 +25,10 @@ pub struct Language {
     pub block_modifiers: Vec<&'static str>,
     pub branch_keywords: Vec<&'static str>,
     pub block_closer: &'static str,
+    /// The word before a method that changes its value, `alters`. A method
+    /// opens a block with no keyword of its own: its line, among a shape's or a
+    /// kind's members, is a name followed by `(`, after `priv` and this word.
+    pub method_marker: &'static str,
     pub line_comment: &'static str,
     /// Bracket pairs, for matching and auto-closing.
     pub brackets: Vec<(&'static str, &'static str)>,
@@ -39,6 +43,7 @@ pub fn language() -> Language {
         block_modifiers: BLOCK_MODIFIERS.to_vec(),
         branch_keywords: BRANCH_KEYWORDS.to_vec(),
         block_closer: BLOCK_CLOSER,
+        method_marker: ALTERS,
         line_comment: "#",
         brackets: vec![("(", ")"), ("{", "}"), ("[", "]"), ("\"", "\"")],
     }

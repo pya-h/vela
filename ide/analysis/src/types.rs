@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::Path;
 
-use vela::ast::{Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, ShapeDef, Span, Stmt, StmtKind, Target, Type};
+use vela::ast::{Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, ShapeDef, Span, Stmt, StmtKind, THIS, Target, Type, method_parts};
 use vela::check::{in_region, regional_types, textual_types};
 use vela::driver;
 use vela::error::Error;
@@ -143,7 +143,9 @@ impl Checked {
                 && task.span.file == 0
                 && task.given.is_empty()
             {
-                for param in &task.params {
+                // A method's value is no parameter the file writes: it sits at
+                // the method's name.
+                for param in task.params.iter().filter(|param| param.name != THIS) {
                     checked.decls.insert(pos(param.span), param.ty.clone());
                 }
                 // A named result is a variable of the task, with the type the
@@ -315,6 +317,17 @@ impl Checked {
             ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
                 self.expr(a, kinds);
                 self.expr(b, kinds);
+            }
+            // `c.step()`, which the checker made a call of the task the method
+            // is, at the method's name: the name after the dot is a member of
+            // the shape or kind before `__on__` (no Vela name holds `__`), as
+            // written without the types a made one was given.
+            ExprKind::Call { name, args, .. } if let Some((owner, _)) = method_parts(name) => {
+                let owner = owner.split("__of__").next().unwrap_or(owner);
+                self.field_accesses.insert(pos(e.span), owner.to_string());
+                for arg in args {
+                    self.expr(arg, kinds);
+                }
             }
             ExprKind::Call { args, .. } | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => {
                 for arg in args {

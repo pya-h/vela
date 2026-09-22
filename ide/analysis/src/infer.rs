@@ -111,10 +111,33 @@ impl<'a> Knowledge<'a> {
         tokens.get(i).filter(|t| t.range.start == start).and_then(|t| t.symbol)
     }
 
+    /// Whether the name at position `q` declares a method of this file.
+    pub fn declares_method(&self, q: usize) -> bool {
+        let start = self.range(q).start;
+        self.symbol_at(q)
+            .and_then(|id| self.symbol(id))
+            .is_some_and(|s| s.kind == SymbolKind::Method && s.module.is_none() && s.name_range.start == start)
+    }
+
+    /// The shape or kind of this file whose block holds `byte`.
+    pub fn owner_around(&self, byte: usize) -> Option<usize> {
+        self.scan
+            .symbols
+            .iter()
+            .position(|s| s.module.is_none() && matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind) && s.range.start <= byte && byte < s.range.end)
+    }
+
     /// The symbols that are children of `parent`, in source order: a shape's
-    /// fields, a kind's variants, or a variant's payload fields.
+    /// fields and methods, a kind's variants and methods, or a variant's payload
+    /// fields.
     pub fn children(&self, parent: usize) -> impl Iterator<Item = (usize, &'a Symbol)> {
         self.scan.symbols.iter().enumerate().filter(move |(_, s)| s.parent == Some(parent))
+    }
+
+    /// The children of `parent` that are of `kind`: a shape's fields, or a
+    /// kind's variants, without their methods and the types they take.
+    pub fn members(&self, parent: usize, kind: SymbolKind) -> impl Iterator<Item = (usize, &'a Symbol)> {
+        self.children(parent).filter(move |(_, s)| s.kind == kind)
     }
 
     /// The first top-level declaration of `kind` called `name`: one of this
@@ -396,7 +419,7 @@ impl<'a> Knowledge<'a> {
     fn variant_of(&self, subject: &Type, tag: &str) -> Option<usize> {
         let Type::Named(kind, _) = subject else { return None };
         let kind = self.global(kind, SymbolKind::Kind)?;
-        self.children(kind).find(|(_, v)| unqualified(&v.name) == tag).map(|(id, _)| id)
+        self.members(kind, SymbolKind::Variant).find(|(_, v)| unqualified(&v.name) == tag).map(|(id, _)| id)
     }
 
     /// The declaration `token` refers to. A variant named alone in a pattern
@@ -520,6 +543,23 @@ impl<'a> Knowledge<'a> {
                 if let Some(variant) = self.symbol_at(q).filter(|&id| self.symbol(id).is_some_and(|s| s.kind == SymbolKind::Variant)) {
                     return self.variant_value(variant, None, depth);
                 }
+                // `.this` and `.x` inside a method: the value it is called on,
+                // which lives in `@this`, and a field of it.
+                if self.token_before(q) == Some(&Token::Dot) && !q.checked_sub(2).and_then(|b| self.token(b)).is_some_and(crate::scan::ends_value) {
+                    let owner = self.symbol(self.owner_around(self.range(q).start)?)?;
+                    let value = match self.takes_region().contains(&owner.name) {
+                        true => Type::Named(owner.name.clone(), Some(vela::ast::THIS_WORD.to_string())),
+                        false => Type::named(&owner.name),
+                    };
+                    if name == vela::ast::THIS_WORD {
+                        return Some(value);
+                    }
+                    let ty = self.field_type(&owner.name, name)?;
+                    return Some(match value {
+                        Type::Named(_, Some(region)) => self.in_region(&ty, &region),
+                        _ => ty,
+                    });
+                }
                 if self.token_before(q) == Some(&Token::Dot) {
                     let base = self.expression_type(q.checked_sub(2)?, depth + 1)?;
                     if name == "len" && matches!(base, Type::Array(..) | Type::Slice(..)) {
@@ -640,6 +680,13 @@ impl<'a> Knowledge<'a> {
                         vela::ast::EditOp::Add => Type::Unit,
                         vela::ast::EditOp::Del => *items,
                     }));
+                }
+                // `c.total()` and `.total()`: what a method sends, which the
+                // checker records at its name.
+                if self.token_before(p) == Some(&Token::Dot)
+                    && let Some(method) = self.symbol_at(p).and_then(|id| self.symbol(id)).filter(|s| s.kind == SymbolKind::Method)
+                {
+                    return exact(p).or_else(|| Some(self.call_type(&method.detail, open, q, depth)));
                 }
                 // `Shape.Circle(…)` and `m.Shape.Circle(…)`: a kind's variant,
                 // recorded where its name starts.
@@ -925,7 +972,7 @@ impl<'a> Knowledge<'a> {
     /// The type of a shape's field.
     pub fn field_type(&self, shape: &str, field: &str) -> Option<Type> {
         let shape = self.global(shape, SymbolKind::Shape)?;
-        let (_, field) = self.children(shape).find(|(_, s)| s.name == field)?;
+        let (_, field) = self.members(shape, SymbolKind::Field).find(|(_, s)| s.name == field)?;
         parse_type(&field.detail)
     }
 }

@@ -13,7 +13,7 @@
   9 |     # `T` is the type the value is given.
     | comment:# `T` is the type the value is given.
  10 |     valueOf() -> T
-    | task:valueOf  punctuation:(  punctuation:)  operator:->  type:T
+    | method:valueOf  punctuation:(  punctuation:)  operator:->  type:T
  11 |         <- .value
     | keyword:<-  punctuation:.  field:value
  12 |     fi
@@ -21,25 +21,25 @@
  14 |     # The shape asks for `shown`, so the body may show a `T`.
     | comment:# The shape asks for `shown`, so the body may show a `T`.
  15 |     tell()
-    | task:tell  punctuation:(  punctuation:)
+    | method:tell  punctuation:(  punctuation:)
  16 |         show(.value)
     | builtin-fn:show  punctuation:(  punctuation:.  field:value  punctuation:)
  17 |     fi
     | keyword:fi
  19 |     alters put(v: T)
-    | variable:alters  task:put  punctuation:(  variable:v  punctuation::  type:T  punctuation:)
+    | keyword:alters  method:put  punctuation:(  parameter:v  punctuation::  type:T  punctuation:)
  20 |         .value = v
-    | punctuation:.  field:value  operator:=  variable:v
+    | punctuation:.  field:value  operator:=  parameter:v
  21 |     fi
     | keyword:fi
  23 |     # A method of a shape given types may be called from another of its methods.
     | comment:# A method of a shape given types may be called from another of its methods.
  24 |     alters twice(v: T)
-    | variable:alters  task:twice  punctuation:(  variable:v  punctuation::  type:T  punctuation:)
+    | keyword:alters  method:twice  punctuation:(  parameter:v  punctuation::  type:T  punctuation:)
  25 |         .put(v)
-    | punctuation:.  field:put  punctuation:(  variable:v  punctuation:)
+    | punctuation:.  method:put  punctuation:(  parameter:v  punctuation:)
  26 |         .tell()
-    | punctuation:.  field:tell  punctuation:(  punctuation:)
+    | punctuation:.  method:tell  punctuation:(  punctuation:)
  27 |     fi
     | keyword:fi
  28 | fi
@@ -53,7 +53,7 @@
  33 |     right: B
     | field:right  punctuation::  type:B
  35 |     tellBoth()
-    | task:tellBoth  punctuation:(  punctuation:)
+    | method:tellBoth  punctuation:(  punctuation:)
  36 |         show(.left)
     | builtin-fn:show  punctuation:(  punctuation:.  field:left  punctuation:)
  37 |         show(.right)
@@ -61,17 +61,17 @@
  38 |     fi
     | keyword:fi
  40 |     leftOf() -> A
-    | task:leftOf  punctuation:(  punctuation:)  operator:->  type:A
+    | method:leftOf  punctuation:(  punctuation:)  operator:->  type:A
  41 |         <- .left
     | keyword:<-  punctuation:.  field:left
  42 |     fi
     | keyword:fi
  44 |     alters swapIn(a: A, b: B)
-    | variable:alters  task:swapIn  punctuation:(  variable:a  punctuation::  type:A  punctuation:,  variable:b  punctuation::  type:B  punctuation:)
+    | keyword:alters  method:swapIn  punctuation:(  parameter:a  punctuation::  type:A  punctuation:,  parameter:b  punctuation::  type:B  punctuation:)
  45 |         .left = a
-    | punctuation:.  field:left  operator:=  variable:a
+    | punctuation:.  field:left  operator:=  parameter:a
  46 |         .right = b
-    | punctuation:.  field:right  operator:=  variable:b
+    | punctuation:.  field:right  operator:=  parameter:b
  47 |     fi
     | keyword:fi
  48 | fi
@@ -83,15 +83,15 @@
  52 |     item: T
     | field:item  punctuation::  type:T
  54 |     itemOf() -> T
-    | task:itemOf  punctuation:(  punctuation:)  operator:->  type:T
+    | method:itemOf  punctuation:(  punctuation:)  operator:->  type:T
  55 |         <- .item
     | keyword:<-  punctuation:.  field:item
  56 |     fi
     | keyword:fi
  58 |     alters set(v: T)
-    | variable:alters  task:set  punctuation:(  variable:v  punctuation::  type:T  punctuation:)
+    | keyword:alters  method:set  punctuation:(  parameter:v  punctuation::  type:T  punctuation:)
  59 |         .item = v
-    | punctuation:.  field:item  operator:=  variable:v
+    | punctuation:.  field:item  operator:=  parameter:v
  60 |     fi
     | keyword:fi
  61 | fi
@@ -107,19 +107,19 @@
  67 |     next: maybe ^Chain<T>
     | field:next  punctuation::  keyword:maybe  operator:^  type:Chain  punctuation:<  type:T  punctuation:>
  69 |     headOf() -> T
-    | task:headOf  punctuation:(  punctuation:)  operator:->  type:T
+    | method:headOf  punctuation:(  punctuation:)  operator:->  type:T
  70 |         <- .head
     | keyword:<-  punctuation:.  field:head
  71 |     fi
     | keyword:fi
  73 |     tailOf() -> maybe ^Chain<T>@this
-    | task:tailOf  punctuation:(  punctuation:)  operator:->  keyword:maybe  operator:^  type:Chain  punctuation:<  type:T  punctuation:>  operator:@  region:this
+    | method:tailOf  punctuation:(  punctuation:)  operator:->  keyword:maybe  operator:^  type:Chain  punctuation:<  type:T  punctuation:>  operator:@  region:this
  74 |         <- .next
     | keyword:<-  punctuation:.  field:next
  75 |     fi
     | keyword:fi
  77 |     alters cut()
-    | variable:alters  task:cut  punctuation:(  punctuation:)
+    | keyword:alters  method:cut  punctuation:(  punctuation:)
  78 |         .next = none
     | punctuation:.  field:next  operator:=  keyword:none
  79 |     fi
@@ -133,7 +133,7 @@
  84 |     hold here = chain
     | keyword:hold  variable:here  operator:=  parameter:chain
  85 |     loop here^.tailOf() is {next}
-    | keyword:loop  variable:here  operator:^  punctuation:.  field:tailOf  punctuation:(  punctuation:)  keyword:is  punctuation:{  variable:next  punctuation:}
+    | keyword:loop  variable:here  operator:^  punctuation:.  method:tailOf  punctuation:(  punctuation:)  keyword:is  punctuation:{  variable:next  punctuation:}
  86 |         here = next
     | variable:here  operator:=  variable:next
  87 |         steps = steps + 1
@@ -149,73 +149,73 @@
  93 |     hold n: Box<int> = Box { value: 7 }
     | keyword:hold  variable:n  punctuation::  type:Box  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Box  punctuation:{  field:value  punctuation::  number:7  punctuation:}
  94 |     n.tell()
-    | variable:n  punctuation:.  field:tell  punctuation:(  punctuation:)
+    | variable:n  punctuation:.  method:tell  punctuation:(  punctuation:)
  95 |     show(n.valueOf())
-    | builtin-fn:show  punctuation:(  variable:n  punctuation:.  field:valueOf  punctuation:(  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:n  punctuation:.  method:valueOf  punctuation:(  punctuation:)  punctuation:)
  96 |     n.put(9)
-    | variable:n  punctuation:.  field:put  punctuation:(  number:9  punctuation:)
+    | variable:n  punctuation:.  method:put  punctuation:(  number:9  punctuation:)
  97 |     n.tell()
-    | variable:n  punctuation:.  field:tell  punctuation:(  punctuation:)
+    | variable:n  punctuation:.  method:tell  punctuation:(  punctuation:)
  98 |     n.twice(11)
-    | variable:n  punctuation:.  field:twice  punctuation:(  number:11  punctuation:)
+    | variable:n  punctuation:.  method:twice  punctuation:(  number:11  punctuation:)
 100 |     region r
     | keyword:region  region:r
 101 |     hold t: Box<text>@r = Box { value: "boxed".copy() at r }
     | keyword:hold  variable:t  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  operator:@  region:r  operator:=  type:Box  punctuation:{  field:value  punctuation::  string:"boxed"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
 102 |     t.tell()
-    | variable:t  punctuation:.  field:tell  punctuation:(  punctuation:)
+    | variable:t  punctuation:.  method:tell  punctuation:(  punctuation:)
 103 |     show(t.valueOf())
-    | builtin-fn:show  punctuation:(  variable:t  punctuation:.  field:valueOf  punctuation:(  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:t  punctuation:.  method:valueOf  punctuation:(  punctuation:)  punctuation:)
 104 |     t.put("again".copy() at r)
-    | variable:t  punctuation:.  field:put  punctuation:(  string:"again"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+    | variable:t  punctuation:.  method:put  punctuation:(  string:"again"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
 105 |     t.tell()
-    | variable:t  punctuation:.  field:tell  punctuation:(  punctuation:)
+    | variable:t  punctuation:.  method:tell  punctuation:(  punctuation:)
 107 |     # The text a method of a made shape sends is in the region the value is in.
     | comment:# The text a method of a made shape sends is in the region the value is in.
 108 |     bind held: text@r = t.valueOf()
-    | keyword:bind  variable:held  punctuation::  type-builtin:text  operator:@  region:r  operator:=  variable:t  punctuation:.  field:valueOf  punctuation:(  punctuation:)
+    | keyword:bind  variable:held  punctuation::  type-builtin:text  operator:@  region:r  operator:=  variable:t  punctuation:.  method:valueOf  punctuation:(  punctuation:)
 109 |     show(held)
     | builtin-fn:show  punctuation:(  variable:held  punctuation:)
 111 |     hold p: Pair<int, text>@r = Pair { left: 1, right: "one".copy() at r }
     | keyword:hold  variable:p  punctuation::  type:Pair  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  operator:@  region:r  operator:=  type:Pair  punctuation:{  field:left  punctuation::  number:1  punctuation:,  field:right  punctuation::  string:"one"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
 112 |     p.tellBoth()
-    | variable:p  punctuation:.  field:tellBoth  punctuation:(  punctuation:)
+    | variable:p  punctuation:.  method:tellBoth  punctuation:(  punctuation:)
 113 |     show(p.leftOf())
-    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:leftOf  punctuation:(  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  method:leftOf  punctuation:(  punctuation:)  punctuation:)
 114 |     p.swapIn(2, "two".copy() at r)
-    | variable:p  punctuation:.  field:swapIn  punctuation:(  number:2  punctuation:,  string:"two"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+    | variable:p  punctuation:.  method:swapIn  punctuation:(  number:2  punctuation:,  string:"two"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
 115 |     p.tellBoth()
-    | variable:p  punctuation:.  field:tellBoth  punctuation:(  punctuation:)
+    | variable:p  punctuation:.  method:tellBoth  punctuation:(  punctuation:)
 117 |     # A shape given a shape given types, each with its own methods.
     | comment:# A shape given a shape given types, each with its own methods.
 118 |     hold deep: Holder<Box<int>> = Holder { item: Box { value: 3 } }
     | keyword:hold  variable:deep  punctuation::  type:Holder  punctuation:<  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:>  operator:=  type:Holder  punctuation:{  field:item  punctuation::  type:Box  punctuation:{  field:value  punctuation::  number:3  punctuation:}  punctuation:}
 119 |     show(deep.itemOf().valueOf())
-    | builtin-fn:show  punctuation:(  variable:deep  punctuation:.  field:itemOf  punctuation:(  punctuation:)  punctuation:.  field:valueOf  punctuation:(  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:deep  punctuation:.  method:itemOf  punctuation:(  punctuation:)  punctuation:.  method:valueOf  punctuation:(  punctuation:)  punctuation:)
 120 |     deep.item.put(5)
-    | variable:deep  punctuation:.  field:item  punctuation:.  field:put  punctuation:(  number:5  punctuation:)
+    | variable:deep  punctuation:.  field:item  punctuation:.  method:put  punctuation:(  number:5  punctuation:)
 121 |     show(deep.itemOf().valueOf())
-    | builtin-fn:show  punctuation:(  variable:deep  punctuation:.  field:itemOf  punctuation:(  punctuation:)  punctuation:.  field:valueOf  punctuation:(  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:deep  punctuation:.  method:itemOf  punctuation:(  punctuation:)  punctuation:.  method:valueOf  punctuation:(  punctuation:)  punctuation:)
 122 |     deep.set(Box { value: 6 })
-    | variable:deep  punctuation:.  field:set  punctuation:(  type:Box  punctuation:{  field:value  punctuation::  number:6  punctuation:}  punctuation:)
+    | variable:deep  punctuation:.  method:set  punctuation:(  type:Box  punctuation:{  field:value  punctuation::  number:6  punctuation:}  punctuation:)
 123 |     deep.itemOf().tell()
-    | variable:deep  punctuation:.  field:itemOf  punctuation:(  punctuation:)  punctuation:.  field:tell  punctuation:(  punctuation:)
+    | variable:deep  punctuation:.  method:itemOf  punctuation:(  punctuation:)  punctuation:.  method:tell  punctuation:(  punctuation:)
 125 |     # A method that changes nothing is called on a `bind` too.
     | comment:# A method that changes nothing is called on a `bind` too.
 126 |     bind fixed: Box<bool> = Box { value: true }
     | keyword:bind  variable:fixed  punctuation::  type:Box  punctuation:<  type-builtin:bool  punctuation:>  operator:=  type:Box  punctuation:{  field:value  punctuation::  keyword:true  punctuation:}
 127 |     show(fixed.valueOf())
-    | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  field:valueOf  punctuation:(  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  method:valueOf  punctuation:(  punctuation:)  punctuation:)
 129 |     hold chain = new Chain<int>(Chain { head: 1, next: none }) at r
     | keyword:hold  variable:chain  operator:=  keyword:new  type:Chain  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  type:Chain  punctuation:{  field:head  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
 130 |     chain = new Chain<int>(Chain { head: 2, next: chain }) at r
     | variable:chain  operator:=  keyword:new  type:Chain  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  type:Chain  punctuation:{  field:head  punctuation::  number:2  punctuation:,  field:next  punctuation::  variable:chain  punctuation:}  punctuation:)  keyword:at  region:r
 131 |     show(chain^.headOf())
-    | builtin-fn:show  punctuation:(  variable:chain  operator:^  punctuation:.  field:headOf  punctuation:(  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  variable:chain  operator:^  punctuation:.  method:headOf  punctuation:(  punctuation:)  punctuation:)
 132 |     show(lengthOf(chain))
     | builtin-fn:show  punctuation:(  task:lengthOf  punctuation:(  variable:chain  punctuation:)  punctuation:)
 133 |     chain^.cut()
-    | variable:chain  operator:^  punctuation:.  field:cut  punctuation:(  punctuation:)
+    | variable:chain  operator:^  punctuation:.  method:cut  punctuation:(  punctuation:)
 134 |     show(lengthOf(chain))
     | builtin-fn:show  punctuation:(  task:lengthOf  punctuation:(  variable:chain  punctuation:)  punctuation:)
 136 |     # A slice of made shapes, each item a place that can change.
@@ -225,8 +225,8 @@
 138 |     boxes.add(Box { value: 20 })
     | variable:boxes  punctuation:.  field:add  punctuation:(  type:Box  punctuation:{  field:value  punctuation::  number:20  punctuation:}  punctuation:)
 139 |     boxes[0].put(21)
-    | variable:boxes  punctuation:[  number:0  punctuation:]  punctuation:.  field:put  punctuation:(  number:21  punctuation:)
+    | variable:boxes  punctuation:[  number:0  punctuation:]  punctuation:.  method:put  punctuation:(  number:21  punctuation:)
 140 |     boxes[0].tell()
-    | variable:boxes  punctuation:[  number:0  punctuation:]  punctuation:.  field:tell  punctuation:(  punctuation:)
+    | variable:boxes  punctuation:[  number:0  punctuation:]  punctuation:.  method:tell  punctuation:(  punctuation:)
 141 | fi
     | keyword:fi

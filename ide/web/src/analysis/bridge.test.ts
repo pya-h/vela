@@ -149,6 +149,35 @@ describe("VelaAnalysis", () => {
     expect(types.map((i) => i.label)).toEqual(["int", "float", "bool", "text", "Box", "maybe"]);
   });
 
+  it("reads methods: highlighting, outline, hover, and completion after a dot", () => {
+    const source =
+      "shape Counter\n    count: int\n\n    total() -> int\n        <- .count\n    fi\n\n    alters step(by: int)\n        .count = .count + by\n    fi\nfi\n\ntask main()\n    hold c = Counter { count: 0 }\n    c.step(2)\n    show(c.total())\nfi\n";
+    const { tokens, diagnostics, outline } = analysis.file(source);
+    expect(diagnostics).toEqual([]);
+    const classAt = (needle: string) => tokens.find((t) => t.from === source.indexOf(needle))?.class;
+    expect(classAt("alters")).toBe("keyword");
+    expect(classAt("step(by")).toBe("method");
+    expect(classAt("step(2)")).toBe("method");
+    expect(classAt("by\n")).toBe("parameter");
+    // A method's `fi` closes the method: `main` and every member are outlined.
+    const [shape, main] = outline;
+    expect(main?.name).toBe("main");
+    expect(shape?.children.map((child) => [child.name, child.kind, child.detail])).toEqual([
+      ["count", "field", "int"],
+      ["total", "method", "() -> int"],
+      ["step", "method", "(by: int)"],
+    ]);
+    expect(SYMBOL_BADGES.method.text).toBe("M");
+    expect(analysis.hover(source, source.indexOf("step(2)"))?.code).toBe("alters step(by: int)");
+    const dot = source.indexOf("c.total") + 2;
+    const members = analysis.complete(source.replace("c.total()", "c."), dot).items;
+    expect(members.map((i) => [i.label, i.kind])).toEqual([
+      ["count", "field"],
+      ["total", "method"],
+      ["step", "method"],
+    ]);
+  });
+
   it("reports what a type given to a task doesn't allow", () => {
     const source = "task biggest<T: ordered>(a: T, b: T) -> T\n    when a > b\n        <- a\n    fi\n    <- b\nfi\n\ntask main()\n    show(biggest(\"a\", \"b\"))\nfi\n";
     const [diagnostic] = analysis.file(source).diagnostics;

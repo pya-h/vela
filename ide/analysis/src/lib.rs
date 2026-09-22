@@ -58,15 +58,15 @@ pub struct Diagnostic {
     pub severity: Severity,
 }
 
-/// A task, shape, or kind, with its fields or variants as children (and a
-/// variant's payload fields as its children).
+/// A task, shape, or kind, with its fields or variants and its methods as
+/// children (and a variant's payload fields as its children).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OutlineItem {
     pub name: String,
     pub kind: SymbolKind,
-    /// A task's parameters and return type, a field's type, or a variant's
-    /// payload, as written.
+    /// A task's or a method's parameters and return type, a field's type, or
+    /// a variant's payload, as written.
     pub detail: String,
     /// The whole declaration.
     pub from: usize,

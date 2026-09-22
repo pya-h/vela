@@ -320,6 +320,10 @@ kbd {
   background: color-mix(in srgb, var(--syn-variant) 12%, transparent);
   color: var(--syn-variant);
 }
+.kind-method {
+  background: color-mix(in srgb, var(--syn-task) 12%, transparent);
+  color: var(--syn-task);
+}
 .kind-field {
   background: color-mix(in srgb, var(--syn-field) 16%, transparent);
   color: var(--syn-field);

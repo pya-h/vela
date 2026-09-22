@@ -96,8 +96,9 @@ fn private_offers_the_declarations_it_can_mark() {
     assert_offers(after, &["task", "shape", "kind", "task -> type"], &["priv", "include", "bind"]);
     // The word being typed is completed too.
     assert_offers("priv sh@@", &["shape"], &["priv"]);
-    // A shape's private field is a name being declared.
-    assert_eq!(labels("shape S\n    priv @@\nfi\n"), Vec::<String>::new());
+    // A shape's private field is a name being declared, and a private method
+    // may say it changes its value.
+    assert_eq!(labels("shape S\n    priv @@\nfi\n"), ["alters"]);
     // Not a statement.
     assert_eq!(labels(&in_main("priv @@")), Vec::<String>::new());
 }
@@ -248,13 +249,13 @@ fn nothing_is_offered_in_comments_text_or_new_names() {
         "task f(@@".to_string(),
         "task f(a: int, @@".to_string(),
         "kind K\n    V(@@".to_string(),
-        "shape S\n    x: int\n    priv @@".to_string(),
         in_main("each @@"),
     ] {
         assert_eq!(labels(&marked), Vec::<String>::new(), "at {:?}", marked);
     }
-    // A field's name is new, but it may be private.
-    assert_eq!(labels("shape S\n    @@"), ["priv"]);
+    // A field's or a method's name is new, but it may be private, and a
+    // method may change its value.
+    assert_eq!(labels("shape S\n    @@"), ["priv", "alters"]);
 }
 
 /// The hover at the `nth` occurrence of `needle` (offset `shift` into it).

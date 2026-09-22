@@ -1,9 +1,11 @@
 // Vela's block structure, read line by line for indentation and folding.
 // Blocks open with a keyword at the start of a line (`task`, `when`, …),
-// may have branches (`else`, `case`), and close with `fi`. A plan B's block
-// opens with a `{` ending a line (or followed only by `fail e`, naming the error)
-// and closes with a line starting with `}`. The block words come from the
-// compiler (see `language()` in ide/analysis), so nothing here is a grammar.
+// may have branches (`else`, `case`), and close with `fi`. A method opens a
+// block with no keyword: among a shape's or a kind's members, a line that is a
+// name followed by `(` (see `methodLines`). A plan B's block opens with a `{`
+// ending a line (or followed only by `fail e`, naming the error) and closes
+// with a line starting with `}`. The block words come from the compiler (see
+// `language()` in ide/analysis), so nothing here is a grammar.
 
 export interface BlockWords {
   blockOpeners: readonly string[];
@@ -11,6 +13,8 @@ export interface BlockWords {
   blockModifiers: readonly string[];
   branchKeywords: readonly string[];
   blockCloser: string;
+  /** The word before a method that changes its value, `alters`. */
+  methodMarker: string;
 }
 
 /**
@@ -68,6 +72,70 @@ export function closesBrace(line: string): boolean {
   return /^\s*\}/.test(line);
 }
 
+/** The words that open an item: a task, a shape, or a kind. */
+const ITEMS = ["task", "shape", "kind"];
+
+/**
+ * The indices of the `lines` (top to bottom) that open a method: inside a shape
+ * or a kind, and not inside one of its methods, a line whose code is a name
+ * followed by `(` (or by `<`, for one naming types), after `priv` and the
+ * method marker. Inside a kind a variant's values are written as a method's
+ * parameters are, so, as the parser reads them, a line with no method above
+ * it, without the marker, that ends after parentheses holding named values
+ * (`Circle(radius: float)`) is a variant.
+ */
+export function methodLines(lines: readonly string[], words: BlockWords): Set<number> {
+  const methods = new Set<number>();
+  const blocks: string[] = [];
+  let methodsAbove = false;
+  const header = new RegExp(`^(?:priv\\s+)?(${words.methodMarker}\\s+)?[A-Za-z_][A-Za-z0-9_]*\\s*([(<])`);
+  lines.forEach((line, index) => {
+    const word = firstWord(line, words.blockModifiers);
+    if (word !== null && ITEMS.includes(word) && indentWidth(line, 1) === 0) {
+      blocks.length = 0;
+      blocks.push(word);
+      methodsAbove = false;
+      return;
+    }
+    if (word === words.blockCloser) {
+      blocks.pop();
+      return;
+    }
+    if (word !== null && words.blockOpeners.includes(word)) {
+      blocks.push(word);
+      return;
+    }
+    const owner = blocks.length === 1 ? blocks[0] : undefined;
+    if (owner !== "shape" && owner !== "kind") return;
+    const text = code(line).trim();
+    const found = header.exec(text);
+    if (found === null) return;
+    if (owner === "kind" && !methodsAbove && found[1] === undefined && found[2] === "(" && isPayload(text, found[0].length - 1)) return;
+    methods.add(index);
+    blocks.push("method");
+    methodsAbove = true;
+  });
+  return methods;
+}
+
+/**
+ * Whether the parentheses opening at `open` in a kind's member line `text`
+ * hold a variant's values: named ones (`name: type`), with nothing after them.
+ */
+function isPayload(text: string, open: number): boolean {
+  let depth = 0;
+  let named = false;
+  for (let i = open; i < text.length; i++) {
+    const char = text[i];
+    if (char === "(") depth++;
+    else if (char === ")") {
+      depth--;
+      if (depth === 0) return named && text.slice(i + 1).trim() === "";
+    } else if (char === ":" && depth === 1) named = true;
+  }
+  return false;
+}
+
 /**
  * The indentation for a line starting with `current`, given the lines above
  * it, nearest first:
@@ -80,10 +148,15 @@ export function closesBrace(line: string): boolean {
  * - otherwise, the same as the line above.
  */
 export function indentation(current: string, above: Iterable<string>, words: BlockWords, unit: number, tabSize: number): number {
+  const lines = [...above];
+  const methods = methodLines([...lines].reverse(), words);
+  // Whether the line `index` places above opens a block with a word, or is a method's.
+  const opens = (index: number, word: string | null) =>
+    (word !== null && words.blockOpeners.includes(word)) || methods.has(lines.length - 1 - index);
   if (closesBrace(current)) {
     let depth = 0;
     // Going up, a line's `{` comes before its own `}`.
-    for (const line of above) {
+    for (const line of lines) {
       if (opensBrace(line)) {
         if (depth === 0) return indentWidth(line, tabSize);
         depth--;
@@ -98,12 +171,12 @@ export function indentation(current: string, above: Iterable<string>, words: Blo
 
   if (closesOrBranches) {
     let depth = 0;
-    for (const line of above) {
+    for (const [index, line] of lines.entries()) {
       const w = firstWord(line, words.blockModifiers);
       if (w === null) continue;
       if (w === words.blockCloser) {
         depth++;
-      } else if (words.blockOpeners.includes(w)) {
+      } else if (opens(index, w)) {
         if (depth === 0) return indentWidth(line, tabSize);
         depth--;
       } else if (depth === 0 && w === word && word !== words.blockCloser) {
@@ -114,13 +187,13 @@ export function indentation(current: string, above: Iterable<string>, words: Blo
     return 0;
   }
 
-  for (const line of above) {
+  for (const [index, line] of lines.entries()) {
     if (isBlank(line)) continue;
     const base = indentWidth(line, tabSize);
     if (opensBrace(line)) return base + unit;
     const w = firstWord(line, words.blockModifiers);
     if (w === "match") return base;
-    if (w !== null && (words.blockOpeners.includes(w) || words.branchKeywords.includes(w))) return base + unit;
+    if (opens(index, w) || (w !== null && words.branchKeywords.includes(w))) return base + unit;
     return base;
   }
   return 0;
@@ -145,12 +218,17 @@ export function closingLine(lines: readonly string[] | ((index: number) => strin
     return null;
   }
   const opener = firstWord(line(open), words.blockModifiers);
-  if (opener === null || !words.blockOpeners.includes(opener)) return null;
+  if (opener === null) return null;
+  // Methods are only found reading from the top, so the whole file is read
+  // once some line could be one.
+  const keyword = words.blockOpeners.includes(opener);
+  const methods = keyword && !["shape", "kind"].includes(opener) ? null : methodLines(Array.from({ length: count }, (_, i) => line(i)), words);
+  if (!keyword && !methods?.has(open)) return null;
   let depth = 0;
   for (let i = open + 1; i < count; i++) {
     const w = firstWord(line(i), words.blockModifiers);
     if (w === null) continue;
-    if (words.blockOpeners.includes(w)) {
+    if ((methods?.has(i) ?? false) || words.blockOpeners.includes(w)) {
       depth++;
     } else if (w === words.blockCloser) {
       if (depth === 0) return i;

@@ -24,6 +24,8 @@ pub enum CompletionKind {
     Variable,
     Parameter,
     Field,
+    /// A method of a shape or kind, after a dot.
+    Method,
     Variant,
     Type,
     Region,
@@ -130,7 +132,28 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         return (items, word_start, byte);
     }
 
-    // After `.`: fields.
+    // `.` starting a value inside a method: the value it is called on, `.this`,
+    // and its shape's or kind's fields and methods.
+    if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
+        && !dot.checked_sub(1).is_some_and(|q| ends_value(&k, q))
+    {
+        let mut items = Vec::new();
+        if let Some(owner) = blocks.contains(&Block::Method).then(|| k.owner_around(word_start)).flatten() {
+            let name = k.symbol(owner).map_or(String::new(), |s| s.name.clone());
+            items.push(CompletionItem {
+                label: vela::ast::THIS_WORD.to_string(),
+                kind: CompletionKind::Keyword,
+                detail: format!("{}, the value this method is called on", name),
+                apply: None,
+                snippet: None,
+                boost: LOCAL,
+            });
+            items.extend(owner_members(&k, owner, ""));
+        }
+        return (items, word_start, byte);
+    }
+
+    // After `.`: fields and methods.
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token) {
         let probe = probe(source, context, k.range(dot).start, word_end);
         let exact = Knowledge::new(source, scan, &probe);
@@ -208,29 +231,29 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
             }
             _ => {}
         }
-        let (shape, through_pointer) = match base {
-            Some(Type::Named(shape, _)) => (shape, false),
-            Some(Type::Ptr(inner, _)) => match *inner {
-                Type::Named(shape, _) => (shape, true),
-                _ => return (with_copy(Vec::new(), false), word_start, byte),
-            },
-            _ => return (with_copy(Vec::new(), false), word_start, byte),
+        // A shape given types (`Box<int>`) has the fields and methods its
+        // declaration writes.
+        let named = |ty: Type| match ty {
+            Type::Named(name, _) => Some(name),
+            Type::Applied(applied) => Some(applied.name),
+            _ => None,
         };
-        let Some(shape_id) = k.global(&shape, SymbolKind::Shape) else { return (with_copy(Vec::new(), false), word_start, byte) };
-        let mut items: Vec<CompletionItem> = k
-            .children(shape_id)
-            // Another module's private fields can't be used here.
-            .filter(|(_, field)| field.module.is_none() || !field.private)
-            .map(|(_, field)| CompletionItem {
-                label: field.name.clone(),
-                kind: CompletionKind::Field,
-                detail: field.detail.clone(),
-                // A pointer's fields are reached through `^`: `p^.x`.
-                apply: through_pointer.then(|| format!("^.{}", field.name)),
-                snippet: None,
-                boost: LOCAL,
-            })
-            .collect();
+        let (owner, through_pointer) = match base {
+            Some(Type::Ptr(inner, _)) => match named(*inner) {
+                Some(owner) => (owner, true),
+                None => return (with_copy(Vec::new(), false), word_start, byte),
+            },
+            Some(other) => match named(other) {
+                Some(owner) => (owner, false),
+                None => return (with_copy(Vec::new(), false), word_start, byte),
+            },
+            None => return (with_copy(Vec::new(), false), word_start, byte),
+        };
+        let Some(owner_id) = k.global(&owner, SymbolKind::Shape).or_else(|| k.global(&owner, SymbolKind::Kind)) else {
+            return (with_copy(Vec::new(), false), word_start, byte);
+        };
+        // A pointer's members are reached through `^`: `p^.x`.
+        let mut items = owner_members(&k, owner_id, if through_pointer { "^." } else { "" });
         items.extend(copy(through_pointer));
         let from = if through_pointer { k.range(dot).start } else { word_start };
         return (items, from, byte);
@@ -244,10 +267,11 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     if let (Some(q), Some(Token::Priv)) = (prev, prev_token)
         && k.line_start(q) == q
     {
-        let items = if blocks.is_empty() {
-            item_level_items().into_iter().filter(|item| item.label != "priv" && item.label != "include").collect()
-        } else {
-            Vec::new()
+        let items = match blocks.as_slice() {
+            [] => item_level_items().into_iter().filter(|item| item.label != "priv" && item.label != "include").collect(),
+            // A private method may change its value.
+            [Block::Shape | Block::Kind] => vec![keyword(vela::ast::ALTERS)],
+            _ => Vec::new(),
         };
         return (items, word_start, byte);
     }
@@ -316,7 +340,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     if matches!(prev_token, Some(Token::LParen | Token::Comma))
         && inside_parens
         && prev.and_then(|q| type_paren(&k, q)).is_none()
-        && (first_token == Some(&Token::Task) || blocks.last() == Some(&Block::Kind))
+        && (first_token == Some(&Token::Task) || blocks.last() == Some(&Block::Kind) || prev.is_some_and(|q| method_header(&k, q)))
     {
         return (Vec::new(), word_start, byte);
     }
@@ -373,7 +397,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         let mut items = type_items(&k, byte, after_arrow, offer_maybe);
         // A parameter can be a region the task allocates in; a result can't,
         // since a task never sends one.
-        if prev_token == Some(&Token::Colon) && first_token == Some(&Token::Task) && inside_parens {
+        if prev_token == Some(&Token::Colon) && (first_token == Some(&Token::Task) || prev.is_some_and(|q| method_header(&k, q))) && inside_parens {
             items.push(CompletionItem {
                 label: "region".to_string(),
                 kind: CompletionKind::Keyword,
@@ -389,15 +413,17 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     // (`prev_token` is also `None` after invalid text, which isn't a line start.)
     let at_line_start = prev.is_none() || prev_token == Some(&Token::Newline);
     if at_line_start {
-        let items = match blocks.first() {
+        // A method's body holds statements, as a task's does.
+        let item = if blocks.contains(&Block::Method) { Some(&Block::Method) } else { blocks.first() };
+        let items = match item {
             // `include` lines come before the file's items.
             None => {
                 let before_items = !(0..prev.map_or(0, |q| q + 1)).any(|q| matches!(k.token(q), Some(Token::Task | Token::Shape | Token::Kind)));
                 item_level_items().into_iter().filter(|item| before_items || item.label != "include").collect()
             }
-            // A shape's field can be private.
-            Some(Block::Shape) => vec![keyword("priv")],
-            Some(Block::Kind) => Vec::new(),
+            // A shape's field and a method can be private, and a method can
+            // change its value.
+            Some(Block::Shape | Block::Kind) => vec![keyword("priv"), keyword(vela::ast::ALTERS)],
             Some(_) => {
                 let probe = probe(source, context, word_start, word_end);
                 let exact = Knowledge::new(source, scan, &probe);
@@ -410,7 +436,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         };
         return (items, word_start, byte);
     }
-    if blocks.is_empty() || matches!(blocks.first(), Some(Block::Shape | Block::Kind)) {
+    if blocks.is_empty() || (matches!(blocks.first(), Some(Block::Shape | Block::Kind)) && !blocks.contains(&Block::Method)) {
         return (Vec::new(), word_start, byte);
     }
     // A region is a value only as the argument for a task's region parameter,
@@ -435,12 +461,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
 
 /// Whether the token at position `q` can end a value, a type, or a loop's name.
 fn ends_value(k: &Knowledge, q: usize) -> bool {
-    matches!(
-        k.token(q),
-        Some(
-            Token::Ident(_) | Token::Int(_) | Token::Float(_) | Token::Text(_) | Token::True | Token::False | Token::None | Token::RParen | Token::RBrace | Token::RBracket | Token::Caret
-        )
-    )
+    k.token(q).is_some_and(crate::scan::ends_value)
 }
 
 /// Whether the `)` at position `q` ends a value that names its region after
@@ -738,11 +759,49 @@ enum Block {
     Task,
     Shape,
     Kind,
+    /// A method, inside a shape or a kind: its header and its body.
+    Method,
     When,
     Match,
     Other,
     /// A plan B's block, opened by a `{` ending its line.
     PlanB,
+}
+
+/// The fields and methods of the shape or kind `owner`, written after a dot:
+/// `prefix` goes before each (`^.` through a pointer). Another module's private
+/// members can't be used here.
+fn owner_members(k: &Knowledge, owner: usize, prefix: &str) -> Vec<CompletionItem> {
+    k.children(owner)
+        .filter(|(_, member)| matches!(member.kind, SymbolKind::Field | SymbolKind::Method) && (member.module.is_none() || !member.private))
+        .map(|(_, member)| {
+            if member.kind == SymbolKind::Field {
+                return CompletionItem {
+                    label: member.name.clone(),
+                    kind: CompletionKind::Field,
+                    detail: member.detail.clone(),
+                    apply: (!prefix.is_empty()).then(|| format!("{}{}", prefix, member.name)),
+                    snippet: None,
+                    boost: LOCAL,
+                };
+            }
+            let params = parameter_names(&member.detail);
+            let mut used = Vec::new();
+            let args: Vec<String> = params.iter().map(|p| format!("${{{}}}", unique(&mut used, p))).collect();
+            let (apply, snippet) = if args.is_empty() {
+                (Some(format!("{}{}()", prefix, member.name)), None)
+            } else {
+                (None, Some(format!("{}{}({})", prefix, member.name, args.join(", "))))
+            };
+            let alters = member.intro.map_or(String::new(), |word| format!("{} ", word));
+            CompletionItem { label: member.name.clone(), kind: CompletionKind::Method, detail: format!("{}{}", alters, member.detail), apply, snippet, boost: LOCAL }
+        })
+        .collect()
+}
+
+/// Whether position `q` is on the header line of a method of this file.
+fn method_header(k: &Knowledge, q: usize) -> bool {
+    (k.line_start(q)..=q).any(|p| k.declares_method(p))
 }
 
 /// The blocks open at `byte`, outermost first.
@@ -772,6 +831,9 @@ fn open_blocks(k: &Knowledge, byte: usize) -> Vec<Block> {
                     _ => Block::Kind,
                 });
             }
+            // A method has no word of its own: it opens where the scan
+            // declares its name.
+            Some(Token::Ident(_)) if k.declares_method(q) => blocks.push(Block::Method),
             Some(Token::When) => blocks.push(Block::When),
             Some(Token::Match) => blocks.push(Block::Match),
             Some(Token::Loop | Token::Each) => blocks.push(Block::Other),
@@ -846,7 +908,7 @@ fn literal_field_items(k: &Knowledge, brace: usize, word_start: usize) -> Vec<Co
             _ => {}
         }
     }
-    k.children(shape)
+    k.members(shape, SymbolKind::Field)
         // Another module's private fields can't be given here.
         .filter(|(_, field)| !given.contains(&field.name) && (field.module.is_none() || !field.private))
         .map(|(_, field)| CompletionItem {
@@ -909,7 +971,7 @@ fn case_items(source: &str, scan: &Scan, context: Context, k: &Knowledge, case: 
     }
 
     let variants: Vec<usize> = match kind {
-        Some(kind) => k.children(kind).map(|(id, _)| id).collect(),
+        Some(kind) => k.members(kind, SymbolKind::Variant).map(|(id, _)| id).collect(),
         None => k.symbols().iter().enumerate().filter(|(_, s)| s.kind == SymbolKind::Variant && s.module.is_none()).map(|(id, _)| id).collect(),
     };
     // A case names a variant alone, even another module's.
@@ -1049,7 +1111,7 @@ fn is_pattern_items(source: &str, scan: &Scan, context: Context, k: &Knowledge, 
         _ => None,
     };
     let variants: Vec<usize> = match kind {
-        Some(kind) => k.children(kind).map(|(id, _)| id).collect(),
+        Some(kind) => k.members(kind, SymbolKind::Variant).map(|(id, _)| id).collect(),
         None => k.symbols().iter().enumerate().filter(|(_, s)| s.kind == SymbolKind::Variant && s.module.is_none()).map(|(id, _)| id).collect(),
     };
     variants
@@ -1197,7 +1259,7 @@ fn visible_globals<'k>(k: &'k Knowledge, kinds: &[SymbolKind]) -> Vec<(String, &
 /// value, or with names for them in a pattern.
 fn kind_variant_items(k: &Knowledge, kind: usize, in_pattern: bool) -> Vec<CompletionItem> {
     let kind_name = k.symbol(kind).map(|s| s.name.clone()).unwrap_or_default();
-    k.children(kind)
+    k.members(kind, SymbolKind::Variant)
         .map(|(id, variant)| {
             let label = unqualified(&variant.name).to_string();
             let snippet = if in_pattern {
@@ -1304,11 +1366,11 @@ fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<Completio
 /// field, which only its own module can build.
 fn literal_snippet(k: &Knowledge, shape: usize, label: &str) -> Option<String> {
     let foreign = k.symbol(shape).is_some_and(|s| s.module.is_some());
-    if foreign && k.children(shape).any(|(_, field)| field.private) {
+    if foreign && k.members(shape, SymbolKind::Field).any(|(_, field)| field.private) {
         return None;
     }
     let mut used = Vec::new();
-    let fields: Vec<String> = k.children(shape).map(|(_, field)| format!("{}: ${{{}}}", field.name, unique(&mut used, &field.name))).collect();
+    let fields: Vec<String> = k.members(shape, SymbolKind::Field).map(|(_, field)| format!("{}: ${{{}}}", field.name, unique(&mut used, &field.name))).collect();
     let body = if fields.is_empty() { "{}".to_string() } else { format!("{{ {} }}", fields.join(", ")) };
     Some(format!("{} {}", label, body))
 }
@@ -1418,7 +1480,7 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bo
         let Some(Type::Named(kind_name, _)) = ty else { continue };
         let Some(kind) = k.global(&kind_name, SymbolKind::Kind) else { continue };
         let mut used = Vec::new();
-        let cases: Vec<String> = k.children(kind).map(|(variant, _)| case_template(k, variant, &mut used)).collect();
+        let cases: Vec<String> = k.members(kind, SymbolKind::Variant).map(|(variant, _)| case_template(k, variant, &mut used)).collect();
         if cases.is_empty() {
             continue;
         }

@@ -17,7 +17,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use serde::Serialize;
-use vela::ast::{BUILTIN_TASKS, MODULE_SEPARATOR, Span, Type, unqualified};
+use vela::ast::{ALTERS, BUILTIN_TASKS, MODULE_SEPARATOR, Span, THIS_WORD, Type, unqualified};
 use vela::lexer::{ESCAPES, LexKind, LexToken, Token, highlight};
 
 use crate::types::{Context, slashed};
@@ -33,6 +33,8 @@ pub enum TokenClass {
     Type,
     Variant,
     Task,
+    /// A method of a shape or kind, where it is declared and where it is called.
+    Method,
     /// A builtin task such as `show`.
     BuiltinFn,
     Parameter,
@@ -61,6 +63,9 @@ pub enum SymbolKind {
     Shape,
     Kind,
     Variant,
+    /// A method of a shape or kind, declared inside it; `intro` is `alters` for
+    /// one that changes the value it is called on.
+    Method,
     /// A shape field or a variant's payload field.
     Field,
     Parameter,
@@ -81,6 +86,7 @@ impl SymbolKind {
             SymbolKind::Task => TokenClass::Task,
             SymbolKind::Shape | SymbolKind::Kind => TokenClass::Type,
             SymbolKind::Variant => TokenClass::Variant,
+            SymbolKind::Method => TokenClass::Method,
             SymbolKind::Field => TokenClass::Field,
             SymbolKind::Parameter => TokenClass::Parameter,
             SymbolKind::Variable => TokenClass::Variable,
@@ -106,16 +112,18 @@ pub(crate) struct Symbol {
     pub visible: Range<usize>,
     /// The keyword that declared a variable: `bind`, `hold`, `each`, `case`,
     /// `is`, or `fail` (the error a plan B names); for a region, `region` (a
-    /// region statement) or `@` (a region a task header only names).
+    /// region statement) or `@` (a region a task header only names); for a
+    /// method, `alters` when it changes the value it is called on.
     pub intro: Option<&'static str>,
-    /// Bytes of the whole declaration: from `task`/`shape`/`kind` to its
-    /// `fi` for those, and just the name for everything else.
+    /// Bytes of the whole declaration: from `task`/`shape`/`kind` (or a
+    /// method's first word) to its `fi` for those, and just the name for
+    /// everything else.
     pub range: Range<usize>,
     /// Source text describing it: a task's parameters and return type, a
     /// field's or parameter's type, a variant's payload.
     pub detail: String,
-    /// The shape of a field, the kind of a variant, or the variant of a
-    /// payload field.
+    /// The shape of a field, the kind of a variant, the shape or kind of a
+    /// method, or the variant of a payload field.
     pub parent: Option<usize>,
     /// The module it is declared in (an index into `Scan::modules`), for a
     /// declaration of another file; its ranges are in that file.
@@ -461,6 +469,61 @@ impl<'a> Tokens<'a> {
             _ => None,
         }
     }
+
+    /// Whether position `p` starts a member of a shape or a kind: the first
+    /// word of its line, or the first after `priv`.
+    fn starts_member(&self, p: usize) -> bool {
+        self.starts_line(p) || (self.before(p) == Some(&Token::Priv) && self.starts_line(p - 1))
+    }
+
+    /// Where the name of the method whose line starts at position `p` (after
+    /// any `priv`) is, as the parser reads a shape's or a kind's members: a
+    /// name followed by `(`, or by `<` for one that names types, with `alters`
+    /// allowed before it. Inside a kind, `in_kind`, a variant's values are
+    /// written as a method's parameters are, so the parser's rule tells them
+    /// apart (see `vela::parser`'s `at_variant_payload`): with no method above
+    /// it, `methods_above`, and without `alters`, a member whose line ends after
+    /// parentheses holding named values is a variant.
+    fn method_at(&self, p: usize, in_kind: bool, methods_above: bool) -> Option<usize> {
+        let alters = self.ident(p) == Some(ALTERS) && self.ident(p + 1).is_some();
+        let name = if alters { p + 1 } else { p };
+        self.ident(name)?;
+        if !matches!(self.token(name + 1), Some(Token::LParen | Token::Lt)) {
+            return None;
+        }
+        if !in_kind || methods_above || alters {
+            return Some(name);
+        }
+        let mut depth = 0usize;
+        let mut named = false;
+        for q in name + 1.. {
+            match self.token(q) {
+                Some(Token::LParen) => depth += 1,
+                Some(Token::RParen) => match depth.checked_sub(1) {
+                    Some(0) => {
+                        let ends = matches!(self.token(q + 1), Some(Token::Newline | Token::Eof) | None);
+                        return (!(named && ends)).then_some(name);
+                    }
+                    Some(left) => depth = left,
+                    None => return Some(name),
+                },
+                Some(Token::Colon) if depth == 1 => named = true,
+                Some(_) => {}
+                None => return Some(name),
+            }
+        }
+        Some(name)
+    }
+}
+
+/// Whether a value can end with `token`, so that a `.` after it reads a member
+/// of that value (`p.x`, `f().m()`, `xs[0].x`, `p^.x`, `t.0.x`); a `.` after
+/// anything else starts a member of the value a method is called on, `.x`.
+pub(crate) fn ends_value(token: &Token) -> bool {
+    matches!(
+        token,
+        Token::Ident(_) | Token::Int(_) | Token::Float(_) | Token::Text(_) | Token::True | Token::False | Token::None | Token::RParen | Token::RBracket | Token::RBrace | Token::Caret
+    )
 }
 
 fn never(_: &Token) -> bool {
@@ -481,6 +544,8 @@ enum Block {
     Task,
     Shape,
     Kind,
+    /// A method, inside a shape or a kind.
+    Method,
     /// `when`, `loop`, `each`, or `match`: any block inside a task.
     Inner,
 }
@@ -495,6 +560,9 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
     // The open task, shape, or kind, and the variant whose payload is open.
     let mut item: Option<usize> = None;
     let mut variant: Option<usize> = None;
+    // The open method, and whether the open shape or kind has one above.
+    let mut method: Option<usize> = None;
+    let mut methods_above = false;
     let mut parens = 0usize;
     // End of the last token that isn't a newline, where an unclosed item ends.
     let mut last_end = 0;
@@ -564,9 +632,10 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
             // Items only appear at the top level, so a new one also closes
             // any item left open by half-typed code.
             Token::Task | Token::Shape | Token::Kind => {
-                if let Some(open) = item.take() {
+                for open in [method.take(), item.take()].into_iter().flatten() {
                     close(&mut symbols, open, last_end);
                 }
+                methods_above = false;
                 blocks.clear();
                 let (block, kind) = match token {
                     Token::Task => (Block::Task, SymbolKind::Task),
@@ -611,7 +680,11 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
             }
             Token::When | Token::Loop | Token::Each | Token::Match => blocks.push(Block::Inner),
             Token::Fi => {
-                blocks.pop();
+                if blocks.pop() == Some(Block::Method)
+                    && let Some(open) = method.take()
+                {
+                    close(&mut symbols, open, tokens.range(p).end);
+                }
                 if blocks.is_empty()
                     && let Some(open) = item.take()
                 {
@@ -621,6 +694,23 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
             Token::LParen => parens += 1,
             Token::RParen => parens = parens.saturating_sub(1),
             Token::Newline => parens = 0,
+            // A method, which a shape or a kind declares below its fields or
+            // variants: a block of its own, closed by its `fi`.
+            Token::Ident(_)
+                if let (Some(owner), [only @ (Block::Shape | Block::Kind)]) = (item, blocks.as_slice())
+                    && tokens.starts_member(p)
+                    && let Some(name) = tokens.method_at(p, *only == Block::Kind, methods_above) =>
+            {
+                let detail = tokens.text_after(name, never);
+                let id = declare(&mut symbols, name, SymbolKind::Method, detail, Some(owner));
+                if let Some(symbol) = symbols.get_mut(id) {
+                    symbol.range.start = tokens.range(if tokens.before(p) == Some(&Token::Priv) { p - 1 } else { p }).start;
+                    symbol.intro = (name != p).then_some(ALTERS);
+                }
+                blocks.push(Block::Method);
+                method = Some(id);
+                methods_above = true;
+            }
             Token::Ident(_) => match (blocks.as_slice(), item) {
                 ([Block::Shape], Some(shape))
                     if (tokens.starts_line(p) || (tokens.before(p) == Some(&Token::Priv) && tokens.starts_line(p - 1)))
@@ -649,7 +739,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
             last_end = tokens.range(p).end;
         }
     }
-    if let Some(open) = item {
+    for open in [method, item].into_iter().flatten() {
         close(&mut symbols, open, last_end);
     }
     (symbols, declared_at, includes)
@@ -711,8 +801,9 @@ impl<'a> Classifier<'a> {
         imports: HashMap<String, usize>,
     ) -> Self {
         let mut globals = HashMap::new();
+        // A field or a method is only ever written after a dot.
         for (id, symbol) in symbols.iter().enumerate() {
-            if !matches!(symbol.kind, SymbolKind::Field) {
+            if !matches!(symbol.kind, SymbolKind::Field | SymbolKind::Method) {
                 globals.entry(symbol.name.clone()).or_insert(id);
             }
         }
@@ -833,6 +924,12 @@ impl<'a> Classifier<'a> {
                         in_type = type_follows;
                         after_type = !type_follows;
                     } else {
+                        // A method's header declares its parameters, which its
+                        // body sees, as a task's does.
+                        if self.declared_at.get(&p).and_then(|&id| self.symbols.get(id)).is_some_and(|s| s.kind == SymbolKind::Method) {
+                            self.open(ScopeKind::Item);
+                            in_task_header = true;
+                        }
                         // `-> total: int`: the result's name, not its type.
                         let declaring_now = match tokens.token(p + 1) {
                             Some(Token::Colon) if in_results && was_type => Some("result"),
@@ -1056,6 +1153,29 @@ impl<'a> Classifier<'a> {
             let kind = self.symbols.get(id).map_or(SymbolKind::Variable, |s| s.kind);
             return (kind.class(), Some(id));
         }
+        // `alters step()`: the word before a method that changes its value.
+        if name == ALTERS && self.declared_at.get(&(p + 1)).and_then(|&id| self.symbols.get(id)).is_some_and(|s| s.kind == SymbolKind::Method) {
+            return (TokenClass::Keyword, None);
+        }
+        // `.this`, `.x`, and `.m()`: the value a method is called on, and a
+        // member of it, which its shape or kind declares.
+        if before == Some(&Token::Dot) && !p.checked_sub(2).and_then(|q| tokens.token(q)).is_some_and(ends_value) {
+            if name == THIS_WORD {
+                return (TokenClass::Keyword, None);
+            }
+            let at = tokens.range(p).start;
+            let owner = self.symbols.iter().position(|s| {
+                s.module.is_none() && matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind) && s.range.start <= at && at < s.range.end
+            });
+            let member = owner.and_then(|owner| {
+                self.symbols.iter().position(|s| s.parent == Some(owner) && s.name == name && matches!(s.kind, SymbolKind::Field | SymbolKind::Method))
+            });
+            return match member.and_then(|id| self.symbols.get(id).map(|s| (id, s.kind))) {
+                Some((id, kind)) => (kind.class(), Some(id)),
+                None if after == Some(&Token::LParen) => (TokenClass::Method, None),
+                None => (TokenClass::Field, None),
+            };
+        }
         // `geometry.area`: a module's name, then a name in it.
         let at = tokens.range(p).start;
         if after == Some(&Token::Dot)
@@ -1126,17 +1246,22 @@ impl<'a> Classifier<'a> {
             let intro = if self.scopes.last().is_some_and(|s| s.kind == ScopeKind::Case) { "case" } else { "is" };
             return (TokenClass::Variable, Some(self.declare_local(p, SymbolKind::Variable, Some(intro), String::new())));
         }
+        // `p.x` and `p.m()`: a field or a method of the value's shape or kind.
         if before == Some(&Token::Dot) {
             let start = tokens.get(p).map(|t| (t.start.line, t.start.col));
-            let shape = start.and_then(|at| self.field_accesses.get(&at)).cloned();
-            return (TokenClass::Field, self.field(shape.as_deref(), name));
+            let owner = start.and_then(|at| self.field_accesses.get(&at)).cloned();
+            let kinds: &[SymbolKind] = if after == Some(&Token::LParen) { &[SymbolKind::Method] } else { &[SymbolKind::Field] };
+            return match self.member(owner.as_deref(), name, kinds) {
+                Some(id) => (self.symbols.get(id).map_or(TokenClass::Field, |s| s.kind.class()), Some(id)),
+                None => (TokenClass::Field, None),
+            };
         }
         if let Some(Brace::Literal(Some(shape))) = braces.last()
             && after == Some(&Token::Colon)
             && matches!(before, Some(Token::LBrace | Token::Comma))
         {
             let shape = shape.clone();
-            return (TokenClass::Field, self.field(Some(&shape), name));
+            return (TokenClass::Field, self.member(Some(&shape), name, &[SymbolKind::Field]));
         }
         let literal_follows = after == Some(&Token::LBrace)
             && (tokens.token(p + 2) == Some(&Token::RBrace)
@@ -1308,18 +1433,19 @@ impl<'a> Classifier<'a> {
         self.global(name, &[SymbolKind::Module]).filter(|_| self.local(name, at).is_none())
     }
 
-    /// A shape's field called `name`. Without a known shape, a field name that
-    /// only one shape declares still resolves.
-    fn field(&self, shape: Option<&str>, name: &str) -> Option<usize> {
+    /// A shape's field, or a shape's or a kind's method, called `name`, as
+    /// `kinds` allows. Without a known owner, a name that only one shape or
+    /// kind declares still resolves.
+    fn member(&self, owner: Option<&str>, name: &str, kinds: &[SymbolKind]) -> Option<usize> {
         let mut candidates = self.symbols.iter().enumerate().filter(|(_, s)| {
-            s.kind == SymbolKind::Field
+            kinds.contains(&s.kind)
                 && s.name == name
                 && s.parent
                     .and_then(|parent| self.symbols.get(parent))
-                    .is_some_and(|parent| parent.kind == SymbolKind::Shape && shape.is_none_or(|shape| parent.name == shape))
+                    .is_some_and(|parent| matches!(parent.kind, SymbolKind::Shape | SymbolKind::Kind) && owner.is_none_or(|owner| parent.name == owner))
         });
         let first = candidates.next().map(|(id, _)| id);
-        if shape.is_none() && candidates.next().is_some() {
+        if owner.is_none() && candidates.next().is_some() {
             return None;
         }
         first

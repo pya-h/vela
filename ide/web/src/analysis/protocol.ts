@@ -8,6 +8,8 @@ export type TokenClass =
   | "type"
   | "variant"
   | "task"
+  /** A method of a shape or kind, where it is declared and where it is called. */
+  | "method"
   | "builtin-fn"
   | "parameter"
   | "variable"
@@ -43,6 +45,8 @@ export type SymbolKind =
   | "shape"
   | "kind"
   | "variant"
+  /** A method of a shape or kind, a child of it in the outline. */
+  | "method"
   | "field"
   | "parameter"
   | "variable"
@@ -77,6 +81,7 @@ export type CompletionKind =
   | "variable"
   | "parameter"
   | "field"
+  | "method"
   | "variant"
   | "type"
   | "region"
@@ -118,6 +123,8 @@ export interface Language {
   blockModifiers: string[];
   branchKeywords: string[];
   blockCloser: string;
+  /** The word before a method that changes its value, `alters`. */
+  methodMarker: string;
   lineComment: string;
   brackets: [string, string][];
 }
