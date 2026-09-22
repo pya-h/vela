@@ -41,13 +41,13 @@ task add_reading(sum: ^int@r, reading: maybe int) -> unit or ReadingError
 fi
 
 task main()
-    # The text saying what went wrong is kept here.
+    # `describe` builds the text saying what went wrong, so it needs a region.
     region said
 
     # match handles both outcomes.
     match check(21)
     case {value}
-        show("reading: {value}" at said)
+        show("reading: ", value)
     case fail problem
         show(describe(problem, said))
     fi
@@ -75,5 +75,5 @@ task main()
         show(describe(problem, said))
     }
     add_reading(sum, 5) { }
-    show("sum: {sum^}" at said)
+    show("sum: ", sum^)
 fi

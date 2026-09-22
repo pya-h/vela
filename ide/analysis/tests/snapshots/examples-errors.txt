@@ -74,8 +74,8 @@
     | keyword:fi
  43 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 44 |     # The text saying what went wrong is kept here.
-    | comment:# The text saying what went wrong is kept here.
+ 44 |     # `describe` builds the text saying what went wrong, so it needs a region.
+    | comment:# `describe` builds the text saying what went wrong, so it needs a region.
  45 |     region said
     | keyword:region  region:said
  47 |     # match handles both outcomes.
@@ -84,8 +84,8 @@
     | keyword:match  task:check  punctuation:(  number:21  punctuation:)
  49 |     case {value}
     | keyword:case  punctuation:{  variable:value  punctuation:}
- 50 |         show("reading: {value}" at said)
-    | builtin-fn:show  punctuation:(  string:"reading: {  variable:value  string:}"  keyword:at  region:said  punctuation:)
+ 50 |         show("reading: ", value)
+    | builtin-fn:show  punctuation:(  string:"reading: "  punctuation:,  variable:value  punctuation:)
  51 |     case fail problem
     | keyword:case  keyword:fail  variable:problem
  52 |         show(describe(problem, said))
@@ -134,7 +134,7 @@
     | punctuation:}
  77 |     add_reading(sum, 5) { }
     | task:add_reading  punctuation:(  variable:sum  punctuation:,  number:5  punctuation:)  punctuation:{  punctuation:}
- 78 |     show("sum: {sum^}" at said)
-    | builtin-fn:show  punctuation:(  string:"sum: {  variable:sum  operator:^  string:}"  keyword:at  region:said  punctuation:)
+ 78 |     show("sum: ", sum^)
+    | builtin-fn:show  punctuation:(  string:"sum: "  punctuation:,  variable:sum  operator:^  punctuation:)
  79 | fi
     | keyword:fi

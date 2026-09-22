@@ -1660,7 +1660,7 @@ fn task_items(k: &Knowledge) -> Vec<CompletionItem> {
         let (detail, snippet) = if *name == vela::ast::SCAN {
             ("(prompt: text) at r -> maybe text@r", format!("{}(${{prompt}}) at ${{region}}", name))
         } else {
-            ("(value: int | float | bool | text | maybe)", format!("{}(${{value}})", name))
+            ("(value: int | float | bool | text | maybe, …)", format!("{}(${{value}})", name))
         };
         CompletionItem { label: name.to_string(), kind: CompletionKind::BuiltinFn, detail: detail.to_string(), apply: None, snippet: Some(snippet), boost: GLOBAL }
     }));

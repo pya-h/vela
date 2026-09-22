@@ -286,12 +286,21 @@ fn hover_describes_declarations() {
     assert_eq!(code_and_doc(hover(&source, "radius", 0)), pair("radius: float", "A payload field of variant Circle."));
     assert_eq!(code_and_doc(hover(&source, "start: p", 0)), pair("start: Point", "A field of shape Line."));
     assert_eq!(code_and_doc(hover(&source, "int\n    y: int", 0)), pair("int", "A 64-bit signed integer."));
-    assert_eq!(hover(&source, "show", 0).code, "task show(value: int | float | bool | text | maybe)");
+    assert_eq!(hover(&source, "show", 0).code, "task show(value: int | float | bool | text | maybe, \u{2026})");
     assert_eq!(hover(&source, "Point {", 0).code, "shape Point\n    x: int\n    y: int\nfi");
     assert_eq!(hover(&source, "Shape\n", 0).code, "kind Shape\n    Circle(radius: float)\n    Rectangle(width: float, height: float)\n    Dot\nfi");
     // The hovered range is the name.
     let h = hover(&source, "total >", 0);
     assert_eq!(h.to - h.from, "total".len());
+}
+
+#[test]
+fn show_takes_several_values() {
+    // A value after a comma completes like the first one, and the file checks.
+    assert_offers(&in_main("show(\"total: \", @@)"), &["total", "p", "area", "true"], &["fi", "task"]);
+    assert_offers(&in_main("show(total, @@)"), &["p", "line", "show"], &["else"]);
+    let checked = "task main()\n    bind n = 1\n    show(\"n = \", n, \"!\")\n    show()\nfi\n";
+    assert_eq!(Analysis::new(checked).diagnostics(), Vec::new());
 }
 
 #[test]

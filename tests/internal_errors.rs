@@ -50,11 +50,21 @@ fn untyped_binding() {
 }
 
 #[test]
-fn show_with_wrong_argument_count() {
-    assert_internal_error(
-        "task main()\n    show(1, 2)\nfi\n",
-        "show called with 2 arguments (at 2:5)",
-    );
+fn show_with_a_type_it_cannot_write() {
+    // The checker refuses a slice given to `show`; give a checked call one
+    // afterwards, as a checker bug would.
+    let mut items = parse("task main()\n    region r\n    bind xs = new [int]() at r\n    show(1, 2)\nfi\n");
+    Checker::new().check_file(&mut items).unwrap();
+    let Item::Task(main) = &mut items[0] else { panic!("expected task main") };
+    let StmtKind::Binding { init, .. } = &main.body[1].kind else { panic!("expected the binding of xs") };
+    let slice = init[0].clone();
+    let StmtKind::Expr(call) = &mut main.body[2].kind else { panic!("expected the call of show") };
+    let ExprKind::Call { args, .. } = &mut call.kind else { panic!("expected a call, got {:?}", call.kind) };
+    args[1] = slice;
+
+    let err = Generator::new().generate(&items).unwrap_err();
+    assert_eq!(err.span, None);
+    assert_eq!(err.message, "internal compiler error: show called with type [int]@r (at 4:5)");
 }
 
 #[test]

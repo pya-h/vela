@@ -16,7 +16,8 @@ are values held in place, and slices (`[int]@r`) view items in a region, made wi
 every index is checked, and `xs.len` is the count. Text knows its length in bytes, `t.len`, has parts that
 are views of the same bytes, `t[0..3]`, is ordered by `<`, and is joined into a region with `a + b at r`; `n.str() at r` (or `text(n) at r`)
 writes a value as text, and a shape or kind gives its own with a method `str`. Text holds values written inside
-it, `"{name} is {age}" at r`, and `\{` and `\}` write braces.
+it, `"{name} is {age}" at r`, and `\{` and `\}` write braces. `show` takes any number of values and writes them
+one after another, then ends the line (`show("n = ", n)`, and `show()` for an empty one).
 `scan("Name: ") at r` shows a prompt and reads a line into a region, giving `none` once the input has ended, and `value.copy()` copies a value (its text, its slices'
 items, and what its pointers point to) into the region where it goes, or `value.copy() at r`. Tuples hold
 values together (`(text, int)`, read as `t.0`), their items never change, and names take them apart

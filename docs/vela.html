@@ -540,13 +540,30 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         any UTF-8 and knows how long it is: <code>t.len</code> is how many bytes it has, read without counting them.
         A character outside ASCII takes more than one byte (<code>"é".len</code> is 2, <code>"Ada".len</code> is 3), and a
         <code>\0</code> is a byte like any other (<code>"ab\0cd".len</code> is 5, and it shows all five).
-        <code>show</code> prints an <code>int</code>, <code>float</code>,
-        <code>bool</code>, or <code>text</code> followed by a newline (or a <code>maybe</code> of one: its value, or
-        <code>none</code>). Floats print with up to 6 significant digits,
+        Floats print with up to 6 significant digits,
         switching to exponent form for very large or small values (<code>123456789.0</code> shows as
         <code>1.23457e+08</code>), and <code>0.0 / 0.0</code> and <code>1.0 / 0.0</code> show as <code>nan</code> and
         <code>inf</code>.
       </p>
+      <p id="show">
+        <code>show</code> takes any number of values and writes them one after another, with nothing between them,
+        then ends the line: <code>show("n = ", n)</code> prints <code>n = 5</code>, and any space between the values is
+        one you write. Each value is an <code>int</code>, a <code>float</code>, a <code>bool</code>, or
+        <code>text</code>, or a <code>maybe</code> of one, which writes its value or <code>none</code>.
+        <code>show()</code> writes an empty line. The values are written, and anything they ask for happens, left to
+        right, so <code>show("a:", f(), " b:", g())</code> calls <code>f</code> before <code>g</code> however the C
+        compiler orders a call's arguments (see <a href="#limits">the limits</a>). A sentence with values in the middle
+        of it reads better as <a href="#interpolation">text holding values</a>, which keeps the text to use again;
+        <code>show</code> is for printing it once.
+      </p>
+      <pre><span class="keyword">task</span> main()
+    <span class="keyword">bind</span> n = <span class="number">5</span>
+    show(<span class="string">"n = "</span>, n)                      <span class="comment"># n = 5</span>
+    show(n, <span class="string">" and "</span>, n * <span class="number">2</span>, <span class="string">"!"</span>)        <span class="comment"># 5 and 10!</span>
+    show()                                <span class="comment"># an empty line</span>
+    <span class="keyword">bind</span> missing: <span class="keyword">maybe</span> int = <span class="keyword">none</span>
+    show(<span class="string">"missing: "</span>, missing)            <span class="comment"># missing: none</span>
+<span class="keyword">fi</span></pre>
       <p id="text-parts">
         <code>t[a..b]</code> is a part of text: its bytes from <code>a</code> up to, but not including, <code>b</code>. A part
         is the same bytes, not a copy, so it lives where the text does: a part of <code>text</code> is <code>text</code>, and a
@@ -2002,10 +2019,12 @@ show(area(square))             <span class="comment"># error: unknown task 'area
           <a href="future.html#methods-later">the room left to grow</a>).</li>
         <li>There are no packages to share modules between programs (see <a href="#modules">Modules</a>).</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
-        <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which
+        <li>The order in which a call's arguments, the parts of a join, the values in text, or an operator's two
+          sides are evaluated isn't defined, which
           matters only when they call tasks that print, or when more than one of them would stop the program
           (see <a href="#int-limits">Numbers</a>), which decides the message. (Where one of them contains a plan B, a
-          change to a slice, or a <code>scan</code>, they are evaluated left to right.)</li>
+          change to a slice, or a <code>scan</code>, they are evaluated left to right, and <code>show</code> always
+          works out its values left to right.)</li>
         <li>An expression, including a shape literal or a call's arguments, must be written on one line.</li>
         <li>Statements aren't yet required to end at a line break (<code>show(1) show(2)</code> on one line is
           accepted).</li>

@@ -175,8 +175,11 @@ impl Generator {
                 TypeDef::Compound(ty) => self.gen_compound(ty),
             }
         }
+        for ty in &used.written {
+            self.gen_show_maybe(ty, false);
+        }
         for ty in &used.shown {
-            self.gen_show_maybe(ty);
+            self.gen_show_maybe(ty, true);
         }
         self.gen_item_helpers(&used);
         self.gen_tuple_eq(&used.tuple_eq);
@@ -577,15 +580,16 @@ impl Generator {
         self.w.close();
     }
 
-    /// `show` for a `maybe` of a type `show` prints: the value, or `none`.
-    fn gen_show_maybe(&mut self, ty: &Type) {
+    /// `show` for a `maybe` of a type `show` prints: the value, or `none`,
+    /// ending the line when `ends`, as the runtime's helpers do for the types it
+    /// writes itself (see `written_helper`).
+    fn gen_show_maybe(&mut self, ty: &Type, ends: bool) {
         let Type::Maybe(inner) = ty else { return };
-        let helper = show_helper(inner);
-        self.w.open(&format!("static void {}({} m)", show_maybe_helper(ty), c_type(ty)));
+        self.w.open(&format!("static void {}({} m)", maybe_helper(ty, ends), c_type(ty)));
         self.w.open("if (m.has)");
-        self.w.line(&format!("{}(m.value);", helper));
+        self.w.line(&format!("{}(m.value);", written_helper(inner, ends)));
         self.w.reopen("else");
-        self.w.line("vela__rt__show_none();");
+        self.w.line(&format!("vela__rt__{}_none();", if ends { "show" } else { "write" }));
         self.w.close();
         self.w.close();
     }
@@ -1399,16 +1403,7 @@ impl Generator {
     /// A call of a task, or of `show`, the expression `e`.
     fn gen_call(&mut self, e: &Expr, name: &str, types: &[TypeArg], args: &[Expr]) -> Result<String> {
         if name == "show" {
-            let [arg] = args else {
-                return Err(Error::internal_at(e.span, format!("show called with {} arguments", args.len())));
-            };
-            let helper = match arg.ty()? {
-                Type::Maybe(_) => show_maybe_helper(arg.ty()?),
-                Type::Int | Type::Float | Type::Bool | Type::Text(_) => show_helper(arg.ty()?),
-                other => return Err(Error::internal_at(e.span, format!("show called with type {}", other))),
-            };
-            let value = self.gen_expr(arg)?;
-            return Ok(format!("{}({})", helper, value));
+            return self.gen_show(e, args);
         }
         // A call of a generic task calls the one made for the types it gives.
         let given: Vec<Type> = types.iter().map(|(ty, _)| ty.clone()).collect();
@@ -1425,6 +1420,35 @@ impl Generator {
             values.insert(0, first);
         }
         Ok(format!("{}({})", mangle(&called), values.join(", ")))
+    }
+
+    /// `show(a, b, …)`, the expression `e`: each value is written where it is
+    /// read, so the values are written, and anything they do happens, left to
+    /// right. Every value but the last is written without ending the line,
+    /// which the last one does, so `show` of one value is the one call it
+    /// always was; `show()` is the end of a line alone.
+    fn gen_show(&mut self, e: &Expr, args: &[Expr]) -> Result<String> {
+        let Some((last, before)) = args.split_last() else {
+            return Ok("vela__rt__show_line()".to_string());
+        };
+        for arg in before {
+            let helper = self.shown_helper(e, arg, false)?;
+            let value = self.gen_expr(arg)?;
+            self.w.line(&format!("{}({});", helper, value));
+        }
+        let helper = self.shown_helper(e, last, true)?;
+        let value = self.gen_expr(last)?;
+        Ok(format!("{}({})", helper, value))
+    }
+
+    /// The helper that writes the value `arg` given to `show`, ending the line
+    /// when `ends` (see `gen_show`).
+    fn shown_helper(&mut self, e: &Expr, arg: &Expr, ends: bool) -> Result<String> {
+        Ok(match arg.ty()? {
+            Type::Maybe(_) => maybe_helper(arg.ty()?, ends),
+            Type::Int | Type::Float | Type::Bool | Type::Text(_) => written_helper(arg.ty()?, ends),
+            other => return Err(Error::internal_at(e.span, format!("show called with type {}", other))),
+        })
     }
 
     /// The address of the place a method that changes the value it is called on
@@ -1866,20 +1890,22 @@ fn success(ret: &Type) -> String {
     format!("(({}){{ .ok = true }})", c_type(ret))
 }
 
-/// The runtime task that shows a value of builtin type `ty`.
-fn show_helper(ty: &Type) -> String {
+/// The runtime task that writes a value of builtin type `ty`: the one that
+/// ends the line when `ends`, which the last value `show` is given does.
+fn written_helper(ty: &Type, ends: bool) -> String {
     let name = match ty {
         Type::Int => "int",
         Type::Float => "float",
         Type::Bool => "bool",
         _ => "text",
     };
-    format!("vela__rt__show_{}", name)
+    format!("vela__rt__{}_{}", if ends { "show" } else { "write" }, name)
 }
 
-/// The generated task that shows a `maybe` of type `ty`.
-fn show_maybe_helper(ty: &Type) -> String {
-    format!("vela__show__{}", c_type(ty).trim_start_matches("vela__"))
+/// The generated task that writes a `maybe` of type `ty`, ending the line when
+/// `ends` (see `written_helper`).
+fn maybe_helper(ty: &Type, ends: bool) -> String {
+    format!("vela__{}__{}", if ends { "show" } else { "write" }, c_type(ty).trim_start_matches("vela__"))
 }
 
 /// Whether the expression contains a plan B, a change to a slice, or a `scan`,
@@ -1909,12 +1935,16 @@ fn has_prelude(e: &Expr) -> bool {
 }
 
 /// The `maybe`, `or`, array, and slice types a program uses, which each need a
-/// C struct, and the helpers it needs for them: `show` for a `maybe`; for a
+/// C struct, and the helpers it needs for them: `show` for a `maybe`, and
+/// writing one before another value of the same `show`; for a
 /// slice, reading an item, slicing, copying into a region, and filling one; for
 /// an array, filling it. Types are kept without regions.
 struct UsedTypes {
     compounds: Vec<Type>,
+    /// The `maybe` types shown as the last value of a `show`, which end the line.
     shown: Vec<Type>,
+    /// The `maybe` types shown before another value of the same `show`.
+    written: Vec<Type>,
     slice_at: Vec<Type>,
     slice_part: Vec<Type>,
     slice_copy: Vec<Type>,
@@ -1945,6 +1975,7 @@ impl UsedTypes {
         let mut used = UsedTypes {
             compounds: Vec::new(),
             shown: Vec::new(),
+            written: Vec::new(),
             slice_at: Vec::new(),
             slice_part: Vec::new(),
             slice_copy: Vec::new(),
@@ -2133,12 +2164,16 @@ impl UsedTypes {
                 self.expr(b);
             }
             ExprKind::Call { name, args, .. } => {
-                if name == "show"
-                    && let [arg] = args.as_slice()
-                    && let Some(ty @ Type::Maybe(_)) = &arg.ty
-                {
-                    // Its text may name a region, which C doesn't see.
-                    note(&mut self.shown, ty);
+                if name == "show" {
+                    for (i, arg) in args.iter().enumerate() {
+                        // Its text may name a region, which C doesn't see. The
+                        // last value ends the line and the others don't, so
+                        // each needs the helper for its place.
+                        if let Some(ty @ Type::Maybe(_)) = &arg.ty {
+                            let ends = i + 1 == args.len();
+                            note(if ends { &mut self.shown } else { &mut self.written }, ty);
+                        }
+                    }
                 }
                 args.iter().for_each(|arg| self.expr(arg));
             }
@@ -2405,7 +2440,8 @@ fn signature(t: &TaskDef, alters: bool) -> String {
 //   vela__int                     a local or field named like C (`c_ident`)
 //   vela__maybe__int              a `maybe` struct              (`c_type`)
 //   vela__or__int__n_ParseError   an `or` struct                (`c_type`)
-//   vela__show__maybe__int        `show` for a `maybe`          (`show_maybe_helper`)
+//   vela__show__maybe__int        `show` for a `maybe`          (`maybe_helper`)
+//   vela__write__maybe__int       one written before another    (`maybe_helper`)
 //   vela__array__4__int           an array struct               (`c_type`)
 //   vela__slice__int              a slice struct                (`c_type`)
 //   vela__at__slice__int          a helper for a slice or array (`item_helper`)

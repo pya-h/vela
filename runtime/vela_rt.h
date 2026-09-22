@@ -13,22 +13,45 @@
 #include <string.h>
 #include <math.h>
 
-static inline void vela__rt__show_int(int64_t x) {
+/* `show` writes each of its values, then ends the line: the `write_` helpers
+ * write one value, and the `show_` ones write a value and end the line, which
+ * is all `show` of a single value needs. */
+
+static inline void vela__rt__show_line(void) {
+    putchar('\n');
+}
+
+static inline void vela__rt__write_int(int64_t x) {
     /* `long long` is at least 64 bits everywhere; `long` is 32 bits on Windows. */
-    printf("%lld\n", (long long)x);
+    printf("%lld", (long long)x);
+}
+
+static inline void vela__rt__show_int(int64_t x) {
+    vela__rt__write_int(x);
+    vela__rt__show_line();
+}
+
+static inline void vela__rt__write_float(double x) {
+    /* C libraries print a NaN's sign inconsistently (`-nan` or `nan`). */
+    if (isnan(x)) {
+        fputs("nan", stdout);
+        return;
+    }
+    printf("%g", x);
 }
 
 static inline void vela__rt__show_float(double x) {
-    /* C libraries print a NaN's sign inconsistently (`-nan` or `nan`). */
-    if (isnan(x)) {
-        puts("nan");
-        return;
-    }
-    printf("%g\n", x);
+    vela__rt__write_float(x);
+    vela__rt__show_line();
+}
+
+static inline void vela__rt__write_bool(bool x) {
+    fputs(x ? "true" : "false", stdout);
 }
 
 static inline void vela__rt__show_bool(bool x) {
-    printf("%s\n", x ? "true" : "false");
+    vela__rt__write_bool(x);
+    vela__rt__show_line();
 }
 
 /* Text: its bytes, which aren't followed by a `\0` and may hold one, and how
@@ -43,14 +66,25 @@ typedef struct vela__rt__text {
  * literal's size, less the `\0` C adds. */
 #define VELA__RT__TEXT(literal) ((vela__rt__text){ (literal), (int64_t)sizeof(literal) - 1 })
 
+static inline void vela__rt__write_text(vela__rt__text x) {
+    if (x.len > 0) {
+        fwrite(x.bytes, 1, (size_t)x.len, stdout);
+    }
+}
+
 static inline void vela__rt__show_text(vela__rt__text x) {
-    fwrite(x.bytes, 1, (size_t)x.len, stdout);
-    putchar('\n');
+    vela__rt__write_text(x);
+    vela__rt__show_line();
 }
 
 /* `show` on an empty `maybe`. */
+static inline void vela__rt__write_none(void) {
+    fputs("none", stdout);
+}
+
 static inline void vela__rt__show_none(void) {
-    puts("none");
+    vela__rt__write_none();
+    vela__rt__show_line();
 }
 
 /* `==` on text compares contents. */

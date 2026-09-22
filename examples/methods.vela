@@ -34,14 +34,14 @@ shape Account
         <- "{.owner} has {.balance}" at r
     fi
 
-    alters deposit(amount: int, r: region)
+    alters deposit(amount: int)
         .balance = .balance + amount
-        .note("deposit", amount, r)
+        .note("deposit", amount)
     fi
 
     # A method may fail, as a task may: `unit or Refusal` sends nothing, or a
     # reason why not.
-    alters withdraw(amount: int, r: region) -> unit or Refusal
+    alters withdraw(amount: int) -> unit or Refusal
         when not .open
             <- fail Closed
         fi
@@ -49,18 +49,17 @@ shape Account
             <- fail TooLittle(amount - .balance)
         fi
         .balance = .balance - amount
-        .note("withdraw", amount, r)
+        .note("withdraw", amount)
     fi
 
     alters close()
         .open = false
     fi
 
-    # Only this file may call it. Building text needs a region to build it in,
-    # and a method isn't given the one its value lives in, so the methods that
-    # say what they did take one and hand it on.
-    priv note(what: text, amount: int, r: region)
-        show("{what} {amount}" at r)
+    # Only this file may call it. `show` writes each value in turn, so saying
+    # what happened needs no text of its own, and no region to hold it.
+    priv note(what: text, amount: int)
+        show(what, " ", amount)
     fi
 fi
 
@@ -85,28 +84,28 @@ task report(result: unit or Refusal, r: region)
 fi
 
 task main()
-    # The text these methods build goes here.
+    # A kind's own text goes here: `show` can't call `str` for us yet.
     region said
 
     hold ada = Account { owner: "Ada", balance: 0, open: true }
-    ada.deposit(100, said)
-    report(ada.withdraw(30, said), said)
-    report(ada.withdraw(500, said), said)
+    ada.deposit(100)
+    report(ada.withdraw(30), said)
+    report(ada.withdraw(500), said)
     show(ada.balanceOf())
     show(ada.str() at said)
     ada.close()
-    report(ada.withdraw(1, said), said)
+    report(ada.withdraw(1), said)
 
     # An item of a slice is a place that can change.
     region bank
     hold accounts = new [Account]() at bank
     accounts.add(Account { owner: "Grace", balance: 5, open: true })
-    accounts[0].deposit(10, said)
+    accounts[0].deposit(10)
     show("{accounts[0]}" at said)
 
     hold best = Best { value: 3 }
     each n in [7, 2, 9, 4]
         best.offer(n)
     fi
-    show("best: {best.value}" at said)
+    show("best: ", best.value)
 fi

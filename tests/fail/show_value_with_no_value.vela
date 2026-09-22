@@ -1,0 +1,7 @@
+# error: 6:22: show expects int, float, bool, or text; this has no value
+task nothing()
+fi
+
+task main()
+    show("result: ", nothing())
+fi

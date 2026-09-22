@@ -2640,27 +2640,11 @@ impl Checker {
             ExprKind::Repeat { value, count } => self.check_repeat(value, count, span),
             ExprKind::Call { name, types, args } => {
                 if name == "show" {
-                    let [arg] = args.as_mut_slice() else {
-                        return err(span, "show expects 1 argument");
-                    };
-                    let ty = self.check_expr(arg)?;
-                    let shown = match &ty {
-                        Type::Maybe(inner) => inner.as_ref(),
-                        other => other,
-                    };
-                    if !matches!(shown, Type::Int | Type::Float | Type::Bool | Type::Text(_)) && !self.allows(Need::Shown, shown) {
-                        if let Some(untold) = self.untold_param(&ty) {
-                            return err(arg.span, untold);
-                        }
-                        let hint = match &ty {
-                            Type::Param(_) => format!("; {} {}", ty, self.why_not(Need::Shown, &ty)),
-                            Type::Ptr(..) => "; to show the value it points to, write 'p^'".to_string(),
-                            Type::Array(..) | Type::Slice(..) => "; show its items one at a time, as in 'each v in xs'".to_string(),
-                            Type::Tuple(_) => "; show its items one at a time, as in 'show(t.0)'".to_string(),
-                            Type::Or(..) => extract_hint(&[&ty]),
-                            _ => String::new(),
-                        };
-                        return err(arg.span, format!("show expects int, float, bool, or text{}", hint));
+                    // `show` takes any number of values, written one after
+                    // another with nothing between them; `show()` is a line of
+                    // its own.
+                    for arg in args.iter_mut() {
+                        self.check_shown(arg)?;
                     }
                     return Ok(Type::Unit);
                 }
@@ -3047,6 +3031,32 @@ impl Checker {
         }
         self.visible_region(region, region_span, true)?;
         Ok(Type::Maybe(Box::new(Type::Text(Some(region.to_string())))))
+    }
+
+    /// Checks one value given to `show`: a number, a bool, text, a `maybe` of
+    /// one, or a type a declaration takes that is `shown`.
+    fn check_shown(&mut self, arg: &mut Expr) -> Result<()> {
+        let ty = self.check_expr(arg)?;
+        let shown = match &ty {
+            Type::Maybe(inner) => inner.as_ref(),
+            other => other,
+        };
+        if matches!(shown, Type::Int | Type::Float | Type::Bool | Type::Text(_)) || self.allows(Need::Shown, shown) {
+            return Ok(());
+        }
+        if let Some(untold) = self.untold_param(&ty) {
+            return err(arg.span, untold);
+        }
+        let hint = match &ty {
+            Type::Param(_) => format!("; {} {}", ty, self.why_not(Need::Shown, &ty)),
+            Type::Ptr(..) => "; to show the value it points to, write 'p^'".to_string(),
+            Type::Array(..) | Type::Slice(..) => "; show its items one at a time, as in 'each v in xs'".to_string(),
+            Type::Tuple(_) => "; show its items one at a time, as in 'show(t.0)'".to_string(),
+            Type::Or(..) => extract_hint(&[&ty]),
+            Type::Unit => "; this has no value".to_string(),
+            _ => String::new(),
+        };
+        err(arg.span, format!("show expects int, float, bool, or text{}", hint))
     }
 
     /// Checks `a + b at region` or `"n = {n}" at region`, text joined into

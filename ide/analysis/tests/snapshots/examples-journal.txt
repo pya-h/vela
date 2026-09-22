@@ -44,27 +44,25 @@
     | keyword:region  region:kept
  25 |     bind name = scan("Your name: ") at kept { "stranger" }
     | keyword:bind  variable:name  operator:=  builtin-fn:scan  punctuation:(  string:"Your name: "  punctuation:)  keyword:at  region:kept  punctuation:{  string:"stranger"  punctuation:}
- 26 |     show("Hello, {name}!" at kept)
-    | builtin-fn:show  punctuation:(  string:"Hello, {  variable:name  string:}!"  keyword:at  region:kept  punctuation:)
+ 26 |     show("Hello, ", name, "!")
+    | builtin-fn:show  punctuation:(  string:"Hello, "  punctuation:,  variable:name  punctuation:,  string:"!"  punctuation:)
  27 |     hold notes = read_notes(kept)
     | keyword:hold  variable:notes  operator:=  task:read_notes  punctuation:(  region:kept  punctuation:)
- 28 |     show("{notes.len} notes, last first" at kept)
-    | builtin-fn:show  punctuation:(  string:"{  variable:notes  punctuation:.  field:len  string:} notes, last first"  keyword:at  region:kept  punctuation:)
+ 28 |     show(notes.len, " notes, last first")
+    | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  field:len  punctuation:,  string:" notes, last first"  punctuation:)
  29 |     hold number = notes.len
     | keyword:hold  variable:number  operator:=  variable:notes  punctuation:.  field:len
  30 |     loop notes.len > 0
     | keyword:loop  variable:notes  punctuation:.  field:len  operator:>  number:0
- 31 |         # The line shown holds the note, so it is new text; a region of its own
-    | comment:# The line shown holds the note, so it is new text; a region of its own
- 32 |         # frees it after every pass.
-    | comment:# frees it after every pass.
- 33 |         region line
-    | keyword:region  region:line
- 34 |         show("{number}. {notes.del()}" at line)
-    | builtin-fn:show  punctuation:(  string:"{  variable:number  string:}. {  variable:notes  punctuation:.  field:del  punctuation:(  punctuation:)  string:}"  keyword:at  region:line  punctuation:)
- 35 |         number = number - 1
+ 31 |         # `show` writes each value in turn, so a line printed once needs no text
+    | comment:# `show` writes each value in turn, so a line printed once needs no text
+ 32 |         # of its own, and no region to hold it.
+    | comment:# of its own, and no region to hold it.
+ 33 |         show(number, ". ", notes.del())
+    | builtin-fn:show  punctuation:(  variable:number  punctuation:,  string:". "  punctuation:,  variable:notes  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)
+ 34 |         number = number - 1
     | variable:number  operator:=  variable:number  operator:-  number:1
- 36 |     fi
+ 35 |     fi
     | keyword:fi
- 37 | fi
+ 36 | fi
     | keyword:fi

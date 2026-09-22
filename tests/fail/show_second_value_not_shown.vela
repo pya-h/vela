@@ -1,0 +1,6 @@
+# error: 5:21: show expects int, float, bool, or text; show its items one at a time, as in 'each v in xs'
+task main()
+    region r
+    bind xs = new [int]() at r
+    show("items: ", xs)
+fi
