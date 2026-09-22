@@ -28,11 +28,13 @@ task describe(s: Status@r) -> text@r
     fi
 fi
 
+# A region named in a type is another task's, which this one can't allocate in,
+# so the line it shows is built in a region of its own, freed on every pass.
 task print_list(first: maybe ^Item@r)
     hold current = first
     loop current is {item}
-        show(item^.title)
-        show(describe(item^.status))
+        region line
+        show("{item^.title} [{describe(item^.status)}]" at line)
         current = item^.next
     fi
 fi
@@ -68,22 +70,23 @@ task add(r: region, title: text, status: Status, next: maybe ^Item@r) -> ^Item@r
 fi
 
 task main()
-    # Every item lives in `todos`, which frees them all when main ends.
+    # Every item lives in `todos`, which frees them all when main ends, and the
+    # lines counting them are built in `said`.
     region todos
+    region said
     bind third = add(todos, "ship it", Blocked("waiting for review"), none)
     bind second = add(todos, "write tests", Done, third)
     bind first = add(todos, "fix the parser", Todo, second)
     print_list(first)
     bind done, total = progress(first)
-    show(done)
-    show(total)
+    show("{done} of {total} done" at said)
 
     when find(first, "write tests") is {tests}
         tests^.status = Todo
     fi
     # Only the count of done items is wanted now, so the other is dropped.
     bind still_done, _ = progress(first)
-    show(still_done)
+    show("{still_done} of them now" at said)
     show(find(first, "celebrate") == none)
 
     # A plan B gives a value to use when there is nothing to extract.

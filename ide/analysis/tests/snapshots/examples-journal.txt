@@ -44,17 +44,27 @@
     | keyword:region  region:kept
  25 |     bind name = scan("Your name: ") at kept { "stranger" }
     | keyword:bind  variable:name  operator:=  builtin-fn:scan  punctuation:(  string:"Your name: "  punctuation:)  keyword:at  region:kept  punctuation:{  string:"stranger"  punctuation:}
- 26 |     show(name)
-    | builtin-fn:show  punctuation:(  variable:name  punctuation:)
+ 26 |     show("Hello, {name}!" at kept)
+    | builtin-fn:show  punctuation:(  string:"Hello, {  variable:name  string:}!"  keyword:at  region:kept  punctuation:)
  27 |     hold notes = read_notes(kept)
     | keyword:hold  variable:notes  operator:=  task:read_notes  punctuation:(  region:kept  punctuation:)
- 28 |     show(notes.len)
-    | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  field:len  punctuation:)
- 29 |     loop notes.len > 0
+ 28 |     show("{notes.len} notes, last first" at kept)
+    | builtin-fn:show  punctuation:(  string:"{  variable:notes  punctuation:.  field:len  string:} notes, last first"  keyword:at  region:kept  punctuation:)
+ 29 |     hold number = notes.len
+    | keyword:hold  variable:number  operator:=  variable:notes  punctuation:.  field:len
+ 30 |     loop notes.len > 0
     | keyword:loop  variable:notes  punctuation:.  field:len  operator:>  number:0
- 30 |         show(notes.del())
-    | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)
- 31 |     fi
+ 31 |         # The line shown holds the note, so it is new text; a region of its own
+    | comment:# The line shown holds the note, so it is new text; a region of its own
+ 32 |         # frees it after every pass.
+    | comment:# frees it after every pass.
+ 33 |         region line
+    | keyword:region  region:line
+ 34 |         show("{number}. {notes.del()}" at line)
+    | builtin-fn:show  punctuation:(  string:"{  variable:number  string:}. {  variable:notes  punctuation:.  field:del  punctuation:(  punctuation:)  string:}"  keyword:at  region:line  punctuation:)
+ 35 |         number = number - 1
+    | variable:number  operator:=  variable:number  operator:-  number:1
+ 36 |     fi
     | keyword:fi
- 32 | fi
+ 37 | fi
     | keyword:fi

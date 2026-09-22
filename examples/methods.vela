@@ -4,18 +4,19 @@
 # `alters`, and only a place that can change may call it: here a `hold`
 # variable, and an item of a slice.
 
-# A kind has methods too, which read the value as `.this`.
+# A kind has methods too, which read the value as `.this`. A method named `str`
+# says how the value becomes text; it makes new text, so it takes the region the
+# text goes in, as any task that builds text does.
 kind Refusal
     TooLittle(short: int)
     Closed
 
-    tell()
+    str(r: region) -> text@r
         match .this
         case TooLittle short
-            show("short by")
-            show(short)
+            <- "short by {short}" at r
         case Closed
-            show("closed")
+            <- "closed"
         fi
     fi
 fi
@@ -29,14 +30,18 @@ shape Account
         <- .balance
     fi
 
-    alters deposit(amount: int)
+    str(r: region) -> text@r
+        <- "{.owner} has {.balance}" at r
+    fi
+
+    alters deposit(amount: int, r: region)
         .balance = .balance + amount
-        .note("deposit", amount)
+        .note("deposit", amount, r)
     fi
 
     # A method may fail, as a task may: `unit or Refusal` sends nothing, or a
     # reason why not.
-    alters withdraw(amount: int) -> unit or Refusal
+    alters withdraw(amount: int, r: region) -> unit or Refusal
         when not .open
             <- fail Closed
         fi
@@ -44,17 +49,18 @@ shape Account
             <- fail TooLittle(amount - .balance)
         fi
         .balance = .balance - amount
-        .note("withdraw", amount)
+        .note("withdraw", amount, r)
     fi
 
     alters close()
         .open = false
     fi
 
-    # Only this file may call it.
-    priv note(what: text, amount: int)
-        show(what)
-        show(amount)
+    # Only this file may call it. Building text needs a region to build it in,
+    # and a method isn't given the one its value lives in, so the methods that
+    # say what they did take one and hand it on.
+    priv note(what: text, amount: int, r: region)
+        show("{what} {amount}" at r)
     fi
 fi
 
@@ -69,34 +75,38 @@ shape Best<T: ordered>
     fi
 fi
 
-task report(result: unit or Refusal)
+task report(result: unit or Refusal, r: region)
     match result
     case {_}
         show("done")
     case fail why
-        why.tell()
+        show("refused: {why}" at r)
     fi
 fi
 
 task main()
+    # The text these methods build goes here.
+    region said
+
     hold ada = Account { owner: "Ada", balance: 0, open: true }
-    ada.deposit(100)
-    report(ada.withdraw(30))
-    report(ada.withdraw(500))
+    ada.deposit(100, said)
+    report(ada.withdraw(30, said), said)
+    report(ada.withdraw(500, said), said)
     show(ada.balanceOf())
+    show(ada.str() at said)
     ada.close()
-    report(ada.withdraw(1))
+    report(ada.withdraw(1, said), said)
 
     # An item of a slice is a place that can change.
     region bank
     hold accounts = new [Account]() at bank
     accounts.add(Account { owner: "Grace", balance: 5, open: true })
-    accounts[0].deposit(10)
-    show(accounts[0].balanceOf())
+    accounts[0].deposit(10, said)
+    show("{accounts[0]}" at said)
 
     hold best = Best { value: 3 }
     each n in [7, 2, 9, 4]
         best.offer(n)
     fi
-    show(best.value)
+    show("best: {best.value}" at said)
 fi

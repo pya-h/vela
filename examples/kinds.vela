@@ -8,24 +8,23 @@ kind Shape
     Rectangle(width: float, height: float)
     Dot
 
-    describe()
+    # A method named `str` says how the value becomes text. It makes new text,
+    # so it takes the region the text goes in, and `"{shape}"` calls it.
+    str(r: region) -> text@r
         match .this
-        case Circle r
-            show("circle")
-            show(r)
+        case Circle radius
+            <- "circle of {radius}" at r
         case Rectangle w h
-            show("rectangle")
-            show(w)
-            show(h)
+            <- "rectangle {w} by {h}" at r
         case Dot
-            show("dot")
+            <- "dot"
         fi
     fi
 
     area() -> float
         match .this
-        case Circle r
-            <- 3.14159 * r * r
+        case Circle radius
+            <- 3.14159 * radius * radius
         case Rectangle w h
             <- w * h
         case Dot
@@ -35,8 +34,8 @@ kind Shape
 
     alters grow()
         match .this
-        case Circle r
-            .this = Circle(r * 2.0)
+        case Circle radius
+            .this = Circle(radius * 2.0)
         case Rectangle w h
             .this = Rectangle(w * 2.0, h * 2.0)
         case Dot
@@ -46,18 +45,19 @@ kind Shape
 fi
 
 task main()
+    # The text the shapes describe themselves with goes here.
+    region said
+
     bind c = Circle(5.0)
-    c.describe()
-    show(c.area())
+    show("{c} covers {c.area()}" at said)
 
     # Only a `hold` value can change.
-    hold r = Rectangle(3.0, 4.0)
-    r.grow()
-    r.describe()
-    show(r.area())
+    hold rect = Rectangle(3.0, 4.0)
+    rect.grow()
+    show("{rect} covers {rect.area()}" at said)
 
     hold d = Dot
-    d.describe()
+    show(d.str() at said)
     d.grow()
-    d.describe()
+    show(text(d) at said)
 fi

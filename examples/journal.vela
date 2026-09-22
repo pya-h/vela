@@ -23,10 +23,15 @@ fi
 task main()
     region kept
     bind name = scan("Your name: ") at kept { "stranger" }
-    show(name)
+    show("Hello, {name}!" at kept)
     hold notes = read_notes(kept)
-    show(notes.len)
+    show("{notes.len} notes, last first" at kept)
+    hold number = notes.len
     loop notes.len > 0
-        show(notes.del())
+        # The line shown holds the note, so it is new text; a region of its own
+        # frees it after every pass.
+        region line
+        show("{number}. {notes.del()}" at line)
+        number = number - 1
     fi
 fi

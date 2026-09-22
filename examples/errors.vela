@@ -18,14 +18,16 @@ task check(reading: maybe int) -> int or ReadingError
     <- value
 fi
 
-task describe(problem: ReadingError) -> text
+# The reason holds a number, so the text saying why is new text, built in the
+# region the task is given.
+task describe(problem: ReadingError, r: region) -> text@r
     match problem
     case Missing
         <- "no reading"
-    case TooCold _
-        <- "too cold"
-    case TooHot _
-        <- "too hot"
+    case TooCold value
+        <- "too cold: {value}" at r
+    case TooHot value
+        <- "too hot: {value}" at r
     fi
 fi
 
@@ -39,24 +41,27 @@ task add_reading(sum: ^int@r, reading: maybe int) -> unit or ReadingError
 fi
 
 task main()
+    # The text saying what went wrong is kept here.
+    region said
+
     # match handles both outcomes.
     match check(21)
     case {value}
-        show(value)
+        show("reading: {value}" at said)
     case fail problem
-        show(describe(problem))
+        show(describe(problem, said))
     fi
 
     # is runs a block for one outcome only.
     when check(99) is fail problem
-        show(describe(problem))
+        show(describe(problem, said))
     fi
 
     # A plan B gives the value to use instead; `fail e` names the error.
     show(check(none) { 0 })
     bind lowest = check(-80) {
         fail problem
-        show(describe(problem))
+        show(describe(problem, said))
         -50
     }
     show(lowest)
@@ -67,8 +72,8 @@ task main()
     add_reading(sum, 10) { }
     add_reading(sum, 70) {
         fail problem
-        show(describe(problem))
+        show(describe(problem, said))
     }
     add_reading(sum, 5) { }
-    show(sum^)
+    show("sum: {sum^}" at said)
 fi

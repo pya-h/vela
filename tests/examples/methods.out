@@ -1,13 +1,10 @@
-deposit
-100
-withdraw
-30
+deposit 100
+withdraw 30
 done
-short by
-430
+refused: short by 430
 70
-closed
-deposit
-10
-15
-9
+Ada has 70
+refused: closed
+deposit 10
+Grace has 15
+best: 9

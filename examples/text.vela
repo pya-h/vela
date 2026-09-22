@@ -1,0 +1,90 @@
+# Text: what it knows about itself, and how new text is made. A text value is
+# its bytes and how many there are, so `t.len` costs nothing and a part,
+# `t[a..b]`, is the same bytes rather than a copy. Text that is built is new, so
+# it goes in a region: `a + b at r` joins, `x.str() at r` writes a value, and
+# `"{x} …" at r` holds values in braces.
+
+shape Card
+    name: text
+    wins: int
+
+    # A shape or a kind says how its values become text with a method named
+    # `str`, which takes the region the text goes in. Every way of asking for
+    # text calls it: `card.str() at r`, `text(card) at r`, and `"{card}"`.
+    str(r: region) -> text@r
+        <- "{.name} ({.wins} wins)" at r
+    fi
+fi
+
+# The first word of a line: a part of it, so it lives where the line does. Text
+# has no items to read one at a time, so a byte is the part `t[i..i + 1]`.
+task first_word(line: text@r) -> text@r
+    each i in 0..line.len
+        when line[i..i + 1] == " "
+            <- line[0..i]
+        fi
+    fi
+    <- line
+fi
+
+# The first letter of each word, as new text: the task takes the region to
+# build it in, and the letters are parts of the name, joined there.
+task initials(name: text@r, r: region) -> text@r
+    hold letters = "".copy() at r
+    hold start = true
+    each i in 0..name.len
+        bind letter = name[i..i + 1]
+        when letter == " "
+            start = true
+        else
+            when start
+                letters = letters + letter at r
+            fi
+            start = false
+        fi
+    fi
+    <- letters
+fi
+
+task main()
+    region r
+
+    # Length is bytes, not characters: a letter outside ASCII takes more.
+    bind name = "Ada Lovelace"
+    show(name.len)
+    show("café".len)
+
+    # Parts view the same bytes, and a bound inside a character stops the
+    # program, so a part never holds half of one.
+    show(first_word(name))
+    show(name[4..name.len])
+    show("café"[3..5])
+
+    # Text compares by its contents, and orders by its bytes, which is the
+    # order of Unicode: capitals come before small letters.
+    show(name == "Ada Lovelace")
+    show("Ada" < "Bob")
+    show("Zoe" < "ada")
+
+    # New text: joined, written from a value, or holding values.
+    show("Hello, " + first_word(name) + "!" at r)
+    show(initials(name, r))
+    show(42.str() at r)
+    show(text(2.5) at r)
+    bind card = Card { name: "Ada", wins: 3 }
+    show(card.str() at r)
+    show("{card} has {card.wins * 2} points" at r)
+    show("\{name\} is written {name.len} bytes long" at r)
+
+    # A loop that builds text again and again can build in a region of its own,
+    # freed on every pass, and copy out only what it keeps.
+    hold longest = "".copy() at r
+    each word in ["one", "three", "two"]
+        region pass
+        bind padded = "[{word}]" at pass
+        when padded.len > longest.len
+            longest = padded.copy() at r
+        fi
+    fi
+    show(longest)
+fi

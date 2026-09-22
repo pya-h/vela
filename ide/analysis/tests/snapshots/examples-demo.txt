@@ -1,5 +1,5 @@
-  1 | # Vela demo: tasks, shapes, pointers, control flow
-    | comment:# Vela demo: tasks, shapes, pointers, control flow
+  1 | # Vela demo: tasks, shapes, pointers, control flow, and text
+    | comment:# Vela demo: tasks, shapes, pointers, control flow, and text
   3 | shape Point
     | keyword:shape  type:Point
   4 |     x: int
@@ -62,7 +62,9 @@
     | keyword:region  region:numbers
  41 |     bind ptr: ^int@numbers = new int(42) at numbers
     | keyword:bind  variable:ptr  punctuation::  operator:^  type-builtin:int  operator:@  region:numbers  operator:=  keyword:new  type-builtin:int  punctuation:(  number:42  punctuation:)  keyword:at  region:numbers
- 42 |     show(ptr^)
-    | builtin-fn:show  punctuation:(  variable:ptr  operator:^  punctuation:)
- 43 | fi
+ 42 |     # Text holding values is new text, so it goes in a region too.
+    | comment:# Text holding values is new text, so it goes in a region too.
+ 43 |     show("the answer is {ptr^}" at numbers)
+    | builtin-fn:show  punctuation:(  string:"the answer is {  variable:ptr  operator:^  string:}"  keyword:at  region:numbers  punctuation:)
+ 44 | fi
     | keyword:fi
