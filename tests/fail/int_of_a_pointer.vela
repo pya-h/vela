@@ -1,0 +1,6 @@
+# error: 5:14: 'int' takes an int, a float, or a bool, but this value is ^float@r; to turn the value it points to into a number, write 'int(p^)'
+task main()
+    region r
+    bind p = new float(2.5) at r
+    show(int(p))
+fi

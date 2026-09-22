@@ -1428,6 +1428,9 @@ impl Generator {
         if name == "show" {
             return self.gen_show(e, args);
         }
+        if let Some(into) = number_cast(name) {
+            return self.gen_number_cast(e, &into, args);
+        }
         // A call of a generic task calls the one made for the types it gives.
         let given: Vec<Type> = types.iter().map(|(ty, _)| ty.clone()).collect();
         let called = instance_name(name, &given);
@@ -1494,6 +1497,25 @@ impl Generator {
         let value = self.gen_expr(last)?;
         self.w.line(&format!("{}({});", helper, value));
         Ok(())
+    }
+
+    /// `int(x)` or `float(x)`, the expression `e`: a value turned into a number.
+    /// A number turned into its own type is the value itself, a bool is 1 or 0
+    /// as C makes it, and an int is a float exactly. Only a float turned into an
+    /// int can fail, so only it is checked at runtime.
+    fn gen_number_cast(&mut self, e: &Expr, into: &Type, args: &[Expr]) -> Result<String> {
+        let [value] = args else {
+            return Err(Error::internal_at(e.span, format!("'{}' called with {}", into, args.len())));
+        };
+        let from = value.ty()?.clone();
+        let expr = self.gen_expr(value)?;
+        Ok(match (into, &from) {
+            (Type::Int, Type::Int) | (Type::Float, Type::Float) => expr,
+            (Type::Int, Type::Bool) => format!("((int64_t){})", parenthesized(&expr)),
+            (Type::Float, Type::Int) => format!("((double){})", parenthesized(&expr)),
+            (Type::Int, Type::Float) => format!("vela__rt__int_of_float({}, {})", expr, self.location(e.span)),
+            _ => return Err(Error::internal_at(e.span, format!("'{}' of a value of type {}", into, from))),
+        })
     }
 
     /// The helper that writes the value `arg` given to `show`, ending the line

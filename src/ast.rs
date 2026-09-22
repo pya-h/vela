@@ -144,6 +144,23 @@ pub const STR: &str = "str";
 /// The type whose name, called, turns a value into text: `text(n) at r`.
 pub const TEXT_CAST: &str = "text";
 
+/// The type whose name, called, turns a value into an `int`: `int(2.9)`, which
+/// truncates toward zero, and `int(ok)`, which is 1 or 0.
+pub const INT_CAST: &str = "int";
+
+/// The type whose name, called, turns a value into a `float`: `float(n)`.
+pub const FLOAT_CAST: &str = "float";
+
+/// The number that `name`, called as a task, turns a value into: `int(x)` and
+/// `float(x)`, which make no memory, so they name no region as `text(x)` does.
+pub fn number_cast(name: &str) -> Option<Type> {
+    match name {
+        INT_CAST => Some(Type::Int),
+        FLOAT_CAST => Some(Type::Float),
+        _ => None,
+    }
+}
+
 /// How many items an array or slice holds, read after a dot as a field.
 pub const LEN: &str = "len";
 

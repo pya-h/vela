@@ -1,0 +1,4 @@
+# error: 3:10: 'int(…)' turns one value into int, as in 'int(x)', got 2 values
+task main()
+    show(int(2.9, 1.5))
+fi

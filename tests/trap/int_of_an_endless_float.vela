@@ -1,0 +1,6 @@
+# trap: inf does not fit in an int at 5:10 in task 'main'
+task main()
+    show(int(-2.9))
+    bind endless = 1.0 / 0.0
+    show(int(endless))
+fi

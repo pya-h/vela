@@ -313,7 +313,7 @@
         </div>
         <div class="card">
           <h3>No standard library <span class="badge b-high">High</span></h3>
-          <p>Only <code>show</code> and <code>scan</code> (which reads a line of input) exist, with text's own operations (<a href="vela.html#text-parts">parts</a>, <a href="vela.html#joining">joining</a>, and <a href="vela.html#str">values as text</a>). No conversions between numbers, files, networking, or math utilities.</p>
+          <p>Only <code>show</code> and <code>scan</code> (which reads a line of input) exist, with text's own operations (<a href="vela.html#text-parts">parts</a>, <a href="vela.html#joining">joining</a>, and <a href="vela.html#str">values as text</a>). Numbers convert with <a href="vela.html#conversions"><code>float(n)</code> and <code>int(x)</code></a>, but text is not read as a number yet, and there are no files, networking, or math utilities.</p>
         </div>
         <div class="card">
           <h3>No module system <span class="badge b-done">Done</span></h3>
@@ -1724,9 +1724,9 @@ show(c.total())</pre>
           when compiling, pass small tuples in registers, and share one copy of a constant tuple, with no check that it
           changed</li>
         <li><strong>Type conversions (casting):</strong> Vela turns a value into text (<code>text(n) at r</code>, or
-          <code>n.str() at r</code>), but can't convert it to another type yet: not an <code>int</code> to a
-          <code>float</code> (except where <code>1 + 2.5</code> promotes it), not a <code>float</code> to an
-          <code>int</code>, and not text to a number. See <a href="#conversions">Type conversions</a> below.</li>
+          <code>n.str() at r</code>) and between numbers (<code>float(n)</code>, <code>int(2.9)</code>,
+          <code>int(ok)</code>), but can't read text as a number yet. See <a href="#conversions">Type conversions</a>
+          below.</li>
         <li><strong>Type aliases:</strong> <code>alias UserId = int</code></li>
       </ul>
 
@@ -1737,28 +1737,39 @@ show(c.total())</pre>
         <code>str(r: region) -&gt; text@r</code> (see <a href="vela.html#str">Values as text</a>).
       </p>
       <p>
-        <strong>Chosen, and next:</strong> the other conversions are calls named by the type, as <code>text(x)</code> is, so
-        they read alike: <code>float(n)</code> and <code>int(x)</code>. They are what reading input still needs:
-        <code>scan</code> reads text, and a program asking for a number has no way to turn <code>"42"</code> into
-        <code>42</code>. (The typed form <code>scan("Age: ", int)</code> waits for this.) The questions they must answer:
+        <span class="badge b-done">Done</span> between numbers, and for a bool: <code>float(n)</code> and
+        <code>int(x)</code> are calls named by the type they give, as <code>text(x)</code> is, and they make no memory, so
+        they name no region (see <a href="vela.html#conversions">Turning a value into a number</a>).
       </p>
-      <pre>bind x = float(n)                  # an int as a float
-bind whole = int(2.9)              # a float as an int: 2, truncated toward zero
-bind age = int("42")               # text to a number can fail: int or ParseError
-bind shown = text(3.5) at r        # a number to text makes text, in a region (done)</pre>
+      <pre>bind x = float(n)                  # an int as a float, which never fails (done)
+bind whole = int(2.9)              # a float as an int: 2, truncated toward zero (done)
+bind counted = int(n &gt; 3)          # a bool as an int: 1 or 0 (done)
+bind shown = text(3.5) at r        # a number to text makes text, in a region (done)
+bind age = int("42")               # text to a number can fail: int or ParseError (next)</pre>
+      <p>
+        <strong>Next:</strong> reading a number from text, which is what input still needs, since <code>scan</code> reads
+        text and a program asking for a number has no way to turn <code>"42"</code> into <code>42</code>. The typed form
+        <code>scan("Age: ", int)</code> comes after that, with one question of its own: how the end of input is told apart
+        from text that is not a number. What the answers were:
+      </p>
       <ul>
         <li><strong>Which conversions.</strong> <code>int</code> ↔ <code>float</code>, <code>bool</code> → <code>int</code>,
-          numbers ↔ <code>text</code>. Shapes, kinds, pointers, and slices don't convert; a task does that.</li>
-        <li><strong>What can fail.</strong> Text to a number can fail (<code>"4x2"</code>), and so can a float to an int
-          (<code>nan</code>, or <code>1e300</code>, which doesn't fit). Vela's own ways apply: a <code>T or E</code> for input
-          that may be wrong (<code>int("42")</code> gives <code>int or ParseError</code>), and stopping the program with a
-          message, as integer overflow does, for a conversion that is a bug when it fails (<code>int(1e300)</code>).</li>
-        <li><strong>Rounding.</strong> A float to an int truncates toward zero, as C does, or rounds; separate conversions
-          (<code>round</code>, <code>floor</code>) keep that explicit.</li>
+          numbers ↔ <code>text</code>. Shapes, kinds, pointers, and slices don't convert; a task does that. A bool reaches
+          <code>float</code> through <code>int</code>, <code>float(int(ok))</code>, so there is one way, not two.</li>
+        <li><strong>What can fail.</strong> A float to an int can fail (<code>nan</code>, or a float too large to hold),
+          and stops the program with a message, as integer overflow does, since such a conversion is a bug when it fails.
+          Text to a number can fail on input that is merely wrong (<code>"4x2"</code>), so it gives a
+          <code>T or E</code>: <code>int("42")</code> is an <code>int or ParseError</code>, a kind with
+          <code>NotANumber</code> and <code>TooLarge</code>, neither holding a value, read with a plan B or
+          <code>match</code>.</li>
+        <li><strong>Rounding.</strong> A float to an int truncates toward zero, as C does. Rounding another way waits for
+          conversions of its own (<code>round</code>, <code>floor</code>), which keeps each one explicit.</li>
         <li><strong>Text needs memory.</strong> A number written as text is new text, so it goes in a region
-          (<code>text@r</code>), written <code>… at r</code> as <code>new</code> and <code>scan</code> are. Done this way.</li>
-        <li><strong>Promotion.</strong> With conversions, <code>1 + 2.5</code> could become an error that asks for
-          <code>float(1) + 2.5</code>, so that no <code>int</code> becomes a <code>float</code> quietly.</li>
+          (<code>text@r</code>), written <code>… at r</code> as <code>new</code> and <code>scan</code> are. Done this way.
+          The conversions between numbers make no memory, so they name no region at all.</li>
+        <li><strong>Promotion.</strong> Refused, once <code>float(n)</code> exists: <code>1 + 2.5</code> is an error that
+          asks for <code>float(1) + 2.5</code>, so that no <code>int</code> becomes a <code>float</code> quietly, and
+          arithmetic agrees with assignment, which already refused <code>bind x: float = 3</code>.</li>
       </ul>
 
       <h3 id="bitwise">Bitwise operators</h3>

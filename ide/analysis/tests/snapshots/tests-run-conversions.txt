@@ -1,0 +1,98 @@
+  1 | # Turning a value into a number: `float(x)` and `int(x)`, called by the name of
+    | comment:# Turning a value into a number: `float(x)` and `int(x)`, called by the name of
+  2 | # the type, as `text(x) at r` is. They make no memory, so they name no region.
+    | comment:# the type, as `text(x) at r` is. They make no memory, so they name no region.
+  3 | # `float` of an int always works. `int` of a float is its whole part, toward
+    | comment:# `float` of an int always works. `int` of a float is its whole part, toward
+  4 | # zero, and `int` of a bool is 1 or 0.
+    | comment:# zero, and `int` of a bool is 1 or 0.
+  6 | task half(n: int) -> float
+    | keyword:task  task:half  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:float
+  7 |     <- float(n) / 2.0
+    | keyword:<-  type-builtin:float  punctuation:(  parameter:n  punctuation:)  operator:/  number:2.0
+  8 | fi
+    | keyword:fi
+ 10 | task counted<T: shown>(value: T, ok: bool) -> int
+    | keyword:task  task:counted  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:value  punctuation::  type:T  punctuation:,  parameter:ok  punctuation::  type-builtin:bool  punctuation:)  operator:->  type-builtin:int
+ 11 |     show("counting ", value)
+    | builtin-fn:show  punctuation:(  string:"counting "  punctuation:,  parameter:value  punctuation:)
+ 12 |     <- int(ok)
+    | keyword:<-  type-builtin:int  punctuation:(  parameter:ok  punctuation:)
+ 13 | fi
+    | keyword:fi
+ 15 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 16 |     region r
+    | keyword:region  region:r
+ 17 |     bind n = 7
+    | keyword:bind  variable:n  operator:=  number:7
+ 19 |     # An int as a float, which never fails.
+    | comment:# An int as a float, which never fails.
+ 20 |     show(float(n))
+    | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  variable:n  punctuation:)  punctuation:)
+ 21 |     show(float(n) / 2.0)
+    | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  variable:n  punctuation:)  operator:/  number:2.0  punctuation:)
+ 22 |     show(half(7), " ", half(-3))
+    | builtin-fn:show  punctuation:(  task:half  punctuation:(  number:7  punctuation:)  punctuation:,  string:" "  punctuation:,  task:half  punctuation:(  operator:-  number:3  punctuation:)  punctuation:)
+ 24 |     # A float as an int: the whole part, toward zero, so it rounds neither way.
+    | comment:# A float as an int: the whole part, toward zero, so it rounds neither way.
+ 25 |     show(int(2.9), " ", int(2.1), " ", int(2.0))
+    | builtin-fn:show  punctuation:(  type-builtin:int  punctuation:(  number:2.9  punctuation:)  punctuation:,  string:" "  punctuation:,  type-builtin:int  punctuation:(  number:2.1  punctuation:)  punctuation:,  string:" "  punctuation:,  type-builtin:int  punctuation:(  number:2.0  punctuation:)  punctuation:)
+ 26 |     show(int(-2.9), " ", int(-2.1), " ", int(-0.5))
+    | builtin-fn:show  punctuation:(  type-builtin:int  punctuation:(  operator:-  number:2.9  punctuation:)  punctuation:,  string:" "  punctuation:,  type-builtin:int  punctuation:(  operator:-  number:2.1  punctuation:)  punctuation:,  string:" "  punctuation:,  type-builtin:int  punctuation:(  operator:-  number:0.5  punctuation:)  punctuation:)
+ 28 |     # A bool as an int, which counts.
+    | comment:# A bool as an int, which counts.
+ 29 |     show(int(true), " ", int(false))
+    | builtin-fn:show  punctuation:(  type-builtin:int  punctuation:(  keyword:true  punctuation:)  punctuation:,  string:" "  punctuation:,  type-builtin:int  punctuation:(  keyword:false  punctuation:)  punctuation:)
+ 30 |     show("over three: ", int(n > 3) + int(n > 100))
+    | builtin-fn:show  punctuation:(  string:"over three: "  punctuation:,  type-builtin:int  punctuation:(  variable:n  operator:>  number:3  punctuation:)  operator:+  type-builtin:int  punctuation:(  variable:n  operator:>  number:100  punctuation:)  punctuation:)
+ 32 |     # A number turned into its own type is the value itself.
+    | comment:# A number turned into its own type is the value itself.
+ 33 |     show(int(n), " ", float(2.5))
+    | builtin-fn:show  punctuation:(  type-builtin:int  punctuation:(  variable:n  punctuation:)  punctuation:,  string:" "  punctuation:,  type-builtin:float  punctuation:(  number:2.5  punctuation:)  punctuation:)
+ 35 |     # The values they give are numbers like any other: they add, compare, go
+    | comment:# The values they give are numbers like any other: they add, compare, go
+ 36 |     # into text, and fit where a number is expected.
+    | comment:# into text, and fit where a number is expected.
+ 37 |     show(float(n) + 0.5, " ", int(2.9) * 3)
+    | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  variable:n  punctuation:)  operator:+  number:0.5  punctuation:,  string:" "  punctuation:,  type-builtin:int  punctuation:(  number:2.9  punctuation:)  operator:*  number:3  punctuation:)
+ 38 |     show(float(n) > 6.5, " ", int(2.9) == 2)
+    | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  variable:n  punctuation:)  operator:>  number:6.5  punctuation:,  string:" "  punctuation:,  type-builtin:int  punctuation:(  number:2.9  punctuation:)  operator:==  number:2  punctuation:)
+ 39 |     show(text(float(n)) at r, " ", "whole {int(2.9)}" at r)
+    | builtin-fn:show  punctuation:(  type-builtin:text  punctuation:(  type-builtin:float  punctuation:(  variable:n  punctuation:)  punctuation:)  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  string:"whole {  type-builtin:int  punctuation:(  number:2.9  punctuation:)  string:}"  keyword:at  region:r  punctuation:)
+ 40 |     show(half(int(5.9)))
+    | builtin-fn:show  punctuation:(  task:half  punctuation:(  type-builtin:int  punctuation:(  number:5.9  punctuation:)  punctuation:)  punctuation:)
+ 42 |     # Both edges of an int, which a float holds exactly.
+    | comment:# Both edges of an int, which a float holds exactly.
+ 43 |     bind biggest = 9223372036854775807
+    | keyword:bind  variable:biggest  operator:=  number:9223372036854775807
+ 44 |     bind smallest = -9223372036854775807 - 1
+    | keyword:bind  variable:smallest  operator:=  operator:-  number:9223372036854775807  operator:-  number:1
+ 45 |     show(int(float(smallest)) == smallest)
+    | builtin-fn:show  punctuation:(  type-builtin:int  punctuation:(  type-builtin:float  punctuation:(  variable:smallest  punctuation:)  punctuation:)  operator:==  variable:smallest  punctuation:)
+ 46 |     show(float(biggest) > 9000000000000000000.0)
+    | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  variable:biggest  punctuation:)  operator:>  number:9000000000000000000.0  punctuation:)
+ 48 |     # A float that is a whole number already, and one that is not.
+    | comment:# A float that is a whole number already, and one that is not.
+ 49 |     hold total = 0
+    | keyword:hold  variable:total  operator:=  number:0
+ 50 |     each v in [0.5, 1.5, 2.5, 3.5]
+    | keyword:each  variable:v  keyword:in  punctuation:[  number:0.5  punctuation:,  number:1.5  punctuation:,  number:2.5  punctuation:,  number:3.5  punctuation:]
+ 51 |         total = total + int(v)
+    | variable:total  operator:=  variable:total  operator:+  type-builtin:int  punctuation:(  variable:v  punctuation:)
+ 52 |     fi
+    | keyword:fi
+ 53 |     show("truncated sum: ", total)
+    | builtin-fn:show  punctuation:(  string:"truncated sum: "  punctuation:,  variable:total  punctuation:)
+ 55 |     # In a task that takes types, where the value is shown and the bool counted.
+    | comment:# In a task that takes types, where the value is shown and the bool counted.
+ 56 |     # One call to a line: which side of a '+' runs first isn't defined.
+    | comment:# One call to a line: which side of a '+' runs first isn't defined.
+ 57 |     bind said = counted("a", true)
+    | keyword:bind  variable:said  operator:=  task:counted  punctuation:(  string:"a"  punctuation:,  keyword:true  punctuation:)
+ 58 |     bind quiet = counted(2, false)
+    | keyword:bind  variable:quiet  operator:=  task:counted  punctuation:(  number:2  punctuation:,  keyword:false  punctuation:)
+ 59 |     show(said + quiet)
+    | builtin-fn:show  punctuation:(  variable:said  operator:+  variable:quiet  punctuation:)
+ 60 | fi
+    | keyword:fi

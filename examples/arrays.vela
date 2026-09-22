@@ -11,7 +11,9 @@ task summary(readings: [float; 7]) -> high: float, average: float
             high <- reading
         fi
     fi
-    average <- sum / 7.0
+    # `float(n)` turns the count into a float, so the average doesn't depend on
+    # the 7 being written twice.
+    average <- sum / float(readings.len)
 fi
 
 # Sorts the items of a slice in place: a slice writes into the memory it views.

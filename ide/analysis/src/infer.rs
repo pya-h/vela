@@ -679,6 +679,12 @@ impl<'a> Knowledge<'a> {
                 }
                 // `n.str(r)`: text in `r`; `n.str()` and `text(n)`, text before
                 // their region.
+                // `int(x)` and `float(x)`: the number the type they name is.
+                if self.token_before(p) != Some(&Token::Dot)
+                    && let Some(number) = vela::ast::number_cast(word)
+                {
+                    return Some(number);
+                }
                 let cast = word == vela::ast::TEXT_CAST && self.token_before(p) != Some(&Token::Dot);
                 if cast || (word == vela::ast::STR && self.token_before(p) == Some(&Token::Dot)) {
                     let region = (!cast && open + 2 == q).then(|| self.ident(open + 1)).flatten();

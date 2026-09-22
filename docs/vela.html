@@ -517,6 +517,26 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         9223372036854775807)</em>), and a division or remainder by a zero written that way, as in <code>n / 0</code>
         (<em>division by zero</em>).
       </p>
+      <p id="conversions">
+        <code>float(n)</code> and <code>int(x)</code> turn a value into a number, called by the name of the type they
+        give, as <a href="#str"><code>text(x) at r</code></a> is. They make no memory, so they name no region.
+        <code>float(n)</code> turns an <code>int</code> into a <code>float</code> exactly, and never fails.
+        <code>int(x)</code> takes a <code>float</code> or a <code>bool</code>: a float becomes its whole part, toward
+        zero, so it rounds neither way (<code>int(2.9)</code> is 2 and <code>int(-2.9)</code> is -2), and a bool becomes
+        1 or 0, which counts (<code>int(n &gt; 3)</code>). A float with no whole part to give stops the program, as
+        arithmetic that doesn't fit does: <code>int(0.0 / 0.0)</code> says <em>nan cannot become an int</em>, and a float
+        too large to hold says <em>inf does not fit in an int</em>. A number turned into its own type,
+        <code>int(n)</code>, is the value itself. A bool reaches <code>float</code> through <code>int</code>,
+        <code>float(int(ok))</code>, and text isn't read as a number yet (see
+        <a href="future.html#conversions">Future Directions</a>); rounding another way waits for conversions of its own.
+      </p>
+      <pre><span class="keyword">task</span> main()
+    <span class="keyword">bind</span> n = <span class="number">7</span>
+    show(float(n) / <span class="number">2.0</span>)                 <span class="comment"># 3.5</span>
+    show(int(<span class="number">2.9</span>), <span class="string">" "</span>, int(<span class="number">-2.9</span>))       <span class="comment"># 2 -2</span>
+    show(<span class="string">"over three: "</span>, int(n &gt; <span class="number">3</span>))    <span class="comment"># over three: 1</span>
+    show(int(<span class="number">1.0</span> / <span class="number">0.0</span>))               <span class="comment"># stops: vela: inf does not fit in an int at 6:10 in task 'main'</span>
+<span class="keyword">fi</span></pre>
       <p>Operators bind from loosest to tightest as follows; operators on the same row group from the left.</p>
       <table>
         <tr><th>Operators</th><th>Example</th></tr>

@@ -285,7 +285,7 @@ fn hover_describes_declarations() {
     assert_eq!(code_and_doc(hover(&source, "Circle(1.0)", 0)), pair("Circle(radius: float)", "A variant of kind Shape."));
     assert_eq!(code_and_doc(hover(&source, "radius", 0)), pair("radius: float", "A payload field of variant Circle."));
     assert_eq!(code_and_doc(hover(&source, "start: p", 0)), pair("start: Point", "A field of shape Line."));
-    assert_eq!(code_and_doc(hover(&source, "int\n    y: int", 0)), pair("int", "A 64-bit signed integer."));
+    assert_eq!(code_and_doc(hover(&source, "int\n    y: int", 0)), pair("int", "A 64-bit signed integer. int(x) turns a value into one: a float becomes its whole part, toward zero (a float with none to give, such as nan, stops the program), and a bool becomes 1 or 0."));
     assert_eq!(hover(&source, "show", 0).code, "task show(value: int | float | bool | text | maybe | anything with str, \u{2026})");
     assert_eq!(hover(&source, "Point {", 0).code, "shape Point\n    x: int\n    y: int\nfi");
     assert_eq!(hover(&source, "Shape\n", 0).code, "kind Shape\n    Circle(radius: float)\n    Rectangle(width: float, height: float)\n    Dot\nfi");
@@ -383,6 +383,22 @@ fn values_holding_pointers_are_in_the_region_of_their_parts_whether_or_not_the_f
         assert_eq!(code("count ="), "bind count: int", "{}", when);
         assert_eq!(code("left right"), "left: ^Tree@r", "{}", when);
     }
+}
+
+#[test]
+fn a_value_turned_into_a_number_reads_as_that_number() {
+    // `int(x)` and `float(x)` are calls named by the type they give, so the
+    // editor reads them as that number, whether or not the file checks.
+    let source = "task main()\n    bind n = 7\n    bind f = float(n)\n    bind w = int(2.9)\n    bind c = int(n > 3)\nfi\n";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_eq!(hover(source, "f =", 0).code, "bind f: float");
+    assert_eq!(hover(source, "w =", 0).code, "bind w: int");
+    assert_eq!(hover(source, "c =", 0).code, "bind c: int");
+    let broken = source.replace("    bind c =", "    show(missing)\n    bind c =");
+    assert_eq!(hover(&broken, "f =", 0).code, "bind f: float");
+    assert_eq!(hover(&broken, "w =", 0).code, "bind w: int");
+    // Hovering the name of the call says what it does.
+    assert!(hover(source, "float(n)", 0).doc.contains("float(n) turns an int"), "{:?}", hover(source, "float(n)", 0).doc);
 }
 
 #[test]

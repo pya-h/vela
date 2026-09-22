@@ -54,6 +54,18 @@ int main(void) {
     check(vela__rt__mod(INT64_MIN, -1, "") == 0, "mod", INT64_MIN, -1);
     check(vela__rt__mod(INT64_MIN, INT64_MAX, "") == -1, "mod", INT64_MIN, INT64_MAX);
     check(vela__rt__neg(INT64_MIN + 1, "") == INT64_MAX, "neg", INT64_MIN + 1, 0);
+    /* `int(x)` on a float: the whole part, toward zero, which rounds neither
+     * way, and the two edges a double holds exactly: -2^63, which is an int,
+     * and 2^63 - 1024, the largest double below 2^63. The floats that stop the
+     * program instead are in tests/trap. */
+    check(vela__rt__int_of_float(2.9, "") == 2, "int of float", 2, 0);
+    check(vela__rt__int_of_float(2.0, "") == 2, "int of float", 2, 0);
+    check(vela__rt__int_of_float(-2.9, "") == -2, "int of float", -2, 0);
+    check(vela__rt__int_of_float(0.5, "") == 0, "int of float", 0, 0);
+    check(vela__rt__int_of_float(-0.5, "") == 0, "int of float", 0, 0);
+    check(vela__rt__int_of_float(-0.0, "") == 0, "int of float", 0, 0);
+    check(vela__rt__int_of_float((double)INT64_MIN, "") == INT64_MIN, "int of float", INT64_MIN, 0);
+    check(vela__rt__int_of_float(9223372036854774784.0, "") == 9223372036854774784, "int of float", INT64_MAX, 0);
     if (failures == 0) {
         puts("ok");
     }

@@ -1,0 +1,11 @@
+# trap: 9e+27 does not fit in an int at 10:10 in task 'main'
+task main()
+    hold big = 9.0
+    hold i = 0
+    loop i < 9
+        big = big * 1000.0
+        i = i + 1
+    fi
+    show(big)
+    show(int(big))
+fi

@@ -1840,6 +1840,11 @@ impl Checker {
                 // `scan`, or one that gives no value.
                 match &e.kind {
                     ExprKind::Call { name, .. } if matches!(e.ty, Some(Type::Or(..))) => err(e.span, ignored_error(name)),
+                    // `int(x)` and `float(x)` read like calls, but they only give
+                    // a number back: on its own, the line does nothing.
+                    ExprKind::Call { name, .. } if number_cast(name).is_some() => {
+                        err(e.span, format!("the number '{}' gives is unused; only a task call can be used as a statement", name))
+                    }
                     ExprKind::Call { .. } | ExprKind::Edit { .. } | ExprKind::Scan { .. } => Ok(()),
                     ExprKind::PlanB { value, .. } if e.ty == Some(Type::Unit) || matches!(value.kind, ExprKind::Call { .. } | ExprKind::Scan { .. }) => Ok(()),
                     ExprKind::Binary(BinaryOp::Eq, ..) => err(e.span, "the result of '==' is unused; use '=' to assign"),
@@ -2647,6 +2652,11 @@ impl Checker {
                         self.check_shown(arg)?;
                     }
                     return Ok(Type::Unit);
+                }
+                // `int(x)` and `float(x)`: a value turned into a number, as
+                // `text(x) at r` turns one into text.
+                if let Some(into) = number_cast(name) {
+                    return self.check_number_cast(&into, types, args, span);
                 }
                 let info = self.tasks.get(name.as_str()).filter(|_| self.sees(name))
                     .ok_or_else(|| {
@@ -3732,6 +3742,42 @@ impl Checker {
         self.check_expr(value)?;
         self.visible_region(region, region_span, true)?;
         Ok(Type::Text(Some(region.to_string())))
+    }
+
+    /// Checks `int(x)` or `float(x)`, a value turned into a number, and returns
+    /// that number's type. A `float` from an int always works; an `int` from a
+    /// float is its whole part, toward zero, which stops the program when there
+    /// is none to give, and an `int` from a bool is 1 or 0. A number turned into
+    /// its own type is the value itself.
+    fn check_number_cast(&mut self, into: &Type, types: &[TypeArg], args: &mut [Expr], span: Span) -> Result<Type> {
+        if let Some((_, at)) = types.first() {
+            return err(*at, format!("'{0}' takes no types, only the value to turn into {0}, as in '{0}(x)'", into));
+        }
+        let takes = match into {
+            Type::Int => "'int' takes an int, a float, or a bool",
+            _ => "'float' takes an int or a float",
+        };
+        let [value] = args else {
+            return err(span, format!("'{0}(…)' turns one value into {0}, as in '{0}(x)', got {1}", into, count(args.len(), "value")));
+        };
+        let ty = self.check_expr(value)?;
+        let fits = matches!((into, &ty), (Type::Int, Type::Int | Type::Float | Type::Bool) | (Type::Float, Type::Int | Type::Float));
+        if fits {
+            return Ok(into.clone());
+        }
+        let hint = match &ty {
+            // Text that holds a number can't be read yet (see the plan in
+            // `docs/future.html#conversions`).
+            Type::Text(_) => "; text can't be read as a number yet".to_string(),
+            Type::Bool => format!("; a bool becomes a number with 'int', as in '{}(int(ok))'", into),
+            Type::Ptr(..) => format!("; to turn the value it points to into a number, write '{}(p^)'", into),
+            Type::Maybe(_) | Type::Or(..) => extract_hint(&[&ty]),
+            Type::Unit => "; this has no value".to_string(),
+            Type::Named(..) | Type::Applied(_) => "; a shape or kind becomes a number only through a task that reads it".to_string(),
+            Type::Param(_) => format!("; {} is any type here, and no word requires a number", ty),
+            _ => String::new(),
+        };
+        err(value.span, format!("{}, but this value is {}{}", takes, ty, hint))
     }
 
     /// Checks that the value a method marked `alters` is called on can change:

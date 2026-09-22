@@ -1,0 +1,8 @@
+# error: 7:14: 'int' takes an int, a float, or a bool, but this value is Point; a shape or kind becomes a number only through a task that reads it
+shape Point
+    x: int
+fi
+
+task main()
+    show(int(Point { x: 1 }))
+fi

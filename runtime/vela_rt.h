@@ -231,6 +231,24 @@ static inline double vela__rt__fmod(double a, double b) {
     return fmod(a, b);
 }
 
+/* `int(x)` on a float: its whole part, toward zero. A float that is no number,
+ * or whose whole part doesn't fit in 64 bits, stops the program with a message,
+ * as integer overflow does. `(double)INT64_MIN` is exactly -2^63, and its
+ * negation exactly 2^63, which no `int` reaches: every float below it truncates
+ * into range, and the comparisons leave a nan out on their own (it is caught
+ * first, so that the message names it). */
+static inline int64_t vela__rt__int_of_float(double x, const char* at) {
+    if (isnan(x)) {
+        vela__rt__int_trap("nan cannot become an int", at);
+    }
+    if (!(x >= (double)INT64_MIN && x < -(double)INT64_MIN)) {
+        char written[64];
+        snprintf(written, sizeof written, "%g does not fit in an int", x);
+        vela__rt__int_trap(written, at);
+    }
+    return (int64_t)x;
+}
+
 /* Regions. A region is an arena: a list of chunks of memory, each handed out
  * front to back, all freed at once when the block that declared the region
  * closes. Allocating is a pointer bump in the newest chunk; see

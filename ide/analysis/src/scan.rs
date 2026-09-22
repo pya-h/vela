@@ -1304,8 +1304,9 @@ impl<'a> Classifier<'a> {
         if after == Some(&Token::LParen) && BUILTIN_TASKS.contains(&name) {
             return (TokenClass::BuiltinFn, None);
         }
-        // `text(n) at r`: the type, turning a value into it.
-        if after == Some(&Token::LParen) && name == vela::ast::TEXT_CAST {
+        // `text(n) at r`, `int(2.9)`, and `float(n)`: the type, turning a value
+        // into it.
+        if after == Some(&Token::LParen) && (name == vela::ast::TEXT_CAST || vela::ast::number_cast(name).is_some()) {
             return (TokenClass::TypeBuiltin, None);
         }
         if after == Some(&Token::LParen)
