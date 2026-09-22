@@ -7,7 +7,7 @@ kind Light
     Green
     Amber(seconds: int)
 
-    shown() -> text
+    label() -> text
         match .this
             case Red
                 <- "red"
@@ -24,7 +24,7 @@ kind Light
     # A method that takes no parameters and sends nothing: `()` alone is enough
     # to tell it from a variant.
     tell()
-        show(.shown())
+        show(.label())
     fi
 
     alters flip()
@@ -97,10 +97,10 @@ task main()
 
     # A method that changes nothing is called on a `bind` too.
     bind fixed = Green
-    show(fixed.shown())
+    show(fixed.label())
     # And on a variant as it is written.
-    show(Light.Amber(1).shown())
-    show(Light.Red.shown())
+    show(Light.Amber(1).label())
+    show(Light.Red.label())
 
     region r
     hold word: Label@r = Word("a word".copy() at r)

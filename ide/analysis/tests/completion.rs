@@ -286,7 +286,7 @@ fn hover_describes_declarations() {
     assert_eq!(code_and_doc(hover(&source, "radius", 0)), pair("radius: float", "A payload field of variant Circle."));
     assert_eq!(code_and_doc(hover(&source, "start: p", 0)), pair("start: Point", "A field of shape Line."));
     assert_eq!(code_and_doc(hover(&source, "int\n    y: int", 0)), pair("int", "A 64-bit signed integer."));
-    assert_eq!(hover(&source, "show", 0).code, "task show(value: int | float | bool | text | maybe, \u{2026})");
+    assert_eq!(hover(&source, "show", 0).code, "task show(value: int | float | bool | text | maybe | anything with str, \u{2026})");
     assert_eq!(hover(&source, "Point {", 0).code, "shape Point\n    x: int\n    y: int\nfi");
     assert_eq!(hover(&source, "Shape\n", 0).code, "kind Shape\n    Circle(radius: float)\n    Rectangle(width: float, height: float)\n    Dot\nfi");
     // The hovered range is the name.
@@ -301,6 +301,29 @@ fn show_takes_several_values() {
     assert_offers(&in_main("show(total, @@)"), &["p", "line", "show"], &["else"]);
     let checked = "task main()\n    bind n = 1\n    show(\"n = \", n, \"!\")\n    show()\nfi\n";
     assert_eq!(Analysis::new(checked).diagnostics(), Vec::new());
+}
+
+#[test]
+fn a_value_shown_by_its_own_str_keeps_its_type_in_the_editor() {
+    // The checker turns such a value into the call of its `str`, which stands
+    // where the value is written. The editor asks about the value there, so a
+    // member of it completes as it does anywhere else, and not as a member of
+    // the text the call gives.
+    let source = "shape Card\n    name: text\n\n    str(r: region) -> text@r\n        <- \"{.name}\" at r\n    fi\nfi\n\ntask main()\n    region r\n    hold cards = new [Card]() at r\n    cards.add(Card { name: \"Ada\" })\n    show(cards[0])\nfi\n";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_offers(&source.replace("show(cards[0])", "show(cards[0].@@)"), &["name", "str", "copy"], &["len"]);
+    assert_eq!(hover(source, "cards[0])", 0).code, "hold cards: [Card]@r");
+}
+
+#[test]
+fn show_takes_a_value_with_its_own_str() {
+    // A shape with a `str` of its own is a value `show` writes, and the name in
+    // the call still hovers as what it is, although the checker has turned the
+    // value into the call of that method.
+    let source = "shape Card\n    name: text\n\n    str(r: region) -> text@r\n        <- \"{.name}\" at r\n    fi\nfi\n\ntask main()\n    bind card = Card { name: \"Ada\" }\n    show(\"top: \", card)\nfi\n";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_eq!(hover(source, "card)", 0).code, "bind card: Card");
+    assert_eq!(hover(source, "str(r", 0).code, "str(r: region) -> text@r");
 }
 
 #[test]
@@ -812,3 +835,4 @@ fn named_results_are_names_of_the_task() {
     // An unnamed list still takes another type.
     assert_offers("task f() -> maybe int, @@", &["int", "maybe"], &["unit"]);
 }
+

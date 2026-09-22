@@ -1,0 +1,196 @@
+  1 | # A shape or kind says how its values are written with a method `str`, which
+    | comment:# A shape or kind says how its values are written with a method `str`, which
+  2 | # `show` calls for it: `show(card)` writes what `card.str()` gives. The text goes
+    | comment:# `show` calls for it: `show(card)` writes what `card.str()` gives. The text goes
+  3 | # in a region `show` makes for the line and frees when it ends, so a value is
+    | comment:# in a region `show` makes for the line and frees when it ends, so a value is
+  4 | # written without the program naming a region at all.
+    | comment:# written without the program naming a region at all.
+  6 | shape Card
+    | keyword:shape  type:Card
+  7 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  8 |     wins: int
+    | field:wins  punctuation::  type-builtin:int
+ 10 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 11 |         <- "{.name} ({.wins})" at r
+    | keyword:<-  string:"{  punctuation:.  field:name  string:} ({  punctuation:.  field:wins  string:})"  keyword:at  region:r
+ 12 |     fi
+    | keyword:fi
+ 14 |     # A method may show the value it is called on.
+    | comment:# A method may show the value it is called on.
+ 15 |     describe()
+    | method:describe  punctuation:(  punctuation:)
+ 16 |         show("card: ", .this)
+    | builtin-fn:show  punctuation:(  string:"card: "  punctuation:,  punctuation:.  keyword:this  punctuation:)
+ 17 |     fi
+    | keyword:fi
+ 18 | fi
+    | keyword:fi
+ 20 | kind Light
+    | keyword:kind  type:Light
+ 21 |     Red
+    | variant:Red
+ 22 |     Green(seconds: int)
+    | variant:Green  punctuation:(  field:seconds  punctuation::  type-builtin:int  punctuation:)
+ 24 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 25 |         match .this
+    | keyword:match  punctuation:.  keyword:this
+ 26 |         case Red
+    | keyword:case  variant:Red
+ 27 |             <- "red"
+    | keyword:<-  string:"red"
+ 28 |         case Green seconds
+    | keyword:case  variant:Green  variable:seconds
+ 29 |             <- "green for {seconds}" at r
+    | keyword:<-  string:"green for {  variable:seconds  string:}"  keyword:at  region:r
+ 30 |         fi
+    | keyword:fi
+ 31 |     fi
+    | keyword:fi
+ 32 | fi
+    | keyword:fi
+ 34 | # A shape that takes a type has one `str` for every type it is made for.
+    | comment:# A shape that takes a type has one `str` for every type it is made for.
+ 35 | shape Box<T: shown>
+    | keyword:shape  type:Box  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>
+ 36 |     item: T
+    | field:item  punctuation::  type:T
+ 38 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 39 |         <- "[{.item}]" at r
+    | keyword:<-  string:"[{  punctuation:.  field:item  string:}]"  keyword:at  region:r
+ 40 |     fi
+    | keyword:fi
+ 41 | fi
+    | keyword:fi
+ 43 | # Its `str` may write lines of its own, which land where they happen: between the
+    | comment:# Its `str` may write lines of its own, which land where they happen: between the
+ 44 | # values written before it and those after.
+    | comment:# values written before it and those after.
+ 45 | shape Loud
+    | keyword:shape  type:Loud
+ 46 |     n: int
+    | field:n  punctuation::  type-builtin:int
+ 48 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 49 |         show("(making text)")
+    | builtin-fn:show  punctuation:(  string:"(making text)"  punctuation:)
+ 50 |         <- "loud {.n}" at r
+    | keyword:<-  string:"loud {  punctuation:.  field:n  string:}"  keyword:at  region:r
+ 51 |     fi
+    | keyword:fi
+ 52 | fi
+    | keyword:fi
+ 54 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 55 |     region r
+    | keyword:region  region:r
+ 56 |     bind card = Card { name: "Ada", wins: 3 }
+    | keyword:bind  variable:card  operator:=  type:Card  punctuation:{  field:name  punctuation::  string:"Ada"  punctuation:,  field:wins  punctuation::  number:3  punctuation:}
+ 57 |     bind light = Light.Green(30)
+    | keyword:bind  variable:light  operator:=  type:Light  punctuation:.  variant:Green  punctuation:(  number:30  punctuation:)
+ 59 |     # A value of its own, and values around it.
+    | comment:# A value of its own, and values around it.
+ 60 |     show(card)
+    | builtin-fn:show  punctuation:(  variable:card  punctuation:)
+ 61 |     show(light)
+    | builtin-fn:show  punctuation:(  variable:light  punctuation:)
+ 62 |     show("at ", card, " under ", light)
+    | builtin-fn:show  punctuation:(  string:"at "  punctuation:,  variable:card  punctuation:,  string:" under "  punctuation:,  variable:light  punctuation:)
+ 63 |     show(Light.Red)
+    | builtin-fn:show  punctuation:(  type:Light  punctuation:.  variant:Red  punctuation:)
+ 65 |     # Several values with their own `str` share the line's region.
+    | comment:# Several values with their own `str` share the line's region.
+ 66 |     show(card, " and ", Card { name: "Bob", wins: 1 })
+    | builtin-fn:show  punctuation:(  variable:card  punctuation:,  string:" and "  punctuation:,  type:Card  punctuation:{  field:name  punctuation::  string:"Bob"  punctuation:,  field:wins  punctuation::  number:1  punctuation:}  punctuation:)
+ 68 |     # A method of the shape itself, which shows the value it is called on.
+    | comment:# A method of the shape itself, which shows the value it is called on.
+ 69 |     card.describe()
+    | variable:card  punctuation:.  method:describe  punctuation:(  punctuation:)
+ 71 |     # Where the value comes from doesn't matter: a pointer it points to, a
+    | comment:# Where the value comes from doesn't matter: a pointer it points to, a
+ 72 |     # field, an item of a slice, an item of a tuple, a call's result.
+    | comment:# field, an item of a slice, an item of a tuple, a call's result.
+ 73 |     bind pointer = new Card(Card { name: "Cleo", wins: 7 }) at r
+    | keyword:bind  variable:pointer  operator:=  keyword:new  type:Card  punctuation:(  type:Card  punctuation:{  field:name  punctuation::  string:"Cleo"  punctuation:,  field:wins  punctuation::  number:7  punctuation:}  punctuation:)  keyword:at  region:r
+ 74 |     show("pointed ", pointer^)
+    | builtin-fn:show  punctuation:(  string:"pointed "  punctuation:,  variable:pointer  operator:^  punctuation:)
+ 75 |     hold cards = new [Card]() at r
+    | keyword:hold  variable:cards  operator:=  keyword:new  punctuation:[  type:Card  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 76 |     cards.add(card.copy() at r)
+    | variable:cards  punctuation:.  field:add  punctuation:(  variable:card  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 77 |     show("item ", cards[0])
+    | builtin-fn:show  punctuation:(  string:"item "  punctuation:,  variable:cards  punctuation:[  number:0  punctuation:]  punctuation:)
+ 78 |     bind pair = (card, 2)
+    | keyword:bind  variable:pair  operator:=  punctuation:(  variable:card  punctuation:,  number:2  punctuation:)
+ 79 |     show("in a tuple ", pair.0, " with ", pair.1)
+    | builtin-fn:show  punctuation:(  string:"in a tuple "  punctuation:,  variable:pair  punctuation:.  field:0  punctuation:,  string:" with "  punctuation:,  variable:pair  punctuation:.  field:1  punctuation:)
+ 80 |     show("made ", best(cards, r))
+    | builtin-fn:show  punctuation:(  string:"made "  punctuation:,  task:best  punctuation:(  variable:cards  punctuation:,  region:r  punctuation:)  punctuation:)
+ 82 |     # A shape made for a type, once for each.
+    | comment:# A shape made for a type, once for each.
+ 83 |     show(Box<int> { item: 7 }, " ", Box<text> { item: "hi" })
+    | builtin-fn:show  punctuation:(  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:item  punctuation::  number:7  punctuation:}  punctuation:,  string:" "  punctuation:,  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:{  field:item  punctuation::  string:"hi"  punctuation:}  punctuation:)
+ 84 |     show(Box<bool> { item: true })
+    | builtin-fn:show  punctuation:(  type:Box  punctuation:<  type-builtin:bool  punctuation:>  punctuation:{  field:item  punctuation::  keyword:true  punctuation:}  punctuation:)
+ 86 |     # Text the `str` builds lasts as long as writing the line takes.
+    | comment:# Text the `str` builds lasts as long as writing the line takes.
+ 87 |     show("before ", Loud { n: 1 }, " after")
+    | builtin-fn:show  punctuation:(  string:"before "  punctuation:,  type:Loud  punctuation:{  field:n  punctuation::  number:1  punctuation:}  punctuation:,  string:" after"  punctuation:)
+ 89 |     # A plan B of a value may show one of its own: the line inside it ends
+    | comment:# A plan B of a value may show one of its own: the line inside it ends
+ 90 |     # while the line around it is still being written, and each has its own
+    | comment:# while the line around it is still being written, and each has its own
+ 91 |     # region.
+    | comment:# region.
+ 92 |     bind missing: maybe int = none
+    | keyword:bind  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 93 |     show("plan B ", missing { show("inner ", card) 9 })
+    | builtin-fn:show  punctuation:(  string:"plan B "  punctuation:,  variable:missing  punctuation:{  builtin-fn:show  punctuation:(  string:"inner "  punctuation:,  variable:card  punctuation:)  number:9  punctuation:}  punctuation:)
+ 95 |     # A task that sends from inside a value of a `show` leaves its line
+    | comment:# A task that sends from inside a value of a `show` leaves its line
+ 96 |     # unfinished, and the next thing written goes on with it.
+    | comment:# unfinished, and the next thing written goes on with it.
+ 97 |     bind gave = give_up(cards)
+    | keyword:bind  variable:gave  operator:=  task:give_up  punctuation:(  variable:cards  punctuation:)
+ 98 |     show(" -> ", gave)
+    | builtin-fn:show  punctuation:(  string:" -> "  punctuation:,  variable:gave  punctuation:)
+100 |     # Every pass of a loop frees the region of its own line.
+    | comment:# Every pass of a loop frees the region of its own line.
+101 |     hold i = 0
+    | keyword:hold  variable:i  operator:=  number:0
+102 |     loop i < 3
+    | keyword:loop  variable:i  operator:<  number:3
+103 |         show("pass ", i, ": ", Card { name: "x", wins: i })
+    | builtin-fn:show  punctuation:(  string:"pass "  punctuation:,  variable:i  punctuation:,  string:": "  punctuation:,  type:Card  punctuation:{  field:name  punctuation::  string:"x"  punctuation:,  field:wins  punctuation::  variable:i  punctuation:}  punctuation:)
+104 |         i = i + 1
+    | variable:i  operator:=  variable:i  operator:+  number:1
+105 |     fi
+    | keyword:fi
+106 | fi
+    | keyword:fi
+108 | task best(cards: [Card@r]@r, r: region) -> Card@r
+    | keyword:task  task:best  punctuation:(  parameter:cards  punctuation::  punctuation:[  type:Card  operator:@  region:r  punctuation:]  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type:Card  operator:@  region:r
+109 |     <- cards[0]
+    | keyword:<-  parameter:cards  punctuation:[  number:0  punctuation:]
+110 | fi
+    | keyword:fi
+112 | # A `<-` inside one of the values leaves the task before the line ends. The
+    | comment:# A `<-` inside one of the values leaves the task before the line ends. The
+113 | # region of the line is freed on the way out, and the line stays unfinished, so
+    | comment:# region of the line is freed on the way out, and the line stays unfinished, so
+114 | # what is written next goes on with it.
+    | comment:# what is written next goes on with it.
+115 | task give_up(cards: [Card@r]@r) -> int
+    | keyword:task  task:give_up  punctuation:(  parameter:cards  punctuation::  punctuation:[  type:Card  operator:@  region:r  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+116 |     bind missing: maybe int = none
+    | keyword:bind  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+117 |     show("gave up on ", cards[0], missing { <- 0 })
+    | builtin-fn:show  punctuation:(  string:"gave up on "  punctuation:,  parameter:cards  punctuation:[  number:0  punctuation:]  punctuation:,  variable:missing  punctuation:{  keyword:<-  number:0  punctuation:}  punctuation:)
+118 |     <- 1
+    | keyword:<-  number:1
+119 | fi
+    | keyword:fi

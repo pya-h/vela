@@ -1,4 +1,4 @@
-# error: 6:22: show expects int, float, bool, or text; this has no value
+# error: 6:22: show expects int, float, bool, text, or a shape or kind with its own 'str'; this has no value
 task nothing()
 fi
 

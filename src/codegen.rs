@@ -90,6 +90,10 @@ pub struct Generator {
     /// Whether the task being generated is one of them, so that the value it is
     /// called on is read through its pointer.
     alters: bool,
+    /// The C names of the regions the `show` calls being generated make for the
+    /// values written by their own `str`, innermost last (see `gen_show`). A
+    /// `show` nests inside another only through a plan B of one of its values.
+    shown: Vec<String>,
 }
 
 impl Default for Generator {
@@ -106,6 +110,7 @@ impl Default for Generator {
             task: String::new(),
             altering: HashSet::new(),
             alters: false,
+            shown: Vec::new(),
         }
     }
 }
@@ -229,6 +234,16 @@ impl Generator {
         let n = self.temp_counter;
         self.temp_counter += 1;
         format!("vela__{}__{}", prefix, n)
+    }
+
+    /// A name for the region a `show` makes for its line (see `gen_show`). It
+    /// goes where the regions a block declares go, and those are written through
+    /// `c_ident`, which leaves this name as it is: no Vela name holds `__`, so
+    /// no region of a program is called this.
+    fn shown_region(&mut self) -> String {
+        let n = self.temp_counter;
+        self.temp_counter += 1;
+        format!("shown__{}", n)
     }
 
     fn gen_shape(&mut self, s: &ShapeDef) {
@@ -1245,6 +1260,14 @@ impl Generator {
             ExprKind::TextLit(s) => Ok(format!("VELA__RT__TEXT(\"{}\")", escape_c_string(s))),
             ExprKind::NoneLit => Ok("NULL".to_string()),
             ExprKind::Var(name) if self.alters && name == THIS => Ok(format!("(*{})", c_ident(name))),
+            // The region the `show` being generated makes for the values written
+            // by their own `str`, which has a name of its own in C (see
+            // `gen_show`), so that one `show` inside another keeps its own.
+            ExprKind::Var(name) if name == SHOWN => self
+                .shown
+                .last()
+                .cloned()
+                .ok_or_else(|| Error::internal_at(e.span, "the region of a 'show' read outside one")),
             ExprKind::Var(name) => Ok(c_ident(name)),
             ExprKind::Field(base, field) => self.gen_field(base, field),
             ExprKind::Index(base, index) => self.gen_index(e, base, index, None),
@@ -1427,9 +1450,40 @@ impl Generator {
     /// right. Every value but the last is written without ending the line,
     /// which the last one does, so `show` of one value is the one call it
     /// always was; `show()` is the end of a line alone.
+    ///
+    /// A value written by its own `str` makes text, which needs a region: the
+    /// line gets one of its own, freed once it ends, so the text lasts exactly
+    /// as long as writing it takes (see `check::show_with_str`). Every value is
+    /// written as a statement, so the free comes after the last of them.
     fn gen_show(&mut self, e: &Expr, args: &[Expr]) -> Result<String> {
+        let shown = args.iter().any(|arg| expr_reads(arg, SHOWN)).then(|| self.shown_region());
+        if let Some(region) = &shown {
+            self.w.line(&format!("vela__rt__region {}[1] = {{ VELA__RT__REGION_EMPTY }};", c_ident(region)));
+            self.shown.push(region.clone());
+            // A `<-` inside one of the values leaves the task before the line
+            // ends, and frees every region open then, this one with them, so it
+            // counts as declared by the block until the line is written.
+            if let Some(block) = self.regions.last_mut() {
+                block.push(region.clone());
+            }
+        }
+        let written = self.gen_shown(e, args);
+        if let Some(region) = &shown {
+            self.shown.pop();
+            if let Some(block) = self.regions.last_mut() {
+                block.pop();
+            }
+            self.w.line(&format!("vela__rt__region_free({});", c_ident(region)));
+        }
+        written?;
+        Ok(String::new())
+    }
+
+    /// The values of a `show`, each written where it is read (see `gen_show`).
+    fn gen_shown(&mut self, e: &Expr, args: &[Expr]) -> Result<()> {
         let Some((last, before)) = args.split_last() else {
-            return Ok("vela__rt__show_line()".to_string());
+            self.w.line("vela__rt__show_line();");
+            return Ok(());
         };
         for arg in before {
             let helper = self.shown_helper(e, arg, false)?;
@@ -1438,7 +1492,8 @@ impl Generator {
         }
         let helper = self.shown_helper(e, last, true)?;
         let value = self.gen_expr(last)?;
-        Ok(format!("{}({})", helper, value))
+        self.w.line(&format!("{}({});", helper, value));
+        Ok(())
     }
 
     /// The helper that writes the value `arg` given to `show`, ending the line

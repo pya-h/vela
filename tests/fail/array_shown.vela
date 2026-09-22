@@ -1,4 +1,4 @@
-# error: 3:10: show expects int, float, bool, or text; show its items one at a time, as in 'each v in xs'
+# error: 3:10: show expects int, float, bool, text, or a shape or kind with its own 'str'; show its items one at a time, as in 'each v in xs'
 task main()
     show([1, 2])
 fi

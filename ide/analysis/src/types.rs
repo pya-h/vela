@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::Path;
 
-use vela::ast::{Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, ShapeDef, Span, Stmt, StmtKind, THIS, Target, Type, method_parts};
+use vela::ast::{Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, SHOWN, ShapeDef, Span, Stmt, StmtKind, THIS, Target, Type, method_parts};
 use vela::check::{in_region, regional_types, textual_types};
 use vela::driver;
 use vela::error::Error;
@@ -293,6 +293,17 @@ impl Checked {
         // A wrapped value keeps its own type at its position.
         if let ExprKind::Wrap(inner) = &e.kind {
             return self.expr(inner, kinds);
+        }
+        // So does a value given to `show` that the checker turned into the call
+        // of its own `str` (see `check::show_with_str`): the call stands where
+        // the value is written, and the editor asks about the value there, not
+        // about the text it becomes. No program can name that region, so no
+        // call a program writes looks like this one.
+        if let ExprKind::Call { args, .. } = &e.kind
+            && let [value, region] = args.as_slice()
+            && matches!(&region.kind, ExprKind::Var(name) if name == SHOWN)
+        {
+            return self.expr(value, kinds);
         }
         if let Some(ty) = &e.ty {
             self.exprs.entry(pos(e.span)).or_insert_with(|| ty.clone());

@@ -9,7 +9,8 @@ kind Shape
     Dot
 
     # A method named `str` says how the value becomes text. It makes new text,
-    # so it takes the region the text goes in, and `"{shape}"` calls it.
+    # so it takes the region the text goes in; `show(shape)` calls it, in a
+    # region of its own, and so does `"{shape}"`.
     str(r: region) -> text@r
         match .this
         case Circle radius
@@ -45,19 +46,16 @@ kind Shape
 fi
 
 task main()
-    # The text the shapes describe themselves with goes here.
-    region said
-
     bind c = Circle(5.0)
-    show("{c} covers {c.area()}" at said)
+    show(c, " covers ", c.area())
 
     # Only a `hold` value can change.
     hold rect = Rectangle(3.0, 4.0)
     rect.grow()
-    show("{rect} covers {rect.area()}" at said)
+    show(rect, " covers ", rect.area())
 
     hold d = Dot
-    show(d.str() at said)
+    show(d)
     d.grow()
-    show(text(d) at said)
+    show(d)
 fi

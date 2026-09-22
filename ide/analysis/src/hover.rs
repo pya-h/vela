@@ -79,8 +79,8 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
             "Shows the prompt, then reads one line of input into region r (also written scan(prompt)@r), without its line break. Gives none when the input has ended.".to_string(),
         ),
         (TokenClass::BuiltinFn, _) => (
-            format!("task {}(value: int | float | bool | text | maybe, …)", text),
-            "Writes each value, with nothing between them, then ends the line: show(\"n = \", n) prints n = 5. A maybe writes its value or none, show() writes an empty line, and the values are written left to right.".to_string(),
+            format!("task {}(value: int | float | bool | text | maybe | anything with str, …)", text),
+            "Writes each value, with nothing between them, then ends the line: show(\"n = \", n) prints n = 5. A maybe writes its value or none, a shape or kind with a method str of its own is written by it in a region show makes for the line, show() writes an empty line, and the values are written left to right.".to_string(),
         ),
         // `.this`: the value the method around it is called on.
         (TokenClass::Keyword, _) if text == vela::ast::THIS_WORD => {

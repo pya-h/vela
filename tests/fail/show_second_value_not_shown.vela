@@ -1,4 +1,4 @@
-# error: 5:21: show expects int, float, bool, or text; show its items one at a time, as in 'each v in xs'
+# error: 5:21: show expects int, float, bool, text, or a shape or kind with its own 'str'; show its items one at a time, as in 'each v in xs'
 task main()
     region r
     bind xs = new [int]() at r

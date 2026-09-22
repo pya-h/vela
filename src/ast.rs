@@ -162,6 +162,11 @@ pub const THIS_WORD: &str = "this";
 /// it reads as the program writes it.
 pub const THIS: &str = ".this";
 
+/// The name of the region a `show` makes for the values it writes with their own
+/// `str`, freed once the line ends (see `codegen::gen_show`). As `.this` is, it
+/// holds a `.`, which no Vela name does, so no program can name it or shadow it.
+pub const SHOWN: &str = ".shown";
+
 /// The name of the task a method becomes: `Counter__on__step` for the method
 /// `step` of `Counter`. No Vela name holds `__`, so it can be no declaration of
 /// a program, and a module's path stays in front of it

@@ -549,20 +549,34 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         <code>show</code> takes any number of values and writes them one after another, with nothing between them,
         then ends the line: <code>show("n = ", n)</code> prints <code>n = 5</code>, and any space between the values is
         one you write. Each value is an <code>int</code>, a <code>float</code>, a <code>bool</code>, or
-        <code>text</code>, or a <code>maybe</code> of one, which writes its value or <code>none</code>.
+        <code>text</code>, or a <code>maybe</code> of one, which writes its value or <code>none</code>. A shape or kind
+        with a <a href="#str">method <code>str</code></a> of its own is a value too: <code>show(card)</code> writes what
+        <code>card.str()</code> gives. The text that takes goes in a region <code>show</code> makes for the line and
+        frees once the line ends, so printing a value of your own names no region at all; a <code>maybe</code> of such a
+        shape or kind has no value to call <code>str</code> on until it is opened, so it is an error.
         <code>show()</code> writes an empty line. The values are written, and anything they ask for happens, left to
         right, so <code>show("a:", f(), " b:", g())</code> calls <code>f</code> before <code>g</code> however the C
         compiler orders a call's arguments (see <a href="#limits">the limits</a>). A sentence with values in the middle
         of it reads better as <a href="#interpolation">text holding values</a>, which keeps the text to use again;
         <code>show</code> is for printing it once.
       </p>
-      <pre><span class="keyword">task</span> main()
+      <pre><span class="keyword">shape</span> Card
+    name: text
+    wins: int
+    str(r: <span class="keyword">region</span>) -&gt; text@r
+        <span class="keyword">&lt;-</span> <span class="string">"{.name} ({.wins})"</span> <span class="keyword">at</span> r
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
     <span class="keyword">bind</span> n = <span class="number">5</span>
     show(<span class="string">"n = "</span>, n)                      <span class="comment"># n = 5</span>
     show(n, <span class="string">" and "</span>, n * <span class="number">2</span>, <span class="string">"!"</span>)        <span class="comment"># 5 and 10!</span>
     show()                                <span class="comment"># an empty line</span>
     <span class="keyword">bind</span> missing: <span class="keyword">maybe</span> int = <span class="keyword">none</span>
     show(<span class="string">"missing: "</span>, missing)            <span class="comment"># missing: none</span>
+    <span class="keyword">bind</span> card = Card { name: <span class="string">"Ada"</span>, wins: <span class="number">3</span> }
+    show(<span class="string">"top: "</span>, card)                   <span class="comment"># top: Ada (3), from Card's str</span>
 <span class="keyword">fi</span></pre>
       <p id="text-parts">
         <code>t[a..b]</code> is a part of text: its bytes from <code>a</code> up to, but not including, <code>b</code>. A part
@@ -668,7 +682,8 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
         <code>x.str()@r</code>, or be given in the parentheses, <code>x.str(r)</code>, and <code>text(x) at r</code> (or
         <code>text(x)@r</code>) is the same, named by the type the value becomes. Numbers, bools, and text have
         <code>str</code> built in; text turned into text is a copy of it in <code>r</code>. A shape or a kind gives its own with
-        a method written <code>str(r: region) -&gt; text@r</code>, and every one of these forms calls it. A value without
+        a method written <code>str(r: region) -&gt; text@r</code>, and every one of these forms calls it, as
+        <a href="#show"><code>show(x)</code></a> does when it writes the value. A value without
         <code>str</code> (a slice, a <code>maybe</code>, a pointer, a shape without the method) is an error saying what
         can be turned into text, and so is a <code>str</code> without a region. <code>+</code> never turns a value into text
         by itself: <code>"n = " + 5 at r</code> is an error that says to turn it into text first.
@@ -687,6 +702,7 @@ show(5.5 % 2.0)   <span class="comment"># 1.5</span></pre>
     show(text(<span class="number">2.5</span>) <span class="keyword">at</span> r)                         <span class="comment"># 2.5, as show writes it</span>
     <span class="keyword">bind</span> p = Point { x: <span class="number">3</span>, y: <span class="number">-4</span> }
     show(<span class="string">"p = "</span> + p.str(r) <span class="keyword">at</span> r)                  <span class="comment"># p = (3, -4)</span>
+    show(<span class="string">"p = "</span>, p)                            <span class="comment"># the same line, with no region to name</span>
     show(<span class="string">"n = "</span> + <span class="number">5</span> <span class="keyword">at</span> r)                        <span class="comment"># error: '+' joins text, but this value is int; turn it into text first …</span>
 <span class="keyword">fi</span></pre>
       <p id="interpolation">
@@ -875,7 +891,7 @@ fixed.step()               <span class="comment"># error: 'Counter.step' changes
     Green
     Blinking(times: int)
 
-    shown() -&gt; text
+    label() -&gt; text
         <span class="keyword">match</span> .this
         <span class="keyword">case</span> Red
             <span class="keyword">&lt;-</span> <span class="string">"red"</span>
@@ -897,7 +913,7 @@ fixed.step()               <span class="comment"># error: 'Counter.step' changes
 
     tell(prefix: text) -&gt; unit
         show(prefix)
-        show(.shown())
+        show(.label())
     <span class="keyword">fi</span>
 <span class="keyword">fi</span>
 
@@ -907,7 +923,7 @@ light.tell(<span class="string">"now:"</span>)         <span class="comment"># n
       <p>
         Inside a kind, a variant's values and a method's parameters are written alike: <code>Blinking(times: int)</code>
         and <code>tell(prefix: text)</code>. A member is a method when it says <code>alters</code>, names what it sends
-        (<code>-&gt; text</code>), takes nothing (<code>shown()</code>), or comes after another method. That leaves one
+        (<code>-&gt; text</code>), takes nothing (<code>label()</code>), or comes after another method. That leaves one
         case, a kind's first method that takes values and sends nothing, which writes <code>-&gt; unit</code>, as
         <code>tell</code> would if it came first; the error for a method read as a variant says so.
       </p>
@@ -1068,7 +1084,9 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
         and show its values too. <code>&amp;</code> joins words (<code>&lt;T: same &amp; shown&gt;</code>), which is read
         today but never needed yet: every pair of these four is an error saying which one to keep, since each already
         means the wider ones. It is there for words that may come. No word asks a type for arithmetic: a task that adds
-        its values takes numbers.
+        its values takes numbers. <code>shown</code> allows the types <code>show</code> writes by itself; a shape or kind
+        with its own <a href="#str"><code>str</code></a> can be shown, but doesn't fit <code>shown</code> yet, so a task
+        that prints one takes it by its own type.
       </p>
       <pre><span class="keyword">task</span> first&lt;T&gt;(xs: [T]@r) -&gt; <span class="keyword">maybe</span> T
     <span class="keyword">each</span> v <span class="keyword">in</span> xs
@@ -1199,7 +1217,7 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
           its own (<code>^Grow&lt;Grow&lt;T&gt;&gt;</code>) would need an endless line of shapes, so that is an error
           after 24 of them, as is a shape containing itself by value.</li>
         <li><strong>Words.</strong> The same four words, meaning the same things:
-          <code>shape Shown&lt;T: shown&gt;</code> may only be given a type that <code>show</code> takes. A task
+          <code>shape Shown&lt;T: shown&gt;</code> may only be given a type that word allows. A task
           passing its own type on must ask for at least as much: a <code>task tell&lt;T&gt;(b: Shown&lt;T&gt;@r)</code>
           is an error that says to require <code>shown</code> too.</li>
       </ul>
@@ -2018,7 +2036,10 @@ show(area(square))             <span class="comment"># error: unknown task 'area
           inside its shape or kind, never in another module (see <a href="#methods">Methods</a> and
           <a href="future.html#methods-later">the room left to grow</a>).</li>
         <li>There are no packages to share modules between programs (see <a href="#modules">Modules</a>).</li>
-        <li><code>show</code> prints floats with 6 significant digits.</li>
+        <li><code>show</code> prints floats with 6 significant digits. It writes a <code>maybe</code> of a number, a
+          bool, or text as its value or <code>none</code>, but a <code>maybe</code> of a shape or kind with its own
+          <code>str</code> has to be opened first, as in <code>when m is {value}</code>, since that method needs a
+          value to run on.</li>
         <li>The order in which a call's arguments, the parts of a join, the values in text, or an operator's two
           sides are evaluated isn't defined, which
           matters only when they call tasks that print, or when more than one of them would stop the program

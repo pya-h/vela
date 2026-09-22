@@ -68,6 +68,27 @@ fn show_with_a_type_it_cannot_write() {
 }
 
 #[test]
+fn the_region_of_a_show_read_outside_one() {
+    // A value with its own `str` becomes the call of that method in the region
+    // `show` makes for its line; read that call on its own, where there is no
+    // such region, as a checker bug would.
+    let mut items = parse(
+        "shape Point\n    x: int\n\n    str(r: region) -> text@r\n        <- \"{.x}\" at r\n    fi\nfi\n\ntask main()\n    show(Point { x: 1 })\nfi\n",
+    );
+    Checker::new().check_file(&mut items).unwrap();
+    let Some(Item::Task(main)) = items.iter_mut().find(|item| matches!(item, Item::Task(task) if task.name == "main")) else {
+        panic!("expected task main")
+    };
+    let StmtKind::Expr(call) = &mut main.body[0].kind else { panic!("expected the call of show") };
+    let ExprKind::Call { args, .. } = &mut call.kind else { panic!("expected a call, got {:?}", call.kind) };
+    *call = args[0].clone();
+
+    let err = Generator::new().generate(&items).unwrap_err();
+    assert_eq!(err.span, None);
+    assert_eq!(err.message, "internal compiler error: the region of a 'show' read outside one (at 10:10)");
+}
+
+#[test]
 fn variant_with_wrong_argument_count() {
     // The checker resolves `Circle(1.0)` into a constructor; give that node an
     // extra argument afterwards, as a checker bug would.

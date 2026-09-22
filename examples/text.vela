@@ -10,7 +10,8 @@ shape Card
 
     # A shape or a kind says how its values become text with a method named
     # `str`, which takes the region the text goes in. Every way of asking for
-    # text calls it: `card.str() at r`, `text(card) at r`, and `"{card}"`.
+    # text calls it: `card.str() at r`, `text(card) at r`, and `"{card}"`, and
+    # so does `show(card)`, which needs no region of ours.
     str(r: region) -> text@r
         <- "{.name} ({.wins} wins)" at r
     fi
@@ -73,6 +74,7 @@ task main()
     show(text(2.5) at r)
     bind card = Card { name: "Ada", wins: 3 }
     show(card.str() at r)
+    show(card)
     show("{card} has {card.wins * 2} points" at r)
     show("\{name\} is written {name.len} bytes long" at r)
 

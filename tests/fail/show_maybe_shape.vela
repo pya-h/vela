@@ -1,0 +1,13 @@
+# error: 12:10: show expects int, float, bool, text, or a shape or kind with its own 'str'; a shape or kind is written by its own 'str', which needs a value, so open the maybe Point first, as in 'when m is {value}'
+shape Point
+    x: int
+
+    str(r: region) -> text@r
+        <- "{.x}" at r
+    fi
+fi
+
+task main()
+    bind here: maybe Point = Point { x: 1 }
+    show(here)
+fi

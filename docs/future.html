@@ -408,8 +408,9 @@
             <code>t.len</code> is a field, and a <code>\0</code> no longer ends text. So are parts,
             <code>t[a..b]</code>, which never cut a character, <code>&lt;</code> on text, and joining,
             <code>a + b at r</code>, values as text, <code>n.str() at r</code> or <code>text(n) at r</code>, and text
-            holding values, <code>"{name} is {age}" at r</code>. <a href="vela.html#text-parts">The language guide
-            describes them</a>.</p>
+            holding values, <code>"{name} is {age}" at r</code>. A shape or kind writes its values with a
+            <code>str</code> of its own, which <code>show(card)</code> calls in a region it makes for the line.
+            <a href="vela.html#text-parts">The language guide describes them</a>.</p>
         </div>
         <div class="card">
           <h3>Regions <span class="badge b-done">Done</span></h3>
@@ -1632,13 +1633,18 @@ show(c.total())</pre>
           <code>Point.origin()</code>. It would give Vela constructors without a new concept, and a home for the
           <code>Kind.of(text)</code> kind of task. It needs a rule for the name, since <code>Point.origin</code> is
           already how a kind's variant is written.</li>
-        <li id="methods-shown-same"><strong>Letting a shape answer <code>show</code> and <code>==</code>:</strong> today
-          only builtin types can be shown or compared, so <code>show(p)</code> and a <code>T: shown</code> task are
-          closed to every shape and kind. A method of the right name and header would open them: a
-          <code>shown() -&gt; text@this</code> makes <code>show(p)</code> work and makes the type fit
-          <code>&lt;T: shown&gt;</code>, and a <code>same(other: This) -&gt; bool</code> does the same for
-          <code>==</code>. It is also the smallest step towards interfaces, which Vela has no design for yet, since it
-          is the same question asked of one method at a time: does this type have a member of this name and header?</li>
+        <li id="methods-shown-same"><strong>Letting a shape answer <code>==</code>, and fit <code>T: shown</code>:</strong>
+          <code>show(p)</code> is done: a method named
+          <a href="vela.html#str"><code>str</code></a> says how a shape or kind is written, and
+          <a href="vela.html#show"><code>show</code></a> calls it in a region it makes for the line. Two halves are
+          left. <code>==</code> has no method behind it, so a <code>same(other: This) -&gt; bool</code> would open it as
+          <code>str</code> opened printing. And a type with <code>str</code> still doesn't fit
+          <code>&lt;T: shown&gt;</code>: the body of a declaration that takes types is checked once, before the types it
+          is given are known, so <code>show(x)</code> in it can't be settled into the call of a method that the type
+          given would name. Letting it would mean checking such a body again for every set of types, which is a change to
+          how declarations that take types are made, not to <code>show</code>. Both are also the smallest step towards
+          interfaces, which Vela has no design for yet, since each is the same question asked of one method at a time:
+          does this type have a member of this name and header?</li>
         <li id="methods-elsewhere"><strong>Methods from another module:</strong> a shape's block holds every method it
           has, so a module can't add one to a type it includes. That keeps a type honest — everything it does is in one
           place — at the cost of the "extension method" that makes a foreign type fit local code. If Vela ever wants

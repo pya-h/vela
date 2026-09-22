@@ -126,8 +126,8 @@
     | keyword:fi
  75 | fi
     | keyword:fi
- 77 | task report(result: unit or Refusal, r: region)
-    | keyword:task  task:report  punctuation:(  parameter:result  punctuation::  type-builtin:unit  keyword:or  type:Refusal  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)
+ 77 | task report(result: unit or Refusal)
+    | keyword:task  task:report  punctuation:(  parameter:result  punctuation::  type-builtin:unit  keyword:or  type:Refusal  punctuation:)
  78 |     match result
     | keyword:match  parameter:result
  79 |     case {_}
@@ -136,55 +136,53 @@
     | builtin-fn:show  punctuation:(  string:"done"  punctuation:)
  81 |     case fail why
     | keyword:case  keyword:fail  variable:why
- 82 |         show("refused: {why}" at r)
-    | builtin-fn:show  punctuation:(  string:"refused: {  variable:why  string:}"  keyword:at  region:r  punctuation:)
- 83 |     fi
+ 82 |         # `show` calls a kind's own `str` for it, in a region of its own.
+    | comment:# `show` calls a kind's own `str` for it, in a region of its own.
+ 83 |         show("refused: ", why)
+    | builtin-fn:show  punctuation:(  string:"refused: "  punctuation:,  variable:why  punctuation:)
+ 84 |     fi
     | keyword:fi
- 84 | fi
+ 85 | fi
     | keyword:fi
- 86 | task main()
+ 87 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 87 |     # A kind's own text goes here: `show` can't call `str` for us yet.
-    | comment:# A kind's own text goes here: `show` can't call `str` for us yet.
- 88 |     region said
-    | keyword:region  region:said
- 90 |     hold ada = Account { owner: "Ada", balance: 0, open: true }
+ 88 |     hold ada = Account { owner: "Ada", balance: 0, open: true }
     | keyword:hold  variable:ada  operator:=  type:Account  punctuation:{  field:owner  punctuation::  string:"Ada"  punctuation:,  field:balance  punctuation::  number:0  punctuation:,  field:open  punctuation::  keyword:true  punctuation:}
- 91 |     ada.deposit(100)
+ 89 |     ada.deposit(100)
     | variable:ada  punctuation:.  method:deposit  punctuation:(  number:100  punctuation:)
- 92 |     report(ada.withdraw(30), said)
-    | task:report  punctuation:(  variable:ada  punctuation:.  method:withdraw  punctuation:(  number:30  punctuation:)  punctuation:,  region:said  punctuation:)
- 93 |     report(ada.withdraw(500), said)
-    | task:report  punctuation:(  variable:ada  punctuation:.  method:withdraw  punctuation:(  number:500  punctuation:)  punctuation:,  region:said  punctuation:)
- 94 |     show(ada.balanceOf())
+ 90 |     report(ada.withdraw(30))
+    | task:report  punctuation:(  variable:ada  punctuation:.  method:withdraw  punctuation:(  number:30  punctuation:)  punctuation:)
+ 91 |     report(ada.withdraw(500))
+    | task:report  punctuation:(  variable:ada  punctuation:.  method:withdraw  punctuation:(  number:500  punctuation:)  punctuation:)
+ 92 |     show(ada.balanceOf())
     | builtin-fn:show  punctuation:(  variable:ada  punctuation:.  method:balanceOf  punctuation:(  punctuation:)  punctuation:)
- 95 |     show(ada.str() at said)
-    | builtin-fn:show  punctuation:(  variable:ada  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:said  punctuation:)
- 96 |     ada.close()
+ 93 |     show(ada)
+    | builtin-fn:show  punctuation:(  variable:ada  punctuation:)
+ 94 |     ada.close()
     | variable:ada  punctuation:.  method:close  punctuation:(  punctuation:)
- 97 |     report(ada.withdraw(1), said)
-    | task:report  punctuation:(  variable:ada  punctuation:.  method:withdraw  punctuation:(  number:1  punctuation:)  punctuation:,  region:said  punctuation:)
- 99 |     # An item of a slice is a place that can change.
+ 95 |     report(ada.withdraw(1))
+    | task:report  punctuation:(  variable:ada  punctuation:.  method:withdraw  punctuation:(  number:1  punctuation:)  punctuation:)
+ 97 |     # An item of a slice is a place that can change.
     | comment:# An item of a slice is a place that can change.
-100 |     region bank
+ 98 |     region bank
     | keyword:region  region:bank
-101 |     hold accounts = new [Account]() at bank
+ 99 |     hold accounts = new [Account]() at bank
     | keyword:hold  variable:accounts  operator:=  keyword:new  punctuation:[  type:Account  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:bank
-102 |     accounts.add(Account { owner: "Grace", balance: 5, open: true })
+100 |     accounts.add(Account { owner: "Grace", balance: 5, open: true })
     | variable:accounts  punctuation:.  field:add  punctuation:(  type:Account  punctuation:{  field:owner  punctuation::  string:"Grace"  punctuation:,  field:balance  punctuation::  number:5  punctuation:,  field:open  punctuation::  keyword:true  punctuation:}  punctuation:)
-103 |     accounts[0].deposit(10)
+101 |     accounts[0].deposit(10)
     | variable:accounts  punctuation:[  number:0  punctuation:]  punctuation:.  method:deposit  punctuation:(  number:10  punctuation:)
-104 |     show("{accounts[0]}" at said)
-    | builtin-fn:show  punctuation:(  string:"{  variable:accounts  punctuation:[  number:0  punctuation:]  string:}"  keyword:at  region:said  punctuation:)
-106 |     hold best = Best { value: 3 }
+102 |     show(accounts[0])
+    | builtin-fn:show  punctuation:(  variable:accounts  punctuation:[  number:0  punctuation:]  punctuation:)
+104 |     hold best = Best { value: 3 }
     | keyword:hold  variable:best  operator:=  type:Best  punctuation:{  field:value  punctuation::  number:3  punctuation:}
-107 |     each n in [7, 2, 9, 4]
+105 |     each n in [7, 2, 9, 4]
     | keyword:each  variable:n  keyword:in  punctuation:[  number:7  punctuation:,  number:2  punctuation:,  number:9  punctuation:,  number:4  punctuation:]
-108 |         best.offer(n)
+106 |         best.offer(n)
     | variable:best  punctuation:.  method:offer  punctuation:(  variable:n  punctuation:)
-109 |     fi
+107 |     fi
     | keyword:fi
-110 |     show("best: ", best.value)
+108 |     show("best: ", best.value)
     | builtin-fn:show  punctuation:(  string:"best: "  punctuation:,  variable:best  punctuation:.  field:value  punctuation:)
-111 | fi
+109 | fi
     | keyword:fi

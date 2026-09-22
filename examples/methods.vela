@@ -74,34 +74,32 @@ shape Best<T: ordered>
     fi
 fi
 
-task report(result: unit or Refusal, r: region)
+task report(result: unit or Refusal)
     match result
     case {_}
         show("done")
     case fail why
-        show("refused: {why}" at r)
+        # `show` calls a kind's own `str` for it, in a region of its own.
+        show("refused: ", why)
     fi
 fi
 
 task main()
-    # A kind's own text goes here: `show` can't call `str` for us yet.
-    region said
-
     hold ada = Account { owner: "Ada", balance: 0, open: true }
     ada.deposit(100)
-    report(ada.withdraw(30), said)
-    report(ada.withdraw(500), said)
+    report(ada.withdraw(30))
+    report(ada.withdraw(500))
     show(ada.balanceOf())
-    show(ada.str() at said)
+    show(ada)
     ada.close()
-    report(ada.withdraw(1), said)
+    report(ada.withdraw(1))
 
     # An item of a slice is a place that can change.
     region bank
     hold accounts = new [Account]() at bank
     accounts.add(Account { owner: "Grace", balance: 5, open: true })
     accounts[0].deposit(10)
-    show("{accounts[0]}" at said)
+    show(accounts[0])
 
     hold best = Best { value: 3 }
     each n in [7, 2, 9, 4]

@@ -12,8 +12,8 @@
     | variant:Green
   8 |     Amber(seconds: int)
     | variant:Amber  punctuation:(  field:seconds  punctuation::  type-builtin:int  punctuation:)
- 10 |     shown() -> text
-    | method:shown  punctuation:(  punctuation:)  operator:->  type-builtin:text
+ 10 |     label() -> text
+    | method:label  punctuation:(  punctuation:)  operator:->  type-builtin:text
  11 |         match .this
     | keyword:match  punctuation:.  keyword:this
  12 |             case Red
@@ -44,8 +44,8 @@
     | comment:# to tell it from a variant.
  26 |     tell()
     | method:tell  punctuation:(  punctuation:)
- 27 |         show(.shown())
-    | builtin-fn:show  punctuation:(  punctuation:.  method:shown  punctuation:(  punctuation:)  punctuation:)
+ 27 |         show(.label())
+    | builtin-fn:show  punctuation:(  punctuation:.  method:label  punctuation:(  punctuation:)  punctuation:)
  28 |     fi
     | keyword:fi
  30 |     alters flip()
@@ -170,14 +170,14 @@
     | comment:# A method that changes nothing is called on a `bind` too.
  99 |     bind fixed = Green
     | keyword:bind  variable:fixed  operator:=  variant:Green
-100 |     show(fixed.shown())
-    | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  method:shown  punctuation:(  punctuation:)  punctuation:)
+100 |     show(fixed.label())
+    | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  method:label  punctuation:(  punctuation:)  punctuation:)
 101 |     # And on a variant as it is written.
     | comment:# And on a variant as it is written.
-102 |     show(Light.Amber(1).shown())
-    | builtin-fn:show  punctuation:(  type:Light  punctuation:.  variant:Amber  punctuation:(  number:1  punctuation:)  punctuation:.  method:shown  punctuation:(  punctuation:)  punctuation:)
-103 |     show(Light.Red.shown())
-    | builtin-fn:show  punctuation:(  type:Light  punctuation:.  variant:Red  punctuation:.  method:shown  punctuation:(  punctuation:)  punctuation:)
+102 |     show(Light.Amber(1).label())
+    | builtin-fn:show  punctuation:(  type:Light  punctuation:.  variant:Amber  punctuation:(  number:1  punctuation:)  punctuation:.  method:label  punctuation:(  punctuation:)  punctuation:)
+103 |     show(Light.Red.label())
+    | builtin-fn:show  punctuation:(  type:Light  punctuation:.  variant:Red  punctuation:.  method:label  punctuation:(  punctuation:)  punctuation:)
 105 |     region r
     | keyword:region  region:r
 106 |     hold word: Label@r = Word("a word".copy() at r)

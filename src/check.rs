@@ -3034,8 +3034,11 @@ impl Checker {
     }
 
     /// Checks one value given to `show`: a number, a bool, text, a `maybe` of
-    /// one, or a type a declaration takes that is `shown`.
+    /// one, a shape or kind with its own `str`, or a type a declaration takes
+    /// that is `shown`.
     fn check_shown(&mut self, arg: &mut Expr) -> Result<()> {
+        let copies = self.unsettled_copies.len();
+        let types = self.unsettled_types.len();
         let ty = self.check_expr(arg)?;
         let shown = match &ty {
             Type::Maybe(inner) => inner.as_ref(),
@@ -3043,6 +3046,14 @@ impl Checker {
         };
         if matches!(shown, Type::Int | Type::Float | Type::Bool | Type::Text(_)) || self.allows(Need::Shown, shown) {
             return Ok(());
+        }
+        // A shape or kind says how its values are written with its own `str`,
+        // which `show` calls in a region of its own. The value is checked again
+        // as part of that call, as a method call checks it twice.
+        if self.has_own_str(&ty) {
+            self.unsettled_copies.truncate(copies);
+            self.unsettled_types.truncate(types);
+            return self.show_with_str(arg);
         }
         if let Some(untold) = self.untold_param(&ty) {
             return err(arg.span, untold);
@@ -3052,11 +3063,54 @@ impl Checker {
             Type::Ptr(..) => "; to show the value it points to, write 'p^'".to_string(),
             Type::Array(..) | Type::Slice(..) => "; show its items one at a time, as in 'each v in xs'".to_string(),
             Type::Tuple(_) => "; show its items one at a time, as in 'show(t.0)'".to_string(),
+            // A `maybe` of a shape or kind: its `str` needs a value, and there
+            // is none to call it on until the `maybe` is opened.
+            Type::Maybe(inner) if self.has_own_str(inner) => {
+                format!("; a shape or kind is written by its own 'str', which needs a value, so open the {} first, as in 'when m is {{value}}'", ty)
+            }
             Type::Or(..) => extract_hint(&[&ty]),
             Type::Unit => "; this has no value".to_string(),
-            _ => String::new(),
+            _ => self.no_own_str(&ty),
         };
-        err(arg.span, format!("show expects int, float, bool, or text{}", hint))
+        err(arg.span, format!("show expects int, float, bool, text, or a shape or kind with its own 'str'{}", hint))
+    }
+
+    /// Whether values of type `ty` are written by a method `str` of their own.
+    fn has_own_str(&self, ty: &Type) -> bool {
+        self.owner_of(ty).is_some_and(|owner| self.tasks.contains_key(&method_name(&owner, STR)))
+    }
+
+    /// The end of a message about a shape or kind that has no `str` of its own,
+    /// and nothing for any other type.
+    fn no_own_str(&self, ty: &Type) -> String {
+        let Some(owner) = self.owner_of(ty).filter(|owner| self.shapes.contains_key(owner) || self.kinds.contains_key(owner)) else {
+            return String::new();
+        };
+        let what = if self.kinds.contains_key(&owner) { "kind" } else { "shape" };
+        format!(
+            "; {} '{}' has no method 'str', which says how its values are written; give it one, written 'str(r: region) -> text@r'",
+            what,
+            unqualified(&owner)
+        )
+    }
+
+    /// Rewrites a value given to `show` that has its own `str` into the call of
+    /// that method, which writes the value into the region `show` makes for the
+    /// line and frees when it ends (see `codegen::gen_show`).
+    fn show_with_str(&mut self, arg: &mut Expr) -> Result<()> {
+        let span = arg.span;
+        if self.lookup(SHOWN).is_none() {
+            self.define_region(SHOWN, span, true)?;
+        }
+        let value = std::mem::replace(arg, Expr::new(ExprKind::NoneLit, span));
+        arg.kind = ExprKind::MethodCall {
+            value: Box::new(value),
+            name: STR.to_string(),
+            args: vec![Expr::new(ExprKind::Var(SHOWN.to_string()), span)],
+            dotted: None,
+        };
+        self.check_expr(arg)?;
+        Ok(())
     }
 
     /// Checks `a + b at region` or `"n = {n}" at region`, text joined into
@@ -3107,8 +3161,7 @@ impl Checker {
         if matches!(ty, Type::Fail(_)) {
             return "; 'fail' takes only the value right after it, so write 'fail (a + b)@r'".to_string();
         }
-        let has_str = self.owner_of(ty).is_some_and(|owner| self.tasks.contains_key(&method_name(&owner, STR)));
-        if self.has_builtin_str(ty) || has_str {
+        if self.has_builtin_str(ty) || self.has_own_str(ty) {
             return "; turn it into text first, as in 'n.str() at r'".to_string();
         }
         extract_hint(&[ty])

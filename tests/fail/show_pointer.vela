@@ -1,4 +1,4 @@
-# error: 5:10: show expects int, float, bool, or text; to show the value it points to, write 'p^'
+# error: 5:10: show expects int, float, bool, text, or a shape or kind with its own 'str'; to show the value it points to, write 'p^'
 task main()
     region r
     bind p = new int(1) at r

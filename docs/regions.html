@@ -719,6 +719,13 @@ false</pre>
         <code>Person</code> holds text that lasts, <code>Person@r</code> text in <code>r</code>.
       </p>
       <p>
+        One region is made without being written: <a href="vela.html#show"><code>show(card)</code></a> writes a shape or
+        kind with its own <code>str</code>, and that text goes in a region the line gets for itself, freed as soon as the
+        line ends. It is the region a program would have declared around the <code>show</code> and thrown away after it,
+        so printing a value of your own needs no region of yours; a region you declare is still the place for text you
+        keep, pass on, or send back.
+      </p>
+      <p>
         A <a href="vela.html#methods">method</a> of such a shape or kind is called on a value in some region, which its
         header and body name <code>@this</code>. It can send what the value holds there, and take pointers into it, and
         each call works out which region that is from the value. It isn't given the region itself, so it can't allocate
