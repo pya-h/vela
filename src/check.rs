@@ -1301,7 +1301,7 @@ impl Checker {
             Some(info) if info.ty == Type::Region => {
                 if allocating && !info.allocates {
                     if name == THIS_WORD && self.current_method.is_some() {
-                        return err(span, self.cannot_allocate_in_this());
+                        return err(span, self.cannot_allocate_in_this("allocate where the value is kept, and give the method what you made"));
                     }
                     return err(
                         span,
@@ -2971,7 +2971,7 @@ impl Checker {
         match region.as_deref() {
             Some(region) if region != ANY_REGION => match self.lookup(region) {
                 Some(info) if info.ty == Type::Region && !info.allocates && region == THIS_WORD && self.current_method.is_some() => {
-                    err(span, format!("adding to a slice may need more room in its region, and {}", self.cannot_allocate_in_this()))
+                    err(span, format!("adding to a slice may need more room in its region, and {}", self.cannot_allocate_in_this("add to it where the value is kept, outside the method")))
                 }
                 Some(info) if info.ty == Type::Region && !info.allocates => err(
                     span,
@@ -3572,11 +3572,13 @@ impl Checker {
     }
 
     /// Why a method can't allocate in the region the value it is called on lives
-    /// in: nothing gives a method that region, only the type of the value.
-    fn cannot_allocate_in_this(&self) -> String {
+    /// in: nothing gives a method that region, only the type of the value. A
+    /// region it takes is another one, which the value can't point into, so the
+    /// fix, `what_to_do`, is always outside the method.
+    fn cannot_allocate_in_this(&self, what_to_do: &str) -> String {
         format!(
-            "'@{0}' is the region the value this method is called on lives in, which a method isn't given, so it can't allocate there; do it where the value is, or take a region to allocate in, as in 'r: region'",
-            THIS_WORD
+            "'@{0}' is the region the value this method is called on lives in, which a method isn't given, so it can't allocate there, and a region it takes is another one, which the value can't point into; {1}",
+            THIS_WORD, what_to_do
         )
     }
 

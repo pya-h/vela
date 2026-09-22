@@ -185,7 +185,8 @@
 ./examples/hello</pre>
       <p>
         More programs are in <code>examples/</code>: <code>fib.vela</code> (recursion), <code>kinds.vela</code>
-        (kinds and <code>match</code>), <code>todo.vela</code> (a linked list in a region, with <code>maybe</code>
+        (kinds, <code>match</code>, and a kind's methods), <code>methods.vela</code> (a shape's methods, <code>alters</code>,
+        <code>priv</code>, a method that can fail, and one of a shape that takes types), <code>todo.vela</code> (a linked list in a region, with <code>maybe</code>
         pointers, <code>is</code>, and a plan B), <code>errors.vela</code> (<code>T or E</code>, <code>fail</code>, and handling
         errors with <code>match</code>, <code>is</code>, and a plan B), <code>regions.vela</code> (a tree in a region, a region
         per loop pass, and copying a result into a longer-lived region), <code>arrays.vela</code> (arrays, and slices
@@ -218,7 +219,7 @@
         <li><code class="type">region</code> — the type of a task's region parameter, <code>r: region</code></li>
         <li><code class="type">T</code> — a type a task or shape takes, standing for the type each use gives it (see <a href="#generics">Types a declaration takes</a>)</li>
         <li><code class="type">Box&lt;int&gt;</code> — a shape with the types it is given, in the region its values live in when it holds anything there (<code>Box&lt;text&gt;@r</code>)</li>
-        <li>User-defined shapes and kinds</li>
+        <li>User-defined shapes and kinds, with methods of their own (see <a href="#methods">Methods</a>)</li>
       </ul>
     </section>
 
@@ -260,6 +261,8 @@ true false none  fi   maybe is     fail include priv</pre>
         <tr><td><code>value { … }</code></td><td>a plan B: the value inside a <code>maybe</code> or <code>T or E</code>, or else what the block gives</td></tr>
         <tr><td><code>{v}</code>, <code>_</code></td><td>in a <code>case</code> or <code>is</code>: the value inside, and anything (or a value left unnamed); <code>_</code> also drops a result</td></tr>
         <tr><td><code>a.x</code></td><td>a field of a shape value</td></tr>
+        <tr><td><code>a.m(…)</code>, <code>alters m(…)</code></td><td>a call of a method of the value's shape or kind; a method that changes its value (see <a href="#methods">Methods</a>)</td></tr>
+        <tr><td><code>.x</code>, <code>.m(…)</code>, <code>.this</code>, <code>@this</code></td><td>inside a method: a field of the value it is called on, another of its methods, the value itself, and the region it lives in</td></tr>
         <tr><td><code>[T; n]</code>, <code>[T]@r</code></td><td>an array type; a slice type (see <a href="#arrays">Arrays</a> and <a href="#slices">Slices</a>)</td></tr>
         <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task or shape takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
@@ -664,6 +667,125 @@ p.x = 5                    <span class="comment"># error: cannot assign to a fie
         variants are named when only their kind is brought in (see <a href="#modules">Modules</a>). Since
         <code>Light.Red</code> reads like a field, no variable can be named like a kind.
       </p>
+      <p>
+        A kind can have methods too, below its variants, which read the value as <code>.this</code> (see
+        <a href="#methods">Methods</a>).
+      </p>
+
+      <h3 id="methods">Methods</h3>
+      <p>
+        A shape or a kind can have <em>methods</em>: tasks of its own, written inside its block, below every field or
+        variant, with no <code>task</code> before them. A method is called on a value, <code>c.total()</code>, and reads
+        what that value holds with a dot: <code>.count</code> is its field and <code>.cap()</code> another of its
+        methods. A name without a dot still means a variable or a task, so a field and a variable never clash.
+      </p>
+      <pre><span class="keyword">shape</span> Counter
+    label: text
+    count: int
+
+    total() -&gt; int
+        <span class="keyword">&lt;-</span> .count
+    <span class="keyword">fi</span>
+
+    <span class="keyword">alters</span> step()
+        .count = .count + <span class="number">1</span>
+        .cap()
+    <span class="keyword">fi</span>
+
+    <span class="keyword">priv</span> <span class="keyword">alters</span> cap()
+        <span class="keyword">when</span> .count &gt; <span class="number">3</span>
+            .count = <span class="number">3</span>
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">hold</span> c = Counter { label: <span class="string">"clicks"</span>, count: <span class="number">0</span> }
+c.step()
+c.step()
+show(c.total())            <span class="comment"># 2</span></pre>
+      <p>
+        A method that changes the value it is called on says <code>alters</code> before its name; one that assigns a
+        member without it is refused, with the fix named. Only a place that can change may call it: a
+        <code>hold</code> variable, a field or item of one, an item of a slice, or what a pointer points to
+        (<code>p^.step()</code>). The compiler gives the method that place, so the change lands where the caller keeps
+        the value. A <code>bind</code>, a parameter, a result, and a value made on the spot never change:
+      </p>
+      <pre><span class="keyword">bind</span> fixed = Counter { label: <span class="string">"once"</span>, count: <span class="number">1</span> }
+show(fixed.total())        <span class="comment"># fine: total changes nothing</span>
+fixed.step()               <span class="comment"># error: 'Counter.step' changes the value it is called on, so it needs a place</span>
+                           <span class="comment">#   that can change, and 'fixed' never does (declared at 1:6); a value declared</span>
+                           <span class="comment">#   with 'hold' can</span>
+
+<span class="keyword">task</span> bump(c: Counter)
+    c.step()               <span class="comment"># error: ... and 'c' is a parameter, which never does; take a pointer to it,</span>
+<span class="keyword">fi</span>                         <span class="comment">#   as in 'c: ^Counter@r', and call the method on 'c^'</span></pre>
+      <p>
+        The whole value is <code>.this</code>. A kind has no fields, so its methods read <code>.this</code> and take it
+        apart with <code>match</code>, and an <code>alters</code> method moves the value to another variant with
+        <code>.this = Other</code>. (A shape's methods have <code>.this</code> too.)
+      </p>
+      <pre><span class="keyword">kind</span> Light
+    Red
+    Green
+    Blinking(times: int)
+
+    shown() -&gt; text
+        <span class="keyword">match</span> .this
+        <span class="keyword">case</span> Red
+            <span class="keyword">&lt;-</span> <span class="string">"red"</span>
+        <span class="keyword">case</span> Green
+            <span class="keyword">&lt;-</span> <span class="string">"green"</span>
+        <span class="keyword">case</span> Blinking <span class="keyword">_</span>
+            <span class="keyword">&lt;-</span> <span class="string">"blinking"</span>
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+
+    <span class="keyword">alters</span> flip()
+        <span class="keyword">match</span> .this
+        <span class="keyword">case</span> Red
+            .this = Green
+        <span class="keyword">case</span> <span class="keyword">_</span>
+            .this = Red
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+
+    tell(prefix: text) -&gt; unit
+        show(prefix)
+        show(.shown())
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">hold</span> light = Red
+light.flip()
+light.tell(<span class="string">"now:"</span>)         <span class="comment"># now:, then green</span></pre>
+      <p>
+        Inside a kind, a variant's values and a method's parameters are written alike: <code>Blinking(times: int)</code>
+        and <code>tell(prefix: text)</code>. A member is a method when it says <code>alters</code>, names what it sends
+        (<code>-&gt; text</code>), takes nothing (<code>shown()</code>), or comes after another method. That leaves one
+        case, a kind's first method that takes values and sends nothing, which writes <code>-&gt; unit</code>, as
+        <code>tell</code> would if it came first; the error for a method read as a variant says so.
+      </p>
+      <ul>
+        <li><strong>Fields first.</strong> Every field or variant goes above the methods: <code>every field of a shape
+          goes above its methods, and method 'total' is declared at 5:5</code>.</li>
+        <li><strong>Names.</strong> A field and a method are both written <code>.name</code>, so they can't share a
+          name, and neither can be called <code>this</code>. No method can be called <code>add</code>, <code>del</code>,
+          <code>copy</code>, or <code>len</code>, which every value or slice already answers to. A method's name clashes
+          with nothing outside its type, so two shapes can each have a <code>total</code>. <code>alters</code> and
+          <code>this</code> are not reserved words: a variable can be called either.</li>
+        <li><strong><code>priv</code></strong> marks a method only its own file may call, as it marks a field.</li>
+        <li><strong>No automatic dereference</strong>, as with fields: a method of what a pointer points to is called
+          <code>p^.total()</code>. A value of a type without methods says so: <code>type int has no methods</code>.</li>
+        <li><strong>Shapes that take types.</strong> A method of <code>shape Box&lt;T&gt;</code> uses <code>T</code> as
+          its fields do, and one is made for each set of types the shape is given
+          (see <a href="#generic-shapes">Shapes that take types</a>). A method takes no types of its own yet
+          (<a href="future.html#methods-own-types">an idea for later</a>).</li>
+        <li><strong>Regions.</strong> The region the value lives in is <code>@this</code>, so a method can send what the
+          value holds, <code>nameOf() -&gt; text@this</code> (see <a href="#methods-in-regions">Methods and
+          regions</a>).</li>
+        <li>A message or a runtime trap inside a method names it as the program writes it:
+          <code>in task 'Counter.step'</code>.</li>
+      </ul>
 
       <h3 id="arrays">Arrays</h3>
       <p>
@@ -1426,8 +1548,8 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         <li><strong>The four changes.</strong> <code>xs.add(v)</code> puts <code>v</code> last and <code>xs.add(i, v)</code>
           before item <code>i</code>, where <code>i</code> may be the length (last). <code>xs.del(i)</code> takes item
           <code>i</code> out and <code>xs.del()</code> the last item; both give the item, which can also be dropped
-          (<code>xs.del(0)</code> as a statement). The items after the change move to close or open the gap. They aren't
-          methods, which Vela doesn't have: they are what a slice can do, as <code>len</code> is what it has.</li>
+          (<code>xs.del(0)</code> as a statement). The items after the change move to close or open the gap. They are
+          built into every slice, as <code>len</code> is, so no <a href="#methods">method</a> can take their names.</li>
         <li><strong>Where.</strong> The slice changes where it is kept, so it must be in a place that can be assigned: a
           <code>hold</code> variable, a field of one, anything behind a pointer (<code>bag^.items.add(v)</code>), or an item of
           another slice. A <code>bind</code>, a parameter, a result, a call's value, and a part taken with
@@ -1517,6 +1639,48 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
           stack, so a list of a million nodes copies without running out of stack, and a table of the values already copied
           (freed when the copy is done) keeps shared values shared.</li>
       </ul>
+
+      <h3 id="methods-in-regions">Methods and regions</h3>
+      <p>
+        A value of a shape or kind that holds pointers or text lives in a region, and inside its methods that region is
+        <code>@this</code>. A method may send what the value holds there, and take more of it; each call works the region
+        out from the value, so one method serves every region.
+      </p>
+      <pre><span class="keyword">shape</span> Named
+    name: text
+    node: ^Node
+
+    nameOf() -&gt; text<span class="keyword">@</span>this              <span class="comment"># the value's own text, in its region</span>
+        <span class="keyword">&lt;-</span> .name
+    <span class="keyword">fi</span>
+
+    <span class="keyword">alters</span> point(to: ^Node<span class="keyword">@</span>this)        <span class="comment"># a pointer into the value's region</span>
+        .node = to
+    <span class="keyword">fi</span>
+
+    made(r: <span class="keyword">region</span>, value: int) -&gt; ^Node<span class="keyword">@</span>r
+        <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value + .node^.value }) <span class="keyword">at</span> r
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">region</span> r
+<span class="keyword">hold</span> n: Named<span class="keyword">@</span>r = Named { name: <span class="string">"ada"</span>.copy() <span class="keyword">at</span> r, node: <span class="keyword">new</span> Node(Node { value: <span class="number">1</span> }) <span class="keyword">at</span> r }
+<span class="keyword">bind</span> name: text<span class="keyword">@</span>r = n.nameOf()
+n.point(<span class="keyword">new</span> Node(Node { value: <span class="number">5</span> }) <span class="keyword">at</span> r)
+<span class="keyword">region</span> s
+n.point(<span class="keyword">new</span> Node(Node { value: <span class="number">9</span> }) <span class="keyword">at</span> s)   <span class="comment"># error: expected type ^Node@r, got ^Node@s; method</span>
+                                          <span class="comment">#   'Named.point' takes 'to' in '@this', the region the</span>
+                                          <span class="comment">#   value it is called on lives in, so it must be in that region too</span></pre>
+      <p>
+        What a method sends from <code>@this</code> is text or pointers of the caller's region, so it can't outlive that
+        region: <code>kept = n.nameOf()</code> into a <code>text</code> that lasts as long as the program is refused, as
+        any text of a region is. A method is given the value, never its region, so it can't allocate in
+        <code>@this</code>: <code>new … at this</code>, and adding to a slice the value holds, are refused, and a region
+        parameter doesn't help, since the value can't point into another region. Grow the value where it is kept
+        (<code>n.node = new Node(…) at r</code>, <code>bag.items.add(v)</code>), or have the method make something in a
+        region it takes and send it back, as <code>made</code> does (<a href="future.html#methods-in-this">an idea for
+        later</a>).
+      </p>
 
       <h3>How it runs</h3>
       <p>
@@ -1699,11 +1863,9 @@ show(area(square))             <span class="comment"># error: unknown task 'area
           (see <a href="#tuples">Tuples</a>).</li>
         <li>Tasks and shapes take types; a kind can't yet, and no word asks a type for arithmetic (see
           <a href="#generics">Types a declaration takes</a>).</li>
-        <li>Every task stands on its own: a shape or a kind has no tasks of its own (<a
-          href="future.html#methods">an idea with the syntax still to pick</a>), so behaviour for a type is
-          written as a task taking it (<code>area(c)</code>, not <code>c.area()</code>). Only a slice has calls of its
-          own, <code>xs.add(…)</code> and <code>xs.del(…)</code>, and only <code>.copy()</code> and <code>.len</code>
-          read that way.</li>
+        <li>A method takes no types of its own, can't allocate in the region its value lives in, and is written
+          inside its shape or kind, never in another module (see <a href="#methods">Methods</a> and
+          <a href="future.html#methods-later">the room left to grow</a>).</li>
         <li>There are no packages to share modules between programs (see <a href="#modules">Modules</a>).</li>
         <li><code>show</code> prints floats with 6 significant digits.</li>
         <li>The order in which a call's arguments, or an operator's two sides, are evaluated isn't defined, which
@@ -1795,6 +1957,7 @@ CC=clang cargo test</pre>
         <li>The compiler generates readable C, making it easy to debug and interoperate with existing C code.</li>
         <li>Syntax uses keywords over punctuation to keep source code friendly and self-documenting; the few symbols (<code>-&gt;</code>, <code>&lt;-</code>, <code>^</code>, <code>@</code>) each stand for one idea.</li>
         <li>Missing values and failures are types (<code>maybe T</code>, <code>T or E</code>) rather than conventions such as null pointers or error codes, so the checker makes sure they are handled.</li>
+        <li>A member of a value is always written after a dot, <code>.count</code> inside a method as <code>c.count</code> outside it, so nothing comes into scope unseen, and a method that changes its value says so with <code>alters</code>, which is also the only time the generated C passes it a pointer.</li>
       </ul>
     </section>
   </main>

@@ -26,7 +26,10 @@ don't: `Box<text>@r` holds its text in `r`. A program can span
 several files: `include shapes/geometry` reads `shapes/geometry.vela`, named as `geometry.area(…)` (or brought in
 with `include shapes/geometry (area)`, or only the names with braces, `{area}`), `=>` gives a module or a name
 another name (`include fuel/prices => fuel`), and everything a file declares is public unless marked `priv`. A
-variant can be written through its kind, `Size.Small`.
+variant can be written through its kind, `Size.Small`. A shape or a kind has methods, written in its block below
+its fields or variants and called on a value (`c.total()`); inside one, `.count` is a field of the value, `.this`
+the value itself, and `@this` the region it lives in, and a method that changes its value says `alters` before its
+name, so only a place that can change may call it.
 
 ```
 task fib(n: int) -> int

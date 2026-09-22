@@ -1,0 +1,102 @@
+# Methods of a shape: written in its block below its fields, and called on a
+# value. Inside one, `.balance` is a field of the value it is called on and
+# `.note()` another of its methods. A method that changes the value says
+# `alters`, and only a place that can change may call it: here a `hold`
+# variable, and an item of a slice.
+
+# A kind has methods too, which read the value as `.this`.
+kind Refusal
+    TooLittle(short: int)
+    Closed
+
+    tell()
+        match .this
+        case TooLittle short
+            show("short by")
+            show(short)
+        case Closed
+            show("closed")
+        fi
+    fi
+fi
+
+shape Account
+    owner: text
+    balance: int
+    open: bool
+
+    balanceOf() -> int
+        <- .balance
+    fi
+
+    alters deposit(amount: int)
+        .balance = .balance + amount
+        .note("deposit", amount)
+    fi
+
+    # A method may fail, as a task may: `unit or Refusal` sends nothing, or a
+    # reason why not.
+    alters withdraw(amount: int) -> unit or Refusal
+        when not .open
+            <- fail Closed
+        fi
+        when amount > .balance
+            <- fail TooLittle(amount - .balance)
+        fi
+        .balance = .balance - amount
+        .note("withdraw", amount)
+    fi
+
+    alters close()
+        .open = false
+    fi
+
+    # Only this file may call it.
+    priv note(what: text, amount: int)
+        show(what)
+        show(amount)
+    fi
+fi
+
+# A shape that takes a type: its methods use `T` as its fields do.
+shape Best<T: ordered>
+    value: T
+
+    alters offer(other: T)
+        when other > .value
+            .value = other
+        fi
+    fi
+fi
+
+task report(result: unit or Refusal)
+    match result
+    case {_}
+        show("done")
+    case fail why
+        why.tell()
+    fi
+fi
+
+task main()
+    hold ada = Account { owner: "Ada", balance: 0, open: true }
+    ada.deposit(100)
+    report(ada.withdraw(30))
+    report(ada.withdraw(500))
+    show(ada.balanceOf())
+    ada.close()
+    report(ada.withdraw(1))
+
+    # An item of a slice is a place that can change.
+    region bank
+    hold accounts = new [Account]() at bank
+    accounts.add(Account { owner: "Grace", balance: 5, open: true })
+    accounts[0].deposit(10)
+    show(accounts[0].balanceOf())
+
+    hold best = Best { value: 3 }
+    each n in [7, 2, 9, 4]
+        best.offer(n)
+    fi
+    show(best.value)
+fi

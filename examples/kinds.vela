@@ -1,29 +1,63 @@
-# Kinds and pattern matching
+# Kinds and pattern matching. A kind's methods, written below its variants,
+# read the value as `.this` and take it apart with `match .this`; one marked
+# `alters` may move the value to another variant, or the same one with new
+# values.
 
 kind Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)
     Dot
-fi
 
-task describe(s: Shape)
-    match s
-    case Circle r
-        show("circle")
-        show(r)
-    case Rectangle w h
-        show("rectangle")
-        show(w)
-        show(h)
-    case Dot
-        show("dot")
+    describe()
+        match .this
+        case Circle r
+            show("circle")
+            show(r)
+        case Rectangle w h
+            show("rectangle")
+            show(w)
+            show(h)
+        case Dot
+            show("dot")
+        fi
+    fi
+
+    area() -> float
+        match .this
+        case Circle r
+            <- 3.14159 * r * r
+        case Rectangle w h
+            <- w * h
+        case Dot
+            <- 0.0
+        fi
+    fi
+
+    alters grow()
+        match .this
+        case Circle r
+            .this = Circle(r * 2.0)
+        case Rectangle w h
+            .this = Rectangle(w * 2.0, h * 2.0)
+        case Dot
+            .this = Circle(1.0)
+        fi
     fi
 fi
 
 task main()
     bind c = Circle(5.0)
-    bind r = Rectangle(3.0, 4.0)
-    describe(c)
-    describe(r)
-    describe(Dot)
+    c.describe()
+    show(c.area())
+
+    # Only a `hold` value can change.
+    hold r = Rectangle(3.0, 4.0)
+    r.grow()
+    r.describe()
+    show(r.area())
+
+    hold d = Dot
+    d.describe()
+    d.grow()
+    d.describe()
 fi

@@ -505,6 +505,15 @@
         messages that come with it.
       </p>
       <p>
+        Vela's methods are written inside the shape or kind they belong to, as in a C++, Swift, or Kotlin class, but with
+        no inheritance, no constructors, and no hidden receiver: every member of the value is written after a dot
+        (<code>.count</code>, <code>.cap()</code>), so nothing comes into scope unseen, where C++ and Java let a bare
+        <code>count</code> mean a field. A method that changes its value says <code>alters</code>, as Rust writes
+        <code>&amp;mut self</code> and C++ leaves off <code>const</code>, and only a value that can change may call it. Go puts
+        methods anywhere in the package and Rust in <code>impl</code> blocks, possibly several; Vela keeps them in the
+        type's own block, so one place shows everything a type does, and no other module can add to it.
+      </p>
+      <p>
         Results can also be named, as in Go: <code>-&gt; total: int</code>, set with <code>total &lt;- value</code>
         and sent by reaching the end of the task. Go gives a named result its zero value, so forgetting to set it is
         silent; Vela has no zero values, so the compiler rejects a path that reads one, or ends, without setting it.

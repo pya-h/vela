@@ -331,8 +331,11 @@
             <code>none</code>.</p>
         </div>
         <div class="card">
-          <h3>No methods <span class="badge b-med">Medium</span></h3>
-          <p>Behavior lives in free tasks such as <code>area(s)</code>. All tasks in a file share one namespace, so two shapes of one file can't both have an <code>area</code>, and a task can only change a shape through a <code>^</code> pointer.</p>
+          <h3>No methods <span class="badge b-done">Done</span></h3>
+          <p>Behavior lived in free tasks such as <code>area(s)</code>: all tasks in a file share one namespace, so two
+            shapes of one file couldn't both have an <code>area</code>, and a task could only change a shape through a
+            <code>^</code> pointer. Now a shape or a kind has methods, <code>c.total()</code>, and one marked
+            <code>alters</code> changes the value it is called on. <a href="#methods">Details below.</a></p>
         </div>
         <div class="card">
           <h3>No concurrency <span class="badge b-med">Medium</span></h3>
@@ -391,6 +394,13 @@
           <p>Arrays <code>[int; 4]</code> held in place, and slices <code>[int]@r</code> that view items in a region, with
             every index checked. <a href="vela.html#arrays">The language guide describes them</a>; the reasoning is
             <a href="#arrays">below</a>.</p>
+        </div>
+        <div class="card">
+          <h3>Methods <span class="badge b-done">Done</span></h3>
+          <p>Methods written inside a shape or a kind, below its fields: <code>.count</code> and <code>.cap()</code> for
+            the value's members, <code>.this</code> for the value, <code>@this</code> for its region, and
+            <code>alters</code> for a method that changes it. <a href="vela.html#methods">The language guide describes
+            them</a>; the reasoning is <a href="#methods">below</a>.</p>
         </div>
         <div class="card">
           <h3>Real string type <span class="badge b-idea">Idea</span></h3>
@@ -791,8 +801,9 @@ show(names.del(1))                    # takes item 1 out: b</pre>
         (<code>xs[1..]</code>), and making a slice with room reserved ahead for a count known in advance. A slice that never reuses the space
         <code>del</code> gives back is a <a href="#slices-without-reuse">lower-priority idea</a>. Shapes take types
         now (<a href="#generics">below</a>), so a collection of anything can be written as one; only a slice grows and
-        shrinks with <code>add</code> and <code>del</code>, which stay built in rather than tasks a shape could
-        provide (methods would come first, see above).
+        shrinks with <code>add</code> and <code>del</code>, which stay built in. A shape has <a href="#methods">methods</a>
+        now, but one can't yet grow the slice it holds, since a method isn't given its value's region
+        (<a href="#methods-in-this">an idea below</a>).
       </p>
     </section>
 
@@ -1261,7 +1272,7 @@ fi</pre>
     </section>
 
     <section>
-      <h2 id="methods"><span class="icon" aria-hidden="true">🧩</span> Methods: Behavior for Shapes and Kinds <span class="badge b-done">Decided</span></h2>
+      <h2 id="methods"><span class="icon" aria-hidden="true">🧩</span> Methods: Behavior for Shapes and Kinds <span class="badge b-done">Done</span></h2>
       <p>
         Vela keeps data and behavior apart: shapes and kinds hold data, and tasks act on it. That separation is a
         good default, but today it has real costs:
@@ -1548,7 +1559,9 @@ show(c.total())</pre>
           <li><strong><code>@this</code> is the region the value lives in.</strong> A method may send what the value
             holds there, <code>nameOf() -&gt; text@this</code>, and take more of it,
             <code>alters keep(p: ^Node@this)</code>; each call works the region out from the value, so one method serves
-            every region. A method that allocates takes a region parameter, as a task does.</li>
+            every region. A method is given the value but not its region, so it can't allocate there (see
+            <a href="#methods-in-this">below</a>); one that makes something to send back takes a region parameter, as a
+            task does.</li>
           <li><strong>Names:</strong> a type's fields and methods share its namespace, so a method can't reuse a field's
             name; method names clash with nothing outside the type. A method can't be called <code>add</code>,
             <code>del</code>, <code>copy</code>, or <code>len</code>, which every value or slice already answers to.</li>
@@ -1561,8 +1574,8 @@ show(c.total())</pre>
             (<code>Box&lt;int&gt;</code>, <code>Box&lt;text&gt;</code>), as a task that takes types is today, and a word
             the shape asks for (<code>shape Shown&lt;T: shown&gt;</code>) holds inside every method of it, so a body may
             rely on it without saying so again.</li>
-          <li><strong>Generated C</strong> stays collision-free: <code>vela_Counter__on__total(vela_Counter self)</code>
-            and <code>vela_Counter__on__step(vela_Counter* self)</code>.</li>
+          <li><strong>Generated C</strong> stays collision-free: <code>vela_Counter__on__total(vela_Counter vela__this)</code>
+            and <code>vela_Counter__on__step(vela_Counter* vela__this)</code>, names no Vela program can write.</li>
         </ul>
         <p>
           What option E offered and this design does not: a task of the type itself, <code>Point.origin()</code>, and
@@ -1626,6 +1639,16 @@ show(c.total())</pre>
           place — at the cost of the "extension method" that makes a foreign type fit local code. If Vela ever wants
           them, the rule to settle is which module's method wins where two add the same name, and whether a method
           added elsewhere may read a <code>priv</code> field (it must not).</li>
+        <li id="methods-in-this"><strong>A method that allocates in its value's region:</strong> today a method is
+          given the value it is called on, never the region that value lives in, so <code>new … at this</code> and
+          <code>.items.add(v)</code> are refused inside it, and a region parameter can't stand in, since the value can't
+          point into another region. The caller has to grow the value itself, <code>bag.items.add(v)</code>, which
+          leaves a shape unable to keep its own list. The fix is for an <code>alters</code> method to be given
+          <code>@this</code> as well, a region argument the call passes along with the value's place. The questions: a
+          value with no region (a shape holding only numbers) has nothing to pass, so either such a method is refused on
+          it or the region is optional; a value reached through a pointer, <code>p^.grow()</code>, is in the region
+          <code>p</code> names, which the call knows; and whether every <code>alters</code> method pays for the
+          argument, or only one that allocates, which the compiler can tell from its body.</li>
         <li id="methods-own-types"><strong>A method that takes types of its own:</strong> a method names no
           <code>&lt; &gt;</code> today, so a <code>Box&lt;T&gt;</code> can't have a
           <code>mapped&lt;U&gt;() -&gt; Box&lt;U&gt;</code>. The types a call gives would have to say which list they
@@ -1850,7 +1873,7 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
           <h3>Next — Growth <span class="badge b-med">Medium Risk</span></h3>
           <ul>
             <li><s>Module system</s> (done: <a href="vela.html#modules">modules</a>, with aliases and <code>Kind.Variant</code>), then a package manager</li>
-            <li>Methods on shapes and kinds (qualified tasks with <code>self</code> / <code>hold self</code>)</li>
+            <li><s>Methods on shapes and kinds</s> (done: <a href="vela.html#methods">methods</a>, with <code>alters</code>, <code>.this</code>, and <code>@this</code>)</li>
             <li><s>Tuples</s> (done: <a href="vela.html#tuples">tuples</a>), <s>generics for tasks and shapes</s>
               (done: <a href="vela.html#generics">types a declaration takes</a>), then perhaps
               <a href="#undecided-generic-kinds">for kinds</a></li>
@@ -1884,8 +1907,8 @@ bind shown = text(3.5) at r        # a number to text makes text, in a region</p
         Rust.
       </p>
       <p>
-        Beyond memory, Vela should grow carefully: methods as qualified tasks, and packages built on its modules,
-        before concurrency or a self-hosted compiler. The goal is not to be everything; it is to be a small,
+        Beyond memory, Vela should grow carefully: packages built on its modules, and the room its methods leave
+        (<a href="#methods-later">above</a>), before concurrency or a self-hosted compiler. The goal is not to be everything; it is to be a small,
         beautiful, fast language that proves you do not need a massive toolchain to write safe systems code.
       </p>
     </section>

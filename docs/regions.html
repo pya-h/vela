@@ -716,6 +716,49 @@ false</pre>
         region <code>scan</code> names. A shape or kind holding text but no pointers may name a region or not:
         <code>Person</code> holds text that lasts, <code>Person@r</code> text in <code>r</code>.
       </p>
+      <p>
+        A <a href="vela.html#methods">method</a> of such a shape or kind is called on a value in some region, which its
+        header and body name <code>@this</code>. It can send what the value holds there, and take pointers into it, and
+        each call works out which region that is from the value. It isn't given the region itself, so it can't allocate
+        there; to make something, it takes a region, as a task does:
+      </p>
+      <pre class="program" data-file="06_methods.vela"><span class="keyword">shape</span> Node
+    value: int
+<span class="keyword">fi</span>
+
+<span class="keyword">shape</span> Named
+    name: text
+    node: ^Node
+
+    nameOf() -&gt; text<span class="keyword">@</span>this
+        <span class="keyword">&lt;-</span> .name
+    <span class="keyword">fi</span>
+
+    <span class="keyword">alters</span> point(to: ^Node<span class="keyword">@</span>this)
+        .node = to
+    <span class="keyword">fi</span>
+
+    made(r: <span class="keyword">region</span>, value: int) -&gt; ^Node<span class="keyword">@</span>r
+        <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value + .node^.value }) <span class="keyword">at</span> r
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> people
+    <span class="keyword">hold</span> ada: Named<span class="keyword">@</span>people = Named { name: <span class="string">"Ada"</span>.copy() <span class="keyword">at</span> people, node: <span class="keyword">new</span> Node(Node { value: <span class="number">1</span> }) <span class="keyword">at</span> people }
+    show(ada.nameOf())
+    ada.point(<span class="keyword">new</span> Node(Node { value: <span class="number">5</span> }) <span class="keyword">at</span> people)
+    <span class="keyword">region</span> scratch
+    <span class="keyword">bind</span> sum = ada.made(scratch, <span class="number">10</span>)
+    show(sum^.value)
+<span class="keyword">fi</span></pre>
+<pre class="output" aria-label="Output">Ada
+15</pre>
+      <p>
+        <code>ada.point(…)</code> with a node of <code>scratch</code> is an error: <code>point</code> takes its node in
+        <code>@this</code>, which for <code>ada</code> is <code>people</code>. A method that should grow its value, such as
+        adding to a slice the value holds, can't yet (see <a href="#limit-method">below</a>).
+      </p>
 
       <h3 id="lesson-errors">Lesson 7: Regions with errors and maybe values</h3>
       <pre class="program" data-file="07_errors.vela"><span class="keyword">shape</span> Node
@@ -950,6 +993,8 @@ not a digit
           <tr><td><code>cannot tell which region 'x' lives in</code></td><td>The value holds no pointers yet; write the binding's type, <code>x: Node@r</code>.</td></tr>
           <tr><td><code>'r' is a region, not a value</code></td><td>Regions can only be passed to a <code>region</code> parameter or used after <code>at</code>/<code>@</code>.</td></tr>
           <tr><td><code>expected type maybe ^Node@_, got ^Node@a</code></td><td><code>@_</code> means "no region": the value was made without any pointer into one, so it can't be given a pointer (see <a href="#limit-pattern">this limitation</a>).</td></tr>
+          <tr><td><code>method 'Named.point' takes 'to' in '@this', the region the value it is called on lives in</code></td><td>A method's parameter is in the value's own region. Allocate the argument where the value lives.</td></tr>
+          <tr><td><code>'@this' is the region the value this method is called on lives in, which a method isn't given, so it can't allocate there</code></td><td>Grow the value where it is kept, outside the method (see <a href="#limit-method">this limitation</a>).</td></tr>
           <tr><td><code>Vela has no 'free'</code></td><td>Memory is freed when the region's block ends; use a smaller region to free sooner.</td></tr>
         </table>
       </div>
@@ -1131,6 +1176,28 @@ chosen = item^.title
       </div>
 
       <div class="limit">
+        <h3 id="limit-method">A method can't allocate in its value's region</h3>
+        <pre><span class="keyword">shape</span> Bag
+    items: [int]
+
+    <span class="keyword">alters</span> put(value: int)
+        .items.add(value)
+        <span class="comment"># error: adding to a slice may need more room in its region, and '@this' is the region the value</span>
+        <span class="comment">#   this method is called on lives in, which a method isn't given, so it can't allocate there, and a</span>
+        <span class="comment">#   region it takes is another one, which the value can't point into; add to it where the value is</span>
+        <span class="comment">#   kept, outside the method</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+        <p>
+          A method is given the value it is called on, and <code>@this</code> only names that value's region in its types,
+          as a task's named region does (<a href="#limit-generic">above</a>). A region parameter is another region, which
+          the value can't point into. <strong>Workaround:</strong> grow the value where it is kept,
+          <code>bag.items.add(v)</code>, or <code>bag^.items.add(v)</code> behind a pointer. Giving an
+          <code>alters</code> method its value's region is <a href="future.html#methods-in-this">an idea for later</a>.
+        </p>
+      </div>
+
+      <div class="limit">
         <h3 id="limit-values">Regions aren't values</h3>
         <p>
           A region can't be stored in a variable or field, sent from a task, or chosen at run time, and a task can't make a
@@ -1243,7 +1310,7 @@ chosen = item^.title
       </p>
 
       <div class="idea">
-        <h4><code>nodes.push(list, 1)</code>: the region before a dot <span class="badge b-later">Later, with methods</span></h4>
+        <h4><code>nodes.push(list, 1)</code>: the region before a dot <span class="badge b-later">Later</span></h4>
         <pre><span class="keyword">task</span> push(r: <span class="keyword">region</span>, list: <span class="keyword">maybe</span> ^Node@r, value: int) -&gt; ^Node@r
     <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
 <span class="keyword">fi</span>
@@ -1253,14 +1320,16 @@ list = nodes.push(list, <span class="number">1</span>)       <span class="commen
           <li><strong>Grammar:</strong> no conflict today. The parser would accept a call after <code>name.</code>, and since
             regions share the variables' names and have no fields, the checker tells <code>nodes.push(…)</code> from a field
             access by looking <code>nodes</code> up.</li>
-          <li><strong>Conflict with methods:</strong> this is the real cost. <a href="future.html">Future Directions</a>
-            recommends methods as qualified tasks, where <code>p.shift(2.5)</code> looks up <code>Point.shift</code> from
-            <code>p</code>'s type. <code>nodes.push(…)</code> would give <code>.name(…)</code> a second lookup rule ("a task
-            whose first parameter is a region"), decided by whether the left side is a region.</li>
+          <li><strong>Conflict with methods:</strong> this is the real cost. Vela now has
+            <a href="vela.html#methods">methods</a>, where <code>p.shift(2, 2)</code> finds <code>shift</code> in
+            <code>p</code>'s shape. <code>nodes.push(…)</code> would give <code>.name(…)</code> a second lookup rule ("a task
+            whose first parameter is a region"), decided by whether the left side is a region; a region has no methods, so
+            the two never meet, but a reader has to know which the left side is.</li>
           <li><strong>Reads as:</strong> "push is something a region does", which isn't quite the model.</li>
           <li><strong>Verdict:</strong> if Vela adopts uniform call syntax (<code>x.f(a)</code> means <code>f(x, a)</code>
-            for any <code>x</code>), region calls come with it and need no rule of their own. Otherwise it collides with the
-            methods design, so decide it together with methods.</li>
+            for any <code>x</code>), region calls come with it and need no rule of their own. Vela's methods chose the other
+            way (a method belongs to its type, and a task is never called after a dot), so this would be the one place a
+            task is.</li>
         </ul>
       </div>
 

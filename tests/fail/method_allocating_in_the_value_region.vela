@@ -1,0 +1,18 @@
+# error: 10:52: '@this' is the region the value this method is called on lives in, which a method isn't given, so it can't allocate there, and a region it takes is another one, which the value can't point into; allocate where the value is kept, and give the method what you made
+shape Node
+    value: int
+fi
+
+shape Holder
+    held: ^Node
+
+    alters renew(value: int)
+        .held = new Node(Node { value: value }) at this
+    fi
+fi
+
+task main()
+    region r
+    hold h: Holder@r = Holder { held: new Node(Node { value: 0 }) at r }
+    h.renew(1)
+fi
