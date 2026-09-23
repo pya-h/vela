@@ -10,7 +10,7 @@ task check(n: int) -> done: unit ~ Oops
 fi
 
 task main()
-    check(1) { fail e
+    check(1) { failure e
         show("bad")
     }
 fi

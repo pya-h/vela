@@ -45,7 +45,7 @@ task main()
         case {(code, label)}
             show(code)
             show(label)
-        case fail (why, bad)
+        case failure (why, bad)
             show(why)
             show(bad)
     fi

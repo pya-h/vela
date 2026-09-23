@@ -134,8 +134,8 @@
     | keyword:case  punctuation:{  keyword:_  punctuation:}
  80 |         show("done")
     | builtin-fn:show  punctuation:(  string:"done"  punctuation:)
- 81 |     case fail why
-    | keyword:case  keyword:fail  variable:why
+ 81 |     case failure why
+    | keyword:case  keyword:failure  variable:why
  82 |         # `show` calls a kind's own `str` for it, in a region of its own.
     | comment:# `show` calls a kind's own `str` for it, in a region of its own.
  83 |         show("refused: ", why)

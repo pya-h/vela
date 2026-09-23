@@ -405,9 +405,9 @@ impl<'a> Tokens<'a> {
     }
 
     /// Whether the `{` at position `p` opens a block that continues on the next
-    /// lines: it ends its line, or only `fail e` follows it there.
+    /// lines: it ends its line, or only `failure e` follows it there.
     fn opens_lines(&self, p: usize) -> bool {
-        let names_error = self.token(p + 1) == Some(&Token::Fail) && matches!(self.token(p + 2), Some(Token::Ident(_) | Token::Underscore));
+        let names_error = self.token(p + 1) == Some(&Token::Failure) && matches!(self.token(p + 2), Some(Token::Ident(_) | Token::Underscore));
         let end = if names_error { p + 3 } else { p + 1 };
         matches!(self.token(end), Some(Token::Newline | Token::Eof) | None)
     }
@@ -919,7 +919,7 @@ impl<'a> Classifier<'a> {
             let was_after_type = std::mem::take(&mut after_type);
             let declaring_now = declaring.take();
             let region_now = region_next.take();
-            if !matches!(token, Token::Newline | Token::Fail) {
+            if !matches!(token, Token::Newline | Token::Failure) {
                 plan_b_head = false;
             }
 
@@ -1130,7 +1130,7 @@ impl<'a> Classifier<'a> {
                             braces.clear();
                         }
                         Token::Is => in_pattern = true,
-                        Token::Fail if plan_b_head => declaring = Some("fail"),
+                        Token::Failure if plan_b_head => declaring = Some("failure"),
                         Token::When => self.open(ScopeKind::When),
                         Token::Loop => self.open(ScopeKind::Other),
                         Token::Each => {

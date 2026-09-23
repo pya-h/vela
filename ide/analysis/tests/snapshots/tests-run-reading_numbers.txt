@@ -34,8 +34,8 @@
     | keyword:case  punctuation:{  keyword:_  punctuation:}
  20 |         <- "a number"
     | keyword:<-  string:"a number"
- 21 |     case fail e
-    | keyword:case  keyword:fail  variable:e
+ 21 |     case failure e
+    | keyword:case  keyword:failure  variable:e
  22 |         <- why(e)
     | keyword:<-  task:why  punctuation:(  variable:e  punctuation:)
  23 |     fi
@@ -48,8 +48,8 @@
     | keyword:task  task:age  punctuation:(  parameter:line  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  operator:~  type:ParseError
  28 |     bind years = int(line) {
     | keyword:bind  variable:years  operator:=  type-builtin:int  punctuation:(  parameter:line  punctuation:)  punctuation:{
- 29 |         fail e
-    | keyword:fail  variable:e
+ 29 |         failure e
+    | keyword:failure  variable:e
  30 |         <- fail e
     | keyword:<-  keyword:fail  variable:e
  31 |     }
@@ -92,8 +92,8 @@
     | keyword:case  punctuation:{  variable:value  punctuation:}
  53 |         show("read ", value)
     | builtin-fn:show  punctuation:(  string:"read "  punctuation:,  variable:value  punctuation:)
- 54 |     case fail e
-    | keyword:case  keyword:fail  variable:e
+ 54 |     case failure e
+    | keyword:case  keyword:failure  variable:e
  55 |         show("no: ", why(e))
     | builtin-fn:show  punctuation:(  string:"no: "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
  56 |     fi
@@ -106,8 +106,8 @@
     | builtin-fn:show  punctuation:(  string:"seven: "  punctuation:,  variable:value  punctuation:)
  61 |     fi
     | keyword:fi
- 62 |     when int("") is fail e
-    | keyword:when  type-builtin:int  punctuation:(  string:""  punctuation:)  keyword:is  keyword:fail  variable:e
+ 62 |     when int("") is failure e
+    | keyword:when  type-builtin:int  punctuation:(  string:""  punctuation:)  keyword:is  keyword:failure  variable:e
  63 |         show("empty: ", why(e))
     | builtin-fn:show  punctuation:(  string:"empty: "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
  64 |     fi
@@ -156,8 +156,8 @@
     | keyword:case  punctuation:{  variable:years  punctuation:}
  90 |             show(line, " -> ", years)
     | builtin-fn:show  punctuation:(  variable:line  punctuation:,  string:" -> "  punctuation:,  variable:years  punctuation:)
- 91 |         case fail e
-    | keyword:case  keyword:fail  variable:e
+ 91 |         case failure e
+    | keyword:case  keyword:failure  variable:e
  92 |             show(line, " -> ", why(e))
     | builtin-fn:show  punctuation:(  variable:line  punctuation:,  string:" -> "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
  93 |         fi

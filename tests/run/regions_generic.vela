@@ -47,11 +47,11 @@ task main()
     show(read(p, a))
 
     outer(a, 1) {
-        fail e
+        failure e
         show("unexpected")
     }
     outer(a, -1) {
-        fail e
+        failure e
         when e is Leaf v
             show(v)
         fi
@@ -59,7 +59,7 @@ task main()
 
     bind good = new Node(Node { value: 7, next: none }) at a
     bind x: maybe ^Node@a = first_or(none) {
-        fail e
+        failure e
         good
     }
     show(x { good }^.value)
@@ -69,11 +69,11 @@ task main()
     match pick(p, q, true)
     case {v}
         show(v^)
-    case fail w
+    case failure w
         show(w^)
     fi
-    show(pick(p, q, false) { fail w
+    show(pick(p, q, false) { failure w
         new int(w^) at a }^)
-    show(pick(p, p, false) { fail w
+    show(pick(p, p, false) { failure w
         w }^)
 fi

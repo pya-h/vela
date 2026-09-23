@@ -264,8 +264,8 @@
     | keyword:case  punctuation:{  punctuation:(  variable:value  punctuation:,  variable:doubled  punctuation:)  punctuation:}
 152 |             show(value + doubled)
     | builtin-fn:show  punctuation:(  variable:value  operator:+  variable:doubled  punctuation:)
-153 |         case fail (reason, where_at)
-    | keyword:case  keyword:fail  punctuation:(  variable:reason  punctuation:,  variable:where_at  punctuation:)
+153 |         case failure (reason, where_at)
+    | keyword:case  keyword:failure  punctuation:(  variable:reason  punctuation:,  variable:where_at  punctuation:)
 154 |             show(reason)
     | builtin-fn:show  punctuation:(  variable:reason  punctuation:)
 155 |             show(where_at)
@@ -278,8 +278,8 @@
     | keyword:case  punctuation:{  punctuation:(  variable:value  punctuation:,  variable:doubled  punctuation:)  punctuation:}
 159 |             show(value + doubled)
     | builtin-fn:show  punctuation:(  variable:value  operator:+  variable:doubled  punctuation:)
-160 |         case fail (reason, where_at)
-    | keyword:case  keyword:fail  punctuation:(  variable:reason  punctuation:,  variable:where_at  punctuation:)
+160 |         case failure (reason, where_at)
+    | keyword:case  keyword:failure  punctuation:(  variable:reason  punctuation:,  variable:where_at  punctuation:)
 161 |             show(reason)
     | builtin-fn:show  punctuation:(  variable:reason  punctuation:)
 162 |             show(where_at)

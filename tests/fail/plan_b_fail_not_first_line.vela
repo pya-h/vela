@@ -1,4 +1,4 @@
-# error: 9:9: 'fail e' names the error only on the first line of a plan B; to send an error, write '<- fail e'
+# error: 9:9: 'fail e' makes a failure, but nothing here is named 'e'; a plan B names its failure with 'failure e' on its first line, and '<- fail e' sends one
 task save(n: int) -> unit ~ text
     <- fail "x"
 fi

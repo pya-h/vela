@@ -6,7 +6,7 @@ task main()
     match save()
     case {done}
         show(1)
-    case fail e
+    case failure e
         show(e)
     fi
 fi

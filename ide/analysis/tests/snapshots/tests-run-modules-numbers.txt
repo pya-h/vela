@@ -76,8 +76,8 @@
     | keyword:task  task:read  punctuation:(  parameter:t  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  operator:~  type:ParseError
  47 |     <- int(t) {
     | keyword:<-  type-builtin:int  punctuation:(  parameter:t  punctuation:)  punctuation:{
- 48 |         fail e
-    | keyword:fail  variable:e
+ 48 |         failure e
+    | keyword:failure  variable:e
  49 |         <- fail e
     | keyword:<-  keyword:fail  variable:e
  50 |     }

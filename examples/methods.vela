@@ -78,7 +78,7 @@ task report(result: unit ~ Refusal)
     match result
     case {_}
         show("done")
-    case fail why
+    case failure why
         # `show` calls a kind's own `str` for it, in a region of its own.
         show("refused: ", why)
     fi

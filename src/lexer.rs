@@ -39,7 +39,11 @@ pub enum Token {
     Fi,
     Maybe,
     Is,
+    /// `fail`, the verb: makes a failure, as in `<- fail e`.
     Fail,
+    /// `failure`, the noun: names a failure where one is matched, as in
+    /// `case failure e` and a plan B's first line.
+    Failure,
     /// `include`: makes another file's tasks, shapes, and kinds usable in this one.
     Include,
     /// `priv`: keeps a task, shape, kind, or shape's field to its own file.
@@ -117,6 +121,7 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("maybe", Token::Maybe),
     ("is", Token::Is),
     ("fail", Token::Fail),
+    ("failure", Token::Failure),
     ("include", Token::Include),
     ("priv", Token::Priv),
 ];

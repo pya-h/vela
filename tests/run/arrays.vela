@@ -88,7 +88,7 @@ task main()
     show(empty[1])
     bind parsed = [parse("one"), fail "skipped"]
     show(parsed[0] { 0 })
-    show(parsed[1] { fail problem
+    show(parsed[1] { failure problem
         show(problem)
         -1
     })

@@ -1040,7 +1040,7 @@ task main()
     bind n = parse("42") { 0 }            # the error is ignored: use 0
 
     bind m = parse("4x") {
-        fail e                            # names the error for this block
+        failure e                         # names the failure for this block
         match e
         case Empty
             show("empty")
@@ -1053,7 +1053,7 @@ task main()
     match parse("7")
     case {value}
         show(value)
-    case fail e
+    case failure e
         show("failed")
     fi
 fi</pre>
@@ -1061,8 +1061,8 @@ fi</pre>
         <li><code>fail e</code> makes an error value. It is always written, even where the types would tell, so
           <code>text or text</code> and future generic code stay unambiguous; the error type must differ from the
           value type anyway.</li>
-        <li><code>case fail e</code> and <code>is fail e</code> match an error; <code>case {v}</code> a success.</li>
-        <li>In a plan B, a first line <code>fail e</code> names the error. The form
+        <li><code>case failure e</code> and <code>is failure e</code> match a failure; <code>case {v}</code> a success. The noun names one; the verb makes one.</li>
+        <li>In a plan B, a first line <code>failure e</code> names the failure it handles. The form
           <code>{ err: ErrorType</code> was considered and rejected: after a variable,
           <code>res { err: Problem }</code> is already a shape literal, and the error's type is known anyway.</li>
         <li><code>unit ~ E</code> is a task that sends nothing when it works: a bare <code>&lt;-</code>, or reaching
@@ -1080,7 +1080,7 @@ fi</pre>
         <li><strong>Sends:</strong> <code>&lt;-</code> may follow <code>{</code> (<code>x { &lt;- 0 }</code>), and
           <code>}</code> ends a bare <code>&lt;-</code>. The hint for <code>a &lt;-1</code> is unaffected, since
           <code>{</code> is not a value.</li>
-        <li><strong>New words:</strong> <code>maybe</code>, <code>is</code>, and <code>fail</code> are reserved, and
+        <li><strong>New words:</strong> <code>maybe</code>, <code>is</code>, <code>fail</code>, and <code>failure</code> are reserved, and
           <code>_</code> is a symbol. In types, <code>~</code> separates the value type from the error type.</li>
         <li><strong>Generated C:</strong> a <code>maybe T</code> is a small struct <code>{ bool has; T value; }</code>
           (a plain pointer for <code>maybe ^T</code>), and <code>T ~ E</code> is
@@ -1092,7 +1092,7 @@ fi</pre>
       <div class="recommendation">
         <h3>💡 Next steps on top of this</h3>
         <ul>
-          <li><strong>Forwarding errors:</strong> a plan B that only sends the error on, <code>fail e</code> then
+          <li><strong>Forwarding errors:</strong> a plan B that only sends the error on, <code>failure e</code> then
             <code>&lt;- fail e</code>, will be common;
             a shorthand can come once real code shows its shape.</li>
           <li><strong>Match expressions</strong> can reuse plan B's rule, "the last line is the value", instead of a
@@ -1789,12 +1789,11 @@ bind age = int("42")               # text to a number can fail: int ~ ParseError
 
       <h3 id="error-spelling">Writing errors: <code>~</code>, and <code>fail</code> beside <code>failure</code></h3>
       <p>
-        <strong>Chosen 2026-09-23. The type separator is written; the two words are not.</strong> How a failing task
-        is written changes in two ways. A result used to be <code>int or ParseError</code>, and the error is still named
-        with <code>fail</code> in every position, which read badly in two places: <code>or</code> is also the boolean
-        operator, and <code>A or B</code> suggests a union of two alike types although the left is the value and the
-        right is the error; and the first line of a plan B, <code>fail e</code>, looks like a declaration although it is
-        a pattern.
+        <strong>Chosen and written 2026-09-23.</strong> How a failing task is written changed in two ways. A result
+        used to be <code>int or ParseError</code>, and the error was named with <code>fail</code> in every position,
+        which read badly in two places: <code>or</code> is also the boolean operator, and <code>A or B</code> suggests a
+        union of two alike types although the left is the value and the right is the error; and the first line of a plan
+        B, <code>fail e</code>, looked like a declaration although it is a pattern.
       </p>
       <ul>
         <li><strong><code>~</code> replaces <code>or</code> in a type.</strong> <span class="badge b-done">Done</span>
@@ -1804,11 +1803,12 @@ bind age = int("42")               # text to a number can fail: int ~ ParseError
           <code>&amp; | &lt;&lt; &gt;&gt;</code> (see <a href="#bitwise">Bitwise operators</a>), so nothing else wants
           it. Sigils already appear in Vela's types (<code>^Node</code>, <code>text@r</code>, <code>[int; 4]</code>),
           which is where this one goes.</li>
-        <li><strong><code>fail</code> splits by what it does:</strong> the verb <code>fail</code> wherever a failure is
-          <em>made</em> (<code>&lt;- fail e</code>, and a failure as a plain value), and the noun
-          <code>failure</code> wherever one is <em>matched and named</em> (<code>case failure e</code>,
-          <code>when x is failure e</code>, and a plan B's first line). <code>failure e</code> names the error value,
-          not a type; the type is the one after <code>~</code>.</li>
+        <li><strong><code>fail</code> splits by what it does.</strong> <span class="badge b-done">Done</span> —
+          the verb <code>fail</code> wherever a failure is <em>made</em> (<code>&lt;- fail e</code>, and a failure as a
+          plain value), and the noun <code>failure</code> wherever one is <em>matched and named</em>
+          (<code>case failure e</code>, <code>when x is failure e</code>, and a plan B's first line).
+          <code>failure e</code> names the error value, not a type; the type is the one after <code>~</code>. Each word
+          written where the other belongs is an error that names the right one.</li>
       </ul>
       <pre><span class="keyword">task</span> age(line: <span class="type">text</span>) -&gt; <span class="type">int</span> ~ ParseError
     <span class="keyword">bind</span> years = int(line) {
@@ -1828,10 +1828,10 @@ bind age = int("42")               # text to a number can fail: int ~ ParseError
     show(<span class="string">"no age"</span>)
 <span class="keyword">fi</span></pre>
       <p>
-        What it cost, and costs: 72 type positions were rewritten in the programs here, and about 51 patterns wait,
-        plus the lexer, the parser, every message that quotes a type or a pattern, Vela Studio, and every page of these
-        docs. Both spellings need an error that teaches the new one, since every program written before used
-        <code>or</code> in a type and <code>fail</code> in a pattern. Four other spellings were weighed and dropped: <code>/</code> (division, and the
+        What it cost: 72 type positions and 65 patterns rewritten in the programs here, plus the lexer, the parser,
+        every message that quotes a type or a pattern, Vela Studio, and every page of these docs. Each old spelling is
+        an error that teaches the new one, since every program written before used <code>or</code> in a type and
+        <code>fail</code> in a pattern. Four other spellings were weighed and dropped: <code>/</code> (division, and the
         path separator in <code>include shapes/circle</code>), <code>|</code> (the bitwise or), <code>!</code> (the
         lexer answers it with <em>Vela negates with 'not'</em>, and <code>is !e</code> reads as <em>is not e</em>), and
         <code>$err</code> (<code>$</code> means a variable in shell and PHP, which is backwards for a mark that means
@@ -1980,8 +1980,8 @@ fi
           and Studio's case completion and its <code>match</code> snippet read variants from the file's own declarations.
           It also hides where a variant comes from: a reader of <code>case TooLarge</code> cannot tell which kind it
           belongs to without opening the declarations, and the value it carries (if a flattened variant holds one) comes
-          from a kind the case doesn't name. A smaller relative is worth deciding with it: <code>case fail Ended</code>
-          straight on a <code>T ~ E</code>, which today is <code>case fail e</code> and then a match.</p>
+          from a kind the case doesn't name. A smaller relative is worth deciding with it: <code>case failure Ended</code>
+          straight on a <code>T ~ E</code>, which today is <code>case failure e</code> and then a match.</p>
           <p><strong>The question to decide</strong> is whether kinds holding kinds turn out to be common enough in real
           programs to pay for a second spelling and a flattening rule, or whether the two matches are simply what a
           nested value costs.</p></li>

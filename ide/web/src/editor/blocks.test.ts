@@ -86,18 +86,19 @@ describe("plan B braces", () => {
     expect(indentOfLast("task main()\n    bind x = a {\n        0\n    } + b {\n        1\n        }")).toBe(4);
   });
 
-  it("reads a { naming the plan B's error as opening its block", () => {
-    expect(indentOfLast('task main()\n    bind n = parse("x") { fail e\n')).toBe(8);
-    expect(indentOfLast("task main()\n    bind n = parse(t) { fail _  # ignored\n")).toBe(8);
-    expect(indentOfLast("task main()\n    when ok\n        bind n = parse(t) { fail e\n            show(e)\n            }")).toBe(8);
-    const lines = ["task main()", "    save(3) { fail problem", "        show(problem)", "    }", "fi"];
+  it("reads a { naming the plan B's failure as opening its block", () => {
+    expect(indentOfLast('task main()\n    bind n = parse("x") { failure e\n')).toBe(8);
+    expect(indentOfLast("task main()\n    bind n = parse(t) { failure _  # ignored\n")).toBe(8);
+    expect(indentOfLast("task main()\n    when ok\n        bind n = parse(t) { failure e\n            show(e)\n            }")).toBe(8);
+    const lines = ["task main()", "    save(3) { failure problem", "        show(problem)", "    }", "fi"];
     expect(closingLine(lines, lines.length, 1, WORDS)).toBe(3);
-    // `fail` with its value on one line is a one-line plan B's value, not a name, and a
-    // line ending in `fail e` without `{` opens nothing.
-    expect(indentOfLast("task main()\n    bind n = m { fail e }\n")).toBe(4);
+    // A name closed on the same line is a one-line plan B, and a line ending in
+    // `failure e` without `{` opens nothing. `fail` never names, so it opens nothing either.
+    expect(indentOfLast("task main()\n    bind n = m { failure e }\n")).toBe(4);
     expect(indentOfLast("task main()\n    <- fail e\n")).toBe(4);
-    expect(indentOfLast('task main()\n    bind n = m { fail "no" \n')).toBe(4);
-    expect(closingLine(["task main()", "    x { fail e }", "fi"], 3, 1, WORDS)).toBeNull();
+    expect(indentOfLast('task main()\n    bind n = m { failure "no" \n')).toBe(4);
+    expect(indentOfLast("task main()\n    bind n = m { fail e\n")).toBe(4);
+    expect(closingLine(["task main()", "    x { failure e }", "fi"], 3, 1, WORDS)).toBeNull();
   });
 
   it("folds a plan B up to its }", () => {

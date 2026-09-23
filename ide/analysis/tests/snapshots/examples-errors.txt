@@ -64,8 +64,8 @@
     | keyword:task  task:add_reading  punctuation:(  parameter:sum  punctuation::  operator:^  type-builtin:int  operator:@  region:r  punctuation:,  parameter:reading  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type:ReadingError
  37 |     bind value = check(reading) {
     | keyword:bind  variable:value  operator:=  task:check  punctuation:(  parameter:reading  punctuation:)  punctuation:{
- 38 |         fail problem
-    | keyword:fail  variable:problem
+ 38 |         failure problem
+    | keyword:failure  variable:problem
  39 |         <- fail problem
     | keyword:<-  keyword:fail  variable:problem
  40 |     }
@@ -84,16 +84,16 @@
     | keyword:case  punctuation:{  variable:value  punctuation:}
  48 |         show("reading: ", value)
     | builtin-fn:show  punctuation:(  string:"reading: "  punctuation:,  variable:value  punctuation:)
- 49 |     case fail problem
-    | keyword:case  keyword:fail  variable:problem
+ 49 |     case failure problem
+    | keyword:case  keyword:failure  variable:problem
  50 |         show(problem)
     | builtin-fn:show  punctuation:(  variable:problem  punctuation:)
  51 |     fi
     | keyword:fi
  53 |     # is runs a block for one outcome only.
     | comment:# is runs a block for one outcome only.
- 54 |     when check(99) is fail problem
-    | keyword:when  task:check  punctuation:(  number:99  punctuation:)  keyword:is  keyword:fail  variable:problem
+ 54 |     when check(99) is failure problem
+    | keyword:when  task:check  punctuation:(  number:99  punctuation:)  keyword:is  keyword:failure  variable:problem
  55 |         show(problem)
     | builtin-fn:show  punctuation:(  variable:problem  punctuation:)
  56 |     fi
@@ -104,8 +104,8 @@
     | builtin-fn:show  punctuation:(  task:check  punctuation:(  keyword:none  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
  60 |     bind lowest = check(-80) {
     | keyword:bind  variable:lowest  operator:=  task:check  punctuation:(  operator:-  number:80  punctuation:)  punctuation:{
- 61 |         fail problem
-    | keyword:fail  variable:problem
+ 61 |         failure problem
+    | keyword:failure  variable:problem
  62 |         show(problem)
     | builtin-fn:show  punctuation:(  variable:problem  punctuation:)
  63 |         -50
@@ -124,8 +124,8 @@
     | task:add_reading  punctuation:(  variable:sum  punctuation:,  number:10  punctuation:)  punctuation:{  punctuation:}
  71 |     add_reading(sum, 70) {
     | task:add_reading  punctuation:(  variable:sum  punctuation:,  number:70  punctuation:)  punctuation:{
- 72 |         fail problem
-    | keyword:fail  variable:problem
+ 72 |         failure problem
+    | keyword:failure  variable:problem
  73 |         show(problem)
     | builtin-fn:show  punctuation:(  variable:problem  punctuation:)
  74 |     }

@@ -154,8 +154,8 @@
     | keyword:bind  variable:parsed  operator:=  punctuation:[  task:parse  punctuation:(  string:"one"  punctuation:)  punctuation:,  keyword:fail  string:"skipped"  punctuation:]
  90 |     show(parsed[0] { 0 })
     | builtin-fn:show  punctuation:(  variable:parsed  punctuation:[  number:0  punctuation:]  punctuation:{  number:0  punctuation:}  punctuation:)
- 91 |     show(parsed[1] { fail problem
-    | builtin-fn:show  punctuation:(  variable:parsed  punctuation:[  number:1  punctuation:]  punctuation:{  keyword:fail  variable:problem
+ 91 |     show(parsed[1] { failure problem
+    | builtin-fn:show  punctuation:(  variable:parsed  punctuation:[  number:1  punctuation:]  punctuation:{  keyword:failure  variable:problem
  92 |         show(problem)
     | builtin-fn:show  punctuation:(  variable:problem  punctuation:)
  93 |         -1

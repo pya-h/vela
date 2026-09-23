@@ -92,8 +92,8 @@
     | keyword:fi
  53 | task save_twice(size: int) -> unit ~ text
     | keyword:task  task:save_twice  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type-builtin:text
- 54 |     save(size) { fail e
-    | task:save  punctuation:(  parameter:size  punctuation:)  punctuation:{  keyword:fail  variable:e
+ 54 |     save(size) { failure e
+    | task:save  punctuation:(  parameter:size  punctuation:)  punctuation:{  keyword:failure  variable:e
  55 |         <- fail e
     | keyword:<-  keyword:fail  variable:e
  56 |     }
@@ -106,8 +106,8 @@
     | keyword:task  task:doubled_or_zero  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  61 |     bind n = check_size(size) {
     | keyword:bind  variable:n  operator:=  task:check_size  punctuation:(  parameter:size  punctuation:)  punctuation:{
- 62 |         fail e
-    | keyword:fail  variable:e
+ 62 |         failure e
+    | keyword:failure  variable:e
  63 |         show(explain(e))
     | builtin-fn:show  punctuation:(  task:explain  punctuation:(  variable:e  punctuation:)  punctuation:)
  64 |         <- 0
@@ -126,8 +126,8 @@
     | builtin-fn:show  punctuation:(  task:check_size  punctuation:(  operator:-  number:1  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
  73 |     bind described = check_size(-500) {
     | keyword:bind  variable:described  operator:=  task:check_size  punctuation:(  operator:-  number:500  punctuation:)  punctuation:{
- 74 |         fail problem
-    | keyword:fail  variable:problem
+ 74 |         failure problem
+    | keyword:failure  variable:problem
  75 |         show(explain(problem))
     | builtin-fn:show  punctuation:(  task:explain  punctuation:(  variable:problem  punctuation:)  punctuation:)
  76 |         -1
@@ -146,14 +146,14 @@
     | keyword:case  punctuation:{  variable:value  punctuation:}
  85 |         show(value)
     | builtin-fn:show  punctuation:(  variable:value  punctuation:)
- 86 |     case fail e
-    | keyword:case  keyword:fail  variable:e
+ 86 |     case failure e
+    | keyword:case  keyword:failure  variable:e
  87 |         show(explain(e))
     | builtin-fn:show  punctuation:(  task:explain  punctuation:(  variable:e  punctuation:)  punctuation:)
  88 |     fi
     | keyword:fi
- 90 |     when check_size(-2) is fail e
-    | keyword:when  task:check_size  punctuation:(  operator:-  number:2  punctuation:)  keyword:is  keyword:fail  variable:e
+ 90 |     when check_size(-2) is failure e
+    | keyword:when  task:check_size  punctuation:(  operator:-  number:2  punctuation:)  keyword:is  keyword:failure  variable:e
  91 |         show(explain(e))
     | builtin-fn:show  punctuation:(  task:explain  punctuation:(  variable:e  punctuation:)  punctuation:)
  92 |     fi
@@ -164,26 +164,26 @@
     | builtin-fn:show  punctuation:(  variable:value  punctuation:)
  95 |     fi
     | keyword:fi
- 97 |     save(10) { fail e
-    | task:save  punctuation:(  number:10  punctuation:)  punctuation:{  keyword:fail  variable:e
+ 97 |     save(10) { failure e
+    | task:save  punctuation:(  number:10  punctuation:)  punctuation:{  keyword:failure  variable:e
  98 |         show(e)
     | builtin-fn:show  punctuation:(  variable:e  punctuation:)
  99 |     }
     | punctuation:}
 100 |     save(500) {
     | task:save  punctuation:(  number:500  punctuation:)  punctuation:{
-101 |         fail reason
-    | keyword:fail  variable:reason
+101 |         failure reason
+    | keyword:failure  variable:reason
 102 |         show(reason)
     | builtin-fn:show  punctuation:(  variable:reason  punctuation:)
 103 |     }
     | punctuation:}
 104 |     save(50) { }
     | task:save  punctuation:(  number:50  punctuation:)  punctuation:{  punctuation:}
-105 |     save(1000) { fail _ }
-    | task:save  punctuation:(  number:1000  punctuation:)  punctuation:{  keyword:fail  keyword:_  punctuation:}
-106 |     save_twice(300) { fail e
-    | task:save_twice  punctuation:(  number:300  punctuation:)  punctuation:{  keyword:fail  variable:e
+105 |     save(1000) { failure _ }
+    | task:save  punctuation:(  number:1000  punctuation:)  punctuation:{  keyword:failure  keyword:_  punctuation:}
+106 |     save_twice(300) { failure e
+    | task:save_twice  punctuation:(  number:300  punctuation:)  punctuation:{  keyword:failure  variable:e
 107 |         show(e)
     | builtin-fn:show  punctuation:(  variable:e  punctuation:)
 108 |     }
@@ -194,8 +194,8 @@
     | keyword:case  punctuation:{  keyword:_  punctuation:}
 112 |         show("fine")
     | builtin-fn:show  punctuation:(  string:"fine"  punctuation:)
-113 |     case fail message
-    | keyword:case  keyword:fail  variable:message
+113 |     case failure message
+    | keyword:case  keyword:failure  variable:message
 114 |         show(message)
     | builtin-fn:show  punctuation:(  variable:message  punctuation:)
 115 |     fi
@@ -214,8 +214,8 @@
     | builtin-fn:show  punctuation:(  task:lookup  punctuation:(  string:"other"  punctuation:)  punctuation:{  keyword:none  punctuation:}  punctuation:)
 124 |     bind missing = lookup("") {
     | keyword:bind  variable:missing  operator:=  task:lookup  punctuation:(  string:""  punctuation:)  punctuation:{
-125 |         fail why
-    | keyword:fail  variable:why
+125 |         failure why
+    | keyword:failure  variable:why
 126 |         show(why)
     | builtin-fn:show  punctuation:(  variable:why  punctuation:)
 127 |         none

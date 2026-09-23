@@ -146,8 +146,8 @@
     | keyword:bind  variable:other  punctuation:,  variable:failed  operator:=  task:pair  punctuation:(  operator:-  number:2  punctuation:)
  88 |     show(other)
     | builtin-fn:show  punctuation:(  variable:other  punctuation:)
- 89 |     show(failed { fail e
-    | builtin-fn:show  punctuation:(  variable:failed  punctuation:{  keyword:fail  variable:e
+ 89 |     show(failed { failure e
+    | builtin-fn:show  punctuation:(  variable:failed  punctuation:{  keyword:failure  variable:e
  90 |         show("handled")
     | builtin-fn:show  punctuation:(  string:"handled"  punctuation:)
  91 |         -1

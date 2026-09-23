@@ -54,8 +54,8 @@
     | keyword:task  task:age  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:~  type:InputError
  31 |     bind years = scan("age? ", int) {
     | keyword:bind  variable:years  operator:=  builtin-fn:scan  punctuation:(  string:"age? "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{
- 32 |         fail e
-    | keyword:fail  variable:e
+ 32 |         failure e
+    | keyword:failure  variable:e
  33 |         <- fail e
     | keyword:<-  keyword:fail  variable:e
  34 |     }
@@ -86,8 +86,8 @@
     | keyword:task  task:twice  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:~  type:InputError
  48 |     bind n = scan("", int) {
     | keyword:bind  variable:n  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)  punctuation:{
- 49 |         fail e
-    | keyword:fail  variable:e
+ 49 |         failure e
+    | keyword:failure  variable:e
  50 |         <- fail Ended
     | keyword:<-  keyword:fail  variant:Ended
  51 |     }
@@ -118,8 +118,8 @@
     | keyword:case  punctuation:{  variable:value  punctuation:}
  66 |             show("read ", value)
     | builtin-fn:show  punctuation:(  string:"read "  punctuation:,  variable:value  punctuation:)
- 67 |         case fail e
-    | keyword:case  keyword:fail  variable:e
+ 67 |         case failure e
+    | keyword:case  keyword:failure  variable:e
  68 |             show("no: ", why(e))
     | builtin-fn:show  punctuation:(  string:"no: "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
  69 |         fi
@@ -134,8 +134,8 @@
     | builtin-fn:show  punctuation:(  string:"seven: "  punctuation:,  variable:value  punctuation:)
  75 |     fi
     | keyword:fi
- 76 |     when scan("", int) is fail e
-    | keyword:when  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)  keyword:is  keyword:fail  variable:e
+ 76 |     when scan("", int) is failure e
+    | keyword:when  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)  keyword:is  keyword:failure  variable:e
  77 |         show("bad: ", why(e))
     | builtin-fn:show  punctuation:(  string:"bad: "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
  78 |     fi
@@ -152,8 +152,8 @@
     | keyword:case  punctuation:{  variable:value  punctuation:}
  85 |         show("float ", value)
     | builtin-fn:show  punctuation:(  string:"float "  punctuation:,  variable:value  punctuation:)
- 86 |     case fail e
-    | keyword:case  keyword:fail  variable:e
+ 86 |     case failure e
+    | keyword:case  keyword:failure  variable:e
  87 |         show("no float: ", why(e))
     | builtin-fn:show  punctuation:(  string:"no float: "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
  88 |     fi
@@ -190,8 +190,8 @@
     | keyword:case  punctuation:{  variable:years  punctuation:}
 106 |             show("age ", years)
     | builtin-fn:show  punctuation:(  string:"age "  punctuation:,  variable:years  punctuation:)
-107 |         case fail e
-    | keyword:case  keyword:fail  variable:e
+107 |         case failure e
+    | keyword:case  keyword:failure  variable:e
 108 |             show("no age: ", why(e))
     | builtin-fn:show  punctuation:(  string:"no age: "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
 109 |         fi
@@ -212,8 +212,8 @@
     | keyword:case  punctuation:{  variable:value  punctuation:}
 118 |             total = total + value
     | variable:total  operator:=  variable:total  operator:+  variable:value
-119 |         case fail e
-    | keyword:case  keyword:fail  variable:e
+119 |         case failure e
+    | keyword:case  keyword:failure  variable:e
 120 |             match e
     | keyword:match  variable:e
 121 |             case Ended

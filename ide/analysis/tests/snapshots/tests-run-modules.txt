@@ -126,8 +126,8 @@
     | builtin-fn:show  punctuation:(  module:bank  punctuation:.  task:balance  punctuation:(  variable:account  punctuation:)  punctuation:)
  70 |     bind after = bank.withdraw(account, 500) {
     | keyword:bind  variable:after  operator:=  module:bank  punctuation:.  task:withdraw  punctuation:(  variable:account  punctuation:,  number:500  punctuation:)  punctuation:{
- 71 |         fail problem
-    | keyword:fail  variable:problem
+ 71 |         failure problem
+    | keyword:failure  variable:problem
  72 |         show(bank.explain(problem))
     | builtin-fn:show  punctuation:(  module:bank  punctuation:.  task:explain  punctuation:(  variable:problem  punctuation:)  punctuation:)
  73 |         account
@@ -188,8 +188,8 @@
     | builtin-fn:show  punctuation:(  module:numbers  punctuation:.  task:read  punctuation:(  string:"4x2"  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
 105 |     show(numbers.refused() {
     | builtin-fn:show  punctuation:(  module:numbers  punctuation:.  task:refused  punctuation:(  punctuation:)  punctuation:{
-106 |         fail e
-    | keyword:fail  variable:e
+106 |         failure e
+    | keyword:failure  variable:e
 107 |         show(numbers.reason(e))
     | builtin-fn:show  punctuation:(  module:numbers  punctuation:.  task:reason  punctuation:(  variable:e  punctuation:)  punctuation:)
 108 |         -1
@@ -202,8 +202,8 @@
     | keyword:case  punctuation:{  variable:value  punctuation:}
 112 |         show(value)
     | builtin-fn:show  punctuation:(  variable:value  punctuation:)
-113 |     case fail e
-    | keyword:case  keyword:fail  variable:e
+113 |     case failure e
+    | keyword:case  keyword:failure  variable:e
 114 |         show(numbers.reason(e))
     | builtin-fn:show  punctuation:(  module:numbers  punctuation:.  task:reason  punctuation:(  variable:e  punctuation:)  punctuation:)
 115 |     fi

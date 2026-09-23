@@ -18,8 +18,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  12 |     show(checked(4) { 0 })
     | builtin-fn:show  punctuation:(  task:checked  punctuation:(  number:4  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
- 13 |     show(checked(-1) { fail e
-    | builtin-fn:show  punctuation:(  task:checked  punctuation:(  operator:-  number:1  punctuation:)  punctuation:{  keyword:fail  variable:e
+ 13 |     show(checked(-1) { failure e
+    | builtin-fn:show  punctuation:(  task:checked  punctuation:(  operator:-  number:1  punctuation:)  punctuation:{  keyword:failure  variable:e
  14 |         show(e)
     | builtin-fn:show  punctuation:(  variable:e  punctuation:)
  15 |         0 })

@@ -158,8 +158,8 @@
     | comment:# An error made of text holding values, read with a plan B.
  86 |     show(checked(n, r) { 0 })
     | builtin-fn:show  punctuation:(  task:checked  punctuation:(  variable:n  punctuation:,  region:r  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
- 87 |     bind low = checked(-n, r) { fail e
-    | keyword:bind  variable:low  operator:=  task:checked  punctuation:(  operator:-  variable:n  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:fail  variable:e
+ 87 |     bind low = checked(-n, r) { failure e
+    | keyword:bind  variable:low  operator:=  task:checked  punctuation:(  operator:-  variable:n  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
  88 |         show(e)
     | builtin-fn:show  punctuation:(  variable:e  punctuation:)
  89 |         0

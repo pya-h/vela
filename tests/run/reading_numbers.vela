@@ -18,7 +18,7 @@ task reason(t: text) -> text
     match int(t)
     case {_}
         <- "a number"
-    case fail e
+    case failure e
         <- why(e)
     fi
 fi
@@ -26,7 +26,7 @@ fi
 # A task may forward the error it was given, and send one of its own.
 task age(line: text) -> int ~ ParseError
     bind years = int(line) {
-        fail e
+        failure e
         <- fail e
     }
     when years > 200
@@ -51,7 +51,7 @@ task main()
     match int("99999999999999999999999")
     case {value}
         show("read ", value)
-    case fail e
+    case failure e
         show("no: ", why(e))
     fi
 
@@ -59,7 +59,7 @@ task main()
     when int("7") is {value}
         show("seven: ", value)
     fi
-    when int("") is fail e
+    when int("") is failure e
         show("empty: ", why(e))
     fi
 
@@ -88,7 +88,7 @@ task main()
         match age(line)
         case {years}
             show(line, " -> ", years)
-        case fail e
+        case failure e
             show(line, " -> ", why(e))
         fi
     fi

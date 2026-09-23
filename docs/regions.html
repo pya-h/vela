@@ -789,7 +789,7 @@ false</pre>
     <span class="keyword">bind</span> good = parse_node(nodes, <span class="number">7</span>) { <span class="keyword">&lt;-</span> }
     show(good^.value)
     <span class="keyword">bind</span> fallback = parse_node(nodes, <span class="number">42</span>) {
-        <span class="keyword">fail</span> reason
+        <span class="keyword">failure</span> reason
         show(reason)
         good
     }

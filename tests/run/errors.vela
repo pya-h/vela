@@ -51,7 +51,7 @@ task lookup(key: text) -> maybe int ~ text
 fi
 
 task save_twice(size: int) -> unit ~ text
-    save(size) { fail e
+    save(size) { failure e
         <- fail e
     }
     <- save(size)
@@ -59,7 +59,7 @@ fi
 
 task doubled_or_zero(size: int) -> int
     bind n = check_size(size) {
-        fail e
+        failure e
         show(explain(e))
         <- 0
     }
@@ -71,7 +71,7 @@ task main()
     show(check_size(-1) { 0 })
 
     bind described = check_size(-500) {
-        fail problem
+        failure problem
         show(explain(problem))
         -1
     }
@@ -83,34 +83,34 @@ task main()
     match check_size(7)
     case {value}
         show(value)
-    case fail e
+    case failure e
         show(explain(e))
     fi
 
-    when check_size(-2) is fail e
+    when check_size(-2) is failure e
         show(explain(e))
     fi
     when check_size(1) is {value}
         show(value)
     fi
 
-    save(10) { fail e
+    save(10) { failure e
         show(e)
     }
     save(500) {
-        fail reason
+        failure reason
         show(reason)
     }
     save(50) { }
-    save(1000) { fail _ }
-    save_twice(300) { fail e
+    save(1000) { failure _ }
+    save_twice(300) { failure e
         show(e)
     }
 
     match save(200)
     case {_}
         show("fine")
-    case fail message
+    case failure message
         show(message)
     fi
 
@@ -122,7 +122,7 @@ task main()
     show(lookup("answer") { none } { 0 })
     show(lookup("other") { none })
     bind missing = lookup("") {
-        fail why
+        failure why
         show(why)
         none
     }

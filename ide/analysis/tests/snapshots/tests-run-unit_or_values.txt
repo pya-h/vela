@@ -26,8 +26,8 @@
     | keyword:case  punctuation:{  keyword:_  punctuation:}
  17 |         <- 1
     | keyword:<-  number:1
- 18 |     case fail e
-    | keyword:case  keyword:fail  variable:e
+ 18 |     case failure e
+    | keyword:case  keyword:failure  variable:e
  19 |         show(e)
     | builtin-fn:show  punctuation:(  variable:e  punctuation:)
  20 |         <- 2

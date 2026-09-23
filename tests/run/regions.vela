@@ -140,17 +140,17 @@ task main()
     match checked(lists, -1)
     case {node}
         show(node^.value)
-    case fail reason
+    case failure reason
         region report
         bind message = new text(reason) at report
         show(message^)
     fi
     bind good = checked(lists, 7) { <- }
     show(good^.value)
-    save(3) { fail e
+    save(3) { failure e
         show(e)
     }
-    save(30) { fail e
+    save(30) { failure e
         show(e)
     }
 

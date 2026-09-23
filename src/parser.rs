@@ -12,6 +12,18 @@ pub const MAX_NESTING: usize = 100;
 /// What a tuple type needs, for the `(` of one that has too few items.
 const TUPLE_TYPE_ITEMS: &str = "a tuple holds two or more items, as in '(int, text)'; a type isn't written in parentheses alone";
 
+/// `fail` written where a failure is matched and named. The verb makes a
+/// failure; the noun names one, so every program written before this says
+/// `fail` in a pattern.
+const FAILURE_NAMES: &str = "a pattern names a failure with 'failure', as in 'failure e'; 'fail e' makes one";
+
+/// `fail` on the first line of a plan B, where the failure it handles is named.
+const PLAN_B_NAMES: &str =
+    "a plan B names the failure it handles with 'failure', as in 'failure e'; to send a failure instead, write '<- fail e'";
+
+/// `failure` written where a value goes: the mirror of `FAILURE_NAMES`.
+const FAIL_MAKES: &str = "'failure' names a failure in a pattern; to make one, write 'fail', as in '<- fail e'";
+
 pub struct Parser {
     tokens: Vec<Token>,
     spans: Vec<Span>,
@@ -1329,10 +1341,12 @@ impl Parser {
                 self.expect(Token::RBrace)?;
                 PatternKind::Value(names)
             }
-            Token::Fail => {
+            Token::Failure => {
                 self.advance();
                 PatternKind::Fail(self.parse_pattern_names()?)
             }
+            // The verb makes a failure; a pattern names one with the noun.
+            Token::Fail => return Err(Error::at(self.peek_span(), FAILURE_NAMES)),
             // `(x, y)` or `hold (x, y)`: the items of a tuple.
             Token::LParen | Token::Hold => {
                 let names = self.parse_pattern_names()?;
@@ -1384,7 +1398,7 @@ impl Parser {
                 }
                 PatternKind::Variant { kind, tag, binds }
             }
-            _ => return Err(self.unexpected("a variant, '{value}', 'none', 'fail e', or '_'")),
+            _ => return Err(self.unexpected("a variant, '{value}', 'none', 'failure e', or '_'")),
         };
         Ok(Pattern { kind, span })
     }
@@ -1678,6 +1692,10 @@ impl Parser {
     }
 
     fn parse_unary(&mut self) -> Result<Expr> {
+        // The noun names a failure; making one is the verb's work.
+        if self.check(Token::Failure) {
+            return Err(Error::at(self.peek_span(), FAIL_MAKES));
+        }
         if matches!(self.peek(), Token::Fail | Token::Minus | Token::Not) {
             return self.parse_prefixed();
         }
@@ -2156,8 +2174,14 @@ impl Parser {
                 format!("a shape literal is written on one line, starting after its '{{', as in '{}x: 1 }}'", example),
             ));
         }
-        let error = if self.check(Token::Fail) && matches!(next, Token::Ident(_) | Token::Underscore) {
-            self.advance(); // fail
+        // `{ failure e` names the failure this plan B handles. `fail` and a name
+        // here is the old spelling of that, never a value: a fallback replaces
+        // the value, so a failure is sent (`<- fail e`) rather than given.
+        if self.check(Token::Fail) && matches!(next, Token::Ident(_) | Token::Underscore) {
+            return Err(Error::at(self.peek_span(), PLAN_B_NAMES));
+        }
+        let error = if self.check(Token::Failure) && matches!(next, Token::Ident(_) | Token::Underscore) {
+            self.advance(); // failure
             Some(self.parse_bound_name()?)
         } else {
             None

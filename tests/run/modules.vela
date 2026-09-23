@@ -68,7 +68,7 @@ task main()
     show(account.owner)
     show(bank.balance(account))
     bind after = bank.withdraw(account, 500) {
-        fail problem
+        failure problem
         show(bank.explain(problem))
         account
     }
@@ -103,14 +103,14 @@ task main()
     show(numbers.read("42") { 0 })
     show(numbers.read("4x2") { -1 })
     show(numbers.refused() {
-        fail e
+        failure e
         show(numbers.reason(e))
         -1
     })
     match numbers.stopped()
     case {value}
         show(value)
-    case fail e
+    case failure e
         show(numbers.reason(e))
     fi
 fi

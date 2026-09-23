@@ -1,10 +1,10 @@
-# error: 7:10: 'fail …' matches the error of a 'T ~ E', but this value is maybe int
+# error: 7:10: 'failure …' matches the error of a 'T ~ E', but this value is maybe int
 task main()
     bind m: maybe int = 1
     match m
     case {n}
         show(n)
-    case fail e
+    case failure e
         show(0)
     fi
 fi

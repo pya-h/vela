@@ -35,7 +35,7 @@ fi
 # `unit ~ E` sends nothing when it works: reaching the end succeeds.
 task add_reading(sum: ^int@r, reading: maybe int) -> unit ~ ReadingError
     bind value = check(reading) {
-        fail problem
+        failure problem
         <- fail problem
     }
     sum^ = sum^ + value
@@ -46,19 +46,19 @@ task main()
     match check(21)
     case {value}
         show("reading: ", value)
-    case fail problem
+    case failure problem
         show(problem)
     fi
 
     # is runs a block for one outcome only.
-    when check(99) is fail problem
+    when check(99) is failure problem
         show(problem)
     fi
 
     # A plan B gives the value to use instead; `fail e` names the error.
     show(check(none) { 0 })
     bind lowest = check(-80) {
-        fail problem
+        failure problem
         show(problem)
         -50
     }
@@ -69,7 +69,7 @@ task main()
     bind sum = new int(0) at totals
     add_reading(sum, 10) { }
     add_reading(sum, 70) {
-        fail problem
+        failure problem
         show(problem)
     }
     add_reading(sum, 5) { }

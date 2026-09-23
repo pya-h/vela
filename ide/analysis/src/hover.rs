@@ -73,7 +73,8 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     ("maybe", "maybe T", "A T, or none. Read it with match, is, or a plan B: x { fallback }."),
     ("none", "none", "The empty maybe. A pointer can't be none; use maybe ^T."),
     ("is", "value is pattern", "The condition holds when the pattern matches; its names are visible in the block."),
-    ("fail", "fail error", "An error, for a task whose type has a ~ side. In a plan B, a first line fail e names the error."),
+    ("fail", "fail error", "Makes a failure, for a task whose type has a ~ side: <- fail e sends one. A pattern names a failure with 'failure' instead."),
+    ("failure", "failure e", "Names the failure a pattern matches: case failure e, when x is failure e, and a plan B's first line. 'fail' makes one."),
     ("_", "_", "Matches anything left, or drops a value without naming it."),
     (
         "alters",
@@ -306,7 +307,7 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 let name = k.at_byte(symbol.name_range.start)?;
                 pattern_name(k, name, &typed(&symbol.name), "Bound by an is condition.")
             }
-            Some("fail") => (format!("fail {}", typed(&symbol.name)), "The error this plan B handles.".to_string()),
+            Some("failure") => (format!("failure {}", typed(&symbol.name)), "The failure this plan B handles.".to_string()),
             Some("each") => {
                 let doc = match k.each_items(id) {
                     None => "The counter of an each loop.",

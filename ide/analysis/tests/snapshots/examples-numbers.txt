@@ -26,8 +26,8 @@
     | keyword:case  punctuation:{  variable:value  punctuation:}
  15 |             show(written, " is ", value)
     | builtin-fn:show  punctuation:(  variable:written  punctuation:,  string:" is "  punctuation:,  variable:value  punctuation:)
- 16 |         case fail why
-    | keyword:case  keyword:fail  variable:why
+ 16 |         case failure why
+    | keyword:case  keyword:failure  variable:why
  17 |             match why
     | keyword:match  variable:why
  18 |             case NotANumber
@@ -76,8 +76,8 @@
     | variable:largest  operator:=  variable:value
  42 |             fi
     | keyword:fi
- 43 |         case fail e
-    | keyword:case  keyword:fail  variable:e
+ 43 |         case failure e
+    | keyword:case  keyword:failure  variable:e
  44 |             match e
     | keyword:match  variable:e
  45 |             # Nothing more to read, so the loop is done.

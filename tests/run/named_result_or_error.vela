@@ -10,7 +10,7 @@ fi
 
 task main()
     show(checked(4) { 0 })
-    show(checked(-1) { fail e
+    show(checked(-1) { failure e
         show(e)
         0 })
 fi

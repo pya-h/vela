@@ -150,14 +150,14 @@ task main()
     match parsed(4)
         case {(value, doubled)}
             show(value + doubled)
-        case fail (reason, where_at)
+        case failure (reason, where_at)
             show(reason)
             show(where_at)
     fi
     match parsed(-2)
         case {(value, doubled)}
             show(value + doubled)
-        case fail (reason, where_at)
+        case failure (reason, where_at)
             show(reason)
             show(where_at)
     fi

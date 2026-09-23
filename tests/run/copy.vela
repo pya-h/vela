@@ -138,7 +138,7 @@ task main()
     match result
         case {value}
             show(value)
-        case fail problem
+        case failure problem
             match problem
                 case Missing what
                     show(what == "")

@@ -26,7 +26,7 @@ fi
 
 task read(t: text) -> int ~ ParseError
     <- int(t) {
-        fail e
+        failure e
         <- fail NotANumber
     }
 fi

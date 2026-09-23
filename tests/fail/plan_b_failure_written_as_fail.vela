@@ -1,0 +1,12 @@
+# error: 9:15: a plan B names the failure it handles with 'failure', as in 'failure e'; to send a failure instead, write '<- fail e'
+task save(n: int) -> unit ~ text
+    when n > 1
+        <- fail "big"
+    fi
+fi
+
+task main()
+    save(2) { fail why
+        show(why)
+    }
+fi

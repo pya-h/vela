@@ -45,7 +45,7 @@ fi
 # it takes, and as a value it sends itself, through its kind or as a bare variant.
 task read(t: text) -> int ~ ParseError
     <- int(t) {
-        fail e
+        failure e
         <- fail e
     }
 fi

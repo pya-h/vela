@@ -3,7 +3,7 @@
 // may have branches (`else`, `case`), and close with `fi`. A method opens a
 // block with no keyword: among a shape's or a kind's members, a line that is a
 // name followed by `(` (see `methodLines`). A plan B's block opens with a `{`
-// ending a line (or followed only by `fail e`, naming the error) and closes
+// ending a line (or followed only by `failure e`, naming the failure) and closes
 // with a line starting with `}`. The block words come from the compiler (see
 // `language()` in ide/analysis), so nothing here is a grammar.
 
@@ -89,11 +89,11 @@ function afterValue(line: string, start: number): number {
 }
 
 /**
- * Whether a line's code ends with `{`, or with `{ fail e` naming the error,
+ * Whether a line's code ends with `{`, or with `{ failure e` naming the failure,
  * opening a plan B's block.
  */
 export function opensBrace(line: string): boolean {
-  return /\{\s*(?:fail\s+[A-Za-z_][A-Za-z0-9_]*\s*)?$/.test(code(line));
+  return /\{\s*(?:failure\s+[A-Za-z_][A-Za-z0-9_]*\s*)?$/.test(code(line));
 }
 
 /** Whether a line starts with `}`, closing a plan B's block. A line such as `} + b {` also opens one. */

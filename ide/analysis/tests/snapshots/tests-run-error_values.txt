@@ -2,8 +2,8 @@
     | comment:# Errors of every type: a shape, an int computed with `fail (…)`, and a
   2 | # `text ~ int` (written without spaces here, which is allowed), handled by
     | comment:# `text ~ int` (written without spaces here, which is allowed), handled by
-  3 | # `match`, a plan B, and `is fail e`.
-    | comment:# `match`, a plan B, and `is fail e`.
+  3 | # `match`, a plan B, and `is failure e`.
+    | comment:# `match`, a plan B, and `is failure e`.
   5 | shape Problem
     | keyword:shape  type:Problem
   6 |     code: int
@@ -44,8 +44,8 @@
     | keyword:case  punctuation:{  variable:v  punctuation:}
  27 |         show(v)
     | builtin-fn:show  punctuation:(  variable:v  punctuation:)
- 28 |     case fail p
-    | keyword:case  keyword:fail  variable:p
+ 28 |     case failure p
+    | keyword:case  keyword:failure  variable:p
  29 |         show(p.code)
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:code  punctuation:)
  30 |         show(p.note)
@@ -54,14 +54,14 @@
     | keyword:fi
  32 |     show(steps(3) { "bad" })
     | builtin-fn:show  punctuation:(  task:steps  punctuation:(  number:3  punctuation:)  punctuation:{  string:"bad"  punctuation:}  punctuation:)
- 33 |     show(steps(15) { fail over
-    | builtin-fn:show  punctuation:(  task:steps  punctuation:(  number:15  punctuation:)  punctuation:{  keyword:fail  variable:over
+ 33 |     show(steps(15) { failure over
+    | builtin-fn:show  punctuation:(  task:steps  punctuation:(  number:15  punctuation:)  punctuation:{  keyword:failure  variable:over
  34 |         show(over)
     | builtin-fn:show  punctuation:(  variable:over  punctuation:)
  35 |         "too many" })
     | string:"too many"  punctuation:}  punctuation:)
- 36 |     when steps(12) is fail extra
-    | keyword:when  task:steps  punctuation:(  number:12  punctuation:)  keyword:is  keyword:fail  variable:extra
+ 36 |     when steps(12) is failure extra
+    | keyword:when  task:steps  punctuation:(  number:12  punctuation:)  keyword:is  keyword:failure  variable:extra
  37 |         show(-extra)
     | builtin-fn:show  punctuation:(  operator:-  variable:extra  punctuation:)
  38 |     fi

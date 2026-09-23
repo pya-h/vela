@@ -78,16 +78,16 @@
     | builtin-fn:show  punctuation:(  task:read  punctuation:(  variable:p  punctuation:,  region:a  punctuation:)  punctuation:)
  49 |     outer(a, 1) {
     | task:outer  punctuation:(  region:a  punctuation:,  number:1  punctuation:)  punctuation:{
- 50 |         fail e
-    | keyword:fail  variable:e
+ 50 |         failure e
+    | keyword:failure  variable:e
  51 |         show("unexpected")
     | builtin-fn:show  punctuation:(  string:"unexpected"  punctuation:)
  52 |     }
     | punctuation:}
  53 |     outer(a, -1) {
     | task:outer  punctuation:(  region:a  punctuation:,  operator:-  number:1  punctuation:)  punctuation:{
- 54 |         fail e
-    | keyword:fail  variable:e
+ 54 |         failure e
+    | keyword:failure  variable:e
  55 |         when e is Leaf v
     | keyword:when  variable:e  keyword:is  variant:Leaf  variable:v
  56 |             show(v)
@@ -100,8 +100,8 @@
     | keyword:bind  variable:good  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:7  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:a
  61 |     bind x: maybe ^Node@a = first_or(none) {
     | keyword:bind  variable:x  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:a  operator:=  task:first_or  punctuation:(  keyword:none  punctuation:)  punctuation:{
- 62 |         fail e
-    | keyword:fail  variable:e
+ 62 |         failure e
+    | keyword:failure  variable:e
  63 |         good
     | variable:good
  64 |     }
@@ -118,18 +118,18 @@
     | keyword:case  punctuation:{  variable:v  punctuation:}
  71 |         show(v^)
     | builtin-fn:show  punctuation:(  variable:v  operator:^  punctuation:)
- 72 |     case fail w
-    | keyword:case  keyword:fail  variable:w
+ 72 |     case failure w
+    | keyword:case  keyword:failure  variable:w
  73 |         show(w^)
     | builtin-fn:show  punctuation:(  variable:w  operator:^  punctuation:)
  74 |     fi
     | keyword:fi
- 75 |     show(pick(p, q, false) { fail w
-    | builtin-fn:show  punctuation:(  task:pick  punctuation:(  variable:p  punctuation:,  variable:q  punctuation:,  keyword:false  punctuation:)  punctuation:{  keyword:fail  variable:w
+ 75 |     show(pick(p, q, false) { failure w
+    | builtin-fn:show  punctuation:(  task:pick  punctuation:(  variable:p  punctuation:,  variable:q  punctuation:,  keyword:false  punctuation:)  punctuation:{  keyword:failure  variable:w
  76 |         new int(w^) at a }^)
     | keyword:new  type-builtin:int  punctuation:(  variable:w  operator:^  punctuation:)  keyword:at  region:a  punctuation:}  operator:^  punctuation:)
- 77 |     show(pick(p, p, false) { fail w
-    | builtin-fn:show  punctuation:(  task:pick  punctuation:(  variable:p  punctuation:,  variable:p  punctuation:,  keyword:false  punctuation:)  punctuation:{  keyword:fail  variable:w
+ 77 |     show(pick(p, p, false) { failure w
+    | builtin-fn:show  punctuation:(  task:pick  punctuation:(  variable:p  punctuation:,  variable:p  punctuation:,  keyword:false  punctuation:)  punctuation:{  keyword:failure  variable:w
  78 |         w }^)
     | variable:w  punctuation:}  operator:^  punctuation:)
  79 | fi

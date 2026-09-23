@@ -1,0 +1,15 @@
+# error: 12:10: a pattern names a failure with 'failure', as in 'failure e'; 'fail e' makes one
+task save(n: int) -> unit ~ text
+    when n > 1
+        <- fail "big"
+    fi
+fi
+
+task main()
+    match save(2)
+    case {_}
+        show("fine")
+    case fail why
+        show(why)
+    fi
+fi

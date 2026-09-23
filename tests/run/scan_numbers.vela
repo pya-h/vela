@@ -29,7 +29,7 @@ fi
 # read from input, refusing one no person has.
 task age() -> int ~ InputError
     bind years = scan("age? ", int) {
-        fail e
+        failure e
         <- fail e
     }
     when years > 200
@@ -46,7 +46,7 @@ fi
 # Nothing more to read is an error this task sends itself.
 task twice() -> int ~ InputError
     bind n = scan("", int) {
-        fail e
+        failure e
         <- fail Ended
     }
     <- n + n
@@ -64,7 +64,7 @@ task main()
         match scan("", int)
         case {value}
             show("read ", value)
-        case fail e
+        case failure e
             show("no: ", why(e))
         fi
     fi
@@ -73,7 +73,7 @@ task main()
     when scan("", int) is {value}
         show("seven: ", value)
     fi
-    when scan("", int) is fail e
+    when scan("", int) is failure e
         show("bad: ", why(e))
     fi
 
@@ -83,7 +83,7 @@ task main()
     match scan("", float)
     case {value}
         show("float ", value)
-    case fail e
+    case failure e
         show("no float: ", why(e))
     fi
 
@@ -104,7 +104,7 @@ task main()
         match age()
         case {years}
             show("age ", years)
-        case fail e
+        case failure e
             show("no age: ", why(e))
         fi
     fi
@@ -116,7 +116,7 @@ task main()
         match scan("", int)
         case {value}
             total = total + value
-        case fail e
+        case failure e
             match e
             case Ended
                 reading = false

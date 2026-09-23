@@ -15,7 +15,7 @@ task take(x: unit ~ text) -> int
     match x
     case {_}
         <- 1
-    case fail e
+    case failure e
         show(e)
         <- 2
     fi

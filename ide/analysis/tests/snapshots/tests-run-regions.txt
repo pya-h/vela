@@ -242,8 +242,8 @@
     | keyword:case  punctuation:{  variable:node  punctuation:}
 142 |         show(node^.value)
     | builtin-fn:show  punctuation:(  variable:node  operator:^  punctuation:.  field:value  punctuation:)
-143 |     case fail reason
-    | keyword:case  keyword:fail  variable:reason
+143 |     case failure reason
+    | keyword:case  keyword:failure  variable:reason
 144 |         region report
     | keyword:region  region:report
 145 |         bind message = new text(reason) at report
@@ -256,14 +256,14 @@
     | keyword:bind  variable:good  operator:=  task:checked  punctuation:(  region:lists  punctuation:,  number:7  punctuation:)  punctuation:{  keyword:<-  punctuation:}
 149 |     show(good^.value)
     | builtin-fn:show  punctuation:(  variable:good  operator:^  punctuation:.  field:value  punctuation:)
-150 |     save(3) { fail e
-    | task:save  punctuation:(  number:3  punctuation:)  punctuation:{  keyword:fail  variable:e
+150 |     save(3) { failure e
+    | task:save  punctuation:(  number:3  punctuation:)  punctuation:{  keyword:failure  variable:e
 151 |         show(e)
     | builtin-fn:show  punctuation:(  variable:e  punctuation:)
 152 |     }
     | punctuation:}
-153 |     save(30) { fail e
-    | task:save  punctuation:(  number:30  punctuation:)  punctuation:{  keyword:fail  variable:e
+153 |     save(30) { failure e
+    | task:save  punctuation:(  number:30  punctuation:)  punctuation:{  keyword:failure  variable:e
 154 |         show(e)
     | builtin-fn:show  punctuation:(  variable:e  punctuation:)
 155 |     }

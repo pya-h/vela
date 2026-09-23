@@ -1874,7 +1874,7 @@ impl Checker {
                     && let ExprKind::Var(name) = &inner.kind
                     && self.lookup(name).is_none()
                 {
-                    return err(e.span, format!("'fail {0}' names the error only on the first line of a plan B; to send an error, write '<- fail {0}'", name));
+                    return err(e.span, format!("'fail {0}' makes a failure, but nothing here is named '{0}'; a plan B names its failure with 'failure {0}' on its first line, and '<- fail {0}' sends one", name));
                 }
                 self.check_expr(e)?;
                 // Of all expressions, only a call, a change to a slice, or a
@@ -2126,7 +2126,7 @@ impl Checker {
             && names.parts.is_empty()
             && self.variant_in_scope(&names.name).is_some()
         {
-            let (keyword, whole) = if matches!(pattern.kind, PatternKind::Fail(_)) { ("fail e", "error") } else { ("{value}", "value") };
+            let (keyword, whole) = if matches!(pattern.kind, PatternKind::Fail(_)) { ("failure e", "error") } else { ("{value}", "value") };
             return err(names.span, format!("'{}' is a variant, but '{}' names the whole {}; give it a name, then match on it", names.name, keyword, whole));
         }
         match (&pattern.kind, subject) {
@@ -2184,7 +2184,7 @@ impl Checker {
             (PatternKind::None, Type::None) => err(span, "this value is always none, so there is nothing to match"),
             (PatternKind::None, other) => err(span, format!("'none' matches an empty maybe, but this value is {}", other)),
             (PatternKind::Fail(_), other) => {
-                err(span, format!("'fail …' matches the error of a 'T ~ E', but this value is {}", other))
+                err(span, format!("'failure …' matches the error of a 'T ~ E', but this value is {}", other))
             }
         }
     }
@@ -2352,7 +2352,7 @@ impl Checker {
                 None => return err(expr.span, format!("'match' needs a kind, a maybe, or a 'T ~ E', but '{}' is a shape", name)),
             },
             Type::Maybe(_) => vec!["{…}".to_string(), "none".to_string()],
-            Type::Or(..) => vec!["{…}".to_string(), "fail …".to_string()],
+            Type::Or(..) => vec!["{…}".to_string(), "failure …".to_string()],
             // A tuple has one case, so it is taken apart rather than matched.
             Type::Tuple(_) => {
                 return err(expr.span, format!("match requires a kind, a maybe, or a 'T ~ E' value, got {}; take a tuple apart with 'bind', as in 'bind (a, b) = t'", ety));
@@ -3374,7 +3374,7 @@ impl Checker {
         let mut bindings = Vec::new();
         if let Some((name, at)) = error {
             let Some(error_ty) = error_ty else {
-                return err(*at, format!("a {} has no error to name; 'fail e' names the error of a 'T ~ E'", value_ty));
+                return err(*at, format!("a {} has no error to name; 'failure e' names the error of a 'T ~ E'", value_ty));
             };
             if self.variant_in_scope(name).is_some() {
                 return err(*at, format!("'{}' is a variant; to send an error, write '<- fail {}'", name, name));
@@ -4373,7 +4373,7 @@ fn extract_hint(types: &[&Type]) -> String {
     match types.iter().find(|t| matches!(t, Type::Maybe(_) | Type::Or(..) | Type::Fail(_))) {
         Some(Type::Fail(_)) => "; 'fail' takes only the value right after it, so write 'fail (a + b)'".to_string(),
         Some(Type::Or(value, error)) if **value == Type::Unit => {
-            format!("; a 'unit or {}' has no value, only an error to handle, as in 'x {{ fail e … }}'", error)
+            format!("; a 'unit ~ {}' has no value, only an error to handle, as in 'x {{ failure e … }}'", error)
         }
         Some(ty) => format!("; the value in this {} must be extracted first, as in 'x {{ … }}' or 'when x is {{value}}'", ty),
         None => String::new(),
@@ -5230,7 +5230,7 @@ fn scanned_type(arg: &Expr) -> Result<Type> {
 
 /// The error for a call whose `T ~ E` result is thrown away.
 fn ignored_error(task: &str) -> String {
-    format!("the error '{0}' may send is ignored; handle it with a plan B, as in '{0}(…) {{ fail e … }}', or with match", task)
+    format!("the error '{0}' may send is ignored; handle it with a plan B, as in '{0}(…) {{ failure e … }}', or with match", task)
 }
 
 /// The error for a `_` that would drop a value holding an error.

@@ -72,8 +72,8 @@
     | keyword:case  punctuation:{  variable:v  punctuation:}
  41 |         <- v
     | keyword:<-  variable:v
- 42 |     case fail msg
-    | keyword:case  keyword:fail  variable:msg
+ 42 |     case failure msg
+    | keyword:case  keyword:failure  variable:msg
  43 |         region d
     | keyword:region  region:d
  44 |         bind pd = new text(msg) at d
@@ -108,8 +108,8 @@
     | keyword:region  region:per
  60 |         bind p = new int(k) at per
     | keyword:bind  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:k  punctuation:)  keyword:at  region:per
- 61 |         show(pick(p^) { fails(p^) { fail e
-    | builtin-fn:show  punctuation:(  task:pick  punctuation:(  variable:p  operator:^  punctuation:)  punctuation:{  task:fails  punctuation:(  variable:p  operator:^  punctuation:)  punctuation:{  keyword:fail  variable:e
+ 61 |         show(pick(p^) { fails(p^) { failure e
+    | builtin-fn:show  punctuation:(  task:pick  punctuation:(  variable:p  operator:^  punctuation:)  punctuation:{  task:fails  punctuation:(  variable:p  operator:^  punctuation:)  punctuation:{  keyword:failure  variable:e
  62 |             region inner
     | keyword:region  region:inner
  63 |             bind q = new int(0) at inner

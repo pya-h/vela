@@ -354,7 +354,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         return (region_items(&k, word_start, allocating), word_start, byte);
     }
     // After `is`: patterns. Names a pattern or plan B declares (`is {v}`,
-    // `is fail e`, `{ fail e`) get no suggestions.
+    // `is failure e`, `{ failure e`) get no suggestions.
     if let (Some(is), Some(Token::Is)) = (prev, prev_token) {
         return (is_pattern_items(source, scan, context, &k, is), word_start, byte);
     }
@@ -367,7 +367,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     let before_prev = prev.and_then(|q| k.token_before(q));
     let declares_name = match prev_token {
         Some(Token::LBrace) => before_prev == Some(&Token::Is),
-        Some(Token::Fail) => matches!(before_prev, Some(Token::Is | Token::LBrace | Token::Newline))
+        Some(Token::Failure) => matches!(before_prev, Some(Token::Is | Token::LBrace | Token::Newline))
             && prev.is_some_and(|q| starts_plan_b_or_pattern(&k, q)),
         _ => false,
     };
@@ -500,7 +500,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
             Some(_) => {
                 let probe = probe(source, context, word_start, word_end);
                 let exact = Knowledge::new(source, scan, &probe);
-                // A plan B's first line may name its error: `fail e`.
+                // A plan B's first line may name its failure: `failure e`.
                 let names_error = prev.is_some_and(|q| {
                     blocks.last() == Some(&Block::PlanB) && starts_plan_b_or_pattern(&k, q + 1) && plan_b_value_can_fail(&exact, q)
                 });
@@ -943,9 +943,9 @@ fn open_blocks(k: &Knowledge, byte: usize) -> Vec<Block> {
 }
 
 /// Whether the `{` at position `q` opens a plan B whose block continues on the
-/// next lines: it ends its line, or only `fail e` follows it there.
+/// next lines: it ends its line, or only `failure e` follows it there.
 pub(crate) fn opens_block_of_lines(k: &Knowledge, q: usize) -> bool {
-    let names_error = k.token(q + 1) == Some(&Token::Fail) && matches!(k.token(q + 2), Some(Token::Ident(_) | Token::Underscore));
+    let names_error = k.token(q + 1) == Some(&Token::Failure) && matches!(k.token(q + 2), Some(Token::Ident(_) | Token::Underscore));
     let end = if names_error { q + 3 } else { q + 1 };
     matches!(k.token(end), Some(Token::Newline) | None)
 }
@@ -1145,7 +1145,7 @@ fn covered_cases(k: &Knowledge, match_q: usize, case: usize) -> Vec<String> {
                     },
                     Some(Token::LBrace) => "{value}".to_string(),
                     Some(Token::None) => "none".to_string(),
-                    Some(Token::Fail) => "fail e".to_string(),
+                    Some(Token::Failure) => "failure e".to_string(),
                     Some(Token::Underscore) => "_".to_string(),
                     _ => continue,
                 };
@@ -1161,7 +1161,7 @@ fn covered_cases(k: &Knowledge, match_q: usize, case: usize) -> Vec<String> {
 /// The patterns of a `maybe` or `T ~ E` as `(label, detail, snippet)`: its
 /// value, and `none` or its error.
 fn outcome_patterns(ty: &Type) -> Option<Vec<(String, String, String)>> {
-    // A tuple's items are named in parentheses, `{(a, b)}` and `fail (a, b)`.
+    // A tuple's items are named in parentheses, `{(a, b)}` and `failure (a, b)`.
     let items = |extracted: &Type| match extracted {
         Type::Tuple(items) => Some(format!("({})", (0..items.len()).map(|i| format!("${{item{}}}", i)).collect::<Vec<_>>().join(", "))),
         _ => None,
@@ -1175,8 +1175,8 @@ fn outcome_patterns(ty: &Type) -> Option<Vec<(String, String, String)>> {
         ("{value}".to_string(), format!("the {}", extracted), name)
     };
     let failure = |error: &Type| {
-        let template = items(error).map_or_else(|| "fail ${e}".to_string(), |parts| format!("fail {}", parts));
-        ("fail e".to_string(), format!("the {} error", error), template)
+        let template = items(error).map_or_else(|| "failure ${e}".to_string(), |parts| format!("failure {}", parts));
+        ("failure e".to_string(), format!("the {} error", error), template)
     };
     match ty {
         Type::Maybe(inner) => Some(vec![value(inner), ("none".to_string(), "no value".to_string(), "none".to_string())]),
@@ -1655,7 +1655,7 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bo
         _ => items.push(keyword("fi")),
     }
     if names_error {
-        items.push(snippet("fail", "name the error this plan B handles", "fail ${e}"));
+        items.push(snippet("failure", "name the failure this plan B handles", "failure ${e}"));
     }
     items.extend([
         snippet("when", "a condition", "when ${condition}\n\t${}\nfi"),

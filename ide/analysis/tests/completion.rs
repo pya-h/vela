@@ -330,7 +330,7 @@ fn show_takes_a_value_with_its_own_str() {
 fn the_kind_reading_a_number_sends_is_known_to_the_editor() {
     // `ParseError` and its variants are declared by no file, so the editor knows
     // them as it knows the builtin types.
-    let source = "task main()\n    match int(\"42\")\n    case {value}\n        show(value)\n    case fail why\n        match why\n        case NotANumber\n            show(\"no\")\n        case TooLarge\n            show(\"big\")\n        fi\n    fi\nfi\n";
+    let source = "task main()\n    match int(\"42\")\n    case {value}\n        show(value)\n    case failure why\n        match why\n        case NotANumber\n            show(\"no\")\n        case TooLarge\n            show(\"big\")\n        fi\n    fi\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
     assert!(hover(source, "int(\"42\")", 0).doc.contains("turns a value into one"), "{:?}", hover(source, "int(\"42\")", 0).doc);
     assert!(hover(source, "NotANumber", 0).doc.contains("no number at all"), "{:?}", hover(source, "NotANumber", 0).doc);
@@ -341,7 +341,7 @@ fn the_kind_reading_a_number_sends_is_known_to_the_editor() {
     assert_eq!(hover(bound, "n =", 0).code, "bind n: int ~ ParseError");
     assert_offers("task f() -> int ~ @@", &["ParseError", "text"], &["unit"]);
     // Hovering the kind itself shows what it is.
-    let named = "task age(line: text) -> int ~ ParseError\n    <- int(line) {\n        fail e\n        <- fail e\n    }\nfi\n\ntask main()\n    show(age(\"1\") { 0 })\nfi\n";
+    let named = "task age(line: text) -> int ~ ParseError\n    <- int(line) {\n        failure e\n        <- fail e\n    }\nfi\n\ntask main()\n    show(age(\"1\") { 0 })\nfi\n";
     assert_eq!(Analysis::new(named).diagnostics(), Vec::new());
     assert!(hover(named, "ParseError", 0).code.starts_with("kind ParseError"), "{:?}", hover(named, "ParseError", 0).code);
 }
@@ -350,7 +350,7 @@ fn the_kind_reading_a_number_sends_is_known_to_the_editor() {
 fn the_kind_reading_a_number_from_input_sends_is_known_to_the_editor() {
     // `InputError`, `Ended` and `NoNumber` are declared by no file either, and a
     // `scan` that reads a number names no region.
-    let source = "task main()\n    match scan(\"Age: \", int)\n    case {age}\n        show(age)\n    case fail e\n        match e\n        case Ended\n            show(\"nothing\")\n        case NoNumber why\n            match why\n            case NotANumber\n                show(\"no number\")\n            case TooLarge\n                show(\"too large\")\n            fi\n        fi\n    fi\nfi\n";
+    let source = "task main()\n    match scan(\"Age: \", int)\n    case {age}\n        show(age)\n    case failure e\n        match e\n        case Ended\n            show(\"nothing\")\n        case NoNumber why\n            match why\n            case NotANumber\n                show(\"no number\")\n            case TooLarge\n                show(\"too large\")\n            fi\n        fi\n    fi\nfi\n";
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
     assert!(hover(source, "Ended", 0).doc.contains("input has ended"), "{:?}", hover(source, "Ended", 0).doc);
     assert!(hover(source, "NoNumber why", 0).code.starts_with("NoNumber(why: ParseError)"), "{:?}", hover(source, "NoNumber why", 0).code);
@@ -534,23 +534,23 @@ fn types_offer_maybe_and_error_types() {
 #[test]
 fn case_and_is_offer_the_patterns_of_maybe_and_error_values() {
     let marked = in_outcomes("match m\n    case @@\n    fi");
-    assert_offers(&marked, &["{value}", "none", "all remaining cases"], &["fail e", "Empty"]);
+    assert_offers(&marked, &["{value}", "none", "all remaining cases"], &["failure e", "Empty"]);
     assert_eq!(item(&marked, "{value}").snippet.as_deref(), Some("{${value}}"));
     assert_eq!(item(&marked, "all remaining cases").snippet.as_deref(), Some("{${value}}\n\t\ncase none\n\t${}"));
     let marked = in_outcomes("match r\n    case {n}\n        show(n)\n    case @@\n    fi");
-    assert_offers(&marked, &["fail e"], &["{value}", "none", "all remaining cases"]);
-    assert_eq!(item(&marked, "fail e").snippet.as_deref(), Some("fail ${e}"));
+    assert_offers(&marked, &["failure e"], &["{value}", "none", "all remaining cases"]);
+    assert_eq!(item(&marked, "failure e").snippet.as_deref(), Some("failure ${e}"));
 
-    assert_offers(&in_outcomes("when m is @@"), &["{value}", "none"], &["fail e", "total"]);
-    assert_offers(&in_outcomes("when r is @@"), &["{value}", "fail e"], &["none"]);
-    assert_offers(&in_outcomes("when parse(\"x\") { fail _\n        0\n    } is @@"), &[], &[]);
+    assert_offers(&in_outcomes("when m is @@"), &["{value}", "none"], &["failure e", "total"]);
+    assert_offers(&in_outcomes("when r is @@"), &["{value}", "failure e"], &["none"]);
+    assert_offers(&in_outcomes("when parse(\"x\") { failure _\n        0\n    } is @@"), &[], &[]);
     // The names a pattern or plan B declares are new.
     for marked in [
         in_outcomes("when m is {@@"),
-        in_outcomes("when r is fail @@"),
+        in_outcomes("when r is failure @@"),
         in_outcomes("when parse(\"2\") is Bad @@"),
-        in_outcomes("bind n = r { fail @@"),
-        in_outcomes("bind n = r {\n        fail @@"),
+        in_outcomes("bind n = r { failure @@"),
+        in_outcomes("bind n = r {\n        failure @@"),
     ] {
         assert_eq!(labels(&marked), Vec::<String>::new(), "at {:?}", marked);
     }
@@ -563,24 +563,24 @@ fn case_and_is_offer_the_patterns_of_maybe_and_error_values() {
 fn plan_b_blocks_offer_values_and_statements() {
     assert_offers(&in_outcomes("bind n = m { @@"), &["total", "m", "fail", "none"], &[]);
     assert_offers(&in_outcomes("bind n = m {\n        @@"), &["bind", "total", "when"], &[]);
-    // `}` closes a plan B, not `fi`, and only its first line may name the error.
+    // `}` closes a plan B, not `fi`, and only its first line may name the failure.
     let marked = in_outcomes("when total > 0\n        bind n = r {\n            @@");
-    assert_offers(&marked, &["fail", "bind"], &["fi", "else"]);
-    assert_eq!(item(&marked, "fail").snippet.as_deref(), Some("fail ${e}"));
-    assert_offers(&in_outcomes("bind n = r {\n        fail e\n        @@"), &["bind"], &["fail", "fi"]);
+    assert_offers(&marked, &["failure", "bind"], &["fi", "else"]);
+    assert_eq!(item(&marked, "failure").snippet.as_deref(), Some("failure ${e}"));
+    assert_offers(&in_outcomes("bind n = r {\n        failure e\n        @@"), &["bind"], &["failure", "fi"]);
     // After the plan B closes, the blocks around it continue.
-    assert_offers(&in_outcomes("when total > 0\n        bind n = r {\n            0\n        }\n        @@"), &["fi", "else"], &["fail"]);
+    assert_offers(&in_outcomes("when total > 0\n        bind n = r {\n            0\n        }\n        @@"), &["fi", "else"], &["failure"]);
     assert_offers(&in_outcomes("@@"), &["match m", "match r", "when … is", "loop … is"], &[]);
-    assert_eq!(item(&in_outcomes("@@"), "match r").snippet.as_deref(), Some("match r\ncase {${value}}\n\t\ncase fail ${e}\n\t${}\nfi"));
+    assert_eq!(item(&in_outcomes("@@"), "match r").snippet.as_deref(), Some("match r\ncase {${value}}\n\t\ncase failure ${e}\n\t${}\nfi"));
 }
 
 #[test]
 fn hover_describes_maybe_and_error_names() {
     let source = OUTCOMES.replace(
         "    @@\n",
-        "    bind n = r {\n        fail problem\n        show(0)\n        0\n    }\n    when m is {value}\n        show(value + n)\n    fi\n",
+        "    bind n = r {\n        failure problem\n        show(0)\n        0\n    }\n    when m is {value}\n        show(value + n)\n    fi\n",
     );
-    assert_eq!(code_and_doc(hover(&source, "problem", 0)), ("fail problem: Problem".to_string(), "The error this plan B handles.".to_string()));
+    assert_eq!(code_and_doc(hover(&source, "problem", 0)), ("failure problem: Problem".to_string(), "The failure this plan B handles.".to_string()));
     assert_eq!(code_and_doc(hover(&source, "value + n", 0)), ("value: int".to_string(), "Bound by an is condition.".to_string()));
     assert_eq!(hover(&source, "m:", 0).code, "bind m: maybe int");
     assert_eq!(hover(&source, "r =", 0).code, "bind r: int ~ Problem");
@@ -588,20 +588,25 @@ fn hover_describes_maybe_and_error_names() {
     assert_eq!(hover(&source, "none", 0).code, "none");
     // `~` explains itself (its class is an operator, as the snapshots show).
     assert_eq!(hover(&source, "~ Problem", 0).code, "T ~ E");
+    // The two words say which is which.
+    assert_eq!(hover(&source, "failure problem", 0).code, "failure e");
+    assert!(hover(&source, "failure problem", 0).doc.contains("Names the failure"), "{:?}", hover(&source, "failure problem", 0).doc);
+    let sending = "task f() -> int ~ text\n    <- fail \"x\"\nfi\n";
+    assert!(hover(sending, "fail \"x\"", 0).doc.contains("Makes a failure"), "{:?}", hover(sending, "fail \"x\"", 0).doc);
 }
 
 #[test]
 fn hover_reads_maybe_and_error_names_when_the_file_doesnt_check() {
     let source = OUTCOMES.replace(
         "    @@\n",
-        "    show(missing)\n    bind a = m { 0 }\n    bind b = r {\n        fail problem\n        0\n    }\n    \
-         when m is {value}\n        show(value)\n    fi\n    when r is fail wrong\n        show(1)\n    fi\n    \
-         match r\n    case {got}\n        show(got)\n    case fail bad\n        show(1)\n    fi\n",
+        "    show(missing)\n    bind a = m { 0 }\n    bind b = r {\n        failure problem\n        0\n    }\n    \
+         when m is {value}\n        show(value)\n    fi\n    when r is failure wrong\n        show(1)\n    fi\n    \
+         match r\n    case {got}\n        show(got)\n    case failure bad\n        show(1)\n    fi\n",
     );
     for (needle, code) in [
         ("a =", "bind a: int"),
         ("b =", "bind b: int"),
-        ("problem", "fail problem: Problem"),
+        ("problem", "failure problem: Problem"),
         ("value}", "value: int"),
         ("wrong", "wrong: Problem"),
         ("got}", "got: int"),
@@ -749,19 +754,20 @@ fn types_follow_a_region_and_error_types_follow_a_regional_type() {
 
 #[test]
 fn a_plan_b_naming_its_error_is_a_block_of_its_own() {
-    let source = "task parse(t: text) -> int ~ text\n    <- 1\nfi\ntask main()\n    when true\n        bind r = parse(\"x\") { fail e\n            @@\n        }\n    fi\nfi\n";
+    let source = "task parse(t: text) -> int ~ text\n    <- 1\nfi\ntask main()\n    when true\n        bind r = parse(\"x\") { failure e\n            @@\n        }\n    fi\nfi\n";
     assert_offers(source, &["show", "e"], &["fi", "else"]);
     // While the file doesn't check, the binding still has the value's type, not the error's.
-    let broken = "kind Problem\n    Empty\nfi\ntask parse(t: text) -> int ~ Problem\n    <- 1\nfi\ntask main()\n    show(missing)\n    bind r = parse(\"x\") { fail e\n        0\n    }\n    show(r)\nfi\n";
+    let broken = "kind Problem\n    Empty\nfi\ntask parse(t: text) -> int ~ Problem\n    <- 1\nfi\ntask main()\n    show(missing)\n    bind r = parse(\"x\") { failure e\n        0\n    }\n    show(r)\nfi\n";
     assert_eq!(hover(broken, "r = parse", 0).code, "bind r: int");
 }
 
 #[test]
 fn only_a_value_that_can_fail_has_an_error_to_name() {
     let source = "task main()\n    bind m: maybe int = none\n    bind n = m {\n        @@\n    }\nfi\n";
-    assert_offers(source, &["show"], &["fail"]);
+    assert_offers(source, &["show"], &["fail", "failure"]);
     let failing = "task get() -> int ~ text\n    <- 1\nfi\ntask main()\n    bind n = get() {\n        @@\n    }\nfi\n";
-    assert_offers(failing, &["fail"], &[]);
+    // The noun names the failure a plan B handles; the verb belongs where a value goes.
+    assert_offers(failing, &["failure"], &["fail"]);
     // `fail` as a value only where some type can hold an error.
     assert_offers("task main()\n    bind x = @@\nfi\n", &["true"], &["fail"]);
 }

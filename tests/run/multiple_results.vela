@@ -86,7 +86,7 @@ task main()
     show(result { 0 })
     bind other, failed = pair(-2)
     show(other)
-    show(failed { fail e
+    show(failed { failure e
         show("handled")
         -1
     })

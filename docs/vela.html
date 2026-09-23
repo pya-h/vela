@@ -187,7 +187,7 @@
         More programs are in <code>examples/</code>: <code>fib.vela</code> (recursion), <code>kinds.vela</code>
         (kinds, <code>match</code>, and a kind's methods), <code>methods.vela</code> (a shape's methods, <code>alters</code>,
         <code>priv</code>, a method that can fail, and one of a shape that takes types), <code>todo.vela</code> (a linked list in a region, with <code>maybe</code>
-        pointers, <code>is</code>, and a plan B), <code>errors.vela</code> (<code>T ~ E</code>, <code>fail</code>, and handling
+        pointers, <code>is</code>, and a plan B), <code>errors.vela</code> (<code>T ~ E</code>, <code>fail</code> and <code>failure</code>, and handling
         errors with <code>match</code>, <code>is</code>, and a plan B), <code>text.vela</code> (lengths, parts, order,
         joining, values as text, and text holding values), <code>regions.vela</code> (a tree in a region, a region
         per loop pass, and copying a result into a longer-lived region), <code>arrays.vela</code> (arrays, and slices
@@ -246,7 +246,7 @@
       <p>These words can't be used as names:</p>
       <pre>task shape kind  bind hold  when   else loop    each
 in   at    match case new   region and  or      not
-true false none  fi   maybe is     fail include priv</pre>
+true false none  fi   maybe is     fail failure include priv</pre>
       <p>
         <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>,
         <code>bool</code>, <code>text</code>, <code>unit</code>) aren't reserved words: no task, shape, kind, or
@@ -573,7 +573,7 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
     <span class="keyword">match</span> int(line)
     <span class="keyword">case</span> {age}
         show(<span class="string">"next year: "</span>, age + <span class="number">1</span>)
-    <span class="keyword">case</span> <span class="keyword">fail</span> why
+    <span class="keyword">case</span> <span class="keyword">failure</span> why
         <span class="keyword">match</span> why
         <span class="keyword">case</span> NotANumber
             show(<span class="string">"that is no number"</span>)
@@ -721,7 +721,7 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         <span class="keyword">match</span> scan(<span class="string">"n: "</span>, <span class="type">int</span>)                <span class="comment"># int ~ InputError; no region</span>
         <span class="keyword">case</span> {value}
             total = total + value
-        <span class="keyword">case</span> <span class="keyword">fail</span> e
+        <span class="keyword">case</span> <span class="keyword">failure</span> e
             <span class="keyword">match</span> e
             <span class="keyword">case</span> Ended                        <span class="comment"># nothing more to read</span>
                 reading = <span class="keyword">false</span>
@@ -1159,7 +1159,7 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
         <li><strong>Patterns.</strong> In <code>is</code> and <code>case</code>, braces take the value out of a
           <code>maybe</code> or a <code>T ~ E</code> and parentheses take a tuple apart, so
           <code>when found is {(name, age)}</code> does both, as do <code>case {(a, b)}</code> and
-          <code>case fail (line, message)</code>. A plain tuple has no other case, so <code>when t is (x, y)</code>
+          <code>case failure (line, message)</code>. A plain tuple has no other case, so <code>when t is (x, y)</code>
           always matches: its block runs with the items named, so a <code>&lt;-</code> in it sends for certain, and an
           <code>else</code> on it, a <code>loop</code> of it, or a <code>match</code> on a tuple, is an error that says to
           use <code>bind</code>. <code>hold</code> before a name makes it a variable the block can
@@ -1461,8 +1461,11 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
       <p>
         A task that can fail sends <code>T ~ E</code>: its value when it works, or an error of type
         <code>E</code>, sent with <code>&lt;- fail error</code>. The error type must differ from the value type, and
-        can be any type but <code>unit</code> or a <code>maybe</code>. <code>case {v}</code> matches a success and
-        <code>case fail e</code> an error, and a plan B's first line <code>fail e</code> names the error:
+        can be any type but <code>unit</code> or a <code>maybe</code>. Two words keep the two jobs apart:
+        <code>fail</code> is the verb that <em>makes</em> a failure, and <code>failure</code> is the noun that
+        <em>names</em> one where it is matched. So <code>case {v}</code> matches a success,
+        <code>case failure e</code> a failure, and a plan B's first line <code>failure e</code> names the failure it
+        handles — the name of the error value, not a type; the type is the one after <code>~</code>:
       </p>
       <pre><span class="keyword">kind</span> SizeError
     Negative(value: int)
@@ -1482,7 +1485,7 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
 <span class="keyword">task</span> main()
     <span class="keyword">bind</span> a = checked(500) { 100 }       <span class="comment"># ignore the error: use 100</span>
     <span class="keyword">bind</span> b = checked(-1) {
-        <span class="keyword">fail</span> e
+        <span class="keyword">failure</span> e
         <span class="keyword">match</span> e
         <span class="keyword">case</span> Negative value
             show(value)            <span class="comment"># -1</span>
@@ -1494,7 +1497,7 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
     <span class="keyword">match</span> checked(7)
     <span class="keyword">case</span> {size}
         show(size)                 <span class="comment"># 7</span>
-    <span class="keyword">case</span> <span class="keyword">fail</span> e
+    <span class="keyword">case</span> <span class="keyword">failure</span> e
         show(<span class="string">"failed"</span>)
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></pre>
@@ -1516,7 +1519,7 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
 
 save(500)                  <span class="comment"># error: the error 'save' may send is ignored</span>
 save(500) {
-    <span class="keyword">fail</span> reason
+    <span class="keyword">failure</span> reason
     show(reason)           <span class="comment"># too big</span>
 }</pre>
 

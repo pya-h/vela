@@ -84,7 +84,7 @@ task main()
     show("café {"é"} ☕ {n}" at r)
     # An error made of text holding values, read with a plan B.
     show(checked(n, r) { 0 })
-    bind low = checked(-n, r) { fail e
+    bind low = checked(-n, r) { failure e
         show(e)
         0
     }

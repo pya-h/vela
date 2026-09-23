@@ -1,6 +1,6 @@
 # Errors of every type: a shape, an int computed with `fail (…)`, and a
 # `text ~ int` (written without spaces here, which is allowed), handled by
-# `match`, a plan B, and `is fail e`.
+# `match`, a plan B, and `is failure e`.
 
 shape Problem
     code: int
@@ -25,15 +25,15 @@ task main()
     match parse("")
     case {v}
         show(v)
-    case fail p
+    case failure p
         show(p.code)
         show(p.note)
     fi
     show(steps(3) { "bad" })
-    show(steps(15) { fail over
+    show(steps(15) { failure over
         show(over)
         "too many" })
-    when steps(12) is fail extra
+    when steps(12) is failure extra
         show(-extra)
     fi
 fi

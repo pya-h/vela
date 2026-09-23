@@ -1,4 +1,4 @@
-# error: 14:15: 'TooBig' is a variant, but 'fail e' names the whole error; give it a name, then match on it
+# error: 14:18: 'TooBig' is a variant, but 'failure e' names the whole error; give it a name, then match on it
 kind Problem
     TooBig
 fi
@@ -11,7 +11,7 @@ task main()
     match check(1)
     case {n}
         show(n)
-    case fail TooBig
+    case failure TooBig
         show(0)
     fi
 fi

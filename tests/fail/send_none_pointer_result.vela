@@ -5,7 +5,7 @@ fi
 
 task main()
     region r
-    find(r, 1) { fail _
+    find(r, 1) { failure _
         <-
     }
 fi

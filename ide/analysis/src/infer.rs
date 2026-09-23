@@ -193,7 +193,7 @@ impl<'a> Knowledge<'a> {
             (SymbolKind::Parameter, _) | (SymbolKind::Field, _) => parse_type(&symbol.detail),
             (SymbolKind::Variable, Some("each")) => self.each_type(id, depth + 1),
             (SymbolKind::Variable, Some("case" | "is")) => self.case_binding_type(id, depth + 1),
-            (SymbolKind::Variable, Some("fail")) => self.plan_b_error_type(id, depth + 1),
+            (SymbolKind::Variable, Some("failure")) => self.plan_b_error_type(id, depth + 1),
             (SymbolKind::Variable, _) if !symbol.detail.is_empty() => parse_type(&symbol.detail),
             // Text of no region in particular lasts, as the checker settles it.
             (SymbolKind::Variable, _) => self.initializer_type(symbol, depth).map(|ty| vela::check::lasting(&ty, &self.types_holding(holds_pointers))),
@@ -224,8 +224,8 @@ impl<'a> Knowledge<'a> {
             if first > last {
                 return None;
             }
-            // A plan B spanning lines (`{`, or `{ fail e`) gives the value it extracts.
-            let names_error = self.token(last.checked_sub(1)?) == Some(&Token::Fail)
+            // A plan B spanning lines (`{`, or `{ failure e`) gives the value it extracts.
+            let names_error = self.token(last.checked_sub(1)?) == Some(&Token::Failure)
                 && matches!(self.token(last), Some(Token::Ident(_) | Token::Underscore));
             let brace = if names_error { last.checked_sub(2)? } else { last };
             if self.token(brace) == Some(&Token::LBrace) {
@@ -449,8 +449,8 @@ impl<'a> Knowledge<'a> {
         match self.token(start)? {
             // `{v}` and `{(a, b)}`: the value inside, and its items.
             Token::LBrace => self.pattern_item(outcome()?.extracted().cloned()?, start + 1, name),
-            // `fail e` and `fail (a, b)`.
-            Token::Fail => match outcome()? {
+            // `failure e` and `failure (a, b)`.
+            Token::Failure => match outcome()? {
                 Type::Or(_, error) => self.pattern_item(*error, start + 1, name),
                 _ => None,
             },

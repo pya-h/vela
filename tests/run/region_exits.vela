@@ -39,7 +39,7 @@ task from_and(n: int) -> int
     match fails(pa^)
     case {v}
         <- v
-    case fail msg
+    case failure msg
         region d
         bind pd = new text(msg) at d
         when pd^ == "four" and pick(pa^ / 4) { <- 1000 } > 0
@@ -58,7 +58,7 @@ task main()
     each k in 0..1000
         region per
         bind p = new int(k) at per
-        show(pick(p^) { fails(p^) { fail e
+        show(pick(p^) { fails(p^) { failure e
             region inner
             bind q = new int(0) at inner
             when k > 10

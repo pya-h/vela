@@ -13,7 +13,7 @@ task from_text()
         match int(written)
         case {value}
             show(written, " is ", value)
-        case fail why
+        case failure why
             match why
             case NotANumber
                 show(written, " is no whole number")
@@ -40,7 +40,7 @@ task main()
             when count == 1 or value > largest
                 largest = value
             fi
-        case fail e
+        case failure e
             match e
             # Nothing more to read, so the loop is done.
             case Ended

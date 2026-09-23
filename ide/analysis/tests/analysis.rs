@@ -183,7 +183,7 @@ fi
 task main()
     bind m: maybe int = 2
     bind n = parse(\"x\") {
-        fail problem
+        failure problem
         bind fallback = 0
         show(problem)
         fallback
@@ -209,7 +209,7 @@ fi
     assert_eq!(class_at(source, "is {value}", 0), TokenClass::Keyword);
     assert_eq!(class_at(source, "maybe int", 0), TokenClass::Keyword);
     assert_eq!(class_at(source, "text\n    <- 1", 0), TokenClass::TypeBuiltin);
-    assert_eq!(class_at(source, "fail problem", 0), TokenClass::Keyword);
+    assert_eq!(class_at(source, "failure problem", 0), TokenClass::Keyword);
 
     // Blocks inside a plan B don't end it early.
     let source = "\
@@ -555,7 +555,7 @@ fn a_variable_on_a_line_with_an_unclosed_brace_is_visible_on_the_next() {
     let source = "shape P\n    x: int\nfi\n\ntask main()\n    bind p = P { x: 1\n    show(p)\nfi\n";
     assert_definition(source, ("p)", 0), ("p =", 0));
     // A plan B spanning lines still hides the name inside it.
-    let plan_b = "task main()\n    bind m: maybe int = none\n    bind n = m { fail e\n        n\n    }\n    show(n)\nfi\n";
+    let plan_b = "task main()\n    bind m: maybe int = none\n    bind n = m { failure e\n        n\n    }\n    show(n)\nfi\n";
     assert_eq!(Analysis::new(plan_b).definition(at(plan_b, "n\n    }", 0)), None);
     assert_definition(plan_b, ("n)", 0), ("n =", 0));
 }

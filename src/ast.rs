@@ -981,7 +981,7 @@ impl Pattern {
             PatternKind::Variant { tag, .. } => tag.clone(),
             PatternKind::Value(_) => "{…}".to_string(),
             PatternKind::None => "none".to_string(),
-            PatternKind::Fail(_) => "fail …".to_string(),
+            PatternKind::Fail(_) => "failure …".to_string(),
             PatternKind::Tuple(_) => "( … )".to_string(),
             PatternKind::Any => DISCARD.to_string(),
         }

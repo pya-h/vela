@@ -246,8 +246,8 @@
     | keyword:case  punctuation:{  variable:value  punctuation:}
 140 |             show(value)
     | builtin-fn:show  punctuation:(  variable:value  punctuation:)
-141 |         case fail problem
-    | keyword:case  keyword:fail  variable:problem
+141 |         case failure problem
+    | keyword:case  keyword:failure  variable:problem
 142 |             match problem
     | keyword:match  variable:problem
 143 |                 case Missing what
