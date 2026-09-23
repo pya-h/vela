@@ -80,10 +80,11 @@ int main(void) {
     input("2.5\r\n-0.5\r\n");
     number("2.5 with a carriage return", VELA__RT__READ_OK, 2.5);
     number("-0.5 with a carriage return", VELA__RT__READ_OK, -0.5);
-    number("the end", VELA__RT__READ_ENDED, 0);
+    number("the end after the carriage returns", VELA__RT__READ_ENDED, 0);
 
-    /* A line far longer than the 128 bytes the reader starts with, which it
-     * grows to hold, and which is a number no int holds. */
+    /* Lines far longer than the 128 bytes the reader starts with, which it grows
+     * to hold: one that is a number no int holds, and one whose digits the
+     * growth must keep, so that a buffer grown wrong cannot pass. */
     {
         char big[5002];
         memset(big, '9', 5000);
@@ -91,6 +92,34 @@ int main(void) {
         big[5001] = 0;
         input(big);
         whole("five thousand digits", VELA__RT__READ_TOO_LARGE, 0);
+        memset(big, '0', 4996);
+        big[4996] = '4';
+        big[4997] = '2';
+        big[4998] = '\n';
+        big[4999] = 0;
+        input(big);
+        whole("42 behind five thousand zeros", VELA__RT__READ_OK, 42);
+    }
+
+    /* The line reader the region form uses is the same one: `scan` copies the
+     * line it reads into a region, without its line break. */
+    {
+        vela__rt__region r = { 0 };
+        vela__rt__text line = { NULL, 0 };
+        input("kept\r\nalso\n");
+        if (!vela__rt__scan(&r, NO_PROMPT, &line) || line.len != 4 || memcmp(line.bytes, "kept", 4) != 0) {
+            printf("scan into a region: read %d bytes\n", (int)line.len);
+            failures++;
+        }
+        if (!vela__rt__scan(&r, NO_PROMPT, &line) || line.len != 4 || memcmp(line.bytes, "also", 4) != 0) {
+            printf("scan into a region, again: read %d bytes\n", (int)line.len);
+            failures++;
+        }
+        if (vela__rt__scan(&r, NO_PROMPT, &line)) {
+            puts("scan into a region: read a line past the end of the input");
+            failures++;
+        }
+        vela__rt__region_free(&r);
     }
 
     /* A `\0` is a byte of the line like any other, and no number holds it. */

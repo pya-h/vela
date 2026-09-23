@@ -374,6 +374,31 @@ fn the_kind_reading_a_number_from_input_sends_is_known_to_the_editor() {
 }
 
 #[test]
+fn the_cases_of_a_kind_no_file_declares_are_offered() {
+    // Its variants are in no file, so they come from the language itself; a kind
+    // the file does declare must not be offered in their place.
+    let of = |body: &str| format!("kind Light\n    Red\n    Dim(n: int)\nfi\n\ntask why(e: InputError) -> int\n    {}\n    <- 0\nfi\n", body);
+    assert_eq!(labels(&of("match e\n    case @@\n    fi")), ["Ended", "NoNumber", "_", "all remaining cases"]);
+    assert_eq!(labels(&of("when e is @@\n    fi")), ["Ended", "NoNumber"]);
+    assert_eq!(labels(&of("match e\n    case InputError.@@\n    fi")), ["Ended", "NoNumber"]);
+    // A case already written is not offered again, and `is` takes one case only.
+    assert_eq!(labels(&of("match e\n    case Ended\n        show(0)\n    case @@\n    fi")), ["NoNumber", "_"]);
+    // The variant that holds a reason is taken apart by a pattern, and written
+    // as a value with parentheses.
+    let pattern = item(&of("match e\n    case @@\n    fi"), "NoNumber");
+    assert_eq!(pattern.snippet.as_deref(), Some("NoNumber ${why}"));
+    assert_eq!(pattern.detail, "InputError (why: ParseError)");
+    let value = item("task f() -> int or ParseError\n    <- fail ParseError.@@\nfi\n", "NotANumber");
+    assert_eq!(value.detail, "ParseError");
+    assert_eq!(item(&of("bind e2 = InputError.@@"), "NoNumber").snippet.as_deref(), Some("NoNumber(${why})"));
+    // The match with every case, offered for a value of one.
+    assert_eq!(
+        item(&of("@@"), "match e").snippet.as_deref(),
+        Some("match e\ncase Ended\n\t\ncase NoNumber ${why}\n\t${}\nfi")
+    );
+}
+
+#[test]
 fn hover_reads_declared_types_when_the_file_doesnt_check() {
     let source = PROGRAM.replace(
         "    @@\n",

@@ -1339,8 +1339,11 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
       </p>
       <p>
         Tasks, shapes, kinds, and variants share one namespace in a file: no two of them can have the same name, even
-        across different kinds, and none can be named like a builtin (<code>int</code>, <code>float</code>,
-        <code>bool</code>, <code>text</code>, <code>unit</code>, <code>show</code>, <code>scan</code>). Another module has names of its own
+        across different kinds, and none can be named like a builtin: the types (<code>int</code>, <code>float</code>,
+        <code>bool</code>, <code>text</code>, <code>unit</code>), the tasks (<code>show</code>, <code>scan</code>), or
+        the kinds no file declares and their variants (<a href="#reading-numbers"><code>ParseError</code></a> with
+        <code>NotANumber</code> and <code>TooLarge</code>, <a href="#reading-input"><code>InputError</code></a> with
+        <code>Ended</code> and <code>NoNumber</code>). Another module has names of its own
         (see <a href="#modules">Modules</a>). Every type you write must be a builtin, a shape, or a kind. A variable
         can't take the name of a variant, a kind, or a module the file includes, so a bare <code>Red</code> always means
         the variant, and <code>Light.Red</code> a variant of <code>Light</code>.
@@ -2092,8 +2095,8 @@ n.point(<span class="keyword">new</span> Node(Node { value: <span class="number"
           in a circle: a -&gt; b -&gt; a</em>). A file includes each module once, however its path is written
           (from the folder <code>app</code>, <code>../app/shapes</code> is <code>shapes</code>), and can't include two
           modules under one name. A name is listed once on an <code>include</code> line. The name a module is included under can't also be the name of something the file declares, of a name
-          it brings in, or of a variable, and can't be a builtin type or task. A module or name can't be renamed to itself, or to
-          a builtin.</li>
+          it brings in, or of a variable, and can't be a builtin type, task, or kind, or a variant of one. A module or name
+          can't be renamed to itself, or to a builtin.</li>
       </ul>
       <pre><span class="comment"># in main.vela, after include shapes/geometry</span>
 show(geometry.pi())            <span class="comment"># error: 'pi' is private to module 'geometry'</span>
@@ -2211,7 +2214,9 @@ CC=clang cargo test</pre>
         <code>vela::driver</code> checks and builds programs exactly as the <code>vela</code> command does (and can
         keep a partly checked program for editors),
         <code>vela::lexer::highlight</code> splits source into tokens without stopping at errors (for editors), and
-        <code>lexer::KEYWORDS</code> and <code>ast::BUILTIN_TYPES</code> list the language's reserved words and types.
+        <code>lexer::KEYWORDS</code>, <code>ast::BUILTIN_TYPES</code>, <code>ast::BUILTIN_TASKS</code> and
+        <code>ast::BUILTIN_KIND_NAMES</code> list the language's reserved words and the names nothing else may take
+        (<code>ast::builtin_kinds</code> gives those kinds as declarations, which Vela Studio reads).
       </p>
       <p>
         The repository is a Cargo workspace: the compiler is the default member, and <a href="ide.html">Vela

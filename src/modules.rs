@@ -429,6 +429,9 @@ impl State {
                     if BUILTIN_TASKS.contains(&alias.as_str()) {
                         return err(*at, format!("'{}' is a builtin task, so nothing else can be named so", alias));
                     }
+                    if let Some(clash) = builtin_kind_clash(alias) {
+                        return err(*at, clash);
+                    }
                 }
                 let (written, at) = (part.local_name(), part.local_span());
                 if let Some(own) = resolver.own.get(written) {
@@ -504,14 +507,22 @@ fn spelling(module: &Module, own: Option<&Names>, tables: &[Names], variants: &V
     Spelling { names }
 }
 
-/// Rejects a module named like a builtin type or task in a file, `name` written
-/// at `span`, which its qualified names would read as.
+/// Rejects a module named like a builtin type, task, or kind in a file, `name`
+/// written at `span`, which its qualified names would read as.
 fn check_module_name(name: &str, span: Span) -> Result<()> {
     if Type::builtin(name).is_some() {
         return err(span, format!("a module can't be named '{}', which is a builtin type", name));
     }
     if BUILTIN_TASKS.contains(&name) {
         return err(span, format!("a module can't be named '{}', which is a builtin task", name));
+    }
+    // A name of a builtin kind would stand for two things in the file: the
+    // module, and the kind or variant every file writes (see `ast::builtin_kinds`).
+    if let Some(kind) = builtin_kind_of(name) {
+        return err(span, format!("a module can't be named '{}', which is a variant of the builtin kind '{}'", name, kind));
+    }
+    if BUILTIN_KIND_NAMES.contains(&name) {
+        return err(span, format!("a module can't be named '{}', which is a builtin kind", name));
     }
     Ok(())
 }
@@ -598,6 +609,20 @@ struct Entry {
 /// so its position is in no file of the program (see `ast::builtin_kinds`).
 fn builtin_kind_entry(name: &str, what: What, kind: Option<String>) -> Entry {
     Entry { full: name.to_string(), what, private: false, span: parse_error_kind().span, kind }
+}
+
+/// The message for a name a builtin kind or one of its variants owns, which a
+/// part brought in under another name may not take either (see
+/// `ast::builtin_kinds`, `check_module_name` for a module, and
+/// `check::collect_declarations` for a declaration).
+fn builtin_kind_clash(name: &str) -> Option<String> {
+    if !BUILTIN_KIND_NAMES.contains(&name) {
+        return None;
+    }
+    Some(match builtin_kind_of(name) {
+        Some(kind) => format!("'{}' is a variant of the builtin kind '{}', so nothing else can be named so", name, kind),
+        None => format!("'{}' is a builtin kind, so nothing else can be named so", name),
+    })
 }
 
 /// A module's declarations, by the names they are written with.

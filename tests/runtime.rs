@@ -82,6 +82,13 @@ fn run(exe: &Path) -> std::process::Output {
 fn run_with_input(exe: &Path, input: Vec<u8>) -> std::process::Output {
     use std::process::Stdio;
     let mut command = Command::new(exe);
+    // In the folder the program was built in, which is this suite's own: a test
+    // that writes a file (`tests/runtime/input.c`) then writes it there rather
+    // than into the working tree, where the suites, which run at the same time,
+    // would write the same name.
+    if let Some(folder) = exe.parent() {
+        command.current_dir(folder);
+    }
     // Leak checking is part of AddressSanitizer only on Linux.
     let leaks = if cfg!(target_os = "linux") { "detect_leaks=1" } else { "detect_leaks=0" };
     command.env("ASAN_OPTIONS", format!("{}:abort_on_error=0", leaks));

@@ -2487,8 +2487,10 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::MethodCall { value, args, .. } => expr_reads(value, name) || args.iter().any(|arg| expr_reads(arg, name)),
         ExprKind::StructInit { fields, .. } => fields.iter().any(|field| expr_reads(&field.value, name)),
         ExprKind::PlanB { value, body, .. } => expr_reads(value, name) || block_reads(body, name),
-        // `scan` reads the region it keeps the line in, where it keeps one.
-        ExprKind::Scan { args, region, .. } => region.as_deref() == Some(name) || args.iter().any(|arg| expr_reads(arg, name)),
+        // `scan` reads the region it keeps the line in, where it keeps one, and
+        // the prompt. The type a typed read names is a type, not a value, so a
+        // variable of that name is not read by it.
+        ExprKind::Scan { args, region, .. } => region.as_deref() == Some(name) || args.iter().take(1).any(|arg| expr_reads(arg, name)),
         // Joining text, and a value turned into text, read the region the text goes in.
         ExprKind::Join { parts, region, .. } => region == name || parts.iter().any(|part| expr_reads(part, name)),
         ExprKind::ToText { value, region, .. } => region == name || expr_reads(value, name),

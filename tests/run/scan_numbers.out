@@ -10,8 +10,12 @@ bad: no number
 0.75
 -0.5
 no float: too large
+line 3: too large
+the input ended
+no number
 age? no age: no number
 age? age 30
+age? no age: too large
 age? no age: no number
 skipped a line
 total: 6

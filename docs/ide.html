@@ -378,17 +378,21 @@ Press Ctrl+C to stop.</pre>
             methods after <code>.</code> (a method with its parameters to fill in, and a pointer's through
             <code>^.</code>), and inside a method, after a <code>.</code> starting a value, <code>this</code> and the fields and
             methods of the value it is called on; a tuple's items by position after its <code>.</code> (<code>0</code>, <code>1</code>, each with its type), and <code>len</code> after an array's, slice's, or text's (and <code>add</code> and <code>del</code> after a slice's),
-            <code>str</code> after a number's, a bool's, or text's, which fills in <code>str() at r</code>;
-            <code>int</code> and <code>float</code> after a <code>scan</code>'s prompt, the two numbers it can read; and
-            <code>copy</code> after a value holding text, a slice, or a pointer; the cases still missing after <code>case</code> and
-            <code>case Kind.</code>, including <code>{value}</code>,
-            <code>none</code>, and <code>fail e</code>; the patterns that fit after <code>is</code> (a tuple's names among them); the regions
+            <code>str</code> after a number's, a bool's, or text's, which fills in <code>str() at r</code>, and
+            <code>copy</code> after a value holding text, a slice, or a pointer; <code>int</code> and <code>float</code>
+            after a <code>scan</code>'s prompt, the two numbers that form reads; the cases still missing after
+            <code>case</code> and <code>case Kind.</code>, including <code>{value}</code>,
+            <code>none</code>, and <code>fail e</code> (the variants of
+            <a href="vela.html#reading-numbers"><code>ParseError</code></a> and
+            <a href="vela.html#reading-input"><code>InputError</code></a> among them, which no file declares);
+            the patterns that fit after <code>is</code> (a tuple's names among them); the regions
             visible after <code>@</code>, and the ones <code>new</code>, <code>scan</code>, or <code>copy</code> can allocate in after <code>new@</code>, <code>scan(…)@</code>,
             <code>copy()@</code>, and a <code>new</code>'s, <code>scan</code>'s, or <code>copy</code>'s <code>at</code>, or as the argument for a task's <code>region</code> parameter; and
             <code>region</code> as a statement or a parameter's type. A call's result shows the caller's regions
             (<code>push(nodes, list)</code> gives a <code>^Node@nodes</code>), even while the file has an error. After
             a finished value, only the words that can continue it: <code>is</code>, <code>in</code>, <code>at</code> (after a
-            <code>new</code>'s, <code>scan</code>'s, or <code>copy()</code>'s value), <code>or</code>, and <code>and</code>. Nothing is offered where a name is being declared: the names after the commas
+            <code>new</code>'s, <code>copy()</code>'s, or a line-reading <code>scan</code>'s value, never after
+            <code>scan(prompt, int)</code>, which names no region), <code>or</code>, and <code>and</code>. Nothing is offered where a name is being declared: the names after the commas
             of <code>bind q, r = …</code> and inside the parentheses of <code>bind a, (b, c) = …</code>, which each
             hover with the type of the value in their place (a tuple's item, for a name that takes one apart), and the
             names in the <code>&lt; &gt;</code> of <code>task first&lt;T&gt;</code> and

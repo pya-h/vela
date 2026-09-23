@@ -1853,10 +1853,13 @@ impl Parser {
     fn parse_scan(&mut self, span: Span) -> Result<Expr> {
         let args = self.parse_arg_list()?;
         if self.check(Token::In) {
-            return Err(Error::at(
-                self.peek_span(),
-                "'scan' names its region with 'at', as in 'scan(\"Name: \") at r' (or 'scan(\"Name: \")@r'); 'in' counts through a range",
-            ));
+            // A read that names a type reads a number, which needs no region, so
+            // nothing follows its call; the checker settles what a type may be.
+            let hint = match args.len() {
+                1 => "'scan' names its region with 'at', as in 'scan(\"Name: \") at r' (or 'scan(\"Name: \")@r'); 'in' counts through a range",
+                _ => "'scan' reading a number names no region, so nothing follows the call, as in 'scan(\"Age: \", int)'; 'in' counts through a range",
+            };
+            return Err(Error::at(self.peek_span(), hint));
         }
         // A line read into a region names one, and a number read from a line
         // names none, which the checker tells apart by what the call takes; the

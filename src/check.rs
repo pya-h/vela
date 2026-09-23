@@ -239,7 +239,12 @@ impl Checker {
     }
 
     /// The variant `name`, written unqualified in the current module, stands for.
+    /// A variant of a builtin kind belongs to no module, so it is the same one in
+    /// every file (see `ast::builtin_kinds`).
     fn variant_in_scope(&self, name: &str) -> Option<&VariantInfo> {
+        if builtin_kind_of(name).is_some() {
+            return self.variants.get(name);
+        }
         self.variants.get(&self.in_module(name))
     }
 
@@ -1551,7 +1556,10 @@ impl Checker {
                 }
             }
         }
-        let mut can: HashSet<&str> = HashSet::new();
+        // The kinds no file declares hold a variant that holds nothing, so they
+        // can always be created; no item declares them, so they are known before
+        // the first look rather than found by it (see `ast::builtin_kinds`).
+        let mut can: HashSet<&str> = BUILTIN_KIND_NAMES.iter().copied().filter(|name| builtin_kind_of(name).is_none()).collect();
         let mut pending: Vec<usize> = (0..items.len()).collect();
         while let Some(i) = pending.pop() {
             let (name, ok) = match items.get(i) {
@@ -3057,8 +3065,7 @@ impl Checker {
         }
     }
 
-    /// Checks `scan(prompt) at region`, at `span`, and returns its type: a
-    /// `maybe text` in the region, which is `none` when the input has ended.
+    /// Checks a read of input, at `span`, and returns its type:
     /// `scan(prompt) at r`, the line as `maybe text@r`, or `scan(prompt, int)`,
     /// a number read from that line as `int or InputError`. The type a typed
     /// read names is a type, not a value, so it is never checked as one.
@@ -3067,13 +3074,25 @@ impl Checker {
             [] => return err(span, SCAN_TAKES),
             [prompt, rest @ ..] => (prompt, rest),
         };
-        let ty = self.check_expr(prompt)?;
-        if !matches!(ty, Type::Text(_)) {
-            return err(prompt.span, format!("'scan' shows a text prompt, as in 'scan(\"Name: \") at r', but this value is {}{}", ty, extract_hint(&[&ty])));
+        // A type where the prompt goes, as in `scan(int)`: the prompt comes
+        // first. A variable may be named after a builtin type, so one that is in
+        // scope is read as the value it is, as anywhere else.
+        if let ExprKind::Var(name) = &prompt.kind
+            && Type::builtin(name).is_some()
+            && self.lookup(name).is_none()
+        {
+            return err(prompt.span, format!("'scan' shows a text prompt first, as in 'scan(\"Age: \", {})'", name));
+        }
+        let shows = self.check_expr(prompt)?;
+        if !matches!(shows, Type::Text(_)) {
+            return err(
+                prompt.span,
+                format!("'scan' shows a text prompt, as in 'scan(\"Name: \") at r', but this value is {}{}", shows, extract_hint(&[&shows])),
+            );
         }
         let number = match rest {
             [] => None,
-            [ty] => Some(scanned_type(ty)?),
+            [named] => Some(scanned_type(named)?),
             _ => return err(span, format!("{}, got {}", SCAN_TAKES, count(args.len(), "argument"))),
         };
         match (number, region) {
@@ -3094,7 +3113,6 @@ impl Checker {
             ),
         }
     }
-
 
     /// Checks one value given to `show`: a number, a bool, text, a `maybe` of
     /// one, a shape or kind with its own `str`, or a type a declaration takes
@@ -5192,7 +5210,6 @@ fn fits_or_err(actual: &Type, expected: &Type, at: Span, given: Given) -> Result
     err(at, format!("expected type {}, got {}{}", expected, actual, hint))
 }
 
-/// The error for a call whose `T or E` result is thrown away.
 /// What `scan` takes, for a call that takes something else.
 const SCAN_TAKES: &str = "'scan' takes the prompt it shows, and the type of a number to read, as in 'scan(\"Name: \") at r' or 'scan(\"Age: \", int)'";
 
@@ -5211,6 +5228,7 @@ fn scanned_type(arg: &Expr) -> Result<Type> {
     err(arg.span, "'scan' reads a number, so it names 'int' or 'float', as in 'scan(\"Age: \", int)'")
 }
 
+/// The error for a call whose `T or E` result is thrown away.
 fn ignored_error(task: &str) -> String {
     format!("the error '{0}' may send is ignored; handle it with a plan B, as in '{0}(…) {{ fail e … }}', or with match", task)
 }

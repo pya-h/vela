@@ -18,6 +18,12 @@ task twice(text: int, float: int) -> int
     <- text + float
 fi
 
+# A parameter may be named like a builtin type, and the type a scan reads is a
+# type rather than that value, so this one is never read.
+task ignoring(int: int) -> int
+    <- scan("", int) { 0 }
+fi
+
 task read(t: text) -> int or ParseError
     <- int(t) {
         fail e
@@ -39,4 +45,8 @@ task main()
     # may not be, as no variable may be named like any kind's variant.
     show(bool.TooLarge)
     show(read("x") { -2 })
+    # A variable named like a builtin type, beside a scan that names that type.
+    bind int = 3
+    show(int + scan("", int) { 0 })
+    show(ignoring(9))
 fi

@@ -1,0 +1,5 @@
+# error: 3:19: 'scan' shows a text prompt first, as in 'scan("Age: ", int)'
+task main()
+    bind n = scan(int) { 0 }
+    show(n)
+fi

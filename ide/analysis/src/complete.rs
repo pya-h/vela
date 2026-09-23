@@ -115,6 +115,35 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         return (member_items(&k, module, members), word_start, byte);
     }
 
+    // After the name of a kind no file declares and `.`: its variants, which no
+    // symbol holds (see `builtin_variants`).
+    if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
+        && let Some(name) = dot.checked_sub(1).and_then(|q| k.ident(q))
+        && let Some(variants) = builtin_variants(name)
+    {
+        let line = k.line_start(dot);
+        let in_pattern = (line..dot).any(|q| matches!(k.token(q), Some(Token::Case | Token::Is)));
+        let covered = match k.token(line) == Some(&Token::Case) {
+            true => k.enclosing_match(line).map(|match_q| covered_cases(&k, match_q, line)).unwrap_or_default(),
+            false => Vec::new(),
+        };
+        let items = variants
+            .into_iter()
+            .filter(|(label, _, _)| !covered.contains(label))
+            .map(|(label, pattern, detail)| {
+                // A value is written `NoNumber(why)`, a pattern `NoNumber why`.
+                let holds = pattern != label;
+                let snippet = match (in_pattern, holds) {
+                    (true, true) => Some(pattern),
+                    (false, true) => Some(format!("{}({})", label, pattern.trim_start_matches(&label).trim())),
+                    _ => None,
+                };
+                CompletionItem { label, kind: CompletionKind::Variant, detail, apply: None, snippet, boost: GLOBAL }
+            })
+            .collect();
+        return (items, word_start, byte);
+    }
+
     // After a kind's name and `.`: its variants, as values or in a pattern.
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
         && let Some(kind) = dot.checked_sub(1).and_then(|q| k.symbol_at(q)).filter(|&id| k.symbol(id).is_some_and(|s| s.kind == SymbolKind::Kind))
@@ -1037,6 +1066,14 @@ fn case_items(source: &str, scan: &Scan, context: Context, k: &Knowledge, case: 
         return items;
     }
 
+    // A kind no file declares has no symbol, so its cases come from the language.
+    if kind.is_none()
+        && let Some(Type::Named(name, _)) = &subject
+        && let items @ [_, ..] = builtin_case_items(name, &covered, true).as_slice()
+    {
+        return items.to_vec();
+    }
+
     let variants: Vec<usize> = match kind {
         Some(kind) => k.members(kind, SymbolKind::Variant).map(|(id, _)| id).collect(),
         None => k.symbols().iter().enumerate().filter(|(_, s)| s.kind == SymbolKind::Variant && s.module.is_none()).map(|(id, _)| id).collect(),
@@ -1177,6 +1214,12 @@ fn is_pattern_items(source: &str, scan: &Scan, context: Context, k: &Knowledge, 
         Some(Type::Named(name, _)) => k.global(name, SymbolKind::Kind),
         _ => None,
     };
+    if kind.is_none()
+        && let Some(Type::Named(name, _)) = &subject
+        && let items @ [_, ..] = builtin_case_items(name, &[], false).as_slice()
+    {
+        return items.to_vec();
+    }
     let variants: Vec<usize> = match kind {
         Some(kind) => k.members(kind, SymbolKind::Variant).map(|(id, _)| id).collect(),
         None => k.symbols().iter().enumerate().filter(|(_, s)| s.kind == SymbolKind::Variant && s.module.is_none()).map(|(id, _)| id).collect(),
@@ -1197,6 +1240,70 @@ fn is_pattern_items(source: &str, scan: &Scan, context: Context, k: &Knowledge, 
             })
         })
         .collect()
+}
+
+/// The variants of a kind no file declares, each as its name, the pattern that
+/// takes it apart, and what it holds: the file's symbols hold nothing about them,
+/// so they come from the language itself (see `ast::builtin_kinds`). None when
+/// `name` is no such kind.
+fn builtin_variants(name: &str) -> Option<Vec<(String, String, String)>> {
+    let kind = vela::ast::builtin_kinds().into_iter().find(|kind| kind.name == name)?;
+    Some(
+        kind.variants
+            .iter()
+            .map(|variant| {
+                let mut used = Vec::new();
+                let mut pattern = variant.tag.clone();
+                for field in &variant.payload {
+                    pattern.push_str(&format!(" ${{{}}}", unique(&mut used, &field.name)));
+                }
+                let holds: Vec<String> = variant.payload.iter().map(|field| format!("{}: {}", field.name, field.ty)).collect();
+                let detail = if holds.is_empty() { kind.name.clone() } else { format!("{} ({})", kind.name, holds.join(", ")) };
+                (variant.tag.clone(), pattern, detail)
+            })
+            .collect(),
+    )
+}
+
+/// Those of them a `match` or an `is` has not covered yet, as cases.
+fn builtin_case_items(name: &str, covered: &[String], every: bool) -> Vec<CompletionItem> {
+    let Some(variants) = builtin_variants(name) else { return Vec::new() };
+    let uncovered: Vec<(String, String, String)> = variants.into_iter().filter(|(label, _, _)| !covered.iter().any(|c| c == label)).collect();
+    let mut items: Vec<CompletionItem> = uncovered
+        .iter()
+        .map(|(label, pattern, detail)| CompletionItem {
+            snippet: (pattern != label).then(|| pattern.clone()),
+            label: label.clone(),
+            kind: CompletionKind::Variant,
+            detail: detail.clone(),
+            apply: None,
+            boost: LOCAL,
+        })
+        .collect();
+    // An `is` runs on one case, so it offers no `_` and no set of the rest.
+    if every && !uncovered.is_empty() {
+        items.push(CompletionItem {
+            label: "_".to_string(),
+            kind: CompletionKind::Keyword,
+            detail: "every other case".to_string(),
+            apply: None,
+            snippet: None,
+            boost: KEYWORD,
+        });
+    }
+    if every && uncovered.len() > 1 {
+        let names: Vec<&str> = uncovered.iter().map(|(label, _, _)| label.as_str()).collect();
+        let cases: Vec<&str> = uncovered.iter().map(|(_, pattern, _)| pattern.as_str()).collect();
+        items.push(CompletionItem {
+            label: "all remaining cases".to_string(),
+            kind: CompletionKind::Snippet,
+            detail: names.join(", "),
+            apply: None,
+            snippet: Some(format!("{}\n\t${{}}", cases.join("\n\t\ncase "))),
+            boost: SNIPPET,
+        });
+    }
+    items
 }
 
 /// `Rectangle ${width} ${height}`: a variant with a field for each binding,
@@ -1562,9 +1669,15 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bo
             continue;
         }
         let Some(Type::Named(kind_name, _)) = ty else { continue };
-        let Some(kind) = k.global(&kind_name, SymbolKind::Kind) else { continue };
-        let mut used = Vec::new();
-        let cases: Vec<String> = k.members(kind, SymbolKind::Variant).map(|(variant, _)| case_template(k, variant, &mut used)).collect();
+        // A kind no file declares has its variants from the language, not from a
+        // symbol (see `builtin_variants`).
+        let cases: Vec<String> = match k.global(&kind_name, SymbolKind::Kind) {
+            Some(kind) => {
+                let mut used = Vec::new();
+                k.members(kind, SymbolKind::Variant).map(|(variant, _)| case_template(k, variant, &mut used)).collect()
+            }
+            None => builtin_variants(&kind_name).unwrap_or_default().into_iter().map(|(_, pattern, _)| pattern).collect(),
+        };
         if cases.is_empty() {
             continue;
         }
@@ -1720,7 +1833,7 @@ fn task_items(k: &Knowledge) -> Vec<CompletionItem> {
         // `scan` names the region it reads a line into after its call; the form
         // that reads a number names no region (see `hover`).
         let (detail, snippet) = if *name == vela::ast::SCAN {
-            ("(prompt: text) at r -> maybe text@r, or (prompt: text, int | float)", format!("{}(${{prompt}}) at ${{region}}", name))
+            ("(prompt: text) at r -> maybe text@r, or (prompt: text, int | float) -> int | float or InputError", format!("{}(${{prompt}}) at ${{region}}", name))
         } else {
             ("(value: int | float | bool | text | maybe | anything with str, …)", format!("{}(${{value}})", name))
         };

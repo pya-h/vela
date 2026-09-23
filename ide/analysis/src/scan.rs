@@ -1337,8 +1337,10 @@ impl<'a> Classifier<'a> {
             return (TokenClass::TypeBuiltin, None);
         }
         // `scan("Age: ", int)`: the type of the number it reads, which is a type
-        // and not a value, as the one a cast names is.
-        if after == Some(&Token::RParen) && before == Some(&Token::Comma) && vela::ast::number_cast(name).is_some() && reads_a_number(tokens, p) {
+        // and not a value, as the one a cast names is. Another builtin type there
+        // is one this form cannot read, which the checker reports; it is still
+        // written as a type.
+        if after == Some(&Token::RParen) && before == Some(&Token::Comma) && Type::builtin(name).is_some() && reads_a_number(tokens, p) {
             return (TokenClass::TypeBuiltin, None);
         }
         if after == Some(&Token::LParen)

@@ -30,45 +30,63 @@
     | keyword:<-  parameter:text  operator:+  parameter:float
  19 | fi
     | keyword:fi
- 21 | task read(t: text) -> int or ParseError
+ 21 | # A parameter may be named like a builtin type, and the type a scan reads is a
+    | comment:# A parameter may be named like a builtin type, and the type a scan reads is a
+ 22 | # type rather than that value, so this one is never read.
+    | comment:# type rather than that value, so this one is never read.
+ 23 | task ignoring(int: int) -> int
+    | keyword:task  task:ignoring  punctuation:(  parameter:int  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 24 |     <- scan("", int) { 0 }
+    | keyword:<-  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)  punctuation:{  number:0  punctuation:}
+ 25 | fi
+    | keyword:fi
+ 27 | task read(t: text) -> int or ParseError
     | keyword:task  task:read  punctuation:(  parameter:t  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  keyword:or  type:ParseError
- 22 |     <- int(t) {
+ 28 |     <- int(t) {
     | keyword:<-  type-builtin:int  punctuation:(  parameter:t  punctuation:)  punctuation:{
- 23 |         fail e
+ 29 |         fail e
     | keyword:fail  variable:e
- 24 |         <- fail NotANumber
+ 30 |         <- fail NotANumber
     | keyword:<-  keyword:fail  variant:NotANumber
- 25 |     }
+ 31 |     }
     | punctuation:}
- 26 | fi
+ 32 | fi
     | keyword:fi
- 28 | task main()
+ 34 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 29 |     bind show = 3
+ 35 |     bind show = 3
     | keyword:bind  variable:show  operator:=  number:3
- 30 |     hold bool = Box { unit: show, show: "shown", TooLarge: false }
+ 36 |     hold bool = Box { unit: show, show: "shown", TooLarge: false }
     | keyword:hold  variable:bool  operator:=  type:Box  punctuation:{  field:unit  punctuation::  variable:show  punctuation:,  field:show  punctuation::  string:"shown"  punctuation:,  field:TooLarge  punctuation::  keyword:false  punctuation:}
- 31 |     bool.unit = twice(bool.unit, 1)
+ 37 |     bool.unit = twice(bool.unit, 1)
     | variable:bool  punctuation:.  field:unit  operator:=  task:twice  punctuation:(  variable:bool  punctuation:.  field:unit  punctuation:,  number:1  punctuation:)
- 32 |     show(bool.unit)
+ 38 |     show(bool.unit)
     | builtin-fn:show  punctuation:(  variable:bool  punctuation:.  field:unit  punctuation:)
- 33 |     show(bool.show)
+ 39 |     show(bool.show)
     | builtin-fn:show  punctuation:(  variable:bool  punctuation:.  field:show  punctuation:)
- 34 |     bind l = Light.Red()
+ 40 |     bind l = Light.Red()
     | keyword:bind  variable:l  operator:=  type:Light  punctuation:.  variant:Red  punctuation:(  punctuation:)
- 35 |     when l is Light.Red
+ 41 |     when l is Light.Red
     | keyword:when  variable:l  keyword:is  type:Light  punctuation:.  variant:Red
- 36 |         show("red")
+ 42 |         show("red")
     | builtin-fn:show  punctuation:(  string:"red"  punctuation:)
- 37 |     fi
+ 43 |     fi
     | keyword:fi
- 38 |     # A field may be named like a variant of a builtin kind, which a variable
+ 44 |     # A field may be named like a variant of a builtin kind, which a variable
     | comment:# A field may be named like a variant of a builtin kind, which a variable
- 39 |     # may not be, as no variable may be named like any kind's variant.
+ 45 |     # may not be, as no variable may be named like any kind's variant.
     | comment:# may not be, as no variable may be named like any kind's variant.
- 40 |     show(bool.TooLarge)
+ 46 |     show(bool.TooLarge)
     | builtin-fn:show  punctuation:(  variable:bool  punctuation:.  field:TooLarge  punctuation:)
- 41 |     show(read("x") { -2 })
+ 47 |     show(read("x") { -2 })
     | builtin-fn:show  punctuation:(  task:read  punctuation:(  string:"x"  punctuation:)  punctuation:{  operator:-  number:2  punctuation:}  punctuation:)
- 42 | fi
+ 48 |     # A variable named like a builtin type, beside a scan that names that type.
+    | comment:# A variable named like a builtin type, beside a scan that names that type.
+ 49 |     bind int = 3
+    | keyword:bind  variable:int  operator:=  number:3
+ 50 |     show(int + scan("", int) { 0 })
+    | builtin-fn:show  punctuation:(  variable:int  operator:+  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+ 51 |     show(ignoring(9))
+    | builtin-fn:show  punctuation:(  task:ignoring  punctuation:(  number:9  punctuation:)  punctuation:)
+ 52 | fi
     | keyword:fi

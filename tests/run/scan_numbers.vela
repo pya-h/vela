@@ -19,6 +19,12 @@ task why(e: InputError) -> text
     fi
 fi
 
+# A kind no file declares is a type like any other, so a shape may keep one.
+shape Refused
+    why: InputError
+    line: int
+fi
+
 # A task may forward the error it was given, and send one of its own: an age
 # read from input, refusing one no person has.
 task age() -> int or InputError
@@ -26,8 +32,13 @@ task age() -> int or InputError
         fail e
         <- fail e
     }
-    when years > 200 or years < 0
-        <- fail InputError.NoNumber(ParseError.NotANumber)
+    when years > 200
+        # A program may send one itself, written through its kind.
+        <- fail InputError.NoNumber(ParseError.TooLarge)
+    fi
+    when years < 0
+        # Or as a bare variant, payload and all.
+        <- fail NoNumber(ParseError.NotANumber)
     fi
     <- years
 fi
@@ -76,8 +87,20 @@ task main()
         show("no float: ", why(e))
     fi
 
+    # A value of either kind is a value like any other: a shape holds one, an
+    # array holds several, and a maybe holds one or none.
+    bind kept = Refused { why: InputError.NoNumber(ParseError.TooLarge), line: 3 }
+    show("line ", kept.line, ": ", why(kept.why))
+    bind ends = [InputError.Ended; 2]
+    show(why(ends[1]))
+    hold last: maybe InputError = none
+    last = NoNumber(ParseError.NotANumber)
+    when last is {e}
+        show(why(e))
+    fi
+
     # A task of its own, sending and forwarding.
-    each round in [0, 1, 2]
+    each round in [0, 1, 2, 3]
         match age()
         case {years}
             show("age ", years)
