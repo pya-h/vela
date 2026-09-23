@@ -1,4 +1,0 @@
-# error: 3:14: 'int' takes an int, a float, or a bool, but this value is text; text can't be read as a number yet
-task main()
-    show(int("42"))
-fi

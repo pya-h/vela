@@ -180,6 +180,9 @@ impl Generator {
                 TypeDef::Compound(ty) => self.gen_compound(ty),
             }
         }
+        for ty in &used.read {
+            self.gen_read_number(ty);
+        }
         for ty in &used.written {
             self.gen_show_maybe(ty, false);
         }
@@ -592,6 +595,30 @@ impl Generator {
             }
             _ => {}
         }
+        self.w.close();
+    }
+
+    /// Reading a number of type `ty` from text: the number, or the reason the
+    /// text was none, as a `ParseError` (see `ast::parse_error_kind`). The
+    /// runtime reads the text and says which; this turns that into the
+    /// `ty or ParseError` the program holds.
+    fn gen_read_number(&mut self, ty: &Type) {
+        let (from, value) = if *ty == Type::Int { ("vela__rt__int_of_text", "int64_t") } else { ("vela__rt__float_of_text", "double") };
+        let or = Type::Or(Box::new(ty.clone()), Box::new(Type::Named(PARSE_ERROR.to_string(), None)));
+        let (or_type, tag) = (c_type(&or), tag_type(PARSE_ERROR));
+        self.w.open(&format!("static {} {}(vela__rt__text text)", or_type, read_helper(ty)));
+        self.w.line(&format!("{} value = 0;", value));
+        self.w.line(&format!("int read = {}(text, &value);", from));
+        self.w.open("if (read == VELA__RT__READ_OK)");
+        self.w.line(&format!("return ({}){{ .ok = true, .value = value }};", or_type));
+        self.w.close();
+        self.w.line(&format!(
+            "{} why = read == VELA__RT__READ_TOO_LARGE ? {} : {};",
+            tag,
+            tag_value(PARSE_ERROR, TOO_LARGE),
+            tag_value(PARSE_ERROR, NOT_A_NUMBER)
+        ));
+        self.w.line(&format!("return ({}){{ .ok = false, .error = {{ .tag = why }} }};", or_type));
         self.w.close();
     }
 
@@ -1509,6 +1536,11 @@ impl Generator {
         };
         let from = value.ty()?.clone();
         let expr = self.gen_expr(value)?;
+        // Text is read by the helper generated for the type it gives, which
+        // carries the reason when the text is no number.
+        if matches!(from, Type::Text(_)) {
+            return Ok(format!("{}({})", read_helper(into), expr));
+        }
         Ok(match (into, &from) {
             (Type::Int, Type::Int) | (Type::Float, Type::Float) => expr,
             (Type::Int, Type::Bool) => format!("((int64_t){})", parenthesized(&expr)),
@@ -1979,6 +2011,12 @@ fn written_helper(ty: &Type, ends: bool) -> String {
     format!("vela__rt__{}_{}", if ends { "show" } else { "write" }, name)
 }
 
+/// The generated task that reads a number of type `ty` from text: `int("42")`
+/// and `float("2.5")`.
+fn read_helper(ty: &Type) -> String {
+    format!("vela__read__{}", if *ty == Type::Int { "int" } else { "float" })
+}
+
 /// The generated task that writes a `maybe` of type `ty`, ending the line when
 /// `ends` (see `written_helper`).
 fn maybe_helper(ty: &Type, ends: bool) -> String {
@@ -2022,6 +2060,10 @@ struct UsedTypes {
     shown: Vec<Type>,
     /// The `maybe` types shown before another value of the same `show`.
     written: Vec<Type>,
+    /// The numbers read from text, `int("42")` and `float("2.5")`, each of which
+    /// needs the helper that turns what the runtime reads into a value or a
+    /// `ParseError`.
+    read: Vec<Type>,
     slice_at: Vec<Type>,
     slice_part: Vec<Type>,
     slice_copy: Vec<Type>,
@@ -2053,6 +2095,7 @@ impl UsedTypes {
             compounds: Vec::new(),
             shown: Vec::new(),
             written: Vec::new(),
+            read: Vec::new(),
             slice_at: Vec::new(),
             slice_part: Vec::new(),
             slice_copy: Vec::new(),
@@ -2241,6 +2284,12 @@ impl UsedTypes {
                 self.expr(b);
             }
             ExprKind::Call { name, args, .. } => {
+                // `int(t)` and `float(t)` on text need the helper that reads it.
+                if let Some(into) = number_cast(name)
+                    && args.first().and_then(|arg| arg.ty.as_ref()).is_some_and(|ty| matches!(ty, Type::Text(_)))
+                {
+                    note(&mut self.read, &into);
+                }
                 if name == "show" {
                     for (i, arg) in args.iter().enumerate() {
                         // Its text may name a region, which C doesn't see. The

@@ -192,7 +192,8 @@
         joining, values as text, and text holding values), <code>regions.vela</code> (a tree in a region, a region
         per loop pass, and copying a result into a longer-lived region), <code>arrays.vela</code> (arrays, and slices
         in a region: sorting and a sieve of primes), <code>shop.vela</code> (a program in three files, with
-        <code>include</code>, braces, <code>=&gt;</code>, and <code>priv</code>), and <code>demo.vela</code> (tasks, shapes, pointers, control flow, and text).
+        <code>include</code>, braces, <code>=&gt;</code>, and <code>priv</code>), <code>numbers.vela</code> (numbers read
+        from input, with <code>int(line)</code> and the reasons a text is no number), and <code>demo.vela</code> (tasks, shapes, pointers, control flow, and text).
       </p>
       <div class="note">
         Prefer an editor? <a href="ide.html">Vela Studio</a> highlights Vela, shows errors as you type, completes
@@ -246,8 +247,10 @@
 in   at    match case new   region and  or      not
 true false none  fi   maybe is     fail include priv</pre>
       <p>
-        <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>, <code>bool</code>,
-        <code>text</code>, <code>unit</code>) aren't reserved words: no task, shape, kind, or variant can take their
+        <code>show</code>, <code>scan</code>, the builtin types (<code>int</code>, <code>float</code>, <code>bool</code>,
+        <code>text</code>, <code>unit</code>), and the builtin kind
+        <a href="#reading-numbers"><code>ParseError</code></a> with its variants <code>NotANumber</code> and
+        <code>TooLarge</code> aren't reserved words: no task, shape, kind, or variant can take their
         names, but a variable, parameter, or field can (see <a href="#names">Names</a>). The symbols:
       </p>
       <table>
@@ -532,9 +535,45 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         arithmetic that doesn't fit does: <code>int(0.0 / 0.0)</code> says <em>nan cannot become an int</em>, and a float
         too large to hold says <em>inf does not fit in an int</em>. A number turned into its own type,
         <code>int(n)</code>, is the value itself. A bool reaches <code>float</code> through <code>int</code>,
-        <code>float(int(ok))</code>, and text isn't read as a number yet (see
-        <a href="future.html#conversions">Future Directions</a>); rounding another way waits for conversions of its own.
+        <code>float(int(ok))</code>, and rounding another way waits for conversions of its own.
       </p>
+      <p id="reading-numbers">
+        <strong>Reading a number from text.</strong> <code>int(t)</code> and <code>float(t)</code> on
+        <code>text</code> may fail, since the text comes from outside the program, so they send
+        <code>int or ParseError</code> and <code>float or ParseError</code>, read with a plan B,
+        <code>match</code>, or <code>is</code> like any <a href="#maybe">error result</a>.
+        <code>ParseError</code> is a kind no program declares, with two variants and no values in them:
+        <code>NotANumber</code>, when the text is no number at all, and <code>TooLarge</code>, when it is a
+        number the type can't hold (<code>"9223372036854775808"</code> as an <code>int</code>). A program may
+        send one itself, written through its kind (<code>fail ParseError.TooLarge</code>) or as a bare variant
+        (<code>fail TooLarge</code>), and no declaration may take the three names.
+      </p>
+      <p>
+        The text is the number and nothing else: digits, an optional leading <code>-</code>, and for a float one
+        <code>.</code> with digits on both sides. A space (<code>" 4"</code>), a <code>+</code>, a <code>_</code>
+        (which a <em>written</em> number may hold), an exponent (<code>"1e5"</code>), a fraction read as an
+        <code>int</code> (<code>"4.0"</code>), and text with nothing in it are all <code>NotANumber</code>.
+        Leading zeros are fine (<code>"007"</code> is 7). A float is read to the nearest one it can hold, from at
+        most 400 significant digits, and one too large to hold is <code>TooLarge</code>; one too small is
+        <code>0</code>, as arithmetic gives.
+      </p>
+      <pre><span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    show(int(<span class="string">"42"</span>) { <span class="number">0</span> })               <span class="comment"># 42</span>
+    show(int(<span class="string">"4x2"</span>) { <span class="number">-1</span> })             <span class="comment"># -1, the plan B's value</span>
+    <span class="keyword">bind</span> line = scan(<span class="string">"Age: "</span>) <span class="keyword">at</span> r { <span class="string">""</span> }
+    <span class="keyword">match</span> int(line)
+    <span class="keyword">case</span> {age}
+        show(<span class="string">"next year: "</span>, age + <span class="number">1</span>)
+    <span class="keyword">case</span> <span class="keyword">fail</span> why
+        <span class="keyword">match</span> why
+        <span class="keyword">case</span> NotANumber
+            show(<span class="string">"that is no number"</span>)
+        <span class="keyword">case</span> TooLarge
+            show(<span class="string">"that number is too large"</span>)
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
       <pre><span class="keyword">task</span> main()
     <span class="keyword">bind</span> n = <span class="number">7</span>
     show(float(n) / <span class="number">2.0</span>)                 <span class="comment"># 3.5</span>
@@ -658,8 +697,9 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
     show(count)
 <span class="keyword">fi</span></pre>
       <p>
-        <code>scan</code> reads text only. Reading a number, as in <code>scan("Age: ", int)</code>, waits for conversions
-        between types (see <a href="future.html#conversions">Future Directions</a>). A loop that reads for a long time
+        <code>scan</code> reads text only; a number comes from reading that text, <code>int(line)</code> (see
+        <a href="#reading-numbers">Reading a number from text</a>). The shorter <code>scan("Age: ", int)</code> is
+        still to come. A loop that reads for a long time
         can keep each line in a region declared inside it, which is freed on every pass.
       </p>
       <p>
@@ -2047,10 +2087,11 @@ show(area(square))             <span class="comment"># error: unknown task 'area
           <a href="#regions">Memory and Regions</a>).</li>
         <li>Text has <code>==</code>, <code>&lt;</code> and the other comparisons, <code>.len</code>, parts
           (<code>t[a..b]</code>), joining (<code>a + b at r</code>), values turned into it (<code>n.str() at r</code>),
-          <code>show</code>, and <code>scan</code>. Text can't be read as a number yet (see
-          <a href="future.html#conversions">Type conversions</a>).</li>
-        <li>Input is read a line of text at a time with <code>scan</code>; there are no conversions from text to numbers
-          yet, and no files.</li>
+          numbers read from it (<code>int(t)</code>), <code>show</code>, and <code>scan</code>. It has no
+          search, no trimming, and no case changes yet.</li>
+        <li>Input is read a line of text at a time with <code>scan</code>, and a number from that line with
+          <code>int(line)</code>; <code>scan("Age: ", int)</code>, which reads one directly, is still to come, and
+          there are no files.</li>
         <li>Arrays and slices can't be compared or shown whole, and an array's count is known before the program runs
           (see <a href="#arrays">Arrays</a>). Tuples can't be shown whole, and are taken apart in
           <code>is</code> and <code>case</code> only in parentheses, as in <code>{(a, b)}</code>

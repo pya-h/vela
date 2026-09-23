@@ -27,6 +27,24 @@ const BUILTIN_TYPE_DOCS: &[(&str, &str)] = &[
     ("unit", "The return type of a task that sends no value."),
 ];
 
+/// What `int("42")` sends when the text is no number: the builtin kind, which a
+/// program reads, passes on, and may send itself, but never declares.
+fn builtin_kind_doc(name: &str) -> Option<(&'static str, &'static str)> {
+    match name {
+        vela::ast::PARSE_ERROR => Some((
+            "kind ParseError\n    NotANumber\n    TooLarge\nfi",
+            "The error int(t) and float(t) send when the text is no number they can read. A program reads it with match, is, or a plan B, passes on one it was given, and may send one itself (fail ParseError.TooLarge). No file declares it, and no declaration may take its name or its variants.",
+        )),
+        vela::ast::NOT_A_NUMBER => {
+            Some(("NotANumber", "A variant of ParseError: the text is no number at all, such as \"4x2\", \"\", or \" 4\" (a number in text carries no spaces, no +, no _, and no exponent)."))
+        }
+        vela::ast::TOO_LARGE => {
+            Some(("TooLarge", "A variant of ParseError: the text is a number, but not one the type holds, such as \"9223372036854775808\" read as an int."))
+        }
+        _ => None,
+    }
+}
+
 /// The words of `maybe`, error results, and regions, which are easy to forget.
 const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     (
@@ -91,6 +109,12 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
         }
         (TokenClass::Keyword, _) => {
             let (_, code, doc) = KEYWORD_DOCS.iter().find(|(word, _, _)| *word == text)?;
+            (code.to_string(), doc.to_string())
+        }
+        // The builtin kind that reading a number sends, and its two variants,
+        // which no file declares (see `ast::parse_error_kind`).
+        (TokenClass::Type | TokenClass::Variant, None) if builtin_kind_doc(text).is_some() => {
+            let (code, doc) = builtin_kind_doc(text)?;
             (code.to_string(), doc.to_string())
         }
         // `@this` in a method's body, which its header didn't name.

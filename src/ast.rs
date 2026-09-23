@@ -161,6 +161,36 @@ pub fn number_cast(name: &str) -> Option<Type> {
     }
 }
 
+/// The kind that reading a number from text sends when the text is no number:
+/// `int("42")` is an `int or ParseError`. No program declares it, and none may
+/// take its name or the names of its variants.
+pub const PARSE_ERROR: &str = "ParseError";
+
+/// Its variants: text that is no number at all, and text that is a number too
+/// large for the type read. Neither holds a value.
+pub const NOT_A_NUMBER: &str = "NotANumber";
+pub const TOO_LARGE: &str = "TooLarge";
+
+/// The names `ParseError` brings, which no program may declare: the kind and its
+/// two variants, so that a program writes them as it writes any kind's.
+pub const BUILTIN_KIND_NAMES: &[&str] = &[PARSE_ERROR, NOT_A_NUMBER, TOO_LARGE];
+
+/// `ParseError` as a declaration, which the checker knows without reading it and
+/// the code generator writes the C for (see `check::Checker::check_program`).
+/// Its position is in no file of the program, so a message about a name it takes
+/// says which kind holds it rather than pointing at a line (see
+/// `check::Checker::define`).
+pub fn parse_error_kind() -> KindDef {
+    let span = Span { line: 0, col: 0, file: usize::MAX };
+    let variant = |tag: &str| Variant { tag: tag.to_string(), payload: Vec::new(), span };
+    KindDef {
+        name: PARSE_ERROR.to_string(),
+        variants: vec![variant(NOT_A_NUMBER), variant(TOO_LARGE)],
+        span,
+        private: false,
+    }
+}
+
 /// How many items an array or slice holds, read after a dot as a field.
 pub const LEN: &str = "len";
 

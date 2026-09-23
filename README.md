@@ -16,7 +16,9 @@ are values held in place, and slices (`[int]@r`) view items in a region, made wi
 every index is checked, and `xs.len` is the count. Text knows its length in bytes, `t.len`, has parts that
 are views of the same bytes, `t[0..3]`, is ordered by `<`, and is joined into a region with `a + b at r`; `n.str() at r` (or `text(n) at r`)
 writes a value as text, and a shape or kind gives its own with a method `str`. `float(n)` and `int(x)` turn a value into a
-number the same way, by the name of the type: a float becomes its whole part toward zero, a bool 1 or 0. Text holds values written inside
+number the same way, by the name of the type: a float becomes its whole part toward zero, a bool 1 or 0. Text
+read as a number may not be one, so `int(line)` sends `int or ParseError`, a builtin kind whose variants are
+`NotANumber` and `TooLarge`. Text holds values written inside
 it, `"{name} is {age}" at r`, and `\{` and `\}` write braces. `show` takes any number of values and writes them
 one after another, then ends the line (`show("n = ", n)`, and `show()` for an empty one); a shape or kind with
 its own `str` is a value it writes too, `show(card)`, in a region it makes for the line and frees after it.

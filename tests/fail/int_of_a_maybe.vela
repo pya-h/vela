@@ -1,4 +1,4 @@
-# error: 4:14: 'int' takes an int, a float, or a bool, but this value is maybe float; the value in this maybe float must be extracted first, as in 'x { … }' or 'when x is {value}'
+# error: 4:14: 'int' takes an int, a float, a bool, or text, but this value is maybe float; the value in this maybe float must be extracted first, as in 'x { … }' or 'when x is {value}'
 task main()
     bind here: maybe float = 2.5
     show(int(here))

@@ -181,10 +181,17 @@ impl Checker {
     pub fn check_program(program: &mut Program) -> Result<()> {
         let mut checker = Checker::with_type_places(std::mem::take(&mut program.type_places));
         checker.modules = program.modules.iter().map(|scope| (scope.name.clone(), scope.clone())).collect();
+        checker.declare_builtin_kinds();
         let result = checker
             .check_file(&mut program.items)
             .and_then(|()| checker.expand_instances(&mut program.items))
-            .map(|()| program.items.extend(std::mem::take(&mut checker.made_shapes)));
+            .map(|()| {
+                program.items.extend(std::mem::take(&mut checker.made_shapes));
+                // No file declares the kind that reading a number sends, so it
+                // joins the program's own declarations here, after every check
+                // that reads them, for the code generator to write its C.
+                program.items.push(Item::Kind(parse_error_kind()));
+            });
         program.type_places = checker.type_places;
         // Names in a message are written as the file with the error writes them.
         let written = std::mem::take(&mut checker.written_names);
@@ -408,6 +415,19 @@ impl Checker {
         Ok(())
     }
 
+    /// Makes `ParseError` and its variants known, as if a file had declared
+    /// them: reading a number from text sends one (see `check_number_cast`), and
+    /// `match`, `is`, and a plan B read it as they read any kind. No program may
+    /// take these names (see `collect_declarations`).
+    fn declare_builtin_kinds(&mut self) {
+        let kind = parse_error_kind();
+        for variant in &kind.variants {
+            let info = VariantInfo { kind: kind.name.clone(), variant: variant.clone() };
+            self.variants.insert(variant.tag.clone(), info);
+        }
+        self.kinds.insert(kind.name.clone(), kind);
+    }
+
     /// Registers every task, shape, kind, and variant. They share one
     /// namespace: no two may have the same name, and none may use the name of
     /// a builtin type or task.
@@ -421,6 +441,17 @@ impl Checker {
             }
             if BUILTIN_TASKS.contains(&written) {
                 return err(span, format!("'{}' is a builtin task and cannot be redefined", written));
+            }
+            // The kind reading a number from text sends, and its variants: a
+            // program gets them without declaring them, and writes them as it
+            // writes any kind's, so the three names are its own.
+            if BUILTIN_KIND_NAMES.contains(&written) {
+                let what = if written == PARSE_ERROR {
+                    "a builtin kind".to_string()
+                } else {
+                    format!("a variant of the builtin kind '{}'", PARSE_ERROR)
+                };
+                return err(span, format!("'{}' is {} and cannot be redefined", written, what));
             }
             if let Some(at) = names.get(name) {
                 return err(span, format!("'{}' is already defined at {}:{}", written, at.line, at.col));
@@ -3763,8 +3794,8 @@ impl Checker {
             return err(*at, format!("'{0}' takes no types, only the value to turn into {0}, as in '{0}(x)'", into));
         }
         let takes = match into {
-            Type::Int => "'int' takes an int, a float, or a bool",
-            _ => "'float' takes an int or a float",
+            Type::Int => "'int' takes an int, a float, a bool, or text",
+            _ => "'float' takes an int, a float, or text",
         };
         let [value] = args else {
             return err(span, format!("'{0}(…)' turns one value into {0}, as in '{0}(x)', got {1}", into, count(args.len(), "value")));
@@ -3774,10 +3805,12 @@ impl Checker {
         if fits {
             return Ok(into.clone());
         }
+        // Text may hold no number at all, which is a mistake in the input rather
+        // than in the program, so reading it sends a value or a reason why not.
+        if matches!(ty, Type::Text(_)) {
+            return Ok(Type::Or(Box::new(into.clone()), Box::new(Type::Named(PARSE_ERROR.to_string(), None))));
+        }
         let hint = match &ty {
-            // Text that holds a number can't be read yet (see the plan in
-            // `docs/future.html#conversions`).
-            Type::Text(_) => "; text can't be read as a number yet".to_string(),
             Type::Bool => format!("; a bool becomes a number with 'int', as in '{}(int(ok))'", into),
             Type::Ptr(..) => format!("; to turn the value it points to into a number, write '{}(p^)'", into),
             Type::Maybe(_) | Type::Or(..) => extract_hint(&[&ty]),

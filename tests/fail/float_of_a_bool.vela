@@ -1,4 +1,4 @@
-# error: 4:16: 'float' takes an int or a float, but this value is bool; a bool becomes a number with 'int', as in 'float(int(ok))'
+# error: 4:16: 'float' takes an int, a float, or text, but this value is bool; a bool becomes a number with 'int', as in 'float(int(ok))'
 task main()
     bind ok = true
     show(float(ok))

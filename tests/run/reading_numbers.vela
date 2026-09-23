@@ -1,0 +1,110 @@
+# Reading a number from text: `int(t)` and `float(t)` send the number, or a
+# `ParseError` saying why the text was none. `ParseError` is a builtin kind with
+# two variants, `NotANumber` and `TooLarge`, which no program declares.
+
+# The reason as text, read with a match on the error.
+task why(e: ParseError) -> text
+    match e
+    case NotANumber
+        <- "not a number"
+    case TooLarge
+        <- "too large"
+    fi
+fi
+
+# Why a text is no number, or nothing when it is one: a plan B whose body sends
+# has to be a block, so a task of its own reads better here.
+task reason(t: text) -> text
+    match int(t)
+    case {_}
+        <- "a number"
+    case fail e
+        <- why(e)
+    fi
+fi
+
+# A task may forward the error it was given, and send one of its own.
+task age(line: text) -> int or ParseError
+    bind years = int(line) {
+        fail e
+        <- fail e
+    }
+    when years > 200
+        <- fail ParseError.TooLarge
+    fi
+    when years < 0
+        <- fail NotANumber
+    fi
+    <- years
+fi
+
+task main()
+    region r
+
+    # A plan B gives the value to use instead.
+    show(int("42") { 0 })
+    show(int("4x2") { -1 })
+    show(float("2.5") { 0.0 })
+    show(float("two") { -1.0 })
+
+    # A match reads the value or the reason.
+    match int("99999999999999999999999")
+    case {value}
+        show("read ", value)
+    case fail e
+        show("no: ", why(e))
+    fi
+
+    # `is` runs a block for one outcome only.
+    when int("7") is {value}
+        show("seven: ", value)
+    fi
+    when int("") is fail e
+        show("empty: ", why(e))
+    fi
+
+    # What is a number, and what is not: the text is the number itself, with no
+    # spaces, no '+', no '_', and no exponent, as a written number has none.
+    each t in ["0", "-0", "007", "-12"]
+        show(t, " -> ", int(t) { -1 })
+    fi
+    each t in [" 4", "4 ", "+4", "4_000", "1e5", "4.0", "", "-", "--4"]
+        show("[", t, "] -> ", reason(t))
+    fi
+
+    # Both edges of an int, and one step past each.
+    show(int("9223372036854775807") { 0 })
+    show(int("-9223372036854775808") { 0 })
+    show(reason("9223372036854775808"))
+    show(reason("-9223372036854775809"))
+
+    # A float reads its fraction, and one too large for a float is too large.
+    show(float("0.1") { 0.0 } + float("0.2") { 0.0 })
+    show(float("-0.5") { 0.0 })
+    show(float("42") { 0.0 })
+
+    # A task of its own, sending and forwarding.
+    each line in ["30", "300", "-4", "x"]
+        match age(line)
+        case {years}
+            show(line, " -> ", years)
+        case fail e
+            show(line, " -> ", why(e))
+        fi
+    fi
+
+    # Read from input: every line that is a number is added up.
+    hold total = 0
+    hold reading = true
+    loop reading
+        region line_memory
+        bind line = scan("") at line_memory { "" }
+        when line == ""
+            reading = false
+        else
+            total = total + int(line) { 0 }
+        fi
+    fi
+    show("total: ", total)
+    show(text(total) at r == "60")
+fi

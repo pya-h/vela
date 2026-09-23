@@ -273,9 +273,11 @@ fn a_program_loads_each_module_once_through_its_loader() {
     // module used twice is read once. A module's names in the program start with
     // its path from the main file's folder.
     assert_eq!(*asked.borrow(), ["app/shapes/geometry.vela", "app/text/labels.vela"]);
-    let names: Vec<&str> = items.iter().map(|item| match item {
-        Item::Task(t) => t.name.as_str(),
-        _ => "",
+    // The tasks, in order; the program also holds the builtin kind that reading
+    // a number sends, which no file declares.
+    let names: Vec<&str> = items.iter().filter_map(|item| match item {
+        Item::Task(t) => Some(t.name.as_str()),
+        _ => None,
     }).collect();
     assert_eq!(names, ["text/labels.label", "text/labels.width", "shapes/geometry.area", "main"]);
     let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
@@ -288,9 +290,11 @@ fn a_module_outside_the_main_folder_keeps_its_path_in_its_names() {
     let files = [("common/text.vela", "task twice(n: int) -> int\n    <- n * 2\nfi\n")];
     let asked = std::cell::RefCell::new(Vec::new());
     let items = driver::check_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
-    let names: Vec<&str> = items.iter().map(|item| match item {
-        Item::Task(t) => t.name.as_str(),
-        _ => "",
+    // The tasks, in order; the program also holds the builtin kind that reading
+    // a number sends, which no file declares.
+    let names: Vec<&str> = items.iter().filter_map(|item| match item {
+        Item::Task(t) => Some(t.name.as_str()),
+        _ => None,
     }).collect();
     assert_eq!(names, ["../common/text.twice", "main"]);
     // In C, `..` is `__2__`, each `/` `__1__`, and the `.` before the name `__0__`.

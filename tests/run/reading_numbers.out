@@ -1,0 +1,33 @@
+42
+-1
+2.5
+-1
+no: too large
+seven: 7
+empty: not a number
+0 -> 0
+-0 -> 0
+007 -> 7
+-12 -> -12
+[ 4] -> not a number
+[4 ] -> not a number
+[+4] -> not a number
+[4_000] -> not a number
+[1e5] -> not a number
+[4.0] -> not a number
+[] -> not a number
+[-] -> not a number
+[--4] -> not a number
+9223372036854775807
+-9223372036854775808
+too large
+too large
+0.3
+-0.5
+42
+30 -> 30
+300 -> too large
+-4 -> not a number
+x -> not a number
+total: 60
+true

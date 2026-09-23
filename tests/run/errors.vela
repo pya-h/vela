@@ -2,12 +2,12 @@
 # and plan B read the result; `unit or E` succeeds with a bare `<-` or by
 # reaching its end.
 
-kind ParseError
+kind BadSize
     Empty
     Negative(value: int)
 fi
 
-task check_size(size: int) -> int or ParseError
+task check_size(size: int) -> int or BadSize
     when size < 0
         <- fail Negative(size)
     fi
@@ -17,7 +17,7 @@ task check_size(size: int) -> int or ParseError
     <- size * 2
 fi
 
-task explain(e: ParseError) -> text
+task explain(e: BadSize) -> text
     match e
     case Empty
         <- "empty"
@@ -114,7 +114,7 @@ task main()
         show(message)
     fi
 
-    hold stored: int or ParseError = fail Empty
+    hold stored: int or BadSize = fail Empty
     show(stored { -1 })
     stored = 8
     show(stored { -1 })

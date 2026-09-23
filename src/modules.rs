@@ -350,7 +350,12 @@ impl State {
     /// to know about it.
     fn resolve(&mut self, index: usize, tables: &[Names], variants: &Variants) -> Result<ModuleScope> {
         let Some(module) = self.modules.get(index) else { return Ok(ModuleScope::default()) };
-        let own = tables.get(index).cloned().unwrap_or_default();
+        let mut own = tables.get(index).cloned().unwrap_or_default();
+        // The builtin kind is written like a declared one, in every file: a task
+        // may send it (`fail ParseError.TooLarge`) as well as read one. A file
+        // declaring the name keeps its own entry here, so that the checker
+        // reports the clash rather than this (see `check::collect_declarations`).
+        own.entry(PARSE_ERROR.to_string()).or_insert_with(|| builtin_kind_entry(PARSE_ERROR, What::Kind, None));
         let mut resolver =
             Resolver { own, modules: HashMap::new(), imports: HashMap::new(), unnamed: Vec::new(), variants, type_places: &self.type_places, params: Vec::new() };
         let mut includes = Vec::new();
@@ -587,6 +592,12 @@ struct Entry {
     kind: Option<String>,
 }
 
+/// An entry for the builtin kind or one of its variants, which no file declares,
+/// so its position is in no file of the program (see `ast::parse_error_kind`).
+fn builtin_kind_entry(name: &str, what: What, kind: Option<String>) -> Entry {
+    Entry { full: name.to_string(), what, private: false, span: parse_error_kind().span, kind }
+}
+
 /// A module's declarations, by the names they are written with.
 type Names = HashMap<String, Entry>;
 
@@ -622,6 +633,12 @@ fn own_names(module: &Module) -> Names {
 /// that `Kind.Variant` finds it and the checker reports the clash.
 fn variants_of_kinds(modules: &[Module]) -> Variants {
     let mut variants = Variants::new();
+    // The variants of the builtin kind, written through it as any kind's are.
+    let builtin = variants.entry(PARSE_ERROR.to_string()).or_default();
+    for variant in parse_error_kind().variants {
+        let entry = builtin_kind_entry(&variant.tag, What::Variant, Some(PARSE_ERROR.to_string()));
+        builtin.insert(variant.tag.clone(), entry);
+    }
     for module in modules {
         let full = |name: &str| if module.id.is_empty() { name.to_string() } else { format!("{}{}{}", module.id, MODULE_SEPARATOR, name) };
         for item in &module.items {

@@ -1,0 +1,8 @@
+# error: 2:6: 'ParseError' is a builtin kind and cannot be redefined
+kind ParseError
+    Empty
+fi
+
+task main()
+    show(1)
+fi

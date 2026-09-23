@@ -249,6 +249,127 @@ static inline int64_t vela__rt__int_of_float(double x, const char* at) {
     return (int64_t)x;
 }
 
+/* Reading a number from text: `int("42")` and `float("2.5")`. The text is the
+ * number and nothing else — digits, with an optional leading `-`, and for a
+ * float one `.` with digits on both sides. No spaces, no `+`, no `_` (which a
+ * written number may hold), and no exponent, as Vela's own numbers have none;
+ * text with nothing in it is no number either. Neither reader touches the text
+ * beyond its length, which may hold a `\0` like any other byte. */
+enum vela__rt__read {
+    /* The number is in `*value`. */
+    VELA__RT__READ_OK = 0,
+    /* The text is no number at all. */
+    VELA__RT__READ_NOT_A_NUMBER = 1,
+    /* A number, but not one this type holds. */
+    VELA__RT__READ_TOO_LARGE = 2,
+};
+
+static inline int vela__rt__int_of_text(vela__rt__text t, int64_t* value) {
+    size_t len = t.len < 0 ? 0 : (size_t)t.len;
+    size_t i = 0;
+    bool negative = len > 0 && t.bytes[0] == '-';
+    if (negative) {
+        i = 1;
+    }
+    if (i >= len) {
+        return VELA__RT__READ_NOT_A_NUMBER;
+    }
+    /* The largest each sign holds, counted unsigned, so that the smallest int,
+     * which has no positive counterpart, is read without overflowing. */
+    const uint64_t smallest = (uint64_t)INT64_MAX + 1u;
+    uint64_t limit = negative ? smallest : (uint64_t)INT64_MAX;
+    uint64_t digits = 0;
+    for (; i < len; i++) {
+        unsigned char c = (unsigned char)t.bytes[i];
+        if (c < '0' || c > '9') {
+            return VELA__RT__READ_NOT_A_NUMBER;
+        }
+        uint64_t digit = (uint64_t)(c - '0');
+        if (digits > (limit - digit) / 10u) {
+            return VELA__RT__READ_TOO_LARGE;
+        }
+        digits = digits * 10u + digit;
+    }
+    /* Only the smallest int reaches the limit of the negative side, and it is
+     * the one value no cast from unsigned could carry. */
+    *value = digits == smallest ? INT64_MIN : (negative ? -(int64_t)digits : (int64_t)digits);
+    return VELA__RT__READ_OK;
+}
+
+/* How many significant digits of a float are read. A double holds about 17, so
+ * this is far more than can change which one is nearest; text with more than
+ * this many is read from its first `VELA__RT__READ_DIGITS`. */
+#define VELA__RT__READ_DIGITS 400
+
+static inline int vela__rt__float_of_text(vela__rt__text t, double* value) {
+    size_t len = t.len < 0 ? 0 : (size_t)t.len;
+    size_t i = 0;
+    bool negative = len > 0 && t.bytes[0] == '-';
+    if (negative) {
+        i = 1;
+    }
+    char digits[VELA__RT__READ_DIGITS];
+    size_t kept = 0;    /* significant digits copied, leading zeros left out */
+    size_t dropped = 0; /* significant digits past the room there is */
+    size_t whole = 0;   /* digits before the dot */
+    size_t fraction = 0;
+    bool dot = false;
+    for (; i < len; i++) {
+        unsigned char c = (unsigned char)t.bytes[i];
+        if (c == '.') {
+            if (dot) {
+                return VELA__RT__READ_NOT_A_NUMBER;
+            }
+            dot = true;
+            continue;
+        }
+        if (c < '0' || c > '9') {
+            return VELA__RT__READ_NOT_A_NUMBER;
+        }
+        if (dot) {
+            fraction++;
+        } else {
+            whole++;
+        }
+        /* A zero before the first digit that counts is only a place, which
+         * `fraction` counts for the digits after the dot. */
+        if (kept == 0 && c == '0') {
+            continue;
+        }
+        if (kept < VELA__RT__READ_DIGITS) {
+            digits[kept++] = (char)c;
+        } else {
+            dropped++;
+        }
+    }
+    /* A dot has digits on both sides: `1.` and `.5` are no numbers. */
+    if (whole == 0 || (dot && fraction == 0)) {
+        return VELA__RT__READ_NOT_A_NUMBER;
+    }
+    if (kept == 0) {
+        *value = negative ? -0.0 : 0.0;
+        return VELA__RT__READ_OK;
+    }
+    /* The digits kept are a whole number times a power of ten: every digit
+     * after the dot divides by ten, and every one dropped multiplies by it. */
+    long exponent = (long)dropped - (long)fraction;
+    char written[VELA__RT__READ_DIGITS + 32];
+    int size = snprintf(written, sizeof written, "%s%.*se%ld", negative ? "-" : "", (int)kept, digits, exponent);
+    if (size < 0 || (size_t)size >= sizeof written) {
+        return VELA__RT__READ_NOT_A_NUMBER;
+    }
+    char* after = NULL;
+    double read = strtod(written, &after);
+    if (after != written + size) {
+        return VELA__RT__READ_NOT_A_NUMBER;
+    }
+    if (isinf(read)) {
+        return VELA__RT__READ_TOO_LARGE;
+    }
+    *value = read;
+    return VELA__RT__READ_OK;
+}
+
 /* Regions. A region is an arena: a list of chunks of memory, each handed out
  * front to back, all freed at once when the block that declared the region
  * closes. Allocating is a pointer bump in the newest chunk; see

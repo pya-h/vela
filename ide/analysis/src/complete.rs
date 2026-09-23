@@ -417,7 +417,9 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         let after_arrow = prev_token == Some(&Token::Arrow);
         // A maybe can't hold a maybe, and an error type can't be one.
         let offer_maybe = !matches!(prev_token, Some(Token::Maybe | Token::Or));
-        let mut items = type_items(&k, byte, after_arrow, offer_maybe);
+        // The kind reading a number sends is offered where an error type goes,
+        // which is where a program writes it.
+        let mut items = type_items(&k, byte, after_arrow, offer_maybe, prev_token == Some(&Token::Or));
         // A parameter can be a region the task allocates in; a result can't,
         // since a task never sends one.
         if prev_token == Some(&Token::Colon) && (first_token == Some(&Token::Task) || prev.is_some_and(|q| method_header(&k, q))) && inside_parens {
@@ -1180,7 +1182,7 @@ fn unique(used: &mut Vec<String>, name: &str) -> String {
     candidate
 }
 
-fn type_items(k: &Knowledge, at: usize, after_arrow: bool, offer_maybe: bool) -> Vec<CompletionItem> {
+fn type_items(k: &Knowledge, at: usize, after_arrow: bool, offer_maybe: bool, after_or: bool) -> Vec<CompletionItem> {
     let taken = type_params_here(k, at);
     let descriptions = [
         ("int", "64-bit signed integer"),
@@ -1200,6 +1202,17 @@ fn type_items(k: &Knowledge, at: usize, after_arrow: bool, offer_maybe: bool) ->
             snippet: None,
             boost: SNIPPET,
         });
+    // The builtin kind reading a number sends, which no file declares. It is an
+    // error type, so it is offered after `or`, where one goes.
+    let builtin_kind = std::iter::once(CompletionItem {
+        label: vela::ast::PARSE_ERROR.to_string(),
+        kind: CompletionKind::Type,
+        detail: "what reading a number from text sends".to_string(),
+        apply: None,
+        snippet: None,
+        boost: SNIPPET,
+    })
+    .filter(|_| after_or);
     let declared = visible_globals(k, &[SymbolKind::Shape, SymbolKind::Kind]).into_iter().map(|(label, s)| CompletionItem {
         label,
         kind: CompletionKind::Type,
@@ -1218,7 +1231,7 @@ fn type_items(k: &Knowledge, at: usize, after_arrow: bool, offer_maybe: bool) ->
         snippet: None,
         boost: SNIPPET,
     });
-    builtin.chain(taken).chain(declared).chain(modules).chain(maybe).collect()
+    builtin.chain(builtin_kind).chain(taken).chain(declared).chain(modules).chain(maybe).collect()
 }
 
 /// The types the declaration around the cursor takes (`<T: ordered>`), which

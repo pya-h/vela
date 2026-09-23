@@ -4,16 +4,16 @@
     | comment:# and plan B read the result; `unit or E` succeeds with a bare `<-` or by
   3 | # reaching its end.
     | comment:# reaching its end.
-  5 | kind ParseError
-    | keyword:kind  type:ParseError
+  5 | kind BadSize
+    | keyword:kind  type:BadSize
   6 |     Empty
     | variant:Empty
   7 |     Negative(value: int)
     | variant:Negative  punctuation:(  field:value  punctuation::  type-builtin:int  punctuation:)
   8 | fi
     | keyword:fi
- 10 | task check_size(size: int) -> int or ParseError
-    | keyword:task  task:check_size  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:or  type:ParseError
+ 10 | task check_size(size: int) -> int or BadSize
+    | keyword:task  task:check_size  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:or  type:BadSize
  11 |     when size < 0
     | keyword:when  parameter:size  operator:<  number:0
  12 |         <- fail Negative(size)
@@ -30,8 +30,8 @@
     | keyword:<-  parameter:size  operator:*  number:2
  18 | fi
     | keyword:fi
- 20 | task explain(e: ParseError) -> text
-    | keyword:task  task:explain  punctuation:(  parameter:e  punctuation::  type:ParseError  punctuation:)  operator:->  type-builtin:text
+ 20 | task explain(e: BadSize) -> text
+    | keyword:task  task:explain  punctuation:(  parameter:e  punctuation::  type:BadSize  punctuation:)  operator:->  type-builtin:text
  21 |     match e
     | keyword:match  parameter:e
  22 |     case Empty
@@ -200,8 +200,8 @@
     | builtin-fn:show  punctuation:(  variable:message  punctuation:)
 115 |     fi
     | keyword:fi
-117 |     hold stored: int or ParseError = fail Empty
-    | keyword:hold  variable:stored  punctuation::  type-builtin:int  keyword:or  type:ParseError  operator:=  keyword:fail  variant:Empty
+117 |     hold stored: int or BadSize = fail Empty
+    | keyword:hold  variable:stored  punctuation::  type-builtin:int  keyword:or  type:BadSize  operator:=  keyword:fail  variant:Empty
 118 |     show(stored { -1 })
     | builtin-fn:show  punctuation:(  variable:stored  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
 119 |     stored = 8

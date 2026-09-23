@@ -1,0 +1,9 @@
+# error: 3:5: 'TooLarge' is a variant of the builtin kind 'ParseError' and cannot be redefined
+kind Reading
+    TooLarge
+    Fine
+fi
+
+task main()
+    show(1)
+fi

@@ -327,6 +327,26 @@ fn show_takes_a_value_with_its_own_str() {
 }
 
 #[test]
+fn the_kind_reading_a_number_sends_is_known_to_the_editor() {
+    // `ParseError` and its variants are declared by no file, so the editor knows
+    // them as it knows the builtin types.
+    let source = "task main()\n    match int(\"42\")\n    case {value}\n        show(value)\n    case fail why\n        match why\n        case NotANumber\n            show(\"no\")\n        case TooLarge\n            show(\"big\")\n        fi\n    fi\nfi\n";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert!(hover(source, "int(\"42\")", 0).doc.contains("turns a value into one"), "{:?}", hover(source, "int(\"42\")", 0).doc);
+    assert!(hover(source, "NotANumber", 0).doc.contains("no number at all"), "{:?}", hover(source, "NotANumber", 0).doc);
+    assert!(hover(source, "TooLarge", 0).doc.contains("not one the type holds"), "{:?}", hover(source, "TooLarge", 0).doc);
+    // The type a reading gives, and the kind where an error type goes.
+    let bound = "task main()\n    bind n = int(\"42\")\n    show(n { 0 })\nfi\n";
+    assert_eq!(Analysis::new(bound).diagnostics(), Vec::new());
+    assert_eq!(hover(bound, "n =", 0).code, "bind n: int or ParseError");
+    assert_offers("task f() -> int or @@", &["ParseError", "text"], &["unit"]);
+    // Hovering the kind itself shows what it is.
+    let named = "task age(line: text) -> int or ParseError\n    <- int(line) {\n        fail e\n        <- fail e\n    }\nfi\n\ntask main()\n    show(age(\"1\") { 0 })\nfi\n";
+    assert_eq!(Analysis::new(named).diagnostics(), Vec::new());
+    assert!(hover(named, "ParseError", 0).code.starts_with("kind ParseError"), "{:?}", hover(named, "ParseError", 0).code);
+}
+
+#[test]
 fn hover_reads_declared_types_when_the_file_doesnt_check() {
     let source = PROGRAM.replace(
         "    @@\n",
@@ -853,4 +873,5 @@ fn named_results_are_names_of_the_task() {
     // An unnamed list still takes another type.
     assert_offers("task f() -> maybe int, @@", &["int", "maybe"], &["unit"]);
 }
+
 

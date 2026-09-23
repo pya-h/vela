@@ -1,5 +1,0 @@
-# error: 4:16: 'float' takes an int or a float, but this value is text; text can't be read as a number yet
-task main()
-    bind word = "2.5"
-    show(float(word))
-fi

@@ -1,0 +1,196 @@
+  1 | # Reading a number from text: `int(t)` and `float(t)` send the number, or a
+    | comment:# Reading a number from text: `int(t)` and `float(t)` send the number, or a
+  2 | # `ParseError` saying why the text was none. `ParseError` is a builtin kind with
+    | comment:# `ParseError` saying why the text was none. `ParseError` is a builtin kind with
+  3 | # two variants, `NotANumber` and `TooLarge`, which no program declares.
+    | comment:# two variants, `NotANumber` and `TooLarge`, which no program declares.
+  5 | # The reason as text, read with a match on the error.
+    | comment:# The reason as text, read with a match on the error.
+  6 | task why(e: ParseError) -> text
+    | keyword:task  task:why  punctuation:(  parameter:e  punctuation::  type:ParseError  punctuation:)  operator:->  type-builtin:text
+  7 |     match e
+    | keyword:match  parameter:e
+  8 |     case NotANumber
+    | keyword:case  variant:NotANumber
+  9 |         <- "not a number"
+    | keyword:<-  string:"not a number"
+ 10 |     case TooLarge
+    | keyword:case  variant:TooLarge
+ 11 |         <- "too large"
+    | keyword:<-  string:"too large"
+ 12 |     fi
+    | keyword:fi
+ 13 | fi
+    | keyword:fi
+ 15 | # Why a text is no number, or nothing when it is one: a plan B whose body sends
+    | comment:# Why a text is no number, or nothing when it is one: a plan B whose body sends
+ 16 | # has to be a block, so a task of its own reads better here.
+    | comment:# has to be a block, so a task of its own reads better here.
+ 17 | task reason(t: text) -> text
+    | keyword:task  task:reason  punctuation:(  parameter:t  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text
+ 18 |     match int(t)
+    | keyword:match  type-builtin:int  punctuation:(  parameter:t  punctuation:)
+ 19 |     case {_}
+    | keyword:case  punctuation:{  keyword:_  punctuation:}
+ 20 |         <- "a number"
+    | keyword:<-  string:"a number"
+ 21 |     case fail e
+    | keyword:case  keyword:fail  variable:e
+ 22 |         <- why(e)
+    | keyword:<-  task:why  punctuation:(  variable:e  punctuation:)
+ 23 |     fi
+    | keyword:fi
+ 24 | fi
+    | keyword:fi
+ 26 | # A task may forward the error it was given, and send one of its own.
+    | comment:# A task may forward the error it was given, and send one of its own.
+ 27 | task age(line: text) -> int or ParseError
+    | keyword:task  task:age  punctuation:(  parameter:line  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  keyword:or  type:ParseError
+ 28 |     bind years = int(line) {
+    | keyword:bind  variable:years  operator:=  type-builtin:int  punctuation:(  parameter:line  punctuation:)  punctuation:{
+ 29 |         fail e
+    | keyword:fail  variable:e
+ 30 |         <- fail e
+    | keyword:<-  keyword:fail  variable:e
+ 31 |     }
+    | punctuation:}
+ 32 |     when years > 200
+    | keyword:when  variable:years  operator:>  number:200
+ 33 |         <- fail ParseError.TooLarge
+    | keyword:<-  keyword:fail  variable:ParseError  punctuation:.  field:TooLarge
+ 34 |     fi
+    | keyword:fi
+ 35 |     when years < 0
+    | keyword:when  variable:years  operator:<  number:0
+ 36 |         <- fail NotANumber
+    | keyword:<-  keyword:fail  variable:NotANumber
+ 37 |     fi
+    | keyword:fi
+ 38 |     <- years
+    | keyword:<-  variable:years
+ 39 | fi
+    | keyword:fi
+ 41 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 42 |     region r
+    | keyword:region  region:r
+ 44 |     # A plan B gives the value to use instead.
+    | comment:# A plan B gives the value to use instead.
+ 45 |     show(int("42") { 0 })
+    | builtin-fn:show  punctuation:(  type-builtin:int  punctuation:(  string:"42"  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+ 46 |     show(int("4x2") { -1 })
+    | builtin-fn:show  punctuation:(  type-builtin:int  punctuation:(  string:"4x2"  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+ 47 |     show(float("2.5") { 0.0 })
+    | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  string:"2.5"  punctuation:)  punctuation:{  number:0.0  punctuation:}  punctuation:)
+ 48 |     show(float("two") { -1.0 })
+    | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  string:"two"  punctuation:)  punctuation:{  operator:-  number:1.0  punctuation:}  punctuation:)
+ 50 |     # A match reads the value or the reason.
+    | comment:# A match reads the value or the reason.
+ 51 |     match int("99999999999999999999999")
+    | keyword:match  type-builtin:int  punctuation:(  string:"99999999999999999999999"  punctuation:)
+ 52 |     case {value}
+    | keyword:case  punctuation:{  variable:value  punctuation:}
+ 53 |         show("read ", value)
+    | builtin-fn:show  punctuation:(  string:"read "  punctuation:,  variable:value  punctuation:)
+ 54 |     case fail e
+    | keyword:case  keyword:fail  variable:e
+ 55 |         show("no: ", why(e))
+    | builtin-fn:show  punctuation:(  string:"no: "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 56 |     fi
+    | keyword:fi
+ 58 |     # `is` runs a block for one outcome only.
+    | comment:# `is` runs a block for one outcome only.
+ 59 |     when int("7") is {value}
+    | keyword:when  type-builtin:int  punctuation:(  string:"7"  punctuation:)  keyword:is  punctuation:{  variable:value  punctuation:}
+ 60 |         show("seven: ", value)
+    | builtin-fn:show  punctuation:(  string:"seven: "  punctuation:,  variable:value  punctuation:)
+ 61 |     fi
+    | keyword:fi
+ 62 |     when int("") is fail e
+    | keyword:when  type-builtin:int  punctuation:(  string:""  punctuation:)  keyword:is  keyword:fail  variable:e
+ 63 |         show("empty: ", why(e))
+    | builtin-fn:show  punctuation:(  string:"empty: "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 64 |     fi
+    | keyword:fi
+ 66 |     # What is a number, and what is not: the text is the number itself, with no
+    | comment:# What is a number, and what is not: the text is the number itself, with no
+ 67 |     # spaces, no '+', no '_', and no exponent, as a written number has none.
+    | comment:# spaces, no '+', no '_', and no exponent, as a written number has none.
+ 68 |     each t in ["0", "-0", "007", "-12"]
+    | keyword:each  variable:t  keyword:in  punctuation:[  string:"0"  punctuation:,  string:"-0"  punctuation:,  string:"007"  punctuation:,  string:"-12"  punctuation:]
+ 69 |         show(t, " -> ", int(t) { -1 })
+    | builtin-fn:show  punctuation:(  variable:t  punctuation:,  string:" -> "  punctuation:,  type-builtin:int  punctuation:(  variable:t  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+ 70 |     fi
+    | keyword:fi
+ 71 |     each t in [" 4", "4 ", "+4", "4_000", "1e5", "4.0", "", "-", "--4"]
+    | keyword:each  variable:t  keyword:in  punctuation:[  string:" 4"  punctuation:,  string:"4 "  punctuation:,  string:"+4"  punctuation:,  string:"4_000"  punctuation:,  string:"1e5"  punctuation:,  string:"4.0"  punctuation:,  string:""  punctuation:,  string:"-"  punctuation:,  string:"--4"  punctuation:]
+ 72 |         show("[", t, "] -> ", reason(t))
+    | builtin-fn:show  punctuation:(  string:"["  punctuation:,  variable:t  punctuation:,  string:"] -> "  punctuation:,  task:reason  punctuation:(  variable:t  punctuation:)  punctuation:)
+ 73 |     fi
+    | keyword:fi
+ 75 |     # Both edges of an int, and one step past each.
+    | comment:# Both edges of an int, and one step past each.
+ 76 |     show(int("9223372036854775807") { 0 })
+    | builtin-fn:show  punctuation:(  type-builtin:int  punctuation:(  string:"9223372036854775807"  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+ 77 |     show(int("-9223372036854775808") { 0 })
+    | builtin-fn:show  punctuation:(  type-builtin:int  punctuation:(  string:"-9223372036854775808"  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+ 78 |     show(reason("9223372036854775808"))
+    | builtin-fn:show  punctuation:(  task:reason  punctuation:(  string:"9223372036854775808"  punctuation:)  punctuation:)
+ 79 |     show(reason("-9223372036854775809"))
+    | builtin-fn:show  punctuation:(  task:reason  punctuation:(  string:"-9223372036854775809"  punctuation:)  punctuation:)
+ 81 |     # A float reads its fraction, and one too large for a float is too large.
+    | comment:# A float reads its fraction, and one too large for a float is too large.
+ 82 |     show(float("0.1") { 0.0 } + float("0.2") { 0.0 })
+    | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  string:"0.1"  punctuation:)  punctuation:{  number:0.0  punctuation:}  operator:+  type-builtin:float  punctuation:(  string:"0.2"  punctuation:)  punctuation:{  number:0.0  punctuation:}  punctuation:)
+ 83 |     show(float("-0.5") { 0.0 })
+    | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  string:"-0.5"  punctuation:)  punctuation:{  number:0.0  punctuation:}  punctuation:)
+ 84 |     show(float("42") { 0.0 })
+    | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  string:"42"  punctuation:)  punctuation:{  number:0.0  punctuation:}  punctuation:)
+ 86 |     # A task of its own, sending and forwarding.
+    | comment:# A task of its own, sending and forwarding.
+ 87 |     each line in ["30", "300", "-4", "x"]
+    | keyword:each  variable:line  keyword:in  punctuation:[  string:"30"  punctuation:,  string:"300"  punctuation:,  string:"-4"  punctuation:,  string:"x"  punctuation:]
+ 88 |         match age(line)
+    | keyword:match  task:age  punctuation:(  variable:line  punctuation:)
+ 89 |         case {years}
+    | keyword:case  punctuation:{  variable:years  punctuation:}
+ 90 |             show(line, " -> ", years)
+    | builtin-fn:show  punctuation:(  variable:line  punctuation:,  string:" -> "  punctuation:,  variable:years  punctuation:)
+ 91 |         case fail e
+    | keyword:case  keyword:fail  variable:e
+ 92 |             show(line, " -> ", why(e))
+    | builtin-fn:show  punctuation:(  variable:line  punctuation:,  string:" -> "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 93 |         fi
+    | keyword:fi
+ 94 |     fi
+    | keyword:fi
+ 96 |     # Read from input: every line that is a number is added up.
+    | comment:# Read from input: every line that is a number is added up.
+ 97 |     hold total = 0
+    | keyword:hold  variable:total  operator:=  number:0
+ 98 |     hold reading = true
+    | keyword:hold  variable:reading  operator:=  keyword:true
+ 99 |     loop reading
+    | keyword:loop  variable:reading
+100 |         region line_memory
+    | keyword:region  region:line_memory
+101 |         bind line = scan("") at line_memory { "" }
+    | keyword:bind  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:line_memory  punctuation:{  string:""  punctuation:}
+102 |         when line == ""
+    | keyword:when  variable:line  operator:==  string:""
+103 |             reading = false
+    | variable:reading  operator:=  keyword:false
+104 |         else
+    | keyword:else
+105 |             total = total + int(line) { 0 }
+    | variable:total  operator:=  variable:total  operator:+  type-builtin:int  punctuation:(  variable:line  punctuation:)  punctuation:{  number:0  punctuation:}
+106 |         fi
+    | keyword:fi
+107 |     fi
+    | keyword:fi
+108 |     show("total: ", total)
+    | builtin-fn:show  punctuation:(  string:"total: "  punctuation:,  variable:total  punctuation:)
+109 |     show(text(total) at r == "60")
+    | builtin-fn:show  punctuation:(  type-builtin:text  punctuation:(  variable:total  punctuation:)  keyword:at  region:r  operator:==  string:"60"  punctuation:)
+110 | fi
+    | keyword:fi
