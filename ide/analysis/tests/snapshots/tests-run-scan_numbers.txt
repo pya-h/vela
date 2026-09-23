@@ -1,0 +1,198 @@
+  1 | # Reading a number from input: `scan(prompt, int)` shows the prompt, reads a
+    | comment:# Reading a number from input: `scan(prompt, int)` shows the prompt, reads a
+  2 | # line, and sends the number it holds, or an `InputError` saying why there is
+    | comment:# line, and sends the number it holds, or an `InputError` saying why there is
+  3 | # none. A number needs no memory, so this form names no region. `InputError` is
+    | comment:# none. A number needs no memory, so this form names no region. `InputError` is
+  4 | # a builtin kind with two variants, `Ended` (the input is over) and `NoNumber`,
+    | comment:# a builtin kind with two variants, `Ended` (the input is over) and `NoNumber`,
+  5 | # which holds the `ParseError` that reading the line gave.
+    | comment:# which holds the `ParseError` that reading the line gave.
+  7 | # Why there is no number, as text.
+    | comment:# Why there is no number, as text.
+  8 | task why(e: InputError) -> text
+    | keyword:task  task:why  punctuation:(  parameter:e  punctuation::  type:InputError  punctuation:)  operator:->  type-builtin:text
+  9 |     match e
+    | keyword:match  parameter:e
+ 10 |     case Ended
+    | keyword:case  variant:Ended
+ 11 |         <- "the input ended"
+    | keyword:<-  string:"the input ended"
+ 12 |     case NoNumber reason
+    | keyword:case  variant:NoNumber  variable:reason
+ 13 |         match reason
+    | keyword:match  variable:reason
+ 14 |         case NotANumber
+    | keyword:case  variant:NotANumber
+ 15 |             <- "no number"
+    | keyword:<-  string:"no number"
+ 16 |         case TooLarge
+    | keyword:case  variant:TooLarge
+ 17 |             <- "too large"
+    | keyword:<-  string:"too large"
+ 18 |         fi
+    | keyword:fi
+ 19 |     fi
+    | keyword:fi
+ 20 | fi
+    | keyword:fi
+ 22 | # A task may forward the error it was given, and send one of its own: an age
+    | comment:# A task may forward the error it was given, and send one of its own: an age
+ 23 | # read from input, refusing one no person has.
+    | comment:# read from input, refusing one no person has.
+ 24 | task age() -> int or InputError
+    | keyword:task  task:age  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:or  type:InputError
+ 25 |     bind years = scan("age? ", int) {
+    | keyword:bind  variable:years  operator:=  builtin-fn:scan  punctuation:(  string:"age? "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{
+ 26 |         fail e
+    | keyword:fail  variable:e
+ 27 |         <- fail e
+    | keyword:<-  keyword:fail  variable:e
+ 28 |     }
+    | punctuation:}
+ 29 |     when years > 200 or years < 0
+    | keyword:when  variable:years  operator:>  number:200  keyword:or  variable:years  operator:<  number:0
+ 30 |         <- fail InputError.NoNumber(ParseError.NotANumber)
+    | keyword:<-  keyword:fail  type:InputError  punctuation:.  variant:NoNumber  punctuation:(  type:ParseError  punctuation:.  variant:NotANumber  punctuation:)
+ 31 |     fi
+    | keyword:fi
+ 32 |     <- years
+    | keyword:<-  variable:years
+ 33 | fi
+    | keyword:fi
+ 35 | # Nothing more to read is an error this task sends itself.
+    | comment:# Nothing more to read is an error this task sends itself.
+ 36 | task twice() -> int or InputError
+    | keyword:task  task:twice  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:or  type:InputError
+ 37 |     bind n = scan("", int) {
+    | keyword:bind  variable:n  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)  punctuation:{
+ 38 |         fail e
+    | keyword:fail  variable:e
+ 39 |         <- fail Ended
+    | keyword:<-  keyword:fail  variant:Ended
+ 40 |     }
+    | punctuation:}
+ 41 |     <- n + n
+    | keyword:<-  variable:n  operator:+  variable:n
+ 42 | fi
+    | keyword:fi
+ 44 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 45 |     # A plan B gives the value to use instead: for 42, for a line that is no
+    | comment:# A plan B gives the value to use instead: for 42, for a line that is no
+ 46 |     # number, and at the end of the input.
+    | comment:# number, and at the end of the input.
+ 47 |     show(scan("n? ", int) { -1 })
+    | builtin-fn:show  punctuation:(  builtin-fn:scan  punctuation:(  string:"n? "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+ 48 |     show(scan("n? ", int) { -1 })
+    | builtin-fn:show  punctuation:(  builtin-fn:scan  punctuation:(  string:"n? "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+ 49 |     show(scan("x? ", float) { -1.0 })
+    | builtin-fn:show  punctuation:(  builtin-fn:scan  punctuation:(  string:"x? "  punctuation:,  type-builtin:float  punctuation:)  punctuation:{  operator:-  number:1.0  punctuation:}  punctuation:)
+ 51 |     # A match reads the number or the reason there is none.
+    | comment:# A match reads the number or the reason there is none.
+ 52 |     each round in [0, 1, 2, 3]
+    | keyword:each  variable:round  keyword:in  punctuation:[  number:0  punctuation:,  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 53 |         match scan("", int)
+    | keyword:match  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)
+ 54 |         case {value}
+    | keyword:case  punctuation:{  variable:value  punctuation:}
+ 55 |             show("read ", value)
+    | builtin-fn:show  punctuation:(  string:"read "  punctuation:,  variable:value  punctuation:)
+ 56 |         case fail e
+    | keyword:case  keyword:fail  variable:e
+ 57 |             show("no: ", why(e))
+    | builtin-fn:show  punctuation:(  string:"no: "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 58 |         fi
+    | keyword:fi
+ 59 |     fi
+    | keyword:fi
+ 61 |     # `is` runs a block for one outcome only.
+    | comment:# `is` runs a block for one outcome only.
+ 62 |     when scan("", int) is {value}
+    | keyword:when  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)  keyword:is  punctuation:{  variable:value  punctuation:}
+ 63 |         show("seven: ", value)
+    | builtin-fn:show  punctuation:(  string:"seven: "  punctuation:,  variable:value  punctuation:)
+ 64 |     fi
+    | keyword:fi
+ 65 |     when scan("", int) is fail e
+    | keyword:when  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)  keyword:is  keyword:fail  variable:e
+ 66 |         show("bad: ", why(e))
+    | builtin-fn:show  punctuation:(  string:"bad: "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 67 |     fi
+    | keyword:fi
+ 69 |     # A float reads its fraction, and one too large for a float is too large.
+    | comment:# A float reads its fraction, and one too large for a float is too large.
+ 70 |     show(scan("", float) { -1.0 } + 0.5)
+    | builtin-fn:show  punctuation:(  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:float  punctuation:)  punctuation:{  operator:-  number:1.0  punctuation:}  operator:+  number:0.5  punctuation:)
+ 71 |     show(scan("", float) { -1.0 })
+    | builtin-fn:show  punctuation:(  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:float  punctuation:)  punctuation:{  operator:-  number:1.0  punctuation:}  punctuation:)
+ 72 |     match scan("", float)
+    | keyword:match  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:float  punctuation:)
+ 73 |     case {value}
+    | keyword:case  punctuation:{  variable:value  punctuation:}
+ 74 |         show("float ", value)
+    | builtin-fn:show  punctuation:(  string:"float "  punctuation:,  variable:value  punctuation:)
+ 75 |     case fail e
+    | keyword:case  keyword:fail  variable:e
+ 76 |         show("no float: ", why(e))
+    | builtin-fn:show  punctuation:(  string:"no float: "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 77 |     fi
+    | keyword:fi
+ 79 |     # A task of its own, sending and forwarding.
+    | comment:# A task of its own, sending and forwarding.
+ 80 |     each round in [0, 1, 2]
+    | keyword:each  variable:round  keyword:in  punctuation:[  number:0  punctuation:,  number:1  punctuation:,  number:2  punctuation:]
+ 81 |         match age()
+    | keyword:match  task:age  punctuation:(  punctuation:)
+ 82 |         case {years}
+    | keyword:case  punctuation:{  variable:years  punctuation:}
+ 83 |             show("age ", years)
+    | builtin-fn:show  punctuation:(  string:"age "  punctuation:,  variable:years  punctuation:)
+ 84 |         case fail e
+    | keyword:case  keyword:fail  variable:e
+ 85 |             show("no age: ", why(e))
+    | builtin-fn:show  punctuation:(  string:"no age: "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 86 |         fi
+    | keyword:fi
+ 87 |     fi
+    | keyword:fi
+ 89 |     # Every line left, added up until the input ends.
+    | comment:# Every line left, added up until the input ends.
+ 90 |     hold total = 0
+    | keyword:hold  variable:total  operator:=  number:0
+ 91 |     hold reading = true
+    | keyword:hold  variable:reading  operator:=  keyword:true
+ 92 |     loop reading
+    | keyword:loop  variable:reading
+ 93 |         match scan("", int)
+    | keyword:match  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)
+ 94 |         case {value}
+    | keyword:case  punctuation:{  variable:value  punctuation:}
+ 95 |             total = total + value
+    | variable:total  operator:=  variable:total  operator:+  variable:value
+ 96 |         case fail e
+    | keyword:case  keyword:fail  variable:e
+ 97 |             match e
+    | keyword:match  variable:e
+ 98 |             case Ended
+    | keyword:case  variant:Ended
+ 99 |                 reading = false
+    | variable:reading  operator:=  keyword:false
+100 |             case NoNumber _
+    | keyword:case  variant:NoNumber  keyword:_
+101 |                 show("skipped a line")
+    | builtin-fn:show  punctuation:(  string:"skipped a line"  punctuation:)
+102 |             fi
+    | keyword:fi
+103 |         fi
+    | keyword:fi
+104 |     fi
+    | keyword:fi
+105 |     show("total: ", total)
+    | builtin-fn:show  punctuation:(  string:"total: "  punctuation:,  variable:total  punctuation:)
+107 |     # The input has ended, so this one sends its own error.
+    | comment:# The input has ended, so this one sends its own error.
+108 |     show(twice() { -1 })
+    | builtin-fn:show  punctuation:(  task:twice  punctuation:(  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+109 | fi
+    | keyword:fi

@@ -57,13 +57,13 @@
  32 |     when years > 200
     | keyword:when  variable:years  operator:>  number:200
  33 |         <- fail ParseError.TooLarge
-    | keyword:<-  keyword:fail  variable:ParseError  punctuation:.  field:TooLarge
+    | keyword:<-  keyword:fail  type:ParseError  punctuation:.  variant:TooLarge
  34 |     fi
     | keyword:fi
  35 |     when years < 0
     | keyword:when  variable:years  operator:<  number:0
  36 |         <- fail NotANumber
-    | keyword:<-  keyword:fail  variable:NotANumber
+    | keyword:<-  keyword:fail  variant:NotANumber
  37 |     fi
     | keyword:fi
  38 |     <- years

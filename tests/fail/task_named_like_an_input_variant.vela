@@ -1,0 +1,8 @@
+# error: 2:6: 'Ended' is a variant of the builtin kind 'InputError' and cannot be redefined
+task Ended() -> bool
+    <- true
+fi
+
+task main()
+    show(Ended())
+fi

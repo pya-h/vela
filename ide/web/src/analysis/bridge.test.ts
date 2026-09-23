@@ -213,7 +213,16 @@ describe("VelaAnalysis", () => {
     const source = "task main()\n    region lines\n    bind name = scan(\"Name: \") at lines { \"nobody\" }\n    show(name)\nfi\n";
     expect(analysis.file(source).diagnostics).toEqual([]);
     expect(analysis.hover(source, source.indexOf("name ="))?.code).toBe("bind name: text@lines");
-    expect(analysis.hover(source, source.indexOf("scan("))?.code).toBe("task scan(prompt: text) at r -> maybe text@r");
+    expect(analysis.hover(source, source.indexOf("scan("))?.code).toBe(
+      "task scan(prompt: text) at r -> maybe text@r\ntask scan(prompt: text, int | float) -> int | float or InputError",
+    );
+  });
+
+  it("describes a number read from input", () => {
+    const source = "task main()\n    bind age = scan(\"Age: \", int)\n    show(age { 0 })\nfi\n";
+    expect(analysis.file(source).diagnostics).toEqual([]);
+    expect(analysis.hover(source, source.indexOf("age ="))?.code).toBe("bind age: int or InputError");
+    expect(analysis.hover(source, source.indexOf("int)"))?.code).toBe("int");
   });
 
   it("describes a copy into a region", () => {

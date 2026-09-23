@@ -313,7 +313,7 @@
         </div>
         <div class="card">
           <h3>No standard library <span class="badge b-high">High</span></h3>
-          <p>Only <code>show</code> and <code>scan</code> (which reads a line of input) exist, with text's own operations (<a href="vela.html#text-parts">parts</a>, <a href="vela.html#joining">joining</a>, and <a href="vela.html#str">values as text</a>). Numbers convert with <a href="vela.html#conversions"><code>float(n)</code> and <code>int(x)</code></a>, which read text too, but there are no files, networking, or math utilities, and text has no search or trimming.</p>
+          <p>Only <code>show</code> and <code>scan</code> (which reads a line of input, or a number from it) exist, with text's own operations (<a href="vela.html#text-parts">parts</a>, <a href="vela.html#joining">joining</a>, and <a href="vela.html#str">values as text</a>). Numbers convert with <a href="vela.html#conversions"><code>float(n)</code> and <code>int(x)</code></a>, which read text too, but there are no files, networking, or math utilities, and text has no search or trimming.</p>
         </div>
         <div class="card">
           <h3>No module system <span class="badge b-done">Done</span></h3>
@@ -1726,8 +1726,8 @@ show(c.total())</pre>
         <li><strong>Type conversions (casting):</strong> <span class="badge b-done">Done</span> — a value becomes text
           (<code>text(n) at r</code>, or <code>n.str() at r</code>), a number becomes another
           (<code>float(n)</code>, <code>int(2.9)</code>, <code>int(ok)</code>), and text is read as one
-          (<code>int(line)</code>). Rounding another way, and <code>scan("Age: ", int)</code>, are what is left; see
-          <a href="#conversions">Type conversions</a> below.</li>
+          (<code>int(line)</code>), from text and from input (<code>scan("Age: ", int)</code>). Rounding another way is
+          what is left; see <a href="#conversions">Type conversions</a> below.</li>
         <li><strong>Type aliases:</strong> <code>alias UserId = int</code></li>
       </ul>
 
@@ -1750,10 +1750,13 @@ bind counted = int(n &gt; 3)          # a bool as an int: 1 or 0 (done)
 bind shown = text(3.5) at r        # a number to text makes text, in a region (done)
 bind age = int("42")               # text to a number can fail: int or ParseError (done)</pre>
       <p>
-        <strong>Next:</strong> the typed form <code>scan("Age: ", int)</code>, which reads a number from input in one
-        step, with one question of its own: how the end of input is told apart from text that is no number, since
-        <code>scan</code> already gives a <code>maybe</code> and the reading gives a <code>ParseError</code>. What the
-        answers were:
+        <span class="badge b-done">Done</span>: the typed form <code>scan("Age: ", int)</code> reads a number from input
+        in one step, and needs no region, since a number needs no memory. Its question was how the end of input is told
+        apart from a line that is no number; the answer is a second builtin kind, <code>InputError</code>, whose
+        <code>Ended</code> says the input is over and whose <code>NoNumber</code> holds the <code>ParseError</code>
+        reading the line gave (see <a href="vela.html#reading-input">Reading a number from input</a>). Two kinds rather
+        than one keep each type exact: the error from <code>int(t)</code> can only be the two reasons text has, and no
+        variant name means two things. What the answers were:
       </p>
       <ul>
         <li><strong>Which conversions.</strong> <code>int</code> ↔ <code>float</code>, <code>bool</code> → <code>int</code>,
@@ -1771,6 +1774,12 @@ bind age = int("42")               # text to a number can fail: int or ParseErro
         <li><strong>Text needs memory.</strong> A number written as text is new text, so it goes in a region
           (<code>text@r</code>), written <code>… at r</code> as <code>new</code> and <code>scan</code> are. Done this way.
           The conversions between numbers make no memory, so they name no region at all.</li>
+        <li><strong>Reading input.</strong> <span class="badge b-done">Done</span> — a second kind, not a third variant
+          of <code>ParseError</code>: a program matching what <code>int(t)</code> sent would otherwise have to list a
+          case that cannot happen. The two kinds say each reason once because <code>NoNumber</code> carries a
+          <code>ParseError</code> rather than repeating its variants under other names, which would have given the
+          language two words for the same two things. The cost is one more level to read through, which
+          <a href="#inner-kind-variants">Variants of a kind held in a kind</a> would remove.</li>
         <li><strong>Promotion.</strong> <span class="badge b-done">Done</span> — refused: <code>1 + 2.5</code> is an
           error that asks for <code>float(1) + 2.5</code>, so no <code>int</code> becomes a <code>float</code> quietly,
           and arithmetic agrees with assignment, which already refused <code>bind x: float = 3</code>.</li>
@@ -1867,6 +1876,58 @@ bind age = int("42")               # text to a number can fail: int or ParseErro
           that differ by their types; or let a header say a region is only needed for some types, which is a new rule to
           learn. Doing neither leaves the wart. The question to decide is whether real programs write enough of these
           tasks for the noise to be worth a rule (see <a href="vela.html#generic-shapes">Shapes that take types</a>).</li>
+        <li id="inner-kind-variants"><strong>Variants of a kind held in a kind:</strong> a kind whose variant holds
+          another kind is read through two matches today. <code>InputError</code> is the first in the language
+          (<a href="vela.html#reading-input">Reading a number from input</a>): its <code>NoNumber</code> holds a
+          <code>ParseError</code>, so telling <code>NotANumber</code> from <code>TooLarge</code> means matching the error,
+          then matching what it holds. The idea is to let the inner variants be written directly, as if they were the
+          outer kind's own, in a <code>case</code> and in a <code>fail</code>:
+          <pre># today
+match e
+case Ended
+    reading = false
+case NoNumber why
+    match why
+    case NotANumber
+        show("no number")
+    case TooLarge
+        show("too large")
+    fi
+fi
+
+# the idea
+match e
+case Ended
+    reading = false
+case NotANumber                    # InputError.NoNumber holding ParseError.NotANumber
+    show("no number")
+case TooLarge
+    show("too large")
+fi
+
+&lt;- fail InputError.NotANumber      # short for fail InputError.NoNumber(ParseError.NotANumber)</pre>
+          <p><strong>What it would add.</strong> The level of nesting costs nothing to read, so a kind can hold another
+          kind wherever that is the honest shape without making every reader pay for it. It keeps two kinds from needing
+          two words for one reason: <code>InputError</code> holds a <code>ParseError</code> exactly because
+          <code>NotANumber</code> and <code>TooLarge</code> are already taken, and a flattened <code>case</code> makes
+          that free. It is not only for the builtin kinds — a program whose error kind wraps another module's error kind
+          wants the same.</p>
+          <p><strong>What it would cost.</strong> Two spellings for one thing, which Vela has otherwise avoided:
+          <code>case NoNumber why</code> still has to work, since a program may want the whole inner value to pass on, so
+          the shortcut is a second way to write a case. Which name wins needs a rule when the outer kind and an inner one
+          share a variant name, or two inner kinds do: refusing the ambiguous name is the safe answer, but it means adding
+          a variant to one kind can break a program that matches another. Whether flattening goes one level deep or all
+          the way needs deciding too, and a kind that holds itself (a tree) has no bottom, so the rule must stop
+          somewhere. It reaches further than it looks: a <code>match</code> counts its cases against the variants of the
+          kind, so the checker would count flattened ones, <code>_</code> would have to mean the rest of a flattened set,
+          and Studio's case completion and its <code>match</code> snippet read variants from the file's own declarations.
+          It also hides where a variant comes from: a reader of <code>case TooLarge</code> cannot tell which kind it
+          belongs to without opening the declarations, and the value it carries (if a flattened variant holds one) comes
+          from a kind the case doesn't name. A smaller relative is worth deciding with it: <code>case fail Ended</code>
+          straight on a <code>T or E</code>, which today is <code>case fail e</code> and then a match.</p>
+          <p><strong>The question to decide</strong> is whether kinds holding kinds turn out to be common enough in real
+          programs to pay for a second spelling and a flattening rule, or whether the two matches are simply what a
+          nested value costs.</p></li>
         <li id="undecided-generic-kinds"><strong>Types for kinds:</strong> tasks and shapes take types today
           (<a href="#generics">Types a Declaration Takes</a>), which leaves kinds as the one declaration that can't:
           no <code>kind Result&lt;T&gt;</code> with <code>Ok(value: T)</code> and <code>Err(message: text)</code>, and no
@@ -1893,7 +1954,7 @@ bind age = int("42")               # text to a number can fail: int or ParseErro
             <li><s>Defined integer overflow and division by zero</s> (done: <a href="vela.html#int-limits">they stop the program with a message</a>)</li>
             <li><s>Fixed-size arrays and slices, which grow and shrink</s> (done: <a href="vela.html#arrays">arrays</a> and <a href="vela.html#slices">slices</a>), <s>and a real <code>text</code> type</s> (done: <a href="vela.html#text-parts">lengths, parts, joins</a>, <a href="vela.html#interpolation"><code>"{n}" at r</code></a>)</li>
             <li><s>Text in regions</s> (done: <a href="vela.html#text-in-regions"><code>text@r</code></a>), <s>reading input</s>
-              (done: <a href="vela.html#input"><code>scan</code></a>), <s>copies into another region</s> (done: <a href="vela.html#copy"><code>.copy()</code></a>), then <a href="#conversions">type conversions</a> (to text done: <a href="vela.html#str"><code>text(n) at r</code></a>; <code>int(x)</code> and <code>float(n)</code> next)</li>
+              (done: <a href="vela.html#input"><code>scan</code></a>), <s>copies into another region</s> (done: <a href="vela.html#copy"><code>.copy()</code></a>), <s>and type conversions</s> (done: <a href="vela.html#str"><code>text(n) at r</code></a>, <a href="vela.html#conversions"><code>int(x)</code> and <code>float(n)</code></a>, <a href="vela.html#reading-numbers"><code>int(t)</code></a>, <a href="vela.html#reading-input"><code>scan("Age: ", int)</code></a>)</li>
             <li>Small region improvements: result-only regions, typed patterns, a lint for regions that grow in loops, and a
               chunk cache (<a href="regions.html#ideas">ideas</a>)</li>
             <li>Move-only owned pointers, on top of regions</li>

@@ -1852,14 +1852,21 @@ impl Parser {
     /// nesting level.)
     fn parse_scan(&mut self, span: Span) -> Result<Expr> {
         let args = self.parse_arg_list()?;
-        if !self.match_token(Token::At) && !self.match_token(Token::AtSign) {
+        if self.check(Token::In) {
             return Err(Error::at(
                 self.peek_span(),
-                "'scan' keeps the line it reads in a region, so it names one, as in 'scan(\"Name: \") at r' or 'scan(\"Name: \")@r'",
+                "'scan' names its region with 'at', as in 'scan(\"Name: \") at r' (or 'scan(\"Name: \")@r'); 'in' counts through a range",
             ));
         }
-        let region_span = self.peek_span();
-        let region = self.expect_ident()?;
+        // A line read into a region names one, and a number read from a line
+        // names none, which the checker tells apart by what the call takes; the
+        // position of a region that isn't there is where one would be written.
+        let mut region_span = self.peek_span();
+        let mut region = None;
+        if self.match_token(Token::At) || self.match_token(Token::AtSign) {
+            region_span = self.peek_span();
+            region = Some(self.expect_ident()?);
+        }
         Ok(Expr::new(ExprKind::Scan { args, region, region_span }, span))
     }
 

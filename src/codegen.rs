@@ -183,6 +183,9 @@ impl Generator {
         for ty in &used.read {
             self.gen_read_number(ty);
         }
+        for ty in &used.scanned {
+            self.gen_scan_number(ty);
+        }
         for ty in &used.written {
             self.gen_show_maybe(ty, false);
         }
@@ -622,6 +625,45 @@ impl Generator {
         self.w.close();
     }
 
+    /// Reading a number of type `ty` from input: the number, the input having
+    /// ended, or the line being no number, as an `InputError` (see
+    /// `ast::input_error_kind`). The runtime shows the prompt, reads the line,
+    /// and frees it, so nothing here needs a region.
+    fn gen_scan_number(&mut self, ty: &Type) {
+        let (from, value) = if *ty == Type::Int { ("vela__rt__int_of_input", "int64_t") } else { ("vela__rt__float_of_input", "double") };
+        let or = Type::Or(Box::new(ty.clone()), Box::new(Type::Named(INPUT_ERROR.to_string(), None)));
+        let or_type = c_type(&or);
+        self.w.open(&format!("static {} {}(vela__rt__text prompt)", or_type, scan_helper(ty)));
+        self.w.line(&format!("{} value = 0;", value));
+        self.w.line(&format!("int read = {}(prompt, &value);", from));
+        self.w.open("if (read == VELA__RT__READ_OK)");
+        self.w.line(&format!("return ({}){{ .ok = true, .value = value }};", or_type));
+        self.w.close();
+        self.w.open("if (read == VELA__RT__READ_ENDED)");
+        self.w.line(&format!(
+            "return ({}){{ .ok = false, .error = {{ .tag = {} }} }};",
+            or_type,
+            tag_value(INPUT_ERROR, ENDED)
+        ));
+        self.w.close();
+        // The line was no number, and the reason is the one reading text gives.
+        self.w.line(&format!(
+            "{} why = read == VELA__RT__READ_TOO_LARGE ? {} : {};",
+            tag_type(PARSE_ERROR),
+            tag_value(PARSE_ERROR, TOO_LARGE),
+            tag_value(PARSE_ERROR, NOT_A_NUMBER)
+        ));
+        self.w.line(&format!(
+            "return ({}){{ .ok = false, .error = {{ .tag = {}, .data = {{ .{} = {{ .{} = ({}){{ .tag = why }} }} }} }} }};",
+            or_type,
+            tag_value(INPUT_ERROR, NO_NUMBER),
+            c_ident(NO_NUMBER),
+            c_ident(WHY),
+            mangle(PARSE_ERROR)
+        ));
+        self.w.close();
+    }
+
     /// `show` for a `maybe` of a type `show` prints: the value, or `none`,
     /// ending the line when `ends`, as the runtime's helpers do for the types it
     /// writes itself (see `written_helper`).
@@ -754,8 +796,8 @@ impl Generator {
             StmtKind::Expr(Expr { kind: ExprKind::Edit { items, op, args }, span, .. }) => {
                 self.gen_edit(*span, items, *op, args, true)?;
             }
-            StmtKind::Expr(Expr { kind: ExprKind::Scan { args, region, .. }, span, .. }) => {
-                self.gen_scan(*span, args, region, true)?;
+            StmtKind::Expr(e @ Expr { kind: ExprKind::Scan { args, region, .. }, .. }) => {
+                self.gen_scan(e, args, region.as_deref(), true)?;
             }
             StmtKind::Expr(e) => {
                 let expr = self.gen_expr(e)?;
@@ -1314,7 +1356,7 @@ impl Generator {
             ExprKind::Wrap(inner) => self.gen_wrap(e, inner),
             ExprKind::PlanB { value, error, body } => self.gen_plan_b(e, value, error.as_ref(), body),
             ExprKind::Edit { items, op, args } => self.gen_edit(e.span, items, *op, args, false),
-            ExprKind::Scan { args, region, .. } => self.gen_scan(e.span, args, region, false),
+            ExprKind::Scan { args, region, .. } => self.gen_scan(e, args, region.as_deref(), false),
             ExprKind::Join { parts, region, .. } => self.gen_join(parts, region),
             ExprKind::ToText { value, region, .. } => self.gen_to_text(e, value, region),
             ExprKind::Copy { value, region, .. } => self.gen_copy(e, value, region.as_deref()),
@@ -1361,18 +1403,32 @@ impl Generator {
     /// reads in order with the rest of the expression around it: the C
     /// expression for the `maybe text` it gives, or nothing when it is a
     /// `statement` of its own.
-    fn gen_scan(&mut self, span: Span, args: &[Expr], region: &str, statement: bool) -> Result<String> {
-        let [prompt] = args else {
-            return Err(Error::internal_at(span, format!("scan with {} arguments", args.len())));
+    fn gen_scan(&mut self, e: &Expr, args: &[Expr], region: Option<&str>, statement: bool) -> Result<String> {
+        let span = e.span;
+        let (prompt, typed) = match (args, region) {
+            ([prompt], Some(region)) => (prompt, Err(region)),
+            // A typed read names no region, and the type it reads is the value
+            // of the `T or InputError` it gives.
+            ([prompt, _], None) => match e.ty()? {
+                Type::Or(number, _) => (prompt, Ok((**number).clone())),
+                other => return Err(Error::internal_at(span, format!("a typed scan of type {}", other))),
+            },
+            _ => return Err(Error::internal_at(span, format!("scan with {} arguments", args.len()))),
         };
         let prompt = self.gen_expr(prompt)?;
-        let call = format!("vela__scan({}, {})", c_ident(region), prompt);
+        let call = match &typed {
+            Ok(number) => format!("{}({})", scan_helper(number), prompt),
+            Err(region) => format!("vela__scan({}, {})", c_ident(region), prompt),
+        };
         if statement {
             self.w.line(&format!("{};", call));
             return Ok(String::new());
         }
-        let line = self.fresh_temp("line");
-        self.w.line(&format!("{} {} = {};", c_type(&Type::Maybe(Box::new(Type::Text(None)))), line, call));
+        let (line, ty) = match &typed {
+            Ok(_) => (self.fresh_temp("number"), e.ty()?.clone()),
+            Err(_) => (self.fresh_temp("line"), Type::Maybe(Box::new(Type::Text(None)))),
+        };
+        self.w.line(&format!("{} {} = {};", c_type(&ty), line, call));
         Ok(line)
     }
 
@@ -2017,6 +2073,12 @@ fn read_helper(ty: &Type) -> String {
     format!("vela__read__{}", if *ty == Type::Int { "int" } else { "float" })
 }
 
+/// The generated task that reads a number of type `ty` from input:
+/// `scan("Age: ", int)`.
+fn scan_helper(ty: &Type) -> String {
+    format!("vela__scan__{}", if *ty == Type::Int { "int" } else { "float" })
+}
+
 /// The generated task that writes a `maybe` of type `ty`, ending the line when
 /// `ends` (see `written_helper`).
 fn maybe_helper(ty: &Type, ends: bool) -> String {
@@ -2064,6 +2126,9 @@ struct UsedTypes {
     /// needs the helper that turns what the runtime reads into a value or a
     /// `ParseError`.
     read: Vec<Type>,
+    /// The numbers read from input, `scan("Age: ", int)`, each of which needs the
+    /// helper that turns what the runtime reads into a value or an `InputError`.
+    scanned: Vec<Type>,
     slice_at: Vec<Type>,
     slice_part: Vec<Type>,
     slice_copy: Vec<Type>,
@@ -2096,6 +2161,7 @@ impl UsedTypes {
             shown: Vec::new(),
             written: Vec::new(),
             read: Vec::new(),
+            scanned: Vec::new(),
             slice_at: Vec::new(),
             slice_part: Vec::new(),
             slice_copy: Vec::new(),
@@ -2322,10 +2388,22 @@ impl UsedTypes {
             ExprKind::Join { parts, .. } => parts.iter().for_each(|part| self.expr(part)),
             ExprKind::ToText { value, .. } => self.expr(value),
             ExprKind::Scan { args, .. } => {
-                self.scans = true;
-                // Its `maybe text` has a struct even when it isn't kept.
-                self.add(&Type::Maybe(Box::new(Type::Text(None))));
-                args.iter().for_each(|arg| self.expr(arg));
+                // A typed read needs the helper that reads a number and the
+                // struct of the `T or InputError` it gives; a line read needs
+                // the one that reads text, whose `maybe text` has a struct even
+                // when it isn't kept.
+                match (&e.ty, args.len()) {
+                    (Some(ty @ Type::Or(number, _)), 2) => {
+                        note(&mut self.scanned, number);
+                        self.add(ty);
+                    }
+                    _ => {
+                        self.scans = true;
+                        self.add(&Type::Maybe(Box::new(Type::Text(None))));
+                    }
+                }
+                // The type a typed read names is a type, not a value.
+                args.iter().take(1).for_each(|arg| self.expr(arg));
             }
             ExprKind::Edit { items, op, args } => {
                 if let Some(slice @ Type::Slice(..)) = &items.ty {
@@ -2409,8 +2487,8 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::MethodCall { value, args, .. } => expr_reads(value, name) || args.iter().any(|arg| expr_reads(arg, name)),
         ExprKind::StructInit { fields, .. } => fields.iter().any(|field| expr_reads(&field.value, name)),
         ExprKind::PlanB { value, body, .. } => expr_reads(value, name) || block_reads(body, name),
-        // `scan` reads the region it keeps the line in.
-        ExprKind::Scan { args, region, .. } => region == name || args.iter().any(|arg| expr_reads(arg, name)),
+        // `scan` reads the region it keeps the line in, where it keeps one.
+        ExprKind::Scan { args, region, .. } => region.as_deref() == Some(name) || args.iter().any(|arg| expr_reads(arg, name)),
         // Joining text, and a value turned into text, read the region the text goes in.
         ExprKind::Join { parts, region, .. } => region == name || parts.iter().any(|part| expr_reads(part, name)),
         ExprKind::ToText { value, region, .. } => region == name || expr_reads(value, name),

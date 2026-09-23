@@ -1,0 +1,5 @@
+# A module taking a name of a builtin kind, for a fail fixture: the kinds reading
+# a number sends belong to no file, so no file may declare one.
+kind InputError
+    Ended
+fi

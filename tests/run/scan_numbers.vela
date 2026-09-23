@@ -1,0 +1,109 @@
+# Reading a number from input: `scan(prompt, int)` shows the prompt, reads a
+# line, and sends the number it holds, or an `InputError` saying why there is
+# none. A number needs no memory, so this form names no region. `InputError` is
+# a builtin kind with two variants, `Ended` (the input is over) and `NoNumber`,
+# which holds the `ParseError` that reading the line gave.
+
+# Why there is no number, as text.
+task why(e: InputError) -> text
+    match e
+    case Ended
+        <- "the input ended"
+    case NoNumber reason
+        match reason
+        case NotANumber
+            <- "no number"
+        case TooLarge
+            <- "too large"
+        fi
+    fi
+fi
+
+# A task may forward the error it was given, and send one of its own: an age
+# read from input, refusing one no person has.
+task age() -> int or InputError
+    bind years = scan("age? ", int) {
+        fail e
+        <- fail e
+    }
+    when years > 200 or years < 0
+        <- fail InputError.NoNumber(ParseError.NotANumber)
+    fi
+    <- years
+fi
+
+# Nothing more to read is an error this task sends itself.
+task twice() -> int or InputError
+    bind n = scan("", int) {
+        fail e
+        <- fail Ended
+    }
+    <- n + n
+fi
+
+task main()
+    # A plan B gives the value to use instead: for 42, for a line that is no
+    # number, and at the end of the input.
+    show(scan("n? ", int) { -1 })
+    show(scan("n? ", int) { -1 })
+    show(scan("x? ", float) { -1.0 })
+
+    # A match reads the number or the reason there is none.
+    each round in [0, 1, 2, 3]
+        match scan("", int)
+        case {value}
+            show("read ", value)
+        case fail e
+            show("no: ", why(e))
+        fi
+    fi
+
+    # `is` runs a block for one outcome only.
+    when scan("", int) is {value}
+        show("seven: ", value)
+    fi
+    when scan("", int) is fail e
+        show("bad: ", why(e))
+    fi
+
+    # A float reads its fraction, and one too large for a float is too large.
+    show(scan("", float) { -1.0 } + 0.5)
+    show(scan("", float) { -1.0 })
+    match scan("", float)
+    case {value}
+        show("float ", value)
+    case fail e
+        show("no float: ", why(e))
+    fi
+
+    # A task of its own, sending and forwarding.
+    each round in [0, 1, 2]
+        match age()
+        case {years}
+            show("age ", years)
+        case fail e
+            show("no age: ", why(e))
+        fi
+    fi
+
+    # Every line left, added up until the input ends.
+    hold total = 0
+    hold reading = true
+    loop reading
+        match scan("", int)
+        case {value}
+            total = total + value
+        case fail e
+            match e
+            case Ended
+                reading = false
+            case NoNumber _
+                show("skipped a line")
+            fi
+        fi
+    fi
+    show("total: ", total)
+
+    # The input has ended, so this one sends its own error.
+    show(twice() { -1 })
+fi

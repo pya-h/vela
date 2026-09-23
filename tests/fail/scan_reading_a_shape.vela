@@ -1,0 +1,9 @@
+# error: 8:34: 'scan' reads a number, so it names 'int' or 'float', as in 'scan("Age: ", int)'
+shape Point
+    x: int
+    y: int
+fi
+
+task main()
+    bind point = scan("Point: ", Point) { Point { x: 0, y: 0 } }
+fi

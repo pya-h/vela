@@ -97,4 +97,20 @@ task main()
     bind counted = numbers.tallyOf(r, "once")
     show(counted.value)
     show(counted.count)
+
+    # The builtin kinds a module sends, read here: their names are the same in
+    # every file, since no file declares them.
+    show(numbers.read("42") { 0 })
+    show(numbers.read("4x2") { -1 })
+    show(numbers.refused() {
+        fail e
+        show(numbers.reason(e))
+        -1
+    })
+    match numbers.stopped()
+    case {value}
+        show(value)
+    case fail e
+        show(numbers.reason(e))
+    fi
 fi

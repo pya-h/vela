@@ -66,3 +66,59 @@
     | keyword:<-  type:Tally  punctuation:{  field:value  punctuation::  parameter:value  punctuation:,  field:count  punctuation::  number:1  punctuation:}
  41 | fi
     | keyword:fi
+ 43 | # The kinds reading a number sends belong to no file, so this module writes both
+    | comment:# The kinds reading a number sends belong to no file, so this module writes both
+ 44 | # without declaring them and without an `include`: as a type it sends, as a type
+    | comment:# without declaring them and without an `include`: as a type it sends, as a type
+ 45 | # it takes, and as a value it sends itself, through its kind or as a bare variant.
+    | comment:# it takes, and as a value it sends itself, through its kind or as a bare variant.
+ 46 | task read(t: text) -> int or ParseError
+    | keyword:task  task:read  punctuation:(  parameter:t  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  keyword:or  type:ParseError
+ 47 |     <- int(t) {
+    | keyword:<-  type-builtin:int  punctuation:(  parameter:t  punctuation:)  punctuation:{
+ 48 |         fail e
+    | keyword:fail  variable:e
+ 49 |         <- fail e
+    | keyword:<-  keyword:fail  variable:e
+ 50 |     }
+    | punctuation:}
+ 51 | fi
+    | keyword:fi
+ 53 | task refused() -> int or InputError
+    | keyword:task  task:refused  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:or  type:InputError
+ 54 |     <- fail InputError.NoNumber(ParseError.TooLarge)
+    | keyword:<-  keyword:fail  type:InputError  punctuation:.  variant:NoNumber  punctuation:(  type:ParseError  punctuation:.  variant:TooLarge  punctuation:)
+ 55 | fi
+    | keyword:fi
+ 57 | task stopped() -> int or InputError
+    | keyword:task  task:stopped  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:or  type:InputError
+ 58 |     <- fail Ended
+    | keyword:<-  keyword:fail  variant:Ended
+ 59 | fi
+    | keyword:fi
+ 61 | task reason(e: InputError) -> text
+    | keyword:task  task:reason  punctuation:(  parameter:e  punctuation::  type:InputError  punctuation:)  operator:->  type-builtin:text
+ 62 |     match e
+    | keyword:match  parameter:e
+ 63 |     case Ended
+    | keyword:case  variant:Ended
+ 64 |         <- "ended"
+    | keyword:<-  string:"ended"
+ 65 |     case NoNumber why
+    | keyword:case  variant:NoNumber  variable:why
+ 66 |         match why
+    | keyword:match  variable:why
+ 67 |         case NotANumber
+    | keyword:case  variant:NotANumber
+ 68 |             <- "no number"
+    | keyword:<-  string:"no number"
+ 69 |         case TooLarge
+    | keyword:case  variant:TooLarge
+ 70 |             <- "too large"
+    | keyword:<-  string:"too large"
+ 71 |         fi
+    | keyword:fi
+ 72 |     fi
+    | keyword:fi
+ 73 | fi
+    | keyword:fi

@@ -1,0 +1,4 @@
+# error: 3:5: the error 'scan' may send is ignored; handle it with a plan B, as in 'scan(…) { fail e … }', or with match
+task main()
+    scan("Age: ", int)
+fi

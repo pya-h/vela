@@ -5,6 +5,8 @@
 shape Box
     unit: int
     show: text
+    # A field may be named like a variant of a builtin kind.
+    TooLarge: bool
 fi
 
 kind Light
@@ -16,9 +18,16 @@ task twice(text: int, float: int) -> int
     <- text + float
 fi
 
+task read(t: text) -> int or ParseError
+    <- int(t) {
+        fail e
+        <- fail NotANumber
+    }
+fi
+
 task main()
     bind show = 3
-    hold bool = Box { unit: show, show: "shown" }
+    hold bool = Box { unit: show, show: "shown", TooLarge: false }
     bool.unit = twice(bool.unit, 1)
     show(bool.unit)
     show(bool.show)
@@ -26,4 +35,8 @@ task main()
     when l is Light.Red
         show("red")
     fi
+    # A field may be named like a variant of a builtin kind, which a variable
+    # may not be, as no variable may be named like any kind's variant.
+    show(bool.TooLarge)
+    show(read("x") { -2 })
 fi

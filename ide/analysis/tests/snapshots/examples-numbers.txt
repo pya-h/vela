@@ -1,92 +1,132 @@
-  1 | # Numbers read from input: `scan` reads a line of text, and `int(line)` reads a
-    | comment:# Numbers read from input: `scan` reads a line of text, and `int(line)` reads a
-  2 | # number from that text, which may be no number at all — so it sends
-    | comment:# number from that text, which may be no number at all — so it sends
-  3 | # `int or ParseError`, handled here with a `match`. Run it and type a few numbers
-    | comment:# `int or ParseError`, handled here with a `match`. Run it and type a few numbers
-  4 | # (an empty line or Ctrl-D ends them), or give it a file: `./numbers < readings.txt`.
-    | comment:# (an empty line or Ctrl-D ends them), or give it a file: `./numbers < readings.txt`.
-  6 | task main()
-    | keyword:task  task:main  punctuation:(  punctuation:)
-  7 |     hold count = 0
-    | keyword:hold  variable:count  operator:=  number:0
-  8 |     hold refused = 0
-    | keyword:hold  variable:refused  operator:=  number:0
-  9 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
- 10 |     hold largest = 0
-    | keyword:hold  variable:largest  operator:=  number:0
- 11 |     hold reading = true
-    | keyword:hold  variable:reading  operator:=  keyword:true
- 12 |     loop reading
-    | keyword:loop  variable:reading
- 13 |         # Freed at the end of every pass, with the line read into it.
-    | comment:# Freed at the end of every pass, with the line read into it.
- 14 |         region line_memory
-    | keyword:region  region:line_memory
- 15 |         bind line = scan("> ") at line_memory { "" }
-    | keyword:bind  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:"> "  punctuation:)  keyword:at  region:line_memory  punctuation:{  string:""  punctuation:}
- 16 |         when line == ""
-    | keyword:when  variable:line  operator:==  string:""
- 17 |             reading = false
-    | variable:reading  operator:=  keyword:false
- 18 |         else
-    | keyword:else
- 19 |             match int(line)
-    | keyword:match  type-builtin:int  punctuation:(  variable:line  punctuation:)
- 20 |             case {value}
+  1 | # Numbers read from input: `scan("> ", int)` shows the prompt, reads a line, and
+    | comment:# Numbers read from input: `scan("> ", int)` shows the prompt, reads a line, and
+  2 | # sends the number it holds, or an `InputError` saying there is none — because
+    | comment:# sends the number it holds, or an `InputError` saying there is none — because
+  3 | # the input ended, or because the line was no number, which holds the
+    | comment:# the input ended, or because the line was no number, which holds the
+  4 | # `ParseError` that reading it gave. Reading a number from text a program already
+    | comment:# `ParseError` that reading it gave. Reading a number from text a program already
+  5 | # has is `int(t)`, which sends that `ParseError` on its own.
+    | comment:# has is `int(t)`, which sends that `ParseError` on its own.
+  6 | #
+    | comment:#
+  7 | # Run it and type a few numbers (Ctrl-D, or the end of a file given as input,
+    | comment:# Run it and type a few numbers (Ctrl-D, or the end of a file given as input,
+  8 | # ends them), or give it a file: `./numbers < readings.txt`.
+    | comment:# ends them), or give it a file: `./numbers < readings.txt`.
+ 10 | # The numbers a program reads may also come from text it holds.
+    | comment:# The numbers a program reads may also come from text it holds.
+ 11 | task from_text()
+    | keyword:task  task:from_text  punctuation:(  punctuation:)
+ 12 |     each written in ["6", "6.5", "-0"]
+    | keyword:each  variable:written  keyword:in  punctuation:[  string:"6"  punctuation:,  string:"6.5"  punctuation:,  string:"-0"  punctuation:]
+ 13 |         match int(written)
+    | keyword:match  type-builtin:int  punctuation:(  variable:written  punctuation:)
+ 14 |         case {value}
     | keyword:case  punctuation:{  variable:value  punctuation:}
- 21 |                 count = count + 1
-    | variable:count  operator:=  variable:count  operator:+  number:1
- 22 |                 total = total + value
-    | variable:total  operator:=  variable:total  operator:+  variable:value
- 23 |                 when count == 1 or value > largest
-    | keyword:when  variable:count  operator:==  number:1  keyword:or  variable:value  operator:>  variable:largest
- 24 |                     largest = value
-    | variable:largest  operator:=  variable:value
- 25 |                 fi
-    | keyword:fi
- 26 |             case fail why
+ 15 |             show(written, " is ", value)
+    | builtin-fn:show  punctuation:(  variable:written  punctuation:,  string:" is "  punctuation:,  variable:value  punctuation:)
+ 16 |         case fail why
     | keyword:case  keyword:fail  variable:why
- 27 |                 refused = refused + 1
-    | variable:refused  operator:=  variable:refused  operator:+  number:1
- 28 |                 # `ParseError` says which way the text was no number.
-    | comment:# `ParseError` says which way the text was no number.
- 29 |                 match why
+ 17 |             match why
     | keyword:match  variable:why
- 30 |                 case NotANumber
+ 18 |             case NotANumber
     | keyword:case  variant:NotANumber
- 31 |                     show(line, " is no number")
-    | builtin-fn:show  punctuation:(  variable:line  punctuation:,  string:" is no number"  punctuation:)
- 32 |                 case TooLarge
+ 19 |                 show(written, " is no whole number")
+    | builtin-fn:show  punctuation:(  variable:written  punctuation:,  string:" is no whole number"  punctuation:)
+ 20 |             case TooLarge
     | keyword:case  variant:TooLarge
- 33 |                     show(line, " does not fit in an int")
-    | builtin-fn:show  punctuation:(  variable:line  punctuation:,  string:" does not fit in an int"  punctuation:)
- 34 |                 fi
+ 21 |                 show(written, " does not fit in an int")
+    | builtin-fn:show  punctuation:(  variable:written  punctuation:,  string:" does not fit in an int"  punctuation:)
+ 22 |             fi
     | keyword:fi
- 35 |             fi
+ 23 |         fi
     | keyword:fi
- 36 |         fi
+ 24 |     fi
     | keyword:fi
- 37 |     fi
+ 25 | fi
     | keyword:fi
- 38 |     when count == 0
+ 27 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 28 |     from_text()
+    | task:from_text  punctuation:(  punctuation:)
+ 30 |     hold count = 0
+    | keyword:hold  variable:count  operator:=  number:0
+ 31 |     hold refused = 0
+    | keyword:hold  variable:refused  operator:=  number:0
+ 32 |     hold total = 0
+    | keyword:hold  variable:total  operator:=  number:0
+ 33 |     hold largest = 0
+    | keyword:hold  variable:largest  operator:=  number:0
+ 34 |     hold reading = true
+    | keyword:hold  variable:reading  operator:=  keyword:true
+ 35 |     loop reading
+    | keyword:loop  variable:reading
+ 36 |         match scan("> ", int)
+    | keyword:match  builtin-fn:scan  punctuation:(  string:"> "  punctuation:,  type-builtin:int  punctuation:)
+ 37 |         case {value}
+    | keyword:case  punctuation:{  variable:value  punctuation:}
+ 38 |             count = count + 1
+    | variable:count  operator:=  variable:count  operator:+  number:1
+ 39 |             total = total + value
+    | variable:total  operator:=  variable:total  operator:+  variable:value
+ 40 |             when count == 1 or value > largest
+    | keyword:when  variable:count  operator:==  number:1  keyword:or  variable:value  operator:>  variable:largest
+ 41 |                 largest = value
+    | variable:largest  operator:=  variable:value
+ 42 |             fi
+    | keyword:fi
+ 43 |         case fail e
+    | keyword:case  keyword:fail  variable:e
+ 44 |             match e
+    | keyword:match  variable:e
+ 45 |             # Nothing more to read, so the loop is done.
+    | comment:# Nothing more to read, so the loop is done.
+ 46 |             case Ended
+    | keyword:case  variant:Ended
+ 47 |                 reading = false
+    | variable:reading  operator:=  keyword:false
+ 48 |             # A line that was no number: the reason says which way.
+    | comment:# A line that was no number: the reason says which way.
+ 49 |             case NoNumber why
+    | keyword:case  variant:NoNumber  variable:why
+ 50 |                 refused = refused + 1
+    | variable:refused  operator:=  variable:refused  operator:+  number:1
+ 51 |                 match why
+    | keyword:match  variable:why
+ 52 |                 case NotANumber
+    | keyword:case  variant:NotANumber
+ 53 |                     show("that is no number")
+    | builtin-fn:show  punctuation:(  string:"that is no number"  punctuation:)
+ 54 |                 case TooLarge
+    | keyword:case  variant:TooLarge
+ 55 |                     show("that does not fit in an int")
+    | builtin-fn:show  punctuation:(  string:"that does not fit in an int"  punctuation:)
+ 56 |                 fi
+    | keyword:fi
+ 57 |             fi
+    | keyword:fi
+ 58 |         fi
+    | keyword:fi
+ 59 |     fi
+    | keyword:fi
+ 61 |     when count == 0
     | keyword:when  variable:count  operator:==  number:0
- 39 |         show("no numbers")
+ 62 |         show("no numbers")
     | builtin-fn:show  punctuation:(  string:"no numbers"  punctuation:)
- 40 |     else
+ 63 |     else
     | keyword:else
- 41 |         show(count, " read, ", refused, " refused")
+ 64 |         show(count, " read, ", refused, " refused")
     | builtin-fn:show  punctuation:(  variable:count  punctuation:,  string:" read, "  punctuation:,  variable:refused  punctuation:,  string:" refused"  punctuation:)
- 42 |         show("total ", total, ", largest ", largest)
+ 65 |         show("total ", total, ", largest ", largest)
     | builtin-fn:show  punctuation:(  string:"total "  punctuation:,  variable:total  punctuation:,  string:", largest "  punctuation:,  variable:largest  punctuation:)
- 43 |         # An average is a float, so the count becomes one: an int and a float
+ 66 |         # An average is a float, so the count becomes one: an int and a float
     | comment:# An average is a float, so the count becomes one: an int and a float
- 44 |         # don't mix on their own.
+ 67 |         # don't mix on their own.
     | comment:# don't mix on their own.
- 45 |         show("average ", float(total) / float(count))
+ 68 |         show("average ", float(total) / float(count))
     | builtin-fn:show  punctuation:(  string:"average "  punctuation:,  type-builtin:float  punctuation:(  variable:total  punctuation:)  operator:/  type-builtin:float  punctuation:(  variable:count  punctuation:)  punctuation:)
- 46 |     fi
+ 69 |     fi
     | keyword:fi
- 47 | fi
+ 70 | fi
     | keyword:fi

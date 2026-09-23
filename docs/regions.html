@@ -715,7 +715,9 @@ false</pre>
         <code>Status.Todo</code>, whose text lasts. Text read with <code>scan("…") at r</code> is new text, so it is in the
         region <code>scan</code> names, and so is text joined with <code>a + b at r</code>, made from a value with
         <code>n.str() at r</code>, or holding values, <code>"{name} is {age}" at r</code>; a part of text,
-        <code>t[a..b]</code>, is the same bytes, so it stays in the region the text is in. A shape or kind holding text but no pointers may name a region or not:
+        <code>t[a..b]</code>, is the same bytes, so it stays in the region the text is in. A number read from input,
+        <code>scan("Age: ", int)</code>, is no memory at all, so that form of <code>scan</code> names no region.
+        A shape or kind holding text but no pointers may name a region or not:
         <code>Person</code> holds text that lasts, <code>Person@r</code> text in <code>r</code>.
       </p>
       <p>

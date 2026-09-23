@@ -262,6 +262,9 @@ enum vela__rt__read {
     VELA__RT__READ_NOT_A_NUMBER = 1,
     /* A number, but not one this type holds. */
     VELA__RT__READ_TOO_LARGE = 2,
+    /* The input has ended, so there was no line to read: only the readers that
+     * read input give this one (`scan("Age: ", int)`). */
+    VELA__RT__READ_ENDED = 3,
 };
 
 static inline int vela__rt__int_of_text(vela__rt__text t, int64_t* value) {
@@ -832,25 +835,25 @@ static inline void vela__rt__copy_finish(vela__rt__copy* c) {
     free(c->pending);
 }
 
-/* Input. `scan(prompt) at r` shows the prompt (flushing the output, which may
- * be waiting for a newline) and reads one line from the standard input into
- * region `r`, without its line break (a Windows "\r\n" included). A line is as
- * long as the input makes it, and a `\0` in it is one of its bytes. There is
- * no line, and this gives false, when the input has ended (or can't be read)
- * before its first character; a last line without a line break is still a
- * line. */
-static inline bool vela__rt__scan(vela__rt__region* r, vela__rt__text prompt, vela__rt__text* line) {
+/* Input. Shows the prompt (flushing the output, which may be waiting for a
+ * newline) and reads one line from the standard input into memory of its own,
+ * which the caller frees, without its line break (a Windows "\r\n" included).
+ * A line is as long as the input makes it, and a `\0` in it is one of its
+ * bytes. There is no line, and this gives false, when the input has ended (or
+ * can't be read) before its first character; a last line without a line break
+ * is still a line. */
+static inline bool vela__rt__read_line(vela__rt__text prompt, char** bytes, size_t* size) {
     fwrite(prompt.bytes, 1, (size_t)prompt.len, stdout);
     fflush(stdout);
     size_t capacity = 128;
-    size_t size = 0;
+    size_t held = 0;
     char* buffer = malloc(capacity);
     if (buffer == NULL) {
         vela__rt__out_of_memory();
     }
     int c;
     while ((c = getchar()) != EOF && c != '\n') {
-        if (size + 1 == capacity) {
+        if (held + 1 == capacity) {
             if (capacity > SIZE_MAX / 2) {
                 free(buffer);
                 vela__rt__out_of_memory();
@@ -863,20 +866,58 @@ static inline bool vela__rt__scan(vela__rt__region* r, vela__rt__text prompt, ve
             buffer = bigger;
             capacity *= 2;
         }
-        buffer[size++] = (char)c;
+        buffer[held++] = (char)c;
     }
-    if (c == EOF && size == 0) {
+    if (c == EOF && held == 0) {
         free(buffer);
         return false;
     }
-    if (size > 0 && buffer[size - 1] == '\r') {
-        size--;
+    if (held > 0 && buffer[held - 1] == '\r') {
+        held--;
+    }
+    *bytes = buffer;
+    *size = held;
+    return true;
+}
+
+/* `scan(prompt) at r`: the line read, in region `r`. */
+static inline bool vela__rt__scan(vela__rt__region* r, vela__rt__text prompt, vela__rt__text* line) {
+    char* buffer = NULL;
+    size_t size = 0;
+    if (!vela__rt__read_line(prompt, &buffer, &size)) {
+        return false;
     }
     char* bytes = vela__rt__region_alloc(r, size, 1);
     memcpy(bytes, buffer, size);
     free(buffer);
     *line = (vela__rt__text){ bytes, (int64_t)size };
     return true;
+}
+
+/* `scan(prompt, int)` and `scan(prompt, float)`: the number the line read
+ * holds, by the rules of `vela__rt__int_of_text` and
+ * `vela__rt__float_of_text`, or `VELA__RT__READ_ENDED` when there was no line.
+ * The line is freed either way, so a number needs no region. */
+static inline int vela__rt__int_of_input(vela__rt__text prompt, int64_t* value) {
+    char* buffer = NULL;
+    size_t size = 0;
+    if (!vela__rt__read_line(prompt, &buffer, &size)) {
+        return VELA__RT__READ_ENDED;
+    }
+    int read = vela__rt__int_of_text((vela__rt__text){ buffer, (int64_t)size }, value);
+    free(buffer);
+    return read;
+}
+
+static inline int vela__rt__float_of_input(vela__rt__text prompt, double* value) {
+    char* buffer = NULL;
+    size_t size = 0;
+    if (!vela__rt__read_line(prompt, &buffer, &size)) {
+        return VELA__RT__READ_ENDED;
+    }
+    int read = vela__rt__float_of_text((vela__rt__text){ buffer, (int64_t)size }, value);
+    free(buffer);
+    return read;
 }
 
 /* Frees everything allocated in `r`, which is then empty again. */

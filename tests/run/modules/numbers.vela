@@ -39,3 +39,35 @@ fi
 task tallyOf<T: shown>(r: region, value: T) -> Tally<T>@r
     <- Tally { value: value, count: 1 }
 fi
+
+# The kinds reading a number sends belong to no file, so this module writes both
+# without declaring them and without an `include`: as a type it sends, as a type
+# it takes, and as a value it sends itself, through its kind or as a bare variant.
+task read(t: text) -> int or ParseError
+    <- int(t) {
+        fail e
+        <- fail e
+    }
+fi
+
+task refused() -> int or InputError
+    <- fail InputError.NoNumber(ParseError.TooLarge)
+fi
+
+task stopped() -> int or InputError
+    <- fail Ended
+fi
+
+task reason(e: InputError) -> text
+    match e
+    case Ended
+        <- "ended"
+    case NoNumber why
+        match why
+        case NotANumber
+            <- "no number"
+        case TooLarge
+            <- "too large"
+        fi
+    fi
+fi

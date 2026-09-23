@@ -171,17 +171,74 @@ pub const PARSE_ERROR: &str = "ParseError";
 pub const NOT_A_NUMBER: &str = "NotANumber";
 pub const TOO_LARGE: &str = "TooLarge";
 
-/// The names `ParseError` brings, which no program may declare: the kind and its
-/// two variants, so that a program writes them as it writes any kind's.
-pub const BUILTIN_KIND_NAMES: &[&str] = &[PARSE_ERROR, NOT_A_NUMBER, TOO_LARGE];
+/// The kind that reading a number from input sends: `scan("Age: ", int)` is an
+/// `int or InputError`. Reading from input can end, which reading text cannot,
+/// so it says that apart from the text being no number, which it holds as the
+/// `ParseError` reading the line gave.
+pub const INPUT_ERROR: &str = "InputError";
+
+/// Its variants: the input has ended, and the line was no number, which holds
+/// why (a `ParseError`).
+pub const ENDED: &str = "Ended";
+pub const NO_NUMBER: &str = "NoNumber";
+
+/// The name of the reason `NoNumber` holds: `case NoNumber why`.
+pub const WHY: &str = "why";
+
+/// The names the builtin kinds bring, which no program may declare: each kind
+/// and its variants, so that a program writes them as it writes any kind's.
+pub const BUILTIN_KIND_NAMES: &[&str] = &[PARSE_ERROR, NOT_A_NUMBER, TOO_LARGE, INPUT_ERROR, ENDED, NO_NUMBER];
+
+/// The kind each builtin variant belongs to, for a message about the name.
+pub fn builtin_kind_of(variant: &str) -> Option<&'static str> {
+    match variant {
+        NOT_A_NUMBER | TOO_LARGE => Some(PARSE_ERROR),
+        ENDED | NO_NUMBER => Some(INPUT_ERROR),
+        _ => None,
+    }
+}
+
+/// Both kinds no program declares, in the order the code generator needs them:
+/// `InputError` holds a `ParseError`.
+pub fn builtin_kinds() -> Vec<KindDef> {
+    vec![parse_error_kind(), input_error_kind()]
+}
+
+/// `InputError` as a declaration, as `parse_error_kind` is. Its `NoNumber` holds
+/// the `ParseError` that reading the line gave, so the two kinds say each reason
+/// once (see `docs/future.html#inner-kind-variants` for the shortcut this waits
+/// for).
+pub fn input_error_kind() -> KindDef {
+    let span = builtin_span();
+    let why = Field {
+        name: WHY.to_string(),
+        ty: Type::Named(PARSE_ERROR.to_string(), None),
+        span,
+        ty_span: span,
+        private: false,
+    };
+    KindDef {
+        name: INPUT_ERROR.to_string(),
+        variants: vec![
+            Variant { tag: ENDED.to_string(), payload: Vec::new(), span },
+            Variant { tag: NO_NUMBER.to_string(), payload: vec![why], span },
+        ],
+        span,
+        private: false,
+    }
+}
+
+/// The position of a declaration no file holds: a file no program has, so a
+/// message about a name it takes says which kind holds it rather than pointing
+/// at a line (see `check::Checker::define`).
+fn builtin_span() -> Span {
+    Span { line: 0, col: 0, file: usize::MAX }
+}
 
 /// `ParseError` as a declaration, which the checker knows without reading it and
 /// the code generator writes the C for (see `check::Checker::check_program`).
-/// Its position is in no file of the program, so a message about a name it takes
-/// says which kind holds it rather than pointing at a line (see
-/// `check::Checker::define`).
 pub fn parse_error_kind() -> KindDef {
-    let span = Span { line: 0, col: 0, file: usize::MAX };
+    let span = builtin_span();
     let variant = |tag: &str| Variant { tag: tag.to_string(), payload: Vec::new(), span };
     KindDef {
         name: PARSE_ERROR.to_string(),
@@ -654,11 +711,15 @@ pub enum ExprKind {
     Wrap(Box<Expr>),
     /// `scan(prompt) at r` or `scan(prompt)@r`: shows the prompt, and reads a
     /// line of input into region `r`, giving `none` when the input has ended.
-    /// `args` are as written (the prompt, for a correct call); `region_span`
-    /// is the position of `r`.
+    /// `scan(prompt, int)` reads a number from that line instead, giving
+    /// `int or InputError`, and names no region because a number needs no
+    /// memory. `args` are as written (the prompt, and the type for a typed
+    /// read); `region` is `None` where none was written, which the checker
+    /// reports for the form that needs one, and `region_span` is its position
+    /// (the position after the call when there is none).
     Scan {
         args: Vec<Expr>,
-        region: String,
+        region: Option<String>,
         region_span: Span,
     },
     /// `a + b + c at r`, or `(a + b)@r`: new text in region `r` holding the

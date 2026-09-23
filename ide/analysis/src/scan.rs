@@ -556,6 +556,24 @@ pub(crate) fn ends_value(token: &Token) -> bool {
     )
 }
 
+/// Whether the argument at position `p` belongs to a `scan` call, so that the
+/// type it names is the number that call reads: `scan("Age: ", int)`.
+fn reads_a_number(tokens: &Tokens, p: usize) -> bool {
+    let mut depth = 0usize;
+    for q in (0..p).rev() {
+        match tokens.token(q) {
+            Some(Token::Newline | Token::Eof) | None => return false,
+            Some(Token::RParen) => depth += 1,
+            Some(Token::LParen) if depth == 0 => {
+                return q.checked_sub(1).is_some_and(|name| tokens.ident(name) == Some(vela::ast::SCAN) && tokens.before(name) != Some(&Token::Dot));
+            }
+            Some(Token::LParen) => depth -= 1,
+            _ => {}
+        }
+    }
+    false
+}
+
 fn never(_: &Token) -> bool {
     false
 }
@@ -1276,6 +1294,15 @@ impl<'a> Classifier<'a> {
             let intro = if self.scopes.last().is_some_and(|s| s.kind == ScopeKind::Case) { "case" } else { "is" };
             return (TokenClass::Variable, Some(self.declare_local(p, SymbolKind::Variable, Some(intro), String::new())));
         }
+        // `ParseError.TooLarge`: a variant of a kind no file declares, written
+        // through its kind. A field of that name belongs to a shape, so only the
+        // kind's own name before the dot makes this one.
+        if before == Some(&Token::Dot)
+            && let Some(kind) = vela::ast::builtin_kind_of(name)
+            && p.checked_sub(2).and_then(|owner| tokens.ident(owner)) == Some(kind)
+        {
+            return (TokenClass::Variant, None);
+        }
         // `p.x` and `p.m()`: a field or a method of the value's shape or kind.
         if before == Some(&Token::Dot) {
             let start = tokens.get(p).map(|t| (t.start.line, t.start.col));
@@ -1309,6 +1336,11 @@ impl<'a> Classifier<'a> {
         if after == Some(&Token::LParen) && (name == vela::ast::TEXT_CAST || vela::ast::number_cast(name).is_some()) {
             return (TokenClass::TypeBuiltin, None);
         }
+        // `scan("Age: ", int)`: the type of the number it reads, which is a type
+        // and not a value, as the one a cast names is.
+        if after == Some(&Token::RParen) && before == Some(&Token::Comma) && vela::ast::number_cast(name).is_some() && reads_a_number(tokens, p) {
+            return (TokenClass::TypeBuiltin, None);
+        }
         if after == Some(&Token::LParen)
             && let Some(id) = self.global(name, &[SymbolKind::Task, SymbolKind::Variant])
         {
@@ -1325,6 +1357,14 @@ impl<'a> Classifier<'a> {
         }
         if BUILTIN_TASKS.contains(&name) {
             return (TokenClass::BuiltinFn, None);
+        }
+        // The kinds no file declares, where a value of one is written rather than
+        // its type: `fail ParseError.TooLarge`, or the bare `fail Ended`. No
+        // declaration takes these names, and a variable or field that does was
+        // found above, so what is left is the kind itself (see `hover`).
+        if vela::ast::BUILTIN_KIND_NAMES.contains(&name) {
+            let class = if vela::ast::builtin_kind_of(name).is_some() { TokenClass::Variant } else { TokenClass::Type };
+            return (class, None);
         }
         if after == Some(&Token::LParen) {
             return (TokenClass::Task, None);

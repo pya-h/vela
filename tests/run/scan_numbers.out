@@ -1,0 +1,18 @@
+n? 42
+n? -1
+x? 2.5
+read 7
+read 0
+no: too large
+no: no number
+seven: 7
+bad: no number
+0.75
+-0.5
+no float: too large
+age? no age: no number
+age? age 30
+age? no age: no number
+skipped a line
+total: 6
+-1

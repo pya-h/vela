@@ -395,6 +395,25 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     }
 
     // Types.
+    // After a `scan`'s prompt: the type of a number to read, the only two types
+    // this form takes.
+    if let (Some(q), Some(Token::Comma)) = (prev, prev_token)
+        && after_scan_prompt(&k, q)
+    {
+        let items = [(vela::ast::INT_CAST, "read a whole number"), (vela::ast::FLOAT_CAST, "read a number with a fraction")]
+            .into_iter()
+            .map(|(name, detail)| CompletionItem {
+                label: name.to_string(),
+                kind: CompletionKind::Type,
+                detail: detail.to_string(),
+                apply: None,
+                snippet: None,
+                boost: SNIPPET,
+            })
+            .collect();
+        return (items, word_start, byte);
+    }
+
     let type_context = match (prev, prev_token) {
         (Some(q), Some(Token::Colon)) => !unclosed_on_line(&k, q, &Token::LBrace, &Token::RBrace),
         (_, Some(Token::Arrow | Token::New)) => true,
@@ -498,7 +517,9 @@ fn names_region_after(k: &Knowledge, q: usize) -> bool {
     }
     let Some(before) = k.matching_open(q, &Token::LParen, &Token::RParen).and_then(|open| open.checked_sub(1)) else { return false };
     if k.ident(before) == Some(vela::ast::SCAN) {
-        return k.token_before(before) != Some(&Token::Dot);
+        // The form that reads a number, `scan(prompt, int)`, names no region.
+        let number = q.checked_sub(1).and_then(|p| k.ident(p)).is_some_and(|name| vela::ast::number_cast(name).is_some());
+        return !number && k.token_before(before) != Some(&Token::Dot);
     }
     // The type between `new` and `(`.
     let mut p = before;
@@ -685,6 +706,27 @@ fn type_paren(k: &Knowledge, q: usize) -> Option<usize> {
         }
     }
     None
+}
+
+/// Whether position `q`, a `,` inside a call's parentheses, is the one after a
+/// `scan`'s prompt, where the type of a number to read goes:
+/// `scan("Age: ", int)`.
+fn after_scan_prompt(k: &Knowledge, q: usize) -> bool {
+    let mut depth = 0usize;
+    for p in (k.line_start(q)..q).rev() {
+        match k.token(p) {
+            Some(Token::RParen) => depth += 1,
+            Some(Token::LParen) if depth == 0 => {
+                // The name before the `(`, which a dot would make a method.
+                return p.checked_sub(1).is_some_and(|name| k.ident(name) == Some(vela::ast::SCAN) && k.token_before(name) != Some(&Token::Dot));
+            }
+            Some(Token::LParen) => depth -= 1,
+            // Only the first argument is the prompt.
+            Some(Token::Comma) if depth == 0 => return false,
+            _ => {}
+        }
+    }
+    false
 }
 
 /// The `[` of an array or slice type that position `q` is inside, on its line.
@@ -1202,17 +1244,23 @@ fn type_items(k: &Knowledge, at: usize, after_arrow: bool, offer_maybe: bool, af
             snippet: None,
             boost: SNIPPET,
         });
-    // The builtin kind reading a number sends, which no file declares. It is an
-    // error type, so it is offered after `or`, where one goes.
-    let builtin_kind = std::iter::once(CompletionItem {
-        label: vela::ast::PARSE_ERROR.to_string(),
-        kind: CompletionKind::Type,
-        detail: "what reading a number from text sends".to_string(),
-        apply: None,
-        snippet: None,
-        boost: SNIPPET,
-    })
-    .filter(|_| after_or);
+    // The builtin kinds reading a number sends, which no file declares. Both are
+    // error types, so they are offered after `or`, where one goes.
+    let builtin_kinds = [
+        (vela::ast::PARSE_ERROR, "what reading a number from text sends"),
+        (vela::ast::INPUT_ERROR, "what reading a number from input sends"),
+    ];
+    let builtin_kind = builtin_kinds
+        .into_iter()
+        .map(|(name, detail)| CompletionItem {
+            label: name.to_string(),
+            kind: CompletionKind::Type,
+            detail: detail.to_string(),
+            apply: None,
+            snippet: None,
+            boost: SNIPPET,
+        })
+        .filter(move |_| after_or);
     let declared = visible_globals(k, &[SymbolKind::Shape, SymbolKind::Kind]).into_iter().map(|(label, s)| CompletionItem {
         label,
         kind: CompletionKind::Type,
@@ -1669,9 +1717,10 @@ fn task_items(k: &Knowledge) -> Vec<CompletionItem> {
         })
         .collect();
     items.extend(BUILTIN_TASKS.iter().map(|name| {
-        // `scan` names the region it reads into after its call.
+        // `scan` names the region it reads a line into after its call; the form
+        // that reads a number names no region (see `hover`).
         let (detail, snippet) = if *name == vela::ast::SCAN {
-            ("(prompt: text) at r -> maybe text@r", format!("{}(${{prompt}}) at ${{region}}", name))
+            ("(prompt: text) at r -> maybe text@r, or (prompt: text, int | float)", format!("{}(${{prompt}}) at ${{region}}", name))
         } else {
             ("(value: int | float | bool | text | maybe | anything with str, …)", format!("{}(${{value}})", name))
         };

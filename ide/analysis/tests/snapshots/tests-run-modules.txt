@@ -178,5 +178,35 @@
     | builtin-fn:show  punctuation:(  variable:counted  punctuation:.  field:value  punctuation:)
  99 |     show(counted.count)
     | builtin-fn:show  punctuation:(  variable:counted  punctuation:.  field:count  punctuation:)
-100 | fi
+101 |     # The builtin kinds a module sends, read here: their names are the same in
+    | comment:# The builtin kinds a module sends, read here: their names are the same in
+102 |     # every file, since no file declares them.
+    | comment:# every file, since no file declares them.
+103 |     show(numbers.read("42") { 0 })
+    | builtin-fn:show  punctuation:(  module:numbers  punctuation:.  task:read  punctuation:(  string:"42"  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+104 |     show(numbers.read("4x2") { -1 })
+    | builtin-fn:show  punctuation:(  module:numbers  punctuation:.  task:read  punctuation:(  string:"4x2"  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+105 |     show(numbers.refused() {
+    | builtin-fn:show  punctuation:(  module:numbers  punctuation:.  task:refused  punctuation:(  punctuation:)  punctuation:{
+106 |         fail e
+    | keyword:fail  variable:e
+107 |         show(numbers.reason(e))
+    | builtin-fn:show  punctuation:(  module:numbers  punctuation:.  task:reason  punctuation:(  variable:e  punctuation:)  punctuation:)
+108 |         -1
+    | operator:-  number:1
+109 |     })
+    | punctuation:}  punctuation:)
+110 |     match numbers.stopped()
+    | keyword:match  module:numbers  punctuation:.  task:stopped  punctuation:(  punctuation:)
+111 |     case {value}
+    | keyword:case  punctuation:{  variable:value  punctuation:}
+112 |         show(value)
+    | builtin-fn:show  punctuation:(  variable:value  punctuation:)
+113 |     case fail e
+    | keyword:case  keyword:fail  variable:e
+114 |         show(numbers.reason(e))
+    | builtin-fn:show  punctuation:(  module:numbers  punctuation:.  task:reason  punctuation:(  variable:e  punctuation:)  punctuation:)
+115 |     fi
+    | keyword:fi
+116 | fi
     | keyword:fi

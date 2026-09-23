@@ -1,5 +1,8 @@
-> > > seven is no number
-> > 99999999999999999999 does not fit in an int
+6 is 6
+6.5 is no whole number
+-0 is 0
+> > > that is no number
+> > that does not fit in an int
 > > 4 read, 2 refused
 total 78, largest 41
 average 19.5

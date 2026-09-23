@@ -60,8 +60,11 @@ fn a_line_read_is_a_maybe_text_in_its_region_whether_or_not_the_file_checks() {
 fn scan_has_a_hover_and_a_snippet_that_names_the_region() {
     let source = program(true, "show(1)");
     let (code, doc) = hover(&source, "scan(");
-    assert_eq!(code, "task scan(prompt: text) at r -> maybe text@r");
+    // Both forms: the line it reads into a region, and the number it reads from
+    // that line, which needs none.
+    assert_eq!(code, "task scan(prompt: text) at r -> maybe text@r\ntask scan(prompt: text, int | float) -> int | float or InputError");
     assert!(doc.starts_with("Shows the prompt, then reads one line"), "{}", doc);
+    assert!(doc.contains("names no region"), "{}", doc);
     let items = completions(&program(true, "bind again = sc@@"));
     let scan = items.iter().find(|item| item.label == "scan").expect("scan is offered");
     assert_eq!(scan.snippet.as_deref(), Some("scan(${prompt}) at ${region}"));
@@ -94,7 +97,7 @@ fn scan_called_is_the_builtin_even_beside_a_variable_named_scan() {
     let source = program(true, "hold scan = 3\n    show(scan)\n    bind again = scan(\"x\") at lines");
     let byte = source.rfind("scan(").expect("a call");
     let hover = Analysis::new(&source).hover(LineIndex::new(&source).utf16_of(byte)).expect("a hover");
-    assert_eq!(hover.code, "task scan(prompt: text) at r -> maybe text@r");
+    assert_eq!(hover.code, "task scan(prompt: text) at r -> maybe text@r\ntask scan(prompt: text, int | float) -> int | float or InputError");
 }
 
 #[test]

@@ -193,7 +193,8 @@
         per loop pass, and copying a result into a longer-lived region), <code>arrays.vela</code> (arrays, and slices
         in a region: sorting and a sieve of primes), <code>shop.vela</code> (a program in three files, with
         <code>include</code>, braces, <code>=&gt;</code>, and <code>priv</code>), <code>numbers.vela</code> (numbers read
-        from input, with <code>int(line)</code> and the reasons a text is no number), and <code>demo.vela</code> (tasks, shapes, pointers, control flow, and text).
+        from input with <code>scan("> ", int)</code>, and from text with <code>int(t)</code>, with the reasons there is
+        no number), and <code>demo.vela</code> (tasks, shapes, pointers, control flow, and text).
       </p>
       <div class="note">
         Prefer an editor? <a href="ide.html">Vela Studio</a> highlights Vela, shows errors as you type, completes
@@ -247,11 +248,13 @@
 in   at    match case new   region and  or      not
 true false none  fi   maybe is     fail include priv</pre>
       <p>
-        <code>show</code>, <code>scan</code>, the builtin types (<code>int</code>, <code>float</code>, <code>bool</code>,
-        <code>text</code>, <code>unit</code>), and the builtin kind
-        <a href="#reading-numbers"><code>ParseError</code></a> with its variants <code>NotANumber</code> and
-        <code>TooLarge</code> aren't reserved words: no task, shape, kind, or variant can take their
-        names, but a variable, parameter, or field can (see <a href="#names">Names</a>). The symbols:
+        <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>,
+        <code>bool</code>, <code>text</code>, <code>unit</code>) aren't reserved words: no task, shape, kind, or
+        variant can take their names, but a variable, parameter, or field can (see <a href="#names">Names</a>). The
+        builtin kinds <a href="#reading-numbers"><code>ParseError</code></a> (<code>NotANumber</code>,
+        <code>TooLarge</code>) and <a href="#reading-input"><code>InputError</code></a> (<code>Ended</code>,
+        <code>NoNumber</code>) take their names the same way, and, as for any kind, a variable may not be named
+        after a kind or one of its variants; a field may. The symbols:
       </p>
       <table>
         <tr><th>Symbol</th><th>Meaning</th></tr>
@@ -557,6 +560,10 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         most 400 significant digits, and one too large to hold is <code>TooLarge</code>; one too small is
         <code>0</code>, as arithmetic gives.
       </p>
+      <p>
+        A number read straight from input is <code>scan(prompt, int)</code>, which sends an
+        <a href="#reading-input"><code>InputError</code></a> instead, since reading input can also end.
+      </p>
       <pre><span class="keyword">task</span> main()
     <span class="keyword">region</span> r
     show(int(<span class="string">"42"</span>) { <span class="number">0</span> })               <span class="comment"># 42</span>
@@ -696,11 +703,47 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
     <span class="keyword">fi</span>
     show(count)
 <span class="keyword">fi</span></pre>
+      <p id="reading-input">
+        <code>scan(prompt, int)</code> and <code>scan(prompt, float)</code> read a number from that line instead of
+        the line itself. A number needs no memory, so this form names no region, and it gives
+        <code>int or InputError</code>: the number, or why there is none. <code>InputError</code> is a kind no file
+        declares, with two variants — <code>Ended</code>, the input is over, and <code>NoNumber</code>, which holds the
+        <code>ParseError</code> that reading the line gave (see
+        <a href="#reading-numbers">Reading a number from text</a>), read with a <code>match</code> of its own. A program
+        reads one with a plan B, <code>match</code>, or <code>is</code>, passes on one it was given, and may send one
+        itself (<code>fail Ended</code>); no declaration may take those names.
+      </p>
+      <pre><span class="keyword">task</span> main()
+    <span class="keyword">hold</span> total = <span class="number">0</span>
+    <span class="keyword">hold</span> reading = <span class="keyword">true</span>
+    <span class="keyword">loop</span> reading
+        <span class="keyword">match</span> scan(<span class="string">"n: "</span>, <span class="type">int</span>)                <span class="comment"># int or InputError; no region</span>
+        <span class="keyword">case</span> {value}
+            total = total + value
+        <span class="keyword">case</span> <span class="keyword">fail</span> e
+            <span class="keyword">match</span> e
+            <span class="keyword">case</span> Ended                        <span class="comment"># nothing more to read</span>
+                reading = <span class="keyword">false</span>
+            <span class="keyword">case</span> NoNumber why                 <span class="comment"># the line was no number</span>
+                <span class="keyword">match</span> why
+                <span class="keyword">case</span> NotANumber
+                    show(<span class="string">"that is no number"</span>)
+                <span class="keyword">case</span> TooLarge
+                    show(<span class="string">"that does not fit in an int"</span>)
+                <span class="keyword">fi</span>
+            <span class="keyword">fi</span>
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+    show(<span class="string">"total "</span>, total)
+    <span class="keyword">bind</span> age = scan(<span class="string">"Age: "</span>, <span class="type">int</span>) { <span class="number">0</span> }        <span class="comment"># a plan B where any trouble means the same</span>
+    show(age)
+<span class="keyword">fi</span></pre>
       <p>
-        <code>scan</code> reads text only; a number comes from reading that text, <code>int(line)</code> (see
-        <a href="#reading-numbers">Reading a number from text</a>). The shorter <code>scan("Age: ", int)</code> is
-        still to come. A loop that reads for a long time
-        can keep each line in a region declared inside it, which is freed on every pass.
+        Which form to use: <code>scan(prompt, int)</code> where a number is all the program wants, and
+        <code>scan(prompt) at r</code> with <code>int(line)</code> where it also wants the line — to print what it
+        refused, to accept <code>"quit"</code> beside numbers, or to read two numbers from one line. A loop that reads
+        for a long time can keep each line in a region declared inside it, which is freed on every pass; a loop that
+        reads numbers keeps nothing.
       </p>
       <p>
         Logic uses words: <code>and</code>, <code>or</code>, and <code>not</code> work on <code>bool</code>, and
@@ -2089,9 +2132,8 @@ show(area(square))             <span class="comment"># error: unknown task 'area
           (<code>t[a..b]</code>), joining (<code>a + b at r</code>), values turned into it (<code>n.str() at r</code>),
           numbers read from it (<code>int(t)</code>), <code>show</code>, and <code>scan</code>. It has no
           search, no trimming, and no case changes yet.</li>
-        <li>Input is read a line of text at a time with <code>scan</code>, and a number from that line with
-          <code>int(line)</code>; <code>scan("Age: ", int)</code>, which reads one directly, is still to come, and
-          there are no files.</li>
+        <li>Input is read a line of text at a time with <code>scan</code>, or a number at a time with
+          <code>scan("Age: ", int)</code>; there are no files, and nothing reads part of a line.</li>
         <li>Arrays and slices can't be compared or shown whole, and an array's count is known before the program runs
           (see <a href="#arrays">Arrays</a>). Tuples can't be shown whole, and are taken apart in
           <code>is</code> and <code>case</code> only in parentheses, as in <code>{(a, b)}</code>

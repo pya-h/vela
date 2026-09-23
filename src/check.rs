@@ -187,10 +187,10 @@ impl Checker {
             .and_then(|()| checker.expand_instances(&mut program.items))
             .map(|()| {
                 program.items.extend(std::mem::take(&mut checker.made_shapes));
-                // No file declares the kind that reading a number sends, so it
-                // joins the program's own declarations here, after every check
-                // that reads them, for the code generator to write its C.
-                program.items.push(Item::Kind(parse_error_kind()));
+                // No file declares the kinds that reading a number sends, so
+                // they join the program's own declarations here, after every
+                // check that reads them, for the code generator to write their C.
+                program.items.extend(builtin_kinds().into_iter().map(Item::Kind));
             });
         program.type_places = checker.type_places;
         // Names in a message are written as the file with the error writes them.
@@ -216,9 +216,11 @@ impl Checker {
     /// Whether a task, shape, kind, or variant name written in the current
     /// module can name the declaration called `name` in the program. The
     /// resolver has given every name a module's code can use its full name, so a
-    /// name without a module is one of the main file's only in the main file.
+    /// name without a module is one of the main file's only in the main file —
+    /// except for the builtin kinds, which belong to no file and so are written
+    /// bare in every one (see `ast::builtin_kinds`).
     fn sees(&self, name: &str) -> bool {
-        self.current_module.is_empty() || name.contains(MODULE_SEPARATOR)
+        self.current_module.is_empty() || name.contains(MODULE_SEPARATOR) || BUILTIN_KIND_NAMES.contains(&name)
     }
 
     /// The program's name for `name` written unqualified in the current module:
@@ -415,17 +417,19 @@ impl Checker {
         Ok(())
     }
 
-    /// Makes `ParseError` and its variants known, as if a file had declared
-    /// them: reading a number from text sends one (see `check_number_cast`), and
-    /// `match`, `is`, and a plan B read it as they read any kind. No program may
-    /// take these names (see `collect_declarations`).
+    /// Makes `ParseError`, `InputError` and their variants known, as if a file
+    /// had declared them: reading a number from text sends the first (see
+    /// `check_number_cast`) and reading one from input the second (see
+    /// `check_scan`), and `match`, `is`, and a plan B read either as they read
+    /// any kind. No program may take these names (see `collect_declarations`).
     fn declare_builtin_kinds(&mut self) {
-        let kind = parse_error_kind();
-        for variant in &kind.variants {
-            let info = VariantInfo { kind: kind.name.clone(), variant: variant.clone() };
-            self.variants.insert(variant.tag.clone(), info);
+        for kind in builtin_kinds() {
+            for variant in &kind.variants {
+                let info = VariantInfo { kind: kind.name.clone(), variant: variant.clone() };
+                self.variants.insert(variant.tag.clone(), info);
+            }
+            self.kinds.insert(kind.name.clone(), kind);
         }
-        self.kinds.insert(kind.name.clone(), kind);
     }
 
     /// Registers every task, shape, kind, and variant. They share one
@@ -442,14 +446,13 @@ impl Checker {
             if BUILTIN_TASKS.contains(&written) {
                 return err(span, format!("'{}' is a builtin task and cannot be redefined", written));
             }
-            // The kind reading a number from text sends, and its variants: a
-            // program gets them without declaring them, and writes them as it
-            // writes any kind's, so the three names are its own.
+            // The kinds reading a number sends, and their variants: a program
+            // gets them without declaring them, and writes them as it writes
+            // any kind's, so those names are their own.
             if BUILTIN_KIND_NAMES.contains(&written) {
-                let what = if written == PARSE_ERROR {
-                    "a builtin kind".to_string()
-                } else {
-                    format!("a variant of the builtin kind '{}'", PARSE_ERROR)
+                let what = match builtin_kind_of(written) {
+                    Some(kind) => format!("a variant of the builtin kind '{}'", kind),
+                    None => "a builtin kind".to_string(),
                 };
                 return err(span, format!("'{}' is {} and cannot be redefined", written, what));
             }
@@ -1876,6 +1879,9 @@ impl Checker {
                     ExprKind::Call { name, .. } if number_cast(name).is_some() => {
                         err(e.span, format!("the number '{}' gives is unused; only a task call can be used as a statement", name))
                     }
+                    // A line read and dropped is a line dropped on purpose, but
+                    // a number read and dropped drops the error with it.
+                    ExprKind::Scan { .. } if matches!(e.ty, Some(Type::Or(..))) => err(e.span, ignored_error(SCAN)),
                     ExprKind::Call { .. } | ExprKind::Edit { .. } | ExprKind::Scan { .. } => Ok(()),
                     ExprKind::PlanB { value, .. } if e.ty == Some(Type::Unit) || matches!(value.kind, ExprKind::Call { .. } | ExprKind::Scan { .. }) => Ok(()),
                     ExprKind::Binary(BinaryOp::Eq, ..) => err(e.span, "the result of '==' is unused; use '=' to assign"),
@@ -2766,7 +2772,7 @@ impl Checker {
             }
             ExprKind::PlanB { value, error, body } => self.check_plan_b(span, value, error.as_ref(), body),
             ExprKind::Edit { items, op, args } => self.check_edit(span, items, *op, args),
-            ExprKind::Scan { args, region, region_span } => self.check_scan(span, args, region, *region_span),
+            ExprKind::Scan { args, region, region_span } => self.check_scan(span, args, region.as_deref(), *region_span),
             ExprKind::Join { parts, region, region_span } => self.check_join(parts, region, *region_span),
             ExprKind::ToText { value, region, region_span } => self.check_to_text(value, region, *region_span),
             ExprKind::Copy { value, region, region_span } => self.check_copy(span, value, region.as_deref(), *region_span),
@@ -3053,26 +3059,42 @@ impl Checker {
 
     /// Checks `scan(prompt) at region`, at `span`, and returns its type: a
     /// `maybe text` in the region, which is `none` when the input has ended.
-    fn check_scan(&mut self, span: Span, args: &mut [Expr], region: &str, region_span: Span) -> Result<Type> {
-        let prompt = match args {
-            [prompt] => prompt,
-            [_, ty] if matches!(&ty.kind, ExprKind::Var(name) if Type::builtin(name).is_some()) => {
-                return err(
-                    ty.span,
-                    "'scan' reads text; reading a value of another type, as in 'scan(\"Age: \", int)', waits for conversions between types, which Vela doesn't have yet",
-                );
-            }
-            _ => {
-                return err(span, format!("'scan' takes the prompt it shows, as in 'scan(\"Name: \") at r', got {}", count(args.len(), "argument")));
-            }
+    /// `scan(prompt) at r`, the line as `maybe text@r`, or `scan(prompt, int)`,
+    /// a number read from that line as `int or InputError`. The type a typed
+    /// read names is a type, not a value, so it is never checked as one.
+    fn check_scan(&mut self, span: Span, args: &mut [Expr], region: Option<&str>, region_span: Span) -> Result<Type> {
+        let (prompt, rest) = match args {
+            [] => return err(span, SCAN_TAKES),
+            [prompt, rest @ ..] => (prompt, rest),
         };
         let ty = self.check_expr(prompt)?;
         if !matches!(ty, Type::Text(_)) {
             return err(prompt.span, format!("'scan' shows a text prompt, as in 'scan(\"Name: \") at r', but this value is {}{}", ty, extract_hint(&[&ty])));
         }
-        self.visible_region(region, region_span, true)?;
-        Ok(Type::Maybe(Box::new(Type::Text(Some(region.to_string())))))
+        let number = match rest {
+            [] => None,
+            [ty] => Some(scanned_type(ty)?),
+            _ => return err(span, format!("{}, got {}", SCAN_TAKES, count(args.len(), "argument"))),
+        };
+        match (number, region) {
+            // A line is text, which needs memory, so it names the region it
+            // goes in; the parser leaves the region out where none was written.
+            (None, None) => err(
+                region_span,
+                "'scan' keeps the line it reads in a region, so it names one, as in 'scan(\"Name: \") at r' or 'scan(\"Name: \")@r'",
+            ),
+            (None, Some(region)) => {
+                self.visible_region(region, region_span, true)?;
+                Ok(Type::Maybe(Box::new(Type::Text(Some(region.to_string())))))
+            }
+            (Some(number), None) => Ok(Type::Or(Box::new(number), Box::new(Type::Named(INPUT_ERROR.to_string(), None)))),
+            (Some(number), Some(_)) => err(
+                region_span,
+                format!("a number needs no memory, so 'scan' reading one names no region: write 'scan(\"Age: \", {})'", number),
+            ),
+        }
     }
+
 
     /// Checks one value given to `show`: a number, a bool, text, a `maybe` of
     /// one, a shape or kind with its own `str`, or a type a declaration takes
@@ -5171,6 +5193,24 @@ fn fits_or_err(actual: &Type, expected: &Type, at: Span, given: Given) -> Result
 }
 
 /// The error for a call whose `T or E` result is thrown away.
+/// What `scan` takes, for a call that takes something else.
+const SCAN_TAKES: &str = "'scan' takes the prompt it shows, and the type of a number to read, as in 'scan(\"Name: \") at r' or 'scan(\"Age: \", int)'";
+
+/// The type a typed `scan` names, `int` or `float`: the number it reads. It is a
+/// type, not a value, so it is never checked as one.
+fn scanned_type(arg: &Expr) -> Result<Type> {
+    if let ExprKind::Var(name) = &arg.kind {
+        if let Some(number) = number_cast(name) {
+            return Ok(number);
+        }
+        // Text is what `scan` reads by itself, so naming it says to leave it out.
+        if matches!(Type::builtin(name), Some(Type::Text(_))) {
+            return err(arg.span, "'scan' reads text on its own, so 'text' is left out: write 'scan(\"Name: \") at r'");
+        }
+    }
+    err(arg.span, "'scan' reads a number, so it names 'int' or 'float', as in 'scan(\"Age: \", int)'")
+}
+
 fn ignored_error(task: &str) -> String {
     format!("the error '{0}' may send is ignored; handle it with a plan B, as in '{0}(…) {{ fail e … }}', or with match", task)
 }

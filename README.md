@@ -22,7 +22,9 @@ read as a number may not be one, so `int(line)` sends `int or ParseError`, a bui
 it, `"{name} is {age}" at r`, and `\{` and `\}` write braces. `show` takes any number of values and writes them
 one after another, then ends the line (`show("n = ", n)`, and `show()` for an empty one); a shape or kind with
 its own `str` is a value it writes too, `show(card)`, in a region it makes for the line and frees after it.
-`scan("Name: ") at r` shows a prompt and reads a line into a region, giving `none` once the input has ended, and `value.copy()` copies a value (its text, its slices'
+`scan("Name: ") at r` shows a prompt and reads a line into a region, giving `none` once the input has ended, and
+`scan("Age: ", int)` reads a number from that line instead, needing no region and sending `int or InputError`,
+whose variants are `Ended` and `NoNumber`, holding the `ParseError` that reading the line gave. `value.copy()` copies a value (its text, its slices'
 items, and what its pointers point to) into the region where it goes, or `value.copy() at r`. Tuples hold
 values together (`(text, int)`, read as `t.0`), their items never change, and names take them apart
 (`bind name, age = pair`, or `when found is {(name, age)}` in a pattern). A task or a shape can take types as well as

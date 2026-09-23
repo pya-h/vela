@@ -1,0 +1,5 @@
+# error: 4:32: 'scan' reads text on its own, so 'text' is left out: write 'scan("Name: ") at r'
+task main()
+    region r
+    bind name = scan("Name: ", text) at r { "nobody" }
+fi

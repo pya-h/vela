@@ -41,6 +41,17 @@ fn builtin_kind_doc(name: &str) -> Option<(&'static str, &'static str)> {
         vela::ast::TOO_LARGE => {
             Some(("TooLarge", "A variant of ParseError: the text is a number, but not one the type holds, such as \"9223372036854775808\" read as an int."))
         }
+        vela::ast::INPUT_ERROR => Some((
+            "kind InputError\n    Ended\n    NoNumber(why: ParseError)\nfi",
+            "The error scan(prompt, int) and scan(prompt, float) send when there is no number to read: the input ended, or the line was no number, which holds why. A program reads it with match, is, or a plan B, passes on one it was given, and may send one itself (fail Ended). No file declares it, and no declaration may take its name or its variants.",
+        )),
+        vela::ast::ENDED => {
+            Some(("Ended", "A variant of InputError: the input has ended, so there was no line to read a number from. A loop reading numbers stops on it."))
+        }
+        vela::ast::NO_NUMBER => Some((
+            "NoNumber(why: ParseError)",
+            "A variant of InputError: a line was read, but it was no number. It holds the ParseError reading the line gave, read with a match of its own: case NoNumber why.",
+        )),
         _ => None,
     }
 }
@@ -93,8 +104,9 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
             (name.to_string(), doc.to_string())
         }
         (TokenClass::BuiltinFn, _) if text == vela::ast::SCAN => (
-            "task scan(prompt: text) at r -> maybe text@r".to_string(),
-            "Shows the prompt, then reads one line of input into region r (also written scan(prompt)@r), without its line break. Gives none when the input has ended.".to_string(),
+            "task scan(prompt: text) at r -> maybe text@r\ntask scan(prompt: text, int | float) -> int | float or InputError".to_string(),
+            "Shows the prompt, then reads one line of input into region r (also written scan(prompt)@r), without its line break; gives none when the input has ended. Naming int or float reads a number from that line instead, which needs no memory and so names no region: it gives that number, or an InputError saying the input ended or the line was no number."
+                .to_string(),
         ),
         (TokenClass::BuiltinFn, _) => (
             format!("task {}(value: int | float | bool | text | maybe | anything with str, …)", text),

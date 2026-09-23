@@ -673,9 +673,20 @@ impl<'a> Knowledge<'a> {
                     return self.span_type(open + 1, q.checked_sub(1)?, depth + 1);
                 };
                 let (p, word) = callee;
-                // `scan(…)`, before its region.
+                // `scan(…)`, before its region, or `scan(…, int)`, which reads a
+                // number and names no region.
                 if word == vela::ast::SCAN && self.token_before(p) != Some(&Token::Dot) {
-                    return Some(Type::Maybe(Box::new(Type::Text(None))));
+                    // The type it reads is the last argument: `scan(prompt, int)`.
+                    let mut number = None;
+                    if let Some(last) = q.checked_sub(1)
+                        && last.checked_sub(1).map(|before| self.token(before)) == Some(Some(&Token::Comma))
+                    {
+                        number = self.ident(last).and_then(vela::ast::number_cast);
+                    }
+                    return Some(match number {
+                        Some(number) => Type::Or(Box::new(number), Box::new(Type::Named(vela::ast::INPUT_ERROR.to_string(), None))),
+                        None => Type::Maybe(Box::new(Type::Text(None))),
+                    });
                 }
                 // `n.str(r)`: text in `r`; `n.str()` and `text(n)`, text before
                 // their region.

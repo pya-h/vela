@@ -347,6 +347,33 @@ fn the_kind_reading_a_number_sends_is_known_to_the_editor() {
 }
 
 #[test]
+fn the_kind_reading_a_number_from_input_sends_is_known_to_the_editor() {
+    // `InputError`, `Ended` and `NoNumber` are declared by no file either, and a
+    // `scan` that reads a number names no region.
+    let source = "task main()\n    match scan(\"Age: \", int)\n    case {age}\n        show(age)\n    case fail e\n        match e\n        case Ended\n            show(\"nothing\")\n        case NoNumber why\n            match why\n            case NotANumber\n                show(\"no number\")\n            case TooLarge\n                show(\"too large\")\n            fi\n        fi\n    fi\nfi\n";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert!(hover(source, "Ended", 0).doc.contains("input has ended"), "{:?}", hover(source, "Ended", 0).doc);
+    assert!(hover(source, "NoNumber why", 0).code.starts_with("NoNumber(why: ParseError)"), "{:?}", hover(source, "NoNumber why", 0).code);
+    assert!(hover(source, "scan", 0).doc.contains("names no region"), "{:?}", hover(source, "scan", 0).doc);
+    // The type it gives, with the compiler's types and with the types read from
+    // the source while the file doesn't check.
+    for checks in [true, false] {
+        let shown = if checks { "show(age { 0 })" } else { "show(unknown)" };
+        let bound = format!("task main()\n    bind age = scan(\"Age: \", int)\n    bind size = scan(\"Size: \", float)\n    {}\nfi\n", shown);
+        assert_eq!(Analysis::new(&bound).diagnostics().is_empty(), checks);
+        assert_eq!(hover(&bound, "age =", 0).code, "bind age: int or InputError", "checks: {}", checks);
+        assert_eq!(hover(&bound, "size =", 0).code, "bind size: float or InputError", "checks: {}", checks);
+    }
+    // The two types this form reads, offered after the prompt, and the kind
+    // where an error type goes.
+    assert_eq!(labels(&in_main("bind age = scan(\"Age: \", @@)")), ["int", "float"]);
+    assert_offers("task f() -> int or @@", &["InputError", "ParseError"], &["unit"]);
+    // A region follows a line read, and never a number read.
+    assert_offers(&in_main("bind line = scan(\"Name: \") @@"), &["at"], &[]);
+    assert_offers(&in_main("bind age = scan(\"Age: \", int) @@"), &[], &["at"]);
+}
+
+#[test]
 fn hover_reads_declared_types_when_the_file_doesnt_check() {
     let source = PROGRAM.replace(
         "    @@\n",
