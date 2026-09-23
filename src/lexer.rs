@@ -74,6 +74,9 @@ pub enum Token {
     Ge,
     Assign,
     Caret,
+    /// `~`, which separates a type from the error it can be instead:
+    /// `int ~ ParseError`.
+    Tilde,
     /// `@`, which names the region a type lives in (`^Node@r`) or `new`
     /// allocates in (`new@r T(v)`). The word `at` is `Token::At`.
     AtSign,
@@ -157,6 +160,9 @@ impl Token {
                 | Token::Comma
                 | Token::Caret
                 | Token::Maybe
+                | Token::Tilde
+                // `or` is no longer a type's error separator, but a `<int or E>`
+                // still reads as types, so the parser can teach `~` there too.
                 | Token::Or
                 | Token::AtSign
                 | Token::LBracket
@@ -210,6 +216,7 @@ impl Token {
             Token::Ge => ">=",
             Token::Assign => "=",
             Token::Caret => "^",
+            Token::Tilde => "~",
             Token::AtSign => "@",
             Token::Underscore => "_",
             // Keywords are found in `KEYWORDS` above.
@@ -482,6 +489,7 @@ impl Lexer {
             '/' => Token::Slash,
             '%' => Token::Percent,
             '^' => Token::Caret,
+            '~' => Token::Tilde,
             '@' => Token::AtSign,
             '=' => {
                 if self.peek() == '=' {

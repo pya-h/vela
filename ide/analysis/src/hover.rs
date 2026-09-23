@@ -73,7 +73,7 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     ("maybe", "maybe T", "A T, or none. Read it with match, is, or a plan B: x { fallback }."),
     ("none", "none", "The empty maybe. A pointer can't be none; use maybe ^T."),
     ("is", "value is pattern", "The condition holds when the pattern matches; its names are visible in the block."),
-    ("fail", "fail error", "An error, for a task that sends T or E. In a plan B, a first line fail e names the error."),
+    ("fail", "fail error", "An error, for a task whose type has a ~ side. In a plan B, a first line fail e names the error."),
     ("_", "_", "Matches anything left, or drops a value without naming it."),
     (
         "alters",
@@ -104,7 +104,7 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
             (name.to_string(), doc.to_string())
         }
         (TokenClass::BuiltinFn, _) if text == vela::ast::SCAN => (
-            "task scan(prompt: text) at r -> maybe text@r\ntask scan(prompt: text, int | float) -> int | float or InputError".to_string(),
+            "task scan(prompt: text) at r -> maybe text@r\ntask scan(prompt: text, int | float) -> int | float ~ InputError".to_string(),
             "Shows the prompt, then reads one line of input into region r (also written scan(prompt)@r), without its line break; gives none when the input has ended. Naming int or float reads a number from that line instead, which needs no memory and so names no region: it gives that number, or an InputError saying the input ended or the line was no number."
                 .to_string(),
         ),
@@ -119,6 +119,11 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
             let doc = "The value this method is called on. A kind's method takes it apart with match .this, and a method marked alters may assign it.";
             (code, doc.to_string())
         }
+        // `~`, which gives a type its error side.
+        (TokenClass::Operator, _) if text == "~" => (
+            "T ~ E".to_string(),
+            "A T when it succeeds, or an error E when it fails. Read it with match, is, or a plan B: x { fallback }. Only a task's own error, never a maybe or the value type again.".to_string(),
+        ),
         (TokenClass::Keyword, _) => {
             let (_, code, doc) = KEYWORD_DOCS.iter().find(|(word, _, _)| *word == text)?;
             (code.to_string(), doc.to_string())

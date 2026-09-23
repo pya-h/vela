@@ -5,7 +5,7 @@ fi
 
 task main()
     region r
-    hold outer: int or Problem = 0
+    hold outer: int ~ Problem = 0
     bind line = scan("") at r { "" }
     outer = fail Bad(line)
     show(1)

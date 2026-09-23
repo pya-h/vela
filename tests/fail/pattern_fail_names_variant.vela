@@ -3,7 +3,7 @@ kind Problem
     TooBig
 fi
 
-task check(n: int) -> int or Problem
+task check(n: int) -> int ~ Problem
     <- n
 fi
 

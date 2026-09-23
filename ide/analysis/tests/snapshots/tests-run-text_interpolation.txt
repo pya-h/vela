@@ -58,8 +58,8 @@
     | comment:# `fail` takes the value right after it, text holding values and its region
  35 | # with it.
     | comment:# with it.
- 36 | task checked(n: int, r: region) -> int or text@r
-    | keyword:task  task:checked  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:int  keyword:or  type-builtin:text  operator:@  region:r
+ 36 | task checked(n: int, r: region) -> int ~ text@r
+    | keyword:task  task:checked  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:int  operator:~  type-builtin:text  operator:@  region:r
  37 |     when n < 0
     | keyword:when  parameter:n  operator:<  number:0
  38 |         <- fail "{n} is below zero" at r

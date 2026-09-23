@@ -44,8 +44,8 @@
     | keyword:fi
  26 | # A task may forward the error it was given, and send one of its own.
     | comment:# A task may forward the error it was given, and send one of its own.
- 27 | task age(line: text) -> int or ParseError
-    | keyword:task  task:age  punctuation:(  parameter:line  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  keyword:or  type:ParseError
+ 27 | task age(line: text) -> int ~ ParseError
+    | keyword:task  task:age  punctuation:(  parameter:line  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  operator:~  type:ParseError
  28 |     bind years = int(line) {
     | keyword:bind  variable:years  operator:=  type-builtin:int  punctuation:(  parameter:line  punctuation:)  punctuation:{
  29 |         fail e

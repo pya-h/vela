@@ -1,5 +1,5 @@
 # error: 3:8: this task sends no value when it succeeds; write a bare '<-', or '<- fail …' to send an error
-task save() -> unit or text
+task save() -> unit ~ text
     <- 5
 fi
 

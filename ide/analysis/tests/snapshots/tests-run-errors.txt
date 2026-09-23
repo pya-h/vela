@@ -1,7 +1,7 @@
-  1 | # `T or E`: a task that can fail sends a value or `fail error`. `match`, `is`,
-    | comment:# `T or E`: a task that can fail sends a value or `fail error`. `match`, `is`,
-  2 | # and plan B read the result; `unit or E` succeeds with a bare `<-` or by
-    | comment:# and plan B read the result; `unit or E` succeeds with a bare `<-` or by
+  1 | # `T ~ E`: a task that can fail sends a value or `fail error`. `match`, `is`,
+    | comment:# `T ~ E`: a task that can fail sends a value or `fail error`. `match`, `is`,
+  2 | # and plan B read the result; `unit ~ E` succeeds with a bare `<-` or by
+    | comment:# and plan B read the result; `unit ~ E` succeeds with a bare `<-` or by
   3 | # reaching its end.
     | comment:# reaching its end.
   5 | kind BadSize
@@ -12,8 +12,8 @@
     | variant:Negative  punctuation:(  field:value  punctuation::  type-builtin:int  punctuation:)
   8 | fi
     | keyword:fi
- 10 | task check_size(size: int) -> int or BadSize
-    | keyword:task  task:check_size  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:or  type:BadSize
+ 10 | task check_size(size: int) -> int ~ BadSize
+    | keyword:task  task:check_size  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:BadSize
  11 |     when size < 0
     | keyword:when  parameter:size  operator:<  number:0
  12 |         <- fail Negative(size)
@@ -52,8 +52,8 @@
     | keyword:fi
  30 | fi
     | keyword:fi
- 32 | task save(size: int) -> unit or text
-    | keyword:task  task:save  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  keyword:or  type-builtin:text
+ 32 | task save(size: int) -> unit ~ text
+    | keyword:task  task:save  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type-builtin:text
  33 |     when size > 100
     | keyword:when  parameter:size  operator:>  number:100
  34 |         <- fail "too big"
@@ -72,8 +72,8 @@
     | builtin-fn:show  punctuation:(  string:"saved"  punctuation:)
  41 | fi
     | keyword:fi
- 43 | task lookup(key: text) -> maybe int or text
-    | keyword:task  task:lookup  punctuation:(  parameter:key  punctuation::  type-builtin:text  punctuation:)  operator:->  keyword:maybe  type-builtin:int  keyword:or  type-builtin:text
+ 43 | task lookup(key: text) -> maybe int ~ text
+    | keyword:task  task:lookup  punctuation:(  parameter:key  punctuation::  type-builtin:text  punctuation:)  operator:->  keyword:maybe  type-builtin:int  operator:~  type-builtin:text
  44 |     when key == ""
     | keyword:when  parameter:key  operator:==  string:""
  45 |         <- fail "no key"
@@ -90,8 +90,8 @@
     | keyword:<-  keyword:none
  51 | fi
     | keyword:fi
- 53 | task save_twice(size: int) -> unit or text
-    | keyword:task  task:save_twice  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  keyword:or  type-builtin:text
+ 53 | task save_twice(size: int) -> unit ~ text
+    | keyword:task  task:save_twice  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type-builtin:text
  54 |     save(size) { fail e
     | task:save  punctuation:(  parameter:size  punctuation:)  punctuation:{  keyword:fail  variable:e
  55 |         <- fail e
@@ -200,8 +200,8 @@
     | builtin-fn:show  punctuation:(  variable:message  punctuation:)
 115 |     fi
     | keyword:fi
-117 |     hold stored: int or BadSize = fail Empty
-    | keyword:hold  variable:stored  punctuation::  type-builtin:int  keyword:or  type:BadSize  operator:=  keyword:fail  variant:Empty
+117 |     hold stored: int ~ BadSize = fail Empty
+    | keyword:hold  variable:stored  punctuation::  type-builtin:int  operator:~  type:BadSize  operator:=  keyword:fail  variant:Empty
 118 |     show(stored { -1 })
     | builtin-fn:show  punctuation:(  variable:stored  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
 119 |     stored = 8

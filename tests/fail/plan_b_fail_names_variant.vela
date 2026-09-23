@@ -3,7 +3,7 @@ kind Problem
     Bad
 fi
 
-task parse(t: text) -> int or Problem
+task parse(t: text) -> int ~ Problem
     <- fail Bad
 fi
 

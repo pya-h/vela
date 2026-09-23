@@ -645,7 +645,7 @@ impl<'a> Knowledge<'a> {
                 let type_token = |r: usize| {
                     matches!(
                         self.token(r),
-                        Some(Token::Caret | Token::Maybe | Token::New | Token::AtSign | Token::Dot | Token::Ident(_) | Token::LBracket | Token::RBracket | Token::Semicolon | Token::Int(_) | Token::Or)
+                        Some(Token::Caret | Token::Maybe | Token::New | Token::AtSign | Token::Dot | Token::Ident(_) | Token::LBracket | Token::RBracket | Token::Semicolon | Token::Int(_) | Token::Tilde)
                     )
                 };
                 let new = open.checked_sub(1).and_then(|before| (0..=before).rev().take_while(|&r| type_token(r)).find(|&r| self.token(r) == Some(&Token::New)));
@@ -1083,7 +1083,7 @@ fn holds_text(ty: &Type, textual: &HashSet<String>) -> bool {
 }
 
 /// A type written in source, such as `int`, `^Point@r`, `maybe ^Node@r`,
-/// `region`, `[int; 4]`, `[^Node]@r`, or `int or ParseError`. Written regions
+/// `region`, `[int; 4]`, `[^Node]@r`, or `int ~ ParseError`. Written regions
 /// are kept as written.
 pub(crate) fn parse_type(text: &str) -> Option<Type> {
     parse_type_within(text, 0)
@@ -1096,8 +1096,9 @@ fn parse_type_within(text: &str, depth: usize) -> Option<Type> {
         return None;
     }
     let text = text.trim();
-    if let Some(at) = unbracketed(text, " or ").next() {
-        let (value, error) = (text.get(..at)?, text.get(at + " or ".len()..)?);
+    // `~` gives a type its error side, with or without spaces around it.
+    if let Some(at) = unbracketed(text, "~").next() {
+        let (value, error) = (text.get(..at)?, text.get(at + "~".len()..)?);
         return Some(Type::Or(Box::new(parse_simple_type(value, depth)?), Box::new(parse_simple_type(error, depth)?)));
     }
     parse_simple_type(text, depth)

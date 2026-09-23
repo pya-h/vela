@@ -1,5 +1,5 @@
 # error: 6:24: this expression has no value (its type is unit)
-task save() -> unit or text
+task save() -> unit ~ text
 fi
 
 task main()

@@ -19,7 +19,7 @@ task find(n: int) -> maybe int, bool
     <- none, false
 fi
 
-task risky(n: int) -> int or Oops
+task risky(n: int) -> int ~ Oops
     when n < 0
         <- fail Bad
     fi
@@ -27,7 +27,7 @@ task risky(n: int) -> int or Oops
 fi
 
 # One value per result, the second an error result.
-task pair(n: int) -> int, int or Oops
+task pair(n: int) -> int, int ~ Oops
     <- n, risky(n)
 fi
 

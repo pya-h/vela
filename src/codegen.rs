@@ -294,8 +294,8 @@ impl Generator {
         self.w.close_with(";");
     }
 
-    /// The struct of a `maybe T` (`has`, `value`), a `T or E` (`ok`, `value`,
-    /// `error`; no `value` for `unit or E`), several results (`r0`, `r1`, …),
+    /// The struct of a `maybe T` (`has`, `value`), a `T ~ E` (`ok`, `value`,
+    /// `error`; no `value` for `unit ~ E`), several results (`r0`, `r1`, …),
     /// an array (`items`), or a slice (`items`, a pointer, `len`, and `room`,
     /// where `add` puts more items; see `vela__rt__items_insert`). A
     /// `maybe`'s and an `or`'s members are always initialized, so either can be
@@ -604,7 +604,7 @@ impl Generator {
     /// Reading a number of type `ty` from text: the number, or the reason the
     /// text was none, as a `ParseError` (see `ast::parse_error_kind`). The
     /// runtime reads the text and says which; this turns that into the
-    /// `ty or ParseError` the program holds.
+    /// `ty ~ ParseError` the program holds.
     fn gen_read_number(&mut self, ty: &Type) {
         let (from, value) = if *ty == Type::Int { ("vela__rt__int_of_text", "int64_t") } else { ("vela__rt__float_of_text", "double") };
         let or = Type::Or(Box::new(ty.clone()), Box::new(Type::Named(PARSE_ERROR.to_string(), None)));
@@ -1206,7 +1206,7 @@ impl Generator {
     }
 
     /// Generates a `match`. On a kind, it is a `switch` on the tag, with `_` as
-    /// `default`; on a `maybe` or `T or E`, an `if`/`else` chain whose last case
+    /// `default`; on a `maybe` or `T ~ E`, an `if`/`else` chain whose last case
     /// needs no test. Each case body gets its own C block, so different cases
     /// may bind the same names. The matched value is evaluated exactly once.
     fn gen_match(&mut self, expr: &Expr, cases: &[Case]) -> Result<()> {
@@ -1351,7 +1351,7 @@ impl Generator {
             ExprKind::Deref(inner) => self.gen_expr(inner).map(|expr| format!("(*({}))", expr)),
             ExprKind::StructInit { name, fields, .. } => self.gen_struct_init(name, fields),
             ExprKind::Range(_, _) => Err(Error::internal_at(e.span, "range outside 'each' reached code generation")),
-            // The error value itself; `Wrap` makes it part of a `T or E`.
+            // The error value itself; `Wrap` makes it part of a `T ~ E`.
             ExprKind::Fail(error) => self.gen_expr(error),
             ExprKind::Wrap(inner) => self.gen_wrap(e, inner),
             ExprKind::PlanB { value, error, body } => self.gen_plan_b(e, value, error.as_ref(), body),
@@ -1408,7 +1408,7 @@ impl Generator {
         let (prompt, typed) = match (args, region) {
             ([prompt], Some(region)) => (prompt, Err(region)),
             // A typed read names no region, and the type it reads is the value
-            // of the `T or InputError` it gives.
+            // of the `T ~ InputError` it gives.
             ([prompt, _], None) => match e.ty()? {
                 Type::Or(number, _) => (prompt, Ok((**number).clone())),
                 other => return Err(Error::internal_at(span, format!("a typed scan of type {}", other))),
@@ -1819,7 +1819,7 @@ impl Generator {
         }
     }
 
-    /// A value becoming part of a `maybe` or `T or E`, the type of `e`.
+    /// A value becoming part of a `maybe` or `T ~ E`, the type of `e`.
     fn gen_wrap(&mut self, e: &Expr, inner: &Expr) -> Result<String> {
         let target = e.ty()?;
         let ctype = c_type(target);
@@ -1837,7 +1837,7 @@ impl Generator {
                     return Ok(format!("(({}){{ .ok = false, .error = {} }})", ctype, self.gen_expr(error)?));
                 }
                 if **value == Type::Unit {
-                    return Err(Error::internal_at(e.span, "a value wrapped as the success of 'unit or E'"));
+                    return Err(Error::internal_at(e.span, "a value wrapped as the success of 'unit ~ E'"));
                 }
                 Ok(format!("(({}){{ .ok = true, .value = {} }})", ctype, self.gen_expr(inner)?))
             }
@@ -2050,7 +2050,7 @@ fn result_member(i: usize) -> String {
     format!("r{}", i)
 }
 
-/// The success of a `unit or E` task, as a C compound literal.
+/// The success of a `unit ~ E` task, as a C compound literal.
 fn success(ret: &Type) -> String {
     format!("(({}){{ .ok = true }})", c_type(ret))
 }
@@ -2389,7 +2389,7 @@ impl UsedTypes {
             ExprKind::ToText { value, .. } => self.expr(value),
             ExprKind::Scan { args, .. } => {
                 // A typed read needs the helper that reads a number and the
-                // struct of the `T or InputError` it gives; a line read needs
+                // struct of the `T ~ InputError` it gives; a line read needs
                 // the one that reads text, whose `maybe text` has a struct even
                 // when it isn't kept.
                 match (&e.ty, args.len()) {

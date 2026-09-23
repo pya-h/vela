@@ -176,7 +176,7 @@ fi
 #[test]
 fn plan_b_and_is_names_are_scoped_to_their_blocks() {
     let source = "\
-task parse(t: text) -> int or text
+task parse(t: text) -> int ~ text
     <- 1
 fi
 

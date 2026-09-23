@@ -1,5 +1,5 @@
 # error: 9:9: 'fail e' names the error only on the first line of a plan B; to send an error, write '<- fail e'
-task save(n: int) -> unit or text
+task save(n: int) -> unit ~ text
     <- fail "x"
 fi
 

@@ -80,7 +80,7 @@ task first(list: maybe ^Node@r) -> maybe ^Node@r
     <- list
 fi
 
-task checked(r: region, n: int) -> ^Node@r or text
+task checked(r: region, n: int) -> ^Node@r ~ text
     region scratch
     bind temporary = new int(n) at scratch
     when temporary^ < 0
@@ -89,7 +89,7 @@ task checked(r: region, n: int) -> ^Node@r or text
     <- push(r, none, temporary^)
 fi
 
-task save(n: int) -> unit or text
+task save(n: int) -> unit ~ text
     region scratch
     bind copy = new int(n) at scratch
     when copy^ > 9

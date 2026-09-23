@@ -1,8 +1,0 @@
-# error: 2:31: the error type can't be unit
-task parse(t: text) -> int or unit
-    <- 1
-fi
-
-task main()
-    show(1)
-fi

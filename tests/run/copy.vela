@@ -41,7 +41,7 @@ task kept_twice(r: region, line: text@s) -> both: [text; 2]@r
     both <- [line.copy(), line.copy()]
 fi
 
-task parse(r: region, line: text@s) -> int or Problem@r
+task parse(r: region, line: text@s) -> int ~ Problem@r
     when line == ""
         <- fail Missing(line).copy()
     fi
@@ -75,7 +75,7 @@ task main()
     hold list: maybe ^Node@kept = none
     hold bag = Bag { names: new [text]() at kept, first: none }
     hold both: [text; 2]@kept = ["", ""]
-    hold result: int or Problem@kept = 0
+    hold result: int ~ Problem@kept = 0
     each pass in 0..1
         region work
         bind line = scan("") at work { "nobody" }

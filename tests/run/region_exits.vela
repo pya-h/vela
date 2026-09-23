@@ -9,7 +9,7 @@ task pick(n: int) -> maybe int
     <- n
 fi
 
-task fails(n: int) -> int or text
+task fails(n: int) -> int ~ text
     when n % 4 == 0
         <- fail "four"
     fi

@@ -327,7 +327,7 @@
             (<code>(text, int)</code>, whose items never change, <a href="vela.html#tuples">Tuples</a>), arrays
             (<code>[int; 4]</code>), and slices (<code>[int]@r</code>, which grow with <code>xs.add(v)</code> and
             shrink with <code>xs.del(i)</code>) are all done (<a href="#arrays">details below</a>), and missing values
-            and errors have types: <code>maybe T</code> and <code>T or E</code>, and a pointer can't be
+            and errors have types: <code>maybe T</code> and <code>T ~ E</code>, and a pointer can't be
             <code>none</code>.</p>
         </div>
         <div class="card">
@@ -420,7 +420,7 @@
         </div>
         <div class="card">
           <h3>Maybe & errors <span class="badge b-done">Done</span></h3>
-          <p><code>maybe T</code> and <code>T or E</code>, read with <code>match</code>, <code>is</code>, or a plan B
+          <p><code>maybe T</code> and <code>T ~ E</code>, read with <code>match</code>, <code>is</code>, or a plan B
             (<code>x { 0.0 }</code>); pointers can no longer be <code>none</code>. <a href="#maybe">Details below.</a></p>
         </div>
         <div class="card">
@@ -636,7 +636,7 @@ fi</pre>
           join, a loop's body sets nothing for certain since it might not run, and the same state answers reads,
           bare <code>&lt;-</code>s, and the end of the task. A named result is a C local, zero-initialized so that
           a gap in that analysis would still read a defined value, and reaching the end of the task returns them.
-          A <code>unit or E</code> task succeeds by reaching its end, so its result has no value to name.
+          A <code>unit ~ E</code> task succeeds by reaching its end, so its result has no value to name.
         </p>
       </div>
     </section>
@@ -768,7 +768,7 @@ show(names.del(1))                    # takes item 1 out: b</pre>
         goes through an array as it was when the loop started (a slice's items as they are, up to the count it had
         then). A literal's values join into one
         type: <code>none</code> and a value make a <code>maybe</code>, <code>fail e</code> and a value a
-        <code>T or E</code>, and a literal of only <code>none</code> takes its type from where it goes
+        <code>T ~ E</code>, and a literal of only <code>none</code> takes its type from where it goes
         (<code>bind slots: [maybe int; 4] = [none; 4]</code>). <strong>Checks.</strong> Every index and slice is checked
         as the program runs and stops it with a message saying where, as integer overflow does (<em>vela: index 4 is out
         of range 0..4 at 7:12 in task 'main'</em>). A constant index or bound out of range, a count below 1, and a type
@@ -909,6 +909,8 @@ show(biggest(true, false))      # error: task 'biggest' takes a type that is 'or
         <code>errno</code>) that nothing enforces. Vela now spells them with types, and gives three ways to get a
         value out, from the most explicit to the most compact. This is implemented; the language guide describes
         it in <a href="vela.html#maybe">Maybe and Errors</a>. This section keeps the reasoning behind the design.
+        How an error result is <em>written</em> changes next: <code>~</code> in place of <code>or</code>, and the noun
+        <code>failure</code> beside the verb <code>fail</code> (see <a href="#error-spelling">Writing errors</a>).
       </p>
 
       <h3>maybe</h3>
@@ -1016,9 +1018,9 @@ bind first = head {
         <li>An empty block is an error, except where there's no value to replace (below).</li>
       </ul>
 
-      <h3>Errors: <code>T or E</code></h3>
+      <h3>Errors: <code>T ~ E</code></h3>
       <p>
-        A task that can fail sends <code>T or E</code>: a <code>T</code> when it works, an <code>E</code> when it
+        A task that can fail sends <code>T ~ E</code>: a <code>T</code> when it works, an <code>E</code> when it
         doesn't. The name <code>Result</code> was avoided because "result" already means what a task sends.
       </p>
       <pre>kind ParseError
@@ -1026,7 +1028,7 @@ bind first = head {
     BadDigit(position: int)
 fi
 
-task parse(digits: text) -&gt; int or ParseError
+task parse(digits: text) -&gt; int ~ ParseError
     when digits == ""
         &lt;- fail Empty
     fi
@@ -1063,9 +1065,9 @@ fi</pre>
         <li>In a plan B, a first line <code>fail e</code> names the error. The form
           <code>{ err: ErrorType</code> was considered and rejected: after a variable,
           <code>res { err: Problem }</code> is already a shape literal, and the error's type is known anyway.</li>
-        <li><code>unit or E</code> is a task that sends nothing when it works: a bare <code>&lt;-</code>, or reaching
+        <li><code>unit ~ E</code> is a task that sends nothing when it works: a bare <code>&lt;-</code>, or reaching
           the end, succeeds.</li>
-        <li>A call written as a statement can't drop an error by accident: when its <code>or</code> result is unused,
+        <li>A call written as a statement can't drop an error by accident: when its <code>~</code> result is unused,
           that is an error (a variable holding one isn't checked for being used, yet);
           <code>save(file) { }</code> ignores the error on purpose.</li>
       </ul>
@@ -1079,9 +1081,9 @@ fi</pre>
           <code>}</code> ends a bare <code>&lt;-</code>. The hint for <code>a &lt;-1</code> is unaffected, since
           <code>{</code> is not a value.</li>
         <li><strong>New words:</strong> <code>maybe</code>, <code>is</code>, and <code>fail</code> are reserved, and
-          <code>_</code> is a symbol. In types, <code>or</code> separates the value type from the error type.</li>
+          <code>_</code> is a symbol. In types, <code>~</code> separates the value type from the error type.</li>
         <li><strong>Generated C:</strong> a <code>maybe T</code> is a small struct <code>{ bool has; T value; }</code>
-          (a plain pointer for <code>maybe ^T</code>), and <code>T or E</code> is
+          (a plain pointer for <code>maybe ^T</code>), and <code>T ~ E</code> is
           <code>{ bool ok; T value; E error; }</code>. An expression containing a plan B is generated as
           statements: its operands are evaluated left to right into temporaries, <code>and</code>/<code>or</code>
           still skip their right side, and a <code>loop</code> condition runs its plan B on every pass.</li>
@@ -1741,14 +1743,14 @@ show(c.total())</pre>
         <span class="badge b-done">Done</span>: <code>float(n)</code> and <code>int(x)</code> are calls named by the
         type they give, as <code>text(x)</code> is, and they make no memory, so they name no region (see
         <a href="vela.html#conversions">Turning a value into a number</a>). Text is read too, and may be no number, so
-        <code>int(t)</code> sends <code>int or ParseError</code> (see
+        <code>int(t)</code> sends <code>int ~ ParseError</code> (see
         <a href="vela.html#reading-numbers">Reading a number from text</a>).
       </p>
       <pre>bind x = float(n)                  # an int as a float, which never fails (done)
 bind whole = int(2.9)              # a float as an int: 2, truncated toward zero (done)
 bind counted = int(n &gt; 3)          # a bool as an int: 1 or 0 (done)
 bind shown = text(3.5) at r        # a number to text makes text, in a region (done)
-bind age = int("42")               # text to a number can fail: int or ParseError (done)</pre>
+bind age = int("42")               # text to a number can fail: int ~ ParseError (done)</pre>
       <p>
         <span class="badge b-done">Done</span>: the typed form <code>scan("Age: ", int)</code> reads a number from input
         in one step, and needs no region, since a number needs no memory. Its question was how the end of input is told
@@ -1765,7 +1767,7 @@ bind age = int("42")               # text to a number can fail: int or ParseErro
         <li><strong>What can fail.</strong> A float to an int can fail (<code>nan</code>, or a float too large to hold),
           and stops the program with a message, as integer overflow does, since such a conversion is a bug when it fails.
           Text to a number can fail on input that is merely wrong (<code>"4x2"</code>), so it gives a
-          <code>T or E</code>: <code>int("42")</code> is an <code>int or ParseError</code>, a kind with
+          <code>T ~ E</code>: <code>int("42")</code> is an <code>int ~ ParseError</code>, a kind with
           <code>NotANumber</code> and <code>TooLarge</code>, neither holding a value, read with a plan B or
           <code>match</code>. A program may send one itself, and the three names are the kind's own, as a builtin
           type's name is.</li>
@@ -1785,23 +1787,78 @@ bind age = int("42")               # text to a number can fail: int or ParseErro
           and arithmetic agrees with assignment, which already refused <code>bind x: float = 3</code>.</li>
       </ul>
 
+      <h3 id="error-spelling">Writing errors: <code>~</code>, and <code>fail</code> beside <code>failure</code></h3>
+      <p>
+        <strong>Chosen 2026-09-23. The type separator is written; the two words are not.</strong> How a failing task
+        is written changes in two ways. A result used to be <code>int or ParseError</code>, and the error is still named
+        with <code>fail</code> in every position, which read badly in two places: <code>or</code> is also the boolean
+        operator, and <code>A or B</code> suggests a union of two alike types although the left is the value and the
+        right is the error; and the first line of a plan B, <code>fail e</code>, looks like a declaration although it is
+        a pattern.
+      </p>
+      <ul>
+        <li><strong><code>~</code> replaces <code>or</code> in a type.</strong> <span class="badge b-done">Done</span>
+          — <code>int ~ ParseError</code>, with or without spaces, and a type written with <code>or</code> is an error
+          that teaches it. <code>or</code> now has one meaning only, the boolean one. <code>~</code> was free (the lexer
+          answered it with <em>unexpected character</em>), and the bitwise operators take
+          <code>&amp; | &lt;&lt; &gt;&gt;</code> (see <a href="#bitwise">Bitwise operators</a>), so nothing else wants
+          it. Sigils already appear in Vela's types (<code>^Node</code>, <code>text@r</code>, <code>[int; 4]</code>),
+          which is where this one goes.</li>
+        <li><strong><code>fail</code> splits by what it does:</strong> the verb <code>fail</code> wherever a failure is
+          <em>made</em> (<code>&lt;- fail e</code>, and a failure as a plain value), and the noun
+          <code>failure</code> wherever one is <em>matched and named</em> (<code>case failure e</code>,
+          <code>when x is failure e</code>, and a plan B's first line). <code>failure e</code> names the error value,
+          not a type; the type is the one after <code>~</code>.</li>
+      </ul>
+      <pre><span class="keyword">task</span> age(line: <span class="type">text</span>) -&gt; <span class="type">int</span> ~ ParseError
+    <span class="keyword">bind</span> years = int(line) {
+        <span class="keyword">failure</span> e                      <span class="comment"># names the failure: a pattern, like a case</span>
+        &lt;- <span class="keyword">fail</span> e                     <span class="comment"># makes one: the verb</span>
+    }
+    <span class="keyword">when</span> years &gt; <span class="number">200</span>
+        &lt;- <span class="keyword">fail</span> ParseError.TooLarge
+    <span class="keyword">fi</span>
+    &lt;- years
+<span class="keyword">fi</span>
+
+<span class="keyword">match</span> age(line)
+<span class="keyword">case</span> {years}
+    show(years)
+<span class="keyword">case</span> <span class="keyword">failure</span> e
+    show(<span class="string">"no age"</span>)
+<span class="keyword">fi</span></pre>
+      <p>
+        What it cost, and costs: 72 type positions were rewritten in the programs here, and about 51 patterns wait,
+        plus the lexer, the parser, every message that quotes a type or a pattern, Vela Studio, and every page of these
+        docs. Both spellings need an error that teaches the new one, since every program written before used
+        <code>or</code> in a type and <code>fail</code> in a pattern. Four other spellings were weighed and dropped: <code>/</code> (division, and the
+        path separator in <code>include shapes/circle</code>), <code>|</code> (the bitwise or), <code>!</code> (the
+        lexer answers it with <em>Vela negates with 'not'</em>, and <code>is !e</code> reads as <em>is not e</em>), and
+        <code>$err</code> (<code>$</code> means a variable in shell and PHP, which is backwards for a mark that means
+        <em>this is the error</em>).
+      </p>
+
       <h3 id="bitwise">Bitwise operators</h3>
       <p>
         Vela has no bitwise operators at all: an <code>int</code> can be added, compared, and divided, but its bits can't
         be read, set, or moved. A systems language needs them — flags packed into an integer, masks over hardware
         registers, hashes, checksums, and dividing or multiplying by powers of two — and today a Vela program has no way
-        to write any of that, not even through a task. <strong>This needs implementing.</strong> The symbols are not
-        chosen yet; whatever they are, these questions come with them:
+        to write any of that, not even through a task. <strong>This needs implementing.</strong> The symbols are
+        chosen: <code>&amp;</code>, <code>|</code>, <code>&lt;&lt;</code> and <code>&gt;&gt;</code>, as C writes them
+        (decided 2026-09-23). These questions come with them:
       </p>
       <ul>
-        <li><strong>Which operations.</strong> And, or, exclusive or, not, and shifts in both directions, at least.</li>
-        <li><strong>Spelling.</strong> C's <code>&amp; | ^ ~ &lt;&lt; &gt;&gt;</code> are familiar but taken or close to
-          taken in Vela: <code>^</code> is a pointer, <code>&amp;</code> joins the words a type must allow
-          (<a href="#generics">Types a Declaration Takes</a>), <code>|</code> is an error that says to write <code>or</code>,
-          and <code>&gt;&gt;</code> already lexes as two <code>&gt;</code>. Words (<code>bitand</code>,
-          <code>shl</code>) or member-like forms (<code>n.shiftLeft(3)</code>, as <code>xs.len</code> and
-          <code>xs.add</code> read) avoid every clash. Vela writes <code>and</code> and <code>or</code> for logic, so the
-          bitwise ones must not read as those.</li>
+        <li><strong>Which operations.</strong> And, or, and shifts in both directions. Exclusive or and complement have
+          no symbol yet: <code>^</code> is a pointer, and <code>~</code> goes to the error side of a type
+          (<a href="#error-spelling">Writing errors</a>), so each needs a word, a member-like form, or nothing at all
+          for now.</li>
+        <li><strong>Spelling, and what each symbol already means.</strong> <code>&amp;</code> joins the words a type
+          must allow (<a href="#generics">Types a Declaration Takes</a>), so it would mean one thing in a type and
+          another in an expression; <code>|</code> is an error today that says to write <code>or</code>, and that
+          message has to go; and <code>&gt;&gt;</code> lexes as two <code>&gt;</code>, which closes nested types
+          (<code>Box&lt;Box&lt;int&gt;&gt;</code>), so the lexer has to tell a shift from the end of two type
+          arguments. Vela writes <code>and</code> and <code>or</code> for logic, and these read differently, which is
+          the point of choosing the C symbols.</li>
         <li><strong>Which types.</strong> <code>int</code> is signed and 64-bit, and Vela has no unsigned type, so a
           shift's meaning at the sign bit, and a right shift of a negative number, must be defined rather than left to C
           (where some of it is undefined). A shift count that is negative or at least 64 is undefined in C, so Vela has
@@ -1924,7 +1981,7 @@ fi
           It also hides where a variant comes from: a reader of <code>case TooLarge</code> cannot tell which kind it
           belongs to without opening the declarations, and the value it carries (if a flattened variant holds one) comes
           from a kind the case doesn't name. A smaller relative is worth deciding with it: <code>case fail Ended</code>
-          straight on a <code>T or E</code>, which today is <code>case fail e</code> and then a match.</p>
+          straight on a <code>T ~ E</code>, which today is <code>case fail e</code> and then a match.</p>
           <p><strong>The question to decide</strong> is whether kinds holding kinds turn out to be common enough in real
           programs to pay for a second spelling and a flattening rule, or whether the two matches are simply what a
           nested value costs.</p></li>
@@ -1934,7 +1991,7 @@ fi
           <code>kind Tree&lt;T&gt;</code>. It would fit the same syntax and the same words, and be made the same way (one
           kind per set of types), so the cost is not the idea but its reach: a kind's variants, their payloads, every
           <code>match</code> and <code>case</code>, and the patterns Studio offers all follow the types, and
-          <code>maybe T</code> and <code>T or E</code> already cover what most generic kinds would be used for. The
+          <code>maybe T</code> and <code>T ~ E</code> already cover what most generic kinds would be used for. The
           question to decide is whether a program that has shapes and tasks taking types still needs kinds taking them
           often enough to pay for that reach.</li>
       </ul>
@@ -1969,7 +2026,7 @@ fi
             <li><s>Tuples</s> (done: <a href="vela.html#tuples">tuples</a>), <s>generics for tasks and shapes</s>
               (done: <a href="vela.html#generics">types a declaration takes</a>), then perhaps
               <a href="#undecided-generic-kinds">for kinds</a></li>
-            <li><s>Missing values and error handling</s> (done: <a href="#maybe"><code>maybe T</code>, plan B, <code>T or E</code></a>)</li>
+            <li><s>Missing values and error handling</s> (done: <a href="#maybe"><code>maybe T</code>, plan B, <code>T ~ E</code></a>)</li>
             <li>Pattern-match expressions</li>
             <li><s>Region-based allocation</s> (done: <a href="regions.html">regions</a>)</li>
             <li>Region brackets with inferred region arguments (<s>generated copies between regions</s>: done, <a href="vela.html#copy"><code>.copy()</code></a>)</li>

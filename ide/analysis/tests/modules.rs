@@ -328,18 +328,18 @@ fn with_parse(code: &str) -> String {
 
 #[test]
 fn another_modules_type_goes_on_with_its_error_type() {
-    let source = with_parse("task parse(s: text) -> geometry.Point or text");
+    let source = with_parse("task parse(s: text) -> geometry.Point ~ text");
     let sources = sources();
     let analysis = Analysis::with_modules(&source, "app/main.vela", &sources);
     assert_eq!(analysis.diagnostics(), Vec::new());
-    assert_eq!(class_at(&analysis, &source, "Point or", 0), TokenClass::Type);
+    assert_eq!(class_at(&analysis, &source, "Point ~", 0), TokenClass::Type);
     assert_eq!(class_at(&analysis, &source, "text\n", 0), TokenClass::TypeBuiltin);
     assert_eq!(analysis.hover(at(&source, "text\n", 0)).unwrap().code, "text");
 
-    let error_types = labels(&with_parse("task parse(s: text) -> geometry.Point or @@"));
+    let error_types = labels(&with_parse("task parse(s: text) -> geometry.Point ~ @@"));
     assert!(error_types.contains(&"int".to_string()) && !error_types.contains(&"main".to_string()), "{:?}", error_types);
-    assert_eq!(labels(&with_parse("task parse(s: text) -> geometry.Point @@")), ["or"]);
-    assert_eq!(labels(&with_parse("task parse(s: text) -> ^geometry.Point@r @@")), ["or"]);
+    assert_eq!(labels(&with_parse("task parse(s: text) -> geometry.Point @@")), ["~"]);
+    assert_eq!(labels(&with_parse("task parse(s: text) -> ^geometry.Point@r @@")), ["~"]);
     // After a value, both words still continue it.
     assert_eq!(labels(&main_with("show(geometry.area(square) @@)")), ["and", "or"]);
 }

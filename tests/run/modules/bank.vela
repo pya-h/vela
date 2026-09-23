@@ -17,7 +17,7 @@ task deposit(account: Account, amount: int) -> Account
     <- Account { owner: account.owner, balance: account.balance + amount }
 fi
 
-task withdraw(account: Account, amount: int) -> Account or Problem
+task withdraw(account: Account, amount: int) -> Account ~ Problem
     when amount > account.balance
         <- fail TooLittle(amount - account.balance)
     fi

@@ -24,7 +24,7 @@ task ignoring(int: int) -> int
     <- scan("", int) { 0 }
 fi
 
-task read(t: text) -> int or ParseError
+task read(t: text) -> int ~ ParseError
     <- int(t) {
         fail e
         <- fail NotANumber

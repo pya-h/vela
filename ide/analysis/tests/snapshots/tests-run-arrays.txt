@@ -48,8 +48,8 @@
     | keyword:<-  punctuation:[  parameter:xs  punctuation:[  number:0  punctuation:]  punctuation:,  parameter:xs  punctuation:[  number:1  punctuation:]  punctuation:]  punctuation:,  punctuation:[  parameter:xs  punctuation:[  number:2  punctuation:]  punctuation:,  parameter:xs  punctuation:[  number:3  punctuation:]  punctuation:]
  30 | fi
     | keyword:fi
- 32 | task parse(word: text) -> int or text
-    | keyword:task  task:parse  punctuation:(  parameter:word  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  keyword:or  type-builtin:text
+ 32 | task parse(word: text) -> int ~ text
+    | keyword:task  task:parse  punctuation:(  parameter:word  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  operator:~  type-builtin:text
  33 |     when word == "one"
     | keyword:when  parameter:word  operator:==  string:"one"
  34 |         <- 1
@@ -138,8 +138,8 @@
     | keyword:bind  variable:front  punctuation:,  variable:back  operator:=  task:halves  punctuation:(  variable:scores  punctuation:)
  81 |     show(front[1] + back[0])
     | builtin-fn:show  punctuation:(  variable:front  punctuation:[  number:1  punctuation:]  operator:+  variable:back  punctuation:[  number:0  punctuation:]  punctuation:)
- 83 |     # `none` and `fail e` make the items a `maybe` or a `T or E`.
-    | comment:# `none` and `fail e` make the items a `maybe` or a `T or E`.
+ 83 |     # `none` and `fail e` make the items a `maybe` or a `T ~ E`.
+    | comment:# `none` and `fail e` make the items a `maybe` or a `T ~ E`.
  84 |     bind slots = [none, 7, none]
     | keyword:bind  variable:slots  operator:=  punctuation:[  keyword:none  punctuation:,  number:7  punctuation:,  keyword:none  punctuation:]
  85 |     show(slots[0])

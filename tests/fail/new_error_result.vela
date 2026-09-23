@@ -1,5 +1,5 @@
-# error: 4:18: 'new' can't make a pointer to 'int or text'; extract the value first, or keep it in a shape's field
+# error: 4:18: 'new' can't make a pointer to 'int ~ text'; extract the value first, or keep it in a shape's field
 task main()
     region r
-    bind p = new int or text(5) at r
+    bind p = new int ~ text(5) at r
 fi

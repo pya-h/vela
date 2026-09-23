@@ -4,7 +4,7 @@ use crate::error::{Error, Result};
 
 /// Where the names inside each written type are: for the type starting at
 /// `(file, line, col)`, each shape, kind, or builtin name, `@region`, `maybe`,
-/// `region`, and `or` (at the error type after it), with its position. The
+/// `region`, and `~` (at the error type after it), with its position. The
 /// types themselves carry no positions; errors about a part of a type use this
 /// to point at that part.
 pub type TypePlaces = std::collections::HashMap<(usize, usize, usize), Vec<(String, Span)>>;
@@ -54,9 +54,9 @@ pub enum Type {
     Range(Box<Type>),
     /// `maybe T`: a `T`, or `none`.
     Maybe(Box<Type>),
-    /// `T or E`: a `T` on success, or an error `E`. `T` may be `unit`.
+    /// `T ~ E`: a `T` on success, or an error `E`. `T` may be `unit`.
     Or(Box<Type>, Box<Type>),
-    /// The type of `fail e` before it becomes part of a `T or E`: the error's type.
+    /// The type of `fail e` before it becomes part of a `T ~ E`: the error's type.
     Fail(Box<Type>),
     /// `region`: the type of a region parameter, which a task allocates in.
     Region,
@@ -162,7 +162,7 @@ pub fn number_cast(name: &str) -> Option<Type> {
 }
 
 /// The kind that reading a number from text sends when the text is no number:
-/// `int("42")` is an `int or ParseError`. No program declares it, and none may
+/// `int("42")` is an `int ~ ParseError`. No program declares it, and none may
 /// take its name or the names of its variants.
 pub const PARSE_ERROR: &str = "ParseError";
 
@@ -172,7 +172,7 @@ pub const NOT_A_NUMBER: &str = "NotANumber";
 pub const TOO_LARGE: &str = "TooLarge";
 
 /// The kind that reading a number from input sends: `scan("Age: ", int)` is an
-/// `int or InputError`. Reading from input can end, which reading text cannot,
+/// `int ~ InputError`. Reading from input can end, which reading text cannot,
 /// so it says that apart from the text being no number, which it holds as the
 /// `ParseError` reading the line gave.
 pub const INPUT_ERROR: &str = "InputError";
@@ -359,7 +359,7 @@ impl Type {
             }
             Type::Or(value, error) => {
                 value.write(f, outer)?;
-                write!(f, " or ")?;
+                write!(f, " ~ ")?;
                 error.write(f, outer)
             }
             Type::Fail(error) => {
@@ -586,7 +586,7 @@ impl Type {
     }
 
     /// The type a plan B or a `{value}` pattern extracts: `T` from `maybe T`
-    /// or `T or E`.
+    /// or `T ~ E`.
     pub fn extracted(&self) -> Option<&Type> {
         match self {
             Type::Maybe(inner) | Type::Or(inner, _) => Some(inner),
@@ -695,10 +695,10 @@ pub enum ExprKind {
         args: Vec<Expr>,
     },
     Range(Box<Expr>, Box<Expr>),
-    /// `fail e`: an error value, which fits a `T or E`.
+    /// `fail e`: an error value, which fits a `T ~ E`.
     Fail(Box<Expr>),
     /// A plan B, `value { … }`: the value extracted from a `maybe` or a
-    /// `T or E`, or else what the block gives. `error` is the name of a first
+    /// `T ~ E`, or else what the block gives. `error` is the name of a first
     /// line `fail e`, with its position.
     PlanB {
         value: Box<Expr>,
@@ -706,13 +706,13 @@ pub enum ExprKind {
         body: Block,
     },
     /// Added by the checker where a value becomes part of a `maybe` or a
-    /// `T or E`: a plain value, `none`, or `fail e`. The node's `ty` is the
+    /// `T ~ E`: a plain value, `none`, or `fail e`. The node's `ty` is the
     /// type it becomes.
     Wrap(Box<Expr>),
     /// `scan(prompt) at r` or `scan(prompt)@r`: shows the prompt, and reads a
     /// line of input into region `r`, giving `none` when the input has ended.
     /// `scan(prompt, int)` reads a number from that line instead, giving
-    /// `int or InputError`, and names no region because a number needs no
+    /// `int ~ InputError`, and names no region because a number needs no
     /// memory. `args` are as written (the prompt, and the type for a typed
     /// read); `region` is `None` where none was written, which the checker
     /// reports for the form that needs one, and `region_span` is its position
@@ -932,11 +932,11 @@ pub enum PatternKind {
     /// value's kind, which the checker makes sure of. (Boxed: patterns are held
     /// by value in frames that nest, and are rarely written with a kind.)
     Variant { kind: Option<Box<Binding>>, tag: String, binds: Vec<Names> },
-    /// `{v}`: the value in a `maybe`, or the success of a `T or E`.
+    /// `{v}`: the value in a `maybe`, or the success of a `T ~ E`.
     Value(Names),
     /// `none`: an empty `maybe`.
     None,
-    /// `fail e`: the error of a `T or E`.
+    /// `fail e`: the error of a `T ~ E`.
     Fail(Names),
     /// `(x, y)`: the items of a tuple, which always match.
     Tuple(Names),

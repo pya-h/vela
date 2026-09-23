@@ -187,7 +187,7 @@
         More programs are in <code>examples/</code>: <code>fib.vela</code> (recursion), <code>kinds.vela</code>
         (kinds, <code>match</code>, and a kind's methods), <code>methods.vela</code> (a shape's methods, <code>alters</code>,
         <code>priv</code>, a method that can fail, and one of a shape that takes types), <code>todo.vela</code> (a linked list in a region, with <code>maybe</code>
-        pointers, <code>is</code>, and a plan B), <code>errors.vela</code> (<code>T or E</code>, <code>fail</code>, and handling
+        pointers, <code>is</code>, and a plan B), <code>errors.vela</code> (<code>T ~ E</code>, <code>fail</code>, and handling
         errors with <code>match</code>, <code>is</code>, and a plan B), <code>text.vela</code> (lengths, parts, order,
         joining, values as text, and text holding values), <code>regions.vela</code> (a tree in a region, a region
         per loop pass, and copying a result into a longer-lived region), <code>arrays.vela</code> (arrays, and slices
@@ -218,7 +218,7 @@
         <li><code class="type">[T]@r</code> — a slice: a view of values of type T in region <code>r</code> (see <a href="#slices">Slices</a>)</li>
         <li><code class="type">(T, U)</code> — a tuple: two or more values held together, whose items never change (see <a href="#tuples">Tuples</a>)</li>
         <li><code class="type">maybe T</code> — a T, or <code>none</code> (see <a href="#maybe">Maybe and Errors</a>)</li>
-        <li><code class="type">T or E</code> — a T, or an error E, sent by a task that can fail</li>
+        <li><code class="type">T ~ E</code> — a T, or an error E, sent by a task that can fail</li>
         <li><code class="type">region</code> — the type of a task's region parameter, <code>r: region</code></li>
         <li><code class="type">T</code> — a type a task or shape takes, standing for the type each use gives it (see <a href="#generics">Types a declaration takes</a>)</li>
         <li><code class="type">Box&lt;int&gt;</code> — a shape with the types it is given, in the region its values live in when it holds anything there (<code>Box&lt;text&gt;@r</code>)</li>
@@ -263,9 +263,10 @@ true false none  fi   maybe is     fail include priv</pre>
         <tr><td><code>&lt;-</code></td><td>ends the task, sending its named results as they are</td></tr>
         <tr><td><code>name &lt;- value</code></td><td>sets a named result and keeps going (several: <code>steps, peak &lt;- 0, start</code>)</td></tr>
         <tr><td><code>name: T</code></td><td>a parameter's, field's, or binding's type</td></tr>
+        <tr><td><code>T ~ E</code></td><td>a type with an error side: a <code>T</code> when it works, an error <code>E</code> when it fails (see <a href="#maybe">Maybe and Errors</a>)</td></tr>
         <tr><td><code>^T</code>, <code>p^</code></td><td>a pointer type; the value a pointer points to</td></tr>
         <tr><td><code>T@r</code>, <code>new@r</code></td><td>the region a type's pointers live in; the region <code>new</code> allocates in (also <code>new T(v) at r</code>)</td></tr>
-        <tr><td><code>value { … }</code></td><td>a plan B: the value inside a <code>maybe</code> or <code>T or E</code>, or else what the block gives</td></tr>
+        <tr><td><code>value { … }</code></td><td>a plan B: the value inside a <code>maybe</code> or <code>T ~ E</code>, or else what the block gives</td></tr>
         <tr><td><code>{v}</code>, <code>_</code></td><td>in a <code>case</code> or <code>is</code>: the value inside, and anything (or a value left unnamed); <code>_</code> also drops a result</td></tr>
         <tr><td><code>a.x</code></td><td>a field of a shape value</td></tr>
         <tr><td><code>a.m(…)</code>, <code>alters m(…)</code></td><td>a call of a method of the value's shape or kind; a method that changes its value (see <a href="#methods">Methods</a>)</td></tr>
@@ -373,10 +374,10 @@ true false none  fi   maybe is     fail include priv</pre>
         <code>-&gt; ^Node@r, int</code> work as they read, and the regions of a call's results are settled at the
         call (see <a href="#regions">Memory and Regions</a>). One value can't be <code>unit</code>, since
         <code>unit</code> means no value at all. A value sent on from a call, as in <code>halves</code> above,
-        goes as it is: it doesn't become a <code>maybe</code> or a <code>T or E</code> on the way, which a single
+        goes as it is: it doesn't become a <code>maybe</code> or a <code>T ~ E</code> on the way, which a single
         sent value would, and the error says so. Results fail one at a time, not together:
-        <code>-&gt; int, int or Bad</code> is two results, the second of which may fail, and its receiver gives that
-        one a plan B. A task that fails as a whole sends a single <code>T or E</code>.
+        <code>-&gt; int, int ~ Bad</code> is two results, the second of which may fail, and its receiver gives that
+        one a plan B. A task that fails as a whole sends a single <code>T ~ E</code>.
       </p>
       <p>
         <code>bind</code>, <code>hold</code>, and assignment take the same lists with plain values too, and every
@@ -389,7 +390,7 @@ a, b = b, a                  <span class="comment"># a is 2, b is 1</span>
       <p>
         A name can appear once on the left of an assignment, and the names of a <code>bind</code> or
         <code>hold</code> must all be new, as any binding's must. A <code>_</code> on the left takes a value and
-        drops it, except a <code>T or E</code>, whose error must be handled.
+        drops it, except a <code>T ~ E</code>, whose error must be handled.
       </p>
 
       <h3 id="named-results">Named Results</h3>
@@ -457,7 +458,7 @@ a, b = b, a                  <span class="comment"># a is 2, b is 1</span>
           <code>&lt;- values</code> line sends its own values, so nothing after it runs and nothing else need be set.</li>
         <li><strong>Whole values.</strong> <code>best &lt;- Point { x: 0, y: 0 }</code> sets a shape result; setting
           one field of it, <code>best.x &lt;- 0</code>, isn't part of this.</li>
-        <li>A task that sends <code>unit or E</code> succeeds by reaching its end, so its result has no value to
+        <li>A task that sends <code>unit ~ E</code> succeeds by reaching its end, so its result has no value to
           name.</li>
       </ul>
 
@@ -543,7 +544,7 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
       <p id="reading-numbers">
         <strong>Reading a number from text.</strong> <code>int(t)</code> and <code>float(t)</code> on
         <code>text</code> may fail, since the text comes from outside the program, so they send
-        <code>int or ParseError</code> and <code>float or ParseError</code>, read with a plan B,
+        <code>int ~ ParseError</code> and <code>float ~ ParseError</code>, read with a plan B,
         <code>match</code>, or <code>is</code> like any <a href="#maybe">error result</a>.
         <code>ParseError</code> is a kind no program declares, with two variants and no values in them:
         <code>NotANumber</code>, when the text is no number at all, and <code>TooLarge</code>, when it is a
@@ -706,7 +707,7 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
       <p id="reading-input">
         <code>scan(prompt, int)</code> and <code>scan(prompt, float)</code> read a number from that line instead of
         the line itself. A number needs no memory, so this form names no region, and it gives
-        <code>int or InputError</code>: the number, or why there is none. <code>InputError</code> is a kind no file
+        <code>int ~ InputError</code>: the number, or why there is none. <code>InputError</code> is a kind no file
         declares, with two variants — <code>Ended</code>, the input is over, and <code>NoNumber</code>, which holds the
         <code>ParseError</code> that reading the line gave (see
         <a href="#reading-numbers">Reading a number from text</a>), read with a <code>match</code> of its own. A program
@@ -717,7 +718,7 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
     <span class="keyword">hold</span> total = <span class="number">0</span>
     <span class="keyword">hold</span> reading = <span class="keyword">true</span>
     <span class="keyword">loop</span> reading
-        <span class="keyword">match</span> scan(<span class="string">"n: "</span>, <span class="type">int</span>)                <span class="comment"># int or InputError; no region</span>
+        <span class="keyword">match</span> scan(<span class="string">"n: "</span>, <span class="type">int</span>)                <span class="comment"># int ~ InputError; no region</span>
         <span class="keyword">case</span> {value}
             total = total + value
         <span class="keyword">case</span> <span class="keyword">fail</span> e
@@ -1081,7 +1082,7 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
       <ul>
         <li><strong>Items.</strong> A literal's values have one type, except that <code>none</code> and a value make a
           <code>maybe</code> (<code>[none, 7]</code> is a <code>[maybe int; 2]</code>), and <code>fail e</code> and a value
-          make a <code>T or E</code>. A literal of only <code>none</code> needs a written type, as in
+          make a <code>T ~ E</code>. A literal of only <code>none</code> needs a written type, as in
           <code>bind slots: [maybe text; 4] = [none; 4]</code>. Arrays go anywhere a type does: fields, payloads,
           parameters, results, <code>maybe [int; 2]</code>, and arrays of shapes (<code>points[1].x = 4</code>). An array
           holds its items by value, so a shape can't hold an array of itself, and an array of pointers lives in a region
@@ -1132,7 +1133,7 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>Items.</strong> Only values that can't change: numbers, bools, text, other tuples, <code>maybe</code>
-          and <code>T or E</code> of those, and shapes and kinds whose fields are all such. A pointer, a slice, or an array
+          and <code>T ~ E</code> of those, and shapes and kinds whose fields are all such. A pointer, a slice, or an array
           (or a shape holding one) is an error, since what it holds could change. <code>(x)</code> is only parentheses, so a
           tuple has at least two items, and a tuple is written on one line.</li>
         <li><strong>Taking apart.</strong> <code>bind a, b = t</code> and <code>bind (a, b) = t</code> declare copies of the
@@ -1156,7 +1157,7 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
           (<code>[(text, int)]@r</code>, whose items are replaced whole, <code>xs[i] = ("Cy", 80)</code>), <code>maybe</code>,
           and after <code>new</code>.</li>
         <li><strong>Patterns.</strong> In <code>is</code> and <code>case</code>, braces take the value out of a
-          <code>maybe</code> or a <code>T or E</code> and parentheses take a tuple apart, so
+          <code>maybe</code> or a <code>T ~ E</code> and parentheses take a tuple apart, so
           <code>when found is {(name, age)}</code> does both, as do <code>case {(a, b)}</code> and
           <code>case fail (line, message)</code>. A plain tuple has no other case, so <code>when t is (x, y)</code>
           always matches: its block runs with the items named, so a <code>&lt;-</code> in it sends for certain, and an
@@ -1255,7 +1256,7 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
           giving it the type it was given itself. A name in <code>&lt; &gt;</code> can't be a builtin type or a type the
           file already names, and <code>main</code> takes no types.</li>
         <li><strong>Not kinds, for now.</strong> A kind can't take types yet, so there is no
-          <code>kind Result&lt;T&gt;</code>; <code>maybe T</code> and <code>T or E</code> cover what most such kinds
+          <code>kind Result&lt;T&gt;</code>; <code>maybe T</code> and <code>T ~ E</code> cover what most such kinds
           would be for. A call that gives a type built from its own (<code>f&lt;(T, int)&gt;</code> inside
           <code>f&lt;T&gt;</code>) would never stop, so a type built up more than 24 types deep, or a task used with
           more than 500 sets of types, is an error.</li>
@@ -1458,7 +1459,7 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
         on the same line: <code>m { &lt;- 0 }</code>.
       </p>
       <p>
-        A task that can fail sends <code>T or E</code>: its value when it works, or an error of type
+        A task that can fail sends <code>T ~ E</code>: its value when it works, or an error of type
         <code>E</code>, sent with <code>&lt;- fail error</code>. The error type must differ from the value type, and
         can be any type but <code>unit</code> or a <code>maybe</code>. <code>case {v}</code> matches a success and
         <code>case fail e</code> an error, and a plan B's first line <code>fail e</code> names the error:
@@ -1468,7 +1469,7 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
     TooBig
 <span class="keyword">fi</span>
 
-<span class="keyword">task</span> checked(size: int) -&gt; int <span class="keyword">or</span> SizeError
+<span class="keyword">task</span> checked(size: int) -&gt; int ~ SizeError
     <span class="keyword">when</span> size &lt; 0
         <span class="keyword">&lt;-</span> <span class="keyword">fail</span> Negative(size)
     <span class="keyword">fi</span>
@@ -1498,15 +1499,15 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></pre>
       <p>
-        <code>unit or E</code> is a task that sends nothing when it works: a bare <code>&lt;-</code>, or reaching the
+        <code>unit ~ E</code> is a task that sends nothing when it works: a bare <code>&lt;-</code>, or reaching the
         end, succeeds, and <code>case {_}</code> matches that success. A call written as a statement can't drop an error by
-        accident: when its <code>or</code> result goes unused, that is an error. (A result kept with <code>bind</code>
-        stays a <code>T or E</code> that only a <code>match</code> or a plan B opens, but nothing yet checks that
+        accident: when its <code>~</code> result goes unused, that is an error. (A result kept with <code>bind</code>
+        stays a <code>T ~ E</code> that only a <code>match</code> or a plan B opens, but nothing yet checks that
         such a variable is ever used.) An empty plan B, <code>save(file) { }</code>, ignores
         the error on purpose. <code>fail</code> binds like <code>-</code> and <code>not</code>, so an error computed
         with operators needs parentheses.
       </p>
-      <pre><span class="keyword">task</span> save(size: int) -&gt; unit <span class="keyword">or</span> text
+      <pre><span class="keyword">task</span> save(size: int) -&gt; unit ~ text
     <span class="keyword">when</span> size &gt; 100
         <span class="keyword">&lt;-</span> <span class="keyword">fail</span> <span class="string">"too big"</span>
     <span class="keyword">fi</span>
@@ -1573,8 +1574,8 @@ save(500) {
       <h3>Pointer types name their region</h3>
       <p>
         A pointer type is written <code>^T@r</code>. The <code>@r</code> comes after <code>^</code> and
-        <code>maybe</code> and before <code>or</code>, so <code>maybe ^Node@r</code> is a maybe pointer into
-        <code>r</code>, and <code>^Node@r or text</code> is such a pointer or a text error. A type without pointers
+        <code>maybe</code> and before <code>~</code>, so <code>maybe ^Node@r</code> is a maybe pointer into
+        <code>r</code>, and <code>^Node@r ~ text</code> is such a pointer or a text error. A type without pointers
         lives in no region: <code>int@r</code> and <code>Point@r</code> are errors. A pointer always points to
         something: one that may be missing is a <code>maybe ^T@r</code>, which must be checked before it is used (see
         <a href="#maybe">Maybe and Errors</a>), and costs nothing extra, since the C it becomes is a plain pointer.
@@ -1901,7 +1902,7 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>What it copies.</strong> Text, a shape or kind holding text, pointers, or slices, a slice, a pointer
-          (with the value it points to), and a <code>maybe</code>, <code>T or E</code>, array, or tuple of those. Copying a
+          (with the value it points to), and a <code>maybe</code>, <code>T ~ E</code>, array, or tuple of those. Copying a
           value that holds none of them (an <code>int</code>, a <code>Point</code> of numbers) is an error: use the value as
           it is.</li>
         <li><strong>Shared values and cycles.</strong> Two pointers to one value give two pointers to one copy, so linked
@@ -2243,7 +2244,7 @@ CC=clang cargo test</pre>
         <li>Memory is managed with regions rather than a garbage collector or a borrow checker: lifetimes are blocks, visible in the source, and a few type rules keep every pointer valid.</li>
         <li>The compiler generates readable C, making it easy to debug and interoperate with existing C code.</li>
         <li>Syntax uses keywords over punctuation to keep source code friendly and self-documenting; the few symbols (<code>-&gt;</code>, <code>&lt;-</code>, <code>^</code>, <code>@</code>) each stand for one idea.</li>
-        <li>Missing values and failures are types (<code>maybe T</code>, <code>T or E</code>) rather than conventions such as null pointers or error codes, so the checker makes sure they are handled.</li>
+        <li>Missing values and failures are types (<code>maybe T</code>, <code>T ~ E</code>) rather than conventions such as null pointers or error codes, so the checker makes sure they are handled.</li>
         <li>A member of a value is always written after a dot, <code>.count</code> inside a method as <code>c.count</code> outside it, so nothing comes into scope unseen, and a method that changes its value says so with <code>alters</code>, which is also the only time the generated C passes it a pointer.</li>
       </ul>
     </section>

@@ -1,7 +1,7 @@
 # A named result in a task that may fail: `value <-` sets it, and `<- fail`
 # sends the error instead.
 
-task checked(n: int) -> value: int or text
+task checked(n: int) -> value: int ~ text
     when n < 0
         <- fail "negative"
     fi

@@ -66,12 +66,12 @@
     | punctuation:.  method:note  punctuation:(  string:"deposit"  punctuation:,  parameter:amount  punctuation:)
  40 |     fi
     | keyword:fi
- 42 |     # A method may fail, as a task may: `unit or Refusal` sends nothing, or a
-    | comment:# A method may fail, as a task may: `unit or Refusal` sends nothing, or a
+ 42 |     # A method may fail, as a task may: `unit ~ Refusal` sends nothing, or a
+    | comment:# A method may fail, as a task may: `unit ~ Refusal` sends nothing, or a
  43 |     # reason why not.
     | comment:# reason why not.
- 44 |     alters withdraw(amount: int) -> unit or Refusal
-    | keyword:alters  method:withdraw  punctuation:(  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  keyword:or  type:Refusal
+ 44 |     alters withdraw(amount: int) -> unit ~ Refusal
+    | keyword:alters  method:withdraw  punctuation:(  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type:Refusal
  45 |         when not .open
     | keyword:when  keyword:not  punctuation:.  field:open
  46 |             <- fail Closed
@@ -126,8 +126,8 @@
     | keyword:fi
  75 | fi
     | keyword:fi
- 77 | task report(result: unit or Refusal)
-    | keyword:task  task:report  punctuation:(  parameter:result  punctuation::  type-builtin:unit  keyword:or  type:Refusal  punctuation:)
+ 77 | task report(result: unit ~ Refusal)
+    | keyword:task  task:report  punctuation:(  parameter:result  punctuation::  type-builtin:unit  operator:~  type:Refusal  punctuation:)
  78 |     match result
     | keyword:match  parameter:result
  79 |     case {_}

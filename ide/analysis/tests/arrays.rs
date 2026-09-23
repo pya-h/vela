@@ -123,8 +123,8 @@ fn completion_offers_types_in_brackets_and_nothing_for_a_count() {
     assert_eq!(labels(&program(true, "bind grid: [int; @@")), Vec::<String>::new());
     // The count of a repeated value is a value.
     assert!(labels(&program(true, "bind zeros = [0; @@")).contains(&"count".to_string()));
-    // `or` goes on after an array type.
-    assert!(labels(&program(true, "hold pair: [int; 2] @@")).contains(&"or".to_string()));
+    // An error type goes on after an array type, with `~`.
+    assert!(labels(&program(true, "hold pair: [int; 2] @@")).contains(&"~".to_string()));
 }
 
 #[test]

@@ -1108,14 +1108,14 @@ impl<'a> Classifier<'a> {
                         declaring_list = None;
                     }
                 }
-                // A type after `maybe`, and the error type after `or` in a type.
+                // A type after `maybe`, and the error type after `~` in a type.
                 Token::Maybe => {
                     self.push(range, TokenClass::Keyword, None);
                     in_type = was_type;
                 }
-                Token::Or if was_after_type => {
-                    self.push(range, TokenClass::Keyword, None);
-                    in_type = true;
+                Token::Tilde => {
+                    self.push(range, TokenClass::Operator, None);
+                    in_type = was_after_type;
                 }
                 // Everything else is a keyword.
                 keyword => {

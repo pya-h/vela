@@ -17,7 +17,7 @@ task named(r: region, line: text@r) -> (text@r, int)
     <- (line, 1)
 fi
 
-task find(id: int) -> (int, text) or (text, int)
+task find(id: int) -> (int, text) ~ (text, int)
     when id < 0
         <- fail (\"unknown\", id)
     fi

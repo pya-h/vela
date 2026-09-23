@@ -30,8 +30,8 @@
     | variant:Missing
  19 | fi
     | keyword:fi
- 21 | task parsed(n: int) -> (int, int) or (text, int)
-    | keyword:task  task:parsed  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  keyword:or  punctuation:(  type-builtin:text  punctuation:,  type-builtin:int  punctuation:)
+ 21 | task parsed(n: int) -> (int, int) ~ (text, int)
+    | keyword:task  task:parsed  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:~  punctuation:(  type-builtin:text  punctuation:,  type-builtin:int  punctuation:)
  22 |     when n < 0
     | keyword:when  parameter:n  operator:<  number:0
  23 |         <- fail ("negative", n)
@@ -178,12 +178,12 @@
     | builtin-fn:show  punctuation:(  variable:word  punctuation:)
 105 |     show(number)
     | builtin-fn:show  punctuation:(  variable:number  punctuation:)
-107 |     # Values that can't change as items: a shape, a kind, maybe, and T or E.
-    | comment:# Values that can't change as items: a shape, a kind, maybe, and T or E.
+107 |     # Values that can't change as items: a shape, a kind, maybe, and T ~ E.
+    | comment:# Values that can't change as items: a shape, a kind, maybe, and T ~ E.
 108 |     bind grade = Mark(45, "ok")
     | keyword:bind  variable:grade  operator:=  variant:Mark  punctuation:(  number:45  punctuation:,  string:"ok"  punctuation:)
-109 |     bind mixed: (Point, Grade, maybe text, int or text) = (Point { x: 3, y: 4 }, Pass(90), none, 5)
-    | keyword:bind  variable:mixed  punctuation::  punctuation:(  type:Point  punctuation:,  type:Grade  punctuation:,  keyword:maybe  type-builtin:text  punctuation:,  type-builtin:int  keyword:or  type-builtin:text  punctuation:)  operator:=  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:,  variant:Pass  punctuation:(  number:90  punctuation:)  punctuation:,  keyword:none  punctuation:,  number:5  punctuation:)
+109 |     bind mixed: (Point, Grade, maybe text, int ~ text) = (Point { x: 3, y: 4 }, Pass(90), none, 5)
+    | keyword:bind  variable:mixed  punctuation::  punctuation:(  type:Point  punctuation:,  type:Grade  punctuation:,  keyword:maybe  type-builtin:text  punctuation:,  type-builtin:int  operator:~  type-builtin:text  punctuation:)  operator:=  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:,  variant:Pass  punctuation:(  number:90  punctuation:)  punctuation:,  keyword:none  punctuation:,  number:5  punctuation:)
 110 |     show(mixed.0.x + mixed.0.y)
     | builtin-fn:show  punctuation:(  variable:mixed  punctuation:.  field:0  punctuation:.  field:x  operator:+  variable:mixed  punctuation:.  field:0  punctuation:.  field:y  punctuation:)
 111 |     match mixed.1

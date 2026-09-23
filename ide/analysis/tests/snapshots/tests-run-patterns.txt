@@ -16,8 +16,8 @@
     | keyword:<-  keyword:none
  10 | fi
     | keyword:fi
- 12 | task parse(t: text) -> int or text
-    | keyword:task  task:parse  punctuation:(  parameter:t  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  keyword:or  type-builtin:text
+ 12 | task parse(t: text) -> int ~ text
+    | keyword:task  task:parse  punctuation:(  parameter:t  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  operator:~  type-builtin:text
  13 |     <- fail t
     | keyword:<-  keyword:fail  parameter:t
  14 | fi

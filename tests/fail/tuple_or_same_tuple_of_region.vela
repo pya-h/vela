@@ -1,5 +1,5 @@
-# error: 2:49: the error type must differ from the value type, as in '(int, text) or ParseError'
-task find(r: region, id: int) -> (int, text) or (int, text@r)
+# error: 2:48: the error type must differ from the value type, as in '(int, text) ~ ParseError'
+task find(r: region, id: int) -> (int, text) ~ (int, text@r)
     <- (id, "found")
 fi
 

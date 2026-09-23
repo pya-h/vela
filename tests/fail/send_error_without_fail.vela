@@ -1,5 +1,5 @@
-# error: 3:8: expected type int or text, got text; an error is given with 'fail', as in '<- fail e'
-task parse(t: text) -> int or text
+# error: 3:8: expected type int ~ text, got text; an error is given with 'fail', as in '<- fail e'
+task parse(t: text) -> int ~ text
     <- "oops"
 fi
 

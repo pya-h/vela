@@ -807,8 +807,8 @@ impl Parser {
     }
 
     /// A type, with an optional error type: `int`, `^Node@r`, `maybe int`,
-    /// `int or ParseError`. `^` and `maybe` bind tighter than `@`, and `@`
-    /// tighter than `or`.
+    /// `int ~ ParseError`. `^` and `maybe` bind tighter than `@`, and `@`
+    /// tighter than `~`.
     fn parse_type(&mut self) -> Result<Type> {
         let start = self.peek_span();
         self.type_parts.clear();
@@ -819,18 +819,33 @@ impl Parser {
 
     fn parse_type_parts(&mut self) -> Result<Type> {
         let value = self.parse_simple_type()?;
-        if !self.match_token(Token::Or) {
+        self.no_or_in_type()?;
+        if !self.match_token(Token::Tilde) {
             return Ok(value);
         }
-        self.type_parts.push(("or".to_string(), self.peek_span()));
+        self.type_parts.push(("~".to_string(), self.peek_span()));
         let error = self.parse_simple_type()?;
-        if self.check(Token::Or) {
-            return Err(Error::at(self.peek_span(), "a type has one error type: 'or' can't appear twice"));
+        self.no_or_in_type()?;
+        if self.check(Token::Tilde) {
+            return Err(Error::at(self.peek_span(), "a type has one error type: '~' can't appear twice"));
         }
         Ok(Type::Or(Box::new(value), Box::new(error)))
     }
 
-    /// A type without `or`, and the region it lives in: `maybe ^Node@r` is
+    /// `or` where a type's `~` belongs. Every program written before the
+    /// separator changed says `or` there, so it is worth teaching rather than
+    /// reporting as an unexpected word.
+    fn no_or_in_type(&mut self) -> Result<()> {
+        if self.check(Token::Or) {
+            return Err(Error::at(
+                self.peek_span(),
+                "a type writes its error side with '~', as in 'int ~ ParseError'; 'or' is only the boolean operator",
+            ));
+        }
+        Ok(())
+    }
+
+    /// A type without `~`, and the region it lives in: `maybe ^Node@r` is
     /// `(maybe ^Node)@r`, whose pointer and `Node` both live in `r`.
     fn parse_simple_type(&mut self) -> Result<Type> {
         let span = self.peek_span();
@@ -1308,7 +1323,7 @@ impl Parser {
                 if self.check(Token::Comma) {
                     return Err(Error::at(
                         self.peek_span(),
-                        "'{…}' names the one value inside a maybe or a 'T or E'; to take a tuple apart too, write its names in parentheses, as in '{(name, age)}'",
+                        "'{…}' names the one value inside a maybe or a 'T ~ E'; to take a tuple apart too, write its names in parentheses, as in '{(name, age)}'",
                     ));
                 }
                 self.expect(Token::RBrace)?;
@@ -1325,7 +1340,7 @@ impl Parser {
                     return Err(Error::at(
                         names.span,
                         format!(
-                            "'{0}' matches a value, so a name alone isn't a pattern: write '{{hold {1}}}' for the value inside a maybe or a 'T or E', or '{0} hold (x, y)' for a tuple's items",
+                            "'{0}' matches a value, so a name alone isn't a pattern: write '{{hold {1}}}' for the value inside a maybe or a 'T ~ E', or '{0} hold (x, y)' for a tuple's items",
                             keyword, names.name
                         ),
                     ));
@@ -2313,7 +2328,7 @@ fn why_means(narrower: Need, wider: Need) -> String {
 }
 
 /// Whether a region written on `ty` belongs to what it holds, because `ty`
-/// keeps none of its own: a tuple or an array, or a `maybe` or `T or E` of one.
+/// keeps none of its own: a tuple or an array, or a `maybe` or `T ~ E` of one.
 /// (A pointer, a slice, and a shape or kind keep the region they are given, and
 /// the checker reports what such a value holds in another region.)
 fn keeps_no_region(ty: &Type) -> bool {

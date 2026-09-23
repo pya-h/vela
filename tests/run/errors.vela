@@ -1,5 +1,5 @@
-# `T or E`: a task that can fail sends a value or `fail error`. `match`, `is`,
-# and plan B read the result; `unit or E` succeeds with a bare `<-` or by
+# `T ~ E`: a task that can fail sends a value or `fail error`. `match`, `is`,
+# and plan B read the result; `unit ~ E` succeeds with a bare `<-` or by
 # reaching its end.
 
 kind BadSize
@@ -7,7 +7,7 @@ kind BadSize
     Negative(value: int)
 fi
 
-task check_size(size: int) -> int or BadSize
+task check_size(size: int) -> int ~ BadSize
     when size < 0
         <- fail Negative(size)
     fi
@@ -29,7 +29,7 @@ task explain(e: BadSize) -> text
     fi
 fi
 
-task save(size: int) -> unit or text
+task save(size: int) -> unit ~ text
     when size > 100
         <- fail "too big"
     fi
@@ -40,7 +40,7 @@ task save(size: int) -> unit or text
     show("saved")
 fi
 
-task lookup(key: text) -> maybe int or text
+task lookup(key: text) -> maybe int ~ text
     when key == ""
         <- fail "no key"
     fi
@@ -50,7 +50,7 @@ task lookup(key: text) -> maybe int or text
     <- none
 fi
 
-task save_twice(size: int) -> unit or text
+task save_twice(size: int) -> unit ~ text
     save(size) { fail e
         <- fail e
     }
@@ -114,7 +114,7 @@ task main()
         show(message)
     fi
 
-    hold stored: int or BadSize = fail Empty
+    hold stored: int ~ BadSize = fail Empty
     show(stored { -1 })
     stored = 8
     show(stored { -1 })

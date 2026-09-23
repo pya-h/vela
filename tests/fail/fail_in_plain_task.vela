@@ -1,4 +1,4 @@
-# error: 3:8: expected type int, got fail text; 'fail …' is an error, which only a 'T or E' can hold
+# error: 3:8: expected type int, got fail text; 'fail …' is an error, which only a 'T ~ E' can hold
 task parse(t: text) -> int
     <- fail "bad"
 fi

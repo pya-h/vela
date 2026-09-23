@@ -32,8 +32,8 @@
     | keyword:<-  keyword:none  punctuation:,  keyword:false
  20 | fi
     | keyword:fi
- 22 | task risky(n: int) -> int or Oops
-    | keyword:task  task:risky  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:or  type:Oops
+ 22 | task risky(n: int) -> int ~ Oops
+    | keyword:task  task:risky  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:Oops
  23 |     when n < 0
     | keyword:when  parameter:n  operator:<  number:0
  24 |         <- fail Bad
@@ -46,8 +46,8 @@
     | keyword:fi
  29 | # One value per result, the second an error result.
     | comment:# One value per result, the second an error result.
- 30 | task pair(n: int) -> int, int or Oops
-    | keyword:task  task:pair  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  type-builtin:int  keyword:or  type:Oops
+ 30 | task pair(n: int) -> int, int ~ Oops
+    | keyword:task  task:pair  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  type-builtin:int  operator:~  type:Oops
  31 |     <- n, risky(n)
     | keyword:<-  parameter:n  punctuation:,  task:risky  punctuation:(  parameter:n  punctuation:)
  32 | fi

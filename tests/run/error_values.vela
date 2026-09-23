@@ -1,19 +1,20 @@
 # Errors of every type: a shape, an int computed with `fail (…)`, and a
-# `text or int`, handled by `match`, a plan B, and `is fail e`.
+# `text ~ int` (written without spaces here, which is allowed), handled by
+# `match`, a plan B, and `is fail e`.
 
 shape Problem
     code: int
     note: text
 fi
 
-task parse(word: text) -> int or Problem
+task parse(word: text) -> int ~ Problem
     when word == ""
         <- fail Problem { code: 1, note: "empty" }
     fi
     <- 7
 fi
 
-task steps(n: int) -> text or int
+task steps(n: int) -> text~int
     when n > 10
         <- fail ((n - 10) * 2)
     fi

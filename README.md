@@ -6,7 +6,7 @@ immutable-by-default bindings, and memory in regions: `new T(v) at r` allocates 
 when its block closes, and pointer types (`^T@r`) keep every pointer from outliving it or being null. Text
 lasts as long as the program (`text`, as a literal does) or is in a region (`text@r`), and a shape holding
 text may name one (`Person@r`). A value that may
-be missing is a `maybe T`, and a task that can fail sends `T or E`; both are read with `match`, `is`, or a
+be missing is a `maybe T`, and a task that can fail sends `T ~ E`; both are read with `match`, `is`, or a
 plan B (`x { fallback }`). Blocks close with `fi`, and a task sends its results with `<-`: one value, or
 several (`-> int, int` … `<- a / b, a % b`), received with `bind q, r = divmod(17, 5)`. Results can be named
 (`-> total: int`), set along the way with `total <- value` and sent by reaching the end of the task. An `int`
@@ -17,13 +17,13 @@ every index is checked, and `xs.len` is the count. Text knows its length in byte
 are views of the same bytes, `t[0..3]`, is ordered by `<`, and is joined into a region with `a + b at r`; `n.str() at r` (or `text(n) at r`)
 writes a value as text, and a shape or kind gives its own with a method `str`. `float(n)` and `int(x)` turn a value into a
 number the same way, by the name of the type: a float becomes its whole part toward zero, a bool 1 or 0. Text
-read as a number may not be one, so `int(line)` sends `int or ParseError`, a builtin kind whose variants are
+read as a number may not be one, so `int(line)` sends `int ~ ParseError`, a builtin kind whose variants are
 `NotANumber` and `TooLarge`. Text holds values written inside
 it, `"{name} is {age}" at r`, and `\{` and `\}` write braces. `show` takes any number of values and writes them
 one after another, then ends the line (`show("n = ", n)`, and `show()` for an empty one); a shape or kind with
 its own `str` is a value it writes too, `show(card)`, in a region it makes for the line and frees after it.
 `scan("Name: ") at r` shows a prompt and reads a line into a region, giving `none` once the input has ended, and
-`scan("Age: ", int)` reads a number from that line instead, needing no region and sending `int or InputError`,
+`scan("Age: ", int)` reads a number from that line instead, needing no region and sending `int ~ InputError`,
 whose variants are `Ended` and `NoNumber`, holding the `ParseError` that reading the line gave. `value.copy()` copies a value (its text, its slices'
 items, and what its pointers point to) into the region where it goes, or `value.copy() at r`. Tuples hold
 values together (`(text, int)`, read as `t.0`), their items never change, and names take them apart

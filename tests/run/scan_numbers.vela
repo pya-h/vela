@@ -27,7 +27,7 @@ fi
 
 # A task may forward the error it was given, and send one of its own: an age
 # read from input, refusing one no person has.
-task age() -> int or InputError
+task age() -> int ~ InputError
     bind years = scan("age? ", int) {
         fail e
         <- fail e
@@ -44,7 +44,7 @@ task age() -> int or InputError
 fi
 
 # Nothing more to read is an error this task sends itself.
-task twice() -> int or InputError
+task twice() -> int ~ InputError
     bind n = scan("", int) {
         fail e
         <- fail Ended

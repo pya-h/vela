@@ -24,7 +24,7 @@ task reason(t: text) -> text
 fi
 
 # A task may forward the error it was given, and send one of its own.
-task age(line: text) -> int or ParseError
+task age(line: text) -> int ~ ParseError
     bind years = int(line) {
         fail e
         <- fail e

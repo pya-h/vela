@@ -1,5 +1,5 @@
 # error: 9:18: arithmetic requires numeric operands; a 'unit or text' has no value, only an error to handle, as in 'x { fail e … }'
-task save(n: int) -> unit or text
+task save(n: int) -> unit ~ text
     when n > 9
         <- fail "too big"
     fi

@@ -138,8 +138,8 @@
     | keyword:<-  parameter:list
  81 | fi
     | keyword:fi
- 83 | task checked(r: region, n: int) -> ^Node@r or text
-    | keyword:task  task:checked  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  operator:^  type:Node  operator:@  region:r  keyword:or  type-builtin:text
+ 83 | task checked(r: region, n: int) -> ^Node@r ~ text
+    | keyword:task  task:checked  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  operator:^  type:Node  operator:@  region:r  operator:~  type-builtin:text
  84 |     region scratch
     | keyword:region  region:scratch
  85 |     bind temporary = new int(n) at scratch
@@ -154,8 +154,8 @@
     | keyword:<-  task:push  punctuation:(  region:r  punctuation:,  keyword:none  punctuation:,  variable:temporary  operator:^  punctuation:)
  90 | fi
     | keyword:fi
- 92 | task save(n: int) -> unit or text
-    | keyword:task  task:save  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  keyword:or  type-builtin:text
+ 92 | task save(n: int) -> unit ~ text
+    | keyword:task  task:save  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type-builtin:text
  93 |     region scratch
     | keyword:region  region:scratch
  94 |     bind copy = new int(n) at scratch

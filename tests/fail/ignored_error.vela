@@ -1,5 +1,5 @@
 # error: 9:5: the error 'save' may send is ignored; handle it with a plan B, as in 'save(…) { fail e … }', or with match
-task save(size: int) -> unit or text
+task save(size: int) -> unit ~ text
     when size > 10
         <- fail "too big"
     fi

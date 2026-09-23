@@ -2,8 +2,8 @@
     | comment:# Tasks generic over regions: a region parameter after the parameter that
   2 | # names it, forwarding a result whose error holds no pointers, a plan B that
     | comment:# names it, forwarding a result whose error holds no pointers, a plan B that
-  3 | # takes its fallback's region through a `T or E`, and a result whose two sides
-    | comment:# takes its fallback's region through a `T or E`, and a result whose two sides
+  3 | # takes its fallback's region through a `T ~ E`, and a result whose two sides
+    | comment:# takes its fallback's region through a `T ~ E`, and a result whose two sides
   4 | # are in regions the caller chooses.
     | comment:# are in regions the caller chooses.
   6 | shape Node
@@ -30,8 +30,8 @@
     | keyword:<-  parameter:p  operator:^  operator:+  variable:extra  operator:^
  19 | fi
     | keyword:fi
- 21 | task check(t: Tree@s) -> unit or Tree@s
-    | keyword:task  task:check  punctuation:(  parameter:t  punctuation::  type:Tree  operator:@  region:s  punctuation:)  operator:->  type-builtin:unit  keyword:or  type:Tree  operator:@  region:s
+ 21 | task check(t: Tree@s) -> unit ~ Tree@s
+    | keyword:task  task:check  punctuation:(  parameter:t  punctuation::  type:Tree  operator:@  region:s  punctuation:)  operator:->  type-builtin:unit  operator:~  type:Tree  operator:@  region:s
  22 |     when t is Leaf v
     | keyword:when  parameter:t  keyword:is  variant:Leaf  variable:v
  23 |         when v < 0
@@ -44,20 +44,20 @@
     | keyword:fi
  27 | fi
     | keyword:fi
- 29 | task outer(r: region, n: int) -> unit or Tree@r
-    | keyword:task  task:outer  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  keyword:or  type:Tree  operator:@  region:r
+ 29 | task outer(r: region, n: int) -> unit ~ Tree@r
+    | keyword:task  task:outer  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type:Tree  operator:@  region:r
  30 |     <- check(Leaf(n))
     | keyword:<-  task:check  punctuation:(  variant:Leaf  punctuation:(  parameter:n  punctuation:)  punctuation:)
  31 | fi
     | keyword:fi
- 33 | task first_or(list: maybe ^Node@r) -> maybe ^Node@r or text
-    | keyword:task  task:first_or  punctuation:(  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  keyword:maybe  operator:^  type:Node  operator:@  region:r  keyword:or  type-builtin:text
+ 33 | task first_or(list: maybe ^Node@r) -> maybe ^Node@r ~ text
+    | keyword:task  task:first_or  punctuation:(  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  keyword:maybe  operator:^  type:Node  operator:@  region:r  operator:~  type-builtin:text
  34 |     <- list
     | keyword:<-  parameter:list
  35 | fi
     | keyword:fi
- 37 | task pick(a: ^int@r, b: ^int@s, left: bool) -> ^int@r or ^int@s
-    | keyword:task  task:pick  punctuation:(  parameter:a  punctuation::  operator:^  type-builtin:int  operator:@  region:r  punctuation:,  parameter:b  punctuation::  operator:^  type-builtin:int  operator:@  region:s  punctuation:,  parameter:left  punctuation::  type-builtin:bool  punctuation:)  operator:->  operator:^  type-builtin:int  operator:@  region:r  keyword:or  operator:^  type-builtin:int  operator:@  region:s
+ 37 | task pick(a: ^int@r, b: ^int@s, left: bool) -> ^int@r ~ ^int@s
+    | keyword:task  task:pick  punctuation:(  parameter:a  punctuation::  operator:^  type-builtin:int  operator:@  region:r  punctuation:,  parameter:b  punctuation::  operator:^  type-builtin:int  operator:@  region:s  punctuation:,  parameter:left  punctuation::  type-builtin:bool  punctuation:)  operator:->  operator:^  type-builtin:int  operator:@  region:r  operator:~  operator:^  type-builtin:int  operator:@  region:s
  38 |     when left
     | keyword:when  parameter:left
  39 |         <- a

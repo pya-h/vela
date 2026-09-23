@@ -18,7 +18,7 @@ kind Score
     Missing
 fi
 
-task parsed(n: int) -> (int, int) or (text, int)
+task parsed(n: int) -> (int, int) ~ (text, int)
     when n < 0
         <- fail ("negative", n)
     fi
@@ -104,9 +104,9 @@ task main()
     show(word)
     show(number)
 
-    # Values that can't change as items: a shape, a kind, maybe, and T or E.
+    # Values that can't change as items: a shape, a kind, maybe, and T ~ E.
     bind grade = Mark(45, "ok")
-    bind mixed: (Point, Grade, maybe text, int or text) = (Point { x: 3, y: 4 }, Pass(90), none, 5)
+    bind mixed: (Point, Grade, maybe text, int ~ text) = (Point { x: 3, y: 4 }, Pass(90), none, 5)
     show(mixed.0.x + mixed.0.y)
     match mixed.1
         case Pass mark

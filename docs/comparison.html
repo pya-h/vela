@@ -440,7 +440,7 @@
         <code>float</code> in arithmetic gives a <code>float</code>, and a plain value becomes a <code>maybe</code> where
         one is expected), every value-returning task must produce a value on every path (a <code>&lt;- value</code>,
         or named results that are set), a missing value is a <code>maybe T</code> that must be checked
-        before use (pointers can't be null), and a failure is a <code>T or E</code> whose error a call statement can't ignore by
+        before use (pointers can't be null), and a failure is a <code>T ~ E</code> whose error a call statement can't ignore by
         accident. Memory is freed through regions, whose pointers the checker keeps from outliving them, so freed
         memory can't be used or freed again. Integer overflow and division by zero stop the program with a message
         instead of being undefined, as they are in C, and so does an index out of range of an array or slice. It is much safer than C, but its guarantees are narrower than

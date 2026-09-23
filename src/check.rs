@@ -1149,7 +1149,7 @@ impl Checker {
             1 => results.into_iter().next().unwrap_or(Type::Unit),
             _ => Type::Results(results),
         };
-        // A `unit or E` task succeeds by reaching its end or a bare `<-`, so a
+        // A `unit ~ E` task succeeds by reaching its end or a bare `<-`, so a
         // name for its result would have nothing to hold.
         if !sends_value(&t.ret)
             && let Some((name, at)) = t.result_names().next()
@@ -1366,7 +1366,7 @@ impl Checker {
 
     /// A type written in the source must be a builtin type, a shape, or a kind.
     /// `unit` is only valid as a return type, which is checked separately, and
-    /// as the value side of `unit or E`.
+    /// as the value side of `unit ~ E`.
     fn check_type(&self, ty: &Type, span: Span) -> Result<()> {
         match ty {
             Type::Unit => err(self.place(span, "unit"), "unit is only allowed as a return type"),
@@ -1392,14 +1392,14 @@ impl Checker {
                     self.check_type(value, span)?;
                 }
                 match error.as_ref() {
-                    Type::Unit => return err(self.place(span, "or"), "the error type can't be unit"),
-                    Type::Maybe(_) => return err(self.place(span, "or"), "the error type can't be a maybe"),
+                    Type::Unit => return err(self.place(span, "~"), "the error type can't be unit"),
+                    Type::Maybe(_) => return err(self.place(span, "~"), "the error type can't be a maybe"),
                     _ => self.check_type(error, span)?,
                 }
                 // Text in two regions is still text on both sides, and a value
                 // of no region in particular (a literal) would fit both.
                 if value == error || (value.without_regions() == error.without_regions() && self.fits_any_region(value)) {
-                    return err(self.place(span, "or"), format!("the error type must differ from the value type, as in '{} or ParseError'", value));
+                    return err(self.place(span, "~"), format!("the error type must differ from the value type, as in '{} ~ ParseError'", value));
                 }
                 Ok(())
             }
@@ -2070,7 +2070,7 @@ impl Checker {
                     return err(first, "this task has no return type, so '<-' cannot take a value");
                 }
                 // One value for one result, which may become a `maybe`, a
-                // `T or E`, or the error of one.
+                // `T ~ E`, or the error of one.
                 if let ([e], [ret]) = (values.as_mut_slice(), expected) {
                     let ret = ret.clone();
                     let ety = self.check_expr(e)?;
@@ -2179,12 +2179,12 @@ impl Checker {
             // `(x, y)`: the items of a tuple, which always match.
             (PatternKind::Tuple(names), _) => self.bound_names(names, subject, false),
             (PatternKind::Value(_), other) => {
-                err(span, format!("'{{…}}' matches the value in a maybe or a 'T or E', but this value is {}", other))
+                err(span, format!("'{{…}}' matches the value in a maybe or a 'T ~ E', but this value is {}", other))
             }
             (PatternKind::None, Type::None) => err(span, "this value is always none, so there is nothing to match"),
             (PatternKind::None, other) => err(span, format!("'none' matches an empty maybe, but this value is {}", other)),
             (PatternKind::Fail(_), other) => {
-                err(span, format!("'fail …' matches the error of a 'T or E', but this value is {}", other))
+                err(span, format!("'fail …' matches the error of a 'T ~ E', but this value is {}", other))
             }
         }
     }
@@ -2349,15 +2349,15 @@ impl Checker {
         let needed: Vec<String> = match &ety {
             Type::Named(name, _) => match self.kinds.get(name) {
                 Some(kind) => kind.variants.iter().map(|v| v.tag.clone()).collect(),
-                None => return err(expr.span, format!("'match' needs a kind, a maybe, or a 'T or E', but '{}' is a shape", name)),
+                None => return err(expr.span, format!("'match' needs a kind, a maybe, or a 'T ~ E', but '{}' is a shape", name)),
             },
             Type::Maybe(_) => vec!["{…}".to_string(), "none".to_string()],
             Type::Or(..) => vec!["{…}".to_string(), "fail …".to_string()],
             // A tuple has one case, so it is taken apart rather than matched.
             Type::Tuple(_) => {
-                return err(expr.span, format!("match requires a kind, a maybe, or a 'T or E' value, got {}; take a tuple apart with 'bind', as in 'bind (a, b) = t'", ety));
+                return err(expr.span, format!("match requires a kind, a maybe, or a 'T ~ E' value, got {}; take a tuple apart with 'bind', as in 'bind (a, b) = t'", ety));
             }
-            other => return err(expr.span, format!("match requires a kind, a maybe, or a 'T or E' value, got {}", other)),
+            other => return err(expr.span, format!("match requires a kind, a maybe, or a 'T ~ E' value, got {}", other)),
         };
         let mut seen: Vec<String> = Vec::new();
         let mut matched_all = false;
@@ -2596,7 +2596,7 @@ impl Checker {
             Type::None => err(at, format!("cannot infer the type of '{}' from none; give it a type, such as '{}: maybe int'", name, name)),
             Type::Fail(error) => err(
                 at,
-                format!("cannot infer the type of '{}' from 'fail …'; give it a type, such as '{}: int or {}'", name, name, error),
+                format!("cannot infer the type of '{}' from 'fail …'; give it a type, such as '{}: int ~ {}'", name, name, error),
             ),
             Type::Unit => err(at, "this expression has no value (its type is unit)"),
             other if unsettled(other) => err(
@@ -2736,7 +2736,7 @@ impl Checker {
             }
             ExprKind::New { ty, ty_span, value, region, region_span } => {
                 **ty = self.resolve_type(ty, *ty_span, TypePlace::New)?;
-                // `^int or E` means `(^int) or E`, so no written type could hold the pointer.
+                // `^int ~ E` means `(^int) ~ E`, so no written type could hold the pointer.
                 if matches!(**ty, Type::Or(..)) {
                     return err(*ty_span, format!("'new' can't make a pointer to '{}'; extract the value first, or keep it in a shape's field", ty));
                 }
@@ -2891,7 +2891,7 @@ impl Checker {
         }
         let items = match base_ty {
             // `[none, none][i]`: an item that is only a literal can be wrapped
-            // where a `maybe` or `T or E` is expected, but not one read out.
+            // where a `maybe` or `T ~ E` is expected, but not one read out.
             Type::Array(items, _) if matches!(**items, Type::None | Type::Fail(_)) => {
                 return err(span, "cannot tell the type of this item from none or 'fail …'; give the array a type first");
             }
@@ -3067,7 +3067,7 @@ impl Checker {
 
     /// Checks a read of input, at `span`, and returns its type:
     /// `scan(prompt) at r`, the line as `maybe text@r`, or `scan(prompt, int)`,
-    /// a number read from that line as `int or InputError`. The type a typed
+    /// a number read from that line as `int ~ InputError`. The type a typed
     /// read names is a type, not a value, so it is never checked as one.
     fn check_scan(&mut self, span: Span, args: &mut [Expr], region: Option<&str>, region_span: Span) -> Result<Type> {
         let (prompt, rest) = match args {
@@ -3279,7 +3279,7 @@ impl Checker {
     /// Gives a `copy()` that `expr` is the region of `expected`, the type of the
     /// place it goes, when that type names one region; otherwise the copy stays
     /// unsettled, which its statement reports. Copies in an array, shape, or
-    /// variant literal, and in a value becoming a `maybe` or a `T or E`, go
+    /// variant literal, and in a value becoming a `maybe` or a `T ~ E`, go
     /// where their part of `expected` does.
     fn settle_copies(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
         match (&mut expr.kind, expected) {
@@ -3368,13 +3368,13 @@ impl Checker {
             Type::Maybe(inner) => ((**inner).clone(), None),
             Type::Or(ok, fail) => ((**ok).clone(), Some((**fail).clone())),
             other => {
-                return err(value.span, format!("this value is {}, not a maybe or a 'T or E', so it needs no plan B", other));
+                return err(value.span, format!("this value is {}, not a maybe or a 'T ~ E', so it needs no plan B", other));
             }
         };
         let mut bindings = Vec::new();
         if let Some((name, at)) = error {
             let Some(error_ty) = error_ty else {
-                return err(*at, format!("a {} has no error to name; 'fail e' names the error of a 'T or E'", value_ty));
+                return err(*at, format!("a {} has no error to name; 'fail e' names the error of a 'T ~ E'", value_ty));
             };
             if self.variant_in_scope(name).is_some() {
                 return err(*at, format!("'{}' is a variant; to send an error, write '<- fail {}'", name, name));
@@ -3412,7 +3412,7 @@ impl Checker {
     }
 
     /// Checks a plan B's statements: the last line gives the value, unless every
-    /// path through the block sends, or there is no value to give (`unit or E`).
+    /// path through the block sends, or there is no value to give (`unit ~ E`).
     ///
     /// Returns the plan B's type, and the last line's position, when the last line
     /// settles it: a value holding no pointers (of `ANY_REGION`, such as
@@ -4215,9 +4215,9 @@ impl Checker {
     }
 
     /// Checks that the value of `expr` fits where `expected` is required, and
-    /// marks where it becomes part of a `maybe` or `T or E` with a `Wrap` node:
+    /// marks where it becomes part of a `maybe` or `T ~ E` with a `Wrap` node:
     /// a plain value or `none` in a `maybe`, a plain value or `fail e` in a
-    /// `T or E`.
+    /// `T ~ E`.
     ///
     /// A value built without pointers (of `ANY_REGION`) fits the same type in
     /// any region, and takes that region; any other value must be of exactly
@@ -4367,7 +4367,7 @@ fn wrap(expr: &mut Expr, ty: &Type) {
     *expr = Expr { kind: ExprKind::Wrap(Box::new(inner)), span, ty: Some(ty.clone()) };
 }
 
-/// A hint for an operation on a `maybe` or `T or E`, whose value must be
+/// A hint for an operation on a `maybe` or `T ~ E`, whose value must be
 /// extracted first; empty if none of `types` is one.
 fn extract_hint(types: &[&Type]) -> String {
     match types.iter().find(|t| matches!(t, Type::Maybe(_) | Type::Or(..) | Type::Fail(_))) {
@@ -4482,7 +4482,7 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
 
 /// Records in `regions` what each region of `pattern` stands for in `actual`,
 /// following `actual` into the places a value can become part of `pattern`
-/// (`maybe`, `T or E`, `fail`). A region already recorded, or one `actual`
+/// (`maybe`, `T ~ E`, `fail`). A region already recorded, or one `actual`
 /// doesn't show, is left as it is; checking the value against the settled type
 /// then reports any mismatch.
 /// The two regions of a type that keeps a value of one region inside a value of
@@ -4765,7 +4765,7 @@ fn unify_params(pattern: &Type, actual: &Type, given: &mut HashMap<String, Type>
             unify_params(pv, av, given);
             unify_params(pe, ae, given);
         }
-        // A plain value given where a `maybe` or a `T or E` is expected becomes
+        // A plain value given where a `maybe` or a `T ~ E` is expected becomes
         // one, so it names the type inside.
         (Type::Maybe(p), a) | (Type::Or(p, _), a) => unify_params(p, a, given),
         _ => {}
@@ -4890,7 +4890,7 @@ fn settled_example(ty: &Type) -> Type {
 
 /// The type the values of types `a` and `b` can both become, for the items of
 /// an array: either, when the other fits it; a `maybe` for `none` and a value;
-/// a `T or E` for `fail e` and a value. `None` when there is none.
+/// a `T ~ E` for `fail e` and a value. `None` when there is none.
 fn join_types(a: &Type, b: &Type) -> Option<Type> {
     if fits_regions(b, a) {
         return Some(a.clone());
@@ -4964,7 +4964,7 @@ fn fields_bytes(fields: &[Field], sizes: &HashMap<String, u128>) -> u128 {
 }
 
 /// Whether a task with return type `ret` must send a value: every return type
-/// except `unit` and `unit or E`, which succeed by reaching their end.
+/// except `unit` and `unit ~ E`, which succeed by reaching their end.
 fn sends_value(ret: &Type) -> bool {
     !matches!(ret, Type::Unit) && !matches!(ret, Type::Or(value, _) if **value == Type::Unit)
 }
@@ -5117,7 +5117,7 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
             format!("; a pointer can't be none, so use 'maybe {}'", value)
         }
         (_, Type::Or(_, error)) if fits_regions(actual, error) => "; an error is given with 'fail', as in '<- fail e'".to_string(),
-        (Type::Fail(_), _) => "; 'fail …' is an error, which only a 'T or E' can hold".to_string(),
+        (Type::Fail(_), _) => "; 'fail …' is an error, which only a 'T ~ E' can hold".to_string(),
         (Type::Maybe(inner) | Type::Or(inner, _), _) if fits_regions(inner, expected) => {
             "; extract its value first, as in 'x { … }' or 'when x is {value}'".to_string()
         }
@@ -5187,7 +5187,7 @@ fn given_by(values: &[Expr]) -> Given {
 /// Checks that a value of type `actual`, one of the several a call sends or the
 /// items of a tuple (`given`), fits where `expected` is required. Nothing can
 /// change it on the way, so unlike a single value it never becomes a `maybe` or
-/// a `T or E` here.
+/// a `T ~ E` here.
 fn fits_or_err(actual: &Type, expected: &Type, at: Span, given: Given) -> Result<()> {
     if fits_regions(actual, expected) {
         return Ok(());
@@ -5228,7 +5228,7 @@ fn scanned_type(arg: &Expr) -> Result<Type> {
     err(arg.span, "'scan' reads a number, so it names 'int' or 'float', as in 'scan(\"Age: \", int)'")
 }
 
-/// The error for a call whose `T or E` result is thrown away.
+/// The error for a call whose `T ~ E` result is thrown away.
 fn ignored_error(task: &str) -> String {
     format!("the error '{0}' may send is ignored; handle it with a plan B, as in '{0}(…) {{ fail e … }}', or with match", task)
 }

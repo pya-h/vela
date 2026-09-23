@@ -1,6 +1,6 @@
 # Tasks generic over regions: a region parameter after the parameter that
 # names it, forwarding a result whose error holds no pointers, a plan B that
-# takes its fallback's region through a `T or E`, and a result whose two sides
+# takes its fallback's region through a `T ~ E`, and a result whose two sides
 # are in regions the caller chooses.
 
 shape Node
@@ -18,7 +18,7 @@ task read(p: ^int@r, r: region) -> int
     <- p^ + extra^
 fi
 
-task check(t: Tree@s) -> unit or Tree@s
+task check(t: Tree@s) -> unit ~ Tree@s
     when t is Leaf v
         when v < 0
             <- fail t
@@ -26,15 +26,15 @@ task check(t: Tree@s) -> unit or Tree@s
     fi
 fi
 
-task outer(r: region, n: int) -> unit or Tree@r
+task outer(r: region, n: int) -> unit ~ Tree@r
     <- check(Leaf(n))
 fi
 
-task first_or(list: maybe ^Node@r) -> maybe ^Node@r or text
+task first_or(list: maybe ^Node@r) -> maybe ^Node@r ~ text
     <- list
 fi
 
-task pick(a: ^int@r, b: ^int@s, left: bool) -> ^int@r or ^int@s
+task pick(a: ^int@r, b: ^int@s, left: bool) -> ^int@r ~ ^int@s
     when left
         <- a
     fi

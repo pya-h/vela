@@ -33,7 +33,7 @@ fi
 
 # `fail` takes the value right after it, text holding values and its region
 # with it.
-task checked(n: int, r: region) -> int or text@r
+task checked(n: int, r: region) -> int ~ text@r
     when n < 0
         <- fail "{n} is below zero" at r
     fi

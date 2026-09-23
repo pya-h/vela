@@ -43,18 +43,18 @@ fi
 # The kinds reading a number sends belong to no file, so this module writes both
 # without declaring them and without an `include`: as a type it sends, as a type
 # it takes, and as a value it sends itself, through its kind or as a bare variant.
-task read(t: text) -> int or ParseError
+task read(t: text) -> int ~ ParseError
     <- int(t) {
         fail e
         <- fail e
     }
 fi
 
-task refused() -> int or InputError
+task refused() -> int ~ InputError
     <- fail InputError.NoNumber(ParseError.TooLarge)
 fi
 
-task stopped() -> int or InputError
+task stopped() -> int ~ InputError
     <- fail Ended
 fi
 

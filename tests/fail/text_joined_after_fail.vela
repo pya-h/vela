@@ -1,5 +1,5 @@
 # error: 3:8: '+' joins text, but this value is fail text; 'fail' takes only the value right after it, so write 'fail (a + b)@r'
-task f(t: text, r: region) -> int or text@r
+task f(t: text, r: region) -> int ~ text@r
     <- fail t + "!" at r
 fi
 

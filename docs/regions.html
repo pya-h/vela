@@ -777,7 +777,7 @@ false</pre>
     next: <span class="keyword">maybe</span> ^Node
 <span class="keyword">fi</span>
 
-<span class="keyword">task</span> parse_node(r: <span class="keyword">region</span>, digit: int) -&gt; ^Node@r <span class="keyword">or</span> text
+<span class="keyword">task</span> parse_node(r: <span class="keyword">region</span>, digit: int) -&gt; ^Node@r ~ text
     <span class="keyword">when</span> digit &lt; <span class="number">0</span> <span class="keyword">or</span> digit &gt; <span class="number">9</span>
         <span class="keyword">&lt;-</span> <span class="keyword">fail</span> <span class="string">"not a digit"</span>
     <span class="keyword">fi</span>
@@ -799,9 +799,9 @@ false</pre>
 not a digit
 7</pre>
       <p>
-        Regions combine with <code>maybe</code> and <code>T or E</code> as you'd expect: <code>^Node@r or text</code> is a
+        Regions combine with <code>maybe</code> and <code>T ~ E</code> as you'd expect: <code>^Node@r ~ text</code> is a
         pointer into <code>r</code> or a text error. The <code>@r</code> belongs to the pointer, so it comes before
-        <code>or</code>. A plan B's fallback must be in the same region as the value it replaces:
+        <code>~</code>. A plan B's fallback must be in the same region as the value it replaces:
         <code>good</code> is also in <code>nodes</code>.
       </p>
 
@@ -1618,7 +1618,7 @@ head.next = push(nodes, <span class="keyword">none</span>, <span class="number">
           <tr><td>Region statistics</td><td><code>VELA_REGION_STATS=1</code> prints each region's peak size at exit, to find
             regions that grow</td><td>Small, runtime only</td><td><span class="badge b-maybe">Worth trying</span></td></tr>
           <tr><td>Limited regions</td><td><code>region cache max 64_000_000</code>, where <code>new</code> gives
-            <code>^T@r or OutOfMemory</code> instead of stopping the program</td><td>Medium</td><td><span class="badge b-maybe">Worth trying</span></td></tr>
+            <code>^T@r ~ OutOfMemory</code> instead of stopping the program</td><td>Medium</td><td><span class="badge b-maybe">Worth trying</span></td></tr>
           <tr><td>Pointers from C</td><td>Pointers C gives to Vela arrive in a region Vela never frees, as
             <code>maybe ^T@extern</code></td><td>Medium, with C calls</td><td><span class="badge b-later">Later</span></td></tr>
           <tr><td>Regions and threads</td><td>A region belongs to the thread that declared it; handing a whole region to another

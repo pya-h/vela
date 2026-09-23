@@ -1,15 +1,15 @@
-  1 | # A `unit or E` is a value too: it can be bound, held, stored in a field, and
-    | comment:# A `unit or E` is a value too: it can be bound, held, stored in a field, and
+  1 | # A `unit ~ E` is a value too: it can be bound, held, stored in a field, and
+    | comment:# A `unit ~ E` is a value too: it can be bound, held, stored in a field, and
   2 | # passed to a task, and `case {_}` matches its success.
     | comment:# passed to a task, and `case {_}` matches its success.
   4 | shape Saved
     | keyword:shape  type:Saved
-  5 |     result: unit or text
-    | field:result  punctuation::  type-builtin:unit  keyword:or  type-builtin:text
+  5 |     result: unit ~ text
+    | field:result  punctuation::  type-builtin:unit  operator:~  type-builtin:text
   6 | fi
     | keyword:fi
-  8 | task save(n: int) -> unit or text
-    | keyword:task  task:save  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  keyword:or  type-builtin:text
+  8 | task save(n: int) -> unit ~ text
+    | keyword:task  task:save  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type-builtin:text
   9 |     when n > 1
     | keyword:when  parameter:n  operator:>  number:1
  10 |         <- fail "big"
@@ -18,8 +18,8 @@
     | keyword:fi
  12 | fi
     | keyword:fi
- 14 | task take(x: unit or text) -> int
-    | keyword:task  task:take  punctuation:(  parameter:x  punctuation::  type-builtin:unit  keyword:or  type-builtin:text  punctuation:)  operator:->  type-builtin:int
+ 14 | task take(x: unit ~ text) -> int
+    | keyword:task  task:take  punctuation:(  parameter:x  punctuation::  type-builtin:unit  operator:~  type-builtin:text  punctuation:)  operator:->  type-builtin:int
  15 |     match x
     | keyword:match  parameter:x
  16 |     case {_}
@@ -46,8 +46,8 @@
     | keyword:bind  variable:s  operator:=  type:Saved  punctuation:{  field:result  punctuation::  task:save  punctuation:(  number:0  punctuation:)  punctuation:}
  28 |     show(take(s.result))
     | builtin-fn:show  punctuation:(  task:take  punctuation:(  variable:s  punctuation:.  field:result  punctuation:)  punctuation:)
- 29 |     hold y: unit or text = save(0)
-    | keyword:hold  variable:y  punctuation::  type-builtin:unit  keyword:or  type-builtin:text  operator:=  task:save  punctuation:(  number:0  punctuation:)
+ 29 |     hold y: unit ~ text = save(0)
+    | keyword:hold  variable:y  punctuation::  type-builtin:unit  operator:~  type-builtin:text  operator:=  task:save  punctuation:(  number:0  punctuation:)
  30 |     y = fail "z"
     | variable:y  operator:=  keyword:fail  string:"z"
  31 |     show(take(y))

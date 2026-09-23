@@ -338,10 +338,10 @@ fn the_kind_reading_a_number_sends_is_known_to_the_editor() {
     // The type a reading gives, and the kind where an error type goes.
     let bound = "task main()\n    bind n = int(\"42\")\n    show(n { 0 })\nfi\n";
     assert_eq!(Analysis::new(bound).diagnostics(), Vec::new());
-    assert_eq!(hover(bound, "n =", 0).code, "bind n: int or ParseError");
-    assert_offers("task f() -> int or @@", &["ParseError", "text"], &["unit"]);
+    assert_eq!(hover(bound, "n =", 0).code, "bind n: int ~ ParseError");
+    assert_offers("task f() -> int ~ @@", &["ParseError", "text"], &["unit"]);
     // Hovering the kind itself shows what it is.
-    let named = "task age(line: text) -> int or ParseError\n    <- int(line) {\n        fail e\n        <- fail e\n    }\nfi\n\ntask main()\n    show(age(\"1\") { 0 })\nfi\n";
+    let named = "task age(line: text) -> int ~ ParseError\n    <- int(line) {\n        fail e\n        <- fail e\n    }\nfi\n\ntask main()\n    show(age(\"1\") { 0 })\nfi\n";
     assert_eq!(Analysis::new(named).diagnostics(), Vec::new());
     assert!(hover(named, "ParseError", 0).code.starts_with("kind ParseError"), "{:?}", hover(named, "ParseError", 0).code);
 }
@@ -361,13 +361,13 @@ fn the_kind_reading_a_number_from_input_sends_is_known_to_the_editor() {
         let shown = if checks { "show(age { 0 })" } else { "show(unknown)" };
         let bound = format!("task main()\n    bind age = scan(\"Age: \", int)\n    bind size = scan(\"Size: \", float)\n    {}\nfi\n", shown);
         assert_eq!(Analysis::new(&bound).diagnostics().is_empty(), checks);
-        assert_eq!(hover(&bound, "age =", 0).code, "bind age: int or InputError", "checks: {}", checks);
-        assert_eq!(hover(&bound, "size =", 0).code, "bind size: float or InputError", "checks: {}", checks);
+        assert_eq!(hover(&bound, "age =", 0).code, "bind age: int ~ InputError", "checks: {}", checks);
+        assert_eq!(hover(&bound, "size =", 0).code, "bind size: float ~ InputError", "checks: {}", checks);
     }
     // The two types this form reads, offered after the prompt, and the kind
     // where an error type goes.
     assert_eq!(labels(&in_main("bind age = scan(\"Age: \", @@)")), ["int", "float"]);
-    assert_offers("task f() -> int or @@", &["InputError", "ParseError"], &["unit"]);
+    assert_offers("task f() -> int ~ @@", &["InputError", "ParseError"], &["unit"]);
     // A region follows a line read, and never a number read.
     assert_offers(&in_main("bind line = scan(\"Name: \") @@"), &["at"], &[]);
     assert_offers(&in_main("bind age = scan(\"Age: \", int) @@"), &[], &["at"]);
@@ -388,7 +388,7 @@ fn the_cases_of_a_kind_no_file_declares_are_offered() {
     let pattern = item(&of("match e\n    case @@\n    fi"), "NoNumber");
     assert_eq!(pattern.snippet.as_deref(), Some("NoNumber ${why}"));
     assert_eq!(pattern.detail, "InputError (why: ParseError)");
-    let value = item("task f() -> int or ParseError\n    <- fail ParseError.@@\nfi\n", "NotANumber");
+    let value = item("task f() -> int ~ ParseError\n    <- fail ParseError.@@\nfi\n", "NotANumber");
     assert_eq!(value.detail, "ParseError");
     assert_eq!(item(&of("bind e2 = InputError.@@"), "NoNumber").snippet.as_deref(), Some("NoNumber(${why})"));
     // The match with every case, offered for a value of one.
@@ -502,7 +502,7 @@ kind Problem
     Bad(at: int)
 fi
 
-task parse(t: text) -> int or Problem
+task parse(t: text) -> int ~ Problem
     <- 1
 fi
 
@@ -525,8 +525,8 @@ fn types_offer_maybe_and_error_types() {
     assert_offers(&in_outcomes("bind x: maybe @@"), &["int", "Problem"], &["maybe", "unit"]);
     assert_offers(&in_outcomes("bind x: maybe ^@@"), &["int"], &["m"]);
     // After `or` in a type, the error type, which is never unit or a maybe.
-    assert_offers("task f() -> int or @@\nfi\n", &["text"], &["unit", "maybe"]);
-    assert_offers(&in_outcomes("bind x: int or @@"), &["Problem"], &["m", "total"]);
+    assert_offers("task f() -> int ~ @@\nfi\n", &["text"], &["unit", "maybe"]);
+    assert_offers(&in_outcomes("bind x: int ~ @@"), &["Problem"], &["m", "total"]);
     // `or` between values is still an expression.
     assert_offers(&in_outcomes("show(total == 1 or @@)"), &["total", "m"], &["Problem"]);
 }
@@ -583,9 +583,11 @@ fn hover_describes_maybe_and_error_names() {
     assert_eq!(code_and_doc(hover(&source, "problem", 0)), ("fail problem: Problem".to_string(), "The error this plan B handles.".to_string()));
     assert_eq!(code_and_doc(hover(&source, "value + n", 0)), ("value: int".to_string(), "Bound by an is condition.".to_string()));
     assert_eq!(hover(&source, "m:", 0).code, "bind m: maybe int");
-    assert_eq!(hover(&source, "r =", 0).code, "bind r: int or Problem");
+    assert_eq!(hover(&source, "r =", 0).code, "bind r: int ~ Problem");
     assert_eq!(hover(&source, "maybe int", 0).code, "maybe T");
     assert_eq!(hover(&source, "none", 0).code, "none");
+    // `~` explains itself (its class is an operator, as the snapshots show).
+    assert_eq!(hover(&source, "~ Problem", 0).code, "T ~ E");
 }
 
 #[test]
@@ -742,15 +744,15 @@ fn types_follow_a_region_and_error_types_follow_a_regional_type() {
     let regions = "shape Node\n    value: int\n    next: maybe ^Node\nfi\n\ntask main()\n    region nodes\n    @@\nfi\n";
     let in_regions = |code: &str| regions.replace("    @@\n", &format!("    {}\n", code));
     assert_offers(&in_regions("bind two = new@nodes @@"), &["int", "Node", "maybe"], &["main", "show", "true"]);
-    assert_offers("shape Node\n    value: int\nfi\ntask f(r: region) -> ^Node@r or @@", &["text", "Node"], &["unit", "maybe", "f"]);
+    assert_offers("shape Node\n    value: int\nfi\ntask f(r: region) -> ^Node@r ~ @@", &["text", "Node"], &["unit", "maybe", "f"]);
 }
 
 #[test]
 fn a_plan_b_naming_its_error_is_a_block_of_its_own() {
-    let source = "task parse(t: text) -> int or text\n    <- 1\nfi\ntask main()\n    when true\n        bind r = parse(\"x\") { fail e\n            @@\n        }\n    fi\nfi\n";
+    let source = "task parse(t: text) -> int ~ text\n    <- 1\nfi\ntask main()\n    when true\n        bind r = parse(\"x\") { fail e\n            @@\n        }\n    fi\nfi\n";
     assert_offers(source, &["show", "e"], &["fi", "else"]);
     // While the file doesn't check, the binding still has the value's type, not the error's.
-    let broken = "kind Problem\n    Empty\nfi\ntask parse(t: text) -> int or Problem\n    <- 1\nfi\ntask main()\n    show(missing)\n    bind r = parse(\"x\") { fail e\n        0\n    }\n    show(r)\nfi\n";
+    let broken = "kind Problem\n    Empty\nfi\ntask parse(t: text) -> int ~ Problem\n    <- 1\nfi\ntask main()\n    show(missing)\n    bind r = parse(\"x\") { fail e\n        0\n    }\n    show(r)\nfi\n";
     assert_eq!(hover(broken, "r = parse", 0).code, "bind r: int");
 }
 
@@ -758,7 +760,7 @@ fn a_plan_b_naming_its_error_is_a_block_of_its_own() {
 fn only_a_value_that_can_fail_has_an_error_to_name() {
     let source = "task main()\n    bind m: maybe int = none\n    bind n = m {\n        @@\n    }\nfi\n";
     assert_offers(source, &["show"], &["fail"]);
-    let failing = "task get() -> int or text\n    <- 1\nfi\ntask main()\n    bind n = get() {\n        @@\n    }\nfi\n";
+    let failing = "task get() -> int ~ text\n    <- 1\nfi\ntask main()\n    bind n = get() {\n        @@\n    }\nfi\n";
     assert_offers(failing, &["fail"], &[]);
     // `fail` as a value only where some type can hold an error.
     assert_offers("task main()\n    bind x = @@\nfi\n", &["true"], &["fail"]);
@@ -789,7 +791,8 @@ fn after_a_finished_value_only_words_that_continue_it() {
     assert_offers(&in_task("when m @@"), &["is", "and", "or"], &["m", "show", "new"]);
     assert_offers(&in_task("each i @@"), &["in"], &["and", "m"]);
     assert_offers(&in_task("bind p = new int(1) @@"), &["at", "and"], &["m", "in"]);
-    assert_offers("task f() -> int @@", &["or"], &["and", "is"]);
+    // After a written type, only the `~` that gives it an error side.
+    assert_offers("task f() -> int @@", &["~"], &["and", "is", "or"]);
     // Right after an operator, values again.
     assert_offers(&in_task("bind x = 1 + @@"), &["m"], &["and"]);
 }
@@ -803,7 +806,7 @@ fn new_is_offered_only_where_a_region_can_be_allocated_in() {
 
 #[test]
 fn keyword_hovers_describe_fail_is_and_underscore() {
-    let source = "task get() -> int or text\n    <- fail \"x\"\nfi\ntask main()\n    when get() is {_}\n        show(1)\n    fi\nfi\n";
+    let source = "task get() -> int ~ text\n    <- fail \"x\"\nfi\ntask main()\n    when get() is {_}\n        show(1)\n    fi\nfi\n";
     assert!(hover(source, "fail", 0).code.starts_with("fail"));
     assert!(hover(source, "is {", 0).code.contains("is"));
     assert_eq!(hover(source, "_}", 0).code, "_");

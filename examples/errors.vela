@@ -1,4 +1,4 @@
-# Errors as values: a task that can fail sends `T or E`, and its caller
+# Errors as values: a task that can fail sends `T ~ E`, and its caller
 # handles the error with match, is, or a plan B.
 
 kind ReadingError
@@ -21,7 +21,7 @@ kind ReadingError
     fi
 fi
 
-task check(reading: maybe int) -> int or ReadingError
+task check(reading: maybe int) -> int ~ ReadingError
     bind value = reading { <- fail Missing }
     when value < -50
         <- fail TooCold(value)
@@ -32,8 +32,8 @@ task check(reading: maybe int) -> int or ReadingError
     <- value
 fi
 
-# `unit or E` sends nothing when it works: reaching the end succeeds.
-task add_reading(sum: ^int@r, reading: maybe int) -> unit or ReadingError
+# `unit ~ E` sends nothing when it works: reaching the end succeeds.
+task add_reading(sum: ^int@r, reading: maybe int) -> unit ~ ReadingError
     bind value = check(reading) {
         fail problem
         <- fail problem

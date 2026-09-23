@@ -9,7 +9,7 @@ task half(n: int) -> maybe int
     <- none
 fi
 
-task parse(t: text) -> int or text
+task parse(t: text) -> int ~ text
     <- fail t
 fi
 

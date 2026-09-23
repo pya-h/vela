@@ -1,9 +1,9 @@
-# error: 6:23: a 'unit or Oops' task succeeds by reaching its end or a bare '<-', so 'done' has no value to name
+# error: 6:23: a 'unit ~ Oops' task succeeds by reaching its end or a bare '<-', so 'done' has no value to name
 kind Oops
     Bad
 fi
 
-task check(n: int) -> done: unit or Oops
+task check(n: int) -> done: unit ~ Oops
     when n < 0
         <- fail Bad
     fi

@@ -456,18 +456,18 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         // `new@r T`: the type follows the region.
         (Some(q), Some(Token::Ident(_))) => after_new_region(&k, q),
         // A type continues after `^`, `maybe`, and an array's or slice's `[`,
-        // and `or` starts the error type.
+        // and `~` starts the error type.
         (Some(q), Some(Token::Caret | Token::Maybe | Token::LBracket)) => starts_type(&k, q),
-        (Some(q), Some(Token::Or)) => q.checked_sub(1).is_some_and(|end| ends_type(&k, end)),
+        (Some(q), Some(Token::Tilde)) => q.checked_sub(1).is_some_and(|end| ends_type(&k, end)),
         _ => false,
     };
     if type_context {
         let after_arrow = prev_token == Some(&Token::Arrow);
         // A maybe can't hold a maybe, and an error type can't be one.
-        let offer_maybe = !matches!(prev_token, Some(Token::Maybe | Token::Or));
+        let offer_maybe = !matches!(prev_token, Some(Token::Maybe | Token::Tilde));
         // The kind reading a number sends is offered where an error type goes,
         // which is where a program writes it.
-        let mut items = type_items(&k, byte, after_arrow, offer_maybe, prev_token == Some(&Token::Or));
+        let mut items = type_items(&k, byte, after_arrow, offer_maybe, prev_token == Some(&Token::Tilde));
         // A parameter can be a region the task allocates in; a result can't,
         // since a task never sends one.
         if prev_token == Some(&Token::Colon) && (first_token == Some(&Token::Task) || prev.is_some_and(|q| method_header(&k, q))) && inside_parens {
@@ -564,7 +564,7 @@ fn names_region_after(k: &Knowledge, q: usize) -> bool {
 }
 
 /// The words that can follow the finished value, type, or name ending at
-/// position `q`: `in` after an `each`'s name or a `new`'s value, `or` after a
+/// position `q`: `in` after an `each`'s name or a `new`'s value, `~` after a
 /// written type, `is` in a condition, and `and`/`or` after a value.
 fn continuation_items(k: &Knowledge, q: usize) -> Vec<CompletionItem> {
     let line = k.line_start(q);
@@ -573,7 +573,7 @@ fn continuation_items(k: &Knowledge, q: usize) -> Vec<CompletionItem> {
         return vec![keyword("in")];
     }
     if ends_type(k, q) {
-        return if on_line(&Token::Or) { Vec::new() } else { vec![keyword("or")] };
+        return if on_line(&Token::Tilde) { Vec::new() } else { vec![error_separator()] };
     }
     let mut items = Vec::new();
     if names_region_after(k, q) {
@@ -657,7 +657,7 @@ fn in_binding_names(k: &Knowledge, q: usize) -> bool {
 
 /// Whether the type-starting token at position `q` (a name, `^`, `maybe`, or
 /// `[`) is in a type: before it, after any `^`, `maybe`, and `[`, comes `:`
-/// (outside a shape literal), `->`, `new`, `or` after a type, or a module's
+/// (outside a shape literal), `->`, `new`, `~` after a type, or a module's
 /// name and `.` that are in a type themselves.
 fn starts_type(k: &Knowledge, q: usize) -> bool {
     let mut p = q;
@@ -671,7 +671,7 @@ fn starts_type(k: &Knowledge, q: usize) -> bool {
         // `(int, text)`: a tuple type's items are types themselves.
         Some((b, Some(Token::LParen))) => starts_type(k, b),
         Some((b, Some(Token::Ident(_)))) => after_new_region(k, b),
-        Some((b, Some(Token::Or))) => b.checked_sub(1).is_some_and(|end| ends_type(k, end)),
+        Some((b, Some(Token::Tilde))) => b.checked_sub(1).is_some_and(|end| ends_type(k, end)),
         // `geometry.Point`: the type goes on after the module's name.
         Some((b, Some(Token::Dot))) => b.checked_sub(1).is_some_and(|module| k.module_at(module).is_some() && starts_type(k, module)),
         _ => false,
@@ -1035,7 +1035,7 @@ fn case_items(source: &str, scan: &Scan, context: Context, k: &Knowledge, case: 
 
     let covered = covered_cases(k, match_q, case);
 
-    // A maybe or `T or E`: a value, and none or an error.
+    // A maybe or `T ~ E`: a value, and none or an error.
     if let Some(outcomes) = subject.as_ref().and_then(outcome_patterns) {
         let uncovered: Vec<&(String, String, String)> = outcomes.iter().filter(|(label, _, _)| !covered.contains(label)).collect();
         let mut items: Vec<CompletionItem> = uncovered
@@ -1158,7 +1158,7 @@ fn covered_cases(k: &Knowledge, match_q: usize, case: usize) -> Vec<String> {
     covered
 }
 
-/// The patterns of a `maybe` or `T or E` as `(label, detail, snippet)`: its
+/// The patterns of a `maybe` or `T ~ E` as `(label, detail, snippet)`: its
 /// value, and `none` or its error.
 fn outcome_patterns(ty: &Type) -> Option<Vec<(String, String, String)>> {
     // A tuple's items are named in parentheses, `{(a, b)}` and `fail (a, b)`.
@@ -1566,6 +1566,19 @@ fn literal_snippet(k: &Knowledge, shape: usize, label: &str) -> Option<String> {
     Some(format!("{} {}", label, body))
 }
 
+/// `~`, offered after a finished type, which an error type follows:
+/// `int ~ ParseError`. A symbol rather than a word, so it says what it is for.
+fn error_separator() -> CompletionItem {
+    CompletionItem {
+        label: "~".to_string(),
+        kind: CompletionKind::Keyword,
+        detail: "an error type follows".to_string(),
+        apply: None,
+        snippet: None,
+        boost: KEYWORD,
+    }
+}
+
 fn keyword(word: &str) -> CompletionItem {
     CompletionItem {
         label: word.to_string(),
@@ -1654,7 +1667,7 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bo
         snippet("match", "a match on a kind", "match ${value}\ncase ${Variant}\n\t${}\nfi"),
     ]);
     // A `match` with every case, for each visible value of a kind, a maybe, or
-    // a `T or E`.
+    // a `T ~ E`.
     for (id, symbol) in visible_locals(k, byte) {
         let ty = k.type_of_symbol(id);
         if let Some(outcomes) = ty.as_ref().and_then(outcome_patterns) {
@@ -1738,9 +1751,9 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
             boost: GLOBAL,
         });
     }
-    // `new` needs a region to allocate in, and `fail` a `T or E` to hold its error.
+    // `new` needs a region to allocate in, and `fail` a `T ~ E` to hold its error.
     let can_allocate = !region_items(k, byte, true).is_empty();
-    let has_errors = k.symbols().iter().any(|symbol| symbol.module.is_none() && symbol.detail.contains(" or "));
+    let has_errors = k.symbols().iter().any(|symbol| symbol.module.is_none() && symbol.detail.contains('~'));
     items.extend(
         VALUE_KEYWORDS
             .iter()
@@ -1833,7 +1846,7 @@ fn task_items(k: &Knowledge) -> Vec<CompletionItem> {
         // `scan` names the region it reads a line into after its call; the form
         // that reads a number names no region (see `hover`).
         let (detail, snippet) = if *name == vela::ast::SCAN {
-            ("(prompt: text) at r -> maybe text@r, or (prompt: text, int | float) -> int | float or InputError", format!("{}(${{prompt}}) at ${{region}}", name))
+            ("(prompt: text) at r -> maybe text@r, or (prompt: text, int | float) -> int | float ~ InputError", format!("{}(${{prompt}}) at ${{region}}", name))
         } else {
             ("(value: int | float | bool | text | maybe | anything with str, …)", format!("{}(${{value}})", name))
         };

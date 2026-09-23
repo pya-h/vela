@@ -26,8 +26,8 @@
     | keyword:<-  type:Account  punctuation:{  field:owner  punctuation::  parameter:account  punctuation:.  field:owner  punctuation:,  field:balance  punctuation::  parameter:account  punctuation:.  field:balance  operator:+  parameter:amount  punctuation:}
  18 | fi
     | keyword:fi
- 20 | task withdraw(account: Account, amount: int) -> Account or Problem
-    | keyword:task  task:withdraw  punctuation:(  parameter:account  punctuation::  type:Account  punctuation:,  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Account  keyword:or  type:Problem
+ 20 | task withdraw(account: Account, amount: int) -> Account ~ Problem
+    | keyword:task  task:withdraw  punctuation:(  parameter:account  punctuation::  type:Account  punctuation:,  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Account  operator:~  type:Problem
  21 |     when amount > account.balance
     | keyword:when  parameter:amount  operator:>  parameter:account  punctuation:.  field:balance
  22 |         <- fail TooLittle(amount - account.balance)

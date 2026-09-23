@@ -1,0 +1,8 @@
+# error: 2:30: the error type must differ from the value type, as in 'int ~ ParseError'
+task parse(t: text) -> int ~ int
+    <- 1
+fi
+
+task main()
+    show(1)
+fi

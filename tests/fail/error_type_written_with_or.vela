@@ -1,0 +1,8 @@
+# error: 2:28: a type writes its error side with '~', as in 'int ~ ParseError'; 'or' is only the boolean operator
+task parse(t: text) -> int or ParseError
+    <- 1
+fi
+
+task main()
+    show(parse("1") { 0 })
+fi

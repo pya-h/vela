@@ -29,7 +29,7 @@ task halves(xs: [int; 4]) -> [int; 2], [int; 2]
     <- [xs[0], xs[1]], [xs[2], xs[3]]
 fi
 
-task parse(word: text) -> int or text
+task parse(word: text) -> int ~ text
     when word == "one"
         <- 1
     fi
@@ -80,7 +80,7 @@ task main()
     bind front, back = halves(scores)
     show(front[1] + back[0])
 
-    # `none` and `fail e` make the items a `maybe` or a `T or E`.
+    # `none` and `fail e` make the items a `maybe` or a `T ~ E`.
     bind slots = [none, 7, none]
     show(slots[0])
     show(slots[1])

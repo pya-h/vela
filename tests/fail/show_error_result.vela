@@ -1,5 +1,5 @@
-# error: 7:10: show expects int, float, bool, text, or a shape or kind with its own 'str'; the value in this int or text must be extracted first, as in 'x { … }' or 'when x is {value}'
-task get() -> int or text
+# error: 7:10: show expects int, float, bool, text, or a shape or kind with its own 'str'; the value in this int ~ text must be extracted first, as in 'x { … }' or 'when x is {value}'
+task get() -> int ~ text
     <- 1
 fi
 

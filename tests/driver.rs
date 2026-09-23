@@ -147,7 +147,7 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ("pointer types", format!("task f(p: {}int)\nfi\n", "^".repeat(deep))),
         ("maybe types", format!("task f(p: {}int)\nfi\n", "maybe ".repeat(deep))),
         ("plan B blocks", program(format!("{}1{}", "m {\n".repeat(deep), "\n}".repeat(deep)))),
-        ("fail chains", format!("task f() -> int or text\n    <- {}\"x\"\nfi\n", "fail ".repeat(deep))),
+        ("fail chains", format!("task f() -> int ~ text\n    <- {}\"x\"\nfi\n", "fail ".repeat(deep))),
         ("dereference chains", program(format!("p{}", "^".repeat(deep)))),
         ("field chains", program(format!("p{}", ".a".repeat(deep)))),
         ("nested matches", format!("task main()\n{}fi\n", "match k\ncase _\n".repeat(deep) + &"fi\n".repeat(deep))),
@@ -226,7 +226,7 @@ fn deep_nesting_is_an_error_not_a_crash() {
     // A copy of a copy, each in the region: every one counts a level.
     let copies = format!("task main()\n    region r\n    bind line = scan(\"\") at r {{ \"\" }}\n    show(line{})\nfi\n", ".copy() at r".repeat(near));
     driver::generate_c(&copies).unwrap();
-    let fails = format!("task f() -> int or text\n    <- {}\"x\"\nfi\n", "fail ".repeat(near));
+    let fails = format!("task f() -> int ~ text\n    <- {}\"x\"\nfi\n", "fail ".repeat(near));
     assert!(driver::generate_c(&fails).is_err_and(|e| !e.message.contains("nested too deeply")), "a deep fail chain reaches the checker");
 }
 

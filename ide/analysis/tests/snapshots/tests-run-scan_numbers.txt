@@ -50,8 +50,8 @@
     | comment:# A task may forward the error it was given, and send one of its own: an age
  29 | # read from input, refusing one no person has.
     | comment:# read from input, refusing one no person has.
- 30 | task age() -> int or InputError
-    | keyword:task  task:age  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:or  type:InputError
+ 30 | task age() -> int ~ InputError
+    | keyword:task  task:age  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:~  type:InputError
  31 |     bind years = scan("age? ", int) {
     | keyword:bind  variable:years  operator:=  builtin-fn:scan  punctuation:(  string:"age? "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{
  32 |         fail e
@@ -82,8 +82,8 @@
     | keyword:fi
  46 | # Nothing more to read is an error this task sends itself.
     | comment:# Nothing more to read is an error this task sends itself.
- 47 | task twice() -> int or InputError
-    | keyword:task  task:twice  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:or  type:InputError
+ 47 | task twice() -> int ~ InputError
+    | keyword:task  task:twice  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:~  type:InputError
  48 |     bind n = scan("", int) {
     | keyword:bind  variable:n  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)  punctuation:{
  49 |         fail e

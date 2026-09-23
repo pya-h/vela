@@ -1,5 +1,5 @@
 # error: 3:13: 'fail' needs an error value, got maybe text
-task check(m: maybe text) -> int or text
+task check(m: maybe text) -> int ~ text
     <- fail m
 fi
 
