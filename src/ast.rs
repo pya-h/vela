@@ -223,6 +223,7 @@ pub fn input_error_kind() -> KindDef {
         span,
         ty_span: span,
         private: false,
+        default: false,
     };
     KindDef {
         name: INPUT_ERROR.to_string(),
@@ -262,6 +263,13 @@ pub const LEN: &str = "len";
 /// inside a shape or a kind (`alters step()`). Not a keyword: it marks a member
 /// and means nothing anywhere else, so a task or a variable may still use it.
 pub const ALTERS: &str = "alters";
+
+/// The word that marks a block's default region, written after the region's name
+/// in its declaration (`region r default`) or after the type of a region a task
+/// takes (`r: region default`). Allocations that name no region go there. Not a
+/// keyword: like `alters`, it marks one thing in one position and means nothing
+/// anywhere else, so a task, a field, or a variable may still be called it.
+pub const DEFAULT: &str = "default";
 
 /// The word after the dot for the whole value a method is called on (`.this`),
 /// and the name of the region that value lives in (`text@this`).
@@ -699,14 +707,16 @@ pub enum ExprKind {
     Unary(UnaryOp, Box<Expr>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
     /// `new T(value) at r` or `new@r T(value)`; `ty_span` is the position of
-    /// `T`, and `region_span` of `r`.
+    /// `T`, and `region_span` of `r`. `region` is `None` where none was written,
+    /// and the checker sets it to the block's default region, or reports that
+    /// there is none (as it does for `Copy`).
     New {
         /// Boxed, which keeps every expression small: the compiler's stages
         /// recurse through expressions, and each level holds some on the stack.
         ty: Box<Type>,
         ty_span: Span,
         value: Box<Expr>,
-        region: String,
+        region: Option<String>,
         region_span: Span,
     },
     Deref(Box<Expr>),
@@ -877,7 +887,10 @@ pub enum StmtKind {
     /// `total <- value`: sets named results, and keeps going.
     SetResults(Vec<Binding>, Vec<Expr>),
     /// `region r`: memory that `new` allocates in `r` until the block closes.
-    Region(String),
+    /// `region r default` also makes it the block's default region, which every
+    /// allocation in the block that names no region goes into (see
+    /// `check::Checker::default_region`). A block declares at most one.
+    Region { name: String, default: bool },
 }
 
 /// A name a `bind` or `hold` declares, `q` or `q: int`. `ty` is the
@@ -1076,6 +1089,10 @@ pub struct Field {
     /// `priv`: a shape's field that only its own file reads, writes, or sets
     /// in a literal. Parameters and payloads are never private.
     pub private: bool,
+    /// `r: region default`: a region the task takes that is its body's default
+    /// region (see `ast::DEFAULT`). Only a parameter of type `region` can be
+    /// one, and a task takes at most one; a field or a payload never is.
+    pub default: bool,
 }
 
 /// `include shapes/circle`, `include shapes/circle => round`,

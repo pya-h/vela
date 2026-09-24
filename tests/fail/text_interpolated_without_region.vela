@@ -1,4 +1,4 @@
-# error: 5:10: text holding values is new text, so it names the region it goes in, as in '"n = {n}" at r' or '"n = {n}"@r'
+# error: 5:10: text holding values is new text, so it names the region it goes in, as in '"n = {n}" at r' or '"n = {n}"@r'; or make a region the block's default, as in 'region r default'
 task main()
     region r
     bind n = 5

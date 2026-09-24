@@ -1,0 +1,6 @@
+# error: 4:23: can't tell which region to copy into, since nothing this copy goes into names one; name it, as in 'x.copy() at r' or 'x.copy()@r'; a copy goes where the value it becomes goes, so a block's default region doesn't settle one
+task main()
+    region r default
+    bind name = "Ada".copy()
+    show(name)
+fi

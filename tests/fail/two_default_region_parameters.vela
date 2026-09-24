@@ -1,0 +1,9 @@
+# error: 2:30: this task already has a default region, 'a', at 2:11
+task keep(a: region default, b: region default) -> ^int@a
+    <- new int(1)
+fi
+
+task main()
+    region r
+    show(keep(r, r)^)
+fi

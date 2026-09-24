@@ -11,6 +11,15 @@ struct VariantInfo {
     variant: Variant,
 }
 
+/// One block's names, and the region its allocations use when they name none:
+/// what `region r default` or a `r: region default` parameter set (see
+/// `ast::DEFAULT` and `Checker::default_region`), with where it was written.
+#[derive(Default)]
+struct Scope {
+    names: HashMap<String, VarInfo>,
+    default: Option<(String, Span)>,
+}
+
 #[derive(Clone)]
 struct VarInfo {
     /// `Type::Region` for a region.
@@ -92,7 +101,7 @@ pub struct Checker {
     private: HashSet<String>,
     /// The module whose code is being checked.
     current_module: String,
-    scopes: Vec<HashMap<String, VarInfo>>,
+    scopes: Vec<Scope>,
     current_ret: Option<Type>,
     /// The names of the current task's results, in order, when it names them.
     result_names: Vec<String>,
@@ -160,8 +169,23 @@ struct TaskInfo {
     owner: Option<Owner>,
 }
 
+/// The error for `x.str()` or `text(x)` where neither the call nor the block
+/// names a region for the new text to go in.
+const STR_NEEDS_REGION: &str =
+    "'str' makes new text, so it names the region the text goes in, as in 'x.str() at r', 'x.str()@r', 'x.str(r)', or 'text(x) at r'";
+
+/// The error for joining text where neither the join nor the block names a
+/// region for the new text to go in.
+const JOIN_NEEDS_REGION: &str =
+    "joining text makes new text, which goes in a region; name it after the last part, as in 'a + b at r', or after parentheses, as in '(a + b)@r'";
+
 /// The error for a `copy()` whose region nothing names.
-const UNSETTLED_COPY: &str = "can't tell which region to copy into, since nothing this copy goes into names one; name it, as in 'x.copy() at r' or 'x.copy()@r'";
+const UNSETTLED_COPY: &str =
+    "can't tell which region to copy into, since nothing this copy goes into names one; name it, as in 'x.copy() at r' or 'x.copy()@r'";
+
+/// The end of that error where the block has a default region: a copy goes where
+/// the value it becomes goes, so a default is no answer for one.
+const COPY_IGNORES_DEFAULT: &str = "; a copy goes where the value it becomes goes, so a block's default region doesn't settle one";
 
 /// At most how many tasks one generic task may be made into, and how deeply a
 /// type given to one may be built up. A generic task whose call gives a type
@@ -206,6 +230,12 @@ impl Checker {
     /// mistakes of their own (see `broken`).
     fn check_each(&mut self, values: &mut [Expr]) {
         for value in values {
+            // A region argument is a region's name, not a value. Without the
+            // task's parameters there is no telling which arguments are regions,
+            // so a name that is one here is left alone.
+            if matches!(&value.kind, ExprKind::Var(name) if self.lookup(name).is_some_and(|info| info.ty == Type::Region)) {
+                continue;
+            }
             let checked = self.check_expr(value);
             self.keep_going(checked.map(|_| ()));
         }
@@ -1213,6 +1243,25 @@ impl Checker {
     /// result's regions must be regions the task is given.
     fn check_header(&mut self, t: &mut TaskDef) -> Result<()> {
         self.enter_type_params(&t.types);
+        // `r: region default` makes the region the task is given its body's
+        // default (see `ast::DEFAULT`): only a region can be one, and a task
+        // takes one at most, as a block declares one at most.
+        let mut marked: Option<&Field> = None;
+        for param in t.params.iter().filter(|param| param.default) {
+            if param.ty != Type::Region {
+                return err(
+                    param.span,
+                    format!("only a region can be a task's default region, as in 'r: region {}'; '{}' is a parameter of type {}", DEFAULT, param.name, param.ty),
+                );
+            }
+            if let Some(first) = marked {
+                return err(
+                    param.span,
+                    format!("this task already has a default region, '{}', at {}:{}", first.name, first.span.line, first.span.col),
+                );
+            }
+            marked = Some(param);
+        }
         if t.name == "main" && !t.types.is_empty() {
             return err(t.span, "'main' is where the program starts, so it takes no types");
         }
@@ -1759,7 +1808,7 @@ impl Checker {
         self.current_ret = Some(known(&task.ret));
         self.current_method = task.owner.clone();
         // Parameters and the task body share one scope, as in C.
-        self.scopes = vec![HashMap::new()];
+        self.scopes = vec![Scope::default()];
         for param in &task.params {
             if param.ty == Type::Region {
                 self.define_region(&param.name, param.span, true)?;
@@ -1776,6 +1825,12 @@ impl Checker {
                     self.define_region(region, param.ty_span, false)?;
                 }
             }
+        }
+        // A region the header marks is the default of the body, which shares the
+        // parameters' scope, so a second default in the body is refused as a
+        // second in any block is (see `set_default_region`).
+        if let Some((name, at)) = task.params.iter().find(|param| param.default).map(|param| (param.name.clone(), param.span)) {
+            self.set_default_region(&name, at)?;
         }
         // Named results are variables of the task, declared by its header.
         self.result_names = task.result_names().map(|(name, _)| name.clone()).collect();
@@ -1860,7 +1915,7 @@ impl Checker {
     }
 
     fn push_scope(&mut self) {
-        self.scopes.push(HashMap::new());
+        self.scopes.push(Scope::default());
     }
 
     fn pop_scope(&mut self) {
@@ -1921,7 +1976,7 @@ impl Checker {
             return Err(Error::internal(format!("'{}' defined outside of a task", name)));
         };
         let allocates = ty == Type::Region;
-        scope.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false, param: false });
+        scope.names.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false, param: false });
         Ok(())
     }
 
@@ -1929,7 +1984,7 @@ impl Checker {
     /// method marked `alters` is called on can change.
     fn define_param(&mut self, name: &str, ty: Type, mutable: bool, span: Span) -> Result<()> {
         self.define(name, ty, mutable, span)?;
-        if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.get_mut(name)) {
+        if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.names.get_mut(name)) {
             info.param = true;
         }
         Ok(())
@@ -1939,7 +1994,7 @@ impl Checker {
     /// `total <- value`.
     fn define_result(&mut self, name: &str, ty: Type, span: Span) -> Result<()> {
         self.define(name, ty, false, span)?;
-        if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.get_mut(name)) {
+        if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.names.get_mut(name)) {
             info.result = true;
         }
         Ok(())
@@ -1955,7 +2010,7 @@ impl Checker {
     /// `new` can allocate in it.
     fn define_region(&mut self, name: &str, span: Span, allocates: bool) -> Result<()> {
         self.define(name, Type::Region, false, span)?;
-        if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.get_mut(name)) {
+        if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.names.get_mut(name)) {
             info.allocates = allocates;
         }
         Ok(())
@@ -1963,11 +2018,82 @@ impl Checker {
 
     fn lookup(&self, name: &str) -> Option<&VarInfo> {
         for scope in self.scopes.iter().rev() {
-            if let Some(info) = scope.get(name) {
+            if let Some(info) = scope.names.get(name) {
                 return Some(info);
             }
         }
         None
+    }
+
+    /// The region an allocation that names none goes in: the default region of
+    /// the innermost block that has one, which a block sets with
+    /// `region r default` or a task with an `r: region default` parameter.
+    /// `None` where no block in scope has named one, which is the error each
+    /// allocating form reports in its own words.
+    fn default_region(&self) -> Option<String> {
+        self.scopes.iter().rev().find_map(|scope| scope.default.as_ref()).map(|(name, _)| name.clone())
+    }
+
+    /// Makes `name` the default region of the innermost block. A block names one
+    /// default at most: a second is a mistake, since two lines that look alike
+    /// would allocate in regions of different lifetimes.
+    fn set_default_region(&mut self, name: &str, span: Span) -> Result<()> {
+        if let Some((already, at)) = self.scopes.last().and_then(|scope| scope.default.clone()) {
+            return err(
+                span,
+                format!(
+                    "this block already has a default region, '{}', named at {}:{}; write 'at {}' on the lines that go there, or declare it in an inner block",
+                    already, at.line, at.col, name
+                ),
+            );
+        }
+        if let Some(scope) = self.scopes.last_mut() {
+            scope.default = Some((name.to_string(), span));
+        }
+        Ok(())
+    }
+
+    /// The region an allocation uses, given the one it writes: that region, or
+    /// the block's default. `needed` is what to say when there is no default,
+    /// which each form words for itself, and a region visible here is named as
+    /// the one to mark.
+    fn region_or_default(&mut self, written: Option<&String>, span: Span, needed: impl FnOnce() -> String) -> Result<String> {
+        if let Some(region) = written {
+            return Ok(region.clone());
+        }
+        match self.default_region() {
+            Some(region) => Ok(region),
+            None => err(span, format!("{}{}", needed(), self.or_make_it_default())),
+        }
+    }
+
+    /// The error for a `copy()` that nothing gives a region: a copy is the one
+    /// thing that allocates without taking a block's default, since the place it
+    /// goes says where it belongs, so the message says that where a block has one.
+    fn unsettled_copy(&self) -> String {
+        match self.default_region() {
+            Some(_) => format!("{}{}", UNSETTLED_COPY, COPY_IGNORES_DEFAULT),
+            None => UNSETTLED_COPY.to_string(),
+        }
+    }
+
+    /// The end of the message for an allocation that names no region: when a
+    /// region is visible here, the shortest fix is to make it the default.
+    fn or_make_it_default(&self) -> String {
+        match self.innermost_region() {
+            Some(name) => format!("; or make a region the block's default, as in 'region {} {}'", name, DEFAULT),
+            None => String::new(),
+        }
+    }
+
+    /// The name of the innermost region this code can allocate in, if any.
+    fn innermost_region(&self) -> Option<&str> {
+        self.scopes
+            .iter()
+            .rev()
+            .flat_map(|scope| scope.names.iter())
+            .find(|(_, info)| info.ty == Type::Region && info.allocates)
+            .map(|(name, _)| name.as_str())
     }
 
     /// The variable called `name`, which must not be a region.
@@ -2044,7 +2170,7 @@ impl Checker {
         self.unsettled_types.truncate(types_before);
         result?;
         if let Some(at) = unsettled {
-            return err(at, UNSETTLED_COPY);
+            return err(at, self.unsettled_copy());
         }
         match untold {
             Some((at, task, param)) => err(at, self.untold_type(&task, &param)),
@@ -2113,7 +2239,7 @@ impl Checker {
                         None if name == DISCARD => actual,
                         // A variable without a type names no region for a copy.
                         None if matches!(init.get(i).filter(|_| !forwarded).map(|value| &value.kind), Some(ExprKind::Copy { region: None, .. })) => {
-                            return err(value_span, UNSETTLED_COPY);
+                            return err(value_span, self.unsettled_copy());
                         }
                         None => self.inferred_type(&name, &actual, value_span)?,
                     };
@@ -2217,6 +2343,10 @@ impl Checker {
                             return err(range.span, format!("cannot tell the type of '{}' from none or 'fail …'; give the array a type first", name));
                         }
                         Type::Array(items, _) | Type::Slice(items, _) => *items,
+                        // What it goes through couldn't be worked out, so what
+                        // each item is can't be either; the body is still checked
+                        // with the name declared (see `Type::Unknown`).
+                        other if other.unknown() => Type::Unknown,
                         other => {
                             return err(
                                 range.span,
@@ -2284,7 +2414,13 @@ impl Checker {
                 }
                 Ok(())
             }
-            StmtKind::Region(name) => self.define_region(name, span, true),
+            StmtKind::Region { name, default } => {
+                self.define_region(name, span, true)?;
+                match default {
+                    true => self.set_default_region(name, span),
+                    false => Ok(()),
+                }
+            }
         }
     }
 
@@ -2929,7 +3065,6 @@ impl Checker {
                 self.check_call_args(span, name, types, args, &info)
             }
             ExprKind::Unary(op, e) => self.check_unary(*op, e, span),
-            ExprKind::Binary(op, l, r) => self.check_binary(*op, l, r, span),
             ExprKind::Construct { kind, tag, args } if self.broken.contains(kind.as_str()) => {
                 // A kind whose own variants have a mistake holds nothing known
                 // (see `broken`).
@@ -2954,21 +3089,31 @@ impl Checker {
                 if matches!(**ty, Type::Or(..)) {
                     return err(*ty_span, format!("'new' can't make a pointer to '{}'; extract the value first, or keep it in a shape's field", ty));
                 }
-                self.visible_region(region, *region_span, true)?;
+                // The region written, or the block's default, which is kept on
+                // the node so the code generator sees the region either way.
+                let written = ty.to_string();
+                let allocates = self.region_or_default(region.as_ref(), *region_span, || {
+                    format!("'new' needs a region to allocate in, as in 'new {0}(…) at r' or 'new@r {0}(…)'", written)
+                })?;
+                *region = Some(allocates.clone());
+                self.visible_region(&allocates, *region_span, true)?;
                 // `new [T](…) at r` makes the slice itself, with its items in `r`.
                 if let Type::Slice(items, _) = &**ty {
-                    let items = self.in_region(items, region);
-                    let slice = Type::Slice(Box::new(items.clone()), Some(region.clone()));
+                    let items = self.in_region(items, &allocates);
+                    let slice = Type::Slice(Box::new(items.clone()), Some(allocates));
                     self.check_slice_source(value, &items, &slice)?;
                     return Ok(slice);
                 }
-                let pointee = self.in_region(ty, region);
+                let pointee = self.in_region(ty, &allocates);
                 self.check_expr(value)?;
                 self.coerce(value, &pointee)?;
-                Ok(Type::Ptr(Box::new(pointee), Some(region.clone())))
+                Ok(Type::Ptr(Box::new(pointee), Some(allocates)))
             }
             ExprKind::Deref(e) => {
                 let ty = self.check_expr(e)?;
+                if ty.unknown() {
+                    return Ok(Type::Unknown);
+                }
                 if let Type::Maybe(inner) = &ty
                     && inner.ptr_inner().is_some()
                 {
@@ -2994,8 +3139,9 @@ impl Checker {
             }
             ExprKind::PlanB { value, error, body } => self.check_plan_b(span, value, error.as_ref(), body),
             ExprKind::Edit { items, op, args } => self.check_edit(span, items, *op, args),
-            ExprKind::Scan { args, region, region_span } => self.check_scan(span, args, region.as_deref(), *region_span),
+            ExprKind::Scan { args, region, region_span } => self.check_scan(span, args, region, *region_span),
             ExprKind::Join { parts, region, region_span } => self.check_join(parts, region, *region_span),
+            ExprKind::Binary(..) => self.check_binary_expr(expr),
             ExprKind::ToText { value, region, region_span } => self.check_to_text(value, region, *region_span),
             ExprKind::Copy { value, region, region_span } => self.check_copy(span, value, region.as_deref(), *region_span),
             // Only the checker creates `Wrap`, with its type already set.
@@ -3236,6 +3382,12 @@ impl Checker {
         };
         let (item, region) = match &ty {
             Type::Slice(item, region) => ((**item).clone(), region.clone()),
+            // Whether this is a slice at all depends on a type the checker
+            // couldn't work out; the arguments are still read (`Type::Unknown`).
+            _ if ty.unknown() => {
+                self.check_each(args);
+                return Ok(Type::Unit);
+            }
             Type::Array(..) => {
                 return err(
                     span,
@@ -3296,7 +3448,7 @@ impl Checker {
     /// `scan(prompt) at r`, the line as `maybe text@r`, or `scan(prompt, int)`,
     /// a number read from that line as `int ~ InputError`. The type a typed
     /// read names is a type, not a value, so it is never checked as one.
-    fn check_scan(&mut self, span: Span, args: &mut [Expr], region: Option<&str>, region_span: Span) -> Result<Type> {
+    fn check_scan(&mut self, span: Span, args: &mut [Expr], region: &mut Option<String>, region_span: Span) -> Result<Type> {
         let (prompt, rest) = match args {
             [] => return err(span, SCAN_TAKES),
             [prompt, rest @ ..] => (prompt, rest),
@@ -3311,7 +3463,7 @@ impl Checker {
             return err(prompt.span, format!("'scan' shows a text prompt first, as in 'scan(\"Age: \", {})'", name));
         }
         let shows = self.check_expr(prompt)?;
-        if !matches!(shows, Type::Text(_)) {
+        if !matches!(shows, Type::Text(_)) && !shows.unknown() {
             return err(
                 prompt.span,
                 format!("'scan' shows a text prompt, as in 'scan(\"Name: \") at r', but this value is {}{}", shows, extract_hint(&[&shows])),
@@ -3322,22 +3474,24 @@ impl Checker {
             [named] => Some(scanned_type(named)?),
             _ => return err(span, format!("{}, got {}", SCAN_TAKES, count(args.len(), "argument"))),
         };
-        match (number, region) {
-            // A line is text, which needs memory, so it names the region it
-            // goes in; the parser leaves the region out where none was written.
-            (None, None) => err(
-                region_span,
-                "'scan' keeps the line it reads in a region, so it names one, as in 'scan(\"Name: \") at r' or 'scan(\"Name: \")@r'",
-            ),
-            (None, Some(region)) => {
-                self.visible_region(region, region_span, true)?;
-                Ok(Type::Maybe(Box::new(Type::Text(Some(region.to_string())))))
+        match number {
+            // A line is text, which needs memory, so it goes in the region the
+            // call names, or else the block's default.
+            None => {
+                let keeps = self.region_or_default(region.as_ref(), region_span, || {
+                    "'scan' keeps the line it reads in a region, so it names one, as in 'scan(\"Name: \") at r' or 'scan(\"Name: \")@r'".to_string()
+                })?;
+                *region = Some(keeps.clone());
+                self.visible_region(&keeps, region_span, true)?;
+                Ok(Type::Maybe(Box::new(Type::Text(Some(keeps)))))
             }
-            (Some(number), None) => Ok(Type::Or(Box::new(number), Box::new(Type::Named(INPUT_ERROR.to_string(), None)))),
-            (Some(number), Some(_)) => err(
+            // A number needs no memory, so this form names no region and takes
+            // no default either.
+            Some(number) if region.is_some() => err(
                 region_span,
                 format!("a number needs no memory, so 'scan' reading one names no region: write 'scan(\"Age: \", {})'", number),
             ),
+            Some(number) => Ok(Type::Or(Box::new(number), Box::new(Type::Named(INPUT_ERROR.to_string(), None)))),
         }
     }
 
@@ -3427,20 +3581,21 @@ impl Checker {
     /// Checks `a + b at region` or `"n = {n}" at region`, text joined into
     /// `region`, and returns its type,
     /// `text@region`. Every part is text, of any region or lasting.
-    fn check_join(&mut self, parts: &mut [Expr], region: &str, region_span: Span) -> Result<Type> {
-        // Text holding values that no `at r` followed (see `Parser::parse_interpolated`).
+    fn check_join(&mut self, parts: &mut [Expr], region: &mut String, region_span: Span) -> Result<Type> {
+        // Text holding values that no `at r` followed (see
+        // `Parser::parse_interpolated`) goes in the block's default region.
         if region.is_empty() {
-            return err(
-                region_span,
-                "text holding values is new text, so it names the region it goes in, as in '\"n = {n}\" at r' or '\"n = {n}\"@r'",
-            );
+            *region = self.region_or_default(None, region_span, || {
+                "text holding values is new text, so it names the region it goes in, as in '\"n = {n}\" at r' or '\"n = {n}\"@r'".to_string()
+            })?;
         }
+        let region = region.as_str();
         let mut numbers = true;
         let mut other = None;
         for part in parts.iter_mut() {
             let ty = self.check_expr(part)?;
             numbers &= ty.is_numeric();
-            if !matches!(ty, Type::Text(_)) && other.is_none() {
+            if !matches!(ty, Type::Text(_)) && other.is_none() && !ty.unknown() {
                 other = Some((ty, part.span));
             }
         }
@@ -3483,6 +3638,9 @@ impl Checker {
     /// of `ANY_REGION` and waits for the place it goes to settle its region.
     fn check_copy(&mut self, span: Span, value: &mut Expr, region: Option<&str>, region_span: Span) -> Result<Type> {
         let ty = self.check_expr(value)?;
+        if ty.unknown() {
+            return Ok(Type::Unknown);
+        }
         if unsettled(&ty) {
             return err(value.span, format!("cannot tell the type of this value from none or 'fail …', so it can't be copied; give it a type first, as in 'x: {}'", settled_example(&ty)));
         }
@@ -3583,6 +3741,7 @@ impl Checker {
             Type::Slice(source, _) => {
                 err(value.span, format!("expected type {}, got {}{}", slice, ty, mismatch_hint(source, items)))
             }
+            _ if ty.unknown() => Ok(()),
             other => err(
                 value.span,
                 format!("'new [{}](…)' makes a slice from '[value; count]', an array, or a slice, but this value is {}", items, other),
@@ -3729,7 +3888,16 @@ impl Checker {
         }
     }
 
-    fn check_binary(&mut self, op: BinaryOp, l: &mut Expr, r: &mut Expr, span: Span) -> Result<Type> {
+    /// Checks a binary operation, and returns its type. `a + b` on text is a
+    /// join, which makes new text and so needs a region: the block's default,
+    /// since a written one is a `Join` from the parser. That replaces the
+    /// expression, so this takes the whole node.
+    fn check_binary_expr(&mut self, expr: &mut Expr) -> Result<Type> {
+        let span = expr.span;
+        let ExprKind::Binary(op, l, r) = &mut expr.kind else {
+            return Err(Error::internal_at(span, "a binary operation that is not one"));
+        };
+        let op = *op;
         let lt = self.check_expr(l)?;
         let rt = self.check_expr(r)?;
         // With one operand's type unknown, the operation's own type is unknown
@@ -3741,13 +3909,43 @@ impl Checker {
                 _ => Type::Unknown,
             });
         }
-        match op {
-            BinaryOp::Add if matches!(lt, Type::Text(_)) || matches!(rt, Type::Text(_)) => {
-                if let Some(other) = [&lt, &rt].into_iter().find(|ty| !matches!(ty, Type::Text(_))) {
-                    return err(span, format!("'+' joins text to text, but the other value is {}{}", other, self.to_text_hint(other)));
-                }
-                err(span, "joining text makes new text, which goes in a region; name it after the last part, as in 'a + b at r', or after parentheses, as in '(a + b)@r'")
+        if op == BinaryOp::Add && (matches!(lt, Type::Text(_)) || matches!(rt, Type::Text(_))) {
+            if let Some(other) = [&lt, &rt].into_iter().find(|ty| !matches!(ty, Type::Text(_))) {
+                return err(span, format!("'+' joins text to text, but the other value is {}{}", other, self.to_text_hint(other)));
             }
+            let region = self.region_or_default(None, span, || JOIN_NEEDS_REGION.to_string())?;
+            return self.join_into(expr, region, span);
+        }
+        self.check_binary(op, l, r, span, &lt, &rt)
+    }
+
+    /// Replaces `a + b` on text with the join it is, in `region`, and returns its
+    /// type. The parts are checked already, so this only settles the region and
+    /// splices the parts of a join of the same region, which a chain of `+` makes
+    /// one level at a time (see `check_join`).
+    fn join_into(&mut self, expr: &mut Expr, region: String, span: Span) -> Result<Type> {
+        self.visible_region(&region, span, true)?;
+        let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+        let ExprKind::Binary(_, l, r) = taken else {
+            return Err(Error::internal_at(span, "a join that is no binary operation"));
+        };
+        let mut parts = Vec::new();
+        for side in [*l, *r] {
+            match side.kind {
+                ExprKind::Join { parts: inner, region: theirs, .. } if theirs == region => parts.extend(inner),
+                // Text turned into text is joined as it is, as `check_join` does
+                // with the parts of a written join.
+                ExprKind::ToText { value, .. } if matches!(value.ty, Some(Type::Text(_))) => parts.push(*value),
+                _ => parts.push(side),
+            }
+        }
+        expr.kind = ExprKind::Join { parts, region: region.clone(), region_span: span };
+        Ok(Type::Text(Some(region)))
+    }
+
+    fn check_binary(&mut self, op: BinaryOp, l: &mut Expr, r: &mut Expr, span: Span, lt: &Type, rt: &Type) -> Result<Type> {
+        let (lt, rt) = (lt.clone(), rt.clone());
+        match op {
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
                 if !lt.is_numeric() || !rt.is_numeric() {
                     if let Some(untold) = self.untold_param(&lt).or_else(|| self.untold_param(&rt)) {
@@ -4019,9 +4217,8 @@ impl Checker {
     /// again, as a shape literal checks its values again (see `literal_types`).
     fn check_method_call(&mut self, expr: &mut Expr) -> Result<()> {
         let span = expr.span;
-        let ExprKind::MethodCall { value, name, args, .. } = &mut expr.kind else { return Ok(()) };
+        let ExprKind::MethodCall { value, name, .. } = &mut expr.kind else { return Ok(()) };
         let name = name.clone();
-        let given = args.len();
         let copies = self.unsettled_copies.len();
         let untold = self.unsettled_types.len();
         let found = self.check_expr(value);
@@ -4034,6 +4231,20 @@ impl Checker {
         if ty.unknown() {
             return Ok(());
         }
+        // `x.str()` and `text(x)` make new text, so they name the region it goes
+        // in; with none written, that is the block's default (see `parse_str`).
+        // It reads as the region argument the written forms give, so a shape's
+        // own `str` takes it as its parameter, as it always did.
+        if name == STR && matches!(&expr.kind, ExprKind::MethodCall { args, .. } if args.is_empty()) {
+            let region = self.region_or_default(None, span, || STR_NEEDS_REGION.to_string())?;
+            if let ExprKind::MethodCall { args, .. } = &mut expr.kind {
+                args.push(Expr::new(ExprKind::Var(region), span));
+            }
+        }
+        let given = match &expr.kind {
+            ExprKind::MethodCall { args, .. } => args.len(),
+            _ => 0,
+        };
         if name == STR && self.has_builtin_str(&ty) {
             return self.builtin_str(expr);
         }
@@ -4114,7 +4325,7 @@ impl Checker {
         };
         let ty = self.check_expr(value)?;
         let fits = matches!((into, &ty), (Type::Int, Type::Int | Type::Float | Type::Bool) | (Type::Float, Type::Int | Type::Float));
-        if fits {
+        if fits || ty.unknown() {
             return Ok(into.clone());
         }
         // Text may hold no number at all, which is a mistake in the input rather
@@ -4745,6 +4956,11 @@ pub fn in_region(ty: &Type, region: &str, takes_region: &HashSet<String>) -> Typ
 /// names no region lasts as long as the program, so it fits any region too. (A
 /// shape or kind holding pointers always has a region once checked.)
 fn fits_regions(actual: &Type, expected: &Type) -> bool {
+    // A type the checker couldn't work out fits anywhere, and anything fits it:
+    // what went wrong is reported where it was made (see `Type::Unknown`).
+    if actual.unknown() || expected.unknown() {
+        return true;
+    }
     let region = |a: &Option<String>, e: &Option<String>| a == e || a.as_deref() == Some(ANY_REGION);
     let lasting = |a: &Option<String>, e: &Option<String>| region(a, e) || a.is_none();
     match (actual, expected) {
@@ -4891,7 +5107,7 @@ impl Checker {
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => {
                 values.iter_mut().try_for_each(|value| self.substitute_expr(value, given, made))
             }
-            StmtKind::Region(_) => Ok(()),
+            StmtKind::Region { .. } => Ok(()),
             StmtKind::Binding { names, init, .. } => {
                 for bound in names.iter_mut() {
                     self.substitute_bound(bound, given, at)?;

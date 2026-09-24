@@ -17,7 +17,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use serde::Serialize;
-use vela::ast::{ALTERS, BUILTIN_TASKS, MODULE_SEPARATOR, Span, THIS_WORD, Type, unqualified};
+use vela::ast::{ALTERS, BUILTIN_TASKS, DEFAULT, MODULE_SEPARATOR, Span, THIS_WORD, Type, unqualified};
 use vela::lexer::{ESCAPES, LexKind, LexToken, Piece, Token, highlight};
 
 use crate::types::{Context, slashed};
@@ -1205,6 +1205,15 @@ impl<'a> Classifier<'a> {
         if name == ALTERS && self.declared_at.get(&(p + 1)).and_then(|&id| self.symbols.get(id)).is_some_and(|s| s.kind == SymbolKind::Method) {
             return (TokenClass::Keyword, None);
         }
+        // `region r default` and `r: region default`: the word that makes a
+        // region the default of a block or of a task's body.
+        if name == DEFAULT {
+            let two_back = p.checked_sub(2).and_then(|q| tokens.token(q));
+            let after_declaration = tokens.ident(p.wrapping_sub(1)).is_some() && two_back == Some(&Token::Region);
+            if before == Some(&Token::Region) || after_declaration {
+                return (TokenClass::Keyword, None);
+            }
+        }
         // `.this`, `.x`, and `.m()`: the value a method is called on, and a
         // member of it, which its shape or kind declares.
         if before == Some(&Token::Dot) && !p.checked_sub(2).and_then(|q| tokens.token(q)).is_some_and(ends_value) {
@@ -1284,7 +1293,10 @@ impl<'a> Classifier<'a> {
         }
         if in_task_header && after == Some(&Token::Colon) && matches!(before, Some(Token::LParen | Token::Comma)) {
             let detail = tokens.text_after(p + 1, ends_field);
-            let kind = if detail == "region" { SymbolKind::Region } else { SymbolKind::Parameter };
+            // `r: region`, and `r: region default`, which also makes it the
+            // default region of the task's body (see `ast::DEFAULT`).
+            let takes_region = detail == "region" || detail == format!("region {}", DEFAULT);
+            let kind = if takes_region { SymbolKind::Region } else { SymbolKind::Parameter };
             return (kind.class(), Some(self.declare_local(p, kind, None, detail)));
         }
         if in_pattern {

@@ -8,61 +8,73 @@
     | comment:# notes are shown back last first. Run it and type a few lines (an empty line or
   5 | # Ctrl-D ends them), or give it a file: `./journal < notes.txt`.
     | comment:# Ctrl-D ends them), or give it a file: `./journal < notes.txt`.
-  7 | task read_notes(r: region) -> [text]@r
-    | keyword:task  task:read_notes  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r
-  8 |     hold notes = new [text]() at r
-    | keyword:hold  variable:notes  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
-  9 |     hold reading = true
+  7 | # `default` makes the region this task is given the one its allocations use, so
+    | comment:# `default` makes the region this task is given the one its allocations use, so
+  8 | # only what goes somewhere else names a region.
+    | comment:# only what goes somewhere else names a region.
+  9 | task read_notes(r: region default) -> [text]@r
+    | keyword:task  task:read_notes  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r
+ 10 |     hold notes = new [text]()
+    | keyword:hold  variable:notes  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)
+ 11 |     hold reading = true
     | keyword:hold  variable:reading  operator:=  keyword:true
- 10 |     loop reading
+ 12 |     loop reading
     | keyword:loop  variable:reading
- 11 |         # Freed at the end of every pass, with the line read into it.
-    | comment:# Freed at the end of every pass, with the line read into it.
- 12 |         region line_memory
-    | keyword:region  region:line_memory
- 13 |         bind line = scan("note> ") at line_memory { "" }
-    | keyword:bind  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:"note> "  punctuation:)  keyword:at  region:line_memory  punctuation:{  string:""  punctuation:}
- 14 |         when line == ""
+ 13 |         # Freed at the end of every pass, with the line read into it. Inside this
+    | comment:# Freed at the end of every pass, with the line read into it. Inside this
+ 14 |         # block it is the default, so the line needs no `at line_memory`.
+    | comment:# block it is the default, so the line needs no `at line_memory`.
+ 15 |         region line_memory default
+    | keyword:region  region:line_memory  keyword:default
+ 16 |         bind line = scan("note> ") { "" }
+    | keyword:bind  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:"note> "  punctuation:)  punctuation:{  string:""  punctuation:}
+ 17 |         when line == ""
     | keyword:when  variable:line  operator:==  string:""
- 15 |             reading = false
+ 18 |             reading = false
     | variable:reading  operator:=  keyword:false
- 16 |         else
+ 19 |         else
     | keyword:else
- 17 |             notes.add(line.copy())
+ 20 |             # A copy goes where the value it becomes goes, which is the slice's
+    | comment:# A copy goes where the value it becomes goes, which is the slice's
+ 21 |             # own region: a default never settles that for it.
+    | comment:# own region: a default never settles that for it.
+ 22 |             notes.add(line.copy())
     | variable:notes  punctuation:.  field:add  punctuation:(  variable:line  punctuation:.  field:copy  punctuation:(  punctuation:)  punctuation:)
- 18 |         fi
+ 23 |         fi
     | keyword:fi
- 19 |     fi
+ 24 |     fi
     | keyword:fi
- 20 |     <- notes
+ 25 |     <- notes
     | keyword:<-  variable:notes
- 21 | fi
+ 26 | fi
     | keyword:fi
- 23 | task main()
+ 28 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 24 |     region kept
+ 29 |     # Written out, as it always could be: a region is named where memory goes.
+    | comment:# Written out, as it always could be: a region is named where memory goes.
+ 30 |     region kept
     | keyword:region  region:kept
- 25 |     bind name = scan("Your name: ") at kept { "stranger" }
+ 31 |     bind name = scan("Your name: ") at kept { "stranger" }
     | keyword:bind  variable:name  operator:=  builtin-fn:scan  punctuation:(  string:"Your name: "  punctuation:)  keyword:at  region:kept  punctuation:{  string:"stranger"  punctuation:}
- 26 |     show("Hello, ", name, "!")
+ 32 |     show("Hello, ", name, "!")
     | builtin-fn:show  punctuation:(  string:"Hello, "  punctuation:,  variable:name  punctuation:,  string:"!"  punctuation:)
- 27 |     hold notes = read_notes(kept)
+ 33 |     hold notes = read_notes(kept)
     | keyword:hold  variable:notes  operator:=  task:read_notes  punctuation:(  region:kept  punctuation:)
- 28 |     show(notes.len, " notes, last first")
+ 34 |     show(notes.len, " notes, last first")
     | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  field:len  punctuation:,  string:" notes, last first"  punctuation:)
- 29 |     hold number = notes.len
+ 35 |     hold number = notes.len
     | keyword:hold  variable:number  operator:=  variable:notes  punctuation:.  field:len
- 30 |     loop notes.len > 0
+ 36 |     loop notes.len > 0
     | keyword:loop  variable:notes  punctuation:.  field:len  operator:>  number:0
- 31 |         # `show` writes each value in turn, so a line printed once needs no text
+ 37 |         # `show` writes each value in turn, so a line printed once needs no text
     | comment:# `show` writes each value in turn, so a line printed once needs no text
- 32 |         # of its own, and no region to hold it.
+ 38 |         # of its own, and no region to hold it.
     | comment:# of its own, and no region to hold it.
- 33 |         show(number, ". ", notes.del())
+ 39 |         show(number, ". ", notes.del())
     | builtin-fn:show  punctuation:(  variable:number  punctuation:,  string:". "  punctuation:,  variable:notes  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)
- 34 |         number = number - 1
+ 40 |         number = number - 1
     | variable:number  operator:=  variable:number  operator:-  number:1
- 35 |     fi
+ 41 |     fi
     | keyword:fi
- 36 | fi
+ 42 | fi
     | keyword:fi

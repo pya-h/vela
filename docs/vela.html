@@ -254,7 +254,10 @@ true false none  fi   maybe is     fail failure include priv</pre>
         builtin kinds <a href="#reading-numbers"><code>ParseError</code></a> (<code>NotANumber</code>,
         <code>TooLarge</code>) and <a href="#reading-input"><code>InputError</code></a> (<code>Ended</code>,
         <code>NoNumber</code>) take their names the same way, and, as for any kind, a variable may not be named
-        after a kind or one of its variants; a field may. The symbols:
+        after a kind or one of its variants; a field may. Three words are read by their position and are no more
+        reserved than those: <code>alters</code> before a method (see <a href="#methods">Methods</a>),
+        <code>default</code> after a region (see <a href="#default-region">A block's default region</a>), and
+        <code>this</code>. The symbols:
       </p>
       <table>
         <tr><th>Symbol</th><th>Meaning</th></tr>
@@ -1045,7 +1048,8 @@ light.tell(<span class="string">"now:"</span>)         <span class="comment"># n
           <code>str</code> turns the value into text for <code>x.str() at r</code> and <code>text(x) at r</code>, so it is
           written <code>str(r: region) -&gt; text@r</code> (see <a href="#str">Values as text</a>). A method's name clashes
           with nothing outside its type, so two shapes can each have a <code>total</code>. <code>alters</code> and
-          <code>this</code> are not reserved words: a variable can be called either.</li>
+          <code>this</code> are not reserved words: a variable can be called either, as it can be called
+          <code>default</code> (see <a href="#default-region">A block's default region</a>).</li>
         <li><strong><code>priv</code></strong> marks a method only its own file may call, as it marks a field.</li>
         <li><strong>No automatic dereference</strong>, as with fields: a method of what a pointer points to is called
           <code>p^.total()</code>. A value of a type without methods says so: <code>type int has no methods</code>.</li>
@@ -1548,6 +1552,8 @@ save(500) {
           <li>A pointer into <code>r</code> has type <code>^T@r</code>, and a type can only name regions visible where it is written.</li>
           <li>When the block declaring <code>r</code> closes, however it closes, everything in <code>r</code> is freed.</li>
           <li>A task allocates only in a region it is given as a parameter, <code>r: region</code>; it can read and link pointers in any region its parameters' types name.</li>
+          <li><code>region r default</code> (and <code>r: region default</code>) makes <code>r</code> the block's
+            <a href="#default-region">default region</a>: what allocates there needs no <code>at r</code>.</li>
           <li>A pointer is never stored in a different region than the one its type names.</li>
         </ul>
       </div>
@@ -1677,6 +1683,54 @@ show(next^)                                <span class="comment"># error: this p
         an argument for one, or a name after <code>@</code> or <code>at</code>. It can't be stored in a variable or a
         field, or sent from a task.
       </p>
+
+      <h3 id="default-region">A block's default region</h3>
+      <p>
+        A block may name one of its regions its <strong>default</strong>, written after the region's name. Everything
+        in the block that makes memory and names no region goes there, so <code>at r</code> is written only where
+        memory goes somewhere else. A task takes one the same way, <code>r: region default</code>, which makes the
+        region it is given the default of its body:
+      </p>
+      <pre><span class="keyword">task</span> grow(r: <span class="keyword">region</span> <span class="keyword">default</span>, upto: int) -&gt; [int]@r
+    <span class="keyword">hold</span> made = <span class="keyword">new</span> [int]()            <span class="comment"># in r</span>
+    <span class="keyword">each</span> n <span class="keyword">in</span> 1..upto
+        made.add(n * n)
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> made
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> kept <span class="keyword">default</span>
+    <span class="keyword">bind</span> squares = grow(kept, 4)         <span class="comment"># a region is still passed by name</span>
+    <span class="keyword">bind</span> greeting = <span class="string">"Hello, "</span> + <span class="string">"Ada"</span>   <span class="comment"># text@kept</span>
+    <span class="keyword">bind</span> p = <span class="keyword">new</span> int(7)                 <span class="comment"># ^int@kept</span>
+    <span class="keyword">each</span> round <span class="keyword">in</span> 0..3
+        <span class="keyword">region</span> pass <span class="keyword">default</span>              <span class="comment"># this block's own default</span>
+        show(<span class="string">"pass "</span> + round.str())      <span class="comment"># text@pass, freed at the end of the pass</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">region</span> other
+    <span class="keyword">bind</span> elsewhere = <span class="keyword">new</span> int(1) <span class="keyword">at</span> other  <span class="comment"># named, so it goes there</span>
+    show(squares.len, greeting, p^, elsewhere^)
+<span class="keyword">fi</span></pre>
+      <ul>
+        <li><strong>What it fills in.</strong> Everything that makes memory and would otherwise name a region:
+          <code>new</code>, <code>new [T](…)</code>, joining text (<code>a + b</code>), text holding values
+          (<code>"{n}"</code>), a value written as text (<code>x.str()</code>, <code>text(x)</code>), and
+          <code>scan(prompt)</code>. A written region always wins, and nothing else changes: the value's type still
+          names the region it lives in, which hover in <a href="ide.html">Vela Studio</a> shows.</li>
+        <li><strong>A copy is the exception.</strong> <code>x.copy()</code> goes where the value it becomes goes
+          (see <a href="#copy">Copies into a region</a>), which is a better answer than a default, so a block's
+          default doesn't settle one and a copy that nothing gives a region still says so.</li>
+        <li><strong>One per block.</strong> A second <code>default</code> in the same block is an error: two lines
+          that look alike would allocate in regions of different lifetimes. An inner block may name its own, which
+          holds until that block closes; after it, the enclosing default is the one in force again.</li>
+        <li><strong>It is opt-in.</strong> A block with no default is exactly as it always was: allocating there names
+          a region, and the error that says so also mentions this, since making a region the default is often the
+          shorter fix.</li>
+        <li><strong>Only a region.</strong> <code>n: int default</code> is an error, and so is <code>default</code> on
+          a shape's field or a variant's value. A task takes one default region at most, and a region the header only
+          names (<code>list: maybe ^Node@r</code>) can't be one, since nothing can allocate there.</li>
+      </ul>
 
       <h3 id="shapes-in-regions">Shapes and kinds that hold pointers</h3>
       <p>

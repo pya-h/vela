@@ -1070,7 +1070,7 @@ impl Resolver<'_> {
                 cases.iter_mut().try_for_each(|case| self.block(&mut case.body))
             }
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter_mut().try_for_each(|e| self.expr(e)),
-            StmtKind::Region(_) => Ok(()),
+            StmtKind::Region { .. } => Ok(()),
         }
     }
 

@@ -438,7 +438,7 @@ impl Parser {
         let span = self.peek_span();
         let name = self.expect_ident()?;
         let types = self.parse_type_params()?;
-        let params = self.parse_field_list()?;
+        let params = self.parse_field_list(true)?;
         let mut results = Vec::new();
         let ret = if self.match_token(Token::Arrow) {
             self.parse_results(&mut results)?
@@ -577,7 +577,7 @@ impl Parser {
                 continue;
             }
             self.reject_field_below_method(&methods, "shape")?;
-            let mut field = self.parse_field()?;
+            let mut field = self.parse_field(false)?;
             reject_member_named_this(&field.name, field.span, "a field")?;
             field.private = private;
             fields.push(field);
@@ -660,7 +660,7 @@ impl Parser {
             ));
         }
         let mut params = vec![receiver(owner, types, span)];
-        let read = self.parse_field_list();
+        let read = self.parse_field_list(true);
         params.extend(if what == "kind" { read.map_err(Parser::kind_member)? } else { read? });
         if let Some(param) = params.iter().skip(1).find(|param| param.ty == Type::Region && param.name == THIS_WORD) {
             return Err(Error::at(param.span, format!("'{0}' is the region the value this method is called on lives in, written '@{0}', so a region parameter can't take the name", THIS_WORD)));
@@ -730,7 +730,7 @@ impl Parser {
             self.reject_field_below_method(&methods, "kind")?;
             let tag = self.expect_ident()?;
             let payload = if self.check(Token::LParen) {
-                self.parse_field_list().map_err(Parser::kind_member)?
+                self.parse_field_list(false).map_err(Parser::kind_member)?
             } else {
                 Vec::new()
             };
@@ -789,8 +789,9 @@ impl Parser {
         }
     }
 
-    /// `name: type`
-    fn parse_field(&mut self) -> Result<Field> {
+    /// `name: type`, and `r: region default` where `params` says these are a
+    /// task's parameters (see `ast::DEFAULT`).
+    fn parse_field(&mut self, params: bool) -> Result<Field> {
         let span = self.peek_span();
         if self.check(Token::Priv) {
             return Err(Error::at(span, "only a shape's field can be 'priv', not a parameter or a variant's value"));
@@ -799,16 +800,37 @@ impl Parser {
         self.expect(Token::Colon)?;
         let ty_span = self.peek_span();
         let ty = self.parse_type()?;
-        Ok(Field { name, ty, span, ty_span, private: false })
+        let default = self.match_default(params)?;
+        Ok(Field { name, ty, span, ty_span, private: false, default })
     }
 
-    /// `(name: type, ...)`
-    fn parse_field_list(&mut self) -> Result<Vec<Field>> {
+    /// The word `default` after a task's parameter, which makes the region it
+    /// takes its body's default (the checker refuses it on anything else). A
+    /// field or a variant's value is never one, and says so.
+    fn match_default(&mut self, params: bool) -> Result<bool> {
+        if !matches!(self.peek(), Token::Ident(word) if word == DEFAULT) {
+            return Ok(false);
+        }
+        if !params {
+            return Err(Error::at(
+                self.peek_span(),
+                format!("only a region a task takes can be a default region, as in 'r: region {}'", DEFAULT),
+            ));
+        }
+        self.advance();
+        if matches!(self.peek(), Token::Ident(word) if word == DEFAULT) {
+            return Err(Error::at(self.peek_span(), format!("'{}' is already written here: a region is the default or it isn't", DEFAULT)));
+        }
+        Ok(true)
+    }
+
+    /// `(name: type, ...)`; `params` as in `parse_field`.
+    fn parse_field_list(&mut self, params: bool) -> Result<Vec<Field>> {
         self.expect(Token::LParen)?;
         let mut fields = Vec::new();
         if !self.check(Token::RParen) {
             loop {
-                fields.push(self.parse_field()?);
+                fields.push(self.parse_field(params)?);
                 if !self.match_token(Token::Comma) {
                     break;
                 }
@@ -1501,11 +1523,14 @@ impl Parser {
     }
 
     /// `region name`
+    /// `region r`, or `region r default`, which makes it the block's default
+    /// region (see `ast::DEFAULT`).
     fn parse_region(&mut self) -> Result<Stmt> {
         self.advance(); // region
         let span = self.peek_span();
         let name = self.expect_ident()?;
-        Ok(Stmt::new(StmtKind::Region(name), span))
+        let default = self.match_default(true)?;
+        Ok(Stmt::new(StmtKind::Region { name, default }, span))
     }
 
     fn parse_expr(&mut self) -> Result<Expr> {
@@ -2095,13 +2120,10 @@ impl Parser {
         if !args.is_empty() {
             return Ok(Expr::new(ExprKind::MethodCall { value, name, args, dotted }, span));
         }
+        // No region written: the block's default, which the checker fills in,
+        // or its error when the block has none (see `region_for_str`).
         if let Some(region) = self.parse_text_region()? {
             args.push(region);
-        } else {
-            return Err(Error::at(
-                self.peek_span(),
-                "'str' makes new text, so it names the region the text goes in, as in 'x.str() at r', 'x.str()@r', or 'x.str(r)'",
-            ));
         }
         Ok(Expr::new(ExprKind::MethodCall { value, name, args, dotted }, span))
     }
@@ -2114,10 +2136,8 @@ impl Parser {
             let got = if args.len() == 1 { "1 value".to_string() } else { format!("{} values", args.len()) };
             Error::at(span, format!("'text(…)' turns one value into text, as in 'text(n) at r', got {}", got))
         })?;
-        let Some(region) = self.parse_text_region()? else {
-            return Err(Error::at(self.peek_span(), "'text(…)' makes new text, so it names the region the text goes in, as in 'text(n) at r' or 'text(n)@r'"));
-        };
-        Ok(Expr::new(ExprKind::MethodCall { value: Box::new(value), name: STR.to_string(), args: vec![region], dotted: None }, span))
+        let args = self.parse_text_region()?.into_iter().collect();
+        Ok(Expr::new(ExprKind::MethodCall { value: Box::new(value), name: STR.to_string(), args, dotted: None }, span))
     }
 
     /// `at r` or `@r` after the parentheses of `str` or `text(…)`: the region,
@@ -2255,11 +2275,11 @@ impl Parser {
         } else {
             None
         };
-        let Some((region, region_span)) = before.or(after) else {
-            return Err(Error::at(
-                self.peek_span(),
-                format!("'new' needs a region to allocate in, as in 'new {}(…) at r' or 'new@r {}(…)'", ty, ty),
-            ));
+        // Without a region, the block's default is the region, which only the
+        // checker knows; it reports the ones that have none (see `check_new`).
+        let (region, region_span) = match before.or(after) {
+            Some((region, at)) => (Some(region), at),
+            None => (None, self.peek_span()),
         };
         Ok(Expr::new(ExprKind::New { ty: Box::new(ty), ty_span, value: Box::new(value), region, region_span }, span))
     }
@@ -2387,7 +2407,7 @@ fn receiver(owner: &str, types: &[TypeParam], span: Span) -> Field {
         let given = types.iter().map(|param| Type::Named(param.name.clone(), None)).collect();
         Type::Applied(Box::new(Applied { name: owner.to_string(), types: given, region }))
     };
-    Field { name: THIS.to_string(), ty, span, ty_span: span, private: false }
+    Field { name: THIS.to_string(), ty, span, ty_span: span, private: false, default: false }
 }
 
 /// Refuses a member named `this`, which is the whole value inside a method, so

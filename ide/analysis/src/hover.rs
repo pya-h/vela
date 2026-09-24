@@ -77,6 +77,11 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     ("failure", "failure e", "Names the failure a pattern matches: case failure e, when x is failure e, and a plan B's first line. 'fail' makes one."),
     ("_", "_", "Matches anything left, or drops a value without naming it."),
     (
+        "default",
+        "region r default",
+        "Makes r the block's default region: every allocation in the block that names no region goes there, as do those in the blocks inside it, until one names its own default. A task takes one the same way, 'r: region default'. A copy is the exception: it goes where the value it becomes goes.",
+    ),
+    (
         "alters",
         "alters name(…)",
         "Marks a method that changes the value it is called on: it may assign .this and what the value holds. Only a place that can change may call it: a hold variable, a field or item of one, or what a pointer points to.",

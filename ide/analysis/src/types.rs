@@ -197,7 +197,7 @@ impl Checked {
         match &stmt.kind {
             StmtKind::Expr(e) => self.expr(e, kinds),
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter().for_each(|value| self.expr(value, kinds)),
-            StmtKind::Region(_) => {
+            StmtKind::Region { .. } => {
                 self.declare(stmt.span, Type::Region);
             }
             StmtKind::Binding { names, init, .. } => {

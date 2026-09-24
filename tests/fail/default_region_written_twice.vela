@@ -1,0 +1,6 @@
+# error: 3:22: 'default' is already written here: a region is the default or it isn't
+task main()
+    region r default default
+    bind p = new int(1)
+    show(p^)
+fi

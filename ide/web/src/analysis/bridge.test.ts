@@ -31,6 +31,16 @@ describe("VelaAnalysis", () => {
     expect(wellFormed("x\udc00y\ud83d\ude00\ud83d")).toBe("x\ufffdy\ud83d\ude00\ufffd");
   });
 
+  it("highlights the word that marks a block's default region", () => {
+    const source = 'task grow(r: region default) -> ^int@r\n    <- new int(1)\nfi\n\ntask main()\n    region kept default\n    show(grow(kept)^)\nfi\n';
+    const { tokens, diagnostics } = analysis.file(source);
+    expect(diagnostics).toEqual([]);
+    const classOf = (needle: string) => tokens.find((t) => t.from === source.indexOf(needle))?.class;
+    expect(classOf("default) ->")).toBe("keyword");
+    expect(classOf("default\n    show")).toBe("keyword");
+    expect(classOf("kept default")).toBe("region");
+  });
+
   it("reports every mistake in the file, each at its own place", () => {
     const source = "task main()\n    show(first)\n    bind ok = 1\n    show(second)\n    show(ok)\nfi\n";
     const { diagnostics } = analysis.file(source);

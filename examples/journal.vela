@@ -4,16 +4,21 @@
 # notes are shown back last first. Run it and type a few lines (an empty line or
 # Ctrl-D ends them), or give it a file: `./journal < notes.txt`.
 
-task read_notes(r: region) -> [text]@r
-    hold notes = new [text]() at r
+# `default` makes the region this task is given the one its allocations use, so
+# only what goes somewhere else names a region.
+task read_notes(r: region default) -> [text]@r
+    hold notes = new [text]()
     hold reading = true
     loop reading
-        # Freed at the end of every pass, with the line read into it.
-        region line_memory
-        bind line = scan("note> ") at line_memory { "" }
+        # Freed at the end of every pass, with the line read into it. Inside this
+        # block it is the default, so the line needs no `at line_memory`.
+        region line_memory default
+        bind line = scan("note> ") { "" }
         when line == ""
             reading = false
         else
+            # A copy goes where the value it becomes goes, which is the slice's
+            # own region: a default never settles that for it.
             notes.add(line.copy())
         fi
     fi
@@ -21,6 +26,7 @@ task read_notes(r: region) -> [text]@r
 fi
 
 task main()
+    # Written out, as it always could be: a region is named where memory goes.
     region kept
     bind name = scan("Your name: ") at kept { "stranger" }
     show("Hello, ", name, "!")

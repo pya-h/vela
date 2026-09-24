@@ -964,7 +964,67 @@ not a digit
         changes its caller's slice through a pointer to what holds it, as in <code>bag^.items.add(v)</code>.
       </p>
 
-      <h3 id="choosing">Lesson 10: Choosing regions</h3>
+      <h3 id="default-region">Lesson 10: A default region</h3>
+      <p>
+        Writing <code>at r</code> on every line that allocates says where memory goes, and in a block where nearly
+        everything goes to one region it says it over and over. A block may name one of its regions its
+        <strong>default</strong>: what allocates there needs no <code>at r</code>, and only the lines that go somewhere
+        else name a region.
+      </p>
+      <pre class="program" data-file="10_default.vela"><span class="keyword">task</span> collect(r: <span class="keyword">region</span> <span class="keyword">default</span>, upto: int) -&gt; [text]@r
+    <span class="keyword">hold</span> lines = <span class="keyword">new</span> [text]()             <span class="comment"># in r, the region this task was given</span>
+    <span class="keyword">each</span> n <span class="keyword">in</span> 1..upto
+        lines.add(<span class="string">"line "</span> + n.str())      <span class="comment"># the join and the number, both in r</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> lines
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> kept <span class="keyword">default</span>
+    <span class="keyword">bind</span> lines = collect(kept, 4)
+    <span class="keyword">each</span> line <span class="keyword">in</span> lines
+        show(line)
+    <span class="keyword">fi</span>
+    <span class="keyword">each</span> round <span class="keyword">in</span> 0..2
+        <span class="keyword">region</span> pass <span class="keyword">default</span>              <span class="comment"># the inner block's own default</span>
+        <span class="keyword">bind</span> note = <span class="string">"pass "</span> + round.str()  <span class="comment"># text@pass: freed at the end of the pass</span>
+        show(note)
+    <span class="keyword">fi</span>
+    <span class="keyword">bind</span> after = <span class="keyword">new</span> int(1)             <span class="comment"># ^int@kept: the outer default again</span>
+    show(after^)
+<span class="keyword">fi</span></pre>
+<pre class="output" aria-label="Output">line 1
+line 2
+line 3
+pass 0
+pass 1
+1</pre>
+      <p>
+        The rules are few, and the types don't change: a value allocated in the default still has the region in its
+        type (<code>^int@kept</code>), which is what keeps it from outliving its memory, and what hover in
+        <a href="ide.html">Vela Studio</a> shows.
+      </p>
+      <ul>
+        <li><strong>One per block.</strong> A second <code>default</code> in one block is an error: two lines that look
+          alike would allocate in regions with different lifetimes. An inner block may name its own, and after it the
+          enclosing default is in force again.</li>
+        <li><strong>A region a task is given can be one</strong> (<code>r: region default</code>), which is where
+          <code>at r</code> repeats most. A region the header only names can't: nothing can allocate there.</li>
+        <li><strong>Everything that makes memory takes it:</strong> <code>new</code>, <code>new [T](…)</code>, joining
+          text, text holding values, <code>x.str()</code> and <code>text(x)</code>, and <code>scan(prompt)</code>. A
+          region argument at a call is still passed by name: <code>collect(kept, 4)</code>.</li>
+        <li><strong>A copy is the exception.</strong> <code>x.copy()</code> goes where the value it becomes goes, which
+          says more than a default could, so a copy that nothing gives a region still asks for one.</li>
+        <li><strong>It is opt-in.</strong> A block that names no default is exactly as it was: every allocation there
+          names its region.</li>
+      </ul>
+      <p>
+        When to reach for it: a task or a block where one region does nearly all the work. When not to: a block that
+        allocates into two regions in turn, where the names are the point — as in Lesson 8, where scratch work and what
+        survives sit side by side.
+      </p>
+
+      <h3 id="choosing">Lesson 11: Choosing regions</h3>
       <p>Rules of thumb:</p>
       <ul>
         <li><strong>Match regions to lifetimes.</strong> Declare a region in the block whose end is when the data stops
@@ -981,11 +1041,13 @@ not a digit
           one with <code>.copy()</code> (Lesson 8).</li>
       </ul>
 
-      <h3 id="messages">Lesson 11: Reading the compiler's messages</h3>
+      <h3 id="messages">Lesson 12: Reading the compiler's messages</h3>
       <div class="table-wrap">
         <table>
           <tr><th>Message (shortened)</th><th>What it means, and the fix</th></tr>
-          <tr><td><code>'new' needs a region to allocate in</code></td><td>Add <code>at r</code> (or write <code>new@r</code>).</td></tr>
+          <tr><td><code>'new' needs a region to allocate in</code></td><td>Add <code>at r</code> (or write <code>new@r</code>), or make a region the block's <a href="#default-region">default</a>.</td></tr>
+          <tr><td><code>this block already has a default region, 'first', named at 3:12</code></td><td>A block names one default at most. Write <code>at r</code> on the lines that go elsewhere, or declare that region in an inner block.</td></tr>
+          <tr><td><code>only a region can be a task's default region</code></td><td><code>default</code> marks a <code>region</code> parameter, as in <code>r: region default</code>; nothing else takes it.</td></tr>
           <tr><td><code>a pointer lives in a region, so its type names one</code></td><td>Write the region: <code>^int@r</code>, not <code>^int</code>.</td></tr>
           <tr><td><code>a slice lives in a region, so its type names one</code></td><td>Write the region: <code>[int]@r</code>, not <code>[int]</code>.</td></tr>
           <tr><td><code>a slice points into a region, but this array isn't in one</code></td><td>The array is in a variable. Copy it into a slice with <code>new [int](xs) at r</code>, or allocate the array in a region and slice <code>p^[a..b]</code>.</td></tr>
@@ -997,7 +1059,7 @@ not a digit
           <tr><td><code>a field lives in the region of the value holding it</code></td><td>In a <code>shape</code> or <code>kind</code>, write <code>^Node</code>, not <code>^Node@r</code>.</td></tr>
           <tr><td><code>unknown region 'r'; declare it with 'region r'</code></td><td>The region isn't visible here: it is declared in another block, later, or not at all.</td></tr>
           <tr><td><code>expected type ^int@outer, got ^int@inner; a value can't move to another region</code></td><td>A pointer would be stored where it could outlive its region, or in a different region. Allocate in the right region, or store a copy: <code>p.copy()</code>.</td></tr>
-          <tr><td><code>can't tell which region to copy into</code></td><td>Nothing the copy goes into names a region (a <code>bind</code> without a type, a comparison). Name it: <code>x.copy() at r</code>.</td></tr>
+          <tr><td><code>can't tell which region to copy into</code></td><td>Nothing the copy goes into names a region (a <code>bind</code> without a type, a comparison). Name it: <code>x.copy() at r</code>. A block's <a href="#default-region">default region</a> doesn't settle a copy, since where the value goes says more.</td></tr>
           <tr><td><code>'copy' copies what a value holds in a region, but this value is int</code></td><td>The value holds no text, slice, or pointer, so it needs no copy: use it as it is.</td></tr>
           <tr><td><code>this task can't allocate in 'r', which it only names in its types</code></td><td>Take the region as a parameter: <code>r: region</code>.</td></tr>
           <tr><td><code>the result lives in region 'r', which the task isn't given</code></td><td>A result can't point into the task's own region; take <code>r: region</code> from the caller.</td></tr>
@@ -1431,12 +1493,19 @@ list = push(list, <span class="number">1</span>)             <span class="commen
       </div>
 
       <div class="idea">
-        <h4><code>using nodes</code>: a default region for a block <span class="badge b-no">Not recommended</span></h4>
+        <h4><code>region r default</code>: a default region for a block <span class="badge b-done">Done</span></h4>
         <ul>
-          <li>Inside the block, <code>new</code> and region arguments would use <code>nodes</code> unless told otherwise, as with
-            Odin's context allocator.</li>
-          <li>The shortest option, but it hides where memory goes behind something declared lines away, and nested blocks with
-            different defaults are easy to misread. It works against "you can see where memory lives".</li>
+          <li>Built on 2026-09-24, and written up as <a href="#default-region">Lesson 10</a>: a block, or a task through
+            <code>r: region default</code>, names one region, and everything in it that allocates without naming a region
+            goes there.</li>
+          <li>This was <em>Not recommended</em> here, for hiding where memory goes behind something declared lines away.
+            What changed the verdict was measuring it: of the lines that allocate and name a region in
+            <code>examples/</code> and <code>tests/run/</code>, only about one in nine also writes that region in a type
+            on the same line, so the narrower idea below (<code>new</code> takes its region from the type) reaches few of
+            them, while a default reaches nearly all — a cut of about two thirds in the region names those lines carry.</li>
+          <li>What answers the objection: it is opt-in, a block names one default at most (so two lines in a block never
+            differ in where they allocate), the region is still in every value's type, and a copy keeps taking its region
+            from the place it goes. Region arguments at calls are untouched; that is the idea above.</li>
         </ul>
       </div>
 

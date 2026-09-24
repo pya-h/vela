@@ -420,7 +420,10 @@
         <div class="card">
           <h3>Regions <span class="badge b-done">Done</span></h3>
           <p><code>region r</code>, <code>new T(v) at r</code>, and pointer types <code>^T@r</code> that can't
-            outlive their region, instead of <code>free</code>. <a href="#memory">Details below</a>; ideas for making them
+            outlive their region, instead of <code>free</code>. A block, or a task through
+            <code>r: region default</code>, can name a
+            <a href="vela.html#default-region">default region</a>, which the allocations that name none use.
+            <a href="#memory">Details below</a>; ideas for making them
             easier to use are in <a href="regions.html#ideas">Vela Regions</a>.</p>
         </div>
         <div class="card">
@@ -1273,7 +1276,7 @@ fi</pre>
         <ul>
           <li><strong>Owned pointers <code>^T</code></strong> could be move-only, letting a single value be freed early without dangling copies.</li>
           <li><strong>Borrowed references <code>&T</code></strong> are temporary and cannot be stored. They are valid only within the current scope/region.</li>
-          <li><strong>Regions</strong> (explicit arenas) group allocations and free them in bulk. References cannot escape their region. <em>(Done, and text has regions too: <code>text@r</code>.)</em> Next for them, from <a href="regions.html#ideas">Vela Regions</a>: copies into another region (done: <a href="vela.html#copy"><code>value.copy()</code></a>), moving a whole region into another, easier region passing (<code>push[nodes](…)</code>, with inferred region arguments), shapes with several regions (and text fields of their own region), tasks that take text of any region without naming it, and fixes for the cases the rules reject today.</li>
+          <li><strong>Regions</strong> (explicit arenas) group allocations and free them in bulk. References cannot escape their region. <em>(Done, and text has regions too: <code>text@r</code>.)</em> Next for them, from <a href="regions.html#ideas">Vela Regions</a>: copies into another region (done: <a href="vela.html#copy"><code>value.copy()</code></a>), a default region per block (done: <a href="vela.html#default-region"><code>region r default</code></a>), moving a whole region into another, easier region passing (<code>push[nodes](…)</code>, with inferred region arguments), shapes with several regions (and text fields of their own region), tasks that take text of any region without naming it, and fixes for the cases the rules reject today.</li>
           <li><strong>No shared mutable state</strong> by default: either you own it mutably, or you borrow it immutably.</li>
         </ul>
         <p>
@@ -1693,6 +1696,19 @@ show(c.total())</pre>
           in any pattern)</em></li>
         <li><strong>Named arguments:</strong> <code>resize(width: 2.0, height: 3.0)</code> for task calls, as shape
           literals already name their fields (<code>Point { x: 1, y: 2 }</code>)</li>
+        <li id="default-arguments"><strong>Default arguments:</strong> <code>=</code> in a task's header gives a
+          parameter the value a call may leave out, as in <code>task pad(text: text, width: int, fill: text = " ")</code>,
+          and <code>pad(name, 8)</code> then reads as <code>pad(name, 8, " ")</code>. The rules to keep it small:
+          <strong>the defaults come last</strong> (a parameter with one can't precede a parameter without one, so what a
+          call leaves out is always a tail of the list, and no argument is ever matched by position across a gap); one
+          value per parameter, written where the parameter is; and the value is an expression the compiler can work out
+          without running the program, so a call costs no more than the same call written out. This is the only place
+          <code>=</code> would mean "the value if none is given"; <code>default</code> already means something else and
+          says nothing about a value (it marks a
+          <a href="vela.html#default-region">default region</a>, which is a region's name, not a value), so the two never
+          meet. Open: whether a method's <code>this</code> and a <code>region</code> parameter are ever allowed one
+          (a region has no value to default to, so no), and whether named arguments, above, should land first so that a
+          call can leave out a middle parameter by naming the rest.</li>
         <li><strong>Statements end at a line break:</strong> today <code>show(1) show(2)</code> on one line is accepted;
           requiring the break, and allowing one inside <code>( )</code> and
           <code>{ }</code>, would make long calls and literals splittable</li>

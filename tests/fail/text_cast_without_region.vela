@@ -1,4 +1,4 @@
-# error: 3:17: 'text(…)' makes new text, so it names the region the text goes in, as in 'text(n) at r' or 'text(n)@r'
+# error: 3:10: 'str' makes new text, so it names the region the text goes in, as in 'x.str() at r', 'x.str()@r', 'x.str(r)', or 'text(x) at r'
 task main()
     show(text(5))
 fi

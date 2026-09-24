@@ -328,6 +328,17 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         return (items, word_start, byte);
     }
 
+    // `region r default` and `r: region default`: the word that makes a region
+    // the default of a block or of a task's body (see `ast::DEFAULT`).
+    if let Some(q) = prev {
+        let before = q.checked_sub(1).and_then(|before| k.token(before));
+        let declared = matches!(prev_token, Some(Token::Ident(_))) && before == Some(&Token::Region);
+        let taken = matches!(prev_token, Some(Token::Region)) && before == Some(&Token::Colon);
+        if declared || taken {
+            return (vec![default_region()], word_start, byte);
+        }
+    }
+
     // Names being declared get no suggestions, including another name in a
     // `bind` or `hold` list (`bind q, r = …`).
     if matches!(prev_token, Some(Token::Task | Token::Shape | Token::Kind | Token::Bind | Token::Hold | Token::Each | Token::Region)) {
@@ -1573,6 +1584,18 @@ fn error_separator() -> CompletionItem {
         label: "~".to_string(),
         kind: CompletionKind::Keyword,
         detail: "an error type follows".to_string(),
+        apply: None,
+        snippet: None,
+        boost: KEYWORD,
+    }
+}
+
+/// `default`, which makes a region the one that allocations naming none use.
+fn default_region() -> CompletionItem {
+    CompletionItem {
+        label: vela::ast::DEFAULT.to_string(),
+        kind: CompletionKind::Keyword,
+        detail: "allocations that name no region go here".to_string(),
         apply: None,
         snippet: None,
         boost: KEYWORD,

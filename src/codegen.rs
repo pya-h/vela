@@ -970,7 +970,7 @@ impl Generator {
                     self.w.line(&format!("return {};", result));
                 }
             }
-            StmtKind::Region(name) => {
+            StmtKind::Region { name, .. } => {
                 self.w.line(&format!("vela__rt__region {}[1] = {{ VELA__RT__REGION_EMPTY }};", c_ident(name)));
                 if let Some(block) = self.regions.last_mut() {
                     block.push(name.clone());
@@ -1347,7 +1347,12 @@ impl Generator {
             ExprKind::Unary(op, operand) => self.gen_unary(e, *op, operand),
             ExprKind::Binary(op, l, r) => self.gen_binary(e, *op, l, r).map(|binary| parenthesized(&binary)),
             ExprKind::Construct { kind, tag, args } => self.gen_construct(e, kind, tag, args),
-            ExprKind::New { ty, value, region, .. } => self.gen_new(e, ty, value, region),
+            ExprKind::New { ty, value, region, .. } => {
+                // The checker settles the region of a `new` that names none
+                // (see `Checker::region_or_default`).
+                let region = region.as_deref().ok_or_else(|| Error::internal_at(e.span, "a 'new' with no region"))?;
+                self.gen_new(e, ty, value, region)
+            }
             ExprKind::Deref(inner) => self.gen_expr(inner).map(|expr| format!("(*({}))", expr)),
             ExprKind::StructInit { name, fields, .. } => self.gen_struct_init(name, fields),
             ExprKind::Range(_, _) => Err(Error::internal_at(e.span, "range outside 'each' reached code generation")),
@@ -2260,7 +2265,7 @@ impl UsedTypes {
             match &stmt.kind {
                 StmtKind::Expr(e) => self.expr(e),
                 StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter().for_each(|value| self.expr(value)),
-                StmtKind::Region(_) => {}
+                StmtKind::Region { .. } => {}
                 StmtKind::Binding { names, init, .. } => {
                     names.iter().for_each(|bound| self.bound(bound));
                     init.iter().for_each(|value| self.expr(value));
@@ -2436,7 +2441,7 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
     match &stmt.kind {
         StmtKind::Expr(e) => expr(e),
         StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter().any(expr),
-        StmtKind::Region(_) => false,
+        StmtKind::Region { .. } => false,
         StmtKind::Binding { init, .. } => init.iter().any(expr),
         StmtKind::Assign(targets, values) => {
             targets.iter().any(|target| target_reads(target, name)) || values.iter().any(expr)
@@ -2475,7 +2480,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::Var(var) => var == name,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit => false,
         // `new` reads the region it allocates in.
-        ExprKind::New { value, region, .. } => region == name || expr_reads(value, name),
+        ExprKind::New { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner)
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => expr_reads(inner, name),
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {

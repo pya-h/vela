@@ -1,0 +1,8 @@
+# error: 2:11: only a region can be a task's default region, as in 'r: region default'; 'n' is a parameter of type int
+task keep(n: int default) -> int
+    <- n
+fi
+
+task main()
+    show(keep(1))
+fi
