@@ -1377,9 +1377,27 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
       </p>
       <p>
         <code>loop</code> repeats while its condition holds. There is no <code>break</code> or
-        <code>continue</code>: end a loop through its condition, or leave the task with <code>&lt;-</code>. There is
-        no <code>else when</code> either; put a <code>when</code> inside the <code>else</code>.
+        <code>continue</code>: end a loop through its condition, or leave the task with <code>&lt;-</code>.
       </p>
+      <p>
+        <code>else when</code> chains conditions: each is tried in turn, the first that holds runs its block, and one
+        <code>fi</code> closes the whole chain. A chain is the same statement as a <code>when</code> written inside the
+        <code>else</code> on its own lines, so it may end with an <code>else</code>, or with nothing when no condition
+        need hold. <code>else if</code> is an error that says so.
+      </p>
+      <pre><span class="keyword">task</span> grade(score: int) -&gt; text
+    <span class="keyword">when</span> score &gt;= <span class="number">90</span>
+        <span class="keyword">&lt;-</span> <span class="string">"top"</span>
+    <span class="keyword">else</span> <span class="keyword">when</span> score &gt;= <span class="number">60</span>
+        <span class="keyword">&lt;-</span> <span class="string">"pass"</span>
+    <span class="keyword">else</span>
+        <span class="keyword">&lt;-</span> <span class="string">"fail"</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    show(grade(<span class="number">72</span>))       <span class="comment"># pass</span>
+<span class="keyword">fi</span></pre>
       <p>
         A condition can also test a pattern with <code>is</code>, the same patterns a <code>case</code> takes. The
         names it binds are visible only in the block it guards (not in the <code>else</code>), and <code>is</code>

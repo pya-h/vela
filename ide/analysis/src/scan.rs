@@ -1131,6 +1131,11 @@ impl<'a> Classifier<'a> {
                         }
                         Token::Is => in_pattern = true,
                         Token::Failure if plan_b_head => declaring = Some("failure"),
+                        // `else when …` continues the block the `else` reopened,
+                        // and one `fi` closes the whole chain, so this `when`
+                        // opens no scope of its own. A `when` on the line after
+                        // an `else` is a statement inside it, which does.
+                        Token::When if tokens.before(p) == Some(&Token::Else) => {}
                         Token::When => self.open(ScopeKind::When),
                         Token::Loop => self.open(ScopeKind::Other),
                         Token::Each => {

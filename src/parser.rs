@@ -1269,19 +1269,42 @@ impl Parser {
     fn parse_when(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
         self.advance(); // when
+        let when = self.parse_when_rest(span)?;
+        // One `fi` closes a whole chain, however many `else when`s it has.
+        self.expect_fi("when", span)?;
+        Ok(when)
+    }
+
+    /// A `when` after its keyword: the condition, the block, and an `else`, an
+    /// `else when …` chain, or neither. A chain is the `when` its `else` holds,
+    /// which is what a `when` written inside an `else` on its own lines is, so
+    /// nothing after the parser tells the two apart. The `fi` closing the chain
+    /// is the caller's to expect.
+    fn parse_when_rest(&mut self, span: Span) -> Result<Stmt> {
         let cond = self.parse_condition()?;
         self.skip_newlines();
         let then_block = self.parse_block_until(&[Token::Else, Token::Fi])?;
         let else_block = if self.match_token(Token::Else) {
-            if self.check(Token::When) || matches!(self.peek(), Token::Ident(name) if name == "if") {
-                return Err(Error::at(self.peek_span(), "Vela has no 'else when'; put a 'when' inside the 'else', on its own line"));
+            if matches!(self.peek(), Token::Ident(name) if name == "if") {
+                return Err(Error::at(self.peek_span(), "Vela writes 'else when', not 'else if'"));
             }
-            self.skip_newlines();
-            Some(self.parse_block_until(&[Token::Fi])?)
+            if self.check(Token::When) {
+                let at = self.peek_span();
+                // A chain nests in the tree, however flat it looks, and every
+                // stage walks the tree recursively (see `MAX_NESTING`), so a
+                // chain too long to walk is refused at the `when` that broke it.
+                self.enter()?;
+                self.advance(); // when
+                let chained = self.parse_when_rest(at)?;
+                self.leave(1);
+                Some(vec![chained])
+            } else {
+                self.skip_newlines();
+                Some(self.parse_block_until(&[Token::Fi])?)
+            }
         } else {
             None
         };
-        self.expect_fi("when", span)?;
         Ok(Stmt::new(StmtKind::When(cond, then_block, else_block), span))
     }
 

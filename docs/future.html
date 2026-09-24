@@ -1688,7 +1688,9 @@ show(c.total())</pre>
         <li><strong>Match expressions:</strong> <code>bind area = match s case Circle r = 3.14 * r * r … fi</code>
           (not <code>-&gt;</code>, which names a task's result type)</li>
         <li><strong>Guards in patterns:</strong> <code>case Circle r when r &gt; 0.0</code></li>
-        <li><strong>Else-if chains:</strong> <code>when ... else when ... else ... fi</code></li>
+        <li><strong>Else-if chains:</strong> <code>when ... else when ... else ... fi</code>
+          <em>(done: <a href="vela.html#control-flow">Control Flow</a>, where one <code>fi</code> closes the chain and
+          <code>else if</code> is an error naming <code>else when</code>)</em></li>
         <li><strong>Inclusive ranges:</strong> <code>0..=10</code> or <code>0...10</code></li>
         <li><strong>Tuples:</strong> <code>(int, text)</code> as values that can be stored and passed, beyond <a href="#results">multiple results</a>
           <em>(done: <a href="vela.html#tuples">Tuples</a>, including patterns that take them apart,

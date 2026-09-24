@@ -853,27 +853,7 @@ impl Generator {
                     self.gen_multi_assign(targets, values, stmt.span)?;
                 }
             }
-            StmtKind::When(cond, then_b, else_b) => {
-                match &cond.pattern {
-                    None => {
-                        let c = self.gen_condition(&cond.value)?;
-                        self.w.open(&format!("if ({})", c));
-                        self.gen_block(then_b)?;
-                    }
-                    Some(pattern) => {
-                        let subject = self.gen_subject(&cond.value)?;
-                        let test = self.pattern_test(cond.value.ty()?, &subject, pattern)?;
-                        self.w.open(&format!("if ({})", test));
-                        self.gen_pattern_bindings(cond.value.ty()?, &subject, pattern, then_b)?;
-                        self.gen_block(then_b)?;
-                    }
-                }
-                if let Some(else_b) = else_b {
-                    self.w.reopen("else");
-                    self.gen_block(else_b)?;
-                }
-                self.w.close();
-            }
+            StmtKind::When(cond, then_b, else_b) => self.gen_when(cond, then_b, else_b.as_deref())?,
             StmtKind::Loop(cond, body) => match &cond.pattern {
                 None if !has_prelude(&cond.value) => {
                     let c = self.gen_condition(&cond.value)?;
@@ -1202,6 +1182,46 @@ impl Generator {
         if !named && matches!(pattern.kind, PatternKind::Tuple(_)) {
             self.w.line(&format!("(void){};", subject));
         }
+        Ok(())
+    }
+
+    /// Generates a `when`, and the `else when`s after it. A chain is an `else`
+    /// holding one `when` (see `Parser::parse_when_rest`), which becomes an
+    /// `else if` where C can take one: a condition that needs statements before
+    /// it, or that binds a pattern, goes inside the `else` instead, since that is
+    /// where those statements belong.
+    fn gen_when(&mut self, cond: &Condition, then_b: &[Stmt], else_b: Option<&[Stmt]>) -> Result<()> {
+        match &cond.pattern {
+            None => {
+                let c = self.gen_condition(&cond.value)?;
+                self.w.open(&format!("if ({})", c));
+                self.gen_block(then_b)?;
+            }
+            Some(pattern) => {
+                let subject = self.gen_subject(&cond.value)?;
+                let test = self.pattern_test(cond.value.ty()?, &subject, pattern)?;
+                self.w.open(&format!("if ({})", test));
+                self.gen_pattern_bindings(cond.value.ty()?, &subject, pattern, then_b)?;
+                self.gen_block(then_b)?;
+            }
+        }
+        let mut rest = else_b;
+        while let Some(block) = rest {
+            if let [Stmt { kind: StmtKind::When(next, body, after), .. }] = block
+                && next.pattern.is_none()
+                && !has_prelude(&next.value)
+            {
+                let c = self.gen_condition(&next.value)?;
+                self.w.reopen(&format!("else if ({})", c));
+                self.gen_block(body)?;
+                rest = after.as_deref();
+                continue;
+            }
+            self.w.reopen("else");
+            self.gen_block(block)?;
+            rest = None;
+        }
+        self.w.close();
         Ok(())
     }
 

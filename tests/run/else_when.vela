@@ -1,0 +1,75 @@
+# `else when` chains: one `fi` closes the whole chain, and a chain is the same
+# statement as a `when` written inside an `else` on its own lines.
+
+kind Light
+    Off
+    Dimmed(level: int)
+    On
+fi
+
+task grade(score: int) -> text
+    when score >= 90
+        <- "top"
+    else when score >= 60
+        <- "pass"
+    else when score >= 0
+        <- "fail"
+    else
+        <- "not a score"
+    fi
+fi
+
+# A chain with no final `else`: nothing runs when no condition holds.
+task counted(n: int) -> int
+    hold seen = 0
+    when n > 10
+        seen = 3
+    else when n > 5
+        seen = 2
+    else when n > 0
+        seen = 1
+    fi
+    <- seen
+fi
+
+task main()
+    each score in 0..4
+        show(grade(score * 40 - 40))
+    fi
+    show(counted(20), " ", counted(7), " ", counted(3), " ", counted(0))
+
+    # A pattern in a chain: its names are visible only in its own block.
+    hold light: Light = Dimmed(4)
+    when light is On
+        show("on")
+    else when light is Dimmed level
+        show("dimmed ", level)
+    else
+        show("off")
+    fi
+
+    # The same chain written as a `when` inside the `else`, which it is.
+    when 1 > 2
+        show("never")
+    else
+        when 2 > 1
+            show("nested")
+        else
+            show("never either")
+        fi
+    fi
+
+    # A chain inside a loop, with a region in one of its blocks.
+    region kept default
+    hold i = 0
+    loop i < 3
+        when i == 0
+            show("zero")
+        else when i == 1
+            show("one " + i.str())
+        else
+            show("many")
+        fi
+        i = i + 1
+    fi
+fi

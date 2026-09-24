@@ -23,10 +23,10 @@ fi
 
 task check(reading: maybe int) -> int ~ ReadingError
     bind value = reading { <- fail Missing }
+    # Alternatives, so one chain: the first condition that holds sends.
     when value < -50
         <- fail TooCold(value)
-    fi
-    when value > 60
+    else when value > 60
         <- fail TooHot(value)
     fi
     <- value

@@ -494,6 +494,12 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         return (items, word_start, byte);
     }
 
+    // Nothing but a `when` follows an `else` on its line: `else when …`
+    // continues the chain, and one `fi` closes the whole of it.
+    if prev_token == Some(&Token::Else) {
+        return (vec![keyword("when")], word_start, byte);
+    }
+
     // (`prev_token` is also `None` after invalid text, which isn't a line start.)
     let at_line_start = prev.is_none() || prev_token == Some(&Token::Newline);
     if at_line_start {

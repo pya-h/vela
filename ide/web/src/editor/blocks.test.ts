@@ -48,6 +48,18 @@ describe("indentation", () => {
     expect(indentOfLast("task t(k: K)\n    match k\n    case")).toBe(4);
   });
 
+  it("reads an else when as one chain, sharing the when's fi", () => {
+    // The line starts with `else`, so it lines up with the `when` it continues,
+    // its block is one level deeper, and the `fi` closing the chain is the
+    // `when`'s: the `when` after the `else` opens nothing of its own.
+    expect(indentOfLast("task main()\n    when x\n        show(1)\n        else when y")).toBe(4);
+    expect(indentOfLast("task main()\n    when x\n        show(1)\n    else when y\n")).toBe(8);
+    expect(indentOfLast("task main()\n    when x\n        show(1)\n    else when y\n        show(2)\n        fi")).toBe(4);
+    const chain = ["task main()", "    when x", "        show(1)", "    else when y", "        show(2)", "    else", "        show(3)", "    fi", "fi"];
+    expect(closingLine(chain, chain.length, 1, WORDS)).toBe(7);
+    expect(closingLine(chain, chain.length, 3, WORDS)).toBeNull();
+  });
+
   it("lines up fi and else with the keyword that opened the block", () => {
     expect(indentOfLast("task main()\n    when x\n        show(1)\n        fi")).toBe(4);
     expect(indentOfLast("task main()\n    when x\n        show(1)\n        else")).toBe(4);

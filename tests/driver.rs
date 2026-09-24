@@ -179,6 +179,8 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ("nested matches", format!("task main()\n{}fi\n", "match k\ncase _\n".repeat(deep) + &"fi\n".repeat(deep))),
         ("nested loops", format!("task main()\n{}fi\n", "loop true\neach i in 0..1\n".repeat(deep) + &"fi\nfi\n".repeat(deep))),
         ("nested is conditions", format!("task main()\n{}fi\n", "when m is {v}\n".repeat(deep) + &"fi\n".repeat(deep))),
+        // One `fi` closes a whole `else when` chain, which nests all the same.
+        ("else when chains", format!("task main()\nwhen true\n{}fi\nfi\n", "else when true\n".repeat(deep))),
         ("nested new", program(format!("{}1{}", "new int(".repeat(deep), ") at r".repeat(deep)))),
         ("nested shape literals", program(format!("{}1{}", "P { x: ".repeat(deep), " }".repeat(deep)))),
         ("region pointer types", format!("task f(p: {}int@r)\nfi\n", "^".repeat(deep))),

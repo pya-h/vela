@@ -1,0 +1,136 @@
+  1 | # `else when` chains: one `fi` closes the whole chain, and a chain is the same
+    | comment:# `else when` chains: one `fi` closes the whole chain, and a chain is the same
+  2 | # statement as a `when` written inside an `else` on its own lines.
+    | comment:# statement as a `when` written inside an `else` on its own lines.
+  4 | kind Light
+    | keyword:kind  type:Light
+  5 |     Off
+    | variant:Off
+  6 |     Dimmed(level: int)
+    | variant:Dimmed  punctuation:(  field:level  punctuation::  type-builtin:int  punctuation:)
+  7 |     On
+    | variant:On
+  8 | fi
+    | keyword:fi
+ 10 | task grade(score: int) -> text
+    | keyword:task  task:grade  punctuation:(  parameter:score  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:text
+ 11 |     when score >= 90
+    | keyword:when  parameter:score  operator:>=  number:90
+ 12 |         <- "top"
+    | keyword:<-  string:"top"
+ 13 |     else when score >= 60
+    | keyword:else  keyword:when  parameter:score  operator:>=  number:60
+ 14 |         <- "pass"
+    | keyword:<-  string:"pass"
+ 15 |     else when score >= 0
+    | keyword:else  keyword:when  parameter:score  operator:>=  number:0
+ 16 |         <- "fail"
+    | keyword:<-  string:"fail"
+ 17 |     else
+    | keyword:else
+ 18 |         <- "not a score"
+    | keyword:<-  string:"not a score"
+ 19 |     fi
+    | keyword:fi
+ 20 | fi
+    | keyword:fi
+ 22 | # A chain with no final `else`: nothing runs when no condition holds.
+    | comment:# A chain with no final `else`: nothing runs when no condition holds.
+ 23 | task counted(n: int) -> int
+    | keyword:task  task:counted  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 24 |     hold seen = 0
+    | keyword:hold  variable:seen  operator:=  number:0
+ 25 |     when n > 10
+    | keyword:when  parameter:n  operator:>  number:10
+ 26 |         seen = 3
+    | variable:seen  operator:=  number:3
+ 27 |     else when n > 5
+    | keyword:else  keyword:when  parameter:n  operator:>  number:5
+ 28 |         seen = 2
+    | variable:seen  operator:=  number:2
+ 29 |     else when n > 0
+    | keyword:else  keyword:when  parameter:n  operator:>  number:0
+ 30 |         seen = 1
+    | variable:seen  operator:=  number:1
+ 31 |     fi
+    | keyword:fi
+ 32 |     <- seen
+    | keyword:<-  variable:seen
+ 33 | fi
+    | keyword:fi
+ 35 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 36 |     each score in 0..4
+    | keyword:each  variable:score  keyword:in  number:0  operator:..  number:4
+ 37 |         show(grade(score * 40 - 40))
+    | builtin-fn:show  punctuation:(  task:grade  punctuation:(  variable:score  operator:*  number:40  operator:-  number:40  punctuation:)  punctuation:)
+ 38 |     fi
+    | keyword:fi
+ 39 |     show(counted(20), " ", counted(7), " ", counted(3), " ", counted(0))
+    | builtin-fn:show  punctuation:(  task:counted  punctuation:(  number:20  punctuation:)  punctuation:,  string:" "  punctuation:,  task:counted  punctuation:(  number:7  punctuation:)  punctuation:,  string:" "  punctuation:,  task:counted  punctuation:(  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  task:counted  punctuation:(  number:0  punctuation:)  punctuation:)
+ 41 |     # A pattern in a chain: its names are visible only in its own block.
+    | comment:# A pattern in a chain: its names are visible only in its own block.
+ 42 |     hold light: Light = Dimmed(4)
+    | keyword:hold  variable:light  punctuation::  type:Light  operator:=  variant:Dimmed  punctuation:(  number:4  punctuation:)
+ 43 |     when light is On
+    | keyword:when  variable:light  keyword:is  variant:On
+ 44 |         show("on")
+    | builtin-fn:show  punctuation:(  string:"on"  punctuation:)
+ 45 |     else when light is Dimmed level
+    | keyword:else  keyword:when  variable:light  keyword:is  variant:Dimmed  variable:level
+ 46 |         show("dimmed ", level)
+    | builtin-fn:show  punctuation:(  string:"dimmed "  punctuation:,  variable:level  punctuation:)
+ 47 |     else
+    | keyword:else
+ 48 |         show("off")
+    | builtin-fn:show  punctuation:(  string:"off"  punctuation:)
+ 49 |     fi
+    | keyword:fi
+ 51 |     # The same chain written as a `when` inside the `else`, which it is.
+    | comment:# The same chain written as a `when` inside the `else`, which it is.
+ 52 |     when 1 > 2
+    | keyword:when  number:1  operator:>  number:2
+ 53 |         show("never")
+    | builtin-fn:show  punctuation:(  string:"never"  punctuation:)
+ 54 |     else
+    | keyword:else
+ 55 |         when 2 > 1
+    | keyword:when  number:2  operator:>  number:1
+ 56 |             show("nested")
+    | builtin-fn:show  punctuation:(  string:"nested"  punctuation:)
+ 57 |         else
+    | keyword:else
+ 58 |             show("never either")
+    | builtin-fn:show  punctuation:(  string:"never either"  punctuation:)
+ 59 |         fi
+    | keyword:fi
+ 60 |     fi
+    | keyword:fi
+ 62 |     # A chain inside a loop, with a region in one of its blocks.
+    | comment:# A chain inside a loop, with a region in one of its blocks.
+ 63 |     region kept default
+    | keyword:region  region:kept  keyword:default
+ 64 |     hold i = 0
+    | keyword:hold  variable:i  operator:=  number:0
+ 65 |     loop i < 3
+    | keyword:loop  variable:i  operator:<  number:3
+ 66 |         when i == 0
+    | keyword:when  variable:i  operator:==  number:0
+ 67 |             show("zero")
+    | builtin-fn:show  punctuation:(  string:"zero"  punctuation:)
+ 68 |         else when i == 1
+    | keyword:else  keyword:when  variable:i  operator:==  number:1
+ 69 |             show("one " + i.str())
+    | builtin-fn:show  punctuation:(  string:"one "  operator:+  variable:i  punctuation:.  field:str  punctuation:(  punctuation:)  punctuation:)
+ 70 |         else
+    | keyword:else
+ 71 |             show("many")
+    | builtin-fn:show  punctuation:(  string:"many"  punctuation:)
+ 72 |         fi
+    | keyword:fi
+ 73 |         i = i + 1
+    | variable:i  operator:=  variable:i  operator:+  number:1
+ 74 |     fi
+    | keyword:fi
+ 75 | fi
+    | keyword:fi

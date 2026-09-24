@@ -388,7 +388,8 @@ Press Ctrl+C to stop.</pre>
             the patterns that fit after <code>is</code> (a tuple's names among them); the regions
             visible after <code>@</code>, and the ones <code>new</code>, <code>scan</code>, or <code>copy</code> can allocate in after <code>new@</code>, <code>scan(…)@</code>,
             <code>copy()@</code>, and a <code>new</code>'s, <code>scan</code>'s, or <code>copy</code>'s <code>at</code>, or as the argument for a task's <code>region</code> parameter; and
-            <code>region</code> as a statement or a parameter's type. A call's result shows the caller's regions
+            <code>region</code> as a statement or a parameter's type; and <code>when</code> after an <code>else</code>,
+            the one word that may follow it, which chains the condition. A call's result shows the caller's regions
             (<code>push(nodes, list)</code> gives a <code>^Node@nodes</code>), even while the file has an error. After
             a finished value, only the words that can continue it: <code>is</code>, <code>in</code>, <code>at</code> (after a
             <code>new</code>'s, <code>copy()</code>'s, or a line-reading <code>scan</code>'s value, never after
@@ -428,8 +429,9 @@ Press Ctrl+C to stop.</pre>
           <h4>Blocks that indent themselves</h4>
           <p>Enter indents after a block's first line (a method's header among them), and after a line ending with a plan B's <code>{</code> (or
             <code>{ failure e</code>); typing
-            <code>fi</code>, <code>else</code>, <code>case</code>, or <code>}</code> lines it up with its block. Blocks,
-            a method's among them, fold from the gutter.</p>
+            <code>fi</code>, <code>else</code>, <code>case</code>, or <code>}</code> lines it up with its block. An
+            <code>else when</code> lines up as its <code>else</code> does and indents its own block, since one
+            <code>fi</code> closes the whole chain. Blocks, a method's among them, fold from the gutter.</p>
         </div>
       </div>
       <p>

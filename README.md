@@ -9,7 +9,8 @@ and then what allocates there needs no `at r`. Text
 lasts as long as the program (`text`, as a literal does) or is in a region (`text@r`), and a shape holding
 text may name one (`Person@r`). A value that may
 be missing is a `maybe T`, and a task that can fail sends `T ~ E`; both are read with `match`, `is`, or a
-plan B (`x { fallback }`). Blocks close with `fi`, and a task sends its results with `<-`: one value, or
+plan B (`x { fallback }`). A `when` chains conditions with `else when`, and one `fi` closes the chain.
+Blocks close with `fi`, and a task sends its results with `<-`: one value, or
 several (`-> int, int` … `<- a / b, a % b`), received with `bind q, r = divmod(17, 5)`. Results can be named
 (`-> total: int`), set along the way with `total <- value` and sent by reaching the end of the task. An `int`
 never wraps: overflow and division by zero stop the program with a message saying where. Arrays (`[int; 4]`)

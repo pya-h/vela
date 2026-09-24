@@ -42,14 +42,14 @@
     | keyword:task  task:check  punctuation:(  parameter:reading  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:ReadingError
  25 |     bind value = reading { <- fail Missing }
     | keyword:bind  variable:value  operator:=  parameter:reading  punctuation:{  keyword:<-  keyword:fail  variant:Missing  punctuation:}
- 26 |     when value < -50
+ 26 |     # Alternatives, so one chain: the first condition that holds sends.
+    | comment:# Alternatives, so one chain: the first condition that holds sends.
+ 27 |     when value < -50
     | keyword:when  variable:value  operator:<  operator:-  number:50
- 27 |         <- fail TooCold(value)
+ 28 |         <- fail TooCold(value)
     | keyword:<-  keyword:fail  variant:TooCold  punctuation:(  variable:value  punctuation:)
- 28 |     fi
-    | keyword:fi
- 29 |     when value > 60
-    | keyword:when  variable:value  operator:>  number:60
+ 29 |     else when value > 60
+    | keyword:else  keyword:when  variable:value  operator:>  number:60
  30 |         <- fail TooHot(value)
     | keyword:<-  keyword:fail  variant:TooHot  punctuation:(  variable:value  punctuation:)
  31 |     fi
