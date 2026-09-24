@@ -83,9 +83,9 @@ fn pos(span: Span) -> Pos {
 
 #[derive(Default)]
 pub(crate) struct Checked {
-    /// The compiler's first error, if any. Its position may be in another file
-    /// of the program (see `files`).
-    pub error: Option<Error>,
+    /// Every mistake the compiler found, in source order. A position may be in
+    /// another file of the program (see `files`).
+    pub errors: Vec<Error>,
     /// The program's files, the analyzed file first, as far as they loaded.
     pub files: Vec<SourceFile>,
     /// The files the program includes, directly or through others, that the
@@ -124,7 +124,7 @@ impl Checked {
         let mut loader = |file: &Path| context.sources.get(&slashed(file)).cloned().ok_or_else(|| io::Error::from(io::ErrorKind::NotFound));
         let partial = driver::front_end_program(path, source, &mut loader);
         let spelling = partial.spelling;
-        let mut checked = Checked { error: partial.error, files: partial.files, missing, ..Checked::default() };
+        let mut checked = Checked { errors: partial.errors, files: partial.files, missing, ..Checked::default() };
         let Some(items) = partial.items else { return checked };
         let kinds: HashMap<&str, &KindDef> = items
             .iter()
@@ -146,13 +146,13 @@ impl Checked {
                 // A method's value is no parameter the file writes: it sits at
                 // the method's name.
                 for param in task.params.iter().filter(|param| param.name != THIS) {
-                    checked.decls.insert(pos(param.span), param.ty.clone());
+                    checked.declare(param.span, param.ty.clone());
                 }
                 // A named result is a variable of the task, with the type the
                 // header gives it.
                 for (result, ty) in task.results.iter().zip(task.ret.results()) {
                     if let Some((_, at)) = &result.name {
-                        checked.decls.insert(pos(*at), ty.clone());
+                        checked.declare(*at, ty.clone());
                     }
                 }
                 checked.block(&task.body, &declarations);
@@ -178,6 +178,15 @@ impl Checked {
         checked
     }
 
+    /// Records the type of a name written at `at`. A type the checker couldn't
+    /// work out is no type to show, so it is left out and the editor falls back
+    /// to what the source itself says (see `ast::Type::Unknown`).
+    fn declare(&mut self, at: Span, ty: Type) {
+        if !ty.unknown() {
+            self.decls.insert(pos(at), ty);
+        }
+    }
+
     fn block(&mut self, stmts: &Block, kinds: &Declarations) {
         for stmt in stmts {
             self.statement(stmt, kinds);
@@ -189,12 +198,12 @@ impl Checked {
             StmtKind::Expr(e) => self.expr(e, kinds),
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter().for_each(|value| self.expr(value, kinds)),
             StmtKind::Region(_) => {
-                self.decls.insert(pos(stmt.span), Type::Region);
+                self.declare(stmt.span, Type::Region);
             }
             StmtKind::Binding { names, init, .. } => {
                 for bound in names.iter().flat_map(vela::ast::Bound::leaves) {
                     if let Some(ty) = &bound.ty {
-                        self.decls.insert(pos(bound.span), ty.clone());
+                        self.declare(bound.span, ty.clone());
                     }
                 }
                 init.iter().for_each(|value| self.expr(value, kinds));
@@ -231,7 +240,7 @@ impl Checked {
                     _ => None,
                 };
                 if let Some(item) = item {
-                    self.decls.insert(pos(stmt.span), item);
+                    self.declare(stmt.span, item);
                 }
                 self.expr(range, kinds);
                 self.block(body, kinds);
@@ -272,7 +281,7 @@ impl Checked {
     /// Records the type of each name `names` binds from a value of type `ty`.
     fn pattern_names(&mut self, names: &vela::ast::Names, ty: &Type) {
         if names.parts.is_empty() {
-            self.decls.insert(pos(names.span), ty.clone());
+            self.declare(names.span, ty.clone());
             return;
         }
         let Type::Tuple(items) = ty else { return };
@@ -305,7 +314,9 @@ impl Checked {
         {
             return self.expr(value, kinds);
         }
-        if let Some(ty) = &e.ty {
+        if let Some(ty) = &e.ty
+            && !ty.unknown()
+        {
             self.exprs.entry(pos(e.span)).or_insert_with(|| ty.clone());
         }
         match &e.kind {
@@ -354,7 +365,7 @@ impl Checked {
             ExprKind::PlanB { value, error, body } => {
                 self.expr(value, kinds);
                 if let (Some((_, span)), Some(Type::Or(_, error_ty))) = (error, &value.ty) {
-                    self.decls.insert(pos(*span), (**error_ty).clone());
+                    self.declare(*span, (**error_ty).clone());
                 }
                 self.block(body, kinds);
             }

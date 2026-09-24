@@ -348,6 +348,30 @@ fn the_default_output_is_a_out() {
 }
 
 #[test]
+fn every_mistake_is_reported_and_too_many_are_counted() {
+    let dir = temp_dir("many-errors");
+    let file = dir.join("many.vela");
+    // Three mistakes: each is shown with its line and a caret under it.
+    std::fs::write(&file, "task main()\n    show(a)\n    show(b)\n    show(c)\nfi\n").unwrap();
+    let out = vela(&[file.to_str().unwrap(), "--check"]);
+    assert_eq!(out.status.code(), Some(1));
+    let shown = stderr(&out);
+    for (line, name) in [(2, "a"), (3, "b"), (4, "c")] {
+        assert!(shown.contains(&format!("{}:{}: error: unknown variable '{}'", line, 10, name)), "{}", shown);
+    }
+    assert_eq!(shown.matches("error:").count(), 3, "{}", shown);
+
+    // More than the command shows at once: the first `MAX_SHOWN`, then a count.
+    let many: String = (0..vela::driver::MAX_SHOWN + 2).map(|i| format!("    show(v{})\n", i)).collect();
+    std::fs::write(&file, format!("task main()\n{}fi\n", many)).unwrap();
+    let out = vela(&[file.to_str().unwrap(), "--check"]);
+    let shown = stderr(&out);
+    assert_eq!(shown.matches("error: unknown variable").count(), vela::driver::MAX_SHOWN, "{}", shown);
+    assert!(shown.ends_with("error: 2 more mistakes, not shown; fix these first and check again\n"), "{}", shown);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn check_reports_what_a_build_would() {
     let dir = temp_dir("check-errors");
     let invalid = dir.join("invalid.vela");

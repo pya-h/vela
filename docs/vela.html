@@ -2132,7 +2132,9 @@ show(area(square))             <span class="comment"># error: unknown task 'area
       <h2 id="limits">Current Limits</h2>
       <p>Vela is young. These are known, and planned for (see <a href="future.html">Future Directions</a>):</p>
       <ul>
-        <li>The compiler reports the first error in a program, not all of them.</li>
+        <li>The compiler reports every mistake a program has, one after another, and at most 20 of them at a
+          time; a mistake that stops a line from being read hides nothing else on that line, and the lexer and
+          the parser still stop at the first thing they can't read.</li>
         <li>Memory is freed a whole region at a time, and a value holds pointers into one region only (see
           <a href="#regions">Memory and Regions</a>).</li>
         <li>Text has <code>==</code>, <code>&lt;</code> and the other comparisons, <code>.len</code>, parts

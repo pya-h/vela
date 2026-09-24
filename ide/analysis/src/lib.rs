@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 
 use serde::Serialize;
+use vela::error::Error;
 use vela::lexer::{LexKind, Token as LexedToken};
 use vela::modules::SourceFile;
 
@@ -97,7 +98,7 @@ pub struct Analysis<'a> {
     context: types::Context<'a>,
     index: LineIndex<'a>,
     scan: scan::Scan,
-    /// What the compiler found: its first error and the checked types.
+    /// What the compiler found: every mistake, and the checked types.
     checked: types::Checked,
 }
 
@@ -136,20 +137,24 @@ impl<'a> Analysis<'a> {
             .collect()
     }
 
-    /// The compiler's diagnostics: its first error, if any. The range covers
-    /// the token the error points at, or one character when the error points
-    /// inside a token, or is empty at the end of a line.
+    /// The compiler's diagnostics: every mistake it found, in source order. The
+    /// range of each covers the token it points at, or one character when it
+    /// points inside a token, or is empty at the end of a line.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
-        let Some(error) = &self.checked.error else { return Vec::new() };
+        self.checked.errors.iter().map(|error| self.diagnostic(error)).collect()
+    }
+
+    /// One mistake as the editor marks it.
+    fn diagnostic(&self, error: &Error) -> Diagnostic {
         let Some(found) = error.span else {
-            return vec![Diagnostic {
+            return Diagnostic {
                 from: 0,
                 to: 0,
                 line: None,
                 col: None,
                 message: error.message.clone(),
                 severity: Severity::Error,
-            }];
+            };
         };
         // An error in another file is shown at the `include` that leads to it, with
         // that file's path and position.
@@ -182,14 +187,14 @@ impl<'a> Analysis<'a> {
                 _ => start,
             },
         };
-        vec![Diagnostic {
+        Diagnostic {
             from: self.index.utf16_of(start),
             to: self.index.utf16_of(end),
             line: Some(span.line),
             col: Some(span.col),
             message,
             severity: Severity::Error,
-        }]
+        }
     }
 
     /// The file's tasks, shapes, and kinds, in source order.

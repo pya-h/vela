@@ -28,7 +28,9 @@ fn assert_internal_error(source: &str, message: &str) {
 #[test]
 fn checked_program_generates_c() {
     let mut items = parse("task main()\n    show(1)\nfi\n");
-    Checker::new().check_file(&mut items).unwrap();
+    let mut checker = Checker::new();
+    checker.check_file(&mut items);
+    assert!(checker.errors().is_empty(), "{:?}", checker.errors());
     let c = Generator::new().generate(&items).unwrap();
     assert!(c.contains("vela__rt__show_int(1);"), "{}", c);
 }
@@ -54,7 +56,9 @@ fn show_with_a_type_it_cannot_write() {
     // The checker refuses a slice given to `show`; give a checked call one
     // afterwards, as a checker bug would.
     let mut items = parse("task main()\n    region r\n    bind xs = new [int]() at r\n    show(1, 2)\nfi\n");
-    Checker::new().check_file(&mut items).unwrap();
+    let mut checker = Checker::new();
+    checker.check_file(&mut items);
+    assert!(checker.errors().is_empty(), "{:?}", checker.errors());
     let Item::Task(main) = &mut items[0] else { panic!("expected task main") };
     let StmtKind::Binding { init, .. } = &main.body[1].kind else { panic!("expected the binding of xs") };
     let slice = init[0].clone();
@@ -75,7 +79,9 @@ fn the_region_of_a_show_read_outside_one() {
     let mut items = parse(
         "shape Point\n    x: int\n\n    str(r: region) -> text@r\n        <- \"{.x}\" at r\n    fi\nfi\n\ntask main()\n    show(Point { x: 1 })\nfi\n",
     );
-    Checker::new().check_file(&mut items).unwrap();
+    let mut checker = Checker::new();
+    checker.check_file(&mut items);
+    assert!(checker.errors().is_empty(), "{:?}", checker.errors());
     let Some(Item::Task(main)) = items.iter_mut().find(|item| matches!(item, Item::Task(task) if task.name == "main")) else {
         panic!("expected task main")
     };
@@ -93,7 +99,9 @@ fn variant_with_wrong_argument_count() {
     // The checker resolves `Circle(1.0)` into a constructor; give that node an
     // extra argument afterwards, as a checker bug would.
     let mut items = parse("kind Shape\n    Circle(radius: float)\nfi\n\ntask main()\n    bind c = Circle(1.0)\nfi\n");
-    Checker::new().check_file(&mut items).unwrap();
+    let mut checker = Checker::new();
+    checker.check_file(&mut items);
+    assert!(checker.errors().is_empty(), "{:?}", checker.errors());
     let Item::Task(main) = &mut items[1] else { panic!("expected task main") };
     let StmtKind::Binding { init, .. } = &mut main.body[0].kind else { panic!("expected a binding") };
     let expr = &mut init[0];

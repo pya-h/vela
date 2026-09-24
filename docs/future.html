@@ -351,8 +351,13 @@
             message, the same under every C compiler (<a href="vela.html#int-limits">the language guide</a>).</p>
         </div>
         <div class="card">
-          <h3>One error at a time <span class="badge b-low">Low</span></h3>
-          <p>The compiler stops at the first error, so fixing a file can take several rounds.</p>
+          <h3 id="every-error">One error at a time <span class="badge b-done">Done</span></h3>
+          <p>The compiler stopped at the first error, so fixing a file took one compile per mistake, and Vela Studio
+            showed one squiggle. It now reports every mistake a file has, in the order they are written: each
+            declaration and each line is checked whatever the ones before it found, a mistake leaves the type it
+            could not work out standing as no type at all, and nothing about that type is a mistake again, so one
+            mistake never turns into a page of them. The <code>vela</code> command shows at most 20 at a time and
+            counts the rest; Studio marks them all (see <a href="vela.html#limits">Current Limits</a>).</p>
         </div>
         <div class="card">
           <h3>C backend dependency <span class="badge b-low">Low</span></h3>
@@ -2012,6 +2017,7 @@ fi
             <li><s>Fixed-size arrays and slices, which grow and shrink</s> (done: <a href="vela.html#arrays">arrays</a> and <a href="vela.html#slices">slices</a>), <s>and a real <code>text</code> type</s> (done: <a href="vela.html#text-parts">lengths, parts, joins</a>, <a href="vela.html#interpolation"><code>"{n}" at r</code></a>)</li>
             <li><s>Text in regions</s> (done: <a href="vela.html#text-in-regions"><code>text@r</code></a>), <s>reading input</s>
               (done: <a href="vela.html#input"><code>scan</code></a>), <s>copies into another region</s> (done: <a href="vela.html#copy"><code>.copy()</code></a>), <s>and type conversions</s> (done: <a href="vela.html#str"><code>text(n) at r</code></a>, <a href="vela.html#conversions"><code>int(x)</code> and <code>float(n)</code></a>, <a href="vela.html#reading-numbers"><code>int(t)</code></a>, <a href="vela.html#reading-input"><code>scan("Age: ", int)</code></a>)</li>
+            <li><s>Every mistake in a file reported at once, not only the first</s> (done: <a href="#every-error">one error at a time</a>)</li>
             <li>Small region improvements: result-only regions, typed patterns, a lint for regions that grow in loops, and a
               chunk cache (<a href="regions.html#ideas">ideas</a>)</li>
             <li>Move-only owned pointers, on top of regions</li>

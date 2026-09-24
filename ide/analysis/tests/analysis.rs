@@ -131,18 +131,23 @@ fn field_definitions_use_the_type_of_the_value() {
 }
 
 #[test]
-fn field_definitions_before_an_error_are_exact_and_after_it_fall_back_to_unique_names() {
+fn field_definitions_are_exact_except_on_a_line_with_a_mistake() {
+    // The checker goes on after a mistake, so only the line that has one is left
+    // without types; there, a field is found by its name when one shape has it.
     let source = format!(
-        "{}task broken()\n    bind q = Point {{ x: 1, y: 2 }}\n    show(q.x)\n    show(missing)\n    show(q.y)\n    show(q.x)\nfi\n",
+        "{}task broken()\n    bind q = Point {{ x: 1, y: 2 }}\n    show(q.x)\n    show(missing, q.y, q.x)\n    show(q.x)\nfi\n",
         SHAPES
     );
     let analysis = Analysis::new(&source);
     assert_eq!(analysis.diagnostics().len(), 1);
     let go = |nth: usize, needle: &str| analysis.definition(at(&source, needle, nth) + 2).map(|l| l.from);
     // `SHAPES` itself uses `q.x` and `q.y` once, in `total`.
-    // Checked before the error: the checker's type picks `Point.x`.
+    // Before the line with the mistake, and after it: the checker's type picks
+    // `Point.x` over `Size.x`.
     assert_eq!(go(1, "q.x"), Some(at(&source, "x: int", 0)));
-    // After it, only `Point` has `y`; both shapes have `x`, so that one is unknown.
+    assert_eq!(go(3, "q.x"), Some(at(&source, "x: int", 0)));
+    // On that line: only `Point` has `y`, so that one is found by its name;
+    // both shapes have `x`, so that one is unknown.
     assert_eq!(go(1, "q.y"), Some(at(&source, "y: int", 0)));
     assert_eq!(go(2, "q.x"), None);
 }
@@ -353,6 +358,27 @@ fn diagnostics_cover_the_token_the_error_points_at() {
 }
 
 #[test]
+fn every_mistake_is_marked_where_it_is() {
+    // Three lines with a mistake, in two tasks: each is marked on its own line,
+    // and the lines between them are checked as usual.
+    let source = "task twice(n: Nope) -> int\n    <- 2\nfi\n\ntask main()\n    bind ok = 1\n    show(missing)\n    show(ok + 1)\n    show(gone)\nfi\n";
+    let analysis = Analysis::new(source);
+    let marks: Vec<(Option<usize>, Option<usize>, String)> =
+        analysis.diagnostics().into_iter().map(|d| (d.line, d.col, d.message)).collect();
+    assert_eq!(
+        marks,
+        [
+            (Some(1), Some(15), "unknown type 'Nope'".to_string()),
+            (Some(7), Some(10), "unknown variable 'missing'".to_string()),
+            (Some(9), Some(10), "unknown variable 'gone'".to_string()),
+        ]
+    );
+    // Each marker covers its own word.
+    let missing = &analysis.diagnostics()[1];
+    assert_eq!((missing.from, missing.to), (at(source, "missing", 0), at(source, "missing", 0) + "missing".len()));
+}
+
+#[test]
 fn outline_lists_items_with_their_members() {
     let analysis = Analysis::new(SHAPES);
     let summary = |item: &OutlineItem| {
@@ -481,6 +507,31 @@ fn every_request_works_on_every_prefix_of_the_examples() {
             check_well_formed(&fs::read_to_string(&file).unwrap(), &file.display().to_string(), true);
         }
     }
+    // Every failing fixture has one mistake; files holding several of them at
+    // once, which the checker now reports together, are analyzed as well.
+    let fixtures = vela_files("tests/fail");
+    for (nth, group) in fixtures.chunks(4).enumerate() {
+        let together: String = group
+            .iter()
+            .enumerate()
+            .map(|(i, file)| one_of_many(&fs::read_to_string(file).unwrap(), nth * 4 + i))
+            .collect();
+        let what = group.iter().map(|file| file.display().to_string()).collect::<Vec<String>>().join(" with ");
+        check_well_formed(&together, &what, false);
+    }
+}
+
+/// A fixture as one part of a file holding several: without its `# error:` line,
+/// and with its `main` task named `main{nth}`, since a file has one `main`.
+fn one_of_many(source: &str, nth: usize) -> String {
+    source
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .map(|line| match line.strip_prefix("task main(") {
+            Some(rest) => format!("task main{}({}\n", nth, rest),
+            None => format!("{}\n", line),
+        })
+        .collect()
 }
 
 #[test]

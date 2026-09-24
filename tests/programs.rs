@@ -9,8 +9,11 @@
 //!   `# error: MESSAGE` for an error without a position, or
 //!   `# error: modules/other.vela:LINE:COL: MESSAGE` for one in a module the
 //!   program includes, with its path from the fixture's folder), and the
-//!   compiler's first line of output must be exactly that diagnostic. The modules
-//!   fixtures use are in `tests/fail/modules/`.
+//!   compiler's first line of output must be exactly that diagnostic. A fixture
+//!   whose program has several mistakes writes one `# error:` line for each, in
+//!   order, and then those must be exactly the mistakes reported: that is how a
+//!   fixture says a mistake causes no others. The modules fixtures use are in
+//!   `tests/fail/modules/`.
 //! - `tests/trap/NAME.vela` must compile, with strict C, and then stop with a
 //!   runtime error: its first line is `# trap: MESSAGE`, the program's stderr
 //!   must be exactly `vela: MESSAGE`, and what it printed before stopping must
@@ -189,27 +192,44 @@ fn check_strict_c(source: &Path, scratch: &Path) -> Option<String> {
     None
 }
 
-/// Compiles `source`, expecting the Vela diagnostic given on the file's first
-/// line (`# error: TEXT`) as the first line the compiler prints.
+/// Compiles `source`, expecting the Vela diagnostics given on the file's first
+/// lines (`# error: TEXT`, one per mistake). One of them must be the first line
+/// the compiler prints; several must be exactly the mistakes it reports, in
+/// order, which is how a fixture says that nothing else follows from them.
 fn check_fail(source: &Path, scratch: &Path) -> Option<String> {
     let name = stem(source);
     let text = fs::read_to_string(source).unwrap();
-    let expected = match text.lines().next().and_then(|l| l.strip_prefix("# error: ")) {
-        Some(e) => e.trim(),
-        None => return Some(format!("{}: first line must be '# error: TEXT'", name)),
+    let expected: Vec<String> = text
+        .lines()
+        .take_while(|line| line.starts_with('#'))
+        .filter_map(|line| line.strip_prefix("# error: "))
+        .map(|error| diagnostic_line(source, error.trim()))
+        .collect();
+    let Some(first) = expected.first() else {
+        return Some(format!("{}: first line must be '# error: TEXT'", name));
     };
     let exe = scratch.join(&name);
     let compile = Command::new(VELA).arg(source).arg("-o").arg(&exe).output().unwrap();
     let stderr = String::from_utf8_lossy(&compile.stderr);
     if compile.status.success() {
-        return Some(format!("{}: compiled, but expected error '{}'", name, expected));
+        return Some(format!("{}: compiled, but expected error '{}'", name, first));
     }
     if stderr.contains("C compilation failed") {
         return Some(format!("{}: rejected by the C compiler, not by Vela\n{}", name, stderr));
     }
-    let wanted = diagnostic_line(source, expected);
-    if stderr.lines().next() != Some(wanted.as_str()) {
-        return Some(format!("{}: expected the error\n{}\ngot:\n{}", name, wanted, stderr));
+    if stderr.lines().next() != Some(first.as_str()) {
+        return Some(format!("{}: expected the error\n{}\ngot:\n{}", name, first, stderr));
+    }
+    if expected.len() > 1 {
+        let reported: Vec<&str> = stderr.lines().filter(|line| line.contains(": error: ")).collect();
+        if reported != expected {
+            return Some(format!(
+                "{}: expected these mistakes and no others\n{}\ngot:\n{}",
+                name,
+                expected.join("\n"),
+                reported.join("\n")
+            ));
+        }
     }
     None
 }

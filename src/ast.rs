@@ -93,6 +93,13 @@ pub enum Type {
     /// checked with the type itself in its place. Its regions are the given
     /// type's, so it holds no region of its own.
     Param(String),
+    /// No type: what the checker uses in place of a type it could not work out,
+    /// after reporting why. It stands in wherever the mistake was, so that the
+    /// checks that follow have something to go on and report their own mistakes
+    /// rather than this one again: it fits every type and every type fits it,
+    /// and nothing about it is ever an error (see `Type::unknown`). No program
+    /// that checks holds one, so the code generator never sees it.
+    Unknown,
 }
 
 /// A shape with the types it is given, `Box<int>` (see `Type::Applied`).
@@ -385,6 +392,10 @@ impl Type {
                 }
                 Ok(())
             }
+            // A message never names this type: every check that could report one
+            // says nothing about it (see `Type::unknown`). It is written for a
+            // compiler bug report, if one ever slips through.
+            Type::Unknown => write!(f, "an unknown type"),
         }
     }
 }
@@ -397,6 +408,22 @@ impl Type {
 
     pub fn is_numeric(&self) -> bool {
         matches!(self, Type::Int | Type::Float)
+    }
+
+    /// Whether the type, or any type inside it, is the one the checker could not
+    /// work out (`Type::Unknown`). Every check that would report a mistake about
+    /// a type asks this first and says nothing when it is true: the mistake has
+    /// already been reported where it was made, and saying more about it would
+    /// only bury the other mistakes in the file.
+    pub fn unknown(&self) -> bool {
+        match self {
+            Type::Unknown => true,
+            Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Array(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => inner.unknown(),
+            Type::Or(value, error) => value.unknown() || error.unknown(),
+            Type::Tuple(types) | Type::Results(types) => types.iter().any(Type::unknown),
+            Type::Applied(applied) => applied.types.iter().any(Type::unknown),
+            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Unit | Type::None | Type::Region | Type::Named(..) | Type::Param(_) => false,
+        }
     }
 
     pub fn ptr_inner(&self) -> Option<&Type> {
@@ -1144,6 +1171,17 @@ pub enum Item {
     Kind(KindDef),
 }
 
+impl Item {
+    /// The name the declaration is known by in the program, with its module.
+    pub fn name(&self) -> &str {
+        match self {
+            Item::Task(t) => &t.name,
+            Item::Shape(s) => &s.name,
+            Item::Kind(k) => &k.name,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TaskDef {
     pub name: String,
@@ -1230,6 +1268,9 @@ pub fn type_word(ty: &Type) -> String {
         Type::Range(inner) => format!("range__{}", type_word(inner)),
         Type::Maybe(inner) => format!("maybe__{}", type_word(inner)),
         Type::Or(value, error) => format!("or__{}__{}", type_word(value), type_word(error)),
+        // Only a program with an error holds a type the checker couldn't work
+        // out, and such a program is never generated (see `Type::Unknown`).
+        Type::Unknown => "unknown".to_string(),
         Type::Fail(error) => format!("fail__{}", type_word(error)),
         Type::Array(items, count) => format!("array__{}__{}", count, type_word(items)),
         Type::Slice(items, _) => format!("slice__{}", type_word(items)),

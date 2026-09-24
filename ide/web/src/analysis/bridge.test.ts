@@ -31,6 +31,15 @@ describe("VelaAnalysis", () => {
     expect(wellFormed("x\udc00y\ud83d\ude00\ud83d")).toBe("x\ufffdy\ud83d\ude00\ufffd");
   });
 
+  it("reports every mistake in the file, each at its own place", () => {
+    const source = "task main()\n    show(first)\n    bind ok = 1\n    show(second)\n    show(ok)\nfi\n";
+    const { diagnostics } = analysis.file(source);
+    expect(diagnostics).toMatchObject([
+      { from: source.indexOf("first"), line: 2, message: "unknown variable 'first'" },
+      { from: source.indexOf("second"), line: 4, message: "unknown variable 'second'" },
+    ]);
+  });
+
   it("covers every non-space character of every example with a token", () => {
     for (const name of readdirSync(examples).filter((f) => f.endsWith(".vela"))) {
       const source = readFileSync(join(examples, name), "utf8");

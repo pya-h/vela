@@ -59,7 +59,8 @@ fn builds_a_program_that_runs() {
 fn invalid_programs_report_the_vela_error() {
     let source = "task main()\n    show(missing)\nfi\n";
     let err = driver::build(source, Path::new("bad.vela"), Path::new("unused-output"), &cc()).unwrap_err();
-    let BuildError::Vela(driver::ProgramError { error, .. }) = &err else { panic!("expected a Vela error, got {:?}", err) };
+    let BuildError::Vela(program) = &err else { panic!("expected a Vela error, got {:?}", err) };
+    let error = program.first();
     assert_eq!(error.span, Some(Span::new(2, 10)));
     assert_eq!(error.message, "unknown variable 'missing'");
     assert_eq!(
@@ -112,23 +113,48 @@ fn c_compiler_failures_keep_the_generated_c() {
 }
 
 #[test]
-fn partial_front_end_keeps_the_types_found_before_an_error() {
+fn partial_front_end_keeps_the_types_found_around_an_error() {
     let source = "task main()\n    bind x = 1.5\n    show(missing)\n    bind y = true\nfi\n";
     let partial = driver::front_end_partial(source);
-    assert_eq!(partial.error, driver::front_end(source).err());
+    assert_eq!(partial.errors.first().cloned(), driver::front_end(source).err());
     let items = partial.items.unwrap();
     let Item::Task(main) = &items[0] else { panic!("expected a task") };
     let binding_type = |i: usize| match &main.body[i].kind {
         StmtKind::Binding { names, .. } => names.first().and_then(|bound| bound.ty.clone()),
         other => panic!("expected a binding, got {:?}", other),
     };
-    // Checked before the error, and not after it.
+    // The checker goes on after a mistake, so the lines on both sides of it are
+    // checked and only the line with the mistake is left without types.
     assert_eq!(binding_type(0), Some(Type::Float));
-    assert_eq!(binding_type(2), None);
+    assert_eq!(binding_type(2), Some(Type::Bool));
 
     // A program that doesn't parse has no items.
     let broken = driver::front_end_partial("task main(\n");
-    assert!(broken.items.is_none() && broken.error.is_some());
+    assert!(broken.items.is_none() && broken.errors.len() == 1);
+}
+
+#[test]
+fn every_mistake_is_reported_once_in_source_order() {
+    // One in a declaration, one in each task body, and one that the first would
+    // have hidden: the checker reports them all, in the order they are written.
+    let source = "task twice(n: Nope) -> int\n    <- n\nfi\n\ntask main()\n    bind a = twice(2)\n    show(missing)\n    show(a, gone)\nfi\n";
+    let partial = driver::front_end_partial(source);
+    let found: Vec<(usize, usize, &str)> =
+        partial.errors.iter().map(|error| (error.span.unwrap().line, error.span.unwrap().col, error.message.as_str())).collect();
+    assert_eq!(
+        found,
+        vec![
+            (1, 15, "unknown type 'Nope'"),
+            (7, 10, "unknown variable 'missing'"),
+            (8, 13, "unknown variable 'gone'"),
+        ]
+    );
+
+    // Every line with a mistake is reported, however many there are; how many
+    // the command shows at once is `MAX_SHOWN` (see the `cli` tests).
+    let many: String = (0..driver::MAX_SHOWN + 3).map(|i| format!("    show(missing{})\n", i)).collect();
+    let errors = driver::front_end_partial(&format!("task main()\n{}fi\n", many)).errors;
+    assert_eq!(errors.len(), driver::MAX_SHOWN + 3);
 }
 
 #[test]
@@ -307,8 +333,8 @@ fn a_module_that_cannot_be_read_says_why() {
     let main = "include lib\n\ntask main()\nfi\n";
     let mut loader = |_: &Path| -> std::io::Result<String> { Err(std::io::Error::other("Is a directory")) };
     let error = driver::check_program(Path::new("main.vela"), main, &mut loader).unwrap_err();
-    assert_eq!(error.error.span, Some(Span { line: 1, col: 9, file: 0 }));
-    assert_eq!(error.error.message, "can't read module 'lib' (lib.vela): Is a directory");
+    assert_eq!(error.first().span, Some(Span { line: 1, col: 9, file: 0 }));
+    assert_eq!(error.first().message, "can't read module 'lib' (lib.vela): Is a directory");
 }
 
 #[test]
@@ -322,7 +348,7 @@ fn a_name_the_file_cant_write_is_told_apart_from_one_it_can() {
     ];
     let asked = std::cell::RefCell::new(Vec::new());
     let error = driver::check_program(Path::new("main.vela"), main, &mut memory_loader(&files, &asked)).unwrap_err();
-    assert_eq!(error.error.message, "expected type c.Thing, got ./c.Thing");
+    assert_eq!(error.first().message, "expected type c.Thing, got ./c.Thing");
 }
 
 #[test]
@@ -331,7 +357,7 @@ fn an_error_in_a_module_names_that_file() {
     let files = [("lib.vela", "task twice(n: int) -> int\n    <- n * \"2\"\nfi\n")];
     let asked = std::cell::RefCell::new(Vec::new());
     let error = driver::check_program(Path::new("main.vela"), main, &mut memory_loader(&files, &asked)).unwrap_err();
-    assert_eq!(error.error.span, Some(Span { line: 2, col: 10, file: 1 }));
+    assert_eq!(error.first().span, Some(Span { line: 2, col: 10, file: 1 }));
     assert_eq!(error.error_file().as_deref(), Some("lib.vela"));
     assert_eq!(
         error.render("main.vela"),
@@ -339,7 +365,7 @@ fn an_error_in_a_module_names_that_file() {
     );
     // A program in one file can't load modules, and says which is missing.
     let partial = driver::front_end_partial(main);
-    assert_eq!(partial.error.unwrap().message, "can't find module 'lib': there is no file 'lib.vela'");
+    assert_eq!(partial.errors[0].message, "can't find module 'lib': there is no file 'lib.vela'");
 }
 
 #[test]
@@ -366,10 +392,10 @@ fn long_chains_of_modules_are_an_error_not_a_crash() {
     check(limit - 1).unwrap();
     for length in [limit, limit + 50] {
         let error = check(length).unwrap_err();
-        assert_eq!(error.error.message, format!("modules include one another too deeply (more than {} in a chain)", limit));
+        assert_eq!(error.first().message, format!("modules include one another too deeply (more than {} in a chain)", limit));
         // At the include that would make the chain too long, even when the last
         // module includes nothing.
-        let span = error.error.span.unwrap();
+        let span = error.first().span.unwrap();
         let file = error.files.get(span.file).unwrap();
         assert_eq!((file.path.to_str(), span.line, span.col), (Some(format!("m{}.vela", limit - 1).as_str()), 1, 9));
     }

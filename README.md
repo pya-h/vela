@@ -89,8 +89,10 @@ cargo clippy --workspace --all-targets
 ```
 
 Programs in `tests/run/` must print their `.out` files (reading `NAME.in` as their input, when there is one), programs in `tests/fail/` must be rejected with
-the error in their first line, programs in `tests/trap/` must print their `.out` files and then stop with
-the runtime error in their first line, and every file in `examples/` is checked against `tests/examples/`.
+the error in their first line (a program with several mistakes lists one `# error:` line for each, and then
+those must be exactly the mistakes reported), programs in `tests/trap/` must print their `.out` files and then
+stop with the runtime error in their first line, and every file in `examples/` is checked against
+`tests/examples/`.
 
 ## Vela Studio
 

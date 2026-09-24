@@ -1,0 +1,8 @@
+# error: 4:10: unknown variable 'first'
+# error: 6:10: unknown variable 'second'
+task main()
+    show(first)
+    bind ok = 1
+    show(second)
+    show(ok)
+fi

@@ -8,6 +8,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{self, Command};
+use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -20,13 +21,22 @@ use crate::modules::{self, Loader, SourceFile, Spelling};
 /// The runtime header that generated C includes as `vela_rt.h`.
 pub const RUNTIME_H: &str = include_str!("../runtime/vela_rt.h");
 
+/// How many mistakes the `vela` command shows at once. A program with more of
+/// them has something wrong that the later ones may well follow from, so the
+/// first few are the ones to fix; the rest are counted instead of shown. Tools
+/// that mark mistakes in place, such as Vela Studio, show them all.
+pub const MAX_SHOWN: usize = 20;
+
 /// Lexes, parses, and type-checks `source`, a program in one file, returning
-/// the checked program. An `include` in it can't be loaded; see `check_program`.
+/// the checked program. Only the first of its mistakes is reported; see
+/// `front_end_partial` for every one. An `include` in it can't be loaded; see
+/// `check_program`.
 pub fn front_end(source: &str) -> Result<Vec<Item>> {
-    match front_end_partial(source) {
-        Partial { error: Some(error), .. } => Err(error),
-        Partial { items: Some(items), error: None, .. } => Ok(items),
-        Partial { items: None, error: None, .. } => Err(Error::internal("the front end produced neither a program nor an error")),
+    let partial = front_end_partial(source);
+    match (partial.items, partial.errors.into_iter().next()) {
+        (_, Some(error)) => Err(error),
+        (Some(items), None) => Ok(items),
+        (None, None) => Err(Error::internal("the front end produced neither a program nor an error")),
     }
 }
 
@@ -34,11 +44,14 @@ pub fn front_end(source: &str) -> Result<Vec<Item>> {
 #[derive(Debug)]
 pub struct Partial {
     /// The program, if it lexes and parses. When checking fails, the checker's
-    /// annotations (expression types, inferred binding types) are filled in
-    /// for the code it checked before the error, and missing after it.
+    /// annotations (expression types, inferred binding types) are filled in for
+    /// the code it checked: it goes on after a mistake, so only the statements
+    /// and declarations that have one are left unannotated.
     pub items: Option<Vec<Item>>,
-    /// The first error, exactly as `front_end` reports it.
-    pub error: Option<Error>,
+    /// Every mistake the program has, in source order (see
+    /// `check::Checker::check_program`). Lexing and parsing stop at the first
+    /// one, so a program that doesn't parse has exactly one.
+    pub errors: Vec<Error>,
     /// The program's files, the main file first; `Span::file` indexes them.
     pub files: Vec<SourceFile>,
     /// How the main file writes the program's names, whose names in `items`
@@ -46,8 +59,16 @@ pub struct Partial {
     pub spelling: Spelling,
 }
 
-/// Like `front_end`, but keeps the program when checking fails, for tools
-/// such as editors that want the types found before the first error.
+impl Partial {
+    /// The first mistake, the one a tool that shows only one shows.
+    pub fn first_error(&self) -> Option<&Error> {
+        self.errors.first()
+    }
+}
+
+/// Like `front_end`, but keeps the program when checking fails, and reports
+/// every mistake, for tools such as editors that show them all and want the
+/// types found around them.
 pub fn front_end_partial(source: &str) -> Partial {
     front_end_program(Path::new(""), source, &mut no_modules)
 }
@@ -57,11 +78,11 @@ pub fn front_end_partial(source: &str) -> Partial {
 pub fn front_end_program(path: &Path, source: &str, loader: &mut Loader) -> Partial {
     let (files, loaded) = modules::load(path, source, loader);
     match loaded {
-        Err(error) => Partial { items: None, error: Some(error), files, spelling: Spelling::default() },
+        Err(error) => Partial { items: None, errors: vec![error], files, spelling: Spelling::default() },
         Ok(mut program) => {
-            let error = Checker::check_program(&mut program).err();
+            let errors = Checker::check_program(&mut program);
             let spelling = program.modules.first().map(|main| main.spelling.clone()).unwrap_or_default();
-            Partial { items: Some(program.items), error, files, spelling }
+            Partial { items: Some(program.items), errors, files, spelling }
         }
     }
 }
@@ -76,28 +97,56 @@ pub fn read_from_disk(path: &Path) -> io::Result<String> {
     fs::read_to_string(path)
 }
 
-/// An error in a program of several files, with the files, to show it.
+/// Why a program of several files was rejected: every mistake it has, in source
+/// order, with the files, to show them. Its `errors` are never empty.
 #[derive(Debug)]
 pub struct ProgramError {
-    pub error: Error,
+    pub errors: Vec<Error>,
     /// The program's files, the main file first.
     pub files: Vec<SourceFile>,
 }
 
 impl ProgramError {
-    /// The error as the `vela` command prints it (see `render_error`), with the
-    /// path and source line of the file it is in; `main_path` names the main
-    /// file, and every other file is named by its path as loaded.
-    pub fn render(&self, main_path: &str) -> String {
-        render_program_error(main_path, &self.files, &self.error)
+    /// One mistake, with the program's files.
+    pub fn one(error: Error, files: Vec<SourceFile>) -> ProgramError {
+        ProgramError { errors: vec![error], files }
     }
 
-    /// The path of the file the error is in, other than the main file, as loaded
-    /// (`/`-separated).
+    /// The first mistake, the one a tool that shows only one shows.
+    pub fn first(&self) -> &Error {
+        self.errors.first().unwrap_or(&NO_ERROR)
+    }
+
+    /// Every mistake as the `vela` command prints it (see `render_error`), one
+    /// after another, each with the path and source line of the file it is in;
+    /// `main_path` names the main file, and every other file is named by its
+    /// path as loaded.
+    pub fn render(&self, main_path: &str) -> String {
+        render_all(main_path, self.errors.iter().map(|error| render_program_error(main_path, &self.files, error)).collect())
+    }
+
+    /// The path of the file the first error is in, other than the main file, as
+    /// loaded (`/`-separated).
     pub fn error_file(&self) -> Option<String> {
-        let file = self.error.span.map(|span| span.file).filter(|&file| file > 0)?;
+        let file = self.first().span.map(|span| span.file).filter(|&file| file > 0)?;
         self.files.get(file).map(|found| found.path.to_string_lossy().replace('\\', "/"))
     }
+}
+
+/// The error a `ProgramError` with no errors would report, which is a compiler
+/// bug: `ProgramError::first` never has to use it.
+static NO_ERROR: LazyLock<Error> = LazyLock::new(|| Error::internal("a program was rejected without saying why"));
+
+/// The diagnostics as the `vela` command prints them: at most `MAX_SHOWN` of
+/// them, one after another, and a last line counting any it leaves out.
+fn render_all(main_path: &str, rendered: Vec<String>) -> String {
+    let more = rendered.len().saturating_sub(MAX_SHOWN);
+    let mut shown: Vec<String> = rendered.into_iter().take(MAX_SHOWN).collect();
+    if more > 0 {
+        let mistakes = if more == 1 { "mistake" } else { "mistakes" };
+        shown.push(format!("{}: error: {} more {}, not shown; fix these first and check again", main_path, more, mistakes));
+    }
+    shown.join("\n")
 }
 
 /// Formats `e`, an error in one of `files`, like `render_error`.
@@ -116,14 +165,15 @@ pub fn check_program(path: &Path, source: &str, loader: &mut Loader) -> std::res
     checked(front_end_program(path, source, loader))
 }
 
-/// The checked program, or the error that stopped it.
+/// The checked program, or every mistake that stopped it.
 fn checked(partial: Partial) -> std::result::Result<Vec<Item>, ProgramError> {
-    match (partial.items, partial.error) {
-        (Some(items), None) => Ok(items),
-        (_, error) => Err(ProgramError {
-            error: error.unwrap_or_else(|| Error::internal("the front end produced neither a program nor an error")),
-            files: partial.files,
-        }),
+    match (partial.items, partial.errors) {
+        (Some(items), errors) if errors.is_empty() => Ok(items),
+        (_, errors) if errors.is_empty() => Err(ProgramError::one(
+            Error::internal("the front end produced neither a program nor an error"),
+            partial.files,
+        )),
+        (_, errors) => Err(ProgramError { errors, files: partial.files }),
     }
 }
 
@@ -138,7 +188,7 @@ pub fn generate_c(source: &str) -> Result<String> {
 /// its modules with `loader`.
 pub fn generate_c_program(path: &Path, source: &str, loader: &mut Loader) -> std::result::Result<String, ProgramError> {
     let items = check_program(path, source, loader)?;
-    Generator::new().generate(&items).map_err(|error| ProgramError { error, files: Vec::new() })
+    Generator::new().generate(&items).map_err(|error| ProgramError::one(error, Vec::new()))
 }
 
 /// `generate_c_program` for C to be written to the file `output`, which must
@@ -195,7 +245,9 @@ impl BuildError {
     /// input file and `source` is its text, for Vela diagnostics.
     pub fn render(&self, path: &str, source: &str) -> String {
         match self {
-            BuildError::Vela(ProgramError { error, files }) if files.is_empty() => render_error(path, source, error),
+            BuildError::Vela(ProgramError { errors, files }) if files.is_empty() => {
+                render_all(path, errors.iter().map(|error| render_error(path, source, error)).collect())
+            }
             BuildError::Vela(error) => error.render(path),
             BuildError::NoMain => format!("{}: error: program has no 'main' task", path),
             BuildError::OutputIsInput(output) => {
@@ -219,7 +271,7 @@ impl BuildError {
 
 impl From<Error> for BuildError {
     fn from(error: Error) -> Self {
-        BuildError::Vela(ProgramError { error, files: Vec::new() })
+        BuildError::Vela(ProgramError::one(error, Vec::new()))
     }
 }
 

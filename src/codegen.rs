@@ -2721,6 +2721,9 @@ fn c_type(ty: &Type) -> String {
         // and `shape_instance`).
         Type::Param(name) => format!("/*type {}*/", name),
         Type::Applied(applied) => format!("/*shape {}*/", applied.name),
+        // Nor is a program with a type the checker couldn't work out, since that
+        // program has an error (see `Type::Unknown`).
+        Type::Unknown => "/*unknown type*/".to_string(),
         Type::Int => "int64_t".to_string(),
         Type::Float => "double".to_string(),
         Type::Bool => "bool".to_string(),

@@ -117,7 +117,14 @@ fn text_completes_its_length_str_and_copy() {
 fn a_misspelled_length_says_what_text_has() {
     let source = "task main()\n    bind name = \"Ada\"\n    show(name.size)\n    show(name.len())\nfi\n";
     let messages: Vec<String> = Analysis::new(source).diagnostics().into_iter().map(|d| d.message).collect();
-    assert_eq!(messages, ["type text has no field 'size'; how many bytes it has is '.len'"]);
+    // Both lines are wrong, and both are reported: reading the length is no call.
+    assert_eq!(
+        messages,
+        [
+            "type text has no field 'size'; how many bytes it has is '.len'",
+            "type text has no methods; how many bytes text has is read without '(…)', as in 't.len'",
+        ]
+    );
 }
 
 #[test]

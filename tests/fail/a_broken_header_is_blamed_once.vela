@@ -1,0 +1,9 @@
+# error: 2:15: unknown type 'Thing'
+task keep(it: Thing) -> int
+    <- 1
+fi
+
+task main()
+    show(keep(1))
+    show(keep("two"))
+fi

@@ -78,7 +78,7 @@ pub fn build(workspace: &Workspace, path: &str, cc: &str) -> Result<Result<Progr
 fn failure(error: &BuildError, path: &str, source: &str) -> Failure {
     let rendered = error.render(path, source);
     let (kind, message, span) = match error {
-        BuildError::Vela(e) => (FailureKind::Vela, e.error.message.clone(), e.error.span),
+        BuildError::Vela(e) => (FailureKind::Vela, e.first().message.clone(), e.first().span),
         BuildError::NoMain => (FailureKind::NoMain, "program has no 'main' task".to_string(), None),
         BuildError::CompilerNotStarted { cc, error } => {
             (FailureKind::CompilerMissing, format!("failed to invoke C compiler '{}': {}", cc, error), None)

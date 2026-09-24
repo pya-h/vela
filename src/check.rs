@@ -139,6 +139,15 @@ pub struct Checker {
     /// so every use must give a type that holds nothing in a region (see
     /// `check_copies_of`).
     loose_copies: HashMap<String, Vec<(String, String, bool, Span)>>,
+    /// Every mistake found so far, in the order the checks found them. The
+    /// checker goes on after one, so a file's mistakes are all reported
+    /// together (see `record` and `Type::Unknown`).
+    errors: Vec<Error>,
+    /// The tasks, shapes, and kinds whose own declaration has a mistake. What
+    /// they promise isn't known, so a use of one is checked as far as it can be
+    /// and then left alone: reporting the declaration's mistake again at every
+    /// use would bury the file's other mistakes (see `Type::Unknown`).
+    broken: HashSet<String>,
 }
 
 /// What a call needs to know about a task: the types it takes, its parameters,
@@ -177,31 +186,90 @@ impl Checker {
         Checker { type_places, ..Self::default() }
     }
 
+    /// The mistakes found so far, in the order they were found.
+    pub fn errors(&self) -> &[Error] {
+        &self.errors
+    }
+
+    /// Records a mistake and goes on checking. The check that found it stops,
+    /// and the next declaration or statement is checked as if it had passed, so
+    /// one mistake never hides the rest of the file. What the failed check was
+    /// working out is left as `Type::Unknown`, which no later check complains
+    /// about.
+    fn record(&mut self, error: Error) {
+        self.errors.push(error);
+    }
+
+    /// Checks each of `values` on its own, recording the mistakes they have.
+    /// Used where nothing is known about the place they go — a call of a task
+    /// whose header has a mistake, say — so that the values are still read for
+    /// mistakes of their own (see `broken`).
+    fn check_each(&mut self, values: &mut [Expr]) {
+        for value in values {
+            let checked = self.check_expr(value);
+            self.keep_going(checked.map(|_| ()));
+        }
+    }
+
+    /// Records the mistake a check that works out a type found, and stands
+    /// `Type::Unknown` in for the type it couldn't work out. Used where what
+    /// follows can be checked without that type: the block a condition guards,
+    /// the cases of a match, the fallback of a plan B.
+    fn or_unknown(&mut self, found: Result<Type>) -> Type {
+        match found {
+            Ok(ty) => ty,
+            Err(error) => {
+                self.record(error);
+                Type::Unknown
+            }
+        }
+    }
+
+    /// Records the mistake in `result`, if it found one. `true` when it passed.
+    fn keep_going(&mut self, result: Result<()>) -> bool {
+        match result {
+            Ok(()) => true,
+            Err(error) => {
+                self.record(error);
+                false
+            }
+        }
+    }
+
     /// Checks a program loaded with `modules::load`, and annotates its items.
-    pub fn check_program(program: &mut Program) -> Result<()> {
+    /// Returns every mistake the program has, in source order, and nothing when
+    /// it checks. The items are annotated as far as they checked, so a tool can
+    /// read the types around a mistake (see `driver::Partial`).
+    pub fn check_program(program: &mut Program) -> Vec<Error> {
         let mut checker = Checker::with_type_places(std::mem::take(&mut program.type_places));
         checker.modules = program.modules.iter().map(|scope| (scope.name.clone(), scope.clone())).collect();
         checker.declare_builtin_kinds();
-        let result = checker
-            .check_file(&mut program.items)
-            .and_then(|()| checker.expand_instances(&mut program.items))
-            .map(|()| {
-                program.items.extend(std::mem::take(&mut checker.made_shapes));
-                // No file declares the kinds that reading a number sends, so
-                // they join the program's own declarations here, after every
-                // check that reads them, for the code generator to write their C.
-                program.items.extend(builtin_kinds().into_iter().map(Item::Kind));
-            });
+        checker.check_file(&mut program.items);
+        // What a program with a mistake would be made into is never generated,
+        // and the parts of it a mistake left unchecked would only cause more, so
+        // the program is completed only once it checks.
+        if checker.errors.is_empty() {
+            let made = checker.expand_instances(&mut program.items);
+            checker.keep_going(made);
+        }
+        if checker.errors.is_empty() {
+            program.items.extend(std::mem::take(&mut checker.made_shapes));
+            // No file declares the kinds that reading a number sends, so
+            // they join the program's own declarations here, after every
+            // check that reads them, for the code generator to write their C.
+            program.items.extend(builtin_kinds().into_iter().map(Item::Kind));
+        }
         program.type_places = checker.type_places;
         // Names in a message are written as the file with the error writes them.
         let written = std::mem::take(&mut checker.written_names);
-        result.map_err(|mut error| {
-            // A shape made for one set of types is named as the program gives
-            // them: `Box<int>`, not the name the compiler made for it. The
-            // longest name first, so one whose name starts another is not cut.
-            let mut made: Vec<(&String, &String)> = written.iter().collect();
-            made.sort_by_key(|(name, _)| std::cmp::Reverse(name.len()));
-            for (name, form) in made {
+        // A shape made for one set of types is named as the program gives
+        // them: `Box<int>`, not the name the compiler made for it. The
+        // longest name first, so one whose name starts another is not cut.
+        let mut made: Vec<(&String, &String)> = written.iter().collect();
+        made.sort_by_key(|(name, _)| std::cmp::Reverse(name.len()));
+        let mut errors = std::mem::take(&mut checker.errors);
+        for error in &mut errors {
+            for (name, form) in &made {
                 if error.message.contains(name.as_str()) {
                     error.message = error.message.replace(name.as_str(), form);
                 }
@@ -209,8 +277,8 @@ impl Checker {
             if let Some(scope) = error.span.and_then(|span| program.modules.iter().find(|scope| scope.file == span.file)) {
                 error.message = scope.spelling.text(&error.message);
             }
-            error
-        })
+        }
+        in_source_order(errors)
     }
 
     /// Whether a task, shape, kind, or variant name written in the current
@@ -310,8 +378,11 @@ impl Checker {
         found(part).or_else(|| spelled.and_then(|spelled| found(&spelled))).or_else(|| found(unqualified(part))).unwrap_or(span)
     }
 
-    pub fn check_file(&mut self, items: &mut [Item]) -> Result<()> {
-        self.collect_declarations(items)?;
+    /// Checks the items of a program, recording every mistake they have (see
+    /// `errors` and `check_program`). Each declaration and each task body is
+    /// checked whatever the ones before it found.
+    pub fn check_file(&mut self, items: &mut [Item]) {
+        self.collect_declarations(items);
         self.regional = regional_types(items);
         self.takes_region = textual_types(items).union(&self.regional).cloned().collect();
         self.changeable = types_holding(items, holds_changeable);
@@ -320,15 +391,18 @@ impl Checker {
                 self.settle_receiver(t);
             }
         }
-        self.check_declarations(items)?;
+        self.check_declarations(items);
         for item in items.iter_mut() {
             if let Item::Task(t) = item {
                 self.current_module = module_of(&t.name).to_string();
-                self.check_task(t)?;
+                // A mistake in a body is the body's own: the task's header was
+                // checked with the other declarations, so calls of it elsewhere
+                // are checked as usual.
+                let checked = self.check_task(t);
+                self.keep_going(checked);
             }
         }
         self.current_module.clear();
-        Ok(())
     }
 
     /// Checks the types one use gives a generic task against the copies its body
@@ -440,8 +514,12 @@ impl Checker {
     /// Registers every task, shape, kind, and variant. They share one
     /// namespace: no two may have the same name, and none may use the name of
     /// a builtin type or task.
-    fn collect_declarations(&mut self, items: &[Item]) -> Result<()> {
+    fn collect_declarations(&mut self, items: &[Item]) {
         let mut names: HashMap<String, Span> = HashMap::new();
+        // The mistakes found here, kept aside while `names` is borrowed, and
+        // recorded once the items are all read. A name declared twice keeps the
+        // first declaration, so the checks that follow have one of each name.
+        let mut found: Vec<Error> = Vec::new();
         let mut declare = |name: &str, span: Span| -> Result<()> {
             // No declaration may take the name of a builtin type or task.
             let written = unqualified(name);
@@ -474,33 +552,48 @@ impl Checker {
                 Item::Kind(k) => k.private,
             };
             if private {
-                let name = match item {
-                    Item::Task(t) => &t.name,
-                    Item::Shape(s) => &s.name,
-                    Item::Kind(k) => &k.name,
-                };
-                self.private.insert(name.clone());
+                self.private.insert(item.name().to_string());
                 if let Item::Kind(k) = item {
                     self.private.extend(k.variants.iter().map(|v| qualify(module_of(&k.name), &v.tag)));
                 }
             }
+            // A name already taken is reported, and the declaration taking it
+            // is left out: every later check reads the first declaration of the
+            // name, as it would have before the second was written.
+            let mut taken = |name: &str, span: Span| -> bool {
+                match declare(name, span) {
+                    Ok(()) => false,
+                    Err(error) => {
+                        found.push(error);
+                        true
+                    }
+                }
+            };
             match item {
                 Item::Shape(s) => {
-                    declare(&s.name, s.span)?;
+                    if taken(&s.name, s.span) {
+                        continue;
+                    }
                     self.shapes.insert(s.name.clone(), s.clone());
                 }
                 Item::Kind(k) => {
-                    declare(&k.name, k.span)?;
+                    if taken(&k.name, k.span) {
+                        continue;
+                    }
                     for v in &k.variants {
                         let full = qualify(module_of(&k.name), &v.tag);
-                        declare(&full, v.span)?;
+                        if taken(&full, v.span) {
+                            continue;
+                        }
                         let info = VariantInfo { kind: k.name.clone(), variant: v.clone() };
                         self.variants.insert(full, info);
                     }
                     self.kinds.insert(k.name.clone(), k.clone());
                 }
                 Item::Task(t) => {
-                    declare(&t.name, t.span)?;
+                    if taken(&t.name, t.span) {
+                        continue;
+                    }
                     // A method is written as a member of its shape or kind, so
                     // every message names it that way (see `written_names`).
                     if let Some(owner) = &t.owner
@@ -516,79 +609,97 @@ impl Checker {
                 }
             }
         }
-        Ok(())
+        for error in found {
+            self.record(error);
+        }
     }
 
     /// Checks the declarations themselves: every written type exists, field
     /// names are distinct, kinds have variants, and no type contains itself.
     /// A task's header gets its types with regions settled (see `resolve_type`).
-    fn check_declarations(&mut self, items: &mut [Item]) -> Result<()> {
+    fn check_declarations(&mut self, items: &mut [Item]) {
         for item in items.iter_mut() {
-            let name = match item {
-                Item::Task(t) => &t.name,
-                Item::Shape(s) => &s.name,
-                Item::Kind(k) => &k.name,
-            };
-            self.current_module = module_of(name).to_string();
-            self.check_private_types(item)?;
-            match item {
-                Item::Shape(s) => {
-                    // A shape's own types are in scope while its fields are
-                    // read, as a task's are while its header and body are.
-                    self.enter_type_params(&s.types);
-                    let fields = self.check_fields(&mut s.fields);
-                    self.type_params.clear();
-                    fields?;
-                    // The fields as they were read, with their regions settled,
-                    // so the shape made for one set of types (see
-                    // `shape_instance`) substitutes into them.
-                    if let Some(shape) = self.shapes.get_mut(&s.name) {
-                        shape.fields = s.fields.clone();
-                    }
-                }
-                Item::Kind(k) => {
-                    if k.variants.is_empty() {
-                        return err(k.span, format!("kind '{}' has no variants", k.name));
-                    }
-                    for v in &mut k.variants {
-                        self.check_fields(&mut v.payload)?;
-                    }
-                    if let Some(kind) = self.kinds.get_mut(&k.name) {
-                        kind.variants = k.variants.clone();
-                    }
-                }
-                Item::Task(t) => {
-                    self.check_header(t)?;
-                    if t.name == "main" {
-                        if let Some(param) = t.params.first() {
-                            return err(param.span, "task 'main' cannot take parameters");
-                        }
-                        if t.ret != Type::Unit {
-                            return err(t.ret_span(), "task 'main' cannot return a value");
-                        }
-                    }
-                }
+            let name = item.name().to_string();
+            self.current_module = module_of(&name).to_string();
+            let mut declared = self.check_private_types(item);
+            if declared.is_ok() {
+                declared = self.check_declaration(item);
+            }
+            if !self.keep_going(declared) {
+                // What the declaration promises isn't settled, so every use of
+                // it is left alone (see `broken`).
+                self.broken.insert(name);
             }
         }
         let mut acyclic = HashSet::new();
         let mut order = Vec::new();
         for item in items.iter() {
             let name = match item {
-                Item::Shape(s) => &s.name,
-                Item::Kind(k) => &k.name,
+                Item::Shape(s) => s.name.clone(),
+                Item::Kind(k) => k.name.clone(),
                 Item::Task(_) => continue,
             };
-            self.check_value_cycle(name, &mut acyclic, &mut order)?;
+            if let Err((error, cycle)) = self.check_value_cycle(&name, &mut acyclic, &mut order) {
+                self.record(error);
+                for found in cycle {
+                    acyclic.insert(found.clone());
+                    self.broken.insert(found);
+                }
+                self.broken.insert(name);
+            }
         }
         self.current_module.clear();
-        self.check_sizes(&order)?;
-        self.check_constructible(items)
+        self.check_sizes(&order);
+        self.check_constructible(items);
+    }
+
+    /// Checks one declaration: a shape's or kind's fields, or a task's header.
+    fn check_declaration(&mut self, item: &mut Item) -> Result<()> {
+        match item {
+            Item::Shape(s) => {
+                // A shape's own types are in scope while its fields are
+                // read, as a task's are while its header and body are.
+                self.enter_type_params(&s.types);
+                let fields = self.check_fields(&mut s.fields);
+                self.type_params.clear();
+                fields?;
+                // The fields as they were read, with their regions settled,
+                // so the shape made for one set of types (see
+                // `shape_instance`) substitutes into them.
+                if let Some(shape) = self.shapes.get_mut(&s.name) {
+                    shape.fields = s.fields.clone();
+                }
+            }
+            Item::Kind(k) => {
+                if k.variants.is_empty() {
+                    return err(k.span, format!("kind '{}' has no variants", k.name));
+                }
+                for v in &mut k.variants {
+                    self.check_fields(&mut v.payload)?;
+                }
+                if let Some(kind) = self.kinds.get_mut(&k.name) {
+                    kind.variants = k.variants.clone();
+                }
+            }
+            Item::Task(t) => {
+                self.check_header(t)?;
+                if t.name == "main" {
+                    if let Some(param) = t.params.first() {
+                        return err(param.span, "task 'main' cannot take parameters");
+                    }
+                    if t.ret != Type::Unit {
+                        return err(t.ret_span(), "task 'main' cannot return a value");
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Settles how large a value of each shape and kind can be, in `order`,
     /// where each comes after the types it holds by value, and rejects one too
     /// large for memory (see `MAX_VALUE_BYTES`).
-    fn check_sizes(&mut self, order: &[String]) -> Result<()> {
+    fn check_sizes(&mut self, order: &[String]) {
         for name in order {
             let (bytes, span) = match (self.shapes.get(name), self.kinds.get(name)) {
                 (Some(shape), _) => (fields_bytes(&shape.fields, &self.sizes), shape.span),
@@ -599,11 +710,12 @@ impl Checker {
                 (None, None) => continue,
             };
             if bytes > MAX_VALUE_BYTES {
-                return err(span, format!("'{}' is too large: a value of it would take more than 1 TiB of memory", unqualified(name)));
+                self.record(Error::at(span, format!("'{}' is too large: a value of it would take more than 1 TiB of memory", unqualified(name))));
+                self.broken.insert(name.clone());
+                continue;
             }
             self.sizes.insert(name.clone(), bytes);
         }
-        Ok(())
     }
 
     /// Rejects a type written at `span` whose values would take more than
@@ -659,6 +771,16 @@ impl Checker {
             return err(span, format!("'{}' is a kind, not a shape; create its values with its variants", name));
         }
         let mut shape = self.shapes.get(name.as_str()).filter(|_| self.sees(name)).ok_or_else(|| self.unknown_shape(span, name))?.clone();
+        // A shape whose own fields have a mistake takes nothing known, so the
+        // values are read on their own (see `broken`).
+        if self.broken.contains(name.as_str()) {
+            let mut values: Vec<&mut Expr> = fields.iter_mut().map(|field| &mut field.value).collect();
+            for value in &mut values {
+                let checked = self.check_expr(value);
+                self.keep_going(checked.map(|_| ()));
+            }
+            return Ok(Type::Unknown);
+        }
         // A literal of a shape that takes types is a literal of the shape made
         // for them, so the rest reads as any other literal. Inside a declaration
         // that takes types, where a type given isn't known yet, it stays a
@@ -873,7 +995,9 @@ impl Checker {
             return err(at, format!("'{}' is too large: a value of it would take more than 1 TiB of memory", key));
         }
         self.sizes.insert(key.clone(), bytes);
-        self.check_value_cycle(&key, &mut HashSet::new(), &mut Vec::new())?;
+        if let Err((error, _)) = self.check_value_cycle(&key, &mut HashSet::new(), &mut Vec::new()) {
+            return Err(error);
+        }
         if let Some(shape) = self.shapes.get(&key) {
             self.made_shapes.push(Item::Shape(shape.clone()));
         }
@@ -1484,7 +1608,7 @@ impl Checker {
     ///
     /// Each type found free of cycles is added to `order` after the types it
     /// contains by value.
-    fn check_value_cycle(&self, root: &str, acyclic: &mut HashSet<String>, order: &mut Vec<String>) -> Result<()> {
+    fn check_value_cycle(&self, root: &str, acyclic: &mut HashSet<String>, order: &mut Vec<String>) -> std::result::Result<(), (Error, Vec<String>)> {
         if acyclic.contains(root) {
             return Ok(());
         }
@@ -1512,10 +1636,14 @@ impl Checker {
                     true => String::new(),
                     false => format!("<{}>", shape.types.iter().map(|param| param.name.clone()).collect::<Vec<_>>().join(", ")),
                 });
-                return err(
+                let error = Error::at(
                     span,
                     format!("'{}' contains itself by value ({}); use a pointer such as 'maybe ^{}{}'", target, chain.join(" -> "), target, takes),
                 );
+                // Every type in the cycle contains itself through the others, so
+                // the cycle is one mistake: it is reported at the field that
+                // closes it, and the types in it are not walked again.
+                return Err((error, chain.into_iter().map(str::to_string).collect()));
             }
             if !acyclic.contains(target) {
                 on_path.insert(target);
@@ -1540,7 +1668,7 @@ impl Checker {
     /// `none`, so a shape whose field points to its own type (directly or
     /// through other types) would need one to exist before the first is made.
     /// A kind can be created if any of its variants can.
-    fn check_constructible(&self, items: &[Item]) -> Result<()> {
+    fn check_constructible(&mut self, items: &[Item]) {
         // The items whose fields name each type: when a type turns out to be
         // creatable, only those need another look.
         let mut users: HashMap<&str, Vec<usize>> = HashMap::new();
@@ -1571,40 +1699,64 @@ impl Checker {
                 pending.extend(users.get(name).into_iter().flatten().copied());
             }
         }
+        // Each type that can never be created is reported, since one that holds
+        // another says nothing about the one it holds.
+        let mut found = Vec::new();
         for item in items {
+            // A type that already has a mistake of its own says nothing more:
+            // one that contains itself by value, say, can never be created
+            // either, which is the same mistake told twice (see `broken`).
+            if self.broken.contains(item.name()) {
+                continue;
+            }
             match item {
                 Item::Shape(s) if !can.contains(s.name.as_str()) => {
                     if let Some(field) = s.fields.iter().find(|f| !constructible(&f.ty, &can)) {
-                        return err(
-                            field.ty_span,
-                            format!(
-                                "'{}' can never be created: field '{}' needs an existing {}; make it 'maybe {}'",
-                                s.name, field.name, field.ty, field.ty
+                        found.push((
+                            s.name.clone(),
+                            Error::at(
+                                field.ty_span,
+                                format!(
+                                    "'{}' can never be created: field '{}' needs an existing {}; make it 'maybe {}'",
+                                    s.name, field.name, field.ty, field.ty
+                                ),
                             ),
-                        );
+                        ));
                     }
                 }
                 Item::Kind(k) if !can.contains(k.name.as_str()) => {
-                    return err(
-                        k.span,
-                        format!("'{}' can never be created: every variant needs an existing value that can't be created either; use 'maybe' for a value that can be missing", k.name),
-                    );
+                    found.push((
+                        k.name.clone(),
+                        Error::at(
+                            k.span,
+                            format!("'{}' can never be created: every variant needs an existing value that can't be created either; use 'maybe' for a value that can be missing", k.name),
+                        ),
+                    ));
                 }
                 _ => {}
             }
         }
-        Ok(())
+        for (name, error) in found {
+            self.record(error);
+            self.broken.insert(name);
+        }
     }
 
     fn check_task(&mut self, task: &mut TaskDef) -> Result<()> {
         self.enter_type_params(&task.types);
+        // A header with a mistake never settled its types, so the body is
+        // checked with nothing known about what the task takes or sends: its own
+        // mistakes are still reported, and the header's isn't reported again at
+        // every line that uses a parameter (see `broken`).
+        let unsettled = self.broken.contains(&task.name);
+        let known = |ty: &Type| if unsettled { Type::Unknown } else { ty.clone() };
         for param in &task.params {
             self.check_size(&param.ty, param.ty_span)?;
         }
         for (i, result) in task.ret.results().iter().enumerate() {
             self.check_size(result, task.result_span(i))?;
         }
-        self.current_ret = Some(task.ret.clone());
+        self.current_ret = Some(known(&task.ret));
         self.current_method = task.owner.clone();
         // Parameters and the task body share one scope, as in C.
         self.scopes = vec![HashMap::new()];
@@ -1614,7 +1766,7 @@ impl Checker {
             } else {
                 // Only the value a method marked `alters` is called on changes.
                 let alters = param.name == THIS && task.owner.as_ref().is_some_and(|owner| owner.alters);
-                self.define_param(&param.name, param.ty.clone(), alters, param.span)?;
+                self.define_param(&param.name, known(&param.ty), alters, param.span)?;
             }
         }
         // The regions the header only names in its types.
@@ -1630,17 +1782,24 @@ impl Checker {
         self.unset = self.result_names.iter().cloned().collect();
         for (result, ty) in task.results.iter().zip(task.ret.results()) {
             if let Some((name, at)) = &result.name {
-                self.define_result(name, ty.clone(), *at)?;
+                self.define_result(name, known(ty), *at)?;
             }
         }
+        let before = self.errors.len();
         self.check_block(&mut task.body)?;
+        // Whether every path sends a value can only be told of a body that
+        // checked: a line with a mistake may well be the one that sends, so a
+        // task with a mistake anywhere is not told this as well (see `record`).
+        let whole = self.errors.len() == before && !unsettled;
         // The copies the body makes of the values of the types the task takes
         // (substituting no types changes nothing and only reads the body). A
         // copy into a region the header keeps that type in is the value's own
         // region, since a use must give a type of that region (see
         // `region_conflict` at a call); any other is only the value itself, and
         // every use must fit that (see `check_copies_of`).
-        if !task.types.is_empty() {
+        // Only a body that checked, since reading it again relies on every call
+        // and method call having been settled (see `substitute_expr`).
+        if !task.types.is_empty() && whole {
             let mut made = Made::default();
             self.substitute_task(task, &HashMap::new(), &mut made)?;
             let kept = keeps_params(task);
@@ -1661,19 +1820,24 @@ impl Checker {
         self.scopes.clear();
         self.current_ret = None;
         self.current_method = None;
-        if self.result_names.is_empty() {
-            if sends_value(&task.ret) && !always_sends(&task.body) {
-                return err(task.span, format!("task '{}' can finish without sending a value", task.name));
+        let ends_well = if self.result_names.is_empty() {
+            if whole && sends_value(&task.ret) && !always_sends(&task.body) {
+                err(task.span, format!("task '{}' can finish without sending a value", task.name))
+            } else {
+                Ok(())
             }
-        } else if !always_sends(&task.body)
+        } else if whole
+            && !always_sends(&task.body)
             && let Some(name) = self.first_unset()
         {
             // Reaching the end sends the results, so they must all be set.
-            return err(task.span, format!("task '{}' can finish without setting '{}'", task.name, name));
-        }
+            err(task.span, format!("task '{}' can finish without setting '{}'", task.name, name))
+        } else {
+            Ok(())
+        };
         self.result_names.clear();
         self.unset.clear();
-        Ok(())
+        ends_well
     }
 
     /// Checks `block` as a path of its own, and returns the results it leaves
@@ -1839,11 +2003,34 @@ impl Checker {
         })
     }
 
+    /// Checks the statements of a block, each whatever the ones before it
+    /// found: a statement with a mistake is reported and the next one is
+    /// checked, so a block's mistakes are all reported together. The names a
+    /// statement that didn't check meant to declare are declared without a type,
+    /// so that using them is no second mistake (see `Type::Unknown`).
     fn check_block(&mut self, block: &mut [Stmt]) -> Result<()> {
         for stmt in block {
-            self.check_stmt(stmt)?;
+            let checked = self.check_stmt(stmt);
+            if !self.keep_going(checked) {
+                self.declare_unchecked(stmt);
+            }
         }
         Ok(())
+    }
+
+    /// Declares, without a type, the names a statement that didn't check would
+    /// have declared. Only `bind` declares a name the rest of the block sees;
+    /// what a pattern or a loop declares is visible in its own block only, which
+    /// the statement checks itself.
+    fn declare_unchecked(&mut self, stmt: &Stmt) {
+        let StmtKind::Binding { names, mutable, .. } = &stmt.kind else { return };
+        for bound in names.iter().flat_map(Bound::leaves) {
+            if bound.name != DISCARD && self.lookup(&bound.name).is_none() {
+                // A name that can't be declared at all (one already taken by a
+                // variant, say) is the statement's own mistake, already reported.
+                let _ = self.define(&bound.name, Type::Unknown, *mutable, bound.span);
+            }
+        }
     }
 
     /// Checks a statement, whose copies must all know their regions when it ends.
@@ -2104,7 +2291,8 @@ impl Checker {
     /// Checks a `when` or `loop` condition and the block it guards, where the
     /// names an `is` pattern binds are visible.
     fn check_condition(&mut self, cond: &mut Condition, body: &mut Block) -> Result<()> {
-        let ty = self.check_expr(&mut cond.value)?;
+        let found = self.check_expr(&mut cond.value);
+        let ty = self.or_unknown(found);
         let Some(pattern) = &cond.pattern else {
             self.expect_type(&ty, &Type::Bool, cond.value.span)?;
             return self.check_scoped_block(body);
@@ -2121,6 +2309,12 @@ impl Checker {
     /// `case` rather than an `is`.
     fn pattern_bindings(&self, subject: &Type, pattern: &Pattern, in_case: bool) -> Result<Vec<Declared>> {
         let span = pattern.span;
+        // Nothing is known about the value, so nothing about what matches it
+        // either; the names the pattern writes are declared without a type, so
+        // the block it guards still reads (see `Type::Unknown`).
+        if subject.unknown() {
+            return Ok(pattern.bindings().into_iter().map(|names| (names.name.clone(), names.span, Type::Unknown, names.mutable)).collect());
+        }
         // `fail TooBig` or `{Red}`: a pattern names the whole error or value.
         if let PatternKind::Value(names) | PatternKind::Fail(names) = &pattern.kind
             && names.parts.is_empty()
@@ -2344,9 +2538,15 @@ impl Checker {
     }
 
     fn check_match(&mut self, span: Span, expr: &mut Expr, cases: &mut [Case]) -> Result<()> {
-        let ety = self.check_expr(expr)?;
+        let found = self.check_expr(expr);
+        let ety = self.or_unknown(found);
+        // The value's type couldn't be worked out, so which cases cover it
+        // isn't known; each case is still checked, and none is missing or
+        // covered twice as far as this match can tell (see `Type::Unknown`).
+        let unknown = ety.unknown();
         // The cases that together cover every value.
         let needed: Vec<String> = match &ety {
+            _ if unknown => Vec::new(),
             Type::Named(name, _) => match self.kinds.get(name) {
                 Some(kind) => kind.variants.iter().map(|v| v.tag.clone()).collect(),
                 None => return err(expr.span, format!("'match' needs a kind, a maybe, or a 'T ~ E', but '{}' is a shape", name)),
@@ -2372,7 +2572,7 @@ impl Checker {
             let bindings = self.pattern_bindings(&ety, &case.pattern, true)?;
             let label = case.pattern.label();
             if matches!(case.pattern.kind, PatternKind::Any) {
-                if needed.iter().all(|n| seen.contains(n)) {
+                if !unknown && needed.iter().all(|n| seen.contains(n)) {
                     return err(case.pattern.span, "every case is already covered, so '_' never matches");
                 }
                 matched_all = true;
@@ -2496,6 +2696,7 @@ impl Checker {
     /// parts, unpacks.
     fn tuple_items(&self, actual: &Type, names: usize, at: Span) -> Result<Vec<Type>> {
         match actual {
+            _ if actual.unknown() => Ok(vec![Type::Unknown; names]),
             Type::Tuple(items) if items.len() == names => Ok(items.clone()),
             Type::Tuple(items) => err(at, format!("this tuple has {} items, but '( … )' takes {}", items.len(), names)),
             other => err(at, format!("'( … )' takes the items of a tuple, but this value is {}{}", other, extract_hint(&[other]))),
@@ -2715,6 +2916,13 @@ impl Checker {
                         Error::at(span, format!("unknown task '{}'{}", name, hint))
                     })?
                     .clone();
+                // A task whose header has a mistake takes and sends nothing
+                // known, so the call is only checked as far as its arguments
+                // are values of their own (see `broken`).
+                if self.broken.contains(name.as_str()) {
+                    self.check_each(args);
+                    return Ok(Type::Unknown);
+                }
                 if args.len() != info.params.len() {
                     return err(span, format!("task '{}' expects {}, got {}", name, count(info.params.len(), "argument"), args.len()));
                 }
@@ -2722,6 +2930,12 @@ impl Checker {
             }
             ExprKind::Unary(op, e) => self.check_unary(*op, e, span),
             ExprKind::Binary(op, l, r) => self.check_binary(*op, l, r, span),
+            ExprKind::Construct { kind, tag, args } if self.broken.contains(kind.as_str()) => {
+                // A kind whose own variants have a mistake holds nothing known
+                // (see `broken`).
+                self.check_each(args);
+                Ok(Type::Unknown)
+            }
             ExprKind::Construct { kind, tag, args } => {
                 let variant = self.kinds.get(kind.as_str())
                     .and_then(|k| k.variants.iter().find(|v| v.tag == *tag))
@@ -2786,7 +3000,13 @@ impl Checker {
             ExprKind::Copy { value, region, region_span } => self.check_copy(span, value, region.as_deref(), *region_span),
             // Only the checker creates `Wrap`, with its type already set.
             ExprKind::Wrap(_) => expr.ty.clone().ok_or_else(|| Error::internal_at(span, "a wrapped value has no type")),
-            // `check_method_call` above has made this the call it is.
+            // `check_method_call` above has made this the call it is, unless the
+            // value it is called on has no type it could work out, which is
+            // what says which method this is (see `Type::Unknown`).
+            ExprKind::MethodCall { value, args, .. } if value.ty.as_ref().is_some_and(Type::unknown) => {
+                self.check_each(args);
+                Ok(Type::Unknown)
+            }
             ExprKind::MethodCall { name, .. } => Err(Error::internal_at(span, format!("the method call '{}' was not rewritten", name))),
         }
     }
@@ -2886,6 +3106,13 @@ impl Checker {
     /// bound that is out of range for an array is an error here; the program
     /// checks the rest as it runs.
     fn check_index(&mut self, base: &Expr, base_ty: &Type, index: &mut Expr, span: Span) -> Result<Type> {
+        if base_ty.unknown() {
+            // Whether this reads an item or takes a slice depends on the type
+            // the checker couldn't work out (see `Type::Unknown`).
+            let checked = self.check_expr(index);
+            self.keep_going(checked.map(|_| ()));
+            return Ok(Type::Unknown);
+        }
         if let Type::Text(region) = base_ty {
             return self.check_text_part(region, index, span);
         }
@@ -3121,6 +3348,9 @@ impl Checker {
         let copies = self.unsettled_copies.len();
         let types = self.unsettled_types.len();
         let ty = self.check_expr(arg)?;
+        if ty.unknown() {
+            return Ok(());
+        }
         let shown = match &ty {
             Type::Maybe(inner) => inner.as_ref(),
             other => other,
@@ -3363,10 +3593,15 @@ impl Checker {
     /// Checks a plan B, `value { body }`, and returns the type it gives: the
     /// type inside `value`.
     fn check_plan_b(&mut self, span: Span, value: &mut Expr, error: Option<&Binding>, body: &mut Block) -> Result<Type> {
-        let value_ty = self.check_expr(value)?;
+        let found = self.check_expr(value);
+        let value_ty = self.or_unknown(found);
+        // Whether the value needs a plan B at all depends on the type the
+        // checker couldn't work out, so the fallback is read for mistakes of
+        // its own and nothing more (see `Type::Unknown`).
         let (extracted, error_ty) = match &value_ty {
             Type::Maybe(inner) => ((**inner).clone(), None),
             Type::Or(ok, fail) => ((**ok).clone(), Some((**fail).clone())),
+            _ if value_ty.unknown() => (Type::Unknown, Some(Type::Unknown)),
             other => {
                 return err(value.span, format!("this value is {}, not a maybe or a 'T ~ E', so it needs no plan B", other));
             }
@@ -3422,6 +3657,19 @@ impl Checker {
         if *extracted == Type::Unit {
             return self.check_block(body).map(|()| None);
         }
+        // Whether the plan B has to give a value depends on the type the checker
+        // couldn't work out, so its last line is read as a value and nothing is
+        // asked of it (see `Type::Unknown`).
+        if extracted.unknown() {
+            let Some((last, rest)) = body.split_last_mut() else { return Ok(None) };
+            self.check_block(rest)?;
+            if let StmtKind::Expr(e) = &mut last.kind {
+                self.check_expr(e)?;
+                return Ok(None);
+            }
+            self.check_stmt(last)?;
+            return Ok(None);
+        }
         let Some((last, rest)) = body.split_last_mut() else {
             return err(span, format!("a plan B needs a value of type {} on its last line, or a '<-'", extracted));
         };
@@ -3461,6 +3709,9 @@ impl Checker {
 
     fn check_unary(&mut self, op: UnaryOp, e: &mut Expr, span: Span) -> Result<Type> {
         let ty = self.check_expr(e)?;
+        if ty.unknown() {
+            return Ok(Type::Unknown);
+        }
         match op {
             UnaryOp::Neg => {
                 if !ty.is_numeric() {
@@ -3481,6 +3732,15 @@ impl Checker {
     fn check_binary(&mut self, op: BinaryOp, l: &mut Expr, r: &mut Expr, span: Span) -> Result<Type> {
         let lt = self.check_expr(l)?;
         let rt = self.check_expr(r)?;
+        // With one operand's type unknown, the operation's own type is unknown
+        // too: a comparison is still a bool, but what it compares isn't checked
+        // (see `Type::Unknown`).
+        if lt.unknown() || rt.unknown() {
+            return Ok(match op {
+                BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge | BinaryOp::And | BinaryOp::Or => Type::Bool,
+                _ => Type::Unknown,
+            });
+        }
         match op {
             BinaryOp::Add if matches!(lt, Type::Text(_)) || matches!(rt, Type::Text(_)) => {
                 if let Some(other) = [&lt, &rt].into_iter().find(|ty| !matches!(ty, Type::Text(_))) {
@@ -3592,6 +3852,12 @@ impl Checker {
     }
 
     fn field_type(&self, base: &Type, field: &str, span: Span) -> Result<Type> {
+        // Nothing is known about what the value holds: its type couldn't be
+        // worked out, or the shape it is of has a mistake in its own fields
+        // (see `Type::Unknown` and `broken`).
+        if base.unknown() || self.owner_of(base).is_some_and(|owner| self.broken.contains(&owner)) {
+            return Ok(Type::Unknown);
+        }
         match base {
             // A shape given a type this declaration takes: its field's type is
             // the shape's with the types given in place of the names it takes.
@@ -3762,6 +4028,12 @@ impl Checker {
         self.unsettled_copies.truncate(copies);
         self.unsettled_types.truncate(untold);
         let ty = found?;
+        // Which method this is comes from the value's type, so a value whose
+        // type the checker couldn't work out leaves the call unread; the
+        // expression it is part of is left as `Type::Unknown`.
+        if ty.unknown() {
+            return Ok(());
+        }
         if name == STR && self.has_builtin_str(&ty) {
             return self.builtin_str(expr);
         }
@@ -4223,6 +4495,12 @@ impl Checker {
     /// any region, and takes that region; any other value must be of exactly
     /// the expected regions.
     fn coerce(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
+        // A value the checker couldn't work out the type of goes anywhere, and
+        // anything goes into a place whose type it couldn't work out: what went
+        // wrong is already reported (see `Type::Unknown`).
+        if expected.unknown() || expr.ty.as_ref().is_some_and(Type::unknown) {
+            return Ok(());
+        }
         self.settle_types(expr, expected)?;
         let actual = expr.ty()?.clone();
         if fits_regions(&actual, expected) {
@@ -4343,6 +4621,11 @@ impl Checker {
     /// Checks that a value of type `actual` is exactly `expected`, where no
     /// value changes type: conditions, operands, and ranges.
     fn expect_type(&self, actual: &Type, expected: &Type, span: Span) -> Result<()> {
+        if actual.unknown() || expected.unknown() {
+            // One of them is a type the checker couldn't work out, and what
+            // went wrong is already reported (see `Type::Unknown`).
+            return Ok(());
+        }
         if actual != expected {
             err(span, format!("expected type {}, got {}{}", expected, actual, extract_hint(&[actual])))
         } else {
@@ -5275,4 +5558,23 @@ fn qualify(module: &str, name: &str) -> String {
 
 fn err<T>(span: Span, msg: impl Into<String>) -> Result<T> {
     Err(Error::at(span, msg))
+}
+
+/// The mistakes as they are reported: each once, in the order a reader meets
+/// them, which is by file (the program's main file first), then line, then
+/// column. The checker finds them in the order it checks — every declaration
+/// before any task's body — and the same mistake can be found twice, by two
+/// checks that each had to work the type out. A mistake about no position at
+/// all (a compiler bug) comes last.
+fn in_source_order(errors: Vec<Error>) -> Vec<Error> {
+    let mut seen = HashSet::new();
+    let mut errors: Vec<Error> =
+        errors.into_iter().filter(|error| seen.insert((error.span.map(Span::place_key), error.message.clone()))).collect();
+    // A stable sort, so two mistakes at one position stay in the order they
+    // were found.
+    errors.sort_by_key(|error| match error.span {
+        Some(span) => (0, span.file, span.line, span.col),
+        None => (1, 0, 0, 0),
+    });
+    errors
 }
