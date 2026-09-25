@@ -109,19 +109,34 @@ const ITEMS = ["task", "shape", "kind"];
  * block, or else a `match` or a `when` used as a value further along it
  * (`bind area = match s`, `show(when ok`), which opens a block just the same.
  * A `when` right after an `else` continues that `when` and opens nothing, since
- * one `fi` closes the whole chain.
+ * one `fi` closes the whole chain. Nor does a line that closes every block it
+ * opens (`when x > 1 show(x) fi`, which Vela allows on one line): what follows
+ * it is outside it.
  */
 export function opener(line: string, words: BlockWords): string | null {
+  const found: string[] = code(line).match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? [];
+  const word = (i: number) => found[i] ?? "";
+  const opens = (i: number) => words.blockOpeners.includes(word(i)) && !(word(i) === "when" && word(i - 1) === "else");
   const first = firstWord(line, words.blockModifiers);
-  if (first !== null && words.blockOpeners.includes(first)) return first;
-  const found = code(line).match(/[A-Za-z_][A-Za-z0-9_]*/g) ?? [];
-  for (let i = 1; i < found.length; i++) {
-    const word = found[i];
-    if (word !== "match" && word !== "when") continue;
-    if (word === "when" && found[i - 1] === "else") continue;
-    return word;
+  let at = -1;
+  if (first !== null && words.blockOpeners.includes(first)) {
+    at = found.indexOf(first);
+  } else {
+    for (let i = 1; i < found.length; i++) {
+      if ((word(i) === "match" || word(i) === "when") && opens(i)) {
+        at = i;
+        break;
+      }
+    }
   }
-  return null;
+  if (at < 0) return null;
+  let open = 0;
+  let closed = 0;
+  for (let i = at; i < found.length; i++) {
+    if (word(i) === words.blockCloser) closed++;
+    else if (opens(i)) open++;
+  }
+  return closed >= open ? null : word(at);
 }
 
 /**

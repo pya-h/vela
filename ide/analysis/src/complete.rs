@@ -549,6 +549,10 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     if !inside_parens || parameter.is_some() {
         items.retain(|item| item.kind != CompletionKind::Region);
     }
+    // A `loop` takes its condition directly, so a `when` can't start it.
+    if prev_token == Some(&Token::Loop) {
+        items.retain(|item| item.label != "when" && item.label != "when … else");
+    }
     (items, word_start, byte)
 }
 

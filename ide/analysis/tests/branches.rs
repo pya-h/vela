@@ -82,6 +82,33 @@ fn completion_offers_when_after_else() {
     assert!(items.contains(&"when".to_string()), "{:?}", items);
 }
 
+#[test]
+fn a_when_on_a_line_of_its_own_inside_an_else_is_a_block_of_its_own() {
+    // Only `else when` on one line is a chain: a `when` on the line below an
+    // `else` opens a block, which the `else` block's own `fi` closes, so the
+    // name it binds is gone after it and the enclosing names are back.
+    let source = "\
+task main()
+    bind a: maybe int = none
+    bind b: maybe int = 7
+    when a is {x}
+        show(x)
+    else
+        when b is {y}
+            show(y)
+        fi
+        show(0)
+    fi
+    show(1)
+fi
+";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_eq!(class_at(source, "y)", 0), TokenClass::Variable);
+    let after = source.replace("        show(0)\n", "        show(y)\n");
+    let complaints: Vec<String> = Analysis::new(&after).diagnostics().into_iter().map(|d| d.message).collect();
+    assert!(complaints.iter().any(|m| m.contains("'y'")), "{:?}", complaints);
+}
+
 const VALUES: &str = "\
 kind Reading
     Ok(value: int)
@@ -141,6 +168,16 @@ fn completion_offers_a_match_and_a_when_where_a_value_goes() {
     // Inside a case's value, the names visible there, including the pattern's.
     let inside = labels("kind K\n    Ok(v: int)\nfi\n\ntask main()\n    bind k = Ok(1)\n    bind n = match k\n    case Ok v = @@\n    fi\n    show(n)\nfi\n");
     assert!(inside.contains(&"v".to_string()), "{:?}", inside);
+}
+
+#[test]
+fn a_loop_is_not_offered_a_when() {
+    // A `loop` takes its condition directly, which the parser insists on, so the
+    // word that would open a value there is left out; a `match` still fits.
+    let items = labels("task main()\n    hold k = 0\n    loop @@\nfi\n");
+    assert!(!items.contains(&"when".to_string()), "{:?}", items);
+    assert!(!items.contains(&"when … else".to_string()), "{:?}", items);
+    assert!(items.contains(&"match".to_string()), "{:?}", items);
 }
 
 #[test]

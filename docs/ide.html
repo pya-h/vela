@@ -434,7 +434,8 @@ Press Ctrl+C to stop.</pre>
             <code>else when</code> lines up as its <code>else</code> does and indents its own block, since one
             <code>fi</code> closes the whole chain. A <code>match</code> or a <code>when</code>
             <a href="vela.html#choices">used as a value</a> opens its block wherever it is written, so
-            <code>bind area = match s</code> takes its cases at the <code>bind</code>'s own level. Blocks, a method's
+            <code>bind area = match s</code> takes its cases at the <code>bind</code>'s own level. A line that closes
+            every block it opens, as a one-line plan B does, opens none of them. Blocks, a method's
             among them, fold from the gutter.</p>
         </div>
       </div>

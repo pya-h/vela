@@ -69,6 +69,22 @@ describe("indentation", () => {
     expect(closingLine(lines, lines.length, 0, WORDS)).toBe(6);
   });
 
+  it("reads a block written whole on one line as opening nothing", () => {
+    // Vela needs no line break before a block's body, so a `fi` on the opening
+    // line closes it there, as a one-line plan B's `}` does: what follows is
+    // outside it, and the block around it still ends at its own `fi`.
+    expect(opener('    when 1 > 0 show("a") fi', WORDS)).toBeNull();
+    expect(opener("    bind x = when c 1 else 2 fi", WORDS)).toBeNull();
+    expect(opener("    bind x = match s case A = 1 case B = 2 fi", WORDS)).toBeNull();
+    // A line whose inner block closes still opens its own.
+    expect(opener("    each i in 0..3 when x fi", WORDS)).toBe("each");
+    expect(indentOfLast('task main()\n    when 1 > 0 show("a") fi\n')).toBe(4);
+    expect(indentOfLast("task main()\n    bind x = when c 1 else 2 fi\n")).toBe(4);
+    const lines = ["task main()", '    when 1 > 0 show("a") fi', "    show(1)", "fi"];
+    expect(closingLine(lines, lines.length, 0, WORDS)).toBe(3);
+    expect(closingLine(lines, lines.length, 1, WORDS)).toBeNull();
+  });
+
   it("reads an else when as one chain, sharing the when's fi", () => {
     // The line starts with `else`, so it lines up with the `when` it continues,
     // its block is one level deeper, and the `fi` closing the chain is the

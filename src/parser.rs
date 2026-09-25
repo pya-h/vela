@@ -634,10 +634,7 @@ impl Parser {
         if is_builtin_member(&name) || name == LEN {
             return Err(Error::at(
                 span,
-                format!(
-                    "'{0}' is what every value or slice already answers to, so a method can't be called that; name it something else, as in '{0}Of'",
-                    name
-                ),
+                format!("'{}' is a reserved name: every value or slice already answers to it, so a method can't be called that", name),
             ));
         }
         if let Some(field) = fields.iter().find(|field| field.name == name) {
@@ -1311,6 +1308,11 @@ impl Parser {
     fn parse_loop(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
         self.advance(); // loop
+        // A `when` is a value too, so `loop when x < 3` would read as a loop
+        // whose condition is a whole `when`, taking the loop's own `fi` with it.
+        if self.check(Token::When) {
+            return Err(Error::at(self.peek_span(), "a 'loop' takes its condition directly, without 'when'"));
+        }
         let cond = self.parse_condition()?;
         self.skip_newlines();
         let body = self.parse_block()?;

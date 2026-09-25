@@ -5011,8 +5011,14 @@ impl Checker {
         // of its branches, since that is where its values are made: a branch
         // giving `none` beside one giving an `int` becomes part of the `maybe`
         // itself, rather than the whole being wrapped once, which would leave the
-        // branches to run for nothing.
-        if let ExprKind::Choice(stmt) = &mut expr.kind {
+        // branches to run for nothing. Only what the branches can become is
+        // pushed into them: where the type they settled on doesn't go where this
+        // value does at all, the mistake is the whole one's, and a branch has
+        // already become that settled type, so blaming its value would name a
+        // type the branch doesn't say (`bind n: int = when … 1 … none … fi`).
+        if let ExprKind::Choice(stmt) = &mut expr.kind
+            && fits(&actual, expected)
+        {
             self.settle_branch_values(stmt, expected)?;
             expr.ty = Some(expected.clone());
             return Ok(());

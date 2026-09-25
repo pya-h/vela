@@ -1,4 +1,4 @@
-# error: 5:5: 'add' is what every value or slice already answers to, so a method can't be called that; name it something else, as in 'addOf'
+# error: 5:5: 'add' is a reserved name: every value or slice already answers to it, so a method can't be called that
 shape Bag
     items: [int]
 
