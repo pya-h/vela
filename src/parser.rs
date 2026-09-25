@@ -591,10 +591,12 @@ impl Parser {
                 self.skip_newlines();
                 continue;
             }
+            let read = self.match_read(private)?;
             self.reject_field_below_method(&methods, "shape")?;
             let mut field = self.parse_field(Slot::Field)?;
             reject_member_named_this(&field.name, field.span, "a field")?;
             field.private = private;
+            field.read = read;
             fields.push(field);
             self.skip_newlines();
         }
@@ -809,13 +811,45 @@ impl Parser {
         if self.check(Token::Priv) {
             return Err(Error::at(span, "only a shape's field can be 'priv', not a parameter or a variant's value"));
         }
+        // A name after `read` is a field it marks, which a parameter and a
+        // variant's value never are (`parse_shape` reads the ones that are).
+        if matches!(self.peek(), Token::Ident(word) if word == READ) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
+            return Err(Error::at(span, format!("only a shape's field can be '{}', not a parameter or a variant's value", READ)));
+        }
         let name = self.expect_ident()?;
         self.expect(Token::Colon)?;
         let ty_span = self.peek_span();
         let ty = self.parse_type()?;
         let default_region = self.match_default(slot == Slot::Param)?;
         let default = self.match_field_default(slot)?;
-        Ok(Field { name, ty, span, ty_span, private: false, default_region, default })
+        Ok(Field { name, ty, span, ty_span, private: false, read: false, default_region, default })
+    }
+
+    /// The word `read` before a shape's field, which any file may read and only
+    /// its own file may assign (see `ast::READ`). The word is a marker only where
+    /// a name follows it: a field called `read` is written `read:` and a method
+    /// `read(`, so both still work. `private` says `priv` was read just before,
+    /// which a field is instead of `read`, not as well.
+    fn match_read(&mut self, private: bool) -> Result<bool> {
+        if !matches!(self.peek(), Token::Ident(word) if word == READ) || !matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
+            return Ok(false);
+        }
+        let at = self.peek_span();
+        // `read step()`: a method says what it changes with `alters`.
+        if matches!(self.tokens.get(self.pos + 2), Some(Token::LParen | Token::Lt)) {
+            return Err(Error::at(at, format!("only a field can be '{}', not a method; a method that changes the value it is called on says '{}'", READ, ALTERS)));
+        }
+        if private {
+            return Err(Error::at(
+                at,
+                format!("a field is 'priv' or '{0}', not both: 'priv' keeps it to its own file, and '{0}' lets any file read it", READ),
+            ));
+        }
+        self.advance();
+        if matches!(self.peek(), Token::Ident(word) if word == READ) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
+            return Err(Error::at(self.peek_span(), format!("'{}' is already written here: a field is read-only or it isn't", READ)));
+        }
+        Ok(true)
     }
 
     /// `= value` after a shape's field: the value a literal that leaves the
@@ -2506,7 +2540,7 @@ fn receiver(owner: &str, types: &[TypeParam], span: Span) -> Field {
         let given = types.iter().map(|param| Type::Named(param.name.clone(), None)).collect();
         Type::Applied(Box::new(Applied { name: owner.to_string(), types: given, region }))
     };
-    Field { name: THIS.to_string(), ty, span, ty_span: span, private: false, default_region: false, default: None }
+    Field { name: THIS.to_string(), ty, span, ty_span: span, private: false, read: false, default_region: false, default: None }
 }
 
 /// Refuses a member named `this`, which is the whole value inside a method, so

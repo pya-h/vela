@@ -1,0 +1,8 @@
+# error: 3:10: 'read' is already written here: a field is read-only or it isn't
+shape Tally
+    read read total: int = 0
+fi
+
+task main()
+    show(1)
+fi

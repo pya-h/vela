@@ -1,0 +1,9 @@
+# A shape with read-only fields, for fixtures that use it from another file.
+shape Meter
+    read label: text
+    read count: int = 0
+
+    alters tick()
+        .count = .count + 1
+    fi
+fi

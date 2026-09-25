@@ -1,0 +1,16 @@
+# error: 10:12: 'total' is a read-only field of 'Tally', which only the methods of 'Tally' assign
+shape Tally
+    read total: int = 0
+fi
+
+shape Clerk
+    name: text = "ada"
+
+    alters cheat(t: ^Tally@r)
+        t^.total = 99
+    fi
+fi
+
+task main()
+    show(1)
+fi

@@ -253,9 +253,11 @@ fn nothing_is_offered_in_comments_text_or_new_names() {
     ] {
         assert_eq!(labels(&marked), Vec::<String>::new(), "at {:?}", marked);
     }
-    // A field's or a method's name is new, but it may be private, and a
-    // method may change its value.
-    assert_eq!(labels("shape S\n    @@"), ["priv", "alters"]);
+    // A field's or a method's name is new, but it may be private, a shape's
+    // field may be read-only, and a method may change its value. A kind has no
+    // fields, so nothing there is read-only.
+    assert_eq!(labels("shape S\n    @@"), ["priv", "read", "alters"]);
+    assert_eq!(labels("kind K\n    V\n    @@"), ["priv", "alters"]);
 }
 
 /// The hover at the `nth` occurrence of `needle` (offset `shift` into it).

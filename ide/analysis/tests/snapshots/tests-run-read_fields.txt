@@ -1,0 +1,88 @@
+  1 | # A field marked `read` is read by any file and assigned only by the methods of
+    | comment:# A field marked `read` is read by any file and assigned only by the methods of
+  2 | # its own shape, so what a shape keeps true of itself stays so wherever it is
+    | comment:# its own shape, so what a shape keeps true of itself stays so wherever it is
+  3 | # used, in the file that declares it as much as in another. A literal gives
+    | comment:# used, in the file that declares it as much as in another. A literal gives
+  4 | # such a field exactly when the shape gives it no value to fall back on.
+    | comment:# such a field exactly when the shape gives it no value to fall back on.
+  6 | include read_fields/meter {Meter, Mode}
+    | keyword:include  module:read_fields  operator:/  module:meter  punctuation:{  type:Meter  punctuation:,  type:Mode  punctuation:}
+  8 | # A shape of this file keeps its `read` fields to its own methods too.
+    | comment:# A shape of this file keeps its `read` fields to its own methods too.
+  9 | shape Tally
+    | keyword:shape  type:Tally
+ 10 |     read total: int = 0
+    | keyword:read  field:total  punctuation::  type-builtin:int  operator:=  number:0
+ 11 |     note: text = "tally"
+    | field:note  punctuation::  type-builtin:text  operator:=  string:"tally"
+ 13 |     alters count(n: int)
+    | keyword:alters  method:count  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)
+ 14 |         .total = .total + n
+    | punctuation:.  field:total  operator:=  punctuation:.  field:total  operator:+  parameter:n
+ 15 |     fi
+    | keyword:fi
+ 17 |     # A method of the shape may assign the field of another of its values.
+    | comment:# A method of the shape may assign the field of another of its values.
+ 18 |     alters take(other: Tally)
+    | keyword:alters  method:take  punctuation:(  parameter:other  punctuation::  type:Tally  punctuation:)
+ 19 |         .total = .total + other.total
+    | punctuation:.  field:total  operator:=  punctuation:.  field:total  operator:+  parameter:other  punctuation:.  field:total
+ 20 |     fi
+    | keyword:fi
+ 21 | fi
+    | keyword:fi
+ 23 | task shown(mode: Mode) -> text
+    | keyword:task  task:shown  punctuation:(  parameter:mode  punctuation::  type:Mode  punctuation:)  operator:->  type-builtin:text
+ 24 |     <- match mode
+    | keyword:<-  keyword:match  parameter:mode
+ 25 |     case Idle = "idle"
+    | keyword:case  variant:Idle  operator:=  string:"idle"
+ 26 |     case Counting = "counting"
+    | keyword:case  variant:Counting  operator:=  string:"counting"
+ 27 |     fi
+    | keyword:fi
+ 28 | fi
+    | keyword:fi
+ 30 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 31 |     hold meter = Meter { label: "door" }
+    | keyword:hold  variable:meter  operator:=  type:Meter  punctuation:{  field:label  punctuation::  string:"door"  punctuation:}
+ 32 |     show(meter.label, " ", meter.count, " ", shown(meter.mode))
+    | builtin-fn:show  punctuation:(  variable:meter  punctuation:.  field:label  punctuation:,  string:" "  punctuation:,  variable:meter  punctuation:.  field:count  punctuation:,  string:" "  punctuation:,  task:shown  punctuation:(  variable:meter  punctuation:.  field:mode  punctuation:)  punctuation:)
+ 33 |     meter.tick()
+    | variable:meter  punctuation:.  method:tick  punctuation:(  punctuation:)
+ 34 |     meter.tick()
+    | variable:meter  punctuation:.  method:tick  punctuation:(  punctuation:)
+ 35 |     show(meter.label, " ", meter.count, " ", shown(meter.mode))
+    | builtin-fn:show  punctuation:(  variable:meter  punctuation:.  field:label  punctuation:,  string:" "  punctuation:,  variable:meter  punctuation:.  field:count  punctuation:,  string:" "  punctuation:,  task:shown  punctuation:(  variable:meter  punctuation:.  field:mode  punctuation:)  punctuation:)
+ 36 |     meter.rename("gate")
+    | variable:meter  punctuation:.  method:rename  punctuation:(  string:"gate"  punctuation:)
+ 37 |     meter.reset()
+    | variable:meter  punctuation:.  method:reset  punctuation:(  punctuation:)
+ 38 |     show(meter.label, " ", meter.count, " ", shown(meter.mode))
+    | builtin-fn:show  punctuation:(  variable:meter  punctuation:.  field:label  punctuation:,  string:" "  punctuation:,  variable:meter  punctuation:.  field:count  punctuation:,  string:" "  punctuation:,  task:shown  punctuation:(  variable:meter  punctuation:.  field:mode  punctuation:)  punctuation:)
+ 40 |     hold tally = Tally {}
+    | keyword:hold  variable:tally  operator:=  type:Tally  punctuation:{  punctuation:}
+ 41 |     tally.count(3)
+    | variable:tally  punctuation:.  method:count  punctuation:(  number:3  punctuation:)
+ 42 |     hold other = Tally { note: "other" }
+    | keyword:hold  variable:other  operator:=  type:Tally  punctuation:{  field:note  punctuation::  string:"other"  punctuation:}
+ 43 |     other.count(4)
+    | variable:other  punctuation:.  method:count  punctuation:(  number:4  punctuation:)
+ 44 |     tally.take(other)
+    | variable:tally  punctuation:.  method:take  punctuation:(  variable:other  punctuation:)
+ 45 |     # An ordinary field beside it is still assigned by anyone.
+    | comment:# An ordinary field beside it is still assigned by anyone.
+ 46 |     tally.note = "sum"
+    | variable:tally  punctuation:.  field:note  operator:=  string:"sum"
+ 47 |     show(tally.note, " ", tally.total)
+    | builtin-fn:show  punctuation:(  variable:tally  punctuation:.  field:note  punctuation:,  string:" "  punctuation:,  variable:tally  punctuation:.  field:total  punctuation:)
+ 49 |     # A whole new value may take the place of one, as for any variable.
+    | comment:# A whole new value may take the place of one, as for any variable.
+ 50 |     meter = Meter { label: "fresh" }
+    | variable:meter  operator:=  type:Meter  punctuation:{  field:label  punctuation::  string:"fresh"  punctuation:}
+ 51 |     show(meter.label, " ", meter.count)
+    | builtin-fn:show  punctuation:(  variable:meter  punctuation:.  field:label  punctuation:,  string:" "  punctuation:,  variable:meter  punctuation:.  field:count  punctuation:)
+ 52 | fi
+    | keyword:fi

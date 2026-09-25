@@ -17,7 +17,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use serde::Serialize;
-use vela::ast::{ALTERS, BUILTIN_TASKS, DEFAULT, MODULE_SEPARATOR, Span, THIS_WORD, Type, unqualified};
+use vela::ast::{ALTERS, BUILTIN_TASKS, DEFAULT, MODULE_SEPARATOR, READ, Span, THIS_WORD, Type, unqualified};
 use vela::lexer::{ESCAPES, LexKind, LexToken, Piece, Token, highlight};
 
 use crate::types::{Context, slashed};
@@ -131,8 +131,12 @@ pub(crate) struct Symbol {
     /// Marked `priv`: a task, shape, kind, or field of its own file only.
     pub private: bool,
     /// A field with a value a literal that leaves it out gives it
-    /// (`size: int = 0`), which is what a literal may not write.
+    /// (`size: int = 0`).
     pub default: bool,
+    /// A field marked `read` (`read path: text`): any file reads it, and only
+    /// the methods of its shape assign it. A literal gives it exactly when it
+    /// has no `default`.
+    pub read: bool,
 }
 
 /// A module the file includes.
@@ -585,6 +589,13 @@ fn ends_field(token: &Token) -> bool {
     matches!(token, Token::Comma | Token::RParen)
 }
 
+/// Whether the name at `p` is a shape's field marked `read`, the word starting
+/// its line (`read path: text`). A field named `read` is followed by `:`, so it
+/// is never taken for the word.
+fn read_marker(tokens: &Tokens, p: usize) -> bool {
+    p.checked_sub(1).is_some_and(|q| tokens.ident(q) == Some(READ) && tokens.starts_line(q))
+}
+
 /// What ends a shape's field, whose type may be followed by the value a literal
 /// that leaves the field out gives it (`size: int = 0`).
 fn ends_shape_field(token: &Token) -> bool {
@@ -630,7 +641,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
         let start = tokens.get(p).map(|t| t.start).unwrap_or_default();
         let visible = 0..tokens.source.len();
         let private = tokens.before(p) == Some(&Token::Priv) || tokens.before(p.saturating_sub(1)) == Some(&Token::Priv);
-        symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro: None, detail, parent, module: None, private, default: false });
+        symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro: None, detail, parent, module: None, private, default: false, read: false });
         declared_at.insert(p, symbols.len() - 1);
         symbols.len() - 1
     };
@@ -770,7 +781,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
             }
             Token::Ident(_) => match (blocks.as_slice(), item) {
                 ([Block::Shape], Some(shape))
-                    if (tokens.starts_line(p) || (tokens.before(p) == Some(&Token::Priv) && tokens.starts_line(p - 1)))
+                    if (tokens.starts_line(p) || (tokens.before(p) == Some(&Token::Priv) && tokens.starts_line(p - 1)) || read_marker(tokens, p))
                         && tokens.token(p + 1) == Some(&Token::Colon) =>
                 {
                     // The type, and whether a value it falls back on follows it.
@@ -780,6 +791,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                     let id = declare(&mut symbols, p, SymbolKind::Field, detail, Some(shape));
                     if let Some(field) = symbols.get_mut(id) {
                         field.default = falls_back;
+                        field.read = read_marker(tokens, p);
                     }
                 }
                 ([Block::Kind], Some(kind)) if tokens.starts_line(p) => {
@@ -1228,6 +1240,11 @@ impl<'a> Classifier<'a> {
         if name == ALTERS && self.declared_at.get(&(p + 1)).and_then(|&id| self.symbols.get(id)).is_some_and(|s| s.kind == SymbolKind::Method) {
             return (TokenClass::Keyword, None);
         }
+        // `read path: text`: the word before a field only its shape's methods
+        // assign.
+        if name == READ && self.declared_at.get(&(p + 1)).and_then(|&id| self.symbols.get(id)).is_some_and(|s| s.kind == SymbolKind::Field && s.read) {
+            return (TokenClass::Keyword, None);
+        }
         // `region r default` and `r: region default`: the word that makes a
         // region the default of a block or of a task's body.
         if name == DEFAULT {
@@ -1474,7 +1491,7 @@ impl<'a> Classifier<'a> {
         // the case may give its value on the same line: `case Ok v = v * 2`.
         if intro == Some("case") {
             let visible = range.end..tokens.source.len();
-            self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, module: None, private: false });
+            self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, read: false, module: None, private: false });
             let id = self.symbols.len() - 1;
             if let Some(scope) = self.scopes.last_mut() {
                 scope.variables.push(id);
@@ -1513,7 +1530,7 @@ impl<'a> Classifier<'a> {
             })
             .map_or(tokens.source.len(), |q| tokens.range(q).end);
         let visible = line_end..tokens.source.len();
-        self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, module: None, private: false });
+        self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, read: false, module: None, private: false });
         let id = self.symbols.len() - 1;
         if let Some(scope) = self.scopes.last_mut() {
             scope.variables.push(id);

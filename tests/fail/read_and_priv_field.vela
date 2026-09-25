@@ -1,0 +1,8 @@
+# error: 3:10: a field is 'priv' or 'read', not both: 'priv' keeps it to its own file, and 'read' lets any file read it
+shape Tally
+    priv read total: int = 0
+fi
+
+task main()
+    show(1)
+fi

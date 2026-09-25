@@ -78,6 +78,9 @@ pub struct Checker {
     /// What the task being checked is a method of, when it is one: its own name
     /// and whether it may change the value it is called on.
     current_method: Option<Owner>,
+    /// The shape or kind whose method is being checked, as `owner_of` names it,
+    /// which is the only code that may assign its `read` fields.
+    current_owner: Option<String>,
     /// The shapes and kinds that hold pointers, directly or in other shapes and
     /// kinds, so their values live in a region.
     regional: HashSet<String>,
@@ -912,6 +915,20 @@ impl Checker {
                 return err(
                     field.span,
                     format!("'{}' is a private field of '{}', which only its own file can give; leave it out and it falls back on its own value", field.name, name),
+                );
+            }
+            // A `read` field that falls back on a value is the shape's own
+            // business: no literal writes it, so nothing can make it say what
+            // isn't so.
+            if field_def.read && field_def.default.is_some() {
+                return err(
+                    field.span,
+                    format!(
+                        "'{}' is a read-only field of '{}' that falls back on its own value, so no literal gives it; only the methods of '{}' set it",
+                        field.name,
+                        name,
+                        unqualified(name)
+                    ),
                 );
             }
             seen.insert(field.name.clone(), field.span);
@@ -1917,6 +1934,7 @@ impl Checker {
         }
         self.current_ret = Some(known(&task.ret));
         self.current_method = task.owner.clone();
+        self.current_owner = task.owner.as_ref().and(task.params.first()).and_then(|this| self.owner_of(&this.ty));
         // Parameters and the task body share one scope, as in C.
         self.scopes = vec![Scope::default()];
         for param in &task.params {
@@ -1985,6 +2003,7 @@ impl Checker {
         self.scopes.clear();
         self.current_ret = None;
         self.current_method = None;
+        self.current_owner = None;
         let ends_well = if self.result_names.is_empty() {
             if whole && sends_value(&task.ret) && !always_sends(&task.body) {
                 err(task.span, format!("task '{}' can finish without sending a value", task.name))
@@ -2904,6 +2923,15 @@ impl Checker {
                 }
                 let base_ty = self.check_field_base(base)?;
                 let ty = self.field_type(&base_ty, field, span)?;
+                // A `read` field is read anywhere and assigned only by the methods
+                // of its own shape, so what a shape keeps true of itself stays
+                // its own, in the file that declares it as much as in another.
+                if let Some(owner) = self.owner_of(&base_ty).filter(|owner| self.current_owner.as_ref() != Some(owner))
+                    && self.declared_field(&owner, field).is_some_and(|declared| declared.read)
+                {
+                    let shape = unqualified(&owner);
+                    return err(span, format!("'{}' is a read-only field of '{}', which only the methods of '{}' assign", field, shape, shape));
+                }
                 match base_ty {
                     Type::Tuple(_) => {
                         return err(span, "a tuple's items never change; give the whole tuple a new value instead, as in 't = (1, 2)'");
@@ -4535,6 +4563,14 @@ impl Checker {
             Type::Applied(applied) => Some(applied.name.clone()),
             _ => None,
         }
+    }
+
+    /// The field `field` as the shape `owner` declares it, for what its markers
+    /// say (`priv`, `read`, and the value it falls back on). A shape made for a
+    /// set of types is read as the shape it was made from, whose fields carry
+    /// them (see `owner_of`).
+    fn declared_field(&self, owner: &str, field: &str) -> Option<&Field> {
+        self.shapes.get(owner)?.fields.iter().find(|declared| declared.name == field)
     }
 
     /// The methods of the shape or kind `owner`, in no particular order.

@@ -1,0 +1,7 @@
+# error: 5:41: 'count' is a read-only field of 'Meter' that falls back on its own value, so no literal gives it; only the methods of 'Meter' set it
+include modules/meter {Meter}
+
+task main()
+    hold meter = Meter { label: "door", count: 3 }
+    show(meter.count)
+fi

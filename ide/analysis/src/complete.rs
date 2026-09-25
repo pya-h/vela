@@ -514,9 +514,10 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 let before_items = !(0..prev.map_or(0, |q| q + 1)).any(|q| matches!(k.token(q), Some(Token::Task | Token::Shape | Token::Kind)));
                 item_level_items().into_iter().filter(|item| before_items || item.label != "include").collect()
             }
-            // A shape's field and a method can be private, and a method can
-            // change its value.
-            Some(Block::Shape | Block::Kind) => vec![keyword("priv"), keyword(vela::ast::ALTERS)],
+            // A shape's field and a method can be private, a shape's field can
+            // be read-only, and a method can change its value.
+            Some(Block::Shape) => vec![keyword("priv"), keyword(vela::ast::READ), keyword(vela::ast::ALTERS)],
+            Some(Block::Kind) => vec![keyword("priv"), keyword(vela::ast::ALTERS)],
             Some(_) => {
                 let probe = probe(source, context, word_start, word_end);
                 let exact = Knowledge::new(source, scan, &probe);
@@ -1029,8 +1030,9 @@ fn literal_field_items(k: &Knowledge, brace: usize, word_start: usize) -> Vec<Co
         }
     }
     k.members(shape, SymbolKind::Field)
-        // Another module's private fields can't be given here.
-        .filter(|(_, field)| !given.contains(&field.name) && (field.module.is_none() || !field.private))
+        // Another module's private fields can't be given here, and a `read`
+        // field that falls back on a value is given by no literal.
+        .filter(|(_, field)| !given.contains(&field.name) && (field.module.is_none() || !field.private) && !(field.read && field.default))
         .map(|(_, field)| CompletionItem {
             label: field.name.clone(),
             kind: CompletionKind::Field,

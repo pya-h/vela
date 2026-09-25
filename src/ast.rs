@@ -223,6 +223,7 @@ pub fn input_error_kind() -> KindDef {
         span,
         ty_span: span,
         private: false,
+        read: false,
         default_region: false,
         default: None,
     };
@@ -264,6 +265,13 @@ pub const LEN: &str = "len";
 /// inside a shape or a kind (`alters step()`). Not a keyword: it marks a member
 /// and means nothing anywhere else, so a task or a variable may still use it.
 pub const ALTERS: &str = "alters";
+
+/// The word that marks a field any file may read and only its own file may
+/// assign, written before the field's name (`read path: text`). Not a keyword:
+/// like `alters`, it marks one thing in one position and means nothing anywhere
+/// else, so a task, a field, or a method may still be called `read`, since a
+/// field named so is written `read:` and a method `read(`.
+pub const READ: &str = "read";
 
 /// The word that marks a block's default region, written after the region's name
 /// in its declaration (`region r default`) or after the type of a region a task
@@ -1108,6 +1116,11 @@ pub struct Field {
     /// `priv`: a shape's field that only its own file reads, writes, or sets
     /// in a literal. Parameters and payloads are never private.
     pub private: bool,
+    /// `read`: a shape's field any file may read and only its own file may
+    /// assign (see `ast::READ`). A literal gives it exactly when it falls back
+    /// on no value, so what the shape keeps to itself stays its own business.
+    /// Never `priv` as well, and never a parameter or a payload.
+    pub read: bool,
     /// `r: region default`: a region the task takes that is its body's default
     /// region (see `ast::DEFAULT`). Only a parameter of type `region` can be
     /// one, and a task takes at most one; a field or a payload never is.

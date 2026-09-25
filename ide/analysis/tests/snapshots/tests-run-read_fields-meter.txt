@@ -1,0 +1,46 @@
+  1 | # A shape whose fields any file reads and only its own methods assign. The one
+    | comment:# A shape whose fields any file reads and only its own methods assign. The one
+  2 | # with no value to fall back on is given by the literal that makes the value;
+    | comment:# with no value to fall back on is given by the literal that makes the value;
+  3 | # the others start at theirs and no literal gives them.
+    | comment:# the others start at theirs and no literal gives them.
+  5 | kind Mode
+    | keyword:kind  type:Mode
+  6 |     Idle
+    | variant:Idle
+  7 |     Counting
+    | variant:Counting
+  8 | fi
+    | keyword:fi
+ 10 | shape Meter
+    | keyword:shape  type:Meter
+ 11 |     read label: text
+    | keyword:read  field:label  punctuation::  type-builtin:text
+ 12 |     read count: int = 0
+    | keyword:read  field:count  punctuation::  type-builtin:int  operator:=  number:0
+ 13 |     read mode: Mode = Mode.Idle
+    | keyword:read  field:mode  punctuation::  type:Mode  operator:=  type:Mode  punctuation:.  variant:Idle
+ 15 |     alters tick()
+    | keyword:alters  method:tick  punctuation:(  punctuation:)
+ 16 |         .count = .count + 1
+    | punctuation:.  field:count  operator:=  punctuation:.  field:count  operator:+  number:1
+ 17 |         .mode = Mode.Counting
+    | punctuation:.  field:mode  operator:=  type:Mode  punctuation:.  variant:Counting
+ 18 |     fi
+    | keyword:fi
+ 20 |     alters rename(to: text)
+    | keyword:alters  method:rename  punctuation:(  parameter:to  punctuation::  type-builtin:text  punctuation:)
+ 21 |         .label = to
+    | punctuation:.  field:label  operator:=  parameter:to
+ 22 |     fi
+    | keyword:fi
+ 24 |     alters reset()
+    | keyword:alters  method:reset  punctuation:(  punctuation:)
+ 25 |         .count = 0
+    | punctuation:.  field:count  operator:=  number:0
+ 26 |         .mode = Mode.Idle
+    | punctuation:.  field:mode  operator:=  type:Mode  punctuation:.  variant:Idle
+ 27 |     fi
+    | keyword:fi
+ 28 | fi
+    | keyword:fi

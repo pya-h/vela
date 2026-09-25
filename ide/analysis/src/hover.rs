@@ -255,7 +255,7 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                     continue;
                 }
                 let separator = if member.kind == SymbolKind::Field { ": " } else { "" };
-                let private = if member.private { "priv " } else { "" };
+                let private = if member.private { "priv " } else if member.read { "read " } else { "" };
                 let alters = if member.kind == SymbolKind::Method { member.intro.map_or(String::new(), |word| format!("{} ", word)) } else { String::new() };
                 code.push_str(&format!("    {}{}{}{}{}\n", private, alters, vela::ast::unqualified(&member.name), separator, member.detail));
             }
@@ -274,7 +274,9 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 Some(p) => format!("A field of shape {}.", p.name),
                 None => String::new(),
             };
-            (format!("{}: {}", symbol.name, symbol.detail), doc)
+            let marker = if symbol.read { "read " } else { "" };
+            let doc = if symbol.read { format!("{} Any file reads it; only the methods of its shape assign it.", doc) } else { doc };
+            (format!("{}{}: {}", marker, symbol.name, symbol.detail), doc)
         }
         SymbolKind::Parameter => {
             let doc = task_around(k, symbol.name_range.start).map(|task| format!("A parameter of {}.", task)).unwrap_or_default();

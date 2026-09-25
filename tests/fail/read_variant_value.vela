@@ -1,0 +1,8 @@
+# error: 3:12: only a shape's field can be 'read', not a parameter or a variant's value
+kind Shape
+    Circle(read radius: float)
+fi
+
+task main()
+    show(1)
+fi
