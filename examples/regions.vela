@@ -18,11 +18,9 @@ fi
 
 # Only reads, so it names the region without taking it.
 task total(t: Tree@r) -> int
-    match t
-    case Leaf value
-        <- value
-    case Branch left right
-        <- total(left^) + total(right^)
+    <- match t
+    case Leaf value = value
+    case Branch left right = total(left^) + total(right^)
     fi
 fi
 

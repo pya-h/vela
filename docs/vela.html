@@ -239,7 +239,9 @@
         A statement is a binding, an assignment, a block, a send (<code>&lt;-</code>), a result update
         (<code>total &lt;- value</code>, see <a href="#named-results">Named Results</a>), a <code>region</code>, or a task
         call, which may have a plan B (see <a href="#maybe">Maybe and Errors</a>). Any other expression on its own line would do nothing, so it is an error: <code>x == 1</code> alone
-        reports <code>the result of '==' is unused; use '=' to assign</code>. Comments start with <code>#</code>.
+        reports <code>the result of '==' is unused; use '=' to assign</code>. A <code>when</code> and a
+        <code>match</code> are blocks, and so statements, but they are also values where one is expected (see
+        <a href="#choices">A match or a when as a value</a>). Comments start with <code>#</code>.
       </p>
 
       <h3>Reserved Words and Symbols</h3>
@@ -1443,7 +1445,8 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
         <a href="#maybe">plan B</a>'s block does; a <code>when</code> uses blocks only, and needs its
         <code>else</code>, since without one nothing gives the value when the condition doesn't hold.
       </p>
-      <pre class="program" data-file="choices.vela"><span class="keyword">kind</span> Shape
+      <pre class="program" data-file="choices.vela"><span class="comment"># The same `area` as in Kinds, with the match as the value it sends.</span>
+<span class="keyword">kind</span> Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)
 <span class="keyword">fi</span>

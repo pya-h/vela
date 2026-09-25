@@ -32,61 +32,57 @@
     | comment:# Only reads, so it names the region without taking it.
  20 | task total(t: Tree@r) -> int
     | keyword:task  task:total  punctuation:(  parameter:t  punctuation::  type:Tree  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
- 21 |     match t
-    | keyword:match  parameter:t
- 22 |     case Leaf value
-    | keyword:case  variant:Leaf  variable:value
- 23 |         <- value
-    | keyword:<-  variable:value
- 24 |     case Branch left right
-    | keyword:case  variant:Branch  variable:left  variable:right
- 25 |         <- total(left^) + total(right^)
-    | keyword:<-  task:total  punctuation:(  variable:left  operator:^  punctuation:)  operator:+  task:total  punctuation:(  variable:right  operator:^  punctuation:)
- 26 |     fi
+ 21 |     <- match t
+    | keyword:<-  keyword:match  parameter:t
+ 22 |     case Leaf value = value
+    | keyword:case  variant:Leaf  variable:value  operator:=  variable:value
+ 23 |     case Branch left right = total(left^) + total(right^)
+    | keyword:case  variant:Branch  variable:left  variable:right  operator:=  task:total  punctuation:(  variable:left  operator:^  punctuation:)  operator:+  task:total  punctuation:(  variable:right  operator:^  punctuation:)
+ 24 |     fi
     | keyword:fi
- 27 | fi
+ 25 | fi
     | keyword:fi
- 29 | # Copies a tree, node by node, into another region.
+ 27 | # Copies a tree, node by node, into another region.
     | comment:# Copies a tree, node by node, into another region.
- 30 | task copy(to: region, t: Tree@from) -> Tree@to
+ 28 | task copy(to: region, t: Tree@from) -> Tree@to
     | keyword:task  task:copy  punctuation:(  region:to  punctuation::  keyword:region  punctuation:,  parameter:t  punctuation::  type:Tree  operator:@  region:from  punctuation:)  operator:->  type:Tree  operator:@  region:to
- 31 |     match t
+ 29 |     match t
     | keyword:match  parameter:t
- 32 |     case Leaf value
+ 30 |     case Leaf value
     | keyword:case  variant:Leaf  variable:value
- 33 |         <- Leaf(value)
+ 31 |         <- Leaf(value)
     | keyword:<-  variant:Leaf  punctuation:(  variable:value  punctuation:)
- 34 |     case Branch left right
+ 32 |     case Branch left right
     | keyword:case  variant:Branch  variable:left  variable:right
- 35 |         <- Branch(new Tree(copy(to, left^)) at to, new Tree(copy(to, right^)) at to)
+ 33 |         <- Branch(new Tree(copy(to, left^)) at to, new Tree(copy(to, right^)) at to)
     | keyword:<-  variant:Branch  punctuation:(  keyword:new  type:Tree  punctuation:(  task:copy  punctuation:(  region:to  punctuation:,  variable:left  operator:^  punctuation:)  punctuation:)  keyword:at  region:to  punctuation:,  keyword:new  type:Tree  punctuation:(  task:copy  punctuation:(  region:to  punctuation:,  variable:right  operator:^  punctuation:)  punctuation:)  keyword:at  region:to  punctuation:)
- 36 |     fi
+ 34 |     fi
     | keyword:fi
- 37 | fi
+ 35 | fi
     | keyword:fi
- 39 | task main()
+ 37 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 40 |     region kept
+ 38 |     region kept
     | keyword:region  region:kept
- 41 |     hold best: Tree@kept = Leaf(0)
+ 39 |     hold best: Tree@kept = Leaf(0)
     | keyword:hold  variable:best  punctuation::  type:Tree  operator:@  region:kept  operator:=  variant:Leaf  punctuation:(  number:0  punctuation:)
- 42 |     each round in 0..5
+ 40 |     each round in 0..5
     | keyword:each  variable:round  keyword:in  number:0  operator:..  number:5
- 43 |         region pass                      # empty again, and freed, on every pass
+ 41 |         region pass                      # empty again, and freed, on every pass
     | keyword:region  region:pass  comment:# empty again, and freed, on every pass
- 44 |         bind candidate = build(pass, 6, round)
+ 42 |         bind candidate = build(pass, 6, round)
     | keyword:bind  variable:candidate  operator:=  task:build  punctuation:(  region:pass  punctuation:,  number:6  punctuation:,  variable:round  punctuation:)
- 45 |         show(total(candidate))
+ 43 |         show(total(candidate))
     | builtin-fn:show  punctuation:(  task:total  punctuation:(  variable:candidate  punctuation:)  punctuation:)
- 46 |         when total(candidate) > total(best)
+ 44 |         when total(candidate) > total(best)
     | keyword:when  task:total  punctuation:(  variable:candidate  punctuation:)  operator:>  task:total  punctuation:(  variable:best  punctuation:)
- 47 |             best = copy(kept, candidate)
+ 45 |             best = copy(kept, candidate)
     | variable:best  operator:=  task:copy  punctuation:(  region:kept  punctuation:,  variable:candidate  punctuation:)
- 48 |         fi
+ 46 |         fi
     | keyword:fi
- 49 |     fi
+ 47 |     fi
     | keyword:fi
- 50 |     show(total(best))
+ 48 |     show(total(best))
     | builtin-fn:show  punctuation:(  task:total  punctuation:(  variable:best  punctuation:)  punctuation:)
- 51 | fi
+ 49 | fi
     | keyword:fi

@@ -10,13 +10,10 @@ kind ReadingError
     # region the method is given. `show(problem)` calls this for us, in a region
     # it makes for the line, so printing a reason names no region at all.
     str(r: region) -> text@r
-        match .this
-        case Missing
-            <- "no reading"
-        case TooCold value
-            <- "too cold: {value}" at r
-        case TooHot value
-            <- "too hot: {value}" at r
+        <- match .this
+        case Missing = "no reading"
+        case TooCold value = "too cold: {value}" at r
+        case TooHot value = "too hot: {value}" at r
         fi
     fi
 fi

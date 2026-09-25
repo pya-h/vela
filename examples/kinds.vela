@@ -12,13 +12,10 @@ kind Shape
     # so it takes the region the text goes in; `show(shape)` calls it, in a
     # region of its own, and so does `"{shape}"`.
     str(r: region) -> text@r
-        match .this
-        case Circle radius
-            <- "circle of {radius}" at r
-        case Rectangle w h
-            <- "rectangle {w} by {h}" at r
-        case Dot
-            <- "dot"
+        <- match .this
+        case Circle radius = "circle of {radius}" at r
+        case Rectangle w h = "rectangle {w} by {h}" at r
+        case Dot = "dot"
         fi
     fi
 

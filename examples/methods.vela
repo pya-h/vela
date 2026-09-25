@@ -12,11 +12,9 @@ kind Refusal
     Closed
 
     str(r: region) -> text@r
-        match .this
-        case TooLittle short
-            <- "short by {short}" at r
-        case Closed
-            <- "closed"
+        <- match .this
+        case TooLittle short = "short by {short}" at r
+        case Closed = "closed"
         fi
     fi
 fi

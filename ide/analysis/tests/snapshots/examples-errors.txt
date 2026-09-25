@@ -18,121 +18,115 @@
     | comment:# it makes for the line, so printing a reason names no region at all.
  12 |     str(r: region) -> text@r
     | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
- 13 |         match .this
-    | keyword:match  punctuation:.  keyword:this
- 14 |         case Missing
-    | keyword:case  variant:Missing
- 15 |             <- "no reading"
-    | keyword:<-  string:"no reading"
- 16 |         case TooCold value
-    | keyword:case  variant:TooCold  variable:value
- 17 |             <- "too cold: {value}" at r
-    | keyword:<-  string:"too cold: {  variable:value  string:}"  keyword:at  region:r
- 18 |         case TooHot value
-    | keyword:case  variant:TooHot  variable:value
- 19 |             <- "too hot: {value}" at r
-    | keyword:<-  string:"too hot: {  variable:value  string:}"  keyword:at  region:r
- 20 |         fi
+ 13 |         <- match .this
+    | keyword:<-  keyword:match  punctuation:.  keyword:this
+ 14 |         case Missing = "no reading"
+    | keyword:case  variant:Missing  operator:=  string:"no reading"
+ 15 |         case TooCold value = "too cold: {value}" at r
+    | keyword:case  variant:TooCold  variable:value  operator:=  string:"too cold: {  variable:value  string:}"  keyword:at  region:r
+ 16 |         case TooHot value = "too hot: {value}" at r
+    | keyword:case  variant:TooHot  variable:value  operator:=  string:"too hot: {  variable:value  string:}"  keyword:at  region:r
+ 17 |         fi
     | keyword:fi
- 21 |     fi
+ 18 |     fi
     | keyword:fi
- 22 | fi
+ 19 | fi
     | keyword:fi
- 24 | task check(reading: maybe int) -> int ~ ReadingError
+ 21 | task check(reading: maybe int) -> int ~ ReadingError
     | keyword:task  task:check  punctuation:(  parameter:reading  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:ReadingError
- 25 |     bind value = reading { <- fail Missing }
+ 22 |     bind value = reading { <- fail Missing }
     | keyword:bind  variable:value  operator:=  parameter:reading  punctuation:{  keyword:<-  keyword:fail  variant:Missing  punctuation:}
- 26 |     # Alternatives, so one chain: the first condition that holds sends.
+ 23 |     # Alternatives, so one chain: the first condition that holds sends.
     | comment:# Alternatives, so one chain: the first condition that holds sends.
- 27 |     when value < -50
+ 24 |     when value < -50
     | keyword:when  variable:value  operator:<  operator:-  number:50
- 28 |         <- fail TooCold(value)
+ 25 |         <- fail TooCold(value)
     | keyword:<-  keyword:fail  variant:TooCold  punctuation:(  variable:value  punctuation:)
- 29 |     else when value > 60
+ 26 |     else when value > 60
     | keyword:else  keyword:when  variable:value  operator:>  number:60
- 30 |         <- fail TooHot(value)
+ 27 |         <- fail TooHot(value)
     | keyword:<-  keyword:fail  variant:TooHot  punctuation:(  variable:value  punctuation:)
- 31 |     fi
+ 28 |     fi
     | keyword:fi
- 32 |     <- value
+ 29 |     <- value
     | keyword:<-  variable:value
- 33 | fi
+ 30 | fi
     | keyword:fi
- 35 | # `unit ~ E` sends nothing when it works: reaching the end succeeds.
+ 32 | # `unit ~ E` sends nothing when it works: reaching the end succeeds.
     | comment:# `unit ~ E` sends nothing when it works: reaching the end succeeds.
- 36 | task add_reading(sum: ^int@r, reading: maybe int) -> unit ~ ReadingError
+ 33 | task add_reading(sum: ^int@r, reading: maybe int) -> unit ~ ReadingError
     | keyword:task  task:add_reading  punctuation:(  parameter:sum  punctuation::  operator:^  type-builtin:int  operator:@  region:r  punctuation:,  parameter:reading  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type:ReadingError
- 37 |     bind value = check(reading) {
+ 34 |     bind value = check(reading) {
     | keyword:bind  variable:value  operator:=  task:check  punctuation:(  parameter:reading  punctuation:)  punctuation:{
- 38 |         failure problem
+ 35 |         failure problem
     | keyword:failure  variable:problem
- 39 |         <- fail problem
+ 36 |         <- fail problem
     | keyword:<-  keyword:fail  variable:problem
- 40 |     }
+ 37 |     }
     | punctuation:}
- 41 |     sum^ = sum^ + value
+ 38 |     sum^ = sum^ + value
     | parameter:sum  operator:^  operator:=  parameter:sum  operator:^  operator:+  variable:value
- 42 | fi
+ 39 | fi
     | keyword:fi
- 44 | task main()
+ 41 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 45 |     # match handles both outcomes.
+ 42 |     # match handles both outcomes.
     | comment:# match handles both outcomes.
- 46 |     match check(21)
+ 43 |     match check(21)
     | keyword:match  task:check  punctuation:(  number:21  punctuation:)
- 47 |     case {value}
+ 44 |     case {value}
     | keyword:case  punctuation:{  variable:value  punctuation:}
- 48 |         show("reading: ", value)
+ 45 |         show("reading: ", value)
     | builtin-fn:show  punctuation:(  string:"reading: "  punctuation:,  variable:value  punctuation:)
- 49 |     case failure problem
+ 46 |     case failure problem
     | keyword:case  keyword:failure  variable:problem
- 50 |         show(problem)
+ 47 |         show(problem)
     | builtin-fn:show  punctuation:(  variable:problem  punctuation:)
- 51 |     fi
+ 48 |     fi
     | keyword:fi
- 53 |     # is runs a block for one outcome only.
+ 50 |     # is runs a block for one outcome only.
     | comment:# is runs a block for one outcome only.
- 54 |     when check(99) is failure problem
+ 51 |     when check(99) is failure problem
     | keyword:when  task:check  punctuation:(  number:99  punctuation:)  keyword:is  keyword:failure  variable:problem
- 55 |         show(problem)
+ 52 |         show(problem)
     | builtin-fn:show  punctuation:(  variable:problem  punctuation:)
- 56 |     fi
+ 53 |     fi
     | keyword:fi
- 58 |     # A plan B gives the value to use instead; `fail e` names the error.
+ 55 |     # A plan B gives the value to use instead; `fail e` names the error.
     | comment:# A plan B gives the value to use instead; `fail e` names the error.
- 59 |     show(check(none) { 0 })
+ 56 |     show(check(none) { 0 })
     | builtin-fn:show  punctuation:(  task:check  punctuation:(  keyword:none  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
- 60 |     bind lowest = check(-80) {
+ 57 |     bind lowest = check(-80) {
     | keyword:bind  variable:lowest  operator:=  task:check  punctuation:(  operator:-  number:80  punctuation:)  punctuation:{
- 61 |         failure problem
+ 58 |         failure problem
     | keyword:failure  variable:problem
- 62 |         show(problem)
+ 59 |         show(problem)
     | builtin-fn:show  punctuation:(  variable:problem  punctuation:)
- 63 |         -50
+ 60 |         -50
     | operator:-  number:50
- 64 |     }
+ 61 |     }
     | punctuation:}
- 65 |     show(lowest)
+ 62 |     show(lowest)
     | builtin-fn:show  punctuation:(  variable:lowest  punctuation:)
- 67 |     # An error can't be ignored by accident: an empty plan B ignores it on purpose.
+ 64 |     # An error can't be ignored by accident: an empty plan B ignores it on purpose.
     | comment:# An error can't be ignored by accident: an empty plan B ignores it on purpose.
- 68 |     region totals
+ 65 |     region totals
     | keyword:region  region:totals
- 69 |     bind sum = new int(0) at totals
+ 66 |     bind sum = new int(0) at totals
     | keyword:bind  variable:sum  operator:=  keyword:new  type-builtin:int  punctuation:(  number:0  punctuation:)  keyword:at  region:totals
- 70 |     add_reading(sum, 10) { }
+ 67 |     add_reading(sum, 10) { }
     | task:add_reading  punctuation:(  variable:sum  punctuation:,  number:10  punctuation:)  punctuation:{  punctuation:}
- 71 |     add_reading(sum, 70) {
+ 68 |     add_reading(sum, 70) {
     | task:add_reading  punctuation:(  variable:sum  punctuation:,  number:70  punctuation:)  punctuation:{
- 72 |         failure problem
+ 69 |         failure problem
     | keyword:failure  variable:problem
- 73 |         show(problem)
+ 70 |         show(problem)
     | builtin-fn:show  punctuation:(  variable:problem  punctuation:)
- 74 |     }
+ 71 |     }
     | punctuation:}
- 75 |     add_reading(sum, 5) { }
+ 72 |     add_reading(sum, 5) { }
     | task:add_reading  punctuation:(  variable:sum  punctuation:,  number:5  punctuation:)  punctuation:{  punctuation:}
- 76 |     show("sum: ", sum^)
+ 73 |     show("sum: ", sum^)
     | builtin-fn:show  punctuation:(  string:"sum: "  punctuation:,  variable:sum  operator:^  punctuation:)
- 77 | fi
+ 74 | fi
     | keyword:fi
