@@ -432,8 +432,10 @@
             (<code>x { 0.0 }</code>); pointers can no longer be <code>none</code>. <a href="#maybe">Details below.</a></p>
         </div>
         <div class="card">
-          <h3>Pattern match expressions <span class="badge b-idea">Idea</span></h3>
-          <p>Let <code>match</code> produce a value, not just execute statements.</p>
+          <h3>Pattern match expressions <span class="badge b-done">Done</span></h3>
+          <p>A <code>match</code>, and a <code>when</code>, can be the value itself: a case gives it with
+            <code>case p = value</code> or on the last line of its block, as a plan B's block does.
+            <a href="vela.html#choices">The language guide describes it.</a></p>
         </div>
         <div class="card">
           <h3>Module system <span class="badge b-done">Done</span></h3>
@@ -1103,8 +1105,10 @@ fi</pre>
           <li><strong>Forwarding errors:</strong> a plan B that only sends the error on, <code>failure e</code> then
             <code>&lt;- fail e</code>, will be common;
             a shorthand can come once real code shows its shape.</li>
-          <li><strong>Match expressions</strong> can reuse plan B's rule, "the last line is the value", instead of a
-            separate <code>= value</code> form per case.</li>
+          <li><s><strong>Match expressions</strong> can reuse plan B's rule, "the last line is the value", instead of a
+            separate <code>= value</code> form per case.</s> Done, with both: a block's last line gives the value, and
+            <code>case p = value</code> writes a short one on the case's own line
+            (<a href="vela.html#choices">A match or a when as a value</a>).</li>
           <li><strong>Named results</strong> work inside plan B unchanged: <code>total &lt;- v</code> updates, a bare
             <code>&lt;-</code> ends.</li>
           <li><strong>Calling C:</strong> pointers coming from C functions should arrive as <code>maybe ^T</code>.</li>
@@ -1686,7 +1690,9 @@ show(c.total())</pre>
       <h3>Syntax & Ergonomics</h3>
       <ul>
         <li><strong>Match expressions:</strong> <code>bind area = match s case Circle r = 3.14 * r * r … fi</code>
-          (not <code>-&gt;</code>, which names a task's result type)</li>
+          (not <code>-&gt;</code>, which names a task's result type)
+          <em>(done: <a href="vela.html#choices">A match or a when as a value</a>, for <code>when</code> as well,
+          where blocks give the value and <code>=</code> is a case's short form)</em></li>
         <li><strong>Guards in patterns:</strong> <code>case Circle r when r &gt; 0.0</code></li>
         <li><strong>Else-if chains:</strong> <code>when ... else when ... else ... fi</code>
           <em>(done: <a href="vela.html#control-flow">Control Flow</a>, where one <code>fi</code> closes the chain and

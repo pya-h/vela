@@ -1106,6 +1106,9 @@ impl<'a> Classifier<'a> {
                     self.push(range, TokenClass::Operator, None);
                     if *token == Token::Assign {
                         declaring_list = None;
+                        // `case p = value`: the pattern ends at the `=`, and what
+                        // follows is the value that case gives.
+                        in_pattern = false;
                     }
                 }
                 // A type after `maybe`, and the error type after `~` in a type.
@@ -1452,6 +1455,17 @@ impl<'a> Classifier<'a> {
         let name = tokens.ident(p).unwrap_or_default().to_string();
         let range = tokens.range(p);
         let start = tokens.get(p).map(|t| t.start).unwrap_or_default();
+        // A name a `case` pattern binds is usable as soon as it is written, since
+        // the case may give its value on the same line: `case Ok v = v * 2`.
+        if intro == Some("case") {
+            let visible = range.end..tokens.source.len();
+            self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, module: None, private: false });
+            let id = self.symbols.len() - 1;
+            if let Some(scope) = self.scopes.last_mut() {
+                scope.variables.push(id);
+            }
+            return id;
+        }
         // Usable from the next line: not in its own initializer, range, or
         // header, including a plan B there that spans lines. Other braces
         // (shape literals, plan Bs written on one line) end with their line.

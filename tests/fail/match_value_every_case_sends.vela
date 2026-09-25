@@ -1,0 +1,16 @@
+# error: 9:20: every case of this match sends with '<-', so nothing gives it a value
+kind Which
+    First
+    Second
+fi
+
+task main()
+    bind w = First
+    bind nothing = match w
+    case First
+        <-
+    case Second
+        <-
+    fi
+    show(nothing)
+fi

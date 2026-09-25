@@ -943,7 +943,8 @@ p.x = 5                    <span class="comment"># error: cannot assign to a fie
       </p>
       <p>
         A kind can have methods too, below its variants, which read the value as <code>.this</code> (see
-        <a href="#methods">Methods</a>).
+        <a href="#methods">Methods</a>). A <code>match</code> can also be the value itself, with each case giving
+        one (see <a href="#choices">A match or a when as a value</a>).
       </p>
 
       <h3 id="methods">Methods</h3>
@@ -1380,6 +1381,10 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
         <code>continue</code>: end a loop through its condition, or leave the task with <code>&lt;-</code>.
       </p>
       <p>
+        A <code>when</code> or a <code>match</code> can be a value as well as a statement, giving one from each branch
+        (see <a href="#choices">A match or a when as a value</a>).
+      </p>
+      <p>
         <code>else when</code> chains conditions: each is tried in turn, the first that holds runs its block, and one
         <code>fi</code> closes the whole chain. A chain is the same statement as a <code>when</code> written inside the
         <code>else</code> on its own lines, so it may end with an <code>else</code>, or with nothing when no condition
@@ -1430,6 +1435,82 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
     show(w)
 <span class="keyword">fi</span></pre>
 
+      <h3 id="choices">A match or a when as a value</h3>
+      <p>
+        A <code>match</code> or a <code>when</code> can be the value itself, wherever a value goes: the right side of
+        a <code>bind</code>, an argument, part of a larger expression, or what a task sends. Every branch then gives
+        the value. A case gives it on one line with <code>=</code>, or on the last line of its block, as a
+        <a href="#maybe">plan B</a>'s block does; a <code>when</code> uses blocks only, and needs its
+        <code>else</code>, since without one nothing gives the value when the condition doesn't hold.
+      </p>
+      <pre class="program" data-file="choices.vela"><span class="keyword">kind</span> Shape
+    Circle(radius: float)
+    Rectangle(width: float, height: float)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> area(s: Shape) -&gt; float
+    <span class="keyword">&lt;-</span> <span class="keyword">match</span> s
+    <span class="keyword">case</span> Circle r = <span class="number">3.14</span> * r * r
+    <span class="keyword">case</span> Rectangle w h = w * h
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="comment"># Shapes come from here, so `main` reads them as any program would.</span>
+<span class="keyword">task</span> made(wide: bool) -&gt; Shape
+    <span class="keyword">&lt;-</span> <span class="keyword">when</span> wide
+        Circle(<span class="number">2.0</span>)
+    <span class="keyword">else</span>
+        Rectangle(<span class="number">1.0</span>, <span class="number">2.0</span>)
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">bind</span> s = made(<span class="keyword">true</span>)
+    show(area(s))                      <span class="comment"># 12.56</span>
+
+    <span class="comment"># A case may work first, and give the value on its last line.</span>
+    <span class="keyword">bind</span> name = <span class="keyword">match</span> s
+    <span class="keyword">case</span> Circle r
+        <span class="keyword">bind</span> wide = r &gt; <span class="number">1.0</span>
+        <span class="keyword">when</span> wide
+            <span class="string">"a wide circle"</span>
+        <span class="keyword">else</span>
+            <span class="string">"a circle"</span>
+        <span class="keyword">fi</span>
+    <span class="keyword">case</span> Rectangle w h = <span class="string">"a rectangle"</span>
+    <span class="keyword">fi</span>
+    show(name)                         <span class="comment"># a wide circle</span>
+
+    <span class="comment"># A `when` used as a value, with a chain of conditions.</span>
+    <span class="keyword">bind</span> size = <span class="keyword">when</span> area(s) &gt; <span class="number">100.0</span>
+        <span class="string">"huge"</span>
+    <span class="keyword">else</span> <span class="keyword">when</span> area(s) &gt; <span class="number">1.0</span>
+        <span class="string">"middling"</span>
+    <span class="keyword">else</span>
+        <span class="string">"tiny"</span>
+    <span class="keyword">fi</span>
+    show(size)                         <span class="comment"># middling</span>
+<span class="keyword">fi</span></pre>
+      <p>The rules are the ones the pieces already have:</p>
+      <ul>
+        <li><strong>Every branch gives one type.</strong> The first branch that gives a value fixes it, and the others
+          must fit. A branch that gives <code>none</code> makes the whole a <code>maybe</code>, and one that gives
+          <code>fail e</code> makes it a <code>T ~ E</code>, exactly as a value becomes one anywhere else
+          (<a href="#maybe">Maybe and Errors</a>). Where every branch gives one of those, the place the value goes
+          says what it is part of, as it does for a bare <code>none</code>.</li>
+        <li><strong>A branch may leave the task instead</strong> with <code>&lt;-</code>. It gives no value then, and
+          the other branches settle the type. If every branch sends, nothing gives a value, which is an error.</li>
+        <li><strong>The last line may be a <code>when</code> or a <code>match</code></strong>, which gives the value
+          through its own branches. That is how a chain of conditions gives one, and how a branch chooses again
+          inside itself.</li>
+        <li><strong>A <code>match</code> still covers every case</strong>, and <code>case _</code> still covers the
+          rest: a value must come from somewhere for every outcome.</li>
+        <li><strong>A region declared inside a branch is freed when it ends</strong>, so the value can't be in it; a
+          value in a region declared outside is fine (see <a href="#regions">Memory and Regions</a>).</li>
+        <li><strong><code>=</code> belongs to a case that gives a value.</strong> The cases of a <code>match</code>
+          written on its own hold statements, so <code>case p = value</code> there is an error that says so.</li>
+      </ul>
+
       <h3 id="maybe">Maybe and Errors</h3>
       <p>
         A value that might be missing has type <code>maybe T</code>. Wherever a <code>maybe</code> is expected (a
@@ -1472,7 +1553,9 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
 }</pre>
       <p>
         The value before the block is evaluated once, and the block runs only when it is empty. Its last line gives
-        the value, of the type inside the <code>maybe</code>; a <code>&lt;-</code> in the block sends from the task as
+        the value, of the type inside the <code>maybe</code>, and may be a <code>when</code> or a <code>match</code>,
+        which gives it through their branches (see <a href="#choices">A match or a when as a value</a>); a
+        <code>&lt;-</code> in the block sends from the task as
         usual, and when every path through the block sends, it needs no value line. Names declared in the block
         stay in it, and an empty block is an error. A call with a plan B can be a statement of its own:
         <code>half(7) { &lt;- }</code> leaves the task when there is no value, and drops the value otherwise. A

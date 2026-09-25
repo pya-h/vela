@@ -739,6 +739,52 @@ impl Generator {
         Ok(())
     }
 
+    /// A block that gives a value, assigned to `into`: its statements, then its
+    /// last line, which is the value. The assignment happens before the block's
+    /// regions are freed, as a plan B's does. Where the last line is a `when` or
+    /// a `match`, its own branches assign it; where every path sends, nothing is
+    /// assigned and the block is generated as it is.
+    fn gen_value_block(&mut self, body: &[Stmt], into: &str) -> Result<()> {
+        let Some((last, rest)) = body.split_last() else { return self.gen_block(body) };
+        if !matches!(last.kind, StmtKind::Expr(_)) && !check::gives_value(last) {
+            return self.gen_block(body);
+        }
+        self.enter_block();
+        self.gen_statements(rest, body)?;
+        match &last.kind {
+            StmtKind::Expr(value) => {
+                let value = self.gen_expr(value)?;
+                self.w.line(&format!("{} = {};", into, value));
+            }
+            _ => self.gen_branching_value(last, Some(into))?,
+        }
+        self.leave_block(body);
+        Ok(())
+    }
+
+    /// A `match` or a `when` used as a value: a temporary holds it, every branch
+    /// assigns it, and the temporary is what the expression reads. C has no
+    /// statement that is also a value, so this is the shape `gen_plan_b` uses.
+    fn gen_choice(&mut self, e: &Expr, stmt: &Stmt) -> Result<String> {
+        let ty = e.ty()?.clone();
+        let result = self.fresh_temp("chosen");
+        // Zeroed: a branch that sends assigns nothing, and C compilers warn
+        // about a value that may be read before it is written.
+        self.w.line(&format!("{} {} = {{ 0 }};", c_type(&ty), result));
+        self.gen_branching_value(stmt, Some(&result))?;
+        Ok(result)
+    }
+
+    /// The statement a `match` or a `when` used as a value is, generated with
+    /// each of its blocks giving the value into `into`.
+    fn gen_branching_value(&mut self, stmt: &Stmt, into: Option<&str>) -> Result<()> {
+        match &stmt.kind {
+            StmtKind::When(cond, then_b, else_b) => self.gen_when(cond, then_b, else_b.as_deref(), into),
+            StmtKind::Match(subject, cases) => self.gen_match(subject, cases, into),
+            _ => Err(Error::internal_at(stmt.span, "a statement that is not a 'when' or a 'match' used as a value")),
+        }
+    }
+
     /// Starts a block that may declare regions.
     fn enter_block(&mut self) {
         self.regions.push(Vec::new());
@@ -853,7 +899,7 @@ impl Generator {
                     self.gen_multi_assign(targets, values, stmt.span)?;
                 }
             }
-            StmtKind::When(cond, then_b, else_b) => self.gen_when(cond, then_b, else_b.as_deref())?,
+            StmtKind::When(cond, then_b, else_b) => self.gen_when(cond, then_b, else_b.as_deref(), None)?,
             StmtKind::Loop(cond, body) => match &cond.pattern {
                 None if !has_prelude(&cond.value) => {
                     let c = self.gen_condition(&cond.value)?;
@@ -919,7 +965,7 @@ impl Generator {
                 self.gen_block(body)?;
                 self.w.close();
             }
-            StmtKind::Match(expr, cases) => self.gen_match(expr, cases)?,
+            StmtKind::Match(expr, cases) => self.gen_match(expr, cases, None)?,
             StmtKind::Send(values) if values.is_empty() => {
                 // A task's own regions are freed first; the results are locals,
                 // and can't point into one of them.
@@ -1190,19 +1236,19 @@ impl Generator {
     /// `else if` where C can take one: a condition that needs statements before
     /// it, or that binds a pattern, goes inside the `else` instead, since that is
     /// where those statements belong.
-    fn gen_when(&mut self, cond: &Condition, then_b: &[Stmt], else_b: Option<&[Stmt]>) -> Result<()> {
+    fn gen_when(&mut self, cond: &Condition, then_b: &[Stmt], else_b: Option<&[Stmt]>, into: Option<&str>) -> Result<()> {
         match &cond.pattern {
             None => {
                 let c = self.gen_condition(&cond.value)?;
                 self.w.open(&format!("if ({})", c));
-                self.gen_block(then_b)?;
+                self.gen_branch_block(then_b, into)?;
             }
             Some(pattern) => {
                 let subject = self.gen_subject(&cond.value)?;
                 let test = self.pattern_test(cond.value.ty()?, &subject, pattern)?;
                 self.w.open(&format!("if ({})", test));
                 self.gen_pattern_bindings(cond.value.ty()?, &subject, pattern, then_b)?;
-                self.gen_block(then_b)?;
+                self.gen_branch_block(then_b, into)?;
             }
         }
         let mut rest = else_b;
@@ -1213,23 +1259,31 @@ impl Generator {
             {
                 let c = self.gen_condition(&next.value)?;
                 self.w.reopen(&format!("else if ({})", c));
-                self.gen_block(body)?;
+                self.gen_branch_block(body, into)?;
                 rest = after.as_deref();
                 continue;
             }
             self.w.reopen("else");
-            self.gen_block(block)?;
+            self.gen_branch_block(block, into)?;
             rest = None;
         }
         self.w.close();
         Ok(())
     }
 
+    /// One branch's block: giving a value into `into`, or plain statements.
+    fn gen_branch_block(&mut self, body: &[Stmt], into: Option<&str>) -> Result<()> {
+        match into {
+            Some(into) => self.gen_value_block(body, into),
+            None => self.gen_block(body),
+        }
+    }
+
     /// Generates a `match`. On a kind, it is a `switch` on the tag, with `_` as
     /// `default`; on a `maybe` or `T ~ E`, an `if`/`else` chain whose last case
     /// needs no test. Each case body gets its own C block, so different cases
     /// may bind the same names. The matched value is evaluated exactly once.
-    fn gen_match(&mut self, expr: &Expr, cases: &[Case]) -> Result<()> {
+    fn gen_match(&mut self, expr: &Expr, cases: &[Case], into: Option<&str>) -> Result<()> {
         let ty = expr.ty()?.clone();
         let needs_temp = !matches!(expr.kind, ExprKind::Var(_));
         let subject = if needs_temp {
@@ -1258,7 +1312,7 @@ impl Generator {
                     }
                 }
                 self.gen_pattern_bindings(&ty, &subject, &case.pattern, &case.body)?;
-                self.gen_block(&case.body)?;
+                self.gen_branch_block(&case.body, into)?;
                 self.w.line("break;");
                 self.w.close();
             }
@@ -1278,7 +1332,7 @@ impl Generator {
                     (_, None) => self.w.reopen("else"),
                 }
                 self.gen_pattern_bindings(&ty, &subject, &case.pattern, &case.body)?;
-                self.gen_block(&case.body)?;
+                self.gen_branch_block(&case.body, into)?;
             }
             if !cases.is_empty() {
                 self.w.close();
@@ -1380,6 +1434,7 @@ impl Generator {
             ExprKind::Fail(error) => self.gen_expr(error),
             ExprKind::Wrap(inner) => self.gen_wrap(e, inner),
             ExprKind::PlanB { value, error, body } => self.gen_plan_b(e, value, error.as_ref(), body),
+            ExprKind::Choice(stmt) => self.gen_choice(e, stmt),
             ExprKind::Edit { items, op, args } => self.gen_edit(e.span, items, *op, args, false),
             ExprKind::Scan { args, region, .. } => self.gen_scan(e, args, region.as_deref(), false),
             ExprKind::Join { parts, region, .. } => self.gen_join(parts, region),
@@ -1899,18 +1954,10 @@ impl Generator {
             self.w.line(&format!("{} {} = {}.error;", c_type(error_ty), c_ident(name), subject));
             self.use_if_unread(name, body);
         }
-        match body.split_last() {
-            Some((last, rest)) if !result.is_empty() && matches!(last.kind, StmtKind::Expr(_)) => {
-                // The value is stored before the block's regions are freed.
-                self.enter_block();
-                self.gen_statements(rest, body)?;
-                if let StmtKind::Expr(fallback) = &last.kind {
-                    let fallback = self.gen_expr(fallback)?;
-                    self.w.line(&format!("{} = {};", result, fallback));
-                }
-                self.leave_block(body);
-            }
-            _ => self.gen_block(body)?,
+        // The value is stored before the block's regions are freed.
+        match result.is_empty() {
+            false => self.gen_value_block(body, &result)?,
+            true => self.gen_block(body)?,
         }
         self.w.close();
         Ok(result)
@@ -2114,7 +2161,7 @@ fn maybe_helper(ty: &Type, ends: bool) -> String {
 /// so generating it writes a prelude.
 fn has_prelude(e: &Expr) -> bool {
     match &e.kind {
-        ExprKind::PlanB { .. } | ExprKind::Edit { .. } | ExprKind::Scan { .. } => true,
+        ExprKind::PlanB { .. } | ExprKind::Choice(_) | ExprKind::Edit { .. } | ExprKind::Scan { .. } => true,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
         | ExprKind::Var(_) => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. }
@@ -2343,6 +2390,8 @@ impl UsedTypes {
             }
             ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. }
             | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => self.expr(inner),
+            // The same statement a `match` or a `when` on its own is.
+            ExprKind::Choice(stmt) => self.block(std::slice::from_ref(stmt)),
             ExprKind::Index(base, index) => {
                 match (&index.kind, &base.ty, &e.ty) {
                     // A part of text needs no helper of its own.
@@ -2512,6 +2561,8 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::MethodCall { value, args, .. } => expr_reads(value, name) || args.iter().any(|arg| expr_reads(arg, name)),
         ExprKind::StructInit { fields, .. } => fields.iter().any(|field| expr_reads(&field.value, name)),
         ExprKind::PlanB { value, body, .. } => expr_reads(value, name) || block_reads(body, name),
+        // The same statement a `match` or a `when` on its own is.
+        ExprKind::Choice(stmt) => block_reads(std::slice::from_ref(stmt), name),
         // `scan` reads the region it keeps the line in, where it keeps one, and
         // the prompt. The type a typed read names is a type, not a value, so a
         // variable of that name is not read by it.

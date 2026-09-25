@@ -1,0 +1,19 @@
+# error: 13:20: this value is in region 'inner', which is freed when the case ends, so it can't be the match's value
+shape Note
+    title: text
+fi
+
+kind Which
+    First
+    Second
+fi
+
+task main()
+    bind w = First
+    bind escaped = match w
+    case _
+        region inner
+        new Note(Note { title: "x" }) at inner
+    fi
+    show(escaped^.title)
+fi

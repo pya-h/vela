@@ -69,7 +69,7 @@ const SNIPPET: i32 = 1;
 const KEYWORD: i32 = 0;
 
 const STATEMENT_KEYWORDS: &[&str] = &["bind", "hold", "when", "loop", "each", "match", "region"];
-const VALUE_KEYWORDS: &[&str] = &["true", "false", "none", "not", "new", "fail"];
+const VALUE_KEYWORDS: &[&str] = &["true", "false", "none", "not", "new", "fail", "match", "when"];
 
 /// Completions at byte `byte` of `source`. Returns the items and the byte
 /// range they replace.
@@ -408,8 +408,11 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         return (Vec::new(), word_start, byte);
     }
 
-    // `case`: the variants the match doesn't cover yet; after the variant, its bindings.
-    if first_token == Some(&Token::Case) {
+    // `case`: the variants the match doesn't cover yet; after the variant, its
+    // bindings. Past an `=`, the case gives a value, which is typed like any
+    // other, so the paths below have it.
+    let gives_value = prev.is_some_and(|q| (k.line_start(q)..=q).any(|p| k.token(p) == Some(&Token::Assign)));
+    if first_token == Some(&Token::Case) && !gives_value {
         if prev_token != Some(&Token::Case) {
             return (Vec::new(), word_start, byte);
         }
@@ -1792,6 +1795,9 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
     if can_allocate {
         items.push(snippet("new … at", "allocate a value in a region", "new ${T}(${value}) at ${r}"));
     }
+    // A `match` or a `when` used as a value: every branch gives it.
+    items.push(snippet("match … = value", "a value from each case", "match ${value}\ncase ${Variant} = ${}\nfi"));
+    items.push(snippet("when … else", "a value from either branch", "when ${condition}\n\t${}\nelse\n\t${}\nfi"));
     items
 }
 

@@ -1401,6 +1401,7 @@ pass 1
           <tr><td><code>expected type maybe ^Node@_, got ^Node@a</code></td><td><code>@_</code> means "no region": the value was made without any pointer into one, so it can't be given a pointer (see <a href="#limit-pattern">this limitation</a>).</td></tr>
           <tr><td><code>method 'Named.point' takes 'to' in '@this', the region the value it is called on lives in</code></td><td>A method's parameter is in the value's own region. Allocate the argument where the value lives.</td></tr>
           <tr><td><code>'@this' is the region the value this method is called on lives in, which a method isn't given, so it can't allocate there</code></td><td>Grow the value where it is kept, outside the method (see <a href="#limit-method">this limitation</a>).</td></tr>
+          <tr><td><code>this value is in region 'r', which is freed when the case ends, so it can't be the match's value</code></td><td>A <code>match</code> or a <code>when</code> <a href="vela.html#choices">used as a value</a> gives it from a region declared inside a branch. Declare the region outside, or copy the value into one that lasts: <code>x.copy() at kept</code>.</td></tr>
           <tr><td><code>Vela has no 'free'</code></td><td>Memory is freed when the region's block ends; use a smaller region to free sooner.</td></tr>
         </table>
       </div>

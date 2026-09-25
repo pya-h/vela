@@ -369,6 +369,8 @@ impl Checked {
                 }
                 self.block(body, kinds);
             }
+            // The same statement a `match` or a `when` on its own is.
+            ExprKind::Choice(stmt) => self.statement(stmt, kinds),
             ExprKind::Scan { args, .. } | ExprKind::Join { parts: args, .. } => {
                 for arg in args {
                     self.expr(arg, kinds);

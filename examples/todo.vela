@@ -18,13 +18,10 @@ fi
 # A status in a region holds its text there, so the task names that region,
 # and so does the text it sends, which may be the reason.
 task describe(s: Status@r) -> text@r
-    match s
-    case Todo
-        <- "todo"
-    case Done
-        <- "done"
-    case Blocked reason
-        <- reason
+    <- match s
+    case Todo = "todo"
+    case Done = "done"
+    case Blocked reason = reason
     fi
 fi
 

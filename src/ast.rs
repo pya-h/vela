@@ -742,6 +742,12 @@ pub enum ExprKind {
         error: Option<(String, Span)>,
         body: Block,
     },
+    /// A `match` used as a value, `bind area = match s … fi`: the statement is
+    /// the same `StmtKind::Match` a `match` on its own is, so everything that
+    /// reads statements reads this too. Each case's block gives the value on its
+    /// last line, as a plan B's block does, or leaves the task with `<-`; a case
+    /// written `case p = value` is a block of that one value.
+    Choice(Box<Stmt>),
     /// Added by the checker where a value becomes part of a `maybe` or a
     /// `T ~ E`: a plain value, `none`, or `fail e`. The node's `ty` is the
     /// type it becomes.

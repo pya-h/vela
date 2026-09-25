@@ -1,0 +1,15 @@
+# error: 11:9: the last line of a case gives its value, but this has none
+kind Shape
+    Circle(r: float)
+    Rect(w: float, h: float)
+fi
+
+task main()
+    bind s = Circle(1.0)
+    bind empty = match s
+    case Circle r
+        show(r)
+    case Rect w h = 1.0
+    fi
+    show(empty)
+fi

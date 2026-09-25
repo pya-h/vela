@@ -22,14 +22,12 @@ kind Shape
         fi
     fi
 
+    # Every case gives the value, so the match is the value this method sends.
     area() -> float
-        match .this
-        case Circle radius
-            <- 3.14159 * radius * radius
-        case Rectangle w h
-            <- w * h
-        case Dot
-            <- 0.0
+        <- match .this
+        case Circle radius = 3.14159 * radius * radius
+        case Rectangle w h = w * h
+        case Dot = 0.0
         fi
     fi
 

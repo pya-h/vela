@@ -1129,6 +1129,8 @@ impl Resolver<'_> {
                 self.expr(value)?;
                 self.block(body)
             }
+            // The same statement a `match` or a `when` on its own is.
+            ExprKind::Choice(stmt) => self.stmt(stmt),
             ExprKind::Edit { items, args, .. } => {
                 self.expr(items)?;
                 args.iter_mut().try_for_each(|e| self.expr(e))

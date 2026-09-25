@@ -1,0 +1,20 @@
+# error: 15:13: this branch gives text, and another gives int; every branch of a when used as a value gives one type
+kind Which
+    First
+    Second
+fi
+
+task main()
+    bind k = First
+    bind c = true
+    bind bad = match k
+    case First
+        when c
+            1
+        else
+            "text"
+        fi
+    case Second = 2
+    fi
+    show(bad)
+fi

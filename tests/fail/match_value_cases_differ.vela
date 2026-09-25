@@ -1,0 +1,14 @@
+# error: 11:21: this case gives text, and another gives int; every case of a match used as a value gives one type
+kind Shape
+    Circle(r: float)
+    Rect(w: float, h: float)
+fi
+
+task main()
+    bind s = Circle(1.0)
+    bind mixed = match s
+    case Circle r = 1
+    case Rect w h = "two"
+    fi
+    show(mixed)
+fi

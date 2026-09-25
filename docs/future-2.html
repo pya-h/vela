@@ -596,7 +596,13 @@ fi</pre>
       </p>
 
       <div class="option">
-        <h3><span aria-hidden="true">🧩</span> Match Expressions</h3>
+        <h3><span aria-hidden="true">🧩</span> Match Expressions <span class="badge b-done">Done</span></h3>
+        <p>
+          <strong>Built on 2026-09-25</strong>, for <code>when</code> as well, and with both spellings a case can have:
+          <code>case p = value</code> on the case's own line, or a block whose last line gives the value, the rule a
+          plan B's block already had. <code>-&gt;</code> stayed out of it, as <a href="future.html">Future
+          Directions</a> argued. <a href="vela.html#choices">The language guide describes it.</a>
+        </p>
         <p>
           Let <code>match</code> produce a value, so it can be used on the right side of a binding.
         </p>
@@ -842,7 +848,7 @@ fi</pre>
           Vela's biggest opportunity is to become a <strong>safer C that still feels like C</strong> — not a smaller Rust. That means keeping explicit memory and explicit control, but adding just enough compile-time proof to eliminate leaks, use-after-free, and data races. Named regions are now in place; <code>defer</code>, static leak checking for resources, borrowed slices, and the region ideas in <a href="regions.html#ideas">Vela Regions</a> would complete a memory story that is both innovative and practical.
         </p>
         <p>
-          For performance, <code>comptime</code> and SIMD are the high-leverage bets: they make Vela competitive with C++ and Zig without adding complexity to the everyday syntax. And for expressiveness, match expressions and derive keep Vela small while removing the boilerplate that currently forces helper tasks and hand-written equality.
+          For performance, <code>comptime</code> and SIMD are the high-leverage bets: they make Vela competitive with C++ and Zig without adding complexity to the everyday syntax. And for expressiveness, match expressions (now <a href="vela.html#choices">built</a>) and derive keep Vela small while removing the boilerplate that currently forces helper tasks and hand-written equality.
         </p>
       </div>
     </section>

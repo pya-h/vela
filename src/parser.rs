@@ -1331,6 +1331,11 @@ impl Parser {
         Ok(Stmt::new(StmtKind::Each(name, range, body), span))
     }
 
+    /// A `match`. A case written `case p = value` gives that value, and one
+    /// written as a block gives the value on the block's last line; both are the
+    /// same case with a one-statement body, and whether the `match` gives a value
+    /// at all is the checker's to say (see `check::Checker::check_match`), since a
+    /// `match` on the last line of a block gives one wherever that block does.
     fn parse_match(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
         self.advance(); // match
@@ -1343,6 +1348,13 @@ impl Parser {
             self.reject_stray_end()?;
             self.expect(Token::Case)?;
             let pattern = self.parse_pattern("case")?;
+            if self.check(Token::Assign) {
+                self.advance(); // =
+                let value = self.parse_expr()?;
+                let value_span = value.span;
+                cases.push(Case { pattern, body: vec![Stmt::new(StmtKind::Expr(value), value_span)] });
+                continue;
+            }
             if !self.check(Token::Newline) && !self.check(Token::Fi) && !self.check(Token::Case) && !self.is_at_end() {
                 if self.check(Token::Send) {
                     return Err(self.misplaced_send());
@@ -1867,6 +1879,20 @@ impl Parser {
             Token::New => return self.parse_new(),
             Token::LBracket => return self.parse_array(),
             Token::LParen => return self.parse_parenthesized(),
+            // A `match` or a `when` where a value is expected: its branches give
+            // the value, each on the last line of its block.
+            Token::Match => {
+                self.enter()?;
+                let chosen = self.parse_match()?;
+                self.leave(1);
+                ExprKind::Choice(Box::new(chosen))
+            }
+            Token::When => {
+                self.enter()?;
+                let chosen = self.parse_when()?;
+                self.leave(1);
+                ExprKind::Choice(Box::new(chosen))
+            }
             // `.this`, `.field`, or `.method(…)`: the value a method is called
             // on, and what it holds.
             Token::Dot if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) => return self.parse_member_of_this(span),

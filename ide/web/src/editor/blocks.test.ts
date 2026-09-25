@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { type BlockWords, closingLine, firstWord, indentWidth, indentation, methodLines } from "./blocks";
+import { type BlockWords, closingLine, firstWord, indentWidth, indentation, methodLines, opener } from "./blocks";
 
 const WORDS: BlockWords = {
   blockOpeners: ["task", "shape", "kind", "when", "loop", "each", "match"],
@@ -46,6 +46,27 @@ describe("indentation", () => {
     expect(indentOfLast("task t(k: K)\n    match k\n    case A\n")).toBe(8);
     expect(indentOfLast("task t(k: K)\n    match k\n    case A\n        show(1)\n    case")).toBe(4);
     expect(indentOfLast("task t(k: K)\n    match k\n    case")).toBe(4);
+  });
+
+  it("reads a match or a when used as a value as opening its block", () => {
+    // The opener may sit after an `=`, or inside a call, and `else when` opens
+    // nothing, since one `fi` closes its chain.
+    expect(opener("    bind area = match s", WORDS)).toBe("match");
+    expect(opener("    show(when ok", WORDS)).toBe("when");
+    expect(opener("    bind label = when n > 0", WORDS)).toBe("when");
+    expect([opener("    else when y", WORDS), opener('    show("match")', WORDS), opener("    show(x)  # match", WORDS)]).toEqual([null, null, null]);
+    // A match's cases line up with the line the `match` is on, wherever in it.
+    expect(indentOfLast("task main()\n    bind area = match s\n")).toBe(4);
+    expect(indentOfLast("task main()\n    bind area = match s\n    case Circle r\n")).toBe(8);
+    expect(indentOfLast("task main()\n    bind area = match s\n    case Circle r\n        1.0\n    case")).toBe(4);
+    expect(indentOfLast("task main()\n    bind area = match s\n    case Circle r = 1.0\n    fi")).toBe(4);
+    // A when used as a value indents its branch, and its else lines up with it.
+    expect(indentOfLast("task main()\n    bind label = when n > 0\n")).toBe(8);
+    expect(indentOfLast('task main()\n    bind label = when n > 0\n        "yes"\n        else')).toBe(4);
+    // Folding covers the whole value, up to the fi that closes it.
+    const lines = ["task main()", "    bind area = match s", "    case Circle r = 1.0", "    case Rect w h = 2.0", "    fi", "    show(area)", "fi"];
+    expect(closingLine(lines, lines.length, 1, WORDS)).toBe(4);
+    expect(closingLine(lines, lines.length, 0, WORDS)).toBe(6);
   });
 
   it("reads an else when as one chain, sharing the when's fi", () => {

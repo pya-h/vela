@@ -1,0 +1,18 @@
+# error: 11:10: a case of a match used as a value gives it on its last line, or sends with '<-' on every path
+# error: 13:13: this value is unused; only a task call can be used as a statement
+kind Which
+    First
+    Second
+fi
+
+task main()
+    bind c = true
+    bind chosen = match First
+    case First
+        when c
+            1
+        fi
+    case Second = 0
+    fi
+    show(chosen)
+fi

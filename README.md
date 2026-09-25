@@ -9,7 +9,9 @@ and then what allocates there needs no `at r`. Text
 lasts as long as the program (`text`, as a literal does) or is in a region (`text@r`), and a shape holding
 text may name one (`Person@r`). A value that may
 be missing is a `maybe T`, and a task that can fail sends `T ~ E`; both are read with `match`, `is`, or a
-plan B (`x { fallback }`). A `when` chains conditions with `else when`, and one `fi` closes the chain.
+plan B (`x { fallback }`). A `when` chains conditions with `else when`, and one `fi` closes the chain. A
+`match` or a `when` can be the value itself, with every branch giving one (`bind area = match s case Circle r
+= 3.14 * r * r … fi`), on a case's own line with `=` or on the last line of a block.
 Blocks close with `fi`, and a task sends its results with `<-`: one value, or
 several (`-> int, int` … `<- a / b, a % b`), received with `bind q, r = divmod(17, 5)`. Results can be named
 (`-> total: int`), set along the way with `total <- value` and sent by reaching the end of the task. An `int`

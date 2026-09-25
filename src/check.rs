@@ -187,6 +187,27 @@ const UNSETTLED_COPY: &str =
 /// the value it becomes goes, so a default is no answer for one.
 const COPY_IGNORES_DEFAULT: &str = "; a copy goes where the value it becomes goes, so a block's default region doesn't settle one";
 
+/// What a `match` or a `when` used as a value calls itself and its parts, so
+/// that one set of checks words its messages for either (see
+/// `Checker::check_branching_value`).
+#[derive(Clone, Copy)]
+struct Branches {
+    /// The statement: `match` or `when`.
+    of: &'static str,
+    /// One of its parts: a `case`, or a `when`'s branch.
+    each: &'static str,
+}
+
+const MATCH_BRANCHES: Branches = Branches { of: "match", each: "case" };
+const WHEN_BRANCHES: Branches = Branches { of: "when", each: "branch" };
+
+impl Branches {
+    /// What a branch that gives no value is missing.
+    fn needs_value(self) -> String {
+        format!("a {} of a {} used as a value gives it on its last line, or sends with '<-' on every path", self.each, self.of)
+    }
+}
+
 /// At most how many tasks one generic task may be made into, and how deeply a
 /// type given to one may be built up. A generic task whose call gives a type
 /// built from its own (`f<(T, int)>` inside `f<T>`) would need an endless
@@ -2292,29 +2313,7 @@ impl Checker {
                 Ok(())
             }
             StmtKind::SetResults(names, values) => self.check_set_results(span, names, values),
-            StmtKind::When(cond, then_block, else_block) => {
-                // A tuple's items always match, so an `else` could never run.
-                if let (Some(pattern), Some(_)) = (&cond.pattern, else_block.as_ref())
-                    && matches!(pattern.kind, PatternKind::Tuple(_))
-                {
-                    return err(pattern.span, "a tuple's items always match, so this 'when' always holds and its 'else' would never run; take the tuple apart with 'bind' instead");
-                }
-                let entry = self.unset.clone();
-                self.check_condition(cond, then_block)?;
-                let after_then = self.branch_state(then_block, &entry);
-                let after_else = match else_block {
-                    Some(else_b) => {
-                        self.check_scoped_block(else_b)?;
-                        self.branch_state(else_b, &entry)
-                    }
-                    // A condition that always holds leaves no other path.
-                    None if always_holds(cond) => None,
-                    // Without an `else`, not running the block is a path too.
-                    None => Some(entry.clone()),
-                };
-                self.join_branches(entry, vec![after_then, after_else]);
-                Ok(())
-            }
+            StmtKind::When(cond, then_block, else_block) => self.check_when(span, cond, then_block, else_block, None).map(|_| ()),
             StmtKind::Loop(cond, body) => {
                 if let Some(pattern) = &cond.pattern
                     && matches!(pattern.kind, PatternKind::Tuple(_))
@@ -2323,7 +2322,7 @@ impl Checker {
                 }
                 // A loop's body might not run, so it sets nothing for certain.
                 let entry = self.unset.clone();
-                self.check_condition(cond, body)?;
+                self.check_condition(cond, body, None)?;
                 self.unset = entry;
                 Ok(())
             }
@@ -2364,7 +2363,7 @@ impl Checker {
                 self.unset = entry;
                 result
             }
-            StmtKind::Match(expr, cases) => self.check_match(span, expr, cases),
+            StmtKind::Match(expr, cases) => self.check_match(span, expr, cases, None).map(|_| ()),
             StmtKind::Send(values) => {
                 let ret = self.current_ret.clone().unwrap_or(Type::Unit);
                 let expected = ret.results();
@@ -2424,20 +2423,269 @@ impl Checker {
         }
     }
 
+    /// Checks a `when`, its `else`, and the `else when`s in between (a chain is
+    /// the `when` its `else` holds). In `gives`, every branch gives the whole a
+    /// value, which the branches settle between them; a chain gives it through
+    /// the `when` on the last line of its `else`, which `value_block_tail`
+    /// reads. A `when` that gives a value needs an `else`, since there is no
+    /// value without one.
+    fn check_when(
+        &mut self,
+        span: Span,
+        cond: &mut Condition,
+        then_block: &mut Block,
+        else_block: &mut Option<Block>,
+        gives: Option<Branches>,
+    ) -> Result<Option<Type>> {
+        // A tuple's items always match, so an `else` could never run.
+        if let (Some(pattern), Some(_)) = (&cond.pattern, else_block.as_ref())
+            && matches!(pattern.kind, PatternKind::Tuple(_))
+        {
+            return err(pattern.span, "a tuple's items always match, so this 'when' always holds and its 'else' would never run; take the tuple apart with 'bind' instead");
+        }
+        if gives.is_some() && else_block.is_none() {
+            return err(span, "a 'when' used as a value needs an 'else': without one, nothing gives the value when the condition doesn't hold");
+        }
+        let entry = self.unset.clone();
+        let mut given = Vec::new();
+        let then_value = match gives {
+            None => {
+                self.check_condition(cond, then_block, None)?;
+                None
+            }
+            Some(_) => {
+                let found = self.check_condition(cond, then_block, gives);
+                self.note_branch(found, span)
+            }
+        };
+        given.extend(then_value.map(|(ty, at)| (0usize, ty, at)));
+        let after_then = self.branch_state(then_block, &entry);
+        let after_else = match else_block {
+            Some(else_b) => {
+                let value = match gives {
+                    Some(branches) => {
+                        let found = self.check_value_block(Vec::new(), else_b, span, branches);
+                        self.note_branch(found, span)
+                    }
+                    None => self.check_scoped_block(else_b).map(|()| None)?,
+                };
+                given.extend(value.map(|(ty, at)| (1usize, ty, at)));
+                self.branch_state(else_b, &entry)
+            }
+            // A condition that always holds leaves no other path.
+            None if always_holds(cond) => None,
+            // Without an `else`, not running the block is a path too.
+            None => Some(entry.clone()),
+        };
+        self.join_branches(entry, vec![after_then, after_else]);
+        let Some(branches) = gives else { return Ok(None) };
+        let settled = self.settle_branches(span, &given, branches)?;
+        let Some(settled) = settled else { return Ok(None) };
+        for (i, _, _) in given.iter().filter(|(_, ty, _)| !ty.unknown() && *ty != settled) {
+            match (i, else_block.as_mut()) {
+                (0, _) => self.settle_value(then_block, &settled)?,
+                (_, Some(else_b)) => self.settle_value(else_b, &settled)?,
+                (_, None) => {}
+            }
+        }
+        self.escaping_region(span, &settled, branches)?;
+        Ok(Some(settled))
+    }
+
+    /// Records the mistake a branch's value had, if any, and says what it gives:
+    /// nothing where every path through it sends, and an unknown type where it
+    /// didn't check, so that the other branches still settle theirs and nothing
+    /// complains about it twice (see `Type::Unknown`).
+    fn note_branch(&mut self, found: Result<Option<(Type, Span)>>, at: Span) -> Option<(Type, Span)> {
+        match found {
+            Ok(value) => value,
+            Err(error) => {
+                self.record(error);
+                Some((Type::Unknown, at))
+            }
+        }
+    }
+
+    /// Coerces the value a block gives to `settled`, the type the branches
+    /// settled on. It runs once the block's own scope has closed, so a value in a
+    /// region the block declared can't become the whole's. A `when` or a `match`
+    /// on the last line is coerced through its own branches, since it settled a
+    /// type among them that may be narrower than the whole: an `int` where a case
+    /// beside it gives `none`, and so the whole is a `maybe int`.
+    fn settle_value(&mut self, block: &mut Block, settled: &Type) -> Result<()> {
+        let Some(last) = block.last_mut() else { return Ok(()) };
+        match &mut last.kind {
+            // A value with no type never checked, which is already reported: there
+            // is nothing to coerce (see `Type::Unknown`).
+            StmtKind::Expr(e) if e.ty.is_none() => Ok(()),
+            StmtKind::Expr(e) => self.coerce(e, settled),
+            // A `when` with no `else`, or a block every path sends from, gives no
+            // value of its own to coerce (see `gives_value`).
+            _ => self.settle_branch_values(last, settled),
+        }
+    }
+
+    /// Coerces the value each branch of a `when` or a `match` gives to `settled`,
+    /// the type the place it goes, or the branches around it, settled on. A
+    /// branching value becomes what is expected branch by branch, rather than as a
+    /// whole: each branch's own `none` or `fail e` then becomes part of the
+    /// `maybe` or the `T ~ E`, which is what the branch gives back.
+    fn settle_branch_values(&mut self, stmt: &mut Stmt, settled: &Type) -> Result<()> {
+        match &mut stmt.kind {
+            StmtKind::When(_, then_block, Some(else_block)) => {
+                self.settle_value(then_block, settled)?;
+                self.settle_value(else_block, settled)
+            }
+            StmtKind::Match(_, cases) => cases.iter_mut().try_for_each(|case| self.settle_value(&mut case.body, settled)),
+            _ => Ok(()),
+        }
+    }
+
+    /// Refuses a value in a region that is freed before the `match` or `when`
+    /// giving it ends: the region was declared inside a branch, so nothing
+    /// outside can name it.
+    fn escaping_region(&mut self, at: Span, settled: &Type, branches: Branches) -> Result<()> {
+        let escaping = settled.regions().into_iter().find(|region| *region != ANY_REGION && self.lookup(region).is_none());
+        match escaping {
+            Some(region) => err(
+                at,
+                format!("this value is in region '{}', which is freed when the {} ends, so it can't be the {}'s value", region, branches.each, branches.of),
+            ),
+            None => Ok(()),
+        }
+    }
+
     /// Checks a `when` or `loop` condition and the block it guards, where the
-    /// names an `is` pattern binds are visible.
-    fn check_condition(&mut self, cond: &mut Condition, body: &mut Block) -> Result<()> {
+    /// names an `is` pattern binds are visible. In `gives`, the block gives a
+    /// value on its last line, which comes back with its position (see
+    /// `check_value_block`); otherwise the block holds statements and nothing
+    /// comes back.
+    fn check_condition(&mut self, cond: &mut Condition, body: &mut Block, gives: Option<Branches>) -> Result<Option<(Type, Span)>> {
         let found = self.check_expr(&mut cond.value);
         let ty = self.or_unknown(found);
         let Some(pattern) = &cond.pattern else {
             self.expect_type(&ty, &Type::Bool, cond.value.span)?;
-            return self.check_scoped_block(body);
+            return match gives {
+                Some(branches) => self.check_value_block(Vec::new(), body, cond.value.span, branches),
+                None => self.check_scoped_block(body).map(|()| None),
+            };
         };
         if matches!(pattern.kind, PatternKind::Any) {
             return err(pattern.span, "'_' matches anything, so this condition would always hold");
         }
         let bindings = self.pattern_bindings(&ty, pattern, false)?;
-        self.check_block_with(bindings, body)
+        match gives {
+            Some(branches) => self.check_value_block(bindings, body, pattern.span, branches),
+            None => self.check_block_with(bindings, body).map(|()| None),
+        }
+    }
+
+    /// Checks a block that gives a value, in a new scope that first declares
+    /// `bindings` (from a pattern). Its statements are checked as usual, and its
+    /// last line gives the value: an expression, a `when` or a `match` whose own
+    /// branches give it, or nothing at all when every path through the block
+    /// sends with `<-`. `at` is where to blame a block that gives no value.
+    fn check_value_block(&mut self, bindings: Vec<Declared>, body: &mut Block, at: Span, branches: Branches) -> Result<Option<(Type, Span)>> {
+        self.push_scope();
+        let result = bindings
+            .into_iter()
+            .filter(|(name, _, _, _)| name != DISCARD)
+            .try_for_each(|(name, span, ty, mutable)| self.define(&name, ty, mutable, span))
+            .and_then(|()| self.value_block_tail(body, at, branches));
+        self.pop_scope();
+        result
+    }
+
+    /// The statements of a block that gives a value, checked in the scope
+    /// `check_value_block` opened: everything but the last line as usual, and the
+    /// last line as the value.
+    fn value_block_tail(&mut self, body: &mut Block, at: Span, branches: Branches) -> Result<Option<(Type, Span)>> {
+        let Some((last, rest)) = body.split_last_mut() else {
+            return err(at, branches.needs_value());
+        };
+        self.check_block(rest)?;
+        // A `when` or a `match` on the last line gives the value through its own
+        // branches, which is what makes a chain of conditions give one.
+        if gives_value(last) {
+            let span = last.span;
+            return Ok(self.check_branching_value(last)?.map(|ty| (ty, span)));
+        }
+        if let StmtKind::Expr(e) = &mut last.kind {
+            let ty = self.check_expr(e)?;
+            if ty == Type::Unit {
+                return err(e.span, format!("the last line of a {} gives its value, but this has none", branches.each));
+            }
+            return Ok(Some((ty, e.span)));
+        }
+        self.check_stmt(last)?;
+        if !always_sends(body) {
+            return err(at, branches.needs_value());
+        }
+        Ok(None)
+    }
+
+    /// A `when` or a `match` used as a value: the type its branches settle on,
+    /// and nothing where every branch sends. The statement is the same one it is
+    /// on its own, so its patterns, its cases and its bookkeeping are checked as
+    /// they always are.
+    fn check_branching_value(&mut self, stmt: &mut Stmt) -> Result<Option<Type>> {
+        let span = stmt.span;
+        match &mut stmt.kind {
+            StmtKind::When(cond, then_block, else_block) => self.check_when(span, cond, then_block, else_block, Some(WHEN_BRANCHES)),
+            StmtKind::Match(subject, cases) => self.check_match(span, subject, cases, Some(MATCH_BRANCHES)),
+            _ => Err(Error::internal_at(span, "a statement that is not a 'when' or a 'match' used as a value")),
+        }
+    }
+
+    /// The type the branches of a `match` or a `when` used as a value settle on:
+    /// the first that gives one, which the others must fit, widened to a `maybe`
+    /// or a `T ~ E` where a branch gives `none` or a failure, as a value becomes
+    /// one anywhere else. A branch whose value had a mistake of its own settles
+    /// nothing, and `None` comes back where nothing settles it.
+    fn settle_branches(&self, at: Span, given: &[(usize, Type, Span)], branches: Branches) -> Result<Option<Type>> {
+        let mut settled: Option<Type> = None;
+        for (_, ty, _) in given.iter().filter(|(_, ty, _)| !ty.unknown()) {
+            let Some(sofar) = &settled else {
+                settled = Some(ty.clone());
+                continue;
+            };
+            if fits(ty, sofar) {
+                continue;
+            }
+            match if fits(sofar, ty) { Some(ty.clone()) } else { widened(sofar, ty) } {
+                Some(wider) => settled = Some(wider),
+                // The branches disagree, which the loop below reports against
+                // what they had settled on until here.
+                None => break,
+            }
+        }
+        // A branch that didn't check may have been the one that told `none` or a
+        // failure what it is part of, so nothing more is said about it here.
+        if let Some(ty) = &settled
+            && unsettled(ty)
+            && given.iter().any(|(_, ty, _)| ty.unknown())
+        {
+            return Ok(None);
+        }
+        let Some(settled) = settled else {
+            if given.is_empty() {
+                return err(at, format!("every {} of this {} sends with '<-', so nothing gives it a value", branches.each, branches.of));
+            }
+            // Every branch that gives a value had a mistake of its own, which is
+            // already reported (see `Type::Unknown`).
+            return Ok(None);
+        };
+        // Every branch must fit what they settled on, which the fold above only
+        // promises for the ones it read before a widening or a disagreement.
+        for (_, ty, span) in given.iter().filter(|(_, ty, _)| !ty.unknown()) {
+            if !fits(ty, &settled) {
+                return err(
+                    *span,
+                    format!("this {} gives {}, and another gives {}; every {} of a {} used as a value gives one type", branches.each, ty, settled, branches.each, branches.of),
+                );
+            }
+        }
+        Ok(Some(settled))
     }
 
     /// Checks that `pattern` can match a value of type `subject`, and returns
@@ -2673,7 +2921,10 @@ impl Checker {
         }
     }
 
-    fn check_match(&mut self, span: Span, expr: &mut Expr, cases: &mut [Case]) -> Result<()> {
+    /// Checks a `match` and its cases. In `gives`, every case gives the match a
+    /// value, which the cases settle between them (see `settle_branches`);
+    /// otherwise the cases hold statements and nothing comes back.
+    fn check_match(&mut self, span: Span, expr: &mut Expr, cases: &mut [Case], gives: Option<Branches>) -> Result<Option<Type>> {
         let found = self.check_expr(expr);
         let ety = self.or_unknown(found);
         // The value's type couldn't be worked out, so which cases cover it
@@ -2701,7 +2952,10 @@ impl Checker {
         // only where every case that runs on sets it.
         let entry = self.unset.clone();
         let mut branches = Vec::new();
-        for case in cases {
+        // The type each case gives, where the match is a value and the case
+        // gives one: a case that sends gives none.
+        let mut given = Vec::new();
+        for (i, case) in cases.iter_mut().enumerate() {
             if matched_all {
                 return err(case.pattern.span, "this case comes after '_', which already matches everything");
             }
@@ -2716,7 +2970,24 @@ impl Checker {
                 return err(case.pattern.span, format!("duplicate case '{}'", label));
             }
             seen.push(label);
-            self.check_block_with(bindings, &mut case.body)?;
+            match gives {
+                Some(words) => {
+                    let found = self.check_value_block(bindings, &mut case.body, case.pattern.span, words);
+                    let value = self.note_branch(found, case.pattern.span);
+                    given.extend(value.map(|(ty, at)| (i, ty, at)));
+                }
+                None => {
+                    // `case p = value` where the match gives none: its body is
+                    // that one value, written on the pattern's own line, which
+                    // nothing would read.
+                    if let [Stmt { kind: StmtKind::Expr(value), .. }] = case.body.as_slice()
+                        && value.span.line == case.pattern.span.line
+                    {
+                        return err(value.span, "a case gives a value with '=' only where the match is one itself, as in 'bind name = match …'; the cases of a match on its own hold statements, written on the lines below it");
+                    }
+                    self.check_block_with(bindings, &mut case.body)?;
+                }
+            }
             branches.push(self.branch_state(&case.body, &entry));
         }
         // A value the cases don't cover would leave the match without setting
@@ -2727,7 +2998,15 @@ impl Checker {
         {
             return err(span, format!("missing case '{}' in match", missing));
         }
-        Ok(())
+        let Some(words) = gives else { return Ok(None) };
+        let Some(settled) = self.settle_branches(span, &given, words)? else { return Ok(None) };
+        for (i, _, _) in given.iter().filter(|(_, ty, _)| !ty.unknown() && *ty != settled) {
+            if let Some(case) = cases.get_mut(*i) {
+                self.settle_value(&mut case.body, &settled)?;
+            }
+        }
+        self.escaping_region(span, &settled, words)?;
+        Ok(Some(settled))
     }
 
     /// Checks an expression, records its type on the node, and returns it. A
@@ -3138,6 +3417,10 @@ impl Checker {
                 Ok(Type::Fail(Box::new(ty)))
             }
             ExprKind::PlanB { value, error, body } => self.check_plan_b(span, value, error.as_ref(), body),
+            // A `match` or a `when` used as a value: its branches give it, and
+            // one whose branches had a mistake of their own gives an unknown
+            // type, so nothing after it complains twice (see `Type::Unknown`).
+            ExprKind::Choice(stmt) => Ok(self.check_branching_value(stmt)?.unwrap_or(Type::Unknown)),
             ExprKind::Edit { items, op, args } => self.check_edit(span, items, *op, args),
             ExprKind::Scan { args, region, region_span } => self.check_scan(span, args, region, *region_span),
             ExprKind::Join { parts, region, region_span } => self.check_join(parts, region, *region_span),
@@ -3858,6 +4141,12 @@ impl Checker {
                 }
             }
             return self.coerce(e, extracted).map(|()| None);
+        }
+        // A `when` or a `match` on the last line gives the value through its own
+        // branches, as it does in the block of a case (see `value_block_tail`).
+        if gives_value(last) {
+            self.check_branching_value(last)?;
+            return self.settle_value(body, extracted).map(|()| None);
         }
         self.check_stmt(last)?;
         if !always_sends(body) {
@@ -4718,6 +5007,16 @@ impl Checker {
             expr.ty = Some(expected.clone());
             return self.settle_copies(expr, expected);
         }
+        // A `match` or a `when` used as a value becomes what is expected in each
+        // of its branches, since that is where its values are made: a branch
+        // giving `none` beside one giving an `int` becomes part of the `maybe`
+        // itself, rather than the whole being wrapped once, which would leave the
+        // branches to run for nothing.
+        if let ExprKind::Choice(stmt) = &mut expr.kind {
+            self.settle_branch_values(stmt, expected)?;
+            expr.ty = Some(expected.clone());
+            return Ok(());
+        }
         if self.coerce_items(expr, expected)? {
             return Ok(());
         }
@@ -4979,6 +5278,53 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
     }
 }
 
+/// Whether a statement on the last line of a block gives that block its value: a
+/// `match`, whose cases cover every value, or a `when` with an `else`, so that
+/// every way through it gives one. A `when` without an `else` can't, so such a
+/// block must send on every path, which is what its message says.
+pub fn gives_value(stmt: &Stmt) -> bool {
+    matches!(&stmt.kind, StmtKind::Match(..) | StmtKind::When(_, _, Some(_)))
+}
+
+/// Whether a value of type `from` goes where `to` is expected, as `coerce` takes
+/// it: unchanged, or becoming part of a `maybe` or a `T ~ E`. Used where several
+/// branches give one value and the types they give are compared to each other
+/// (see `Checker::settle_branches`).
+fn fits(from: &Type, to: &Type) -> bool {
+    if fits_regions(from, to) {
+        return true;
+    }
+    match to {
+        Type::Maybe(inner) => *from == Type::None || fits_regions(from, inner),
+        Type::Or(value, error) => match from {
+            Type::Fail(given) => fits_regions(given, error),
+            other => fits_regions(other, value),
+        },
+        _ => false,
+    }
+}
+
+/// The type that takes both `a` and `b`, where one of them is `none` or a
+/// failure: a plain value and `none` make a `maybe`, and a plain value and a
+/// failure a `T ~ E`, as a value becomes one anywhere else. Nothing, where the
+/// two simply differ.
+fn widened(a: &Type, b: &Type) -> Option<Type> {
+    let (plain, other) = match (a, b) {
+        (Type::None | Type::Fail(_), _) => (b, a),
+        (_, Type::None | Type::Fail(_)) => (a, b),
+        _ => return None,
+    };
+    match (plain, other) {
+        // `maybe T ~ E` is not a type, so a failure beside a maybe widens to
+        // nothing, and neither does a value that is already a `T ~ E`.
+        (Type::Maybe(_) | Type::Or(..), Type::Fail(_)) => None,
+        (Type::None | Type::Fail(_), _) => None,
+        (plain, Type::None) => Some(Type::Maybe(Box::new(plain.clone()))),
+        (plain, Type::Fail(error)) => Some(Type::Or(Box::new(plain.clone()), error.clone())),
+        _ => None,
+    }
+}
+
 /// Records in `regions` what each region of `pattern` stands for in `actual`,
 /// following `actual` into the places a value can become part of `pattern`
 /// (`maybe`, `T ~ E`, `fail`). A region already recorded, or one `actual`
@@ -5225,6 +5571,8 @@ impl Checker {
                 self.substitute_expr(value, given, made)?;
                 self.substitute_block(body, given, made)
             }
+            // The same statement a `match` or a `when` on its own is.
+            ExprKind::Choice(stmt) => self.substitute_stmt(stmt, given, made),
             ExprKind::Edit { items, args, .. } => {
                 self.substitute_expr(items, given, made)?;
                 args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made))

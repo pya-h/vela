@@ -1,0 +1,175 @@
+# A `match` and a `when` used as values: every branch gives the value, on one
+# line with `=` for a case, or on the last line of its block.
+
+kind Shape
+    Circle(r: float)
+    Rect(w: float, h: float)
+fi
+
+kind Reading
+    Ok(value: int)
+    Missing
+fi
+
+# The cases give the value, one each.
+task area(s: Shape) -> float
+    <- match s
+    case Circle r = 3.14 * r * r
+    case Rect w h = w * h
+    fi
+fi
+
+# A case may work first and give the value on its last line, and a chain of
+# conditions gives it through the branch that holds.
+task describe(s: Shape) -> text
+    <- match s
+    case Circle r
+        bind size = r * 2.0
+        when size > 10.0
+            "a wide circle"
+        else when size > 2.0
+            "a circle"
+        else
+            "a dot"
+        fi
+    case Rect w h = "a rectangle"
+    fi
+fi
+
+# A `when` used as a value needs its `else`.
+task label(value: int) -> text
+    <- when value > 100
+        "high"
+    else
+        "low"
+    fi
+fi
+
+# Takes a maybe, so a value given to it becomes one.
+task keep(m: maybe int) -> int
+    <- m { -1 }
+fi
+
+# Where every branch that gives a value gives `none`, the branches still run and
+# the value becomes the maybe the place it goes expects; the other branch leaves.
+task none_or_leave(n: int) -> int
+    <- keep(when n > 1
+        none
+    else
+        <- 0
+    fi)
+fi
+
+task main()
+    bind circle = Circle(2.0)
+    show(area(circle), " ", area(Rect(2.0, 3.0)))
+    show(describe(circle), ", ", describe(Circle(0.5)), ", ", describe(Rect(1.0, 1.0)))
+    show(label(200), " ", label(5))
+
+    # A case that gives `none` makes the whole a maybe, and one that gives a
+    # failure makes it a `T ~ E`.
+    bind half = match Ok(8)
+    case Ok value = value / 2
+    case Missing = none
+    fi
+    show(half)
+    bind checked = match Ok(-1)
+    case Ok value
+        when value < 0
+            fail "negative"
+        else
+            value
+        fi
+    case Missing = fail "nothing read"
+    fi
+    show(checked { 0 })
+
+    # A branch may leave the task instead of giving a value, and a value may be
+    # used anywhere: in an argument, or in a larger expression.
+    bind doubled = 1 + match Ok(20)
+    case Ok value = value
+    case Missing
+        show("no value")
+        0
+    fi
+    show(doubled)
+
+    # In a region: the value a branch gives goes where the whole one does, and a
+    # literal lasts, so it fits beside text of a region.
+    region kept default
+    bind note = when doubled > 10
+        "big: " + doubled.str()
+    else
+        "small"
+    fi
+    show(note)
+
+    # A plan B's block gives its value the same way, so a `when` or a `match` on
+    # its last line gives it through their branches.
+    bind first: maybe int = none
+    bind fallback = first {
+        when doubled > 10
+            doubled
+        else
+            0
+        fi
+    }
+    show(fallback)
+
+    # A `when` used as a value, inside the case of a `match` used as one.
+    each n in 0..3
+        show(match Ok(n)
+        case Ok value
+            when value == 0
+                "zero"
+            else when value == 1
+                "one"
+            else
+                "many"
+            fi
+        case Missing = "none"
+        fi)
+    fi
+
+    # A branch inside a branch settles a type of its own, which the branches
+    # around it may widen: here the case giving `none` makes the whole a maybe,
+    # so the inner `when` gives a maybe int too.
+    bind inner = match Ok(3)
+    case Ok value
+        when value > 2
+            value
+        else when value > 0
+            0
+        else
+            -1
+        fi
+    case Missing = none
+    fi
+    show(inner)
+
+    # The same, where the place the value goes widens it: `keep` takes a maybe.
+    show(keep(match Ok(4)
+    case Ok value
+        when value > 2
+            value
+        else
+            0
+        fi
+    case Missing = 0
+    fi))
+    show(none_or_leave(2), " ", none_or_leave(0))
+
+    # Branches that all give `none`, or all give a failure: the type comes from
+    # the place the value goes, and each branch becomes part of it.
+    bind empty: maybe int = when doubled > 10
+        none
+    else
+        none
+    fi
+    show(empty)
+    bind failed: int ~ text = match Ok(1)
+    case Ok value = fail "first"
+    case Missing = fail "second"
+    fi
+    show(failed { -9 })
+fi
