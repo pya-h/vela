@@ -216,4 +216,9 @@ fi
     assert_eq!(hover(source, "held: maybe").0, "bind held: maybe (int ~ text)");
     assert_eq!(hover(source, "plain: (int)").0, "bind plain: int");
     assert_eq!(hover(source, "inner = v").0, "bind inner: int ~ text");
+    // And while the file does not check, where types are read as they are written.
+    let typing = source.replace("    show(kept(held), plain)", "    show(unknown)\n    show(kept(held), plain)");
+    assert!(!Analysis::new(&typing).diagnostics().is_empty());
+    assert_eq!(hover(&typing, "v: maybe").0, "v: maybe (int ~ text)");
+    assert_eq!(hover(&typing, "plain: (int)").0, "bind plain: int");
 }

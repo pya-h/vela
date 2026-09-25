@@ -1162,10 +1162,14 @@ fn parse_prefixed_type(text: &str, depth: usize) -> Option<Type> {
     }
     let mut ty = match text.trim_end() {
         "region" => Type::Region,
-        // `(T, U)`.
+        // `(T, U)`, a tuple of two or more items, or one type the parentheses
+        // only group, as in `maybe (int ~ text)` (see `parser::parse_tuple_type`).
         parens if parens.starts_with('(') && parens.ends_with(')') => {
-            let items: Option<Vec<Type>> = split_list(parens.get(1..parens.len() - 1)?).into_iter().map(|item| parse_type_within(item, depth + 1)).collect();
-            Type::Tuple(items.filter(|items| items.len() >= 2)?)
+            let items: Vec<Type> = split_list(parens.get(1..parens.len() - 1)?).into_iter().map(|item| parse_type_within(item, depth + 1)).collect::<Option<_>>()?;
+            match <[Type; 1]>::try_from(items) {
+                Ok([only]) => only,
+                Err(items) => Type::Tuple(Some(items).filter(|items| items.len() >= 2)?),
+            }
         }
         // `[T; n]` or `[T]`.
         brackets if brackets.starts_with('[') && brackets.ends_with(']') => {

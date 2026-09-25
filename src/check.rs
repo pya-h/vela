@@ -1582,6 +1582,12 @@ impl Checker {
                 _ => self.check_type(inner, span),
             },
             Type::Or(value, error) => {
+                // One error side, whichever side of the `~` the other is written
+                // on: `(int ~ text) ~ text` and `int ~ (text ~ int)` name two, as
+                // `maybe maybe int` names two emptinesses.
+                if matches!(value.as_ref(), Type::Or(..)) || matches!(error.as_ref(), Type::Or(..)) {
+                    return err(self.place(span, "~"), "a type has one error type: '~' can't appear twice");
+                }
                 if **value != Type::Unit {
                     self.check_type(value, span)?;
                 }
@@ -3814,6 +3820,8 @@ impl Checker {
             Type::Maybe(inner) if self.has_own_str(inner) => {
                 format!("; a shape or kind is written by its own 'str', which needs a value, so open the {} first, as in 'when m is {{value}}'", ty)
             }
+            // A `maybe` of a value that can fail: two to open, the `maybe` first.
+            Type::Maybe(inner) if matches!(inner.as_ref(), Type::Or(..)) => extract_hint(&[&ty]),
             Type::Or(..) => extract_hint(&[&ty]),
             Type::Unit => "; this has no value".to_string(),
             _ => self.no_own_str(&ty),

@@ -13,6 +13,10 @@ pub const MAX_NESTING: usize = 100;
 /// in parentheses is that type, so only `()` and `(T,)` are reported.
 const TUPLE_TYPE_ITEMS: &str = "a tuple holds two or more items, as in '(int, text)'";
 
+/// The same for a tuple of values, and what both say about `(1, 2,)`.
+const TUPLE_ITEMS: &str = "a tuple holds two or more items, as in '(1, \"Ada\")'";
+const TUPLE_TRAILING_COMMA: &str = "a tuple has no comma after its last item";
+
 /// `fail` written where a failure is matched and named. The verb makes a
 /// failure; the noun names one, so every program written before this says
 /// `fail` in a pattern.
@@ -997,9 +1001,13 @@ impl Parser {
     fn parse_tuple_type(&mut self, opened: Span) -> Result<Type> {
         let mut items = Vec::new();
         loop {
-            // `()` and `(int,)`: a missing item, rather than a missing name.
+            // `()` and `(int,)`: a missing item, rather than a missing name;
+            // `(int, text,)`: the comma is the one after the last item.
             if self.check(Token::RParen) {
-                return Err(Error::at(opened, TUPLE_TYPE_ITEMS));
+                return match items.as_slice() {
+                    [] | [_] => Err(Error::at(opened, TUPLE_TYPE_ITEMS)),
+                    _ => Err(Error::at(self.peek_span(), TUPLE_TRAILING_COMMA)),
+                };
             }
             items.push(self.parse_type_parts()?);
             if !self.match_token(Token::Comma) {
@@ -2005,6 +2013,14 @@ impl Parser {
             }
             if self.check(Token::Newline) {
                 break Err(Error::at(self.peek_span(), "a tuple is written on one line, as in '(1, \"Ada\")'"));
+            }
+            // `(1,)`: one value in parentheses is only grouped, as one type is.
+            // `(1, 2,)`: the comma is the one after the last item.
+            if self.check(Token::RParen) {
+                break Err(match values.as_slice() {
+                    [_] => Error::at(span, TUPLE_ITEMS.to_string()),
+                    _ => Error::at(self.peek_span(), TUPLE_TRAILING_COMMA.to_string()),
+                });
             }
             match self.parse_expr() {
                 Ok(value) => values.push(value),

@@ -1576,7 +1576,8 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
       <p>
         A task that can fail sends <code>T ~ E</code>: its value when it works, or an error of type
         <code>E</code>, sent with <code>&lt;- fail error</code>. The error type must differ from the value type, and
-        can be any type but <code>unit</code> or a <code>maybe</code>. Two words keep the two jobs apart:
+        can be any type but <code>unit</code>, a <code>maybe</code>, or another <code>T ~ E</code>: a type has one
+        error side, so <code>(int ~ text) ~ text</code> is refused, as <code>maybe maybe int</code> is. Two words keep the two jobs apart:
         <code>fail</code> is the verb that <em>makes</em> a failure, and <code>failure</code> is the noun that
         <em>names</em> one where it is matched. So <code>case {v}</code> matches a success,
         <code>case failure e</code> a failure, and a plan B's first line <code>failure e</code> names the failure it
@@ -1674,7 +1675,9 @@ save(500) {
           <code>maybe int ~ text</code> means <code>(maybe int) ~ text</code>: a text failure, or a success holding
           maybe an <code>int</code>. Parentheses group a type, so the other nesting is
           <code>maybe (int ~ text)</code>: nothing, or a result that may have failed. One type in parentheses is only
-          that type, and a tuple still needs two or more items.
+          that type, and a tuple still needs two or more items. A <code>maybe</code> and an error side nest either way
+          round, but neither nests inside itself: <code>maybe maybe int</code> and <code>(int ~ text) ~ text</code> are
+          both refused.
         </p>
       </div>
 
