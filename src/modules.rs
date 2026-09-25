@@ -737,6 +737,11 @@ impl Resolver<'_> {
                 self.enter_type_params(&s.types, "shape", &s.name)?;
                 for field in &mut s.fields {
                     field.ty = self.ty(&field.ty, field.ty_span)?;
+                    // A field's default names the program's things as the body
+                    // of a task does: `state: State = State.Idle`.
+                    if let Some(value) = &mut field.default {
+                        self.expr(value)?;
+                    }
                 }
                 self.params.clear();
                 Ok(())

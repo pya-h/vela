@@ -1,0 +1,14 @@
+# error: 9:14: the value field 'n' falls back on must be one the compiler works out without running the program: a number, text, 'true', 'false', 'none', a variant, or a tuple, an array, or a literal of those
+task one() -> int
+    <- 1
+fi
+
+# A default is read where each literal is written, so it can't call a task or
+# read a variable: nothing a literal leaves out costs more than writing it.
+shape Count
+    n: int = one()
+fi
+
+task main()
+    show(Count {}.n)
+fi

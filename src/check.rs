@@ -702,6 +702,37 @@ impl Checker {
         self.current_module.clear();
         self.check_sizes(&order);
         self.check_constructible(items);
+        self.check_field_defaults(items);
+    }
+
+    /// Checks the value each field falls back on, after every declaration is
+    /// settled. It comes last because such a value can be a literal of another
+    /// shape, whose own left-out fields are filled in to check it: a shape that
+    /// held itself would fill itself forever, and by now it is one whose fields
+    /// aren't settled, which no literal reads (see `broken`).
+    fn check_field_defaults(&mut self, items: &[Item]) {
+        for item in items {
+            let Item::Shape(shape) = item else { continue };
+            if self.broken.contains(&shape.name) {
+                continue;
+            }
+            self.current_module = module_of(&shape.name).to_string();
+            self.enter_type_params(&shape.types);
+            let mut checked = Ok(());
+            for field in &shape.fields {
+                if let Some(value) = &field.default {
+                    checked = self.check_field_default(&mut value.clone(), &field.ty, &field.name);
+                    if checked.is_err() {
+                        break;
+                    }
+                }
+            }
+            self.type_params.clear();
+            if !self.keep_going(checked) {
+                self.broken.insert(shape.name.clone());
+            }
+        }
+        self.current_module.clear();
     }
 
     /// Checks one declaration: a shape's or kind's fields, or a task's header.
@@ -817,7 +848,7 @@ impl Checker {
     /// Checks a shape's fields or a variant's payload.
     /// A shape literal, `Point { x: 1 }` or `Box<int> { value: none }`: every
     /// field given exactly once, and the region of the value they make.
-    fn check_struct_init(&mut self, span: Span, name: &mut String, written: &mut Vec<TypeArg>, fields: &mut [FieldInit]) -> Result<Type> {
+    fn check_struct_init(&mut self, span: Span, name: &mut String, written: &mut Vec<TypeArg>, fields: &mut Vec<FieldInit>) -> Result<Type> {
         if self.sees(name) && self.kinds.contains_key(name.as_str()) {
             return err(span, format!("'{}' is a kind, not a shape; create its values with its variants", name));
         }
@@ -851,12 +882,20 @@ impl Checker {
         } else if let Some((ty, at)) = written.first() {
             return err(*at, format!("shape '{}' takes no types, so '< … >' has nothing to name; write '{}' alone", unqualified(name), ty));
         }
-        if module_of(name) != self.current_module
-            && let Some(hidden) = shape.fields.iter().find(|f| f.private)
+        // A private field another file can't give is one only its own module can
+        // build the shape at all — unless the shape gives it a value to fall back
+        // on, which is what lets a shape keep a field of its own and still be
+        // built anywhere.
+        let outside = module_of(name) != self.current_module;
+        if outside
+            && let Some(hidden) = shape.fields.iter().find(|f| f.private && f.default.is_none())
         {
             return err(
                 span,
-                format!("'{}' can't be built outside its file, since its field '{}' is private; a task of its module can build it", name, hidden.name),
+                format!(
+                    "'{}' can't be built outside its file, since its field '{}' is private and falls back on no value; a task of its module can build it, or that field can name the value it falls back on",
+                    name, hidden.name
+                ),
             );
         }
         // Fields may be given in any order, each exactly once.
@@ -869,11 +908,26 @@ impl Checker {
             if let Some(at) = seen.get(&field.name) {
                 return err(field.span, format!("field '{}' is already given at {}:{}", field.name, at.line, at.col));
             }
+            if field_def.private && outside {
+                return err(
+                    field.span,
+                    format!("'{}' is a private field of '{}', which only its own file can give; leave it out and it falls back on its own value", field.name, name),
+                );
+            }
             seen.insert(field.name.clone(), field.span);
             declared.push(field_def.clone());
         }
-        if let Some(missing) = shape.fields.iter().find(|f| !seen.contains_key(&f.name)) {
-            return err(span, format!("missing field '{}' in '{}'", missing.name, name));
+        // A field left out takes the value its shape falls back on, written into
+        // the literal here so that nothing after this sees a literal without it.
+        for field_def in &shape.fields {
+            if seen.contains_key(&field_def.name) {
+                continue;
+            }
+            let Some(default) = &field_def.default else {
+                return err(span, format!("missing field '{}' in '{}'", field_def.name, name));
+            };
+            fields.push(FieldInit { name: field_def.name.clone(), span, value: default.clone() });
+            declared.push(field_def.clone());
         }
         // The types given in place of the names the shape takes, for a literal
         // whose types aren't all known yet.
@@ -1243,6 +1297,35 @@ impl Checker {
         Ok(())
     }
 
+    /// Checks a field's default, `size: int = 0`: a value the compiler works out
+    /// without running the program, which fits the field's type. A copy is
+    /// checked, so the one the shape keeps is the value as it is written, and
+    /// every literal that leaves the field out gets a copy of that (see
+    /// `check_struct_init`). A mistake here makes the shape one whose fields
+    /// aren't settled, so no literal of it says the same thing again (see
+    /// `broken`).
+    fn check_field_default(&mut self, value: &mut Expr, ty: &Type, field: &str) -> Result<()> {
+        let at = value.span;
+        if !ty.params().is_empty() {
+            return err(
+                at,
+                format!("field '{}' is of a type the shape takes, which is a different type in every value, so it has no value to fall back on", field),
+            );
+        }
+        self.check_expr(value)?;
+        if !constant_value(value) {
+            return err(
+                at,
+                format!(
+                    "the value field '{}' falls back on must be one the compiler works out without running the program: a number, text, 'true', 'false', 'none', a variant, or a tuple, an array, or a literal of those",
+                    field
+                ),
+            );
+        }
+        self.coerce(value, ty)?;
+        Ok(())
+    }
+
     /// Drops the region named on the value a method is called on where its shape
     /// or kind lives in none: the parser writes `@this` on every receiver, since
     /// only the whole file says which types hold something in a region. A shape
@@ -1268,7 +1351,7 @@ impl Checker {
         // default (see `ast::DEFAULT`): only a region can be one, and a task
         // takes one at most, as a block declares one at most.
         let mut marked: Option<&Field> = None;
-        for param in t.params.iter().filter(|param| param.default) {
+        for param in t.params.iter().filter(|param| param.default_region) {
             if param.ty != Type::Region {
                 return err(
                     param.span,
@@ -1856,7 +1939,7 @@ impl Checker {
         // A region the header marks is the default of the body, which shares the
         // parameters' scope, so a second default in the body is refused as a
         // second in any block is (see `set_default_region`).
-        if let Some((name, at)) = task.params.iter().find(|param| param.default).map(|param| (param.name.clone(), param.span)) {
+        if let Some((name, at)) = task.params.iter().find(|param| param.default_region).map(|param| (param.name.clone(), param.span)) {
             self.set_default_region(&name, at)?;
         }
         // Named results are variables of the task, declared by its header.
@@ -5704,6 +5787,25 @@ fn holds_changeable(ty: &Type, changeable: &HashSet<String>) -> bool {
         Type::Maybe(inner) => holds_changeable(inner, changeable),
         Type::Or(value, error) => holds_changeable(value, changeable) || holds_changeable(error, changeable),
         Type::Tuple(items) => items.iter().any(|item| holds_changeable(item, changeable)),
+        _ => false,
+    }
+}
+
+/// Whether `expr` is a value the compiler works out without running the program,
+/// which is what a field falls back on (see `check_field_default`): a literal,
+/// `none`, a number with a sign, a variant, or a tuple, an array, or a shape's
+/// literal whose parts are all of these. Checked after the expression is, so a
+/// variant is already a `Construct` rather than a name. Nothing here reads a
+/// variable, calls a task, or makes memory, so a literal that leaves a field out
+/// costs no more than one that writes the value.
+fn constant_value(expr: &Expr) -> bool {
+    match &expr.kind {
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit => true,
+        ExprKind::Unary(_, inner) => constant_value(inner),
+        ExprKind::Array(values) | ExprKind::Tuple(values) => values.iter().all(constant_value),
+        ExprKind::Construct { args, .. } => args.iter().all(constant_value),
+        ExprKind::Repeat { value, count } => constant_value(value) && constant_value(count),
+        ExprKind::StructInit { fields, .. } => fields.iter().all(|field| constant_value(&field.value)),
         _ => false,
     }
 }

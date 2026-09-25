@@ -1706,7 +1706,10 @@ show(c.total())</pre>
           literals already name their fields (<code>Point { x: 1, y: 2 }</code>)</li>
         <li id="default-arguments"><strong>Default arguments:</strong> <code>=</code> in a task's header gives a
           parameter the value a call may leave out, as in <code>task pad(text: text, width: int, fill: text = " ")</code>,
-          and <code>pad(name, 8)</code> then reads as <code>pad(name, 8, " ")</code>. The rules to keep it small:
+          and <code>pad(name, 8)</code> then reads as <code>pad(name, 8, " ")</code>.
+          (<span class="badge b-done">Done</span> for a shape's <a href="vela.html#field-defaults">field</a>, which is
+          the same feature where a literal names what it gives, so it needs no rule about order; a parameter and a
+          variant's value still say that only a field can have one.) The rules to keep it small:
           <strong>the defaults come last</strong> (a parameter with one can't precede a parameter without one, so what a
           call leaves out is always a tail of the list, and no argument is ever matched by position across a gap); one
           value per parameter, written where the parameter is; and the value is an expression the compiler can work out

@@ -223,7 +223,8 @@ pub fn input_error_kind() -> KindDef {
         span,
         ty_span: span,
         private: false,
-        default: false,
+        default_region: false,
+        default: None,
     };
     KindDef {
         name: INPUT_ERROR.to_string(),
@@ -1110,7 +1111,15 @@ pub struct Field {
     /// `r: region default`: a region the task takes that is its body's default
     /// region (see `ast::DEFAULT`). Only a parameter of type `region` can be
     /// one, and a task takes at most one; a field or a payload never is.
-    pub default: bool,
+    pub default_region: bool,
+    /// `size: int = 0`: the value a shape's field takes where a literal leaves
+    /// it out, which is what lets a literal name some fields and not others. It
+    /// is a value the compiler works out without running the program (see
+    /// `check::constant_value`), and the checker writes it into every literal
+    /// that leaves the field out, so nothing later in the compiler sees a
+    /// literal missing a field. A parameter and a variant's value never have one
+    /// (see `docs/future.html#default-arguments` for the parameter half).
+    pub default: Option<Expr>,
 }
 
 /// `include shapes/circle`, `include shapes/circle => round`,

@@ -1,0 +1,7 @@
+# error: 5:39: 'used' is a private field of 'Machine', which only its own file can give; leave it out and it falls back on its own value
+include modules/machine {Machine}
+
+task main()
+    hold m = Machine { name: "press", used: 3 }
+    show(m.name)
+fi

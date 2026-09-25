@@ -1576,16 +1576,22 @@ fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<Completio
         .collect()
 }
 
-/// A literal of the shape `shape`, written `label`, with every field:
-/// `Point { x: ${x}, y: ${y} }`. None for another module's shape with a private
-/// field, which only its own module can build.
+/// A literal of the shape `shape`, written `label`, with every field a literal
+/// must give: `Point { x: ${x}, y: ${y} }`. A field the shape gives a value to
+/// fall back on is left out, since the literal needn't write it. None for
+/// another module's shape with a private field of that kind, which only its own
+/// module can build.
 fn literal_snippet(k: &Knowledge, shape: usize, label: &str) -> Option<String> {
     let foreign = k.symbol(shape).is_some_and(|s| s.module.is_some());
-    if foreign && k.members(shape, SymbolKind::Field).any(|(_, field)| field.private) {
+    if foreign && k.members(shape, SymbolKind::Field).any(|(_, field)| field.private && !field.default) {
         return None;
     }
     let mut used = Vec::new();
-    let fields: Vec<String> = k.members(shape, SymbolKind::Field).map(|(_, field)| format!("{}: ${{{}}}", field.name, unique(&mut used, &field.name))).collect();
+    let fields: Vec<String> = k
+        .members(shape, SymbolKind::Field)
+        .filter(|(_, field)| !field.default)
+        .map(|(_, field)| format!("{}: ${{{}}}", field.name, unique(&mut used, &field.name)))
+        .collect();
     let body = if fields.is_empty() { "{}".to_string() } else { format!("{{ {} }}", fields.join(", ")) };
     Some(format!("{} {}", label, body))
 }

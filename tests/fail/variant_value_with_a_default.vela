@@ -1,0 +1,9 @@
+# error: 3:26: only a shape's field can be given a value to fall back on, not a variant's value
+kind Shape
+    Circle(radius: float = 1.0)
+    Dot
+fi
+
+task main()
+    show(1)
+fi

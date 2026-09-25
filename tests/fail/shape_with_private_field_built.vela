@@ -1,4 +1,4 @@
-# error: 5:17: 'library.Card' can't be built outside its file, since its field 'pin' is private; a task of its module can build it
+# error: 5:17: 'library.Card' can't be built outside its file, since its field 'pin' is private and falls back on no value; a task of its module can build it, or that field can name the value it falls back on
 include modules/library
 
 task main()

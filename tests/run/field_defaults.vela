@@ -1,0 +1,101 @@
+# A field can name the value a literal that leaves it out gives it, written
+# `size: int = 0`. The value is one the compiler works out without running the
+# program, so a literal that leaves the field out costs no more than one that
+# writes it. A field with no default is still given, and a private field with
+# one lets another module build the shape while its own field stays its own:
+# `Machine` below is built here, and only its module touches its `used`.
+
+include field_defaults/machine {Machine, Power}
+
+kind State
+    Idle
+    Busy
+fi
+
+shape Job
+    # The field a literal must give.
+    name: text
+    # Every kind of value a field can fall back on.
+    tries: int = 0
+    weight: float = 1.5
+    ready: bool = true
+    note: maybe text = none
+    state: State = State.Idle
+    marks: [int; 3] = [0, 0, 0]
+    room: [int; 2] = [7; 2]
+    place: (int, text) = (1, "first")
+    priv secret: int = -1
+
+    told() -> int
+        <- .secret
+    fi
+fi
+
+# A shape whose every field falls back on something is written `Thing {}`.
+shape Counters
+    hits: int = 0
+    misses: int = 0
+fi
+
+# A shape that takes types keeps the defaults of the fields whose types it
+# doesn't take.
+shape Boxed<T>
+    value: T
+    label: text = "boxed"
+fi
+
+task main()
+    hold job = Job { name: "sweep" }
+    show(job.name, " ", job.tries, " ", job.weight, " ", job.ready)
+    show(job.note { "no note" }, " ", job.marks[2], " ", job.room[0])
+    show(job.place.0, " ", job.place.1, " ", job.told())
+    match job.state
+    case Idle
+        show("idle")
+    case Busy
+        show("busy")
+    fi
+
+    # A literal writes what it likes and falls back on the rest.
+    hold picked = Job { name: "scrub", tries: 3, note: "again", state: State.Busy, place: (2, "second") }
+    show(picked.tries, " ", picked.note { "" }, " ", picked.place.1)
+    match picked.state
+    case Idle
+        show("idle")
+    case Busy
+        show("busy")
+    fi
+
+    bind empty = Counters {}
+    show(empty.hits, " ", empty.misses)
+
+    region r
+    hold box = Boxed<int> { value: 4 }
+    show(box.label, " ", box.value)
+    hold named = Boxed<text> { value: "deep", label: "kept" }
+    show(named.label, " ", named.value)
+
+    # A default is read where the literal is, so each value gets its own.
+    hold first = Counters {}
+    hold second = Counters {}
+    first.hits = 9
+    show(first.hits, " ", second.hits)
+
+    # Text a field falls back on lasts as long as the program, so it fits a
+    # value of any region.
+    bind line = "job {picked.tries}" at r
+    hold moved = Job { name: line }
+    show(moved.name, " ", moved.note { "no note" })
+
+    # Another module's shape, built without the private field it keeps.
+    hold machine = Machine { name: "press" }
+    machine.run()
+    machine.run()
+    show(machine.name, " ", machine.runs())
+    match machine.power
+    case Off
+        show("off")
+    case On
+        show("on")
+    fi
+fi

@@ -1,0 +1,176 @@
+  1 | # A field can name the value a literal that leaves it out gives it, written
+    | comment:# A field can name the value a literal that leaves it out gives it, written
+  2 | # `size: int = 0`. The value is one the compiler works out without running the
+    | comment:# `size: int = 0`. The value is one the compiler works out without running the
+  3 | # program, so a literal that leaves the field out costs no more than one that
+    | comment:# program, so a literal that leaves the field out costs no more than one that
+  4 | # writes it. A field with no default is still given, and a private field with
+    | comment:# writes it. A field with no default is still given, and a private field with
+  5 | # one lets another module build the shape while its own field stays its own:
+    | comment:# one lets another module build the shape while its own field stays its own:
+  6 | # `Machine` below is built here, and only its module touches its `used`.
+    | comment:# `Machine` below is built here, and only its module touches its `used`.
+  8 | include field_defaults/machine {Machine, Power}
+    | keyword:include  module:field_defaults  operator:/  module:machine  punctuation:{  type:Machine  punctuation:,  type:Power  punctuation:}
+ 10 | kind State
+    | keyword:kind  type:State
+ 11 |     Idle
+    | variant:Idle
+ 12 |     Busy
+    | variant:Busy
+ 13 | fi
+    | keyword:fi
+ 15 | shape Job
+    | keyword:shape  type:Job
+ 16 |     # The field a literal must give.
+    | comment:# The field a literal must give.
+ 17 |     name: text
+    | field:name  punctuation::  type-builtin:text
+ 18 |     # Every kind of value a field can fall back on.
+    | comment:# Every kind of value a field can fall back on.
+ 19 |     tries: int = 0
+    | field:tries  punctuation::  type-builtin:int  operator:=  number:0
+ 20 |     weight: float = 1.5
+    | field:weight  punctuation::  type-builtin:float  operator:=  number:1.5
+ 21 |     ready: bool = true
+    | field:ready  punctuation::  type-builtin:bool  operator:=  keyword:true
+ 22 |     note: maybe text = none
+    | field:note  punctuation::  keyword:maybe  type-builtin:text  operator:=  keyword:none
+ 23 |     state: State = State.Idle
+    | field:state  punctuation::  type:State  operator:=  type:State  punctuation:.  variant:Idle
+ 24 |     marks: [int; 3] = [0, 0, 0]
+    | field:marks  punctuation::  punctuation:[  type-builtin:int  punctuation:;  number:3  punctuation:]  operator:=  punctuation:[  number:0  punctuation:,  number:0  punctuation:,  number:0  punctuation:]
+ 25 |     room: [int; 2] = [7; 2]
+    | field:room  punctuation::  punctuation:[  type-builtin:int  punctuation:;  number:2  punctuation:]  operator:=  punctuation:[  number:7  punctuation:;  number:2  punctuation:]
+ 26 |     place: (int, text) = (1, "first")
+    | field:place  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:text  punctuation:)  operator:=  punctuation:(  number:1  punctuation:,  string:"first"  punctuation:)
+ 27 |     priv secret: int = -1
+    | keyword:priv  field:secret  punctuation::  type-builtin:int  operator:=  operator:-  number:1
+ 29 |     told() -> int
+    | method:told  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 30 |         <- .secret
+    | keyword:<-  punctuation:.  field:secret
+ 31 |     fi
+    | keyword:fi
+ 32 | fi
+    | keyword:fi
+ 34 | # A shape whose every field falls back on something is written `Thing {}`.
+    | comment:# A shape whose every field falls back on something is written `Thing {}`.
+ 35 | shape Counters
+    | keyword:shape  type:Counters
+ 36 |     hits: int = 0
+    | field:hits  punctuation::  type-builtin:int  operator:=  number:0
+ 37 |     misses: int = 0
+    | field:misses  punctuation::  type-builtin:int  operator:=  number:0
+ 38 | fi
+    | keyword:fi
+ 40 | # A shape that takes types keeps the defaults of the fields whose types it
+    | comment:# A shape that takes types keeps the defaults of the fields whose types it
+ 41 | # doesn't take.
+    | comment:# doesn't take.
+ 42 | shape Boxed<T>
+    | keyword:shape  type:Boxed  punctuation:<  type:T  punctuation:>
+ 43 |     value: T
+    | field:value  punctuation::  type:T
+ 44 |     label: text = "boxed"
+    | field:label  punctuation::  type-builtin:text  operator:=  string:"boxed"
+ 45 | fi
+    | keyword:fi
+ 47 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 48 |     hold job = Job { name: "sweep" }
+    | keyword:hold  variable:job  operator:=  type:Job  punctuation:{  field:name  punctuation::  string:"sweep"  punctuation:}
+ 49 |     show(job.name, " ", job.tries, " ", job.weight, " ", job.ready)
+    | builtin-fn:show  punctuation:(  variable:job  punctuation:.  field:name  punctuation:,  string:" "  punctuation:,  variable:job  punctuation:.  field:tries  punctuation:,  string:" "  punctuation:,  variable:job  punctuation:.  field:weight  punctuation:,  string:" "  punctuation:,  variable:job  punctuation:.  field:ready  punctuation:)
+ 50 |     show(job.note { "no note" }, " ", job.marks[2], " ", job.room[0])
+    | builtin-fn:show  punctuation:(  variable:job  punctuation:.  field:note  punctuation:{  string:"no note"  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:job  punctuation:.  field:marks  punctuation:[  number:2  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:job  punctuation:.  field:room  punctuation:[  number:0  punctuation:]  punctuation:)
+ 51 |     show(job.place.0, " ", job.place.1, " ", job.told())
+    | builtin-fn:show  punctuation:(  variable:job  punctuation:.  field:place  punctuation:.  field:0  punctuation:,  string:" "  punctuation:,  variable:job  punctuation:.  field:place  punctuation:.  field:1  punctuation:,  string:" "  punctuation:,  variable:job  punctuation:.  method:told  punctuation:(  punctuation:)  punctuation:)
+ 52 |     match job.state
+    | keyword:match  variable:job  punctuation:.  field:state
+ 53 |     case Idle
+    | keyword:case  variant:Idle
+ 54 |         show("idle")
+    | builtin-fn:show  punctuation:(  string:"idle"  punctuation:)
+ 55 |     case Busy
+    | keyword:case  variant:Busy
+ 56 |         show("busy")
+    | builtin-fn:show  punctuation:(  string:"busy"  punctuation:)
+ 57 |     fi
+    | keyword:fi
+ 59 |     # A literal writes what it likes and falls back on the rest.
+    | comment:# A literal writes what it likes and falls back on the rest.
+ 60 |     hold picked = Job { name: "scrub", tries: 3, note: "again", state: State.Busy, place: (2, "second") }
+    | keyword:hold  variable:picked  operator:=  type:Job  punctuation:{  field:name  punctuation::  string:"scrub"  punctuation:,  field:tries  punctuation::  number:3  punctuation:,  field:note  punctuation::  string:"again"  punctuation:,  field:state  punctuation::  type:State  punctuation:.  variant:Busy  punctuation:,  field:place  punctuation::  punctuation:(  number:2  punctuation:,  string:"second"  punctuation:)  punctuation:}
+ 61 |     show(picked.tries, " ", picked.note { "" }, " ", picked.place.1)
+    | builtin-fn:show  punctuation:(  variable:picked  punctuation:.  field:tries  punctuation:,  string:" "  punctuation:,  variable:picked  punctuation:.  field:note  punctuation:{  string:""  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:picked  punctuation:.  field:place  punctuation:.  field:1  punctuation:)
+ 62 |     match picked.state
+    | keyword:match  variable:picked  punctuation:.  field:state
+ 63 |     case Idle
+    | keyword:case  variant:Idle
+ 64 |         show("idle")
+    | builtin-fn:show  punctuation:(  string:"idle"  punctuation:)
+ 65 |     case Busy
+    | keyword:case  variant:Busy
+ 66 |         show("busy")
+    | builtin-fn:show  punctuation:(  string:"busy"  punctuation:)
+ 67 |     fi
+    | keyword:fi
+ 69 |     bind empty = Counters {}
+    | keyword:bind  variable:empty  operator:=  type:Counters  punctuation:{  punctuation:}
+ 70 |     show(empty.hits, " ", empty.misses)
+    | builtin-fn:show  punctuation:(  variable:empty  punctuation:.  field:hits  punctuation:,  string:" "  punctuation:,  variable:empty  punctuation:.  field:misses  punctuation:)
+ 72 |     region r
+    | keyword:region  region:r
+ 73 |     hold box = Boxed<int> { value: 4 }
+    | keyword:hold  variable:box  operator:=  type:Boxed  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  number:4  punctuation:}
+ 74 |     show(box.label, " ", box.value)
+    | builtin-fn:show  punctuation:(  variable:box  punctuation:.  field:label  punctuation:,  string:" "  punctuation:,  variable:box  punctuation:.  field:value  punctuation:)
+ 75 |     hold named = Boxed<text> { value: "deep", label: "kept" }
+    | keyword:hold  variable:named  operator:=  type:Boxed  punctuation:<  type-builtin:text  punctuation:>  punctuation:{  field:value  punctuation::  string:"deep"  punctuation:,  field:label  punctuation::  string:"kept"  punctuation:}
+ 76 |     show(named.label, " ", named.value)
+    | builtin-fn:show  punctuation:(  variable:named  punctuation:.  field:label  punctuation:,  string:" "  punctuation:,  variable:named  punctuation:.  field:value  punctuation:)
+ 78 |     # A default is read where the literal is, so each value gets its own.
+    | comment:# A default is read where the literal is, so each value gets its own.
+ 79 |     hold first = Counters {}
+    | keyword:hold  variable:first  operator:=  type:Counters  punctuation:{  punctuation:}
+ 80 |     hold second = Counters {}
+    | keyword:hold  variable:second  operator:=  type:Counters  punctuation:{  punctuation:}
+ 81 |     first.hits = 9
+    | variable:first  punctuation:.  field:hits  operator:=  number:9
+ 82 |     show(first.hits, " ", second.hits)
+    | builtin-fn:show  punctuation:(  variable:first  punctuation:.  field:hits  punctuation:,  string:" "  punctuation:,  variable:second  punctuation:.  field:hits  punctuation:)
+ 84 |     # Text a field falls back on lasts as long as the program, so it fits a
+    | comment:# Text a field falls back on lasts as long as the program, so it fits a
+ 85 |     # value of any region.
+    | comment:# value of any region.
+ 86 |     bind line = "job {picked.tries}" at r
+    | keyword:bind  variable:line  operator:=  string:"job {  variable:picked  punctuation:.  field:tries  string:}"  keyword:at  region:r
+ 87 |     hold moved = Job { name: line }
+    | keyword:hold  variable:moved  operator:=  type:Job  punctuation:{  field:name  punctuation::  variable:line  punctuation:}
+ 88 |     show(moved.name, " ", moved.note { "no note" })
+    | builtin-fn:show  punctuation:(  variable:moved  punctuation:.  field:name  punctuation:,  string:" "  punctuation:,  variable:moved  punctuation:.  field:note  punctuation:{  string:"no note"  punctuation:}  punctuation:)
+ 90 |     # Another module's shape, built without the private field it keeps.
+    | comment:# Another module's shape, built without the private field it keeps.
+ 91 |     hold machine = Machine { name: "press" }
+    | keyword:hold  variable:machine  operator:=  type:Machine  punctuation:{  field:name  punctuation::  string:"press"  punctuation:}
+ 92 |     machine.run()
+    | variable:machine  punctuation:.  method:run  punctuation:(  punctuation:)
+ 93 |     machine.run()
+    | variable:machine  punctuation:.  method:run  punctuation:(  punctuation:)
+ 94 |     show(machine.name, " ", machine.runs())
+    | builtin-fn:show  punctuation:(  variable:machine  punctuation:.  field:name  punctuation:,  string:" "  punctuation:,  variable:machine  punctuation:.  method:runs  punctuation:(  punctuation:)  punctuation:)
+ 95 |     match machine.power
+    | keyword:match  variable:machine  punctuation:.  field:power
+ 96 |     case Off
+    | keyword:case  variant:Off
+ 97 |         show("off")
+    | builtin-fn:show  punctuation:(  string:"off"  punctuation:)
+ 98 |     case On
+    | keyword:case  variant:On
+ 99 |         show("on")
+    | builtin-fn:show  punctuation:(  string:"on"  punctuation:)
+100 |     fi
+    | keyword:fi
+101 | fi
+    | keyword:fi

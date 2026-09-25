@@ -1,0 +1,13 @@
+sweep 0 1.5 true
+no note 0 7
+1 first -1
+idle
+3 again second
+busy
+0 0
+boxed 4
+kept deep
+9 0
+job 3 no note
+press 2
+on

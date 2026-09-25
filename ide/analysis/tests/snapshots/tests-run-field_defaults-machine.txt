@@ -1,0 +1,36 @@
+  1 | # A shape whose own field is private and falls back on a value: another module
+    | comment:# A shape whose own field is private and falls back on a value: another module
+  2 | # can build it, and still can't read or write that field.
+    | comment:# can build it, and still can't read or write that field.
+  4 | kind Power
+    | keyword:kind  type:Power
+  5 |     Off
+    | variant:Off
+  6 |     On
+    | variant:On
+  7 | fi
+    | keyword:fi
+  9 | shape Machine
+    | keyword:shape  type:Machine
+ 10 |     priv used: int = 0
+    | keyword:priv  field:used  punctuation::  type-builtin:int  operator:=  number:0
+ 11 |     name: text
+    | field:name  punctuation::  type-builtin:text
+ 12 |     power: Power = Power.Off
+    | field:power  punctuation::  type:Power  operator:=  type:Power  punctuation:.  variant:Off
+ 14 |     alters run()
+    | keyword:alters  method:run  punctuation:(  punctuation:)
+ 15 |         .used = .used + 1
+    | punctuation:.  field:used  operator:=  punctuation:.  field:used  operator:+  number:1
+ 16 |         .power = Power.On
+    | punctuation:.  field:power  operator:=  type:Power  punctuation:.  variant:On
+ 17 |     fi
+    | keyword:fi
+ 19 |     runs() -> int
+    | method:runs  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 20 |         <- .used
+    | keyword:<-  punctuation:.  field:used
+ 21 |     fi
+    | keyword:fi
+ 22 | fi
+    | keyword:fi

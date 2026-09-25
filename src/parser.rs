@@ -29,6 +29,16 @@ const PLAN_B_NAMES: &str =
 /// `failure` written where a value goes: the mirror of `FAILURE_NAMES`.
 const FAIL_MAKES: &str = "'failure' names a failure in a pattern; to make one, write 'fail', as in '<- fail e'";
 
+/// Where a `name: type` is written, which settles what may follow the type: a
+/// shape's field takes `= value`, a task's parameter takes `default` on a region
+/// it is given, and a variant's value takes neither (see `parse_field`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Slot {
+    Field,
+    Param,
+    Value,
+}
+
 pub struct Parser {
     tokens: Vec<Token>,
     spans: Vec<Span>,
@@ -443,7 +453,7 @@ impl Parser {
         let span = self.peek_span();
         let name = self.expect_ident()?;
         let types = self.parse_type_params()?;
-        let params = self.parse_field_list(true)?;
+        let params = self.parse_field_list(Slot::Param)?;
         let mut results = Vec::new();
         let ret = if self.match_token(Token::Arrow) {
             self.parse_results(&mut results)?
@@ -582,7 +592,7 @@ impl Parser {
                 continue;
             }
             self.reject_field_below_method(&methods, "shape")?;
-            let mut field = self.parse_field(false)?;
+            let mut field = self.parse_field(Slot::Field)?;
             reject_member_named_this(&field.name, field.span, "a field")?;
             field.private = private;
             fields.push(field);
@@ -662,7 +672,7 @@ impl Parser {
             ));
         }
         let mut params = vec![receiver(owner, types, span)];
-        let read = self.parse_field_list(true);
+        let read = self.parse_field_list(Slot::Param);
         params.extend(if what == "kind" { read.map_err(Parser::kind_member)? } else { read? });
         if let Some(param) = params.iter().skip(1).find(|param| param.ty == Type::Region && param.name == THIS_WORD) {
             return Err(Error::at(param.span, format!("'{0}' is the region the value this method is called on lives in, written '@{0}', so a region parameter can't take the name", THIS_WORD)));
@@ -732,7 +742,7 @@ impl Parser {
             self.reject_field_below_method(&methods, "kind")?;
             let tag = self.expect_ident()?;
             let payload = if self.check(Token::LParen) {
-                self.parse_field_list(false).map_err(Parser::kind_member)?
+                self.parse_field_list(Slot::Value).map_err(Parser::kind_member)?
             } else {
                 Vec::new()
             };
@@ -791,9 +801,10 @@ impl Parser {
         }
     }
 
-    /// `name: type`, and `r: region default` where `params` says these are a
-    /// task's parameters (see `ast::DEFAULT`).
-    fn parse_field(&mut self, params: bool) -> Result<Field> {
+    /// `name: type`, `r: region default` in a task's parameters (see
+    /// `ast::DEFAULT`), and `size: int = 0` for a shape's field, which `slot`
+    /// says which of these is being read.
+    fn parse_field(&mut self, slot: Slot) -> Result<Field> {
         let span = self.peek_span();
         if self.check(Token::Priv) {
             return Err(Error::at(span, "only a shape's field can be 'priv', not a parameter or a variant's value"));
@@ -802,8 +813,24 @@ impl Parser {
         self.expect(Token::Colon)?;
         let ty_span = self.peek_span();
         let ty = self.parse_type()?;
-        let default = self.match_default(params)?;
-        Ok(Field { name, ty, span, ty_span, private: false, default })
+        let default_region = self.match_default(slot == Slot::Param)?;
+        let default = self.match_field_default(slot)?;
+        Ok(Field { name, ty, span, ty_span, private: false, default_region, default })
+    }
+
+    /// `= value` after a shape's field: the value a literal that leaves the
+    /// field out gives it. A parameter and a variant's value have none, and say
+    /// so (see `docs/future.html#default-arguments` for the parameter half).
+    fn match_field_default(&mut self, slot: Slot) -> Result<Option<Expr>> {
+        let at = self.peek_span();
+        if !self.match_token(Token::Assign) {
+            return Ok(None);
+        }
+        if slot != Slot::Field {
+            let what = if slot == Slot::Param { "a parameter" } else { "a variant's value" };
+            return Err(Error::at(at, format!("only a shape's field can be given a value to fall back on, not {}", what)));
+        }
+        Ok(Some(self.parse_expr()?))
     }
 
     /// The word `default` after a task's parameter, which makes the region it
@@ -826,13 +853,13 @@ impl Parser {
         Ok(true)
     }
 
-    /// `(name: type, ...)`; `params` as in `parse_field`.
-    fn parse_field_list(&mut self, params: bool) -> Result<Vec<Field>> {
+    /// `(name: type, ...)`; `slot` as in `parse_field`.
+    fn parse_field_list(&mut self, slot: Slot) -> Result<Vec<Field>> {
         self.expect(Token::LParen)?;
         let mut fields = Vec::new();
         if !self.check(Token::RParen) {
             loop {
-                fields.push(self.parse_field(params)?);
+                fields.push(self.parse_field(slot)?);
                 if !self.match_token(Token::Comma) {
                     break;
                 }
@@ -2479,7 +2506,7 @@ fn receiver(owner: &str, types: &[TypeParam], span: Span) -> Field {
         let given = types.iter().map(|param| Type::Named(param.name.clone(), None)).collect();
         Type::Applied(Box::new(Applied { name: owner.to_string(), types: given, region }))
     };
-    Field { name: THIS.to_string(), ty, span, ty_span: span, private: false, default: false }
+    Field { name: THIS.to_string(), ty, span, ty_span: span, private: false, default_region: false, default: None }
 }
 
 /// Refuses a member named `this`, which is the whole value inside a method, so

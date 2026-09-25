@@ -1,0 +1,22 @@
+# A shape whose own field is private and falls back on a value: another module
+# can build it, and still can't read or write that field.
+
+kind Power
+    Off
+    On
+fi
+
+shape Machine
+    priv used: int = 0
+    name: text
+    power: Power = Power.Off
+
+    alters run()
+        .used = .used + 1
+        .power = Power.On
+    fi
+
+    runs() -> int
+        <- .used
+    fi
+fi

@@ -186,7 +186,7 @@
       <p>
         More programs are in <code>examples/</code>: <code>fib.vela</code> (recursion), <code>kinds.vela</code>
         (kinds, <code>match</code>, and a kind's methods), <code>methods.vela</code> (a shape's methods, <code>alters</code>,
-        <code>priv</code>, a method that can fail, and one of a shape that takes types), <code>todo.vela</code> (a linked list in a region, with <code>maybe</code>
+        <code>priv</code>, a method that can fail, one of a shape that takes types, and <a href="#field-defaults">fields that name the value they fall back on</a>), <code>todo.vela</code> (a linked list in a region, with <code>maybe</code>
         pointers, <code>is</code>, and a plan B), <code>errors.vela</code> (<code>T ~ E</code>, <code>fail</code> and <code>failure</code>, and handling
         errors with <code>match</code>, <code>is</code>, and a plan B), <code>text.vela</code> (lengths, parts, order,
         joining, values as text, and text holding values), <code>regions.vela</code> (a tree in a region, a region
@@ -295,7 +295,7 @@ true false none  fi   maybe is     fail failure include priv</pre>
         <tr><td><code>name =&gt; other</code></td><td>on an <code>include</code> line: the name a module or a name brought in is written with in this file</td></tr>
         <tr><td><code>Name { x: 1 }</code></td><td>a shape literal</td></tr>
         <tr><td><code>0..5</code></td><td>a range, in <code>each</code> and in a slice (<code>xs[1..3]</code>)</td></tr>
-        <tr><td><code>=</code></td><td>assignment, and the value of a binding</td></tr>
+        <tr><td><code>=</code></td><td>assignment, the value of a binding, the value a <a href="#field-defaults">field falls back on</a>, and the value a <code>case</code> gives</td></tr>
         <tr><td><code>+ - * / %</code>, <code>== != &lt; &lt;= &gt; &gt;=</code></td><td>arithmetic and comparison</td></tr>
       </table>
 
@@ -869,6 +869,33 @@ show(p.x)</pre>
       <p>
         A shape literal must give every field exactly once, in any order: <code>Point { y: 20, x: 10 }</code> is the
         same value. A shape may also have no fields (<code>Marker {}</code>).
+      </p>
+      <p id="field-defaults">
+        A field can name the value a literal that leaves it out gives it, written after its type. It is a value the
+        compiler works out without running the program — a number, text, <code>true</code>, <code>false</code>,
+        <code>none</code>, a variant, or a tuple, an array, or a literal of those — so a literal that leaves the field
+        out costs no more than one that writes it. The value is read where the literal is, so each value made gets its
+        own. A literal may still write the field, and a shape whose every field names one is written <code>Job {}</code>.
+      </p>
+      <pre><span class="keyword">kind</span> State
+    Idle
+    Busy
+<span class="keyword">fi</span>
+
+<span class="keyword">shape</span> Job
+    name: text                   <span class="comment"># every literal gives this one</span>
+    tries: int = 0
+    note: <span class="keyword">maybe</span> text = <span class="keyword">none</span>
+    state: State = State.Idle
+<span class="keyword">fi</span>
+
+<span class="keyword">bind</span> sweep = Job { name: "sweep" }              <span class="comment"># tries 0, note none, state Idle</span>
+<span class="keyword">bind</span> again = Job { name: "scrub", tries: 3 }    <span class="comment"># what it writes, and the rest</span>
+Job { tries: 1 }                                <span class="comment"># error: missing field 'name' in 'Job'</span></pre>
+      <p>
+        This is what lets a shape keep a field of its own and still be built anywhere: a <code>priv</code> field with
+        no value to fall back on can only be given inside its own module, so only that module can build the shape at
+        all, while one that names a value is left out elsewhere and starts there.
       </p>
       <p>
         Shapes and kinds can be used before they are declared. A type cannot contain itself by value, since its
@@ -2287,8 +2314,10 @@ n.point(<span class="keyword">new</span> Node(Node { value: <span class="number"
           (<code>{Color =&gt; Hue}</code>), but not the module, which has no name there.</li>
         <li><strong>Private.</strong> Everything a file declares can be used by the files that include it, unless it is
           marked <code>priv</code>: a task, shape, or kind (whose variants are then private too), or a shape's field.
-          Another file can't read or assign a private field, or build its shape with a literal, so a module can keep
-          a value's invariants to itself through its tasks. What other files see of a public task (its parameters and
+          Another file can't read or assign a private field, or give it in a literal, so a module can keep
+          a value's invariants to itself through its tasks. A shape with a private field can be built elsewhere only
+          when that field <a href="#field-defaults">names the value it falls back on</a>, which the literal leaves out;
+          with no such value, only the field's own module can build the shape at all. What other files see of a public task (its parameters and
           results), a public shape (its public fields), or a public kind (its variants' values) can't mention a
           private type, since they couldn't name it.</li>
         <li><strong>Each module's own names.</strong> Tasks, shapes, kinds, and variants share one namespace within a

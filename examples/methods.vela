@@ -19,10 +19,12 @@ kind Refusal
     fi
 fi
 
+# A field can name the value a literal that leaves it out gives it, so an
+# account is opened by naming its owner alone.
 shape Account
     owner: text
-    balance: int
-    open: bool
+    balance: int = 0
+    open: bool = true
 
     balanceOf() -> int
         <- .balance
@@ -83,7 +85,7 @@ task report(result: unit ~ Refusal)
 fi
 
 task main()
-    hold ada = Account { owner: "Ada", balance: 0, open: true }
+    hold ada = Account { owner: "Ada" }
     ada.deposit(100)
     report(ada.withdraw(30))
     report(ada.withdraw(500))
@@ -95,7 +97,7 @@ task main()
     # An item of a slice is a place that can change.
     region bank
     hold accounts = new [Account]() at bank
-    accounts.add(Account { owner: "Grace", balance: 5, open: true })
+    accounts.add(Account { owner: "Grace", balance: 5 })
     accounts[0].deposit(10)
     show(accounts[0])
 

@@ -14,7 +14,7 @@ task main()
     basket = cart.add(basket, Product.Cheese(600), 1)
     show(basket.items)                       # 8
     show(cart.total(basket))                 # 1690 cents
-
+    
     # Item came in as Product; its variants are named through it.
     bind snack: Product = Product.Cheese(100)
     show(price_of(snack))                    # 300

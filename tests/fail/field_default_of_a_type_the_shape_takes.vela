@@ -1,0 +1,8 @@
+# error: 3:16: field 'value' is of a type the shape takes, which is a different type in every value, so it has no value to fall back on
+shape Box<T>
+    value: T = 0
+fi
+
+task main()
+    show(1)
+fi

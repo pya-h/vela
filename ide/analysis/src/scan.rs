@@ -130,6 +130,9 @@ pub(crate) struct Symbol {
     pub module: Option<usize>,
     /// Marked `priv`: a task, shape, kind, or field of its own file only.
     pub private: bool,
+    /// A field with a value a literal that leaves it out gives it
+    /// (`size: int = 0`), which is what a literal may not write.
+    pub default: bool,
 }
 
 /// A module the file includes.
@@ -582,6 +585,12 @@ fn ends_field(token: &Token) -> bool {
     matches!(token, Token::Comma | Token::RParen)
 }
 
+/// What ends a shape's field, whose type may be followed by the value a literal
+/// that leaves the field out gives it (`size: int = 0`).
+fn ends_shape_field(token: &Token) -> bool {
+    matches!(token, Token::Assign)
+}
+
 /// What ends the words a type a declaration takes must allow.
 fn ends_type_param(token: &Token) -> bool {
     matches!(token, Token::Comma | Token::Gt)
@@ -621,7 +630,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
         let start = tokens.get(p).map(|t| t.start).unwrap_or_default();
         let visible = 0..tokens.source.len();
         let private = tokens.before(p) == Some(&Token::Priv) || tokens.before(p.saturating_sub(1)) == Some(&Token::Priv);
-        symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro: None, detail, parent, module: None, private });
+        symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro: None, detail, parent, module: None, private, default: false });
         declared_at.insert(p, symbols.len() - 1);
         symbols.len() - 1
     };
@@ -764,8 +773,14 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                     if (tokens.starts_line(p) || (tokens.before(p) == Some(&Token::Priv) && tokens.starts_line(p - 1)))
                         && tokens.token(p + 1) == Some(&Token::Colon) =>
                 {
-                    let detail = tokens.text_after(p + 1, never);
-                    declare(&mut symbols, p, SymbolKind::Field, detail, Some(shape));
+                    // The type, and whether a value it falls back on follows it.
+                    let whole = tokens.text_after(p + 1, never);
+                    let detail = tokens.text_after(p + 1, ends_shape_field);
+                    let falls_back = whole != detail;
+                    let id = declare(&mut symbols, p, SymbolKind::Field, detail, Some(shape));
+                    if let Some(field) = symbols.get_mut(id) {
+                        field.default = falls_back;
+                    }
                 }
                 ([Block::Kind], Some(kind)) if tokens.starts_line(p) => {
                     let detail = tokens.text_after(p, never);
@@ -1459,7 +1474,7 @@ impl<'a> Classifier<'a> {
         // the case may give its value on the same line: `case Ok v = v * 2`.
         if intro == Some("case") {
             let visible = range.end..tokens.source.len();
-            self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, module: None, private: false });
+            self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, module: None, private: false });
             let id = self.symbols.len() - 1;
             if let Some(scope) = self.scopes.last_mut() {
                 scope.variables.push(id);
@@ -1498,7 +1513,7 @@ impl<'a> Classifier<'a> {
             })
             .map_or(tokens.source.len(), |q| tokens.range(q).end);
         let visible = line_end..tokens.source.len();
-        self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, module: None, private: false });
+        self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, module: None, private: false });
         let id = self.symbols.len() - 1;
         if let Some(scope) = self.scopes.last_mut() {
             scope.variables.push(id);
