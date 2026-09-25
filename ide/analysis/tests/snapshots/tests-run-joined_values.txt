@@ -1,0 +1,168 @@
+  1 | # Where several values must have one type — the items of an array, the branches
+    | comment:# Where several values must have one type — the items of an array, the branches
+  2 | # of a `match` or a `when` used as a value — their types are joined by one rule:
+    | comment:# of a `match` or a `when` used as a value — their types are joined by one rule:
+  3 | # a `maybe` or an error side is wrapped around whatever is already there, and a
+    | comment:# a `maybe` or an error side is wrapped around whatever is already there, and a
+  4 | # value already made is never changed inside. Parentheses group a type, so both
+    | comment:# value already made is never changed inside. Parentheses group a type, so both
+  5 | # nestings can be written: `maybe int ~ text` is `(maybe int) ~ text`, and
+    | comment:# nestings can be written: `maybe int ~ text` is `(maybe int) ~ text`, and
+  6 | # `maybe (int ~ text)` is the other one.
+    | comment:# `maybe (int ~ text)` is the other one.
+  8 | task risky(n: int) -> int ~ text
+    | keyword:task  task:risky  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type-builtin:text
+  9 |     when n > 0
+    | keyword:when  parameter:n  operator:>  number:0
+ 10 |         <- n
+    | keyword:<-  parameter:n
+ 11 |     fi
+    | keyword:fi
+ 12 |     <- fail "no reading"
+    | keyword:<-  keyword:fail  string:"no reading"
+ 13 | fi
+    | keyword:fi
+ 15 | task divide(a: int, b: int) -> (int, int)
+    | keyword:task  task:divide  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)
+ 16 |     <- (a / b, a % b)
+    | keyword:<-  punctuation:(  parameter:a  operator:/  parameter:b  punctuation:,  parameter:a  operator:%  parameter:b  punctuation:)
+ 17 | fi
+    | keyword:fi
+ 19 | # One type in parentheses is that type, here `int`.
+    | comment:# One type in parentheses is that type, here `int`.
+ 20 | task twice(x: (int)) -> int
+    | keyword:task  task:twice  punctuation:(  parameter:x  punctuation::  punctuation:(  type-builtin:int  punctuation:)  punctuation:)  operator:->  type-builtin:int
+ 21 |     <- x * 2
+    | keyword:<-  parameter:x  operator:*  number:2
+ 22 | fi
+    | keyword:fi
+ 24 | # Both nestings, written down, as a parameter and as a result.
+    | comment:# Both nestings, written down, as a parameter and as a result.
+ 25 | task kept(v: maybe (int ~ text)) -> int
+    | keyword:task  task:kept  punctuation:(  parameter:v  punctuation::  keyword:maybe  punctuation:(  type-builtin:int  operator:~  type-builtin:text  punctuation:)  punctuation:)  operator:->  type-builtin:int
+ 26 |     bind inner = v { <- -1 }
+    | keyword:bind  variable:inner  operator:=  parameter:v  punctuation:{  keyword:<-  operator:-  number:1  punctuation:}
+ 27 |     <- inner { -2 }
+    | keyword:<-  variable:inner  punctuation:{  operator:-  number:2  punctuation:}
+ 28 | fi
+    | keyword:fi
+ 30 | task sent(n: int) -> (maybe int) ~ text
+    | keyword:task  task:sent  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:(  keyword:maybe  type-builtin:int  punctuation:)  operator:~  type-builtin:text
+ 31 |     when n < 0
+    | keyword:when  parameter:n  operator:<  number:0
+ 32 |         <- fail "negative"
+    | keyword:<-  keyword:fail  string:"negative"
+ 33 |     fi
+    | keyword:fi
+ 34 |     when n == 0
+    | keyword:when  parameter:n  operator:==  number:0
+ 35 |         <- none
+    | keyword:<-  keyword:none
+ 36 |     fi
+    | keyword:fi
+ 37 |     <- n
+    | keyword:<-  parameter:n
+ 38 | fi
+    | keyword:fi
+ 40 | # The same result type, written without parentheses: `~` holds the whole type
+    | comment:# The same result type, written without parentheses: `~` holds the whole type
+ 41 | # before it, so this is the one above, not `maybe (int ~ text)`.
+    | comment:# before it, so this is the one above, not `maybe (int ~ text)`.
+ 42 | task also(n: int) -> maybe int ~ text
+    | keyword:task  task:also  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int  operator:~  type-builtin:text
+ 43 |     <- sent(n)
+    | keyword:<-  task:sent  punctuation:(  parameter:n  punctuation:)
+ 44 | fi
+    | keyword:fi
+ 46 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 47 |     bind m: maybe int = 3
+    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:3
+ 48 |     show(twice(21))
+    | builtin-fn:show  punctuation:(  task:twice  punctuation:(  number:21  punctuation:)  punctuation:)
+ 50 |     # An array of a value and `none`: the wrapper goes around the value.
+    | comment:# An array of a value and `none`: the wrapper goes around the value.
+ 51 |     bind xs = [1, none]
+    | keyword:bind  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  keyword:none  punctuation:]
+ 52 |     show(xs[0] { -1 }, " ", xs[1] { -1 })
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:[  number:0  punctuation:]  punctuation:{  operator:-  number:1  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:[  number:1  punctuation:]  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+ 54 |     # A `maybe int` beside a failure keeps the maybe and gains an error side.
+    | comment:# A `maybe int` beside a failure keeps the maybe and gains an error side.
+ 55 |     bind ys = [m, fail "no"]
+    | keyword:bind  variable:ys  operator:=  punctuation:[  variable:m  punctuation:,  keyword:fail  string:"no"  punctuation:]
+ 56 |     match ys[0]
+    | keyword:match  variable:ys  punctuation:[  number:0  punctuation:]
+ 57 |     case {inside}
+    | keyword:case  punctuation:{  variable:inside  punctuation:}
+ 58 |         show("ys: ", inside { -1 })
+    | builtin-fn:show  punctuation:(  string:"ys: "  punctuation:,  variable:inside  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+ 59 |     case failure e
+    | keyword:case  keyword:failure  variable:e
+ 60 |         show("ys failed: ", e)
+    | builtin-fn:show  punctuation:(  string:"ys failed: "  punctuation:,  variable:e  punctuation:)
+ 61 |     fi
+    | keyword:fi
+ 62 |     match ys[1]
+    | keyword:match  variable:ys  punctuation:[  number:1  punctuation:]
+ 63 |     case {inside}
+    | keyword:case  punctuation:{  variable:inside  punctuation:}
+ 64 |         show("ys: ", inside { -1 })
+    | builtin-fn:show  punctuation:(  string:"ys: "  punctuation:,  variable:inside  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+ 65 |     case failure e
+    | keyword:case  keyword:failure  variable:e
+ 66 |         show("ys failed: ", e)
+    | builtin-fn:show  punctuation:(  string:"ys failed: "  punctuation:,  variable:e  punctuation:)
+ 67 |     fi
+    | keyword:fi
+ 69 |     # An `int ~ text` beside `none` keeps its error side and goes inside a maybe.
+    | comment:# An `int ~ text` beside `none` keeps its error side and goes inside a maybe.
+ 70 |     bind zs = [risky(1), none]
+    | keyword:bind  variable:zs  operator:=  punctuation:[  task:risky  punctuation:(  number:1  punctuation:)  punctuation:,  keyword:none  punctuation:]
+ 71 |     show(kept(zs[0]), " ", kept(zs[1]), " ", kept(risky(-1)))
+    | builtin-fn:show  punctuation:(  task:kept  punctuation:(  variable:zs  punctuation:[  number:0  punctuation:]  punctuation:)  punctuation:,  string:" "  punctuation:,  task:kept  punctuation:(  variable:zs  punctuation:[  number:1  punctuation:]  punctuation:)  punctuation:,  string:" "  punctuation:,  task:kept  punctuation:(  task:risky  punctuation:(  operator:-  number:1  punctuation:)  punctuation:)  punctuation:)
+ 73 |     # The branches of a value `match` or `when` are joined by the same rule.
+    | comment:# The branches of a value `match` or `when` are joined by the same rule.
+ 74 |     bind first = when m == none
+    | keyword:bind  variable:first  operator:=  keyword:when  variable:m  operator:==  keyword:none
+ 75 |         fail "nothing"
+    | keyword:fail  string:"nothing"
+ 76 |     else
+    | keyword:else
+ 77 |         m
+    | variable:m
+ 78 |     fi
+    | keyword:fi
+ 79 |     show(first { none } { -3 })
+    | builtin-fn:show  punctuation:(  variable:first  punctuation:{  keyword:none  punctuation:}  punctuation:{  operator:-  number:3  punctuation:}  punctuation:)
+ 80 |     bind second = when m == none
+    | keyword:bind  variable:second  operator:=  keyword:when  variable:m  operator:==  keyword:none
+ 81 |         none
+    | keyword:none
+ 82 |     else
+    | keyword:else
+ 83 |         risky(2)
+    | task:risky  punctuation:(  number:2  punctuation:)
+ 84 |     fi
+    | keyword:fi
+ 85 |     show(kept(second))
+    | builtin-fn:show  punctuation:(  task:kept  punctuation:(  variable:second  punctuation:)  punctuation:)
+ 87 |     # A tuple written out is built item by item, so an item becomes what that
+    | comment:# A tuple written out is built item by item, so an item becomes what that
+ 88 |     # item's type is; one already made is taken apart to build another.
+    | comment:# item's type is; one already made is taken apart to build another.
+ 89 |     bind pair: (int, maybe int) = (2, 3)
+    | keyword:bind  variable:pair  punctuation::  punctuation:(  type-builtin:int  punctuation:,  keyword:maybe  type-builtin:int  punctuation:)  operator:=  punctuation:(  number:2  punctuation:,  number:3  punctuation:)
+ 90 |     bind made = divide(17, 5)
+    | keyword:bind  variable:made  operator:=  task:divide  punctuation:(  number:17  punctuation:,  number:5  punctuation:)
+ 91 |     bind widened: (int, maybe int) = (made.0, made.1)
+    | keyword:bind  variable:widened  punctuation::  punctuation:(  type-builtin:int  punctuation:,  keyword:maybe  type-builtin:int  punctuation:)  operator:=  punctuation:(  variable:made  punctuation:.  field:0  punctuation:,  variable:made  punctuation:.  field:1  punctuation:)
+ 92 |     show(pair.0, " ", pair.1 { -1 }, " ", widened.0, " ", widened.1 { -1 })
+    | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:0  punctuation:,  string:" "  punctuation:,  variable:pair  punctuation:.  field:1  punctuation:{  operator:-  number:1  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:widened  punctuation:.  field:0  punctuation:,  string:" "  punctuation:,  variable:widened  punctuation:.  field:1  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+ 94 |     # A task can send either nesting, and each keeps its own outcomes.
+    | comment:# A task can send either nesting, and each keeps its own outcomes.
+ 95 |     show(sent(5) { none } { -4 }, " ", sent(0) { none } { -5 }, " ", sent(-1) { none } { -6 })
+    | builtin-fn:show  punctuation:(  task:sent  punctuation:(  number:5  punctuation:)  punctuation:{  keyword:none  punctuation:}  punctuation:{  operator:-  number:4  punctuation:}  punctuation:,  string:" "  punctuation:,  task:sent  punctuation:(  number:0  punctuation:)  punctuation:{  keyword:none  punctuation:}  punctuation:{  operator:-  number:5  punctuation:}  punctuation:,  string:" "  punctuation:,  task:sent  punctuation:(  operator:-  number:1  punctuation:)  punctuation:{  keyword:none  punctuation:}  punctuation:{  operator:-  number:6  punctuation:}  punctuation:)
+ 96 |     show(also(7) { none } { -7 })
+    | builtin-fn:show  punctuation:(  task:also  punctuation:(  number:7  punctuation:)  punctuation:{  keyword:none  punctuation:}  punctuation:{  operator:-  number:7  punctuation:}  punctuation:)
+ 97 | fi
+    | keyword:fi

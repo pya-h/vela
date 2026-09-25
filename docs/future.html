@@ -1940,6 +1940,12 @@ bind age = int("42")               # text to a number can fail: int ~ ParseError
           <a href="vela.html#slice-changes">Adding and taking out items</a>). A second kind of slice could never reuse that
           space and always grow into new room in its region, so no older copy ever sees another's items, at the cost of
           memory. That behavior stays as it is; this would be a separate kind of slice, with syntax still to be chosen.</li>
+        <li id="one-item-tuple"><strong>A tuple of one item:</strong> a tuple holds two or more items, and one type or
+          value in parentheses is only grouped — <code>(int)</code> is <code>int</code>, which is how
+          <a href="vela.html#wider"><code>maybe (int ~ text)</code></a> is written. A trailing comma could make a tuple
+          of one, <code>(int,)</code> and <code>(2,)</code>, which reads unambiguously beside the grouping. It would
+          need <code>t.0</code>, <code>==</code>, patterns, unpacking and a C layout of its own, and nothing yet asks
+          for it, so it waits for a use that does.</li>
       </ul>
     </section>
 

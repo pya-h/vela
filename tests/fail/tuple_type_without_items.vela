@@ -1,4 +1,4 @@
-# error: 3:13: a tuple holds two or more items, as in '(int, text)'; a type isn't written in parentheses alone
+# error: 3:13: a tuple holds two or more items, as in '(int, text)'
 task main()
     bind t: () = 1
     show(t)

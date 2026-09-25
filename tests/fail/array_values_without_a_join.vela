@@ -1,0 +1,11 @@
+# error: 9:26: an array's values have one type, but this one is maybe int and the ones before it are int ~ text
+task risky(n: int) -> int ~ text
+    <- n
+fi
+
+task main()
+    bind m: maybe int = 3
+    # Neither fits the other: one would have to be remade inside.
+    bind xs = [risky(1), m]
+    show(xs.len)
+fi

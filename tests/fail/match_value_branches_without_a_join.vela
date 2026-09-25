@@ -1,0 +1,14 @@
+# error: 11:9: this branch gives maybe int, and another gives int ~ text; every branch of a when used as a value gives one type
+task risky(n: int) -> int ~ text
+    <- n
+fi
+
+task main()
+    bind m: maybe int = 3
+    bind picked = when m == none
+        risky(1)
+    else
+        m
+    fi
+    show(picked { none })
+fi

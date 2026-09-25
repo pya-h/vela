@@ -191,3 +191,29 @@ fn naming_a_tuples_items_without_parentheses_is_reported() {
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert!(diagnostic.message.contains("{(name, age)}"), "{}", diagnostic.message);
 }
+
+#[test]
+fn one_type_in_parentheses_is_grouped_rather_than_a_tuple() {
+    // `~` holds the whole type before it, so parentheses are how the other
+    // nesting is written, and Studio shows each as it is written.
+    let source = "\
+task risky(n: int) -> int ~ text
+    <- n
+fi
+
+task kept(v: maybe (int ~ text)) -> int
+    bind inner = v { <- -1 }
+    <- inner { -2 }
+fi
+
+task main()
+    bind held: maybe (int ~ text) = risky(1)
+    bind plain: (int) = 2
+    show(kept(held), plain)
+fi
+";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_eq!(hover(source, "held: maybe").0, "bind held: maybe (int ~ text)");
+    assert_eq!(hover(source, "plain: (int)").0, "bind plain: int");
+    assert_eq!(hover(source, "inner = v").0, "bind inner: int ~ text");
+}

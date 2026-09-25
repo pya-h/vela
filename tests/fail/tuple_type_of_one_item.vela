@@ -1,7 +1,0 @@
-# error: 2:15: a tuple holds two or more items, as in '(int, text)'; a type isn't written in parentheses alone
-task twice(x: (int)) -> int
-    <- x * 2
-fi
-
-task main()
-fi

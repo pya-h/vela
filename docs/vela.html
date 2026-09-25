@@ -218,7 +218,9 @@
         <li><code class="type">[T]@r</code> — a slice: a view of values of type T in region <code>r</code> (see <a href="#slices">Slices</a>)</li>
         <li><code class="type">(T, U)</code> — a tuple: two or more values held together, whose items never change (see <a href="#tuples">Tuples</a>)</li>
         <li><code class="type">maybe T</code> — a T, or <code>none</code> (see <a href="#maybe">Maybe and Errors</a>)</li>
-        <li><code class="type">T ~ E</code> — a T, or an error E, sent by a task that can fail</li>
+        <li><code class="type">T ~ E</code> — a T, or an error E, sent by a task that can fail; <code>~</code> holds the whole
+          type before it, so <code>maybe int ~ text</code> is <code>(maybe int) ~ text</code>, and parentheses group the
+          other nesting, <code>maybe (int ~ text)</code> (see <a href="#wider">Becoming a wider type</a>)</li>
         <li><code class="type">region</code> — the type of a task's region parameter, <code>r: region</code></li>
         <li><code class="type">T</code> — a type a task or shape takes, standing for the type each use gives it (see <a href="#generics">Types a declaration takes</a>)</li>
         <li><code class="type">Box&lt;int&gt;</code> — a shape with the types it is given, in the region its values live in when it holds anything there (<code>Box&lt;text&gt;@r</code>)</li>
@@ -279,7 +281,7 @@ true false none  fi   maybe is     fail failure include priv</pre>
         <tr><td><code>[T; n]</code>, <code>[T]@r</code></td><td>an array type; a slice type (see <a href="#arrays">Arrays</a> and <a href="#slices">Slices</a>)</td></tr>
         <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task or shape takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
-        <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>)</td></tr>
+        <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
         <tr><td><code>[a, b]</code>, <code>[v; n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
         <tr><td><code>t[a..b]</code>, <code>t.len</code></td><td>a part of text, the same bytes (see <a href="#text-parts">Parts of text</a>); how many bytes it has</td></tr>
@@ -1142,7 +1144,9 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
         <li><strong>Items.</strong> Only values that can't change: numbers, bools, text, other tuples, <code>maybe</code>
           and <code>T ~ E</code> of those, and shapes and kinds whose fields are all such. A pointer, a slice, or an array
           (or a shape holding one) is an error, since what it holds could change. <code>(x)</code> is only parentheses, so a
-          tuple has at least two items, and a tuple is written on one line.</li>
+          tuple has at least two items, and a tuple is written on one line. The same holds for types:
+          <code>(int)</code> is <code>int</code>, which is how a type is grouped
+          (<a href="#wider">Becoming a wider type</a>), and <code>()</code> and <code>(int,)</code> are errors.</li>
         <li><strong>Taking apart.</strong> <code>bind a, b = t</code> and <code>bind (a, b) = t</code> declare copies of the
           items; a nested part is written in parentheses (<code>bind a, (b, c) = t</code>), a name may have a type
           (<code>bind n: int, (f: float, s: text) = t</code>), and <code>_</code> drops an item. Changing <code>a</code>
@@ -1498,11 +1502,12 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
 <span class="keyword">fi</span></pre>
       <p>The rules are the ones the pieces already have:</p>
       <ul>
-        <li><strong>Every branch gives one type.</strong> The first branch that gives a value fixes it, and the others
-          must fit. A branch that gives <code>none</code> makes the whole a <code>maybe</code>, and one that gives
-          <code>fail e</code> makes it a <code>T ~ E</code>, exactly as a value becomes one anywhere else
-          (<a href="#maybe">Maybe and Errors</a>). Where every branch gives one of those, the place the value goes
-          says what it is part of, as it does for a bare <code>none</code>.</li>
+        <li><strong>Every branch gives one type.</strong> The types the branches give are joined, by the rule the items
+          of an array follow: a branch that gives <code>none</code> makes the whole a <code>maybe</code>, and one that
+          gives <code>fail e</code> makes it a <code>T ~ E</code>, exactly as a value becomes one anywhere else, with the
+          wrapper outside whatever a branch already gives (see <a href="#wider">Becoming a wider type</a>). Where every
+          branch gives one of those, the place the value goes says what it is part of, as it does for a bare
+          <code>none</code>.</li>
         <li><strong>A branch may leave the task instead</strong> with <code>&lt;-</code>. It gives no value then, and
           the other branches settle the type. If every branch sends, nothing gives a value, which is an error.</li>
         <li><strong>The last line may be a <code>when</code> or a <code>match</code></strong>, which gives the value
@@ -1632,6 +1637,46 @@ save(500) {
     <span class="keyword">failure</span> reason
     show(reason)           <span class="comment"># too big</span>
 }</pre>
+
+      <h3 id="wider">Becoming a wider type</h3>
+      <p>
+        A plain value becomes a <code>maybe</code> or a <code>T ~ E</code> by being <em>wrapped</em>: the value is kept
+        as it is, and the emptiness, or the error side, is added around it. That is all of it, and it has one
+        consequence worth knowing: <strong>a value already made is never changed inside.</strong> A value written out
+        is built part by part, so each part becomes what that part's type is; a value that comes back from a task is
+        already made, and nothing reaches into it.
+      </p>
+      <pre><span class="keyword">bind</span> pair: (int, <span class="keyword">maybe</span> int) = (<span class="number">2</span>, <span class="number">3</span>)      <span class="comment"># written out, so built item by item</span>
+<span class="keyword">bind</span> made = divide(<span class="number">17</span>, <span class="number">5</span>)                 <span class="comment"># (int, int), already made</span>
+<span class="keyword">bind</span> taken: (int, <span class="keyword">maybe</span> int) = (made.<span class="number">0</span>, made.<span class="number">1</span>)  <span class="comment"># its items, built into the type wanted</span>
+<span class="keyword">bind</span> same: (int, <span class="keyword">maybe</span> int) = made
+<span class="comment"># error: expected type (int, maybe int), got (int, int); a value already made is never changed inside, …</span></pre>
+      <p>
+        Where several values must have one type — the items of an array, the branches of a <span class="keyword">match</span>
+        or a <span class="keyword">when</span> <a href="#choices">used as a value</a> — the same rule decides what that
+        type is: the types are joined, and a wrapper goes <em>outside</em> whatever is already wrapped.
+      </p>
+      <pre><span class="keyword">bind</span> m: <span class="keyword">maybe</span> int = <span class="number">3</span>
+<span class="keyword">bind</span> xs = [<span class="number">1</span>, <span class="keyword">none</span>]                <span class="comment"># [maybe int; 2]</span>
+<span class="keyword">bind</span> ys = [m, <span class="keyword">fail</span> <span class="string">"no"</span>]           <span class="comment"># [maybe int ~ text; 2]: the maybe kept, an error side added</span>
+<span class="keyword">bind</span> zs = [risky(<span class="number">1</span>), <span class="keyword">none</span>]         <span class="comment"># risky sends int ~ text: [maybe (int ~ text); 2]</span>
+<span class="keyword">bind</span> ws = [risky(<span class="number">1</span>), m]            <span class="comment"># error: an array's values have one type, but this one is maybe int …</span></pre>
+      <p>
+        The middle two are the two nestings, and which one comes out follows from what was wrapped already: a
+        <code>maybe int</code> beside a failure keeps its <code>maybe</code> and gains an error side, and an
+        <code>int ~ text</code> beside <code>none</code> keeps its error side and goes inside a <code>maybe</code>. Two
+        values that would each need the other remade, like <code>int ~ text</code> beside <code>maybe int</code>, have
+        no type in common: which one is meant is the program's to say.
+      </p>
+      <div class="note">
+        <p>
+          <strong>Writing the two apart.</strong> <code>~</code> holds the whole type before it, so
+          <code>maybe int ~ text</code> means <code>(maybe int) ~ text</code>: a text failure, or a success holding
+          maybe an <code>int</code>. Parentheses group a type, so the other nesting is
+          <code>maybe (int ~ text)</code>: nothing, or a result that may have failed. One type in parentheses is only
+          that type, and a tuple still needs two or more items.
+        </p>
+      </div>
 
     </section>
 

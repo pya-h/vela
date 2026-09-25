@@ -9,8 +9,9 @@ use crate::lexer::{KEYWORDS, LexKind, LexToken, Piece, Token};
 /// its WebAssembly module with it) instead of reporting an error.
 pub const MAX_NESTING: usize = 100;
 
-/// What a tuple type needs, for the `(` of one that has too few items.
-const TUPLE_TYPE_ITEMS: &str = "a tuple holds two or more items, as in '(int, text)'; a type isn't written in parentheses alone";
+/// What a tuple type needs, for the `(` of one that has too few items. One type
+/// in parentheses is that type, so only `()` and `(T,)` are reported.
+const TUPLE_TYPE_ITEMS: &str = "a tuple holds two or more items, as in '(int, text)'";
 
 /// `fail` written where a failure is matched and named. The verb makes a
 /// failure; the noun names one, so every program written before this says
@@ -990,7 +991,9 @@ impl Parser {
         Ok(types)
     }
 
-    /// After a type's `(` at `opened`: `T, U, …)`, a tuple of two or more items.
+    /// After a type's `(` at `opened`: `T, U, …)`, a tuple of two or more items,
+    /// or one type alone, which the parentheses only group — the way to write
+    /// `maybe (int ~ text)`, since `maybe int ~ text` reads as `(maybe int) ~ text`.
     fn parse_tuple_type(&mut self, opened: Span) -> Result<Type> {
         let mut items = Vec::new();
         loop {
@@ -1006,8 +1009,10 @@ impl Parser {
         if !self.match_token(Token::RParen) {
             return Err(self.unexpected("',' and another item, or ')' to close the tuple"));
         }
-        if items.len() < 2 {
-            return Err(Error::at(opened, TUPLE_TYPE_ITEMS));
+        // One item, with no comma after it (which the loop reports above): the
+        // parentheses group that type rather than making a tuple of it.
+        if items.len() == 1 {
+            return Ok(items.remove(0));
         }
         Ok(Type::Tuple(items))
     }

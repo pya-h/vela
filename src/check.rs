@@ -2638,10 +2638,11 @@ impl Checker {
     }
 
     /// The type the branches of a `match` or a `when` used as a value settle on:
-    /// the first that gives one, which the others must fit, widened to a `maybe`
-    /// or a `T ~ E` where a branch gives `none` or a failure, as a value becomes
-    /// one anywhere else. A branch whose value had a mistake of its own settles
-    /// nothing, and `None` comes back where nothing settles it.
+    /// the types they give, joined one after another by the rule the items of an
+    /// array follow (`join_types`), so that a branch giving `none` or a failure
+    /// makes the whole a `maybe` or a `T ~ E`, as a value becomes one anywhere
+    /// else. A branch whose value had a mistake of its own settles nothing, and
+    /// `None` comes back where nothing settles it.
     fn settle_branches(&self, at: Span, given: &[(usize, Type, Span)], branches: Branches) -> Result<Option<Type>> {
         let mut settled: Option<Type> = None;
         for (_, ty, _) in given.iter().filter(|(_, ty, _)| !ty.unknown()) {
@@ -2649,11 +2650,8 @@ impl Checker {
                 settled = Some(ty.clone());
                 continue;
             };
-            if fits(ty, sofar) {
-                continue;
-            }
-            match if fits(sofar, ty) { Some(ty.clone()) } else { widened(sofar, ty) } {
-                Some(wider) => settled = Some(wider),
+            match join_types(sofar, ty) {
+                Some(joined) => settled = Some(joined),
                 // The branches disagree, which the loop below reports against
                 // what they had settled on until here.
                 None => break,
@@ -5292,10 +5290,12 @@ pub fn gives_value(stmt: &Stmt) -> bool {
     matches!(&stmt.kind, StmtKind::Match(..) | StmtKind::When(_, _, Some(_)))
 }
 
-/// Whether a value of type `from` goes where `to` is expected, as `coerce` takes
-/// it: unchanged, or becoming part of a `maybe` or a `T ~ E`. Used where several
-/// branches give one value and the types they give are compared to each other
-/// (see `Checker::settle_branches`).
+/// Whether a value of type `from` goes where `to` is expected without being
+/// remade: unchanged, or wrapped as part of a `maybe` or a `T ~ E`, which is all
+/// `coerce` can do to a value whose parts it cannot see. Used where the branches
+/// of a value `match` or `when` are checked against what they settled on
+/// (`Checker::settle_branches`), and to tell a place that takes what they settled
+/// on from one that would need each branch remade (`Checker::coerce`).
 fn fits(from: &Type, to: &Type) -> bool {
     if fits_regions(from, to) {
         return true;
@@ -5310,24 +5310,22 @@ fn fits(from: &Type, to: &Type) -> bool {
     }
 }
 
-/// The type that takes both `a` and `b`, where one of them is `none` or a
-/// failure: a plain value and `none` make a `maybe`, and a plain value and a
-/// failure a `T ~ E`, as a value becomes one anywhere else. Nothing, where the
-/// two simply differ.
-fn widened(a: &Type, b: &Type) -> Option<Type> {
-    let (plain, other) = match (a, b) {
-        (Type::None | Type::Fail(_), _) => (b, a),
-        (_, Type::None | Type::Fail(_)) => (a, b),
-        _ => return None,
-    };
-    match (plain, other) {
-        // `maybe T ~ E` is not a type, so a failure beside a maybe widens to
-        // nothing, and neither does a value that is already a `T ~ E`.
-        (Type::Maybe(_) | Type::Or(..), Type::Fail(_)) => None,
-        (Type::None | Type::Fail(_), _) => None,
-        (plain, Type::None) => Some(Type::Maybe(Box::new(plain.clone()))),
-        (plain, Type::Fail(error)) => Some(Type::Or(Box::new(plain.clone()), error.clone())),
-        _ => None,
+/// Whether a value of type `from` would have to be **remade inside** to be a
+/// `to`: it is not one already and doesn't become one by being wrapped (`fits`),
+/// but every part of it goes into the part beside it, wrapped or remade inside in
+/// this same way. Nothing remakes a value already made (see `join_types`), so a
+/// message says what to do instead. Two types that simply differ, like
+/// `(int, text)` and `(int, maybe int)`, are not this.
+fn remade_inside(from: &Type, to: &Type) -> bool {
+    if fits(from, to) {
+        return false;
+    }
+    match (from, to) {
+        (Type::Maybe(a), Type::Maybe(b)) | (Type::Fail(a), Type::Fail(b)) => fits(a, b) || remade_inside(a, b),
+        (Type::Or(value, error), Type::Or(other, known)) => fits_regions(error, known) && (fits(value, other) || remade_inside(value, other)),
+        (Type::Array(a, an), Type::Array(b, bn)) => an == bn && (fits(a, b) || remade_inside(a, b)),
+        (Type::Tuple(a), Type::Tuple(b)) => a.len() == b.len() && a.iter().zip(b).all(|(a, b)| fits(a, b) || remade_inside(a, b)),
+        _ => false,
     }
 }
 
@@ -5741,9 +5739,23 @@ fn settled_example(ty: &Type) -> Type {
     }
 }
 
-/// The type the values of types `a` and `b` can both become, for the items of
-/// an array: either, when the other fits it; a `maybe` for `none` and a value;
-/// a `T ~ E` for `fail e` and a value. `None` when there is none.
+/// The type the values of types `a` and `b` can both become, where several
+/// values must have one type: the items of an array, and the branches of a
+/// `match` or a `when` used as a value. Either type, when the other fits it; a
+/// `maybe` for `none` and a value; a `T ~ E` for `fail e` and a value. `None`
+/// when there is none, which is the mistake of two values that disagree.
+///
+/// A value already made is never changed inside: a `maybe` or a `T ~ E` is
+/// wrapped **around** it, which is all `coerce` can do to a value it cannot see
+/// the parts of. So `int ~ text` beside `none` is `maybe (int ~ text)`, the
+/// failure kept as it is inside a `maybe`, and not `(maybe int) ~ text`, which
+/// would mean reaching into the value to make its `int` a `maybe int`. A `maybe`
+/// or a `T ~ E` whose own inside would have to change joins with nothing, and the
+/// two values are reported as disagreeing. An array or a tuple is different: its
+/// items are values of their own, so joining them item by item asks nothing of a
+/// value that is already made — a written one is built item by item (see
+/// `Checker::coerce_items`), and one that is already made is refused by `coerce`,
+/// which says to build a new one.
 fn join_types(a: &Type, b: &Type) -> Option<Type> {
     if fits_regions(b, a) {
         return Some(a.clone());
@@ -5758,18 +5770,27 @@ fn join_types(a: &Type, b: &Type) -> Option<Type> {
         (Type::None, Type::Maybe(_)) => Some(b.clone()),
         (Type::Maybe(_), Type::None) => Some(a.clone()),
         (Type::None, other) | (other, Type::None) if plain(other) => Some(Type::Maybe(Box::new(other.clone()))),
-        (Type::Maybe(inner), other) | (other, Type::Maybe(inner)) if plain(other) => {
-            join_types(inner, other).filter(plain).map(|value| Type::Maybe(Box::new(value)))
-        }
+        // `none` beside a value that can fail: the `T ~ E` goes inside the
+        // `maybe`, whole, since nothing can reach into it.
+        (Type::None, Type::Or(..)) => Some(Type::Maybe(Box::new(b.clone()))),
+        (Type::Or(..), Type::None) => Some(Type::Maybe(Box::new(a.clone()))),
+        (Type::Maybe(inner), other) | (other, Type::Maybe(inner)) if plain(other) => join_types(inner, other)
+            .filter(plain)
+            // The maybe's own value stays as it is: only the other side is made
+            // into it, or built as it.
+            .filter(|joined| fits_regions(inner, joined))
+            .map(|value| Type::Maybe(Box::new(value))),
         (Type::Fail(error), Type::Or(_, known)) | (Type::Or(_, known), Type::Fail(error)) if fits_regions(error, known) => {
             Some(if matches!(a, Type::Or(..)) { a.clone() } else { b.clone() })
         }
         (Type::Fail(error), other) | (other, Type::Fail(error)) if plain(other) || matches!(other, Type::Maybe(_)) => {
             (!fits_regions(other, error) && !fits_regions(error, other)).then(|| Type::Or(Box::new(other.clone()), error.clone()))
         }
-        (Type::Or(value, error), other) | (other, Type::Or(value, error)) if !matches!(other, Type::Fail(_)) => {
-            join_types(value, other).filter(|joined| !matches!(joined, Type::Or(..))).map(|joined| Type::Or(Box::new(joined), error.clone()))
-        }
+        (Type::Or(value, error), other) | (other, Type::Or(value, error)) if !matches!(other, Type::Fail(_)) => join_types(value, other)
+            .filter(|joined| !matches!(joined, Type::Or(..)))
+            // As above: the success it already holds is not remade.
+            .filter(|joined| fits_regions(value, joined))
+            .map(|joined| Type::Or(Box::new(joined), error.clone())),
         _ => None,
     }
 }
@@ -6003,6 +6024,17 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
             } else {
                 "; a value can't move to another region: a pointer into one region is never stored in another".to_string()
             }
+        }
+        // The same shape, differing in a part inside it: a value is wrapped as
+        // part of a `maybe` or a `T ~ E`, but a value already made is never
+        // reached into, so it is built again from its parts (see `join_types`).
+        _ if remade_inside(actual, expected) => {
+            let parts = match actual {
+                Type::Tuple(items) => format!(", as in '({})'", (0..items.len()).map(|i| format!("v.{}", i)).collect::<Vec<_>>().join(", ")),
+                Type::Maybe(_) | Type::Or(..) => ", taking its value out first, as in 'v { … }'".to_string(),
+                _ => String::new(),
+            };
+            format!("; a value already made is never changed inside, so build one that is what this place holds{}", parts)
         }
         _ => String::new(),
     }

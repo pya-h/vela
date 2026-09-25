@@ -321,6 +321,18 @@ impl Type {
             Some(region) if Some(region.as_str()) != outer => write!(f, "@{}", region),
             _ => Ok(()),
         };
+        // A `~` holds the whole type before it, so a `T ~ E` written after a
+        // prefix needs its parentheses to read back as itself: `maybe (int ~ text)`
+        // is not `maybe int ~ text`, which is `(maybe int) ~ text`. Brackets and
+        // commas close a type themselves, so an item needs none.
+        let grouped = |f: &mut fmt::Formatter<'_>, inner: &Type, outer: Option<&str>| match inner {
+            Type::Or(..) => {
+                write!(f, "(")?;
+                inner.write(f, outer)?;
+                write!(f, ")")
+            }
+            _ => inner.write(f, outer),
+        };
         match self {
             Type::Int => write!(f, "int"),
             Type::Float => write!(f, "float"),
@@ -334,7 +346,7 @@ impl Type {
             Type::Region => write!(f, "region"),
             Type::Ptr(inner, region) => {
                 write!(f, "^")?;
-                inner.write(f, region.as_deref().or(outer))?;
+                grouped(f, inner, region.as_deref().or(outer))?;
                 suffix(f, region)
             }
             Type::Named(name, region) => {
@@ -370,7 +382,7 @@ impl Type {
             }
             Type::Maybe(inner) => {
                 write!(f, "maybe ")?;
-                inner.write(f, outer)
+                grouped(f, inner, outer)
             }
             Type::Or(value, error) => {
                 value.write(f, outer)?;
@@ -379,7 +391,7 @@ impl Type {
             }
             Type::Fail(error) => {
                 write!(f, "fail ")?;
-                error.write(f, outer)
+                grouped(f, error, outer)
             }
             Type::Tuple(items) => {
                 write!(f, "(")?;
