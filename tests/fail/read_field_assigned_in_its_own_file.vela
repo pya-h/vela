@@ -1,4 +1,4 @@
-# error: 12:11: 'total' is a read-only field of 'Tally', which only the methods of 'Tally' change
+# error: 12:11: 'total' is a read-only field of 'Tally', which only the alters methods of 'Tally' change
 # The field belongs to the shape rather than the file, so a task of the file
 # that declares it is outside it too.
 shape Tally

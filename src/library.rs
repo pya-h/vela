@@ -16,7 +16,20 @@ pub const MODULES: &[(&str, &str)] = &[("files", include_str!("../std/files.vela
 
 /// Each native task of the library, by its name in the program, with the
 /// runtime function that is its body, which takes the same parameters.
-pub const NATIVES: &[(&str, &str)] = &[("std/files.path_exists", "vela__rt__files_path_exists")];
+pub const NATIVES: &[(&str, &str)] = &[
+    ("std/files.path_exists", "vela__rt__files_path_exists"),
+    ("std/files.open_handle", "vela__rt__files_open"),
+    ("std/files.is_open", "vela__rt__files_is_open"),
+    ("std/files.close_handle", "vela__rt__files_close"),
+    ("std/files.read_rest", "vela__rt__files_read"),
+    ("std/files.read_line", "vela__rt__files_line"),
+    ("std/files.write_text", "vela__rt__files_write"),
+    ("std/files.at_end", "vela__rt__files_ended"),
+    ("std/files.size_of", "vela__rt__files_size"),
+    ("std/files.rename_path", "vela__rt__files_rename"),
+    ("std/files.remove_path", "vela__rt__files_remove"),
+    ("std/files.status", "vela__rt__files_status"),
+];
 
 /// The source of the library's module `name` (`files` for `std/files`).
 pub fn module(name: &str) -> Option<&'static str> {

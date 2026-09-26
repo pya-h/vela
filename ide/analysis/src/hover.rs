@@ -252,7 +252,8 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             let takes = if symbol.detail.starts_with('<') { symbol.detail.as_str() } else { "" };
             let mut code = format!("{}{} {}{}\n", private, keyword, symbol.name, takes);
             for (_, member) in k.children(id) {
-                if member.kind == SymbolKind::TypeParam {
+                // Another file's private members are its own, as completion leaves them out too.
+                if member.kind == SymbolKind::TypeParam || (member.private && symbol.module.is_some()) {
                     continue;
                 }
                 let separator = if member.kind == SymbolKind::Field { ": " } else { "" };
@@ -276,7 +277,7 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 None => String::new(),
             };
             let marker = if symbol.read { "read " } else { "" };
-            let doc = if symbol.read { format!("{} Any file reads it; only the methods of its shape assign it.", doc) } else { doc };
+            let doc = if symbol.read { format!("{} Any file reads it; only the alters methods of its shape change it.", doc) } else { doc };
             (format!("{}{}: {}", marker, symbol.name, symbol.detail), doc)
         }
         SymbolKind::Parameter => {

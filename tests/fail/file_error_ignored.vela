@@ -1,0 +1,8 @@
+# error: 7:11: the error 'File.write' may send is ignored; handle it with a plan B, as in 'value.write(…) { failure e … }', or with match
+include std/files {File, FileMode}
+
+task main()
+    region r
+    hold notes = File { path: "notes.txt" }
+    notes.write("lost")
+fi

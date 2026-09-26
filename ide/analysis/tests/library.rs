@@ -59,7 +59,9 @@ fn hover_and_definitions_know_the_library() {
     assert_eq!(exists.code, "exists() -> bool");
     assert!(exists.doc.starts_with("A method of shape disk.File"), "{}", exists.doc);
     let file = analysis.hover(at(&source, "File {")).unwrap();
-    assert_eq!(file.code, "shape disk.File\n    read path: text\n    exists() -> bool\nfi");
+    // Its own private field and method are the library's.
+    assert!(file.code.starts_with("shape disk.File\n    read path: text\n    read state: disk.FileState\n    read mode: maybe disk.FileMode\n    alters open("), "{}", file.code);
+    assert!(!file.code.contains("handle") && !file.code.contains("left_closed"), "{}", file.code);
     assert_eq!(file.doc, "From module disk (Vela's library).");
     let module = analysis.hover(at(&source, "disk (")).unwrap();
     assert_eq!((module.code.as_str(), module.doc.as_str()), ("include std/files => disk", "A module of Vela's library, which comes with the compiler."));

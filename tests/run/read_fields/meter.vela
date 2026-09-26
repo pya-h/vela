@@ -1,4 +1,4 @@
-# A shape whose fields any file reads and only its own methods assign. The one
+# A shape whose fields any file reads and only its own alters methods change. The one
 # with no value to fall back on is given by the literal that makes the value;
 # the others start at theirs and no literal gives them.
 

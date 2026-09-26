@@ -182,29 +182,136 @@
       <h2 id="files">std/files</h2>
       <p>
         Files on the disk. A <code>File</code> is made from its path, and making one opens nothing: it is a value
-        that names a file, which its methods ask about. Its <code>path</code> is a
-        <a href="vela.html#read-fields"><code>read</code></a> field, given when the File is made and changed by no one
-        else after.
+        that names a file, which its methods ask about, open, read, write, rename, and delete. A file is opened in
+        a <a href="regions.html">region</a>, which closes it when its block ends, as it frees its memory;
+        <code>close()</code> closes it sooner. Everything that touches the disk can fail, with a
+        <a href="#file-error"><code>FileError</code></a> that a <a href="vela.html#maybe">plan B</a> handles.
       </p>
-      <pre><span class="keyword">include</span> std/files {File}
+      <pre><span class="keyword">include</span> std/files {File, FileMode}
 
 <span class="keyword">task</span> main()
-    <span class="keyword">bind</span> notes = File { path: "notes.txt" }
-    show(notes.path)            <span class="comment"># notes.txt</span>
-    show(notes.exists())        <span class="comment"># true when a file that can be read is there</span>
-<span class="keyword">fi</span></pre>
+    <span class="keyword">region</span> r
+    <span class="keyword">hold</span> notes = File { path: "notes.txt" }
+    notes.open(FileMode.Write) <span class="keyword">at</span> r { <span class="keyword">failure</span> e
+        show("could not open it")
+    }
+    notes.write("first line\n") { <span class="keyword">failure</span> e
+        show("could not write")
+    }
+    notes.close() { <span class="keyword">failure</span> e
+        show("could not close")
+    }
+    notes.open(FileMode.Read) <span class="keyword">at</span> r { <span class="keyword">failure</span> e
+        show("could not open it")
+    }
+    <span class="keyword">loop</span> notes.line() <span class="keyword">at</span> r { <span class="keyword">none</span> } <span class="keyword">is</span> {line}
+        show(line)                  <span class="comment"># first line</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>                              <span class="comment"># r's block ends, and closes the file</span></pre>
+
+      <h3 id="file">File</h3>
+      <p>
+        Its fields are <a href="vela.html#read-fields"><code>read</code></a> fields: any code reads them, and only
+        File's own <code>alters</code> methods change them. <code>path</code> is given when a File is made; the
+        others start at their own values, which no literal gives.
+      </p>
       <table>
         <thead><tr><th>Member</th><th>What it is</th></tr></thead>
         <tbody>
-          <tr><td><code>path: text</code></td><td>The path the File was made with, read-only.</td></tr>
-          <tr><td><code>exists() -&gt; bool</code></td><td>Whether a file that can be read is at the path. A folder, or
-            a file the program may not read, is not one, and neither is a path holding a zero byte.</td></tr>
+          <tr><td><code>path: text</code></td><td>The path the File names.</td></tr>
+          <tr><td><code>state: FileState</code></td><td>What its methods left it: <code>Idle</code> until opened,
+            then <code>Open</code>, <code>Closed</code>, or <code>Gone</code> once deleted.</td></tr>
+          <tr><td><code>mode: maybe FileMode</code></td><td>How it was opened last; <code>none</code> before
+            then.</td></tr>
+          <tr><td><code>alters open(mode) at r</code></td><td>Opens the file as <code>mode</code> says, until
+            <code>close()</code> or the end of <code>r</code>'s block. Fails with <code>AlreadyOpen</code> on a file
+            open already, and <code>NotFound</code> or <code>NotAllowed</code> when the system says so.</td></tr>
+          <tr><td><code>alters close()</code></td><td>Closes the file. On one that isn't open, fails with
+            <code>NotOpen</code>.</td></tr>
+          <tr><td><code>read() at r -&gt; text@r</code></td><td>The rest of the file, from where reading is.</td></tr>
+          <tr><td><code>line() at r -&gt; maybe text@r</code></td><td>The next line without its line break (a
+            Windows <code>\r\n</code> as well); <code>none</code> at the end. A last line without a line break is
+            still a line.</td></tr>
+          <tr><td><code>lines() at r -&gt; [text@r]@r</code></td><td>The rest of the file, line by line.</td></tr>
+          <tr><td><code>write(t)</code></td><td>Writes <code>t</code>, of any region, where writing is.</td></tr>
+          <tr><td><code>ended() -&gt; bool</code></td><td>Whether nothing more can be read: at the end, or not open
+            for reading.</td></tr>
+          <tr><td><code>size() -&gt; int</code></td><td>How many bytes the file has; an open one with what was
+            written so far.</td></tr>
+          <tr><td><code>exists() -&gt; bool</code></td><td>Whether a file that can be read is at the path. A folder,
+            or a file the program may not read, is not one, and neither is a path holding a zero byte.</td></tr>
+          <tr><td><code>alters rename(to)</code></td><td>Gives the file another path, on the disk and in
+            <code>path</code>.</td></tr>
+          <tr><td><code>alters delete()</code></td><td>Deletes the file, closing it first when it is open; its
+            state is then <code>Gone</code>.</td></tr>
+          <tr><td><code>str() at r -&gt; text@r</code></td><td>The path and the state:
+            <code>notes.txt (open)</code>.</td></tr>
         </tbody>
       </table>
       <p>
-        This is the module's first piece. Opening a file, reading and writing it, renaming and deleting it, and
-        the kinds that say what state a File is in, how it was opened, and what went wrong, come next, with a
-        region that owns an open file and closes it when its block ends.
+        Each of <code>read</code>, <code>line</code>, <code>lines</code>, <code>write</code>, <code>size</code>,
+        <code>rename</code>, and <code>delete</code> can fail, and their results are <code>~ FileError</code>. The
+        methods marked <code>alters</code> change the File, so they are called on a <code>hold</code> variable (or
+        through a pointer). The ones that take a region take it last, so it is written after the call:
+        <code>notes.read() at r</code>, as <a href="vela.html#region-after-call">any such call</a> may.
+      </p>
+
+      <h3 id="file-mode">FileMode</h3>
+      <table>
+        <thead><tr><th>Variant</th><th>Opens the file to</th></tr></thead>
+        <tbody>
+          <tr><td><code>Read</code></td><td>read it from its start; it must be there.</td></tr>
+          <tr><td><code>Write</code></td><td>write it from its start, emptied first, and made when it isn't
+            there.</td></tr>
+          <tr><td><code>Append</code></td><td>write at its end, and made when it isn't there.</td></tr>
+          <tr><td><code>ReadWrite</code></td><td>read and write it; it must be there. Reading and writing go on from
+            the same place.</td></tr>
+        </tbody>
+      </table>
+
+      <h3 id="file-error">FileError</h3>
+      <table>
+        <thead><tr><th>Variant</th><th>When</th></tr></thead>
+        <tbody>
+          <tr><td><code>NotFound</code></td><td>There is no file at the path, or none that can be read.</td></tr>
+          <tr><td><code>NotAllowed</code></td><td>The system doesn't let the program open it so.</td></tr>
+          <tr><td><code>AlreadyOpen</code></td><td>Opened again before it was closed.</td></tr>
+          <tr><td><code>NotOpen</code></td><td>Not open: never opened, closed, deleted, or closed by its region or
+            by a copy.</td></tr>
+          <tr><td><code>WrongMode</code></td><td>Read when opened only to write, or written when opened only to
+            read.</td></tr>
+          <tr><td><code>Failed</code></td><td>Anything else the system reports.</td></tr>
+        </tbody>
+      </table>
+      <p>
+        <code>NotFound</code> and <code>NotAllowed</code> are told apart where the system's C library says which;
+        where it doesn't, a failure to open is <code>Failed</code>.
+      </p>
+
+      <h3 id="file-regions">Regions and copies</h3>
+      <p>
+        The region a file is opened in owns it: when the region's block ends, the file is closed, even when a File
+        naming it lives on outside the block. A File is a value, and a copy of it names the same open file, so
+        closing either closes it for both. Neither can tell the File they didn't close, so its
+        <code>state</code> still says <code>Open</code> until one of its own methods finds out: every method then
+        finds the file closed, and fails with <code>NotOpen</code>, never reaching a file opened since (a
+        <code>close()</code> that finds it so sets <code>state</code> to <code>Closed</code>). The state is what the
+        File's methods left it, and what the file is, its methods tell.
+      </p>
+      <pre><span class="keyword">hold</span> kept = File { path: "notes.txt" }
+<span class="keyword">each</span> pass <span class="keyword">in</span> 0..1
+    <span class="keyword">region</span> round
+    kept.open(FileMode.Read) <span class="keyword">at</span> round { <span class="keyword">failure</span> e
+        show("could not open it")
+    }
+<span class="keyword">fi</span>                                  <span class="comment"># round's block ends, and closes the file</span>
+show(kept.str() <span class="keyword">at</span> r)                <span class="comment"># notes.txt (open): what open left it</span>
+show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failure</span> e
+    "closed"                        <span class="comment"># NotOpen</span>
+})</pre>
+      <p>
+        <code>examples/files.vela</code> is a whole program: a list written to a file, added to, read back line by
+        line, and deleted.
       </p>
     </section>
 

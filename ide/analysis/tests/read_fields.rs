@@ -57,7 +57,7 @@ fn a_read_field_is_a_field_whose_hover_says_who_assigns_it() {
         let when = if checks { "checked" } else { "declared" };
         let (code, doc) = hover(&source, "label: text");
         assert_eq!(code, "read label: text", "{}", when);
-        assert!(doc.contains("only the methods of its shape assign it"), "{}: {}", when, doc);
+        assert!(doc.contains("only the alters methods of its shape change it"), "{}: {}", when, doc);
         assert_eq!(hover(&source, "count: int =").0, "read count: int", "{}", when);
         // An ordinary field beside them says nothing of the kind.
         assert_eq!(hover(&source, "note: text").0, "note: text", "{}", when);
@@ -121,5 +121,5 @@ fn assigning_a_read_field_outside_its_methods_is_reported() {
     let source = program(true, "meter.count = 5");
     let diagnostics = Analysis::new(&source).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
-    assert_eq!(diagnostic.message, "'count' is a read-only field of 'Meter', which only the methods of 'Meter' change");
+    assert_eq!(diagnostic.message, "'count' is a read-only field of 'Meter', which only the alters methods of 'Meter' change");
 }

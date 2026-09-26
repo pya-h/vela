@@ -2,35 +2,375 @@
     | comment:# Vela's library comes with the compiler: `include std/files` brings in its
   2 | # files module as any module is brought in, with nothing to find on the disk,
     | comment:# files module as any module is brought in, with nothing to find on the disk,
-  3 | # and a module of the program may include it as well.
-    | comment:# and a module of the program may include it as well.
-  5 | include std/files {File}
-    | keyword:include  module:std  operator:/  module:files  punctuation:{  type:File  punctuation:}
-  6 | include std_files/paths (readable)
+  3 | # and a module of the program may include it as well. A test program runs in a
+    | comment:# and a module of the program may include it as well. A test program runs in a
+  4 | # folder holding a copy of its own folder's files, so it writes where it likes.
+    | comment:# folder holding a copy of its own folder's files, so it writes where it likes.
+  6 | include std/files {File, FileMode, FileError}
+    | keyword:include  module:std  operator:/  module:files  punctuation:{  type:File  punctuation:,  type:FileMode  punctuation:,  type:FileError  punctuation:}
+  7 | include std_files/paths (readable)
     | keyword:include  module:std_files  operator:/  module:paths  punctuation:(  task:readable  punctuation:)
-  8 | task main()
+  9 | task why(error: FileError) -> text
+    | keyword:task  task:why  punctuation:(  parameter:error  punctuation::  type:FileError  punctuation:)  operator:->  type-builtin:text
+ 10 |     <- match error
+    | keyword:<-  keyword:match  parameter:error
+ 11 |     case NotFound = "not found"
+    | keyword:case  variant:NotFound  operator:=  string:"not found"
+ 12 |     case NotAllowed = "not allowed"
+    | keyword:case  variant:NotAllowed  operator:=  string:"not allowed"
+ 13 |     case AlreadyOpen = "already open"
+    | keyword:case  variant:AlreadyOpen  operator:=  string:"already open"
+ 14 |     case NotOpen = "not open"
+    | keyword:case  variant:NotOpen  operator:=  string:"not open"
+ 15 |     case WrongMode = "wrong mode"
+    | keyword:case  variant:WrongMode  operator:=  string:"wrong mode"
+ 16 |     case Failed = "failed"
+    | keyword:case  variant:Failed  operator:=  string:"failed"
+ 17 |     fi
+    | keyword:fi
+ 18 | fi
+    | keyword:fi
+ 20 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
-  9 |     # A File is made from its path, and asked about. A test program runs in a
-    | comment:# A File is made from its path, and asked about. A test program runs in a
- 10 |     # folder holding a copy of its own folder's files, this module among them.
-    | comment:# folder holding a copy of its own folder's files, this module among them.
- 11 |     bind here = File { path: "paths.vela" }
+ 21 |     region r
+    | keyword:region  region:r
+ 22 |     # A File is made from its path, and asked about.
+    | comment:# A File is made from its path, and asked about.
+ 23 |     bind here = File { path: "paths.vela" }
     | keyword:bind  variable:here  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"paths.vela"  punctuation:}
- 12 |     show(here.path, " ", here.exists())
+ 24 |     show(here.path, " ", here.exists())
     | builtin-fn:show  punctuation:(  variable:here  punctuation:.  field:path  punctuation:,  string:" "  punctuation:,  variable:here  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
- 13 |     show(File { path: "no such file" }.exists())
+ 25 |     show(File { path: "no such file" }.exists())
     | builtin-fn:show  punctuation:(  type:File  punctuation:{  field:path  punctuation::  string:"no such file"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
- 14 |     # An empty file is a file; a folder is not one, though a file in it is.
+ 26 |     # An empty file is a file; a folder is not one, though a file in it is.
     | comment:# An empty file is a file; a folder is not one, though a file in it is.
- 15 |     show(File { path: "empty.txt" }.exists(), " ", File { path: "notes" }.exists(), " ", File { path: "notes/about.txt" }.exists())
+ 27 |     show(File { path: "empty.txt" }.exists(), " ", File { path: "notes" }.exists(), " ", File { path: "notes/about.txt" }.exists())
     | builtin-fn:show  punctuation:(  type:File  punctuation:{  field:path  punctuation::  string:"empty.txt"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  type:File  punctuation:{  field:path  punctuation::  string:"notes"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  type:File  punctuation:{  field:path  punctuation::  string:"notes/about.txt"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
- 16 |     # A zero byte ends a path to the system, so text holding one names no file.
+ 28 |     # A zero byte ends a path to the system, so text holding one names no file.
     | comment:# A zero byte ends a path to the system, so text holding one names no file.
- 17 |     show(File { path: "paths.vela\0" }.exists())
+ 29 |     show(File { path: "paths.vela\0" }.exists())
     | builtin-fn:show  punctuation:(  type:File  punctuation:{  field:path  punctuation::  string:"paths.vela  escape:\0  string:"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
- 18 |     # Through a module of the program, which names it through the module.
+ 30 |     # Through a module of the program, which names it through the module.
     | comment:# Through a module of the program, which names it through the module.
- 19 |     show(readable("paths.vela"), " ", readable(""))
+ 31 |     show(readable("paths.vela"), " ", readable(""))
     | builtin-fn:show  punctuation:(  task:readable  punctuation:(  string:"paths.vela"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:readable  punctuation:(  string:""  punctuation:)  punctuation:)
- 20 | fi
+ 33 |     # Written, then added to, then read back.
+    | comment:# Written, then added to, then read back.
+ 34 |     hold notes = File { path: "notes.txt" }
+    | keyword:hold  variable:notes  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
+ 35 |     show(notes.str() at r)
+    | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 36 |     notes.open(FileMode.Write) at r { failure e
+    | variable:notes  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Write  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 37 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 38 |     }
+    | punctuation:}
+ 39 |     notes.write("one\ntwo\n") { failure e
+    | variable:notes  punctuation:.  method:write  punctuation:(  string:"one  escape:\n  string:two  escape:\n  string:"  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 40 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 41 |     }
+    | punctuation:}
+ 42 |     show(notes.str() at r, " ", notes.size() { -1 })
+    | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  variable:notes  punctuation:.  method:size  punctuation:(  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+ 43 |     notes.close() { failure e
+    | variable:notes  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 44 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 45 |     }
+    | punctuation:}
+ 46 |     notes.open(FileMode.Append) at r { failure e
+    | variable:notes  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Append  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 47 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 48 |     }
+    | punctuation:}
+ 49 |     notes.write("three") { failure e
+    | variable:notes  punctuation:.  method:write  punctuation:(  string:"three"  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 50 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 51 |     }
+    | punctuation:}
+ 52 |     notes.close() { failure e
+    | variable:notes  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 53 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 54 |     }
+    | punctuation:}
+ 55 |     show(notes.size() { -1 })
+    | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  method:size  punctuation:(  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+ 56 |     notes.open(FileMode.Read) at r { failure e
+    | variable:notes  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 57 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 58 |     }
+    | punctuation:}
+ 59 |     show(notes.line() at r { "failed" }, " ", notes.ended())
+    | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  method:line  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  string:"failed"  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:notes  punctuation:.  method:ended  punctuation:(  punctuation:)  punctuation:)
+ 60 |     bind rest = notes.lines() at r { failure e
+    | keyword:bind  variable:rest  operator:=  variable:notes  punctuation:.  method:lines  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 61 |         new [text]([why(e)]) at r
+    | keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:[  task:why  punctuation:(  variable:e  punctuation:)  punctuation:]  punctuation:)  keyword:at  region:r
+ 62 |     }
+    | punctuation:}
+ 63 |     show(rest.len, " ", rest[0], " ", rest[1], " ", notes.ended())
+    | builtin-fn:show  punctuation:(  variable:rest  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:rest  punctuation:[  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:rest  punctuation:[  number:1  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:notes  punctuation:.  method:ended  punctuation:(  punctuation:)  punctuation:)
+ 64 |     show(notes.line()@r { "failed" })
+    | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  method:line  punctuation:(  punctuation:)  operator:@  region:r  punctuation:{  string:"failed"  punctuation:}  punctuation:)
+ 65 |     notes.close() { failure e
+    | variable:notes  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 66 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 67 |     }
+    | punctuation:}
+ 69 |     # The whole of a file at once, and lines ended the Windows way.
+    | comment:# The whole of a file at once, and lines ended the Windows way.
+ 70 |     hold windows = File { path: "windows.txt" }
+    | keyword:hold  variable:windows  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"windows.txt"  punctuation:}
+ 71 |     windows.open(FileMode.Read) at r { failure e
+    | variable:windows  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 72 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 73 |     }
+    | punctuation:}
+ 74 |     bind lines = windows.lines() at r { failure e
+    | keyword:bind  variable:lines  operator:=  variable:windows  punctuation:.  method:lines  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 75 |         new [text]([why(e)]) at r
+    | keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:[  task:why  punctuation:(  variable:e  punctuation:)  punctuation:]  punctuation:)  keyword:at  region:r
+ 76 |     }
+    | punctuation:}
+ 77 |     show(lines.len, " [", lines[0], "] [", lines[1], "] [", lines[2], "]")
+    | builtin-fn:show  punctuation:(  variable:lines  punctuation:.  field:len  punctuation:,  string:" ["  punctuation:,  variable:lines  punctuation:[  number:0  punctuation:]  punctuation:,  string:"] ["  punctuation:,  variable:lines  punctuation:[  number:1  punctuation:]  punctuation:,  string:"] ["  punctuation:,  variable:lines  punctuation:[  number:2  punctuation:]  punctuation:,  string:"]"  punctuation:)
+ 78 |     windows.close() { failure e
+    | variable:windows  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 79 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 80 |     }
+    | punctuation:}
+ 81 |     windows.open(FileMode.Read) at r { failure e
+    | variable:windows  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 82 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 83 |     }
+    | punctuation:}
+ 84 |     show((windows.read() at r { "failed" }).len)
+    | builtin-fn:show  punctuation:(  punctuation:(  variable:windows  punctuation:.  method:read  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  string:"failed"  punctuation:}  punctuation:)  punctuation:.  field:len  punctuation:)
+ 85 |     windows.close() { failure e
+    | variable:windows  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 86 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 87 |     }
+    | punctuation:}
+ 89 |     # Read and written through one opening.
+    | comment:# Read and written through one opening.
+ 90 |     hold both = File { path: "notes.txt" }
+    | keyword:hold  variable:both  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
+ 91 |     both.open(FileMode.ReadWrite) at r { failure e
+    | variable:both  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:ReadWrite  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 92 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 93 |     }
+    | punctuation:}
+ 94 |     show(both.line() at r { "failed" })
+    | builtin-fn:show  punctuation:(  variable:both  punctuation:.  method:line  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  string:"failed"  punctuation:}  punctuation:)
+ 95 |     both.write("TWO") { failure e
+    | variable:both  punctuation:.  method:write  punctuation:(  string:"TWO"  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 96 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 97 |     }
+    | punctuation:}
+ 98 |     # Written over "two", with the rest after it: "\nthree".
+    | comment:# Written over "two", with the rest after it: "\nthree".
+ 99 |     show((both.read() at r { "failed" }).len)
+    | builtin-fn:show  punctuation:(  punctuation:(  variable:both  punctuation:.  method:read  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  string:"failed"  punctuation:}  punctuation:)  punctuation:.  field:len  punctuation:)
+100 |     both.close() { failure e
+    | variable:both  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+101 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+102 |     }
+    | punctuation:}
+103 |     both.open(FileMode.Read) at r { failure e
+    | variable:both  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+104 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+105 |     }
+    | punctuation:}
+106 |     show(both.lines()@r { failure e
+    | builtin-fn:show  punctuation:(  variable:both  punctuation:.  method:lines  punctuation:(  punctuation:)  operator:@  region:r  punctuation:{  keyword:failure  variable:e
+107 |         new [text]([why(e)]) at r
+    | keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:[  task:why  punctuation:(  variable:e  punctuation:)  punctuation:]  punctuation:)  keyword:at  region:r
+108 |     }[1])
+    | punctuation:}  punctuation:[  number:1  punctuation:]  punctuation:)
+109 |     both.close() { failure e
+    | variable:both  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+110 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+111 |     }
+    | punctuation:}
+113 |     # What goes wrong.
+    | comment:# What goes wrong.
+114 |     hold wrong = File { path: "notes.txt" }
+    | keyword:hold  variable:wrong  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
+115 |     wrong.open(FileMode.Read) at r { failure e
+    | variable:wrong  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+116 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+117 |     }
+    | punctuation:}
+118 |     wrong.open(FileMode.Read) at r { failure e
+    | variable:wrong  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+119 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+120 |     }
+    | punctuation:}
+121 |     wrong.write("x") { failure e
+    | variable:wrong  punctuation:.  method:write  punctuation:(  string:"x"  punctuation:)  punctuation:{  keyword:failure  variable:e
+122 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+123 |     }
+    | punctuation:}
+124 |     wrong.close() { failure e
+    | variable:wrong  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+125 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+126 |     }
+    | punctuation:}
+127 |     wrong.close() { failure e
+    | variable:wrong  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+128 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+129 |     }
+    | punctuation:}
+130 |     show(wrong.read() at r { failure e
+    | builtin-fn:show  punctuation:(  variable:wrong  punctuation:.  method:read  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+131 |         why(e)
+    | task:why  punctuation:(  variable:e  punctuation:)
+132 |     })
+    | punctuation:}  punctuation:)
+133 |     wrong.open(FileMode.Write) at r { failure e
+    | variable:wrong  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Write  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+134 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+135 |     }
+    | punctuation:}
+136 |     show(wrong.read() at r { failure e
+    | builtin-fn:show  punctuation:(  variable:wrong  punctuation:.  method:read  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+137 |         why(e)
+    | task:why  punctuation:(  variable:e  punctuation:)
+138 |     })
+    | punctuation:}  punctuation:)
+139 |     wrong.close() { failure e
+    | variable:wrong  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+140 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+141 |     }
+    | punctuation:}
+142 |     hold missing = File { path: "missing.txt" }
+    | keyword:hold  variable:missing  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"missing.txt"  punctuation:}
+143 |     missing.open(FileMode.Read) at r { failure e
+    | variable:missing  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+144 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+145 |     }
+    | punctuation:}
+146 |     missing.open(FileMode.ReadWrite) at r { failure e
+    | variable:missing  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:ReadWrite  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+147 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+148 |     }
+    | punctuation:}
+149 |     show(missing.size() { failure e
+    | builtin-fn:show  punctuation:(  variable:missing  punctuation:.  method:size  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+150 |         -1
+    | operator:-  number:1
+151 |     }, " ", missing.str() at r)
+    | punctuation:}  punctuation:,  string:" "  punctuation:,  variable:missing  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+153 |     # A region that ends closes the file opened in it; the File kept outside
+    | comment:# A region that ends closes the file opened in it; the File kept outside
+154 |     # it still says what its methods left it, and finds it closed.
+    | comment:# it still says what its methods left it, and finds it closed.
+155 |     hold kept = File { path: "empty.txt" }
+    | keyword:hold  variable:kept  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"empty.txt"  punctuation:}
+156 |     each pass in 0..2
+    | keyword:each  variable:pass  keyword:in  number:0  operator:..  number:2
+157 |         region round
+    | keyword:region  region:round
+158 |         kept.open(FileMode.Read) at round { failure e
+    | variable:kept  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:round  punctuation:{  keyword:failure  variable:e
+159 |             show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+160 |         }
+    | punctuation:}
+161 |         show(pass, " ", kept.ended())
+    | builtin-fn:show  punctuation:(  variable:pass  punctuation:,  string:" "  punctuation:,  variable:kept  punctuation:.  method:ended  punctuation:(  punctuation:)  punctuation:)
+162 |     fi
+    | keyword:fi
+163 |     show(kept.str() at r, " ", kept.ended())
+    | builtin-fn:show  punctuation:(  variable:kept  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  variable:kept  punctuation:.  method:ended  punctuation:(  punctuation:)  punctuation:)
+164 |     kept.close() { failure e
+    | variable:kept  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+165 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+166 |     }
+    | punctuation:}
+167 |     show(kept.str() at r)
+    | builtin-fn:show  punctuation:(  variable:kept  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+169 |     # A copy closes the file for both.
+    | comment:# A copy closes the file for both.
+170 |     hold first = File { path: "empty.txt" }
+    | keyword:hold  variable:first  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"empty.txt"  punctuation:}
+171 |     first.open(FileMode.Read) at r { failure e
+    | variable:first  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+172 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+173 |     }
+    | punctuation:}
+174 |     hold second = first
+    | keyword:hold  variable:second  operator:=  variable:first
+175 |     second.close() { failure e
+    | variable:second  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+176 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+177 |     }
+    | punctuation:}
+178 |     show(first.line() at r { failure e
+    | builtin-fn:show  punctuation:(  variable:first  punctuation:.  method:line  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+179 |         why(e)
+    | task:why  punctuation:(  variable:e  punctuation:)
+180 |     })
+    | punctuation:}  punctuation:)
+182 |     # Renamed, then deleted.
+    | comment:# Renamed, then deleted.
+183 |     hold moved = File { path: "notes.txt" }
+    | keyword:hold  variable:moved  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
+184 |     moved.rename("moved.txt") { failure e
+    | variable:moved  punctuation:.  method:rename  punctuation:(  string:"moved.txt"  punctuation:)  punctuation:{  keyword:failure  variable:e
+185 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+186 |     }
+    | punctuation:}
+187 |     show(moved.path, " ", moved.exists(), " ", File { path: "notes.txt" }.exists())
+    | builtin-fn:show  punctuation:(  variable:moved  punctuation:.  field:path  punctuation:,  string:" "  punctuation:,  variable:moved  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
+188 |     moved.open(FileMode.Read) at r { failure e
+    | variable:moved  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+189 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+190 |     }
+    | punctuation:}
+191 |     moved.delete() { failure e
+    | variable:moved  punctuation:.  method:delete  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+192 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+193 |     }
+    | punctuation:}
+194 |     show(moved.str() at r, " ", moved.exists())
+    | builtin-fn:show  punctuation:(  variable:moved  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  variable:moved  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
+195 |     moved.delete() { failure e
+    | variable:moved  punctuation:.  method:delete  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+196 |         show(why(e))
+    | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
+197 |     }
+    | punctuation:}
+198 | fi
     | keyword:fi

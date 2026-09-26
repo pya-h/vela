@@ -1,11 +1,11 @@
-# A field marked `read` is read by any file and assigned only by the methods of
-# its own shape, so what a shape keeps true of itself stays so wherever it is
-# used, in the file that declares it as much as in another. A literal gives
+# A field marked `read` is set once and then changed only by the alters methods
+# of its own shape, so what a shape keeps true of itself stays so wherever it
+# is used, in the file that declares it as much as in another. A literal gives
 # such a field exactly when the shape gives it no value to fall back on.
 
 include read_fields/meter {Meter, Mode}
 
-# A shape of this file keeps its `read` fields to its own methods too.
+# A shape of this file keeps its `read` fields to its own alters methods too.
 shape Tally
     read total: int = 0
     note: text = "tally"
@@ -17,6 +17,26 @@ shape Tally
     # A method of the shape may assign the field of another of its values.
     alters take(other: Tally)
         .total = .total + other.total
+    fi
+
+    alters clear()
+        .total = 0
+    fi
+
+    # One that alters nothing makes a changed copy through one that does.
+    cleared() -> Tally@this
+        hold copy = .this
+        copy.clear()
+        <- copy
+    fi
+fi
+
+# A read field that may be missing is still given once, by the literal.
+shape Seat
+    read holder: maybe text
+
+    alters claim(by: text)
+        .holder = by
     fi
 fi
 
@@ -44,7 +64,12 @@ task main()
     tally.take(other)
     # An ordinary field beside it is still assigned by anyone.
     tally.note = "sum"
-    show(tally.note, " ", tally.total)
+    show(tally.note, " ", tally.total, " ", tally.cleared().total, " ", tally.total)
+
+    hold seat = Seat { holder: none }
+    show(seat.holder { "free" })
+    seat.claim("ana")
+    show(seat.holder { "free" })
 
     # A whole new value may take the place of one, as for any variable.
     meter = Meter { label: "fresh" }

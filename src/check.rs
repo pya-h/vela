@@ -78,8 +78,8 @@ pub struct Checker {
     /// What the task being checked is a method of, when it is one: its own name
     /// and whether it may change the value it is called on.
     current_method: Option<Owner>,
-    /// The shape or kind whose method is being checked, as `owner_of` names it,
-    /// which is the only code that may assign its `read` fields.
+    /// The shape or kind whose `alters` method is being checked, as `owner_of`
+    /// names it: the only code that may change its `read` fields.
     current_owner: Option<String>,
     /// The shapes and kinds that hold pointers, directly or in other shapes and
     /// kinds, so their values live in a region.
@@ -957,7 +957,7 @@ impl Checker {
                 return refuse(|| Error::at(
                     field.span,
                     format!(
-                        "'{}' is a read-only field of '{1}' that falls back on its own value, so no literal gives it; only the methods of '{1}' change it",
+                        "'{}' is a read-only field of '{1}' that falls back on its own value, so no literal gives it; only the alters methods of '{1}' change it",
                         field.name, name
                     ),
                 ));
@@ -1981,7 +1981,7 @@ impl Checker {
         }
         self.current_ret = Some(known(&task.ret));
         self.current_method = task.owner.clone();
-        self.current_owner = task.owner.as_ref().and(task.params.first()).and_then(|this| self.owner_of(&this.ty));
+        self.current_owner = task.owner.as_ref().filter(|owner| owner.alters).and(task.params.first()).and_then(|this| self.owner_of(&this.ty));
         // Parameters and the task body share one scope, as in C.
         self.scopes = vec![Scope::default()];
         for param in &task.params {
@@ -2439,7 +2439,12 @@ impl Checker {
                     // A method called on a value whose type is unknown stays
                     // unread, and whatever made the type unknown was reported.
                     ExprKind::MethodCall { .. } => Ok(()),
-                    ExprKind::PlanB { value, .. } if e.ty == Some(Type::Unit) || matches!(value.kind, ExprKind::Call { .. } | ExprKind::Scan { .. }) => Ok(()),
+                    // A method call left unread, whose mistake is reported, counts as one.
+                    ExprKind::PlanB { value, .. }
+                        if e.ty == Some(Type::Unit) || matches!(value.kind, ExprKind::Call { .. } | ExprKind::Scan { .. } | ExprKind::MethodCall { .. }) =>
+                    {
+                        Ok(())
+                    }
                     ExprKind::Binary(BinaryOp::Eq, ..) => err(e.span, "the result of '==' is unused; use '=' to assign"),
                     _ => err(e.span, "this value is unused; only a task call can be used as a statement"),
                 }
@@ -3060,7 +3065,7 @@ impl Checker {
     }
 
     /// Refuses to change `field` of a value of type `base` where it is a `read`
-    /// field, outside the methods of its own shape: it is read anywhere, so what
+    /// field, outside the alters methods of its own shape: it is read anywhere, so what
     /// a shape keeps true of itself stays its own, in the file that declares it
     /// as much as in another. Assigning it, an item of it, or a part of it, or
     /// calling a method that alters it, all change it.
@@ -3069,7 +3074,7 @@ impl Checker {
             && self.declared_field(&owner, field).is_some_and(|declared| declared.read)
         {
             // The full name, which each file's message spells as it writes it.
-            return err(span, format!("'{}' is a read-only field of '{1}', which only the methods of '{1}' change", field, owner));
+            return err(span, format!("'{}' is a read-only field of '{1}', which only the alters methods of '{1}' change", field, owner));
         }
         Ok(())
     }
@@ -6480,6 +6485,13 @@ fn scanned_type(arg: &Expr) -> Result<Type> {
 
 /// The error for a call whose `T ~ E` result is thrown away.
 fn ignored_error(task: &str) -> String {
+    // A method is called on a value, and written so.
+    if let Some((owner, method)) = method_parts(task) {
+        return format!(
+            "the error '{0}{1}{2}' may send is ignored; handle it with a plan B, as in 'value.{2}(…) {{ failure e … }}', or with match",
+            owner, MODULE_SEPARATOR, method
+        );
+    }
     format!("the error '{0}' may send is ignored; handle it with a plan B, as in '{0}(…) {{ failure e … }}', or with match", task)
 }
 

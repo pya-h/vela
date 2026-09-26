@@ -1,4 +1,4 @@
-# error: 6:11: 'count' is a read-only field of 'Meter', which only the methods of 'Meter' change
+# error: 6:11: 'count' is a read-only field of 'Meter', which only the alters methods of 'Meter' change
 include modules/meter {Meter}
 
 task main()

@@ -193,7 +193,9 @@
         joining, values as text, and text holding values), <code>regions.vela</code> (a tree in a region, a region
         per loop pass, copying a result into a longer-lived region, and <a href="#region-after-call">the region named after a call</a>), <code>arrays.vela</code> (arrays, and slices
         in a region: sorting and a sieve of primes), <code>shop.vela</code> (a program in three files, with
-        <code>include</code>, braces, <code>=&gt;</code>, and <code>priv</code>), <code>numbers.vela</code> (numbers read
+        <code>include</code>, braces, <code>=&gt;</code>, and <code>priv</code>), <code>files.vela</code> (a list kept in a
+        file with <a href="std.html#files"><code>std/files</code></a>: written, added to, read line by line, and
+        deleted), <code>numbers.vela</code> (numbers read
         from input with <code>scan("> ", int)</code>, and from text with <code>int(t)</code>, with the reasons there is
         no number), and <code>demo.vela</code> (tasks, shapes, pointers, control flow, and text).
       </p>
@@ -913,14 +915,14 @@ Job { tries: 1 }                                <span class="comment"># error: m
         <code>maybe</code> of every type.
       </p>
       <p id="read-fields">
-        <strong>Read-only fields.</strong> <code>read</code> before a field lets any code read it and only the
-        methods of its own shape assign it, so what a shape keeps true of itself stays so wherever its values go —
-        in another file, and in the file that declares it too, since the field belongs to the shape rather than
-        the file. A literal gives such a field exactly when it has no value to fall back on: the one that names
-        what the value is made from is given where the value is made, and the ones that start at a value of their
-        own are the shape's to change, so no literal can make them say what isn't so. A field is
-        <code>priv</code> or <code>read</code>, not both: <code>priv</code> says which files may look,
-        <code>read</code> says which code may change.
+        <strong>Read-only fields.</strong> A field marked <code>read</code> is set once, and after that only the
+        <code>alters</code> methods of its own shape change it; any other code, in any file, only reads it. So what a
+        shape keeps true of itself stays so wherever its values go — in another file, and in the file that
+        declares it too, since the field belongs to the shape rather than the file. It is set once in one of two
+        ways: a field with no value to fall back on is given by the literal that makes the value (a
+        <code>maybe</code> one too, even when it is <code>none</code>), and a field with one starts at it, and no
+        literal may give it. A field is <code>priv</code> or <code>read</code>, not both: a field every file reads
+        is no file's secret.
       </p>
       <pre><span class="keyword">shape</span> Meter
     <span class="keyword">read</span> label: text             <span class="comment"># given by the literal, then only Meter changes it</span>
@@ -934,7 +936,7 @@ Job { tries: 1 }                                <span class="comment"># error: m
 <span class="keyword">hold</span> m = Meter { label: "door" }
 m.tick()
 show(m.label, " ", m.count)     <span class="comment"># door 1</span>
-m.count = 5                     <span class="comment"># error: 'count' is a read-only field of 'Meter', which only the methods of 'Meter' change</span>
+m.count = 5                     <span class="comment"># error: 'count' is a read-only field of 'Meter', which only the alters methods of 'Meter' change</span>
 Meter { label: "x", count: 3 }  <span class="comment"># error: … falls back on its own value, so no literal gives it</span>
 m = Meter { label: "gate" }     <span class="comment"># ok: a whole new value, which the literal rules keep honest</span></pre>
       <p>
@@ -2448,6 +2450,7 @@ show(area(square))             <span class="comment"># error: unknown task 'area
 
 <span class="keyword">task</span> main()
     show(File { path: "notes.txt" }.exists())    <span class="comment"># whether a file that can be read is there</span>
+    <span class="comment"># and open(), read(), line(), write(), close(), rename(), delete(): see Vela Library</span>
 <span class="keyword">fi</span></pre>
     </section>
 
@@ -2482,7 +2485,7 @@ show(area(square))             <span class="comment"># error: unknown task 'area
           numbers read from it (<code>int(t)</code>), <code>show</code>, and <code>scan</code>. It has no
           search, no trimming, and no case changes yet.</li>
         <li>Input is read a line of text at a time with <code>scan</code>, or a number at a time with
-          <code>scan("Age: ", int)</code>; nothing reads part of a line, and files can so far only be asked whether they exist (<a href="std.html#files"><code>std/files</code></a>).</li>
+          <code>scan("Age: ", int)</code>; nothing reads part of a line from input; files are read and written with <a href="std.html#files"><code>std/files</code></a>.</li>
         <li>Arrays and slices can't be compared or shown whole, and an array's count is known before the program runs
           (see <a href="#arrays">Arrays</a>). Tuples can't be shown whole, and are taken apart in
           <code>is</code> and <code>case</code> only in parentheses, as in <code>{(a, b)}</code>

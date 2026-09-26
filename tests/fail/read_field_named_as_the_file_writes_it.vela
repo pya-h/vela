@@ -1,4 +1,4 @@
-# error: 6:11: 'count' is a read-only field of 'Gauge', which only the methods of 'Gauge' change
+# error: 6:11: 'count' is a read-only field of 'Gauge', which only the alters methods of 'Gauge' change
 include modules/meter {Meter => Gauge}
 
 task main()

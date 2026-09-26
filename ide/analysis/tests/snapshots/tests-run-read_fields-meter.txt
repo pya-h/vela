@@ -1,5 +1,5 @@
-  1 | # A shape whose fields any file reads and only its own methods assign. The one
-    | comment:# A shape whose fields any file reads and only its own methods assign. The one
+  1 | # A shape whose fields any file reads and only its own alters methods change. The one
+    | comment:# A shape whose fields any file reads and only its own alters methods change. The one
   2 | # with no value to fall back on is given by the literal that makes the value;
     | comment:# with no value to fall back on is given by the literal that makes the value;
   3 | # the others start at theirs and no literal gives them.

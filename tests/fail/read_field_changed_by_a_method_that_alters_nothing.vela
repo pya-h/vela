@@ -1,0 +1,15 @@
+# error: 8:14: 'count' is a read-only field of 'Tally', which only the alters methods of 'Tally' change
+shape Tally
+    read count: int = 0
+
+    # Not marked alters, so it changes no read field, even of a copy of its own.
+    reset() -> Tally
+        hold copy = .this
+        copy.count = 0
+        <- copy
+    fi
+fi
+
+task main()
+    show(Tally {}.reset().count)
+fi

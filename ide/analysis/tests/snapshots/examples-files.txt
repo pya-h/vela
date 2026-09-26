@@ -1,0 +1,152 @@
+  1 | # Files, with Vela's library: a shopping list written to a file, added to,
+    | comment:# Files, with Vela's library: a shopping list written to a file, added to,
+  2 | # read back line by line, and deleted at the end, so running the example
+    | comment:# read back line by line, and deleted at the end, so running the example
+  3 | # leaves nothing behind.
+    | comment:# leaves nothing behind.
+  4 | #
+    | comment:#
+  5 | # A File is made from its path and opened in a region, which closes it when
+    | comment:# A File is made from its path and opened in a region, which closes it when
+  6 | # the region's block ends; `close()` closes it sooner. Every method that
+    | comment:# the region's block ends; `close()` closes it sooner. Every method that
+  7 | # touches the disk can fail, and a plan B says what to do then.
+    | comment:# touches the disk can fail, and a plan B says what to do then.
+  9 | include std/files {File, FileMode, FileError}
+    | keyword:include  module:std  operator:/  module:files  punctuation:{  type:File  punctuation:,  type:FileMode  punctuation:,  type:FileError  punctuation:}
+ 11 | task said(error: FileError) -> text
+    | keyword:task  task:said  punctuation:(  parameter:error  punctuation::  type:FileError  punctuation:)  operator:->  type-builtin:text
+ 12 |     <- match error
+    | keyword:<-  keyword:match  parameter:error
+ 13 |     case NotFound = "there is no such file"
+    | keyword:case  variant:NotFound  operator:=  string:"there is no such file"
+ 14 |     case NotAllowed = "the system won't allow it"
+    | keyword:case  variant:NotAllowed  operator:=  string:"the system won't allow it"
+ 15 |     case AlreadyOpen = "it is open already"
+    | keyword:case  variant:AlreadyOpen  operator:=  string:"it is open already"
+ 16 |     case NotOpen = "it isn't open"
+    | keyword:case  variant:NotOpen  operator:=  string:"it isn't open"
+ 17 |     case WrongMode = "it isn't open for that"
+    | keyword:case  variant:WrongMode  operator:=  string:"it isn't open for that"
+ 18 |     case Failed = "the system failed"
+    | keyword:case  variant:Failed  operator:=  string:"the system failed"
+ 19 |     fi
+    | keyword:fi
+ 20 | fi
+    | keyword:fi
+ 22 | # Writes the list's first items, emptying the file first.
+    | comment:# Writes the list's first items, emptying the file first.
+ 23 | task start(list: File@r) -> unit ~ FileError
+    | keyword:task  task:start  punctuation:(  parameter:list  punctuation::  type:File  operator:@  region:r  punctuation:)  operator:->  type-builtin:unit  operator:~  type:FileError
+ 24 |     region w
+    | keyword:region  region:w
+ 25 |     hold file = list
+    | keyword:hold  variable:file  operator:=  parameter:list
+ 26 |     file.open(FileMode.Write) at w { failure e
+    | variable:file  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Write  punctuation:)  keyword:at  region:w  punctuation:{  keyword:failure  variable:e
+ 27 |         <- fail e
+    | keyword:<-  keyword:fail  variable:e
+ 28 |     }
+    | punctuation:}
+ 29 |     each item in ["bread", "milk"]
+    | keyword:each  variable:item  keyword:in  punctuation:[  string:"bread"  punctuation:,  string:"milk"  punctuation:]
+ 30 |         file.write("{item}\n"@w) { failure e
+    | variable:file  punctuation:.  method:write  punctuation:(  string:"{  variable:item  string:}  escape:\n  string:"  operator:@  region:w  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 31 |             <- fail e
+    | keyword:<-  keyword:fail  variable:e
+ 32 |         }
+    | punctuation:}
+ 33 |     fi
+    | keyword:fi
+ 34 |     # The region closes the file here, at the end of its block.
+    | comment:# The region closes the file here, at the end of its block.
+ 35 | fi
+    | keyword:fi
+ 37 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 38 |     region r
+    | keyword:region  region:r
+ 39 |     hold list = File { path: "shopping.txt" }
+    | keyword:hold  variable:list  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"shopping.txt"  punctuation:}
+ 40 |     start(list) { failure e
+    | task:start  punctuation:(  variable:list  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 41 |         show("could not start the list: ", said(e))
+    | builtin-fn:show  punctuation:(  string:"could not start the list: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 42 |     }
+    | punctuation:}
+ 44 |     # Adding goes at the end.
+    | comment:# Adding goes at the end.
+ 45 |     list.open(FileMode.Append) at r { failure e
+    | variable:list  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Append  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 46 |         show("could not add: ", said(e))
+    | builtin-fn:show  punctuation:(  string:"could not add: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 47 |     }
+    | punctuation:}
+ 48 |     list.write("apples\n") { failure e
+    | variable:list  punctuation:.  method:write  punctuation:(  string:"apples  escape:\n  string:"  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 49 |         show("could not add: ", said(e))
+    | builtin-fn:show  punctuation:(  string:"could not add: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 50 |     }
+    | punctuation:}
+ 51 |     list.close() { failure e
+    | variable:list  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 52 |         show("could not close: ", said(e))
+    | builtin-fn:show  punctuation:(  string:"could not close: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 53 |     }
+    | punctuation:}
+ 54 |     show(list.path, " holds ", list.size() { 0 }, " bytes")
+    | builtin-fn:show  punctuation:(  variable:list  punctuation:.  field:path  punctuation:,  string:" holds "  punctuation:,  variable:list  punctuation:.  method:size  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" bytes"  punctuation:)
+ 56 |     # Read back line by line: `line()` gives none at the end of the file.
+    | comment:# Read back line by line: `line()` gives none at the end of the file.
+ 57 |     list.open(FileMode.Read) at r { failure e
+    | variable:list  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 58 |         show("could not read: ", said(e))
+    | builtin-fn:show  punctuation:(  string:"could not read: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 59 |     }
+    | punctuation:}
+ 60 |     hold count = 0
+    | keyword:hold  variable:count  operator:=  number:0
+ 61 |     loop list.line() at r { none } is {item}
+    | keyword:loop  variable:list  punctuation:.  method:line  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:none  punctuation:}  keyword:is  punctuation:{  variable:item  punctuation:}
+ 62 |         count = count + 1
+    | variable:count  operator:=  variable:count  operator:+  number:1
+ 63 |         show(count, ". ", item)
+    | builtin-fn:show  punctuation:(  variable:count  punctuation:,  string:". "  punctuation:,  variable:item  punctuation:)
+ 64 |     fi
+    | keyword:fi
+ 65 |     list.close() { failure e
+    | variable:list  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 66 |         show("could not close: ", said(e))
+    | builtin-fn:show  punctuation:(  string:"could not close: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 67 |     }
+    | punctuation:}
+ 69 |     # Reading a file opened for writing is a mistake the plan B names.
+    | comment:# Reading a file opened for writing is a mistake the plan B names.
+ 70 |     list.open(FileMode.Append) at r { failure e
+    | variable:list  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Append  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 71 |         show("could not add: ", said(e))
+    | builtin-fn:show  punctuation:(  string:"could not add: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 72 |     }
+    | punctuation:}
+ 73 |     show(list.read() at r { failure e
+    | builtin-fn:show  punctuation:(  variable:list  punctuation:.  method:read  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 74 |         said(e)
+    | task:said  punctuation:(  variable:e  punctuation:)
+ 75 |     })
+    | punctuation:}  punctuation:)
+ 76 |     list.close() { failure e
+    | variable:list  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 77 |         show("could not close: ", said(e))
+    | builtin-fn:show  punctuation:(  string:"could not close: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 78 |     }
+    | punctuation:}
+ 80 |     list.delete() { failure e
+    | variable:list  punctuation:.  method:delete  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 81 |         show("could not delete: ", said(e))
+    | builtin-fn:show  punctuation:(  string:"could not delete: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 82 |     }
+    | punctuation:}
+ 83 |     show(list.str() at r, ", and there: ", list.exists())
+    | builtin-fn:show  punctuation:(  variable:list  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  string:", and there: "  punctuation:,  variable:list  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
+ 84 | fi
+    | keyword:fi

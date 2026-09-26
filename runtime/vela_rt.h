@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -386,12 +387,21 @@ typedef struct vela__rt__chunk {
     _Alignas(max_align_t) unsigned char data[];
 } vela__rt__chunk;
 
+/* A file a region closes when it is freed (see std/files below): one of the
+ * region's own allocations, so it goes with the region. */
+typedef struct vela__rt__closer {
+    struct vela__rt__closer* next;
+    int64_t handle;
+} vela__rt__closer;
+
 typedef struct vela__rt__region {
     vela__rt__chunk* newest;
+    /* The files opened in the region, closed before its memory is freed. */
+    vela__rt__closer* closers;
 } vela__rt__region;
 
 /* The initializer of an empty region: `vela__rt__region r[1] = { VELA__RT__REGION_EMPTY };`. */
-#define VELA__RT__REGION_EMPTY { NULL }
+#define VELA__RT__REGION_EMPTY { NULL, NULL }
 
 /* Total sizes of ordinary chunks, header included. */
 enum { VELA__RT__CHUNK_FIRST = 4096, VELA__RT__CHUNK_MAX = 1 << 20 };
@@ -920,26 +930,6 @@ static inline int vela__rt__float_of_input(vela__rt__text prompt, double* value)
     return read;
 }
 
-/* Frees everything allocated in `r`, which is then empty again. */
-static inline void vela__rt__region_free(vela__rt__region* r) {
-    vela__rt__chunk* chunk = r->newest;
-    while (chunk != NULL) {
-        vela__rt__chunk* previous = chunk->previous;
-        free(chunk);
-        chunk = previous;
-    }
-    r->newest = NULL;
-}
-
-/* Placed at the end of every task that returns a value. The checker ensures
- * every path sends, so this is never reached; it keeps C compilers from
- * treating the end of the function as reachable (undefined behavior). */
-static inline _Noreturn void vela__rt__missing_send(const char* task) {
-    fflush(stdout);
-    fprintf(stderr, "vela: task '%s' finished without sending a value\n", task);
-    abort();
-}
-
 /* Vela's library, `std`: the bodies of its native tasks, each named for the
  * task it is in `src/library.rs`, and each written in C11 alone, so a program
  * that uses the library builds wherever one that doesn't does. */
@@ -975,6 +965,399 @@ static inline bool vela__rt__files_path_exists(vela__rt__text path) {
     bool readable = getc(file) != EOF || !ferror(file);
     fclose(file);
     return readable;
+}
+
+/* std/files keeps the files a program has open in a table. A File holds a
+ * handle, its slot's index with the slot's generation above it, and a slot's
+ * generation changes each time it is opened, so a File copied before a close,
+ * or kept after its region closed it, finds the slot's file isn't its own:
+ * `NotOpen`, never another file. The statuses are FileError's variants in
+ * order after 0, which is none, and `ENDED`, which is no error but the end. */
+enum {
+    VELA__RT__FILE_OK = 0,
+    VELA__RT__FILE_NOT_FOUND = 1,
+    VELA__RT__FILE_NOT_ALLOWED = 2,
+    VELA__RT__FILE_ALREADY_OPEN = 3,
+    VELA__RT__FILE_NOT_OPEN = 4,
+    VELA__RT__FILE_WRONG_MODE = 5,
+    VELA__RT__FILE_FAILED = 6,
+    VELA__RT__FILE_ENDED = 7
+};
+
+/* FileMode's variants in order; the last thing done, for a file both read and
+ * written, where C asks for a seek between the two. */
+enum { VELA__RT__MODE_READ, VELA__RT__MODE_WRITE, VELA__RT__MODE_APPEND, VELA__RT__MODE_READ_WRITE };
+enum { VELA__RT__DID_NOTHING, VELA__RT__DID_READ, VELA__RT__DID_WRITE };
+
+typedef struct vela__rt__file_slot {
+    FILE* file;
+    uint32_t generation;
+    int mode;
+    int did;
+} vela__rt__file_slot;
+
+typedef struct vela__rt__file_table {
+    vela__rt__file_slot* slots;
+    size_t count;
+    /* What the last of these operations came to, one of the statuses. */
+    int64_t status;
+} vela__rt__file_table;
+
+/* The table, in a function rather than a variable of the header, so a
+ * program that opens no file has nothing unused. */
+static inline vela__rt__file_table* vela__rt__files(void) {
+    static vela__rt__file_table table = { NULL, 0, VELA__RT__FILE_OK };
+    return &table;
+}
+
+/* The status of the last operation, which the library turns into a FileError. */
+static inline int64_t vela__rt__files_status(void) {
+    return vela__rt__files()->status;
+}
+
+static inline int64_t vela__rt__files_done(int64_t status) {
+    vela__rt__files()->status = status;
+    return status;
+}
+
+/* The slot `handle` holds open, or NULL when it holds none now. */
+static inline vela__rt__file_slot* vela__rt__file_of(int64_t handle) {
+    if (handle < 0) {
+        return NULL;
+    }
+    vela__rt__file_table* table = vela__rt__files();
+    size_t index = (size_t)(handle & 0xffffffff);
+    uint32_t generation = (uint32_t)(handle >> 32);
+    if (index >= table->count) {
+        return NULL;
+    }
+    vela__rt__file_slot* slot = &table->slots[index];
+    return slot->file != NULL && slot->generation == generation ? slot : NULL;
+}
+
+/* Why opening, renaming, or removing a file failed, as the C library says it,
+ * where it says so: `errno`'s ENOENT and EACCES are POSIX's, not C11's. */
+static inline int64_t vela__rt__files_why(int error) {
+#ifdef ENOENT
+    if (error == ENOENT) {
+        return VELA__RT__FILE_NOT_FOUND;
+    }
+#endif
+#ifdef EACCES
+    if (error == EACCES) {
+        return VELA__RT__FILE_NOT_ALLOWED;
+    }
+#endif
+#ifdef EPERM
+    if (error == EPERM) {
+        return VELA__RT__FILE_NOT_ALLOWED;
+    }
+#endif
+    (void)error;
+    return VELA__RT__FILE_FAILED;
+}
+
+/* `file.open(mode) at within`: the handle of the file at `path`, opened as
+ * `mode` says, which `within` closes when it is freed; or a status, below 0. */
+static inline int64_t vela__rt__files_open(vela__rt__text path, int64_t mode, vela__rt__region* within) {
+    static const char* const how[] = { "rb", "wb", "ab", "r+b" };
+    char* name = vela__rt__path_of(path);
+    if (name == NULL || mode < 0 || mode > VELA__RT__MODE_READ_WRITE) {
+        free(name);
+        return -vela__rt__files_done(VELA__RT__FILE_NOT_FOUND);
+    }
+    errno = 0;
+    FILE* file = fopen(name, how[mode]);
+    int error = errno;
+    free(name);
+    if (file == NULL) {
+        return -vela__rt__files_done(vela__rt__files_why(error));
+    }
+    /* A folder opens for reading on some systems, and reading it fails. */
+    if (mode == VELA__RT__MODE_READ || mode == VELA__RT__MODE_READ_WRITE) {
+        int c = getc(file);
+        if (c == EOF && ferror(file)) {
+            fclose(file);
+            return -vela__rt__files_done(VELA__RT__FILE_NOT_FOUND);
+        }
+        if (c != EOF) {
+            ungetc(c, file);
+        }
+    }
+    vela__rt__file_table* table = vela__rt__files();
+    size_t index = 0;
+    while (index < table->count && table->slots[index].file != NULL) {
+        index++;
+    }
+    if (index == table->count) {
+        size_t count = table->count == 0 ? 8 : table->count * 2;
+        if (count > 0xffffffffu || count > SIZE_MAX / sizeof(vela__rt__file_slot)) {
+            vela__rt__out_of_memory();
+        }
+        vela__rt__file_slot* slots = realloc(table->slots, count * sizeof(vela__rt__file_slot));
+        if (slots == NULL) {
+            vela__rt__out_of_memory();
+        }
+        for (size_t i = table->count; i < count; i++) {
+            slots[i] = (vela__rt__file_slot){ NULL, 0, 0, VELA__RT__DID_NOTHING };
+        }
+        table->slots = slots;
+        table->count = count;
+    }
+    vela__rt__file_slot* slot = &table->slots[index];
+    slot->file = file;
+    slot->generation++;
+    slot->mode = (int)mode;
+    slot->did = VELA__RT__DID_NOTHING;
+    int64_t handle = (int64_t)(((uint64_t)slot->generation << 32) | (uint64_t)index);
+    vela__rt__closer* closer = vela__rt__region_alloc(within, sizeof(vela__rt__closer), _Alignof(vela__rt__closer));
+    closer->handle = handle;
+    closer->next = within->closers;
+    within->closers = closer;
+    vela__rt__files_done(VELA__RT__FILE_OK);
+    return handle;
+}
+
+/* Whether `handle` holds a file open now. */
+static inline bool vela__rt__files_is_open(int64_t handle) {
+    return vela__rt__file_of(handle) != NULL;
+}
+
+/* `file.close()`: a status. */
+static inline int64_t vela__rt__files_close(int64_t handle) {
+    vela__rt__file_slot* slot = vela__rt__file_of(handle);
+    if (slot == NULL) {
+        return vela__rt__files_done(VELA__RT__FILE_NOT_OPEN);
+    }
+    bool closed = fclose(slot->file) == 0;
+    slot->file = NULL;
+    return vela__rt__files_done(closed ? VELA__RT__FILE_OK : VELA__RT__FILE_FAILED);
+}
+
+/* The slot of `handle`, ready to be read (`reading`) or written, or NULL with
+ * the status saying why not. A file both read and written is sought in place
+ * between the two, as C asks. */
+static inline vela__rt__file_slot* vela__rt__files_ready(int64_t handle, bool reading) {
+    vela__rt__file_slot* slot = vela__rt__file_of(handle);
+    if (slot == NULL) {
+        vela__rt__files_done(VELA__RT__FILE_NOT_OPEN);
+        return NULL;
+    }
+    bool can = reading ? slot->mode == VELA__RT__MODE_READ || slot->mode == VELA__RT__MODE_READ_WRITE : slot->mode != VELA__RT__MODE_READ;
+    if (!can) {
+        vela__rt__files_done(VELA__RT__FILE_WRONG_MODE);
+        return NULL;
+    }
+    int doing = reading ? VELA__RT__DID_READ : VELA__RT__DID_WRITE;
+    if (slot->did != VELA__RT__DID_NOTHING && slot->did != doing) {
+        fseek(slot->file, 0, SEEK_CUR);
+    }
+    slot->did = doing;
+    vela__rt__files_done(VELA__RT__FILE_OK);
+    return slot;
+}
+
+/* Bytes read into a growing buffer the caller frees: up to the end, or with
+ * `line`, up to and without the next line break (a Windows "\r\n" included).
+ * Gives false when nothing was there to read, the end or an error. */
+static inline bool vela__rt__files_gather(FILE* file, bool line, char** bytes, size_t* size) {
+    size_t capacity = 128;
+    size_t held = 0;
+    char* buffer = malloc(capacity);
+    if (buffer == NULL) {
+        vela__rt__out_of_memory();
+    }
+    int c = EOF;
+    bool any = false;
+    while ((c = getc(file)) != EOF) {
+        any = true;
+        if (line && c == '\n') {
+            break;
+        }
+        if (held + 1 == capacity) {
+            if (capacity > SIZE_MAX / 2) {
+                free(buffer);
+                vela__rt__out_of_memory();
+            }
+            char* bigger = realloc(buffer, capacity * 2);
+            if (bigger == NULL) {
+                free(buffer);
+                vela__rt__out_of_memory();
+            }
+            buffer = bigger;
+            capacity *= 2;
+        }
+        buffer[held++] = (char)c;
+    }
+    if (line && held > 0 && buffer[held - 1] == '\r') {
+        held--;
+    }
+    *bytes = buffer;
+    *size = held;
+    return any;
+}
+
+/* `file.read() at into`: the rest of the file, in `into`. */
+static inline vela__rt__text vela__rt__files_read(int64_t handle, vela__rt__region* into) {
+    vela__rt__file_slot* slot = vela__rt__files_ready(handle, true);
+    if (slot == NULL) {
+        return (vela__rt__text){ "", 0 };
+    }
+    char* bytes = NULL;
+    size_t size = 0;
+    vela__rt__files_gather(slot->file, false, &bytes, &size);
+    vela__rt__text text = vela__rt__text_in(into, bytes, size);
+    free(bytes);
+    if (ferror(slot->file)) {
+        clearerr(slot->file);
+        vela__rt__files_done(VELA__RT__FILE_FAILED);
+    }
+    return text;
+}
+
+/* `file.line() at into`: the next line, in `into`, or `ENDED` when there is
+ * none; a last line without a line break is still a line. */
+static inline vela__rt__text vela__rt__files_line(int64_t handle, vela__rt__region* into) {
+    vela__rt__file_slot* slot = vela__rt__files_ready(handle, true);
+    if (slot == NULL) {
+        return (vela__rt__text){ "", 0 };
+    }
+    char* bytes = NULL;
+    size_t size = 0;
+    bool any = vela__rt__files_gather(slot->file, true, &bytes, &size);
+    vela__rt__text text = vela__rt__text_in(into, bytes, size);
+    free(bytes);
+    if (ferror(slot->file)) {
+        clearerr(slot->file);
+        vela__rt__files_done(VELA__RT__FILE_FAILED);
+    } else if (!any) {
+        vela__rt__files_done(VELA__RT__FILE_ENDED);
+    }
+    return text;
+}
+
+/* `file.write(t)`: a status. */
+static inline int64_t vela__rt__files_write(int64_t handle, vela__rt__text text) {
+    vela__rt__file_slot* slot = vela__rt__files_ready(handle, false);
+    if (slot == NULL) {
+        return vela__rt__files_status();
+    }
+    size_t wrote = fwrite(text.bytes, 1, (size_t)text.len, slot->file);
+    return vela__rt__files_done(wrote == (size_t)text.len ? VELA__RT__FILE_OK : VELA__RT__FILE_FAILED);
+}
+
+/* `file.ended()`: whether nothing more can be read, which a file not open for
+ * reading never has. */
+static inline bool vela__rt__files_ended(int64_t handle) {
+    vela__rt__file_slot* slot = vela__rt__file_of(handle);
+    if (slot == NULL || (slot->mode != VELA__RT__MODE_READ && slot->mode != VELA__RT__MODE_READ_WRITE)) {
+        return true;
+    }
+    if (slot->did == VELA__RT__DID_WRITE) {
+        fseek(slot->file, 0, SEEK_CUR);
+        slot->did = VELA__RT__DID_READ;
+    }
+    int c = getc(slot->file);
+    if (c == EOF) {
+        clearerr(slot->file);
+        return true;
+    }
+    ungetc(c, slot->file);
+    return false;
+}
+
+/* `file.size()`: how many bytes the file has, or a status below 0. An open
+ * file is measured where it is, its writes counted; any other at its path. */
+static inline int64_t vela__rt__files_size(vela__rt__text path, int64_t handle) {
+    vela__rt__file_slot* slot = vela__rt__file_of(handle);
+    FILE* file = slot != NULL ? slot->file : NULL;
+    long at = 0;
+    if (file != NULL) {
+        fflush(file);
+        at = ftell(file);
+    } else {
+        char* name = vela__rt__path_of(path);
+        if (name == NULL) {
+            return -vela__rt__files_done(VELA__RT__FILE_NOT_FOUND);
+        }
+        errno = 0;
+        file = fopen(name, "rb");
+        int error = errno;
+        free(name);
+        if (file == NULL) {
+            return -vela__rt__files_done(vela__rt__files_why(error));
+        }
+    }
+    long size = fseek(file, 0, SEEK_END) == 0 ? ftell(file) : -1;
+    if (slot != NULL) {
+        fseek(file, at, SEEK_SET);
+    } else {
+        fclose(file);
+    }
+    if (size < 0) {
+        return -vela__rt__files_done(VELA__RT__FILE_FAILED);
+    }
+    vela__rt__files_done(VELA__RT__FILE_OK);
+    return (int64_t)size;
+}
+
+/* `file.rename(to)`: a status. */
+static inline int64_t vela__rt__files_rename(vela__rt__text from, vela__rt__text to) {
+    char* old = vela__rt__path_of(from);
+    char* new_name = vela__rt__path_of(to);
+    if (old == NULL || new_name == NULL) {
+        free(old);
+        free(new_name);
+        return vela__rt__files_done(VELA__RT__FILE_NOT_FOUND);
+    }
+    errno = 0;
+    int failed = rename(old, new_name);
+    int error = errno;
+    free(old);
+    free(new_name);
+    return vela__rt__files_done(failed == 0 ? VELA__RT__FILE_OK : vela__rt__files_why(error));
+}
+
+/* `file.delete()`: a status. */
+static inline int64_t vela__rt__files_remove(vela__rt__text path) {
+    char* name = vela__rt__path_of(path);
+    if (name == NULL) {
+        return vela__rt__files_done(VELA__RT__FILE_NOT_FOUND);
+    }
+    errno = 0;
+    int failed = remove(name);
+    int error = errno;
+    free(name);
+    return vela__rt__files_done(failed == 0 ? VELA__RT__FILE_OK : vela__rt__files_why(error));
+}
+
+/* Frees everything allocated in `r`, which is then empty again, after closing
+ * the files opened in it (a File copied or kept after that finds it closed). */
+static inline void vela__rt__region_free(vela__rt__region* r) {
+    for (vela__rt__closer* closer = r->closers; closer != NULL; closer = closer->next) {
+        vela__rt__file_slot* slot = vela__rt__file_of(closer->handle);
+        if (slot != NULL) {
+            fclose(slot->file);
+            slot->file = NULL;
+        }
+    }
+    r->closers = NULL;
+    vela__rt__chunk* chunk = r->newest;
+    while (chunk != NULL) {
+        vela__rt__chunk* previous = chunk->previous;
+        free(chunk);
+        chunk = previous;
+    }
+    r->newest = NULL;
+}
+
+/* Placed at the end of every task that returns a value. The checker ensures
+ * every path sends, so this is never reached; it keeps C compilers from
+ * treating the end of the function as reachable (undefined behavior). */
+static inline _Noreturn void vela__rt__missing_send(const char* task) {
+    fflush(stdout);
+    fprintf(stderr, "vela: task '%s' finished without sending a value\n", task);
+    abort();
 }
 
 #endif

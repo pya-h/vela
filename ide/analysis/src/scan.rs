@@ -134,8 +134,8 @@ pub(crate) struct Symbol {
     /// (`size: int = 0`).
     pub default: bool,
     /// A field marked `read` (`read path: text`): any file reads it, and only
-    /// the methods of its shape assign it. A literal gives it exactly when it
-    /// has no `default`.
+    /// the alters methods of its shape change it. A literal gives it exactly
+    /// when it has no `default`.
     pub read: bool,
 }
 

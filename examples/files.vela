@@ -1,0 +1,84 @@
+# Files, with Vela's library: a shopping list written to a file, added to,
+# read back line by line, and deleted at the end, so running the example
+# leaves nothing behind.
+#
+# A File is made from its path and opened in a region, which closes it when
+# the region's block ends; `close()` closes it sooner. Every method that
+# touches the disk can fail, and a plan B says what to do then.
+
+include std/files {File, FileMode, FileError}
+
+task said(error: FileError) -> text
+    <- match error
+    case NotFound = "there is no such file"
+    case NotAllowed = "the system won't allow it"
+    case AlreadyOpen = "it is open already"
+    case NotOpen = "it isn't open"
+    case WrongMode = "it isn't open for that"
+    case Failed = "the system failed"
+    fi
+fi
+
+# Writes the list's first items, emptying the file first.
+task start(list: File@r) -> unit ~ FileError
+    region w
+    hold file = list
+    file.open(FileMode.Write) at w { failure e
+        <- fail e
+    }
+    each item in ["bread", "milk"]
+        file.write("{item}\n"@w) { failure e
+            <- fail e
+        }
+    fi
+    # The region closes the file here, at the end of its block.
+fi
+
+task main()
+    region r
+    hold list = File { path: "shopping.txt" }
+    start(list) { failure e
+        show("could not start the list: ", said(e))
+    }
+
+    # Adding goes at the end.
+    list.open(FileMode.Append) at r { failure e
+        show("could not add: ", said(e))
+    }
+    list.write("apples\n") { failure e
+        show("could not add: ", said(e))
+    }
+    list.close() { failure e
+        show("could not close: ", said(e))
+    }
+    show(list.path, " holds ", list.size() { 0 }, " bytes")
+
+    # Read back line by line: `line()` gives none at the end of the file.
+    list.open(FileMode.Read) at r { failure e
+        show("could not read: ", said(e))
+    }
+    hold count = 0
+    loop list.line() at r { none } is {item}
+        count = count + 1
+        show(count, ". ", item)
+    fi
+    list.close() { failure e
+        show("could not close: ", said(e))
+    }
+
+    # Reading a file opened for writing is a mistake the plan B names.
+    list.open(FileMode.Append) at r { failure e
+        show("could not add: ", said(e))
+    }
+    show(list.read() at r { failure e
+        said(e)
+    })
+    list.close() { failure e
+        show("could not close: ", said(e))
+    }
+
+    list.delete() { failure e
+        show("could not delete: ", said(e))
+    }
+    show(list.str() at r, ", and there: ", list.exists())
+fi

@@ -1,13 +1,25 @@
 # Vela's library comes with the compiler: `include std/files` brings in its
 # files module as any module is brought in, with nothing to find on the disk,
-# and a module of the program may include it as well.
+# and a module of the program may include it as well. A test program runs in a
+# folder holding a copy of its own folder's files, so it writes where it likes.
 
-include std/files {File}
+include std/files {File, FileMode, FileError}
 include std_files/paths (readable)
 
+task why(error: FileError) -> text
+    <- match error
+    case NotFound = "not found"
+    case NotAllowed = "not allowed"
+    case AlreadyOpen = "already open"
+    case NotOpen = "not open"
+    case WrongMode = "wrong mode"
+    case Failed = "failed"
+    fi
+fi
+
 task main()
-    # A File is made from its path, and asked about. A test program runs in a
-    # folder holding a copy of its own folder's files, this module among them.
+    region r
+    # A File is made from its path, and asked about.
     bind here = File { path: "paths.vela" }
     show(here.path, " ", here.exists())
     show(File { path: "no such file" }.exists())
@@ -17,4 +29,170 @@ task main()
     show(File { path: "paths.vela\0" }.exists())
     # Through a module of the program, which names it through the module.
     show(readable("paths.vela"), " ", readable(""))
+
+    # Written, then added to, then read back.
+    hold notes = File { path: "notes.txt" }
+    show(notes.str() at r)
+    notes.open(FileMode.Write) at r { failure e
+        show(why(e))
+    }
+    notes.write("one\ntwo\n") { failure e
+        show(why(e))
+    }
+    show(notes.str() at r, " ", notes.size() { -1 })
+    notes.close() { failure e
+        show(why(e))
+    }
+    notes.open(FileMode.Append) at r { failure e
+        show(why(e))
+    }
+    notes.write("three") { failure e
+        show(why(e))
+    }
+    notes.close() { failure e
+        show(why(e))
+    }
+    show(notes.size() { -1 })
+    notes.open(FileMode.Read) at r { failure e
+        show(why(e))
+    }
+    show(notes.line() at r { "failed" }, " ", notes.ended())
+    bind rest = notes.lines() at r { failure e
+        new [text]([why(e)]) at r
+    }
+    show(rest.len, " ", rest[0], " ", rest[1], " ", notes.ended())
+    show(notes.line()@r { "failed" })
+    notes.close() { failure e
+        show(why(e))
+    }
+
+    # The whole of a file at once, and lines ended the Windows way.
+    hold windows = File { path: "windows.txt" }
+    windows.open(FileMode.Read) at r { failure e
+        show(why(e))
+    }
+    bind lines = windows.lines() at r { failure e
+        new [text]([why(e)]) at r
+    }
+    show(lines.len, " [", lines[0], "] [", lines[1], "] [", lines[2], "]")
+    windows.close() { failure e
+        show(why(e))
+    }
+    windows.open(FileMode.Read) at r { failure e
+        show(why(e))
+    }
+    show((windows.read() at r { "failed" }).len)
+    windows.close() { failure e
+        show(why(e))
+    }
+
+    # Read and written through one opening.
+    hold both = File { path: "notes.txt" }
+    both.open(FileMode.ReadWrite) at r { failure e
+        show(why(e))
+    }
+    show(both.line() at r { "failed" })
+    both.write("TWO") { failure e
+        show(why(e))
+    }
+    # Written over "two", with the rest after it: "\nthree".
+    show((both.read() at r { "failed" }).len)
+    both.close() { failure e
+        show(why(e))
+    }
+    both.open(FileMode.Read) at r { failure e
+        show(why(e))
+    }
+    show(both.lines()@r { failure e
+        new [text]([why(e)]) at r
+    }[1])
+    both.close() { failure e
+        show(why(e))
+    }
+
+    # What goes wrong.
+    hold wrong = File { path: "notes.txt" }
+    wrong.open(FileMode.Read) at r { failure e
+        show(why(e))
+    }
+    wrong.open(FileMode.Read) at r { failure e
+        show(why(e))
+    }
+    wrong.write("x") { failure e
+        show(why(e))
+    }
+    wrong.close() { failure e
+        show(why(e))
+    }
+    wrong.close() { failure e
+        show(why(e))
+    }
+    show(wrong.read() at r { failure e
+        why(e)
+    })
+    wrong.open(FileMode.Write) at r { failure e
+        show(why(e))
+    }
+    show(wrong.read() at r { failure e
+        why(e)
+    })
+    wrong.close() { failure e
+        show(why(e))
+    }
+    hold missing = File { path: "missing.txt" }
+    missing.open(FileMode.Read) at r { failure e
+        show(why(e))
+    }
+    missing.open(FileMode.ReadWrite) at r { failure e
+        show(why(e))
+    }
+    show(missing.size() { failure e
+        -1
+    }, " ", missing.str() at r)
+
+    # A region that ends closes the file opened in it; the File kept outside
+    # it still says what its methods left it, and finds it closed.
+    hold kept = File { path: "empty.txt" }
+    each pass in 0..2
+        region round
+        kept.open(FileMode.Read) at round { failure e
+            show(why(e))
+        }
+        show(pass, " ", kept.ended())
+    fi
+    show(kept.str() at r, " ", kept.ended())
+    kept.close() { failure e
+        show(why(e))
+    }
+    show(kept.str() at r)
+
+    # A copy closes the file for both.
+    hold first = File { path: "empty.txt" }
+    first.open(FileMode.Read) at r { failure e
+        show(why(e))
+    }
+    hold second = first
+    second.close() { failure e
+        show(why(e))
+    }
+    show(first.line() at r { failure e
+        why(e)
+    })
+
+    # Renamed, then deleted.
+    hold moved = File { path: "notes.txt" }
+    moved.rename("moved.txt") { failure e
+        show(why(e))
+    }
+    show(moved.path, " ", moved.exists(), " ", File { path: "notes.txt" }.exists())
+    moved.open(FileMode.Read) at r { failure e
+        show(why(e))
+    }
+    moved.delete() { failure e
+        show(why(e))
+    }
+    show(moved.str() at r, " ", moved.exists())
+    moved.delete() { failure e
+        show(why(e))
+    }
 fi
