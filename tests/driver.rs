@@ -191,7 +191,7 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ("index chains", program(format!("p{}", "[0]".repeat(deep)))),
         ("slice changes", program(format!("{}0{}", "xs.del(".repeat(deep), ")".repeat(deep)))),
         ("scans", program(format!("{}\"\"{}", "scan(".repeat(deep), ") at r".repeat(deep)))),
-        ("copies", program(format!("line{}", ".copy() at r".repeat(deep)))),
+        ("copies", program(format!("line{}", ".copy()@r".repeat(deep)))),
         ("tuples", program(format!("{}1{}", "(".repeat(deep), ", 1)".repeat(deep)))),
         ("tuple types", format!("task f(p: {}int{})\nfi\n", "(".repeat(deep), ", int)".repeat(deep))),
         ("tuple items", program(format!("t{}", ".0".repeat(deep)))),
@@ -251,8 +251,9 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ", _)".repeat(near / 2 - 1)
     );
     driver::generate_c(&tuples).unwrap();
-    // A copy of a copy, each in the region: every one counts a level.
-    let copies = format!("task main()\n    region r\n    bind line = scan(\"\") at r {{ \"\" }}\n    show(line{})\nfi\n", ".copy() at r".repeat(near));
+    // A copy of a copy, each in the region, named with `@` since a copy goes on
+    // from the one before it: every one counts a level.
+    let copies = format!("task main()\n    region r\n    bind line = scan(\"\") at r {{ \"\" }}\n    show(line{})\nfi\n", ".copy()@r".repeat(near));
     driver::generate_c(&copies).unwrap();
     let fails = format!("task f() -> int ~ text\n    <- {}\"x\"\nfi\n", "fail ".repeat(near));
     assert!(driver::generate_c(&fails).is_err_and(|e| !e.message.contains("nested too deeply")), "a deep fail chain reaches the checker");

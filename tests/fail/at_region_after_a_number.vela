@@ -1,0 +1,10 @@
+# error: 9:22: 'int(…)' makes a number, which holds no memory, so no region is named after it
+task label(n: int, r: region) -> text@r
+    <- "#{n}" at r
+fi
+
+
+task main()
+    region r
+    show(int("3") at r)
+fi

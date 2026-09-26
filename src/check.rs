@@ -2186,6 +2186,45 @@ impl Checker {
     /// the block's default. `needed` is what to say when there is no default,
     /// which each form words for itself, and a region visible here is named as
     /// the one to mark.
+    /// Settles the region of a call to `what` (`task 'f'`, `method 'M.m'`), whose
+    /// written arguments are `args` and whose parameters, a method's without the
+    /// value it is called on, are `params`. A region written after the call
+    /// (`f(x) at r`, which the parser adds last; see `ExprKind::RegionAfter`)
+    /// becomes the region argument it stands for, where the task takes one last
+    /// that the parentheses leave out; and where the parentheses leave out only
+    /// that region, it is the block's default, as for any allocation that names
+    /// none. Anything else is left to the call's own checks.
+    fn settle_call_region(&mut self, span: Span, what: &str, args: &mut Vec<Expr>, params: &[(String, Type)]) -> Result<()> {
+        let last = params.last().filter(|(_, ty)| *ty == Type::Region);
+        if let Some(at) = region_after(args) {
+            if last.is_none() {
+                return err(at, format!("{} takes no region last, so no region is named after its call", what));
+            }
+            if args.len() > params.len() {
+                return err(at, format!("{} is given its region in the parentheses already, so this is a second one; name it once", what));
+            }
+            if let Some(arg) = args.last_mut()
+                && let ExprKind::RegionAfter(region) = &mut arg.kind
+            {
+                arg.kind = ExprKind::Var(std::mem::take(region));
+            }
+            return Ok(());
+        }
+        // A call whose last argument is a region gave its region and left out
+        // something else, which the count of its arguments says.
+        let gives_region = args.last().is_some_and(|arg| matches!(&arg.kind, ExprKind::Var(name) if self.lookup(name).is_some_and(|info| info.ty == Type::Region)));
+        if let Some((param, _)) = last
+            && args.len() + 1 == params.len()
+            && !gives_region
+        {
+            let region = self.region_or_default(None, span, || {
+                format!("{} takes the region it makes memory in last, as '{}'; name it after the call, as in '… at r' or '…@r', or in the parentheses", what, param)
+            })?;
+            args.push(Expr::new(ExprKind::Var(region), span));
+        }
+        Ok(())
+    }
+
     fn region_or_default(&mut self, written: Option<&String>, span: Span, needed: impl FnOnce() -> String) -> Result<String> {
         if let Some(region) = written {
             return Ok(region.clone());
@@ -3397,6 +3436,9 @@ impl Checker {
             ExprKind::BoolLit(_) => Ok(Type::Bool),
             ExprKind::TextLit(_) => Ok(Type::Text(None)),
             ExprKind::NoneLit => Ok(Type::None),
+            // One the call it is written after doesn't take (a variant's, which
+            // `settle_call_region` never sees).
+            ExprKind::RegionAfter(_) => err(span, "a region is named after a call only when the call takes one last"),
             ExprKind::Var(name) => {
                 let ty = self.lookup_or_err(name, span)?.ty.clone();
                 if self.unset.contains(name.as_str()) {
@@ -3420,6 +3462,14 @@ impl Checker {
             ExprKind::Tuple(values) => self.check_tuple(values),
             ExprKind::Repeat { value, count } => self.check_repeat(value, count, span),
             ExprKind::Call { name, types, args } => {
+                // `show`, `int(…)` and `float(…)` make no memory a program sees,
+                // so nothing names a region after them.
+                if let Some(at) = region_after(args)
+                    && (name == "show" || number_cast(name).is_some())
+                {
+                    let what = if name == "show" { "'show' writes each value in a region of its own".to_string() } else { format!("'{}(…)' makes a number, which holds no memory", name) };
+                    return err(at, format!("{}, so no region is named after it", what));
+                }
                 if name == "show" {
                     // `show` takes any number of values, written one after
                     // another with nothing between them; `show()` is a line of
@@ -3453,6 +3503,7 @@ impl Checker {
                     self.check_each(args);
                     return Ok(Type::Unknown);
                 }
+                self.settle_call_region(span, &format!("task '{}'", name), args, &info.params)?;
                 if args.len() != info.params.len() {
                     return err(span, format!("task '{}' expects {}, got {}", name, count(info.params.len(), "argument"), args.len()));
                 }
@@ -3470,6 +3521,9 @@ impl Checker {
                     .and_then(|k| k.variants.iter().find(|v| v.tag == *tag))
                     .cloned()
                     .ok_or_else(|| Error::internal_at(span, format!("unknown variant '{}'", tag)))?;
+                if let Some(at) = region_after(args) {
+                    return err(at, format!("variant '{}' makes a value, not memory, so no region is named after it", tag));
+                }
                 if args.len() != variant.payload.len() {
                     return err(span, format!("variant '{}' expects {}, got {}", tag, count(variant.payload.len(), "argument"), args.len()));
                 }
@@ -4655,11 +4709,20 @@ impl Checker {
                 args.push(Expr::new(ExprKind::Var(region), span));
             }
         }
-        let given = match &expr.kind {
-            ExprKind::MethodCall { args, .. } => args.len(),
-            _ => 0,
-        };
         if name == STR && self.has_builtin_str(&ty) {
+            // The region written after it is the one `str` takes, and the only one.
+            if let ExprKind::MethodCall { args, .. } = &mut expr.kind
+                && let Some(at) = region_after(args)
+            {
+                if args.len() > 1 {
+                    return err(at, "'str' is given its region in the parentheses already, so this is a second one; name it once");
+                }
+                if let Some(arg) = args.last_mut()
+                    && let ExprKind::RegionAfter(region) = &mut arg.kind
+                {
+                    arg.kind = ExprKind::Var(std::mem::take(region));
+                }
+            }
             return self.builtin_str(expr);
         }
         let owner = self.owner_of(&ty).ok_or_else(|| self.no_method(&ty, &name, span))?;
@@ -4669,6 +4732,13 @@ impl Checker {
         if self.private.contains(&full) && module_of(&owner) != self.current_module {
             return err(span, format!("'{}' is a private method of '{}', which only its own file can use", name, unqualified(&owner)));
         }
+        if let ExprKind::MethodCall { args, .. } = &mut expr.kind {
+            self.settle_call_region(span, &format!("method '{}'", written), args, info.params.get(1..).unwrap_or_default())?;
+        }
+        let given = match &expr.kind {
+            ExprKind::MethodCall { args, .. } => args.len(),
+            _ => 0,
+        };
         // The value it is called on is the first parameter, not an argument.
         if given + 1 != info.params.len() {
             return err(span, format!("method '{}' expects {}, got {}", written, count(info.params.len() - 1, "argument"), given));
@@ -5681,7 +5751,7 @@ impl Checker {
                 self.substitute_type(ty, given, ty_span)?;
                 self.substitute_expr(value, given, made)
             }
-            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) => Ok(()),
+            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) | ExprKind::RegionAfter(_) => Ok(()),
             ExprKind::Unary(_, inner)
             | ExprKind::Deref(inner)
             | ExprKind::Field(inner, _)
@@ -5825,6 +5895,12 @@ fn holds_changeable(ty: &Type, changeable: &HashSet<String>) -> bool {
         Type::Tuple(items) => items.iter().any(|item| holds_changeable(item, changeable)),
         _ => false,
     }
+}
+
+/// Where the region written after a call is (`f(x) at r`), when the parser
+/// added one as the call's last argument (see `ExprKind::RegionAfter`).
+fn region_after(args: &[Expr]) -> Option<Span> {
+    args.last().filter(|arg| matches!(arg.kind, ExprKind::RegionAfter(_))).map(|arg| arg.span)
 }
 
 /// Whether `expr` is a value the compiler works out without running the program,

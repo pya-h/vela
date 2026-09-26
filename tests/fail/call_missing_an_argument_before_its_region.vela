@@ -1,0 +1,11 @@
+# error: 10:10: task 'label' expects 3 arguments, got 2
+# A call whose last argument is a region gave its region, so it left out
+# something else, and a default region doesn't stand in for that.
+task label(n: int, m: int, r: region) -> text@r
+    <- "{n}{m}" at r
+fi
+
+task main()
+    region r default
+    show(label(1, r))
+fi

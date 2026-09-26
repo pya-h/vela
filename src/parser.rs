@@ -29,6 +29,54 @@ const PLAN_B_NAMES: &str =
 /// `failure` written where a value goes: the mirror of `FAILURE_NAMES`.
 const FAIL_MAKES: &str = "'failure' names a failure in a pattern; to make one, write 'fail', as in '<- fail e'";
 
+/// A second region after one already written: `f(x)@r at r2`, or `a + b at r at r2`.
+const REGION_ALREADY_NAMED: &str =
+    "the region is already named before this one; a part names a region of its own with '@', as in 'x.str()@r', or in parentheses, as in '(x.str() at r)'";
+
+/// What `place_region` did with a region written after a value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Placing {
+    Placed,
+    /// The call already has its region written after it.
+    Already,
+    /// Nothing there takes a region written after it.
+    Nowhere,
+}
+
+/// Gives the region written after `expr`, `f(x) at r` or `f(x)@r`, to the call
+/// `expr` is: a task's or a method's, whose last argument it becomes (see
+/// `ExprKind::RegionAfter`), or a `scan` or a copy, whose region it is. With
+/// `through_prefix`, for `at r` over the whole of what comes before it, a
+/// `fail`, `-`, or `not` in front of the call is looked through, since none of
+/// them makes memory; `@r` belongs to the call right before it and looks
+/// through nothing. Which calls take a region is the checker's to say.
+fn place_region(expr: &mut Expr, region: &str, span: Span, through_prefix: bool) -> Placing {
+    match &mut expr.kind {
+        ExprKind::Call { args, .. } | ExprKind::MethodCall { args, .. } => {
+            if matches!(args.last(), Some(Expr { kind: ExprKind::RegionAfter(_), .. })) {
+                return Placing::Already;
+            }
+            args.push(Expr::new(ExprKind::RegionAfter(region.to_string()), span));
+            Placing::Placed
+        }
+        ExprKind::Scan { region: written, region_span, .. } | ExprKind::Copy { region: written, region_span, .. } => {
+            if written.is_some() {
+                return Placing::Already;
+            }
+            *written = Some(region.to_string());
+            *region_span = span;
+            Placing::Placed
+        }
+        ExprKind::Unary(_, inner) | ExprKind::Fail(inner) if through_prefix => place_region(inner, region, span, false),
+        _ => Placing::Nowhere,
+    }
+}
+
+/// Whether `@r` right after `expr` names a region `place_region` can give it.
+fn takes_region_after(expr: &Expr) -> bool {
+    matches!(expr.kind, ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Scan { .. } | ExprKind::Copy { .. })
+}
+
 /// Where a `name: type` is written, which settles what may follow the type: a
 /// shape's field takes `= value`, a task's parameter takes `default` on a region
 /// it is given, and a variant's value takes neither (see `parse_field`).
@@ -1723,12 +1771,17 @@ impl Parser {
                 let added = matches!(left.kind, ExprKind::Binary(BinaryOp::Add, ..));
                 if (added && levels > 0) || pending_region(&left) {
                     left = self.parse_join(left)?;
+                    self.reject_after_region()?;
                 } else if added {
                     // A chain in parentheses names its region with `@`.
                     return Err(Error::at(
                         self.peek_span(),
                         "a '+' chain in parentheses names its region with '@', as in '(a + b)@r'; without them, write 'a + b at r'",
                     ));
+                } else {
+                    // Everything before `at` is one call, not a chain: the
+                    // region is the call's (see `place_region`).
+                    left = self.parse_call_region(left)?;
                 }
             }
             let span = self.peek_span();
@@ -1785,6 +1838,53 @@ impl Parser {
             }
         }
         Ok(Expr::new(ExprKind::Join { parts, region, region_span }, span))
+    }
+
+    /// `at r` after `expr`, which is not a `+` chain: the region of the call it
+    /// is, or of the call a `fail`, `-`, or `not` before it is written on (see
+    /// `place_region`), with the plan B that may follow: `f(x) at r { … }`.
+    fn parse_call_region(&mut self, mut expr: Expr) -> Result<Expr> {
+        let at = self.peek_span();
+        self.advance(); // at
+        let region_span = self.peek_span();
+        let region = self.expect_ident()?;
+        match place_region(&mut expr, &region, region_span, true) {
+            Placing::Placed => {}
+            Placing::Already => return Err(Error::at(at, REGION_ALREADY_NAMED)),
+            Placing::Nowhere => {
+                return Err(Error::at(
+                    at,
+                    "'at r' names the region of what comes before it: a call, a '+' chain of text, or text holding values; a call inside something else names its own, as in 'f(x)@r' or '(f(x) at r)'",
+                ));
+            }
+        }
+        self.reject_after_region()?;
+        while self.check(Token::LBrace) {
+            self.enter()?;
+            let planned = self.parse_plan_b(expr);
+            self.leave(1);
+            expr = planned?;
+        }
+        Ok(expr)
+    }
+
+    /// Refuses what may not follow `at r`, which names the region of everything
+    /// before it and so comes last: another `+` part, which would read as if the
+    /// region were the whole chain's, a second region, and a field, an item, or a
+    /// `^` of the value, which would read as if they were the region's.
+    fn reject_after_region(&self) -> Result<()> {
+        match self.peek() {
+            Token::Dot | Token::LBracket | Token::Caret => Err(Error::at(
+                self.peek_span(),
+                "'at r' names the region of everything before it, so nothing reads from the value after it; name the region with '@', as in 'x.copy()@r.len', or put the whole in parentheses, as in '(x.copy() at r).len'",
+            )),
+            Token::Plus => Err(Error::at(
+                self.peek_span(),
+                "'at r' names the region of everything before it, so it comes after the last part, as in 'a + b + c at r'; a part names a region of its own with '@', as in 'x.str()@r', or in parentheses, as in '(x.str() at r)'",
+            )),
+            Token::At => Err(Error::at(self.peek_span(), REGION_ALREADY_NAMED)),
+            _ => Ok(()),
+        }
     }
 
     /// Text holding values, `"n = {n}"`, at `span` and the cursor: a join of
@@ -1888,16 +1988,33 @@ impl Parser {
             expr = self.parse_join(expr)?;
         }
         let mut levels = 0;
-        while matches!(self.peek(), Token::Dot | Token::LBracket | Token::Caret | Token::LBrace) {
-            self.enter()?;
-            levels += 1;
-            expr = self.parse_suffix(expr)?;
+        loop {
+            match self.peek() {
+                Token::Dot | Token::LBracket | Token::Caret | Token::LBrace => {
+                    self.enter()?;
+                    levels += 1;
+                    expr = self.parse_suffix(expr)?;
+                }
+                // `f(x)@r`: the region of the call right before it, which a
+                // further suffix may follow (`x.str()@r.len`).
+                Token::AtSign if takes_region_after(&expr) => {
+                    let at = self.peek_span();
+                    self.advance(); // @
+                    let region_span = self.peek_span();
+                    let region = self.expect_ident()?;
+                    if place_region(&mut expr, &region, region_span, false) == Placing::Already {
+                        self.leave(levels);
+                        return Err(Error::at(at, REGION_ALREADY_NAMED));
+                    }
+                }
+                _ => break,
+            }
         }
         self.leave(levels);
         if self.check(Token::AtSign) {
             return Err(Error::at(
                 self.peek_span(),
-                "'@r' after a value names the region text is joined into only after parentheses or text holding values, as in '(a + b)@r' or '\"n = {n}\"@r'; or write 'a + b at r'",
+                "'@r' names the region of the call right before it, as in 'f(x)@r', or of text joined in parentheses or holding values, as in '(a + b)@r' or '\"n = {n}\"@r'",
             ));
         }
         Ok(expr)
@@ -2045,15 +2162,11 @@ impl Parser {
             return Err(Error::at(self.peek_span(), hint));
         }
         // A line read into a region names one, and a number read from a line
-        // names none, which the checker tells apart by what the call takes; the
-        // position of a region that isn't there is where one would be written.
-        let mut region_span = self.peek_span();
-        let mut region = None;
-        if self.match_token(Token::At) || self.match_token(Token::AtSign) {
-            region_span = self.peek_span();
-            region = Some(self.expect_ident()?);
-        }
-        Ok(Expr::new(ExprKind::Scan { args, region, region_span }, span))
+        // names none, which the checker tells apart by what the call takes. The
+        // region comes after, `at r` or `@r`, as for any call (see
+        // `place_region`); until then its position is where one would be written.
+        let region_span = self.peek_span();
+        Ok(Expr::new(ExprKind::Scan { args, region: None, region_span }, span))
     }
 
     /// `(value)`, or a tuple, `(a, b, …)`, on one line.
@@ -2240,48 +2353,28 @@ impl Parser {
         Ok(types)
     }
 
-    /// `value.str() at r`, `value.str()@r`, or `value.str(r)`, with the cursor at
-    /// `(` and `expr` the field `str` of the value: the method call `str`, given
-    /// the region as its argument.
+    /// `value.str(r)` or `value.str()`, with the cursor at `(` and `expr` the
+    /// field `str` of the value: the method call `str`. A region written after
+    /// it, `at r` or `@r`, is read as it is after any call (see
+    /// `place_region`), and with none the checker gives it the block's default.
     fn parse_str(&mut self, expr: Expr) -> Result<Expr> {
         let dotted = dotted_name(&expr).map(|(whole, _)| whole);
         let span = expr.span;
         let ExprKind::Field(value, name) = expr.kind else { return Err(Error::internal_at(span, "a 'str' without its value")) };
-        let mut args = self.parse_arg_list()?;
-        // With the region given in the parentheses, an `at` after them is a
-        // join's: `a.str(r) + b at r`.
-        if !args.is_empty() {
-            return Ok(Expr::new(ExprKind::MethodCall { value, name, args, dotted }, span));
-        }
-        // No region written: the block's default, which the checker fills in,
-        // or its error when the block has none (see `region_for_str`).
-        if let Some(region) = self.parse_text_region()? {
-            args.push(region);
-        }
+        let args = self.parse_arg_list()?;
         Ok(Expr::new(ExprKind::MethodCall { value, name, args, dotted }, span))
     }
 
-    /// `text(value) at r` or `text(value)@r`, at `span`, with the cursor at `(`:
-    /// the method call `str` on the value, given the region.
+    /// `text(value)`, at `span`, with the cursor at `(`: the method call `str` on
+    /// the value, whose region is written after it as for any call
+    /// (`text(n) at r`, `text(n)@r`; see `place_region`).
     fn parse_text_cast(&mut self, span: Span) -> Result<Expr> {
         let args = self.parse_arg_list()?;
         let [value] = <[Expr; 1]>::try_from(args).map_err(|args| {
             let got = if args.len() == 1 { "1 value".to_string() } else { format!("{} values", args.len()) };
             Error::at(span, format!("'text(…)' turns one value into text, as in 'text(n) at r', got {}", got))
         })?;
-        let args = self.parse_text_region()?.into_iter().collect();
-        Ok(Expr::new(ExprKind::MethodCall { value: Box::new(value), name: STR.to_string(), args, dotted: None }, span))
-    }
-
-    /// `at r` or `@r` after the parentheses of `str` or `text(…)`: the region,
-    /// as the name it is.
-    fn parse_text_region(&mut self) -> Result<Option<Expr>> {
-        if !self.match_token(Token::At) && !self.match_token(Token::AtSign) {
-            return Ok(None);
-        }
-        let span = self.peek_span();
-        let region = self.expect_ident()?;
-        Ok(Some(Expr::new(ExprKind::Var(region), span)))
+        Ok(Expr::new(ExprKind::MethodCall { value: Box::new(value), name: STR.to_string(), args: Vec::new(), dotted: None }, span))
     }
 
     /// `value.copy()`, with the cursor at `(` and `expr` the field `copy` of the
@@ -2295,13 +2388,9 @@ impl Parser {
         if self.check(Token::In) {
             return Err(Error::at(self.peek_span(), "a copy names its region with 'at', as in 'x.copy() at r' (or 'x.copy()@r'); 'in' counts through a range"));
         }
-        let (region, region_span) = if self.match_token(Token::At) || self.match_token(Token::AtSign) {
-            let region_span = self.peek_span();
-            (Some(self.expect_ident()?), region_span)
-        } else {
-            (None, expr.span)
-        };
-        Ok(Expr::new(ExprKind::Copy { value, region, region_span }, expr.span))
+        // The region comes after, `at r` or `@r`, as for any call (see
+        // `place_region`); with none, the place the copy goes names it.
+        Ok(Expr::new(ExprKind::Copy { value, region: None, region_span: expr.span }, expr.span))
     }
 
     /// Whether the `{` at the cursor, after a name, opens a shape literal

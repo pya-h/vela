@@ -934,6 +934,14 @@ no spare yet
           parameters name.</li>
       </ul>
 
+      <p>
+        A task that takes its region <em>last</em> can be given it after the call instead, as <code>new</code> is:
+        <code>copy(tree) at kept</code> or <code>copy(tree)@kept</code> is <code>copy(tree, kept)</code>. After a
+        <code>+</code> chain of text, <code>at r</code> is the whole chain's, and a part names its own with <code>@</code>
+        (see <a href="vela.html#region-after-call">The region after a call</a>); with a block's
+        <a href="#default-region">default region</a>, a call that names none uses it.
+      </p>
+
       <h3 id="lesson-shapes">Lesson 6: Shapes and kinds that hold pointers</h3>
       <pre class="program" data-file="06_shapes.vela"><span class="keyword">shape</span> Node
     value: int
@@ -1333,8 +1341,10 @@ pass 1
         <li><strong>A region a task is given can be one</strong> (<code>r: region default</code>), which is where
           <code>at r</code> repeats most. A region the header only names can't: nothing can allocate there.</li>
         <li><strong>Everything that makes memory takes it:</strong> <code>new</code>, <code>new [T](…)</code>, joining
-          text, text holding values, <code>x.str()</code> and <code>text(x)</code>, and <code>scan(prompt)</code>. A
-          region argument at a call is still passed by name: <code>collect(kept, 4)</code>.</li>
+          text, text holding values, <code>x.str()</code> and <code>text(x)</code>, <code>scan(prompt)</code>, and a
+          call of a task or method that takes its region last and leaves it out
+          (<a href="vela.html#region-after-call"><code>label(n)</code></a>). A region a task takes anywhere else is
+          still passed by name: <code>collect(kept, 4)</code>.</li>
         <li><strong>A copy is the exception.</strong> <code>x.copy()</code> goes where the value it becomes goes, which
           says more than a default could, so a copy that nothing gives a region still asks for one.</li>
         <li><strong>It is opt-in.</strong> A block that names no default is exactly as it was: every allocation there
@@ -1714,6 +1724,13 @@ chosen = item^.title
         Every call to a task that allocates passes a region: <code>push(nodes, list, 1)</code>. In a program that allocates
         a lot, that region argument repeats everywhere, and it is easy to confuse with the real arguments. Several spellings
         could make it lighter:
+      </p>
+      <p>
+        <span class="badge b-done">Done in part</span> A task that takes its region <em>last</em> is now given it after
+        the call, as <code>new</code> is: <code>push(list, 1) at nodes</code> or <code>push(list, 1)@nodes</code>, and a
+        call that leaves it out takes the block's <a href="#default-region">default region</a> (see
+        <a href="vela.html#region-after-call">The region after a call</a>). What follows is still open for a region
+        taken anywhere but last, and for working the region out from the arguments.
       </p>
 
       <div class="idea">

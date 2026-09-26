@@ -1,0 +1,10 @@
+# error: 9:10: task 'label' takes the region it makes memory in last, as 'r'; name it after the call, as in '… at r' or '…@r', or in the parentheses; or make a region the block's default, as in 'region r default'
+task label(n: int, r: region) -> text@r
+    <- "#{n}" at r
+fi
+
+
+task main()
+    region r
+    show(label(1))
+fi

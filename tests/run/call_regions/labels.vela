@@ -1,0 +1,10 @@
+# Tasks that take the region they make text in last, used from another file.
+
+task label(n: int, into: region) -> text@into
+    <- "#{n}" at into
+fi
+
+# One that takes types, too.
+task filled<T>(x: T, into: region) -> [T]@into
+    <- new [T]([x; 2]) at into
+fi

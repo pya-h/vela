@@ -1,0 +1,10 @@
+# error: 9:22: 'str' is given its region in the parentheses already, so this is a second one; name it once
+task label(n: int, r: region) -> text@r
+    <- "#{n}" at r
+fi
+
+
+task main()
+    region r
+    show(2.str(r) at r)
+fi

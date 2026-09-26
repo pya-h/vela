@@ -1,0 +1,70 @@
+# A task or method that takes a region last can be given it after the call, as
+# `new T(v) at r` is: `f(x) at r`, or `f(x)@r`, as well as `f(x, r)`. `at r`
+# names the region of everything before it, so after a `+` chain it is the
+# chain's; `@r` belongs to the call right before it, and parentheses group a
+# part with its own. Where a call leaves the region out, the block's default
+# region is used, as for every other allocation.
+
+include call_regions/labels (label, filled)
+
+kind Why
+    Empty
+fi
+
+shape Tag
+    name: text
+
+    shown(into: region) -> text@into
+        <- "<{.name}>" at into
+    fi
+fi
+
+task checked(t: text, into: region) -> text@into ~ Why
+    when t.len == 0
+        <- fail Empty
+    fi
+    <- "[{t}]" at into
+fi
+
+task size(xs: [int]@r, work: region) -> int
+    <- xs.len
+fi
+
+task why(into: region) -> Why
+    <- Empty
+fi
+
+task risky(into: region) -> int ~ Why
+    <- fail why() at into
+fi
+
+task main()
+    region r
+    # The three ways to give a task its region.
+    show(label(1) at r, " ", label(2)@r, " ", label(3, r))
+    # A method, the same way.
+    bind tag = Tag { name: "x" }
+    show(tag.shown() at r, tag.shown()@r, tag.shown(r))
+    # After a chain, the region is the whole chain's; a part names its own with
+    # `@`, or in parentheses.
+    show("a" + label(4)@r at r)
+    show(("b" + label(5)@r) + (label(6) at r) at r)
+    # A plan B follows the region.
+    show(checked("ok") at r { "fallback" }, " ", checked("") at r { "fallback" })
+    # `-`, `not`, and `fail` make no memory, so the region is the call's.
+    bind xs = new [int]([1, 2, 3]) at r
+    show(-size(xs) at r)
+    show(risky() at r { -1 })
+    # `@r` lets the value go on; parentheses do too.
+    show(label(7)@r.len, " ", (label(8) at r).len)
+    # A task that takes types, and one of another file.
+    bind twos = filled("two") at r
+    show(twos.len, " ", twos[1])
+    # `str`, `text(…)`, a copy and `scan` read the same way.
+    show(42.str() at r, " ", text(2.5)@r, " ", 7.str(r))
+    bind line = scan("") at r { "none" }
+    show(line.copy() at r, " ", line.copy()@r.len)
+    # With a default region, a call that names none uses it.
+    region d default
+    show(label(9), " ", tag.shown())
+fi

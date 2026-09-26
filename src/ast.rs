@@ -829,6 +829,12 @@ pub enum ExprKind {
         args: Vec<Expr>,
         dotted: Option<String>,
     },
+    /// The region written after a call, `f(x) at r` or `f(x)@r`, which the
+    /// parser adds to the call as its last argument. The checker makes it the
+    /// `Var` a region argument is, once it knows the task takes a region last,
+    /// and says what is wrong where it doesn't, so nothing after the checker
+    /// sees one.
+    RegionAfter(String),
     /// `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, or `xs.del()`: a change to the
     /// slice `items` names, a place that holds it. Not a method: the builtin
     /// changes every slice has, which no method may take the name of. The

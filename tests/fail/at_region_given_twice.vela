@@ -1,0 +1,10 @@
+# error: 9:25: task 'label' is given its region in the parentheses already, so this is a second one; name it once
+task label(n: int, r: region) -> text@r
+    <- "#{n}" at r
+fi
+
+
+task main()
+    region r
+    show(label(1, r) at r)
+fi

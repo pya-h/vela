@@ -6,13 +6,14 @@ kind Tree
     Branch(left: ^Tree, right: ^Tree)
 fi
 
-# Allocates, so it takes the region to build in.
-task build(r: region, depth: int, seed: int) -> Tree@r
+# Allocates, so it takes the region to build in. Taken last, the region can be
+# named after a call, as it is after `new`: `build(depth, seed) at r`.
+task build(depth: int, seed: int, r: region) -> Tree@r
     when depth == 0
         <- Leaf(seed % 10)
     fi
-    bind left = new Tree(build(r, depth - 1, seed * 3 + 1)) at r
-    bind right = new@r Tree(build(r, depth - 1, seed * 7 + 2))
+    bind left = new Tree(build(depth - 1, seed * 3 + 1) at r) at r
+    bind right = new@r Tree(build(depth - 1, seed * 7 + 2)@r)
     <- Branch(left, right)
 fi
 
@@ -25,12 +26,12 @@ task total(t: Tree@r) -> int
 fi
 
 # Copies a tree, node by node, into another region.
-task copy(to: region, t: Tree@from) -> Tree@to
+task copy(t: Tree@from, to: region) -> Tree@to
     match t
     case Leaf value
         <- Leaf(value)
     case Branch left right
-        <- Branch(new Tree(copy(to, left^)) at to, new Tree(copy(to, right^)) at to)
+        <- Branch(new Tree(copy(left^) at to) at to, new Tree(copy(right^)@to) at to)
     fi
 fi
 
@@ -39,10 +40,10 @@ task main()
     hold best: Tree@kept = Leaf(0)
     each round in 0..5
         region pass                      # empty again, and freed, on every pass
-        bind candidate = build(pass, 6, round)
+        bind candidate = build(6, round) at pass
         show(total(candidate))
         when total(candidate) > total(best)
-            best = copy(kept, candidate)
+            best = copy(candidate) at kept
         fi
     fi
     show(total(best))

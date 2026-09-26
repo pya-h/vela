@@ -1094,7 +1094,8 @@ impl Resolver<'_> {
             return args.iter_mut().try_for_each(|arg| self.expr(arg));
         }
         match &mut expr.kind {
-            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit => Ok(()),
+            // A region is a name of the task, never of the program.
+            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::RegionAfter(_) => Ok(()),
             // A variable keeps its name. No variable can be named like a variant
             // (see `Checker::define`), so a variant written as a value is renamed.
             ExprKind::Var(name) => self.rename(name, span, &[What::Variant]),

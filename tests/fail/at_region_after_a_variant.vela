@@ -1,0 +1,15 @@
+# error: 13:35: variant 'Circle' makes a value, not memory, so no region is named after it
+task label(n: int, r: region) -> text@r
+    <- "#{n}" at r
+fi
+
+
+kind Shape
+    Circle(radius: float)
+fi
+
+task main()
+    region r
+    bind s = Shape.Circle(1.0) at r
+    show(1)
+fi

@@ -1,0 +1,10 @@
+# error: 9:24: 'at r' names the region of everything before it, so it comes after the last part, as in 'a + b + c at r'; a part names a region of its own with '@', as in 'x.str()@r', or in parentheses, as in '(x.str() at r)'
+task label(n: int, r: region) -> text@r
+    <- "#{n}" at r
+fi
+
+
+task main()
+    region r
+    show(label(1) at r + "x")
+fi

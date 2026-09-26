@@ -1,0 +1,14 @@
+# error: 13:22: task 'twice' takes no region last, so no region is named after its call
+task label(n: int, r: region) -> text@r
+    <- "#{n}" at r
+fi
+
+
+task twice(n: int) -> int
+    <- n * 2
+fi
+
+task main()
+    region r
+    show(twice(1) at r)
+fi

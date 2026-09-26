@@ -1,0 +1,15 @@
+# error: 14:24: 'at r' names the region of what comes before it: a call, a '+' chain of text, or text holding values; a call inside something else names its own, as in 'f(x)@r' or '(f(x) at r)'
+task label(n: int, r: region) -> text@r
+    <- "#{n}" at r
+fi
+
+
+task count(xs: [int]@r, work: region) -> int
+    <- xs.len
+fi
+
+task main()
+    region r
+    bind xs = new [int]([1]) at r
+    show(2 * count(xs) at r)
+fi

@@ -1,0 +1,19 @@
+# error: 18:12: method 'Tag.shown' takes the region it makes memory in last, as 'r'; name it after the call, as in '… at r' or '…@r', or in the parentheses; or make a region the block's default, as in 'region r default'
+task label(n: int, r: region) -> text@r
+    <- "#{n}" at r
+fi
+
+
+shape Tag
+    name: text
+
+    shown(r: region) -> text@r
+        <- "<{.name}>" at r
+    fi
+fi
+
+task main()
+    region r
+    bind t = Tag { name: "x" }
+    show(t.shown())
+fi

@@ -595,7 +595,9 @@ impl<'a> Knowledge<'a> {
                         Type::Maybe(line) if matches!(*line, Type::Text(_)) => Some(Type::Maybe(Box::new(Type::Text(Some(name.to_string()))))),
                         // `n.str() at r` and `text(n) at r`.
                         Type::Text(_) => Some(Type::Text(Some(name.to_string()))),
-                        _ => None,
+                        // `f(x) at r`: what the task sends, with the region it
+                        // takes last written after it (see `call_type`).
+                        other => Some(other),
                     };
                 }
                 let id = self.symbol_at(q)?;
@@ -890,8 +892,9 @@ impl<'a> Knowledge<'a> {
             }
         }
         args.push((first, close - 1));
+        let params = parameters(detail);
         let mut regions = HashMap::new();
-        for ((first, last), (name, ty)) in args.into_iter().zip(parameters(detail)) {
+        for ((first, last), (name, ty)) in args.into_iter().zip(params.iter().cloned()) {
             match ty {
                 _ if first > last => {}
                 Some(Type::Region) => {
@@ -906,6 +909,15 @@ impl<'a> Knowledge<'a> {
                 }
                 None => {}
             }
+        }
+        // A region the task takes last and the parentheses leave out, written
+        // after the call instead: `f(x) at r` or `f(x)@r`.
+        if let Some((name, Some(Type::Region))) = params.last()
+            && !regions.contains_key(name)
+            && matches!(self.token(close + 1), Some(Token::At | Token::AtSign))
+            && let Some(region) = self.ident(close + 2)
+        {
+            regions.insert(name.clone(), region.to_string());
         }
         return_type(detail).map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| ANY_REGION.to_string())))
     }

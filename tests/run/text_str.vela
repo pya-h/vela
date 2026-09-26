@@ -7,7 +7,7 @@ shape Point
     x: int
     y: int
     str(r: region) -> text@r
-        <- "(" + .x.str() at r + ", " + .y.str(r) + ")" at r
+        <- "(" + .x.str()@r + ", " + .y.str(r) + ")" at r
     fi
 fi
 
@@ -26,7 +26,7 @@ fi
 
 # A type that is `shown` is a number, a bool, or text, which all have `str`.
 task labelled<T: shown>(label: text, value: T, r: region) -> text@r
-    <- label + ": " + value.str() at r at r
+    <- label + ": " + value.str()@r at r
 fi
 
 task main()
@@ -46,12 +46,12 @@ task main()
     show(n.str() at r)
     show(text(-n - 1) at r)
     show((n.str() at r).len)
-    show("n = " + n.str() at r at r)
+    show("n = " + n.str()@r at r)
     bind p = Point { x: 3, y: -4 }
     show(p.str() at r)
     show(text(p) at r)
     show(p.str(r).len)
-    show(Suit.Spades.str() at r + Suit.Hearts.str(r) at r)
+    show(Suit.Spades.str()@r + Suit.Hearts.str(r) at r)
     show(labelled("count", 3, r))
     show(labelled("ok", true, r))
     show(labelled("name", "Ada", r))
