@@ -5,9 +5,11 @@ idle
 3 again second
 busy
 0 0
-boxed 4
+boxed 4 -1
+6 7
+6
 kept deep
 9 0
 job 3 no note
-press 2
+press 2 5
 on

@@ -589,14 +589,18 @@ impl<'a> Knowledge<'a> {
                     if let Some(value) = self.copied_value(q - 2) {
                         return Some(self.in_region(&self.expression_type(value, depth + 1)?.without_regions(), name));
                     }
+                    // `f(x) at r`: what the task sends, with the region it takes
+                    // last written after it, which only some of its type may be
+                    // in (see `call_type`).
+                    if self.calls_task(q - 2) {
+                        return self.expression_type(q - 2, depth + 1);
+                    }
                     return match self.expression_type(q - 2, depth + 1)? {
                         Type::Ptr(pointee, _) => Some(Type::Ptr(Box::new(self.in_region(&pointee, name)), Some(name.to_string()))),
                         Type::Slice(items, _) => Some(Type::Slice(Box::new(self.in_region(&items, name)), Some(name.to_string()))),
                         Type::Maybe(line) if matches!(*line, Type::Text(_)) => Some(Type::Maybe(Box::new(Type::Text(Some(name.to_string()))))),
                         // `n.str() at r` and `text(n) at r`.
                         Type::Text(_) => Some(Type::Text(Some(name.to_string()))),
-                        // `f(x) at r`: what the task sends, with the region it
-                        // takes last written after it (see `call_type`).
                         other => Some(other),
                     };
                 }
@@ -920,6 +924,19 @@ impl<'a> Knowledge<'a> {
             regions.insert(name.clone(), region.to_string());
         }
         return_type(detail).map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| ANY_REGION.to_string())))
+    }
+
+    /// Whether the `)` at `q` ends a call of one of the program's tasks or
+    /// methods, as opposed to `new`, `scan`, `text`, or a built-in `str`.
+    fn calls_task(&self, q: usize) -> bool {
+        let Some(word) = self.matching_open(q, &Token::LParen, &Token::RParen).and_then(|open| open.checked_sub(1)) else { return false };
+        if self.ident(word).is_none() {
+            return false;
+        }
+        if self.token_before(word) == Some(&Token::Dot) && self.symbol_at(word).and_then(|id| self.symbol(id)).is_some_and(|s| s.kind == SymbolKind::Method) {
+            return true;
+        }
+        self.qualified_at(word).is_some_and(|(name, _)| self.global(&name, SymbolKind::Task).is_some())
     }
 
     /// When the `)` at `q` ends `x.copy()`, the position where `x` ends.

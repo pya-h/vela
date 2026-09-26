@@ -880,6 +880,9 @@ pub struct FieldInit {
     /// Position of the field name.
     pub span: Span,
     pub value: Expr,
+    /// Whether the checker filled it in with the value the field falls back
+    /// on, which is read as the shape's module wrote it (see `check_struct_init`).
+    pub filled: bool,
 }
 
 pub type Block = Vec<Stmt>;

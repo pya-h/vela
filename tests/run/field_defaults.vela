@@ -5,7 +5,7 @@
 # one lets another module build the shape while its own field stays its own:
 # `Machine` below is built here, and only its module touches its `used`.
 
-include field_defaults/machine {Machine, Power}
+include field_defaults/machine {Machine, Power, Plant}
 
 kind State
     Idle
@@ -38,10 +38,27 @@ shape Counters
 fi
 
 # A shape that takes types keeps the defaults of the fields whose types it
-# doesn't take.
+# doesn't take, and a maybe of one it takes falls back on none, which fits
+# every type.
 shape Boxed<T>
     value: T
     label: text = "boxed"
+    spare: maybe T = none
+fi
+
+# A shape made for a set of types is held by value like any other.
+shape Shelf
+    box: Boxed<int>
+fi
+
+# A read-only field with a default, on a literal a method is called on.
+shape Dial
+    read turns: int = 2
+    step: int
+
+    reach() -> int
+        <- .turns * .step
+    fi
 fi
 
 task main()
@@ -71,7 +88,10 @@ task main()
 
     region r
     hold box = Boxed<int> { value: 4 }
-    show(box.label, " ", box.value)
+    show(box.label, " ", box.value, " ", box.spare { -1 })
+    bind shelf = Shelf { box: Boxed<int> { value: 6, spare: 7 } }
+    show(shelf.box.value, " ", shelf.box.spare { -1 })
+    show(Dial { step: 3 }.reach())
     hold named = Boxed<text> { value: "deep", label: "kept" }
     show(named.label, " ", named.value)
 
@@ -91,7 +111,7 @@ task main()
     hold machine = Machine { name: "press" }
     machine.run()
     machine.run()
-    show(machine.name, " ", machine.runs())
+    show(machine.name, " ", machine.runs(), " ", Plant {}.cell.level())
     match machine.power
     case Off
         show("off")

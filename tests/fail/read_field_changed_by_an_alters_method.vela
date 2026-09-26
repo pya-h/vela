@@ -1,0 +1,19 @@
+# error: 18:11: 'counter' is a read-only field of 'Panel', which only the methods of 'Panel' change
+shape Counter
+    n: int = 0
+
+    alters bump()
+        .n = .n + 1
+    fi
+fi
+
+shape Panel
+    read counter: Counter
+    read cells: [int; 2]
+fi
+
+task main()
+    hold panel = Panel { counter: Counter {}, cells: [1, 2] }
+    show(panel.counter.n)
+    panel.counter.bump()
+fi

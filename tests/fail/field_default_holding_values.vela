@@ -1,0 +1,8 @@
+# error: 3:19: joined text, or text holding values, is made while the program runs, so field 'title' can't fall back on it; its default is text written whole, as in '"n"'
+shape Page
+    title: text = "page {1}"
+fi
+
+task main()
+    show(Page {}.title)
+fi

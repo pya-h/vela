@@ -2518,7 +2518,7 @@ impl Parser {
                 let name = self.expect_ident()?;
                 self.expect(Token::Colon)?;
                 let value = self.parse_expr()?;
-                fields.push(FieldInit { name, span, value });
+                fields.push(FieldInit { name, span, value, filled: false });
                 if !self.match_token(Token::Comma) {
                     break;
                 }

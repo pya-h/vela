@@ -38,6 +38,11 @@ task risky(into: region) -> int ~ Why
     <- fail why() at into
 fi
 
+# Two regions, the one its text is in and the one it makes the new text in.
+task joined(t: text@a, a: region, into: region) -> text@into
+    <- t + "!" at into
+fi
+
 task main()
     region r
     # The three ways to give a task its region.
@@ -67,4 +72,8 @@ task main()
     # With a default region, a call that names none uses it.
     region d default
     show(label(9), " ", tag.shown())
+    # A region given in the parentheses where the task takes one is that one,
+    # and the region it takes last is still the default.
+    bind own = label(10) at r
+    show(joined(own, r), " ", joined(own, r) at d)
 fi

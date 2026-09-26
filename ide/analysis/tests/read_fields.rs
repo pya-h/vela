@@ -121,5 +121,5 @@ fn assigning_a_read_field_outside_its_methods_is_reported() {
     let source = program(true, "meter.count = 5");
     let diagnostics = Analysis::new(&source).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
-    assert_eq!(diagnostic.message, "'count' is a read-only field of 'Meter', which only the methods of 'Meter' assign");
+    assert_eq!(diagnostic.message, "'count' is a read-only field of 'Meter', which only the methods of 'Meter' change");
 }

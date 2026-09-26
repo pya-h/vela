@@ -904,6 +904,13 @@ Job { tries: 1 }                                <span class="comment"># error: m
         no value to fall back on can only be given inside its own module, so only that module can build the shape at
         all, while one that names a value is left out elsewhere and starts there.
       </p>
+      <p>
+        The value a field falls back on belongs to the shape's file, which reads it wherever the literal is, so it
+        may give what only that file can, such as a private field of another of its shapes. A field of a type the
+        shape takes, as <code>value: T</code> in <code>Box&lt;T&gt;</code>, is a different type in every value and
+        so falls back on nothing, except that <code>spare: maybe T = none</code> may, since <code>none</code> fits a
+        <code>maybe</code> of every type.
+      </p>
       <p id="read-fields">
         <strong>Read-only fields.</strong> <code>read</code> before a field lets any code read it and only the
         methods of its own shape assign it, so what a shape keeps true of itself stays so wherever its values go —
@@ -926,9 +933,16 @@ Job { tries: 1 }                                <span class="comment"># error: m
 <span class="keyword">hold</span> m = Meter { label: "door" }
 m.tick()
 show(m.label, " ", m.count)     <span class="comment"># door 1</span>
-m.count = 5                     <span class="comment"># error: 'count' is a read-only field of 'Meter', which only the methods of 'Meter' assign</span>
+m.count = 5                     <span class="comment"># error: 'count' is a read-only field of 'Meter', which only the methods of 'Meter' change</span>
 Meter { label: "x", count: 3 }  <span class="comment"># error: … falls back on its own value, so no literal gives it</span>
 m = Meter { label: "gate" }     <span class="comment"># ok: a whole new value, which the literal rules keep honest</span></pre>
+      <p>
+        Assigning is not the only change: calling an <code>alters</code> method on the field, assigning a field or
+        an item of an array it holds, and adding to or taking from a slice it holds all change it, and all are
+        refused outside the shape's methods. What a pointer or a slice in it points to lives in a region rather
+        than in the field, so <code>m.items[0] = 1</code> or <code>m.next^.value = 1</code> is still a change to
+        that memory, not to the field.
+      </p>
       <p>
         <code>read</code> names no word of its own: a field called <code>read</code> is written <code>read:</code>
         and a method <code>read(…)</code>, so both still work.

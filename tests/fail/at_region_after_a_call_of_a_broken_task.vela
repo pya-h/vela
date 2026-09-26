@@ -1,0 +1,10 @@
+# error: 2:37: unknown type 'Missing'
+task label(n: int, into: region) -> Missing@into
+    <- n
+fi
+
+task main()
+    region work
+    show(label(1) at work)
+    show(label(2)@work)
+fi

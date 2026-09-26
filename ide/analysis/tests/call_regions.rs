@@ -115,3 +115,43 @@ fn a_region_given_twice_is_reported() {
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert_eq!(diagnostic.message, "task 'checked' is given its region in the parentheses already, so this is a second one; name it once");
 }
+
+#[test]
+fn a_region_after_a_call_leaves_a_result_in_another_region_where_it_is() {
+    let source = "\
+shape Node
+    v: int
+fi
+
+task keep(p: ^Node@q, work: region) -> ^Node@q
+    <- p
+fi
+
+task firsts(xs: [text@q]@q, work: region) -> [text@q]@q
+    <- xs
+fi
+
+task pick(t: text@q, work: region) -> text@q
+    <- t
+fi
+
+task main()
+    CHECK
+    region r
+    region s
+    bind p = new Node(Node { v: 1 }) at s
+    bind xs = new [text]([\"a\"]) at s
+    bind tt = \"a{1}\" at s
+    bind kept = keep(p) at r
+    bind firsts = firsts(xs) at r
+    bind picked = pick(tt)@r
+    show(kept^.v, firsts.len, picked)
+fi
+";
+    for (when, first) in [("checked", "show(0)"), ("declared", "show(unknown)"), ("unparsed", "show(1 +)")] {
+        let source = source.replace("CHECK", first);
+        assert_eq!(hover(&source, "kept ="), "bind kept: ^Node@s", "{}", when);
+        assert_eq!(hover(&source, "firsts ="), "bind firsts: [text]@s", "{}", when);
+        assert_eq!(hover(&source, "picked ="), "bind picked: text@s", "{}", when);
+    }
+}

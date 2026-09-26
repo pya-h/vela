@@ -34,3 +34,25 @@
     | keyword:fi
  22 | fi
     | keyword:fi
+ 24 | # A default may give what only this module can, such as a private field that
+    | comment:# A default may give what only this module can, such as a private field that
+ 25 | # falls back on nothing: a literal elsewhere that leaves out `cell` still gets it.
+    | comment:# falls back on nothing: a literal elsewhere that leaves out `cell` still gets it.
+ 26 | shape Cell
+    | keyword:shape  type:Cell
+ 27 |     priv charge: int
+    | keyword:priv  field:charge  punctuation::  type-builtin:int
+ 29 |     level() -> int
+    | method:level  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 30 |         <- .charge
+    | keyword:<-  punctuation:.  field:charge
+ 31 |     fi
+    | keyword:fi
+ 32 | fi
+    | keyword:fi
+ 34 | shape Plant
+    | keyword:shape  type:Plant
+ 35 |     cell: Cell = Cell { charge: 5 }
+    | field:cell  punctuation::  type:Cell  operator:=  type:Cell  punctuation:{  field:charge  punctuation::  number:5  punctuation:}
+ 36 | fi
+    | keyword:fi

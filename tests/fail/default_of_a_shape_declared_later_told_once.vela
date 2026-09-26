@@ -1,0 +1,12 @@
+# error: 7:19: expected type text, got int
+shape Door
+    frame: Frame = Frame {}
+fi
+
+shape Frame
+    label: text = 3
+fi
+
+task main()
+    show(Door {}.frame.label)
+fi

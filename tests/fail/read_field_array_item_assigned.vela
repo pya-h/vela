@@ -1,0 +1,14 @@
+# error: 12:11: 'cells' is a read-only field of 'Panel', which only the methods of 'Panel' change
+shape Panel
+    read cells: [int; 2]
+
+    alters clear()
+        .cells[0] = 0
+    fi
+fi
+
+task main()
+    hold panel = Panel { cells: [1, 2] }
+    panel.cells[1] = 5
+    show(panel.cells[1])
+fi

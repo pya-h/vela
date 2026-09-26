@@ -20,3 +20,17 @@ shape Machine
         <- .used
     fi
 fi
+
+# A default may give what only this module can, such as a private field that
+# falls back on nothing: a literal elsewhere that leaves out `cell` still gets it.
+shape Cell
+    priv charge: int
+
+    level() -> int
+        <- .charge
+    fi
+fi
+
+shape Plant
+    cell: Cell = Cell { charge: 5 }
+fi
