@@ -1,0 +1,8 @@
+# error: 3:5: cannot assign to an item of immutable variable 'xs'; a parameter that changes is written 'hold xs: [int; 2]', and is the task's own copy
+task f(xs: [int; 2])
+    xs[0] = 1
+fi
+
+task main()
+    f([1, 2])
+fi

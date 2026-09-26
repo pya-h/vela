@@ -34,16 +34,16 @@
     | keyword:fi
  20 | fi
     | keyword:fi
- 22 | # Writes the list's first items, emptying the file first.
-    | comment:# Writes the list's first items, emptying the file first.
- 23 | task start(list: File@r) -> unit ~ FileError
-    | keyword:task  task:start  punctuation:(  parameter:list  punctuation::  type:File  operator:@  region:r  punctuation:)  operator:->  type-builtin:unit  operator:~  type:FileError
- 24 |     region w
+ 22 | # Writes the list's first items, emptying the file first. The task opens its
+    | comment:# Writes the list's first items, emptying the file first. The task opens its
+ 23 | # own copy of the File, which `hold` lets it change.
+    | comment:# own copy of the File, which `hold` lets it change.
+ 24 | task start(hold file: File@r) -> unit ~ FileError
+    | keyword:task  task:start  punctuation:(  keyword:hold  parameter:file  punctuation::  type:File  operator:@  region:r  punctuation:)  operator:->  type-builtin:unit  operator:~  type:FileError
+ 25 |     region w
     | keyword:region  region:w
- 25 |     hold file = list
-    | keyword:hold  variable:file  operator:=  parameter:list
  26 |     file.open(FileMode.Write) at w { failure e
-    | variable:file  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Write  punctuation:)  keyword:at  region:w  punctuation:{  keyword:failure  variable:e
+    | parameter:file  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Write  punctuation:)  keyword:at  region:w  punctuation:{  keyword:failure  variable:e
  27 |         <- fail e
     | keyword:<-  keyword:fail  variable:e
  28 |     }
@@ -51,7 +51,7 @@
  29 |     each item in ["bread", "milk"]
     | keyword:each  variable:item  keyword:in  punctuation:[  string:"bread"  punctuation:,  string:"milk"  punctuation:]
  30 |         file.write("{item}\n"@w) { failure e
-    | variable:file  punctuation:.  method:write  punctuation:(  string:"{  variable:item  string:}  escape:\n  string:"  operator:@  region:w  punctuation:)  punctuation:{  keyword:failure  variable:e
+    | parameter:file  punctuation:.  method:write  punctuation:(  string:"{  variable:item  string:}  escape:\n  string:"  operator:@  region:w  punctuation:)  punctuation:{  keyword:failure  variable:e
  31 |             <- fail e
     | keyword:<-  keyword:fail  variable:e
  32 |         }

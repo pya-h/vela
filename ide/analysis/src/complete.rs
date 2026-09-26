@@ -415,7 +415,18 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         && prev.and_then(|q| type_paren(&k, q)).is_none()
         && (first_token == Some(&Token::Task) || blocks.last() == Some(&Block::Kind) || prev.is_some_and(|q| method_header(&k, q)))
     {
-        return (Vec::new(), word_start, byte);
+        // A task's or a method's parameter may be one it changes (`hold n: int`);
+        // a variant's value never is. In a kind, `V(` may be either until the
+        // line says `alters` or what the method sends.
+        let in_kind = blocks.contains(&Block::Kind);
+        let says_method = prev.is_some_and(|q| {
+            (k.line_start(q)..)
+                .take_while(|&p| !matches!(k.token(p), Some(Token::Newline | Token::Eof) | None))
+                .any(|p| matches!(k.token(p), Some(Token::Arrow)) || k.ident(p) == Some(vela::ast::ALTERS))
+        });
+        let takes = first_token == Some(&Token::Task) || (prev.is_some_and(|q| method_header(&k, q)) && (!in_kind || says_method));
+        let items = if takes { vec![keyword("hold")] } else { Vec::new() };
+        return (items, word_start, byte);
     }
 
     // `case`: the variants the match doesn't cover yet; after the variant, its

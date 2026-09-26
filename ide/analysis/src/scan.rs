@@ -1192,6 +1192,9 @@ impl<'a> Classifier<'a> {
                             declaring = Some("each");
                         }
                         Token::Match => self.open(ScopeKind::Match),
+                        // `(hold n: int`: a parameter the task changes, which
+                        // the header declares below, not a variable.
+                        Token::Hold if in_task_header && matches!(tokens.before(p), Some(Token::LParen | Token::Comma)) => {}
                         Token::Bind | Token::Hold => {
                             let intro = if *keyword == Token::Bind { "bind" } else { "hold" };
                             declaring = Some(intro);
@@ -1354,13 +1357,15 @@ impl<'a> Classifier<'a> {
             }
             return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind, SymbolKind::TypeParam]));
         }
-        if in_task_header && after == Some(&Token::Colon) && matches!(before, Some(Token::LParen | Token::Comma)) {
+        let held = before == Some(&Token::Hold) && matches!(p.checked_sub(1).and_then(|q| tokens.before(q)), Some(Token::LParen | Token::Comma));
+        if in_task_header && after == Some(&Token::Colon) && (held || matches!(before, Some(Token::LParen | Token::Comma))) {
             let detail = tokens.text_after(p + 1, ends_field);
             // `r: region`, and `r: region default`, which also makes it the
             // default region of the task's body (see `ast::DEFAULT`).
             let takes_region = detail == "region" || detail == format!("region {}", DEFAULT);
             let kind = if takes_region { SymbolKind::Region } else { SymbolKind::Parameter };
-            return (kind.class(), Some(self.declare_local(p, kind, None, detail)));
+            let intro = if held { Some("hold") } else { None };
+            return (kind.class(), Some(self.declare_local(p, kind, intro, detail)));
         }
         if in_pattern {
             if matches!(before, Some(Token::Case | Token::Is)) {

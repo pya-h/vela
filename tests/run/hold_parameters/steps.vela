@@ -1,0 +1,13 @@
+# A task of another file takes a parameter it changes as any task does.
+task collatz(hold n: int) -> int
+    hold steps = 0
+    loop n != 1
+        when n % 2 == 0
+            n = n / 2
+        else
+            n = 3 * n + 1
+        fi
+        steps = steps + 1
+    fi
+    <- steps
+fi

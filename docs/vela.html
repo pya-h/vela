@@ -346,12 +346,44 @@ true false none  fi   maybe is     fail failure include priv</pre>
         reports that <code>a</code> isn't a result of the task.
       </p>
       <p>
-        Tasks can be called before they are declared, and can call themselves. Parameters are immutable, and
-        arguments are copies, so a task can't change a shape it was given; pass a pointer to let it change the
-        caller's value.
+        Tasks can be called before they are declared, and can call themselves. Arguments are copies, so a task
+        never changes the caller's value; a parameter never changes either, unless it is written
+        <code>hold</code> (see <a href="#parameters">Parameters that change</a>). Pass a pointer to let a task change
+        memory the caller can see.
       </p>
       <p>
         Every program starts at <code>task main()</code>, which takes no parameters and returns nothing.
+      </p>
+
+      <h3 id="parameters">Parameters that change</h3>
+      <p>
+        A parameter is immutable: <code>n = n + 1</code> in a task that takes <code>n: int</code> reports
+        <em>cannot assign to immutable variable 'n'; a parameter that changes is written 'hold n: int', and is the
+        task's own copy</em>. Written <code>hold</code> before its name, a parameter is the task's own copy of what
+        it was given, which it changes as it changes any <code>hold</code> variable: assigned, its fields and items
+        assigned, its <code>alters</code> methods called, a slice added to.
+      </p>
+      <pre><span class="keyword">task</span> countdown(<span class="keyword">hold</span> n: int, step: int) -&gt; int
+    <span class="keyword">hold</span> steps = <span class="number">0</span>
+    <span class="keyword">loop</span> n &gt; <span class="number">0</span>
+        n = n - step
+        steps = steps + <span class="number">1</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> steps
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">bind</span> a = <span class="number">10</span>
+    show(countdown(a, <span class="number">3</span>))    <span class="comment"># 4</span>
+    show(a)                  <span class="comment"># 10: the caller's value never changes</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        Since the caller's value never changes, the call needs no mark, and any value can be given, a
+        <code>bind</code> or a literal too. A slice is a copy of the caller's slice: adding to it leaves the caller's
+        length as it was, and the items the two still share are the same items, as after <code>ys = xs</code> (see
+        <a href="#slice-changes">Adding and taking out items</a>). A method takes one too:
+        <code>alters add(hold by: int)</code>. A region never changes, so <code>hold r: region</code> is an error, and
+        only a parameter is <code>hold</code>: a shape's field changes where the value it is part of is held.
       </p>
 
       <h3 id="results">Several Results</h3>
@@ -969,7 +1001,7 @@ m = Meter { label: "gate" }     <span class="comment"># ok: a whole new value, w
 <span class="keyword">shape</span> Chain
     next: ^Chain           <span class="comment"># error: 'Chain' can never be created: field 'next' needs an existing ^Chain</span>
 <span class="keyword">fi</span></pre>
-      <p>Assigning to a field requires the variable to be a <code>hold</code>; task parameters are immutable.</p>
+      <p>Assigning to a field requires the variable to be a <code>hold</code>, or a <a href="#parameters"><code>hold</code> parameter</a>.</p>
       <pre><span class="keyword">hold</span> q = Point { x: 1, y: 2 }
 q.x = 5                    <span class="comment"># ok</span>
 p.x = 5                    <span class="comment"># error: cannot assign to a field of immutable variable 'p'</span></pre>

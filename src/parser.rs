@@ -901,13 +901,41 @@ impl Parser {
         if matches!(self.peek(), Token::Ident(word) if word == READ) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
             return Err(Error::at(span, format!("only a shape's field can be '{}', not a parameter or a variant's value", READ)));
         }
+        let passing = self.match_passing(slot)?;
         let name = self.expect_ident()?;
         self.expect(Token::Colon)?;
         let ty_span = self.peek_span();
         let ty = self.parse_type()?;
         let default_region = self.match_default(slot == Slot::Param)?;
         let default = self.match_field_default(slot)?;
-        Ok(Field { name, ty, span, ty_span, private: false, read: false, default_region, default })
+        Ok(Field { name, ty, span, ty_span, private: false, read: false, default_region, passing, default })
+    }
+
+    /// `hold` before a task's parameter, which makes it the task's own copy to
+    /// change (see `Passing`). A shape's field and a variant's value change with
+    /// the value they are part of, and say so.
+    fn match_passing(&mut self, slot: Slot) -> Result<Passing> {
+        if !self.check(Token::Hold) {
+            return Ok(Passing::Copy);
+        }
+        let at = self.peek_span();
+        match slot {
+            Slot::Param => {}
+            Slot::Field => {
+                return Err(Error::at(
+                    at,
+                    "only a parameter can be 'hold'; a shape's field changes where the value it is part of is held, as in 'hold p = Point {…}' then 'p.x = 1'",
+                ));
+            }
+            Slot::Value => {
+                return Err(Error::at(at, "only a parameter can be 'hold', not a variant's value"));
+            }
+        }
+        self.advance();
+        if self.check(Token::Hold) {
+            return Err(Error::at(self.peek_span(), "'hold' is already written here: a parameter changes or it doesn't"));
+        }
+        Ok(Passing::Hold)
     }
 
     /// The word `read` before a shape's field, which any file may read and only
@@ -2666,7 +2694,7 @@ fn receiver(owner: &str, types: &[TypeParam], span: Span) -> Field {
         let given = types.iter().map(|param| Type::Named(param.name.clone(), None)).collect();
         Type::Applied(Box::new(Applied { name: owner.to_string(), types: given, region }))
     };
-    Field { name: THIS.to_string(), ty, span, ty_span: span, private: false, read: false, default_region: false, default: None }
+    Field { name: THIS.to_string(), ty, span, ty_span: span, private: false, read: false, default_region: false, passing: Passing::Copy, default: None }
 }
 
 /// Refuses a member named `this`, which is the whole value inside a method, so

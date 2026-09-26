@@ -1,0 +1,148 @@
+  1 | # A parameter written `hold x: T` is the task's own copy: the task may change
+    | comment:# A parameter written `hold x: T` is the task's own copy: the task may change
+  2 | # it as it changes any `hold` variable, and the value the caller gave never
+    | comment:# it as it changes any `hold` variable, and the value the caller gave never
+  3 | # changes, so the call needs no mark.
+    | comment:# changes, so the call needs no mark.
+  5 | include hold_parameters/steps {collatz}
+    | keyword:include  module:hold_parameters  operator:/  module:steps  punctuation:{  task:collatz  punctuation:}
+  7 | shape Counter
+    | keyword:shape  type:Counter
+  8 |     n: int = 0
+    | field:n  punctuation::  type-builtin:int  operator:=  number:0
+ 10 |     alters tick()
+    | keyword:alters  method:tick  punctuation:(  punctuation:)
+ 11 |         .n = .n + 1
+    | punctuation:.  field:n  operator:=  punctuation:.  field:n  operator:+  number:1
+ 12 |     fi
+    | keyword:fi
+ 14 |     # A method takes one too.
+    | comment:# A method takes one too.
+ 15 |     alters add_all(hold by: [int; 3])
+    | keyword:alters  method:add_all  punctuation:(  keyword:hold  parameter:by  punctuation::  punctuation:[  type-builtin:int  punctuation:;  number:3  punctuation:]  punctuation:)
+ 16 |         by[0] = by[0] + by[1] + by[2]
+    | parameter:by  punctuation:[  number:0  punctuation:]  operator:=  parameter:by  punctuation:[  number:0  punctuation:]  operator:+  parameter:by  punctuation:[  number:1  punctuation:]  operator:+  parameter:by  punctuation:[  number:2  punctuation:]
+ 17 |         .n = .n + by[0]
+    | punctuation:.  field:n  operator:=  punctuation:.  field:n  operator:+  parameter:by  punctuation:[  number:0  punctuation:]
+ 18 |     fi
+    | keyword:fi
+ 19 | fi
+    | keyword:fi
+ 21 | task countdown(hold n: int, step: int) -> int
+    | keyword:task  task:countdown  punctuation:(  keyword:hold  parameter:n  punctuation::  type-builtin:int  punctuation:,  parameter:step  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 22 |     hold steps = 0
+    | keyword:hold  variable:steps  operator:=  number:0
+ 23 |     loop n > 0
+    | keyword:loop  parameter:n  operator:>  number:0
+ 24 |         n = n - step
+    | parameter:n  operator:=  parameter:n  operator:-  parameter:step
+ 25 |         steps = steps + 1
+    | variable:steps  operator:=  variable:steps  operator:+  number:1
+ 26 |     fi
+    | keyword:fi
+ 27 |     <- steps
+    | keyword:<-  variable:steps
+ 28 | fi
+    | keyword:fi
+ 30 | # A shape: its fields change, and its alters methods can be called.
+    | comment:# A shape: its fields change, and its alters methods can be called.
+ 31 | task bumped(hold c: Counter) -> int
+    | keyword:task  task:bumped  punctuation:(  keyword:hold  parameter:c  punctuation::  type:Counter  punctuation:)  operator:->  type-builtin:int
+ 32 |     c.tick()
+    | parameter:c  punctuation:.  method:tick  punctuation:(  punctuation:)
+ 33 |     c.n = c.n + 10
+    | parameter:c  punctuation:.  field:n  operator:=  parameter:c  punctuation:.  field:n  operator:+  number:10
+ 34 |     <- c.n
+    | keyword:<-  parameter:c  punctuation:.  field:n
+ 35 | fi
+    | keyword:fi
+ 37 | # Text is given a part of itself, and a tuple another tuple.
+    | comment:# Text is given a part of itself, and a tuple another tuple.
+ 38 | task cut(hold t: text, hold pair: (int, int)) -> text, int
+    | keyword:task  task:cut  punctuation:(  keyword:hold  parameter:t  punctuation::  type-builtin:text  punctuation:,  keyword:hold  parameter:pair  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:)  operator:->  type-builtin:text  punctuation:,  type-builtin:int
+ 39 |     when t.len > 2
+    | keyword:when  parameter:t  punctuation:.  field:len  operator:>  number:2
+ 40 |         t = t[0..2]
+    | parameter:t  operator:=  parameter:t  punctuation:[  number:0  operator:..  number:2  punctuation:]
+ 41 |     fi
+    | keyword:fi
+ 42 |     pair = (pair.1, pair.0)
+    | parameter:pair  operator:=  punctuation:(  parameter:pair  punctuation:.  field:1  punctuation:,  parameter:pair  punctuation:.  field:0  punctuation:)
+ 43 |     <- t, pair.0
+    | keyword:<-  parameter:t  punctuation:,  parameter:pair  punctuation:.  field:0
+ 44 | fi
+    | keyword:fi
+ 46 | # A slice is its own copy of the caller's: adding to it leaves the caller's
+    | comment:# A slice is its own copy of the caller's: adding to it leaves the caller's
+ 47 | # length as it was.
+    | comment:# length as it was.
+ 48 | task grown(hold xs: [int]@r, r: region) -> int
+    | keyword:task  task:grown  punctuation:(  keyword:hold  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:int
+ 49 |     xs.add(9)
+    | parameter:xs  punctuation:.  field:add  punctuation:(  number:9  punctuation:)
+ 50 |     xs.add(10)
+    | parameter:xs  punctuation:.  field:add  punctuation:(  number:10  punctuation:)
+ 51 |     <- xs.len
+    | keyword:<-  parameter:xs  punctuation:.  field:len
+ 52 | fi
+    | keyword:fi
+ 54 | # A generic task, and a recursive one.
+    | comment:# A generic task, and a recursive one.
+ 55 | task last_of<T>(hold items: [T; 3], fill: T) -> T
+    | keyword:task  task:last_of  punctuation:<  type:T  punctuation:>  punctuation:(  keyword:hold  parameter:items  punctuation::  punctuation:[  type:T  punctuation:;  number:3  punctuation:]  punctuation:,  parameter:fill  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 56 |     items[2] = fill
+    | parameter:items  punctuation:[  number:2  punctuation:]  operator:=  parameter:fill
+ 57 |     <- items[2]
+    | keyword:<-  parameter:items  punctuation:[  number:2  punctuation:]
+ 58 | fi
+    | keyword:fi
+ 60 | task digits(hold n: int) -> int
+    | keyword:task  task:digits  punctuation:(  keyword:hold  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 61 |     when n < 10
+    | keyword:when  parameter:n  operator:<  number:10
+ 62 |         <- 1
+    | keyword:<-  number:1
+ 63 |     fi
+    | keyword:fi
+ 64 |     n = n / 10
+    | parameter:n  operator:=  parameter:n  operator:/  number:10
+ 65 |     <- 1 + digits(n)
+    | keyword:<-  number:1  operator:+  task:digits  punctuation:(  parameter:n  punctuation:)
+ 66 | fi
+    | keyword:fi
+ 68 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 69 |     bind a = 10
+    | keyword:bind  variable:a  operator:=  number:10
+ 70 |     show(countdown(a, 3), " ", a)
+    | builtin-fn:show  punctuation:(  task:countdown  punctuation:(  variable:a  punctuation:,  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:a  punctuation:)
+ 72 |     hold c = Counter {}
+    | keyword:hold  variable:c  operator:=  type:Counter  punctuation:{  punctuation:}
+ 73 |     show(bumped(c), " ", c.n)
+    | builtin-fn:show  punctuation:(  task:bumped  punctuation:(  variable:c  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  field:n  punctuation:)
+ 74 |     bind arr = [1, 2, 3]
+    | keyword:bind  variable:arr  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 75 |     c.add_all(arr)
+    | variable:c  punctuation:.  method:add_all  punctuation:(  variable:arr  punctuation:)
+ 76 |     show(c.n, " ", arr[0])
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:n  punctuation:,  string:" "  punctuation:,  variable:arr  punctuation:[  number:0  punctuation:]  punctuation:)
+ 78 |     bind word = "hey"
+    | keyword:bind  variable:word  operator:=  string:"hey"
+ 79 |     bind short, first = cut(word, (1, 2))
+    | keyword:bind  variable:short  punctuation:,  variable:first  operator:=  task:cut  punctuation:(  variable:word  punctuation:,  punctuation:(  number:1  punctuation:,  number:2  punctuation:)  punctuation:)
+ 80 |     show(short, " ", first, " ", word)
+    | builtin-fn:show  punctuation:(  variable:short  punctuation:,  string:" "  punctuation:,  variable:first  punctuation:,  string:" "  punctuation:,  variable:word  punctuation:)
+ 82 |     region r
+    | keyword:region  region:r
+ 83 |     hold xs = new [int]() at r
+    | keyword:hold  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 84 |     xs.add(1)
+    | variable:xs  punctuation:.  field:add  punctuation:(  number:1  punctuation:)
+ 85 |     show(grown(xs, r), " ", xs.len)
+    | builtin-fn:show  punctuation:(  task:grown  punctuation:(  variable:xs  punctuation:,  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:.  field:len  punctuation:)
+ 87 |     show(last_of([1, 2, 3], 7), " ", last_of(["a", "b", "c"], "z"))
+    | builtin-fn:show  punctuation:(  task:last_of  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:,  number:7  punctuation:)  punctuation:,  string:" "  punctuation:,  task:last_of  punctuation:(  punctuation:[  string:"a"  punctuation:,  string:"b"  punctuation:,  string:"c"  punctuation:]  punctuation:,  string:"z"  punctuation:)  punctuation:)
+ 88 |     show(digits(12345), " ", collatz(6))
+    | builtin-fn:show  punctuation:(  task:digits  punctuation:(  number:12345  punctuation:)  punctuation:,  string:" "  punctuation:,  task:collatz  punctuation:(  number:6  punctuation:)  punctuation:)
+ 89 | fi
+    | keyword:fi

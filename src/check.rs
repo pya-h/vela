@@ -1985,12 +1985,16 @@ impl Checker {
         // Parameters and the task body share one scope, as in C.
         self.scopes = vec![Scope::default()];
         for param in &task.params {
+            if param.ty == Type::Region && param.passing != Passing::Copy {
+                self.record(Error::at(param.span, format!("a region never changes, so '{}' can't be 'hold'", param.name)));
+            }
             if param.ty == Type::Region {
                 self.define_region(&param.name, param.span, true)?;
             } else {
-                // Only the value a method marked `alters` is called on changes.
+                // Only the value a method marked `alters` is called on changes,
+                // and a parameter the task holds a copy of (`hold x: T`).
                 let alters = param.name == THIS && task.owner.as_ref().is_some_and(|owner| owner.alters);
-                self.define_param(&param.name, known(&param.ty), alters, param.span)?;
+                self.define_param(&param.name, known(&param.ty), alters || param.passing == Passing::Hold, param.span)?;
             }
         }
         // The regions the header only names in its types.
@@ -3020,7 +3024,7 @@ impl Checker {
                     if name == THIS {
                         return Err(self.this_cannot_change(span, &format!("assigning '{}'", THIS)));
                     }
-                    return err(span, format!("cannot assign to immutable variable '{}'", name));
+                    return err(span, format!("cannot assign to immutable variable '{}'{}", name, param_hint(name, info)));
                 }
                 let ty = info.ty.clone();
                 expr.ty = Some(ty.clone());
@@ -3091,7 +3095,7 @@ impl Checker {
                     return err(base.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
                 if !info.mutable {
-                    return err(base.span, format!("cannot assign to an item of immutable variable '{}'", name));
+                    return err(base.span, format!("cannot assign to an item of immutable variable '{}'{}", name, param_hint(name, info)));
                 }
             }
             return self.check_expr(base);
@@ -3113,7 +3117,7 @@ impl Checker {
                     return err(place.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
                 if !info.mutable {
-                    return err(place.span, format!("cannot assign to an item of immutable variable '{}'", name));
+                    return err(place.span, format!("cannot assign to an item of immutable variable '{}'{}", name, param_hint(name, info)));
                 }
                 Ok(())
             }
@@ -3150,7 +3154,7 @@ impl Checker {
                     return err(span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
                 if is_shape && !info.mutable {
-                    return err(span, format!("cannot assign to a field of immutable variable '{}'", name));
+                    return err(span, format!("cannot assign to a field of immutable variable '{}'{}", name, param_hint(name, info)));
                 }
                 self.check_expr(base)
             }
@@ -3884,6 +3888,9 @@ impl Checker {
                     return err(items.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
                 if !info.mutable && matches!(info.ty, Type::Slice(..)) {
+                    if info.param {
+                        return err(items.span, format!("'{}' changes '{}', a parameter, which never changes{}", word, name, param_hint(&name, info)));
+                    }
                     return err(items.span, format!("'{}' changes '{}', which is immutable; keep the slice in a 'hold' variable to change it", word, name));
                 }
                 self.check_expr(items)?
@@ -4980,7 +4987,7 @@ impl Checker {
                 }
                 if info.param {
                     return refuse(format!(
-                        "it needs a place that can change, and '{0}' is a parameter, which never does; take a pointer to it, as in '{0}: ^{1}@r', and call the method on '{0}^'",
+                        "it needs a place that can change, and '{0}' is a parameter, which never does; write 'hold {0}: {1}' to change the task's own copy, or take a pointer, as in '{0}: ^{1}@r', and call the method on '{0}^'",
                         name,
                         info.ty.without_regions()
                     ));
@@ -6556,4 +6563,13 @@ fn in_source_order(errors: Vec<Error>) -> Vec<Error> {
         None => (1, 0, 0, 0),
     });
     errors
+}
+
+/// The end of the message for changing a parameter that never changes: how to
+/// write one the task may change. Empty for anything else.
+fn param_hint(name: &str, info: &VarInfo) -> String {
+    if !info.param || name == THIS {
+        return String::new();
+    }
+    format!("; a parameter that changes is written 'hold {}: {}', and is the task's own copy", name, info.ty)
 }

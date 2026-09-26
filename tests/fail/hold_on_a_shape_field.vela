@@ -1,0 +1,7 @@
+# error: 3:5: only a parameter can be 'hold'; a shape's field changes where the value it is part of is held, as in 'hold p = Point {…}' then 'p.x = 1'
+shape Point
+    hold x: int
+fi
+
+task main()
+fi

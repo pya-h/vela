@@ -50,16 +50,16 @@
     | comment:# `show` writes each value in turn, so the line needs no text of its own: the
  29 | # title, the status, and the brackets around it are written one after another.
     | comment:# title, the status, and the brackets around it are written one after another.
- 30 | task print_list(first: maybe ^Item@r)
-    | keyword:task  task:print_list  punctuation:(  parameter:first  punctuation::  keyword:maybe  operator:^  type:Item  operator:@  region:r  punctuation:)
- 31 |     hold current = first
-    | keyword:hold  variable:current  operator:=  parameter:first
+ 30 | # `hold` makes the parameter the task's own copy, which walks down the list.
+    | comment:# `hold` makes the parameter the task's own copy, which walks down the list.
+ 31 | task print_list(hold current: maybe ^Item@r)
+    | keyword:task  task:print_list  punctuation:(  keyword:hold  parameter:current  punctuation::  keyword:maybe  operator:^  type:Item  operator:@  region:r  punctuation:)
  32 |     loop current is {item}
-    | keyword:loop  variable:current  keyword:is  punctuation:{  variable:item  punctuation:}
+    | keyword:loop  parameter:current  keyword:is  punctuation:{  variable:item  punctuation:}
  33 |         show(item^.title, " [", describe(item^.status), "]")
     | builtin-fn:show  punctuation:(  variable:item  operator:^  punctuation:.  field:title  punctuation:,  string:" ["  punctuation:,  task:describe  punctuation:(  variable:item  operator:^  punctuation:.  field:status  punctuation:)  punctuation:,  string:"]"  punctuation:)
  34 |         current = item^.next
-    | variable:current  operator:=  variable:item  operator:^  punctuation:.  field:next
+    | parameter:current  operator:=  variable:item  operator:^  punctuation:.  field:next
  35 |     fi
     | keyword:fi
  36 | fi

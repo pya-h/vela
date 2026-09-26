@@ -225,6 +225,7 @@ pub fn input_error_kind() -> KindDef {
         private: false,
         read: false,
         default_region: false,
+        passing: Passing::Copy,
         default: None,
     };
     KindDef {
@@ -1140,6 +1141,10 @@ pub struct Field {
     /// region (see `ast::DEFAULT`). Only a parameter of type `region` can be
     /// one, and a task takes at most one; a field or a payload never is.
     pub default_region: bool,
+    /// How a parameter takes its value: `x: T` never changes, `hold x: T` is
+    /// the task's own copy, which it may change. A field or a payload is always
+    /// `Passing::Copy`.
+    pub passing: Passing,
     /// `size: int = 0`: the value a shape's field takes where a literal leaves
     /// it out, which is what lets a literal name some fields and not others. It
     /// is a value the compiler works out without running the program (see
@@ -1148,6 +1153,17 @@ pub struct Field {
     /// literal missing a field. A parameter and a variant's value never have one
     /// (see `docs/future.html#default-arguments` for the parameter half).
     pub default: Option<Expr>,
+}
+
+/// How a task's parameter takes the value it is given (see `Field::passing`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Passing {
+    /// `x: T`: a value that never changes in the task.
+    #[default]
+    Copy,
+    /// `hold x: T`: the task's own copy, which it may change; the caller's value
+    /// never does, so the call has no mark.
+    Hold,
 }
 
 /// `include shapes/circle`, `include shapes/circle => round`,

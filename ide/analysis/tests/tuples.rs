@@ -170,9 +170,10 @@ fn completion_offers_types_inside_a_tuple_type() {
         assert_eq!(labels("task f(t: (int, @@))\nfi\n"), types);
         assert_eq!(labels("shape Holder\n    t: (int, @@)\nfi\n"), ["int", "float", "bool", "text", "Holder", "maybe"]);
         assert_eq!(labels("task f() -> (int, @@)\nfi\n"), types);
-        // A name of a binding, and one of a parameter, are still being declared.
+        // A name of a binding, and one of a parameter, are still being declared,
+        // and a parameter may be one the task changes.
         assert!(labels(&program(checks, "bind one, @@ = (1, 2)")).is_empty(), "checks: {}", checks);
-        assert!(labels("task f(a: int, @@)\nfi\n").is_empty());
+        assert_eq!(labels("task f(a: int, @@)\nfi\n"), ["hold"]);
     }
 }
 

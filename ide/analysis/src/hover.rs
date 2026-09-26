@@ -282,6 +282,10 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
         }
         SymbolKind::Parameter => {
             let doc = task_around(k, symbol.name_range.start).map(|task| format!("A parameter of {}.", task)).unwrap_or_default();
+            if symbol.intro == Some("hold") {
+                let doc = format!("{} The task's own copy, which it may change; the caller's value never does.", doc);
+                return Some((format!("hold {}", typed(&symbol.name)), doc.trim_start().to_string()));
+            }
             (typed(&symbol.name), doc)
         }
         SymbolKind::Region if symbol.name == vela::ast::THIS_WORD && symbol.intro == Some("@") && is_in_method(k, symbol.name_range.start) => {

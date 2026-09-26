@@ -1,0 +1,89 @@
+# A parameter written `hold x: T` is the task's own copy: the task may change
+# it as it changes any `hold` variable, and the value the caller gave never
+# changes, so the call needs no mark.
+
+include hold_parameters/steps {collatz}
+
+shape Counter
+    n: int = 0
+
+    alters tick()
+        .n = .n + 1
+    fi
+
+    # A method takes one too.
+    alters add_all(hold by: [int; 3])
+        by[0] = by[0] + by[1] + by[2]
+        .n = .n + by[0]
+    fi
+fi
+
+task countdown(hold n: int, step: int) -> int
+    hold steps = 0
+    loop n > 0
+        n = n - step
+        steps = steps + 1
+    fi
+    <- steps
+fi
+
+# A shape: its fields change, and its alters methods can be called.
+task bumped(hold c: Counter) -> int
+    c.tick()
+    c.n = c.n + 10
+    <- c.n
+fi
+
+# Text is given a part of itself, and a tuple another tuple.
+task cut(hold t: text, hold pair: (int, int)) -> text, int
+    when t.len > 2
+        t = t[0..2]
+    fi
+    pair = (pair.1, pair.0)
+    <- t, pair.0
+fi
+
+# A slice is its own copy of the caller's: adding to it leaves the caller's
+# length as it was.
+task grown(hold xs: [int]@r, r: region) -> int
+    xs.add(9)
+    xs.add(10)
+    <- xs.len
+fi
+
+# A generic task, and a recursive one.
+task last_of<T>(hold items: [T; 3], fill: T) -> T
+    items[2] = fill
+    <- items[2]
+fi
+
+task digits(hold n: int) -> int
+    when n < 10
+        <- 1
+    fi
+    n = n / 10
+    <- 1 + digits(n)
+fi
+
+task main()
+    bind a = 10
+    show(countdown(a, 3), " ", a)
+
+    hold c = Counter {}
+    show(bumped(c), " ", c.n)
+    bind arr = [1, 2, 3]
+    c.add_all(arr)
+    show(c.n, " ", arr[0])
+
+    bind word = "hey"
+    bind short, first = cut(word, (1, 2))
+    show(short, " ", first, " ", word)
+
+    region r
+    hold xs = new [int]() at r
+    xs.add(1)
+    show(grown(xs, r), " ", xs.len)
+
+    show(last_of([1, 2, 3], 7), " ", last_of(["a", "b", "c"], "z"))
+    show(digits(12345), " ", collatz(6))
+fi

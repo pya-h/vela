@@ -1,0 +1,6 @@
+# error: 2:13: 'hold' is already written here: a parameter changes or it doesn't
+task f(hold hold n: int)
+fi
+
+task main()
+fi

@@ -1,0 +1,103 @@
+//! How parameters take their values, in the editor: `hold n: int`, a parameter
+//! the task changes, is a parameter whose hover says so, the word before it is
+//! a keyword, a parameter list offers it, and all of it holds while the file
+//! doesn't check. In the sources below, `@@` marks the cursor.
+
+// A panic in a test is a test failure, so these lints do not apply here.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
+
+use vela_analysis::{Analysis, CompletionItem, LineIndex, TokenClass};
+
+const PROGRAM: &str = "\
+task countdown(hold n: int, step: int) -> int
+    CHECK
+    loop n > 0
+        n = n - step
+    fi
+    <- n
+fi
+
+task main()
+    show(countdown(10, 3))
+fi
+";
+
+fn program(checks: bool) -> String {
+    let first = if checks { "show(0)" } else { "show(unknown)" };
+    PROGRAM.replace("CHECK", first)
+}
+
+fn completions(marked: &str) -> Vec<CompletionItem> {
+    let at = marked.find("@@").expect("a @@ marker");
+    let source = marked.replacen("@@", "", 1);
+    Analysis::new(&source).complete(LineIndex::new(&source).utf16_of(at)).items
+}
+
+fn hover(source: &str, needle: &str) -> (String, String) {
+    let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
+    let hover = Analysis::new(source).hover(LineIndex::new(source).utf16_of(byte)).unwrap_or_else(|| panic!("no hover at {:?}", needle));
+    (hover.code, hover.doc)
+}
+
+#[test]
+fn the_program_used_by_these_tests_compiles() {
+    assert_eq!(Analysis::new(&program(true)).diagnostics(), Vec::new());
+}
+
+#[test]
+fn a_hold_parameter_is_a_parameter_whose_hover_says_it_changes() {
+    for checks in [true, false] {
+        let source = program(checks);
+        let when = if checks { "checked" } else { "declared" };
+        let (code, doc) = hover(&source, "n: int");
+        assert_eq!(code, "hold n: int", "{}", when);
+        assert!(doc.starts_with("A parameter of task countdown."), "{}: {}", when, doc);
+        assert!(doc.contains("the caller's value never does"), "{}: {}", when, doc);
+        // Where it is used, too, and a plain one beside it says nothing of the kind.
+        assert_eq!(hover(&source, "n > 0").0, "hold n: int", "{}", when);
+        assert_eq!(hover(&source, "step: int").0, "step: int", "{}", when);
+        let analysis = Analysis::new(&source);
+        let class_at = |needle: &str| {
+            let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
+            analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
+        };
+        assert_eq!(class_at("hold n"), Some(TokenClass::Keyword), "{}", when);
+        assert_eq!(class_at("n: int"), Some(TokenClass::Parameter), "{}", when);
+        assert_eq!(class_at("n - step"), Some(TokenClass::Parameter), "{}", when);
+    }
+}
+
+#[test]
+fn a_parameter_list_offers_hold() {
+    for marked in ["task f(@@)\nfi\n", "task f(a: int, @@)\nfi\n", "task f(ho@@)\nfi\n"] {
+        let items = completions(marked);
+        let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(labels, ["hold"], "{:?}", marked);
+    }
+    // A method's too, in a shape, and in a kind once the line says it is one.
+    for marked in ["shape S\n    n: int\n\n    alters add(@@)\n    fi\nfi\n", "kind K\n    A\n\n    alters m(@@)\n    fi\nfi\n", "kind K\n    A\n\n    m(@@) -> int\n    fi\nfi\n"] {
+        let labels: Vec<String> = completions(marked).into_iter().map(|item| item.label).collect();
+        assert_eq!(labels, ["hold"], "{:?}", marked);
+    }
+    // Not after the word, where the parameter's name goes.
+    assert!(completions("task f(hold @@)\nfi\n").is_empty());
+}
+
+#[test]
+fn changing_a_parameter_that_never_changes_says_how_to_write_one_that_does() {
+    let source = "\
+task f(n: int)
+    n = 2
+fi
+
+task main()
+    f(1)
+fi
+";
+    let diagnostics = Analysis::new(source).diagnostics();
+    let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
+    assert_eq!(
+        diagnostic.message,
+        "cannot assign to immutable variable 'n'; a parameter that changes is written 'hold n: int', and is the task's own copy"
+    );
+}

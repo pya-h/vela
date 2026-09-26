@@ -27,8 +27,8 @@ fi
 
 # `show` writes each value in turn, so the line needs no text of its own: the
 # title, the status, and the brackets around it are written one after another.
-task print_list(first: maybe ^Item@r)
-    hold current = first
+# `hold` makes the parameter the task's own copy, which walks down the list.
+task print_list(hold current: maybe ^Item@r)
     loop current is {item}
         show(item^.title, " [", describe(item^.status), "]")
         current = item^.next

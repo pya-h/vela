@@ -1,0 +1,8 @@
+# error: 3:5: cannot assign to immutable variable 'n'; a parameter that changes is written 'hold n: int', and is the task's own copy
+task f(n: int)
+    n = n + 1
+fi
+
+task main()
+    f(1)
+fi

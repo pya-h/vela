@@ -1,0 +1,26 @@
+  1 | # A task of another file takes a parameter it changes as any task does.
+    | comment:# A task of another file takes a parameter it changes as any task does.
+  2 | task collatz(hold n: int) -> int
+    | keyword:task  task:collatz  punctuation:(  keyword:hold  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  3 |     hold steps = 0
+    | keyword:hold  variable:steps  operator:=  number:0
+  4 |     loop n != 1
+    | keyword:loop  parameter:n  operator:!=  number:1
+  5 |         when n % 2 == 0
+    | keyword:when  parameter:n  operator:%  number:2  operator:==  number:0
+  6 |             n = n / 2
+    | parameter:n  operator:=  parameter:n  operator:/  number:2
+  7 |         else
+    | keyword:else
+  8 |             n = 3 * n + 1
+    | parameter:n  operator:=  number:3  operator:*  parameter:n  operator:+  number:1
+  9 |         fi
+    | keyword:fi
+ 10 |         steps = steps + 1
+    | variable:steps  operator:=  variable:steps  operator:+  number:1
+ 11 |     fi
+    | keyword:fi
+ 12 |     <- steps
+    | keyword:<-  variable:steps
+ 13 | fi
+    | keyword:fi

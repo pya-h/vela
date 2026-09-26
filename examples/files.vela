@@ -19,10 +19,10 @@ task said(error: FileError) -> text
     fi
 fi
 
-# Writes the list's first items, emptying the file first.
-task start(list: File@r) -> unit ~ FileError
+# Writes the list's first items, emptying the file first. The task opens its
+# own copy of the File, which `hold` lets it change.
+task start(hold file: File@r) -> unit ~ FileError
     region w
-    hold file = list
     file.open(FileMode.Write) at w { failure e
         <- fail e
     }

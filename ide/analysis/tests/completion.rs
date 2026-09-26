@@ -246,12 +246,15 @@ fn nothing_is_offered_in_comments_text_or_new_names() {
         in_main("show(\"unfinished @@"),
         in_main("bind @@"),
         "task @@".to_string(),
-        "task f(@@".to_string(),
-        "task f(a: int, @@".to_string(),
+        "task f(hold @@".to_string(),
         "kind K\n    V(@@".to_string(),
         in_main("each @@"),
     ] {
         assert_eq!(labels(&marked), Vec::<String>::new(), "at {:?}", marked);
+    }
+    // A parameter's name is new, but it may be one the task changes.
+    for marked in ["task f(@@", "task f(a: int, @@"] {
+        assert_eq!(labels(marked), ["hold"], "at {:?}", marked);
     }
     // A field's or a method's name is new, but it may be private, a shape's
     // field may be read-only, and a method may change its value. A kind has no
