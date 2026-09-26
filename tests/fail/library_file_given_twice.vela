@@ -1,0 +1,7 @@
+# error: 3:13: this module is already included at 2:13; a file includes each module once
+include std/files
+include std/files => disk
+
+task main()
+    show(1)
+fi

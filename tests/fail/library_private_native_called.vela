@@ -1,0 +1,6 @@
+# error: 5:10: 'path_exists' is private to module 'files'
+include std/files
+
+task main()
+    show(files.path_exists("notes.txt"))
+fi

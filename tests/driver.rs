@@ -314,6 +314,23 @@ fn a_program_loads_each_module_once_through_its_loader() {
 }
 
 #[test]
+fn the_library_comes_with_the_compiler_and_is_never_read_from_a_loader() {
+    // Vela's library is the compiler's own, so no loader is asked for it, and a
+    // file named like one of its modules can't stand in for it.
+    let main = "include std/files {File}\ninclude tools\n\ntask main()\n    show(File { path: \"x\" }.exists(), tools.ready())\nfi\n";
+    let files = [
+        ("app/tools.vela", "include std/files\n\ntask ready() -> bool\n    <- files.File { path: \"y\" }.exists()\nfi\n"),
+        ("app/std/files.vela", "task exists() -> int\n    <- 1\nfi\n"),
+    ];
+    let asked = std::cell::RefCell::new(Vec::new());
+    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
+    assert_eq!(*asked.borrow(), ["app/tools.vela"]);
+    // The library's native task is the runtime's function, and its File the library's.
+    assert!(c.contains("return vela__rt__files_path_exists(path);"), "{}", c);
+    assert!(c.contains("vela_std__1__files__0__File"), "{}", c);
+}
+
+#[test]
 fn a_module_outside_the_main_folder_keeps_its_path_in_its_names() {
     let main = "include ../common/text => words\n\ntask main()\n    show(words.twice(2))\nfi\n";
     let files = [("common/text.vela", "task twice(n: int) -> int\n    <- n * 2\nfi\n")];

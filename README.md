@@ -40,7 +40,9 @@ task or shape is made for each set of types used. The types a shape is given nam
 don't: `Box<text>@r` holds its text in `r`. A program can span
 several files: `include shapes/geometry` reads `shapes/geometry.vela`, named as `geometry.area(…)` (or brought in
 with `include shapes/geometry (area)`, or only the names with braces, `{area}`), `=>` gives a module or a name
-another name (`include fuel/prices => fuel`), and everything a file declares is public unless marked `priv`. A
+another name (`include fuel/prices => fuel`), and everything a file declares is public unless marked `priv`. Vela's
+own library comes with the compiler and is included the same way, with a path starting `std`
+(`include std/files {File}`). A
 variant can be written through its kind, `Size.Small`. A shape or a kind has methods, written in its block below
 its fields or variants and called on a value (`c.total()`); inside one, `.count` is a field of the value, `.this`
 the value itself, and `@this` the region it lives in, and a method that changes its value says `alters` before its
@@ -115,7 +117,8 @@ See [docs/ide.html](docs/ide.html) for features, shortcuts, and security notes.
 | Path | What |
 |---|---|
 | `src/` | The compiler: lexer, parser, checker, C generator, and the build driver |
-| `runtime/vela_rt.h` | The small C runtime the generated code includes |
+| `runtime/vela_rt.h` | The small C runtime the generated code includes, with the bodies of the library's native tasks |
+| `std/` | Vela's library, in Vela, which the compiler holds as it is built (`include std/files`) |
 | `examples/` | Example programs |
 | `tests/` | Program tests (`run/`, `fail/`, `trap/`, `examples/`), C runtime tests (`runtime/`), and Rust tests |
 | `docs/` | The language reference, the regions guide, a comparison with other languages, design notes, and the Vela Studio guide |
@@ -125,6 +128,7 @@ See [docs/ide.html](docs/ide.html) for features, shortcuts, and security notes.
 
 - [The language](docs/vela.html)
 - [Regions: memory in Vela](docs/regions.html), a guide and tutorial
+- [Vela's library](docs/std.html), the modules that come with the compiler
 - [Vela Studio](docs/ide.html)
 - [Vela and other languages](docs/comparison.html)
 - [Future directions](docs/future.html), and a [second design notebook](docs/future-2.html)

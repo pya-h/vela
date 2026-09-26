@@ -139,6 +139,7 @@
     <nav class="doc-nav" aria-label="Vela documentation">
       <a href="vela.html" aria-current="page">Language</a>
       <a href="regions.html">Regions</a>
+      <a href="std.html">Library</a>
       <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html">Future</a>
@@ -2436,6 +2437,18 @@ show(area(square))             <span class="comment"># error: unknown task 'area
         <code>examples/shop.vela</code> is a program in three files. In the generated C, a module's names are
         prefixed with its path (<code>vela_shapes__1__geometry__0__area</code>), so every module's names stay apart.
       </p>
+      <p id="library">
+        <strong>Vela's library.</strong> A path that starts with <code>std</code> names a module of the library that
+        comes with the compiler, and is included like any other: <code>include std/files {File}</code>. It is read
+        from the compiler, never from the disk, so a folder of the program's own can't be named <code>std</code>, and
+        <code>std</code> is no reserved word: a variable may still be called so. What the library has, and how it is
+        made, is in <a href="std.html">Vela Library</a>.
+      </p>
+      <pre><span class="keyword">include</span> std/files {File}
+
+<span class="keyword">task</span> main()
+    show(File { path: "notes.txt" }.exists())    <span class="comment"># whether a file that can be read is there</span>
+<span class="keyword">fi</span></pre>
     </section>
 
     <section>
@@ -2469,7 +2482,7 @@ show(area(square))             <span class="comment"># error: unknown task 'area
           numbers read from it (<code>int(t)</code>), <code>show</code>, and <code>scan</code>. It has no
           search, no trimming, and no case changes yet.</li>
         <li>Input is read a line of text at a time with <code>scan</code>, or a number at a time with
-          <code>scan("Age: ", int)</code>; there are no files, and nothing reads part of a line.</li>
+          <code>scan("Age: ", int)</code>; nothing reads part of a line, and files can so far only be asked whether they exist (<a href="std.html#files"><code>std/files</code></a>).</li>
         <li>Arrays and slices can't be compared or shown whole, and an array's count is known before the program runs
           (see <a href="#arrays">Arrays</a>). Tuples can't be shown whole, and are taken apart in
           <code>is</code> and <code>case</code> only in parentheses, as in <code>{(a, b)}</code>

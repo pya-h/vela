@@ -1,0 +1,8 @@
+# error: 2:13: 'native' marks a task whose body the compiler writes in C, which only Vela's library has; leave out 'native'
+native task size(path: text) -> int
+    <- path.len
+fi
+
+task main()
+    show(size("notes.txt"))
+fi

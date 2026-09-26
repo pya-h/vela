@@ -273,6 +273,12 @@ pub const ALTERS: &str = "alters";
 /// field named so is written `read:` and a method `read(`.
 pub const READ: &str = "read";
 
+/// The word before `task` that marks a task of Vela's library whose body is a
+/// function of the runtime (see `library`): `native task path_exists(path: text@p) -> bool`,
+/// with no body and no `fi`. Not a keyword: it means something only there, so a
+/// program may still name anything `native`.
+pub const NATIVE: &str = "native";
+
 /// The word that marks a block's default region, written after the region's name
 /// in its declaration (`region r default`) or after the type of a region a task
 /// takes (`r: region default`). Allocations that name no region go there. Not a
@@ -1271,6 +1277,9 @@ pub struct TaskDef {
     pub span: Span,
     /// `priv task`: only its own file can call it.
     pub private: bool,
+    /// `native task`: its body is a function of the runtime, and `body` is empty
+    /// (see `NATIVE`).
+    pub native: bool,
     /// What makes this task a method of a shape or a kind, and not a task the
     /// program can name; `None` for a task.
     pub owner: Option<Owner>,

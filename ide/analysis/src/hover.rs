@@ -201,6 +201,7 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
         SymbolKind::Module => {
             let module = k.scan.modules.iter().find(|m| m.symbol == id);
             let doc = match module {
+                Some(m) if m.library => "A module of Vela's library, which comes with the compiler.".to_string(),
                 Some(m) if m.source.is_some() => format!("A module this file includes: the file {}.", m.path),
                 Some(m) => format!("A module this file includes: the file {}, which can't be read.", m.path),
                 None => "A module this file includes.".to_string(),
@@ -364,7 +365,8 @@ fn from_module(k: &Knowledge, symbol: &crate::scan::Symbol) -> String {
     match symbol.module.and_then(|m| k.scan.modules.get(m)) {
         Some(module) => {
             let name = k.symbol(module.symbol).map_or("", |s| s.name.as_str());
-            format!("From module {} ({}).", name, module.path)
+            let from = if module.library { "Vela's library".to_string() } else { module.path.clone() };
+            format!("From module {} ({}).", name, from)
         }
         None => String::new(),
     }

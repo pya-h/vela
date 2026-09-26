@@ -18,6 +18,7 @@ use std::path::{Component, Path, PathBuf};
 use crate::ast::*;
 use crate::error::{Error, Result};
 use crate::lexer::Lexer;
+use crate::library;
 use crate::parser::{MAX_NESTING, Parser};
 
 /// One file of a program: file number `i` of a program is `files[i]`, and
@@ -228,7 +229,7 @@ struct State {
 
 impl State {
     fn load(&mut self, path: &Path, source: &str, loader: &mut Loader) -> Result<Program> {
-        let main = self.parse(String::new(), path, source.to_string(), None)?;
+        let main = self.parse(String::new(), path, identity(path), source.to_string(), None)?;
         self.visit(main, loader)?;
         let tables: Vec<Names> = self.modules.iter().map(own_names).collect();
         let variants = variants_of_kinds(&self.modules);
@@ -246,18 +247,20 @@ impl State {
     }
 
     /// Lexes and parses `source` as the next file, the module with identity
-    /// `id`, loaded by the `include` at `included_at`.
-    fn parse(&mut self, id: String, path: &Path, source: String, included_at: Option<Span>) -> Result<usize> {
+    /// `id`, read from `path`, which `key` tells from every other file, loaded by
+    /// the `include` at `included_at`.
+    fn parse(&mut self, id: String, path: &Path, key: PathBuf, source: String, included_at: Option<Span>) -> Result<usize> {
         let file = self.files.len();
         self.files.push(SourceFile { path: path.to_path_buf(), source, included_at });
         let source = self.files.get(file).map_or("", |f| f.source.as_str());
         let (tokens, spans) = Lexer::for_file(source, file).tokenize()?;
         let mut parser = Parser::new(tokens, spans);
         let items = parser.parse_file()?;
+        check_natives(&id, &items)?;
         self.type_places.extend(parser.type_places());
         let includes = parser.includes();
         let index = self.modules.len();
-        self.by_path.insert(identity(path), index);
+        self.by_path.insert(key, index);
         self.modules.push(Module { id, file, includes, included: Vec::new(), items });
         Ok(index)
     }
@@ -268,6 +271,7 @@ impl State {
         let includes = self.modules.get(index).map(|m| m.includes.clone()).unwrap_or_default();
         let folder = self.module_path(index).parent().map(Path::to_path_buf).unwrap_or_default();
         let main_folder = self.module_path(0).parent().map(Path::to_path_buf).unwrap_or_default();
+        let in_library = self.modules.get(index).is_some_and(|module| library::is_library(&module.id));
         let mut targets = Vec::new();
         for (i, include) in includes.iter().enumerate() {
             if let Some(local) = include.local_name() {
@@ -278,9 +282,17 @@ impl State {
             {
                 return err(*at, format!("'{0}' is already named '{0}'; leave out '=> {0}'", alias));
             }
-            let path = module_file(&folder, &include.path);
+            let from_library = library_module(include)?;
+            if in_library && from_library.is_none() {
+                return err(include.span, "a module of Vela's library includes only other modules of the library, as in 'include std/files'");
+            }
+            let path = match &from_library {
+                Some((name, _)) => PathBuf::from(format!("{}/{}.vela", library::ROOT, name)),
+                None => module_file(&folder, &include.path),
+            };
+            let key = include_key(&folder, include);
             let earlier = includes.iter().take(i);
-            if let Some(earlier) = earlier.clone().find(|earlier| identity(&module_file(&folder, &earlier.path)) == identity(&path)) {
+            if let Some(earlier) = earlier.clone().find(|earlier| include_key(&folder, earlier) == key) {
                 let at = earlier.name_span;
                 return err(include.name_span, format!("this module is already included at {}:{}; a file includes each module once", at.line, at.col));
             }
@@ -296,7 +308,7 @@ impl State {
                     ),
                 );
             }
-            let target = match self.by_path.get(&identity(&path)) {
+            let target = match self.by_path.get(&key) {
                 Some(&target) => {
                     if let Some(start) = self.loading.iter().position(|&m| m == target) {
                         return err(include.span, self.cycle(start, target));
@@ -307,6 +319,24 @@ impl State {
                     if self.loading.len() >= MAX_MODULE_DEPTH {
                         return err(include.span, format!("modules include one another too deeply (more than {} in a chain)", MAX_MODULE_DEPTH));
                     }
+                    if let Some((name, source)) = from_library {
+                        let id = format!("{}/{}", library::ROOT, name);
+                        let target = self.parse(id, &path, key, source.to_string(), Some(include.span))?;
+                        self.visit(target, loader)?;
+                        targets.push(target);
+                        continue;
+                    }
+                    let id = module_id(&main_folder, &path);
+                    if library::is_library(&id) {
+                        return err(
+                            include.span,
+                            format!(
+                                "'{}' is in a folder named '{}' beside the main file, which would read as Vela's library; give the folder another name",
+                                include.written(),
+                                library::ROOT
+                            ),
+                        );
+                    }
                     let source = loader(&path).map_err(|error| {
                         let message = match error.kind() {
                             io::ErrorKind::NotFound => format!("can't find module '{}': there is no file '{}.vela'", include.written(), include.written()),
@@ -314,7 +344,7 @@ impl State {
                         };
                         Error::at(include.span, message)
                     })?;
-                    let target = self.parse(module_id(&main_folder, &path), &path, source, Some(include.span))?;
+                    let target = self.parse(id, &path, key, source, Some(include.span))?;
                     self.visit(target, loader)?;
                     target
                 }
@@ -505,6 +535,60 @@ fn spelling(module: &Module, own: Option<&Names>, tables: &[Names], variants: &V
     // The main file's names are already written as the program names them.
     names.retain(|full, written| full != written);
     Spelling { names }
+}
+
+/// The module of Vela's library that `include` names, when its path starts with
+/// `std`: its name after `std/` and its source.
+fn library_module(include: &Include) -> Result<Option<(String, &'static str)>> {
+    let Some((first, rest)) = include.path.split_first() else { return Ok(None) };
+    if first != library::ROOT {
+        return Ok(None);
+    }
+    if rest.is_empty() {
+        return err(
+            include.span,
+            format!("'{0}' is Vela's library, not one of its modules; include a module of it, as in 'include {0}/files'", library::ROOT),
+        );
+    }
+    let name = rest.join("/");
+    match library::module(&name) {
+        Some(source) => Ok(Some((name, source))),
+        None => err(include.span, format!("Vela's library has no module '{}/{}'; its modules are {}", library::ROOT, name, library::listed())),
+    }
+}
+
+/// What tells the module `include` loads, from a file in `folder`, from every
+/// other: a module of the library by its name, which no file on the disk has,
+/// and any other by the file it is.
+fn include_key(folder: &Path, include: &Include) -> PathBuf {
+    match include.path.first() {
+        Some(first) if first == library::ROOT => PathBuf::from(format!("<{}>/{}", library::ROOT, include.path.join("/"))),
+        _ => identity(&module_file(folder, &include.path)),
+    }
+}
+
+/// Rejects a native task (see `ast::NATIVE`) outside Vela's library, and one of
+/// the library whose body the runtime doesn't have, in the module with identity
+/// `id` that declares `items`.
+fn check_natives(id: &str, items: &[Item]) -> Result<()> {
+    for item in items {
+        let Item::Task(task) = item else { continue };
+        if !task.native {
+            continue;
+        }
+        if !library::is_library(id) {
+            let fix = if task.body.is_empty() { format!("give '{}' a body in Vela, closed with 'fi'", task.name) } else { format!("leave out '{}'", NATIVE) };
+            return err(task.span, format!("'{}' marks a task whose body the compiler writes in C, which only Vela's library has; {}", NATIVE, fix));
+        }
+        if let Some(first) = task.body.first() {
+            return err(first.span, format!("native task '{}' has no body, since the compiler writes it in C; leave out its lines and its 'fi'", task.name));
+        }
+        let full = format!("{}{}{}", id, MODULE_SEPARATOR, task.name);
+        if library::native(&full).is_none() {
+            return Err(Error::internal_at(task.span, format!("the runtime has no body for the native task '{}' (see src/library.rs)", full)));
+        }
+    }
+    Ok(())
 }
 
 /// Rejects a module named like a builtin type, task, or kind in a file, `name`

@@ -453,6 +453,7 @@ impl Parser {
             self.advance();
             let mut item = match self.peek() {
                 Token::Task => self.parse_task().map(Item::Task)?,
+                _ if self.at_native() => self.parse_native().map(Item::Task)?,
                 Token::Shape => self.parse_shape().map(Item::Shape)?,
                 Token::Kind => self.parse_kind().map(Item::Kind)?,
                 _ => return Err(Error::at(span, "'priv' goes before a task, shape, or kind, or a shape's field")),
@@ -463,6 +464,9 @@ impl Parser {
                 Item::Kind(k) => k.private = true,
             }
             return Ok(item);
+        }
+        if self.at_native() {
+            return self.parse_native().map(Item::Task);
         }
         match self.peek() {
             Token::Task => self.parse_task().map(Item::Task),
@@ -497,6 +501,18 @@ impl Parser {
 
     fn parse_task(&mut self) -> Result<TaskDef> {
         let opened = self.peek_span();
+        let mut task = self.parse_task_header()?;
+        if self.check(Token::LBrace) {
+            return Err(Error::at(self.peek_span(), "a task's body starts on the line after its header, and closes with 'fi'"));
+        }
+        self.skip_newlines();
+        task.body = self.parse_block()?;
+        self.expect_fi("task", opened)?;
+        Ok(task)
+    }
+
+    /// `task name<types>(params) -> results`, at `task`: a task with no body yet.
+    fn parse_task_header(&mut self) -> Result<TaskDef> {
         self.advance(); // task
         let span = self.peek_span();
         let name = self.expect_ident()?;
@@ -508,13 +524,33 @@ impl Parser {
         } else {
             Type::Unit
         };
-        if self.check(Token::LBrace) {
-            return Err(Error::at(self.peek_span(), "a task's body starts on the line after its header, and closes with 'fi'"));
+        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None })
+    }
+
+    /// Whether the cursor is at `native task` (see `ast::NATIVE`).
+    fn at_native(&self) -> bool {
+        matches!(self.peek(), Token::Ident(word) if word == NATIVE) && self.tokens.get(self.pos + 1) == Some(&Token::Task)
+    }
+
+    /// `native task name(params) -> results`: a task whose body is a function
+    /// of the runtime, so its header is all there is of it. Whether its file
+    /// may have one is for loading to say (see `modules::load`).
+    fn parse_native(&mut self) -> Result<TaskDef> {
+        let opened = self.peek_span();
+        self.advance(); // native
+        let mut task = self.parse_task_header()?;
+        task.native = true;
+        if !matches!(self.peek(), Token::Newline | Token::Eof) {
+            return Err(self.unexpected("the end of the line: a native task is its header alone"));
         }
         self.skip_newlines();
-        let body = self.parse_block()?;
-        self.expect_fi("task", opened)?;
-        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body, span, private: false, owner: None })
+        // A body written anyway is read, so that loading says what is wrong: in
+        // a program, that it has no native tasks at all.
+        if !matches!(self.peek(), Token::Task | Token::Shape | Token::Kind | Token::Priv | Token::Eof) && !self.at_native() {
+            task.body = self.parse_block()?;
+            self.expect_fi("task", opened)?;
+        }
+        Ok(task)
     }
 
     /// `<T, U: ordered>` after a declaration's name: the types it takes, with
@@ -749,6 +785,7 @@ impl Parser {
             body,
             span,
             private,
+            native: false,
             owner: Some(Owner { name, alters: alters_span.is_some(), alters_span }),
         })
     }

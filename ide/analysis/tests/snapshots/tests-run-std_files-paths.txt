@@ -1,0 +1,14 @@
+  1 | # A module of the program that includes the library itself, and writes its
+    | comment:# A module of the program that includes the library itself, and writes its
+  2 | # File through the module's name.
+    | comment:# File through the module's name.
+  4 | include std/files
+    | keyword:include  module:std  operator:/  module:files
+  6 | task readable(path: text@p) -> bool
+    | keyword:task  task:readable  punctuation:(  parameter:path  punctuation::  type-builtin:text  operator:@  region:p  punctuation:)  operator:->  type-builtin:bool
+  7 |     bind file = files.File { path: path }
+    | keyword:bind  variable:file  operator:=  module:files  punctuation:.  type:File  punctuation:{  field:path  punctuation::  parameter:path  punctuation:}
+  8 |     <- file.exists()
+    | keyword:<-  variable:file  punctuation:.  method:exists  punctuation:(  punctuation:)
+  9 | fi
+    | keyword:fi

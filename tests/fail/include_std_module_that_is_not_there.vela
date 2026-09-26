@@ -1,0 +1,6 @@
+# error: 2:9: Vela's library has no module 'std/network'; its modules are 'std/files'
+include std/network
+
+task main()
+    show(1)
+fi

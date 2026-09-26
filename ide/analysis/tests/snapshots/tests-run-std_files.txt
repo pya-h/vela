@@ -1,0 +1,36 @@
+  1 | # Vela's library comes with the compiler: `include std/files` brings in its
+    | comment:# Vela's library comes with the compiler: `include std/files` brings in its
+  2 | # files module as any module is brought in, with nothing to find on the disk,
+    | comment:# files module as any module is brought in, with nothing to find on the disk,
+  3 | # and a module of the program may include it as well.
+    | comment:# and a module of the program may include it as well.
+  5 | include std/files {File}
+    | keyword:include  module:std  operator:/  module:files  punctuation:{  type:File  punctuation:}
+  6 | include std_files/paths (readable)
+    | keyword:include  module:std_files  operator:/  module:paths  punctuation:(  task:readable  punctuation:)
+  8 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  9 |     # A File is made from its path, and asked about. A test program runs in a
+    | comment:# A File is made from its path, and asked about. A test program runs in a
+ 10 |     # folder holding a copy of its own folder's files, this module among them.
+    | comment:# folder holding a copy of its own folder's files, this module among them.
+ 11 |     bind here = File { path: "paths.vela" }
+    | keyword:bind  variable:here  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"paths.vela"  punctuation:}
+ 12 |     show(here.path, " ", here.exists())
+    | builtin-fn:show  punctuation:(  variable:here  punctuation:.  field:path  punctuation:,  string:" "  punctuation:,  variable:here  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
+ 13 |     show(File { path: "no such file" }.exists())
+    | builtin-fn:show  punctuation:(  type:File  punctuation:{  field:path  punctuation::  string:"no such file"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
+ 14 |     # An empty file is a file; a folder is not one, though a file in it is.
+    | comment:# An empty file is a file; a folder is not one, though a file in it is.
+ 15 |     show(File { path: "empty.txt" }.exists(), " ", File { path: "notes" }.exists(), " ", File { path: "notes/about.txt" }.exists())
+    | builtin-fn:show  punctuation:(  type:File  punctuation:{  field:path  punctuation::  string:"empty.txt"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  type:File  punctuation:{  field:path  punctuation::  string:"notes"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  type:File  punctuation:{  field:path  punctuation::  string:"notes/about.txt"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
+ 16 |     # A zero byte ends a path to the system, so text holding one names no file.
+    | comment:# A zero byte ends a path to the system, so text holding one names no file.
+ 17 |     show(File { path: "paths.vela\0" }.exists())
+    | builtin-fn:show  punctuation:(  type:File  punctuation:{  field:path  punctuation::  string:"paths.vela  escape:\0  string:"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
+ 18 |     # Through a module of the program, which names it through the module.
+    | comment:# Through a module of the program, which names it through the module.
+ 19 |     show(readable("paths.vela"), " ", readable(""))
+    | builtin-fn:show  punctuation:(  task:readable  punctuation:(  string:"paths.vela"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:readable  punctuation:(  string:""  punctuation:)  punctuation:)
+ 20 | fi
+    | keyword:fi

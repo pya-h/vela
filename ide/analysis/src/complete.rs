@@ -102,6 +102,16 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 let module = open.checked_sub(1).and_then(|p| k.module_at(p));
                 module.map(|m| member_items(&k, m, Members::Listed)).unwrap_or_default()
             }
+            // The path's start, where Vela's library is one of the modules
+            // there are, and after `std/`, its modules.
+            _ if prev_token == Some(&Token::Include) => library_items(true),
+            _ if prev_token == Some(&Token::Slash)
+                && q >= 2
+                && k.ident(q - 1) == Some(vela::library::ROOT)
+                && k.token(q - 2) == Some(&Token::Include) =>
+            {
+                library_items(false)
+            }
             _ => Vec::new(),
         };
         return (items, word_start, byte);
@@ -1509,7 +1519,7 @@ fn module_items(k: &Knowledge) -> Vec<CompletionItem> {
             Some(CompletionItem {
                 label: symbol.name.clone(),
                 kind: CompletionKind::Module,
-                detail: module.path.clone(),
+                detail: if module.library { "Vela's library".to_string() } else { module.path.clone() },
                 apply: None,
                 snippet: None,
                 boost: GLOBAL,
@@ -1621,6 +1631,22 @@ fn default_region() -> CompletionItem {
         snippet: None,
         boost: KEYWORD,
     }
+}
+
+/// The modules of Vela's library, each written whole (`std/files`) or, after
+/// `std/`, by its own name.
+fn library_items(whole: bool) -> Vec<CompletionItem> {
+    vela::library::MODULES
+        .iter()
+        .map(|(name, _)| CompletionItem {
+            label: if whole { format!("{}/{}", vela::library::ROOT, name) } else { name.to_string() },
+            kind: CompletionKind::Module,
+            detail: "Vela's library".to_string(),
+            apply: None,
+            snippet: None,
+            boost: 0,
+        })
+        .collect()
 }
 
 fn keyword(word: &str) -> CompletionItem {

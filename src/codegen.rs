@@ -690,6 +690,16 @@ impl Generator {
             _ => t.name.clone(),
         };
         self.w.open(&signature(t, self.alters));
+        // A native task's body is the runtime function it stands for, given
+        // its parameters as they are (see `ast::NATIVE`).
+        if t.native {
+            let function = crate::library::native(&t.name).ok_or_else(|| Error::internal_at(t.span, format!("the runtime has no body for the native task '{}'", t.name)))?;
+            let args: Vec<String> = t.params.iter().map(|param| c_ident(&param.name)).collect();
+            let call = format!("{}({})", function, args.join(", "));
+            self.w.line(&if t.ret == Type::Unit { format!("{};", call) } else { format!("return {};", call) });
+            self.w.close();
+            return Ok(());
+        }
         for param in &t.params {
             self.use_if_unread(&param.name, &t.body);
         }

@@ -286,6 +286,7 @@
     <nav class="doc-nav" aria-label="Vela documentation">
       <a href="vela.html">Language</a>
       <a href="regions.html">Regions</a>
+      <a href="std.html">Library</a>
       <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html" aria-current="page">Future</a>
@@ -313,7 +314,9 @@
         </div>
         <div class="card">
           <h3>No standard library <span class="badge b-high">High</span></h3>
-          <p>Only <code>show</code> and <code>scan</code> (which reads a line of input, or a number from it) exist, with text's own operations (<a href="vela.html#text-parts">parts</a>, <a href="vela.html#joining">joining</a>, and <a href="vela.html#str">values as text</a>). Numbers convert with <a href="vela.html#conversions"><code>float(n)</code> and <code>int(x)</code></a>, which read text too, but there are no files, networking, or math utilities, and text has no search or trimming.</p>
+          <p>Started: <a href="std.html">Vela's library</a> comes with the compiler, brought in with
+            <code>include std/files</code>, and its first module, files, can tell whether a file is there; opening,
+            reading, and writing files come next. Before it, only <code>show</code> and <code>scan</code> (which reads a line of input, or a number from it) exist, with text's own operations (<a href="vela.html#text-parts">parts</a>, <a href="vela.html#joining">joining</a>, and <a href="vela.html#str">values as text</a>). Numbers convert with <a href="vela.html#conversions"><code>float(n)</code> and <code>int(x)</code></a>, which read text too, but there are no files, networking, or math utilities, and text has no search or trimming.</p>
         </div>
         <div class="card">
           <h3>No module system <span class="badge b-done">Done</span></h3>
@@ -2054,7 +2057,7 @@ fi
             <li>Small region improvements: result-only regions, typed patterns, a lint for regions that grow in loops, and a
               chunk cache (<a href="regions.html#ideas">ideas</a>)</li>
             <li>Move-only owned pointers, on top of regions</li>
-            <li>Basic standard library (math, strings, files)</li>
+            <li>Basic standard library (math, strings, <s>files</s> started: <a href="std.html">the library</a> and <code>std/files</code>)</li>
           </ul>
         </div>
         <div class="roadmap-phase next">

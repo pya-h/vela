@@ -2015,6 +2015,17 @@ impl Checker {
                 self.define_result(name, known(ty), *at)?;
             }
         }
+        // A native task's body is the runtime's (see `ast::NATIVE`), so its
+        // header is all there is to check.
+        if task.native {
+            self.scopes.clear();
+            self.current_ret = None;
+            self.current_method = None;
+            self.current_owner = None;
+            self.result_names.clear();
+            self.unset.clear();
+            return Ok(());
+        }
         let before = self.errors.len();
         self.check_block(&mut task.body)?;
         // Whether every path sends a value can only be told of a body that

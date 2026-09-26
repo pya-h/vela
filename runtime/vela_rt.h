@@ -940,4 +940,41 @@ static inline _Noreturn void vela__rt__missing_send(const char* task) {
     abort();
 }
 
+/* Vela's library, `std`: the bodies of its native tasks, each named for the
+ * task it is in `src/library.rs`, and each written in C11 alone, so a program
+ * that uses the library builds wherever one that doesn't does. */
+
+/* `path` as a C string, which ends at its first `\0`: NULL for text holding
+ * one, which names no file. The caller frees it. */
+static inline char* vela__rt__path_of(vela__rt__text path) {
+    if (memchr(path.bytes, '\0', (size_t)path.len) != NULL) {
+        return NULL;
+    }
+    char* name = malloc((size_t)path.len + 1);
+    if (name == NULL) {
+        vela__rt__out_of_memory();
+    }
+    memcpy(name, path.bytes, (size_t)path.len);
+    name[path.len] = '\0';
+    return name;
+}
+
+/* std/files: whether a file that can be read is at `path`. C11 has no other
+ * way to ask than to open it, and a folder opens on some systems, so a byte is
+ * read too: reading a folder is an error, where an empty file only ends. */
+static inline bool vela__rt__files_path_exists(vela__rt__text path) {
+    char* name = vela__rt__path_of(path);
+    if (name == NULL) {
+        return false;
+    }
+    FILE* file = fopen(name, "rb");
+    free(name);
+    if (file == NULL) {
+        return false;
+    }
+    bool readable = getc(file) != EOF || !ferror(file);
+    fclose(file);
+    return readable;
+}
+
 #endif

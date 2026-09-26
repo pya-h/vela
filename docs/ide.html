@@ -198,6 +198,7 @@
     <nav class="doc-nav" aria-label="Vela documentation">
       <a href="vela.html">Language</a>
       <a href="regions.html">Regions</a>
+      <a href="std.html">Library</a>
       <a href="ide.html" aria-current="page">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html">Future</a>
@@ -358,7 +359,10 @@ Press Ctrl+C to stop.</pre>
             name hovers, completes, and jumps under its new name, and after <code>Size.</code> completion offers the
             kind's variants; and an error in a module, even one not saved yet, is
             shown at the <code>include</code> that leads to it, with the module's file and line. An open file counts as
-            edited; any other is read from the workspace.</p>
+            edited; any other is read from the workspace. <a href="std.html">Vela's library</a> needs no file at all:
+            <code>include std/files</code> is read from the compiler, completion right after <code>include</code> (or
+            <code>include std/</code>) offers its modules, and its names hover and complete as a module's do, though
+            <kbd>F12</kbd> stays put, since the library is no file to open.</p>
         </div>
         <div class="card">
           <h4>Errors as you type</h4>

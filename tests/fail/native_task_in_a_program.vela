@@ -1,0 +1,6 @@
+# error: 2:13: 'native' marks a task whose body the compiler writes in C, which only Vela's library has; give 'size' a body in Vela, closed with 'fi'
+native task size(path: text) -> int
+
+task main()
+    show(size("notes.txt"))
+fi

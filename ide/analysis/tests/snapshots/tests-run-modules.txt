@@ -97,9 +97,9 @@
  54 |     region colors
     | keyword:region  region:colors
  55 |     show(palette.Blue.str() at colors)
-    | builtin-fn:show  punctuation:(  module:palette  punctuation:.  variant:Blue  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:colors  punctuation:)
+    | builtin-fn:show  punctuation:(  module:palette  punctuation:.  variant:Blue  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:colors  punctuation:)
  56 |     show(palette.Color.Red.str(colors))
-    | builtin-fn:show  punctuation:(  module:palette  punctuation:.  type:Color  punctuation:.  variant:Red  punctuation:.  field:str  punctuation:(  region:colors  punctuation:)  punctuation:)
+    | builtin-fn:show  punctuation:(  module:palette  punctuation:.  type:Color  punctuation:.  variant:Red  punctuation:.  method:str  punctuation:(  region:colors  punctuation:)  punctuation:)
  57 |     show(text(red) at colors)
     | builtin-fn:show  punctuation:(  type-builtin:text  punctuation:(  variable:red  punctuation:)  keyword:at  region:colors  punctuation:)
  58 |     match Dark(3)

@@ -244,9 +244,14 @@ impl<'a> Analysis<'a> {
         // A module's name leads to its file.
         if symbol.kind == SymbolKind::Module {
             let module = self.scan.modules.iter().find(|m| self.scan.symbols.get(m.symbol).is_some_and(|s| s.name_range == symbol.name_range))?;
+            if module.library {
+                return None;
+            }
             return module.source.as_ref().map(|_| Location { from: 0, to: 0, path: Some(module.path.clone()) });
         }
         match symbol.module.and_then(|m| self.scan.modules.get(m)) {
+            // Vela's library is no file the editor can open.
+            Some(module) if module.library => None,
             Some(module) => {
                 let source = module.source.as_deref()?;
                 let range = LineIndex::new(source).utf16_range(&symbol.name_range);

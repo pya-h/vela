@@ -1,0 +1,9 @@
+# A module of the program that includes the library itself, and writes its
+# File through the module's name.
+
+include std/files
+
+task readable(path: text@p) -> bool
+    bind file = files.File { path: path }
+    <- file.exists()
+fi

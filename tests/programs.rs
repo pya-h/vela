@@ -92,7 +92,7 @@ fn check_run(source: &Path, expected_path: &Path, trap: Option<&str>, scratch: &
         return Some(failure);
     }
     let input = fs::read(expected_path.with_extension("in")).unwrap_or_default();
-    let run = match run_with_timeout(&exe, input) {
+    let run = match run_with_timeout(&exe, input, &run_folder(source, &name, scratch)) {
         Some(run) => run,
         None => return Some(format!("{}: still running after {} seconds", name, RUN_TIMEOUT.as_secs())),
     };
@@ -121,15 +121,41 @@ fn check_run(source: &Path, expected_path: &Path, trap: Option<&str>, scratch: &
     None
 }
 
+/// The folder a test program runs in, made fresh in `scratch` for the program
+/// called `name`: empty, or holding a copy of the files in the folder beside
+/// `source` that has its name (`tests/run/std_files/`), so a program that reads
+/// or writes files finds what it expects and changes nothing of the working tree.
+fn run_folder(source: &Path, name: &str, scratch: &Path) -> PathBuf {
+    let folder = scratch.join(format!("{}.files", name));
+    let _ = fs::remove_dir_all(&folder);
+    fs::create_dir_all(&folder).unwrap();
+    copy_folder(&source.with_extension(""), &folder);
+    folder
+}
+
+fn copy_folder(from: &Path, to: &Path) {
+    let Ok(entries) = fs::read_dir(from) else { return };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let target = to.join(entry.file_name());
+        if path.is_dir() {
+            fs::create_dir_all(&target).unwrap();
+            copy_folder(&path, &target);
+        } else {
+            fs::copy(&path, &target).unwrap();
+        }
+    }
+}
+
 /// How long a test program may run: a program that loops forever fails its
 /// test instead of hanging the suite.
 const RUN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// Runs `exe` with `input` as its standard input, capturing its output; `None`
 /// (after killing it) if it runs too long.
-fn run_with_timeout(exe: &Path, input: Vec<u8>) -> Option<std::process::Output> {
+fn run_with_timeout(exe: &Path, input: Vec<u8>, folder: &Path) -> Option<std::process::Output> {
     use std::process::Stdio;
-    let mut child = Command::new(exe).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
+    let mut child = Command::new(exe).current_dir(folder).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().unwrap();
     // Written on a thread, and closed after, so the program sees the input end;
     // a program that stops reading early closes the pipe, which isn't an error.
     let mut stdin = child.stdin.take().unwrap();

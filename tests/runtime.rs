@@ -80,15 +80,18 @@ fn run(exe: &Path) -> std::process::Output {
 
 /// `run`, with `input` as the program's standard input.
 fn run_with_input(exe: &Path, input: Vec<u8>) -> std::process::Output {
-    use std::process::Stdio;
-    let mut command = Command::new(exe);
     // In the folder the program was built in, which is this suite's own: a test
     // that writes a file (`tests/runtime/input.c`) then writes it there rather
     // than into the working tree, where the suites, which run at the same time,
     // would write the same name.
-    if let Some(folder) = exe.parent() {
-        command.current_dir(folder);
-    }
+    run_in(exe, input, exe.parent().unwrap_or(Path::new(".")))
+}
+
+/// `run_with_input`, in `folder`.
+fn run_in(exe: &Path, input: Vec<u8>, folder: &Path) -> std::process::Output {
+    use std::process::Stdio;
+    let mut command = Command::new(exe);
+    command.current_dir(folder);
     // Leak checking is part of AddressSanitizer only on Linux.
     let leaks = if cfg!(target_os = "linux") { "detect_leaks=1" } else { "detect_leaks=0" };
     command.env("ASAN_OPTIONS", format!("{}:abort_on_error=0", leaks));
@@ -181,6 +184,32 @@ fn programs_run_clean_under_the_sanitizers() {
 /// Builds `source` with the sanitizers and runs it, expecting the output in
 /// `expected` and success, or, when `trap` gives a message, to stop with exactly
 /// that message; a description of the failure, if any.
+/// The folder a test program runs in, made fresh in `scratch` for the program
+/// called `name`: empty, or holding a copy of the files in the folder beside
+/// `source` that has its name (`tests/run/std_files/`), so a program that reads
+/// or writes files finds what it expects and changes nothing of the working tree.
+fn run_folder(source: &Path, name: &str, scratch: &Path) -> PathBuf {
+    let folder = scratch.join(format!("{}.files", name));
+    let _ = fs::remove_dir_all(&folder);
+    fs::create_dir_all(&folder).unwrap();
+    copy_folder(&source.with_extension(""), &folder);
+    folder
+}
+
+fn copy_folder(from: &Path, to: &Path) {
+    let Ok(entries) = fs::read_dir(from) else { return };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let target = to.join(entry.file_name());
+        if path.is_dir() {
+            fs::create_dir_all(&target).unwrap();
+            copy_folder(&path, &target);
+        } else {
+            fs::copy(&path, &target).unwrap();
+        }
+    }
+}
+
 fn check_sanitized(source: &Path, expected: &Path, name: &str, trap: Option<&str>, scratch: &Path) -> Option<String> {
     let emit = Command::new(VELA).arg(source).arg("--emit-c").output().unwrap();
     if !emit.status.success() {
@@ -192,7 +221,7 @@ fn check_sanitized(source: &Path, expected: &Path, name: &str, trap: Option<&str
     if let Err(errors) = compile_c(&c_path, &exe, SANITIZER_FLAGS) {
         return Some(format!("{}: {}", name, errors));
     }
-    let output = run_with_input(&exe, fs::read(expected.with_extension("in")).unwrap_or_default());
+    let output = run_in(&exe, fs::read(expected.with_extension("in")).unwrap_or_default(), &run_folder(source, name, scratch));
     let stderr = String::from_utf8_lossy(&output.stderr);
     match trap {
         None if !output.status.success() => return Some(format!("{}:\n{}", name, stderr)),

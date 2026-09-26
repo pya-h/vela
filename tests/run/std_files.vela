@@ -1,0 +1,20 @@
+# Vela's library comes with the compiler: `include std/files` brings in its
+# files module as any module is brought in, with nothing to find on the disk,
+# and a module of the program may include it as well.
+
+include std/files {File}
+include std_files/paths (readable)
+
+task main()
+    # A File is made from its path, and asked about. A test program runs in a
+    # folder holding a copy of its own folder's files, this module among them.
+    bind here = File { path: "paths.vela" }
+    show(here.path, " ", here.exists())
+    show(File { path: "no such file" }.exists())
+    # An empty file is a file; a folder is not one, though a file in it is.
+    show(File { path: "empty.txt" }.exists(), " ", File { path: "notes" }.exists(), " ", File { path: "notes/about.txt" }.exists())
+    # A zero byte ends a path to the system, so text holding one names no file.
+    show(File { path: "paths.vela\0" }.exists())
+    # Through a module of the program, which names it through the module.
+    show(readable("paths.vela"), " ", readable(""))
+fi

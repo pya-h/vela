@@ -17,7 +17,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use serde::Serialize;
-use vela::ast::{ALTERS, BUILTIN_TASKS, DEFAULT, MODULE_SEPARATOR, READ, Span, THIS_WORD, Type, unqualified};
+use vela::ast::{ALTERS, BUILTIN_TASKS, DEFAULT, MODULE_SEPARATOR, NATIVE, READ, Span, THIS_WORD, Type, unqualified};
 use vela::lexer::{ESCAPES, LexKind, LexToken, Piece, Token, highlight};
 
 use crate::types::{Context, slashed};
@@ -152,6 +152,9 @@ pub(crate) struct Module {
     pub symbol: usize,
     /// Whether this file names the module: not when only its parts are included.
     pub named: bool,
+    /// Whether it is a module of Vela's library, whose text is the compiler's
+    /// and no file the editor has (see `vela::library`).
+    pub library: bool,
 }
 
 /// A classified piece of source.
@@ -260,12 +263,24 @@ fn included_modules(
         let index = modules.len();
         declared_at.insert(line.last, line.symbol);
         let file = vela::modules::module_file(folder, &line.parts);
-        let path = slashed(&file);
-        let source = context.sources.get(&path).cloned();
+        // A module of Vela's library is the compiler's own, whatever the
+        // editor has (see `vela::library`).
+        let library = line.parts.split_first().filter(|(first, _)| *first == vela::library::ROOT).map(|(_, rest)| rest.join("/"));
+        let path = match &library {
+            Some(name) => format!("{}/{}.vela", vela::library::ROOT, name),
+            None => slashed(&file),
+        };
+        let source = match &library {
+            Some(name) => vela::library::module(name).map(str::to_string),
+            None => context.sources.get(&path).cloned(),
+        };
         // The name this file names the module by, or its path, which the
         // compiler names a declaration this file can't write by.
         let name = if line.only_parts {
-            let id = vela::modules::module_id(folder, &file);
+            let id = match &library {
+                Some(name) => format!("{}/{}", vela::library::ROOT, name),
+                None => vela::modules::module_id(folder, &file),
+            };
             if let Some(symbol) = symbols.get_mut(line.symbol) {
                 symbol.name = id.clone();
             }
@@ -337,7 +352,7 @@ fn included_modules(
                 imports.entry(local.clone()).or_insert(id);
             }
         }
-        modules.push(Module { path, source, symbol: line.symbol, named: !line.only_parts });
+        modules.push(Module { path, source, symbol: line.symbol, named: !line.only_parts, library: library.is_some() });
     }
     (modules, imports)
 }
@@ -640,7 +655,11 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
         let range = tokens.range(p);
         let start = tokens.get(p).map(|t| t.start).unwrap_or_default();
         let visible = 0..tokens.source.len();
-        let private = tokens.before(p) == Some(&Token::Priv) || tokens.before(p.saturating_sub(1)) == Some(&Token::Priv);
+        // `priv name`, `priv task name`, or `priv native task name`.
+        let native = p >= 2 && tokens.ident(p - 2) == Some(NATIVE);
+        let private = tokens.before(p) == Some(&Token::Priv)
+            || tokens.before(p.saturating_sub(1)) == Some(&Token::Priv)
+            || (native && tokens.before(p - 2) == Some(&Token::Priv));
         symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro: None, detail, parent, module: None, private, default: false, read: false });
         declared_at.insert(p, symbols.len() - 1);
         symbols.len() - 1
@@ -1245,6 +1264,10 @@ impl<'a> Classifier<'a> {
         if name == READ && self.declared_at.get(&(p + 1)).and_then(|&id| self.symbols.get(id)).is_some_and(|s| s.kind == SymbolKind::Field && s.read) {
             return (TokenClass::Keyword, None);
         }
+        // `native task …`: a task of Vela's library whose body is C.
+        if name == NATIVE && after == Some(&Token::Task) {
+            return (TokenClass::Keyword, None);
+        }
         // `region r default` and `r: region default`: the word that makes a
         // region the default of a block or of a task's body.
         if name == DEFAULT {
@@ -1577,18 +1600,38 @@ impl<'a> Classifier<'a> {
     /// `kinds` allows. Without a known owner, a name that only one shape or
     /// kind declares still resolves.
     fn member(&self, owner: Option<&str>, name: &str, kinds: &[SymbolKind]) -> Option<usize> {
-        let mut candidates = self.symbols.iter().enumerate().filter(|(_, s)| {
+        let found = |owned: &dyn Fn(&Symbol) -> bool| {
+            let mut candidates = self.symbols.iter().enumerate().filter(|(_, s)| {
+                kinds.contains(&s.kind)
+                    && s.name == name
+                    && s.parent
+                        .and_then(|parent| self.symbols.get(parent))
+                        .is_some_and(|parent| matches!(parent.kind, SymbolKind::Shape | SymbolKind::Kind) && owned(parent))
+            });
+            let first = candidates.next().map(|(id, _)| id);
+            // With no owner known, a name two shapes have is neither's.
+            if owner.is_none() && candidates.next().is_some() {
+                return None;
+            }
+            first
+        };
+        let exact = found(&|parent: &Symbol| owner.is_none_or(|owner| parent.name == owner));
+        if exact.is_some() || owner.is_none() {
+            return exact;
+        }
+        // A shape of a module this file names and also brings in by name
+        // (`include m => d (File)`) is `d.File` among the symbols, and `File`
+        // as the compiler spells it: the one such shape, if only one is.
+        let suffix = format!("{}{}", MODULE_SEPARATOR, owner.unwrap_or_default());
+        let mut loose = self.symbols.iter().enumerate().filter(|(_, s)| {
             kinds.contains(&s.kind)
                 && s.name == name
                 && s.parent
                     .and_then(|parent| self.symbols.get(parent))
-                    .is_some_and(|parent| matches!(parent.kind, SymbolKind::Shape | SymbolKind::Kind) && owner.is_none_or(|owner| parent.name == owner))
+                    .is_some_and(|parent| parent.module.is_some() && matches!(parent.kind, SymbolKind::Shape | SymbolKind::Kind) && parent.name.ends_with(&suffix))
         });
-        let first = candidates.next().map(|(id, _)| id);
-        if owner.is_none() && candidates.next().is_some() {
-            return None;
-        }
-        first
+        let first = loose.next().map(|(id, _)| id);
+        if loose.next().is_some() { None } else { first }
     }
 
     fn push(&mut self, range: Range<usize>, class: TokenClass, symbol: Option<usize>) {

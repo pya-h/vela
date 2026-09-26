@@ -1,0 +1,17 @@
+# std/files: files on the disk. A program brings it in with
+# `include std/files {File}`, or names it `files.File` after `include std/files`.
+
+# A file, named by its path. Making one opens nothing: a File is made, then
+# asked about or opened, and only its own methods change what it says of itself.
+shape File
+    read path: text
+
+    # Whether a file that can be read is at the path.
+    exists() -> bool
+        <- path_exists(.path)
+    fi
+fi
+
+# The C the compiler writes for these is in `runtime/vela_rt.h`, and which one
+# each is in `src/library.rs`.
+priv native task path_exists(path: text@p) -> bool

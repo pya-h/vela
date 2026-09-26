@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela Library</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --fg: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --code-bg: #1e293b;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+    }
+    header {
+      padding: 4rem 1rem 3rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(56,189,248,0.1) 0%, transparent 100%);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+    h1 span {
+      color: var(--accent);
+    }
+    .tagline {
+      margin-top: 0.75rem;
+      font-size: 1.25rem;
+      color: var(--muted);
+    }
+    main {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 3rem;
+      font-size: 1.75rem;
+      color: var(--accent-2);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    h3 {
+      margin-top: 2rem;
+      color: var(--accent);
+    }
+    p { margin: 1rem 0; }
+    code, pre {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      font-size: 0.95rem;
+    }
+    code {
+      background: var(--code-bg);
+      padding: 0.15rem 0.4rem;
+      border-radius: 0.25rem;
+      color: var(--accent);
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1.25rem;
+      border-radius: 0.5rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      line-height: 1.5;
+    }
+    .keyword { color: #c084fc; }
+    .type { color: #38bdf8; }
+    .string { color: #86efac; }
+    .comment { color: #8b9ab0; font-style: italic; }
+    .number { color: #fbbf24; }
+    ul {
+      padding-left: 1.5rem;
+    }
+    li {
+      margin: 0.5rem 0;
+    }
+    .note {
+      background: rgba(56,189,248,0.08);
+      border-left: 4px solid var(--accent);
+      padding: 1rem 1.25rem;
+      border-radius: 0 0.5rem 0.5rem 0;
+      margin: 1.5rem 0;
+    }
+    .doc-nav {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .doc-nav a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"] {
+      color: var(--accent);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+    }
+    th, td {
+      padding: 0.45rem 0.6rem;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+    }
+    footer {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Vela<span>.</span> Library</h1>
+    <p class="tagline">The modules that come with the compiler, under <code>std</code>.</p>
+    <nav class="doc-nav" aria-label="Vela documentation">
+      <a href="vela.html">Language</a>
+      <a href="regions.html">Regions</a>
+      <a href="std.html" aria-current="page">Library</a>
+      <a href="ide.html">Studio</a>
+      <a href="comparison.html">Comparison</a>
+      <a href="future.html">Future</a>
+    </nav>
+  </header>
+
+  <main>
+    <section>
+      <h2 id="using">Using the library</h2>
+      <p>
+        Vela's library is a set of modules written in Vela that come with the compiler. A program brings one in
+        the way it brings in a <a href="vela.html#modules">module of its own</a>, with <code>include</code> and a path
+        that starts with <code>std</code>:
+      </p>
+      <pre><span class="keyword">include</span> std/files {File}          <span class="comment"># File, by its own name</span>
+<span class="keyword">include</span> std/files                 <span class="comment"># or through the module: files.File</span>
+<span class="keyword">include</span> std/files =&gt; disk         <span class="comment"># or under a name of the file's choosing: disk.File</span></pre>
+      <p>
+        Nothing is read from the disk to find it: the library is part of the compiler, so the command, Vela Studio,
+        and the web editor all have the same library, and a program needs nothing installed beside the compiler.
+        Everything the <a href="vela.html#modules">module rules</a> say holds for it too: <code>priv</code> keeps what
+        a module keeps to itself, names brought in may be renamed with <code>=&gt;</code>, and a file includes each
+        module once.
+      </p>
+      <ul>
+        <li><strong><code>std</code> is not a word.</strong> It is only the first part of a path on an
+          <code>include</code> line, the way <code>std::</code> starts a name in C++. A variable, a task, or a field may
+          still be called <code>std</code>.</li>
+        <li><strong>A module is named.</strong> <code>include std</code> alone is refused: <em>'std' is Vela's library,
+          not one of its modules; include a module of it, as in 'include std/files'</em>. So is a module the library
+          doesn't have, and the message lists the ones it does.</li>
+        <li><strong>A program's folder can't be called <code>std</code>.</strong> A module in a folder named
+          <code>std</code> beside the main file would have a name that reads as the library's, so it is refused:
+          <em>'../std/helpers' is in a folder named 'std' beside the main file, which would read as Vela's library;
+          give the folder another name</em>.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 id="files">std/files</h2>
+      <p>
+        Files on the disk. A <code>File</code> is made from its path, and making one opens nothing: it is a value
+        that names a file, which its methods ask about. Its <code>path</code> is a
+        <a href="vela.html#read-fields"><code>read</code></a> field, given when the File is made and changed by no one
+        else after.
+      </p>
+      <pre><span class="keyword">include</span> std/files {File}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">bind</span> notes = File { path: "notes.txt" }
+    show(notes.path)            <span class="comment"># notes.txt</span>
+    show(notes.exists())        <span class="comment"># true when a file that can be read is there</span>
+<span class="keyword">fi</span></pre>
+      <table>
+        <thead><tr><th>Member</th><th>What it is</th></tr></thead>
+        <tbody>
+          <tr><td><code>path: text</code></td><td>The path the File was made with, read-only.</td></tr>
+          <tr><td><code>exists() -&gt; bool</code></td><td>Whether a file that can be read is at the path. A folder, or
+            a file the program may not read, is not one, and neither is a path holding a zero byte.</td></tr>
+        </tbody>
+      </table>
+      <p>
+        This is the module's first piece. Opening a file, reading and writing it, renaming and deleting it, and
+        the kinds that say what state a File is in, how it was opened, and what went wrong, come next, with a
+        region that owns an open file and closes it when its block ends.
+      </p>
+    </section>
+
+    <section>
+      <h2 id="native">How the library is made</h2>
+      <p>
+        The library is Vela source in the repository's <code>std/</code> folder, which the compiler holds as it is
+        built. Most of it is Vela like any program's. What Vela itself can't do, such as asking the system about a
+        file, is a <em>native</em> task: its header is Vela, and its body is a function of the runtime that the
+        generated C includes.
+      </p>
+      <pre><span class="comment"># std/files.vela</span>
+<span class="keyword">priv native task</span> path_exists(path: text@p) -&gt; bool</pre>
+      <p>
+        A native task has no body and no <code>fi</code>, and the compiler writes its body as a call of the runtime
+        function <code>src/library.rs</code> names for it. Only the library has them: in a program,
+        <code>native task</code> is refused (<em>'native' marks a task whose body the compiler writes in C, which only
+        Vela's library has</em>), so the library is not a way to call any C a program likes. Like
+        <code>read</code>, <code>native</code> is a word only there, so a program may still name anything
+        <code>native</code>. The runtime's functions use standard C11 alone, so a program that uses the library
+        builds wherever any other does.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Vela — a minimal systems language experiment.</p>
+  </footer>
+</body>
+</html>
