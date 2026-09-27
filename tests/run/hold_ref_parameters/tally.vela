@@ -1,0 +1,13 @@
+# A task and a method of another file take the caller's place as any do.
+shape Tally
+    count: int = 0
+
+    alters add_into(hold& total: int)
+        total = total + .count
+        .count = 0
+    fi
+fi
+
+task double(hold& n: int)
+    n = n * 2
+fi

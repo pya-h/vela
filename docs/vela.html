@@ -283,6 +283,7 @@ true false none  fi   maybe is     fail failure include priv</pre>
         <tr><td><code>a.m(…)</code>, <code>alters m(…)</code></td><td>a call of a method of the value's shape or kind; a method that changes its value (see <a href="#methods">Methods</a>)</td></tr>
         <tr><td><code>.x</code>, <code>.m(…)</code>, <code>.this</code>, <code>@this</code></td><td>inside a method: a field of the value it is called on, another of its methods, the value itself, and the region it lives in</td></tr>
         <tr><td><code>[T; n]</code>, <code>[T]@r</code></td><td>an array type; a slice type (see <a href="#arrays">Arrays</a> and <a href="#slices">Slices</a>)</td></tr>
+        <tr><td><code>hold x: T</code>, <code>hold&amp; x: T</code>, <code>f(&amp;a)</code></td><td>a parameter the task changes: its own copy, or the caller's place, which the call marks with <code>&amp;</code> (see <a href="#parameters">Parameters that change</a>)</td></tr>
         <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task or shape takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
@@ -348,8 +349,8 @@ true false none  fi   maybe is     fail failure include priv</pre>
       <p>
         Tasks can be called before they are declared, and can call themselves. Arguments are copies, so a task
         never changes the caller's value; a parameter never changes either, unless it is written
-        <code>hold</code> (see <a href="#parameters">Parameters that change</a>). Pass a pointer to let a task change
-        memory the caller can see.
+        <code>hold</code>, and a task changes the caller's own value only through a parameter written
+        <code>hold&amp;</code> (see <a href="#parameters">Parameters that change</a>) or a pointer.
       </p>
       <p>
         Every program starts at <code>task main()</code>, which takes no parameters and returns nothing.
@@ -384,6 +385,52 @@ true false none  fi   maybe is     fail failure include priv</pre>
         <a href="#slice-changes">Adding and taking out items</a>). A method takes one too:
         <code>alters add(hold by: int)</code>. A region never changes, so <code>hold r: region</code> is an error, and
         only a parameter is <code>hold</code>: a shape's field changes where the value it is part of is held.
+      </p>
+      <p>
+        Written <code>hold&amp;</code>, a parameter is the caller's place itself: every change the task makes to it
+        is a change there. The call marks the place it gives with <code>&amp;</code>, so whoever reads the call sees
+        what may change:
+      </p>
+      <pre><span class="keyword">task</span> swap(<span class="keyword">hold&amp;</span> a: int, <span class="keyword">hold&amp;</span> b: int)
+    a, b = b, a
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">hold</span> x = <span class="number">1</span>
+    <span class="keyword">hold</span> y = <span class="number">2</span>
+    swap(&amp;x, &amp;y)          <span class="comment"># x is 2, y is 1</span>
+    <span class="keyword">hold</span> pair = [<span class="number">1</span>, <span class="number">2</span>]
+    swap(&amp;pair[<span class="number">0</span>], &amp;pair[<span class="number">1</span>])
+<span class="keyword">fi</span></pre>
+      <p>
+        A place is given only where it can change: a <code>hold</code> variable, a field or an array item of one
+        (<code>&amp;c.n</code>, <code>&amp;pair[0]</code>), what a pointer points to (<code>&amp;p^</code>,
+        <code>&amp;p^.n</code>), or a <code>hold&amp;</code> or <code>hold</code> parameter, passed on. The rest is
+        refused, each with the reason:
+      </p>
+      <ul>
+        <li><strong>A value that never changes</strong>: a <code>bind</code>, a plain parameter (which a task passes
+          on by taking it as <code>hold&amp;</code> itself), a result, a tuple's item, a <code>read</code> field
+          outside its shape's alters methods, and a value made at the call (<code>&amp;(a + 1)</code>).</li>
+        <li><strong>An item of a slice</strong>: <code>&amp;xs[0]</code>. A slice's items move to new memory when it
+          grows, and the task would go on changing the old copy; give the slice and the index instead.</li>
+        <li><strong>The mark where it doesn't belong</strong>: <code>&amp;a</code> given to a parameter that takes a
+          copy says to leave out <code>&amp;</code>, and <code>a</code> given to a <code>hold&amp;</code> one says to
+          write <code>&amp;a</code>. Nothing else takes <code>&amp;a</code>.</li>
+        <li><strong>One place given twice</strong> where the call changes it: <code>swap(&amp;x, &amp;x)</code>,
+          <code>f(x, &amp;x)</code>, <code>c.give(&amp;c.n)</code> (where <code>give</code> alters <code>c</code>),
+          and <code>swap(&amp;items[i], &amp;items[1])</code>, whose two items may be the same. The task would see a
+          value change that it never wrote. Two different fields or two different items written as numbers are
+          fine, and so are two places through pointers, <code>&amp;p^</code> and <code>&amp;q^</code>, which can't
+          be told apart before the program runs, as writing through two pointers can't.</li>
+        <li><strong>Another type</strong>: the place holds exactly the parameter's type, since the task may write
+          any value of it there. <code>maybe int</code> is not given an <code>int</code>, and a
+          <code>hold&amp; t: text@p</code> given text that lasts as long as the program is refused when another
+          argument makes <code>p</code> a region that ends sooner.</li>
+      </ul>
+      <p>
+        <code>hold&amp;</code> is one word: <code>hold &amp;x</code> is an error that says so. In C, such a parameter
+        is a pointer to the place, as the value an <code>alters</code> method is called on already is.
       </p>
 
       <h3 id="results">Several Results</h3>
@@ -1099,7 +1146,9 @@ show(c.total())            <span class="comment"># 2</span></pre>
         member without it is refused, with the fix named. Only a place that can change may call it: a
         <code>hold</code> variable, a field or item of one, an item of a slice, or what a pointer points to
         (<code>p^.step()</code>). The compiler gives the method that place, so the change lands where the caller keeps
-        the value. A <code>bind</code>, a parameter, a result, and a value made on the spot never change:
+        the value, as a <a href="#parameters"><code>hold&amp;</code> parameter</a> is given one. A <code>bind</code>, a
+        parameter not written <code>hold</code> or <code>hold&amp;</code>, a result, and a value made on the spot
+        never change:
       </p>
       <pre><span class="keyword">bind</span> fixed = Counter { label: <span class="string">"once"</span>, count: <span class="number">1</span> }
 show(fixed.total())        <span class="comment"># fine: total changes nothing</span>
@@ -1108,8 +1157,8 @@ fixed.step()               <span class="comment"># error: 'Counter.step' changes
                            <span class="comment">#   with 'hold' can</span>
 
 <span class="keyword">task</span> bump(c: Counter)
-    c.step()               <span class="comment"># error: ... and 'c' is a parameter, which never does; take a pointer to it,</span>
-<span class="keyword">fi</span>                         <span class="comment">#   as in 'c: ^Counter@r', and call the method on 'c^'</span></pre>
+    c.step()               <span class="comment"># error: ... and 'c' is a parameter, which never does; write 'hold c: Counter'</span>
+<span class="keyword">fi</span>                         <span class="comment">#   to change the task's own copy, or 'hold&amp; c: Counter' to change the caller's</span></pre>
       <p>
         The whole value is <code>.this</code>. A kind has no fields, so its methods read <code>.this</code> and take it
         apart with <code>match</code>, and an <code>alters</code> method moves the value to another variant with

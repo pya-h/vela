@@ -1137,6 +1137,9 @@ impl<'a> Classifier<'a> {
                     self.push(range, TokenClass::Punctuation, None);
                     needs_word = true;
                 }
+                // `hold&` is one word, and `&a` gives a place at a call.
+                Token::Amp if tokens.before(p) == Some(&Token::Hold) => self.push(range, TokenClass::Keyword, None),
+                Token::Amp => self.push(range, TokenClass::Operator, None),
                 Token::Comma => {
                     self.push(range, TokenClass::Punctuation, None);
                     match declaring_list {
@@ -1357,14 +1360,18 @@ impl<'a> Classifier<'a> {
             }
             return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind, SymbolKind::TypeParam]));
         }
-        let held = before == Some(&Token::Hold) && matches!(p.checked_sub(1).and_then(|q| tokens.before(q)), Some(Token::LParen | Token::Comma));
-        if in_task_header && after == Some(&Token::Colon) && (held || matches!(before, Some(Token::LParen | Token::Comma))) {
+        // `hold n: int` and `hold& n: int`: the word, and its `&`, before a
+        // parameter's name.
+        let opens_param = |q: usize| matches!(tokens.before(q), Some(Token::LParen | Token::Comma));
+        let held = before == Some(&Token::Hold) && opens_param(p - 1);
+        let held_ref = before == Some(&Token::Amp) && p >= 2 && tokens.token(p - 2) == Some(&Token::Hold) && opens_param(p - 2);
+        if in_task_header && after == Some(&Token::Colon) && (held || held_ref || matches!(before, Some(Token::LParen | Token::Comma))) {
             let detail = tokens.text_after(p + 1, ends_field);
             // `r: region`, and `r: region default`, which also makes it the
             // default region of the task's body (see `ast::DEFAULT`).
             let takes_region = detail == "region" || detail == format!("region {}", DEFAULT);
             let kind = if takes_region { SymbolKind::Region } else { SymbolKind::Parameter };
-            let intro = if held { Some("hold") } else { None };
+            let intro = if held_ref { Some("hold&") } else if held { Some("hold") } else { None };
             return (kind.class(), Some(self.declare_local(p, kind, intro, detail)));
         }
         if in_pattern {

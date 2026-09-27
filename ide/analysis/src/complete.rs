@@ -354,6 +354,10 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     if matches!(prev_token, Some(Token::Task | Token::Shape | Token::Kind | Token::Bind | Token::Hold | Token::Each | Token::Region)) {
         return (Vec::new(), word_start, byte);
     }
+    // `hold& name`: the `&` is part of the word.
+    if prev_token == Some(&Token::Amp) && prev.and_then(|q| q.checked_sub(1)).and_then(|q| k.token(q)) == Some(&Token::Hold) {
+        return (Vec::new(), word_start, byte);
+    }
     if let (Some(q), Some(Token::Comma)) = (prev, prev_token)
         && in_binding_names(&k, q)
     {
@@ -425,7 +429,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 .any(|p| matches!(k.token(p), Some(Token::Arrow)) || k.ident(p) == Some(vela::ast::ALTERS))
         });
         let takes = first_token == Some(&Token::Task) || (prev.is_some_and(|q| method_header(&k, q)) && (!in_kind || says_method));
-        let items = if takes { vec![keyword("hold")] } else { Vec::new() };
+        let items = if takes { vec![keyword("hold"), keyword("hold&")] } else { Vec::new() };
         return (items, word_start, byte);
     }
 

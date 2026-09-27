@@ -177,6 +177,8 @@ pub struct Checker {
 struct TaskInfo {
     types: Vec<TypeParam>,
     params: Vec<(String, Type)>,
+    /// How each parameter takes its value, in the order of `params`.
+    passing: Vec<Passing>,
     ret: Type,
     owner: Option<Owner>,
 }
@@ -674,7 +676,7 @@ impl Checker {
                         self.written_names.insert(short, format!("{}{}{}", unqualified(ty), MODULE_SEPARATOR, owner.name));
                     }
                     let params = t.params.iter().map(|p| (p.name.clone(), p.ty.clone())).collect();
-                    self.tasks.insert(t.name.clone(), TaskInfo { types: t.types.clone(), params, ret: t.ret.clone(), owner: t.owner.clone() });
+                    self.tasks.insert(t.name.clone(), TaskInfo { types: t.types.clone(), params, passing: t.params.iter().map(|p| p.passing).collect(), ret: t.ret.clone(), owner: t.owner.clone() });
                 }
             }
         }
@@ -1496,7 +1498,7 @@ impl Checker {
             check_str_method(t)?;
         }
         let params = t.params.iter().map(|p| (p.name.clone(), p.ty.clone())).collect();
-        self.tasks.insert(t.name.clone(), TaskInfo { types: t.types.clone(), params, ret: t.ret.clone(), owner: t.owner.clone() });
+        self.tasks.insert(t.name.clone(), TaskInfo { types: t.types.clone(), params, passing: t.params.iter().map(|p| p.passing).collect(), ret: t.ret.clone(), owner: t.owner.clone() });
         self.type_params.clear();
         Ok(())
     }
@@ -1986,15 +1988,16 @@ impl Checker {
         self.scopes = vec![Scope::default()];
         for param in &task.params {
             if param.ty == Type::Region && param.passing != Passing::Copy {
-                self.record(Error::at(param.span, format!("a region never changes, so '{}' can't be 'hold'", param.name)));
+                self.record(Error::at(param.span, format!("a region never changes, so '{}' can't be '{}'", param.name, if param.passing == Passing::HoldRef { "hold&" } else { "hold" })));
             }
             if param.ty == Type::Region {
                 self.define_region(&param.name, param.span, true)?;
             } else {
                 // Only the value a method marked `alters` is called on changes,
-                // and a parameter the task holds a copy of (`hold x: T`).
+                // and a parameter the task holds a copy of (`hold x: T`) or the
+                // caller's place (`hold& x: T`).
                 let alters = param.name == THIS && task.owner.as_ref().is_some_and(|owner| owner.alters);
-                self.define_param(&param.name, known(&param.ty), alters || param.passing == Passing::Hold, param.span)?;
+                self.define_param(&param.name, known(&param.ty), alters || param.passing != Passing::Copy, param.span)?;
             }
         }
         // The regions the header only names in its types.
@@ -3527,6 +3530,9 @@ impl Checker {
             // One the call it is written after doesn't take (a variant's, which
             // `settle_call_region` never sees).
             ExprKind::RegionAfter(_) => err(span, "a region is named after a call only when the call takes one last"),
+            // One a call gives a `hold&` parameter is checked with the call's
+            // arguments (see `check_argument`).
+            ExprKind::Ref(_) => err(span, "'&' gives a place to a parameter written 'hold&', which changes it, as in 'f(&a)'; anywhere else, write the value itself"),
             ExprKind::Var(name) => {
                 let ty = self.lookup_or_err(name, span)?.ty.clone();
                 if self.unset.contains(name.as_str()) {
@@ -4987,9 +4993,9 @@ impl Checker {
                 }
                 if info.param {
                     return refuse(format!(
-                        "it needs a place that can change, and '{0}' is a parameter, which never does; write 'hold {0}: {1}' to change the task's own copy, or take a pointer, as in '{0}: ^{1}@r', and call the method on '{0}^'",
+                        "it needs a place that can change, and '{0}' is a parameter, which never does; write 'hold {0}: {1}' to change the task's own copy, or 'hold& {0}: {1}' to change the caller's",
                         name,
-                        info.ty.without_regions()
+                        info.ty
                     ));
                 }
                 refuse(format!(
@@ -5072,12 +5078,13 @@ impl Checker {
         // worked out rather than written.
         let places: Vec<Span> = info.types.iter().enumerate().map(|(i, _)| written.get(i).map_or(span, |(_, at)| *at)).collect();
         let mut regions: HashMap<String, String> = HashMap::new();
-        for (arg, (param, ty)) in args.iter_mut().zip(params) {
+        let what = if info.owner.is_some() { "method" } else { "task" };
+        for ((arg, (param, ty)), passing) in args.iter_mut().zip(params).zip(&info.passing) {
             if *ty != Type::Region {
                 // A value of a shape made for its types is read as that shape
                 // given them, so a header naming `Box<T>` matches it (see
                 // `match_regions`).
-                let actual = self.check_expr(arg)?;
+                let actual = self.check_argument(arg, *passing, &format!("{} '{}'", what, task), param)?;
                 self.match_regions(ty, &actual, &mut regions);
                 self.match_params(ty, &actual, &mut given);
                 self.match_params(ty, &actual, &mut shown);
@@ -5123,13 +5130,33 @@ impl Checker {
         if !info.types.is_empty() {
             self.check_kept_regions(span, task, info, &regions, &given)?;
         }
-        let what = if info.owner.is_some() { "method" } else { "task" };
-        for (arg, (param, ty)) in args.iter_mut().zip(params) {
+        for ((arg, (param, ty)), passing) in args.iter_mut().zip(params).zip(&info.passing) {
             if *ty == Type::Region {
                 continue;
             }
             let expected = self.settled_type(ty, &regions, &given, span)?;
             let actual = arg.ty()?.clone();
+            // The place itself is given, so it holds exactly what the task
+            // may write there: nothing becomes a wider type on the way.
+            if *passing == Passing::HoldRef {
+                // A region no argument names holds nothing the task could write
+                // there but values that last as long as the program, as the
+                // place's own do.
+                let lasting = expected.map_regions(&mut |region| (region != ANY_REGION).then(|| region.to_string()));
+                if actual != expected && actual != lasting && !actual.unknown() && !expected.unknown() {
+                    if actual.without_regions() == expected.without_regions() {
+                        return err(
+                            arg.span,
+                            format!("expected type {0}, got {1}; the {2} may write a {0} in the place given as '{3}', which a place of type {1} can't hold", expected, actual, what, param),
+                        );
+                    }
+                    return err(
+                        arg.span,
+                        format!("expected type {}, got {}; '{}' is given the place itself, which the {} changes, so the place is of exactly its type", expected, actual, param, what),
+                    );
+                }
+                continue;
+            }
             let same_but_region = [Some(&expected), expected.extracted()].into_iter().flatten().any(|e| actual.without_regions() == e.without_regions());
             match self.coerce(arg, &expected) {
                 // A parameter that holds text of no region, given text of one.
@@ -5162,6 +5189,7 @@ impl Checker {
                 result => result?,
             }
         }
+        self.check_aliasing(args, info)?;
         let sent = self.settled_type(ret, &regions, &given, span)?;
         // A type no argument names is worked out from the place the value goes
         // (see `settle_types`), or written at the call.
@@ -5180,6 +5208,136 @@ impl Checker {
             .collect();
         self.note_instance(span, task, written);
         Ok(sent)
+    }
+
+    /// Checks one argument of a call, given to `param` of `callee` (`task 'f'`),
+    /// and returns its type: a place marked `&` for a `hold&` parameter, and a
+    /// value otherwise.
+    fn check_argument(&mut self, arg: &mut Expr, passing: Passing, callee: &str, param: &str) -> Result<Type> {
+        match (&mut arg.kind, passing) {
+            (ExprKind::Ref(place), Passing::HoldRef) => {
+                let ty = self.check_expr(place)?;
+                self.given_place(place, param)?;
+                arg.ty = Some(ty.clone());
+                Ok(ty)
+            }
+            (ExprKind::Ref(_), _) => err(
+                arg.span,
+                format!("{} takes a copy as '{1}', so leave out '&'; a parameter written 'hold& {1}: …' is given the place itself", callee, param),
+            ),
+            (_, Passing::HoldRef) => {
+                self.check_expr(arg)?;
+                match place_path(arg) {
+                    Some(path) => err(
+                        arg.span,
+                        format!("{} changes '{}', the place it is given, so the call marks that place with '&', as in '&{}'", callee, param, path_text(&path)),
+                    ),
+                    None => err(
+                        arg.span,
+                        format!("{} changes '{}', the place it is given, so it takes a place that can change, marked with '&', as in '&a', and this is a value made here", callee, param),
+                    ),
+                }
+            }
+            _ => self.check_expr(arg),
+        }
+    }
+
+    /// Checks that `place`, already checked, can be given to `hold& param`:
+    /// a place that can change, as an assignment writes to, other than an item
+    /// of a slice, which may move when the slice grows.
+    fn given_place(&self, place: &Expr, param: &str) -> Result<()> {
+        let refuse = |why: String| err(place.span, format!("'{}' is given the place itself, to change, so {}", param, why));
+        match &place.kind {
+            ExprKind::Var(name) => {
+                let info = self.lookup_or_err(name, place.span)?;
+                if info.result {
+                    return refuse(format!("it needs a place that can change, and '{}' is a result, which only '<-' sets", name));
+                }
+                if info.mutable {
+                    return Ok(());
+                }
+                if name == THIS {
+                    return Err(self.this_cannot_change(place.span, &format!("giving '{}' to '{}'", THIS, param)));
+                }
+                if info.param {
+                    return refuse(format!(
+                        "it needs a place that can change, and '{0}' is a parameter, which never does; to pass on the caller's place, write 'hold& {0}: {1}'",
+                        name, info.ty
+                    ));
+                }
+                refuse(format!("it needs a place that can change, and '{}' never does (declared at {}:{}); a value declared with 'hold' can", name, info.span.line, info.span.col))
+            }
+            ExprKind::Field(base, field) => {
+                if matches!(&base.kind, ExprKind::Var(name) if name == THIS) && !self.lookup(THIS).is_some_and(|info| info.mutable) {
+                    return Err(self.this_cannot_change(place.span, &format!("giving '{}{}' to '{}'", MODULE_SEPARATOR, field, param)));
+                }
+                match &base.ty {
+                    Some(Type::Tuple(_)) => return refuse("it needs a place that can change, and a tuple's items never do".to_string()),
+                    Some(Type::Array(..) | Type::Slice(..) | Type::Text(_)) => {
+                        return refuse(format!("it needs a place that can change, and '{}' is worked out from the value, not kept in it", field));
+                    }
+                    Some(ty) => self.read_only_field(ty, field, place.span)?,
+                    None => {}
+                }
+                self.given_place(base, param)
+            }
+            ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => {
+                refuse("it needs a place that can change, and a part taken of a value is a new value, not a place".to_string())
+            }
+            ExprKind::Index(base, _) => match &base.ty {
+                Some(Type::Slice(..)) => refuse(
+                    "it can't be an item of a slice, which moves when the slice grows; give the slice and the item's index, or copy the item into a 'hold' variable, change it, and put it back"
+                        .to_string(),
+                ),
+                Some(Type::Text(_)) => refuse("it needs a place that can change, and text never does".to_string()),
+                _ => self.given_place(base, param),
+            },
+            ExprKind::Deref(_) => Ok(()),
+            _ => refuse("it needs a place that can change: a 'hold' variable, a field or array item of one, or what a pointer points to (p^), not a value made here".to_string()),
+        }
+    }
+
+    /// Rejects a call that gives one place twice where the task changes it:
+    /// `swap(&a, &a)`, `f(a, &a)`, or `f(&a, &a.x)`, and a method that alters
+    /// the value it is called on given a part of it. The task would see a value
+    /// change under it that it never wrote. Two places through pointers, `&p^`
+    /// and `&q^`, can't be told apart before the program runs, and are allowed,
+    /// as writing through two pointers is.
+    fn check_aliasing(&self, args: &[Expr], info: &TaskInfo) -> Result<()> {
+        let alters = info.owner.as_ref().is_some_and(|owner| owner.alters);
+        // Each argument that names a place, whether the task changes it, and
+        // the parameter it is given to.
+        let mut places: Vec<(Vec<Step>, bool, &str, Span)> = Vec::new();
+        for (i, ((arg, (param, _)), passing)) in args.iter().zip(&info.params).zip(&info.passing).enumerate() {
+            let (place, changed) = match (&arg.kind, passing) {
+                (ExprKind::Ref(place), Passing::HoldRef) => (place.as_ref(), true),
+                (_, Passing::Hold) => continue,
+                _ => (arg, i == 0 && alters),
+            };
+            let Some(path) = place_path(place) else { continue };
+            for (before, before_changed, before_param, _) in &places {
+                if (changed || *before_changed) && overlaps(before, &path) {
+                    let name = |param: &str| if param == THIS { "the value it is called on".to_string() } else { format!("'{}'", param) };
+                    let relation = if path.len() > before.len() {
+                        "is part of the place given as"
+                    } else if path.len() < before.len() {
+                        "holds the place given as"
+                    } else if path.contains(&Step::Item(None)) || before.contains(&Step::Item(None)) {
+                        "may be the place given as"
+                    } else {
+                        "is given as"
+                    };
+                    let changing = if changed { param.as_str() } else { *before_param };
+                    let how = if changing == THIS { "the method changes the value it is called on".to_string() } else { format!("the call changes it through '{}'", changing) };
+                    return err(
+                        arg.span,
+                        format!("'{}' {} {} too, and {}; a place the call changes is given once, so keep a copy of it in a variable first, and give that as the other", path_text(&path), relation, name(before_param), how),
+                    );
+                }
+            }
+            places.push((path, changed, param, arg.span));
+        }
+        Ok(())
     }
 
     /// One type of a task's header as the call sees it: the caller's regions in
@@ -5901,6 +6059,7 @@ impl Checker {
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) | ExprKind::RegionAfter(_) => Ok(()),
             ExprKind::Unary(_, inner)
             | ExprKind::Deref(inner)
+            | ExprKind::Ref(inner)
             | ExprKind::Field(inner, _)
             | ExprKind::Fail(inner)
             | ExprKind::Wrap(inner)
@@ -6572,4 +6731,76 @@ fn param_hint(name: &str, info: &VarInfo) -> String {
         return String::new();
     }
     format!("; a parameter that changes is written 'hold {}: {}', and is the task's own copy", name, info.ty)
+}
+
+/// A step from a variable to a place in it: a field, an item, or what a
+/// pointer points to (see `place_path`).
+#[derive(Debug, Clone, PartialEq)]
+enum Step {
+    Field(String),
+    /// An item at a number known before the program runs, or at one that isn't.
+    Item(Option<i64>),
+    Deref,
+}
+
+/// The place `e` names, as its variable and the steps from it, or `None` for a
+/// value that isn't a place.
+fn place_path(e: &Expr) -> Option<Vec<Step>> {
+    let mut steps = Vec::new();
+    let mut at = e;
+    loop {
+        match &at.kind {
+            ExprKind::Var(name) => {
+                steps.push(Step::Field(name.clone()));
+                steps.reverse();
+                return Some(steps);
+            }
+            ExprKind::Field(base, field) => {
+                steps.push(Step::Field(field.clone()));
+                at = base;
+            }
+            ExprKind::Index(base, index) if !matches!(index.kind, ExprKind::Range(..)) => {
+                steps.push(Step::Item(match index.kind {
+                    ExprKind::IntLit(n) => Some(n),
+                    _ => None,
+                }));
+                at = base;
+            }
+            ExprKind::Deref(pointer) => {
+                steps.push(Step::Deref);
+                at = pointer;
+            }
+            _ => return None,
+        }
+    }
+}
+
+/// Whether two places may be the same, or one part of the other: they start at
+/// the same variable and no step tells them apart.
+fn overlaps(a: &[Step], b: &[Step]) -> bool {
+    a.iter().zip(b).all(|pair| match pair {
+        (Step::Item(Some(x)), Step::Item(Some(y))) => x == y,
+        (Step::Item(_), Step::Item(_)) => true,
+        (x, y) => x == y,
+    })
+}
+
+/// A place as a program writes it: `a.b[2]`, `p^.x`.
+fn path_text(path: &[Step]) -> String {
+    let mut text = String::new();
+    for (i, step) in path.iter().enumerate() {
+        match step {
+            // `.n` inside a method is a field of the value it is called on.
+            Step::Field(name) if i == 0 && name == THIS && path.len() > 1 => {}
+            Step::Field(name) if i == 0 => text.push_str(name),
+            Step::Field(name) => {
+                text.push('.');
+                text.push_str(name);
+            }
+            Step::Item(Some(n)) => text.push_str(&format!("[{}]", n)),
+            Step::Item(None) => text.push_str("[…]"),
+            Step::Deref => text.push('^'),
+        }
+    }
+    text
 }

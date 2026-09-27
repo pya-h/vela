@@ -1,0 +1,13 @@
+# error: 12:12: 'c.n' is part of the place given as the value it is called on too, and the call changes it through 'x'; a place the call changes is given once, so keep a copy of it in a variable first, and give that as the other
+shape Counter
+    n: int = 0
+
+    alters give(hold& x: int)
+        x = .n
+    fi
+fi
+
+task main()
+    hold c = Counter {}
+    c.give(&c.n)
+fi

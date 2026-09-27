@@ -282,6 +282,10 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
         }
         SymbolKind::Parameter => {
             let doc = task_around(k, symbol.name_range.start).map(|task| format!("A parameter of {}.", task)).unwrap_or_default();
+            if symbol.intro == Some("hold&") {
+                let doc = format!("{} The caller's place, which the call gives as '&a': every change to it is a change there.", doc);
+                return Some((format!("hold& {}", typed(&symbol.name)), doc.trim_start().to_string()));
+            }
             if symbol.intro == Some("hold") {
                 let doc = format!("{} The task's own copy, which it may change; the caller's value never does.", doc);
                 return Some((format!("hold {}", typed(&symbol.name)), doc.trim_start().to_string()));

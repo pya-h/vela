@@ -1,0 +1,10 @@
+# error: 9:21: 'items[1]' may be the place given as 'a' too, and the call changes it through 'b'; a place the call changes is given once, so keep a copy of it in a variable first, and give that as the other
+task swap(hold& a: int, hold& b: int)
+    a, b = b, a
+fi
+
+task main()
+    hold items = [1, 2, 3]
+    hold i = 0
+    swap(&items[i], &items[1])
+fi

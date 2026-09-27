@@ -1,0 +1,6 @@
+# error: 2:18: a parameter that is the caller's place is written 'hold& x', with '&' against 'hold'
+task sample(hold &x: int)
+fi
+
+task main()
+fi

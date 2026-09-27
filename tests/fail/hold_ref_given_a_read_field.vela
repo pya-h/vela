@@ -1,0 +1,13 @@
+# error: 12:15: 'count' is a read-only field of 'Meter', which only the alters methods of 'Meter' change
+shape Meter
+    read count: int = 0
+fi
+
+task sample(hold& x: int)
+    x = 10
+fi
+
+task main()
+    hold m = Meter {}
+    sample(&m.count)
+fi

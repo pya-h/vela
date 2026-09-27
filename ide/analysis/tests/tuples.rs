@@ -173,7 +173,7 @@ fn completion_offers_types_inside_a_tuple_type() {
         // A name of a binding, and one of a parameter, are still being declared,
         // and a parameter may be one the task changes.
         assert!(labels(&program(checks, "bind one, @@ = (1, 2)")).is_empty(), "checks: {}", checks);
-        assert_eq!(labels("task f(a: int, @@)\nfi\n"), ["hold"]);
+        assert_eq!(labels("task f(a: int, @@)\nfi\n"), ["hold", "hold&"]);
     }
 }
 

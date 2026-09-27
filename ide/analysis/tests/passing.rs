@@ -1,6 +1,7 @@
 //! How parameters take their values, in the editor: `hold n: int`, a parameter
-//! the task changes, is a parameter whose hover says so, the word before it is
-//! a keyword, a parameter list offers it, and all of it holds while the file
+//! the task changes, and `hold& n: int`, the caller's place, which a call gives
+//! as `&a`, are parameters whose hover says so, the words before them are
+//! keywords, a parameter list offers them, and all of it holds while the file
 //! doesn't check. In the sources below, `@@` marks the cursor.
 
 // A panic in a test is a test failure, so these lints do not apply here.
@@ -17,8 +18,16 @@ task countdown(hold n: int, step: int) -> int
     <- n
 fi
 
+task swap(hold& a: int, hold& b: int)
+    a, b = b, a
+fi
+
 task main()
     show(countdown(10, 3))
+    hold x = 1
+    hold y = 2
+    swap(&x, &y)
+    show(x)
 fi
 ";
 
@@ -72,15 +81,19 @@ fn a_parameter_list_offers_hold() {
     for marked in ["task f(@@)\nfi\n", "task f(a: int, @@)\nfi\n", "task f(ho@@)\nfi\n"] {
         let items = completions(marked);
         let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
-        assert_eq!(labels, ["hold"], "{:?}", marked);
+        assert_eq!(labels, ["hold", "hold&"], "{:?}", marked);
     }
     // A method's too, in a shape, and in a kind once the line says it is one.
     for marked in ["shape S\n    n: int\n\n    alters add(@@)\n    fi\nfi\n", "kind K\n    A\n\n    alters m(@@)\n    fi\nfi\n", "kind K\n    A\n\n    m(@@) -> int\n    fi\nfi\n"] {
         let labels: Vec<String> = completions(marked).into_iter().map(|item| item.label).collect();
-        assert_eq!(labels, ["hold"], "{:?}", marked);
+        assert_eq!(labels, ["hold", "hold&"], "{:?}", marked);
     }
     // Not after the word, where the parameter's name goes.
     assert!(completions("task f(hold @@)\nfi\n").is_empty());
+    assert!(completions("task f(hold& @@)\nfi\n").is_empty());
+    // At a call, what follows '&' is a place: the variables.
+    let at_call: Vec<String> = completions(&program(true).replace("swap(&x, &y)", "swap(&x, &@@)")).into_iter().map(|item| item.label).collect();
+    assert!(at_call.contains(&"y".to_string()), "{:?}", at_call);
 }
 
 #[test]
@@ -100,4 +113,36 @@ fi
         diagnostic.message,
         "cannot assign to immutable variable 'n'; a parameter that changes is written 'hold n: int', and is the task's own copy"
     );
+}
+
+#[test]
+fn a_hold_ref_parameter_is_the_callers_place() {
+    for checks in [true, false] {
+        let source = program(checks);
+        let when = if checks { "checked" } else { "declared" };
+        let (code, doc) = hover(&source, "a: int");
+        assert_eq!(code, "hold& a: int", "{}", when);
+        assert!(doc.starts_with("A parameter of task swap."), "{}: {}", when, doc);
+        assert!(doc.contains("The caller's place"), "{}: {}", when, doc);
+        assert_eq!(hover(&source, "a, b = b").0, "hold& a: int", "{}", when);
+        // The place given at the call is the variable itself.
+        assert_eq!(hover(&source, "x, &y").0, "hold x: int", "{}", when);
+        let analysis = Analysis::new(&source);
+        let class_at = |needle: &str| {
+            let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
+            analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
+        };
+        assert_eq!(class_at("hold& a"), Some(TokenClass::Keyword), "{}", when);
+        assert_eq!(class_at("& a"), Some(TokenClass::Keyword), "{}", when);
+        assert_eq!(class_at("&x"), Some(TokenClass::Operator), "{}", when);
+        assert_eq!(class_at("x, &y"), Some(TokenClass::Variable), "{}", when);
+    }
+}
+
+#[test]
+fn a_call_that_leaves_out_the_mark_is_reported() {
+    let source = program(true).replace("swap(&x, &y)", "swap(x, &y)");
+    let diagnostics = Analysis::new(&source).diagnostics();
+    let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
+    assert_eq!(diagnostic.message, "task 'swap' changes 'a', the place it is given, so the call marks that place with '&', as in '&x'");
 }

@@ -1,0 +1,5 @@
+# error: 4:14: '&' gives a place to a parameter written 'hold&', which changes it, as in 'f(&a)'; anywhere else, write the value itself
+task main()
+    hold a = 1
+    bind b = &a
+fi

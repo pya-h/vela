@@ -411,8 +411,9 @@ Press Ctrl+C to stop.</pre>
             those and a shape's fields, with <code>task</code>, <code>shape</code>, and <code>kind</code> after it; and
             <code>priv</code> and <code>alters</code> at the start of a shape's or a kind's member, with
             <code>alters</code> after its <code>priv</code>. In a task's or a method's parameters, where a name goes,
-            <code>hold</code>, which makes the parameter the task's own copy to change; such a parameter hovers as
-            <code>hold n: int</code>. A method's body completes as a task's does.</p>
+            <code>hold</code> and <code>hold&amp;</code>, which make the parameter the task's own copy to change, or
+            the caller's place; such a parameter hovers as <code>hold n: int</code> or <code>hold&amp; n: int</code>,
+            and after the <code>&amp;</code> of a call, where a place goes, the variables are offered. A method's body completes as a task's does.</p>
         </div>
         <div class="card">
           <h4>Snippets</h4>

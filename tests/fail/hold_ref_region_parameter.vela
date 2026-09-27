@@ -1,0 +1,6 @@
+# error: 2:8: a region never changes, so 'r' can't be 'hold&'
+task f(hold& r: region)
+fi
+
+task main()
+fi

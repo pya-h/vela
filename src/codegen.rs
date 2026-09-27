@@ -87,9 +87,10 @@ pub struct Generator {
     /// The methods that change the value they are called on, which take it by
     /// pointer (see `signature`), by the name of the task each is.
     altering: HashSet<String>,
-    /// Whether the task being generated is one of them, so that the value it is
-    /// called on is read through its pointer.
-    alters: bool,
+    /// The parameters of the task being generated that are pointers to the
+    /// caller's place, read through them: the value a method that alters it is
+    /// called on, and every `hold&` parameter.
+    pointers: HashSet<String>,
     /// The C names of the regions the `show` calls being generated make for the
     /// values written by their own `str`, innermost last (see `gen_show`). A
     /// `show` nests inside another only through a plan B of one of its values.
@@ -109,7 +110,7 @@ impl Default for Generator {
             results: Vec::new(),
             task: String::new(),
             altering: HashSet::new(),
-            alters: false,
+            pointers: HashSet::new(),
             shown: Vec::new(),
         }
     }
@@ -680,7 +681,8 @@ impl Generator {
 
     fn gen_task(&mut self, t: &TaskDef) -> Result<()> {
         self.ret = t.ret.clone();
-        self.alters = self.altering.contains(&t.name);
+        let alters = self.altering.contains(&t.name);
+        self.pointers = t.params.iter().filter(|p| is_pointer_param(p, alters)).map(|p| p.name.clone()).collect();
         self.regions.clear();
         self.results = t.result_names().map(|(name, _)| name.clone()).collect();
         // A method is named in a runtime message as the program writes it,
@@ -689,7 +691,7 @@ impl Generator {
             Some((owner, method)) if t.owner.is_some() => format!("{}{}{}", owner, MODULE_SEPARATOR, method),
             _ => t.name.clone(),
         };
-        self.w.open(&signature(t, self.alters));
+        self.w.open(&signature(t, alters));
         // A native task's body is the runtime function it stands for, given
         // its parameters as they are (see `ast::NATIVE`).
         if t.native {
@@ -1393,7 +1395,9 @@ impl Generator {
                 values.push(String::new());
             } else if in_order && !constant {
                 let tmp = self.fresh_temp("arg");
-                self.w.line(&format!("{} {} = {};", c_type(operand.ty()?), tmp, value));
+                // A place given to a `hold&` parameter is its address.
+                let pointer = if matches!(operand.kind, ExprKind::Ref(_)) { "*" } else { "" };
+                self.w.line(&format!("{}{} {} = {};", c_type(operand.ty()?), pointer, tmp, value));
                 values.push(tmp);
             } else {
                 values.push(value);
@@ -1414,7 +1418,9 @@ impl Generator {
             ExprKind::NoneLit => Ok("NULL".to_string()),
             // The checker makes every one the `Var` it stands for.
             ExprKind::RegionAfter(_) => Err(Error::internal_at(e.span, "a region written after a call that the checker left as it was")),
-            ExprKind::Var(name) if self.alters && name == THIS => Ok(format!("(*{})", c_ident(name))),
+            ExprKind::Var(name) if self.pointers.contains(name) => Ok(format!("(*{})", c_ident(name))),
+            // The place given to a `hold&` parameter: its address.
+            ExprKind::Ref(place) => self.gen_receiver(place),
             // The region the `show` being generated makes for the values written
             // by their own `str`, which has a name of its own in C (see
             // `gen_show`), so that one `show` inside another keeps its own.
@@ -1531,6 +1537,7 @@ impl Generator {
     fn gen_edit(&mut self, span: Span, items: &Expr, op: EditOp, args: &[Expr], statement: bool) -> Result<String> {
         let slice = items.ty()?.clone();
         let place = match &items.kind {
+            ExprKind::Var(name) if self.pointers.contains(name) => c_ident(name),
             ExprKind::Var(name) => format!("&{}", c_ident(name)),
             _ => {
                 let place = self.gen_place(items)?;
@@ -1709,12 +1716,14 @@ impl Generator {
     }
 
     /// The address of the place a method that changes the value it is called on
-    /// is called on, which the checker has made sure can change.
+    /// is called on, or of one given to a `hold&` parameter, which the checker
+    /// has made sure can change.
     fn gen_receiver(&mut self, value: &Expr) -> Result<String> {
         if let ExprKind::Var(name) = &value.kind {
             // The value a method is called on is already a pointer in a method
-            // that changes it, so calling another one passes it on.
-            if self.alters && name == THIS {
+            // that changes it, and so is a `hold&` parameter, so giving either
+            // on passes the pointer.
+            if self.pointers.contains(name) {
                 return Ok(c_ident(name));
             }
             return Ok(format!("&{}", c_ident(name)));
@@ -2176,7 +2185,7 @@ fn has_prelude(e: &Expr) -> bool {
         ExprKind::PlanB { .. } | ExprKind::Choice(_) | ExprKind::Edit { .. } | ExprKind::Scan { .. } => true,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
         | ExprKind::Var(_) | ExprKind::RegionAfter(_) => false,
-        ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. }
+        ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. }
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Copy { value: inner, .. } | ExprKind::ToText { value: inner, .. } => {
             has_prelude(inner)
         }
@@ -2400,7 +2409,7 @@ impl UsedTypes {
                     }
                 }
             }
-            ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::New { value: inner, .. }
+            ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. }
             | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => self.expr(inner),
             // The same statement a `match` or a `when` on its own is.
             ExprKind::Choice(stmt) => self.block(std::slice::from_ref(stmt)),
@@ -2562,7 +2571,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit => false,
         // `new` reads the region it allocates in.
         ExprKind::New { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
-        ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner)
+        ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner)
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => expr_reads(inner, name),
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             expr_reads(a, name) || expr_reads(b, name)
@@ -2703,6 +2712,12 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
     }
 }
 
+/// Whether parameter `p` of a task is a pointer to the caller's place in C: a
+/// `hold&` one, or the value a method that `alters` it is called on.
+fn is_pointer_param(p: &Field, alters: bool) -> bool {
+    p.passing == Passing::HoldRef || (alters && p.name == THIS)
+}
+
 /// The C declarator of a task, e.g. `int64_t vela_add(int64_t a, int64_t b)`.
 fn signature(t: &TaskDef, alters: bool) -> String {
     let params: Vec<String> = t
@@ -2710,8 +2725,9 @@ fn signature(t: &TaskDef, alters: bool) -> String {
         .iter()
         .map(|p| {
             // A method that changes the value it is called on is given the
-            // place it is in, so what it writes is what the caller holds.
-            if alters && p.name == THIS {
+            // place it is in, so what it writes is what the caller holds, and
+            // so is a `hold&` parameter.
+            if is_pointer_param(p, alters) {
                 return format!("{}* {}", c_type(&p.ty), c_ident(&p.name));
             }
             format!("{} {}", c_type(&p.ty), c_ident(&p.name))

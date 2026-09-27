@@ -305,8 +305,9 @@ impl Parser {
             (Token::Dot, _, Some(Token::Int(n))) => format!("; a number starts with a digit, as in '0.{}'", n),
             (Token::LBrace, Some(Token::Newline) | None, _) => "; a plan B's '{' goes on the line of its value, and blocks close with 'fi'".to_string(),
             (Token::Semicolon, _, Some(Token::Newline | Token::Eof) | None) => "; a statement ends at the end of its line, without ';'".to_string(),
-            // `&` joins the words after a type's `:` and means nothing else.
-            (Token::Amp, _, _) => "; Vela writes 'and' for both at once ('&' only joins the words a generic type must allow)".to_string(),
+            // `&` joins the words after a type's `:`, and marks a place given at
+            // a call, which starts a value.
+            (Token::Amp, _, _) => "; Vela writes 'and' for both at once ('&' gives a place to a 'hold&' parameter, as in 'f(&a)', and joins the words a generic type must allow)".to_string(),
             _ => String::new(),
         };
         Error::at(self.peek_span(), format!("expected {}, got {}{}", expected, self.peek().describe(), hint))
@@ -911,8 +912,8 @@ impl Parser {
         Ok(Field { name, ty, span, ty_span, private: false, read: false, default_region, passing, default })
     }
 
-    /// `hold` before a task's parameter, which makes it the task's own copy to
-    /// change (see `Passing`). A shape's field and a variant's value change with
+    /// `hold` or `hold&` before a task's parameter, which makes it the task's
+    /// own copy to change, or the caller's place (see `Passing`). A shape's field and a variant's value change with
     /// the value they are part of, and say so.
     fn match_passing(&mut self, slot: Slot) -> Result<Passing> {
         if !self.check(Token::Hold) {
@@ -932,10 +933,24 @@ impl Parser {
             }
         }
         self.advance();
+        let passing = if self.check(Token::Amp) {
+            // `hold&` is one word: `hold &x` reads as the `&` of a call.
+            let amp = self.peek_span();
+            if amp.line != at.line || amp.col != at.col + "hold".len() {
+                return Err(Error::at(amp, "a parameter that is the caller's place is written 'hold& x', with '&' against 'hold'"));
+            }
+            self.advance();
+            Passing::HoldRef
+        } else {
+            Passing::Hold
+        };
         if self.check(Token::Hold) {
             return Err(Error::at(self.peek_span(), "'hold' is already written here: a parameter changes or it doesn't"));
         }
-        Ok(Passing::Hold)
+        if self.check(Token::Amp) {
+            return Err(Error::at(self.peek_span(), "'&' marks a place given at a call, as in 'f(&a)'; a parameter's name is written without it, as in 'hold& a: int'"));
+        }
+        Ok(passing)
     }
 
     /// The word `read` before a shape's field, which any file may read and only
@@ -1997,13 +2012,13 @@ impl Parser {
         if self.check(Token::Failure) {
             return Err(Error::at(self.peek_span(), FAIL_MAKES));
         }
-        if matches!(self.peek(), Token::Fail | Token::Minus | Token::Not) {
+        if matches!(self.peek(), Token::Fail | Token::Minus | Token::Not | Token::Amp) {
             return self.parse_prefixed();
         }
         self.parse_postfix()
     }
 
-    /// `fail e`, `-x`, or `not x`. (A function of its own: `parse_unary`'s frame
+    /// `fail e`, `-x`, `not x`, or `&a`. (A function of its own: `parse_unary`'s frame
     /// is on the stack once per nesting level.)
     fn parse_prefixed(&mut self) -> Result<Expr> {
         let span = self.peek_span();
@@ -2012,6 +2027,12 @@ impl Parser {
             let error = self.parse_operand()?;
             self.leave(1);
             return Ok(Expr::new(ExprKind::Fail(Box::new(error)), span));
+        }
+        if self.match_token(Token::Amp) {
+            self.enter()?;
+            let place = self.parse_operand()?;
+            self.leave(1);
+            return Ok(Expr::new(ExprKind::Ref(Box::new(place)), span));
         }
         let op = if self.match_token(Token::Minus) {
             UnaryOp::Neg

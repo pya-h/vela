@@ -748,6 +748,9 @@ pub enum ExprKind {
         region_span: Span,
     },
     Deref(Box<Expr>),
+    /// `&a`: the place `a` given to a `hold&` parameter, which the task
+    /// changes. Only an argument is one (see `check::check_call_args`).
+    Ref(Box<Expr>),
     /// `Point { x: 1 }`, or `Box<int> { value: none }` for a shape that takes
     /// types: `types` holds the ones the literal names, empty when the values it
     /// gives say which they are.
@@ -1142,8 +1145,8 @@ pub struct Field {
     /// one, and a task takes at most one; a field or a payload never is.
     pub default_region: bool,
     /// How a parameter takes its value: `x: T` never changes, `hold x: T` is
-    /// the task's own copy, which it may change. A field or a payload is always
-    /// `Passing::Copy`.
+    /// the task's own copy, which it may change, and `hold& x: T` is the
+    /// caller's place. A field or a payload is always `Passing::Copy`.
     pub passing: Passing,
     /// `size: int = 0`: the value a shape's field takes where a literal leaves
     /// it out, which is what lets a literal name some fields and not others. It
@@ -1164,6 +1167,9 @@ pub enum Passing {
     /// `hold x: T`: the task's own copy, which it may change; the caller's value
     /// never does, so the call has no mark.
     Hold,
+    /// `hold& x: T`: the caller's place itself, which the call marks,
+    /// `f(&a)`; every change to `x` is a change to it.
+    HoldRef,
 }
 
 /// `include shapes/circle`, `include shapes/circle => round`,

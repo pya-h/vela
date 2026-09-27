@@ -1,0 +1,10 @@
+# error: 9:12: expected type text@r, got text; the task may write a text@r in the place given as 't', which a place of type text can't hold
+task rename(hold& t: text@p, to: text@p)
+    t = to
+fi
+
+task main()
+    hold s = "x"
+    region r
+    rename(&s, "y" + "!" at r)
+fi
