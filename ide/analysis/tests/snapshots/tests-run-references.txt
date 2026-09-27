@@ -122,35 +122,41 @@
     | variable:pn  operator:=  number:42
  71 |     show(p^.n)
     | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:n  punctuation:)
- 73 |     # A copy is a copy.
+ 73 |     # A reference that reads a pointer.
+    | comment:# A reference that reads a pointer.
+ 74 |     bind& pointer = &p
+    | keyword:bind  keyword:&  variable:pointer  operator:=  operator:&  variable:p
+ 75 |     show(pointer^.n)
+    | builtin-fn:show  punctuation:(  variable:pointer  operator:^  punctuation:.  field:n  punctuation:)
+ 77 |     # A copy is a copy.
     | comment:# A copy is a copy.
- 74 |     hold z = y
+ 78 |     hold z = y
     | keyword:hold  variable:z  operator:=  variable:y
- 75 |     z = 0
+ 79 |     z = 0
     | variable:z  operator:=  number:0
- 76 |     show(x, " ", z)
+ 80 |     show(x, " ", z)
     | builtin-fn:show  punctuation:(  variable:x  punctuation:,  string:" "  punctuation:,  variable:z  punctuation:)
- 78 |     # Each block has its own names: a reference in one, a variable in another.
+ 82 |     # Each block has its own names: a reference in one, a variable in another.
     | comment:# Each block has its own names: a reference in one, a variable in another.
- 79 |     each i in 0..2
+ 83 |     each i in 0..2
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:2
- 80 |         when i == 0
+ 84 |         when i == 0
     | keyword:when  variable:i  operator:==  number:0
- 81 |             hold& first = &arr[0]
+ 85 |             hold& first = &arr[0]
     | keyword:hold  keyword:&  variable:first  operator:=  operator:&  variable:arr  punctuation:[  number:0  punctuation:]
- 82 |             first = 50
+ 86 |             first = 50
     | variable:first  operator:=  number:50
- 83 |         else
+ 87 |         else
     | keyword:else
- 84 |             hold first = 1
+ 88 |             hold first = 1
     | keyword:hold  variable:first  operator:=  number:1
- 85 |             show(first)
+ 89 |             show(first)
     | builtin-fn:show  punctuation:(  variable:first  punctuation:)
- 86 |         fi
+ 90 |         fi
     | keyword:fi
- 87 |     fi
+ 91 |     fi
     | keyword:fi
- 88 |     show(arr[0])
+ 92 |     show(arr[0])
     | builtin-fn:show  punctuation:(  variable:arr  punctuation:[  number:0  punctuation:]  punctuation:)
- 89 | fi
+ 93 | fi
     | keyword:fi

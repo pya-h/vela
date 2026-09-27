@@ -70,6 +70,10 @@ task main()
     pn = 42
     show(p^.n)
 
+    # A reference that reads a pointer.
+    bind& pointer = &p
+    show(pointer^.n)
+
     # A copy is a copy.
     hold z = y
     z = 0

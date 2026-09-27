@@ -966,11 +966,20 @@ impl Generator {
                     self.w.line(&format!("{};", expr));
                 }
             }
-            // `hold& y = &x`: a pointer to the place, read through it.
-            StmtKind::Binding { names, reference: true, init, .. } => {
+            // `hold& y = &x`: a pointer to the place, read through it; one that
+            // only reads, `bind& y = &x`, may name a value passed by a hidden
+            // pointer, which is `const`.
+            StmtKind::Binding { names, mutable, reference: true, init } => {
                 if let ([bound], [Expr { kind: ExprKind::Ref(place), .. }]) = (names.as_slice(), init.as_slice()) {
-                    let address = self.gen_receiver(place)?;
-                    self.w.line(&format!("{}* {} = {};", c_type(place.ty()?), c_ident(&bound.name), address));
+                    let address = match &place.kind {
+                        ExprKind::Var(_) => self.gen_receiver(place)?,
+                        _ if !*mutable => format!("&{}", self.gen_place(place)?),
+                        _ => self.gen_receiver(place)?,
+                    };
+                    // `T const*`, which for a pointer type is a pointer to a
+                    // constant pointer, not to what it points to.
+                    let constant = if *mutable { "" } else { " const" };
+                    self.w.line(&format!("{}{}* {} = {};", c_type(place.ty()?), constant, c_ident(&bound.name), address));
                     self.pointers.insert(bound.name.clone());
                 } else {
                     return Err(Error::internal_at(stmt.span, "a reference that isn't one name given one place"));
@@ -1003,7 +1012,7 @@ impl Generator {
                 // The checker guarantees every place is a variable, field, or
                 // deref, all of which generate valid C lvalues.
                 if let ([Target::Place(lhs)], [rhs]) = (targets.as_slice(), values.as_slice()) {
-                    if has_prelude(rhs) && !matches!(lhs.kind, ExprKind::Var(_)) {
+                    if (has_prelude(rhs) || !changes_nothing(rhs)) && !matches!(lhs.kind, ExprKind::Var(_)) {
                         // Find the place before the value's prelude runs, which
                         // might change what the place refers to.
                         let place = self.gen_place(lhs)?;
@@ -1523,19 +1532,25 @@ impl Generator {
     /// before it starts can change it: no argument after it may change
     /// anything. A value anywhere else (behind a pointer, in a slice, named by
     /// a reference) might change while the task runs, through memory the task
-    /// reaches, so it is copied first, as any other value is.
-    fn gen_hidden_operands(&mut self, operands: &[&Expr], hidden: &[bool]) -> Result<Vec<String>> {
+    /// reaches, so it is copied first, as any other value is; and so is every
+    /// one given to a method that changes the value it is called on (not
+    /// `addressable`), which may hold it.
+    fn gen_hidden_operands(&mut self, operands: &[&Expr], hidden: &[bool], addressable: bool) -> Result<Vec<String>> {
         let last_effect = operands.iter().rposition(|e| !changes_nothing(e));
         let mut values = Vec::new();
         for (i, operand) in operands.iter().enumerate() {
             let effect_after = last_effect.is_some_and(|last| i < last);
+            // As in `gen_operands`: before the last operand that may change
+            // something, or that one itself when others follow it.
+            let variable = matches!(operand.kind, ExprKind::Var(_));
+            let in_order = last_effect.is_some_and(|last| i < last || (i + 1 < operands.len() && !variable));
             if hidden.get(i).copied().unwrap_or(false) {
-                if !effect_after && self.kept_place(operand) {
+                if addressable && !effect_after && self.kept_place(operand) {
                     values.push(self.address_of(operand)?);
                     continue;
                 }
                 let value = self.gen_expr(operand)?;
-                if effect_after {
+                if in_order {
                     let tmp = self.fresh_temp("arg");
                     self.w.line(&format!("{} {} = {};", c_type(operand.ty()?), tmp, value));
                     values.push(format!("&{}", tmp));
@@ -1551,7 +1566,7 @@ impl Generator {
                 operand.kind,
                 ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
             );
-            if effect_after && !constant {
+            if in_order && !constant {
                 let tmp = self.fresh_temp("arg");
                 let pointer = if matches!(operand.kind, ExprKind::Ref(_)) { "*" } else { "" };
                 self.w.line(&format!("{}{} {} = {};", c_type(operand.ty()?), pointer, tmp, value));
@@ -1600,8 +1615,10 @@ impl Generator {
             // The checker makes every one the `Var` it stands for.
             ExprKind::RegionAfter(_) => Err(Error::internal_at(e.span, "a region written after a call that the checker left as it was")),
             ExprKind::Var(name) if self.pointers.contains(name) => Ok(format!("(*{})", c_ident(name))),
-            // The place given to a `hold&` parameter: its address.
-            ExprKind::Ref(place) => self.gen_receiver(place),
+            // The place given to a `hold&` parameter: its address, worked out
+            // where the argument is, as its value would be (`gen_operands`
+            // keeps it in order with the others).
+            ExprKind::Ref(place) => self.gen_address(place),
             // The region the `show` being generated makes for the values written
             // by their own `str`, which has a name of its own in C (see
             // `gen_show`), so that one `show` inside another keeps its own.
@@ -1799,14 +1816,22 @@ impl Generator {
         let called = instance_name(name, &given);
         // A method that changes the value it is called on is given the place it
         // is in, found before the arguments are read, as an assignment's is.
+        // The place is found before the arguments are read, unless none of them
+        // can change anything: then its address is an expression, which writes
+        // no statement, so the call is no prelude (see `has_prelude`).
         let (first, rest) = match args.split_first() {
-            Some((value, rest)) if self.altering.contains(&called) => (Some(self.gen_receiver(value)?), rest),
+            Some((value, rest)) if self.altering.contains(&called) => {
+                let quiet = rest.iter().all(|arg| changes_nothing(arg) && !has_prelude(arg));
+                (Some(if quiet { self.gen_address(value)? } else { self.gen_receiver(value)? }), rest)
+            }
             _ => (None, args),
         };
         let rest: Vec<&Expr> = rest.iter().collect();
         let offset = usize::from(first.is_some());
         let hidden: Vec<bool> = (0..rest.len()).map(|i| self.hidden_of(&called).get(i + offset).copied().unwrap_or(false)).collect();
-        let mut values = if hidden.contains(&true) { self.gen_hidden_operands(&rest, &hidden)? } else { self.gen_operands(&rest)? };
+        // A method that changes the value it is called on may be given a part
+        // of it to copy, `c.grow(c.big)`, which it must not see change.
+        let mut values = if hidden.contains(&true) { self.gen_hidden_operands(&rest, &hidden, first.is_none())? } else { self.gen_operands(&rest)? };
         if let Some(first) = first {
             values.insert(0, first);
         }
@@ -1917,6 +1942,15 @@ impl Generator {
         Ok(pointer)
     }
 
+    /// The address of a place that can change, as an expression that writes no
+    /// statement of its own unless the place's index has a prelude.
+    fn gen_address(&mut self, place: &Expr) -> Result<String> {
+        match &place.kind {
+            ExprKind::Var(_) => self.gen_receiver(place),
+            _ => Ok(format!("&{}", self.gen_place(place)?)),
+        }
+    }
+
     /// `-operand` or `not operand`, the expression `e`.
     fn gen_unary(&mut self, e: &Expr, op: UnaryOp, operand: &Expr) -> Result<String> {
         let expr = self.gen_expr(operand)?;
@@ -1983,7 +2017,15 @@ impl Generator {
             let source = self.gen_expr(value)?;
             let source = match value.ty()? {
                 // A view of the array, which lives until the copy is made.
-                Type::Array(_, count) => format!("(({}){{ .items = ({}).items, .len = INT64_C({}) }})", c_type(slice), source, count),
+                // The array may be read through a hidden `const` pointer; the
+                // copy only reads the view.
+                Type::Array(_, count) => format!(
+                    "(({}){{ .items = ({}*)({}).items, .len = INT64_C({}) }})",
+                    c_type(slice),
+                    c_type(item_type(slice)),
+                    source,
+                    count
+                ),
                 _ => source,
             };
             return Ok(format!("{}({}, {})", item_helper("copy", slice), c_ident(region), source));

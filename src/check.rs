@@ -5418,7 +5418,9 @@ impl Checker {
 
     /// Rejects a call that gives one place twice where the task changes it:
     /// `swap(&a, &a)`, `f(a, &a)`, or `f(&a, &a.x)`, and a method that alters
-    /// the value it is called on given a part of it. The task would see a value
+    /// the value it is called on given a part of it as a `hold&`,
+    /// `c.give(&c.n)`. A copy of a part of it, `c.grow(c.n)`, is read before
+    /// the method runs, as it always was. The task would see a value
     /// change under it that it never wrote. Two places through pointers, `&p^`
     /// and `&q^`, can't be told apart before the program runs, and are allowed,
     /// as writing through two pointers is.
@@ -5435,7 +5437,11 @@ impl Checker {
             };
             let Some(path) = self.resolved_path(place) else { continue };
             for (before, before_changed, before_param, _) in &places {
-                if (changed || *before_changed) && overlaps(before, &path) {
+                // A value given to a copy is read before the call starts, so a
+                // method may change the value it is called on and be given a
+                // part of it, `c.grow(c.n)`; only a `hold&` beside it names it.
+                let receiver_and_copy = alters && ((i != 0 && !changed && *before_param == THIS) || (i == 0 && !*before_changed));
+                if (changed || *before_changed) && !receiver_and_copy && overlaps(before, &path) {
                     let name = |param: &str| if param == THIS { "the value it is called on".to_string() } else { format!("'{}'", param) };
                     let relation = if path.len() > before.len() {
                         "is part of the place given as"

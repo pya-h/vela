@@ -11,6 +11,16 @@ shape Big
     first() -> int
         <- .a[0]
     fi
+
+    # Given a copy of the value it changes, which it reads as it was.
+    alters absorb(other: Big)
+        .a[0] = .a[0] + 100
+        .a[0] = .a[0] + other.a[0]
+    fi
+
+    alters grow(k: int)
+        .a[1] = .a[1] + k
+    fi
 fi
 
 kind Held
@@ -124,6 +134,30 @@ task main()
     show(both(b, bump(&b)), " ", b.a[0])
 
     show(held_total(Held.Some(b), b, 4))
+
+    # A method that changes its value, given a copy of it or of a part of it.
+    hold c = make(2)
+    c.absorb(c)
+    c.grow(c.a[1])
+    show(c.a[0], " ", c.a[1])
+
+    # A value made by a call that changes a later argument is made first.
+    hold m = 1
+    show(first_and(mk(&m), m), " ", copied(c, r))
+fi
+
+task mk(hold& n: int) -> Big
+    n = n + 100
+    <- make(n)
+fi
+
+task first_and(b: Big, k: int) -> int
+    <- b.a[0] * 1000 + k
+fi
+
+task copied(b: Big, r: region) -> int
+    bind items = new [int](b.a) at r
+    <- items[11]
 fi
 
 # The first is read before the second changes it.

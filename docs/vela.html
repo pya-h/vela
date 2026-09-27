@@ -422,7 +422,8 @@ true false none  fi   maybe is     fail failure include priv</pre>
         <li><strong>One place given twice</strong> where the call changes it: <code>swap(&amp;x, &amp;x)</code>,
           <code>f(x, &amp;x)</code>, <code>c.give(&amp;c.n)</code> (where <code>give</code> alters <code>c</code>),
           and <code>swap(&amp;items[i], &amp;items[1])</code>, whose two items may be the same. The task would see a
-          value change that it never wrote. Two different fields or two different items written as numbers are
+          value change that it never wrote. A copy is read before the call starts, so a method may still be given a
+          copy of the value it changes, or of a part of it: <code>c.grow(c.n)</code>. Two different fields or two different items written as numbers are
           fine, and so are two places through pointers, <code>&amp;p^</code> and <code>&amp;q^</code>, which can't
           be told apart before the program runs, as writing through two pointers can't.</li>
         <li><strong>Another type</strong>: the place holds exactly the parameter's type, since the task may write
