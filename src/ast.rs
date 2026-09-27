@@ -929,6 +929,9 @@ pub enum StmtKind {
     Assign(Vec<Target>, Vec<Expr>),
     When(Condition, Block, Option<Block>),
     Loop(Condition, Block),
+    /// `block … fi`: statements in a block of their own, whose names, regions,
+    /// and the files opened in them end at its `fi`.
+    Block(Block),
     Each(String, Expr, Block),
     Match(Expr, Vec<Case>),
     /// `<-`, `<- value`, or `<- a, b`: one value per result.

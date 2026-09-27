@@ -816,6 +816,9 @@ no spare yet
         <li><strong>At a <code>&lt;-</code>.</strong> In <code>first_square_over</code>, the send frees <code>work</code>
           (after computing <code>square^</code>, the value it sends), even though it happens deep inside a loop.</li>
         <li><strong>At the end of a plan B's block,</strong> after its last line has given its value.</li>
+        <li><strong>At the <code>fi</code> of a <a href="vela.html#blocks"><code>block</code></a>,</strong> a block of its
+          own, written anywhere a statement is, for a region (and the files opened in it) that should end before the
+          task does, with no loop or condition around it.</li>
       </ul>
       <p>
         Notice that <code>total</code> lives in <code>outer</code>, declared before the loop: values that must survive

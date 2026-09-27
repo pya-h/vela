@@ -296,7 +296,7 @@ describe("VelaAnalysis", () => {
   it("describes the language from the compiler's tables", () => {
     const language = analysis.language();
     expect(language.keywords).toEqual(expect.arrayContaining(["task", "fi", "hold", "none"]));
-    expect(language.blockOpeners).toEqual(["task", "shape", "kind", "when", "loop", "each", "match"]);
+    expect(language.blockOpeners).toEqual(["task", "shape", "kind", "when", "loop", "each", "block", "match"]);
     expect(language.blockModifiers).toEqual(["priv"]);
     expect(language.branchKeywords).toEqual(["else", "case"]);
     expect(language.builtinTypes).toEqual(["int", "float", "bool", "text", "unit"]);

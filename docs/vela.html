@@ -253,7 +253,8 @@
       <p>These words can't be used as names:</p>
       <pre>task shape kind  bind hold  when   else loop    each
 in   at    match case new   region and  or      not
-true false none  fi   maybe is     fail failure include priv</pre>
+true false none  fi   maybe is     fail failure include priv
+block</pre>
       <p>
         <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>,
         <code>bool</code>, <code>text</code>, <code>unit</code>) aren't reserved words: no task, shape, kind, or
@@ -1608,6 +1609,27 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
         A <code>when</code> or a <code>match</code> can be a value as well as a statement, giving one from each branch
         (see <a href="#choices">A match or a when as a value</a>).
       </p>
+      <p id="blocks">
+        <code>block</code> starts a block of its own, closed by <code>fi</code>, which runs its statements once, where
+        it is. What it declares ends at its <code>fi</code>: its names, which another block may use again, and its
+        regions, which are freed there with the files opened in them, though the task goes on (see
+        <a href="#region-lifetime">A region lives until its block closes</a>):
+      </p>
+      <pre><span class="keyword">hold</span> total = <span class="number">0</span>
+<span class="keyword">block</span>
+    <span class="keyword">region</span> r
+    <span class="keyword">hold</span> f = File { path: <span class="string">"notes.txt"</span> }
+    f.open(FileMode.Read) <span class="keyword">at</span> r { <span class="keyword">failure</span> e
+        <span class="keyword">&lt;-</span>
+    }
+    total = f.size() { <span class="number">0</span> }
+<span class="keyword">fi</span>                           <span class="comment"># the file is closed here, and r freed</span>
+show(total)</pre>
+      <p>
+        A <code>block</code> takes nothing on its line. What it sets is set after it, a result
+        (<code>total &lt;- …</code>) too, and a block every path of which sends counts as sending. It is a statement,
+        not a value.
+      </p>
       <p>
         <code>else when</code> chains conditions: each is tried in turn, the first that holds runs its block, and one
         <code>fi</code> closes the whole chain. A chain is the same statement as a <code>when</code> written inside the
@@ -1971,7 +1993,7 @@ show(next^)                                <span class="comment"># error: this p
 <span class="keyword">bind</span> bad: ^int@r = <span class="keyword">none</span>                    <span class="comment"># error: expected type ^int@r, got none; a pointer can't be none, so use 'maybe ^int@r'</span>
 <span class="keyword">bind</span> lost: ^int = <span class="keyword">new</span> int(2) <span class="keyword">at</span> r         <span class="comment"># error: a pointer lives in a region, so its type names one</span></pre>
 
-      <h3>A region lives until its block closes</h3>
+      <h3 id="region-lifetime">A region lives until its block closes</h3>
       <p>
         A region can be used from its <code>region</code> statement to the end of the block that declares it, like a
         variable, and shares the variables' names (no shadowing). Since a type can only name a region visible where
@@ -1991,7 +2013,9 @@ show(next^)                                <span class="comment"># error: this p
         The region is freed however the block ends: at its <code>fi</code>, at the end of a plan B's block (after its
         last line has given its value), or by a send (<code>&lt;-</code>) from anywhere inside it, which frees every region the
         task has declared before it returns (after computing the value it sends). A <code>region</code> in a loop's body
-        is a new region on every pass, freed at the end of the pass, which is how a loop allocates without growing:
+        is a new region on every pass, freed at the end of the pass, which is how a loop allocates without growing,
+        and a <code>region</code> in a <a href="#blocks"><code>block</code></a> is freed at the block's
+        <code>fi</code>, without a loop or a condition around it:
       </p>
       <pre><span class="keyword">each</span> line <span class="keyword">in</span> 0..1000
     <span class="keyword">region</span> work                            <span class="comment"># empty again on every pass</span>

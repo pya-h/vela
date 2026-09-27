@@ -1,0 +1,6 @@
+# error: 3:14: expected an expression, got 'block'
+task main()
+    bind v = block
+        1
+    fi
+fi

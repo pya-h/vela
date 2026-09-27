@@ -1,0 +1,154 @@
+  1 | # A block of its own, `block … fi`: what it declares, its names and regions,
+    | comment:# A block of its own, `block … fi`: what it declares, its names and regions,
+  2 | # ends at its `fi`, so a region closes there, and the files opened in it with
+    | comment:# ends at its `fi`, so a region closes there, and the files opened in it with
+  3 | # it, though the task goes on.
+    | comment:# it, though the task goes on.
+  5 | include std/files {File, FileMode, FileError}
+    | keyword:include  module:std  operator:/  module:files  punctuation:{  type:File  punctuation:,  type:FileMode  punctuation:,  type:FileError  punctuation:}
+  7 | # A block whose every path sends counts as sending.
+    | comment:# A block whose every path sends counts as sending.
+  8 | task sign(n: int) -> int
+    | keyword:task  task:sign  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  9 |     block
+    | keyword:block
+ 10 |         when n < 0
+    | keyword:when  parameter:n  operator:<  number:0
+ 11 |             <- -1
+    | keyword:<-  operator:-  number:1
+ 12 |         fi
+    | keyword:fi
+ 13 |         <- 1
+    | keyword:<-  number:1
+ 14 |     fi
+    | keyword:fi
+ 15 | fi
+    | keyword:fi
+ 17 | # A result set inside a block is set after it.
+    | comment:# A result set inside a block is set after it.
+ 18 | task halves(n: int) -> half: int, rest: int
+    | keyword:task  task:halves  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:half  punctuation::  type-builtin:int  punctuation:,  variable:rest  punctuation::  type-builtin:int
+ 19 |     block
+    | keyword:block
+ 20 |         half <- n / 2
+    | variable:half  keyword:<-  parameter:n  operator:/  number:2
+ 21 |         rest <- n - n / 2
+    | variable:rest  keyword:<-  parameter:n  operator:-  parameter:n  operator:/  number:2
+ 22 |     fi
+    | keyword:fi
+ 23 | fi
+    | keyword:fi
+ 25 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 26 |     hold total = 0
+    | keyword:hold  variable:total  operator:=  number:0
+ 27 |     block
+    | keyword:block
+ 28 |         hold step = 2
+    | keyword:hold  variable:step  operator:=  number:2
+ 29 |         total = total + step
+    | variable:total  operator:=  variable:total  operator:+  variable:step
+ 30 |     fi
+    | keyword:fi
+ 31 |     # Another block may use the same name for something else.
+    | comment:# Another block may use the same name for something else.
+ 32 |     block
+    | keyword:block
+ 33 |         bind step = "three"
+    | keyword:bind  variable:step  operator:=  string:"three"
+ 34 |         total = total + step.len
+    | variable:total  operator:=  variable:total  operator:+  variable:step  punctuation:.  field:len
+ 35 |     fi
+    | keyword:fi
+ 36 |     show(total, " ", sign(-3), " ", sign(4))
+    | builtin-fn:show  punctuation:(  variable:total  punctuation:,  string:" "  punctuation:,  task:sign  punctuation:(  operator:-  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  task:sign  punctuation:(  number:4  punctuation:)  punctuation:)
+ 37 |     bind half, rest = halves(7)
+    | keyword:bind  variable:half  punctuation:,  variable:rest  operator:=  task:halves  punctuation:(  number:7  punctuation:)
+ 38 |     show(half, " ", rest)
+    | builtin-fn:show  punctuation:(  variable:half  punctuation:,  string:" "  punctuation:,  variable:rest  punctuation:)
+ 40 |     # Blocks nest, each with a default region of its own, and one in a loop
+    | comment:# Blocks nest, each with a default region of its own, and one in a loop
+ 41 |     # starts again each round.
+    | comment:# starts again each round.
+ 42 |     each i in 0..3
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:3
+ 43 |         block
+    | keyword:block
+ 44 |             region r default
+    | keyword:region  region:r  keyword:default
+ 45 |             bind kept = new int(i * 10)
+    | keyword:bind  variable:kept  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:i  operator:*  number:10  punctuation:)
+ 46 |             block
+    | keyword:block
+ 47 |                 region inner default
+    | keyword:region  region:inner  keyword:default
+ 48 |                 bind more = new int(kept^ + 1)
+    | keyword:bind  variable:more  operator:=  keyword:new  type-builtin:int  punctuation:(  variable:kept  operator:^  operator:+  number:1  punctuation:)
+ 49 |                 total = total + more^
+    | variable:total  operator:=  variable:total  operator:+  variable:more  operator:^
+ 50 |             fi
+    | keyword:fi
+ 51 |         fi
+    | keyword:fi
+ 52 |     fi
+    | keyword:fi
+ 53 |     show(total)
+    | builtin-fn:show  punctuation:(  variable:total  punctuation:)
+ 55 |     # A reference made in a block names its place until the block ends.
+    | comment:# A reference made in a block names its place until the block ends.
+ 56 |     block
+    | keyword:block
+ 57 |         hold& t = &total
+    | keyword:hold  keyword:&  variable:t  operator:=  operator:&  variable:total
+ 58 |         t = 0
+    | variable:t  operator:=  number:0
+ 59 |     fi
+    | keyword:fi
+ 60 |     show(total)
+    | builtin-fn:show  punctuation:(  variable:total  punctuation:)
+ 62 |     # A file opened in a block's region is closed at its fi.
+    | comment:# A file opened in a block's region is closed at its fi.
+ 63 |     hold notes = File { path: "notes.txt" }
+    | keyword:hold  variable:notes  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
+ 64 |     block
+    | keyword:block
+ 65 |         region r
+    | keyword:region  region:r
+ 66 |         notes.open(FileMode.Read) at r { failure e
+    | variable:notes  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 67 |             show("could not open notes.txt")
+    | builtin-fn:show  punctuation:(  string:"could not open notes.txt"  punctuation:)
+ 68 |             <-
+    | keyword:<-
+ 69 |         }
+    | punctuation:}
+ 70 |         show(notes.line() at r { "" } { "" })
+    | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  method:line  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  string:""  punctuation:}  punctuation:{  string:""  punctuation:}  punctuation:)
+ 71 |     fi
+    | keyword:fi
+ 72 |     region later
+    | keyword:region  region:later
+ 73 |     bind after = notes.line() at later { failure e
+    | keyword:bind  variable:after  operator:=  variable:notes  punctuation:.  method:line  punctuation:(  punctuation:)  keyword:at  region:later  punctuation:{  keyword:failure  variable:e
+ 74 |         show("closed at the block's fi")
+    | builtin-fn:show  punctuation:(  string:"closed at the block's fi"  punctuation:)
+ 75 |         none
+    | keyword:none
+ 76 |     }
+    | punctuation:}
+ 77 |     show(after { "(nothing read)" })
+    | builtin-fn:show  punctuation:(  variable:after  punctuation:{  string:"(nothing read)"  punctuation:}  punctuation:)
+ 78 |     # And so it opens again.
+    | comment:# And so it opens again.
+ 79 |     block
+    | keyword:block
+ 80 |         region r
+    | keyword:region  region:r
+ 81 |         notes.open(FileMode.Read) at r { <- }
+    | variable:notes  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:<-  punctuation:}
+ 82 |         show(notes.line() at r { "" } { "" })
+    | builtin-fn:show  punctuation:(  variable:notes  punctuation:.  method:line  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  string:""  punctuation:}  punctuation:{  string:""  punctuation:}  punctuation:)
+ 83 |     fi
+    | keyword:fi
+ 84 | fi
+    | keyword:fi

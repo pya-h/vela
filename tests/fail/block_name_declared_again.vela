@@ -1,0 +1,7 @@
+# error: 5:14: 'x' is already defined at 3:10
+task main()
+    hold x = 1
+    block
+        hold x = 2
+    fi
+fi

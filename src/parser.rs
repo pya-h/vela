@@ -485,7 +485,7 @@ impl Parser {
             token if !matches!(token, Token::Send) || self.at_line_start() => {
                 let statement = matches!(
                     token,
-                    Token::Ident(_) | Token::Bind | Token::Hold | Token::When | Token::Loop | Token::Each | Token::Match | Token::Send | Token::Region | Token::Else | Token::Case
+                    Token::Ident(_) | Token::Bind | Token::Hold | Token::When | Token::Loop | Token::Each | Token::Block | Token::Match | Token::Send | Token::Region | Token::Else | Token::Case
                 );
                 let error = self.unexpected("'task', 'shape', or 'kind'");
                 if statement {
@@ -1268,6 +1268,7 @@ impl Parser {
             Token::Hold => self.parse_binding(false),
             Token::When => self.parse_when(),
             Token::Loop => self.parse_loop(),
+            Token::Block => self.parse_plain_block(),
             Token::Each => self.parse_each(),
             Token::Match => self.parse_match(),
             Token::Send => self.parse_send(),
@@ -1549,6 +1550,19 @@ impl Parser {
         let body = self.parse_block()?;
         self.expect_fi("loop", span)?;
         Ok(Stmt::new(StmtKind::Loop(cond, body), span))
+    }
+
+    /// `block`, then its statements from the next line, closed by `fi`.
+    fn parse_plain_block(&mut self) -> Result<Stmt> {
+        let span = self.peek_span();
+        self.advance(); // block
+        if !matches!(self.peek(), Token::Newline | Token::Eof) {
+            return Err(Error::at(self.peek_span(), "a 'block' takes nothing on its line: its statements start on the next one, and 'fi' closes it"));
+        }
+        self.skip_newlines();
+        let body = self.parse_block()?;
+        self.expect_fi("block", span)?;
+        Ok(Stmt::new(StmtKind::Block(body), span))
     }
 
     fn parse_each(&mut self) -> Result<Stmt> {

@@ -74,79 +74,81 @@
     | builtin-fn:show  punctuation:(  string:"could not start the list: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
  42 |     }
     | punctuation:}
- 44 |     # Adding goes at the end.
-    | comment:# Adding goes at the end.
- 45 |     list.open(FileMode.Append) at r { failure e
-    | variable:list  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Append  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
- 46 |         show("could not add: ", said(e))
+ 44 |     # Adding goes at the end. The file is opened in a block's region, which
+    | comment:# Adding goes at the end. The file is opened in a block's region, which
+ 45 |     # closes it at the block's fi, though main goes on.
+    | comment:# closes it at the block's fi, though main goes on.
+ 46 |     block
+    | keyword:block
+ 47 |         region adding
+    | keyword:region  region:adding
+ 48 |         list.open(FileMode.Append) at adding { failure e
+    | variable:list  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Append  punctuation:)  keyword:at  region:adding  punctuation:{  keyword:failure  variable:e
+ 49 |             show("could not add: ", said(e))
     | builtin-fn:show  punctuation:(  string:"could not add: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
- 47 |     }
+ 50 |         }
     | punctuation:}
- 48 |     list.write("apples\n") { failure e
+ 51 |         list.write("apples\n") { failure e
     | variable:list  punctuation:.  method:write  punctuation:(  string:"apples  escape:\n  string:"  punctuation:)  punctuation:{  keyword:failure  variable:e
- 49 |         show("could not add: ", said(e))
+ 52 |             show("could not add: ", said(e))
     | builtin-fn:show  punctuation:(  string:"could not add: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
- 50 |     }
+ 53 |         }
     | punctuation:}
- 51 |     list.close() { failure e
-    | variable:list  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
- 52 |         show("could not close: ", said(e))
-    | builtin-fn:show  punctuation:(  string:"could not close: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
- 53 |     }
-    | punctuation:}
- 54 |     show(list.path, " holds ", list.size() { 0 }, " bytes")
-    | builtin-fn:show  punctuation:(  variable:list  punctuation:.  field:path  punctuation:,  string:" holds "  punctuation:,  variable:list  punctuation:.  method:size  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" bytes"  punctuation:)
- 56 |     # Read back line by line: `line()` gives none at the end of the file.
-    | comment:# Read back line by line: `line()` gives none at the end of the file.
- 57 |     list.open(FileMode.Read) at r { failure e
-    | variable:list  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
- 58 |         show("could not read: ", said(e))
-    | builtin-fn:show  punctuation:(  string:"could not read: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
- 59 |     }
-    | punctuation:}
- 60 |     hold count = 0
-    | keyword:hold  variable:count  operator:=  number:0
- 61 |     loop list.line() at r { none } is {item}
-    | keyword:loop  variable:list  punctuation:.  method:line  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:none  punctuation:}  keyword:is  punctuation:{  variable:item  punctuation:}
- 62 |         count = count + 1
-    | variable:count  operator:=  variable:count  operator:+  number:1
- 63 |         show(count, ". ", item)
-    | builtin-fn:show  punctuation:(  variable:count  punctuation:,  string:". "  punctuation:,  variable:item  punctuation:)
- 64 |     fi
+ 54 |     fi
     | keyword:fi
- 65 |     list.close() { failure e
-    | variable:list  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
- 66 |         show("could not close: ", said(e))
-    | builtin-fn:show  punctuation:(  string:"could not close: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
- 67 |     }
+ 55 |     show(list.path, " holds ", list.size() { 0 }, " bytes")
+    | builtin-fn:show  punctuation:(  variable:list  punctuation:.  field:path  punctuation:,  string:" holds "  punctuation:,  variable:list  punctuation:.  method:size  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" bytes"  punctuation:)
+ 57 |     # Read back line by line: `line()` gives none at the end of the file.
+    | comment:# Read back line by line: `line()` gives none at the end of the file.
+ 58 |     list.open(FileMode.Read) at r { failure e
+    | variable:list  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
+ 59 |         show("could not read: ", said(e))
+    | builtin-fn:show  punctuation:(  string:"could not read: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 60 |     }
     | punctuation:}
- 69 |     # Reading a file opened for writing is a mistake the plan B names.
+ 61 |     hold count = 0
+    | keyword:hold  variable:count  operator:=  number:0
+ 62 |     loop list.line() at r { none } is {item}
+    | keyword:loop  variable:list  punctuation:.  method:line  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:none  punctuation:}  keyword:is  punctuation:{  variable:item  punctuation:}
+ 63 |         count = count + 1
+    | variable:count  operator:=  variable:count  operator:+  number:1
+ 64 |         show(count, ". ", item)
+    | builtin-fn:show  punctuation:(  variable:count  punctuation:,  string:". "  punctuation:,  variable:item  punctuation:)
+ 65 |     fi
+    | keyword:fi
+ 66 |     list.close() { failure e
+    | variable:list  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
+ 67 |         show("could not close: ", said(e))
+    | builtin-fn:show  punctuation:(  string:"could not close: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
+ 68 |     }
+    | punctuation:}
+ 70 |     # Reading a file opened for writing is a mistake the plan B names.
     | comment:# Reading a file opened for writing is a mistake the plan B names.
- 70 |     list.open(FileMode.Append) at r { failure e
+ 71 |     list.open(FileMode.Append) at r { failure e
     | variable:list  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Append  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
- 71 |         show("could not add: ", said(e))
+ 72 |         show("could not add: ", said(e))
     | builtin-fn:show  punctuation:(  string:"could not add: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
- 72 |     }
+ 73 |     }
     | punctuation:}
- 73 |     show(list.read() at r { failure e
+ 74 |     show(list.read() at r { failure e
     | builtin-fn:show  punctuation:(  variable:list  punctuation:.  method:read  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
- 74 |         said(e)
+ 75 |         said(e)
     | task:said  punctuation:(  variable:e  punctuation:)
- 75 |     })
+ 76 |     })
     | punctuation:}  punctuation:)
- 76 |     list.close() { failure e
+ 77 |     list.close() { failure e
     | variable:list  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
- 77 |         show("could not close: ", said(e))
+ 78 |         show("could not close: ", said(e))
     | builtin-fn:show  punctuation:(  string:"could not close: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
- 78 |     }
+ 79 |     }
     | punctuation:}
- 80 |     list.delete() { failure e
+ 81 |     list.delete() { failure e
     | variable:list  punctuation:.  method:delete  punctuation:(  punctuation:)  punctuation:{  keyword:failure  variable:e
- 81 |         show("could not delete: ", said(e))
+ 82 |         show("could not delete: ", said(e))
     | builtin-fn:show  punctuation:(  string:"could not delete: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
- 82 |     }
+ 83 |     }
     | punctuation:}
- 83 |     show(list.str() at r, ", and there: ", list.exists())
+ 84 |     show(list.str() at r, ", and there: ", list.exists())
     | builtin-fn:show  punctuation:(  variable:list  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  string:", and there: "  punctuation:,  variable:list  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
- 84 | fi
+ 85 | fi
     | keyword:fi

@@ -183,7 +183,8 @@
       <p>
         Files on the disk. A <code>File</code> is made from its path, and making one opens nothing: it is a value
         that names a file, which its methods ask about, open, read, write, rename, and delete. A file is opened in
-        a <a href="regions.html">region</a>, which closes it when its block ends, as it frees its memory;
+        a <a href="regions.html">region</a>, which closes it when its block ends, as it frees its memory (a
+        <a href="vela.html#blocks"><code>block … fi</code></a> makes a block anywhere, for just that);
         <code>close()</code> closes it sooner. Everything that touches the disk can fail, with a
         <a href="#file-error"><code>FileError</code></a> that a <a href="vela.html#maybe">plan B</a> handles.
       </p>

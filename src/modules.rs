@@ -1144,6 +1144,7 @@ impl Resolver<'_> {
                     None => Ok(()),
                 }
             }
+            StmtKind::Block(body) => self.block(body),
             StmtKind::Loop(cond, body) => {
                 self.expr(&mut cond.value)?;
                 cond.pattern.iter_mut().try_for_each(|pattern| self.pattern(pattern))?;

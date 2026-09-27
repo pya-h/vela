@@ -1,0 +1,5 @@
+# error: 3:11: a 'block' takes nothing on its line: its statements start on the next one, and 'fi' closes it
+task main()
+    block show(1)
+    fi
+fi

@@ -24,6 +24,9 @@ pub enum Token {
     Else,
     Loop,
     Each,
+    /// `block`: a block of its own, which ends at its `fi` with its names and
+    /// regions.
+    Block,
     In,
     Match,
     Case,
@@ -33,7 +36,8 @@ pub enum Token {
     And,
     Or,
     Not,
-    /// `&`, which joins the words a generic type must allow (`<T: same & shown>`).
+    /// `&`, which joins the words a generic type must allow (`<T: same & shown>`),
+    /// marks a place given to `hold&` (`f(&a)`), and makes `hold&` and `bind&`.
     /// Vela writes `and` for both conditions at once.
     Amp,
     Fi,
@@ -105,6 +109,7 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("else", Token::Else),
     ("loop", Token::Loop),
     ("each", Token::Each),
+    ("block", Token::Block),
     ("in", Token::In),
     ("at", Token::At),
     ("match", Token::Match),

@@ -1,0 +1,4 @@
+# error: 5:1: expected 'fi' to close the 'block' at 3:5, got end of file
+task main()
+    block
+        show(1)

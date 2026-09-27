@@ -1030,6 +1030,13 @@ impl Generator {
                 }
             }
             StmtKind::When(cond, then_b, else_b) => self.gen_when(cond, then_b, else_b.as_deref(), None)?,
+            // A C block of its own: its regions are freed, and the files opened
+            // in them closed, at its end (see `leave_block`).
+            StmtKind::Block(body) => {
+                self.w.open("");
+                self.gen_block(body)?;
+                self.w.close();
+            }
             StmtKind::Loop(cond, body) => match &cond.pattern {
                 None if !has_prelude(&cond.value) => {
                     let c = self.gen_condition(&cond.value)?;
@@ -2598,6 +2605,7 @@ impl UsedTypes {
                     targets.iter().for_each(|target| self.target(target));
                     values.iter().for_each(|value| self.expr(value));
                 }
+                StmtKind::Block(body) => self.block(body),
                 StmtKind::When(cond, then_b, else_b) => {
                     self.expr(&cond.value);
                     self.block(then_b);
@@ -2774,6 +2782,7 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
         }
         StmtKind::When(cond, then_b, else_b) => expr(&cond.value) || body(then_b) || else_b.as_ref().is_some_and(body),
         StmtKind::Loop(cond, b) => expr(&cond.value) || body(b),
+        StmtKind::Block(b) => body(b),
         StmtKind::Each(_, range, b) => expr(range) || body(b),
         StmtKind::Match(subject, cases) => expr(subject) || cases.iter().any(|case| body(&case.body)),
     }

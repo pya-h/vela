@@ -68,7 +68,7 @@ const GLOBAL: i32 = 2;
 const SNIPPET: i32 = 1;
 const KEYWORD: i32 = 0;
 
-const STATEMENT_KEYWORDS: &[&str] = &["bind", "hold", "when", "loop", "each", "match", "region"];
+const STATEMENT_KEYWORDS: &[&str] = &["bind", "hold", "when", "loop", "each", "block", "match", "region"];
 const VALUE_KEYWORDS: &[&str] = &["true", "false", "none", "not", "new", "fail", "match", "when"];
 
 /// Completions at byte `byte` of `source`. Returns the items and the byte
@@ -352,6 +352,10 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     // Names being declared get no suggestions, including another name in a
     // `bind` or `hold` list (`bind q, r = …`).
     if matches!(prev_token, Some(Token::Task | Token::Shape | Token::Kind | Token::Bind | Token::Hold | Token::Each | Token::Region)) {
+        return (Vec::new(), word_start, byte);
+    }
+    // `block` takes nothing on its line.
+    if prev_token == Some(&Token::Block) {
         return (Vec::new(), word_start, byte);
     }
     // `hold& name` and `bind& name`: the `&` is part of the word.
@@ -982,7 +986,7 @@ fn open_blocks(k: &Knowledge, byte: usize) -> Vec<Block> {
             Some(Token::Ident(_)) if k.declares_method(q) => blocks.push(Block::Method),
             Some(Token::When) => blocks.push(Block::When),
             Some(Token::Match) => blocks.push(Block::Match),
-            Some(Token::Loop | Token::Each) => blocks.push(Block::Other),
+            Some(Token::Loop | Token::Each | Token::Block) => blocks.push(Block::Other),
             Some(Token::Fi) => {
                 blocks.pop();
             }
@@ -1185,7 +1189,7 @@ fn covered_cases(k: &Knowledge, match_q: usize, case: usize) -> Vec<String> {
     let mut depth = 0usize;
     for q in match_q + 1..k.len() {
         match k.token(q) {
-            Some(Token::When | Token::Loop | Token::Each | Token::Match) => depth += 1,
+            Some(Token::When | Token::Loop | Token::Each | Token::Block | Token::Match) => depth += 1,
             Some(Token::Fi) if depth == 0 => break,
             Some(Token::Fi) => depth -= 1,
             Some(Token::Case) if depth == 0 && q != case => {
@@ -1702,14 +1706,14 @@ fn item_level_items() -> Vec<CompletionItem> {
 }
 
 /// The word that last opened or divided the innermost block before `byte`:
-/// `when`, `else`, `loop`, `each`, `match`, `case`, or a declaration word.
+/// `when`, `else`, `loop`, `each`, `block`, `match`, `case`, or a declaration word.
 fn innermost_block_word<'k>(k: &'k Knowledge, byte: usize) -> Option<&'k Token> {
     let mut depth = 0usize;
     let mut q = k.last_before(byte)?;
     loop {
         match k.token(q) {
             Some(Token::Fi) => depth += 1,
-            Some(token @ (Token::When | Token::Loop | Token::Each | Token::Match)) => {
+            Some(token @ (Token::When | Token::Loop | Token::Each | Token::Block | Token::Match)) => {
                 if depth == 0 {
                     return Some(token);
                 }
@@ -1749,6 +1753,7 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bo
         snippet("when … is", "run a block when a pattern matches", "when ${value} is {${name}}\n\t${}\nfi"),
         snippet("loop … is", "repeat while a pattern matches", "loop ${value} is {${name}}\n\t${}\nfi"),
         snippet("each", "count through a range", "each ${i} in ${start}..${end}\n\t${}\nfi"),
+        snippet("block", "a block of its own, whose names and regions end at its fi", "block\n\t${}\nfi"),
         snippet("match", "a match on a kind", "match ${value}\ncase ${Variant}\n\t${}\nfi"),
     ]);
     // A `match` with every case, for each visible value of a kind, a maybe, or

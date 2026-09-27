@@ -41,16 +41,17 @@ task main()
         show("could not start the list: ", said(e))
     }
 
-    # Adding goes at the end.
-    list.open(FileMode.Append) at r { failure e
-        show("could not add: ", said(e))
-    }
-    list.write("apples\n") { failure e
-        show("could not add: ", said(e))
-    }
-    list.close() { failure e
-        show("could not close: ", said(e))
-    }
+    # Adding goes at the end. The file is opened in a block's region, which
+    # closes it at the block's fi, though main goes on.
+    block
+        region adding
+        list.open(FileMode.Append) at adding { failure e
+            show("could not add: ", said(e))
+        }
+        list.write("apples\n") { failure e
+            show("could not add: ", said(e))
+        }
+    fi
     show(list.path, " holds ", list.size() { 0 }, " bytes")
 
     # Read back line by line: `line()` gives none at the end of the file.

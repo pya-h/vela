@@ -501,7 +501,7 @@ impl<'a> Knowledge<'a> {
         for q in (0..case).rev() {
             match self.token(q) {
                 Some(Token::Fi) => depth += 1,
-                Some(Token::When | Token::Loop | Token::Each) if depth > 0 => depth -= 1,
+                Some(Token::When | Token::Loop | Token::Each | Token::Block) if depth > 0 => depth -= 1,
                 Some(Token::Match) if depth == 0 => return Some(q),
                 Some(Token::Match) => depth -= 1,
                 Some(Token::Task | Token::Shape | Token::Kind) => return None,

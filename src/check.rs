@@ -2564,6 +2564,9 @@ impl Checker {
             }
             StmtKind::SetResults(names, values) => self.check_set_results(span, names, values),
             StmtKind::When(cond, then_block, else_block) => self.check_when(span, cond, then_block, else_block, None).map(|_| ()),
+            // Its statements run once, as the block around it does, so what they
+            // set is set after it; what they declare ends at its `fi`.
+            StmtKind::Block(body) => self.check_scoped_block(body),
             StmtKind::Loop(cond, body) => {
                 if let Some(pattern) = &cond.pattern
                     && matches!(pattern.kind, PatternKind::Tuple(_))
@@ -6108,6 +6111,7 @@ impl Checker {
                     None => Ok(()),
                 }
             }
+            StmtKind::Block(body) => self.substitute_block(body, given, made),
             StmtKind::Loop(cond, body) => {
                 self.substitute_expr(&mut cond.value, given, made)?;
                 self.substitute_block(body, given, made)
@@ -6565,7 +6569,7 @@ fn constructible(ty: &Type, can: &HashSet<&str>) -> bool {
 
 /// Whether running `block` always ends in `<-`: it contains a `<-`, a
 /// `when` whose two branches both always send, a `when` that always holds and
-/// whose block sends, or a `match` whose cases all send. Loops don't count,
+/// whose block sends, a `match` whose cases all send, or a `block` that sends. Loops don't count,
 /// since their bodies might not run.
 fn always_sends(block: &Block) -> bool {
     block.iter().any(|stmt| match &stmt.kind {
@@ -6573,6 +6577,7 @@ fn always_sends(block: &Block) -> bool {
         StmtKind::When(_, then_block, Some(else_block)) => always_sends(then_block) && always_sends(else_block),
         StmtKind::When(cond, then_block, None) => always_holds(cond) && always_sends(then_block),
         StmtKind::Match(_, cases) => cases.iter().all(|case| always_sends(&case.body)),
+        StmtKind::Block(body) => always_sends(body),
         _ => false,
     })
 }

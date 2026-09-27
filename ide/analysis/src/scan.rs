@@ -765,7 +765,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                     }
                 }
             }
-            Token::When | Token::Loop | Token::Each | Token::Match => blocks.push(Block::Inner),
+            Token::When | Token::Loop | Token::Each | Token::Block | Token::Match => blocks.push(Block::Inner),
             Token::Fi => {
                 if blocks.pop() == Some(Block::Method)
                     && let Some(open) = method.take()
@@ -1193,7 +1193,7 @@ impl<'a> Classifier<'a> {
                         // an `else` is a statement inside it, which does.
                         Token::When if tokens.before(p) == Some(&Token::Else) => {}
                         Token::When => self.open(ScopeKind::When),
-                        Token::Loop => self.open(ScopeKind::Other),
+                        Token::Loop | Token::Block => self.open(ScopeKind::Other),
                         Token::Each => {
                             self.open(ScopeKind::Other);
                             declaring = Some("each");

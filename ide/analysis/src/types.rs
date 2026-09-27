@@ -224,6 +224,7 @@ impl Checked {
                     self.block(else_block, kinds);
                 }
             }
+            StmtKind::Block(body) => self.block(body, kinds),
             StmtKind::Loop(cond, body) => {
                 self.expr(&cond.value, kinds);
                 if let Some(pattern) = &cond.pattern {
