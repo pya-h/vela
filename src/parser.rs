@@ -1453,16 +1453,45 @@ impl Parser {
     /// `bind name [: type] [, name [: type]]* = values`, or the same with
     /// `hold`. A name may be `_`, which drops its value.
     fn parse_binding(&mut self, immutable: bool) -> Result<Stmt> {
+        let word = if immutable { "bind" } else { "hold" };
+        let at = self.peek_span();
         self.advance(); // bind / hold
+        let reference = self.match_reference(word, at)?;
         let span = self.peek_span();
         let mut names = vec![self.parse_bound()?];
         while self.match_token(Token::Comma) {
+            if reference {
+                return Err(Error::at(self.peek_span(), format!("a reference is declared one at a time, each with its own '{}&'", word)));
+            }
             names.push(self.parse_bound()?);
+        }
+        if reference && names.iter().any(|bound| !bound.parts.is_empty()) {
+            return Err(Error::at(span, format!("a reference names one place, so '{}&' takes one name, not a tuple's items", word)));
         }
         self.expect(Token::Assign)?;
         let init = self.parse_value_list()?;
-        let kind = StmtKind::Binding { names, mutable: !immutable, init };
+        if reference && init.len() > 1 {
+            return Err(Error::at(init.get(1).map_or(span, |value| value.span), "a reference names one place, so it takes one value, as in '&x'"));
+        }
+        let kind = StmtKind::Binding { names, mutable: !immutable, reference, init };
         Ok(Stmt::new(kind, span))
+    }
+
+    /// The `&` of `hold&` or `bind&` before a binding's name, written against
+    /// the word at `at`, which makes the binding a reference.
+    fn match_reference(&mut self, word: &str, at: Span) -> Result<bool> {
+        if !self.check(Token::Amp) {
+            return Ok(false);
+        }
+        let amp = self.peek_span();
+        if amp.line != at.line || amp.col != at.col + word.len() {
+            return Err(Error::at(amp, format!("a reference is written '{0}& y = &x', with '&' against '{0}'", word)));
+        }
+        self.advance();
+        if self.check(Token::Amp) {
+            return Err(Error::at(self.peek_span(), format!("'&' marks the place a reference names, after '=', as in '{}& y = &x'", word)));
+        }
+        Ok(true)
     }
 
     fn parse_when(&mut self) -> Result<Stmt> {

@@ -1,5 +1,5 @@
-# error: 4:14: '&' gives a place to a parameter written 'hold&', which changes it, as in 'f(&a)'; anywhere else, write the value itself
+# error: 4:10: '&' marks a place given to a 'hold&' parameter, as in 'f(&a)', or named by a reference, as in 'hold& y = &a'; anywhere else, write the value itself
 task main()
     hold a = 1
-    bind b = &a
+    show(&a + 1)
 fi

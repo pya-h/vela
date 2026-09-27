@@ -1,0 +1,6 @@
+# error: 5:16: 'hold& z' names a place to change it, so it needs a place that can change, and 'y' is a 'bind&', which only reads the place it names; 'bind& z = &x' names it only to read it
+task main()
+    hold x = 1
+    bind& y = &x
+    hold& z = &y
+fi

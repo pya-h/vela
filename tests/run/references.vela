@@ -1,0 +1,89 @@
+# A local reference is another name for a place: `hold& y = &x` changes it, so a
+# change to either is a change to both, and `bind& y = &x` only reads it, as it
+# is when read. A reference is of its place's type, is never pointed elsewhere,
+# and a copy of one, `hold z = y`, is a copy of what it names.
+
+shape Counter
+    n: int = 0
+
+    alters tick()
+        .n = .n + 1
+    fi
+
+    # A method names a part of its own value.
+    alters bump_by(k: int)
+        hold& count = &.n
+        count = count + k
+    fi
+fi
+
+task add_hundred(hold& x: int)
+    x = x + 100
+fi
+
+task main()
+    hold x = 1
+    hold& y = &x
+    y = 5
+    show(x)
+    x = 7
+    show(y)
+
+    # One that reads a value that never changes, and one that reads what a
+    # variable holds now.
+    bind a = 3
+    bind& b = &a
+    bind& seen = &x
+    x = 11
+    show(b, " ", seen)
+
+    # A field, a whole shape, and its alters methods through it; a reference
+    # is given on to a hold& parameter as the place it names.
+    hold c = Counter {}
+    hold& n = &c.n
+    c.tick()
+    n = n + 10
+    show(c.n, " ", n)
+    hold& cc = &c
+    cc.tick()
+    cc.bump_by(3)
+    add_hundred(&cc.n)
+    show(c.n)
+
+    # A slice kept in a variable, an array's item, and a reference to another.
+    region r
+    hold xs = new [int]() at r
+    hold& ys = &xs
+    ys.add(4)
+    ys.add(5)
+    show(xs.len)
+    hold arr = [1, 2, 3]
+    hold& mid = &arr[1]
+    mid = 20
+    hold& again = &y
+    again = 9
+    show(arr[1], " ", x)
+
+    # What a pointer points to.
+    hold p = new Counter(Counter {}) at r
+    hold& pn = &p^.n
+    pn = 42
+    show(p^.n)
+
+    # A copy is a copy.
+    hold z = y
+    z = 0
+    show(x, " ", z)
+
+    # Each block has its own names: a reference in one, a variable in another.
+    each i in 0..2
+        when i == 0
+            hold& first = &arr[0]
+            first = 50
+        else
+            hold first = 1
+            show(first)
+        fi
+    fi
+    show(arr[0])
+fi

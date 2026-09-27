@@ -1,0 +1,5 @@
+# error: 4:11: a reference names a place for as long as its block lasts, so 'hold&' takes a name, not '_'
+task main()
+    hold x = 1
+    hold& _ = &x
+fi

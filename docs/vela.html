@@ -284,6 +284,7 @@ true false none  fi   maybe is     fail failure include priv</pre>
         <tr><td><code>.x</code>, <code>.m(…)</code>, <code>.this</code>, <code>@this</code></td><td>inside a method: a field of the value it is called on, another of its methods, the value itself, and the region it lives in</td></tr>
         <tr><td><code>[T; n]</code>, <code>[T]@r</code></td><td>an array type; a slice type (see <a href="#arrays">Arrays</a> and <a href="#slices">Slices</a>)</td></tr>
         <tr><td><code>hold x: T</code>, <code>hold&amp; x: T</code>, <code>f(&amp;a)</code></td><td>a parameter the task changes: its own copy, or the caller's place, which the call marks with <code>&amp;</code> (see <a href="#parameters">Parameters that change</a>)</td></tr>
+        <tr><td><code>hold&amp; y = &amp;x</code>, <code>bind&amp; y = &amp;x</code></td><td>another name for the place <code>x</code>, which changes it or only reads it (see <a href="#references">References</a>)</td></tr>
         <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task or shape takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
@@ -433,6 +434,47 @@ true false none  fi   maybe is     fail failure include priv</pre>
         is a pointer to the place, as the value an <code>alters</code> method is called on already is.
       </p>
 
+      <h3 id="references">References</h3>
+      <p>
+        A block can name a place too. <code>hold&amp; y = &amp;x</code> makes <code>y</code> another name for
+        <code>x</code>, so a change to either is a change to both, and <code>bind&amp; y = &amp;x</code> names it only
+        to read it, as it is whenever it is read:
+      </p>
+      <pre><span class="keyword">hold</span> x = <span class="number">1</span>
+<span class="keyword">hold&amp;</span> y = &amp;x          <span class="comment"># y is another name for x</span>
+y = <span class="number">5</span>                    <span class="comment"># x is 5</span>
+x = <span class="number">7</span>                    <span class="comment"># y reads 7</span>
+
+<span class="keyword">hold</span> c = Counter {}
+<span class="keyword">hold&amp;</span> count = &amp;c.n    <span class="comment"># a field, an array's item, or p^ too</span>
+count = count + <span class="number">1</span>
+
+<span class="keyword">bind</span> a = <span class="number">1</span>
+<span class="keyword">bind&amp;</span> b = &amp;a          <span class="comment"># b reads a, and never changes it</span>
+<span class="keyword">hold&amp;</span> d = &amp;a          <span class="comment"># error: 'a' never changes; 'bind&amp; d = &amp;a' names it only to read it</span></pre>
+      <p>
+        <code>hold&amp;</code> takes the places a <code>hold&amp;</code> parameter does, and <code>bind&amp;</code> takes
+        those and also a <code>bind</code>, a parameter, and another <code>bind&amp;</code>. Neither names an item of a
+        slice, which moves when the slice grows, a result, or a value made on the spot. A reference is kept safe by
+        what it can't do, so it needs no lifetimes:
+      </p>
+      <ul>
+        <li><strong>It is not a type.</strong> <code>y</code> above is an <code>int</code>, like <code>x</code>, and of
+          exactly its place's type. Only a block's name or a parameter is a reference: never a field, an item, a result,
+          or a value sent with <code>&lt;-</code>, and <code>hold z = y</code> copies what <code>y</code> names. So a
+          reference never outlives its place, which is declared before it, in its block or one around it.</li>
+        <li><strong>It is never pointed elsewhere.</strong> <code>y = 5</code> writes to the place <code>y</code> names,
+          and <code>y = &amp;z</code> is an error that says so; the compiler always knows what each reference names.</li>
+        <li><strong>A call sees through it.</strong> <code>swap(&amp;x, &amp;y)</code>, where <code>y</code> names
+          <code>x</code>, gives one place twice, and is refused as <code>swap(&amp;x, &amp;x)</code> is.</li>
+        <li>It is declared one at a time, <code>hold&amp; a, b = …</code> being an error, and <code>hold&amp;</code>
+          is one word, as for a parameter.</li>
+      </ul>
+      <p>
+        In C, a reference is a pointer to the place, which an optimizing C compiler usually removes, using the place
+        itself.
+      </p>
+
       <h3 id="results">Several Results</h3>
       <p>
         A task can send more than one value: its header lists the types after <code>-&gt;</code>, and
@@ -554,7 +596,9 @@ a, b = b, a                  <span class="comment"># a is 2, b is 1</span>
       </ul>
 
       <h3>Bindings</h3>
-      <p><code>bind</code> creates an immutable binding. <code>hold</code> creates a mutable variable.</p>
+      <p><code>bind</code> creates an immutable binding. <code>hold</code> creates a mutable variable. Written
+        <code>bind&amp;</code> or <code>hold&amp;</code>, either is another name for a place instead (see
+        <a href="#references">References</a>).</p>
       <pre><span class="keyword">bind</span> pi = 3.14
 <span class="keyword">hold</span> count = 0
 count = count + 1

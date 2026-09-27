@@ -1,0 +1,156 @@
+  1 | # A local reference is another name for a place: `hold& y = &x` changes it, so a
+    | comment:# A local reference is another name for a place: `hold& y = &x` changes it, so a
+  2 | # change to either is a change to both, and `bind& y = &x` only reads it, as it
+    | comment:# change to either is a change to both, and `bind& y = &x` only reads it, as it
+  3 | # is when read. A reference is of its place's type, is never pointed elsewhere,
+    | comment:# is when read. A reference is of its place's type, is never pointed elsewhere,
+  4 | # and a copy of one, `hold z = y`, is a copy of what it names.
+    | comment:# and a copy of one, `hold z = y`, is a copy of what it names.
+  6 | shape Counter
+    | keyword:shape  type:Counter
+  7 |     n: int = 0
+    | field:n  punctuation::  type-builtin:int  operator:=  number:0
+  9 |     alters tick()
+    | keyword:alters  method:tick  punctuation:(  punctuation:)
+ 10 |         .n = .n + 1
+    | punctuation:.  field:n  operator:=  punctuation:.  field:n  operator:+  number:1
+ 11 |     fi
+    | keyword:fi
+ 13 |     # A method names a part of its own value.
+    | comment:# A method names a part of its own value.
+ 14 |     alters bump_by(k: int)
+    | keyword:alters  method:bump_by  punctuation:(  parameter:k  punctuation::  type-builtin:int  punctuation:)
+ 15 |         hold& count = &.n
+    | keyword:hold  keyword:&  variable:count  operator:=  operator:&  punctuation:.  field:n
+ 16 |         count = count + k
+    | variable:count  operator:=  variable:count  operator:+  parameter:k
+ 17 |     fi
+    | keyword:fi
+ 18 | fi
+    | keyword:fi
+ 20 | task add_hundred(hold& x: int)
+    | keyword:task  task:add_hundred  punctuation:(  keyword:hold  keyword:&  parameter:x  punctuation::  type-builtin:int  punctuation:)
+ 21 |     x = x + 100
+    | parameter:x  operator:=  parameter:x  operator:+  number:100
+ 22 | fi
+    | keyword:fi
+ 24 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 25 |     hold x = 1
+    | keyword:hold  variable:x  operator:=  number:1
+ 26 |     hold& y = &x
+    | keyword:hold  keyword:&  variable:y  operator:=  operator:&  variable:x
+ 27 |     y = 5
+    | variable:y  operator:=  number:5
+ 28 |     show(x)
+    | builtin-fn:show  punctuation:(  variable:x  punctuation:)
+ 29 |     x = 7
+    | variable:x  operator:=  number:7
+ 30 |     show(y)
+    | builtin-fn:show  punctuation:(  variable:y  punctuation:)
+ 32 |     # One that reads a value that never changes, and one that reads what a
+    | comment:# One that reads a value that never changes, and one that reads what a
+ 33 |     # variable holds now.
+    | comment:# variable holds now.
+ 34 |     bind a = 3
+    | keyword:bind  variable:a  operator:=  number:3
+ 35 |     bind& b = &a
+    | keyword:bind  keyword:&  variable:b  operator:=  operator:&  variable:a
+ 36 |     bind& seen = &x
+    | keyword:bind  keyword:&  variable:seen  operator:=  operator:&  variable:x
+ 37 |     x = 11
+    | variable:x  operator:=  number:11
+ 38 |     show(b, " ", seen)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:,  string:" "  punctuation:,  variable:seen  punctuation:)
+ 40 |     # A field, a whole shape, and its alters methods through it; a reference
+    | comment:# A field, a whole shape, and its alters methods through it; a reference
+ 41 |     # is given on to a hold& parameter as the place it names.
+    | comment:# is given on to a hold& parameter as the place it names.
+ 42 |     hold c = Counter {}
+    | keyword:hold  variable:c  operator:=  type:Counter  punctuation:{  punctuation:}
+ 43 |     hold& n = &c.n
+    | keyword:hold  keyword:&  variable:n  operator:=  operator:&  variable:c  punctuation:.  field:n
+ 44 |     c.tick()
+    | variable:c  punctuation:.  method:tick  punctuation:(  punctuation:)
+ 45 |     n = n + 10
+    | variable:n  operator:=  variable:n  operator:+  number:10
+ 46 |     show(c.n, " ", n)
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:n  punctuation:,  string:" "  punctuation:,  variable:n  punctuation:)
+ 47 |     hold& cc = &c
+    | keyword:hold  keyword:&  variable:cc  operator:=  operator:&  variable:c
+ 48 |     cc.tick()
+    | variable:cc  punctuation:.  method:tick  punctuation:(  punctuation:)
+ 49 |     cc.bump_by(3)
+    | variable:cc  punctuation:.  method:bump_by  punctuation:(  number:3  punctuation:)
+ 50 |     add_hundred(&cc.n)
+    | task:add_hundred  punctuation:(  operator:&  variable:cc  punctuation:.  field:n  punctuation:)
+ 51 |     show(c.n)
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:.  field:n  punctuation:)
+ 53 |     # A slice kept in a variable, an array's item, and a reference to another.
+    | comment:# A slice kept in a variable, an array's item, and a reference to another.
+ 54 |     region r
+    | keyword:region  region:r
+ 55 |     hold xs = new [int]() at r
+    | keyword:hold  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 56 |     hold& ys = &xs
+    | keyword:hold  keyword:&  variable:ys  operator:=  operator:&  variable:xs
+ 57 |     ys.add(4)
+    | variable:ys  punctuation:.  field:add  punctuation:(  number:4  punctuation:)
+ 58 |     ys.add(5)
+    | variable:ys  punctuation:.  field:add  punctuation:(  number:5  punctuation:)
+ 59 |     show(xs.len)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:.  field:len  punctuation:)
+ 60 |     hold arr = [1, 2, 3]
+    | keyword:hold  variable:arr  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 61 |     hold& mid = &arr[1]
+    | keyword:hold  keyword:&  variable:mid  operator:=  operator:&  variable:arr  punctuation:[  number:1  punctuation:]
+ 62 |     mid = 20
+    | variable:mid  operator:=  number:20
+ 63 |     hold& again = &y
+    | keyword:hold  keyword:&  variable:again  operator:=  operator:&  variable:y
+ 64 |     again = 9
+    | variable:again  operator:=  number:9
+ 65 |     show(arr[1], " ", x)
+    | builtin-fn:show  punctuation:(  variable:arr  punctuation:[  number:1  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:x  punctuation:)
+ 67 |     # What a pointer points to.
+    | comment:# What a pointer points to.
+ 68 |     hold p = new Counter(Counter {}) at r
+    | keyword:hold  variable:p  operator:=  keyword:new  type:Counter  punctuation:(  type:Counter  punctuation:{  punctuation:}  punctuation:)  keyword:at  region:r
+ 69 |     hold& pn = &p^.n
+    | keyword:hold  keyword:&  variable:pn  operator:=  operator:&  variable:p  operator:^  punctuation:.  field:n
+ 70 |     pn = 42
+    | variable:pn  operator:=  number:42
+ 71 |     show(p^.n)
+    | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:n  punctuation:)
+ 73 |     # A copy is a copy.
+    | comment:# A copy is a copy.
+ 74 |     hold z = y
+    | keyword:hold  variable:z  operator:=  variable:y
+ 75 |     z = 0
+    | variable:z  operator:=  number:0
+ 76 |     show(x, " ", z)
+    | builtin-fn:show  punctuation:(  variable:x  punctuation:,  string:" "  punctuation:,  variable:z  punctuation:)
+ 78 |     # Each block has its own names: a reference in one, a variable in another.
+    | comment:# Each block has its own names: a reference in one, a variable in another.
+ 79 |     each i in 0..2
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:2
+ 80 |         when i == 0
+    | keyword:when  variable:i  operator:==  number:0
+ 81 |             hold& first = &arr[0]
+    | keyword:hold  keyword:&  variable:first  operator:=  operator:&  variable:arr  punctuation:[  number:0  punctuation:]
+ 82 |             first = 50
+    | variable:first  operator:=  number:50
+ 83 |         else
+    | keyword:else
+ 84 |             hold first = 1
+    | keyword:hold  variable:first  operator:=  number:1
+ 85 |             show(first)
+    | builtin-fn:show  punctuation:(  variable:first  punctuation:)
+ 86 |         fi
+    | keyword:fi
+ 87 |     fi
+    | keyword:fi
+ 88 |     show(arr[0])
+    | builtin-fn:show  punctuation:(  variable:arr  punctuation:[  number:0  punctuation:]  punctuation:)
+ 89 | fi
+    | keyword:fi

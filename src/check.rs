@@ -34,6 +34,9 @@ struct VarInfo {
     result: bool,
     /// Whether the task's header declares it, which no code can change.
     param: bool,
+    /// For a reference, `hold& y = &x` or `bind& y = &x`: the place it names,
+    /// from a variable that isn't a reference itself (see `resolved_path`).
+    refers: Option<Vec<Step>>,
 }
 
 /// What a place an assignment writes to takes: nothing (`_`), a value of a
@@ -2170,7 +2173,7 @@ impl Checker {
             return Err(Error::internal(format!("'{}' defined outside of a task", name)));
         };
         let allocates = ty == Type::Region;
-        scope.names.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false, param: false });
+        scope.names.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false, param: false, refers: None });
         Ok(())
     }
 
@@ -2456,9 +2459,16 @@ impl Checker {
                     _ => err(e.span, "this value is unused; only a task call can be used as a statement"),
                 }
             }
-            StmtKind::Binding { names, mutable, init } => {
+            StmtKind::Binding { names, mutable, reference: true, init } => self.check_reference(names, *mutable, init),
+            StmtKind::Binding { names, mutable, init, .. } => {
                 for bound in names.iter_mut() {
                     self.resolve_bound_types(bound)?;
+                }
+                // `hold y = &x`: a copy, where a reference was maybe meant.
+                if let Some(marked) = init.iter().find(|value| matches!(value.kind, ExprKind::Ref(_))) {
+                    let word = if *mutable { "hold" } else { "bind" };
+                    let name = names.first().map_or("y", |bound| bound.name.as_str());
+                    return err(marked.span, format!("'{0} {1}' takes a copy, so leave out '&'; '{0}& {1} = &…' is another name for the place", word, name));
                 }
                 let given = self.value_types(init, names.len(), span, true)?;
                 // A single call sending several values gives them all, and
@@ -2510,6 +2520,20 @@ impl Checker {
                 let mut assigned: HashMap<String, Span> = HashMap::new();
                 for target in targets.iter_mut() {
                     places.push(self.check_target(target, &mut assigned)?);
+                }
+                // `y = &x`: '=' writes a value; nothing points a name elsewhere.
+                if let Some(marked) = values.iter().find(|value| matches!(value.kind, ExprKind::Ref(_))) {
+                    let reference = targets.iter().find_map(|target| match target {
+                        Target::Place(Expr { kind: ExprKind::Var(name), .. }) if self.lookup(name).is_some_and(|info| info.refers.is_some()) => Some(name.clone()),
+                        _ => None,
+                    });
+                    return err(
+                        marked.span,
+                        match reference {
+                            Some(name) => format!("'{0}' names one place for as long as it lasts, and '{0} = …' writes a value there, so leave out '&'", name),
+                            None => "'=' writes a value, so leave out '&'; a name for a place is declared, as in 'hold& y = &x'".to_string(),
+                        },
+                    );
                 }
                 let given = self.value_types(values, targets.len(), span, true)?;
                 let forwarded = values.len() < targets.len();
@@ -3532,7 +3556,7 @@ impl Checker {
             ExprKind::RegionAfter(_) => err(span, "a region is named after a call only when the call takes one last"),
             // One a call gives a `hold&` parameter is checked with the call's
             // arguments (see `check_argument`).
-            ExprKind::Ref(_) => err(span, "'&' gives a place to a parameter written 'hold&', which changes it, as in 'f(&a)'; anywhere else, write the value itself"),
+            ExprKind::Ref(_) => err(span, "'&' marks a place given to a 'hold&' parameter, as in 'f(&a)', or named by a reference, as in 'hold& y = &a'; anywhere else, write the value itself"),
             ExprKind::Var(name) => {
                 let ty = self.lookup_or_err(name, span)?.ty.clone();
                 if self.unset.contains(name.as_str()) {
@@ -3894,8 +3918,9 @@ impl Checker {
                     return err(items.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
                 if !info.mutable && matches!(info.ty, Type::Slice(..)) {
-                    if info.param {
-                        return err(items.span, format!("'{}' changes '{}', a parameter, which never changes{}", word, name, param_hint(&name, info)));
+                    if info.param || info.refers.is_some() {
+                        let what = if info.param { "a parameter, which never changes" } else { "a 'bind&'" };
+                        return err(items.span, format!("'{}' changes '{}', {}{}", word, name, what, param_hint(&name, info)));
                     }
                     return err(items.span, format!("'{}' changes '{}', which is immutable; keep the slice in a 'hold' variable to change it", word, name));
                 }
@@ -4991,6 +5016,9 @@ impl Checker {
                 if info.result {
                     return refuse(format!("it needs a place that can change, and '{}' is a result, which only '<-' sets", name));
                 }
+                if info.refers.is_some() {
+                    return refuse(format!("it needs a place that can change, and '{0}' only reads the place it names; a reference that changes it is written 'hold& {0} = &…'", name));
+                }
                 if info.param {
                     return refuse(format!(
                         "it needs a place that can change, and '{0}' is a parameter, which never does; write 'hold {0}: {1}' to change the task's own copy, or 'hold& {0}: {1}' to change the caller's",
@@ -5210,6 +5238,93 @@ impl Checker {
         Ok(sent)
     }
 
+    /// Checks `hold& y = &x` or `bind& y = &x`, which the parser made one name
+    /// and one value, and declares `y`, another name for the place `&x` marks:
+    /// one that changes it (`hold&`), or only reads it. `y` is of the place's
+    /// type exactly, since what either writes the other reads.
+    fn check_reference(&mut self, names: &mut [Bound], mutable: bool, init: &mut [Expr]) -> Result<()> {
+        let word = if mutable { "hold&" } else { "bind&" };
+        let (Some(bound), Some(value)) = (names.first_mut(), init.first_mut()) else { return Ok(()) };
+        self.resolve_bound_types(bound)?;
+        let name = bound.name.clone();
+        if name == DISCARD {
+            return err(bound.span, format!("a reference names a place for as long as its block lasts, so '{}' takes a name, not '_'", word));
+        }
+        let ExprKind::Ref(place) = &mut value.kind else {
+            self.check_expr(value)?;
+            let example = place_path(value).map_or_else(|| "x".to_string(), |path| path_text(&path));
+            return err(value.span, format!("'{} {}' is another name for a place, marked with '&', as in '&{}'", word, name, example));
+        };
+        let ty = self.check_expr(place)?;
+        if mutable {
+            if let Err(error) = self.given_place(place, &Taker::Reference(&name)) {
+                // A place that only can't change may still be read through one.
+                return match (self.read_place(place), self.resolved_path(place)) {
+                    (Ok(()), Some(path)) => Err(Error { message: format!("{}; 'bind& {} = &{}' names it only to read it", error.message, name, path_text(&path)), ..error }),
+                    _ => Err(error),
+                };
+            }
+        } else {
+            self.read_place(place)?;
+        }
+        let Some(path) = self.resolved_path(place) else {
+            return err(place.span, format!("'{} {}' names a place: a variable, a field or an item of one, or what a pointer points to", word, name));
+        };
+        if let Some(annotated) = &bound.ty
+            && *annotated != ty
+            && !ty.unknown()
+        {
+            return err(
+                bound.ty_span.unwrap_or(bound.span),
+                format!("'{}' names a place of type {}, and a reference is of its place's type exactly, since what either writes the other reads", name, ty),
+            );
+        }
+        bound.ty = Some(ty.clone());
+        value.ty = Some(ty.clone());
+        let at = bound.span;
+        self.define(&name, ty, mutable, at)?;
+        if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.names.get_mut(&name)) {
+            info.refers = Some(path);
+        }
+        Ok(())
+    }
+
+    /// Checks that `place`, already checked, can be read through `bind& y`: a
+    /// place, as `given_place` takes, of any variable, other than an item of a
+    /// slice, which moves when the slice grows, and a result, which only its
+    /// name reads.
+    fn read_place(&self, place: &Expr) -> Result<()> {
+        let refuse = |why: &str| err(place.span, format!("a reference names a place for as long as its block lasts, so {}", why));
+        match &place.kind {
+            ExprKind::Var(name) => {
+                if self.lookup_or_err(name, place.span)?.result {
+                    return refuse(&format!("it can't name '{}', a result, which is read by its name", name));
+                }
+                Ok(())
+            }
+            ExprKind::Field(base, _) => self.read_place(base),
+            ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => refuse("it can't name a part taken of a value, which is a new value, not a place"),
+            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..))) => refuse(
+                "it can't name an item of a slice, which moves when the slice grows; hold the item's index, or copy the item into a variable",
+            ),
+            ExprKind::Index(base, _) => self.read_place(base),
+            ExprKind::Deref(_) => Ok(()),
+            _ => refuse("it names a variable, a field or an item of one, or what a pointer points to, and not a value made here"),
+        }
+    }
+
+    /// The place `e` names, as `place_path` gives it, with a reference it
+    /// starts at replaced by the place that reference names.
+    fn resolved_path(&self, e: &Expr) -> Option<Vec<Step>> {
+        let mut path = place_path(e)?;
+        if let Some(Step::Field(root)) = path.first()
+            && let Some(refers) = self.lookup(root).and_then(|info| info.refers.clone())
+        {
+            path.splice(0..1, refers);
+        }
+        Some(path)
+    }
+
     /// Checks one argument of a call, given to `param` of `callee` (`task 'f'`),
     /// and returns its type: a place marked `&` for a `hold&` parameter, and a
     /// value otherwise.
@@ -5217,7 +5332,7 @@ impl Checker {
         match (&mut arg.kind, passing) {
             (ExprKind::Ref(place), Passing::HoldRef) => {
                 let ty = self.check_expr(place)?;
-                self.given_place(place, param)?;
+                self.given_place(place, &Taker::Param(param))?;
                 arg.ty = Some(ty.clone());
                 Ok(ty)
             }
@@ -5242,11 +5357,12 @@ impl Checker {
         }
     }
 
-    /// Checks that `place`, already checked, can be given to `hold& param`:
+    /// Checks that `place`, already checked, can be given to a `hold&`
+    /// parameter or named by a `hold&` reference (see `Taker`):
     /// a place that can change, as an assignment writes to, other than an item
     /// of a slice, which may move when the slice grows.
-    fn given_place(&self, place: &Expr, param: &str) -> Result<()> {
-        let refuse = |why: String| err(place.span, format!("'{}' is given the place itself, to change, so {}", param, why));
+    fn given_place(&self, place: &Expr, taker: &Taker) -> Result<()> {
+        let refuse = |why: String| err(place.span, format!("{}, so {}", taker.lead(), why));
         match &place.kind {
             ExprKind::Var(name) => {
                 let info = self.lookup_or_err(name, place.span)?;
@@ -5257,7 +5373,10 @@ impl Checker {
                     return Ok(());
                 }
                 if name == THIS {
-                    return Err(self.this_cannot_change(place.span, &format!("giving '{}' to '{}'", THIS, param)));
+                    return Err(self.this_cannot_change(place.span, &taker.using(THIS)));
+                }
+                if info.refers.is_some() {
+                    return refuse(format!("it needs a place that can change, and '{}' is a 'bind&', which only reads the place it names", name));
                 }
                 if info.param {
                     return refuse(format!(
@@ -5269,7 +5388,7 @@ impl Checker {
             }
             ExprKind::Field(base, field) => {
                 if matches!(&base.kind, ExprKind::Var(name) if name == THIS) && !self.lookup(THIS).is_some_and(|info| info.mutable) {
-                    return Err(self.this_cannot_change(place.span, &format!("giving '{}{}' to '{}'", MODULE_SEPARATOR, field, param)));
+                    return Err(self.this_cannot_change(place.span, &taker.using(&format!("{}{}", MODULE_SEPARATOR, field))));
                 }
                 match &base.ty {
                     Some(Type::Tuple(_)) => return refuse("it needs a place that can change, and a tuple's items never do".to_string()),
@@ -5279,7 +5398,7 @@ impl Checker {
                     Some(ty) => self.read_only_field(ty, field, place.span)?,
                     None => {}
                 }
-                self.given_place(base, param)
+                self.given_place(base, taker)
             }
             ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => {
                 refuse("it needs a place that can change, and a part taken of a value is a new value, not a place".to_string())
@@ -5290,7 +5409,7 @@ impl Checker {
                         .to_string(),
                 ),
                 Some(Type::Text(_)) => refuse("it needs a place that can change, and text never does".to_string()),
-                _ => self.given_place(base, param),
+                _ => self.given_place(base, taker),
             },
             ExprKind::Deref(_) => Ok(()),
             _ => refuse("it needs a place that can change: a 'hold' variable, a field or array item of one, or what a pointer points to (p^), not a value made here".to_string()),
@@ -5314,7 +5433,7 @@ impl Checker {
                 (_, Passing::Hold) => continue,
                 _ => (arg, i == 0 && alters),
             };
-            let Some(path) = place_path(place) else { continue };
+            let Some(path) = self.resolved_path(place) else { continue };
             for (before, before_changed, before_param, _) in &places {
                 if (changed || *before_changed) && overlaps(before, &path) {
                     let name = |param: &str| if param == THIS { "the value it is called on".to_string() } else { format!("'{}'", param) };
@@ -5329,9 +5448,12 @@ impl Checker {
                     };
                     let changing = if changed { param.as_str() } else { *before_param };
                     let how = if changing == THIS { "the method changes the value it is called on".to_string() } else { format!("the call changes it through '{}'", changing) };
+                    // A reference is named as written, with the place it names.
+                    let written = place_path(place).map(|written| path_text(&written)).unwrap_or_default();
+                    let subject = if written != path_text(&path) { format!("'{}' names '{}', which", written, path_text(&path)) } else { format!("'{}'", written) };
                     return err(
                         arg.span,
-                        format!("'{}' {} {} too, and {}; a place the call changes is given once, so keep a copy of it in a variable first, and give that as the other", path_text(&path), relation, name(before_param), how),
+                        format!("{} {} {} too, and {}; a place the call changes is given once, so keep a copy of it in a variable first, and give that as the other", subject, relation, name(before_param), how),
                     );
                 }
             }
@@ -6727,6 +6849,9 @@ fn in_source_order(errors: Vec<Error>) -> Vec<Error> {
 /// The end of the message for changing a parameter that never changes: how to
 /// write one the task may change. Empty for anything else.
 fn param_hint(name: &str, info: &VarInfo) -> String {
+    if info.refers.is_some() {
+        return format!("; '{0}' only reads the place it names, and a reference that changes it is written 'hold& {0} = &…'", name);
+    }
     if !info.param || name == THIS {
         return String::new();
     }
@@ -6803,4 +6928,29 @@ fn path_text(path: &[Step]) -> String {
         }
     }
     text
+}
+
+/// What takes a place that changes: a `hold&` parameter, or a `hold&` local
+/// reference, by its name, which the errors about the place name.
+enum Taker<'a> {
+    Param(&'a str),
+    Reference(&'a str),
+}
+
+impl Taker<'_> {
+    /// How an error about the place starts.
+    fn lead(&self) -> String {
+        match self {
+            Taker::Param(name) => format!("'{}' is given the place itself, to change", name),
+            Taker::Reference(name) => format!("'hold& {}' names a place to change it", name),
+        }
+    }
+
+    /// What giving it `place` is, for the error that it changes `.this`.
+    fn using(&self, place: &str) -> String {
+        match self {
+            Taker::Param(name) => format!("giving '{}' to '{}'", place, name),
+            Taker::Reference(name) => format!("naming '{}' with 'hold& {}'", place, name),
+        }
+    }
 }

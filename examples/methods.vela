@@ -96,6 +96,13 @@ task main()
     ada.close()
     report(ada.withdraw(1))
 
+    # A reference is another name for an account: its alters methods change
+    # the account it names.
+    hold bob = Account { owner: "Bob" }
+    hold& current = &bob
+    current.deposit(20)
+    show(bob)
+
     # An item of a slice is a place that can change.
     region bank
     hold accounts = new [Account]() at bank

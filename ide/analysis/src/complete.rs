@@ -354,8 +354,8 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     if matches!(prev_token, Some(Token::Task | Token::Shape | Token::Kind | Token::Bind | Token::Hold | Token::Each | Token::Region)) {
         return (Vec::new(), word_start, byte);
     }
-    // `hold& name`: the `&` is part of the word.
-    if prev_token == Some(&Token::Amp) && prev.and_then(|q| q.checked_sub(1)).and_then(|q| k.token(q)) == Some(&Token::Hold) {
+    // `hold& name` and `bind& name`: the `&` is part of the word.
+    if prev_token == Some(&Token::Amp) && matches!(prev.and_then(|q| q.checked_sub(1)).and_then(|q| k.token(q)), Some(Token::Hold | Token::Bind)) {
         return (Vec::new(), word_start, byte);
     }
     if let (Some(q), Some(Token::Comma)) = (prev, prev_token)

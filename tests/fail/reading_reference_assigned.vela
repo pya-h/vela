@@ -1,0 +1,6 @@
+# error: 5:5: cannot assign to immutable variable 'y'; 'y' only reads the place it names, and a reference that changes it is written 'hold& y = &…'
+task main()
+    hold x = 1
+    bind& y = &x
+    y = 2
+fi

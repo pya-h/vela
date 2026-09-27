@@ -87,9 +87,9 @@ pub struct Generator {
     /// The methods that change the value they are called on, which take it by
     /// pointer (see `signature`), by the name of the task each is.
     altering: HashSet<String>,
-    /// The parameters of the task being generated that are pointers to the
-    /// caller's place, read through them: the value a method that alters it is
-    /// called on, and every `hold&` parameter.
+    /// The names in the task being generated that are pointers to a place,
+    /// read through them: the value a method that alters it is called on, every
+    /// `hold&` parameter, and the references of the blocks being generated.
     pointers: HashSet<String>,
     /// The C names of the regions the `show` calls being generated make for the
     /// values written by their own `str`, innermost last (see `gen_show`). A
@@ -805,6 +805,15 @@ impl Generator {
     /// Ends the block `block`, freeing the regions it declared, newest first.
     /// (After a final `<-`, which frees them itself, nothing more runs.)
     fn leave_block(&mut self, block: &[Stmt]) {
+        // A reference is read through its pointer in its own block only: a
+        // block beside it may use the name for a variable of its own.
+        for stmt in block {
+            if let StmtKind::Binding { names, reference: true, .. } = &stmt.kind {
+                for bound in names {
+                    self.pointers.remove(&bound.name);
+                }
+            }
+        }
         let declared = self.regions.pop().unwrap_or_default();
         if matches!(block.last().map(|stmt| &stmt.kind), Some(StmtKind::Send(_))) {
             return;
@@ -865,6 +874,16 @@ impl Generator {
                     self.w.line(&format!("(void){};", expr));
                 } else if !expr.is_empty() {
                     self.w.line(&format!("{};", expr));
+                }
+            }
+            // `hold& y = &x`: a pointer to the place, read through it.
+            StmtKind::Binding { names, reference: true, init, .. } => {
+                if let ([bound], [Expr { kind: ExprKind::Ref(place), .. }]) = (names.as_slice(), init.as_slice()) {
+                    let address = self.gen_receiver(place)?;
+                    self.w.line(&format!("{}* {} = {};", c_type(place.ty()?), c_ident(&bound.name), address));
+                    self.pointers.insert(bound.name.clone());
+                } else {
+                    return Err(Error::internal_at(stmt.span, "a reference that isn't one name given one place"));
                 }
             }
             StmtKind::Binding { names, init, .. } => {

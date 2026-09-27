@@ -413,7 +413,9 @@ Press Ctrl+C to stop.</pre>
             <code>alters</code> after its <code>priv</code>. In a task's or a method's parameters, where a name goes,
             <code>hold</code> and <code>hold&amp;</code>, which make the parameter the task's own copy to change, or
             the caller's place; such a parameter hovers as <code>hold n: int</code> or <code>hold&amp; n: int</code>,
-            and after the <code>&amp;</code> of a call, where a place goes, the variables are offered. A method's body completes as a task's does.</p>
+            and after the <code>&amp;</code> of a call, where a place goes, the variables are offered. A reference,
+            <code>hold&amp; y = &amp;x</code> or <code>bind&amp; y = &amp;x</code>, hovers as <code>hold&amp; y: int</code>
+            or <code>bind&amp; y: int</code>, saying whether it changes its place. A method's body completes as a task's does.</p>
         </div>
         <div class="card">
           <h4>Snippets</h4>

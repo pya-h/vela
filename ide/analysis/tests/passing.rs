@@ -146,3 +146,55 @@ fn a_call_that_leaves_out_the_mark_is_reported() {
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert_eq!(diagnostic.message, "task 'swap' changes 'a', the place it is given, so the call marks that place with '&', as in '&x'");
 }
+
+const REFERENCES: &str = "\
+shape Counter
+    n: int = 0
+fi
+
+task main()
+    CHECK
+    hold x = 1
+    hold& y = &x
+    y = 5
+    bind& seen = &x
+    hold c = Counter {}
+    hold& n = &c.n
+    n = 2
+    show(seen, n)
+fi
+";
+
+#[test]
+fn a_local_reference_hovers_with_its_word_and_type() {
+    for checks in [true, false] {
+        let source = REFERENCES.replace("CHECK", if checks { "show(0)" } else { "show(unknown)" });
+        let when = if checks { "checked" } else { "declared" };
+        let (code, doc) = hover(&source, "y = &x");
+        assert_eq!(code, "hold& y: int", "{}", when);
+        assert!(doc.contains("a change to either is a change to both"), "{}: {}", when, doc);
+        assert_eq!(hover(&source, "y = 5").0, "hold& y: int", "{}", when);
+        assert_eq!(hover(&source, "seen = &x").0, "bind& seen: int", "{}", when);
+        assert_eq!(hover(&source, "n = &c.n").0, "hold& n: int", "{}", when);
+        let analysis = Analysis::new(&source);
+        let class_at = |needle: &str| {
+            let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
+            analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
+        };
+        assert_eq!(class_at("& y"), Some(TokenClass::Keyword), "{}", when);
+        assert_eq!(class_at("& seen"), Some(TokenClass::Keyword), "{}", when);
+        assert_eq!(class_at("&x\n    y"), Some(TokenClass::Operator), "{}", when);
+        assert_eq!(class_at("y = 5"), Some(TokenClass::Variable), "{}", when);
+    }
+    // Nothing is offered for the name being declared.
+    assert!(completions("task main()\n    hold x = 1\n    hold& @@\nfi\n").is_empty());
+    assert!(completions("task main()\n    hold x = 1\n    bind& @@\nfi\n").is_empty());
+}
+
+#[test]
+fn a_reference_that_only_reads_is_reported_where_it_is_changed() {
+    let source = REFERENCES.replace("CHECK", "show(0)").replace("    show(seen, n)", "    seen = 1");
+    let diagnostics = Analysis::new(&source).diagnostics();
+    let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
+    assert_eq!(diagnostic.message, "cannot assign to immutable variable 'seen'; 'seen' only reads the place it names, and a reference that changes it is written 'hold& seen = &…'");
+}

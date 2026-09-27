@@ -333,6 +333,14 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 (format!("each {}", typed(&symbol.name)), doc.to_string())
             }
             Some("hold") => (format!("hold {}", typed(&symbol.name)), "A mutable variable.".to_string()),
+            Some("hold&") => (
+                format!("hold& {}", typed(&symbol.name)),
+                "A reference: another name for the place given after '=', so a change to either is a change to both.".to_string(),
+            ),
+            Some("bind&") => (
+                format!("bind& {}", typed(&symbol.name)),
+                "A reference that reads the place given after '=', as it is when read, and never changes it.".to_string(),
+            ),
             Some("result") => {
                 let doc = match task_around(k, symbol.name_range.start) {
                     Some(task) => format!("A result of {}, which reaching its end sends.", task),

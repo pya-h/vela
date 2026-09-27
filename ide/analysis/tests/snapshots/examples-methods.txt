@@ -166,27 +166,39 @@
     | variable:ada  punctuation:.  method:close  punctuation:(  punctuation:)
  97 |     report(ada.withdraw(1))
     | task:report  punctuation:(  variable:ada  punctuation:.  method:withdraw  punctuation:(  number:1  punctuation:)  punctuation:)
- 99 |     # An item of a slice is a place that can change.
+ 99 |     # A reference is another name for an account: its alters methods change
+    | comment:# A reference is another name for an account: its alters methods change
+100 |     # the account it names.
+    | comment:# the account it names.
+101 |     hold bob = Account { owner: "Bob" }
+    | keyword:hold  variable:bob  operator:=  type:Account  punctuation:{  field:owner  punctuation::  string:"Bob"  punctuation:}
+102 |     hold& current = &bob
+    | keyword:hold  keyword:&  variable:current  operator:=  operator:&  variable:bob
+103 |     current.deposit(20)
+    | variable:current  punctuation:.  method:deposit  punctuation:(  number:20  punctuation:)
+104 |     show(bob)
+    | builtin-fn:show  punctuation:(  variable:bob  punctuation:)
+106 |     # An item of a slice is a place that can change.
     | comment:# An item of a slice is a place that can change.
-100 |     region bank
+107 |     region bank
     | keyword:region  region:bank
-101 |     hold accounts = new [Account]() at bank
+108 |     hold accounts = new [Account]() at bank
     | keyword:hold  variable:accounts  operator:=  keyword:new  punctuation:[  type:Account  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:bank
-102 |     accounts.add(Account { owner: "Grace", balance: 5 })
+109 |     accounts.add(Account { owner: "Grace", balance: 5 })
     | variable:accounts  punctuation:.  field:add  punctuation:(  type:Account  punctuation:{  field:owner  punctuation::  string:"Grace"  punctuation:,  field:balance  punctuation::  number:5  punctuation:}  punctuation:)
-103 |     accounts[0].deposit(10)
+110 |     accounts[0].deposit(10)
     | variable:accounts  punctuation:[  number:0  punctuation:]  punctuation:.  method:deposit  punctuation:(  number:10  punctuation:)
-104 |     show(accounts[0])
+111 |     show(accounts[0])
     | builtin-fn:show  punctuation:(  variable:accounts  punctuation:[  number:0  punctuation:]  punctuation:)
-106 |     hold best = Best { value: 3 }
+113 |     hold best = Best { value: 3 }
     | keyword:hold  variable:best  operator:=  type:Best  punctuation:{  field:value  punctuation::  number:3  punctuation:}
-107 |     each n in [7, 2, 9, 4]
+114 |     each n in [7, 2, 9, 4]
     | keyword:each  variable:n  keyword:in  punctuation:[  number:7  punctuation:,  number:2  punctuation:,  number:9  punctuation:,  number:4  punctuation:]
-108 |         best.offer(n)
+115 |         best.offer(n)
     | variable:best  punctuation:.  method:offer  punctuation:(  variable:n  punctuation:)
-109 |     fi
+116 |     fi
     | keyword:fi
-110 |     show("best: ", best.value)
+117 |     show("best: ", best.value)
     | builtin-fn:show  punctuation:(  string:"best: "  punctuation:,  variable:best  punctuation:.  field:value  punctuation:)
-111 | fi
+118 | fi
     | keyword:fi

@@ -1138,7 +1138,11 @@ impl<'a> Classifier<'a> {
                     needs_word = true;
                 }
                 // `hold&` is one word, and `&a` gives a place at a call.
-                Token::Amp if tokens.before(p) == Some(&Token::Hold) => self.push(range, TokenClass::Keyword, None),
+                // The name after `hold&` or `bind&` is still being declared.
+                Token::Amp if matches!(tokens.before(p), Some(Token::Hold | Token::Bind)) => {
+                    self.push(range, TokenClass::Keyword, None);
+                    declaring = declaring_now;
+                }
                 Token::Amp => self.push(range, TokenClass::Operator, None),
                 Token::Comma => {
                     self.push(range, TokenClass::Punctuation, None);
@@ -1199,7 +1203,14 @@ impl<'a> Classifier<'a> {
                         // the header declares below, not a variable.
                         Token::Hold if in_task_header && matches!(tokens.before(p), Some(Token::LParen | Token::Comma)) => {}
                         Token::Bind | Token::Hold => {
-                            let intro = if *keyword == Token::Bind { "bind" } else { "hold" };
+                            // `hold& y = &x` and `bind& y = &x`: references.
+                            let reference = tokens.token(p + 1) == Some(&Token::Amp);
+                            let intro = match (*keyword == Token::Bind, reference) {
+                                (true, false) => "bind",
+                                (true, true) => "bind&",
+                                (false, false) => "hold",
+                                (false, true) => "hold&",
+                            };
                             declaring = Some(intro);
                             declaring_list = Some(intro);
                         }

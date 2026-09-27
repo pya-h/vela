@@ -919,6 +919,9 @@ pub enum StmtKind {
     Binding {
         names: Vec<Bound>,
         mutable: bool,
+        /// `hold& y = &x` or `bind& y = &x`: one name, which is another name for
+        /// the place its value marks, changing it (`hold&`) or only reading it.
+        reference: bool,
         /// The values: one per name, or a single call that sends them all.
         init: Vec<Expr>,
     },
