@@ -267,7 +267,7 @@
           Vela has no default constructor that always runs.</li>
       </ul>
       <p>
-        One problem led to this idea. <a href="future.html#methods-of-the-type">Shared fields</a> can count how often
+        One problem led to this idea. <a href="vela.html#shared">Shared fields</a> can count how often
         <code>X.new(…)</code> is called, but not how many values of <code>X</code> exist. A literal skips
         <code>new</code>, a copy makes a second value without calling anything, and nothing runs when a value goes away.
         Events on a shape's own life, <code>oninit</code> and <code>ondrop</code>, answer that problem

@@ -40,165 +40,175 @@
     | comment:# account is opened by naming its owner alone. One marked `read` is read by any
  24 | # code and changed only by the account's own methods, so no one can reopen a
     | comment:# code and changed only by the account's own methods, so no one can reopen a
- 25 | # closed account by writing to it.
-    | comment:# closed account by writing to it.
- 26 | shape Account
+ 25 | # closed account by writing to it. A `shared` field belongs to the shape rather
+    | comment:# closed account by writing to it. A `shared` field belongs to the shape rather
+ 26 | # than to any account: one value for the whole program, read as
+    | comment:# than to any account: one value for the whole program, read as
+ 27 | # `Account.deposits`, and this one is `read` too, so only the methods count.
+    | comment:# `Account.deposits`, and this one is `read` too, so only the methods count.
+ 28 | shape Account
     | keyword:shape  type:Account
- 27 |     owner: text
+ 29 |     owner: text
     | field:owner  punctuation::  type-builtin:text
- 28 |     balance: int = 0
+ 30 |     balance: int = 0
     | field:balance  punctuation::  type-builtin:int  operator:=  number:0
- 29 |     read open: bool = true
+ 31 |     read open: bool = true
     | keyword:read  field:open  punctuation::  type-builtin:bool  operator:=  keyword:true
- 31 |     balanceOf() -> int
+ 32 |     shared read deposits: int = 0
+    | keyword:shared  keyword:read  field:deposits  punctuation::  type-builtin:int  operator:=  number:0
+ 34 |     balanceOf() -> int
     | method:balanceOf  punctuation:(  punctuation:)  operator:->  type-builtin:int
- 32 |         <- .balance
+ 35 |         <- .balance
     | keyword:<-  punctuation:.  field:balance
- 33 |     fi
+ 36 |     fi
     | keyword:fi
- 35 |     str(r: region) -> text@r
+ 38 |     str(r: region) -> text@r
     | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
- 36 |         <- "{.owner} has {.balance}" at r
+ 39 |         <- "{.owner} has {.balance}" at r
     | keyword:<-  string:"{  punctuation:.  field:owner  string:} has {  punctuation:.  field:balance  string:}"  keyword:at  region:r
- 37 |     fi
+ 40 |     fi
     | keyword:fi
- 39 |     alters deposit(amount: int)
+ 42 |     alters deposit(amount: int)
     | keyword:alters  method:deposit  punctuation:(  parameter:amount  punctuation::  type-builtin:int  punctuation:)
- 40 |         .balance = .balance + amount
+ 43 |         .balance = .balance + amount
     | punctuation:.  field:balance  operator:=  punctuation:.  field:balance  operator:+  parameter:amount
- 41 |         .note("deposit", amount)
+ 44 |         Account.deposits = Account.deposits + 1
+    | type:Account  punctuation:.  field:deposits  operator:=  type:Account  punctuation:.  field:deposits  operator:+  number:1
+ 45 |         .note("deposit", amount)
     | punctuation:.  method:note  punctuation:(  string:"deposit"  punctuation:,  parameter:amount  punctuation:)
- 42 |     fi
+ 46 |     fi
     | keyword:fi
- 44 |     # A method may fail, as a task may: `unit ~ Refusal` sends nothing, or a
+ 48 |     # A method may fail, as a task may: `unit ~ Refusal` sends nothing, or a
     | comment:# A method may fail, as a task may: `unit ~ Refusal` sends nothing, or a
- 45 |     # reason why not.
+ 49 |     # reason why not.
     | comment:# reason why not.
- 46 |     alters withdraw(amount: int) -> unit ~ Refusal
+ 50 |     alters withdraw(amount: int) -> unit ~ Refusal
     | keyword:alters  method:withdraw  punctuation:(  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type:Refusal
- 47 |         when not .open
+ 51 |         when not .open
     | keyword:when  keyword:not  punctuation:.  field:open
- 48 |             <- fail Closed
+ 52 |             <- fail Closed
     | keyword:<-  keyword:fail  variant:Closed
- 49 |         fi
+ 53 |         fi
     | keyword:fi
- 50 |         when amount > .balance
+ 54 |         when amount > .balance
     | keyword:when  parameter:amount  operator:>  punctuation:.  field:balance
- 51 |             <- fail TooLittle(amount - .balance)
+ 55 |             <- fail TooLittle(amount - .balance)
     | keyword:<-  keyword:fail  variant:TooLittle  punctuation:(  parameter:amount  operator:-  punctuation:.  field:balance  punctuation:)
- 52 |         fi
+ 56 |         fi
     | keyword:fi
- 53 |         .balance = .balance - amount
+ 57 |         .balance = .balance - amount
     | punctuation:.  field:balance  operator:=  punctuation:.  field:balance  operator:-  parameter:amount
- 54 |         .note("withdraw", amount)
+ 58 |         .note("withdraw", amount)
     | punctuation:.  method:note  punctuation:(  string:"withdraw"  punctuation:,  parameter:amount  punctuation:)
- 55 |     fi
-    | keyword:fi
- 57 |     alters close()
-    | keyword:alters  method:close  punctuation:(  punctuation:)
- 58 |         .open = false
-    | punctuation:.  field:open  operator:=  keyword:false
  59 |     fi
     | keyword:fi
- 61 |     # Only this file may call it. `show` writes each value in turn, so saying
+ 61 |     alters close()
+    | keyword:alters  method:close  punctuation:(  punctuation:)
+ 62 |         .open = false
+    | punctuation:.  field:open  operator:=  keyword:false
+ 63 |     fi
+    | keyword:fi
+ 65 |     # Only this file may call it. `show` writes each value in turn, so saying
     | comment:# Only this file may call it. `show` writes each value in turn, so saying
- 62 |     # what happened needs no text of its own, and no region to hold it.
+ 66 |     # what happened needs no text of its own, and no region to hold it.
     | comment:# what happened needs no text of its own, and no region to hold it.
- 63 |     priv note(what: text, amount: int)
+ 67 |     priv note(what: text, amount: int)
     | keyword:priv  method:note  punctuation:(  parameter:what  punctuation::  type-builtin:text  punctuation:,  parameter:amount  punctuation::  type-builtin:int  punctuation:)
- 64 |         show(what, " ", amount)
+ 68 |         show(what, " ", amount)
     | builtin-fn:show  punctuation:(  parameter:what  punctuation:,  string:" "  punctuation:,  parameter:amount  punctuation:)
- 65 |     fi
+ 69 |     fi
     | keyword:fi
- 66 | fi
+ 70 | fi
     | keyword:fi
- 68 | # A shape that takes a type: its methods use `T` as its fields do.
+ 72 | # A shape that takes a type: its methods use `T` as its fields do.
     | comment:# A shape that takes a type: its methods use `T` as its fields do.
- 69 | shape Best<T: ordered>
+ 73 | shape Best<T: ordered>
     | keyword:shape  type:Best  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:>
- 70 |     value: T
+ 74 |     value: T
     | field:value  punctuation::  type:T
- 72 |     alters offer(other: T)
+ 76 |     alters offer(other: T)
     | keyword:alters  method:offer  punctuation:(  parameter:other  punctuation::  type:T  punctuation:)
- 73 |         when other > .value
+ 77 |         when other > .value
     | keyword:when  parameter:other  operator:>  punctuation:.  field:value
- 74 |             .value = other
+ 78 |             .value = other
     | punctuation:.  field:value  operator:=  parameter:other
- 75 |         fi
+ 79 |         fi
     | keyword:fi
- 76 |     fi
+ 80 |     fi
     | keyword:fi
- 77 | fi
+ 81 | fi
     | keyword:fi
- 79 | task report(result: unit ~ Refusal)
+ 83 | task report(result: unit ~ Refusal)
     | keyword:task  task:report  punctuation:(  parameter:result  punctuation::  type-builtin:unit  operator:~  type:Refusal  punctuation:)
- 80 |     match result
+ 84 |     match result
     | keyword:match  parameter:result
- 81 |     case {_}
+ 85 |     case {_}
     | keyword:case  punctuation:{  keyword:_  punctuation:}
- 82 |         show("done")
+ 86 |         show("done")
     | builtin-fn:show  punctuation:(  string:"done"  punctuation:)
- 83 |     case failure why
+ 87 |     case failure why
     | keyword:case  keyword:failure  variable:why
- 84 |         # `show` calls a kind's own `str` for it, in a region of its own.
+ 88 |         # `show` calls a kind's own `str` for it, in a region of its own.
     | comment:# `show` calls a kind's own `str` for it, in a region of its own.
- 85 |         show("refused: ", why)
+ 89 |         show("refused: ", why)
     | builtin-fn:show  punctuation:(  string:"refused: "  punctuation:,  variable:why  punctuation:)
- 86 |     fi
+ 90 |     fi
     | keyword:fi
- 87 | fi
+ 91 | fi
     | keyword:fi
- 89 | task main()
+ 93 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 90 |     hold ada = Account { owner: "Ada" }
+ 94 |     hold ada = Account { owner: "Ada" }
     | keyword:hold  variable:ada  operator:=  type:Account  punctuation:{  field:owner  punctuation::  string:"Ada"  punctuation:}
- 91 |     ada.deposit(100)
+ 95 |     ada.deposit(100)
     | variable:ada  punctuation:.  method:deposit  punctuation:(  number:100  punctuation:)
- 92 |     report(ada.withdraw(30))
+ 96 |     report(ada.withdraw(30))
     | task:report  punctuation:(  variable:ada  punctuation:.  method:withdraw  punctuation:(  number:30  punctuation:)  punctuation:)
- 93 |     report(ada.withdraw(500))
+ 97 |     report(ada.withdraw(500))
     | task:report  punctuation:(  variable:ada  punctuation:.  method:withdraw  punctuation:(  number:500  punctuation:)  punctuation:)
- 94 |     show(ada.balanceOf())
+ 98 |     show(ada.balanceOf())
     | builtin-fn:show  punctuation:(  variable:ada  punctuation:.  method:balanceOf  punctuation:(  punctuation:)  punctuation:)
- 95 |     show(ada)
+ 99 |     show(ada)
     | builtin-fn:show  punctuation:(  variable:ada  punctuation:)
- 96 |     ada.close()
+100 |     ada.close()
     | variable:ada  punctuation:.  method:close  punctuation:(  punctuation:)
- 97 |     report(ada.withdraw(1))
+101 |     report(ada.withdraw(1))
     | task:report  punctuation:(  variable:ada  punctuation:.  method:withdraw  punctuation:(  number:1  punctuation:)  punctuation:)
- 99 |     # A reference is another name for an account: its alters methods change
+103 |     # A reference is another name for an account: its alters methods change
     | comment:# A reference is another name for an account: its alters methods change
-100 |     # the account it names.
+104 |     # the account it names.
     | comment:# the account it names.
-101 |     hold bob = Account { owner: "Bob" }
+105 |     hold bob = Account { owner: "Bob" }
     | keyword:hold  variable:bob  operator:=  type:Account  punctuation:{  field:owner  punctuation::  string:"Bob"  punctuation:}
-102 |     hold& current = &bob
+106 |     hold& current = &bob
     | keyword:hold  keyword:&  variable:current  operator:=  operator:&  variable:bob
-103 |     current.deposit(20)
+107 |     current.deposit(20)
     | variable:current  punctuation:.  method:deposit  punctuation:(  number:20  punctuation:)
-104 |     show(bob)
+108 |     show(bob)
     | builtin-fn:show  punctuation:(  variable:bob  punctuation:)
-106 |     # An item of a slice is a place that can change.
+110 |     # An item of a slice is a place that can change.
     | comment:# An item of a slice is a place that can change.
-107 |     region bank
+111 |     region bank
     | keyword:region  region:bank
-108 |     hold accounts = new [Account]() at bank
+112 |     hold accounts = new [Account]() at bank
     | keyword:hold  variable:accounts  operator:=  keyword:new  punctuation:[  type:Account  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:bank
-109 |     accounts.add(Account { owner: "Grace", balance: 5 })
+113 |     accounts.add(Account { owner: "Grace", balance: 5 })
     | variable:accounts  punctuation:.  field:add  punctuation:(  type:Account  punctuation:{  field:owner  punctuation::  string:"Grace"  punctuation:,  field:balance  punctuation::  number:5  punctuation:}  punctuation:)
-110 |     accounts[0].deposit(10)
+114 |     accounts[0].deposit(10)
     | variable:accounts  punctuation:[  number:0  punctuation:]  punctuation:.  method:deposit  punctuation:(  number:10  punctuation:)
-111 |     show(accounts[0])
+115 |     show(accounts[0])
     | builtin-fn:show  punctuation:(  variable:accounts  punctuation:[  number:0  punctuation:]  punctuation:)
-113 |     hold best = Best { value: 3 }
+116 |     show("deposits: ", Account.deposits)
+    | builtin-fn:show  punctuation:(  string:"deposits: "  punctuation:,  type:Account  punctuation:.  field:deposits  punctuation:)
+118 |     hold best = Best { value: 3 }
     | keyword:hold  variable:best  operator:=  type:Best  punctuation:{  field:value  punctuation::  number:3  punctuation:}
-114 |     each n in [7, 2, 9, 4]
+119 |     each n in [7, 2, 9, 4]
     | keyword:each  variable:n  keyword:in  punctuation:[  number:7  punctuation:,  number:2  punctuation:,  number:9  punctuation:,  number:4  punctuation:]
-115 |         best.offer(n)
+120 |         best.offer(n)
     | variable:best  punctuation:.  method:offer  punctuation:(  variable:n  punctuation:)
-116 |     fi
+121 |     fi
     | keyword:fi
-117 |     show("best: ", best.value)
+122 |     show("best: ", best.value)
     | builtin-fn:show  punctuation:(  string:"best: "  punctuation:,  variable:best  punctuation:.  field:value  punctuation:)
-118 | fi
+123 | fi
     | keyword:fi

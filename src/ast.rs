@@ -751,6 +751,11 @@ pub enum ExprKind {
     /// `&a`: the place `a` given to a `hold&` parameter, which the task
     /// changes. Only an argument is one (see `check::check_call_args`).
     Ref(Box<Expr>),
+    /// `X.f`: the shared field `field` of the shape `shape` (its name in the
+    /// program), one value for the whole program. The parser reads it as a
+    /// field of a name, and the resolver makes it this once it knows the name
+    /// is a shape (no variable is named like one).
+    Shared { shape: String, field: String },
     /// `Point { x: 1 }`, or `Box<int> { value: none }` for a shape that takes
     /// types: `types` holds the ones the literal names, empty when the values it
     /// gives say which they are.
@@ -1502,10 +1507,33 @@ pub struct ShapeDef {
     /// in it has been replaced.
     pub given: Vec<Type>,
     pub fields: Vec<Field>,
+    /// `shared f: int = 0`: fields that are one value for the whole program,
+    /// never part of a value of the shape, in the order they are written.
+    pub shared: Vec<SharedField>,
     /// Position of the shape name.
     pub span: Span,
     /// `priv shape`: only its own file can name it.
     pub private: bool,
+}
+
+/// A shape's `shared` field: one value for the whole program, reached only
+/// through the shape's name, `X.f`, never through a value. Its `field` always
+/// has a first value, its `default`, one the compiler works out without running
+/// the program, and may be `priv` or `read` as any field.
+#[derive(Debug, Clone)]
+pub struct SharedField {
+    pub field: Field,
+    /// `shared hold f`: any code that sees it may change it. A `read` one only
+    /// the shape's own methods change, and one that is neither never changes.
+    pub hold: bool,
+}
+
+impl SharedField {
+    /// Whether anything may ever change it: `hold`, or `read`, which its own
+    /// shape's methods change.
+    pub fn changes(&self) -> bool {
+        self.hold || self.field.read
+    }
 }
 
 #[derive(Debug, Clone)]

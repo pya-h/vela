@@ -1,0 +1,36 @@
+  1 | # A module whose shape keeps shared fields, used from tests/run/shared_fields.vela.
+    | comment:# A module whose shape keeps shared fields, used from tests/run/shared_fields.vela.
+  3 | shape Tally
+    | keyword:shape  type:Tally
+  4 |     n: int = 0
+    | field:n  punctuation::  type-builtin:int  operator:=  number:0
+  5 |     # Any file reads it; only the methods of Tally change it.
+    | comment:# Any file reads it; only the methods of Tally change it.
+  6 |     shared read made: int = 0
+    | keyword:shared  keyword:read  field:made  punctuation::  type-builtin:int  operator:=  number:0
+  7 |     # Any file that sees it may change it.
+    | comment:# Any file that sees it may change it.
+  8 |     shared hold limit: int = 3
+    | keyword:shared  keyword:hold  field:limit  punctuation::  type-builtin:int  operator:=  number:3
+  9 |     priv shared hold secret: int = 42
+    | keyword:priv  keyword:shared  keyword:hold  field:secret  punctuation::  type-builtin:int  operator:=  number:42
+ 11 |     alters tick()
+    | keyword:alters  method:tick  punctuation:(  punctuation:)
+ 12 |         .n = .n + 1
+    | punctuation:.  field:n  operator:=  punctuation:.  field:n  operator:+  number:1
+ 13 |         Tally.made = Tally.made + 1
+    | type:Tally  punctuation:.  field:made  operator:=  type:Tally  punctuation:.  field:made  operator:+  number:1
+ 14 |     fi
+    | keyword:fi
+ 16 |     # A method that doesn't change its value may still change shared fields.
+    | comment:# A method that doesn't change its value may still change shared fields.
+ 17 |     reveal() -> int
+    | method:reveal  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 18 |         Tally.secret = Tally.secret + 1
+    | type:Tally  punctuation:.  field:secret  operator:=  type:Tally  punctuation:.  field:secret  operator:+  number:1
+ 19 |         <- Tally.secret
+    | keyword:<-  type:Tally  punctuation:.  field:secret
+ 20 |     fi
+    | keyword:fi
+ 21 | fi
+    | keyword:fi

@@ -188,7 +188,7 @@
       <p>
         More programs are in <code>examples/</code>: <code>fib.vela</code> (recursion), <code>kinds.vela</code>
         (kinds, <code>match</code>, and a kind's methods), <code>methods.vela</code> (a shape's methods, <code>alters</code>,
-        <code>priv</code>, a method that can fail, one of a shape that takes types, <a href="#field-defaults">fields that name the value they fall back on</a>, and a <a href="#read-fields"><code>read</code></a> field), <code>todo.vela</code> (a linked list in a region, with <code>maybe</code>
+        <code>priv</code>, a method that can fail, one of a shape that takes types, <a href="#field-defaults">fields that name the value they fall back on</a>, a <a href="#read-fields"><code>read</code></a> field, and a <a href="#shared">shared</a> one), <code>todo.vela</code> (a linked list in a region, with <code>maybe</code>
         pointers, <code>is</code>, and a plan B), <code>errors.vela</code> (<code>T ~ E</code>, <code>fail</code> and <code>failure</code>, and handling
         errors with <code>match</code>, <code>is</code>, and a plan B), <code>text.vela</code> (lengths, parts, order,
         joining, values as text, and text holding values), <code>regions.vela</code> (a tree in a region, a region
@@ -255,7 +255,7 @@
       <pre>task shape kind  bind hold  when   else loop    each
 in   at    match case new   region and  or      not
 true false none  fi   maybe is     fail failure include priv
-block</pre>
+block shared</pre>
       <p>
         <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>,
         <code>bool</code>, <code>text</code>, <code>unit</code>) aren't reserved words: no task, shape, kind, or
@@ -263,7 +263,8 @@ block</pre>
         builtin kinds <a href="#reading-numbers"><code>ParseError</code></a> (<code>NotANumber</code>,
         <code>TooLarge</code>) and <a href="#reading-input"><code>InputError</code></a> (<code>Ended</code>,
         <code>NoNumber</code>) take their names the same way, and, as for any kind, a variable may not be named
-        after a kind or one of its variants; a field may. Four words are read by their position and are no more
+        after a kind or one of its variants; a field may. Nor may a variable be named after a shape, whose
+        <a href="#shared">shared fields</a> <code>Shape.f</code> names. Four words are read by their position and are no more
         reserved than those: <code>alters</code> before a method (see <a href="#methods">Methods</a>),
         <code>read</code> before a shape's field (see <a href="#read-fields">Read-only fields</a>),
         <code>default</code> after a region (see <a href="#default-region">A block's default region</a>), and
@@ -1085,6 +1086,62 @@ m = Meter { label: "gate" }     <span class="comment"># ok: a whole new value, w
       <p>
         <code>read</code> names no word of its own: a field called <code>read</code> is written <code>read:</code>
         and a method <code>read(…)</code>, so both still work.
+      </p>
+      <p id="shared">
+        <strong>Shared fields.</strong> A field marked <code>shared</code> belongs to the shape itself rather than to
+        each value: there is one of it for the whole program, however many values of the shape there are, even none.
+        It is read and changed only through the shape's name, <code>Point.made</code> (or
+        <code>geometry.Point.made</code> from another file), never through a value, and a literal never gives it.
+        Inside the shape's own methods it is written the same way, since it is no member of <code>.this</code>.
+      </p>
+      <ul>
+        <li>A shared field never changes unless it is <code>shared hold</code>, which any code that sees it may
+          change. A value decides whether its own fields change (<code>bind p</code> or <code>hold p</code>), and no
+          value owns a shared field, so its declaration says it.</li>
+        <li><code>shared read</code> is read anywhere and changed only by the methods of its shape, and
+          <code>priv shared</code> is seen only by its own file, as for any field. The words go in that order:
+          <code>priv shared hold f</code>, <code>shared read f</code>.</li>
+        <li>It always names its first value, one the compiler works out without running the program, as a field's
+          value to fall back on is. That value may name a shared field above it in its shape, or one of another
+          shape; ones that name each other in a circle are refused. A field's value to fall back on may name a shared
+          field that never changes.</li>
+        <li>Changing one needs no <code>alters</code>, which is about the value a method is called on: an
+          ordinary method, or a task, changes <code>Point.made</code> as it may.</li>
+        <li>It lives as long as the program, which no region does, so it can't hold anything that lives in one: a
+          pointer, a slice, <code>text@r</code>, a value holding one, or a <a href="std.html#files"><code>File</code></a>.
+          Numbers, <code>bool</code>, text written in the program, arrays, tuples, <code>maybe</code>, kinds, and
+          shapes of those are all fine. (See <a href="future.html#static-region">a static region</a> for an idea that
+          would lift this.)</li>
+        <li>A shape that takes types has no shared fields yet (see
+          <a href="future.html#shared-in-generic-shapes">the idea</a>).</li>
+      </ul>
+      <pre><span class="keyword">shape</span> Ticket
+    number: int
+    <span class="keyword">shared</span> prefix: text = "T-"          <span class="comment"># never changes</span>
+    <span class="keyword">shared</span> <span class="keyword">read</span> issued: int = 0        <span class="comment"># only Ticket's methods change it</span>
+    <span class="keyword">shared</span> <span class="keyword">hold</span> limit: int = 100      <span class="comment"># any code may change it</span>
+    <span class="keyword">priv</span> <span class="keyword">shared</span> <span class="keyword">hold</span> last: int = 0    <span class="comment"># only this file sees it</span>
+
+    <span class="keyword">alters</span> issue()
+        Ticket.last = Ticket.last + 1
+        .number = Ticket.last
+        Ticket.issued = Ticket.issued + 1
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">hold</span> t = Ticket { number: 0 }
+t.issue()
+show(Ticket.prefix, t.number, " of ", Ticket.issued)   <span class="comment"># T-1 of 1</span>
+Ticket.limit = 50                <span class="comment"># ok: shared hold</span>
+Ticket.issued = 7                <span class="comment"># error: 'Ticket.issued' is a read-only shared field, which only the methods of 'Ticket' change</span>
+show(t.issued)                   <span class="comment"># error: 'issued' is a shared field of 'Ticket' … so it is read as 'Ticket.issued'</span>
+Ticket { number: 1, limit: 3 }   <span class="comment"># error: 'limit' is a shared field of 'Ticket' … so no literal gives it</span></pre>
+      <p>
+        In C each shared field is one variable of its own, given its first value where the program starts: a value
+        of the shape is no larger for it, and reading one costs what reading a variable does. Since
+        <code>Point.made</code> names the shape, no variable may be named like a shape, as none may be named like a
+        kind. Counting how many values of a shape exist, rather than how many were made by one method, needs code
+        that runs when a value is made and when it goes away, which is the <a href="events.html">events</a> idea.
       </p>
       <p>
         Shapes and kinds can be used before they are declared. A type cannot contain itself by value, since its

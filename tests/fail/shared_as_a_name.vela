@@ -1,0 +1,4 @@
+# error: 3:10: expected a name, got 'shared', which is a reserved word
+task main()
+    hold shared = 1
+fi

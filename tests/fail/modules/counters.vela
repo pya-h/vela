@@ -1,0 +1,9 @@
+# A module for the fail fixtures: a shape with shared fields of every kind.
+
+shape Counter
+    n: int = 0
+    shared read made: int = 0
+    shared hold open: int = 0
+    shared fixed: int = 3
+    priv shared hold secret: int = 1
+fi

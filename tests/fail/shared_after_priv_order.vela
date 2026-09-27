@@ -1,0 +1,4 @@
+# error: 3:12: 'priv' goes first, as in 'priv shared f: int = 0'
+shape Point
+    shared priv made: int = 0
+fi

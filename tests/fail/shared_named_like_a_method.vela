@@ -1,0 +1,8 @@
+# error: 5:5: 'area' is already a shared field of 'Point', at 3:12; a method and a shared field of one shape can't share a name
+shape Point
+    shared area: int = 0
+
+    area() -> int
+        <- 0
+    fi
+fi

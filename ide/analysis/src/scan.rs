@@ -137,6 +137,10 @@ pub(crate) struct Symbol {
     /// the alters methods of its shape change it. A literal gives it exactly
     /// when it has no `default`.
     pub read: bool,
+    /// A shape's `shared` field (`shared made: int = 0`): one value for the
+    /// whole program, read through the shape's name, never a value's. `intro`
+    /// is `hold` for one any code may change.
+    pub shared: bool,
 }
 
 /// A module the file includes.
@@ -611,6 +615,20 @@ fn read_marker(tokens: &Tokens, p: usize) -> bool {
     p.checked_sub(1).is_some_and(|q| tokens.ident(q) == Some(READ) && tokens.starts_line(q))
 }
 
+/// Whether the name at `p` is a shape's `shared` field, as in `shared f`,
+/// `shared hold f`, or `shared read f`, with `shared` starting its line (after
+/// `priv`, if it is written); and if so, whether it is `hold`.
+fn shared_marker(tokens: &Tokens, p: usize) -> Option<bool> {
+    let (at, hold) = match p.checked_sub(1).and_then(|q| tokens.token(q)) {
+        Some(Token::Shared) => (p - 1, false),
+        Some(Token::Hold) => (p.checked_sub(2)?, true),
+        Some(Token::Ident(word)) if word == READ => (p.checked_sub(2)?, false),
+        _ => return None,
+    };
+    let starts = tokens.starts_line(at) || (tokens.before(at) == Some(&Token::Priv) && tokens.starts_line(at - 1));
+    (tokens.token(at) == Some(&Token::Shared) && starts).then_some(hold)
+}
+
 /// What ends a shape's field, whose type may be followed by the value a literal
 /// that leaves the field out gives it (`size: int = 0`).
 fn ends_shape_field(token: &Token) -> bool {
@@ -660,7 +678,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
         let private = tokens.before(p) == Some(&Token::Priv)
             || tokens.before(p.saturating_sub(1)) == Some(&Token::Priv)
             || (native && tokens.before(p - 2) == Some(&Token::Priv));
-        symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro: None, detail, parent, module: None, private, default: false, read: false });
+        symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro: None, detail, parent, module: None, private, default: false, read: false, shared: false });
         declared_at.insert(p, symbols.len() - 1);
         symbols.len() - 1
     };
@@ -800,17 +818,28 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
             }
             Token::Ident(_) => match (blocks.as_slice(), item) {
                 ([Block::Shape], Some(shape))
-                    if (tokens.starts_line(p) || (tokens.before(p) == Some(&Token::Priv) && tokens.starts_line(p - 1)) || read_marker(tokens, p))
+                    if (tokens.starts_line(p)
+                        || (tokens.before(p) == Some(&Token::Priv) && tokens.starts_line(p - 1))
+                        || read_marker(tokens, p)
+                        || shared_marker(tokens, p).is_some())
                         && tokens.token(p + 1) == Some(&Token::Colon) =>
                 {
                     // The type, and whether a value it falls back on follows it.
                     let whole = tokens.text_after(p + 1, never);
                     let detail = tokens.text_after(p + 1, ends_shape_field);
                     let falls_back = whole != detail;
+                    let shared = shared_marker(tokens, p);
                     let id = declare(&mut symbols, p, SymbolKind::Field, detail, Some(shape));
                     if let Some(field) = symbols.get_mut(id) {
                         field.default = falls_back;
-                        field.read = read_marker(tokens, p);
+                        field.read = read_marker(tokens, p) || (shared.is_some() && tokens.ident(p - 1) == Some(READ));
+                        field.shared = shared.is_some();
+                        field.intro = shared.filter(|hold| *hold).map(|_| "hold");
+                        // `priv shared f`: `declare` looks only just before the name.
+                        if shared.is_some() {
+                            let start = (p.saturating_sub(3)..p).find(|q| tokens.token(*q) == Some(&Token::Shared));
+                            field.private = start.is_some_and(|q| tokens.before(q) == Some(&Token::Priv));
+                        }
                     }
                 }
                 ([Block::Kind], Some(kind)) if tokens.starts_line(p) => {
@@ -1537,7 +1566,7 @@ impl<'a> Classifier<'a> {
         // the case may give its value on the same line: `case Ok v = v * 2`.
         if intro == Some("case") {
             let visible = range.end..tokens.source.len();
-            self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, read: false, module: None, private: false });
+            self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, read: false, shared: false, module: None, private: false });
             let id = self.symbols.len() - 1;
             if let Some(scope) = self.scopes.last_mut() {
                 scope.variables.push(id);
@@ -1576,7 +1605,7 @@ impl<'a> Classifier<'a> {
             })
             .map_or(tokens.source.len(), |q| tokens.range(q).end);
         let visible = line_end..tokens.source.len();
-        self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, read: false, module: None, private: false });
+        self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, read: false, shared: false, module: None, private: false });
         let id = self.symbols.len() - 1;
         if let Some(scope) = self.scopes.last_mut() {
             scope.variables.push(id);

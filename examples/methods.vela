@@ -22,11 +22,14 @@ fi
 # A field can name the value a literal that leaves it out gives it, so an
 # account is opened by naming its owner alone. One marked `read` is read by any
 # code and changed only by the account's own methods, so no one can reopen a
-# closed account by writing to it.
+# closed account by writing to it. A `shared` field belongs to the shape rather
+# than to any account: one value for the whole program, read as
+# `Account.deposits`, and this one is `read` too, so only the methods count.
 shape Account
     owner: text
     balance: int = 0
     read open: bool = true
+    shared read deposits: int = 0
 
     balanceOf() -> int
         <- .balance
@@ -38,6 +41,7 @@ shape Account
 
     alters deposit(amount: int)
         .balance = .balance + amount
+        Account.deposits = Account.deposits + 1
         .note("deposit", amount)
     fi
 
@@ -109,6 +113,7 @@ task main()
     accounts.add(Account { owner: "Grace", balance: 5 })
     accounts[0].deposit(10)
     show(accounts[0])
+    show("deposits: ", Account.deposits)
 
     hold best = Best { value: 3 }
     each n in [7, 2, 9, 4]

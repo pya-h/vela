@@ -663,23 +663,36 @@ impl Parser {
         let name = self.expect_ident()?;
         let types = self.parse_type_params()?;
         self.skip_newlines();
-        let mut fields = Vec::new();
+        let mut fields: Vec<Field> = Vec::new();
+        let mut shared: Vec<SharedField> = Vec::new();
         let mut methods: Vec<TaskDef> = Vec::new();
         while !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() {
             self.skip_newlines();
             if self.check(Token::Fi) || self.at_item_start() { break; }
             self.reject_stray_end()?;
             let private = self.match_token(Token::Priv);
+            if self.check(Token::Shared) {
+                let member = self.parse_shared_field(&name, &types, private, &methods)?;
+                reject_same_name(&member.field, &fields, &shared)?;
+                shared.push(member);
+                self.skip_newlines();
+                continue;
+            }
             if self.at_method() {
-                let method = self.parse_method(&name, "shape", &types, private, &fields, &methods)?;
+                let method = self.parse_method(&name, "shape", &types, private, Above { fields: &fields, shared: &shared, methods: &methods })?;
                 methods.push(method);
                 self.skip_newlines();
                 continue;
+            }
+            // `read shared f`: the words go the other way round.
+            if matches!(self.peek(), Token::Ident(word) if word == READ) && self.tokens.get(self.pos + 1) == Some(&Token::Shared) {
+                return Err(Error::at(self.peek_span(), format!("'shared' goes first, as in 'shared {} f: int = 0'", READ)));
             }
             let read = self.match_read(private)?;
             self.reject_field_below_method(&methods, "shape")?;
             let mut field = self.parse_field(Slot::Field)?;
             reject_member_named_this(&field.name, field.span, "a field")?;
+            reject_same_name(&field, &fields, &shared)?;
             field.private = private;
             field.read = read;
             fields.push(field);
@@ -687,7 +700,63 @@ impl Parser {
         }
         self.expect_fi("shape", opened)?;
         self.methods.extend(methods.into_iter().map(Item::Task));
-        Ok(ShapeDef { name, types, given: Vec::new(), fields, span, private: false })
+        Ok(ShapeDef { name, types, given: Vec::new(), fields, shared, span, private: false })
+    }
+
+    /// A shape's `shared` field, with the cursor at `shared` and `private` saying
+    /// `priv` came before it: `shared f: int = 0`, `shared hold f: int = 0`, or
+    /// `shared read f: int = 0`. It always names its first value.
+    fn parse_shared_field(&mut self, shape: &str, types: &[TypeParam], private: bool, methods: &[TaskDef]) -> Result<SharedField> {
+        let at = self.peek_span();
+        self.advance(); // shared
+        if self.check(Token::Priv) {
+            return Err(Error::at(self.peek_span(), "'priv' goes first, as in 'priv shared f: int = 0'"));
+        }
+        if self.check(Token::Shared) {
+            return Err(Error::at(self.peek_span(), "'shared' is already written here"));
+        }
+        if self.at_method() {
+            return Err(Error::at(at, "a method can't be 'shared' yet; only a field can"));
+        }
+        let hold_at = self.peek_span();
+        let hold = self.match_token(Token::Hold);
+        if hold && self.check(Token::Amp) {
+            return Err(Error::at(self.peek_span(), "a shared field is a value of its own, not a place elsewhere, so it is 'shared hold', without '&'"));
+        }
+        if hold && self.check(Token::Hold) {
+            return Err(Error::at(self.peek_span(), "'hold' is already written here"));
+        }
+        let read = self.match_read(private)?;
+        if hold && read {
+            return Err(Error::at(
+                hold_at,
+                format!("a shared field is 'hold' or '{0}', not both: 'hold' lets any code that sees it change it, and '{0}' only the methods of its shape", READ),
+            ));
+        }
+        if read && self.check(Token::Hold) {
+            return Err(Error::at(
+                self.peek_span(),
+                format!("a shared field is 'hold' or '{0}', not both: 'hold' lets any code that sees it change it, and '{0}' only the methods of its shape", READ),
+            ));
+        }
+        if !types.is_empty() {
+            return Err(Error::at(
+                at,
+                format!("a shape that takes types can't have shared fields yet ('{}' takes {}): it is a different shape for every set of types", shape, type_param_list(types)),
+            ));
+        }
+        self.reject_field_below_method(methods, "shape")?;
+        let mut field = self.parse_field(Slot::Field)?;
+        reject_member_named_this(&field.name, field.span, "a field")?;
+        if field.default.is_none() {
+            return Err(Error::at(
+                field.ty_span,
+                format!("a shared field names its first value, as in 'shared {0}: {1} = …', since no literal ever gives it one", field.name, field.ty),
+            ));
+        }
+        field.private = private;
+        field.read = read;
+        Ok(SharedField { field, hold })
     }
 
     /// Rejects a field written below a method: a shape's or a kind's block reads
@@ -721,7 +790,8 @@ impl Parser {
     /// parameters, what it sends, and its body, with `alters` before it when it
     /// changes the value it is called on. It becomes a task whose first parameter
     /// holds that value (see `method_name` and `THIS`).
-    fn parse_method(&mut self, owner: &str, what: &str, types: &[TypeParam], private: bool, fields: &[Field], methods: &[TaskDef]) -> Result<TaskDef> {
+    fn parse_method(&mut self, owner: &str, what: &str, types: &[TypeParam], private: bool, above: Above) -> Result<TaskDef> {
+        let Above { fields, shared, methods } = above;
         let opened = self.peek_span();
         let alters_span = match self.peek() {
             Token::Ident(word) if word == ALTERS => {
@@ -745,6 +815,15 @@ impl Parser {
                 format!(
                     "'{0}' is already a field of '{1}', at {2}:{3}; both are written '.{0}', so a field and a method can't share a name",
                     name, owner, field.span.line, field.span.col
+                ),
+            ));
+        }
+        if let Some(member) = shared.iter().find(|member| member.field.name == name) {
+            return Err(Error::at(
+                span,
+                format!(
+                    "'{0}' is already a shared field of '{1}', at {2}:{3}; a method and a shared field of one shape can't share a name",
+                    name, owner, member.field.span.line, member.field.span.col
                 ),
             ));
         }
@@ -816,10 +895,13 @@ impl Parser {
             let variant_span = self.peek_span();
             // `priv` goes before a method, whose name is what the checks below read.
             let private = self.match_token(Token::Priv);
+            if self.check(Token::Shared) {
+                return Err(Error::at(self.peek_span(), "a kind has no fields, so no shared ones; a shape has them"));
+            }
             // A variant carries its values in parentheses, as a method takes its
             // parameters, so `alters` or a `->` after them tells them apart.
             if self.at_method() && !self.at_variant_payload(&methods) {
-                let method = self.parse_method(&name, "kind", &[], private, &[], &methods)?;
+                let method = self.parse_method(&name, "kind", &[], private, Above { fields: &[], shared: &[], methods: &methods })?;
                 methods.push(method);
                 self.skip_newlines();
                 continue;
@@ -2763,6 +2845,25 @@ fn receiver(owner: &str, types: &[TypeParam], span: Span) -> Field {
 
 /// Refuses a member named `this`, which is the whole value inside a method, so
 /// nothing written after a dot could reach it.
+/// What a shape or a kind declares above a method, whose names the method's
+/// can't take (see `Parser::parse_method`).
+#[derive(Clone, Copy)]
+struct Above<'a> {
+    fields: &'a [Field],
+    shared: &'a [SharedField],
+    methods: &'a [TaskDef],
+}
+
+/// Refuses a field or shared field named like one written above it in the
+/// same shape: both are named after a dot, so they can't share a name.
+fn reject_same_name(field: &Field, fields: &[Field], shared: &[SharedField]) -> Result<()> {
+    let before = fields.iter().chain(shared.iter().map(|member| &member.field)).find(|before| before.name == field.name);
+    match before {
+        Some(before) => Err(Error::at(field.span, format!("field '{}' is already defined at {}:{}", field.name, before.span.line, before.span.col))),
+        None => Ok(()),
+    }
+}
+
 fn reject_member_named_this(name: &str, span: Span, what: &str) -> Result<()> {
     if name != THIS_WORD {
         return Ok(());

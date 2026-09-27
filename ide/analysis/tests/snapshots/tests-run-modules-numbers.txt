@@ -10,115 +10,113 @@
     | keyword:fi
   8 | task add(a: int, b: int) -> int
     | keyword:task  task:add  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
-  9 |     # A variable may have the name of a shape, as in any file.
-    | comment:# A variable may have the name of a shape, as in any file.
- 10 |     bind Sum = a + b
-    | keyword:bind  variable:Sum  operator:=  parameter:a  operator:+  parameter:b
- 11 |     <- Sum
-    | keyword:<-  variable:Sum
- 12 | fi
+  9 |     bind total = a + b
+    | keyword:bind  variable:total  operator:=  parameter:a  operator:+  parameter:b
+ 10 |     <- total
+    | keyword:<-  variable:total
+ 11 | fi
     | keyword:fi
- 14 | # A generic task another file uses, and a private one it uses itself: the task
+ 13 | # A generic task another file uses, and a private one it uses itself: the task
     | comment:# A generic task another file uses, and a private one it uses itself: the task
- 15 | # made for each set of types a use gives belongs to this module too.
+ 14 | # made for each set of types a use gives belongs to this module too.
     | comment:# made for each set of types a use gives belongs to this module too.
- 16 | task larger<T: ordered>(a: T, b: T) -> T
+ 15 | task larger<T: ordered>(a: T, b: T) -> T
     | keyword:task  task:larger  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type:T
- 17 |     <- pickFirst(biggest(a, b), a)
+ 16 |     <- pickFirst(biggest(a, b), a)
     | keyword:<-  task:pickFirst  punctuation:(  task:biggest  punctuation:(  parameter:a  punctuation:,  parameter:b  punctuation:)  punctuation:,  parameter:a  punctuation:)
- 18 | fi
+ 17 | fi
     | keyword:fi
- 20 | priv task pickFirst<T>(a: T, b: T) -> T
+ 19 | priv task pickFirst<T>(a: T, b: T) -> T
     | keyword:priv  keyword:task  task:pickFirst  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type:T
- 21 |     <- a
+ 20 |     <- a
     | keyword:<-  parameter:a
- 22 | fi
+ 21 | fi
     | keyword:fi
- 24 | priv task biggest<T: ordered>(a: T, b: T) -> T
+ 23 | priv task biggest<T: ordered>(a: T, b: T) -> T
     | keyword:priv  keyword:task  task:biggest  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type:T
- 25 |     when a > b
+ 24 |     when a > b
     | keyword:when  parameter:a  operator:>  parameter:b
- 26 |         <- a
+ 25 |         <- a
     | keyword:<-  parameter:a
- 27 |     fi
+ 26 |     fi
     | keyword:fi
- 28 |     <- b
+ 27 |     <- b
     | keyword:<-  parameter:b
- 29 | fi
+ 28 | fi
     | keyword:fi
- 31 | # A shape that takes types, used from another file, and a task that makes one.
+ 30 | # A shape that takes types, used from another file, and a task that makes one.
     | comment:# A shape that takes types, used from another file, and a task that makes one.
- 32 | shape Tally<T: shown>
+ 31 | shape Tally<T: shown>
     | keyword:shape  type:Tally  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>
- 33 |     value: T
+ 32 |     value: T
     | field:value  punctuation::  type:T
- 34 |     count: int
+ 33 |     count: int
     | field:count  punctuation::  type-builtin:int
- 35 | fi
+ 34 | fi
     | keyword:fi
- 37 | # A shape given types names the region its values live in, since the type given
+ 36 | # A shape given types names the region its values live in, since the type given
     | comment:# A shape given types names the region its values live in, since the type given
- 38 | # may hold text or pointers, so the task takes the region to name.
+ 37 | # may hold text or pointers, so the task takes the region to name.
     | comment:# may hold text or pointers, so the task takes the region to name.
- 39 | task tallyOf<T: shown>(r: region, value: T) -> Tally<T>@r
+ 38 | task tallyOf<T: shown>(r: region, value: T) -> Tally<T>@r
     | keyword:task  task:tallyOf  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:value  punctuation::  type:T  punctuation:)  operator:->  type:Tally  punctuation:<  type:T  punctuation:>  operator:@  region:r
- 40 |     <- Tally { value: value, count: 1 }
+ 39 |     <- Tally { value: value, count: 1 }
     | keyword:<-  type:Tally  punctuation:{  field:value  punctuation::  parameter:value  punctuation:,  field:count  punctuation::  number:1  punctuation:}
- 41 | fi
+ 40 | fi
     | keyword:fi
- 43 | # The kinds reading a number sends belong to no file, so this module writes both
+ 42 | # The kinds reading a number sends belong to no file, so this module writes both
     | comment:# The kinds reading a number sends belong to no file, so this module writes both
- 44 | # without declaring them and without an `include`: as a type it sends, as a type
+ 43 | # without declaring them and without an `include`: as a type it sends, as a type
     | comment:# without declaring them and without an `include`: as a type it sends, as a type
- 45 | # it takes, and as a value it sends itself, through its kind or as a bare variant.
+ 44 | # it takes, and as a value it sends itself, through its kind or as a bare variant.
     | comment:# it takes, and as a value it sends itself, through its kind or as a bare variant.
- 46 | task read(t: text) -> int ~ ParseError
+ 45 | task read(t: text) -> int ~ ParseError
     | keyword:task  task:read  punctuation:(  parameter:t  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  operator:~  type:ParseError
- 47 |     <- int(t) {
+ 46 |     <- int(t) {
     | keyword:<-  type-builtin:int  punctuation:(  parameter:t  punctuation:)  punctuation:{
- 48 |         failure e
+ 47 |         failure e
     | keyword:failure  variable:e
- 49 |         <- fail e
+ 48 |         <- fail e
     | keyword:<-  keyword:fail  variable:e
- 50 |     }
+ 49 |     }
     | punctuation:}
- 51 | fi
+ 50 | fi
     | keyword:fi
- 53 | task refused() -> int ~ InputError
+ 52 | task refused() -> int ~ InputError
     | keyword:task  task:refused  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:~  type:InputError
- 54 |     <- fail InputError.NoNumber(ParseError.TooLarge)
+ 53 |     <- fail InputError.NoNumber(ParseError.TooLarge)
     | keyword:<-  keyword:fail  type:InputError  punctuation:.  variant:NoNumber  punctuation:(  type:ParseError  punctuation:.  variant:TooLarge  punctuation:)
- 55 | fi
+ 54 | fi
     | keyword:fi
- 57 | task stopped() -> int ~ InputError
+ 56 | task stopped() -> int ~ InputError
     | keyword:task  task:stopped  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:~  type:InputError
- 58 |     <- fail Ended
+ 57 |     <- fail Ended
     | keyword:<-  keyword:fail  variant:Ended
- 59 | fi
+ 58 | fi
     | keyword:fi
- 61 | task reason(e: InputError) -> text
+ 60 | task reason(e: InputError) -> text
     | keyword:task  task:reason  punctuation:(  parameter:e  punctuation::  type:InputError  punctuation:)  operator:->  type-builtin:text
- 62 |     match e
+ 61 |     match e
     | keyword:match  parameter:e
- 63 |     case Ended
+ 62 |     case Ended
     | keyword:case  variant:Ended
- 64 |         <- "ended"
+ 63 |         <- "ended"
     | keyword:<-  string:"ended"
- 65 |     case NoNumber why
+ 64 |     case NoNumber why
     | keyword:case  variant:NoNumber  variable:why
- 66 |         match why
+ 65 |         match why
     | keyword:match  variable:why
- 67 |         case NotANumber
+ 66 |         case NotANumber
     | keyword:case  variant:NotANumber
- 68 |             <- "no number"
+ 67 |             <- "no number"
     | keyword:<-  string:"no number"
- 69 |         case TooLarge
+ 68 |         case TooLarge
     | keyword:case  variant:TooLarge
- 70 |             <- "too large"
+ 69 |             <- "too large"
     | keyword:<-  string:"too large"
- 71 |         fi
+ 70 |         fi
     | keyword:fi
- 72 |     fi
+ 71 |     fi
     | keyword:fi
- 73 | fi
+ 72 | fi
     | keyword:fi

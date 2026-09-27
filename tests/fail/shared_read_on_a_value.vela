@@ -1,0 +1,10 @@
+# error: 9:12: 'made' is a shared field of 'Point', one value for the whole program rather than part of each value, so it is read as 'Point.made'
+shape Point
+    x: int
+    shared made: int = 0
+fi
+
+task main()
+    bind p = Point { x: 1 }
+    show(p.made)
+fi

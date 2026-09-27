@@ -96,9 +96,9 @@ fn private_offers_the_declarations_it_can_mark() {
     assert_offers(after, &["task", "shape", "kind", "task -> type"], &["priv", "include", "bind"]);
     // The word being typed is completed too.
     assert_offers("priv sh@@", &["shape"], &["priv"]);
-    // A shape's private field is a name being declared, and a private method
-    // may say it changes its value.
-    assert_eq!(labels("shape S\n    priv @@\nfi\n"), ["alters"]);
+    // A shape's private field is a name being declared, a private method may
+    // say it changes its value, and a private field may be shared.
+    assert_eq!(labels("shape S\n    priv @@\nfi\n"), ["alters", "shared"]);
     // Not a statement.
     assert_eq!(labels(&in_main("priv @@")), Vec::<String>::new());
 }
@@ -257,9 +257,9 @@ fn nothing_is_offered_in_comments_text_or_new_names() {
         assert_eq!(labels(marked), ["hold", "hold&"], "at {:?}", marked);
     }
     // A field's or a method's name is new, but it may be private, a shape's
-    // field may be read-only, and a method may change its value. A kind has no
-    // fields, so nothing there is read-only.
-    assert_eq!(labels("shape S\n    @@"), ["priv", "read", "alters"]);
+    // field may be read-only or shared, and a method may change its value. A
+    // kind has no fields, so nothing there is read-only or shared.
+    assert_eq!(labels("shape S\n    @@"), ["priv", "read", "shared", "alters"]);
     assert_eq!(labels("kind K\n    V\n    @@"), ["priv", "alters"]);
 }
 

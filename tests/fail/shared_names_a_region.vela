@@ -1,0 +1,4 @@
+# error: 3:24: a shared field lives as long as the program, which no region does, so its type names none; remove '@r'
+shape Name
+    shared first: text@r = "x"
+fi

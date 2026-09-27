@@ -6,9 +6,8 @@ shape Sum
 fi
 
 task add(a: int, b: int) -> int
-    # A variable may have the name of a shape, as in any file.
-    bind Sum = a + b
-    <- Sum
+    bind total = a + b
+    <- total
 fi
 
 # A generic task another file uses, and a private one it uses itself: the task

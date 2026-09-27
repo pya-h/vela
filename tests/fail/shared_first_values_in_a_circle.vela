@@ -1,0 +1,8 @@
+# error: 7:23: the first values of shared fields name one another in a circle, A.x → B.y → A.x, so none of them has one
+shape A
+    shared x: int = B.y
+fi
+
+shape B
+    shared y: int = A.x
+fi

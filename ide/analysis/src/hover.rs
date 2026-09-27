@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use crate::TokenClass;
 use crate::infer::Knowledge;
-use crate::scan::SymbolKind;
+use crate::scan::{Symbol, SymbolKind};
 
 /// What to show for a name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -257,7 +257,7 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                     continue;
                 }
                 let separator = if member.kind == SymbolKind::Field { ": " } else { "" };
-                let private = if member.private { "priv " } else if member.read { "read " } else { "" };
+                let private = shared_words(member);
                 let alters = if member.kind == SymbolKind::Method { member.intro.map_or(String::new(), |word| format!("{} ", word)) } else { String::new() };
                 code.push_str(&format!("    {}{}{}{}{}\n", private, alters, vela::ast::unqualified(&member.name), separator, member.detail));
             }
@@ -276,6 +276,21 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 Some(p) => format!("A field of shape {}.", p.name),
                 None => String::new(),
             };
+            if symbol.shared {
+                let shape = parent.map(|p| p.name.as_str()).unwrap_or("?");
+                let changes = match (symbol.intro, symbol.read) {
+                    (Some(_), _) => " Any code that sees it may change it.",
+                    (None, true) => " Any file reads it; only the methods of its shape change it.",
+                    (None, false) => " It never changes.",
+                };
+                let doc = format!(
+                    "A shared field of shape {0}: one value for the whole program, not part of each value, read as {0}.{1}.{2}",
+                    vela::ast::unqualified(shape),
+                    symbol.name,
+                    changes
+                );
+                return Some((format!("{}{}: {}", shared_words(symbol), symbol.name, symbol.detail), doc));
+            }
             let marker = if symbol.read { "read " } else { "" };
             let doc = if symbol.read { format!("{} Any file reads it; only the alters methods of its shape change it.", doc) } else { doc };
             (format!("{}{}: {}", marker, symbol.name, symbol.detail), doc)
@@ -387,4 +402,15 @@ fn from_module(k: &Knowledge, symbol: &crate::scan::Symbol) -> String {
         }
         None => String::new(),
     }
+}
+
+/// The words a shape's member is declared with before its name, as a hover
+/// writes them: `priv`, `read`, and for a shared field, `shared` and `hold`.
+fn shared_words(member: &Symbol) -> String {
+    let private = if member.private { "priv " } else { "" };
+    if !member.shared {
+        return if member.private { private.to_string() } else if member.read { "read ".to_string() } else { String::new() };
+    }
+    let change = if member.intro.is_some() { "hold " } else if member.read { "read " } else { "" };
+    format!("{}shared {}", private, change)
 }

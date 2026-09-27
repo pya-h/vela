@@ -1,6 +1,6 @@
 
 task main()
-    bind x: maybe int = none
+    bind x: maybe int = 1
     bind a = x { 10 }
     show(a)
     bind y = x { <- }  # if its none then end program
@@ -10,4 +10,12 @@ task main()
     fi
     show(x)
     show(y)
+    # heap allocated stuff can be changed even if they
+    region r default
+    bind x2 = new [int]([1,2,3])
+    x2[0] = 2
+    show(x2[0])
+    bind pnt = new int(1)
+    pnt^ = 2
+    show(pnt^)
 fi

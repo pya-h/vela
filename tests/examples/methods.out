@@ -9,4 +9,5 @@ deposit 20
 Bob has 20
 deposit 10
 Grace has 15
+deposits: 3
 best: 9

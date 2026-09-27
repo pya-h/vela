@@ -334,6 +334,10 @@ impl Checked {
                 }
                 self.expr(base, kinds);
             }
+            // `Point.made`: a member of the shape itself, at the member's name.
+            ExprKind::Shared { shape, .. } => {
+                self.field_accesses.insert(pos(e.span), shape.clone());
+            }
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
             | ExprKind::Var(_) | ExprKind::RegionAfter(_) => {}
             ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. } => self.expr(inner, kinds),

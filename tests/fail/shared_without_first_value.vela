@@ -1,0 +1,4 @@
+# error: 3:18: a shared field names its first value, as in 'shared made: int = …', since no literal ever gives it one
+shape Point
+    shared made: int
+fi

@@ -1,0 +1,6 @@
+# error: 5:22: 'counters.Counter.made' is a read-only shared field, which only the methods of 'counters.Counter' change
+include modules/counters
+
+task main()
+    counters.Counter.made = 1
+fi

@@ -59,6 +59,9 @@ enum TypePlace {
     Field,
     /// The type after `new`, which lives in the region `new` allocates in.
     New,
+    /// A shape's shared field, which lives as long as the program, and so in no
+    /// region (see `check_shared_type`).
+    Shared,
     /// A task's header: any region names, which the task is given.
     Header,
     /// Inside a task: only regions visible there.
@@ -169,6 +172,20 @@ pub struct Checker {
     /// The field whose default is being checked, whose value is written with no
     /// task or method around it (see `check_field_default`).
     in_default: Option<String>,
+    /// The shared field whose first value is being checked, as its shape and
+    /// its index there, which may name a shared field above it (see
+    /// `check_shared_value`).
+    in_shared: Option<(String, usize)>,
+    /// The first values of shared fields, checked, by `shared_key`: `None` for
+    /// one with a mistake, which is reported once. Each is checked when it is
+    /// first needed, by its own shape or by a shared field that names it.
+    shared_values: HashMap<String, Option<Expr>>,
+    /// The shared fields whose first value is being checked, innermost last,
+    /// so a cycle of them is found (see `check_shared_value`).
+    shared_checking: Vec<String>,
+    /// The shape whose method is being checked, shared or not: the only code
+    /// that may change its `shared read` fields.
+    current_shape: Option<String>,
     /// Whether a call was refused for leaving out the region it takes last,
     /// which a chain joined `at r` reads (see `check_join`).
     region_wanted: bool,
@@ -224,6 +241,17 @@ impl Branches {
         format!("a {} of a {} used as a value gives it on its last line, or sends with '<-' on every path", self.each, self.of)
     }
 }
+
+/// The name a shared field is known by in the checker's tables, and as a place:
+/// its shape's name in the program, a dot, and its own (`Point.made`). No
+/// variable is named with a dot.
+fn shared_key(shape: &str, field: &str) -> String {
+    format!("{}{}{}", shape, MODULE_SEPARATOR, field)
+}
+
+/// The `File` shape of `std/files`, which a shared field can't hold (see
+/// `Checker::check_shared_type`).
+const FILE_SHAPE: &str = "std/files.File";
 
 /// At most how many tasks one generic task may be made into, and how deeply a
 /// type given to one may be built up. A generic task whose call gives a type
@@ -726,6 +754,7 @@ impl Checker {
         self.check_sizes(&order);
         self.check_constructible(items);
         self.check_field_defaults(items);
+        self.check_shared_fields(items);
     }
 
     /// Checks the value each field falls back on, after every declaration is
@@ -785,6 +814,14 @@ impl Checker {
                 let fields = self.check_fields(&mut s.fields);
                 self.type_params.clear();
                 fields?;
+                for member in &mut s.shared {
+                    let field = &mut member.field;
+                    field.ty = self.resolve_type(&field.ty, field.ty_span, TypePlace::Shared)?;
+                    self.check_shared_type(&field.ty, field.ty_span, &field.name)?;
+                }
+                if let Some(shape) = self.shapes.get_mut(&s.name) {
+                    shape.shared = s.shared.clone();
+                }
                 // The fields as they were read, with their regions settled,
                 // so the shape made for one set of types (see
                 // `shape_instance`) substitutes into them.
@@ -944,6 +981,12 @@ impl Checker {
         let mut declared = Vec::new();
         for field in fields.iter() {
             let Some(field_def) = shape.fields.iter().find(|f| f.name == field.name) else {
+                if shape.shared.iter().any(|member| member.field.name == field.name) {
+                    return refuse(|| Error::at(
+                        field.span,
+                        format!("'{0}' is a shared field of '{1}', one value for the whole program rather than part of each value, so no literal gives it; it is '{1}.{0}'", field.name, name),
+                    ));
+                }
                 return refuse(|| Error::at(field.span, format!("shape '{}' has no field '{}'", name, field.name)));
             };
             if let Some(at) = seen.get(&field.name) {
@@ -1130,7 +1173,7 @@ impl Checker {
         let written = format!("{}<{}>", name, types.iter().map(Type::to_string).collect::<Vec<_>>().join(", "));
         self.written_names.insert(key.clone(), written);
         self.made_of.insert(key.clone(), Applied { name: name.to_string(), types: types.clone(), region: None });
-        let made = ShapeDef { name: key.clone(), types: Vec::new(), given: types.clone(), fields: Vec::new(), span: source.span, private: source.private };
+        let made = ShapeDef { name: key.clone(), types: Vec::new(), given: types.clone(), fields: Vec::new(), shared: Vec::new(), span: source.span, private: source.private };
         self.shapes.insert(key.clone(), made);
         self.making_shapes.push(key.clone());
         let fields = self.instance_fields(&source, types);
@@ -1340,6 +1383,43 @@ impl Checker {
         }
     }
 
+    /// Refuses a shared field's type that holds what lives in a region, which
+    /// no region outlasts: a pointer, a slice, or a value of a shape or kind
+    /// that holds one; and a `File`, which a region closes (see
+    /// `docs/future.html#static-region` for a region that would last).
+    fn check_shared_type(&self, ty: &Type, span: Span, field: &str) -> Result<()> {
+        if holds_pointers(ty, &self.regional) {
+            return err(
+                span,
+                format!(
+                    "shared field '{}' can't hold a pointer or a slice, or a value holding one: those live in a region, and a shared field lives as long as the program, which no region does",
+                    field
+                ),
+            );
+        }
+        if self.holds_file(ty) {
+            return err(span, format!("shared field '{}' can't hold a 'File', which the region it is opened in closes, and a shared field lives as long as the program", field));
+        }
+        Ok(())
+    }
+
+    /// Whether a value of type `ty` holds a `File` of `std/files`, directly or
+    /// in a shape, kind, or tuple it holds by value.
+    fn holds_file(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Named(name, _) if name == FILE_SHAPE => true,
+            Type::Named(name, _) => {
+                let fields = self.shapes.get(name).map(|shape| shape.fields.iter().collect::<Vec<_>>()).unwrap_or_default();
+                let payloads = self.kinds.get(name).map(|kind| kind.variants.iter().flat_map(|variant| &variant.payload).collect::<Vec<_>>()).unwrap_or_default();
+                fields.into_iter().chain(payloads).any(|field| self.holds_file(&field.ty))
+            }
+            Type::Maybe(inner) | Type::Array(inner, _) => self.holds_file(inner),
+            Type::Or(value, error) => self.holds_file(value) || self.holds_file(error),
+            Type::Tuple(items) => items.iter().any(|item| self.holds_file(item)),
+            _ => false,
+        }
+    }
+
     fn check_fields(&mut self, fields: &mut [Field]) -> Result<()> {
         let mut seen: HashMap<String, Span> = HashMap::new();
         for field in fields.iter_mut() {
@@ -1542,6 +1622,10 @@ impl Checker {
                 (TypePlace::Field, Some(region)) => err(
                     self.place(span, &format!("@{}", region)),
                     format!("a field lives in the region of the value holding it, so its type names no region; remove '@{}'", region),
+                ),
+                (TypePlace::Shared, Some(region)) => err(
+                    self.place(span, &format!("@{}", region)),
+                    format!("a shared field lives as long as the program, which no region does, so its type names none; remove '@{}'", region),
                 ),
                 (TypePlace::New, Some(region)) => err(
                     self.place(span, &format!("@{}", region)),
@@ -1987,6 +2071,7 @@ impl Checker {
         self.current_ret = Some(known(&task.ret));
         self.current_method = task.owner.clone();
         self.current_owner = task.owner.as_ref().filter(|owner| owner.alters).and(task.params.first()).and_then(|this| self.owner_of(&this.ty));
+        self.current_shape = task.params.first().filter(|_| task.owner.is_some()).and_then(|this| self.owner_of(&this.ty));
         // Parameters and the task body share one scope, as in C.
         self.scopes = vec![Scope::default()];
         for param in &task.params {
@@ -2032,6 +2117,7 @@ impl Checker {
             self.current_ret = None;
             self.current_method = None;
             self.current_owner = None;
+            self.current_shape = None;
             self.result_names.clear();
             self.unset.clear();
             return Ok(());
@@ -2072,6 +2158,7 @@ impl Checker {
         self.current_ret = None;
         self.current_method = None;
         self.current_owner = None;
+        self.current_shape = None;
         let ends_well = if self.result_names.is_empty() {
             if whole && sends_value(&task.ret) && !always_sends(&task.body) {
                 err(task.span, format!("task '{}' can finish without sending a value", task.name))
@@ -2155,6 +2242,10 @@ impl Checker {
         // Nor like a kind, which `Kind.Variant` would read as.
         if self.kinds.contains_key(&self.in_module(name)) {
             return err(span, format!("'{0}' is the name of a kind, so '{0}.x' would name its variant; choose another name", name));
+        }
+        // Nor like a shape, which `Shape.f` would read as, for its shared field.
+        if self.shapes.contains_key(&self.in_module(name)) {
+            return err(span, format!("'{0}' is the name of a shape, so '{0}.x' would name its shared field; choose another name", name));
         }
         // Nor may it take a module's name, which `name.x` would read as.
         if let Some(at) = self.module_used(name) {
@@ -3082,6 +3173,12 @@ impl Checker {
                 Ok(ty)
             }
             ExprKind::Deref(_) => self.check_expr(expr),
+            ExprKind::Shared { shape, field } => {
+                let (shape, field) = (shape.clone(), field.clone());
+                let ty = self.check_expr(expr)?;
+                self.changeable_shared(&shape, &field, span, "")?;
+                Ok(ty)
+            }
             ExprKind::Index(base, index) => {
                 if matches!(index.kind, ExprKind::Range(..)) {
                     if matches!(self.check_expr(base)?, Type::Text(_)) {
@@ -3152,6 +3249,7 @@ impl Checker {
                 Ok(())
             }
             ExprKind::Deref(_) => Ok(()),
+            ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, ""),
             ExprKind::Field(base, field) => {
                 if let Some(ty) = &base.ty {
                     self.read_only_field(ty, field, place.span)?;
@@ -3188,7 +3286,7 @@ impl Checker {
                 }
                 self.check_expr(base)
             }
-            ExprKind::Field(..) | ExprKind::Deref(_) | ExprKind::Index(..) => self.check_assign_target(base),
+            ExprKind::Field(..) | ExprKind::Deref(_) | ExprKind::Index(..) | ExprKind::Shared { .. } => self.check_assign_target(base),
             _ => err(span, "cannot assign to a field of a temporary value"),
         }
     }
@@ -3548,6 +3646,9 @@ impl Checker {
         if matches!(expr.kind, ExprKind::MethodCall { .. }) {
             self.check_method_call(expr)?;
         }
+        if matches!(expr.kind, ExprKind::Shared { .. }) {
+            return self.check_shared_use(expr);
+        }
         match &mut expr.kind {
             ExprKind::IntLit(_) => Ok(Type::Int),
             ExprKind::FloatLit(_) => Ok(Type::Float),
@@ -3560,6 +3661,7 @@ impl Checker {
             // One a call gives a `hold&` parameter is checked with the call's
             // arguments (see `check_argument`).
             ExprKind::Ref(_) => err(span, "'&' marks a place given to a 'hold&' parameter, as in 'f(&a)', or named by a reference, as in 'hold& y = &a'; anywhere else, write the value itself"),
+            ExprKind::Shared { .. } => Err(Error::internal_at(span, "a shared field read as another value")),
             ExprKind::Var(name) => {
                 let ty = self.lookup_or_err(name, span)?.ty.clone();
                 if self.unset.contains(name.as_str()) {
@@ -4701,6 +4803,12 @@ impl Checker {
                         return Ok(self.field_in(&f.ty, region));
                     }
                 }
+                if shape.shared.iter().any(|member| member.field.name == field) {
+                    return err(
+                        span,
+                        format!("'{0}' is a shared field of '{1}', one value for the whole program rather than part of each value, so it is read as '{1}.{0}'", field, name),
+                    );
+                }
                 err(span, format!("shape '{}' has no field '{}'", name, field))
             }
             Type::Tuple(items) => match field.parse::<usize>() {
@@ -5045,6 +5153,7 @@ impl Checker {
             ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..))) => Ok(()),
             ExprKind::Index(base, _) => self.altered_place(base, method),
             ExprKind::Deref(_) => Ok(()),
+            ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, value.span, &format!("'{}' changes the value it is called on, and ", method)),
             _ => refuse("it needs a place that can change, such as a 'hold' variable, a field or item of one, or what a pointer points to, and not a value made here".to_string()),
         }
     }
@@ -5081,8 +5190,168 @@ impl Checker {
         )
     }
 
+    /// Checks `X.f`, a shared field of a shape, which `expr` is, and returns its
+    /// type. Where a value is worked out before the program runs (the value a
+    /// field falls back on, or a shared field's first value), `expr` becomes the
+    /// first value of the field it names, which is what it is there. (A
+    /// function of its own: `infer_expr`'s frame is on the stack once per
+    /// nesting level.)
+    #[inline(never)]
+    fn check_shared_use(&mut self, expr: &mut Expr) -> Result<Type> {
+        let span = expr.span;
+        let ExprKind::Shared { shape, field } = &expr.kind else { return Err(Error::internal_at(span, "a shared field without its name")) };
+        let (shape, field) = (shape.clone(), field.clone());
+        if self.broken.contains(&shape) {
+            return Ok(Type::Unknown);
+        }
+        let Some(def) = self.shapes.get(&shape) else { return Err(Error::internal_at(span, format!("shared field of unknown shape '{}'", shape))) };
+        let Some(index) = def.shared.iter().position(|member| member.field.name == field) else {
+            if def.fields.iter().any(|declared| declared.name == field) {
+                return err(span, format!("'{0}' is a field of every value of '{1}', not a shared one, so it is read on a value, as in 'p.{0}'", field, shape));
+            }
+            if self.tasks.contains_key(&method_name(&shape, &field)) {
+                return err(span, format!("'{0}' is a method of every value of '{1}', so it is called on a value, as in 'p.{0}(…)'", field, shape));
+            }
+            // `Card.Hearts`, written as if the shape were a kind.
+            if self.variants.values().any(|info| info.variant.tag == field) {
+                return err(span, format!("'{}' is a shape, not a kind, so it has no variant '{}'", shape, field));
+            }
+            return err(span, format!("shape '{}' has no shared field '{}'", shape, field));
+        };
+        let Some(member) = def.shared.get(index).cloned() else { return Ok(Type::Unknown) };
+        if member.field.private && module_of(&shape) != self.current_module {
+            return err(span, format!("'{}' is a private shared field of '{}', which only its own file can use", field, shape));
+        }
+        // Worked out before the program runs: the field's first value.
+        if let Some((within, above)) = self.in_shared.clone() {
+            if within == shape && index >= above {
+                let what = if index == above { "its own".to_string() } else { format!("'{}', declared below it at {}:{}", shared_key(&shape, &field), member.field.span.line, member.field.span.col) };
+                return err(span, format!("a shared field's first value can name the shared fields above it in its shape, not {}", what));
+            }
+        } else if let Some(falls_back) = self.in_default.clone() {
+            if member.changes() {
+                return err(
+                    span,
+                    format!(
+                        "the value field '{}' falls back on is worked out before the program runs, and shared field '{}' can change, so it can't be named there; one that never changes can",
+                        falls_back, shared_key(&shape, &field)
+                    ),
+                );
+            }
+        } else {
+            expr.ty = Some(member.field.ty.clone());
+            return Ok(member.field.ty);
+        }
+        let value = self.shared_value(&shape, index, span)?;
+        let ty = value.ty.clone().unwrap_or(Type::Unknown);
+        *expr = Expr { span, ..value };
+        Ok(ty)
+    }
+
+    /// Refuses to change the shared field `field` of `shape` at `span` where
+    /// it can't be: one that is neither `hold` nor `read`, and a `read` one
+    /// outside the methods of its shape. `lead` starts the message, for a
+    /// change that is a call's.
+    fn changeable_shared(&self, shape: &str, field: &str, span: Span, lead: &str) -> Result<()> {
+        let Some(member) = self.shapes.get(shape).and_then(|def| def.shared.iter().find(|member| member.field.name == field)) else { return Ok(()) };
+        let written = shared_key(shape, field);
+        if !member.changes() {
+            return err(
+                span,
+                format!(
+                    "{}'{}' never changes (declared at {}:{}); a shared field that changes is 'shared hold {}', or 'shared read {}', which only the methods of '{}' change",
+                    lead, written, member.field.span.line, member.field.span.col, field, field, shape
+                ),
+            );
+        }
+        if !member.hold && self.current_shape.as_deref() != Some(shape) {
+            return err(span, format!("{}'{}' is a read-only shared field, which only the methods of '{}' change", lead, written, shape));
+        }
+        Ok(())
+    }
+
+    /// The first value of shared field `index` of `shape`, checked, which a use
+    /// at `span` names (or the field's own declaration). Each is checked once,
+    /// where its own module reads it: a mistake found in it is sent on, to be
+    /// reported once by whoever asked first, and a later use of it only says it
+    /// has one.
+    fn shared_value(&mut self, shape: &str, index: usize, span: Span) -> Result<Expr> {
+        let Some(member) = self.shapes.get(shape).and_then(|def| def.shared.get(index)).cloned() else {
+            return Err(Error::internal_at(span, "a shared field that isn't declared"));
+        };
+        let key = shared_key(shape, &member.field.name);
+        let written = shared_key(shape, &member.field.name);
+        match self.shared_values.get(&key) {
+            Some(Some(value)) => return Ok(value.clone()),
+            Some(None) => return err(span, format!("the first value of '{}' has a mistake of its own", written)),
+            None => {}
+        }
+        if let Some(at) = self.shared_checking.iter().position(|checking| *checking == key) {
+            let mut circle: Vec<String> = self.shared_checking.get(at..).unwrap_or_default().to_vec();
+            circle.push(key);
+            return err(span, format!("the first values of shared fields name one another in a circle, {}, so none of them has one", circle.join(" → ")));
+        }
+        let Some(mut value) = member.field.default.clone() else { return Err(Error::internal_at(span, "a shared field with no first value")) };
+        self.shared_checking.push(key.clone());
+        let module = std::mem::replace(&mut self.current_module, module_of(shape).to_string());
+        let outer_shared = self.in_shared.replace((shape.to_string(), index));
+        let outer_default = self.in_default.take();
+        let checked = self.check_first_value(&mut value, &member.field);
+        self.in_default = outer_default;
+        self.in_shared = outer_shared;
+        self.current_module = module;
+        self.shared_checking.pop();
+        let kept = checked.map(|()| value);
+        self.shared_values.insert(key, kept.as_ref().ok().cloned());
+        kept
+    }
+
+    /// Checks a shared field's first value, written after its type: a value the
+    /// compiler works out without running the program, as a field falls back
+    /// on (see `check_field_default`), which may name a shared field above it.
+    fn check_first_value(&mut self, value: &mut Expr, field: &Field) -> Result<()> {
+        self.check_expr(value)?;
+        if !constant_value(value) {
+            return err(
+                value.span,
+                format!(
+                    "the first value of shared field '{}' must be one the compiler works out without running the program: a number, text, 'true', 'false', 'none', a variant, a shared field above it, or a tuple, an array, or a literal of those",
+                    field.name
+                ),
+            );
+        }
+        self.coerce(value, &field.ty)
+    }
+
+    /// Checks the first value of every shared field, and writes it, checked,
+    /// into its shape's declaration for the code generator. A field named by
+    /// another's first value has been checked already, and is checked once.
+    fn check_shared_fields(&mut self, items: &mut [Item]) {
+        for item in items.iter_mut() {
+            let Item::Shape(shape) = item else { continue };
+            if self.broken.contains(&shape.name) {
+                continue;
+            }
+            for index in 0..shape.shared.len() {
+                let Some(member) = shape.shared.get(index) else { continue };
+                let key = shared_key(&shape.name, &member.field.name);
+                if !self.shared_values.contains_key(&key) {
+                    let span = member.field.default.as_ref().map_or(member.field.span, |value| value.span);
+                    let checked = self.shared_value(&shape.name, index, span).map(|_| ());
+                    self.keep_going(checked);
+                }
+                if let (Some(Some(value)), Some(member)) = (self.shared_values.get(&key), shape.shared.get_mut(index)) {
+                    member.field.default = Some(value.clone());
+                }
+            }
+        }
+    }
+
     /// The error for `.this` or `.x` in a task that is no method.
     fn not_a_method(&self, written: &str) -> String {
+        if self.in_shared.is_some() {
+            return format!("'{}' reads the value a method is called on, and a shared field belongs to no value", written);
+        }
         if let Some(field) = &self.in_default {
             return format!("'{}' reads the value a method is called on, and the value field '{}' falls back on is worked out before there is one, so it reads no other field", written, field);
         }
@@ -5311,7 +5580,7 @@ impl Checker {
                 "it can't name an item of a slice, which moves when the slice grows; hold the item's index, or copy the item into a variable",
             ),
             ExprKind::Index(base, _) => self.read_place(base),
-            ExprKind::Deref(_) => Ok(()),
+            ExprKind::Deref(_) | ExprKind::Shared { .. } => Ok(()),
             _ => refuse("it names a variable, a field or an item of one, or what a pointer points to, and not a value made here"),
         }
     }
@@ -5415,6 +5684,7 @@ impl Checker {
                 _ => self.given_place(base, taker),
             },
             ExprKind::Deref(_) => Ok(()),
+            ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, &format!("{}, and ", taker.lead())),
             _ => refuse("it needs a place that can change: a 'hold' variable, a field or array item of one, or what a pointer points to (p^), not a value made here".to_string()),
         }
     }
@@ -6188,7 +6458,7 @@ impl Checker {
                 self.substitute_type(ty, given, ty_span)?;
                 self.substitute_expr(value, given, made)
             }
-            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) | ExprKind::RegionAfter(_) => Ok(()),
+            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } => Ok(()),
             ExprKind::Unary(_, inner)
             | ExprKind::Deref(inner)
             | ExprKind::Ref(inner)
@@ -6888,6 +7158,13 @@ fn place_path(e: &Expr) -> Option<Vec<Step>> {
         match &at.kind {
             ExprKind::Var(name) => {
                 steps.push(Step::Field(name.clone()));
+                steps.reverse();
+                return Some(steps);
+            }
+            // A shared field is one place for the whole program, named as it is
+            // written, which no variable's name is.
+            ExprKind::Shared { shape, field } => {
+                steps.push(Step::Field(shared_key(shape, field)));
                 steps.reverse();
                 return Some(steps);
             }

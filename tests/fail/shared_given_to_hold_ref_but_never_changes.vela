@@ -1,0 +1,12 @@
+# error: 11:17: 'n' is given the place itself, to change, and 'Point.start' never changes (declared at 3:12); a shared field that changes is 'shared hold start', or 'shared read start', which only the methods of 'Point' change
+shape Point
+    shared start: int = 7
+fi
+
+task bump(hold& n: int)
+    n = n + 1
+fi
+
+task main()
+    bump(&Point.start)
+fi

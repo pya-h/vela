@@ -827,6 +827,12 @@ impl Resolver<'_> {
                         self.expr(value)?;
                     }
                 }
+                for member in &mut s.shared {
+                    member.field.ty = self.ty(&member.field.ty, member.field.ty_span)?;
+                    if let Some(value) = &mut member.field.default {
+                        self.expr(value)?;
+                    }
+                }
                 self.params.clear();
                 Ok(())
             }
@@ -1039,9 +1045,11 @@ impl Resolver<'_> {
         Ok(true)
     }
 
-    /// `Shape.Circle` (or `m.Shape.Circle`), a variant read as a field of a
-    /// name, rewritten to the variant; whether `expr` was one. No variable can
-    /// be named like a kind (see `Checker::define`). (A function of its own:
+    /// `Suit.Hearts` (or `m.Suit.Hearts`), a variant read as a field of a
+    /// name, rewritten to the variant, or `Point.made`, a shared field of a
+    /// shape, rewritten to `ExprKind::Shared`; whether `expr` was one. No
+    /// variable can be named like a kind or a shape (see `Checker::define`).
+    /// (A function of its own:
     /// `expr`'s frame is on the stack once per nesting level.)
     fn variant_as_field(&self, expr: &mut Expr) -> Result<bool> {
         let ExprKind::Field(base, tag) = &expr.kind else { return Ok(false) };
@@ -1053,11 +1061,21 @@ impl Resolver<'_> {
             expr.kind = ExprKind::Var(variant.full);
             return Ok(true);
         }
-        // `m.Name.x`, where `m.Name` isn't a kind. (A variable may be named like
-        // a shape or task of this file, so `Name.x` may be a field.)
-        if name.contains(MODULE_SEPARATOR)
-            && let Some(entry) = self.lookup(name, base.span, false)?
-        {
+        // `Shape.f` (or `m.Shape.f`): a shared field of the shape. No variable
+        // is named like a shape either, so the name is the shape's.
+        let entry = match name.contains(MODULE_SEPARATOR) {
+            true => self.lookup(name, base.span, false)?,
+            false => self.lookup(name, base.span, false)?.filter(|entry| entry.what == What::Shape),
+        };
+        if let Some(entry) = entry {
+            if entry.what == What::Shape {
+                let field = tag.clone();
+                // Where the field's name is written, as for a field of a value.
+                expr.kind = ExprKind::Shared { shape: entry.full, field };
+                return Ok(true);
+            }
+            // `m.Name.x`, where `m.Name` is a task. (A variable may be named
+            // like a task of this file, so `Name.x` may be a field.)
             return err(expr.span, format!("'{}' is a {}, not a kind, so it has no variant '{}'", name, entry.what.word(), tag));
         }
         Ok(false)
@@ -1181,6 +1199,8 @@ impl Resolver<'_> {
         match &mut expr.kind {
             // A region is a name of the task, never of the program.
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::RegionAfter(_) => Ok(()),
+            // Only the resolver makes one, above.
+            ExprKind::Shared { .. } => Ok(()),
             // A variable keeps its name. No variable can be named like a variant
             // (see `Checker::define`), so a variant written as a value is renamed.
             ExprKind::Var(name) => self.rename(name, span, &[What::Variant]),

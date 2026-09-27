@@ -1,0 +1,6 @@
+# error: 3:5: a method can't be 'shared' yet; only a field can
+shape Point
+    shared origin() -> int
+        <- 0
+    fi
+fi

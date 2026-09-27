@@ -52,6 +52,9 @@ pub enum Token {
     Include,
     /// `priv`: keeps a task, shape, kind, or shape's field to its own file.
     Priv,
+    /// `shared`: a shape's field that is one value for the whole program rather
+    /// than part of each value, reached through the shape's name, `X.f`.
+    Shared,
     Ident(String),
     LParen,
     RParen,
@@ -129,6 +132,7 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("failure", Token::Failure),
     ("include", Token::Include),
     ("priv", Token::Priv),
+    ("shared", Token::Shared),
 ];
 
 /// The escapes allowed in text literals: the character after `\` and the

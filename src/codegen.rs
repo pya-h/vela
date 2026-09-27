@@ -216,6 +216,23 @@ impl Generator {
         self.gen_copies(&used.copied);
         self.w.blank();
 
+        // Shared fields: one variable each for the whole program, given its
+        // first value where the program starts.
+        let shared: Vec<(String, &SharedField)> = items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Shape(s) if s.types.is_empty() => Some(s),
+                _ => None,
+            })
+            .flat_map(|s| s.shared.iter().map(move |member| (shared_name(&s.name, &member.field.name), member)))
+            .collect();
+        for (name, member) in &shared {
+            self.w.line(&format!("static {} {};", c_type(&member.field.ty), name));
+        }
+        if !shared.is_empty() {
+            self.w.blank();
+        }
+
         // Forward declarations for tasks. A generic task generates nothing: one
         // task per set of types a call gives it is generated in its place (see
         // the checker's `expand_instances`).
@@ -247,6 +264,13 @@ impl Generator {
             // Line by line even into a pipe, so output isn't lost if the
             // program then crashes.
             self.w.line("setvbuf(stdout, NULL, _IOLBF, BUFSIZ);");
+            for (name, member) in &shared {
+                let Some(value) = &member.field.default else {
+                    return Err(Error::internal_at(member.field.span, "a shared field without its first value"));
+                };
+                let value = self.gen_expr(value)?;
+                self.w.line(&format!("{} = {};", name, value));
+            }
             self.w.line("vela_main();");
             self.w.line("return 0;");
             self.w.close();
@@ -1635,6 +1659,7 @@ impl Generator {
                 .cloned()
                 .ok_or_else(|| Error::internal_at(e.span, "the region of a 'show' read outside one")),
             ExprKind::Var(name) => Ok(c_ident(name)),
+            ExprKind::Shared { shape, field } => Ok(shared_name(shape, field)),
             ExprKind::Field(base, field) => self.gen_field(base, field),
             ExprKind::Index(base, index) => self.gen_index(e, base, index, None),
             ExprKind::Array(values) => self.gen_array(e, values),
@@ -2416,7 +2441,7 @@ fn has_prelude(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::PlanB { .. } | ExprKind::Choice(_) | ExprKind::Edit { .. } | ExprKind::Scan { .. } => true,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
-        | ExprKind::Var(_) | ExprKind::RegionAfter(_) => false,
+        | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. }
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Copy { value: inner, .. } | ExprKind::ToText { value: inner, .. } => {
             has_prelude(inner)
@@ -2515,7 +2540,16 @@ impl UsedTypes {
             match item {
                 // The fields of a shape that takes types hold `T`, which no C
                 // type answers; the shapes made from it hold the types given.
-                Item::Shape(s) if s.types.is_empty() => s.fields.iter().for_each(|f| used.add(&f.ty)),
+                Item::Shape(s) if s.types.is_empty() => {
+                    s.fields.iter().for_each(|f| used.add(&f.ty));
+                    // A shared field's first value is written where the program starts.
+                    for member in &s.shared {
+                        used.add(&member.field.ty);
+                        if let Some(value) = &member.field.default {
+                            used.expr(value);
+                        }
+                    }
+                }
                 Item::Shape(_) => {}
                 Item::Kind(k) => k.variants.iter().flat_map(|v| &v.payload).for_each(|f| used.add(&f.ty)),
                 // A generic task's own types hold `T`, which no C type
@@ -2635,7 +2669,7 @@ impl UsedTypes {
         }
         match &e.kind {
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
-            | ExprKind::Var(_) | ExprKind::RegionAfter(_) => {}
+            | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } => {}
             ExprKind::New { ty, value, .. } if matches!(**ty, Type::Slice(..)) => {
                 let Some(slice) = &e.ty else { return };
                 match &value.kind {
@@ -2813,7 +2847,7 @@ fn place_reads(target: &Expr, name: &str) -> bool {
 fn expr_reads(e: &Expr, name: &str) -> bool {
     match &e.kind {
         ExprKind::Var(var) | ExprKind::RegionAfter(var) => var == name,
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit => false,
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Shared { .. } => false,
         // `new` reads the region it allocates in.
         ExprKind::New { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner)
@@ -2961,7 +2995,7 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
 /// no change to a slice, no line read. (It may still stop the program.)
 fn changes_nothing(e: &Expr) -> bool {
     match &e.kind {
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) => true,
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) | ExprKind::Shared { .. } => true,
         ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Unary(_, inner) | ExprKind::Wrap(inner) => changes_nothing(inner),
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => changes_nothing(a) && changes_nothing(b),
         ExprKind::Array(items) | ExprKind::Tuple(items) => items.iter().all(changes_nothing),
@@ -3037,6 +3071,15 @@ fn mangle(name: &str) -> String {
 
 fn tag_type(kind: &str) -> String {
     format!("vela_{}__Tag", c_name(kind))
+}
+
+/// The C name of shared field `field` of shape `shape`: a variable of its own,
+/// one for the whole program. No Vela name contains `__`, so it is no other
+/// name. (Kept apart from `gen_expr`, whose frame is on the stack once per
+/// nesting level.)
+#[inline(never)]
+fn shared_name(shape: &str, field: &str) -> String {
+    format!("vela_{}__shared_{}", c_name(shape), field)
 }
 
 fn tag_value(kind: &str, tag: &str) -> String {

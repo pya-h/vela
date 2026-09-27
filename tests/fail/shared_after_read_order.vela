@@ -1,0 +1,4 @@
+# error: 3:5: 'shared' goes first, as in 'shared read f: int = 0'
+shape Point
+    read shared made: int = 0
+fi

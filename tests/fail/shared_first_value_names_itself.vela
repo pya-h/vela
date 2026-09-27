@@ -1,0 +1,4 @@
+# error: 3:27: a shared field's first value can name the shared fields above it in its shape, not its own
+shape Point
+    shared a: int = Point.a + 1
+fi

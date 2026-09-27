@@ -171,6 +171,26 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         return (items, word_start, byte);
     }
 
+    // After a shape's name and `.`: its shared fields, which belong to the
+    // shape itself rather than to any value of it.
+    if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
+        && let Some(shape) = dot.checked_sub(1).and_then(|q| k.symbol_at(q)).filter(|&id| k.symbol(id).is_some_and(|s| s.kind == SymbolKind::Shape))
+    {
+        let items = k
+            .members(shape, SymbolKind::Field)
+            .filter(|(_, field)| field.shared && (field.module.is_none() || !field.private))
+            .map(|(_, field)| CompletionItem {
+                label: field.name.clone(),
+                kind: CompletionKind::Field,
+                detail: field.detail.clone(),
+                apply: None,
+                snippet: None,
+                boost: LOCAL,
+            })
+            .collect();
+        return (items, word_start, byte);
+    }
+
     // `.` starting a value inside a method: the value it is called on, `.this`,
     // and its shape's or kind's fields and methods.
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
@@ -331,11 +351,19 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     {
         let items = match blocks.as_slice() {
             [] => item_level_items().into_iter().filter(|item| item.label != "priv" && item.label != "include").collect(),
-            // A private method may change its value.
-            [Block::Shape | Block::Kind] => vec![keyword(vela::ast::ALTERS)],
+            // A private method may change its value, and a shape's shared
+            // field may be private.
+            [Block::Shape] => vec![keyword(vela::ast::ALTERS), keyword("shared")],
+            [Block::Kind] => vec![keyword(vela::ast::ALTERS)],
             _ => Vec::new(),
         };
         return (items, word_start, byte);
+    }
+
+    // After `shared` in a shape: whether the field changes, and who changes it.
+    // (Otherwise its name is being declared.)
+    if prev_token == Some(&Token::Shared) && blocks.as_slice() == [Block::Shape] {
+        return (vec![keyword("hold"), keyword(vela::ast::READ)], word_start, byte);
     }
 
     // `region r default` and `r: region default`: the word that makes a region
@@ -544,8 +572,8 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 item_level_items().into_iter().filter(|item| before_items || item.label != "include").collect()
             }
             // A shape's field and a method can be private, a shape's field can
-            // be read-only, and a method can change its value.
-            Some(Block::Shape) => vec![keyword("priv"), keyword(vela::ast::READ), keyword(vela::ast::ALTERS)],
+            // be read-only or shared, and a method can change its value.
+            Some(Block::Shape) => vec![keyword("priv"), keyword(vela::ast::READ), keyword("shared"), keyword(vela::ast::ALTERS)],
             Some(Block::Kind) => vec![keyword("priv"), keyword(vela::ast::ALTERS)],
             Some(_) => {
                 let probe = probe(source, context, word_start, word_end);
@@ -923,7 +951,8 @@ enum Block {
 /// members can't be used here.
 fn owner_members(k: &Knowledge, owner: usize, prefix: &str) -> Vec<CompletionItem> {
     k.children(owner)
-        .filter(|(_, member)| matches!(member.kind, SymbolKind::Field | SymbolKind::Method) && (member.module.is_none() || !member.private))
+        // A shared field is the shape's own, read through its name.
+        .filter(|(_, member)| matches!(member.kind, SymbolKind::Field | SymbolKind::Method) && !member.shared && (member.module.is_none() || !member.private))
         .map(|(_, member)| {
             if member.kind == SymbolKind::Field {
                 return CompletionItem {
@@ -1060,8 +1089,9 @@ fn literal_field_items(k: &Knowledge, brace: usize, word_start: usize) -> Vec<Co
     }
     k.members(shape, SymbolKind::Field)
         // Another module's private fields can't be given here, and a `read`
-        // field that falls back on a value is given by no literal.
-        .filter(|(_, field)| !given.contains(&field.name) && (field.module.is_none() || !field.private) && !(field.read && field.default))
+        // field that falls back on a value is given by no literal, and nor is
+        // a shared field, which is no part of a value.
+        .filter(|(_, field)| !given.contains(&field.name) && (field.module.is_none() || !field.private) && !(field.read && field.default) && !field.shared)
         .map(|(_, field)| CompletionItem {
             label: field.name.clone(),
             kind: CompletionKind::Field,

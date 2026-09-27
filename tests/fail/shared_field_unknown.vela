@@ -1,0 +1,8 @@
+# error: 7:16: shape 'Point' has no shared field 'nothing'
+shape Point
+    x: int
+fi
+
+task main()
+    show(Point.nothing)
+fi

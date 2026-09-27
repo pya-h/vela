@@ -1,0 +1,176 @@
+  1 | # A shape's shared field is one value for the whole program, never part of a
+    | comment:# A shape's shared field is one value for the whole program, never part of a
+  2 | # value: it is read and changed through the shape's name, `Point.made`.
+    | comment:# value: it is read and changed through the shape's name, `Point.made`.
+  4 | include shared_fields/tally
+    | keyword:include  module:shared_fields  operator:/  module:tally
+  6 | kind Mood
+    | keyword:kind  type:Mood
+  7 |     Calm
+    | variant:Calm
+  8 |     Loud
+    | variant:Loud
+  9 | fi
+    | keyword:fi
+ 11 | shape Spot
+    | keyword:shape  type:Spot
+ 12 |     x: int
+    | field:x  punctuation::  type-builtin:int
+ 13 |     y: int
+    | field:y  punctuation::  type-builtin:int
+ 15 |     alters move(by: int)
+    | keyword:alters  method:move  punctuation:(  parameter:by  punctuation::  type-builtin:int  punctuation:)
+ 16 |         .x = .x + by
+    | punctuation:.  field:x  operator:=  punctuation:.  field:x  operator:+  parameter:by
+ 17 |     fi
+    | keyword:fi
+ 18 | fi
+    | keyword:fi
+ 20 | shape Point
+    | keyword:shape  type:Point
+ 21 |     x: int
+    | field:x  punctuation::  type-builtin:int
+ 22 |     # A field may fall back on a shared field that never changes.
+    | comment:# A field may fall back on a shared field that never changes.
+ 23 |     y: int = Point.start
+    | field:y  punctuation::  type-builtin:int  operator:=  type:Point  punctuation:.  field:start
+ 24 |     shared start: int = 7
+    | keyword:shared  field:start  punctuation::  type-builtin:int  operator:=  number:7
+ 25 |     shared name: text = "point"
+    | keyword:shared  field:name  punctuation::  type-builtin:text  operator:=  string:"point"
+ 26 |     # A shared field's first value may name the shared fields above it.
+    | comment:# A shared field's first value may name the shared fields above it.
+ 27 |     shared corners: [int; 3] = [Point.start, 2, 3]
+    | keyword:shared  field:corners  punctuation::  punctuation:[  type-builtin:int  punctuation:;  number:3  punctuation:]  operator:=  punctuation:[  type:Point  punctuation:.  field:start  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 28 |     shared pair: (int, text) = (1, "one")
+    | keyword:shared  field:pair  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:text  punctuation:)  operator:=  punctuation:(  number:1  punctuation:,  string:"one"  punctuation:)
+ 29 |     shared mood: Mood = Mood.Loud
+    | keyword:shared  field:mood  punctuation::  type:Mood  operator:=  type:Mood  punctuation:.  variant:Loud
+ 30 |     shared spare: maybe int = none
+    | keyword:shared  field:spare  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 31 |     shared hold made: int = 0
+    | keyword:shared  keyword:hold  field:made  punctuation::  type-builtin:int  operator:=  number:0
+ 32 |     shared read seen: int = 0
+    | keyword:shared  keyword:read  field:seen  punctuation::  type-builtin:int  operator:=  number:0
+ 33 |     shared hold origin: Spot = Spot { x: 0, y: 0 }
+    | keyword:shared  keyword:hold  field:origin  punctuation::  type:Spot  operator:=  type:Spot  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}
+ 34 |     shared hold big: [int; 20] = [0; 20]
+    | keyword:shared  keyword:hold  field:big  punctuation::  punctuation:[  type-builtin:int  punctuation:;  number:20  punctuation:]  operator:=  punctuation:[  number:0  punctuation:;  number:20  punctuation:]
+ 36 |     alters look()
+    | keyword:alters  method:look  punctuation:(  punctuation:)
+ 37 |         Point.seen = Point.seen + 1
+    | type:Point  punctuation:.  field:seen  operator:=  type:Point  punctuation:.  field:seen  operator:+  number:1
+ 38 |         .x = .x + Point.start
+    | punctuation:.  field:x  operator:=  punctuation:.  field:x  operator:+  type:Point  punctuation:.  field:start
+ 39 |     fi
+    | keyword:fi
+ 40 | fi
+    | keyword:fi
+ 42 | # Another shape's first value may name these too.
+    | comment:# Another shape's first value may name these too.
+ 43 | shape Grid
+    | keyword:shape  type:Grid
+ 44 |     shared hold side: int = Point.start
+    | keyword:shared  keyword:hold  field:side  punctuation::  type-builtin:int  operator:=  type:Point  punctuation:.  field:start
+ 45 | fi
+    | keyword:fi
+ 47 | task bump(hold& n: int)
+    | keyword:task  task:bump  punctuation:(  keyword:hold  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)
+ 48 |     n = n + 1
+    | parameter:n  operator:=  parameter:n  operator:+  number:1
+ 49 | fi
+    | keyword:fi
+ 51 | # Point.big is large, so it is given by a hidden pointer where it is a place that
+    | comment:# Point.big is large, so it is given by a hidden pointer where it is a place that
+ 52 | # only the task changes; a shared field is not, so the task gets a copy.
+    | comment:# only the task changes; a shared field is not, so the task gets a copy.
+ 53 | task first_after_change(values: [int; 20]) -> int
+    | keyword:task  task:first_after_change  punctuation:(  parameter:values  punctuation::  punctuation:[  type-builtin:int  punctuation:;  number:20  punctuation:]  punctuation:)  operator:->  type-builtin:int
+ 54 |     Point.big[0] = 99
+    | type:Point  punctuation:.  field:big  punctuation:[  number:0  punctuation:]  operator:=  number:99
+ 55 |     <- values[0]
+    | keyword:<-  parameter:values  punctuation:[  number:0  punctuation:]
+ 56 | fi
+    | keyword:fi
+ 58 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 59 |     show(Point.start, " ", Point.name, " ", Point.corners[0], Point.corners[1], Point.corners[2])
+    | builtin-fn:show  punctuation:(  type:Point  punctuation:.  field:start  punctuation:,  string:" "  punctuation:,  type:Point  punctuation:.  field:name  punctuation:,  string:" "  punctuation:,  type:Point  punctuation:.  field:corners  punctuation:[  number:0  punctuation:]  punctuation:,  type:Point  punctuation:.  field:corners  punctuation:[  number:1  punctuation:]  punctuation:,  type:Point  punctuation:.  field:corners  punctuation:[  number:2  punctuation:]  punctuation:)
+ 60 |     show(Point.pair.1, " ", Point.spare {-1})
+    | builtin-fn:show  punctuation:(  type:Point  punctuation:.  field:pair  punctuation:.  field:1  punctuation:,  string:" "  punctuation:,  type:Point  punctuation:.  field:spare  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
+ 61 |     when Point.mood is Loud
+    | keyword:when  type:Point  punctuation:.  field:mood  keyword:is  variant:Loud
+ 62 |         show("loud")
+    | builtin-fn:show  punctuation:(  string:"loud"  punctuation:)
+ 63 |     fi
+    | keyword:fi
+ 65 |     # Changed through its name, given to a hold& parameter, and through a reference.
+    | comment:# Changed through its name, given to a hold& parameter, and through a reference.
+ 66 |     Point.made = Point.made + 1
+    | type:Point  punctuation:.  field:made  operator:=  type:Point  punctuation:.  field:made  operator:+  number:1
+ 67 |     bump(&Point.made)
+    | task:bump  punctuation:(  operator:&  type:Point  punctuation:.  field:made  punctuation:)
+ 68 |     hold& r = &Point.made
+    | keyword:hold  keyword:&  variable:r  operator:=  operator:&  type:Point  punctuation:.  field:made
+ 69 |     r = r * 10
+    | variable:r  operator:=  variable:r  operator:*  number:10
+ 70 |     show(Point.made)
+    | builtin-fn:show  punctuation:(  type:Point  punctuation:.  field:made  punctuation:)
+ 71 |     bind& seen_now = &Point.seen
+    | keyword:bind  keyword:&  variable:seen_now  operator:=  operator:&  type:Point  punctuation:.  field:seen
+ 73 |     # A method changes a read-only shared field of its own shape.
+    | comment:# A method changes a read-only shared field of its own shape.
+ 74 |     hold p = Point { x: 1 }
+    | keyword:hold  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:}
+ 75 |     p.look()
+    | variable:p  punctuation:.  method:look  punctuation:(  punctuation:)
+ 76 |     p.look()
+    | variable:p  punctuation:.  method:look  punctuation:(  punctuation:)
+ 77 |     show(p.x, " ", p.y, " ", Point.seen, " ", seen_now)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:x  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  field:y  punctuation:,  string:" "  punctuation:,  type:Point  punctuation:.  field:seen  punctuation:,  string:" "  punctuation:,  variable:seen_now  punctuation:)
+ 79 |     # A shared value that is a shape: its fields and its methods.
+    | comment:# A shared value that is a shape: its fields and its methods.
+ 80 |     Point.origin.move(5)
+    | type:Point  punctuation:.  field:origin  punctuation:.  method:move  punctuation:(  number:5  punctuation:)
+ 81 |     Point.origin.y = 2
+    | type:Point  punctuation:.  field:origin  punctuation:.  field:y  operator:=  number:2
+ 82 |     show(Point.origin.x, Point.origin.y)
+    | builtin-fn:show  punctuation:(  type:Point  punctuation:.  field:origin  punctuation:.  field:x  punctuation:,  type:Point  punctuation:.  field:origin  punctuation:.  field:y  punctuation:)
+ 84 |     # An item of a shared array, and a copy of it given to a task.
+    | comment:# An item of a shared array, and a copy of it given to a task.
+ 85 |     Point.big[0] = 1
+    | type:Point  punctuation:.  field:big  punctuation:[  number:0  punctuation:]  operator:=  number:1
+ 86 |     show(first_after_change(Point.big), " ", Point.big[0])
+    | builtin-fn:show  punctuation:(  task:first_after_change  punctuation:(  type:Point  punctuation:.  field:big  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Point  punctuation:.  field:big  punctuation:[  number:0  punctuation:]  punctuation:)
+ 88 |     Grid.side = Grid.side + 1
+    | type:Grid  punctuation:.  field:side  operator:=  type:Grid  punctuation:.  field:side  operator:+  number:1
+ 89 |     show(Grid.side)
+    | builtin-fn:show  punctuation:(  type:Grid  punctuation:.  field:side  punctuation:)
+ 91 |     # In loops and conditions, read again each round.
+    | comment:# In loops and conditions, read again each round.
+ 92 |     loop Point.made < 23
+    | keyword:loop  type:Point  punctuation:.  field:made  operator:<  number:23
+ 93 |         Point.made = Point.made + 1
+    | type:Point  punctuation:.  field:made  operator:=  type:Point  punctuation:.  field:made  operator:+  number:1
+ 94 |     fi
+    | keyword:fi
+ 95 |     when Point.made == 23 and Point.start > 0
+    | keyword:when  type:Point  punctuation:.  field:made  operator:==  number:23  keyword:and  type:Point  punctuation:.  field:start  operator:>  number:0
+ 96 |         show("made ", Point.made)
+    | builtin-fn:show  punctuation:(  string:"made "  punctuation:,  type:Point  punctuation:.  field:made  punctuation:)
+ 97 |     fi
+    | keyword:fi
+ 99 |     # Another file's shared fields, read and changed as that file allows.
+    | comment:# Another file's shared fields, read and changed as that file allows.
+100 |     hold t = tally.Tally {}
+    | keyword:hold  variable:t  operator:=  module:tally  punctuation:.  type:Tally  punctuation:{  punctuation:}
+101 |     t.tick()
+    | variable:t  punctuation:.  method:tick  punctuation:(  punctuation:)
+102 |     t.tick()
+    | variable:t  punctuation:.  method:tick  punctuation:(  punctuation:)
+103 |     tally.Tally.limit = tally.Tally.limit + 1
+    | module:tally  punctuation:.  type:Tally  punctuation:.  field:limit  operator:=  module:tally  punctuation:.  type:Tally  punctuation:.  field:limit  operator:+  number:1
+104 |     show(tally.Tally.made, " ", tally.Tally.limit, " ", t.n, " ", t.reveal(), " ", t.reveal())
+    | builtin-fn:show  punctuation:(  module:tally  punctuation:.  type:Tally  punctuation:.  field:made  punctuation:,  string:" "  punctuation:,  module:tally  punctuation:.  type:Tally  punctuation:.  field:limit  punctuation:,  string:" "  punctuation:,  variable:t  punctuation:.  field:n  punctuation:,  string:" "  punctuation:,  variable:t  punctuation:.  method:reveal  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:t  punctuation:.  method:reveal  punctuation:(  punctuation:)  punctuation:)
+105 | fi
+    | keyword:fi
