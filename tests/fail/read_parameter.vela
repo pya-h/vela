@@ -1,4 +1,4 @@
-# error: 2:12: only a shape's field can be 'read', not a parameter or a variant's value
+; error: 2:12: only a shape's field can be 'read', not a parameter or a variant's value
 task twice(read n: int) -> int
     <- n * 2
 fi

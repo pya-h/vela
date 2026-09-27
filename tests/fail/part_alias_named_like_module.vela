@@ -1,4 +1,4 @@
-# error: 3:33: 'library' is the name of a module this file includes
+; error: 3:33: 'library' is the name of a module this file includes
 include modules/library
 include modules/leaks (inner => library)
 

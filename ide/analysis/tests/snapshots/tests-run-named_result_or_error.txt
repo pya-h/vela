@@ -1,7 +1,7 @@
-  1 | # A named result in a task that may fail: `value <-` sets it, and `<- fail`
-    | comment:# A named result in a task that may fail: `value <-` sets it, and `<- fail`
-  2 | # sends the error instead.
-    | comment:# sends the error instead.
+  1 | ; A named result in a task that may fail: `value <-` sets it, and `<- fail`
+    | comment:; A named result in a task that may fail: `value <-` sets it, and `<- fail`
+  2 | ; sends the error instead.
+    | comment:; sends the error instead.
   4 | task checked(n: int) -> value: int ~ text
     | keyword:task  task:checked  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:value  punctuation::  type-builtin:int  operator:~  type-builtin:text
   5 |     when n < 0

@@ -1,4 +1,4 @@
-# error: 11:31: 'Bad' is a variant; to send an error, write '<- fail Bad'
+; error: 11:31: 'Bad' is a variant; to send an error, write '<- fail Bad'
 kind Problem
     Bad
 fi

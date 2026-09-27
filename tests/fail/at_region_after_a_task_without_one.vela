@@ -1,4 +1,4 @@
-# error: 13:22: task 'twice' takes no region last, so no region is named after its call
+; error: 13:22: task 'twice' takes no region last, so no region is named after its call
 task label(n: int, r: region) -> text@r
     <- "#{n}" at r
 fi

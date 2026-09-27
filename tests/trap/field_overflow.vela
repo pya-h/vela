@@ -1,4 +1,4 @@
-# trap: integer overflow at 7:15 in task 'main'
+; trap: integer overflow at 7:15 in task 'main'
 shape S
     v: int
 fi

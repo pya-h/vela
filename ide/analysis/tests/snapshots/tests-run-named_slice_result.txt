@@ -1,11 +1,11 @@
-  1 | # A named result holding a slice in the caller's region, sliced again before
-    | comment:# A named result holding a slice in the caller's region, sliced again before
-  2 | # the task ends.
-    | comment:# the task ends.
+  1 | ; A named result holding a slice in the caller's region, sliced again before
+    | comment:; A named result holding a slice in the caller's region, sliced again before
+  2 | ; the task ends.
+    | comment:; the task ends.
   4 | task evens(r: region, n: int) -> out: [int]@r, count: int
     | keyword:task  task:evens  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:out  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  variable:count  punctuation::  type-builtin:int
-  5 |     out, count <- new@r [int]([0; n]), 0
-    | variable:out  punctuation:,  variable:count  keyword:<-  keyword:new  operator:@  region:r  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:;  parameter:n  punctuation:]  punctuation:)  punctuation:,  number:0
+  5 |     out, count <- new@r [int]([0#n]), 0
+    | variable:out  punctuation:,  variable:count  keyword:<-  keyword:new  operator:@  region:r  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:#  parameter:n  punctuation:]  punctuation:)  punctuation:,  number:0
   6 |     each i in 0..n
     | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:n
   7 |         when i % 2 == 0

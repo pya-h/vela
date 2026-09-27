@@ -1,4 +1,4 @@
-# error: 4:12: '<-' sends a value and must start a line; to compare with a negative number, write '< -'
+; error: 4:12: '<-' sends a value and must start a line; to compare with a negative number, write '< -'
 task main()
     hold a = 1
     show(a <-1)

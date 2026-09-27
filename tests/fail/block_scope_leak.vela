@@ -1,4 +1,4 @@
-# error: 6:10: unknown variable 'y'
+; error: 6:10: unknown variable 'y'
 task main()
     when true
         bind y = 1

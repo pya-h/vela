@@ -1,7 +1,7 @@
-  1 | # `t[a..b]` is a part of text: the bytes from `a` up to, but not including,
-    | comment:# `t[a..b]` is a part of text: the bytes from `a` up to, but not including,
-  2 | # `b`, the same bytes rather than a copy, so it lives where the text does.
-    | comment:# `b`, the same bytes rather than a copy, so it lives where the text does.
+  1 | ; `t[a..b]` is a part of text: the bytes from `a` up to, but not including,
+    | comment:; `t[a..b]` is a part of text: the bytes from `a` up to, but not including,
+  2 | ; `b`, the same bytes rather than a copy, so it lives where the text does.
+    | comment:; `b`, the same bytes rather than a copy, so it lives where the text does.
   4 | shape Person
     | keyword:shape  type:Person
   5 |     name: text
@@ -42,14 +42,14 @@
     | builtin-fn:show  punctuation:(  variable:name  punctuation:[  number:3  operator:..  number:3  punctuation:]  operator:==  string:""  punctuation:)
  25 |     show(name[0..name.len] == name)
     | builtin-fn:show  punctuation:(  variable:name  punctuation:[  number:0  operator:..  variable:name  punctuation:.  field:len  punctuation:]  operator:==  variable:name  punctuation:)
- 26 |     # A part of text of the program is text of the program.
-    | comment:# A part of text of the program is text of the program.
+ 26 |     ; A part of text of the program is text of the program.
+    | comment:; A part of text of the program is text of the program.
  27 |     bind short: text = name[0..3]
     | keyword:bind  variable:short  punctuation::  type-builtin:text  operator:=  variable:name  punctuation:[  number:0  operator:..  number:3  punctuation:]
  28 |     show(short.len)
     | builtin-fn:show  punctuation:(  variable:short  punctuation:.  field:len  punctuation:)
- 29 |     # Whole characters, however many bytes each takes.
-    | comment:# Whole characters, however many bytes each takes.
+ 29 |     ; Whole characters, however many bytes each takes.
+    | comment:; Whole characters, however many bytes each takes.
  30 |     bind word = "café ✓"
     | keyword:bind  variable:word  operator:=  string:"café ✓"
  31 |     show(word[0..3])
@@ -60,8 +60,8 @@
     | builtin-fn:show  punctuation:(  variable:word  punctuation:[  number:6  operator:..  number:9  punctuation:]  punctuation:)
  34 |     show(word[3..5].len)
     | builtin-fn:show  punctuation:(  variable:word  punctuation:[  number:3  operator:..  number:5  punctuation:]  punctuation:.  field:len  punctuation:)
- 35 |     # A part of text in a region is in that region.
-    | comment:# A part of text in a region is in that region.
+ 35 |     ; A part of text in a region is in that region.
+    | comment:; A part of text in a region is in that region.
  36 |     region r
     | keyword:region  region:r
  37 |     bind line = "Grace Hopper".copy() at r

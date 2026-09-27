@@ -1,4 +1,4 @@
-# error: 8:24: 'new' needs a region to allocate in, as in 'new int(…) at r' or 'new@r int(…)'
+; error: 8:24: 'new' needs a region to allocate in, as in 'new int(…) at r' or 'new@r int(…)'
 task main()
     each round in 0..2
         region pass default

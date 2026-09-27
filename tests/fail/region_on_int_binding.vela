@@ -1,4 +1,4 @@
-# error: 4:17: 'int' holds no pointers or text, so it lives in no region; remove '@r'
+; error: 4:17: 'int' holds no pointers or text, so it lives in no region; remove '@r'
 task main()
     region r
     bind n: int@r = 1

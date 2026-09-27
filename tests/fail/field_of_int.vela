@@ -1,4 +1,4 @@
-# error: 4:12: type int has no fields
+; error: 4:12: type int has no fields
 task main()
     bind n = 1
     show(n.x)

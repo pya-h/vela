@@ -1,6 +1,6 @@
-# error: 5:15: '^' reads the value a pointer points to, but this value is [int]@r; read an item of a slice with 'xs[i]'
+; error: 5:15: '^' reads the value a pointer points to, but this value is [int]@r; read an item of a slice with 'xs[i]'
 task main()
     region r
-    bind items = new [int]([0; 3]) at r
+    bind items = new [int]([0#3]) at r
     show(items^)
 fi

@@ -1,7 +1,7 @@
-  1 | # Tasks send their result with `<-`, so `send` is an ordinary name; and a
-    | comment:# Tasks send their result with `<-`, so `send` is an ordinary name; and a
-  2 | # comparison with a negative number keeps working when written with a space.
-    | comment:# comparison with a negative number keeps working when written with a space.
+  1 | ; Tasks send their result with `<-`, so `send` is an ordinary name; and a
+    | comment:; Tasks send their result with `<-`, so `send` is an ordinary name; and a
+  2 | ; comparison with a negative number keeps working when written with a space.
+    | comment:; comparison with a negative number keeps working when written with a space.
   3 | task send(n: int) -> int
     | keyword:task  task:send  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
   4 |     <- n + 1

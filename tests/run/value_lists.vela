@@ -1,5 +1,5 @@
-# Lists of names: types on some or all of them, `hold` from a call sending
-# several results, and `_` dropping a result.
+; Lists of names: types on some or all of them, `hold` from a call sending
+; several results, and `_` dropping a result.
 
 task divmod(a: int, b: int) -> int, int
     <- a / b, a % b

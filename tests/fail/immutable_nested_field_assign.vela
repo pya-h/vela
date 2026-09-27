@@ -1,4 +1,4 @@
-# error: 12:5: cannot assign to a field of immutable variable 'line'
+; error: 12:5: cannot assign to a field of immutable variable 'line'
 shape Point
     x: int
 fi

@@ -1,7 +1,7 @@
-  1 | # Arithmetic, for tests/run/modules/lists/stack.vela, and a task that takes a
-    | comment:# Arithmetic, for tests/run/modules/lists/stack.vela, and a task that takes a
-  2 | # type, used from tests/run/modules.vela.
-    | comment:# type, used from tests/run/modules.vela.
+  1 | ; Arithmetic, for tests/run/modules/lists/stack.vela, and a task that takes a
+    | comment:; Arithmetic, for tests/run/modules/lists/stack.vela, and a task that takes a
+  2 | ; type, used from tests/run/modules.vela.
+    | comment:; type, used from tests/run/modules.vela.
   4 | shape Sum
     | keyword:shape  type:Sum
   5 |     value: int
@@ -16,10 +16,10 @@
     | keyword:<-  variable:total
  11 | fi
     | keyword:fi
- 13 | # A generic task another file uses, and a private one it uses itself: the task
-    | comment:# A generic task another file uses, and a private one it uses itself: the task
- 14 | # made for each set of types a use gives belongs to this module too.
-    | comment:# made for each set of types a use gives belongs to this module too.
+ 13 | ; A generic task another file uses, and a private one it uses itself: the task
+    | comment:; A generic task another file uses, and a private one it uses itself: the task
+ 14 | ; made for each set of types a use gives belongs to this module too.
+    | comment:; made for each set of types a use gives belongs to this module too.
  15 | task larger<T: ordered>(a: T, b: T) -> T
     | keyword:task  task:larger  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type:T
  16 |     <- pickFirst(biggest(a, b), a)
@@ -44,8 +44,8 @@
     | keyword:<-  parameter:b
  28 | fi
     | keyword:fi
- 30 | # A shape that takes types, used from another file, and a task that makes one.
-    | comment:# A shape that takes types, used from another file, and a task that makes one.
+ 30 | ; A shape that takes types, used from another file, and a task that makes one.
+    | comment:; A shape that takes types, used from another file, and a task that makes one.
  31 | shape Tally<T: shown>
     | keyword:shape  type:Tally  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>
  32 |     value: T
@@ -54,22 +54,22 @@
     | field:count  punctuation::  type-builtin:int
  34 | fi
     | keyword:fi
- 36 | # A shape given types names the region its values live in, since the type given
-    | comment:# A shape given types names the region its values live in, since the type given
- 37 | # may hold text or pointers, so the task takes the region to name.
-    | comment:# may hold text or pointers, so the task takes the region to name.
+ 36 | ; A shape given types names the region its values live in, since the type given
+    | comment:; A shape given types names the region its values live in, since the type given
+ 37 | ; may hold text or pointers, so the task takes the region to name.
+    | comment:; may hold text or pointers, so the task takes the region to name.
  38 | task tallyOf<T: shown>(r: region, value: T) -> Tally<T>@r
     | keyword:task  task:tallyOf  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:value  punctuation::  type:T  punctuation:)  operator:->  type:Tally  punctuation:<  type:T  punctuation:>  operator:@  region:r
  39 |     <- Tally { value: value, count: 1 }
     | keyword:<-  type:Tally  punctuation:{  field:value  punctuation::  parameter:value  punctuation:,  field:count  punctuation::  number:1  punctuation:}
  40 | fi
     | keyword:fi
- 42 | # The kinds reading a number sends belong to no file, so this module writes both
-    | comment:# The kinds reading a number sends belong to no file, so this module writes both
- 43 | # without declaring them and without an `include`: as a type it sends, as a type
-    | comment:# without declaring them and without an `include`: as a type it sends, as a type
- 44 | # it takes, and as a value it sends itself, through its kind or as a bare variant.
-    | comment:# it takes, and as a value it sends itself, through its kind or as a bare variant.
+ 42 | ; The kinds reading a number sends belong to no file, so this module writes both
+    | comment:; The kinds reading a number sends belong to no file, so this module writes both
+ 43 | ; without declaring them and without an `include`: as a type it sends, as a type
+    | comment:; without declaring them and without an `include`: as a type it sends, as a type
+ 44 | ; it takes, and as a value it sends itself, through its kind or as a bare variant.
+    | comment:; it takes, and as a value it sends itself, through its kind or as a bare variant.
  45 | task read(t: text) -> int ~ ParseError
     | keyword:task  task:read  punctuation:(  parameter:t  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  operator:~  type:ParseError
  46 |     <- int(t) {

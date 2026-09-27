@@ -1,7 +1,7 @@
-# Several results: a task's `->` lists the types it sends, `<-` sends one
-# value per type, and a list of names receives them. `_` takes a value and
-# drops it. The values of a list are all computed before the first is stored,
-# so `a, b = b, a` swaps.
+; Several results: a task's `->` lists the types it sends, `<-` sends one
+; value per type, and a list of names receives them. `_` takes a value and
+; drops it. The values of a list are all computed before the first is stored,
+; so `a, b = b, a` swaps.
 
 kind Oops
     Bad
@@ -11,7 +11,7 @@ task divmod(a: int, b: int) -> int, int
     <- a / b, a % b
 fi
 
-# Results of different types, one of them a maybe.
+; Results of different types, one of them a maybe.
 task find(n: int) -> maybe int, bool
     when n > 0
         <- n, true
@@ -26,18 +26,18 @@ task risky(n: int) -> int ~ Oops
     <- n
 fi
 
-# One value per result, the second an error result.
+; One value per result, the second an error result.
 task pair(n: int) -> int, int ~ Oops
     <- n, risky(n)
 fi
 
-# A call that sends every value of another task.
+; A call that sends every value of another task.
 task forward(a: int, b: int) -> int, int
     <- divmod(a, b)
 fi
 
-# Three results, with a region among them: each follows the rule for a single
-# result, so the pointer's region comes from the header.
+; Three results, with a region among them: each follows the rule for a single
+; result, so the pointer's region comes from the header.
 shape Node
     value: int
     next: maybe ^Node
@@ -52,7 +52,7 @@ task build(r: region, v: int) -> ^Node@r, int, bool
     <- new Node(Node { value: v, next: none }) at r, v * 2, v > 0
 fi
 
-# The values are computed before the regions of the block are freed.
+; The values are computed before the regions of the block are freed.
 task counted(n: int) -> int, int
     region r
     hold total = 0
@@ -70,7 +70,7 @@ task main()
     show(q)
     show(r)
 
-    # `_` drops a result.
+    ; `_` drops a result.
     bind whole, _ = divmod(9, 4)
     show(whole)
 
@@ -95,7 +95,7 @@ task main()
     show(a)
     show(b)
 
-    # Assigning a list, and swapping.
+    ; Assigning a list, and swapping.
     hold x = 1
     hold y = 2
     x, y = y, x
@@ -107,7 +107,7 @@ task main()
     _, y = divmod(1, 9)
     show(y)
 
-    # A plain list of values, and one with a plan B in it.
+    ; A plain list of values, and one with a plan B in it.
     bind first, second = risky(3) { 0 }, risky(-3) { 8 }
     show(first)
     show(second)
@@ -122,7 +122,7 @@ task main()
     show(total)
     show(count)
 
-    # A field and a variable in one assignment.
+    ; A field and a variable in one assignment.
     hold spot = Point { x: 0, y: 0 }
     hold last = 0
     spot.x, last = divmod(31, 4)
@@ -131,7 +131,7 @@ task main()
     spot.x, spot.y = spot.y, spot.x
     show(spot.x)
 
-    # A task that sends nothing, received by '_': it runs in its place.
+    ; A task that sends nothing, received by '_': it runs in its place.
     bind _, after = show(1), 2
     show(after)
     _, last = show(3), 4

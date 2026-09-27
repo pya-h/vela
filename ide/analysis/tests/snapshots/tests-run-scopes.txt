@@ -1,7 +1,7 @@
-  1 | # Block scoping: variables live until the end of their block, and sibling
-    | comment:# Block scoping: variables live until the end of their block, and sibling
-  2 | # blocks may reuse names.
-    | comment:# blocks may reuse names.
+  1 | ; Block scoping: variables live until the end of their block, and sibling
+    | comment:; Block scoping: variables live until the end of their block, and sibling
+  2 | ; blocks may reuse names.
+    | comment:; blocks may reuse names.
   4 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
   5 |     when true

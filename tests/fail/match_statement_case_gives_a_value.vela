@@ -1,4 +1,4 @@
-# error: 10:21: a case gives a value with '=' only where the match is one itself, as in 'bind name = match …'; the cases of a match on its own hold statements, written on the lines below it
+; error: 10:21: a case gives a value with '=' only where the match is one itself, as in 'bind name = match …'; the cases of a match on its own hold statements, written on the lines below it
 kind Shape
     Circle(r: float)
     Rect(w: float, h: float)

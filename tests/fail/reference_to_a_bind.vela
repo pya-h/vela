@@ -1,4 +1,4 @@
-# error: 4:16: 'hold& y' names a place to change it, so it needs a place that can change, and 'a' never does (declared at 3:10); a value declared with 'hold' can; 'bind& y = &a' names it only to read it
+; error: 4:16: 'hold& y' names a place to change it, so it needs a place that can change, and 'a' never does (declared at 3:10); a value declared with 'hold' can; 'bind& y = &a' names it only to read it
 task main()
     bind a = 1
     hold& y = &a

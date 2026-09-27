@@ -1,4 +1,4 @@
-# error: 8:24: expected type ^Point@r, got ^int@r
+; error: 8:24: expected type ^Point@r, got ^int@r
 shape Point
     x: int
 fi

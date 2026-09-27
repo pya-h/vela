@@ -1,4 +1,4 @@
-# error: 2:27: 'total' is already defined at 2:12
+; error: 2:27: 'total' is already defined at 2:12
 task score(total: int) -> total: int
     total <- 1
 fi

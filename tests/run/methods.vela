@@ -1,7 +1,7 @@
-# Methods of a shape: written inside it, below its fields, and called on a value.
-# A member of the value is written with a dot, `.x`; a method that changes the
-# value says `alters` before its name, and only a place that can change may call
-# one. `.this` is the whole value, and `@this` the region it lives in.
+; Methods of a shape: written inside it, below its fields, and called on a value.
+; A member of the value is written with a dot, `.x`; a method that changes the
+; value says `alters` before its name, and only a place that can change may call
+; one. `.this` is the whole value, and `@this` the region it lives in.
 
 shape Counter
     label: text
@@ -11,7 +11,7 @@ shape Counter
         <- .count
     fi
 
-    # What the value holds in its own region, sent out of the method.
+    ; What the value holds in its own region, sent out of the method.
     nameOf() -> text@this
         <- .label
     fi
@@ -29,15 +29,15 @@ shape Counter
         fi
     fi
 
-    # Only its own file may call this one.
+    ; Only its own file may call this one.
     priv alters cap()
         when .count > 3
             .count = 3
         fi
     fi
 
-    # The whole value, given to a task, and a new one in its place. The task
-    # names the region, since the value the method is called on lives in one.
+    ; The whole value, given to a task, and a new one in its place. The task
+    ; names the region, since the value the method is called on lives in one.
     beats(other: Counter@this) -> bool
         <- higher(.this, other)
     fi
@@ -64,7 +64,7 @@ shape Point
         .y = .y + dy
     fi
 
-    # A method calling itself, on a value it makes.
+    ; A method calling itself, on a value it makes.
     stepsTo(goal: int) -> int
         when .x >= goal
             <- 0
@@ -82,7 +82,7 @@ shape Row
         <- .items[0].lengthSquared()
     fi
 
-    # A method of a value a field points to, and one of a field's own.
+    ; A method of a value a field points to, and one of a field's own.
     farthest(other: ^Point@this) -> int
         when other^.lengthSquared() > .here.lengthSquared()
             <- other^.lengthSquared()
@@ -91,7 +91,7 @@ shape Row
     fi
 fi
 
-# An `alters` method keeping a pointer into the region its value lives in.
+; An `alters` method keeping a pointer into the region its value lives in.
 shape Holder
     held: ^Point
 
@@ -104,7 +104,7 @@ shape Holder
     fi
 fi
 
-# A method may send a maybe, and be called where its value goes.
+; A method may send a maybe, and be called where its value goes.
 shape Bag
     items: [int]
 
@@ -127,7 +127,7 @@ task main()
     c.reset()
     show(c.total())
 
-    # A method that changes nothing is called on anything, a `bind` too.
+    ; A method that changes nothing is called on anything, a `bind` too.
     bind fixed = Counter { label: "once", count: 1 }
     show(fixed.total())
     show(fixed.nameOf())
@@ -139,12 +139,12 @@ task main()
     show(p.stepsTo(7))
 
     region r
-    # Through a pointer, which is where a task changes a value of its own.
+    ; Through a pointer, which is where a task changes a value of its own.
     hold q = new Point(Point { x: 1, y: 1 }) at r
     q^.shift(2, 2)
     show(q^.lengthSquared())
 
-    # A field of a `hold`, and an item of a slice, are places that can change.
+    ; A field of a `hold`, and an item of a slice, are places that can change.
     hold items = new [Point]() at r
     items.add(Point { x: 6, y: 8 })
     hold row = Row { here: Point { x: 1, y: 2 }, items: items }
@@ -155,7 +155,7 @@ task main()
     items[0].shift(1, 0)
     show(items[0].lengthSquared())
 
-    # A method on the value a call sends.
+    ; A method on the value a call sends.
     show(made().total())
 
     bind bag = Bag { items: items_of(r) }
@@ -163,7 +163,7 @@ task main()
     bind empty = Bag { items: new [int]() at r }
     show(empty.firstOf())
 
-    # The text a method sends is in the region the value is in.
+    ; The text a method sends is in the region the value is in.
     hold named: Counter@r = Counter { label: "in a region".copy() at r, count: 2 }
     bind held: text@r = named.nameOf()
     show(held)

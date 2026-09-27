@@ -1,4 +1,4 @@
-# error: 4:16: 'n' is a variable, not a region
+; error: 4:16: 'n' is a variable, not a region
 task main()
     bind n = 1
     show(5.str(n))

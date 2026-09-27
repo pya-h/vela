@@ -1,10 +1,10 @@
-# A block of its own, `block … fi`: what it declares, its names and regions,
-# ends at its `fi`, so a region closes there, and the files opened in it with
-# it, though the task goes on.
+; A block of its own, `block … fi`: what it declares, its names and regions,
+; ends at its `fi`, so a region closes there, and the files opened in it with
+; it, though the task goes on.
 
 include std/files {File, FileMode, FileError}
 
-# A block whose every path sends counts as sending.
+; A block whose every path sends counts as sending.
 task sign(n: int) -> int
     block
         when n < 0
@@ -14,7 +14,7 @@ task sign(n: int) -> int
     fi
 fi
 
-# A result set inside a block is set after it.
+; A result set inside a block is set after it.
 task halves(n: int) -> half: int, rest: int
     block
         half <- n / 2
@@ -28,7 +28,7 @@ task main()
         hold step = 2
         total = total + step
     fi
-    # Another block may use the same name for something else.
+    ; Another block may use the same name for something else.
     block
         bind step = "three"
         total = total + step.len
@@ -37,8 +37,8 @@ task main()
     bind half, rest = halves(7)
     show(half, " ", rest)
 
-    # Blocks nest, each with a default region of its own, and one in a loop
-    # starts again each round.
+    ; Blocks nest, each with a default region of its own, and one in a loop
+    ; starts again each round.
     each i in 0..3
         block
             region r default
@@ -52,14 +52,14 @@ task main()
     fi
     show(total)
 
-    # A reference made in a block names its place until the block ends.
+    ; A reference made in a block names its place until the block ends.
     block
         hold& t = &total
         t = 0
     fi
     show(total)
 
-    # A file opened in a block's region is closed at its fi.
+    ; A file opened in a block's region is closed at its fi.
     hold notes = File { path: "notes.txt" }
     block
         region r
@@ -75,7 +75,7 @@ task main()
         none
     }
     show(after { "(nothing read)" })
-    # And so it opens again.
+    ; And so it opens again.
     block
         region r
         notes.open(FileMode.Read) at r { <- }

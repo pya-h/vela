@@ -1,4 +1,4 @@
-# `end` is an ordinary name, so a kind may have a variant called `end`.
+; `end` is an ordinary name, so a kind may have a variant called `end`.
 kind Step
     start
     end

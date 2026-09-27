@@ -1,16 +1,16 @@
-# Kinds and pattern matching. A kind's methods, written below its variants,
-# read the value as `.this` and take it apart with `match .this`; one marked
-# `alters` may move the value to another variant, or the same one with new
-# values.
+; Kinds and pattern matching. A kind's methods, written below its variants,
+; read the value as `.this` and take it apart with `match .this`; one marked
+; `alters` may move the value to another variant, or the same one with new
+; values.
 
 kind Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)
     Dot
 
-    # A method named `str` says how the value becomes text. It makes new text,
-    # so it takes the region the text goes in; `show(shape)` calls it, in a
-    # region of its own, and so does `"{shape}"`.
+    ; A method named `str` says how the value becomes text. It makes new text,
+    ; so it takes the region the text goes in; `show(shape)` calls it, in a
+    ; region of its own, and so does `"{shape}"`.
     str(r: region) -> text@r
         <- match .this
         case Circle radius = "circle of {radius}" at r
@@ -19,7 +19,7 @@ kind Shape
         fi
     fi
 
-    # Every case gives the value, so the match is the value this method sends.
+    ; Every case gives the value, so the match is the value this method sends.
     area() -> float
         <- match .this
         case Circle radius = 3.14159 * radius * radius
@@ -44,7 +44,7 @@ task main()
     bind c = Circle(5.0)
     show(c, " covers ", c.area())
 
-    # Only a `hold` value can change.
+    ; Only a `hold` value can change.
     hold rect = Rectangle(3.0, 4.0)
     rect.grow()
     show(rect, " covers ", rect.area())

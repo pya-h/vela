@@ -1,7 +1,7 @@
-  1 | # Integer arithmetic is 64-bit, even between literals, which C would compute
-    | comment:# Integer arithmetic is 64-bit, even between literals, which C would compute
-  2 | # in its (often 32-bit) int.
-    | comment:# in its (often 32-bit) int.
+  1 | ; Integer arithmetic is 64-bit, even between literals, which C would compute
+    | comment:; Integer arithmetic is 64-bit, even between literals, which C would compute
+  2 | ; in its (often 32-bit) int.
+    | comment:; in its (often 32-bit) int.
   4 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
   5 |     show(1000000 * 1000000)

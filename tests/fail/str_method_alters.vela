@@ -1,4 +1,4 @@
-# error: 4:5: a method named 'str' turns the value it is called on into text without changing it, so it isn't marked 'alters'
+; error: 4:5: a method named 'str' turns the value it is called on into text without changing it, so it isn't marked 'alters'
 shape Point
     x: int
     alters str(r: region) -> text@r

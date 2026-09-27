@@ -1,4 +1,4 @@
-# error: 4:10: 'len' can't be assigned: it is how many bytes the text has, and text never changes; give the variable other text instead
+; error: 4:10: 'len' can't be assigned: it is how many bytes the text has, and text never changes; give the variable other text instead
 task main()
     hold name = "Ada"
     name.len = 2

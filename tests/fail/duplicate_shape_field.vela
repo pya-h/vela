@@ -1,4 +1,4 @@
-# error: 5:5: field 'x' is already defined at 3:5
+; error: 5:5: field 'x' is already defined at 3:5
 shape Point
     x: int
     y: int

@@ -1,11 +1,11 @@
-  1 | # A module's names in every position: kinds brought in by name and used
-    | comment:# A module's names in every position: kinds brought in by name and used
-  2 | # through `Kind.Variant`, a module under another name in patterns, maybe,
-    | comment:# through `Kind.Variant`, a module under another name in patterns, maybe,
-  3 | # `new`, region types, and arrays. The palette module uses its own private
-    | comment:# `new`, region types, and arrays. The palette module uses its own private
-  4 | # kind and shape.
-    | comment:# kind and shape.
+  1 | ; A module's names in every position: kinds brought in by name and used
+    | comment:; A module's names in every position: kinds brought in by name and used
+  2 | ; through `Kind.Variant`, a module under another name in patterns, maybe,
+    | comment:; through `Kind.Variant`, a module under another name in patterns, maybe,
+  3 | ; `new`, region types, and arrays. The palette module uses its own private
+    | comment:; `new`, region types, and arrays. The palette module uses its own private
+  4 | ; kind and shape.
+    | comment:; kind and shape.
   6 | include module_parts/shapes/palette (Color, describe)
     | keyword:include  module:module_parts  operator:/  module:shapes  operator:/  module:palette  punctuation:(  type:Color  punctuation:,  task:describe  punctuation:)
   7 | include module_parts/shapes/geometry => geo
@@ -60,8 +60,8 @@
     | variable:head  punctuation:.  field:next  operator:=  keyword:new  operator:@  region:r  module:geo  punctuation:.  type:Node  punctuation:(  module:geo  punctuation:.  type:Node  punctuation:{  field:value  punctuation::  number:2  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)
  33 |     show(head.next { boxed2(r) }^.value)
     | builtin-fn:show  punctuation:(  variable:head  punctuation:.  field:next  punctuation:{  task:boxed2  punctuation:(  region:r  punctuation:)  punctuation:}  operator:^  punctuation:.  field:value  punctuation:)
- 34 |     bind corners: [geo.Point; 2] = [geo.Point { x: 0.0, y: 0.0 }; 2]
-    | keyword:bind  variable:corners  punctuation::  punctuation:[  module:geo  punctuation:.  type:Point  punctuation:;  number:2  punctuation:]  operator:=  punctuation:[  module:geo  punctuation:.  type:Point  punctuation:{  field:x  punctuation::  number:0.0  punctuation:,  field:y  punctuation::  number:0.0  punctuation:}  punctuation:;  number:2  punctuation:]
+ 34 |     bind corners: [geo.Point#2] = [geo.Point { x: 0.0, y: 0.0 }#2]
+    | keyword:bind  variable:corners  punctuation::  punctuation:[  module:geo  punctuation:.  type:Point  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  module:geo  punctuation:.  type:Point  punctuation:{  field:x  punctuation::  number:0.0  punctuation:,  field:y  punctuation::  number:0.0  punctuation:}  punctuation:#  number:2  punctuation:]
  35 |     show(corners.len)
     | builtin-fn:show  punctuation:(  variable:corners  punctuation:.  field:len  punctuation:)
  36 | fi

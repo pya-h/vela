@@ -1,4 +1,4 @@
-# error: 9:10: every case is already covered, so '_' never matches
+; error: 9:10: every case is already covered, so '_' never matches
 task main()
     bind m: maybe int = 1
     match m

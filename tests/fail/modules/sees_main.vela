@@ -1,4 +1,4 @@
-# Calls a task of the program's main file, which a module can't see.
+; Calls a task of the program's main file, which a module can't see.
 
 task call_main() -> int
     <- helper()

@@ -1,4 +1,4 @@
-# error: 3:22: this task can't allocate in 'r', which it only names in its types; take it as a parameter, 'r: region'
+; error: 3:22: this task can't allocate in 'r', which it only names in its types; take it as a parameter, 'r: region'
 task make(p: ^int@r) -> ^int@r
     <- new int(1) at r
 fi

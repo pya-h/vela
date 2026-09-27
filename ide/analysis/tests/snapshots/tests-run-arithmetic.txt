@@ -1,5 +1,5 @@
-  1 | # Integer arithmetic, precedence, unary operators and boolean logic
-    | comment:# Integer arithmetic, precedence, unary operators and boolean logic
+  1 | ; Integer arithmetic, precedence, unary operators and boolean logic
+    | comment:; Integer arithmetic, precedence, unary operators and boolean logic
   3 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
   4 |     show(1 + 2 * 3)

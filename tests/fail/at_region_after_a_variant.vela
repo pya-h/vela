@@ -1,4 +1,4 @@
-# error: 13:35: variant 'Circle' makes a value, not memory, so no region is named after it
+; error: 13:35: variant 'Circle' makes a value, not memory, so no region is named after it
 task label(n: int, r: region) -> text@r
     <- "#{n}" at r
 fi

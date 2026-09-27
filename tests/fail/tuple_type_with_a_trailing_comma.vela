@@ -1,4 +1,4 @@
-# error: 3:24: a tuple has no comma after its last item
+; error: 3:24: a tuple has no comma after its last item
 task main()
     bind t: (int, text,) = (1, "Ada")
     show(t.0)

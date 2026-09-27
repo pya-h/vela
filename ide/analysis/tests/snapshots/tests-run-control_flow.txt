@@ -1,5 +1,5 @@
-  1 | # when/else, loop, each, and early send
-    | comment:# when/else, loop, each, and early send
+  1 | ; when/else, loop, each, and early send
+    | comment:; when/else, loop, each, and early send
   3 | task sign(n: int) -> int
     | keyword:task  task:sign  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
   4 |     when n < 0

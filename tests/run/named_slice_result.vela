@@ -1,8 +1,8 @@
-# A named result holding a slice in the caller's region, sliced again before
-# the task ends.
+; A named result holding a slice in the caller's region, sliced again before
+; the task ends.
 
 task evens(r: region, n: int) -> out: [int]@r, count: int
-    out, count <- new@r [int]([0; n]), 0
+    out, count <- new@r [int]([0#n]), 0
     each i in 0..n
         when i % 2 == 0
             out[count] = i

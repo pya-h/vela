@@ -1,5 +1,5 @@
-# A module that includes one from a folder named std beside the main file,
-# which the library's name would read as its own.
+; A module that includes one from a folder named std beside the main file,
+; which the library's name would read as its own.
 include ../std/helpers
 
 task helped() -> int

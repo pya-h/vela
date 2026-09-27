@@ -1,4 +1,4 @@
-# error: 3:17: a tuple is written on one line, as in '(1, "Ada")'
+; error: 3:17: a tuple is written on one line, as in '(1, "Ada")'
 task main()
     bind t = (1,
         2)

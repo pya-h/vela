@@ -1,4 +1,4 @@
-# trap: integer overflow at 3:10 in task 'below'
+; trap: integer overflow at 3:10 in task 'below'
 task below(n: int, by: int) -> int
     <- n - by
 fi

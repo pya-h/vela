@@ -1,4 +1,4 @@
-# error: 5:10: 'library.greet' is brought in as 'hello' at 2:35, so this file names it 'hello'
+; error: 5:10: 'library.greet' is brought in as 'hello' at 2:35, so this file names it 'hello'
 include modules/library (greet => hello)
 
 task main()

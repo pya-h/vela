@@ -1,7 +1,7 @@
-# error: 2:22: the result lives in region 'r', which the task isn't given; take it as a parameter, as in 'r: region'
+; error: 2:22: the result lives in region 'r', which the task isn't given; take it as a parameter, as in 'r: region'
 task make() -> [int]@r
     region r
-    <- new [int]([0; 3]) at r
+    <- new [int]([0#3]) at r
 fi
 
 task main()

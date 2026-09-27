@@ -1,4 +1,4 @@
-# error: 14:18: 'TooBig' is a variant, but 'failure e' names the whole error; give it a name, then match on it
+; error: 14:18: 'TooBig' is a variant, but 'failure e' names the whole error; give it a name, then match on it
 kind Problem
     TooBig
 fi

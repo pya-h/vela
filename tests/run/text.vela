@@ -1,4 +1,4 @@
-# Text literals and escapes
+; Text literals and escapes
 
 task main()
     show("plain")

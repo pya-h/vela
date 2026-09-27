@@ -1,4 +1,4 @@
-# error: 3:10: 'total' might not be set here
+; error: 3:10: 'total' might not be set here
 task score(hits: int) -> total: int
     show(total)
     total <- hits

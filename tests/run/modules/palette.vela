@@ -1,4 +1,4 @@
-# Colors, for tests/run/modules.vela.
+; Colors, for tests/run/modules.vela.
 
 kind Color
     Red

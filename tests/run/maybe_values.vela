@@ -1,6 +1,6 @@
-# `maybe T`: a plain value or `none` becomes one wherever a maybe is expected,
-# `show` prints the value or `none`, `==` compares with `none`, and `match`
-# reads it.
+; `maybe T`: a plain value or `none` becomes one wherever a maybe is expected,
+; `show` prints the value or `none`, `==` compares with `none`, and `match`
+; reads it.
 
 shape Reading
     label: text

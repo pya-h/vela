@@ -1,4 +1,4 @@
-# error: 5:10: 'path_exists' is private to module 'files'
+; error: 5:10: 'path_exists' is private to module 'files'
 include std/files
 
 task main()

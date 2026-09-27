@@ -1,4 +1,4 @@
-# error: 4:12: '=' assigns; to compare, write '=='
+; error: 4:12: '=' assigns; to compare, write '=='
 task main()
     hold x = 1
     when x = 1

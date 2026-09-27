@@ -1,7 +1,7 @@
-  1 | # `is` with `none`, `{_}`, and `else`, and `loop … is` walking a kind until its
-    | comment:# `is` with `none`, `{_}`, and `else`, and `loop … is` walking a kind until its
-  2 | # pattern no longer matches.
-    | comment:# pattern no longer matches.
+  1 | ; `is` with `none`, `{_}`, and `else`, and `loop … is` walking a kind until its
+    | comment:; `is` with `none`, `{_}`, and `else`, and `loop … is` walking a kind until its
+  2 | ; pattern no longer matches.
+    | comment:; pattern no longer matches.
   4 | kind Step
     | keyword:kind  type:Step
   5 |     Walk(left: int)

@@ -1,5 +1,5 @@
-# trap: text 1..4 is out of range 0..3 at 8:14 in task 'main'
-# Taking a part of text past its end.
+; trap: text 1..4 is out of range 0..3 at 8:14 in task 'main'
+; Taking a part of text past its end.
 task main()
     bind name = "Ada"
     hold end = 3

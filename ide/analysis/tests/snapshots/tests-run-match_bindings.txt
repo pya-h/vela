@@ -1,7 +1,7 @@
-  1 | # Different cases may bind the same names, and the matched value is
-    | comment:# Different cases may bind the same names, and the matched value is
-  2 | # evaluated exactly once.
-    | comment:# evaluated exactly once.
+  1 | ; Different cases may bind the same names, and the matched value is
+    | comment:; Different cases may bind the same names, and the matched value is
+  2 | ; evaluated exactly once.
+    | comment:; evaluated exactly once.
   4 | kind Pair
     | keyword:kind  type:Pair
   5 |     Ints(a: int, b: int)

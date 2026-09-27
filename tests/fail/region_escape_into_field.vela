@@ -1,4 +1,4 @@
-# error: 12:23: expected type maybe ^Node@a, got ^Node@b; a value can't move to another region: a pointer into one region is never stored in another
+; error: 12:23: expected type maybe ^Node@a, got ^Node@b; a value can't move to another region: a pointer into one region is never stored in another
 shape Node
     value: int
     next: maybe ^Node

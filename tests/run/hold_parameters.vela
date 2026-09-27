@@ -1,6 +1,6 @@
-# A parameter written `hold x: T` is the task's own copy: the task may change
-# it as it changes any `hold` variable, and the value the caller gave never
-# changes, so the call needs no mark.
+; A parameter written `hold x: T` is the task's own copy: the task may change
+; it as it changes any `hold` variable, and the value the caller gave never
+; changes, so the call needs no mark.
 
 include hold_parameters/steps {collatz}
 
@@ -11,8 +11,8 @@ shape Counter
         .n = .n + 1
     fi
 
-    # A method takes one too.
-    alters add_all(hold by: [int; 3])
+    ; A method takes one too.
+    alters add_all(hold by: [int#3])
         by[0] = by[0] + by[1] + by[2]
         .n = .n + by[0]
     fi
@@ -27,14 +27,14 @@ task countdown(hold n: int, step: int) -> int
     <- steps
 fi
 
-# A shape: its fields change, and its alters methods can be called.
+; A shape: its fields change, and its alters methods can be called.
 task bumped(hold c: Counter) -> int
     c.tick()
     c.n = c.n + 10
     <- c.n
 fi
 
-# Text is given a part of itself, and a tuple another tuple.
+; Text is given a part of itself, and a tuple another tuple.
 task cut(hold t: text, hold pair: (int, int)) -> text, int
     when t.len > 2
         t = t[0..2]
@@ -43,16 +43,16 @@ task cut(hold t: text, hold pair: (int, int)) -> text, int
     <- t, pair.0
 fi
 
-# A slice is its own copy of the caller's: adding to it leaves the caller's
-# length as it was.
+; A slice is its own copy of the caller's: adding to it leaves the caller's
+; length as it was.
 task grown(hold xs: [int]@r, r: region) -> int
     xs.add(9)
     xs.add(10)
     <- xs.len
 fi
 
-# A generic task, and a recursive one.
-task last_of<T>(hold items: [T; 3], fill: T) -> T
+; A generic task, and a recursive one.
+task last_of<T>(hold items: [T#3], fill: T) -> T
     items[2] = fill
     <- items[2]
 fi

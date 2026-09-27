@@ -1,4 +1,4 @@
-# error: 6:19: expected type text, got text@r; this text is in region 'r', and text here must last as long as the program, as a literal does
+; error: 6:19: expected type text, got text@r; this text is in region 'r', and text here must last as long as the program, as a literal does
 task main()
     region r
     bind names = new [text](["a", "b"]) at r

@@ -1830,7 +1830,7 @@ impl Generator {
         Ok(format!("(({}){{ {} }})", c_type(e.ty()?), items.join(", ")))
     }
 
-    /// `[value; count]`, the expression `e`.
+    /// `[value#count]`, the expression `e`.
     fn gen_repeat(&mut self, e: &Expr, value: &Expr) -> Result<String> {
         let value = self.gen_expr(value)?;
         Ok(format!("{}({})", item_helper("fill", e.ty()?), value))

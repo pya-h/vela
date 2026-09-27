@@ -1,4 +1,4 @@
-# error: 5:9: a method takes no types of its own yet ('Box' already gives it '<T>'); write a task that takes them, and call it from here
+; error: 5:9: a method takes no types of its own yet ('Box' already gives it '<T>'); write a task that takes them, and call it from here
 shape Box<T>
     value: T
 

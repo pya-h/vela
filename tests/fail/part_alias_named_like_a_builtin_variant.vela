@@ -1,4 +1,4 @@
-# error: 2:35: 'TooLarge' is a variant of the builtin kind 'ParseError', so nothing else can be named so
+; error: 2:35: 'TooLarge' is a variant of the builtin kind 'ParseError', so nothing else can be named so
 include modules/library (greet => TooLarge)
 
 task main()

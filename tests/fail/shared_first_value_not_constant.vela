@@ -1,4 +1,4 @@
-# error: 7:24: the first value of shared field 'made' must be one the compiler works out without running the program: a number, text, 'true', 'false', 'none', a variant, a shared field above it, or a tuple, an array, or a literal of those
+; error: 7:24: the first value of shared field 'made' must be one the compiler works out without running the program: a number, text, 'true', 'false', 'none', a variant, a shared field above it, or a tuple, an array, or a literal of those
 task seven() -> int
     <- 7
 fi

@@ -1,4 +1,4 @@
-# error: 2:29: the error type can't be a maybe
+; error: 2:29: the error type can't be a maybe
 task parse(n: int) -> int ~ maybe text
     <- n
 fi

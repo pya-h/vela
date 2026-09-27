@@ -1,4 +1,4 @@
-# error: 7:10: expected 3 values, got 2
+; error: 7:10: expected 3 values, got 2
 task divmod(a: int, b: int) -> int, int
     <- a / b, a % b
 fi

@@ -1,4 +1,4 @@
-# error: 12:12: method 'Point.twice' expects 0 arguments, got 1
+; error: 12:12: method 'Point.twice' expects 0 arguments, got 1
 shape Point
     x: int
 

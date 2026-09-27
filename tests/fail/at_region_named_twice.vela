@@ -1,4 +1,4 @@
-# error: 9:30: the region is already named before this one; a part names a region of its own with '@', as in 'x.str()@r', or in parentheses, as in '(x.str() at r)'
+; error: 9:30: the region is already named before this one; a part names a region of its own with '@', as in 'x.str()@r', or in parentheses, as in '(x.str() at r)'
 task label(n: int, r: region) -> text@r
     <- "#{n}" at r
 fi

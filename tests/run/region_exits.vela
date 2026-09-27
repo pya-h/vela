@@ -1,6 +1,6 @@
-# Regions are freed on every way out of their block: a `<-` from a plan B in
-# a loop condition, on the right of `and`, and from nested plan Bs in a loop
-# body. (tests/runtime.rs runs this under sanitizers, which fail on a leak.)
+; Regions are freed on every way out of their block: a `<-` from a plan B in
+; a loop condition, on the right of `and`, and from nested plan Bs in a loop
+; body. (tests/runtime.rs runs this under sanitizers, which fail on a leak.)
 
 task pick(n: int) -> maybe int
     when n % 3 == 0

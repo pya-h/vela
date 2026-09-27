@@ -1,5 +1,5 @@
-# Tasks send their result with `<-`, so `send` is an ordinary name; and a
-# comparison with a negative number keeps working when written with a space.
+; Tasks send their result with `<-`, so `send` is an ordinary name; and a
+; comparison with a negative number keeps working when written with a space.
 task send(n: int) -> int
     <- n + 1
 fi

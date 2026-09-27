@@ -1,17 +1,17 @@
-  1 | # The names of builtin tasks and types are only reserved as declarations:
-    | comment:# The names of builtin tasks and types are only reserved as declarations:
-  2 | # variables, parameters, and fields may use them; `Light.Red()` is a variant
-    | comment:# variables, parameters, and fields may use them; `Light.Red()` is a variant
-  3 | # without a payload written with parentheses.
-    | comment:# without a payload written with parentheses.
+  1 | ; The names of builtin tasks and types are only reserved as declarations:
+    | comment:; The names of builtin tasks and types are only reserved as declarations:
+  2 | ; variables, parameters, and fields may use them; `Light.Red()` is a variant
+    | comment:; variables, parameters, and fields may use them; `Light.Red()` is a variant
+  3 | ; without a payload written with parentheses.
+    | comment:; without a payload written with parentheses.
   5 | shape Box
     | keyword:shape  type:Box
   6 |     unit: int
     | field:unit  punctuation::  type-builtin:int
   7 |     show: text
     | field:show  punctuation::  type-builtin:text
-  8 |     # A field may be named like a variant of a builtin kind.
-    | comment:# A field may be named like a variant of a builtin kind.
+  8 |     ; A field may be named like a variant of a builtin kind.
+    | comment:; A field may be named like a variant of a builtin kind.
   9 |     TooLarge: bool
     | field:TooLarge  punctuation::  type-builtin:bool
  10 | fi
@@ -30,10 +30,10 @@
     | keyword:<-  parameter:text  operator:+  parameter:float
  19 | fi
     | keyword:fi
- 21 | # A parameter may be named like a builtin type, and the type a scan reads is a
-    | comment:# A parameter may be named like a builtin type, and the type a scan reads is a
- 22 | # type rather than that value, so this one is never read.
-    | comment:# type rather than that value, so this one is never read.
+ 21 | ; A parameter may be named like a builtin type, and the type a scan reads is a
+    | comment:; A parameter may be named like a builtin type, and the type a scan reads is a
+ 22 | ; type rather than that value, so this one is never read.
+    | comment:; type rather than that value, so this one is never read.
  23 | task ignoring(int: int) -> int
     | keyword:task  task:ignoring  punctuation:(  parameter:int  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  24 |     <- scan("", int) { 0 }
@@ -72,16 +72,16 @@
     | builtin-fn:show  punctuation:(  string:"red"  punctuation:)
  43 |     fi
     | keyword:fi
- 44 |     # A field may be named like a variant of a builtin kind, which a variable
-    | comment:# A field may be named like a variant of a builtin kind, which a variable
- 45 |     # may not be, as no variable may be named like any kind's variant.
-    | comment:# may not be, as no variable may be named like any kind's variant.
+ 44 |     ; A field may be named like a variant of a builtin kind, which a variable
+    | comment:; A field may be named like a variant of a builtin kind, which a variable
+ 45 |     ; may not be, as no variable may be named like any kind's variant.
+    | comment:; may not be, as no variable may be named like any kind's variant.
  46 |     show(bool.TooLarge)
     | builtin-fn:show  punctuation:(  variable:bool  punctuation:.  field:TooLarge  punctuation:)
  47 |     show(read("x") { -2 })
     | builtin-fn:show  punctuation:(  task:read  punctuation:(  string:"x"  punctuation:)  punctuation:{  operator:-  number:2  punctuation:}  punctuation:)
- 48 |     # A variable named like a builtin type, beside a scan that names that type.
-    | comment:# A variable named like a builtin type, beside a scan that names that type.
+ 48 |     ; A variable named like a builtin type, beside a scan that names that type.
+    | comment:; A variable named like a builtin type, beside a scan that names that type.
  49 |     bind int = 3
     | keyword:bind  variable:int  operator:=  number:3
  50 |     show(int + scan("", int) { 0 })

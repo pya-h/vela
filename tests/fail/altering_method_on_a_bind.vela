@@ -1,4 +1,4 @@
-# error: 12:5: 'Counter.step' changes the value it is called on, so it needs a place that can change, and 'c' never does (declared at 11:10); a value declared with 'hold' can
+; error: 12:5: 'Counter.step' changes the value it is called on, so it needs a place that can change, and 'c' never does (declared at 11:10); a value declared with 'hold' can
 shape Counter
     count: int
 

@@ -1,4 +1,4 @@
-# error: 4:14: expected type int, got text
+; error: 4:14: expected type int, got text
 task main()
     bind m: maybe int = none
     show(m { "zero" })

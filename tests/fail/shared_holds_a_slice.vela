@@ -1,4 +1,4 @@
-# error: 3:19: shared field 'items' can't hold a pointer or a slice, or a value holding one: those live in a region, and a shared field lives as long as the program, which no region does
+; error: 3:19: shared field 'items' can't hold a pointer or a slice, or a value holding one: those live in a region, and a shared field lives as long as the program, which no region does
 shape Bag
     shared items: [int] = none
 fi

@@ -1,9 +1,9 @@
-  1 | # A parameter written `hold& x: T` is the caller's place: every change the task
-    | comment:# A parameter written `hold& x: T` is the caller's place: every change the task
-  2 | # makes to `x` is a change there. The call marks the place it gives with `&`,
-    | comment:# makes to `x` is a change there. The call marks the place it gives with `&`,
-  3 | # so a reader sees at the call what may change.
-    | comment:# so a reader sees at the call what may change.
+  1 | ; A parameter written `hold& x: T` is the caller's place: every change the task
+    | comment:; A parameter written `hold& x: T` is the caller's place: every change the task
+  2 | ; makes to `x` is a change there. The call marks the place it gives with `&`,
+    | comment:; makes to `x` is a change there. The call marks the place it gives with `&`,
+  3 | ; so a reader sees at the call what may change.
+    | comment:; so a reader sees at the call what may change.
   5 | include hold_ref_parameters/tally {Tally, double}
     | keyword:include  module:hold_ref_parameters  operator:/  module:tally  punctuation:{  type:Tally  punctuation:,  task:double  punctuation:}
   7 | shape Counter
@@ -16,8 +16,8 @@
     | punctuation:.  field:n  operator:=  punctuation:.  field:n  operator:+  number:1
  12 |     fi
     | keyword:fi
- 14 |     # A method takes one too, and gives its own fields.
-    | comment:# A method takes one too, and gives its own fields.
+ 14 |     ; A method takes one too, and gives its own fields.
+    | comment:; A method takes one too, and gives its own fields.
  15 |     alters add_to(hold& total: int)
     | keyword:alters  method:add_to  punctuation:(  keyword:hold  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)
  16 |         total = total + .n
@@ -40,10 +40,10 @@
     | parameter:a  punctuation:,  parameter:b  operator:=  parameter:b  punctuation:,  parameter:a
  27 | fi
     | keyword:fi
- 29 | # A shape: its fields change, its alters methods are called, and a field of it
-    | comment:# A shape: its fields change, its alters methods are called, and a field of it
- 30 | # is given on to another task.
-    | comment:# is given on to another task.
+ 29 | ; A shape: its fields change, its alters methods are called, and a field of it
+    | comment:; A shape: its fields change, its alters methods are called, and a field of it
+ 30 | ; is given on to another task.
+    | comment:; is given on to another task.
  31 | task bump(hold& c: Counter)
     | keyword:task  task:bump  punctuation:(  keyword:hold  keyword:&  parameter:c  punctuation::  type:Counter  punctuation:)
  32 |     c.tick()
@@ -56,8 +56,8 @@
     | parameter:c  punctuation:.  field:n  operator:=  parameter:c  punctuation:.  field:n  operator:+  number:1
  36 | fi
     | keyword:fi
- 38 | # A slice grows where the caller keeps it.
-    | comment:# A slice grows where the caller keeps it.
+ 38 | ; A slice grows where the caller keeps it.
+    | comment:; A slice grows where the caller keeps it.
  39 | task push_two(hold& xs: [int]@r, r: region)
     | keyword:task  task:push_two  punctuation:(  keyword:hold  keyword:&  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)
  40 |     xs.add(1)
@@ -66,8 +66,8 @@
     | parameter:xs  punctuation:.  field:add  punctuation:(  number:2  punctuation:)
  42 | fi
     | keyword:fi
- 44 | # A generic task, and a recursive one, which passes its own place on.
-    | comment:# A generic task, and a recursive one, which passes its own place on.
+ 44 | ; A generic task, and a recursive one, which passes its own place on.
+    | comment:; A generic task, and a recursive one, which passes its own place on.
  45 | task put<T>(hold& place: T, value: T)
     | keyword:task  task:put  punctuation:<  type:T  punctuation:>  punctuation:(  keyword:hold  keyword:&  parameter:place  punctuation::  type:T  punctuation:,  parameter:value  punctuation::  type:T  punctuation:)
  46 |     place = value
@@ -88,8 +88,8 @@
     | keyword:fi
  55 | fi
     | keyword:fi
- 57 | # Text whose region the call settles, and a tuple given a new value.
-    | comment:# Text whose region the call settles, and a tuple given a new value.
+ 57 | ; Text whose region the call settles, and a tuple given a new value.
+    | comment:; Text whose region the call settles, and a tuple given a new value.
  58 | task rename(hold& t: text@p, to: text@p)
     | keyword:task  task:rename  punctuation:(  keyword:hold  keyword:&  parameter:t  punctuation::  type-builtin:text  operator:@  region:p  punctuation:,  parameter:to  punctuation::  type-builtin:text  operator:@  region:p  punctuation:)
  59 |     t = to
@@ -128,8 +128,8 @@
     | variable:c  punctuation:.  method:add_to  punctuation:(  operator:&  variable:total  punctuation:)
  79 |     show(total, " ", c.n)
     | builtin-fn:show  punctuation:(  variable:total  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:.  field:n  punctuation:)
- 81 |     # Two different fields, and two different items of an array.
-    | comment:# Two different fields, and two different items of an array.
+ 81 |     ; Two different fields, and two different items of an array.
+    | comment:; Two different fields, and two different items of an array.
  82 |     hold pair = Counter { n: 3 }
     | keyword:hold  variable:pair  operator:=  type:Counter  punctuation:{  field:n  punctuation::  number:3  punctuation:}
  83 |     hold other = Counter { n: 4 }

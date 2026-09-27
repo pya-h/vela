@@ -1,4 +1,4 @@
-# error: 7:6: task 'code' can finish without sending a value
+; error: 7:6: task 'code' can finish without sending a value
 kind Light
     Red
     Green

@@ -1,4 +1,4 @@
-# error: modules/broken.vela:4:10: arithmetic requires numeric operands
+; error: modules/broken.vela:4:10: arithmetic requires numeric operands
 include modules/broken
 
 task main()

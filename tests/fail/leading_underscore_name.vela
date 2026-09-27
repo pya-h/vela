@@ -1,4 +1,4 @@
-# error: 2:6: '_helper': names must start with a letter
+; error: 2:6: '_helper': names must start with a letter
 task _helper()
     show(1)
 fi

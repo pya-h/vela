@@ -1,4 +1,4 @@
-# error: 15:19: expected type maybe ^Node@_, got ^Node@a; this place holds a value without pointers (of no region), so it can't take a pointer into one
+; error: 15:19: expected type maybe ^Node@_, got ^Node@a; this place holds a value without pointers (of no region), so it can't take a pointer into one
 shape Node
     value: int
     next: maybe ^Node

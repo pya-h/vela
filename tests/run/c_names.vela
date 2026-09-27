@@ -1,5 +1,5 @@
-# Names that mean something in C (keywords, macros, the runtime's helpers, and
-# the C library's `free`) are ordinary names in Vela.
+; Names that mean something in C (keywords, macros, the runtime's helpers, and
+; the C library's `free`) are ordinary names in Vela.
 
 shape Record
     default: int

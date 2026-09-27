@@ -1,4 +1,4 @@
-# error: 8:12: '==' can't compare values of type Point
+; error: 8:12: '==' can't compare values of type Point
 shape Point
     x: int
 fi

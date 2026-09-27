@@ -1,17 +1,17 @@
-# Modules: a program in several files. `include` loads a file from this file's
-# folder; what it declares is named through the module's name (`geometry.area`)
-# or, when listed in parentheses, by its own name. `priv` keeps a task, shape,
-# kind, or field to its own file.
+; Modules: a program in several files. `include` loads a file from this file's
+; folder; what it declares is named through the module's name (`geometry.area`)
+; or, when listed in parentheses, by its own name. `priv` keeps a task, shape,
+; kind, or field to its own file.
 
 include modules/geometry
 include modules/palette (Color, Custom, describe)
 include modules/bank
 include modules/lists/stack
-# The same module the stack includes, brought in here for its generic task.
+; The same module the stack includes, brought in here for its generic task.
 include modules/numbers
 
-# The same variant name as palette's Red, and the same task name as
-# geometry's area: each module has names of its own.
+; The same variant name as palette's Red, and the same task name as
+; geometry's area: each module has names of its own.
 kind Shade
     Red
     Dark(level: int)
@@ -22,7 +22,7 @@ task area(size: int) -> int
 fi
 
 task main()
-    # Tasks, shapes, and variants of a module, through its name.
+    ; Tasks, shapes, and variants of a module, through its name.
     bind square = geometry.Square(3.0)
     bind circle = geometry.Circle(1.0)
     show(geometry.area(square))
@@ -32,7 +32,7 @@ task main()
     bind corner: geometry.Point = geometry.Point { x: 3.0, y: 4.0 }
     show(geometry.distance(origin, corner))
     geometry.main()
-    # A case names a variant alone: the value's kind says whose it is.
+    ; A case names a variant alone: the value's kind says whose it is.
     match square
     case Circle radius
         show(radius)
@@ -45,12 +45,12 @@ task main()
         show("a dot")
     fi
 
-    # Names brought in with `include m (…)`, and the others still through `m.`.
+    ; Names brought in with `include m (…)`, and the others still through `m.`.
     bind red: Color = palette.Red
     show(describe(red))
     show(describe(Custom(10, 20, 30)))
     show(describe(palette.Blue))
-    # A method of a module's kind, called on a variant named through the module.
+    ; A method of a module's kind, called on a variant named through the module.
     region colors
     show(palette.Blue.str() at colors)
     show(palette.Color.Red.str(colors))
@@ -62,7 +62,7 @@ task main()
         show(level)
     fi
 
-    # A private field, set and read through its module's tasks.
+    ; A private field, set and read through its module's tasks.
     hold account = bank.open("ada", 100)
     account = bank.deposit(account, 50)
     show(account.owner)
@@ -74,8 +74,8 @@ task main()
     }
     show(bank.balance(after))
 
-    # A module in a folder, which includes another through `..`, with regions and
-    # named results.
+    ; A module in a folder, which includes another through `..`, with regions and
+    ; named results.
     region r
     hold top: maybe ^stack.Node@r = none
     each i in 1..4
@@ -85,12 +85,12 @@ task main()
     show(total)
     show(count)
 
-    # A task from another module that takes a type, with the type worked out
-    # from the arguments and written at the call.
+    ; A task from another module that takes a type, with the type worked out
+    ; from the arguments and written at the call.
     show(numbers.larger(3, 8))
     show(numbers.larger<float>(1.5, 0.5))
 
-    # A shape from another module that takes types, built here and there.
+    ; A shape from another module that takes types, built here and there.
     bind tally: numbers.Tally<int> = numbers.Tally { value: 5, count: 2 }
     show(tally.value)
     show(tally.count)
@@ -98,8 +98,8 @@ task main()
     show(counted.value)
     show(counted.count)
 
-    # The builtin kinds a module sends, read here: their names are the same in
-    # every file, since no file declares them.
+    ; The builtin kinds a module sends, read here: their names are the same in
+    ; every file, since no file declares them.
     show(numbers.read("42") { 0 })
     show(numbers.read("4x2") { -1 })
     show(numbers.refused() {

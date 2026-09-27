@@ -1,7 +1,7 @@
-  1 | # Regions: a tree built in a region, a scratch region for every loop pass,
-    | comment:# Regions: a tree built in a region, a scratch region for every loop pass,
-  2 | # and the one result that must survive copied into a longer-lived region.
-    | comment:# and the one result that must survive copied into a longer-lived region.
+  1 | ; Regions: a tree built in a region, a scratch region for every loop pass,
+    | comment:; Regions: a tree built in a region, a scratch region for every loop pass,
+  2 | ; and the one result that must survive copied into a longer-lived region.
+    | comment:; and the one result that must survive copied into a longer-lived region.
   4 | kind Tree
     | keyword:kind  type:Tree
   5 |     Leaf(value: int)
@@ -10,10 +10,10 @@
     | variant:Branch  punctuation:(  field:left  punctuation::  operator:^  type:Tree  punctuation:,  field:right  punctuation::  operator:^  type:Tree  punctuation:)
   7 | fi
     | keyword:fi
-  9 | # Allocates, so it takes the region to build in. Taken last, the region can be
-    | comment:# Allocates, so it takes the region to build in. Taken last, the region can be
- 10 | # named after a call, as it is after `new`: `build(depth, seed) at r`.
-    | comment:# named after a call, as it is after `new`: `build(depth, seed) at r`.
+  9 | ; Allocates, so it takes the region to build in. Taken last, the region can be
+    | comment:; Allocates, so it takes the region to build in. Taken last, the region can be
+ 10 | ; named after a call, as it is after `new`: `build(depth, seed) at r`.
+    | comment:; named after a call, as it is after `new`: `build(depth, seed) at r`.
  11 | task build(depth: int, seed: int, r: region) -> Tree@r
     | keyword:task  task:build  punctuation:(  parameter:depth  punctuation::  type-builtin:int  punctuation:,  parameter:seed  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type:Tree  operator:@  region:r
  12 |     when depth == 0
@@ -30,8 +30,8 @@
     | keyword:<-  variant:Branch  punctuation:(  variable:left  punctuation:,  variable:right  punctuation:)
  18 | fi
     | keyword:fi
- 20 | # Only reads, so it names the region without taking it.
-    | comment:# Only reads, so it names the region without taking it.
+ 20 | ; Only reads, so it names the region without taking it.
+    | comment:; Only reads, so it names the region without taking it.
  21 | task total(t: Tree@r) -> int
     | keyword:task  task:total  punctuation:(  parameter:t  punctuation::  type:Tree  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
  22 |     <- match t
@@ -44,8 +44,8 @@
     | keyword:fi
  26 | fi
     | keyword:fi
- 28 | # Copies a tree, node by node, into another region.
-    | comment:# Copies a tree, node by node, into another region.
+ 28 | ; Copies a tree, node by node, into another region.
+    | comment:; Copies a tree, node by node, into another region.
  29 | task copy(t: Tree@from, to: region) -> Tree@to
     | keyword:task  task:copy  punctuation:(  parameter:t  punctuation::  type:Tree  operator:@  region:from  punctuation:,  region:to  punctuation::  keyword:region  punctuation:)  operator:->  type:Tree  operator:@  region:to
  30 |     match t
@@ -70,8 +70,8 @@
     | keyword:hold  variable:best  punctuation::  type:Tree  operator:@  region:kept  operator:=  variant:Leaf  punctuation:(  number:0  punctuation:)
  41 |     each round in 0..5
     | keyword:each  variable:round  keyword:in  number:0  operator:..  number:5
- 42 |         region pass                      # empty again, and freed, on every pass
-    | keyword:region  region:pass  comment:# empty again, and freed, on every pass
+ 42 |         region pass                      ; empty again, and freed, on every pass
+    | keyword:region  region:pass  comment:; empty again, and freed, on every pass
  43 |         bind candidate = build(6, round) at pass
     | keyword:bind  variable:candidate  operator:=  task:build  punctuation:(  number:6  punctuation:,  variable:round  punctuation:)  keyword:at  region:pass
  44 |         show(total(candidate))

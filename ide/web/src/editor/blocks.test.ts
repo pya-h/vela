@@ -19,7 +19,7 @@ function indentOfLast(source: string): number {
 
 describe("reading lines", () => {
   it("finds the first word and the indentation", () => {
-    expect([firstWord("    when x"), firstWord("# when"), firstWord("  "), firstWord("fi")]).toEqual(["when", null, null, "fi"]);
+    expect([firstWord("    when x"), firstWord("; when"), firstWord("  "), firstWord("fi")]).toEqual(["when", null, null, "fi"]);
     // A modifier before an opener is skipped; alone, or before anything else, it is the word.
     expect([firstWord("priv task f()", ["priv"]), firstWord("    priv balance: int", ["priv"]), firstWord("priv", ["priv"])]).toEqual(["task", "balance", "priv"]);
     expect([indentWidth("    x", 4), indentWidth("\tx", 4), indentWidth("  \tx", 4), indentWidth("", 4)]).toEqual([4, 4, 4, 0]);
@@ -37,7 +37,7 @@ describe("indentation", () => {
   it("keeps the level of an ordinary line, skipping blank lines", () => {
     expect(indentOfLast("task main()\n    show(1)\n")).toBe(4);
     expect(indentOfLast("task main()\n    show(1)\n\n   \n")).toBe(4);
-    expect(indentOfLast("task main()\n    # a comment\n")).toBe(4);
+    expect(indentOfLast("task main()\n    ; a comment\n")).toBe(4);
     expect(indentOfLast("")).toBe(0);
   });
 
@@ -54,7 +54,7 @@ describe("indentation", () => {
     expect(opener("    bind area = match s", WORDS)).toBe("match");
     expect(opener("    show(when ok", WORDS)).toBe("when");
     expect(opener("    bind label = when n > 0", WORDS)).toBe("when");
-    expect([opener("    else when y", WORDS), opener('    show("match")', WORDS), opener("    show(x)  # match", WORDS)]).toEqual([null, null, null]);
+    expect([opener("    else when y", WORDS), opener('    show("match")', WORDS), opener("    show(x)  ; match", WORDS)]).toEqual([null, null, null]);
     // A match's cases line up with the line the `match` is on, wherever in it.
     expect(indentOfLast("task main()\n    bind area = match s\n")).toBe(4);
     expect(indentOfLast("task main()\n    bind area = match s\n    case Circle r\n")).toBe(8);
@@ -111,25 +111,25 @@ describe("indentation", () => {
 describe("plan B braces", () => {
   it("indents after a line ending with { and lines } up with it", () => {
     expect(indentOfLast("task main()\n    bind n = m {\n")).toBe(8);
-    expect(indentOfLast("task main()\n    bind n = m {  # no value\n")).toBe(8);
+    expect(indentOfLast("task main()\n    bind n = m {  ; no value\n")).toBe(8);
     expect(indentOfLast("task main()\n    bind n = m {\n        show(1)\n        }")).toBe(4);
     expect(indentOfLast("task main()\n    bind n = m {\n        bind k = j {\n            0\n        }\n        k\n        }")).toBe(4);
     // After the closing line, the block's level again.
     expect(indentOfLast("task main()\n    bind n = m {\n        0\n    }\n")).toBe(4);
     // A brace in a comment or a one-line plan B opens nothing.
-    expect(indentOfLast("task main()\n    # a {\n")).toBe(4);
+    expect(indentOfLast("task main()\n    ; a {\n")).toBe(4);
     expect(indentOfLast("task main()\n    bind n = m { 0 }\n")).toBe(4);
     // Nor does one in a trailing comment or a string.
-    expect(indentOfLast("task main()\n    show(1)  # see {\n")).toBe(4);
-    expect(indentOfLast('task main()\n    show("use { # like this")\n')).toBe(4);
+    expect(indentOfLast("task main()\n    show(1)  ; see {\n")).toBe(4);
+    expect(indentOfLast('task main()\n    show("use { ; like this")\n')).toBe(4);
     expect(indentOfLast('task main()\n    show("\\" {")\n')).toBe(4);
-    expect(indentOfLast('task main()\n    bind n = m {  # "quoted" {\n')).toBe(8);
+    expect(indentOfLast('task main()\n    bind n = m {  ; "quoted" {\n')).toBe(8);
     // Values in a string may hold strings, and braces, of their own.
-    expect(indentOfLast('task main()\n    bind n = m("{"#"}") {\n')).toBe(8);
+    expect(indentOfLast('task main()\n    bind n = m("{";"}") {\n')).toBe(8);
     expect(indentOfLast('task main()\n    bind n = m("{k { 0 }} {f("}")}") {\n')).toBe(8);
     expect(indentOfLast('task main()\n    show("{n} {")\n')).toBe(4);
     expect(indentOfLast('task main()\n    show("\\{ {n}")\n')).toBe(4);
-    expect(indentOfLast("task main()\n    bind n = m {\n        show(1)  # uses {\n        0\n        }")).toBe(4);
+    expect(indentOfLast("task main()\n    bind n = m {\n        show(1)  ; uses {\n        0\n        }")).toBe(4);
     // A line closing one plan B and opening another.
     expect(indentOfLast("task main()\n    bind x = a {\n        0\n    } + b {\n")).toBe(8);
     expect(indentOfLast("task main()\n    bind x = a {\n        0\n    } + b {\n        1\n        }")).toBe(4);
@@ -137,7 +137,7 @@ describe("plan B braces", () => {
 
   it("reads a { naming the plan B's failure as opening its block", () => {
     expect(indentOfLast('task main()\n    bind n = parse("x") { failure e\n')).toBe(8);
-    expect(indentOfLast("task main()\n    bind n = parse(t) { failure _  # ignored\n")).toBe(8);
+    expect(indentOfLast("task main()\n    bind n = parse(t) { failure _  ; ignored\n")).toBe(8);
     expect(indentOfLast("task main()\n    when ok\n        bind n = parse(t) { failure e\n            show(e)\n            }")).toBe(8);
     const lines = ["task main()", "    save(3) { failure problem", "        show(problem)", "    }", "fi"];
     expect(closingLine(lines, lines.length, 1, WORDS)).toBe(3);
@@ -155,7 +155,7 @@ describe("plan B braces", () => {
     expect(closingLine(lines, lines.length, 1, WORDS)).toBe(6);
     expect(closingLine(lines, lines.length, 2, WORDS)).toBe(4);
     expect(closingLine(lines, lines.length, 0, WORDS)).toBe(7);
-    const chained = ["task main()", "    bind n = m {", "        bind x = a {", "            0", "        } + b {  # see {", "            1", "        }", "        x", "    }", "fi"];
+    const chained = ["task main()", "    bind n = m {", "        bind x = a {", "            0", "        } + b {  ; see {", "            1", "        }", "        x", "    }", "fi"];
     expect(closingLine(chained, chained.length, 1, WORDS)).toBe(8);
     expect(closingLine(chained, chained.length, 2, WORDS)).toBe(4);
     expect(closingLine(chained, chained.length, 4, WORDS)).toBe(6);

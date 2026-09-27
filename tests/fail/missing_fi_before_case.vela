@@ -1,4 +1,4 @@
-# error: 8:5: expected 'fi' to close the 'when' at 6:9, got 'case'
+; error: 8:5: expected 'fi' to close the 'when' at 6:9, got 'case'
 task main()
     bind m: maybe int = 1
     match m

@@ -1,6 +1,6 @@
-# trap: integer overflow at 8:25 in task 'Counter.step'
-# A method that changes the value it is called on, until the count no longer
-# fits in an int.
+; trap: integer overflow at 8:25 in task 'Counter.step'
+; A method that changes the value it is called on, until the count no longer
+; fits in an int.
 shape Counter
     count: int
 

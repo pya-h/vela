@@ -1,5 +1,5 @@
-# A kind holding another kind: a `match` inside a `case`, and `is` patterns
-# through `Kind.Variant` one inside the other.
+; A kind holding another kind: a `match` inside a `case`, and `is` patterns
+; through `Kind.Variant` one inside the other.
 
 kind Shape
     Circle(radius: int)

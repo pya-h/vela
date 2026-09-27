@@ -1,4 +1,4 @@
-# error: 5:10: '<-' sends a value and must start a line
+; error: 5:10: '<-' sends a value and must start a line
 task pick(flag: bool) -> int
     when flag
         <- 1

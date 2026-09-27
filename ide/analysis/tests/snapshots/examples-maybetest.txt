@@ -6,8 +6,8 @@
     | keyword:bind  variable:a  operator:=  variable:x  punctuation:{  number:10  punctuation:}
   5 |     show(a)
     | builtin-fn:show  punctuation:(  variable:a  punctuation:)
-  6 |     bind y = x { <- }  # if its none then end program
-    | keyword:bind  variable:y  operator:=  variable:x  punctuation:{  keyword:<-  punctuation:}  comment:# if its none then end program
+  6 |     bind y = x { <- }  ; if its none then end program
+    | keyword:bind  variable:y  operator:=  variable:x  punctuation:{  keyword:<-  punctuation:}  comment:; if its none then end program
   7 |     when x is { z }
     | keyword:when  variable:x  keyword:is  punctuation:{  variable:z  punctuation:}
   8 |         show("yeah")
@@ -20,8 +20,8 @@
     | builtin-fn:show  punctuation:(  variable:x  punctuation:)
  12 |     show(y)
     | builtin-fn:show  punctuation:(  variable:y  punctuation:)
- 13 |     # heap allocated stuff can be changed even if they
-    | comment:# heap allocated stuff can be changed even if they
+ 13 |     ; heap allocated stuff can be changed even if they
+    | comment:; heap allocated stuff can be changed even if they
  14 |     region r default
     | keyword:region  region:r  keyword:default
  15 |     bind x2 = new [int]([1,2,3])

@@ -1,5 +1,5 @@
-  1 | # `each` over part of a slice, and over the array a pointer points to.
-    | comment:# `each` over part of a slice, and over the array a pointer points to.
+  1 | ; `each` over part of a slice, and over the array a pointer points to.
+    | comment:; `each` over part of a slice, and over the array a pointer points to.
   3 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
   4 |     region r
@@ -12,8 +12,8 @@
     | builtin-fn:show  punctuation:(  variable:x  punctuation:)
   8 |     fi
     | keyword:fi
-  9 |     bind boxed = new [int; 3]([7, 8, 9]) at r
-    | keyword:bind  variable:boxed  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:;  number:3  punctuation:]  punctuation:(  punctuation:[  number:7  punctuation:,  number:8  punctuation:,  number:9  punctuation:]  punctuation:)  keyword:at  region:r
+  9 |     bind boxed = new [int#3]([7, 8, 9]) at r
+    | keyword:bind  variable:boxed  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  punctuation:(  punctuation:[  number:7  punctuation:,  number:8  punctuation:,  number:9  punctuation:]  punctuation:)  keyword:at  region:r
  10 |     show(boxed^.len)
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:.  field:len  punctuation:)
  11 |     each v in boxed^

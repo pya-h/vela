@@ -1,5 +1,5 @@
-# Float literals, arithmetic in floats, and float remainder. An int doesn't
-# become a float on its own, so every int taking part is written 'float(n)'.
+; Float literals, arithmetic in floats, and float remainder. An int doesn't
+; become a float on its own, so every int taking part is written 'float(n)'.
 
 shape Vec1
     x: float

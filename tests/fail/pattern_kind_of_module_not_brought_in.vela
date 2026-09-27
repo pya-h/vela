@@ -1,4 +1,4 @@
-# error: 6:10: 'Suit' isn't a kind, so a pattern can't name a variant of it; module 'library' has one: write 'library.Suit', or bring it in with 'include … (Suit)'
+; error: 6:10: 'Suit' isn't a kind, so a pattern can't name a variant of it; module 'library' has one: write 'library.Suit', or bring it in with 'include … (Suit)'
 include modules/library
 
 task main()

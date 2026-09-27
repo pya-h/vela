@@ -1,5 +1,5 @@
-# A shape's shared field is one value for the whole program, never part of a
-# value: it is read and changed through the shape's name, `Point.made`.
+; A shape's shared field is one value for the whole program, never part of a
+; value: it is read and changed through the shape's name, `Point.made`.
 
 include shared_fields/tally
 
@@ -19,19 +19,19 @@ fi
 
 shape Point
     x: int
-    # A field may fall back on a shared field that never changes.
+    ; A field may fall back on a shared field that never changes.
     y: int = Point.start
     shared start: int = 7
     shared name: text = "point"
-    # A shared field's first value may name the shared fields above it.
-    shared corners: [int; 3] = [Point.start, 2, 3]
+    ; A shared field's first value may name the shared fields above it.
+    shared corners: [int#3] = [Point.start, 2, 3]
     shared pair: (int, text) = (1, "one")
     shared mood: Mood = Mood.Loud
     shared spare: maybe int = none
     shared hold made: int = 0
     shared read seen: int = 0
     shared hold origin: Spot = Spot { x: 0, y: 0 }
-    shared hold big: [int; 20] = [0; 20]
+    shared hold big: [int#20] = [0#20]
 
     alters look()
         Point.seen = Point.seen + 1
@@ -39,7 +39,7 @@ shape Point
     fi
 fi
 
-# Another shape's first value may name these too.
+; Another shape's first value may name these too.
 shape Grid
     shared hold side: int = Point.start
 fi
@@ -48,9 +48,9 @@ task bump(hold& n: int)
     n = n + 1
 fi
 
-# Point.big is large, so it is given by a hidden pointer where it is a place that
-# only the task changes; a shared field is not, so the task gets a copy.
-task first_after_change(values: [int; 20]) -> int
+; Point.big is large, so it is given by a hidden pointer where it is a place that
+; only the task changes; a shared field is not, so the task gets a copy.
+task first_after_change(values: [int#20]) -> int
     Point.big[0] = 99
     <- values[0]
 fi
@@ -62,7 +62,7 @@ task main()
         show("loud")
     fi
 
-    # Changed through its name, given to a hold& parameter, and through a reference.
+    ; Changed through its name, given to a hold& parameter, and through a reference.
     Point.made = Point.made + 1
     bump(&Point.made)
     hold& r = &Point.made
@@ -70,25 +70,25 @@ task main()
     show(Point.made)
     bind& seen_now = &Point.seen
 
-    # A method changes a read-only shared field of its own shape.
+    ; A method changes a read-only shared field of its own shape.
     hold p = Point { x: 1 }
     p.look()
     p.look()
     show(p.x, " ", p.y, " ", Point.seen, " ", seen_now)
 
-    # A shared value that is a shape: its fields and its methods.
+    ; A shared value that is a shape: its fields and its methods.
     Point.origin.move(5)
     Point.origin.y = 2
     show(Point.origin.x, Point.origin.y)
 
-    # An item of a shared array, and a copy of it given to a task.
+    ; An item of a shared array, and a copy of it given to a task.
     Point.big[0] = 1
     show(first_after_change(Point.big), " ", Point.big[0])
 
     Grid.side = Grid.side + 1
     show(Grid.side)
 
-    # In loops and conditions, read again each round.
+    ; In loops and conditions, read again each round.
     loop Point.made < 23
         Point.made = Point.made + 1
     fi
@@ -96,7 +96,7 @@ task main()
         show("made ", Point.made)
     fi
 
-    # Another file's shared fields, read and changed as that file allows.
+    ; Another file's shared fields, read and changed as that file allows.
     hold t = tally.Tally {}
     t.tick()
     t.tick()

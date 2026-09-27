@@ -1,4 +1,4 @@
-# error: 5:12: expected type int, got bool
+; error: 5:12: expected type int, got bool
 task main()
     region r
     hold xs = new [int]() at r

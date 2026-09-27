@@ -1,4 +1,4 @@
-# error: 5:27: expected type Ticket, got int
+; error: 5:27: expected type Ticket, got int
 include modules/library (Card => Ticket, card)
 
 task main()

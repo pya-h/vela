@@ -1,5 +1,5 @@
-# trap: index 3 is out of range 0..3 at 7:18 in task 'main'
-# Reading one item past the end of an array.
+; trap: index 3 is out of range 0..3 at 7:18 in task 'main'
+; Reading one item past the end of an array.
 task main()
     bind days = [1, 2, 3]
     hold i = 0

@@ -1,4 +1,4 @@
-# error: 8:5: 'spot' is a result; set it with 'spot <- …'
+; error: 8:5: 'spot' is a result; set it with 'spot <- …'
 shape Point
     x: int
 fi

@@ -1,4 +1,4 @@
-# error: 18:12: expected type ^Node@r, got ^Node@s; method 'Holder.keep' takes 'p' in '@this', the region the value it is called on lives in, so it must be in that region too
+; error: 18:12: expected type ^Node@r, got ^Node@s; method 'Holder.keep' takes 'p' in '@this', the region the value it is called on lives in, so it must be in that region too
 shape Node
     value: int
 fi

@@ -1,5 +1,5 @@
-  1 | # Number literals with `_` between digits, and the `\r` escape in text.
-    | comment:# Number literals with `_` between digits, and the `\r` escape in text.
+  1 | ; Number literals with `_` between digits, and the `\r` escape in text.
+    | comment:; Number literals with `_` between digits, and the `\r` escape in text.
   3 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
   4 |     show(1_000_000 + 1)

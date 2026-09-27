@@ -1,4 +1,4 @@
-# error: 4:22: expected type ^int@r, got none; a pointer can't be none, so use 'maybe ^int@r'
+; error: 4:22: expected type ^int@r, got none; a pointer can't be none, so use 'maybe ^int@r'
 task main()
     region r
     bind p: ^int@r = none

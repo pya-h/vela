@@ -1,4 +1,4 @@
-# error: 15:13: this branch gives text, and another gives int; every branch of a when used as a value gives one type
+; error: 15:13: this branch gives text, and another gives int; every branch of a when used as a value gives one type
 kind Which
     First
     Second

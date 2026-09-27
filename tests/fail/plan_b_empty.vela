@@ -1,4 +1,4 @@
-# error: 4:14: a plan B needs a value of type int on its last line, or a '<-'
+; error: 4:14: a plan B needs a value of type int on its last line, or a '<-'
 task main()
     bind m: maybe int = none
     bind n = m { }

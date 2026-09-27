@@ -1,5 +1,5 @@
-# A bare `<-` in a plan B, in a task with named results, sends the results
-# as they are set so far.
+; A bare `<-` in a plan B, in a task with named results, sends the results
+; as they are set so far.
 
 task sum_until_none(a: maybe int, b: maybe int) -> total: int, seen: int
     total, seen <- 0, 0

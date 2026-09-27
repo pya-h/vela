@@ -1,4 +1,4 @@
-# error: 6:5: a plan B's block closes with '}', not 'end'
+; error: 6:5: a plan B's block closes with '}', not 'end'
 task main()
     bind m: maybe int = none
     bind n = m {

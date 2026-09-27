@@ -1,4 +1,4 @@
-# A public task mentioning a private shape, for a fail fixture.
+; A public task mentioning a private shape, for a fail fixture.
 
 priv shape Inner
     value: int

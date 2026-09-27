@@ -1,4 +1,4 @@
-# error: 4:8: expected 2 values, got one tuple; a tuple is one value, so send its items, as in '<- t.0, t.1'
+; error: 4:8: expected 2 values, got one tuple; a tuple is one value, so send its items, as in '<- t.0, t.1'
 task pair() -> int, int
     bind t = (1, 2)
     <- t

@@ -1,4 +1,4 @@
-# error: 4:1: expected 'fi' to close the 'task' at 2:1, got 'else' (or an 'else' without its 'when')
+; error: 4:1: expected 'fi' to close the 'task' at 2:1, got 'else' (or an 'else' without its 'when')
 task main()
     show(1)
 else

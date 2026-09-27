@@ -1,4 +1,4 @@
-# error: 13:9: blocks close with 'fi', not 'end'
+; error: 13:9: blocks close with 'fi', not 'end'
 kind Light
     Red(level: int)
     Green(level: int)

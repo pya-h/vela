@@ -1,4 +1,4 @@
-# error: 5:15: a '{' in text opens a value, which ends with '}' on the same line; to write a brace, write '\{'
+; error: 5:15: a '{' in text opens a value, which ends with '}' on the same line; to write a brace, write '\{'
 task main()
     region r
     bind n = 5

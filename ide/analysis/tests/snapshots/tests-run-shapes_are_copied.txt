@@ -1,7 +1,7 @@
-  1 | # A shape is a value: `hold b = a` and passing it to a task copy it, so
-    | comment:# A shape is a value: `hold b = a` and passing it to a task copy it, so
-  2 | # changing the copy leaves the original as it was.
-    | comment:# changing the copy leaves the original as it was.
+  1 | ; A shape is a value: `hold b = a` and passing it to a task copy it, so
+    | comment:; A shape is a value: `hold b = a` and passing it to a task copy it, so
+  2 | ; changing the copy leaves the original as it was.
+    | comment:; changing the copy leaves the original as it was.
   4 | shape Point
     | keyword:shape  type:Point
   5 |     x: int

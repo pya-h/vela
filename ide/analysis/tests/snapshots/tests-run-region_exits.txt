@@ -1,9 +1,9 @@
-  1 | # Regions are freed on every way out of their block: a `<-` from a plan B in
-    | comment:# Regions are freed on every way out of their block: a `<-` from a plan B in
-  2 | # a loop condition, on the right of `and`, and from nested plan Bs in a loop
-    | comment:# a loop condition, on the right of `and`, and from nested plan Bs in a loop
-  3 | # body. (tests/runtime.rs runs this under sanitizers, which fail on a leak.)
-    | comment:# body. (tests/runtime.rs runs this under sanitizers, which fail on a leak.)
+  1 | ; Regions are freed on every way out of their block: a `<-` from a plan B in
+    | comment:; Regions are freed on every way out of their block: a `<-` from a plan B in
+  2 | ; a loop condition, on the right of `and`, and from nested plan Bs in a loop
+    | comment:; a loop condition, on the right of `and`, and from nested plan Bs in a loop
+  3 | ; body. (tests/runtime.rs runs this under sanitizers, which fail on a leak.)
+    | comment:; body. (tests/runtime.rs runs this under sanitizers, which fail on a leak.)
   5 | task pick(n: int) -> maybe int
     | keyword:task  task:pick  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int
   6 |     when n % 3 == 0

@@ -1,4 +1,4 @@
-# error: 8:10: unknown variable 'step'
+; error: 8:10: unknown variable 'step'
 task main()
     hold n = 0
     loop n < 1

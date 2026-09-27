@@ -1,4 +1,4 @@
-# error: 3:10: integer literal '9223372036854775808' is too large
+; error: 3:10: integer literal '9223372036854775808' is too large
 task main()
     show(9223372036854775808)
 fi

@@ -1,4 +1,4 @@
-# error: 2:15: unknown type 'Thing'
+; error: 2:15: unknown type 'Thing'
 task keep(it: Thing) -> int
     <- 1
 fi

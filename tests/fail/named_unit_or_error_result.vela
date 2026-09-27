@@ -1,4 +1,4 @@
-# error: 6:23: a 'unit ~ Oops' task succeeds by reaching its end or a bare '<-', so 'done' has no value to name
+; error: 6:23: a 'unit ~ Oops' task succeeds by reaching its end or a bare '<-', so 'done' has no value to name
 kind Oops
     Bad
 fi

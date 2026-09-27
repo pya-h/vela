@@ -1,25 +1,25 @@
-  1 | # Methods of a shape that takes types. A method names no types of its own: the
-    | comment:# Methods of a shape that takes types. A method names no types of its own: the
-  2 | # ones the shape takes stand in it as they do in its fields, and one method is
-    | comment:# ones the shape takes stand in it as they do in its fields, and one method is
-  3 | # made for each shape the compiler makes. A word the shape asks for holds inside
-    | comment:# made for each shape the compiler makes. A word the shape asks for holds inside
-  4 | # every method of it, so a body may rely on it without saying so again.
-    | comment:# every method of it, so a body may rely on it without saying so again.
+  1 | ; Methods of a shape that takes types. A method names no types of its own: the
+    | comment:; Methods of a shape that takes types. A method names no types of its own: the
+  2 | ; ones the shape takes stand in it as they do in its fields, and one method is
+    | comment:; ones the shape takes stand in it as they do in its fields, and one method is
+  3 | ; made for each shape the compiler makes. A word the shape asks for holds inside
+    | comment:; made for each shape the compiler makes. A word the shape asks for holds inside
+  4 | ; every method of it, so a body may rely on it without saying so again.
+    | comment:; every method of it, so a body may rely on it without saying so again.
   6 | shape Box<T: shown>
     | keyword:shape  type:Box  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>
   7 |     value: T
     | field:value  punctuation::  type:T
-  9 |     # `T` is the type the value is given.
-    | comment:# `T` is the type the value is given.
+  9 |     ; `T` is the type the value is given.
+    | comment:; `T` is the type the value is given.
  10 |     valueOf() -> T
     | method:valueOf  punctuation:(  punctuation:)  operator:->  type:T
  11 |         <- .value
     | keyword:<-  punctuation:.  field:value
  12 |     fi
     | keyword:fi
- 14 |     # The shape asks for `shown`, so the body may show a `T`.
-    | comment:# The shape asks for `shown`, so the body may show a `T`.
+ 14 |     ; The shape asks for `shown`, so the body may show a `T`.
+    | comment:; The shape asks for `shown`, so the body may show a `T`.
  15 |     tell()
     | method:tell  punctuation:(  punctuation:)
  16 |         show(.value)
@@ -32,8 +32,8 @@
     | punctuation:.  field:value  operator:=  parameter:v
  21 |     fi
     | keyword:fi
- 23 |     # A method of a shape given types may be called from another of its methods.
-    | comment:# A method of a shape given types may be called from another of its methods.
+ 23 |     ; A method of a shape given types may be called from another of its methods.
+    | comment:; A method of a shape given types may be called from another of its methods.
  24 |     alters twice(v: T)
     | keyword:alters  method:twice  punctuation:(  parameter:v  punctuation::  type:T  punctuation:)
  25 |         .put(v)
@@ -44,8 +44,8 @@
     | keyword:fi
  28 | fi
     | keyword:fi
- 30 | # A shape given types, holding another shape given types.
-    | comment:# A shape given types, holding another shape given types.
+ 30 | ; A shape given types, holding another shape given types.
+    | comment:; A shape given types, holding another shape given types.
  31 | shape Pair<A: shown, B: shown>
     | keyword:shape  type:Pair  punctuation:<  type:A  punctuation::  keyword:shown  punctuation:,  type:B  punctuation::  keyword:shown  punctuation:>
  32 |     left: A
@@ -76,8 +76,8 @@
     | keyword:fi
  48 | fi
     | keyword:fi
- 50 | # A shape that asks nothing of its type, so it may hold a shape given types.
-    | comment:# A shape that asks nothing of its type, so it may hold a shape given types.
+ 50 | ; A shape that asks nothing of its type, so it may hold a shape given types.
+    | comment:; A shape that asks nothing of its type, so it may hold a shape given types.
  51 | shape Holder<T>
     | keyword:shape  type:Holder  punctuation:<  type:T  punctuation:>
  52 |     item: T
@@ -96,10 +96,10 @@
     | keyword:fi
  61 | fi
     | keyword:fi
- 63 | # A shape that takes types and holds a pointer: its values live in a region, and
-    | comment:# A shape that takes types and holds a pointer: its values live in a region, and
- 64 | # a method may name it.
-    | comment:# a method may name it.
+ 63 | ; A shape that takes types and holds a pointer: its values live in a region, and
+    | comment:; A shape that takes types and holds a pointer: its values live in a region, and
+ 64 | ; a method may name it.
+    | comment:; a method may name it.
  65 | shape Chain<T: fixed>
     | keyword:shape  type:Chain  punctuation:<  type:T  punctuation::  keyword:fixed  punctuation:>
  66 |     head: T
@@ -170,8 +170,8 @@
     | variable:t  punctuation:.  method:put  punctuation:(  string:"again"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
 105 |     t.tell()
     | variable:t  punctuation:.  method:tell  punctuation:(  punctuation:)
-107 |     # The text a method of a made shape sends is in the region the value is in.
-    | comment:# The text a method of a made shape sends is in the region the value is in.
+107 |     ; The text a method of a made shape sends is in the region the value is in.
+    | comment:; The text a method of a made shape sends is in the region the value is in.
 108 |     bind held: text@r = t.valueOf()
     | keyword:bind  variable:held  punctuation::  type-builtin:text  operator:@  region:r  operator:=  variable:t  punctuation:.  method:valueOf  punctuation:(  punctuation:)
 109 |     show(held)
@@ -186,8 +186,8 @@
     | variable:p  punctuation:.  method:swapIn  punctuation:(  number:2  punctuation:,  string:"two"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
 115 |     p.tellBoth()
     | variable:p  punctuation:.  method:tellBoth  punctuation:(  punctuation:)
-117 |     # A shape given a shape given types, each with its own methods.
-    | comment:# A shape given a shape given types, each with its own methods.
+117 |     ; A shape given a shape given types, each with its own methods.
+    | comment:; A shape given a shape given types, each with its own methods.
 118 |     hold deep: Holder<Box<int>> = Holder { item: Box { value: 3 } }
     | keyword:hold  variable:deep  punctuation::  type:Holder  punctuation:<  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:>  operator:=  type:Holder  punctuation:{  field:item  punctuation::  type:Box  punctuation:{  field:value  punctuation::  number:3  punctuation:}  punctuation:}
 119 |     show(deep.itemOf().valueOf())
@@ -200,8 +200,8 @@
     | variable:deep  punctuation:.  method:set  punctuation:(  type:Box  punctuation:{  field:value  punctuation::  number:6  punctuation:}  punctuation:)
 123 |     deep.itemOf().tell()
     | variable:deep  punctuation:.  method:itemOf  punctuation:(  punctuation:)  punctuation:.  method:tell  punctuation:(  punctuation:)
-125 |     # A method that changes nothing is called on a `bind` too.
-    | comment:# A method that changes nothing is called on a `bind` too.
+125 |     ; A method that changes nothing is called on a `bind` too.
+    | comment:; A method that changes nothing is called on a `bind` too.
 126 |     bind fixed: Box<bool> = Box { value: true }
     | keyword:bind  variable:fixed  punctuation::  type:Box  punctuation:<  type-builtin:bool  punctuation:>  operator:=  type:Box  punctuation:{  field:value  punctuation::  keyword:true  punctuation:}
 127 |     show(fixed.valueOf())
@@ -218,8 +218,8 @@
     | variable:chain  operator:^  punctuation:.  method:cut  punctuation:(  punctuation:)
 134 |     show(lengthOf(chain))
     | builtin-fn:show  punctuation:(  task:lengthOf  punctuation:(  variable:chain  punctuation:)  punctuation:)
-136 |     # A slice of made shapes, each item a place that can change.
-    | comment:# A slice of made shapes, each item a place that can change.
+136 |     ; A slice of made shapes, each item a place that can change.
+    | comment:; A slice of made shapes, each item a place that can change.
 137 |     hold boxes = new [Box<int>]() at r
     | keyword:hold  variable:boxes  operator:=  keyword:new  punctuation:[  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
 138 |     boxes.add(Box { value: 20 })

@@ -1,4 +1,4 @@
-# error: 9:23: 'at r' names the region of everything before it, so nothing reads from the value after it; name the region with '@', as in 'x.copy()@r.len', or put the whole in parentheses, as in '(x.copy() at r).len'
+; error: 9:23: 'at r' names the region of everything before it, so nothing reads from the value after it; name the region with '@', as in 'x.copy()@r.len', or put the whole in parentheses, as in '(x.copy() at r).len'
 task label(n: int, r: region) -> text@r
     <- "#{n}" at r
 fi

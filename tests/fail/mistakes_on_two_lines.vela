@@ -1,5 +1,5 @@
-# error: 4:10: unknown variable 'first'
-# error: 6:10: unknown variable 'second'
+; error: 4:10: unknown variable 'first'
+; error: 6:10: unknown variable 'second'
 task main()
     show(first)
     bind ok = 1

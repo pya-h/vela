@@ -1,4 +1,4 @@
-# Fibonacci in Vela
+; Fibonacci in Vela
 
 task fib(n: int) -> int
     when n < 2

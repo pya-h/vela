@@ -1,5 +1,5 @@
-# Different cases may bind the same names, and the matched value is
-# evaluated exactly once.
+; Different cases may bind the same names, and the matched value is
+; evaluated exactly once.
 
 kind Pair
     Ints(a: int, b: int)

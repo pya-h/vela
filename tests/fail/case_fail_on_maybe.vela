@@ -1,4 +1,4 @@
-# error: 7:10: 'failure …' matches the error of a 'T ~ E', but this value is maybe int
+; error: 7:10: 'failure …' matches the error of a 'T ~ E', but this value is maybe int
 task main()
     bind m: maybe int = 1
     match m

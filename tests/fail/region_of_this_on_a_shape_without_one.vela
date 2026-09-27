@@ -1,4 +1,4 @@
-# error: 5:18: 'int' holds no pointers or text, so it lives in no region; remove '@this'
+; error: 5:18: 'int' holds no pointers or text, so it lives in no region; remove '@this'
 shape Point
     x: int
 

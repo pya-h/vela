@@ -1,4 +1,4 @@
-# error: 7:30: '==' can't compare values of type (int, Point); tuples compare item by item when every item is a number, a bool, text, or a tuple of them
+; error: 7:30: '==' can't compare values of type (int, Point); tuples compare item by item when every item is a number, a bool, text, or a tuple of them
 shape Point
     x: int
 fi

@@ -1,5 +1,5 @@
-# Values are read left to right: one read before a call that changes it (given
-# as `&a`, or as the value an alters method is called on) is read as it was.
+; Values are read left to right: one read before a call that changes it (given
+; as `&a`, or as the value an alters method is called on) is read as it was.
 
 shape Counter
     n: int = 0
@@ -41,7 +41,7 @@ task main()
     show(flag or bump(&n) == 0, " ", n)
     show(flag and bump(&n) == 0, " ", n)
 
-    # A loop's condition is read again before every round, change and all.
+    ; A loop's condition is read again before every round, change and all.
     hold k = 0
     hold rounds = 0
     loop k < 300 and bump(&k) == 0
@@ -49,9 +49,9 @@ task main()
     fi
     show(k, " ", rounds)
 
-    # The place given with '&' is found where the argument is read: not at all
-    # when 'and' skips its right side, again each round of a loop, and in the
-    # 'else when' that reaches it.
+    ; The place given with '&' is found where the argument is read: not at all
+    ; when 'and' skips its right side, again each round of a loop, and in the
+    ; 'else when' that reaches it.
     hold arr = [0, 0, 0]
     hold i = 3
     show(i < 3 and step(&arr[i]))
@@ -68,7 +68,7 @@ task main()
         show("stepped ", arr[2])
     fi
 
-    # An assignment finds its place before the value that changes the index.
+    ; An assignment finds its place before the value that changes the index.
     hold spot = 0
     hold slots = [0, 0, 0]
     slots[spot] = seven(&spot)

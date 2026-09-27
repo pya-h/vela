@@ -1,4 +1,4 @@
-# error: 8:5: 'Off' is already defined at 3:5
+; error: 8:5: 'Off' is already defined at 3:5
 kind Light
     Off
     Red

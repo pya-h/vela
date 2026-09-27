@@ -1,7 +1,7 @@
-  1 | # A cart that keeps its total to itself: other files change it only through
-    | comment:# A cart that keeps its total to itself: other files change it only through
-  2 | # these tasks. prices.vela is in the same folder, so it is included as `prices`.
-    | comment:# these tasks. prices.vela is in the same folder, so it is included as `prices`.
+  1 | ; A cart that keeps its total to itself: other files change it only through
+    | comment:; A cart that keeps its total to itself: other files change it only through
+  2 | ; these tasks. prices.vela is in the same folder, so it is included as `prices`.
+    | comment:; these tasks. prices.vela is in the same folder, so it is included as `prices`.
   4 | include prices (Item, price_of)
     | keyword:include  module:prices  punctuation:(  type:Item  punctuation:,  task:price_of  punctuation:)
   6 | shape Cart

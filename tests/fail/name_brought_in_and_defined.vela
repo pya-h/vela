@@ -1,4 +1,4 @@
-# error: 2:26: 'greet' is brought in here, but this file also defines a task with that name at 4:6
+; error: 2:26: 'greet' is brought in here, but this file also defines a task with that name at 4:6
 include modules/library (greet)
 
 task greet() -> text

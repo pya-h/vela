@@ -1,7 +1,7 @@
-# Tuples: `(int, text)` holds two or more values, read by position as `t.0`,
-# `t.1`. Their items never change; a `hold` tuple takes a whole new tuple.
-# Names unpack a tuple, with or without parentheses, and nested parts in
-# parentheses. Several results (`-> int, int`) stay separate from tuples.
+; Tuples: `(int, text)` holds two or more values, read by position as `t.0`,
+; `t.1`. Their items never change; a `hold` tuple takes a whole new tuple.
+; Names unpack a tuple, with or without parentheses, and nested parts in
+; parentheses. Several results (`-> int, int`) stay separate from tuples.
 
 shape Point
     x: int
@@ -33,22 +33,22 @@ task divmod(a: int, b: int) -> int, int
     <- a / b, a % b
 fi
 
-# A tuple holding text of the caller's region.
+; A tuple holding text of the caller's region.
 task tagged(r: region, line: text@r) -> (text@r, int)
     <- (line, 7)
 fi
 
-# A tuple whose text is all in one region, written once.
+; A tuple whose text is all in one region, written once.
 task first_two(names: [text]@r) -> (text, text)@r
     <- (names[0], names[1])
 fi
 
-# A tuple in a region, written on the whole and on an item: the same region.
+; A tuple in a region, written on the whole and on an item: the same region.
 task label(t: (int, text@r)@r) -> text@r
     <- t.1
 fi
 
-# A tuple's items always match, so this block always runs and always sends.
+; A tuple's items always match, so this block always runs and always sends.
 task total(t: (int, (int, int))) -> sum: int
     when t is (first, (second, third))
         sum <- first + second + third
@@ -61,14 +61,14 @@ task main()
     show(pair.0)
     show(pair.1)
 
-    # Nested tuples, a whole new value for a hold tuple, and items that can't change.
+    ; Nested tuples, a whole new value for a hold tuple, and items that can't change.
     hold t = (1, (2.5, "deep"))
     show(t.1.1)
     t = (2, (3.5, "other"))
     show(t.1.0)
     show(t.0)
 
-    # Unpacking: a list of names, parentheses, nested parts, and `_`.
+    ; Unpacking: a list of names, parentheses, nested parts, and `_`.
     bind q, rest = divide(17, 5)
     show(q * 10 + rest)
     bind (a, b) = divide(20, 6)
@@ -86,12 +86,12 @@ task main()
     show(half)
     show(label)
 
-    # Several results are received as before, and can be put in a tuple.
+    ; Several results are received as before, and can be put in a tuple.
     bind whole, left = divmod(9, 4)
     bind packed = (whole, left)
     show(packed.0 + packed.1)
 
-    # Assignment into hold variables: with or without parentheses, nested.
+    ; Assignment into hold variables: with or without parentheses, nested.
     hold x = 0
     hold y = 0
     x, y = divide(9, 4)
@@ -104,7 +104,7 @@ task main()
     show(word)
     show(number)
 
-    # Values that can't change as items: a shape, a kind, maybe, and T ~ E.
+    ; Values that can't change as items: a shape, a kind, maybe, and T ~ E.
     bind grade = Mark(45, "ok")
     bind mixed: (Point, Grade, maybe text, int ~ text) = (Point { x: 3, y: 4 }, Pass(90), none, 5)
     show(mixed.0.x + mixed.0.y)
@@ -117,7 +117,7 @@ task main()
     show(mixed.2 == none)
     show(mixed.3 { 0 })
 
-    # Tuples in a slice, behind a pointer, and in a maybe.
+    ; Tuples in a slice, behind a pointer, and in a maybe.
     hold scores = new [(text, int)]() at r
     scores.add(("Ada", 90))
     scores.add(("Bob", 75))
@@ -135,13 +135,13 @@ task main()
     show(id)
     show(name)
 
-    # Equality, item by item, text by its characters.
+    ; Equality, item by item, text by its characters.
     show((1, "a") == (1, "a"))
     show((1, (2.5, "a")) != (1, (2.5, "b")))
     show(pair == ("Ada", 36))
 
-    # Patterns: braces take the value out, parentheses take the tuple apart,
-    # and `hold` names can be assigned.
+    ; Patterns: braces take the value out, parentheses take the tuple apart,
+    ; and `hold` names can be assigned.
     bind person: maybe (text, int) = ("Ada", 36)
     when person is {(who, years)}
         show(who)
@@ -188,7 +188,7 @@ task main()
             show("missing")
     fi
 
-    # Text of a region in a tuple.
+    ; Text of a region in a tuple.
     bind line = scan("") at r { "none" }
     bind held = tagged(r, line)
     show(held.0)

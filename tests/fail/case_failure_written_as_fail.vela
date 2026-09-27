@@ -1,4 +1,4 @@
-# error: 12:10: a pattern names a failure with 'failure', as in 'failure e'; 'fail e' makes one
+; error: 12:10: a pattern names a failure with 'failure', as in 'failure e'; 'fail e' makes one
 task save(n: int) -> unit ~ text
     when n > 1
         <- fail "big"

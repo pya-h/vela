@@ -1,4 +1,4 @@
-# error: 2:28: a module can't be named 'int', which is a builtin type
+; error: 2:28: a module can't be named 'int', which is a builtin type
 include modules/library => int
 
 task main()

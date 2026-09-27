@@ -1,8 +1,8 @@
-# Named results: `-> total: int` makes the result a variable of the task.
-# `total <- value` sets it and keeps going, `<- value` sets it and ends the
-# task, a bare `<-` sends what the results hold, and reaching the end sends
-# them too. Vela has no zero values, so the checker makes sure each result is
-# set before it is read, before a bare `<-`, and before the end.
+; Named results: `-> total: int` makes the result a variable of the task.
+; `total <- value` sets it and keeps going, `<- value` sets it and ends the
+; task, a bare `<-` sends what the results hold, and reaching the end sends
+; them too. Vela has no zero values, so the checker makes sure each result is
+; set before it is read, before a bare `<-`, and before the end.
 
 shape Node
     value: int
@@ -12,13 +12,13 @@ fi
 task score(hits: int, misses: int) -> total: int
     total <- hits * 10
     when misses == 0
-        <- total + 50            # a perfect round: send the bonus and end here
+        <- total + 50            ; a perfect round: send the bonus and end here
     fi
-    total <- total - misses * 5  # otherwise keep going
+    total <- total - misses * 5  ; otherwise keep going
     when total < 0
         total <- 0
     fi
-fi                               # reaching the end sends total
+fi                               ; reaching the end sends total
 
 task collatz(start: int) -> steps: int, peak: int
     hold n = start
@@ -34,12 +34,12 @@ task collatz(start: int) -> steps: int, peak: int
             peak <- n
         fi
         when steps == 1000
-            <-                   # give up and send what we have
+            <-                   ; give up and send what we have
         fi
     fi
 fi
 
-# A result set in every branch, and one branch that leaves instead.
+; A result set in every branch, and one branch that leaves instead.
 task classify(n: int) -> label: text
     when n < 0
         <- "negative"
@@ -51,7 +51,7 @@ task classify(n: int) -> label: text
     fi
 fi
 
-# Every case of a match sets the result.
+; Every case of a match sets the result.
 kind Light
     Red
     Green
@@ -69,7 +69,7 @@ task brightness(light: Light) -> level: int
     fi
 fi
 
-# A named result in a region the caller gives, built one node at a time.
+; A named result in a region the caller gives, built one node at a time.
 task build(r: region, n: int) -> list: maybe ^Node@r, count: int
     list, count <- none, 0
     each i in 0..n
@@ -77,7 +77,7 @@ task build(r: region, n: int) -> list: maybe ^Node@r, count: int
     fi
 fi
 
-# A region of the task's own is freed before the results are sent.
+; A region of the task's own is freed before the results are sent.
 task summed(n: int) -> sum: int, made: int
     region scratch
     sum, made <- 0, 0
@@ -87,7 +87,7 @@ task summed(n: int) -> sum: int, made: int
     fi
 fi
 
-# One call's results set another task's results.
+; One call's results set another task's results.
 task twice(n: int) -> sum: int, made: int
     sum, made <- summed(n)
 fi

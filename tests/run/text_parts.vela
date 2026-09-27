@@ -1,5 +1,5 @@
-# `t[a..b]` is a part of text: the bytes from `a` up to, but not including,
-# `b`, the same bytes rather than a copy, so it lives where the text does.
+; `t[a..b]` is a part of text: the bytes from `a` up to, but not including,
+; `b`, the same bytes rather than a copy, so it lives where the text does.
 
 shape Person
     name: text
@@ -23,16 +23,16 @@ task main()
     show(name[4..12][0..4])
     show(name[3..3] == "")
     show(name[0..name.len] == name)
-    # A part of text of the program is text of the program.
+    ; A part of text of the program is text of the program.
     bind short: text = name[0..3]
     show(short.len)
-    # Whole characters, however many bytes each takes.
+    ; Whole characters, however many bytes each takes.
     bind word = "café ✓"
     show(word[0..3])
     show(word[3..5])
     show(word[6..9])
     show(word[3..5].len)
-    # A part of text in a region is in that region.
+    ; A part of text in a region is in that region.
     region r
     bind line = "Grace Hopper".copy() at r
     show(first_word(line))

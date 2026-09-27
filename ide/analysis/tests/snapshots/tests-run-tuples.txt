@@ -1,11 +1,11 @@
-  1 | # Tuples: `(int, text)` holds two or more values, read by position as `t.0`,
-    | comment:# Tuples: `(int, text)` holds two or more values, read by position as `t.0`,
-  2 | # `t.1`. Their items never change; a `hold` tuple takes a whole new tuple.
-    | comment:# `t.1`. Their items never change; a `hold` tuple takes a whole new tuple.
-  3 | # Names unpack a tuple, with or without parentheses, and nested parts in
-    | comment:# Names unpack a tuple, with or without parentheses, and nested parts in
-  4 | # parentheses. Several results (`-> int, int`) stay separate from tuples.
-    | comment:# parentheses. Several results (`-> int, int`) stay separate from tuples.
+  1 | ; Tuples: `(int, text)` holds two or more values, read by position as `t.0`,
+    | comment:; Tuples: `(int, text)` holds two or more values, read by position as `t.0`,
+  2 | ; `t.1`. Their items never change; a `hold` tuple takes a whole new tuple.
+    | comment:; `t.1`. Their items never change; a `hold` tuple takes a whole new tuple.
+  3 | ; Names unpack a tuple, with or without parentheses, and nested parts in
+    | comment:; Names unpack a tuple, with or without parentheses, and nested parts in
+  4 | ; parentheses. Several results (`-> int, int`) stay separate from tuples.
+    | comment:; parentheses. Several results (`-> int, int`) stay separate from tuples.
   6 | shape Point
     | keyword:shape  type:Point
   7 |     x: int
@@ -54,32 +54,32 @@
     | keyword:<-  parameter:a  operator:/  parameter:b  punctuation:,  parameter:a  operator:%  parameter:b
  34 | fi
     | keyword:fi
- 36 | # A tuple holding text of the caller's region.
-    | comment:# A tuple holding text of the caller's region.
+ 36 | ; A tuple holding text of the caller's region.
+    | comment:; A tuple holding text of the caller's region.
  37 | task tagged(r: region, line: text@r) -> (text@r, int)
     | keyword:task  task:tagged  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:line  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  punctuation:(  type-builtin:text  operator:@  region:r  punctuation:,  type-builtin:int  punctuation:)
  38 |     <- (line, 7)
     | keyword:<-  punctuation:(  parameter:line  punctuation:,  number:7  punctuation:)
  39 | fi
     | keyword:fi
- 41 | # A tuple whose text is all in one region, written once.
-    | comment:# A tuple whose text is all in one region, written once.
+ 41 | ; A tuple whose text is all in one region, written once.
+    | comment:; A tuple whose text is all in one region, written once.
  42 | task first_two(names: [text]@r) -> (text, text)@r
     | keyword:task  task:first_two  punctuation:(  parameter:names  punctuation::  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:(  type-builtin:text  punctuation:,  type-builtin:text  punctuation:)  operator:@  region:r
  43 |     <- (names[0], names[1])
     | keyword:<-  punctuation:(  parameter:names  punctuation:[  number:0  punctuation:]  punctuation:,  parameter:names  punctuation:[  number:1  punctuation:]  punctuation:)
  44 | fi
     | keyword:fi
- 46 | # A tuple in a region, written on the whole and on an item: the same region.
-    | comment:# A tuple in a region, written on the whole and on an item: the same region.
+ 46 | ; A tuple in a region, written on the whole and on an item: the same region.
+    | comment:; A tuple in a region, written on the whole and on an item: the same region.
  47 | task label(t: (int, text@r)@r) -> text@r
     | keyword:task  task:label  punctuation:(  parameter:t  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:text  operator:@  region:r  punctuation:)  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  48 |     <- t.1
     | keyword:<-  parameter:t  punctuation:.  field:1
  49 | fi
     | keyword:fi
- 51 | # A tuple's items always match, so this block always runs and always sends.
-    | comment:# A tuple's items always match, so this block always runs and always sends.
+ 51 | ; A tuple's items always match, so this block always runs and always sends.
+    | comment:; A tuple's items always match, so this block always runs and always sends.
  52 | task total(t: (int, (int, int))) -> sum: int
     | keyword:task  task:total  punctuation:(  parameter:t  punctuation::  punctuation:(  type-builtin:int  punctuation:,  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:)  punctuation:)  operator:->  variable:sum  punctuation::  type-builtin:int
  53 |     when t is (first, (second, third))
@@ -100,8 +100,8 @@
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:0  punctuation:)
  62 |     show(pair.1)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:1  punctuation:)
- 64 |     # Nested tuples, a whole new value for a hold tuple, and items that can't change.
-    | comment:# Nested tuples, a whole new value for a hold tuple, and items that can't change.
+ 64 |     ; Nested tuples, a whole new value for a hold tuple, and items that can't change.
+    | comment:; Nested tuples, a whole new value for a hold tuple, and items that can't change.
  65 |     hold t = (1, (2.5, "deep"))
     | keyword:hold  variable:t  operator:=  punctuation:(  number:1  punctuation:,  punctuation:(  number:2.5  punctuation:,  string:"deep"  punctuation:)  punctuation:)
  66 |     show(t.1.1)
@@ -112,8 +112,8 @@
     | builtin-fn:show  punctuation:(  variable:t  punctuation:.  field:1  punctuation:.  field:0  punctuation:)
  69 |     show(t.0)
     | builtin-fn:show  punctuation:(  variable:t  punctuation:.  field:0  punctuation:)
- 71 |     # Unpacking: a list of names, parentheses, nested parts, and `_`.
-    | comment:# Unpacking: a list of names, parentheses, nested parts, and `_`.
+ 71 |     ; Unpacking: a list of names, parentheses, nested parts, and `_`.
+    | comment:; Unpacking: a list of names, parentheses, nested parts, and `_`.
  72 |     bind q, rest = divide(17, 5)
     | keyword:bind  variable:q  punctuation:,  variable:rest  operator:=  task:divide  punctuation:(  number:17  punctuation:,  number:5  punctuation:)
  73 |     show(q * 10 + rest)
@@ -146,16 +146,16 @@
     | builtin-fn:show  punctuation:(  variable:half  punctuation:)
  87 |     show(label)
     | builtin-fn:show  punctuation:(  variable:label  punctuation:)
- 89 |     # Several results are received as before, and can be put in a tuple.
-    | comment:# Several results are received as before, and can be put in a tuple.
+ 89 |     ; Several results are received as before, and can be put in a tuple.
+    | comment:; Several results are received as before, and can be put in a tuple.
  90 |     bind whole, left = divmod(9, 4)
     | keyword:bind  variable:whole  punctuation:,  variable:left  operator:=  task:divmod  punctuation:(  number:9  punctuation:,  number:4  punctuation:)
  91 |     bind packed = (whole, left)
     | keyword:bind  variable:packed  operator:=  punctuation:(  variable:whole  punctuation:,  variable:left  punctuation:)
  92 |     show(packed.0 + packed.1)
     | builtin-fn:show  punctuation:(  variable:packed  punctuation:.  field:0  operator:+  variable:packed  punctuation:.  field:1  punctuation:)
- 94 |     # Assignment into hold variables: with or without parentheses, nested.
-    | comment:# Assignment into hold variables: with or without parentheses, nested.
+ 94 |     ; Assignment into hold variables: with or without parentheses, nested.
+    | comment:; Assignment into hold variables: with or without parentheses, nested.
  95 |     hold x = 0
     | keyword:hold  variable:x  operator:=  number:0
  96 |     hold y = 0
@@ -178,8 +178,8 @@
     | builtin-fn:show  punctuation:(  variable:word  punctuation:)
 105 |     show(number)
     | builtin-fn:show  punctuation:(  variable:number  punctuation:)
-107 |     # Values that can't change as items: a shape, a kind, maybe, and T ~ E.
-    | comment:# Values that can't change as items: a shape, a kind, maybe, and T ~ E.
+107 |     ; Values that can't change as items: a shape, a kind, maybe, and T ~ E.
+    | comment:; Values that can't change as items: a shape, a kind, maybe, and T ~ E.
 108 |     bind grade = Mark(45, "ok")
     | keyword:bind  variable:grade  operator:=  variant:Mark  punctuation:(  number:45  punctuation:,  string:"ok"  punctuation:)
 109 |     bind mixed: (Point, Grade, maybe text, int ~ text) = (Point { x: 3, y: 4 }, Pass(90), none, 5)
@@ -202,8 +202,8 @@
     | builtin-fn:show  punctuation:(  variable:mixed  punctuation:.  field:2  operator:==  keyword:none  punctuation:)
 118 |     show(mixed.3 { 0 })
     | builtin-fn:show  punctuation:(  variable:mixed  punctuation:.  field:3  punctuation:{  number:0  punctuation:}  punctuation:)
-120 |     # Tuples in a slice, behind a pointer, and in a maybe.
-    | comment:# Tuples in a slice, behind a pointer, and in a maybe.
+120 |     ; Tuples in a slice, behind a pointer, and in a maybe.
+    | comment:; Tuples in a slice, behind a pointer, and in a maybe.
 121 |     hold scores = new [(text, int)]() at r
     | keyword:hold  variable:scores  operator:=  keyword:new  punctuation:[  punctuation:(  type-builtin:text  punctuation:,  type-builtin:int  punctuation:)  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
 122 |     scores.add(("Ada", 90))
@@ -236,18 +236,18 @@
     | builtin-fn:show  punctuation:(  variable:id  punctuation:)
 136 |     show(name)
     | builtin-fn:show  punctuation:(  variable:name  punctuation:)
-138 |     # Equality, item by item, text by its characters.
-    | comment:# Equality, item by item, text by its characters.
+138 |     ; Equality, item by item, text by its characters.
+    | comment:; Equality, item by item, text by its characters.
 139 |     show((1, "a") == (1, "a"))
     | builtin-fn:show  punctuation:(  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)  operator:==  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)  punctuation:)
 140 |     show((1, (2.5, "a")) != (1, (2.5, "b")))
     | builtin-fn:show  punctuation:(  punctuation:(  number:1  punctuation:,  punctuation:(  number:2.5  punctuation:,  string:"a"  punctuation:)  punctuation:)  operator:!=  punctuation:(  number:1  punctuation:,  punctuation:(  number:2.5  punctuation:,  string:"b"  punctuation:)  punctuation:)  punctuation:)
 141 |     show(pair == ("Ada", 36))
     | builtin-fn:show  punctuation:(  variable:pair  operator:==  punctuation:(  string:"Ada"  punctuation:,  number:36  punctuation:)  punctuation:)
-143 |     # Patterns: braces take the value out, parentheses take the tuple apart,
-    | comment:# Patterns: braces take the value out, parentheses take the tuple apart,
-144 |     # and `hold` names can be assigned.
-    | comment:# and `hold` names can be assigned.
+143 |     ; Patterns: braces take the value out, parentheses take the tuple apart,
+    | comment:; Patterns: braces take the value out, parentheses take the tuple apart,
+144 |     ; and `hold` names can be assigned.
+    | comment:; and `hold` names can be assigned.
 145 |     bind person: maybe (text, int) = ("Ada", 36)
     | keyword:bind  variable:person  punctuation::  keyword:maybe  punctuation:(  type-builtin:text  punctuation:,  type-builtin:int  punctuation:)  operator:=  punctuation:(  string:"Ada"  punctuation:,  number:36  punctuation:)
 146 |     when person is {(who, years)}
@@ -338,8 +338,8 @@
     | builtin-fn:show  punctuation:(  string:"missing"  punctuation:)
 189 |     fi
     | keyword:fi
-191 |     # Text of a region in a tuple.
-    | comment:# Text of a region in a tuple.
+191 |     ; Text of a region in a tuple.
+    | comment:; Text of a region in a tuple.
 192 |     bind line = scan("") at r { "none" }
     | keyword:bind  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r  punctuation:{  string:"none"  punctuation:}
 193 |     bind held = tagged(r, line)

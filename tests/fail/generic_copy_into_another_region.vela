@@ -1,4 +1,4 @@
-# error: 9:29: 'keepIn' copies a 'T' into region 'r' at 3:10, and nothing in its header keeps a 'T' in 'r', so that copy is only the value itself; this use gives text@outer, which is in region 'outer'. So name the region in a parameter's type, as in 'xs: [T]@r', or write 'keepIn' for text@outer itself
+; error: 9:29: 'keepIn' copies a 'T' into region 'r' at 3:10, and nothing in its header keeps a 'T' in 'r', so that copy is only the value itself; this use gives text@outer, which is in region 'outer'. So name the region in a parameter's type, as in 'xs: [T]@r', or write 'keepIn' for text@outer itself
 task keepIn<T>(r: region, v: T) -> T
     <- v.copy() at r
 fi

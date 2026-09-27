@@ -1,4 +1,4 @@
-# Every path of a value-returning task must send; each of these tasks does.
+; Every path of a value-returning task must send; each of these tasks does.
 
 kind Light
     Red

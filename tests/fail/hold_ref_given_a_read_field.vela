@@ -1,4 +1,4 @@
-# error: 12:15: 'count' is a read-only field of 'Meter', which only the alters methods of 'Meter' change
+; error: 12:15: 'count' is a read-only field of 'Meter', which only the alters methods of 'Meter' change
 shape Meter
     read count: int = 0
 fi

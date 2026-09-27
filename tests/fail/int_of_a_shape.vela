@@ -1,4 +1,4 @@
-# error: 7:14: 'int' takes an int, a float, a bool, or text, but this value is Point; a shape or kind becomes a number only through a task that reads it
+; error: 7:14: 'int' takes an int, a float, a bool, or text, but this value is Point; a shape or kind becomes a number only through a task that reads it
 shape Point
     x: int
 fi

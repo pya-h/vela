@@ -1,4 +1,4 @@
-# error: 9:16: 'show' writes each value in a region of its own, so no region is named after it
+; error: 9:16: 'show' writes each value in a region of its own, so no region is named after it
 task label(n: int, r: region) -> text@r
     <- "#{n}" at r
 fi

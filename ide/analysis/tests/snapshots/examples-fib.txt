@@ -1,5 +1,5 @@
-  1 | # Fibonacci in Vela
-    | comment:# Fibonacci in Vela
+  1 | ; Fibonacci in Vela
+    | comment:; Fibonacci in Vela
   3 | task fib(n: int) -> int
     | keyword:task  task:fib  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
   4 |     when n < 2

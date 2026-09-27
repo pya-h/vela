@@ -1,4 +1,4 @@
-# error: 3:10: show expects int, float, bool, text, or a shape or kind with its own 'str'; T is any type here; require it, as in '<T: shown>'
+; error: 3:10: show expects int, float, bool, text, or a shape or kind with its own 'str'; T is any type here; require it, as in '<T: shown>'
 task tell<T>(value: T)
     show(value)
 fi

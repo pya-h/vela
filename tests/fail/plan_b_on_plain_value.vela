@@ -1,4 +1,4 @@
-# error: 4:10: this value is int, not a maybe or a 'T ~ E', so it needs no plan B
+; error: 4:10: this value is int, not a maybe or a 'T ~ E', so it needs no plan B
 task main()
     bind n = 5
     show(n { 0 })

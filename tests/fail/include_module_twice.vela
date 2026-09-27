@@ -1,4 +1,4 @@
-# error: 3:17: this module is already included at 2:17; a file includes each module once
+; error: 3:17: this module is already included at 2:17; a file includes each module once
 include modules/library
 include modules/library
 

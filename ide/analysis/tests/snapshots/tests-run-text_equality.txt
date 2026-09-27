@@ -1,5 +1,5 @@
-  1 | # `==` on text compares contents, not addresses.
-    | comment:# `==` on text compares contents, not addresses.
+  1 | ; `==` on text compares contents, not addresses.
+    | comment:; `==` on text compares contents, not addresses.
   3 | task same(a: text, b: text) -> bool
     | keyword:task  task:same  punctuation:(  parameter:a  punctuation::  type-builtin:text  punctuation:,  parameter:b  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:bool
   4 |     <- a == b
@@ -14,8 +14,8 @@
     | builtin-fn:show  punctuation:(  string:"apple"  operator:==  string:"apples"  punctuation:)
  10 |     show("apple" != "pear")
     | builtin-fn:show  punctuation:(  string:"apple"  operator:!=  string:"pear"  punctuation:)
- 11 |     # A NUL is one of the bytes compared, not the end of the text.
-    | comment:# A NUL is one of the bytes compared, not the end of the text.
+ 11 |     ; A NUL is one of the bytes compared, not the end of the text.
+    | comment:; A NUL is one of the bytes compared, not the end of the text.
  12 |     show(same("ab\0x", "ab\0y"))
     | builtin-fn:show  punctuation:(  task:same  punctuation:(  string:"ab  escape:\0  string:x"  punctuation:,  string:"ab  escape:\0  string:y"  punctuation:)  punctuation:)
  13 |     show(same("ab\0x", "ab\0x"))

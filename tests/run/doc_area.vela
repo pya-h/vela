@@ -1,4 +1,4 @@
-# The kinds example from docs/vela.html
+; The kinds example from docs/vela.html
 
 kind Shape
     Circle(radius: float)

@@ -1,4 +1,4 @@
-# error: 3:10: invalid number '0x1F.5': a number written in another base is whole
+; error: 3:10: invalid number '0x1F.5': a number written in another base is whole
 task main()
     show(0x1F.5)
 fi

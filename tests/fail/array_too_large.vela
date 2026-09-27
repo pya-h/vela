@@ -1,4 +1,4 @@
-# error: 3:18: [[int; 1000000]; 10000000] is too large: a value of it would take more than 1 TiB of memory; a slice in a region can be as long as memory allows
+; error: 3:18: [[int#1000000]#10000000] is too large: a value of it would take more than 1 TiB of memory; a slice in a region can be as long as memory allows
 task main()
-    bind cells = [[0; 1000000]; 10000000]
+    bind cells = [[0#1000000]#10000000]
 fi

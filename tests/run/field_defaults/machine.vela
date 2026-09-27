@@ -1,5 +1,5 @@
-# A shape whose own field is private and falls back on a value: another module
-# can build it, and still can't read or write that field.
+; A shape whose own field is private and falls back on a value: another module
+; can build it, and still can't read or write that field.
 
 kind Power
     Off
@@ -21,8 +21,8 @@ shape Machine
     fi
 fi
 
-# A default may give what only this module can, such as a private field that
-# falls back on nothing: a literal elsewhere that leaves out `cell` still gets it.
+; A default may give what only this module can, such as a private field that
+; falls back on nothing: a literal elsewhere that leaves out `cell` still gets it.
 shape Cell
     priv charge: int
 

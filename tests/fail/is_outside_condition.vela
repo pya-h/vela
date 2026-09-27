@@ -1,4 +1,4 @@
-# error: 4:20: 'is' can only test the whole condition of a 'when' or 'loop', as in 'when x is {value}'
+; error: 4:20: 'is' can only test the whole condition of a 'when' or 'loop', as in 'when x is {value}'
 task main()
     bind m: maybe int = 1
     bind empty = m is none

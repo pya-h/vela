@@ -1,4 +1,4 @@
-# error: 7:18: 'Red' is a variant, not a type; its type is its kind, 'Light'
+; error: 7:18: 'Red' is a variant, not a type; its type is its kind, 'Light'
 kind Light
     Red
     Green

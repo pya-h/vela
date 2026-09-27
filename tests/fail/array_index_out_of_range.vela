@@ -1,4 +1,4 @@
-# error: 4:15: index 3 is out of range 0..3 for [int; 3]
+; error: 4:15: index 3 is out of range 0..3 for [int#3]
 task main()
     bind days = [1, 2, 3]
     show(days[3])

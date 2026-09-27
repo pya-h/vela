@@ -1,4 +1,4 @@
-# error: 3:13: expected the value to set the result to, after '<-'
+; error: 3:13: expected the value to set the result to, after '<-'
 task score(hits: int) -> total: int
     total <-
 fi

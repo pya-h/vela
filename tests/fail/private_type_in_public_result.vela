@@ -1,4 +1,4 @@
-# error: 10:28: task 'pair' is public, but 'Token' is private to its file, so other files couldn't name it; make it 'priv' too, or the type public
+; error: 10:28: task 'pair' is public, but 'Token' is private to its file, so other files couldn't name it; make it 'priv' too, or the type public
 priv shape Token
     value: int
 fi

@@ -1,9 +1,9 @@
-# Copies into a region: `value.copy() at r` (or `value.copy()@r`) copies what a
-# value holds in regions (its text, its slices' items, and what its pointers
-# point to, all the way down) into `r`. Without a region, the copy goes into the
-# region of the place it is put in. Each value here is made in a region freed
-# before it is read again, so the sanitizers (tests/runtime.rs) catch a copy
-# that still points into it. Its input is `copy.in`.
+; Copies into a region: `value.copy() at r` (or `value.copy()@r`) copies what a
+; value holds in regions (its text, its slices' items, and what its pointers
+; point to, all the way down) into `r`. Without a region, the copy goes into the
+; region of the place it is put in. Each value here is made in a region freed
+; before it is read again, so the sanitizers (tests/runtime.rs) catch a copy
+; that still points into it. Its input is `copy.in`.
 
 shape Person
     name: text
@@ -31,13 +31,13 @@ kind Problem
     Missing(what: text)
 fi
 
-# A copy sent back: the result's region names where it goes.
+; A copy sent back: the result's region names where it goes.
 task keep(r: region, line: text@s) -> text@r
     <- line.copy()
 fi
 
-# A copy in a task's named result.
-task kept_twice(r: region, line: text@s) -> both: [text; 2]@r
+; A copy in a task's named result.
+task kept_twice(r: region, line: text@s) -> both: [text#2]@r
     both <- [line.copy(), line.copy()]
 fi
 
@@ -74,13 +74,13 @@ task main()
     hold named: maybe text@kept = none
     hold list: maybe ^Node@kept = none
     hold bag = Bag { names: new [text]() at kept, first: none }
-    hold both: [text; 2]@kept = ["", ""]
+    hold both: [text#2]@kept = ["", ""]
     hold result: int ~ Problem@kept = 0
     each pass in 0..1
         region work
         bind line = scan("") at work { "nobody" }
 
-        # Text, into the place it goes, or into the region written.
+        ; Text, into the place it goes, or into the region written.
         lines.add(line.copy())
         named = line.copy()
         bind at_kept = line.copy() at kept
@@ -90,7 +90,7 @@ task main()
         lines.add(keep(kept, line))
         both = kept_twice(kept, line)
 
-        # Shapes and kinds, and copies inside their literals.
+        ; Shapes and kinds, and copies inside their literals.
         people.add(Person { name: line.copy(), age: 36 })
         bind worker: Person@work = Person { name: line, age: 7 }
         people.add(worker.copy())
@@ -100,7 +100,7 @@ task main()
         entries.add(Empty.copy()@kept)
         result = parse(kept, scan("") at work { "" })
 
-        # A slice in a shape, and a maybe.
+        ; A slice in a shape, and a maybe.
         hold names = new [text]() at work
         names.add(line)
         names.add("literal")
@@ -108,7 +108,7 @@ task main()
         bag = held.copy()
         names[0] = "changed"
 
-        # Linked nodes: one shared by two pointers, and a cycle.
+        ; Linked nodes: one shared by two pointers, and a cycle.
         bind nodes = build(work, 5)
         bind second = nodes^.next { nodes }
         nodes^.other = second
@@ -150,15 +150,15 @@ task main()
 
     when list is {head}
         show(count(head))
-        # The copy of the shared node is shared: a change through one pointer
-        # shows through the other, and the cycle leads back to the copy.
+        ; The copy of the shared node is shared: a change through one pointer
+        ; shows through the other, and the cycle leads back to the copy.
         bind second = head^.other { head }
         second^.label = "shared"
         show(head^.next { head }^.label)
         show(second^.other { second }^.label)
     fi
 
-    # A long list, copied into the region it is in, and a copy's items are its own.
+    ; A long list, copied into the region it is in, and a copy's items are its own.
     region big
     bind long = build(big, 100000)
     bind again = long.copy() at big

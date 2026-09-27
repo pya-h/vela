@@ -1,4 +1,4 @@
-# error: 12:21: 'Red' is a variant, but '{value}' names the whole value; give it a name, then match on it
+; error: 12:21: 'Red' is a variant, but '{value}' names the whole value; give it a name, then match on it
 kind Light
     Red
     Green

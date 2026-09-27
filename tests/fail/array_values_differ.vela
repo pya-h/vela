@@ -1,4 +1,4 @@
-# error: 3:23: an array's values have one type, but this one is text and the ones before it are int
+; error: 3:23: an array's values have one type, but this one is text and the ones before it are int
 task main()
     bind values = [1, "two"]
 fi

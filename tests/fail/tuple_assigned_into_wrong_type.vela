@@ -1,4 +1,4 @@
-# error: 5:12: expected type float, got int
+; error: 5:12: expected type float, got int
 task main()
     hold x = 1.5
     hold y = 0

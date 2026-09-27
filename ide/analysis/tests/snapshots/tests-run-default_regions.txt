@@ -1,13 +1,13 @@
-  1 | # A block names one of its regions the default: every allocation in it that
-    | comment:# A block names one of its regions the default: every allocation in it that
-  2 | # names no region goes there, and an inner block may name its own.
-    | comment:# names no region goes there, and an inner block may name its own.
+  1 | ; A block names one of its regions the default: every allocation in it that
+    | comment:; A block names one of its regions the default: every allocation in it that
+  2 | ; names no region goes there, and an inner block may name its own.
+    | comment:; names no region goes there, and an inner block may name its own.
   4 | shape Card
     | keyword:shape  type:Card
   5 |     rank: int
     | field:rank  punctuation::  type-builtin:int
-  7 |     # The region a method is given can be its default too.
-    | comment:# The region a method is given can be its default too.
+  7 |     ; The region a method is given can be its default too.
+    | comment:; The region a method is given can be its default too.
   8 |     str(r: region default) -> text@r
     | method:str  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
   9 |         <- "card " + .rank.str()
@@ -16,8 +16,8 @@
     | keyword:fi
  11 | fi
     | keyword:fi
- 13 | # A task allocates in the region it is given, which its header makes the default.
-    | comment:# A task allocates in the region it is given, which its header makes the default.
+ 13 | ; A task allocates in the region it is given, which its header makes the default.
+    | comment:; A task allocates in the region it is given, which its header makes the default.
  14 | task grow(r: region default, upto: int) -> [int]@r
     | keyword:task  task:grow  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:,  parameter:upto  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
  15 |     hold made = new [int]()
@@ -32,8 +32,8 @@
     | keyword:<-  variable:made
  20 | fi
     | keyword:fi
- 22 | # A region the header only names is no default: this one allocates nowhere.
-    | comment:# A region the header only names is no default: this one allocates nowhere.
+ 22 | ; A region the header only names is no default: this one allocates nowhere.
+    | comment:; A region the header only names is no default: this one allocates nowhere.
  23 | task total(xs: [int]@r) -> int
     | keyword:task  task:total  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
  24 |     hold sum = 0
@@ -56,10 +56,10 @@
     | keyword:bind  variable:squares  operator:=  task:grow  punctuation:(  region:kept  punctuation:,  number:5  punctuation:)
  34 |     show(total(squares))
     | builtin-fn:show  punctuation:(  task:total  punctuation:(  variable:squares  punctuation:)  punctuation:)
- 36 |     # Every form that makes memory takes the default: a pointer, a slice, text
-    | comment:# Every form that makes memory takes the default: a pointer, a slice, text
- 37 |     # joined, a value written as text, and text holding values.
-    | comment:# joined, a value written as text, and text holding values.
+ 36 |     ; Every form that makes memory takes the default: a pointer, a slice, text
+    | comment:; Every form that makes memory takes the default: a pointer, a slice, text
+ 37 |     ; joined, a value written as text, and text holding values.
+    | comment:; joined, a value written as text, and text holding values.
  38 |     bind p = new int(7)
     | keyword:bind  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  number:7  punctuation:)
  39 |     hold names = new [text]()
@@ -78,8 +78,8 @@
     | builtin-fn:show  punctuation:(  variable:sentence  punctuation:)
  46 |     show(Card { rank: 3 })
     | builtin-fn:show  punctuation:(  type:Card  punctuation:{  field:rank  punctuation::  number:3  punctuation:}  punctuation:)
- 48 |     # An inner block names its own default; the outer one is back after it.
-    | comment:# An inner block names its own default; the outer one is back after it.
+ 48 |     ; An inner block names its own default; the outer one is back after it.
+    | comment:; An inner block names its own default; the outer one is back after it.
  49 |     each round in 0..3
     | keyword:each  variable:round  keyword:in  number:0  operator:..  number:3
  50 |         region pass default
@@ -94,8 +94,8 @@
     | keyword:bind  variable:after  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)
  55 |     show(after.len, " kept")
     | builtin-fn:show  punctuation:(  variable:after  punctuation:.  field:len  punctuation:,  string:" kept"  punctuation:)
- 57 |     # A region that is not the default is still written.
-    | comment:# A region that is not the default is still written.
+ 57 |     ; A region that is not the default is still written.
+    | comment:; A region that is not the default is still written.
  58 |     region other
     | keyword:region  region:other
  59 |     bind elsewhere = new int(1) at other

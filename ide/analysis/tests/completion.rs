@@ -241,7 +241,7 @@ fn shape_literals_offer_the_missing_fields() {
 #[test]
 fn nothing_is_offered_in_comments_text_or_new_names() {
     for marked in [
-        in_main("# a comm@@ent"),
+        in_main("; a comm@@ent"),
         in_main("show(\"hel@@lo\")"),
         in_main("show(\"unfinished @@"),
         in_main("bind @@"),

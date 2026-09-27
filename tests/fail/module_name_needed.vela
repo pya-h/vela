@@ -1,4 +1,4 @@
-# error: 5:10: unknown task 'greet'; module 'library' has one: write 'library.greet', or bring it in with 'include … (greet)'
+; error: 5:10: unknown task 'greet'; module 'library' has one: write 'library.greet', or bring it in with 'include … (greet)'
 include modules/library
 
 task main()

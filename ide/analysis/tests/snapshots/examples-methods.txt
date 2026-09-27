@@ -1,19 +1,19 @@
-  1 | # Methods of a shape: written in its block below its fields, and called on a
-    | comment:# Methods of a shape: written in its block below its fields, and called on a
-  2 | # value. Inside one, `.balance` is a field of the value it is called on and
-    | comment:# value. Inside one, `.balance` is a field of the value it is called on and
-  3 | # `.note()` another of its methods. A method that changes the value says
-    | comment:# `.note()` another of its methods. A method that changes the value says
-  4 | # `alters`, and only a place that can change may call it: here a `hold`
-    | comment:# `alters`, and only a place that can change may call it: here a `hold`
-  5 | # variable, and an item of a slice.
-    | comment:# variable, and an item of a slice.
-  7 | # A kind has methods too, which read the value as `.this`. A method named `str`
-    | comment:# A kind has methods too, which read the value as `.this`. A method named `str`
-  8 | # says how the value becomes text; it makes new text, so it takes the region the
-    | comment:# says how the value becomes text; it makes new text, so it takes the region the
-  9 | # text goes in, as any task that builds text does.
-    | comment:# text goes in, as any task that builds text does.
+  1 | ; Methods of a shape: written in its block below its fields, and called on a
+    | comment:; Methods of a shape: written in its block below its fields, and called on a
+  2 | ; value. Inside one, `.balance` is a field of the value it is called on and
+    | comment:; value. Inside one, `.balance` is a field of the value it is called on and
+  3 | ; `.note()` another of its methods. A method that changes the value says
+    | comment:; `.note()` another of its methods. A method that changes the value says
+  4 | ; `alters`, and only a place that can change may call it: here a `hold`
+    | comment:; `alters`, and only a place that can change may call it: here a `hold`
+  5 | ; variable, and an item of a slice.
+    | comment:; variable, and an item of a slice.
+  7 | ; A kind has methods too, which read the value as `.this`. A method named `str`
+    | comment:; A kind has methods too, which read the value as `.this`. A method named `str`
+  8 | ; says how the value becomes text; it makes new text, so it takes the region the
+    | comment:; says how the value becomes text; it makes new text, so it takes the region the
+  9 | ; text goes in, as any task that builds text does.
+    | comment:; text goes in, as any task that builds text does.
  10 | kind Refusal
     | keyword:kind  type:Refusal
  11 |     TooLittle(short: int)
@@ -34,18 +34,18 @@
     | keyword:fi
  20 | fi
     | keyword:fi
- 22 | # A field can name the value a literal that leaves it out gives it, so an
-    | comment:# A field can name the value a literal that leaves it out gives it, so an
- 23 | # account is opened by naming its owner alone. One marked `read` is read by any
-    | comment:# account is opened by naming its owner alone. One marked `read` is read by any
- 24 | # code and changed only by the account's own methods, so no one can reopen a
-    | comment:# code and changed only by the account's own methods, so no one can reopen a
- 25 | # closed account by writing to it. A `shared` field belongs to the shape rather
-    | comment:# closed account by writing to it. A `shared` field belongs to the shape rather
- 26 | # than to any account: one value for the whole program, read as
-    | comment:# than to any account: one value for the whole program, read as
- 27 | # `Account.deposits`, and this one is `read` too, so only the methods count.
-    | comment:# `Account.deposits`, and this one is `read` too, so only the methods count.
+ 22 | ; A field can name the value a literal that leaves it out gives it, so an
+    | comment:; A field can name the value a literal that leaves it out gives it, so an
+ 23 | ; account is opened by naming its owner alone. One marked `read` is read by any
+    | comment:; account is opened by naming its owner alone. One marked `read` is read by any
+ 24 | ; code and changed only by the account's own methods, so no one can reopen a
+    | comment:; code and changed only by the account's own methods, so no one can reopen a
+ 25 | ; closed account by writing to it. A `shared` field belongs to the shape rather
+    | comment:; closed account by writing to it. A `shared` field belongs to the shape rather
+ 26 | ; than to any account: one value for the whole program, read as
+    | comment:; than to any account: one value for the whole program, read as
+ 27 | ; `Account.deposits`, and this one is `read` too, so only the methods count.
+    | comment:; `Account.deposits`, and this one is `read` too, so only the methods count.
  28 | shape Account
     | keyword:shape  type:Account
  29 |     owner: text
@@ -78,10 +78,10 @@
     | punctuation:.  method:note  punctuation:(  string:"deposit"  punctuation:,  parameter:amount  punctuation:)
  46 |     fi
     | keyword:fi
- 48 |     # A method may fail, as a task may: `unit ~ Refusal` sends nothing, or a
-    | comment:# A method may fail, as a task may: `unit ~ Refusal` sends nothing, or a
- 49 |     # reason why not.
-    | comment:# reason why not.
+ 48 |     ; A method may fail, as a task may: `unit ~ Refusal` sends nothing, or a
+    | comment:; A method may fail, as a task may: `unit ~ Refusal` sends nothing, or a
+ 49 |     ; reason why not.
+    | comment:; reason why not.
  50 |     alters withdraw(amount: int) -> unit ~ Refusal
     | keyword:alters  method:withdraw  punctuation:(  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type:Refusal
  51 |         when not .open
@@ -108,10 +108,10 @@
     | punctuation:.  field:open  operator:=  keyword:false
  63 |     fi
     | keyword:fi
- 65 |     # Only this file may call it. `show` writes each value in turn, so saying
-    | comment:# Only this file may call it. `show` writes each value in turn, so saying
- 66 |     # what happened needs no text of its own, and no region to hold it.
-    | comment:# what happened needs no text of its own, and no region to hold it.
+ 65 |     ; Only this file may call it. `show` writes each value in turn, so saying
+    | comment:; Only this file may call it. `show` writes each value in turn, so saying
+ 66 |     ; what happened needs no text of its own, and no region to hold it.
+    | comment:; what happened needs no text of its own, and no region to hold it.
  67 |     priv note(what: text, amount: int)
     | keyword:priv  method:note  punctuation:(  parameter:what  punctuation::  type-builtin:text  punctuation:,  parameter:amount  punctuation::  type-builtin:int  punctuation:)
  68 |         show(what, " ", amount)
@@ -120,8 +120,8 @@
     | keyword:fi
  70 | fi
     | keyword:fi
- 72 | # A shape that takes a type: its methods use `T` as its fields do.
-    | comment:# A shape that takes a type: its methods use `T` as its fields do.
+ 72 | ; A shape that takes a type: its methods use `T` as its fields do.
+    | comment:; A shape that takes a type: its methods use `T` as its fields do.
  73 | shape Best<T: ordered>
     | keyword:shape  type:Best  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:>
  74 |     value: T
@@ -148,8 +148,8 @@
     | builtin-fn:show  punctuation:(  string:"done"  punctuation:)
  87 |     case failure why
     | keyword:case  keyword:failure  variable:why
- 88 |         # `show` calls a kind's own `str` for it, in a region of its own.
-    | comment:# `show` calls a kind's own `str` for it, in a region of its own.
+ 88 |         ; `show` calls a kind's own `str` for it, in a region of its own.
+    | comment:; `show` calls a kind's own `str` for it, in a region of its own.
  89 |         show("refused: ", why)
     | builtin-fn:show  punctuation:(  string:"refused: "  punctuation:,  variable:why  punctuation:)
  90 |     fi
@@ -174,10 +174,10 @@
     | variable:ada  punctuation:.  method:close  punctuation:(  punctuation:)
 101 |     report(ada.withdraw(1))
     | task:report  punctuation:(  variable:ada  punctuation:.  method:withdraw  punctuation:(  number:1  punctuation:)  punctuation:)
-103 |     # A reference is another name for an account: its alters methods change
-    | comment:# A reference is another name for an account: its alters methods change
-104 |     # the account it names.
-    | comment:# the account it names.
+103 |     ; A reference is another name for an account: its alters methods change
+    | comment:; A reference is another name for an account: its alters methods change
+104 |     ; the account it names.
+    | comment:; the account it names.
 105 |     hold bob = Account { owner: "Bob" }
     | keyword:hold  variable:bob  operator:=  type:Account  punctuation:{  field:owner  punctuation::  string:"Bob"  punctuation:}
 106 |     hold& current = &bob
@@ -186,8 +186,8 @@
     | variable:current  punctuation:.  method:deposit  punctuation:(  number:20  punctuation:)
 108 |     show(bob)
     | builtin-fn:show  punctuation:(  variable:bob  punctuation:)
-110 |     # An item of a slice is a place that can change.
-    | comment:# An item of a slice is a place that can change.
+110 |     ; An item of a slice is a place that can change.
+    | comment:; An item of a slice is a place that can change.
 111 |     region bank
     | keyword:region  region:bank
 112 |     hold accounts = new [Account]() at bank

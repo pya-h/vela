@@ -1,23 +1,23 @@
-  1 | # Numbers read from input: `scan("> ", int)` shows the prompt, reads a line, and
-    | comment:# Numbers read from input: `scan("> ", int)` shows the prompt, reads a line, and
-  2 | # sends the number it holds, or an `InputError` saying there is none — because
-    | comment:# sends the number it holds, or an `InputError` saying there is none — because
-  3 | # the input ended, or because the line was no number, which holds the
-    | comment:# the input ended, or because the line was no number, which holds the
-  4 | # `ParseError` that reading it gave. Reading a number from text a program already
-    | comment:# `ParseError` that reading it gave. Reading a number from text a program already
-  5 | # has is `int(t)`, which sends that `ParseError` on its own, and reads a whole
-    | comment:# has is `int(t)`, which sends that `ParseError` on its own, and reads a whole
-  6 | # number written in another base too, as code writes one: `0x1F`, `0o17`, `0b101`.
-    | comment:# number written in another base too, as code writes one: `0x1F`, `0o17`, `0b101`.
-  7 | #
-    | comment:#
-  8 | # Run it and type a few numbers (Ctrl-D, or the end of a file given as input,
-    | comment:# Run it and type a few numbers (Ctrl-D, or the end of a file given as input,
-  9 | # ends them), or give it a file: `./numbers < readings.txt`.
-    | comment:# ends them), or give it a file: `./numbers < readings.txt`.
- 11 | # The numbers a program reads may also come from text it holds.
-    | comment:# The numbers a program reads may also come from text it holds.
+  1 | ; Numbers read from input: `scan("> ", int)` shows the prompt, reads a line, and
+    | comment:; Numbers read from input: `scan("> ", int)` shows the prompt, reads a line, and
+  2 | ; sends the number it holds, or an `InputError` saying there is none — because
+    | comment:; sends the number it holds, or an `InputError` saying there is none — because
+  3 | ; the input ended, or because the line was no number, which holds the
+    | comment:; the input ended, or because the line was no number, which holds the
+  4 | ; `ParseError` that reading it gave. Reading a number from text a program already
+    | comment:; `ParseError` that reading it gave. Reading a number from text a program already
+  5 | ; has is `int(t)`, which sends that `ParseError` on its own, and reads a whole
+    | comment:; has is `int(t)`, which sends that `ParseError` on its own, and reads a whole
+  6 | ; number written in another base too, as code writes one: `0x1F`, `0o17`, `0b101`.
+    | comment:; number written in another base too, as code writes one: `0x1F`, `0o17`, `0b101`.
+  7 | ;
+    | comment:;
+  8 | ; Run it and type a few numbers (Ctrl-D, or the end of a file given as input,
+    | comment:; Run it and type a few numbers (Ctrl-D, or the end of a file given as input,
+  9 | ; ends them), or give it a file: `./numbers < readings.txt`.
+    | comment:; ends them), or give it a file: `./numbers < readings.txt`.
+ 11 | ; The numbers a program reads may also come from text it holds.
+    | comment:; The numbers a program reads may also come from text it holds.
  12 | task from_text()
     | keyword:task  task:from_text  punctuation:(  punctuation:)
  13 |     each written in ["6", "6.5", "-0", "0x1F", "-0b101", "010", "0b102"]
@@ -82,14 +82,14 @@
     | keyword:case  keyword:failure  variable:e
  45 |             match e
     | keyword:match  variable:e
- 46 |             # Nothing more to read, so the loop is done.
-    | comment:# Nothing more to read, so the loop is done.
+ 46 |             ; Nothing more to read, so the loop is done.
+    | comment:; Nothing more to read, so the loop is done.
  47 |             case Ended
     | keyword:case  variant:Ended
  48 |                 reading = false
     | variable:reading  operator:=  keyword:false
- 49 |             # A line that was no number: the reason says which way.
-    | comment:# A line that was no number: the reason says which way.
+ 49 |             ; A line that was no number: the reason says which way.
+    | comment:; A line that was no number: the reason says which way.
  50 |             case NoNumber why
     | keyword:case  variant:NoNumber  variable:why
  51 |                 refused = refused + 1
@@ -122,10 +122,10 @@
     | builtin-fn:show  punctuation:(  variable:count  punctuation:,  string:" read, "  punctuation:,  variable:refused  punctuation:,  string:" refused"  punctuation:)
  66 |         show("total ", total, ", largest ", largest)
     | builtin-fn:show  punctuation:(  string:"total "  punctuation:,  variable:total  punctuation:,  string:", largest "  punctuation:,  variable:largest  punctuation:)
- 67 |         # An average is a float, so the count becomes one: an int and a float
-    | comment:# An average is a float, so the count becomes one: an int and a float
- 68 |         # don't mix on their own.
-    | comment:# don't mix on their own.
+ 67 |         ; An average is a float, so the count becomes one: an int and a float
+    | comment:; An average is a float, so the count becomes one: an int and a float
+ 68 |         ; don't mix on their own.
+    | comment:; don't mix on their own.
  69 |         show("average ", float(total) / float(count))
     | builtin-fn:show  punctuation:(  string:"average "  punctuation:,  type-builtin:float  punctuation:(  variable:total  punctuation:)  operator:/  type-builtin:float  punctuation:(  variable:count  punctuation:)  punctuation:)
  70 |     fi

@@ -1,4 +1,4 @@
-# error: 11:19: '+' joins text, but this value is Point; turn it into text first, as in 'n.str() at r'
+; error: 11:19: '+' joins text, but this value is Point; turn it into text first, as in 'n.str() at r'
 shape Point
     x: int
     str(r: region) -> text@r

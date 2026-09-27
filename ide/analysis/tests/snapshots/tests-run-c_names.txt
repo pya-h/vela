@@ -1,7 +1,7 @@
-  1 | # Names that mean something in C (keywords, macros, the runtime's helpers, and
-    | comment:# Names that mean something in C (keywords, macros, the runtime's helpers, and
-  2 | # the C library's `free`) are ordinary names in Vela.
-    | comment:# the C library's `free`) are ordinary names in Vela.
+  1 | ; Names that mean something in C (keywords, macros, the runtime's helpers, and
+    | comment:; Names that mean something in C (keywords, macros, the runtime's helpers, and
+  2 | ; the C library's `free`) are ordinary names in Vela.
+    | comment:; the C library's `free`) are ordinary names in Vela.
   4 | shape Record
     | keyword:shape  type:Record
   5 |     default: int

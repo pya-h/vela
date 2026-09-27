@@ -1,4 +1,4 @@
-# error: 3:10: show expects int, float, bool, text, or a shape or kind with its own 'str'; the value in this int ~ InputError must be extracted first, as in 'x { … }' or 'when x is {value}'
+; error: 3:10: show expects int, float, bool, text, or a shape or kind with its own 'str'; the value in this int ~ InputError must be extracted first, as in 'x { … }' or 'when x is {value}'
 task main()
     show(scan("Age: ", int))
 fi

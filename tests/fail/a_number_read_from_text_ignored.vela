@@ -1,4 +1,4 @@
-# error: 3:5: the error 'int' may send is ignored; handle it with a plan B, as in 'int(…) { failure e … }', or with match
+; error: 3:5: the error 'int' may send is ignored; handle it with a plan B, as in 'int(…) { failure e … }', or with match
 task main()
     int("42")
 fi

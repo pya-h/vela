@@ -1,15 +1,15 @@
-  1 | # Shapes that take types: `shape Box<T>` is checked once, with `T` standing for
-    | comment:# Shapes that take types: `shape Box<T>` is checked once, with `T` standing for
-  2 | # the type each value of it is given, and one shape is made for each set of types
-    | comment:# the type each value of it is given, and one shape is made for each set of types
-  3 | # the program uses it with. The types given name no region, as a shape's fields
-    | comment:# the program uses it with. The types given name no region, as a shape's fields
-  4 | # don't: they are in the region of the value holding them, which the whole type
-    | comment:# don't: they are in the region of the value holding them, which the whole type
-  5 | # names (`Box<text>@r`). A literal names its types (`Box<int> { value: none }`)
-    | comment:# names (`Box<text>@r`). A literal names its types (`Box<int> { value: none }`)
-  6 | # or the values it gives say which they are (`Box { value: 1 }`).
-    | comment:# or the values it gives say which they are (`Box { value: 1 }`).
+  1 | ; Shapes that take types: `shape Box<T>` is checked once, with `T` standing for
+    | comment:; Shapes that take types: `shape Box<T>` is checked once, with `T` standing for
+  2 | ; the type each value of it is given, and one shape is made for each set of types
+    | comment:; the type each value of it is given, and one shape is made for each set of types
+  3 | ; the program uses it with. The types given name no region, as a shape's fields
+    | comment:; the program uses it with. The types given name no region, as a shape's fields
+  4 | ; don't: they are in the region of the value holding them, which the whole type
+    | comment:; don't: they are in the region of the value holding them, which the whole type
+  5 | ; names (`Box<text>@r`). A literal names its types (`Box<int> { value: none }`)
+    | comment:; names (`Box<text>@r`). A literal names its types (`Box<int> { value: none }`)
+  6 | ; or the values it gives say which they are (`Box { value: 1 }`).
+    | comment:; or the values it gives say which they are (`Box { value: 1 }`).
   8 | shape Box<T>
     | keyword:shape  type:Box  punctuation:<  type:T  punctuation:>
   9 |     value: T
@@ -24,10 +24,10 @@
     | field:right  punctuation::  type:B
  15 | fi
     | keyword:fi
- 17 | # A shape that takes types can hold anything a field can: text, a slice, a
-    | comment:# A shape that takes types can hold anything a field can: text, a slice, a
- 18 | # pointer, a tuple, another shape given types.
-    | comment:# pointer, a tuple, another shape given types.
+ 17 | ; A shape that takes types can hold anything a field can: text, a slice, a
+    | comment:; A shape that takes types can hold anything a field can: text, a slice, a
+ 18 | ; pointer, a tuple, another shape given types.
+    | comment:; pointer, a tuple, another shape given types.
  19 | shape Holder<T>
     | keyword:shape  type:Holder  punctuation:<  type:T  punctuation:>
  20 |     items: [T]
@@ -36,8 +36,8 @@
     | field:label  punctuation::  type-builtin:text
  22 | fi
     | keyword:fi
- 24 | # A field may name the shape again, with the types it takes, behind a pointer.
-    | comment:# A field may name the shape again, with the types it takes, behind a pointer.
+ 24 | ; A field may name the shape again, with the types it takes, behind a pointer.
+    | comment:; A field may name the shape again, with the types it takes, behind a pointer.
  25 | shape Node<T>
     | keyword:shape  type:Node  punctuation:<  type:T  punctuation:>
  26 |     value: T
@@ -46,8 +46,8 @@
     | field:next  punctuation::  keyword:maybe  operator:^  type:Node  punctuation:<  type:T  punctuation:>
  28 | fi
     | keyword:fi
- 30 | # A word says what every type given for it must allow, as for a task.
-    | comment:# A word says what every type given for it must allow, as for a task.
+ 30 | ; A word says what every type given for it must allow, as for a task.
+    | comment:; A word says what every type given for it must allow, as for a task.
  31 | shape Shown<T: shown>
     | keyword:shape  type:Shown  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>
  32 |     value: T
@@ -60,10 +60,10 @@
     | builtin-fn:show  punctuation:(  parameter:b  punctuation:.  field:value  punctuation:)
  37 | fi
     | keyword:fi
- 39 | # A task that takes types can take and make values of a shape given them: the
-    | comment:# A task that takes types can take and make values of a shape given them: the
- 40 | # region comes from the header, as for any value holding text or pointers.
-    | comment:# region comes from the header, as for any value holding text or pointers.
+ 39 | ; A task that takes types can take and make values of a shape given them: the
+    | comment:; A task that takes types can take and make values of a shape given them: the
+ 40 | ; region comes from the header, as for any value holding text or pointers.
+    | comment:; region comes from the header, as for any value holding text or pointers.
  41 | task boxOf<T>(r: region, v: T) -> Box<T>@r
     | keyword:task  task:boxOf  punctuation:<  type:T  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:v  punctuation::  type:T  punctuation:)  operator:->  type:Box  punctuation:<  type:T  punctuation:>  operator:@  region:r
  42 |     <- Box { value: v }
@@ -88,30 +88,30 @@
     | keyword:<-  keyword:none
  54 | fi
     | keyword:fi
- 56 | # One region name for two shapes given different types: the one made for a type
-    | comment:# One region name for two shapes given different types: the one made for a type
- 57 | # that holds nothing in a region names none, and the region is dropped for it.
-    | comment:# that holds nothing in a region names none, and the region is dropped for it.
+ 56 | ; One region name for two shapes given different types: the one made for a type
+    | comment:; One region name for two shapes given different types: the one made for a type
+ 57 | ; that holds nothing in a region names none, and the region is dropped for it.
+    | comment:; that holds nothing in a region names none, and the region is dropped for it.
  58 | task swap<A: fixed, B: fixed>(a: Box<A>@r, b: Box<B>@r) -> (Box<B>@r, Box<A>@r)
     | keyword:task  task:swap  punctuation:<  type:A  punctuation::  keyword:fixed  punctuation:,  type:B  punctuation::  keyword:fixed  punctuation:>  punctuation:(  parameter:a  punctuation::  type:Box  punctuation:<  type:A  punctuation:>  operator:@  region:r  punctuation:,  parameter:b  punctuation::  type:Box  punctuation:<  type:B  punctuation:>  operator:@  region:r  punctuation:)  operator:->  punctuation:(  type:Box  punctuation:<  type:B  punctuation:>  operator:@  region:r  punctuation:,  type:Box  punctuation:<  type:A  punctuation:>  operator:@  region:r  punctuation:)
  59 |     <- (b, a)
     | keyword:<-  punctuation:(  parameter:b  punctuation:,  parameter:a  punctuation:)
  60 | fi
     | keyword:fi
- 62 | # A shape made for its types is one type with the shape given them, so a header
-    | comment:# A shape made for its types is one type with the shape given them, so a header
- 63 | # that takes no types may name it as it is written, and its region is the one the
-    | comment:# that takes no types may name it as it is written, and its region is the one the
- 64 | # values live in.
-    | comment:# values live in.
+ 62 | ; A shape made for its types is one type with the shape given them, so a header
+    | comment:; A shape made for its types is one type with the shape given them, so a header
+ 63 | ; that takes no types may name it as it is written, and its region is the one the
+    | comment:; that takes no types may name it as it is written, and its region is the one the
+ 64 | ; values live in.
+    | comment:; values live in.
  65 | task textOf(b: Box<text>@r) -> text@r
     | keyword:task  task:textOf  punctuation:(  parameter:b  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  66 |     <- b.value
     | keyword:<-  parameter:b  punctuation:.  field:value
  67 | fi
     | keyword:fi
- 69 | # A shape given types may be given to another, with one region for the whole.
-    | comment:# A shape given types may be given to another, with one region for the whole.
+ 69 | ; A shape given types may be given to another, with one region for the whole.
+    | comment:; A shape given types may be given to another, with one region for the whole.
  70 | task leftText(p: Pair<Box<text>, int>@r) -> text@r
     | keyword:task  task:leftText  punctuation:(  parameter:p  punctuation::  type:Pair  punctuation:<  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:,  type-builtin:int  punctuation:>  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  71 |     <- p.left.value
@@ -130,8 +130,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  80 |     region r
     | keyword:region  region:r
- 82 |     # The types are written, or the values say which they are.
-    | comment:# The types are written, or the values say which they are.
+ 82 |     ; The types are written, or the values say which they are.
+    | comment:; The types are written, or the values say which they are.
  83 |     bind written: Box<int> = Box<int> { value: 1 }
     | keyword:bind  variable:written  punctuation::  type:Box  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  number:1  punctuation:}
  84 |     show(written.value)
@@ -144,10 +144,10 @@
     | keyword:bind  variable:empty  punctuation::  type:Box  punctuation:<  keyword:maybe  type-builtin:int  punctuation:>  operator:=  type:Box  punctuation:<  keyword:maybe  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  keyword:none  punctuation:}
  88 |     show(empty.value)
     | builtin-fn:show  punctuation:(  variable:empty  punctuation:.  field:value  punctuation:)
- 90 |     # The shape made for one set of types serves every region: the text of a
-    | comment:# The shape made for one set of types serves every region: the text of a
- 91 |     # `Box<text>` is in the region of the box.
-    | comment:# `Box<text>` is in the region of the box.
+ 90 |     ; The shape made for one set of types serves every region: the text of a
+    | comment:; The shape made for one set of types serves every region: the text of a
+ 91 |     ; `Box<text>` is in the region of the box.
+    | comment:; `Box<text>` is in the region of the box.
  92 |     bind here: Box<text>@r = Box { value: "in a region".copy() at r }
     | keyword:bind  variable:here  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  operator:@  region:r  operator:=  type:Box  punctuation:{  field:value  punctuation::  string:"in a region"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
  93 |     show(here.value)
@@ -156,16 +156,16 @@
     | keyword:bind  variable:lasting  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  operator:=  type:Box  punctuation:{  field:value  punctuation::  string:"as long as the program"  punctuation:}
  95 |     show(lasting.value)
     | builtin-fn:show  punctuation:(  variable:lasting  punctuation:.  field:value  punctuation:)
- 97 |     # Two types at once, with the words they must allow.
-    | comment:# Two types at once, with the words they must allow.
+ 97 |     ; Two types at once, with the words they must allow.
+    | comment:; Two types at once, with the words they must allow.
  98 |     bind pair: Pair<int, text> = Pair { left: 3, right: "three" }
     | keyword:bind  variable:pair  punctuation::  type:Pair  punctuation:<  type-builtin:int  punctuation:,  type-builtin:text  punctuation:>  operator:=  type:Pair  punctuation:{  field:left  punctuation::  number:3  punctuation:,  field:right  punctuation::  string:"three"  punctuation:}
  99 |     show(pair.left)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:left  punctuation:)
 100 |     show(pair.right)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:right  punctuation:)
-102 |     # A shape given types holds what any field holds.
-    | comment:# A shape given types holds what any field holds.
+102 |     ; A shape given types holds what any field holds.
+    | comment:; A shape given types holds what any field holds.
 103 |     hold items = new [int]() at r
     | keyword:hold  variable:items  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
 104 |     items.add(4)
@@ -186,8 +186,8 @@
     | keyword:bind  variable:tuple  punctuation::  type:Box  punctuation:<  punctuation:(  type-builtin:int  punctuation:,  type-builtin:bool  punctuation:)  punctuation:>  operator:=  type:Box  punctuation:{  field:value  punctuation::  punctuation:(  number:7  punctuation:,  keyword:true  punctuation:)  punctuation:}
 112 |     show(tuple.value.0)
     | builtin-fn:show  punctuation:(  variable:tuple  punctuation:.  field:value  punctuation:.  field:0  punctuation:)
-114 |     # A field naming the shape again, behind a pointer.
-    | comment:# A field naming the shape again, behind a pointer.
+114 |     ; A field naming the shape again, behind a pointer.
+    | comment:; A field naming the shape again, behind a pointer.
 115 |     bind tail: ^Node<int>@r = new Node<int>(Node { value: 9, next: none }) at r
     | keyword:bind  variable:tail  punctuation::  operator:^  type:Node  punctuation:<  type-builtin:int  punctuation:>  operator:@  region:r  operator:=  keyword:new  type:Node  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:9  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
 116 |     bind head: ^Node<int>@r = new Node<int>(Node { value: 8, next: tail }) at r
@@ -200,8 +200,8 @@
     | builtin-fn:show  punctuation:(  variable:second  operator:^  punctuation:.  field:value  punctuation:)
 120 |     fi
     | keyword:fi
-122 |     # Tasks that take types, with values of shapes given types.
-    | comment:# Tasks that take types, with values of shapes given types.
+122 |     ; Tasks that take types, with values of shapes given types.
+    | comment:; Tasks that take types, with values of shapes given types.
 123 |     tell(Shown { value: "shown" })
     | task:tell  punctuation:(  type:Shown  punctuation:{  field:value  punctuation::  string:"shown"  punctuation:}  punctuation:)
 124 |     tell(Shown { value: 10 })
@@ -232,10 +232,10 @@
     | builtin-fn:show  punctuation:(  variable:swapped  punctuation:.  field:0  punctuation:.  field:value  punctuation:)
 138 |     show(swapped.1.value)
     | builtin-fn:show  punctuation:(  variable:swapped  punctuation:.  field:1  punctuation:.  field:value  punctuation:)
-140 |     # A header that takes no types naming a shape made for its types, and a
-    | comment:# A header that takes no types naming a shape made for its types, and a
-141 |     # shape given types given to another.
-    | comment:# shape given types given to another.
+140 |     ; A header that takes no types naming a shape made for its types, and a
+    | comment:; A header that takes no types naming a shape made for its types, and a
+141 |     ; shape given types given to another.
+    | comment:; shape given types given to another.
 142 |     show(textOf(here))
     | builtin-fn:show  punctuation:(  task:textOf  punctuation:(  variable:here  punctuation:)  punctuation:)
 143 |     bind deep: Box<Box<text>>@r = Box { value: Box { value: "two boxes deep".copy() at r } }
@@ -248,8 +248,8 @@
     | builtin-fn:show  punctuation:(  task:leftText  punctuation:(  variable:paired  punctuation:)  punctuation:)
 147 |     show(paired.right)
     | builtin-fn:show  punctuation:(  variable:paired  punctuation:.  field:right  punctuation:)
-149 |     # A kind's payload, a `maybe`, and a copy into another region.
-    | comment:# A kind's payload, a `maybe`, and a copy into another region.
+149 |     ; A kind's payload, a `maybe`, and a copy into another region.
+    | comment:; A kind's payload, a `maybe`, and a copy into another region.
 150 |     bind holding = Holding.Number(Box { value: 14 })
     | keyword:bind  variable:holding  operator:=  type:Holding  punctuation:.  variant:Number  punctuation:(  type:Box  punctuation:{  field:value  punctuation::  number:14  punctuation:}  punctuation:)
 151 |     match holding

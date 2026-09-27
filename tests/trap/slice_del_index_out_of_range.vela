@@ -1,5 +1,5 @@
-# trap: index 3 is out of range 0..2 at 8:16 in task 'main'
-# Taking out an item past the last: an index of the items there are.
+; trap: index 3 is out of range 0..2 at 8:16 in task 'main'
+; Taking out an item past the last: an index of the items there are.
 task main()
     region r
     hold items = new [int]([1, 2, 3]) at r

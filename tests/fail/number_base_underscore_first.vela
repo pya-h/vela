@@ -1,4 +1,4 @@
-# error: 3:10: invalid number '0x_ff': an underscore goes between two digits, as in '0xff_ff'
+; error: 3:10: invalid number '0x_ff': an underscore goes between two digits, as in '0xff_ff'
 task main()
     show(0x_ff)
 fi

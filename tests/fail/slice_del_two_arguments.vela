@@ -1,4 +1,4 @@
-# error: 5:13: 'del' takes an index, or nothing for the last item, as in 'xs.del(i)' or 'xs.del()', got 2 arguments
+; error: 5:13: 'del' takes an index, or nothing for the last item, as in 'xs.del(i)' or 'xs.del()', got 2 arguments
 task main()
     region r
     hold xs = new [int]([1, 2, 3]) at r

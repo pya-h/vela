@@ -1,4 +1,4 @@
-# error: 4:9: a task sends its result with '<-', not 'send'
+; error: 4:9: a task sends its result with '<-', not 'send'
 task report(n: int)
     when n < 0
         send

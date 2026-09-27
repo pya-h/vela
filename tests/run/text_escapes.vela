@@ -1,5 +1,5 @@
-# Text reaches C exactly as written: no trigraphs, raw control bytes, or
-# escapes that swallow the characters after them.
+; Text reaches C exactly as written: no trigraphs, raw control bytes, or
+; escapes that swallow the characters after them.
 task main()
     show("what??!")
     show("a??/b")
@@ -10,6 +10,6 @@ task main()
     show("é1")
     show("héllo, wörld ✓7")
     show("100% sure")
-    # A NUL is a byte of the text like any other.
+    ; A NUL is a byte of the text like any other.
     show("ab\0cd")
 fi

@@ -1,4 +1,4 @@
-# trap: division by zero at 3:14 in task 'average'
+; trap: division by zero at 3:14 in task 'average'
 task average(total: int, count: int) -> int
     <- total / count
 fi

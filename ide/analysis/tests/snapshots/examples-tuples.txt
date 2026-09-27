@@ -1,11 +1,11 @@
-  1 | # Tuples: values held together, as `(text, int)`, read by position (`t.0`,
-    | comment:# Tuples: values held together, as `(text, int)`, read by position (`t.0`,
-  2 | # `t.1`) and taken apart into names, in a binding or in a pattern. A tuple's
-    | comment:# `t.1`) and taken apart into names, in a binding or in a pattern. A tuple's
-  3 | # items never change; a `hold` tuple can only take a whole new one.
-    | comment:# items never change; a `hold` tuple can only take a whole new one.
-  5 | # The lowest and highest score, as one tuple.
-    | comment:# The lowest and highest score, as one tuple.
+  1 | ; Tuples: values held together, as `(text, int)`, read by position (`t.0`,
+    | comment:; Tuples: values held together, as `(text, int)`, read by position (`t.0`,
+  2 | ; `t.1`) and taken apart into names, in a binding or in a pattern. A tuple's
+    | comment:; `t.1`) and taken apart into names, in a binding or in a pattern. A tuple's
+  3 | ; items never change; a `hold` tuple can only take a whole new one.
+    | comment:; items never change; a `hold` tuple can only take a whole new one.
+  5 | ; The lowest and highest score, as one tuple.
+    | comment:; The lowest and highest score, as one tuple.
   6 | task range_of(scores: [(text, int)]@r) -> (int, int)
     | keyword:task  task:range_of  punctuation:(  parameter:scores  punctuation::  punctuation:[  punctuation:(  type-builtin:text  punctuation:,  type-builtin:int  punctuation:)  punctuation:]  operator:@  region:r  punctuation:)  operator:->  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)
   7 |     hold low = scores[0].1
@@ -34,10 +34,10 @@
     | keyword:<-  punctuation:(  variable:low  punctuation:,  variable:high  punctuation:)
  19 | fi
     | keyword:fi
- 21 | # The name and score of the best entry, or none when there are none. Its text
-    | comment:# The name and score of the best entry, or none when there are none. Its text
- 22 | # is in the slice's region.
-    | comment:# is in the slice's region.
+ 21 | ; The name and score of the best entry, or none when there are none. Its text
+    | comment:; The name and score of the best entry, or none when there are none. Its text
+ 22 | ; is in the slice's region.
+    | comment:; is in the slice's region.
  23 | task best(scores: [(text, int)]@r) -> maybe (text, int)@r
     | keyword:task  task:best  punctuation:(  parameter:scores  punctuation::  punctuation:[  punctuation:(  type-builtin:text  punctuation:,  type-builtin:int  punctuation:)  punctuation:]  operator:@  region:r  punctuation:)  operator:->  keyword:maybe  punctuation:(  type-builtin:text  punctuation:,  type-builtin:int  punctuation:)  operator:@  region:r
  24 |     when scores.len == 0
@@ -76,26 +76,26 @@
     | variable:scores  punctuation:.  field:add  punctuation:(  punctuation:(  string:"Cy"  punctuation:,  number:85  punctuation:)  punctuation:)
  43 |     bind low, high = range_of(scores)
     | keyword:bind  variable:low  punctuation:,  variable:high  operator:=  task:range_of  punctuation:(  variable:scores  punctuation:)
- 44 |     show(high - low)                         # 13
-    | builtin-fn:show  punctuation:(  variable:high  operator:-  variable:low  punctuation:)  comment:# 13
- 46 |     # A pattern takes the value out of the maybe and the tuple apart at once.
-    | comment:# A pattern takes the value out of the maybe and the tuple apart at once.
+ 44 |     show(high - low)                         ; 13
+    | builtin-fn:show  punctuation:(  variable:high  operator:-  variable:low  punctuation:)  comment:; 13
+ 46 |     ; A pattern takes the value out of the maybe and the tuple apart at once.
+    | comment:; A pattern takes the value out of the maybe and the tuple apart at once.
  47 |     when best(scores) is {(name, score)}
     | keyword:when  task:best  punctuation:(  variable:scores  punctuation:)  keyword:is  punctuation:{  punctuation:(  variable:name  punctuation:,  variable:score  punctuation:)  punctuation:}
- 48 |         show(name)                           # Ada
-    | builtin-fn:show  punctuation:(  variable:name  punctuation:)  comment:# Ada
- 49 |         show(score)                          # 91
-    | builtin-fn:show  punctuation:(  variable:score  punctuation:)  comment:# 91
+ 48 |         show(name)                           ; Ada
+    | builtin-fn:show  punctuation:(  variable:name  punctuation:)  comment:; Ada
+ 49 |         show(score)                          ; 91
+    | builtin-fn:show  punctuation:(  variable:score  punctuation:)  comment:; 91
  50 |     fi
     | keyword:fi
- 52 |     # An entry is replaced whole; its items can't be assigned.
-    | comment:# An entry is replaced whole; its items can't be assigned.
+ 52 |     ; An entry is replaced whole; its items can't be assigned.
+    | comment:; An entry is replaced whole; its items can't be assigned.
  53 |     scores[1] = ("Bob", 95)
     | variable:scores  punctuation:[  number:1  punctuation:]  operator:=  punctuation:(  string:"Bob"  punctuation:,  number:95  punctuation:)
  54 |     when best(scores) is {(_, top)}
     | keyword:when  task:best  punctuation:(  variable:scores  punctuation:)  keyword:is  punctuation:{  punctuation:(  keyword:_  punctuation:,  variable:top  punctuation:)  punctuation:}
- 55 |         show(top)                            # 95
-    | builtin-fn:show  punctuation:(  variable:top  punctuation:)  comment:# 95
+ 55 |         show(top)                            ; 95
+    | builtin-fn:show  punctuation:(  variable:top  punctuation:)  comment:; 95
  56 |     fi
     | keyword:fi
  57 | fi

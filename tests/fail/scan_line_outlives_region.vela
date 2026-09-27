@@ -1,4 +1,4 @@
-# error: 7:33: expected type text@outer, got text@pass; this text is in region 'pass', and text here is in region 'outer'
+; error: 7:33: expected type text@outer, got text@pass; this text is in region 'pass', and text here is in region 'outer'
 task main()
     region outer
     hold last = scan("") at outer { "" }

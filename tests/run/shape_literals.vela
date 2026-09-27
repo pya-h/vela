@@ -1,4 +1,4 @@
-# Shape literal fields may be given in any order, and a shape may be empty.
+; Shape literal fields may be given in any order, and a shape may be empty.
 
 shape Point
     x: int

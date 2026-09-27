@@ -1,4 +1,4 @@
-# Braces bring in a module's names without the module's name.
+; Braces bring in a module's names without the module's name.
 
 include module_parts/shapes/palette {Color, describe}
 

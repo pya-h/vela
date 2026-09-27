@@ -1,4 +1,4 @@
-# error: 10:9: calling 'Counter.step' changes the value this method is called on, so 'alters' goes before its name, as in 'alters twice(…)'
+; error: 10:9: calling 'Counter.step' changes the value this method is called on, so 'alters' goes before its name, as in 'alters twice(…)'
 shape Counter
     count: int
 

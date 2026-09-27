@@ -1,13 +1,13 @@
 int float bool text
-[int; 3] [[float; 2]; 3] [float; 2] int
+[int#3] [[float#2]#3] [float#2] int
 [float] [text] [float]
 Point ^Point ^^Point Point int
 maybe int (int, text) text Mood
 Box<int> Box<Box<text>> Box<text>
 Crate Weather Weather
 text
-int [int; 3] Box<int> ^Point (int, text)
-[Point; 2] [text; 2]
+int [int#3] Box<int> ^Point (int, text)
+[Point#2] [text#2]
 Point Point int
 int
-8 true
+7 true

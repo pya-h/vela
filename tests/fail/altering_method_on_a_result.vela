@@ -1,4 +1,4 @@
-# error: 12:5: 'Counter.step' changes the value it is called on, so it needs a place that can change, and 'made' is a result, which only '<-' sets
+; error: 12:5: 'Counter.step' changes the value it is called on, so it needs a place that can change, and 'made' is a result, which only '<-' sets
 shape Counter
     count: int
 

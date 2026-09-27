@@ -1,4 +1,4 @@
-# error: 5:14: expected '}' to end the value, got identifier 'n'
+; error: 5:14: expected '}' to end the value, got identifier 'n'
 task main()
     region r
     bind n = 5

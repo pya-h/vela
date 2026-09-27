@@ -1,4 +1,4 @@
-# error: 3:12: 'steps' is already set at 3:5
+; error: 3:12: 'steps' is already set at 3:5
 task pair(n: int) -> steps: int, peak: int
     steps, steps <- n, n
     peak <- n

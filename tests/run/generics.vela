@@ -1,9 +1,9 @@
-# Generic tasks: `task first<T>(…)` takes types as well as values. Its body is
-# checked once, with `T` standing for the type each use gives it, and one task is
-# made for each set of types the program uses it with. A word after a type's `:`
-# says what every type given for it must allow: `ordered`, `shown`, `same`, or
-# `fixed`. The type comes from the arguments, from the place the value goes, or
-# written in `< >` at the call.
+; Generic tasks: `task first<T>(…)` takes types as well as values. Its body is
+; checked once, with `T` standing for the type each use gives it, and one task is
+; made for each set of types the program uses it with. A word after a type's `:`
+; says what every type given for it must allow: `ordered`, `shown`, `same`, or
+; `fixed`. The type comes from the arguments, from the place the value goes, or
+; written in `< >` at the call.
 
 task first<T>(xs: [T]@r) -> maybe T
     each v in xs
@@ -48,7 +48,7 @@ task twoOf<T>(v: T) -> T, T
     <- v, v
 fi
 
-# A generic task can use another, giving it the type it was given itself.
+; A generic task can use another, giving it the type it was given itself.
 task middle<T>(a: T, b: T) -> T
     <- second(a, b)
 fi
@@ -57,8 +57,8 @@ task second<T>(a: T, b: T) -> T
     <- b
 fi
 
-# A task made from this one calls itself with the same type, which needs one
-# task, not an endless line of them.
+; A task made from this one calls itself with the same type, which needs one
+; task, not an endless line of them.
 task countDown<T>(v: T, times: int) -> T
     when times <= 0
         <- v
@@ -66,7 +66,7 @@ task countDown<T>(v: T, times: int) -> T
     <- countDown(v, times - 1)
 fi
 
-# The region a generic task is given is where it builds.
+; The region a generic task is given is where it builds.
 task listOf<T>(r: region, a: T, b: T) -> [T]@r
     hold made: [T]@r = new [T]() at r
     made.add(a)
@@ -74,8 +74,8 @@ task listOf<T>(r: region, a: T, b: T) -> [T]@r
     <- made
 fi
 
-# A copy of a value of the type the task takes goes into a region the header
-# keeps that type in (`[T]@r` here), so a use may give any type.
+; A copy of a value of the type the task takes goes into a region the header
+; keeps that type in (`[T]@r` here), so a use may give any type.
 task copiedInto<T>(r: region, xs: [T]@r) -> [T]@r
     hold made: [T]@r = new [T]() at r
     each v in xs
@@ -84,8 +84,8 @@ task copiedInto<T>(r: region, xs: [T]@r) -> [T]@r
     <- made
 fi
 
-# A copy into any other region is only the value itself, so a use must give a
-# type that holds nothing in a region (`int` here).
+; A copy into any other region is only the value itself, so a use must give a
+; type that holds nothing in a region (`int` here).
 task kept<T>(r: region, v: T) -> T
     <- v.copy() at r
 fi
@@ -105,22 +105,22 @@ task main()
     bind ns: [int]@r = new [int]([4, 5, 6]) at r
     bind names: [text@r]@r = new [text](["ada", "bo"]) at r
 
-    # The type comes from the arguments.
+    ; The type comes from the arguments.
     show(first(ns))
     show(last(ns))
     show(first(names))
 
-    # Or it is written, in `< >` as in the header.
+    ; Or it is written, in `< >` as in the header.
     show(first<int>(ns))
     show(first<text@r>(names))
 
-    # Or from the place the value goes, including through a plan B.
+    ; Or from the place the value goes, including through a plan B.
     bind nothingYet: maybe int = nothing()
     show(nothingYet)
     bind fallback: text = nothing() { "nothing there" }
     show(fallback)
 
-    # A word says what the body may do with the values.
+    ; A word says what the body may do with the values.
     show(biggest(2, 5))
     show(biggest(1.5, 0.5))
     tell("count", 7)
@@ -128,7 +128,7 @@ task main()
     show(alike(2, 2))
     show(alike("a", "b"))
 
-    # Two types at once, and results that are both of one type.
+    ; Two types at once, and results that are both of one type.
     bind pair: (int, text) = pairUp(1, "two")
     show(pair.0)
     show(pair.1)
@@ -136,7 +136,7 @@ task main()
     show(a)
     show(b)
 
-    # Shapes, kinds, tuples, slices, and pointers are types like any other.
+    ; Shapes, kinds, tuples, slices, and pointers are types like any other.
     bind place = second(Point { x: 1, y: 2 }, Point { x: 3, y: 4 })
     show(place.x)
     bind shade = middle(Shade.Light, Shade.Dark(7))
@@ -154,7 +154,7 @@ task main()
     show(second(held, held)^)
     show(countDown("still here", 3))
 
-    # A slice built in the region the task is given, and a copy made there.
+    ; A slice built in the region the task is given, and a copy made there.
     bind made = listOf(r, 10, 20)
     show(made[0] + made[1])
     bind words = listOf(r, "one".copy() at r, "two".copy() at r)

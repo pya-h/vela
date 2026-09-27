@@ -1,4 +1,4 @@
-# error: 5:17: unknown variable 'library'; module 'modules/library' is included as 'lib'
+; error: 5:17: unknown variable 'library'; module 'modules/library' is included as 'lib'
 include modules/library => lib
 
 task main()

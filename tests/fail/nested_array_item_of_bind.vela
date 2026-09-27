@@ -1,4 +1,4 @@
-# error: 4:5: cannot assign to an item of immutable variable 'grid'
+; error: 4:5: cannot assign to an item of immutable variable 'grid'
 task main()
     bind grid = [[1, 2], [3, 4]]
     grid[0][1] = 5

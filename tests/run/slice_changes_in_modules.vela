@@ -1,5 +1,5 @@
-# Changes to a slice written in a module, and `m.Kind.add(…)`, which names a
-# variant of a kind in a module rather than a change to a slice.
+; Changes to a slice written in a module, and `m.Kind.add(…)`, which names a
+; variant of a kind in a module rather than a change to a slice.
 
 include slice_changes/stack (Op)
 

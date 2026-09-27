@@ -1,5 +1,5 @@
-  1 | # `end` is an ordinary name, so a kind may have a variant called `end`.
-    | comment:# `end` is an ordinary name, so a kind may have a variant called `end`.
+  1 | ; `end` is an ordinary name, so a kind may have a variant called `end`.
+    | comment:; `end` is an ordinary name, so a kind may have a variant called `end`.
   2 | kind Step
     | keyword:kind  type:Step
   3 |     start

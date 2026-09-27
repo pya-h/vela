@@ -1,4 +1,4 @@
-# Figures and their measures, for tests/run/modules.vela.
+; Figures and their measures, for tests/run/modules.vela.
 
 shape Point
     x: float
@@ -28,7 +28,7 @@ task distance(a: Point, b: Point) -> float
     <- root(dx * dx + dy * dy)
 fi
 
-# Only the main file's main starts the program: this one is an ordinary task.
+; Only the main file's main starts the program: this one is an ordinary task.
 task main()
     show("geometry")
 fi
@@ -37,7 +37,7 @@ priv task pi() -> float
     <- 3.14159
 fi
 
-# Newton's method: Vela has no math library yet.
+; Newton's method: Vela has no math library yet.
 priv task root(n: float) -> float
     hold guess = n
     each step in 0..30

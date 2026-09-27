@@ -1,4 +1,4 @@
-# error: 6:22: a reference names a place for as long as its block lasts, so it can't name an item of a slice, which moves when the slice grows; hold the item's index, or copy the item into a variable
+; error: 6:22: a reference names a place for as long as its block lasts, so it can't name an item of a slice, which moves when the slice grows; hold the item's index, or copy the item into a variable
 task main()
     region r
     hold xs = new [int]() at r

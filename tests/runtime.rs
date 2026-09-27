@@ -160,7 +160,7 @@ fn programs_run_clean_under_the_sanitizers() {
         .map(|p| (p.with_extension("out"), format!("run-{}", stem(&p)), p, None))
         .chain(files("examples", "vela").into_iter().map(|p| (root().join("tests/examples").join(format!("{}.out", stem(&p))), format!("example-{}", stem(&p)), p, None)))
         .chain(files("tests/trap", "vela").into_iter().map(|p| {
-            let message = fs::read_to_string(&p).unwrap().lines().next().and_then(|l| l.strip_prefix("# trap: ")).map(|m| m.trim().to_string());
+            let message = fs::read_to_string(&p).unwrap().lines().next().and_then(|l| l.strip_prefix("; trap: ")).map(|m| m.trim().to_string());
             (p.with_extension("out"), format!("trap-{}", stem(&p)), p, Some(message.unwrap_or_default()))
         }))
         .map(|(expected, name, source, trap)| (source, expected, name, trap))

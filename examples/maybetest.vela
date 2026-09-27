@@ -3,14 +3,14 @@ task main()
     bind x: maybe int = 1
     bind a = x { 10 }
     show(a)
-    bind y = x { <- }  # if its none then end program
+    bind y = x { <- }  ; if its none then end program
     when x is { z }
         show("yeah")
         show(z)
     fi
     show(x)
     show(y)
-    # heap allocated stuff can be changed even if they
+    ; heap allocated stuff can be changed even if they
     region r default
     bind x2 = new [int]([1,2,3])
     x2[0] = 2

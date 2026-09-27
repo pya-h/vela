@@ -1,4 +1,4 @@
-# error: 8:12: type maybe Point has no fields; extract its value first, as in 'when x is {value}'
+; error: 8:12: type maybe Point has no fields; extract its value first, as in 'when x is {value}'
 shape Point
     x: int
 fi

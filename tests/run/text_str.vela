@@ -1,7 +1,7 @@
-# Turning a value into text: `x.str() at r`, `x.str()@r`, `x.str(r)`, and
-# `text(x) at r` are the same. Numbers, bools, and text have it built in, and
-# write a value as `show` does; a shape or kind gives its own with a method
-# `str(r: region) -> text@r`, which all four forms call.
+; Turning a value into text: `x.str() at r`, `x.str()@r`, `x.str(r)`, and
+; `text(x) at r` are the same. Numbers, bools, and text have it built in, and
+; write a value as `show` does; a shape or kind gives its own with a method
+; `str(r: region) -> text@r`, which all four forms call.
 
 shape Point
     x: int
@@ -24,7 +24,7 @@ kind Suit
     fi
 fi
 
-# A type that is `shown` is a number, a bool, or text, which all have `str`.
+; A type that is `shown` is a number, a bool, or text, which all have `str`.
 task labelled<T: shown>(label: text, value: T, r: region) -> text@r
     <- label + ": " + value.str()@r at r
 fi
@@ -55,7 +55,7 @@ task main()
     show(labelled("count", 3, r))
     show(labelled("ok", true, r))
     show(labelled("name", "Ada", r))
-    # Text a region holds, kept in another region.
+    ; Text a region holds, kept in another region.
     hold kept = new [text]() at r
     loop kept.len < 3
         region pass

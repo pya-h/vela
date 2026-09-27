@@ -1,4 +1,4 @@
-# trap: integer overflow at 3:8 in task 'opposite'
+; trap: integer overflow at 3:8 in task 'opposite'
 task opposite(n: int) -> int
     <- -n
 fi

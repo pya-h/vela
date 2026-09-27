@@ -49,7 +49,7 @@ fn language_needs_no_source() {
     let language = &response["results"][0];
     assert!(language["keywords"].as_array().unwrap().contains(&json!("fi")));
     assert_eq!(language["blockCloser"], "fi");
-    assert_eq!(language["lineComment"], "#");
+    assert_eq!(language["lineComment"], ";");
     assert_eq!(language["brackets"][0], json!(["(", ")"]));
 }
 

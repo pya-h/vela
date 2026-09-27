@@ -1,4 +1,4 @@
-# error: 2:1: expected 'task', 'shape', or 'kind', got name 'use'; another file is brought in with 'include', as in 'include geometry'
+; error: 2:1: expected 'task', 'shape', or 'kind', got name 'use'; another file is brought in with 'include', as in 'include geometry'
 use modules/library
 
 task main()

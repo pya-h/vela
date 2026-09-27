@@ -9,7 +9,7 @@ test("highlights and outlines a Vela file", async ({ page, studio }) => {
   const content = page.locator(".cm-content");
   await expect(content.locator(".tok-keyword", { hasText: /^kind$/ })).toHaveCount(1);
   await expect(content.locator(".tok-variant", { hasText: /^Circle$/ }).first()).toBeVisible();
-  await expect(content.locator(".tok-comment")).toHaveText("# Kinds and pattern matching");
+  await expect(content.locator(".tok-comment")).toHaveText("; Kinds and pattern matching");
   await expect(content.locator(".tok-string").first()).toHaveText('"circle"');
 
   const outline = page.locator(".outline");

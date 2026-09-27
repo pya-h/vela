@@ -1,4 +1,4 @@
-# error: 14:10: this pattern names kind 'Weather', but the value's kind is 'Mood'
+; error: 14:10: this pattern names kind 'Weather', but the value's kind is 'Mood'
 kind Mood
     Calm
     Busy

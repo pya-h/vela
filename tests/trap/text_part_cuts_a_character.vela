@@ -1,5 +1,5 @@
-# trap: text 0..4 cuts through a character at byte 4 at 8:14 in task 'main'
-# "é" takes two bytes, 3 and 4, so a part may end at 3 or 5 but not at 4.
+; trap: text 0..4 cuts through a character at byte 4 at 8:14 in task 'main'
+; "é" takes two bytes, 3 and 4, so a part may end at 3 or 5 but not at 4.
 task main()
     bind word = "café"
     show(word[0..3])

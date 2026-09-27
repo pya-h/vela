@@ -12,11 +12,11 @@ be missing is a `maybe T`, and a task that can fail sends `T ~ E`; both are read
 plan B (`x { fallback }`). A `when` chains conditions with `else when`, and one `fi` closes the chain. A
 `match` or a `when` can be the value itself, with every branch giving one (`bind area = match s case Circle r
 = 3.14 * r * r … fi`), on a case's own line with `=` or on the last line of a block.
-Blocks close with `fi`, and a task sends its results with `<-`: one value, or
+Blocks close with `fi`, a comment starts with `;` (`bind x = 1 ; the first`), and a task sends its results with `<-`: one value, or
 several (`-> int, int` … `<- a / b, a % b`), received with `bind q, r = divmod(17, 5)`. Results can be named
 (`-> total: int`), set along the way with `total <- value` and sent by reaching the end of the task. An `int`
-never wraps: overflow and division by zero stop the program with a message saying where. Arrays (`[int; 4]`)
-are values held in place, and slices (`[int]@r`) view items in a region, made with `new [int]([0; n]) at r`
+never wraps: overflow and division by zero stop the program with a message saying where. Arrays (`[int#4]`)
+are values held in place, and slices (`[int]@r`) view items in a region, made with `new [int]([0#n]) at r`
 (or empty, `new [int]() at r`) and changed with `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, and `xs.del()`;
 every index is checked, and `xs.len` is the count. Text knows its length in bytes, `t.len`, has parts that
 are views of the same bytes, `t[0..3]`, is ordered by `<`, and is joined into a region with `a + b at r`; `n.str() at r` (or `text(n) at r`)
@@ -96,7 +96,7 @@ cargo clippy --workspace --all-targets
 ```
 
 Programs in `tests/run/` must print their `.out` files (reading `NAME.in` as their input, when there is one), programs in `tests/fail/` must be rejected with
-the error in their first line (a program with several mistakes lists one `# error:` line for each, and then
+the error in their first line (a program with several mistakes lists one `; error:` line for each, and then
 those must be exactly the mistakes reported), programs in `tests/trap/` must print their `.out` files and then
 stop with the runtime error in their first line, and every file in `examples/` is checked against
 `tests/examples/`.

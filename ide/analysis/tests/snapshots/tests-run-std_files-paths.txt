@@ -1,7 +1,7 @@
-  1 | # A module of the program that includes the library itself, and writes its
-    | comment:# A module of the program that includes the library itself, and writes its
-  2 | # File through the module's name.
-    | comment:# File through the module's name.
+  1 | ; A module of the program that includes the library itself, and writes its
+    | comment:; A module of the program that includes the library itself, and writes its
+  2 | ; File through the module's name.
+    | comment:; File through the module's name.
   4 | include std/files
     | keyword:include  module:std  operator:/  module:files
   6 | task readable(path: text@p) -> bool

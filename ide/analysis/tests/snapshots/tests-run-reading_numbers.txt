@@ -1,11 +1,11 @@
-  1 | # Reading a number from text: `int(t)` and `float(t)` send the number, or a
-    | comment:# Reading a number from text: `int(t)` and `float(t)` send the number, or a
-  2 | # `ParseError` saying why the text was none. `ParseError` is a builtin kind with
-    | comment:# `ParseError` saying why the text was none. `ParseError` is a builtin kind with
-  3 | # two variants, `NotANumber` and `TooLarge`, which no program declares.
-    | comment:# two variants, `NotANumber` and `TooLarge`, which no program declares.
-  5 | # The reason as text, read with a match on the error.
-    | comment:# The reason as text, read with a match on the error.
+  1 | ; Reading a number from text: `int(t)` and `float(t)` send the number, or a
+    | comment:; Reading a number from text: `int(t)` and `float(t)` send the number, or a
+  2 | ; `ParseError` saying why the text was none. `ParseError` is a builtin kind with
+    | comment:; `ParseError` saying why the text was none. `ParseError` is a builtin kind with
+  3 | ; two variants, `NotANumber` and `TooLarge`, which no program declares.
+    | comment:; two variants, `NotANumber` and `TooLarge`, which no program declares.
+  5 | ; The reason as text, read with a match on the error.
+    | comment:; The reason as text, read with a match on the error.
   6 | task why(e: ParseError) -> text
     | keyword:task  task:why  punctuation:(  parameter:e  punctuation::  type:ParseError  punctuation:)  operator:->  type-builtin:text
   7 |     match e
@@ -22,10 +22,10 @@
     | keyword:fi
  13 | fi
     | keyword:fi
- 15 | # Why a text is no number, or nothing when it is one: a plan B whose body sends
-    | comment:# Why a text is no number, or nothing when it is one: a plan B whose body sends
- 16 | # has to be a block, so a task of its own reads better here.
-    | comment:# has to be a block, so a task of its own reads better here.
+ 15 | ; Why a text is no number, or nothing when it is one: a plan B whose body sends
+    | comment:; Why a text is no number, or nothing when it is one: a plan B whose body sends
+ 16 | ; has to be a block, so a task of its own reads better here.
+    | comment:; has to be a block, so a task of its own reads better here.
  17 | task reason(t: text) -> text
     | keyword:task  task:reason  punctuation:(  parameter:t  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text
  18 |     match int(t)
@@ -42,8 +42,8 @@
     | keyword:fi
  24 | fi
     | keyword:fi
- 26 | # A task may forward the error it was given, and send one of its own.
-    | comment:# A task may forward the error it was given, and send one of its own.
+ 26 | ; A task may forward the error it was given, and send one of its own.
+    | comment:; A task may forward the error it was given, and send one of its own.
  27 | task age(line: text) -> int ~ ParseError
     | keyword:task  task:age  punctuation:(  parameter:line  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int  operator:~  type:ParseError
  28 |     bind years = int(line) {
@@ -74,8 +74,8 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  42 |     region r
     | keyword:region  region:r
- 44 |     # A plan B gives the value to use instead.
-    | comment:# A plan B gives the value to use instead.
+ 44 |     ; A plan B gives the value to use instead.
+    | comment:; A plan B gives the value to use instead.
  45 |     show(int("42") { 0 })
     | builtin-fn:show  punctuation:(  type-builtin:int  punctuation:(  string:"42"  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
  46 |     show(int("4x2") { -1 })
@@ -84,8 +84,8 @@
     | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  string:"2.5"  punctuation:)  punctuation:{  number:0.0  punctuation:}  punctuation:)
  48 |     show(float("two") { -1.0 })
     | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  string:"two"  punctuation:)  punctuation:{  operator:-  number:1.0  punctuation:}  punctuation:)
- 50 |     # A match reads the value or the reason.
-    | comment:# A match reads the value or the reason.
+ 50 |     ; A match reads the value or the reason.
+    | comment:; A match reads the value or the reason.
  51 |     match int("99999999999999999999999")
     | keyword:match  type-builtin:int  punctuation:(  string:"99999999999999999999999"  punctuation:)
  52 |     case {value}
@@ -98,8 +98,8 @@
     | builtin-fn:show  punctuation:(  string:"no: "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
  56 |     fi
     | keyword:fi
- 58 |     # `is` runs a block for one outcome only.
-    | comment:# `is` runs a block for one outcome only.
+ 58 |     ; `is` runs a block for one outcome only.
+    | comment:; `is` runs a block for one outcome only.
  59 |     when int("7") is {value}
     | keyword:when  type-builtin:int  punctuation:(  string:"7"  punctuation:)  keyword:is  punctuation:{  variable:value  punctuation:}
  60 |         show("seven: ", value)
@@ -112,10 +112,10 @@
     | builtin-fn:show  punctuation:(  string:"empty: "  punctuation:,  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
  64 |     fi
     | keyword:fi
- 66 |     # What is a number, and what is not: the text is the number itself, with no
-    | comment:# What is a number, and what is not: the text is the number itself, with no
- 67 |     # spaces, no '+', no '_', and no exponent, as a written number has none.
-    | comment:# spaces, no '+', no '_', and no exponent, as a written number has none.
+ 66 |     ; What is a number, and what is not: the text is the number itself, with no
+    | comment:; What is a number, and what is not: the text is the number itself, with no
+ 67 |     ; spaces, no '+', no '_', and no exponent, as a written number has none.
+    | comment:; spaces, no '+', no '_', and no exponent, as a written number has none.
  68 |     each t in ["0", "-0", "007", "-12"]
     | keyword:each  variable:t  keyword:in  punctuation:[  string:"0"  punctuation:,  string:"-0"  punctuation:,  string:"007"  punctuation:,  string:"-12"  punctuation:]
  69 |         show(t, " -> ", int(t) { -1 })
@@ -128,8 +128,8 @@
     | builtin-fn:show  punctuation:(  string:"["  punctuation:,  variable:t  punctuation:,  string:"] -> "  punctuation:,  task:reason  punctuation:(  variable:t  punctuation:)  punctuation:)
  73 |     fi
     | keyword:fi
- 75 |     # Both edges of an int, and one step past each.
-    | comment:# Both edges of an int, and one step past each.
+ 75 |     ; Both edges of an int, and one step past each.
+    | comment:; Both edges of an int, and one step past each.
  76 |     show(int("9223372036854775807") { 0 })
     | builtin-fn:show  punctuation:(  type-builtin:int  punctuation:(  string:"9223372036854775807"  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
  77 |     show(int("-9223372036854775808") { 0 })
@@ -138,16 +138,16 @@
     | builtin-fn:show  punctuation:(  task:reason  punctuation:(  string:"9223372036854775808"  punctuation:)  punctuation:)
  79 |     show(reason("-9223372036854775809"))
     | builtin-fn:show  punctuation:(  task:reason  punctuation:(  string:"-9223372036854775809"  punctuation:)  punctuation:)
- 81 |     # A float reads its fraction, and one too large for a float is too large.
-    | comment:# A float reads its fraction, and one too large for a float is too large.
+ 81 |     ; A float reads its fraction, and one too large for a float is too large.
+    | comment:; A float reads its fraction, and one too large for a float is too large.
  82 |     show(float("0.1") { 0.0 } + float("0.2") { 0.0 })
     | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  string:"0.1"  punctuation:)  punctuation:{  number:0.0  punctuation:}  operator:+  type-builtin:float  punctuation:(  string:"0.2"  punctuation:)  punctuation:{  number:0.0  punctuation:}  punctuation:)
  83 |     show(float("-0.5") { 0.0 })
     | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  string:"-0.5"  punctuation:)  punctuation:{  number:0.0  punctuation:}  punctuation:)
  84 |     show(float("42") { 0.0 })
     | builtin-fn:show  punctuation:(  type-builtin:float  punctuation:(  string:"42"  punctuation:)  punctuation:{  number:0.0  punctuation:}  punctuation:)
- 86 |     # A task of its own, sending and forwarding.
-    | comment:# A task of its own, sending and forwarding.
+ 86 |     ; A task of its own, sending and forwarding.
+    | comment:; A task of its own, sending and forwarding.
  87 |     each line in ["30", "300", "-4", "x"]
     | keyword:each  variable:line  keyword:in  punctuation:[  string:"30"  punctuation:,  string:"300"  punctuation:,  string:"-4"  punctuation:,  string:"x"  punctuation:]
  88 |         match age(line)
@@ -164,8 +164,8 @@
     | keyword:fi
  94 |     fi
     | keyword:fi
- 96 |     # Read from input: every line that is a number is added up.
-    | comment:# Read from input: every line that is a number is added up.
+ 96 |     ; Read from input: every line that is a number is added up.
+    | comment:; Read from input: every line that is a number is added up.
  97 |     hold total = 0
     | keyword:hold  variable:total  operator:=  number:0
  98 |     hold reading = true

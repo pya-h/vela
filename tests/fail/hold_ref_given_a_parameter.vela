@@ -1,4 +1,4 @@
-# error: 7:13: 'x' is given the place itself, to change, so it needs a place that can change, and 'n' is a parameter, which never does; to pass on the caller's place, write 'hold& n: int'
+; error: 7:13: 'x' is given the place itself, to change, so it needs a place that can change, and 'n' is a parameter, which never does; to pass on the caller's place, write 'hold& n: int'
 task sample(hold& x: int)
     x = 10
 fi

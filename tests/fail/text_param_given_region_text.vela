@@ -1,4 +1,4 @@
-# error: 9:16: expected type text, got text@r; task 'greet' takes text that lasts as long as the program here, as a literal does; to take text of any region, its parameter can name one, as in 'name: text@r'
+; error: 9:16: expected type text, got text@r; task 'greet' takes text that lasts as long as the program here, as a literal does; to take text of any region, its parameter can name one, as in 'name: text@r'
 task greet(name: text)
     show(name)
 fi

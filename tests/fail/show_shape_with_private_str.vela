@@ -1,4 +1,4 @@
-# error: 5:10: 'str' is a private method of 'Point', which only its own file can use
+; error: 5:10: 'str' is a private method of 'Point', which only its own file can use
 include modules/private_str
 
 task main()

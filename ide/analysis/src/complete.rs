@@ -499,8 +499,8 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         return (literal_field_items(&k, brace, word_start), word_start, byte);
     }
 
-    // An array type's count, `[int; 4]`, is a number.
-    if let (Some(q), Some(Token::Semicolon)) = (prev, prev_token)
+    // An array type's count, `[int#4]`, is a number.
+    if let (Some(q), Some(Token::Hash)) = (prev, prev_token)
         && type_bracket(&k, q).is_some()
     {
         return (Vec::new(), word_start, byte);
@@ -649,7 +649,7 @@ fn names_region_after(k: &Knowledge, q: usize) -> bool {
     loop {
         match k.token(p) {
             Some(Token::New) => return k.token(p + 1) != Some(&Token::AtSign),
-            Some(Token::Ident(_) | Token::Dot | Token::LBracket | Token::RBracket | Token::Semicolon | Token::Int(_) | Token::Caret | Token::Maybe) => {}
+            Some(Token::Ident(_) | Token::Dot | Token::LBracket | Token::RBracket | Token::Hash | Token::Int(_) | Token::Caret | Token::Maybe) => {}
             _ => return false,
         }
         let Some(previous) = p.checked_sub(1) else { return false };
@@ -874,7 +874,7 @@ fn after_new_region(k: &Knowledge, q: usize) -> bool {
 /// Whether the type-ending name at position `q` (a type's name, or the region
 /// after its `@`) ends a type, so that an `or` after it starts the error type.
 fn ends_type(k: &Knowledge, q: usize) -> bool {
-    // `[int; 4]` or `[int]@r`.
+    // `[int#4]` or `[int]@r`.
     let closing = if k.token_before(q) == Some(&Token::AtSign) { q.checked_sub(2) } else { Some(q) };
     if let Some(close) = closing.filter(|&close| k.token(close) == Some(&Token::RBracket)) {
         return close.checked_sub(1).and_then(|inside| type_bracket(k, inside)).is_some();

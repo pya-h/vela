@@ -1,9 +1,9 @@
-  1 | # Patterns in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
-    | comment:# Patterns in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
-  2 | # binding drops a value, and `is` tests one pattern with its names visible
-    | comment:# binding drops a value, and `is` tests one pattern with its names visible
-  3 | # only in the block it guards.
-    | comment:# only in the block it guards.
+  1 | ; Patterns in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
+    | comment:; Patterns in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
+  2 | ; binding drops a value, and `is` tests one pattern with its names visible
+    | comment:; binding drops a value, and `is` tests one pattern with its names visible
+  3 | ; only in the block it guards.
+    | comment:; only in the block it guards.
   5 | task half(n: int) -> maybe int
     | keyword:task  task:half  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int
   6 |     when n % 2 == 0
@@ -126,8 +126,8 @@
     | builtin-fn:show  punctuation:(  string:"some light"  punctuation:)
  74 |     fi
     | keyword:fi
- 76 |     # A lone `_` matches anything, without reading the value.
-    | comment:# A lone `_` matches anything, without reading the value.
+ 76 |     ; A lone `_` matches anything, without reading the value.
+    | comment:; A lone `_` matches anything, without reading the value.
  77 |     match half(3)
     | keyword:match  task:half  punctuation:(  number:3  punctuation:)
  78 |     case _

@@ -1,4 +1,4 @@
-# error: 2:6: 'InputError' is a builtin kind and cannot be redefined
+; error: 2:6: 'InputError' is a builtin kind and cannot be redefined
 kind InputError
     Ended
 fi

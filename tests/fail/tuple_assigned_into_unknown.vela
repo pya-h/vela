@@ -1,4 +1,4 @@
-# error: 4:8: unknown variable 'missing'
+; error: 4:8: unknown variable 'missing'
 task main()
     hold x = 0
     x, missing = (1, 2)

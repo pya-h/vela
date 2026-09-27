@@ -1,8 +1,8 @@
-# Text in a region: `text` lasts as long as the program (a literal does), and
-# `text@r` is in region `r`, as the text a value in `r` holds is. Text that
-# lasts fits wherever text of a region is expected. A shape or kind holding
-# text may name a region (`Person@r`), in which its text is, or none
-# (`Person`), when its text lasts; one holding pointers always names one.
+; Text in a region: `text` lasts as long as the program (a literal does), and
+; `text@r` is in region `r`, as the text a value in `r` holds is. Text that
+; lasts fits wherever text of a region is expected. A shape or kind holding
+; text may name a region (`Person@r`), in which its text is, or none
+; (`Person`), when its text lasts; one holding pointers always names one.
 
 shape Person
     name: text
@@ -21,7 +21,7 @@ shape Task
     next: maybe ^Task
 fi
 
-# Reads text of any region; sends text of that region.
+; Reads text of any region; sends text of that region.
 task longer(a: text@r, b: text@r) -> text@r
     when a == b
         <- "same"
@@ -38,8 +38,8 @@ task describe(s: Status@r) -> text@r
     fi
 fi
 
-# Keeps text in a value in the caller's region, and reads it back: text a
-# value in `r` holds is `text@r`, even when it was a literal.
+; Keeps text in a value in the caller's region, and reads it back: text a
+; value in `r` holds is `text@r`, even when it was a literal.
 task named(r: region, name: text) -> text@r
     bind boxed = new text(name) at r
     <- boxed^
@@ -49,9 +49,9 @@ task greet(p: Person@r)
     show(p.name)
 fi
 
-# An array keeps no region of its own, so the one written on it is its text's:
-# writing the same region on both is the same type.
-task pick(pair: [text@r; 2]@r, i: int) -> text@r
+; An array keeps no region of its own, so the one written on it is its text's:
+; writing the same region on both is the same type.
+task pick(pair: [text@r#2]@r, i: int) -> text@r
     <- pair[i]
 fi
 
@@ -64,7 +64,7 @@ task main()
     show(longer(kept, "Bob"))
     show(longer("x", "x"))
 
-    # A shape holding text: none of a region, or text of one.
+    ; A shape holding text: none of a region, or text of one.
     bind plain = Person { name: "Cy", age: 3 }
     bind held: Person@r = Person { name: kept, age: 36 }
     bind inferred = Person { name: kept, age: 1 }
@@ -79,7 +79,7 @@ task main()
     show(pick([kept, lasting], 0))
     show(pick([kept, "Bob"], 1))
 
-    # Text in slices and pointers is in their region.
+    ; Text in slices and pointers is in their region.
     hold names = new [text]() at r
     names.add(lasting)
     names.add(kept)
@@ -91,7 +91,7 @@ task main()
     note^ = lasting
     show(note^)
 
-    # A shape holding pointers holds its text in its region.
+    ; A shape holding pointers holds its text in its region.
     bind job = new Task(Task { title: "write", status: Status.Blocked(kept), owner: held, next: none }) at r
     show(describe(job^.status))
     show(describe(Status.Todo))
@@ -105,7 +105,7 @@ task main()
             show("none")
     fi
 
-    # maybe and errors of text of a region.
+    ; maybe and errors of text of a region.
     hold found: maybe text@r = none
     found = kept
     show(found)

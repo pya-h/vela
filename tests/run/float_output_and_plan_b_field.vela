@@ -1,5 +1,5 @@
-# How `show` writes large, small, and negative floats, and a field read from
-# the value a plan B gives.
+; How `show` writes large, small, and negative floats, and a field read from
+; the value a plan B gives.
 
 shape Point
     x: float

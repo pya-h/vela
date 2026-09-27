@@ -1,8 +1,8 @@
-# trap: index -1 is out of range 0..4 at 9:15 in task 'main'
-# Reading a slice's item before its first.
+; trap: index -1 is out of range 0..4 at 9:15 in task 'main'
+; Reading a slice's item before its first.
 task main()
     region r
-    bind items = new [int]([5; 4]) at r
+    bind items = new [int]([5#4]) at r
     hold i = 0
     show(items[i])
     i = i - 1

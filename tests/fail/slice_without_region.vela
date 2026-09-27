@@ -1,4 +1,4 @@
-# error: 2:17: a slice lives in a region, so its type names one, as in '[int]@r'
+; error: 2:17: a slice lives in a region, so its type names one, as in '[int]@r'
 task sum(items: [int]) -> int
     <- 0
 fi

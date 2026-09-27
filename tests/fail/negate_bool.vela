@@ -1,4 +1,4 @@
-# error: 3:10: negation requires a number, got bool
+; error: 3:10: negation requires a number, got bool
 task main()
     show(-true)
 fi

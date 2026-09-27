@@ -1,4 +1,4 @@
-# error: 2:17: a module can't be named 'Ended', which is a variant of the builtin kind 'InputError'
+; error: 2:17: a module can't be named 'Ended', which is a variant of the builtin kind 'InputError'
 include modules/Ended
 
 task main()

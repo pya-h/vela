@@ -1,16 +1,16 @@
-# A block names one of its regions the default: every allocation in it that
-# names no region goes there, and an inner block may name its own.
+; A block names one of its regions the default: every allocation in it that
+; names no region goes there, and an inner block may name its own.
 
 shape Card
     rank: int
 
-    # The region a method is given can be its default too.
+    ; The region a method is given can be its default too.
     str(r: region default) -> text@r
         <- "card " + .rank.str()
     fi
 fi
 
-# A task allocates in the region it is given, which its header makes the default.
+; A task allocates in the region it is given, which its header makes the default.
 task grow(r: region default, upto: int) -> [int]@r
     hold made = new [int]()
     each n in 1..upto
@@ -19,7 +19,7 @@ task grow(r: region default, upto: int) -> [int]@r
     <- made
 fi
 
-# A region the header only names is no default: this one allocates nowhere.
+; A region the header only names is no default: this one allocates nowhere.
 task total(xs: [int]@r) -> int
     hold sum = 0
     each x in xs
@@ -33,8 +33,8 @@ task main()
     bind squares = grow(kept, 5)
     show(total(squares))
 
-    # Every form that makes memory takes the default: a pointer, a slice, text
-    # joined, a value written as text, and text holding values.
+    ; Every form that makes memory takes the default: a pointer, a slice, text
+    ; joined, a value written as text, and text holding values.
     bind p = new int(7)
     hold names = new [text]()
     names.add("Ada")
@@ -45,7 +45,7 @@ task main()
     show(sentence)
     show(Card { rank: 3 })
 
-    # An inner block names its own default; the outer one is back after it.
+    ; An inner block names its own default; the outer one is back after it.
     each round in 0..3
         region pass default
         bind line = "pass " + round.str()
@@ -54,7 +54,7 @@ task main()
     bind after = new [int]([1, 2, 3])
     show(after.len, " kept")
 
-    # A region that is not the default is still written.
+    ; A region that is not the default is still written.
     region other
     bind elsewhere = new int(1) at other
     show(elsewhere^)

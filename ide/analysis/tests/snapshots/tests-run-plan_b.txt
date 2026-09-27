@@ -1,11 +1,11 @@
-  1 | # Plan B: `value { … }` gives the value inside a maybe, or else what its block
-    | comment:# Plan B: `value { … }` gives the value inside a maybe, or else what its block
-  2 | # gives on its last line. A `<-` inside sends from the task. Operands around a
-    | comment:# gives on its last line. A `<-` inside sends from the task. Operands around a
-  3 | # plan B are evaluated left to right, `and`/`or` still skip their right side,
-    | comment:# plan B are evaluated left to right, `and`/`or` still skip their right side,
-  4 | # and a loop condition runs its plan B on every pass.
-    | comment:# and a loop condition runs its plan B on every pass.
+  1 | ; Plan B: `value { … }` gives the value inside a maybe, or else what its block
+    | comment:; Plan B: `value { … }` gives the value inside a maybe, or else what its block
+  2 | ; gives on its last line. A `<-` inside sends from the task. Operands around a
+    | comment:; gives on its last line. A `<-` inside sends from the task. Operands around a
+  3 | ; plan B are evaluated left to right, `and`/`or` still skip their right side,
+    | comment:; plan B are evaluated left to right, `and`/`or` still skip their right side,
+  4 | ; and a loop condition runs its plan B on every pass.
+    | comment:; and a loop condition runs its plan B on every pass.
   6 | shape Pair
     | keyword:shape  type:Pair
   7 |     left: int
@@ -54,10 +54,10 @@
     | builtin-fn:show  punctuation:(  variable:n  punctuation:)
  33 | fi
     | keyword:fi
- 35 | # A call with a plan B as a statement: leave when there's no value, and drop
-    | comment:# A call with a plan B as a statement: leave when there's no value, and drop
- 36 | # the value otherwise.
-    | comment:# the value otherwise.
+ 35 | ; A call with a plan B as a statement: leave when there's no value, and drop
+    | comment:; A call with a plan B as a statement: leave when there's no value, and drop
+ 36 | ; the value otherwise.
+    | comment:; the value otherwise.
  37 | task stop_on_none(m: maybe int)
     | keyword:task  task:stop_on_none  punctuation:(  parameter:m  punctuation::  keyword:maybe  type-builtin:int  punctuation:)
  38 |     noisy("statement", m) { <- }
@@ -112,22 +112,22 @@
     | task:report  punctuation:(  number:9  punctuation:)
  67 |     report(none)
     | task:report  punctuation:(  keyword:none  punctuation:)
- 69 |     # Nested: fall back to a second maybe.
-    | comment:# Nested: fall back to a second maybe.
+ 69 |     ; Nested: fall back to a second maybe.
+    | comment:; Nested: fall back to a second maybe.
  70 |     bind backup: maybe int = 7
     | keyword:bind  variable:backup  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:7
  71 |     show(noisy("a", none) { backup { 0 } })
     | builtin-fn:show  punctuation:(  task:noisy  punctuation:(  string:"a"  punctuation:,  keyword:none  punctuation:)  punctuation:{  variable:backup  punctuation:{  number:0  punctuation:}  punctuation:}  punctuation:)
- 73 |     # Left to right, even across a plan B.
-    | comment:# Left to right, even across a plan B.
+ 73 |     ; Left to right, even across a plan B.
+    | comment:; Left to right, even across a plan B.
  74 |     show(noisy("left", 1) { 0 } + noisy("right", none) { 2 })
     | builtin-fn:show  punctuation:(  task:noisy  punctuation:(  string:"left"  punctuation:,  number:1  punctuation:)  punctuation:{  number:0  punctuation:}  operator:+  task:noisy  punctuation:(  string:"right"  punctuation:,  keyword:none  punctuation:)  punctuation:{  number:2  punctuation:}  punctuation:)
  75 |     bind pair = Pair { left: noisy("l", none) { 3 }, right: noisy("r", 4) { 0 } }
     | keyword:bind  variable:pair  operator:=  type:Pair  punctuation:{  field:left  punctuation::  task:noisy  punctuation:(  string:"l"  punctuation:,  keyword:none  punctuation:)  punctuation:{  number:3  punctuation:}  punctuation:,  field:right  punctuation::  task:noisy  punctuation:(  string:"r"  punctuation:,  number:4  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:}
  76 |     show(pair.left * pair.right)
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:left  operator:*  variable:pair  punctuation:.  field:right  punctuation:)
- 78 |     # A variable changed by a plan B is read before the plan B runs.
-    | comment:# A variable changed by a plan B is read before the plan B runs.
+ 78 |     ; A variable changed by a plan B is read before the plan B runs.
+    | comment:; A variable changed by a plan B is read before the plan B runs.
  79 |     hold n = 1
     | keyword:hold  variable:n  operator:=  number:1
  80 |     bind total = n + noisy("change", none) {
@@ -142,16 +142,16 @@
     | builtin-fn:show  punctuation:(  variable:total  punctuation:)
  85 |     show(n)
     | builtin-fn:show  punctuation:(  variable:n  punctuation:)
- 87 |     # `and` and `or` skip their right side, plan B included.
-    | comment:# `and` and `or` skip their right side, plan B included.
+ 87 |     ; `and` and `or` skip their right side, plan B included.
+    | comment:; `and` and `or` skip their right side, plan B included.
  88 |     show(check("and", false) and noisy("never", none) { 1 } == 1)
     | builtin-fn:show  punctuation:(  task:check  punctuation:(  string:"and"  punctuation:,  keyword:false  punctuation:)  keyword:and  task:noisy  punctuation:(  string:"never"  punctuation:,  keyword:none  punctuation:)  punctuation:{  number:1  punctuation:}  operator:==  number:1  punctuation:)
  89 |     show(check("or", true) or noisy("never", none) { 1 } == 1)
     | builtin-fn:show  punctuation:(  task:check  punctuation:(  string:"or"  punctuation:,  keyword:true  punctuation:)  keyword:or  task:noisy  punctuation:(  string:"never"  punctuation:,  keyword:none  punctuation:)  punctuation:{  number:1  punctuation:}  operator:==  number:1  punctuation:)
  90 |     show(check("and", true) and noisy("runs", none) { 1 } == 1)
     | builtin-fn:show  punctuation:(  task:check  punctuation:(  string:"and"  punctuation:,  keyword:true  punctuation:)  keyword:and  task:noisy  punctuation:(  string:"runs"  punctuation:,  keyword:none  punctuation:)  punctuation:{  number:1  punctuation:}  operator:==  number:1  punctuation:)
- 92 |     # A loop condition runs its plan B on every pass.
-    | comment:# A loop condition runs its plan B on every pass.
+ 92 |     ; A loop condition runs its plan B on every pass.
+    | comment:; A loop condition runs its plan B on every pass.
  93 |     hold left: maybe int = 3
     | keyword:hold  variable:left  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:3
  94 |     hold passes = 0
@@ -166,8 +166,8 @@
     | keyword:fi
  99 |     show(passes)
     | builtin-fn:show  punctuation:(  variable:passes  punctuation:)
-101 |     # In a `when`, an `each` range, a match subject, and an assignment target.
-    | comment:# In a `when`, an `each` range, a match subject, and an assignment target.
+101 |     ; In a `when`, an `each` range, a match subject, and an assignment target.
+    | comment:; In a `when`, an `each` range, a match subject, and an assignment target.
 102 |     when noisy("cond", none) { 1 } == 1
     | keyword:when  task:noisy  punctuation:(  string:"cond"  punctuation:,  keyword:none  punctuation:)  punctuation:{  number:1  punctuation:}  operator:==  number:1
 103 |         show("yes")

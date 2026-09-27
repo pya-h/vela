@@ -1,5 +1,5 @@
-# A shape with a private field that falls back on a value: another module can
-# build it, and still can't give or read that field.
+; A shape with a private field that falls back on a value: another module can
+; build it, and still can't give or read that field.
 shape Machine
     priv used: int = 0
     name: text

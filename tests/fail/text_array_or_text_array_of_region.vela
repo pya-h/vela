@@ -1,6 +1,6 @@
-# error: 4:25: the error type must differ from the value type, as in '[text; 2] ~ ParseError'
+; error: 4:24: the error type must differ from the value type, as in '[text#2] ~ ParseError'
 task main()
     region r
-    hold y: [text; 2] ~ [text@r; 2] = ["a", "b"]
+    hold y: [text#2] ~ [text@r#2] = ["a", "b"]
     show(1)
 fi

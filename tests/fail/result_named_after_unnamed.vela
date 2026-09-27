@@ -1,4 +1,4 @@
-# error: 2:21: either every result has a name or none does, and this one has a name, as in '-> steps: int, peak: int'
+; error: 2:21: either every result has a name or none does, and this one has a name, as in '-> steps: int, peak: int'
 task pair() -> int, total: int
     <- 1, 2
 fi

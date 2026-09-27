@@ -1,4 +1,4 @@
-# error: 4:11: 'Node' can never be created: field 'next' needs an existing ^Node; make it 'maybe ^Node'
+; error: 4:11: 'Node' can never be created: field 'next' needs an existing ^Node; make it 'maybe ^Node'
 shape Node
     value: int
     next: ^Node

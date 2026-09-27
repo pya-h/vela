@@ -1,4 +1,4 @@
-# Points, nodes, and figures, for tests/run/module_parts.vela.
+; Points, nodes, and figures, for tests/run/module_parts.vela.
 
 shape Point
     x: float

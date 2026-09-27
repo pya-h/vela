@@ -1,4 +1,4 @@
-# error: 5:44: 'state' is a read-only field of 'File' that falls back on its own value, so no literal gives it; only the alters methods of 'File' change it
+; error: 5:44: 'state' is a read-only field of 'File' that falls back on its own value, so no literal gives it; only the alters methods of 'File' change it
 include std/files {File, FileState}
 
 task main()

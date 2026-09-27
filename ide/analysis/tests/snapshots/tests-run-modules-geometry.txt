@@ -1,5 +1,5 @@
-  1 | # Figures and their measures, for tests/run/modules.vela.
-    | comment:# Figures and their measures, for tests/run/modules.vela.
+  1 | ; Figures and their measures, for tests/run/modules.vela.
+    | comment:; Figures and their measures, for tests/run/modules.vela.
   3 | shape Point
     | keyword:shape  type:Point
   4 |     x: float
@@ -48,8 +48,8 @@
     | keyword:<-  task:root  punctuation:(  variable:dx  operator:*  variable:dx  operator:+  variable:dy  operator:*  variable:dy  punctuation:)
  29 | fi
     | keyword:fi
- 31 | # Only the main file's main starts the program: this one is an ordinary task.
-    | comment:# Only the main file's main starts the program: this one is an ordinary task.
+ 31 | ; Only the main file's main starts the program: this one is an ordinary task.
+    | comment:; Only the main file's main starts the program: this one is an ordinary task.
  32 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
  33 |     show("geometry")
@@ -62,8 +62,8 @@
     | keyword:<-  number:3.14159
  38 | fi
     | keyword:fi
- 40 | # Newton's method: Vela has no math library yet.
-    | comment:# Newton's method: Vela has no math library yet.
+ 40 | ; Newton's method: Vela has no math library yet.
+    | comment:; Newton's method: Vela has no math library yet.
  41 | priv task root(n: float) -> float
     | keyword:priv  keyword:task  task:root  punctuation:(  parameter:n  punctuation::  type-builtin:float  punctuation:)  operator:->  type-builtin:float
  42 |     hold guess = n

@@ -1,4 +1,4 @@
-# error: 7:19: expected type text, got int
+; error: 7:19: expected type text, got int
 shape Door
     frame: Frame = Frame {}
 fi

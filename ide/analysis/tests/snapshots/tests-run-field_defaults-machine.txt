@@ -1,7 +1,7 @@
-  1 | # A shape whose own field is private and falls back on a value: another module
-    | comment:# A shape whose own field is private and falls back on a value: another module
-  2 | # can build it, and still can't read or write that field.
-    | comment:# can build it, and still can't read or write that field.
+  1 | ; A shape whose own field is private and falls back on a value: another module
+    | comment:; A shape whose own field is private and falls back on a value: another module
+  2 | ; can build it, and still can't read or write that field.
+    | comment:; can build it, and still can't read or write that field.
   4 | kind Power
     | keyword:kind  type:Power
   5 |     Off
@@ -34,10 +34,10 @@
     | keyword:fi
  22 | fi
     | keyword:fi
- 24 | # A default may give what only this module can, such as a private field that
-    | comment:# A default may give what only this module can, such as a private field that
- 25 | # falls back on nothing: a literal elsewhere that leaves out `cell` still gets it.
-    | comment:# falls back on nothing: a literal elsewhere that leaves out `cell` still gets it.
+ 24 | ; A default may give what only this module can, such as a private field that
+    | comment:; A default may give what only this module can, such as a private field that
+ 25 | ; falls back on nothing: a literal elsewhere that leaves out `cell` still gets it.
+    | comment:; falls back on nothing: a literal elsewhere that leaves out `cell` still gets it.
  26 | shape Cell
     | keyword:shape  type:Cell
  27 |     priv charge: int

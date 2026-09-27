@@ -1,5 +1,5 @@
-# A cart that keeps its total to itself: other files change it only through
-# these tasks. prices.vela is in the same folder, so it is included as `prices`.
+; A cart that keeps its total to itself: other files change it only through
+; these tasks. prices.vela is in the same folder, so it is included as `prices`.
 
 include prices (Item, price_of)
 

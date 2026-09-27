@@ -1,4 +1,4 @@
-# error: 4:15: '<-' must start a line: the body of a 'case' starts on the line after it
+; error: 4:15: '<-' must start a line: the body of a 'case' starts on the line after it
 task f(m: maybe int) -> int
     match m
     case none <- 0

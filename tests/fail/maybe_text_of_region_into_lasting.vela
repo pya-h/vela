@@ -1,4 +1,4 @@
-# error: 6:13: expected type maybe text, got maybe text@r; this text is in region 'r', and text here must last as long as the program, as a literal does
+; error: 6:13: expected type maybe text, got maybe text@r; this text is in region 'r', and text here must last as long as the program, as a literal does
 task main()
     hold m: maybe text = none
     when true

@@ -1,4 +1,4 @@
-# error: 2:6: 'main' is where the program starts, so it takes no types
+; error: 2:6: 'main' is where the program starts, so it takes no types
 task main<T>()
     show(1)
 fi

@@ -1,4 +1,4 @@
-# Variants without a payload can be written with or without parentheses.
+; Variants without a payload can be written with or without parentheses.
 
 kind Light
     Red

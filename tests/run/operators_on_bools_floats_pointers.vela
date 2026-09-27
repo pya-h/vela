@@ -1,5 +1,5 @@
-# `==`, `!=`, and `<=` on bools, floats, and pointers, and `and` binding
-# tighter than `or`.
+; `==`, `!=`, and `<=` on bools, floats, and pointers, and `and` binding
+; tighter than `or`.
 
 task main()
     show(true == true)

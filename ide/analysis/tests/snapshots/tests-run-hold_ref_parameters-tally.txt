@@ -1,5 +1,5 @@
-  1 | # A task and a method of another file take the caller's place as any do.
-    | comment:# A task and a method of another file take the caller's place as any do.
+  1 | ; A task and a method of another file take the caller's place as any do.
+    | comment:; A task and a method of another file take the caller's place as any do.
   2 | shape Tally
     | keyword:shape  type:Tally
   3 |     count: int = 0

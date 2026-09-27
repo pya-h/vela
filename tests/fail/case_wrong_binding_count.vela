@@ -1,4 +1,4 @@
-# error: 10:10: case 'Circle' expects 1 binding, got 2
+; error: 10:10: case 'Circle' expects 1 binding, got 2
 kind Shape
     Circle(radius: float)
     Square(side: float)

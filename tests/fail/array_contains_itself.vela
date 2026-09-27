@@ -1,6 +1,6 @@
-# error: 3:15: 'Tree' contains itself by value (Tree -> Tree); use a pointer such as 'maybe ^Tree'
+; error: 3:15: 'Tree' contains itself by value (Tree -> Tree); use a pointer such as 'maybe ^Tree'
 shape Tree
-    children: [Tree; 2]
+    children: [Tree#2]
 fi
 
 task main()

@@ -1,4 +1,4 @@
-# error: 3:8: 'del' changes 'xs', a parameter, which never changes; a parameter that changes is written 'hold xs: [int]@r', and is the task's own copy
+; error: 3:8: 'del' changes 'xs', a parameter, which never changes; a parameter that changes is written 'hold xs: [int]@r', and is the task's own copy
 task last(xs: [int]@r) -> int
     <- xs.del()
 fi

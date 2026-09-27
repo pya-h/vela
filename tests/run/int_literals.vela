@@ -1,5 +1,5 @@
-# Integer arithmetic is 64-bit, even between literals, which C would compute
-# in its (often 32-bit) int.
+; Integer arithmetic is 64-bit, even between literals, which C would compute
+; in its (often 32-bit) int.
 
 task main()
     show(1000000 * 1000000)

@@ -1,4 +1,4 @@
-# error: 6:24: this expression has no value (its type is unit)
+; error: 6:24: this expression has no value (its type is unit)
 task save() -> unit ~ text
 fi
 

@@ -1,4 +1,4 @@
-# trap: index 3 is out of range 0..3 at 8:9 in task 'main'
+; trap: index 3 is out of range 0..3 at 8:9 in task 'main'
 task main()
     hold days = [1, 2, 3]
     hold i = 2

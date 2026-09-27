@@ -1,4 +1,4 @@
-# error: 3:18: expected type text, got int
+; error: 3:18: expected type text, got int
 shape Label
     name: text = 3
 fi

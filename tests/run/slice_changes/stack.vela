@@ -1,5 +1,5 @@
-# A stack kept in a region, changed by the tasks of this module, and a kind
-# whose variants are named like the changes to a slice.
+; A stack kept in a region, changed by the tasks of this module, and a kind
+; whose variants are named like the changes to a slice.
 
 kind Op
     add(amount: int)

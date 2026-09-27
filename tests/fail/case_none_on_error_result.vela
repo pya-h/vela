@@ -1,4 +1,4 @@
-# error: 10:10: 'none' matches an empty maybe, but this value is int ~ text
+; error: 10:10: 'none' matches an empty maybe, but this value is int ~ text
 task parse(t: text) -> int ~ text
     <- 1
 fi

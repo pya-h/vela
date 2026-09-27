@@ -1,5 +1,5 @@
-# Where an operand contains a plan B, a call's arguments and an operator's
-# sides are evaluated left to right, including calls wrapped around a plan B.
+; Where an operand contains a plan B, a call's arguments and an operator's
+; sides are evaluated left to right, including calls wrapped around a plan B.
 
 task say(label: text, v: int) -> int
     show(label)

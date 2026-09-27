@@ -1,4 +1,4 @@
-# error: 3:5: 'TooLarge' is a variant of the builtin kind 'ParseError' and cannot be redefined
+; error: 3:5: 'TooLarge' is a variant of the builtin kind 'ParseError' and cannot be redefined
 kind Reading
     TooLarge
     Fine

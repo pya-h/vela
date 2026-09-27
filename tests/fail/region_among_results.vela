@@ -1,4 +1,4 @@
-# error: 2:31: a task can't send a region; regions are only parameters, as in 'task build(r: region)'
+; error: 2:31: a task can't send a region; regions are only parameters, as in 'task build(r: region)'
 task build(r: region) -> int, region
     <- 1, r
 fi

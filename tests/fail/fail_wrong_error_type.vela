@@ -1,4 +1,4 @@
-# error: 3:8: expected an error of type text, got int
+; error: 3:8: expected an error of type text, got int
 task parse(t: text) -> int ~ text
     <- fail 3
 fi

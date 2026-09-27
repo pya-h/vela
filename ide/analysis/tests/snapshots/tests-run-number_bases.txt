@@ -1,7 +1,7 @@
-  1 | # Whole numbers written in another base, in code and in text `int(…)` reads:
-    | comment:# Whole numbers written in another base, in code and in text `int(…)` reads:
-  2 | # `0x` hex, `0o` octal, `0b` binary, with underscores between digits in code.
-    | comment:# `0x` hex, `0o` octal, `0b` binary, with underscores between digits in code.
+  1 | ; Whole numbers written in another base, in code and in text `int(…)` reads:
+    | comment:; Whole numbers written in another base, in code and in text `int(…)` reads:
+  2 | ; `0x` hex, `0o` octal, `0b` binary, with underscores between digits in code.
+    | comment:; `0x` hex, `0o` octal, `0b` binary, with underscores between digits in code.
   4 | task read(written: text) -> int
     | keyword:task  task:read  punctuation:(  parameter:written  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:int
   5 |     <- int(written) { -1 }
@@ -12,8 +12,8 @@
     | keyword:task  task:why  punctuation:(  parameter:read  punctuation::  type-builtin:int  operator:~  type:ParseError  punctuation:)  operator:->  type-builtin:text
   9 |     bind problem = match read
     | keyword:bind  variable:problem  operator:=  keyword:match  parameter:read
- 10 |         case {n} = ParseError.NotANumber   # every read given here fails
-    | keyword:case  punctuation:{  variable:n  punctuation:}  operator:=  type:ParseError  punctuation:.  variant:NotANumber  comment:# every read given here fails
+ 10 |         case {n} = ParseError.NotANumber   ; every read given here fails
+    | keyword:case  punctuation:{  variable:n  punctuation:}  operator:=  type:ParseError  punctuation:.  variant:NotANumber  comment:; every read given here fails
  11 |         case failure e = e
     | keyword:case  keyword:failure  variable:e  operator:=  variable:e
  12 |     fi
@@ -36,30 +36,30 @@
     | builtin-fn:show  punctuation:(  number:0o17  punctuation:,  string:" "  punctuation:,  number:0o7_5_5  punctuation:,  string:" "  punctuation:,  number:0b101  punctuation:,  string:" "  punctuation:,  number:0b1010_0101  punctuation:)
  22 |     show(0x7fff_ffff_ffff_ffff, " ", -0x10, " ", 0x0 + 0o0 + 0b0)
     | builtin-fn:show  punctuation:(  number:0x7fff_ffff_ffff_ffff  punctuation:,  string:" "  punctuation:,  operator:-  number:0x10  punctuation:,  string:" "  punctuation:,  number:0x0  operator:+  number:0o0  operator:+  number:0b0  punctuation:)
- 23 |     # A number in another base is an int like any other.
-    | comment:# A number in another base is an int like any other.
+ 23 |     ; A number in another base is an int like any other.
+    | comment:; A number in another base is an int like any other.
  24 |     bind mask = 0b1111
     | keyword:bind  variable:mask  operator:=  number:0b1111
  25 |     show(mask * 0x10 + 0o1)
     | builtin-fn:show  punctuation:(  variable:mask  operator:*  number:0x10  operator:+  number:0o1  punctuation:)
- 26 |     # Text is read the same way, with a sign before the base.
-    | comment:# Text is read the same way, with a sign before the base.
+ 26 |     ; Text is read the same way, with a sign before the base.
+    | comment:; Text is read the same way, with a sign before the base.
  27 |     show(read("0x1F"), " ", read("0XaB"), " ", read("0xAb"), " ", read("-0b11"), " ", read("0o17"))
     | builtin-fn:show  punctuation:(  task:read  punctuation:(  string:"0x1F"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:read  punctuation:(  string:"0XaB"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:read  punctuation:(  string:"0xAb"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:read  punctuation:(  string:"-0b11"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:read  punctuation:(  string:"0o17"  punctuation:)  punctuation:)
- 28 |     # A leading zero alone is only a digit.
-    | comment:# A leading zero alone is only a digit.
+ 28 |     ; A leading zero alone is only a digit.
+    | comment:; A leading zero alone is only a digit.
  29 |     show(read("010"), " ", read("007"), " ", read("0"))
     | builtin-fn:show  punctuation:(  task:read  punctuation:(  string:"010"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:read  punctuation:(  string:"007"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:read  punctuation:(  string:"0"  punctuation:)  punctuation:)
- 30 |     # The smallest and largest ints, and one past each.
-    | comment:# The smallest and largest ints, and one past each.
+ 30 |     ; The smallest and largest ints, and one past each.
+    | comment:; The smallest and largest ints, and one past each.
  31 |     show(read("-0x8000000000000000"), " ", read("0x7fffffffffffffff"))
     | builtin-fn:show  punctuation:(  task:read  punctuation:(  string:"-0x8000000000000000"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:read  punctuation:(  string:"0x7fffffffffffffff"  punctuation:)  punctuation:)
  32 |     show(read("0x8000000000000000"), " ", read("-0x8000000000000001"))
     | builtin-fn:show  punctuation:(  task:read  punctuation:(  string:"0x8000000000000000"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:read  punctuation:(  string:"-0x8000000000000001"  punctuation:)  punctuation:)
- 33 |     # No digits after the base, a digit the base hasn't, an upper-case base
-    | comment:# No digits after the base, a digit the base hasn't, an upper-case base
- 34 |     # letter, and underscores are no number.
-    | comment:# letter, and underscores are no number.
+ 33 |     ; No digits after the base, a digit the base hasn't, an upper-case base
+    | comment:; No digits after the base, a digit the base hasn't, an upper-case base
+ 34 |     ; letter, and underscores are no number.
+    | comment:; letter, and underscores are no number.
  35 |     show(read("0x"), " ", read("0b102"), " ", read("0o8"), " ", read("0X1"), " ", read("0x1_0"), " ", read("0x-1"))
     | builtin-fn:show  punctuation:(  task:read  punctuation:(  string:"0x"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:read  punctuation:(  string:"0b102"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:read  punctuation:(  string:"0o8"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:read  punctuation:(  string:"0X1"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:read  punctuation:(  string:"0x1_0"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:read  punctuation:(  string:"0x-1"  punctuation:)  punctuation:)
  36 |     show(why(int("0xZ")), " ", why(int("0x1_0000_0000_0000_0000")), " ", why(int("0x10000000000000000")))

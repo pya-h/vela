@@ -1,4 +1,4 @@
-# error: 3:15: only a region a task takes can be a default region, as in 'r: region default'
+; error: 3:15: only a region a task takes can be a default region, as in 'r: region default'
 shape Note
     text: int default
 fi

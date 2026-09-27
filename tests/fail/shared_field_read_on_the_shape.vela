@@ -1,4 +1,4 @@
-# error: 7:16: 'x' is a field of every value of 'Point', not a shared one, so it is read on a value, as in 'p.x'
+; error: 7:16: 'x' is a field of every value of 'Point', not a shared one, so it is read on a value, as in 'p.x'
 shape Point
     x: int
 fi

@@ -1,5 +1,5 @@
-# `else when` chains: one `fi` closes the whole chain, and a chain is the same
-# statement as a `when` written inside an `else` on its own lines.
+; `else when` chains: one `fi` closes the whole chain, and a chain is the same
+; statement as a `when` written inside an `else` on its own lines.
 
 kind Light
     Off
@@ -19,7 +19,7 @@ task grade(score: int) -> text
     fi
 fi
 
-# A chain with no final `else`: nothing runs when no condition holds.
+; A chain with no final `else`: nothing runs when no condition holds.
 task counted(n: int) -> int
     hold seen = 0
     when n > 10
@@ -38,7 +38,7 @@ task main()
     fi
     show(counted(20), " ", counted(7), " ", counted(3), " ", counted(0))
 
-    # A pattern in a chain: its names are visible only in its own block.
+    ; A pattern in a chain: its names are visible only in its own block.
     hold light: Light = Dimmed(4)
     when light is On
         show("on")
@@ -48,7 +48,7 @@ task main()
         show("off")
     fi
 
-    # The same chain written as a `when` inside the `else`, which it is.
+    ; The same chain written as a `when` inside the `else`, which it is.
     when 1 > 2
         show("never")
     else
@@ -59,7 +59,7 @@ task main()
         fi
     fi
 
-    # A chain inside a loop, with a region in one of its blocks.
+    ; A chain inside a loop, with a region in one of its blocks.
     region kept default
     hold i = 0
     loop i < 3

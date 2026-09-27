@@ -1,59 +1,59 @@
-# std/files: files on the disk. A program brings it in with
-# `include std/files {File, FileMode}`, or names it `files.File` after
-# `include std/files`.
+; std/files: files on the disk. A program brings it in with
+; `include std/files {File, FileMode}`, or names it `files.File` after
+; `include std/files`.
 
-# How a file is opened.
+; How a file is opened.
 kind FileMode
-    # Read from its start; the file must be there.
+    ; Read from its start; the file must be there.
     Read
-    # Written from its start, emptied first, and made when it isn't there.
+    ; Written from its start, emptied first, and made when it isn't there.
     Write
-    # Written at its end, and made when it isn't there.
+    ; Written at its end, and made when it isn't there.
     Append
-    # Read and written; the file must be there.
+    ; Read and written; the file must be there.
     ReadWrite
 fi
 
-# What a File says of itself, as its own methods left it. A region that ends
-# closes a file opened in it, and a copy of a File can close it too, and neither
-# can tell this File; its methods then find it closed (see `NotOpen`).
+; What a File says of itself, as its own methods left it. A region that ends
+; closes a file opened in it, and a copy of a File can close it too, and neither
+; can tell this File; its methods then find it closed (see `NotOpen`).
 kind FileState
-    # Made, and not opened yet.
+    ; Made, and not opened yet.
     Idle
     Open
     Closed
-    # Deleted.
+    ; Deleted.
     Gone
 fi
 
-# What went wrong.
+; What went wrong.
 kind FileError
-    # There is no file at the path, or none that can be read.
+    ; There is no file at the path, or none that can be read.
     NotFound
-    # The system doesn't let the program open the file so.
+    ; The system doesn't let the program open the file so.
     NotAllowed
-    # Opened again before it was closed.
+    ; Opened again before it was closed.
     AlreadyOpen
-    # Not open: never opened, closed, deleted, or closed by its region or a copy.
+    ; Not open: never opened, closed, deleted, or closed by its region or a copy.
     NotOpen
-    # Read when opened only to write, or written when opened only to read.
+    ; Read when opened only to write, or written when opened only to read.
     WrongMode
-    # Anything else the system reports.
+    ; Anything else the system reports.
     Failed
 fi
 
-# A file, named by its path. Making one opens nothing: a File is made, then
-# asked about or opened, and only its own methods change what it says of
-# itself. A file is opened in a region, which closes it when its block ends:
-# `file.open(FileMode.Read) at r`.
+; A file, named by its path. Making one opens nothing: a File is made, then
+; asked about or opened, and only its own methods change what it says of
+; itself. A file is opened in a region, which closes it when its block ends:
+; `file.open(FileMode.Read) at r`.
 shape File
     read path: text
     read state: FileState = FileState.Idle
-    # How it was opened last; none before it is.
+    ; How it was opened last; none before it is.
     read mode: maybe FileMode = none
     priv handle: int = -1
 
-    # Opens the file as `mode` says, until `close()` or the end of `within`'s block.
+    ; Opens the file as `mode` says, until `close()` or the end of `within`'s block.
     alters open(mode: FileMode, within: region) -> unit ~ FileError
         when is_open(.handle)
             <- fail FileError.AlreadyOpen
@@ -67,7 +67,7 @@ shape File
         .mode = mode
     fi
 
-    # Closes the file. One its region or a copy closed is closed already.
+    ; Closes the file. One its region or a copy closed is closed already.
     alters close() -> unit ~ FileError
         when not is_open(.handle)
             .left_closed()
@@ -81,7 +81,7 @@ shape File
         fi
     fi
 
-    # The rest of the file, from where reading is.
+    ; The rest of the file, from where reading is.
     read(into: region) -> text@into ~ FileError
         bind got = read_rest(.handle, into)
         when status() != 0
@@ -90,7 +90,7 @@ shape File
         <- got
     fi
 
-    # The next line, without its line break; none at the end of the file.
+    ; The next line, without its line break; none at the end of the file.
     line(into: region) -> maybe text@into ~ FileError
         bind got = read_line(.handle, into)
         bind code = status()
@@ -103,7 +103,7 @@ shape File
         <- got
     fi
 
-    # The rest of the file, line by line.
+    ; The rest of the file, line by line.
     lines(into: region) -> [text@into]@into ~ FileError
         hold all = new [text]() at into
         loop true
@@ -120,7 +120,7 @@ shape File
         <- all
     fi
 
-    # Writes `t` where writing is.
+    ; Writes `t` where writing is.
     write(t: text@p) -> unit ~ FileError
         bind status = write_text(.handle, t)
         when status != 0
@@ -128,12 +128,12 @@ shape File
         fi
     fi
 
-    # Whether nothing more can be read: at the end, or not open to read.
+    ; Whether nothing more can be read: at the end, or not open to read.
     ended() -> bool
         <- at_end(.handle)
     fi
 
-    # How many bytes the file has: an open one as written so far.
+    ; How many bytes the file has: an open one as written so far.
     size() -> int ~ FileError
         bind got = size_of(.path, .handle)
         when got < 0
@@ -142,12 +142,12 @@ shape File
         <- got
     fi
 
-    # Whether a file that can be read is at the path.
+    ; Whether a file that can be read is at the path.
     exists() -> bool
         <- path_exists(.path)
     fi
 
-    # Gives the file another path, on the disk and here.
+    ; Gives the file another path, on the disk and here.
     alters rename(to: text@this) -> unit ~ FileError
         bind status = rename_path(.path, to)
         when status != 0
@@ -156,7 +156,7 @@ shape File
         .path = to
     fi
 
-    # Deletes the file, closing it first when it is open.
+    ; Deletes the file, closing it first when it is open.
     alters delete() -> unit ~ FileError
         when is_open(.handle)
             bind closed = close_handle(.handle)
@@ -174,7 +174,7 @@ shape File
         .state = FileState.Gone
     fi
 
-    # The path, and what the File says of itself: `notes.txt (open)`.
+    ; The path, and what the File says of itself: `notes.txt (open)`.
     str(into: region) -> text@into
         bind said = match .state
         case Idle = "idle"
@@ -185,8 +185,8 @@ shape File
         <- "{.path} ({said})" at into
     fi
 
-    # A File that says it is open, whose file was closed by its region or a
-    # copy, is closed.
+    ; A File that says it is open, whose file was closed by its region or a
+    ; copy, is closed.
     priv alters left_closed()
         match .state
         case Open
@@ -196,7 +196,7 @@ shape File
     fi
 fi
 
-# The status the runtime gives at the end of a file, which is no error.
+; The status the runtime gives at the end of a file, which is no error.
 priv task ended_code() -> int
     <- 7
 fi
@@ -210,7 +210,7 @@ priv task mode_code(mode: FileMode) -> int
     fi
 fi
 
-# The FileError a status of the runtime names (see `runtime/vela_rt.h`).
+; The FileError a status of the runtime names (see `runtime/vela_rt.h`).
 priv task error_of(status: int) -> FileError
     when status == 1
         <- FileError.NotFound
@@ -226,8 +226,8 @@ priv task error_of(status: int) -> FileError
     <- FileError.Failed
 fi
 
-# The C the compiler writes for these is in `runtime/vela_rt.h`, and which one
-# each is in `src/library.rs`.
+; The C the compiler writes for these is in `runtime/vela_rt.h`, and which one
+; each is in `src/library.rs`.
 priv native task path_exists(path: text@p) -> bool
 priv native task open_handle(path: text@p, mode: int, within: region) -> int
 priv native task is_open(handle: int) -> bool

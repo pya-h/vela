@@ -1,13 +1,13 @@
-# Reading input: `scan(prompt) at r` (or `scan(prompt)@r`) shows the prompt,
-# then reads one line into region `r`, without its line break, and gives a
-# `maybe text@r`: none once the input has ended. Its input is `scan.in`.
+; Reading input: `scan(prompt) at r` (or `scan(prompt)@r`) shows the prompt,
+; then reads one line into region `r`, without its line break, and gives a
+; `maybe text@r`: none once the input has ended. Its input is `scan.in`.
 
 shape Person
     name: text
     age: int
 fi
 
-# Asks in the caller's region, so it takes the region.
+; Asks in the caller's region, so it takes the region.
 task ask(r: region, question: text) -> text@r
     <- scan(question) at r { "no answer" }
 fi
@@ -24,7 +24,7 @@ task main()
     bind person: Person@r = Person { name: name, age: 36 }
     show(person.name == "Ada")
 
-    # A Windows line break, and a line of nothing.
+    ; A Windows line break, and a line of nothing.
     bind windows = scan("")@r { "none" }
     show(windows == "crlf")
     match scan("") at r
@@ -34,8 +34,8 @@ task main()
             show("ended too early")
     fi
 
-    # A line longer than any buffer, and one holding a zero byte, which is one
-    # of its bytes.
+    ; A line longer than any buffer, and one holding a zero byte, which is one
+    ; of its bytes.
     bind long = scan("") at r { "" }
     show(long == "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789")
     show(long.len)
@@ -43,14 +43,14 @@ task main()
     show(zero == "ab\0cd")
     show(zero.len)
 
-    # A prompt in a region, arguments read left to right, and lines dropped.
+    ; A prompt in a region, arguments read left to right, and lines dropped.
     hold prompt = new [text]() at r
     prompt.add("Two lines: ")
     both(scan(prompt[0]) at r, scan("")@r)
     scan("skipped ")@r
     scan("")@r { "" }
 
-    # Every line left, each in a region freed on its pass.
+    ; Every line left, each in a region freed on its pass.
     hold count = 0
     loop true
         region line_memory

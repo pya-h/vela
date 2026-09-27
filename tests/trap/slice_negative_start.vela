@@ -1,7 +1,7 @@
-# trap: slice -1..2 is out of range 0..4 at 7:15 in task 'main'
+; trap: slice -1..2 is out of range 0..4 at 7:15 in task 'main'
 task main()
     region r
-    bind items = new [int]([0; 4]) at r
+    bind items = new [int]([0#4]) at r
     hold i = 0
     i = i - 1
     show(items[i..2].len)

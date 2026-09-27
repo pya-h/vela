@@ -1,4 +1,4 @@
-# error: 2:11: a region doesn't live in another region
+; error: 2:11: a region doesn't live in another region
 task f(r: region@s)
 fi
 

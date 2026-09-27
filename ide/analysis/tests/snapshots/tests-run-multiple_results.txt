@@ -1,11 +1,11 @@
-  1 | # Several results: a task's `->` lists the types it sends, `<-` sends one
-    | comment:# Several results: a task's `->` lists the types it sends, `<-` sends one
-  2 | # value per type, and a list of names receives them. `_` takes a value and
-    | comment:# value per type, and a list of names receives them. `_` takes a value and
-  3 | # drops it. The values of a list are all computed before the first is stored,
-    | comment:# drops it. The values of a list are all computed before the first is stored,
-  4 | # so `a, b = b, a` swaps.
-    | comment:# so `a, b = b, a` swaps.
+  1 | ; Several results: a task's `->` lists the types it sends, `<-` sends one
+    | comment:; Several results: a task's `->` lists the types it sends, `<-` sends one
+  2 | ; value per type, and a list of names receives them. `_` takes a value and
+    | comment:; value per type, and a list of names receives them. `_` takes a value and
+  3 | ; drops it. The values of a list are all computed before the first is stored,
+    | comment:; drops it. The values of a list are all computed before the first is stored,
+  4 | ; so `a, b = b, a` swaps.
+    | comment:; so `a, b = b, a` swaps.
   6 | kind Oops
     | keyword:kind  type:Oops
   7 |     Bad
@@ -18,8 +18,8 @@
     | keyword:<-  parameter:a  operator:/  parameter:b  punctuation:,  parameter:a  operator:%  parameter:b
  12 | fi
     | keyword:fi
- 14 | # Results of different types, one of them a maybe.
-    | comment:# Results of different types, one of them a maybe.
+ 14 | ; Results of different types, one of them a maybe.
+    | comment:; Results of different types, one of them a maybe.
  15 | task find(n: int) -> maybe int, bool
     | keyword:task  task:find  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int  punctuation:,  type-builtin:bool
  16 |     when n > 0
@@ -44,26 +44,26 @@
     | keyword:<-  parameter:n
  27 | fi
     | keyword:fi
- 29 | # One value per result, the second an error result.
-    | comment:# One value per result, the second an error result.
+ 29 | ; One value per result, the second an error result.
+    | comment:; One value per result, the second an error result.
  30 | task pair(n: int) -> int, int ~ Oops
     | keyword:task  task:pair  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  type-builtin:int  operator:~  type:Oops
  31 |     <- n, risky(n)
     | keyword:<-  parameter:n  punctuation:,  task:risky  punctuation:(  parameter:n  punctuation:)
  32 | fi
     | keyword:fi
- 34 | # A call that sends every value of another task.
-    | comment:# A call that sends every value of another task.
+ 34 | ; A call that sends every value of another task.
+    | comment:; A call that sends every value of another task.
  35 | task forward(a: int, b: int) -> int, int
     | keyword:task  task:forward  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  type-builtin:int
  36 |     <- divmod(a, b)
     | keyword:<-  task:divmod  punctuation:(  parameter:a  punctuation:,  parameter:b  punctuation:)
  37 | fi
     | keyword:fi
- 39 | # Three results, with a region among them: each follows the rule for a single
-    | comment:# Three results, with a region among them: each follows the rule for a single
- 40 | # result, so the pointer's region comes from the header.
-    | comment:# result, so the pointer's region comes from the header.
+ 39 | ; Three results, with a region among them: each follows the rule for a single
+    | comment:; Three results, with a region among them: each follows the rule for a single
+ 40 | ; result, so the pointer's region comes from the header.
+    | comment:; result, so the pointer's region comes from the header.
  41 | shape Node
     | keyword:shape  type:Node
  42 |     value: int
@@ -86,8 +86,8 @@
     | keyword:<-  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  parameter:v  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r  punctuation:,  parameter:v  operator:*  number:2  punctuation:,  parameter:v  operator:>  number:0
  53 | fi
     | keyword:fi
- 55 | # The values are computed before the regions of the block are freed.
-    | comment:# The values are computed before the regions of the block are freed.
+ 55 | ; The values are computed before the regions of the block are freed.
+    | comment:; The values are computed before the regions of the block are freed.
  56 | task counted(n: int) -> int, int
     | keyword:task  task:counted  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  type-builtin:int
  57 |     region r
@@ -118,8 +118,8 @@
     | builtin-fn:show  punctuation:(  variable:q  punctuation:)
  71 |     show(r)
     | builtin-fn:show  punctuation:(  variable:r  punctuation:)
- 73 |     # `_` drops a result.
-    | comment:# `_` drops a result.
+ 73 |     ; `_` drops a result.
+    | comment:; `_` drops a result.
  74 |     bind whole, _ = divmod(9, 4)
     | keyword:bind  variable:whole  punctuation:,  keyword:_  operator:=  task:divmod  punctuation:(  number:9  punctuation:,  number:4  punctuation:)
  75 |     show(whole)
@@ -160,8 +160,8 @@
     | builtin-fn:show  punctuation:(  variable:a  punctuation:)
  96 |     show(b)
     | builtin-fn:show  punctuation:(  variable:b  punctuation:)
- 98 |     # Assigning a list, and swapping.
-    | comment:# Assigning a list, and swapping.
+ 98 |     ; Assigning a list, and swapping.
+    | comment:; Assigning a list, and swapping.
  99 |     hold x = 1
     | keyword:hold  variable:x  operator:=  number:1
 100 |     hold y = 2
@@ -182,8 +182,8 @@
     | keyword:_  punctuation:,  variable:y  operator:=  task:divmod  punctuation:(  number:1  punctuation:,  number:9  punctuation:)
 108 |     show(y)
     | builtin-fn:show  punctuation:(  variable:y  punctuation:)
-110 |     # A plain list of values, and one with a plan B in it.
-    | comment:# A plain list of values, and one with a plan B in it.
+110 |     ; A plain list of values, and one with a plan B in it.
+    | comment:; A plain list of values, and one with a plan B in it.
 111 |     bind first, second = risky(3) { 0 }, risky(-3) { 8 }
     | keyword:bind  variable:first  punctuation:,  variable:second  operator:=  task:risky  punctuation:(  number:3  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  task:risky  punctuation:(  operator:-  number:3  punctuation:)  punctuation:{  number:8  punctuation:}
 112 |     show(first)
@@ -206,8 +206,8 @@
     | builtin-fn:show  punctuation:(  variable:total  punctuation:)
 123 |     show(count)
     | builtin-fn:show  punctuation:(  variable:count  punctuation:)
-125 |     # A field and a variable in one assignment.
-    | comment:# A field and a variable in one assignment.
+125 |     ; A field and a variable in one assignment.
+    | comment:; A field and a variable in one assignment.
 126 |     hold spot = Point { x: 0, y: 0 }
     | keyword:hold  variable:spot  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}
 127 |     hold last = 0
@@ -222,8 +222,8 @@
     | variable:spot  punctuation:.  field:x  punctuation:,  variable:spot  punctuation:.  field:y  operator:=  variable:spot  punctuation:.  field:y  punctuation:,  variable:spot  punctuation:.  field:x
 132 |     show(spot.x)
     | builtin-fn:show  punctuation:(  variable:spot  punctuation:.  field:x  punctuation:)
-134 |     # A task that sends nothing, received by '_': it runs in its place.
-    | comment:# A task that sends nothing, received by '_': it runs in its place.
+134 |     ; A task that sends nothing, received by '_': it runs in its place.
+    | comment:; A task that sends nothing, received by '_': it runs in its place.
 135 |     bind _, after = show(1), 2
     | keyword:bind  keyword:_  punctuation:,  variable:after  operator:=  builtin-fn:show  punctuation:(  number:1  punctuation:)  punctuation:,  number:2
 136 |     show(after)

@@ -1,5 +1,5 @@
-  1 | # Every path of a value-returning task must send; each of these tasks does.
-    | comment:# Every path of a value-returning task must send; each of these tasks does.
+  1 | ; Every path of a value-returning task must send; each of these tasks does.
+    | comment:; Every path of a value-returning task must send; each of these tasks does.
   3 | kind Light
     | keyword:kind  type:Light
   4 |     Red

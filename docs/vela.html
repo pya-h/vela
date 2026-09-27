@@ -168,14 +168,14 @@
         <li><strong>Minimal surface.</strong> No classes <em>and</em> structs. No interfaces <em>and</em> traits. Just shapes, kinds, and tasks.</li>
         <li><strong>One way to do it.</strong> Immutability by default with <code>bind</code>; mutation explicitly opt-in with <code>hold</code>.</li>
         <li><strong>Safe by design.</strong> Static typing, exhaustive pattern matching, no uninitialized variables, no null pointers, and pointers that can never outlive their memory.</li>
-        <li><strong>Beautiful syntax.</strong> Words for control flow and logic (<code>when</code>, <code>and</code>, <code>not</code>), blocks closed with <code>fi</code>, no semicolons, and a symbol only where it reads as a picture: <code>-&gt;</code> names what a task gives back, and <code>&lt;-</code> gives it back.</li>
+        <li><strong>Beautiful syntax.</strong> Words for control flow and logic (<code>when</code>, <code>and</code>, <code>not</code>), blocks closed with <code>fi</code>, no semicolons ending statements, and a symbol only where it reads as a picture: <code>-&gt;</code> names what a task gives back, and <code>&lt;-</code> gives it back.</li>
         <li><strong>No GC, no free.</strong> Values live on the stack, and <code>new</code> allocates in a <em>region</em>, which frees everything in it at once when its block closes (see <a href="#regions">Memory and Regions</a>).</li>
       </ul>
     </section>
 
     <section>
       <h2>Hello, Vela</h2>
-      <pre><span class="comment"># A tiny Vela program</span>
+      <pre><span class="comment">; A tiny Vela program</span>
 <span class="keyword">task</span> main()
     show(<span class="string">"Hello, Vela!"</span>)
 <span class="keyword">fi</span></pre>
@@ -218,7 +218,7 @@
         <li><code class="type">unit</code> — the return type of a task that returns nothing; it has no values, so it
           can't be the type of a variable, parameter, or field</li>
         <li><code class="type">^T@r</code> — pointer to a T in region <code>r</code>; it always points to something (see <a href="#regions">Memory and Regions</a>)</li>
-        <li><code class="type">[T; n]</code> — an array: <code>n</code> values of type T, held in place (see <a href="#arrays">Arrays</a>)</li>
+        <li><code class="type">[T#n]</code> — an array: <code>n</code> values of type T, held in place (see <a href="#arrays">Arrays</a>)</li>
         <li><code class="type">[T]@r</code> — a slice: a view of values of type T in region <code>r</code> (see <a href="#slices">Slices</a>)</li>
         <li><code class="type">(T, U)</code> — a tuple: two or more values held together, whose items never change (see <a href="#tuples">Tuples</a>)</li>
         <li><code class="type">maybe T</code> — a T, or <code>none</code> (see <a href="#maybe">Maybe and Errors</a>)</li>
@@ -236,8 +236,11 @@
       <h2>Syntax Overview</h2>
       <p>
         Every block — a task, shape, kind, <code>when</code>, <code>loop</code>, <code>each</code>, or
-        <code>match</code> — closes with <code>fi</code>. Write each statement on its own line, without a semicolon
-        after it (a <code>;</code> only separates an array's type or value from its count, as in <code>[int; 4]</code>).
+        <code>match</code> — closes with <code>fi</code>. Write each statement on its own line, with nothing
+        after it but a comment. A <code>;</code> starts a comment, as a semicolon adds a remark to a sentence
+        (<code>bind x = 1 ; the first</code>), and a <code>#</code> separates an array's type or value from its count,
+        as in item #4: <code>[int#4]</code>, <code>[0#4]</code>. Written the other way round, as other languages do, each
+        is an error that says which is which.
         (The compiler doesn't insist on the line break yet; see <a href="#limits">Current Limits</a>.)
         Files may use LF or CRLF line endings.
       </p>
@@ -247,7 +250,7 @@
         call, which may have a plan B (see <a href="#maybe">Maybe and Errors</a>). Any other expression on its own line would do nothing, so it is an error: <code>x == 1</code> alone
         reports <code>the result of '==' is unused; use '=' to assign</code>. A <code>when</code> and a
         <code>match</code> are blocks, and so statements, but they are also values where one is expected (see
-        <a href="#choices">A match or a when as a value</a>). Comments start with <code>#</code>.
+        <a href="#choices">A match or a when as a value</a>). Comments start with <code>;</code>.
       </p>
 
       <h3>Reserved Words and Symbols</h3>
@@ -286,13 +289,14 @@ block shared type</pre>
         <tr><td><code>a.x</code></td><td>a field of a shape value</td></tr>
         <tr><td><code>a.m(…)</code>, <code>alters m(…)</code></td><td>a call of a method of the value's shape or kind; a method that changes its value (see <a href="#methods">Methods</a>)</td></tr>
         <tr><td><code>.x</code>, <code>.m(…)</code>, <code>.this</code>, <code>@this</code></td><td>inside a method: a field of the value it is called on, another of its methods, the value itself, and the region it lives in</td></tr>
-        <tr><td><code>[T; n]</code>, <code>[T]@r</code></td><td>an array type; a slice type (see <a href="#arrays">Arrays</a> and <a href="#slices">Slices</a>)</td></tr>
+        <tr><td><code>; …</code></td><td>a comment, to the end of the line</td></tr>
+        <tr><td><code>[T#n]</code>, <code>[T]@r</code></td><td>an array type; a slice type (see <a href="#arrays">Arrays</a> and <a href="#slices">Slices</a>)</td></tr>
         <tr><td><code>hold x: T</code>, <code>hold&amp; x: T</code>, <code>f(&amp;a)</code></td><td>a parameter the task changes: its own copy, or the caller's place, which the call marks with <code>&amp;</code> (see <a href="#parameters">Parameters that change</a>)</td></tr>
         <tr><td><code>hold&amp; y = &amp;x</code>, <code>bind&amp; y = &amp;x</code></td><td>another name for the place <code>x</code>, which changes it or only reads it (see <a href="#references">References</a>)</td></tr>
         <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task or shape takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
-        <tr><td><code>[a, b]</code>, <code>[v; n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
+        <tr><td><code>[a, b]</code>, <code>[v#n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
         <tr><td><code>t[a..b]</code>, <code>t.len</code></td><td>a part of text, the same bytes (see <a href="#text-parts">Parts of text</a>); how many bytes it has</td></tr>
         <tr><td><code>a + b at r</code>, <code>(a + b)@r</code></td><td>text joined into new text in region <code>r</code> (see <a href="#joining">Joining text</a>)</td></tr>
@@ -335,12 +339,12 @@ block shared type</pre>
     <span class="keyword">when</span> x &lt; 0
         <span class="keyword">&lt;-</span> -1
     <span class="keyword">fi</span>
-    <span class="keyword">&lt;-</span> 1                 <span class="comment"># without this line: task 'sign' can finish without sending a value</span>
+    <span class="keyword">&lt;-</span> 1                 <span class="comment">; without this line: task 'sign' can finish without sending a value</span>
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> report(x: int)
     <span class="keyword">when</span> x == 0
-        <span class="keyword">&lt;-</span>                  <span class="comment"># nothing to send: just leave</span>
+        <span class="keyword">&lt;-</span>                  <span class="comment">; nothing to send: just leave</span>
     <span class="keyword">fi</span>
     show(x)
 <span class="keyword">fi</span></pre>
@@ -381,8 +385,8 @@ block shared type</pre>
 
 <span class="keyword">task</span> main()
     <span class="keyword">bind</span> a = <span class="number">10</span>
-    show(countdown(a, <span class="number">3</span>))    <span class="comment"># 4</span>
-    show(a)                  <span class="comment"># 10: the caller's value never changes</span>
+    show(countdown(a, <span class="number">3</span>))    <span class="comment">; 4</span>
+    show(a)                  <span class="comment">; 10: the caller's value never changes</span>
 <span class="keyword">fi</span></pre>
       <p>
         Since the caller's value never changes, the call needs no mark, and any value can be given, a
@@ -404,7 +408,7 @@ block shared type</pre>
 <span class="keyword">task</span> main()
     <span class="keyword">hold</span> x = <span class="number">1</span>
     <span class="keyword">hold</span> y = <span class="number">2</span>
-    swap(&amp;x, &amp;y)          <span class="comment"># x is 2, y is 1</span>
+    swap(&amp;x, &amp;y)          <span class="comment">; x is 2, y is 1</span>
     <span class="keyword">hold</span> pair = [<span class="number">1</span>, <span class="number">2</span>]
     swap(&amp;pair[<span class="number">0</span>], &amp;pair[<span class="number">1</span>])
 <span class="keyword">fi</span></pre>
@@ -447,17 +451,17 @@ block shared type</pre>
         to read it, as it is whenever it is read:
       </p>
       <pre><span class="keyword">hold</span> x = <span class="number">1</span>
-<span class="keyword">hold&amp;</span> y = &amp;x          <span class="comment"># y is another name for x</span>
-y = <span class="number">5</span>                    <span class="comment"># x is 5</span>
-x = <span class="number">7</span>                    <span class="comment"># y reads 7</span>
+<span class="keyword">hold&amp;</span> y = &amp;x          <span class="comment">; y is another name for x</span>
+y = <span class="number">5</span>                    <span class="comment">; x is 5</span>
+x = <span class="number">7</span>                    <span class="comment">; y reads 7</span>
 
 <span class="keyword">hold</span> c = Counter {}
-<span class="keyword">hold&amp;</span> count = &amp;c.n    <span class="comment"># a field, an array's item, or p^ too</span>
+<span class="keyword">hold&amp;</span> count = &amp;c.n    <span class="comment">; a field, an array's item, or p^ too</span>
 count = count + <span class="number">1</span>
 
 <span class="keyword">bind</span> a = <span class="number">1</span>
-<span class="keyword">bind&amp;</span> b = &amp;a          <span class="comment"># b reads a, and never changes it</span>
-<span class="keyword">hold&amp;</span> d = &amp;a          <span class="comment"># error: 'a' never changes; 'bind&amp; d = &amp;a' names it only to read it</span></pre>
+<span class="keyword">bind&amp;</span> b = &amp;a          <span class="comment">; b reads a, and never changes it</span>
+<span class="keyword">hold&amp;</span> d = &amp;a          <span class="comment">; error: 'a' never changes; 'bind&amp; d = &amp;a' names it only to read it</span></pre>
       <p>
         <code>hold&amp;</code> takes the places a <code>hold&amp;</code> parameter does, and <code>bind&amp;</code> takes
         those and also a <code>bind</code>, a parameter, and another <code>bind&amp;</code>. Neither names an item of a
@@ -492,11 +496,11 @@ count = count + <span class="number">1</span>
 
 <span class="keyword">task</span> main()
     <span class="keyword">bind</span> q, r = divmod(17, 5)
-    show(q)                      <span class="comment"># 3</span>
-    show(r)                      <span class="comment"># 2</span>
+    show(q)                      <span class="comment">; 3</span>
+    show(r)                      <span class="comment">; 2</span>
 
-    <span class="keyword">bind</span> whole, <span class="keyword">_</span> = divmod(9, 4)  <span class="comment"># _ drops a result</span>
-    show(whole)                  <span class="comment"># 2</span>
+    <span class="keyword">bind</span> whole, <span class="keyword">_</span> = divmod(9, 4)  <span class="comment">; _ drops a result</span>
+    show(whole)                  <span class="comment">; 2</span>
 <span class="keyword">fi</span></pre>
       <p>
         The results are separate values, not one value, and not a tuple: <code>show(divmod(17, 5))</code> and
@@ -506,7 +510,7 @@ count = count + <span class="number">1</span>
         which includes a <code>&lt;-</code> that sends them on:
       </p>
       <pre><span class="keyword">task</span> halves(n: int) -&gt; int, int
-    <span class="keyword">&lt;-</span> divmod(n, 2)         <span class="comment"># sends both of divmod's values</span>
+    <span class="keyword">&lt;-</span> divmod(n, 2)         <span class="comment">; sends both of divmod's values</span>
 <span class="keyword">fi</span></pre>
       <p>
         Each result follows the rules of a single one: <code>-&gt; maybe int, bool</code> and
@@ -524,7 +528,7 @@ count = count + <span class="number">1</span>
       </p>
       <pre><span class="keyword">hold</span> a = 1
 <span class="keyword">hold</span> b = 2
-a, b = b, a                  <span class="comment"># a is 2, b is 1</span>
+a, b = b, a                  <span class="comment">; a is 2, b is 1</span>
 <span class="keyword">bind</span> x: int, y: float = 3, 0.5</pre>
       <p>
         A name can appear once on the left of an assignment, and the names of a <code>bind</code> or
@@ -550,13 +554,13 @@ a, b = b, a                  <span class="comment"># a is 2, b is 1</span>
       <pre><span class="keyword">task</span> score(hits: int, misses: int) -&gt; total: int
     total <span class="keyword">&lt;-</span> hits * <span class="number">10</span>
     <span class="keyword">when</span> misses == <span class="number">0</span>
-        <span class="keyword">&lt;-</span> total + <span class="number">50</span>            <span class="comment"># a perfect round: send the bonus score and end here</span>
+        <span class="keyword">&lt;-</span> total + <span class="number">50</span>            <span class="comment">; a perfect round: send the bonus score and end here</span>
     <span class="keyword">fi</span>
-    total <span class="keyword">&lt;-</span> total - misses * <span class="number">5</span>  <span class="comment"># otherwise keep going</span>
+    total <span class="keyword">&lt;-</span> total - misses * <span class="number">5</span>  <span class="comment">; otherwise keep going</span>
     <span class="keyword">when</span> total &lt; <span class="number">0</span>
         total <span class="keyword">&lt;-</span> <span class="number">0</span>
     <span class="keyword">fi</span>
-<span class="keyword">fi</span>                               <span class="comment"># reaching the end sends total</span></pre>
+<span class="keyword">fi</span>                               <span class="comment">; reaching the end sends total</span></pre>
       <p>
         Setting a result never ends the task. With several names, one line can set them all, and a bare
         <code>&lt;-</code> sends what they hold:
@@ -575,7 +579,7 @@ a, b = b, a                  <span class="comment"># a is 2, b is 1</span>
             peak <span class="keyword">&lt;-</span> n
         <span class="keyword">fi</span>
         <span class="keyword">when</span> steps == <span class="number">1000</span>
-            <span class="keyword">&lt;-</span>                  <span class="comment"># give up and send what we have</span>
+            <span class="keyword">&lt;-</span>                  <span class="comment">; give up and send what we have</span>
         <span class="keyword">fi</span>
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></pre>
@@ -608,7 +612,7 @@ a, b = b, a                  <span class="comment"># a is 2, b is 1</span>
       <pre><span class="keyword">bind</span> pi = 3.14
 <span class="keyword">hold</span> count = 0
 count = count + 1
-<span class="keyword">hold</span> total: float = 0.0     <span class="comment"># the type can be written out</span></pre>
+<span class="keyword">hold</span> total: float = 0.0     <span class="comment">; the type can be written out</span></pre>
       <p>
         Assigning copies the value. Shapes are copied whole, so after <code>hold b = a</code>, changing
         <code>b.x</code> leaves <code>a</code> alone.
@@ -631,10 +635,10 @@ count = count + 1
     <span class="keyword">bind</span> label = <span class="string">"go"</span>
     show(label)
 <span class="keyword">else</span>
-    <span class="keyword">bind</span> label = <span class="string">"wait"</span>   <span class="comment"># fine: a different block</span>
+    <span class="keyword">bind</span> label = <span class="string">"wait"</span>   <span class="comment">; fine: a different block</span>
     show(label)
 <span class="keyword">fi</span>
-show(label)                <span class="comment"># error: unknown variable 'label'</span></pre>
+show(label)                <span class="comment">; error: unknown variable 'label'</span></pre>
 
       <h3>Numbers</h3>
       <p>
@@ -663,13 +667,13 @@ show(label)                <span class="comment"># error: unknown variable 'labe
         (<code>0X1F</code>), no digits after the base, and an underscore that isn't between two digits are each an
         invalid number that says which. <a href="#reading-numbers"><code>int(text)</code></a> reads the same bases.
       </p>
-      <pre>show(<span class="number">0x1F</span>, <span class="string">" "</span>, <span class="number">0o17</span>, <span class="string">" "</span>, <span class="number">0b101</span>)      <span class="comment"># 31 15 5</span>
-show(<span class="number">0xff_ff</span> + <span class="number">1</span>)                  <span class="comment"># 65536</span>
-show(<span class="number">0b102</span>)                        <span class="comment"># error: invalid number '0b102': '2' is not a binary digit (0 or 1)</span></pre>
-      <pre>show(<span class="number">7</span> / <span class="number">2</span>)              <span class="comment"># 3, two ints</span>
-show(float(<span class="number">7</span>) / <span class="number">2.0</span>)     <span class="comment"># 3.5, two floats</span>
-show(<span class="number">5.5</span> % <span class="number">2.0</span>)          <span class="comment"># 1.5</span>
-show(<span class="number">7</span> / <span class="number">2.0</span>)            <span class="comment"># error: an int and a float don't mix in arithmetic …</span></pre>
+      <pre>show(<span class="number">0x1F</span>, <span class="string">" "</span>, <span class="number">0o17</span>, <span class="string">" "</span>, <span class="number">0b101</span>)      <span class="comment">; 31 15 5</span>
+show(<span class="number">0xff_ff</span> + <span class="number">1</span>)                  <span class="comment">; 65536</span>
+show(<span class="number">0b102</span>)                        <span class="comment">; error: invalid number '0b102': '2' is not a binary digit (0 or 1)</span></pre>
+      <pre>show(<span class="number">7</span> / <span class="number">2</span>)              <span class="comment">; 3, two ints</span>
+show(float(<span class="number">7</span>) / <span class="number">2.0</span>)     <span class="comment">; 3.5, two floats</span>
+show(<span class="number">5.5</span> % <span class="number">2.0</span>)          <span class="comment">; 1.5</span>
+show(<span class="number">7</span> / <span class="number">2.0</span>)            <span class="comment">; error: an int and a float don't mix in arithmetic …</span></pre>
       <p id="int-limits">
         An <code>int</code> never wraps around. An operation whose result doesn't fit in an <code>int</code>, and a
         division or remainder by zero, stop the program with a message saying where, on every C compiler:
@@ -679,8 +683,8 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> main()
-    show(average(10, 4))     <span class="comment"># 2</span>
-    show(average(10, 0))     <span class="comment"># stops: vela: division by zero at 2:14 in task 'average'</span>
+    show(average(10, 4))     <span class="comment">; 2</span>
+    show(average(10, 0))     <span class="comment">; stops: vela: division by zero at 2:14 in task 'average'</span>
 <span class="keyword">fi</span></pre>
       <p>
         The one quotient that doesn't fit is the smallest <code>int</code> divided by <code>-1</code>, and
@@ -733,8 +737,8 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
       </p>
       <pre><span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    show(int(<span class="string">"42"</span>) { <span class="number">0</span> })               <span class="comment"># 42</span>
-    show(int(<span class="string">"4x2"</span>) { <span class="number">-1</span> })             <span class="comment"># -1, the plan B's value</span>
+    show(int(<span class="string">"42"</span>) { <span class="number">0</span> })               <span class="comment">; 42</span>
+    show(int(<span class="string">"4x2"</span>) { <span class="number">-1</span> })             <span class="comment">; -1, the plan B's value</span>
     <span class="keyword">bind</span> line = scan(<span class="string">"Age: "</span>) <span class="keyword">at</span> r { <span class="string">""</span> }
     <span class="keyword">match</span> int(line)
     <span class="keyword">case</span> {age}
@@ -750,10 +754,10 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
 <span class="keyword">fi</span></pre>
       <pre><span class="keyword">task</span> main()
     <span class="keyword">bind</span> n = <span class="number">7</span>
-    show(float(n) / <span class="number">2.0</span>)                 <span class="comment"># 3.5</span>
-    show(int(<span class="number">2.9</span>), <span class="string">" "</span>, int(<span class="number">-2.9</span>))       <span class="comment"># 2 -2</span>
-    show(<span class="string">"over three: "</span>, int(n &gt; <span class="number">3</span>))    <span class="comment"># over three: 1</span>
-    show(int(<span class="number">1.0</span> / <span class="number">0.0</span>))               <span class="comment"># stops: vela: inf does not fit in an int at 6:10 in task 'main'</span>
+    show(float(n) / <span class="number">2.0</span>)                 <span class="comment">; 3.5</span>
+    show(int(<span class="number">2.9</span>), <span class="string">" "</span>, int(<span class="number">-2.9</span>))       <span class="comment">; 2 -2</span>
+    show(<span class="string">"over three: "</span>, int(n &gt; <span class="number">3</span>))    <span class="comment">; over three: 1</span>
+    show(int(<span class="number">1.0</span> / <span class="number">0.0</span>))               <span class="comment">; stops: vela: inf does not fit in an int at 6:10 in task 'main'</span>
 <span class="keyword">fi</span></pre>
       <p>Operators bind from loosest to tightest as follows; operators on the same row group from the left.</p>
       <table>
@@ -773,8 +777,8 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
       <p>
         Text literals use double quotes and support the escapes <code>\n</code>, <code>\t</code>, <code>\r</code>,
         <code>\\</code>, <code>\"</code>, <code>\0</code>, and <code>\{</code> and <code>\}</code> for braces, since a
-        brace in text holds a value (see <a href="#interpolation">Text holding values</a>). A <code>#</code> starts a comment that runs to the end
-        of the line. A text literal ends on the line it starts (a line break in it is written <code>\n</code>). Text holds
+        brace in text holds a value (see <a href="#interpolation">Text holding values</a>). A <code>;</code> starts a comment that runs to the end
+        of the line (and a value in text's braces can't hold one). A text literal ends on the line it starts (a line break in it is written <code>\n</code>). Text holds
         any UTF-8 and knows how long it is: <code>t.len</code> is how many bytes it has, read without counting them.
         A character outside ASCII takes more than one byte (<code>"é".len</code> is 2, <code>"Ada".len</code> is 3), and a
         <code>\0</code> is a byte like any other (<code>"ab\0cd".len</code> is 5, and it shows all five).
@@ -808,13 +812,13 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
 
 <span class="keyword">task</span> main()
     <span class="keyword">bind</span> n = <span class="number">5</span>
-    show(<span class="string">"n = "</span>, n)                      <span class="comment"># n = 5</span>
-    show(n, <span class="string">" and "</span>, n * <span class="number">2</span>, <span class="string">"!"</span>)        <span class="comment"># 5 and 10!</span>
-    show()                                <span class="comment"># an empty line</span>
+    show(<span class="string">"n = "</span>, n)                      <span class="comment">; n = 5</span>
+    show(n, <span class="string">" and "</span>, n * <span class="number">2</span>, <span class="string">"!"</span>)        <span class="comment">; 5 and 10!</span>
+    show()                                <span class="comment">; an empty line</span>
     <span class="keyword">bind</span> missing: <span class="keyword">maybe</span> int = <span class="keyword">none</span>
-    show(<span class="string">"missing: "</span>, missing)            <span class="comment"># missing: none</span>
+    show(<span class="string">"missing: "</span>, missing)            <span class="comment">; missing: none</span>
     <span class="keyword">bind</span> card = Card { name: <span class="string">"Ada"</span>, wins: <span class="number">3</span> }
-    show(<span class="string">"top: "</span>, card)                   <span class="comment"># top: Ada (3), from Card's str</span>
+    show(<span class="string">"top: "</span>, card)                   <span class="comment">; top: Ada (3), from Card's str</span>
 <span class="keyword">fi</span></pre>
       <p id="text-parts">
         <code>t[a..b]</code> is a part of text: its bytes from <code>a</code> up to, but not including, <code>b</code>. A part
@@ -834,7 +838,7 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
     <span class="keyword">hold</span> i = <span class="number">0</span>
     <span class="keyword">loop</span> i &lt; line.len
         <span class="keyword">when</span> line[i..i + <span class="number">1</span>] == <span class="string">" "</span>
-            <span class="keyword">&lt;-</span> line[<span class="number">0</span>..i]              <span class="comment"># a part: text@r, like the line</span>
+            <span class="keyword">&lt;-</span> line[<span class="number">0</span>..i]              <span class="comment">; a part: text@r, like the line</span>
         <span class="keyword">fi</span>
         i = i + <span class="number">1</span>
     <span class="keyword">fi</span>
@@ -843,12 +847,12 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
 
 <span class="keyword">task</span> main()
     <span class="keyword">bind</span> name = <span class="string">"Ada Lovelace"</span>
-    show(name.len)                        <span class="comment"># 12</span>
-    show(name[<span class="number">4</span>..name.len])               <span class="comment"># Lovelace</span>
-    show(first_word(name))                <span class="comment"># Ada</span>
-    show(<span class="string">"café"</span>.len)                      <span class="comment"># 5: é takes two bytes</span>
-    show(<span class="string">"café"</span>[<span class="number">3</span>..<span class="number">5</span>])                   <span class="comment"># é</span>
-    show(<span class="string">"apple"</span> &lt; <span class="string">"banana"</span>)            <span class="comment"># true</span>
+    show(name.len)                        <span class="comment">; 12</span>
+    show(name[<span class="number">4</span>..name.len])               <span class="comment">; Lovelace</span>
+    show(first_word(name))                <span class="comment">; Ada</span>
+    show(<span class="string">"café"</span>.len)                      <span class="comment">; 5: é takes two bytes</span>
+    show(<span class="string">"café"</span>[<span class="number">3</span>..<span class="number">5</span>])                   <span class="comment">; é</span>
+    show(<span class="string">"apple"</span> &lt; <span class="string">"banana"</span>)            <span class="comment">; true</span>
 <span class="keyword">fi</span></pre>
       <p id="input">
         <code>scan(prompt) at r</code>, or <code>scan(prompt)@r</code>, reads input: it shows the prompt (as it is, with
@@ -862,10 +866,10 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
       </p>
       <pre><span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">bind</span> name = scan(<span class="string">"Your name: "</span>) <span class="keyword">at</span> r { <span class="string">"stranger"</span> }   <span class="comment"># text@r; "stranger" when input has ended</span>
+    <span class="keyword">bind</span> name = scan(<span class="string">"Your name: "</span>) <span class="keyword">at</span> r { <span class="string">"stranger"</span> }   <span class="comment">; text@r; "stranger" when input has ended</span>
     show(name)
     <span class="keyword">hold</span> count = <span class="number">0</span>
-    <span class="keyword">loop</span> scan(<span class="string">""</span>)@r <span class="keyword">is</span> {line}                              <span class="comment"># every line left</span>
+    <span class="keyword">loop</span> scan(<span class="string">""</span>)@r <span class="keyword">is</span> {line}                              <span class="comment">; every line left</span>
         count = count + <span class="number">1</span>
     <span class="keyword">fi</span>
     show(count)
@@ -884,14 +888,14 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
     <span class="keyword">hold</span> total = <span class="number">0</span>
     <span class="keyword">hold</span> reading = <span class="keyword">true</span>
     <span class="keyword">loop</span> reading
-        <span class="keyword">match</span> scan(<span class="string">"n: "</span>, <span class="type">int</span>)                <span class="comment"># int ~ InputError; no region</span>
+        <span class="keyword">match</span> scan(<span class="string">"n: "</span>, <span class="type">int</span>)                <span class="comment">; int ~ InputError; no region</span>
         <span class="keyword">case</span> {value}
             total = total + value
         <span class="keyword">case</span> <span class="keyword">failure</span> e
             <span class="keyword">match</span> e
-            <span class="keyword">case</span> Ended                        <span class="comment"># nothing more to read</span>
+            <span class="keyword">case</span> Ended                        <span class="comment">; nothing more to read</span>
                 reading = <span class="keyword">false</span>
-            <span class="keyword">case</span> NoNumber why                 <span class="comment"># the line was no number</span>
+            <span class="keyword">case</span> NoNumber why                 <span class="comment">; the line was no number</span>
                 <span class="keyword">match</span> why
                 <span class="keyword">case</span> NotANumber
                     show(<span class="string">"that is no number"</span>)
@@ -902,7 +906,7 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         <span class="keyword">fi</span>
     <span class="keyword">fi</span>
     show(<span class="string">"total "</span>, total)
-    <span class="keyword">bind</span> age = scan(<span class="string">"Age: "</span>, <span class="type">int</span>) { <span class="number">0</span> }        <span class="comment"># a plan B where any trouble means the same</span>
+    <span class="keyword">bind</span> age = scan(<span class="string">"Age: "</span>, <span class="type">int</span>) { <span class="number">0</span> }        <span class="comment">; a plan B where any trouble means the same</span>
     show(age)
 <span class="keyword">fi</span></pre>
       <p>
@@ -939,14 +943,14 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">bind</span> name = full_name(<span class="string">"Ada"</span>, <span class="string">"Lovelace"</span>, r)   <span class="comment"># text@r</span>
-    show((<span class="string">"&lt;"</span> + name + <span class="string">"&gt;"</span>)@r)                  <span class="comment"># &lt;Ada Lovelace&gt;</span>
+    <span class="keyword">bind</span> name = full_name(<span class="string">"Ada"</span>, <span class="string">"Lovelace"</span>, r)   <span class="comment">; text@r</span>
+    show((<span class="string">"&lt;"</span> + name + <span class="string">"&gt;"</span>)@r)                  <span class="comment">; &lt;Ada Lovelace&gt;</span>
     <span class="keyword">hold</span> line = <span class="string">""</span>.copy() <span class="keyword">at</span> r
     <span class="keyword">each</span> word <span class="keyword">in</span> [<span class="string">"one"</span>, <span class="string">"two"</span>]
-        line = line + word + <span class="string">";"</span> <span class="keyword">at</span> r                 <span class="comment"># one;two; — each join is new text in r</span>
+        line = line + word + <span class="string">";"</span> <span class="keyword">at</span> r                 <span class="comment">; one;two; — each join is new text in r</span>
     <span class="keyword">fi</span>
     show(line)
-    show(<span class="string">"Ada"</span> + <span class="string">"!"</span>)                           <span class="comment"># error: joining text makes new text, which goes in a region …</span>
+    show(<span class="string">"Ada"</span> + <span class="string">"!"</span>)                           <span class="comment">; error: joining text makes new text, which goes in a region …</span>
 <span class="keyword">fi</span></pre>
       <p>
         Each join makes new text in its region, and a region only frees memory when its block closes, so a loop that joins
@@ -978,12 +982,12 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    show(<span class="number">42</span>.str() <span class="keyword">at</span> r)                          <span class="comment"># 42</span>
-    show(text(<span class="number">2.5</span>) <span class="keyword">at</span> r)                         <span class="comment"># 2.5, as show writes it</span>
+    show(<span class="number">42</span>.str() <span class="keyword">at</span> r)                          <span class="comment">; 42</span>
+    show(text(<span class="number">2.5</span>) <span class="keyword">at</span> r)                         <span class="comment">; 2.5, as show writes it</span>
     <span class="keyword">bind</span> p = Point { x: <span class="number">3</span>, y: <span class="number">-4</span> }
-    show(<span class="string">"p = "</span> + p.str(r) <span class="keyword">at</span> r)                  <span class="comment"># p = (3, -4)</span>
-    show(<span class="string">"p = "</span>, p)                            <span class="comment"># the same line, with no region to name</span>
-    show(<span class="string">"n = "</span> + <span class="number">5</span> <span class="keyword">at</span> r)                        <span class="comment"># error: '+' joins text, but this value is int; turn it into text first …</span>
+    show(<span class="string">"p = "</span> + p.str(r) <span class="keyword">at</span> r)                  <span class="comment">; p = (3, -4)</span>
+    show(<span class="string">"p = "</span>, p)                            <span class="comment">; the same line, with no region to name</span>
+    show(<span class="string">"n = "</span> + <span class="number">5</span> <span class="keyword">at</span> r)                        <span class="comment">; error: '+' joins text, but this value is int; turn it into text first …</span>
 <span class="keyword">fi</span></pre>
       <p id="interpolation">
         <strong>Text holding values.</strong> A value in braces inside text, <code>"n = {n}" at r</code>, is turned into
@@ -1009,17 +1013,17 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
     <span class="keyword">region</span> r
     <span class="keyword">bind</span> name = <span class="string">"Ada"</span>
     <span class="keyword">bind</span> n = <span class="number">3</span>
-    show(<span class="string">"{name} has {n} cats"</span> <span class="keyword">at</span> r)             <span class="comment"># Ada has 3 cats</span>
-    show(<span class="string">"{n} * 2 = {n * 2}, big: {n &gt; 2}"</span>@r)     <span class="comment"># 3 * 2 = 6, big: true</span>
-    show(<span class="string">"at {Point { x: n, y: -n }}"</span> <span class="keyword">at</span> r)       <span class="comment"># at (3, -3), from Point's str</span>
-    show(<span class="string">"\{name\} is {name[0..1]}…"</span> <span class="keyword">at</span> r)          <span class="comment"># {name} is A…</span>
-    show(<span class="string">"n = {n}"</span>)                             <span class="comment"># error: text holding values is new text, so it names the region it goes in …</span>
+    show(<span class="string">"{name} has {n} cats"</span> <span class="keyword">at</span> r)             <span class="comment">; Ada has 3 cats</span>
+    show(<span class="string">"{n} * 2 = {n * 2}, big: {n &gt; 2}"</span>@r)     <span class="comment">; 3 * 2 = 6, big: true</span>
+    show(<span class="string">"at {Point { x: n, y: -n }}"</span> <span class="keyword">at</span> r)       <span class="comment">; at (3, -3), from Point's str</span>
+    show(<span class="string">"\{name\} is {name[0..1]}…"</span> <span class="keyword">at</span> r)          <span class="comment">; {name} is A…</span>
+    show(<span class="string">"n = {n}"</span>)                             <span class="comment">; error: text holding values is new text, so it names the region it goes in …</span>
 <span class="keyword">fi</span></pre>
-      <pre><span class="comment"># greet the user</span>
-show(<span class="string">"say \"hi\""</span>)       <span class="comment"># say "hi"</span>
-show(2.0 / 3.0)            <span class="comment"># 0.666667</span>
-show(1 &lt; 2 <span class="keyword">and not</span> false)  <span class="comment"># true</span>
-show(1 == 1.0)             <span class="comment"># error: expected type int, got float</span></pre>
+      <pre><span class="comment">; greet the user</span>
+show(<span class="string">"say \"hi\""</span>)       <span class="comment">; say "hi"</span>
+show(2.0 / 3.0)            <span class="comment">; 0.666667</span>
+show(1 &lt; 2 <span class="keyword">and not</span> false)  <span class="comment">; true</span>
+show(1 == 1.0)             <span class="comment">; error: expected type int, got float</span></pre>
 
       <h3>Shapes</h3>
       <p>Shapes group named fields, like C's structs. (Several values of one type are an array; see <a href="#arrays">Arrays</a>.)</p>
@@ -1047,15 +1051,15 @@ show(p.x)</pre>
 <span class="keyword">fi</span>
 
 <span class="keyword">shape</span> Job
-    name: text                   <span class="comment"># every literal gives this one</span>
+    name: text                   <span class="comment">; every literal gives this one</span>
     tries: int = 0
     note: <span class="keyword">maybe</span> text = <span class="keyword">none</span>
     state: State = State.Idle
 <span class="keyword">fi</span>
 
-<span class="keyword">bind</span> sweep = Job { name: "sweep" }              <span class="comment"># tries 0, note none, state Idle</span>
-<span class="keyword">bind</span> again = Job { name: "scrub", tries: 3 }    <span class="comment"># what it writes, and the rest</span>
-Job { tries: 1 }                                <span class="comment"># error: missing field 'name' in 'Job'</span></pre>
+<span class="keyword">bind</span> sweep = Job { name: "sweep" }              <span class="comment">; tries 0, note none, state Idle</span>
+<span class="keyword">bind</span> again = Job { name: "scrub", tries: 3 }    <span class="comment">; what it writes, and the rest</span>
+Job { tries: 1 }                                <span class="comment">; error: missing field 'name' in 'Job'</span></pre>
       <p>
         This is what lets a shape keep a field of its own and still be built anywhere: a <code>priv</code> field with
         no value to fall back on can only be given inside its own module, so only that module can build the shape at
@@ -1079,20 +1083,20 @@ Job { tries: 1 }                                <span class="comment"># error: m
         is no file's secret.
       </p>
       <pre><span class="keyword">shape</span> Meter
-    <span class="keyword">read</span> label: text             <span class="comment"># given by the literal, then only Meter changes it</span>
-    <span class="keyword">read</span> count: int = 0          <span class="comment"># starts at 0, and only Meter changes it</span>
+    <span class="keyword">read</span> label: text             <span class="comment">; given by the literal, then only Meter changes it</span>
+    <span class="keyword">read</span> count: int = 0          <span class="comment">; starts at 0, and only Meter changes it</span>
 
     <span class="keyword">alters</span> tick()
-        .count = .count + 1     <span class="comment"># ok: a method of Meter</span>
+        .count = .count + 1     <span class="comment">; ok: a method of Meter</span>
     <span class="keyword">fi</span>
 <span class="keyword">fi</span>
 
 <span class="keyword">hold</span> m = Meter { label: "door" }
 m.tick()
-show(m.label, " ", m.count)     <span class="comment"># door 1</span>
-m.count = 5                     <span class="comment"># error: 'count' is a read-only field of 'Meter', which only the alters methods of 'Meter' change</span>
-Meter { label: "x", count: 3 }  <span class="comment"># error: … falls back on its own value, so no literal gives it</span>
-m = Meter { label: "gate" }     <span class="comment"># ok: a whole new value, which the literal rules keep honest</span></pre>
+show(m.label, " ", m.count)     <span class="comment">; door 1</span>
+m.count = 5                     <span class="comment">; error: 'count' is a read-only field of 'Meter', which only the alters methods of 'Meter' change</span>
+Meter { label: "x", count: 3 }  <span class="comment">; error: … falls back on its own value, so no literal gives it</span>
+m = Meter { label: "gate" }     <span class="comment">; ok: a whole new value, which the literal rules keep honest</span></pre>
       <p>
         Assigning is not the only change: calling an <code>alters</code> method on the field, assigning a field or
         an item of an array it holds, and adding to or taking from a slice it holds all change it, and all are
@@ -1134,10 +1138,10 @@ m = Meter { label: "gate" }     <span class="comment"># ok: a whole new value, w
       </ul>
       <pre><span class="keyword">shape</span> Ticket
     number: int
-    <span class="keyword">shared</span> prefix: text = "T-"          <span class="comment"># never changes</span>
-    <span class="keyword">shared</span> <span class="keyword">read</span> issued: int = 0        <span class="comment"># only Ticket's methods change it</span>
-    <span class="keyword">shared</span> <span class="keyword">hold</span> limit: int = 100      <span class="comment"># any code may change it</span>
-    <span class="keyword">priv</span> <span class="keyword">shared</span> <span class="keyword">hold</span> last: int = 0    <span class="comment"># only this file sees it</span>
+    <span class="keyword">shared</span> prefix: text = "T-"          <span class="comment">; never changes</span>
+    <span class="keyword">shared</span> <span class="keyword">read</span> issued: int = 0        <span class="comment">; only Ticket's methods change it</span>
+    <span class="keyword">shared</span> <span class="keyword">hold</span> limit: int = 100      <span class="comment">; any code may change it</span>
+    <span class="keyword">priv</span> <span class="keyword">shared</span> <span class="keyword">hold</span> last: int = 0    <span class="comment">; only this file sees it</span>
 
     <span class="keyword">alters</span> issue()
         Ticket.last = Ticket.last + 1
@@ -1148,11 +1152,11 @@ m = Meter { label: "gate" }     <span class="comment"># ok: a whole new value, w
 
 <span class="keyword">hold</span> t = Ticket { number: 0 }
 t.issue()
-show(Ticket.prefix, t.number, " of ", Ticket.issued)   <span class="comment"># T-1 of 1</span>
-Ticket.limit = 50                <span class="comment"># ok: shared hold</span>
-Ticket.issued = 7                <span class="comment"># error: 'Ticket.issued' is a read-only shared field, which only the methods of 'Ticket' change</span>
-show(t.issued)                   <span class="comment"># error: 'issued' is a shared field of 'Ticket' … so it is read as 'Ticket.issued'</span>
-Ticket { number: 1, limit: 3 }   <span class="comment"># error: 'limit' is a shared field of 'Ticket' … so no literal gives it</span></pre>
+show(Ticket.prefix, t.number, " of ", Ticket.issued)   <span class="comment">; T-1 of 1</span>
+Ticket.limit = 50                <span class="comment">; ok: shared hold</span>
+Ticket.issued = 7                <span class="comment">; error: 'Ticket.issued' is a read-only shared field, which only the methods of 'Ticket' change</span>
+show(t.issued)                   <span class="comment">; error: 'issued' is a shared field of 'Ticket' … so it is read as 'Ticket.issued'</span>
+Ticket { number: 1, limit: 3 }   <span class="comment">; error: 'limit' is a shared field of 'Ticket' … so no literal gives it</span></pre>
       <p>
         In C each shared field is one variable of its own, given its first value where the program starts: a value
         of the shape is no larger for it, and reading one costs what reading a variable does. Since
@@ -1169,20 +1173,20 @@ Ticket { number: 1, limit: 3 }   <span class="comment"># error: 'limit' is a sha
       </p>
       <pre><span class="keyword">shape</span> Node
     value: int
-    next: <span class="keyword">maybe</span> ^Node      <span class="comment"># ok: a pointer that can be none</span>
+    next: <span class="keyword">maybe</span> ^Node      <span class="comment">; ok: a pointer that can be none</span>
 <span class="keyword">fi</span>
 
 <span class="keyword">shape</span> Loop
-    inner: Loop            <span class="comment"># error: 'Loop' contains itself by value</span>
+    inner: Loop            <span class="comment">; error: 'Loop' contains itself by value</span>
 <span class="keyword">fi</span>
 
 <span class="keyword">shape</span> Chain
-    next: ^Chain           <span class="comment"># error: 'Chain' can never be created: field 'next' needs an existing ^Chain</span>
+    next: ^Chain           <span class="comment">; error: 'Chain' can never be created: field 'next' needs an existing ^Chain</span>
 <span class="keyword">fi</span></pre>
       <p>Assigning to a field requires the variable to be a <code>hold</code>, or a <a href="#parameters"><code>hold</code> parameter</a>.</p>
       <pre><span class="keyword">hold</span> q = Point { x: 1, y: 2 }
-q.x = 5                    <span class="comment"># ok</span>
-p.x = 5                    <span class="comment"># error: cannot assign to a field of immutable variable 'p'</span></pre>
+q.x = 5                    <span class="comment">; ok</span>
+p.x = 5                    <span class="comment">; error: cannot assign to a field of immutable variable 'p'</span></pre>
 
       <h3 id="kinds">Kinds</h3>
       <p>
@@ -1226,7 +1230,7 @@ p.x = 5                    <span class="comment"># error: cannot assign to a fie
 <span class="keyword">fi</span>
 
 <span class="keyword">bind</span> a = Red
-<span class="keyword">bind</span> b = Green()          <span class="comment"># same as Green</span>
+<span class="keyword">bind</span> b = Green()          <span class="comment">; same as Green</span>
 <span class="keyword">bind</span> c = Dimmed(3)</pre>
       <p>
         A variant can also be named through its kind: <code>Light.Red</code> and <code>Light.Dimmed(3)</code> are the
@@ -1271,7 +1275,7 @@ p.x = 5                    <span class="comment"># error: cannot assign to a fie
 <span class="keyword">hold</span> c = Counter { label: <span class="string">"clicks"</span>, count: <span class="number">0</span> }
 c.step()
 c.step()
-show(c.total())            <span class="comment"># 2</span></pre>
+show(c.total())            <span class="comment">; 2</span></pre>
       <p>
         A method that changes the value it is called on says <code>alters</code> before its name; one that assigns a
         member without it is refused, with the fix named. Only a place that can change may call it: a
@@ -1282,14 +1286,14 @@ show(c.total())            <span class="comment"># 2</span></pre>
         never change:
       </p>
       <pre><span class="keyword">bind</span> fixed = Counter { label: <span class="string">"once"</span>, count: <span class="number">1</span> }
-show(fixed.total())        <span class="comment"># fine: total changes nothing</span>
-fixed.step()               <span class="comment"># error: 'Counter.step' changes the value it is called on, so it needs a place</span>
-                           <span class="comment">#   that can change, and 'fixed' never does (declared at 1:6); a value declared</span>
-                           <span class="comment">#   with 'hold' can</span>
+show(fixed.total())        <span class="comment">; fine: total changes nothing</span>
+fixed.step()               <span class="comment">; error: 'Counter.step' changes the value it is called on, so it needs a place</span>
+                           <span class="comment">;   that can change, and 'fixed' never does (declared at 1:6); a value declared</span>
+                           <span class="comment">;   with 'hold' can</span>
 
 <span class="keyword">task</span> bump(c: Counter)
-    c.step()               <span class="comment"># error: ... and 'c' is a parameter, which never does; write 'hold c: Counter'</span>
-<span class="keyword">fi</span>                         <span class="comment">#   to change the task's own copy, or 'hold&amp; c: Counter' to change the caller's</span></pre>
+    c.step()               <span class="comment">; error: ... and 'c' is a parameter, which never does; write 'hold c: Counter'</span>
+<span class="keyword">fi</span>                         <span class="comment">;   to change the task's own copy, or 'hold&amp; c: Counter' to change the caller's</span></pre>
       <p>
         The whole value is <code>.this</code>. A kind has no fields, so its methods read <code>.this</code> and take it
         apart with <code>match</code>, and an <code>alters</code> method moves the value to another variant with
@@ -1328,7 +1332,7 @@ fixed.step()               <span class="comment"># error: 'Counter.step' changes
 
 <span class="keyword">hold</span> light = Red
 light.flip()
-light.tell(<span class="string">"now:"</span>)         <span class="comment"># now:, then green</span></pre>
+light.tell(<span class="string">"now:"</span>)         <span class="comment">; now:, then green</span></pre>
       <p>
         Inside a kind, a variant's values and a method's parameters are written alike: <code>Blinking(times: int)</code>
         and <code>tell(prefix: text)</code>. A member is a method when it says <code>alters</code>, names what it sends
@@ -1363,33 +1367,33 @@ light.tell(<span class="string">"now:"</span>)         <span class="comment"># n
 
       <h3 id="arrays">Arrays</h3>
       <p>
-        An array holds a fixed number of values of one type, written <code>[type; count]</code>. A literal lists the
-        values, or repeats one: <code>[0; 8]</code> is eight zeros, the value computed once and copied. <code>xs[i]</code>
+        An array holds a fixed number of values of one type, written <code>[type#count]</code>. A literal lists the
+        values, or repeats one: <code>[0#8]</code> is eight zeros, the value computed once and copied. <code>xs[i]</code>
         is an item, counting from 0, and <code>xs.len</code> is how many items there are. An array is a value, like a
         shape: assigning or passing it copies every item, and an item can be assigned where a field could be, as in a
         <code>hold</code>.
       </p>
-      <pre><span class="keyword">bind</span> scores: [int; 4] = [90, 72, 85, 60]
-show(scores[2])             <span class="comment"># 85</span>
-show(scores.len)            <span class="comment"># 4</span>
-<span class="keyword">hold</span> grid = [[0; 3]; 2]     <span class="comment"># [[int; 3]; 2]</span>
+      <pre><span class="keyword">bind</span> scores: [int#4] = [90, 72, 85, 60]
+show(scores[2])             <span class="comment">; 85</span>
+show(scores.len)            <span class="comment">; 4</span>
+<span class="keyword">hold</span> grid = [[0#3]#2]     <span class="comment">; [[int#3]#2]</span>
 grid[1][2] = 5
-<span class="keyword">hold</span> copy = scores          <span class="comment"># a copy: changing it leaves scores as it was</span>
+<span class="keyword">hold</span> copy = scores          <span class="comment">; a copy: changing it leaves scores as it was</span>
 copy[0] = 0
-scores[0] = 0               <span class="comment"># error: cannot assign to an item of immutable variable 'scores'</span>
+scores[0] = 0               <span class="comment">; error: cannot assign to an item of immutable variable 'scores'</span>
 <span class="keyword">each</span> score <span class="keyword">in</span> scores
     show(score)
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>Items.</strong> A literal's values have one type, except that <code>none</code> and a value make a
-          <code>maybe</code> (<code>[none, 7]</code> is a <code>[maybe int; 2]</code>), and <code>fail e</code> and a value
+          <code>maybe</code> (<code>[none, 7]</code> is a <code>[maybe int#2]</code>), and <code>fail e</code> and a value
           make a <code>T ~ E</code>. A literal of only <code>none</code> needs a written type, as in
-          <code>bind slots: [maybe text; 4] = [none; 4]</code>. Arrays go anywhere a type does: fields, payloads,
-          parameters, results, <code>maybe [int; 2]</code>, and arrays of shapes (<code>points[1].x = 4</code>). An array
+          <code>bind slots: [maybe text#4] = [none#4]</code>. Arrays go anywhere a type does: fields, payloads,
+          parameters, results, <code>maybe [int#2]</code>, and arrays of shapes (<code>points[1].x = 4</code>). An array
           holds its items by value, so a shape can't hold an array of itself, and an array of pointers lives in a region
-          like a shape holding them (<code>[^Node; 3]@r</code>). An array keeps no region of its own, so the one written
-          on it is its items' (<code>[text; 2]@r</code> and <code>[text@r; 2]</code> are one type, and so is
-          <code>[text@r; 2]@r</code>); writing two different ones is an error.</li>
+          like a shape holding them (<code>[^Node#3]@r</code>). An array keeps no region of its own, so the one written
+          on it is its items' (<code>[text#2]@r</code> and <code>[text@r#2]</code> are one type, and so is
+          <code>[text@r#2]@r</code>); writing two different ones is an error.</li>
         <li><strong>Count.</strong> A count is at least 1 and known before the program runs: a number in a type, and a
           number or arithmetic on numbers (<code>[0; 2 * 8]</code>) in a literal. For a count known only while the
           program runs, make a slice in a region (see <a href="#slices">Slices</a>). A type whose values would take more
@@ -1417,20 +1421,20 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
 
 <span class="keyword">task</span> main()
     <span class="keyword">bind</span> pair: (text, int) = (<span class="string">"Ada"</span>, <span class="number">36</span>)
-    show(pair.<span class="number">0</span>)                         <span class="comment"># Ada</span>
-    show(pair.<span class="number">1</span>)                         <span class="comment"># 36</span>
-    <span class="keyword">hold</span> point = (<span class="number">1</span>, (<span class="number">2.5</span>, <span class="string">"deep"</span>))      <span class="comment"># (int, (float, text))</span>
-    show(point.<span class="number">1.1</span>)                      <span class="comment"># deep</span>
-    point = (<span class="number">2</span>, (<span class="number">3.5</span>, <span class="string">"other"</span>))          <span class="comment"># a hold tuple takes a whole new tuple</span>
-    <span class="keyword">bind</span> q, r = divide(<span class="number">17</span>, <span class="number">5</span>)            <span class="comment"># unpacks the tuple: 3 and 2</span>
-    <span class="keyword">bind</span> (whole, left) = divide(<span class="number">9</span>, <span class="number">4</span>)    <span class="comment"># the same, in parentheses</span>
-    <span class="keyword">bind</span> first, (half, label) = point    <span class="comment"># a nested part, in parentheses</span>
+    show(pair.<span class="number">0</span>)                         <span class="comment">; Ada</span>
+    show(pair.<span class="number">1</span>)                         <span class="comment">; 36</span>
+    <span class="keyword">hold</span> point = (<span class="number">1</span>, (<span class="number">2.5</span>, <span class="string">"deep"</span>))      <span class="comment">; (int, (float, text))</span>
+    show(point.<span class="number">1.1</span>)                      <span class="comment">; deep</span>
+    point = (<span class="number">2</span>, (<span class="number">3.5</span>, <span class="string">"other"</span>))          <span class="comment">; a hold tuple takes a whole new tuple</span>
+    <span class="keyword">bind</span> q, r = divide(<span class="number">17</span>, <span class="number">5</span>)            <span class="comment">; unpacks the tuple: 3 and 2</span>
+    <span class="keyword">bind</span> (whole, left) = divide(<span class="number">9</span>, <span class="number">4</span>)    <span class="comment">; the same, in parentheses</span>
+    <span class="keyword">bind</span> first, (half, label) = point    <span class="comment">; a nested part, in parentheses</span>
     <span class="keyword">hold</span> x = <span class="number">0</span>
     <span class="keyword">hold</span> y = <span class="number">0</span>
-    x, y = divide(<span class="number">20</span>, <span class="number">6</span>)                 <span class="comment"># into hold variables of the items&#x27; types</span>
-    (y, x) = (x, y)                      <span class="comment"># swapped</span>
-    point.<span class="number">0</span> = <span class="number">5</span>                          <span class="comment"># error: a tuple&#x27;s items never change; …</span>
-    show(pair == (<span class="string">"Ada"</span>, <span class="number">36</span>))            <span class="comment"># true</span>
+    x, y = divide(<span class="number">20</span>, <span class="number">6</span>)                 <span class="comment">; into hold variables of the items&#x27; types</span>
+    (y, x) = (x, y)                      <span class="comment">; swapped</span>
+    point.<span class="number">0</span> = <span class="number">5</span>                          <span class="comment">; error: a tuple&#x27;s items never change; …</span>
+    show(pair == (<span class="string">"Ada"</span>, <span class="number">36</span>))            <span class="comment">; true</span>
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>Items.</strong> Only values that can't change: numbers, bools, text, other tuples, <code>maybe</code>
@@ -1523,14 +1527,14 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
     <span class="keyword">bind</span> ns: [int]@r = <span class="keyword">new</span> [int]([<span class="number">4</span>, <span class="number">5</span>]) <span class="keyword">at</span> r
     <span class="keyword">hold</span> names: [text@r]@r = <span class="keyword">new</span> [text]() <span class="keyword">at</span> r
     names.add(<span class="string">"Ada"</span>.copy() <span class="keyword">at</span> r)
-    show(first(ns))                      <span class="comment"># 4 — the argument says T is int</span>
-    show(first&lt;text@r&gt;(names))            <span class="comment"># Ada — or the call writes it out</span>
-    show(biggest(<span class="number">2</span>, <span class="number">5</span>))                   <span class="comment"># 5</span>
-    show(biggest(<span class="number">1.5</span>, <span class="number">0.5</span>))               <span class="comment"># 1.5 — the same task, made for float too</span>
-    <span class="keyword">bind</span> empty: <span class="keyword">maybe</span> int = nothing()    <span class="comment"># the place the value goes says T is int</span>
+    show(first(ns))                      <span class="comment">; 4 — the argument says T is int</span>
+    show(first&lt;text@r&gt;(names))            <span class="comment">; Ada — or the call writes it out</span>
+    show(biggest(<span class="number">2</span>, <span class="number">5</span>))                   <span class="comment">; 5</span>
+    show(biggest(<span class="number">1.5</span>, <span class="number">0.5</span>))               <span class="comment">; 1.5 — the same task, made for float too</span>
+    <span class="keyword">bind</span> empty: <span class="keyword">maybe</span> int = nothing()    <span class="comment">; the place the value goes says T is int</span>
     <span class="keyword">bind</span> fallback: text = nothing() { <span class="string">"none"</span> }
-    show(biggest(<span class="string">"fig"</span>, <span class="string">"pear"</span>))          <span class="comment"># pear — text has an order too</span>
-    show(biggest(<span class="keyword">true</span>, <span class="keyword">false</span>))            <span class="comment"># error: task 'biggest' takes a type that is 'ordered' …</span>
+    show(biggest(<span class="string">"fig"</span>, <span class="string">"pear"</span>))          <span class="comment">; pear — text has an order too</span>
+    show(biggest(<span class="keyword">true</span>, <span class="keyword">false</span>))            <span class="comment">; error: task 'biggest' takes a type that is 'ordered' …</span>
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>Which type a call is for.</strong> From its arguments, from the place its value goes (a binding's
@@ -1583,7 +1587,7 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
     value: T
 <span class="keyword">fi</span>
 
-<span class="comment"># A field may name the shape again, with the types it takes, behind a pointer.</span>
+<span class="comment">; A field may name the shape again, with the types it takes, behind a pointer.</span>
 <span class="keyword">shape</span> Node&lt;T&gt;
     value: T
     next: <span class="keyword">maybe</span> ^Node&lt;T&gt;
@@ -1595,14 +1599,14 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">bind</span> count = Box { value: <span class="number">1</span> }          <span class="comment"># Box&lt;int&gt;: the value says which type</span>
-    <span class="keyword">bind</span> empty = Box&lt;<span class="keyword">maybe</span> int&gt; { value: <span class="keyword">none</span> }  <span class="comment"># written, since none says nothing</span>
+    <span class="keyword">bind</span> count = Box { value: <span class="number">1</span> }          <span class="comment">; Box&lt;int&gt;: the value says which type</span>
+    <span class="keyword">bind</span> empty = Box&lt;<span class="keyword">maybe</span> int&gt; { value: <span class="keyword">none</span> }  <span class="comment">; written, since none says nothing</span>
     <span class="keyword">bind</span> kept: Box&lt;text&gt;@r = Box { value: <span class="string">"ada"</span>.copy() <span class="keyword">at</span> r }
-    show(valueOf(count))                   <span class="comment"># 1</span>
-    show(kept.value)                       <span class="comment"># ada</span>
+    show(valueOf(count))                   <span class="comment">; 1</span>
+    show(kept.value)                       <span class="comment">; ada</span>
     <span class="keyword">bind</span> tail: ^Node&lt;int&gt;@r = <span class="keyword">new</span> Node&lt;int&gt;(Node { value: <span class="number">3</span>, next: <span class="keyword">none</span> }) <span class="keyword">at</span> r
     <span class="keyword">bind</span> head: ^Node&lt;int&gt;@r = <span class="keyword">new</span> Node&lt;int&gt;(Node { value: <span class="number">2</span>, next: tail }) <span class="keyword">at</span> r
-    show(head^.value)                      <span class="comment"># 2</span>
+    show(head^.value)                      <span class="comment">; 2</span>
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>Literals.</strong> <code>Box { value: 1 }</code> works out the types from the values it gives, as a
@@ -1698,7 +1702,7 @@ scores[0] = 0               <span class="comment"># error: cannot assign to an i
         <span class="keyword">&lt;-</span>
     }
     total = f.size() { <span class="number">0</span> }
-<span class="keyword">fi</span>                           <span class="comment"># the file is closed here, and r freed</span>
+<span class="keyword">fi</span>                           <span class="comment">; the file is closed here, and r freed</span>
 show(total)</pre>
       <p>
         A <code>block</code> takes nothing on its line. What it sets is set after it, a result
@@ -1722,7 +1726,7 @@ show(total)</pre>
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> main()
-    show(grade(<span class="number">72</span>))       <span class="comment"># pass</span>
+    show(grade(<span class="number">72</span>))       <span class="comment">; pass</span>
 <span class="keyword">fi</span></pre>
       <p>
         A condition can also test a pattern with <code>is</code>, the same patterns a <code>case</code> takes. The
@@ -1735,22 +1739,22 @@ show(total)</pre>
     show(level)
 <span class="keyword">fi</span>
 
-<span class="keyword">loop</span> current <span class="keyword">is</span> {node}      <span class="comment"># while current holds a node</span>
+<span class="keyword">loop</span> current <span class="keyword">is</span> {node}      <span class="comment">; while current holds a node</span>
     show(node^.value)
     current = node^.next
 <span class="keyword">fi</span></pre>
 
       <pre><span class="keyword">bind</span> found: <span class="keyword">maybe</span> (text, int) = (<span class="string">"Ada"</span>, <span class="number">36</span>)
-<span class="keyword">when</span> found <span class="keyword">is</span> {(name, age)}       <span class="comment"># the value, then its items</span>
+<span class="keyword">when</span> found <span class="keyword">is</span> {(name, age)}       <span class="comment">; the value, then its items</span>
     show(name)
     show(age)
 <span class="keyword">fi</span>
 <span class="keyword">bind</span> pair = (<span class="number">1</span>, <span class="string">"one"</span>)
-<span class="keyword">when</span> pair <span class="keyword">is</span> (number, word)       <span class="comment"># always matches: a tuple has no other case</span>
+<span class="keyword">when</span> pair <span class="keyword">is</span> (number, word)       <span class="comment">; always matches: a tuple has no other case</span>
     show(number)
     show(word)
 <span class="keyword">fi</span>
-<span class="keyword">when</span> pair <span class="keyword">is</span> <span class="keyword">hold</span> (n, w)          <span class="comment"># hold: the names can be assigned</span>
+<span class="keyword">when</span> pair <span class="keyword">is</span> <span class="keyword">hold</span> (n, w)          <span class="comment">; hold: the names can be assigned</span>
     n = n + <span class="number">1</span>
     show(n)
     show(w)
@@ -1764,7 +1768,7 @@ show(total)</pre>
         <a href="#maybe">plan B</a>'s block does; a <code>when</code> uses blocks only, and needs its
         <code>else</code>, since without one nothing gives the value when the condition doesn't hold.
       </p>
-      <pre class="program" data-file="choices.vela"><span class="comment"># The same `area` as in Kinds, with the match as the value it sends.</span>
+      <pre class="program" data-file="choices.vela"><span class="comment">; The same `area` as in Kinds, with the match as the value it sends.</span>
 <span class="keyword">kind</span> Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)
@@ -1777,7 +1781,7 @@ show(total)</pre>
     <span class="keyword">fi</span>
 <span class="keyword">fi</span>
 
-<span class="comment"># Shapes come from here, so `main` reads them as any program would.</span>
+<span class="comment">; Shapes come from here, so `main` reads them as any program would.</span>
 <span class="keyword">task</span> made(wide: bool) -&gt; Shape
     <span class="keyword">&lt;-</span> <span class="keyword">when</span> wide
         Circle(<span class="number">2.0</span>)
@@ -1788,9 +1792,9 @@ show(total)</pre>
 
 <span class="keyword">task</span> main()
     <span class="keyword">bind</span> s = made(<span class="keyword">true</span>)
-    show(area(s))                      <span class="comment"># 12.56</span>
+    show(area(s))                      <span class="comment">; 12.56</span>
 
-    <span class="comment"># A case may work first, and give the value on its last line.</span>
+    <span class="comment">; A case may work first, and give the value on its last line.</span>
     <span class="keyword">bind</span> name = <span class="keyword">match</span> s
     <span class="keyword">case</span> Circle r
         <span class="keyword">bind</span> wide = r &gt; <span class="number">1.0</span>
@@ -1801,9 +1805,9 @@ show(total)</pre>
         <span class="keyword">fi</span>
     <span class="keyword">case</span> Rectangle w h = <span class="string">"a rectangle"</span>
     <span class="keyword">fi</span>
-    show(name)                         <span class="comment"># a wide circle</span>
+    show(name)                         <span class="comment">; a wide circle</span>
 
-    <span class="comment"># A `when` used as a value, with a chain of conditions.</span>
+    <span class="comment">; A `when` used as a value, with a chain of conditions.</span>
     <span class="keyword">bind</span> size = <span class="keyword">when</span> area(s) &gt; <span class="number">100.0</span>
         <span class="string">"huge"</span>
     <span class="keyword">else</span> <span class="keyword">when</span> area(s) &gt; <span class="number">1.0</span>
@@ -1811,7 +1815,7 @@ show(total)</pre>
     <span class="keyword">else</span>
         <span class="string">"tiny"</span>
     <span class="keyword">fi</span>
-    show(size)                         <span class="comment"># middling</span>
+    show(size)                         <span class="comment">; middling</span>
 <span class="keyword">fi</span></pre>
       <p>The rules are the ones the pieces already have:</p>
       <ul>
@@ -1844,19 +1848,19 @@ show(total)</pre>
       </p>
       <pre><span class="keyword">task</span> half(n: int) -&gt; <span class="keyword">maybe</span> int
     <span class="keyword">when</span> n % 2 == 0
-        <span class="keyword">&lt;-</span> n / 2               <span class="comment"># the int becomes a maybe int</span>
+        <span class="keyword">&lt;-</span> n / 2               <span class="comment">; the int becomes a maybe int</span>
     <span class="keyword">fi</span>
     <span class="keyword">&lt;-</span> <span class="keyword">none</span>
 <span class="keyword">fi</span>
 
 <span class="keyword">bind</span> m = half(7)
-show(m)                    <span class="comment"># none</span>
-show(m == <span class="keyword">none</span>)            <span class="comment"># true</span>
-show(m + 1)                <span class="comment"># error: arithmetic requires numeric operands; the value in this maybe int must be extracted first</span></pre>
+show(m)                    <span class="comment">; none</span>
+show(m == <span class="keyword">none</span>)            <span class="comment">; true</span>
+show(m + 1)                <span class="comment">; error: arithmetic requires numeric operands; the value in this maybe int must be extracted first</span></pre>
       <p>There are three ways to get the value out. <code>match</code> handles both outcomes:</p>
       <pre><span class="keyword">match</span> half(8)
 <span class="keyword">case</span> {n}
-    show(n)                <span class="comment"># 4</span>
+    show(n)                <span class="comment">; 4</span>
 <span class="keyword">case</span> <span class="keyword">none</span>
     show(<span class="string">"odd"</span>)
 <span class="keyword">fi</span></pre>
@@ -1865,14 +1869,14 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
         <code>when half(8) is {n}</code>. And a <em>plan B</em>, a block after the value, gives the value to use
         when there is none:
       </p>
-      <pre><span class="keyword">bind</span> a = half(7) { 0 }            <span class="comment"># 0</span>
-<span class="keyword">bind</span> b = half(7) { 1 } * 10       <span class="comment"># 10: a plan B works inside expressions</span>
+      <pre><span class="keyword">bind</span> a = half(7) { 0 }            <span class="comment">; 0</span>
+<span class="keyword">bind</span> b = half(7) { 1 } * 10       <span class="comment">; 10: a plan B works inside expressions</span>
 <span class="keyword">bind</span> c = half(7) {
     show(<span class="string">"odd, using 3"</span>)
-    3                              <span class="comment"># the last line is the value</span>
+    3                              <span class="comment">; the last line is the value</span>
 }
 <span class="keyword">bind</span> d = half(7) {
-    <span class="keyword">&lt;-</span>                             <span class="comment"># or leave the task instead</span>
+    <span class="keyword">&lt;-</span>                             <span class="comment">; or leave the task instead</span>
 }</pre>
       <p>
         The value before the block is evaluated once, and the block runs only when it is empty. Its last line gives
@@ -1912,12 +1916,12 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> main()
-    <span class="keyword">bind</span> a = checked(500) { 100 }       <span class="comment"># ignore the error: use 100</span>
+    <span class="keyword">bind</span> a = checked(500) { 100 }       <span class="comment">; ignore the error: use 100</span>
     <span class="keyword">bind</span> b = checked(-1) {
         <span class="keyword">failure</span> e
         <span class="keyword">match</span> e
         <span class="keyword">case</span> Negative value
-            show(value)            <span class="comment"># -1</span>
+            show(value)            <span class="comment">; -1</span>
         <span class="keyword">case</span> TooBig
             show(<span class="string">"too big"</span>)
         <span class="keyword">fi</span>
@@ -1925,7 +1929,7 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
     }
     <span class="keyword">match</span> checked(7)
     <span class="keyword">case</span> {size}
-        show(size)                 <span class="comment"># 7</span>
+        show(size)                 <span class="comment">; 7</span>
     <span class="keyword">case</span> <span class="keyword">failure</span> e
         show(<span class="string">"failed"</span>)
     <span class="keyword">fi</span>
@@ -1946,10 +1950,10 @@ show(m + 1)                <span class="comment"># error: arithmetic requires nu
     show(<span class="string">"saved"</span>)
 <span class="keyword">fi</span>
 
-save(500)                  <span class="comment"># error: the error 'save' may send is ignored</span>
+save(500)                  <span class="comment">; error: the error 'save' may send is ignored</span>
 save(500) {
     <span class="keyword">failure</span> reason
-    show(reason)           <span class="comment"># too big</span>
+    show(reason)           <span class="comment">; too big</span>
 }</pre>
 
       <h3 id="wider">Becoming a wider type</h3>
@@ -1960,21 +1964,21 @@ save(500) {
         is built part by part, so each part becomes what that part's type is; a value that comes back from a task is
         already made, and nothing reaches into it.
       </p>
-      <pre><span class="keyword">bind</span> pair: (int, <span class="keyword">maybe</span> int) = (<span class="number">2</span>, <span class="number">3</span>)      <span class="comment"># written out, so built item by item</span>
-<span class="keyword">bind</span> made = divide(<span class="number">17</span>, <span class="number">5</span>)                 <span class="comment"># (int, int), already made</span>
-<span class="keyword">bind</span> taken: (int, <span class="keyword">maybe</span> int) = (made.<span class="number">0</span>, made.<span class="number">1</span>)  <span class="comment"># its items, built into the type wanted</span>
+      <pre><span class="keyword">bind</span> pair: (int, <span class="keyword">maybe</span> int) = (<span class="number">2</span>, <span class="number">3</span>)      <span class="comment">; written out, so built item by item</span>
+<span class="keyword">bind</span> made = divide(<span class="number">17</span>, <span class="number">5</span>)                 <span class="comment">; (int, int), already made</span>
+<span class="keyword">bind</span> taken: (int, <span class="keyword">maybe</span> int) = (made.<span class="number">0</span>, made.<span class="number">1</span>)  <span class="comment">; its items, built into the type wanted</span>
 <span class="keyword">bind</span> same: (int, <span class="keyword">maybe</span> int) = made
-<span class="comment"># error: expected type (int, maybe int), got (int, int); a value already made is never changed inside, …</span></pre>
+<span class="comment">; error: expected type (int, maybe int), got (int, int); a value already made is never changed inside, …</span></pre>
       <p>
         Where several values must have one type — the items of an array, the branches of a <span class="keyword">match</span>
         or a <span class="keyword">when</span> <a href="#choices">used as a value</a> — the same rule decides what that
         type is: the types are joined, and a wrapper goes <em>outside</em> whatever is already wrapped.
       </p>
       <pre><span class="keyword">bind</span> m: <span class="keyword">maybe</span> int = <span class="number">3</span>
-<span class="keyword">bind</span> xs = [<span class="number">1</span>, <span class="keyword">none</span>]                <span class="comment"># [maybe int; 2]</span>
-<span class="keyword">bind</span> ys = [m, <span class="keyword">fail</span> <span class="string">"no"</span>]           <span class="comment"># [maybe int ~ text; 2]: the maybe kept, an error side added</span>
-<span class="keyword">bind</span> zs = [risky(<span class="number">1</span>), <span class="keyword">none</span>]         <span class="comment"># risky sends int ~ text: [maybe (int ~ text); 2]</span>
-<span class="keyword">bind</span> ws = [risky(<span class="number">1</span>), m]            <span class="comment"># error: an array's values have one type, but this one is maybe int …</span></pre>
+<span class="keyword">bind</span> xs = [<span class="number">1</span>, <span class="keyword">none</span>]                <span class="comment">; [maybe int#2]</span>
+<span class="keyword">bind</span> ys = [m, <span class="keyword">fail</span> <span class="string">"no"</span>]           <span class="comment">; [maybe int ~ text#2]: the maybe kept, an error side added</span>
+<span class="keyword">bind</span> zs = [risky(<span class="number">1</span>), <span class="keyword">none</span>]         <span class="comment">; risky sends int ~ text: [maybe (int ~ text)#2]</span>
+<span class="keyword">bind</span> ws = [risky(<span class="number">1</span>), m]            <span class="comment">; error: an array's values have one type, but this one is maybe int …</span></pre>
       <p>
         The middle two are the two nestings, and which one comes out follows from what was wrapped already: a
         <code>maybe int</code> beside a failure keeps its <code>maybe</code> and gains an error side, and an
@@ -2022,10 +2026,10 @@ save(500) {
     <span class="keyword">bind</span> xs = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]
     <span class="keyword">bind</span> items = <span class="keyword">new</span> [float]() <span class="keyword">at</span> r
     <span class="keyword">bind</span> p = <span class="keyword">new</span> Point(Point { x: <span class="number">1</span>, y: <span class="number">2</span> }) <span class="keyword">at</span> r
-    show(xs.type, <span class="string">" "</span>, items.type, <span class="string">" "</span>, p.type, <span class="string">" "</span>, p^.type)   <span class="comment"># [int; 3] [float] ^Point Point</span>
-    show((<span class="number">1</span>, <span class="string">"a"</span>).type, <span class="string">" "</span>, named(xs))                   <span class="comment"># (int, text) [int; 3]</span>
+    show(xs.type, <span class="string">" "</span>, items.type, <span class="string">" "</span>, p.type, <span class="string">" "</span>, p^.type)   <span class="comment">; [int#3] [float] ^Point Point</span>
+    show((<span class="number">1</span>, <span class="string">"a"</span>).type, <span class="string">" "</span>, named(xs))                   <span class="comment">; (int, text) [int#3]</span>
     <span class="keyword">bind</span> m: <span class="keyword">maybe</span> int = <span class="keyword">none</span>
-    show(m.type)                                         <span class="comment"># maybe int</span>
+    show(m.type)                                         <span class="comment">; maybe int</span>
 <span class="keyword">fi</span></pre>
 
     </section>
@@ -2066,13 +2070,13 @@ save(500) {
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> main()
-    <span class="keyword">region</span> scratch                          <span class="comment"># a new, empty region</span>
-    <span class="keyword">bind</span> n = <span class="keyword">new</span> int(42) <span class="keyword">at</span> scratch         <span class="comment"># n is a ^int@scratch</span>
+    <span class="keyword">region</span> scratch                          <span class="comment">; a new, empty region</span>
+    <span class="keyword">bind</span> n = <span class="keyword">new</span> int(42) <span class="keyword">at</span> scratch         <span class="comment">; n is a ^int@scratch</span>
     <span class="keyword">bind</span> p = <span class="keyword">new</span>@scratch Point(Point { x: 1, y: 2 })
-    n^ = n^ + 1                             <span class="comment"># read and write through ^</span>
+    n^ = n^ + 1                             <span class="comment">; read and write through ^</span>
     p^.x = 5
-    show(n^ + p^.x)                         <span class="comment"># 48</span>
-<span class="keyword">fi</span>                                          <span class="comment"># scratch, and all in it, is freed here</span></pre>
+    show(n^ + p^.x)                         <span class="comment">; 48</span>
+<span class="keyword">fi</span>                                          <span class="comment">; scratch, and all in it, is freed here</span></pre>
       <p>
         <code>new T(value) at r</code> and <code>new@r T(value)</code> are the same: both copy the value into region
         <code>r</code> and give back a <code>^T@r</code>. The type after <code>new</code> names no region, since what
@@ -2096,11 +2100,11 @@ save(500) {
     next = <span class="keyword">new</span> int(1) <span class="keyword">at</span> r
 <span class="keyword">fi</span>
 <span class="keyword">when</span> next <span class="keyword">is</span> {p}
-    show(p^)                               <span class="comment"># 1</span>
+    show(p^)                               <span class="comment">; 1</span>
 <span class="keyword">fi</span>
-show(next^)                                <span class="comment"># error: this pointer is a maybe ^int@r, which may be none</span>
-<span class="keyword">bind</span> bad: ^int@r = <span class="keyword">none</span>                    <span class="comment"># error: expected type ^int@r, got none; a pointer can't be none, so use 'maybe ^int@r'</span>
-<span class="keyword">bind</span> lost: ^int = <span class="keyword">new</span> int(2) <span class="keyword">at</span> r         <span class="comment"># error: a pointer lives in a region, so its type names one</span></pre>
+show(next^)                                <span class="comment">; error: this pointer is a maybe ^int@r, which may be none</span>
+<span class="keyword">bind</span> bad: ^int@r = <span class="keyword">none</span>                    <span class="comment">; error: expected type ^int@r, got none; a pointer can't be none, so use 'maybe ^int@r'</span>
+<span class="keyword">bind</span> lost: ^int = <span class="keyword">new</span> int(2) <span class="keyword">at</span> r         <span class="comment">; error: a pointer lives in a region, so its type names one</span></pre>
 
       <h3 id="region-lifetime">A region lives until its block closes</h3>
       <p>
@@ -2110,14 +2114,14 @@ show(next^)                                <span class="comment"># error: this p
         nothing is left pointing into it when it is freed. And a pointer is never stored in another region, which
         might live longer:
       </p>
-      <pre><span class="keyword">hold</span> saved: <span class="keyword">maybe</span> ^int@inner = <span class="keyword">none</span>     <span class="comment"># error: unknown region 'inner'; declare it with 'region inner'</span>
+      <pre><span class="keyword">hold</span> saved: <span class="keyword">maybe</span> ^int@inner = <span class="keyword">none</span>     <span class="comment">; error: unknown region 'inner'; declare it with 'region inner'</span>
 
 <span class="keyword">region</span> outer
 <span class="keyword">hold</span> p = <span class="keyword">new</span> int(0) <span class="keyword">at</span> outer
 <span class="keyword">when</span> ready
     <span class="keyword">region</span> inner
-    p = <span class="keyword">new</span> int(1) <span class="keyword">at</span> inner                <span class="comment"># error: expected type ^int@outer, got ^int@inner;</span>
-<span class="keyword">fi</span>                                         <span class="comment">#   a value can't move to another region</span></pre>
+    p = <span class="keyword">new</span> int(1) <span class="keyword">at</span> inner                <span class="comment">; error: expected type ^int@outer, got ^int@inner;</span>
+<span class="keyword">fi</span>                                         <span class="comment">;   a value can't move to another region</span></pre>
       <p>
         The region is freed however the block ends: at its <code>fi</code>, at the end of a plan B's block (after its
         last line has given its value), or by a send (<code>&lt;-</code>) from anywhere inside it, which frees every region the
@@ -2127,7 +2131,7 @@ show(next^)                                <span class="comment"># error: this p
         <code>fi</code>, without a loop or a condition around it:
       </p>
       <pre><span class="keyword">each</span> line <span class="keyword">in</span> 0..1000
-    <span class="keyword">region</span> work                            <span class="comment"># empty again on every pass</span>
+    <span class="keyword">region</span> work                            <span class="comment">; empty again on every pass</span>
     <span class="keyword">bind</span> temporary = <span class="keyword">new</span> int(line) <span class="keyword">at</span> work
     show(temporary^)
 <span class="keyword">fi</span></pre>
@@ -2151,7 +2155,7 @@ show(next^)                                <span class="comment"># error: this p
     <span class="keyword">&lt;-</span> <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
 <span class="keyword">fi</span>
 
-<span class="keyword">task</span> sum(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int         <span class="comment"># only reads, so r is just a name</span>
+<span class="keyword">task</span> sum(list: <span class="keyword">maybe</span> ^Node@r) -&gt; int         <span class="comment">; only reads, so r is just a name</span>
     <span class="keyword">hold</span> total = 0
     <span class="keyword">hold</span> current = list
     <span class="keyword">loop</span> current <span class="keyword">is</span> {node}
@@ -2167,7 +2171,7 @@ show(next^)                                <span class="comment"># error: this p
     <span class="keyword">each</span> i <span class="keyword">in</span> 1..4
         list = push(nodes, list, i)
     <span class="keyword">fi</span>
-    show(sum(list))                        <span class="comment"># 6</span>
+    show(sum(list))                        <span class="comment">; 6</span>
 <span class="keyword">fi</span></pre>
       <p id="region-after-call">
         <strong>The region after a call.</strong> A task or a method that takes its region <em>last</em> can be given it
@@ -2201,11 +2205,11 @@ show(next^)                                <span class="comment"># error: this p
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    show(label(1) <span class="keyword">at</span> r, label(2)@r, label(3, r))   <span class="comment"># #1#2#3</span>
-    show(<span class="string">"a"</span> + label(4)@r <span class="keyword">at</span> r)                 <span class="comment"># a#4</span>
-    show(label(5) <span class="keyword">at</span> r + <span class="string">"!"</span>)                    <span class="comment"># error: 'at r' names the region of everything before it, so it comes after the last part …</span>
+    show(label(1) <span class="keyword">at</span> r, label(2)@r, label(3, r))   <span class="comment">; #1#2#3</span>
+    show(<span class="string">"a"</span> + label(4)@r <span class="keyword">at</span> r)                 <span class="comment">; a#4</span>
+    show(label(5) <span class="keyword">at</span> r + <span class="string">"!"</span>)                    <span class="comment">; error: 'at r' names the region of everything before it, so it comes after the last part …</span>
     <span class="keyword">region</span> d <span class="keyword">default</span>
-    show(label(6))                            <span class="comment"># #6, in d</span>
+    show(label(6))                            <span class="comment">; #6, in d</span>
 <span class="keyword">fi</span></pre>
       <p>
         A region named in a task's header without a <code>region</code> parameter, like <code>r</code> in
@@ -2215,7 +2219,7 @@ show(next^)                                <span class="comment"># error: this p
         parameters with the same region name must be in the same region, and a result can only name regions the
         header's parameters name:
       </p>
-      <pre><span class="keyword">task</span> make() -&gt; ^int@r                     <span class="comment"># error: the result lives in region 'r', which the task isn't given</span>
+      <pre><span class="keyword">task</span> make() -&gt; ^int@r                     <span class="comment">; error: the result lives in region 'r', which the task isn't given</span>
     <span class="keyword">region</span> r
     <span class="keyword">&lt;-</span> <span class="keyword">new</span> int(1) <span class="keyword">at</span> r
 <span class="keyword">fi</span></pre>
@@ -2233,7 +2237,7 @@ show(next^)                                <span class="comment"># error: this p
         region it is given the default of its body:
       </p>
       <pre><span class="keyword">task</span> grow(r: <span class="keyword">region</span> <span class="keyword">default</span>, upto: int) -&gt; [int]@r
-    <span class="keyword">hold</span> made = <span class="keyword">new</span> [int]()            <span class="comment"># in r</span>
+    <span class="keyword">hold</span> made = <span class="keyword">new</span> [int]()            <span class="comment">; in r</span>
     <span class="keyword">each</span> n <span class="keyword">in</span> 1..upto
         made.add(n * n)
     <span class="keyword">fi</span>
@@ -2242,15 +2246,15 @@ show(next^)                                <span class="comment"># error: this p
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> kept <span class="keyword">default</span>
-    <span class="keyword">bind</span> squares = grow(kept, 4)         <span class="comment"># a region is still passed by name</span>
-    <span class="keyword">bind</span> greeting = <span class="string">"Hello, "</span> + <span class="string">"Ada"</span>   <span class="comment"># text@kept</span>
-    <span class="keyword">bind</span> p = <span class="keyword">new</span> int(7)                 <span class="comment"># ^int@kept</span>
+    <span class="keyword">bind</span> squares = grow(kept, 4)         <span class="comment">; a region is still passed by name</span>
+    <span class="keyword">bind</span> greeting = <span class="string">"Hello, "</span> + <span class="string">"Ada"</span>   <span class="comment">; text@kept</span>
+    <span class="keyword">bind</span> p = <span class="keyword">new</span> int(7)                 <span class="comment">; ^int@kept</span>
     <span class="keyword">each</span> round <span class="keyword">in</span> 0..3
-        <span class="keyword">region</span> pass <span class="keyword">default</span>              <span class="comment"># this block's own default</span>
-        show(<span class="string">"pass "</span> + round.str())      <span class="comment"># text@pass, freed at the end of the pass</span>
+        <span class="keyword">region</span> pass <span class="keyword">default</span>              <span class="comment">; this block's own default</span>
+        show(<span class="string">"pass "</span> + round.str())      <span class="comment">; text@pass, freed at the end of the pass</span>
     <span class="keyword">fi</span>
     <span class="keyword">region</span> other
-    <span class="keyword">bind</span> elsewhere = <span class="keyword">new</span> int(1) <span class="keyword">at</span> other  <span class="comment"># named, so it goes there</span>
+    <span class="keyword">bind</span> elsewhere = <span class="keyword">new</span> int(1) <span class="keyword">at</span> other  <span class="comment">; named, so it goes there</span>
     show(squares.len, greeting, p^, elsewhere^)
 <span class="keyword">fi</span></pre>
       <ul>
@@ -2283,7 +2287,7 @@ show(next^)                                <span class="comment"># error: this p
       </p>
       <pre><span class="keyword">kind</span> Tree
     Leaf(value: int)
-    Branch(left: ^Tree, right: ^Tree)          <span class="comment"># no region here: '^Tree@r' is an error</span>
+    Branch(left: ^Tree, right: ^Tree)          <span class="comment">; no region here: '^Tree@r' is an error</span>
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> count(t: Tree@r) -&gt; int
@@ -2299,8 +2303,8 @@ show(next^)                                <span class="comment"># error: this p
     <span class="keyword">region</span> trees
     <span class="keyword">bind</span> one = <span class="keyword">new</span> Tree(Leaf(1)) <span class="keyword">at</span> trees
     <span class="keyword">bind</span> two = <span class="keyword">new</span> Tree(Leaf(2)) <span class="keyword">at</span> trees
-    show(count(Branch(one, two)))          <span class="comment"># 3</span>
-    show(count(Leaf(5)))                   <span class="comment"># 5</span>
+    show(count(Branch(one, two)))          <span class="comment">; 3</span>
+    show(count(Leaf(5)))                   <span class="comment">; 5</span>
 <span class="keyword">fi</span></pre>
       <p>
         A value built without any pointers, such as <code>Leaf(5)</code> or <code>Node { value: 1, next: none }</code>,
@@ -2311,10 +2315,10 @@ show(next^)                                <span class="comment"># error: this p
         ends.) A binding without a type can't tell which region such a value should be in, so it asks for
         one:
       </p>
-      <pre><span class="keyword">hold</span> head = Node { value: 1, next: <span class="keyword">none</span> }     <span class="comment"># error: cannot tell which region 'head' lives in, ...;</span>
-                                              <span class="comment">#   give it a type, such as 'head: Node@r'</span>
+      <pre><span class="keyword">hold</span> head = Node { value: 1, next: <span class="keyword">none</span> }     <span class="comment">; error: cannot tell which region 'head' lives in, ...;</span>
+                                              <span class="comment">;   give it a type, such as 'head: Node@r'</span>
 <span class="keyword">hold</span> first: Node@nodes = Node { value: 1, next: <span class="keyword">none</span> }
-first.next = push(nodes, <span class="keyword">none</span>, 2)                <span class="comment"># fine: first is in nodes</span></pre>
+first.next = push(nodes, <span class="keyword">none</span>, 2)                <span class="comment">; fine: first is in nodes</span></pre>
 
       <h3 id="text-in-regions">Text in a region</h3>
       <p>
@@ -2334,7 +2338,7 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
     age: int
 <span class="keyword">fi</span>
 
-<span class="comment"># Takes a Person whose text is in any region, or lasts.</span>
+<span class="comment">; Takes a Person whose text is in any region, or lasts.</span>
 <span class="keyword">task</span> greet(p: Person@r)
     show(p.name)
 <span class="keyword">fi</span>
@@ -2342,14 +2346,14 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
     <span class="keyword">hold</span> names = <span class="keyword">new</span> [text]() <span class="keyword">at</span> r
-    names.add(<span class="string">"Ada"</span>)                               <span class="comment"># a literal fits text@r</span>
-    <span class="keyword">bind</span> first = names[<span class="number">0</span>]                          <span class="comment"># text@r</span>
-    <span class="keyword">bind</span> plain = Person { name: <span class="string">"Bob"</span>, age: <span class="number">7</span> }    <span class="comment"># Person: its text lasts</span>
-    <span class="keyword">bind</span> held = Person { name: first, age: <span class="number">36</span> }    <span class="comment"># Person@r: its text is in r</span>
-    greet(plain)                                   <span class="comment"># Bob</span>
-    greet(held)                                    <span class="comment"># Ada</span>
+    names.add(<span class="string">"Ada"</span>)                               <span class="comment">; a literal fits text@r</span>
+    <span class="keyword">bind</span> first = names[<span class="number">0</span>]                          <span class="comment">; text@r</span>
+    <span class="keyword">bind</span> plain = Person { name: <span class="string">"Bob"</span>, age: <span class="number">7</span> }    <span class="comment">; Person: its text lasts</span>
+    <span class="keyword">bind</span> held = Person { name: first, age: <span class="number">36</span> }    <span class="comment">; Person@r: its text is in r</span>
+    greet(plain)                                   <span class="comment">; Bob</span>
+    greet(held)                                    <span class="comment">; Ada</span>
     <span class="keyword">hold</span> lasting = <span class="string">"none yet"</span>
-    lasting = first                                <span class="comment"># error: expected type text, got text@r; …</span>
+    lasting = first                                <span class="comment">; error: expected type text, got text@r; …</span>
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>Tasks.</strong> A parameter of type <code>text</code> takes text that lasts. To take text of any region,
@@ -2371,12 +2375,12 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         many there are. It follows a pointer's rules: it is never <code>none</code> (a <code>maybe [int]@r</code> can
         be), its type names its region except in a field and after <code>new</code>, it can't be stored in another
         region, and a task sends one only into a region it is given. <code>new [T](items) at r</code> makes a slice by
-        copying the items into <code>r</code>: <code>[v; n]</code> for <code>n</code> copies of <code>v</code>, where
+        copying the items into <code>r</code>: <code>[v#n]</code> for <code>n</code> copies of <code>v</code>, where
         <code>n</code> may be known only as the program runs, an array, or another slice. <code>new [T]() at r</code>
         makes one with no items.
       </p>
       <pre><span class="keyword">task</span> squares(r: region, n: int) -&gt; [int]@r
-    <span class="keyword">bind</span> out = <span class="keyword">new</span> [int]([0; n]) <span class="keyword">at</span> r
+    <span class="keyword">bind</span> out = <span class="keyword">new</span> [int]([0#n]) <span class="keyword">at</span> r
     <span class="keyword">each</span> i <span class="keyword">in</span> 0..n
         out[i] = i * i
     <span class="keyword">fi</span>
@@ -2385,21 +2389,21 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">bind</span> all = squares(r, 5)            <span class="comment"># 0 1 4 9 16</span>
-    <span class="keyword">bind</span> middle = all[1..4]             <span class="comment"># 1 4 9: the same memory, not a copy</span>
-    middle[0] = 100                     <span class="comment"># a slice's items are written through it, even a bind's</span>
-    show(all[1])                        <span class="comment"># 100</span>
-    show(middle.len)                    <span class="comment"># 3</span>
-    <span class="keyword">bind</span> copied = <span class="keyword">new</span> [int](middle) <span class="keyword">at</span> r  <span class="comment"># its own items</span>
+    <span class="keyword">bind</span> all = squares(r, 5)            <span class="comment">; 0 1 4 9 16</span>
+    <span class="keyword">bind</span> middle = all[1..4]             <span class="comment">; 1 4 9: the same memory, not a copy</span>
+    middle[0] = 100                     <span class="comment">; a slice's items are written through it, even a bind's</span>
+    show(all[1])                        <span class="comment">; 100</span>
+    show(middle.len)                    <span class="comment">; 3</span>
+    <span class="keyword">bind</span> copied = <span class="keyword">new</span> [int](middle) <span class="keyword">at</span> r  <span class="comment">; its own items</span>
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>Slicing.</strong> <code>xs[a..b]</code> is the items from <code>a</code> up to, but not including,
           <code>b</code>, without copying. It works on a slice, and on an array in a region: one a pointer points to, as in
-          <code>p^[0..2]</code> for <code>p: ^[int; 4]@r</code>, or an item of a slice. An array in a variable isn't in a
+          <code>p^[0..2]</code> for <code>p: ^[int#4]@r</code>, or an item of a slice. An array in a variable isn't in a
           region, so slicing it is an error; copy it with <code>new [int](xs) at r</code>, or keep it in a region with
-          <code>new [int; 4](xs) at r</code>.</li>
+          <code>new [int#4](xs) at r</code>.</li>
         <li><strong>Checks.</strong> Every index and slice is checked as the program runs (<em>vela: slice 2..7 is out of
-          range 0..4</em>, <em>vela: slice 3..1 ends before it starts</em>), and so is a count for <code>new [T]([v; n])</code>
+          range 0..4</em>, <em>vela: slice 3..1 ends before it starts</em>), and so is a count for <code>new [T]([v#n])</code>
           (<em>vela: count -2 is negative</em>).</li>
         <li><strong>Writing.</strong> A slice's items can always be written, like what a pointer points to; its
           <code>len</code> can't be: it changes as items are added and taken out, or by slicing.</li>
@@ -2413,14 +2417,14 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
       </p>
       <pre><span class="keyword">task</span> main()
     <span class="keyword">region</span> r
-    <span class="keyword">hold</span> queue = <span class="keyword">new</span> [text]() <span class="keyword">at</span> r   <span class="comment"># no items yet</span>
-    queue.add(<span class="string">"b"</span>)                       <span class="comment"># last: b</span>
-    queue.add(<span class="string">"d"</span>)                       <span class="comment"># b d</span>
-    queue.add(0, <span class="string">"a"</span>)                    <span class="comment"># before item 0: a b d</span>
-    queue.add(2, <span class="string">"c"</span>)                    <span class="comment"># a b c d</span>
-    show(queue.del(1))                  <span class="comment"># b; now a c d</span>
-    show(queue.del())                   <span class="comment"># d, the last; now a c</span>
-    show(queue.len)                     <span class="comment"># 2</span>
+    <span class="keyword">hold</span> queue = <span class="keyword">new</span> [text]() <span class="keyword">at</span> r   <span class="comment">; no items yet</span>
+    queue.add(<span class="string">"b"</span>)                       <span class="comment">; last: b</span>
+    queue.add(<span class="string">"d"</span>)                       <span class="comment">; b d</span>
+    queue.add(0, <span class="string">"a"</span>)                    <span class="comment">; before item 0: a b d</span>
+    queue.add(2, <span class="string">"c"</span>)                    <span class="comment">; a b c d</span>
+    show(queue.del(1))                  <span class="comment">; b; now a c d</span>
+    show(queue.del())                   <span class="comment">; d, the last; now a c</span>
+    show(queue.len)                     <span class="comment">; 2</span>
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>The four changes.</strong> <code>xs.add(v)</code> puts <code>v</code> last and <code>xs.add(i, v)</code>
@@ -2483,21 +2487,21 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
     <span class="keyword">hold</span> titles = <span class="keyword">new</span> [text]() <span class="keyword">at</span> kept
     <span class="keyword">hold</span> first: <span class="keyword">maybe</span> ^Note@kept = <span class="keyword">none</span>
     <span class="keyword">each</span> pass <span class="keyword">in</span> <span class="number">0</span>..<span class="number">2</span>
-        <span class="keyword">region</span> work                                 <span class="comment"># freed at the end of every pass</span>
+        <span class="keyword">region</span> work                                 <span class="comment">; freed at the end of every pass</span>
         <span class="keyword">bind</span> line = scan(<span class="string">"Title: "</span>) <span class="keyword">at</span> work { <span class="string">"none"</span> }
         <span class="keyword">hold</span> tags = <span class="keyword">new</span> [text]() <span class="keyword">at</span> work
         tags.add(line)
         <span class="keyword">bind</span> note = <span class="keyword">new</span> Note(Note { title: line, tags: tags }) <span class="keyword">at</span> work
-        titles.add(line.copy())                     <span class="comment"># into kept, the slice&#x27;s region</span>
+        titles.add(line.copy())                     <span class="comment">; into kept, the slice&#x27;s region</span>
         <span class="keyword">when</span> first <span class="keyword">is</span> <span class="keyword">none</span>
-            first = note.copy()                     <span class="comment"># the note, its title, its tags</span>
+            first = note.copy()                     <span class="comment">; the note, its title, its tags</span>
         <span class="keyword">fi</span>
-        <span class="keyword">bind</span> shout = line.copy() <span class="keyword">at</span> kept            <span class="comment"># nothing here names a region</span>
+        <span class="keyword">bind</span> shout = line.copy() <span class="keyword">at</span> kept            <span class="comment">; nothing here names a region</span>
         show(shout)
     <span class="keyword">fi</span>
-    show(titles[<span class="number">0</span>])                                 <span class="comment"># Ada</span>
+    show(titles[<span class="number">0</span>])                                 <span class="comment">; Ada</span>
     <span class="keyword">bind</span> kept_note = first { <span class="keyword">&lt;-</span> }
-    show(kept_note^.tags[<span class="number">0</span>])                        <span class="comment"># Ada</span>
+    show(kept_note^.tags[<span class="number">0</span>])                        <span class="comment">; Ada</span>
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>What it copies.</strong> Text, a shape or kind holding text, pointers, or slices, a slice, a pointer
@@ -2528,11 +2532,11 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
     name: text
     node: ^Node
 
-    nameOf() -&gt; text<span class="keyword">@</span>this              <span class="comment"># the value's own text, in its region</span>
+    nameOf() -&gt; text<span class="keyword">@</span>this              <span class="comment">; the value's own text, in its region</span>
         <span class="keyword">&lt;-</span> .name
     <span class="keyword">fi</span>
 
-    <span class="keyword">alters</span> point(to: ^Node<span class="keyword">@</span>this)        <span class="comment"># a pointer into the value's region</span>
+    <span class="keyword">alters</span> point(to: ^Node<span class="keyword">@</span>this)        <span class="comment">; a pointer into the value's region</span>
         .node = to
     <span class="keyword">fi</span>
 
@@ -2546,9 +2550,9 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
 <span class="keyword">bind</span> name: text<span class="keyword">@</span>r = n.nameOf()
 n.point(<span class="keyword">new</span> Node(Node { value: <span class="number">5</span> }) <span class="keyword">at</span> r)
 <span class="keyword">region</span> s
-n.point(<span class="keyword">new</span> Node(Node { value: <span class="number">9</span> }) <span class="keyword">at</span> s)   <span class="comment"># error: expected type ^Node@r, got ^Node@s; method</span>
-                                          <span class="comment">#   'Named.point' takes 'to' in '@this', the region the</span>
-                                          <span class="comment">#   value it is called on lives in, so it must be in that region too</span></pre>
+n.point(<span class="keyword">new</span> Node(Node { value: <span class="number">9</span> }) <span class="keyword">at</span> s)   <span class="comment">; error: expected type ^Node@r, got ^Node@s; method</span>
+                                          <span class="comment">;   'Named.point' takes 'to' in '@this', the region the</span>
+                                          <span class="comment">;   value it is called on lives in, so it must be in that region too</span></pre>
       <p>
         What a method sends from <code>@this</code> is text or pointers of the caller's region, so it can't outlive that
         region: <code>kept = n.nameOf()</code> into a <code>text</code> that lasts as long as the program is refused, as
@@ -2597,27 +2601,27 @@ n.point(<span class="keyword">new</span> Node(Node { value: <span class="number"
         with <code>include</code>, naming its path without <code>.vela</code>. What the other file declares is then named through
         the module's name, the path's last part:
       </p>
-      <pre><span class="comment"># main.vela</span>
+      <pre><span class="comment">; main.vela</span>
 <span class="keyword">include</span> shapes/geometry
 <span class="keyword">include</span> shapes/palette (Color, describe)
 
 <span class="keyword">task</span> main()
     <span class="keyword">bind</span> square = geometry.Square(3.0)
-    show(geometry.area(square))              <span class="comment"># 9</span>
+    show(geometry.area(square))              <span class="comment">; 9</span>
     <span class="keyword">bind</span> corner: geometry.Point = geometry.Point { x: 3.0, y: 4.0 }
-    show(corner.x)                           <span class="comment"># 3</span>
-    <span class="keyword">match</span> square                             <span class="comment"># a case names the variant alone</span>
+    show(corner.x)                           <span class="comment">; 3</span>
+    <span class="keyword">match</span> square                             <span class="comment">; a case names the variant alone</span>
     <span class="keyword">case</span> Square side
-        show(side)                           <span class="comment"># 3</span>
+        show(side)                           <span class="comment">; 3</span>
     <span class="keyword">case</span> Circle radius
         show(radius)
     <span class="keyword">fi</span>
-    <span class="keyword">bind</span> red: Color = palette.Red           <span class="comment"># Color came in by name</span>
-    show(describe(red))                      <span class="comment"># red</span>
-    show(describe(Color.Blue))               <span class="comment"># blue: a variant through its kind</span>
+    <span class="keyword">bind</span> red: Color = palette.Red           <span class="comment">; Color came in by name</span>
+    show(describe(red))                      <span class="comment">; red</span>
+    show(describe(Color.Blue))               <span class="comment">; blue: a variant through its kind</span>
 <span class="keyword">fi</span>
 
-<span class="comment"># shapes/geometry.vela</span>
+<span class="comment">; shapes/geometry.vela</span>
 <span class="keyword">shape</span> Point
     x: float
     y: float
@@ -2637,7 +2641,7 @@ n.point(<span class="keyword">new</span> Node(Node { value: <span class="number"
     <span class="keyword">fi</span>
 <span class="keyword">fi</span>
 
-<span class="keyword">priv</span> <span class="keyword">task</span> pi() -&gt; float                <span class="comment"># only geometry.vela can call it</span>
+<span class="keyword">priv</span> <span class="keyword">task</span> pi() -&gt; float                <span class="comment">; only geometry.vela can call it</span>
     <span class="keyword">&lt;-</span> 3.14159
 <span class="keyword">fi</span></pre>
       <ul>
@@ -2701,9 +2705,9 @@ n.point(<span class="keyword">new</span> Node(Node { value: <span class="number"
           it brings in, or of a variable, and can't be a builtin type, task, or kind, or a variant of one. A module or name
           can't be renamed to itself, or to a builtin.</li>
       </ul>
-      <pre><span class="comment"># in main.vela, after include shapes/geometry</span>
-show(geometry.pi())            <span class="comment"># error: 'pi' is private to module 'geometry'</span>
-show(area(square))             <span class="comment"># error: unknown task 'area'; module 'geometry' has one: write 'geometry.area', …</span></pre>
+      <pre><span class="comment">; in main.vela, after include shapes/geometry</span>
+show(geometry.pi())            <span class="comment">; error: 'pi' is private to module 'geometry'</span>
+show(area(square))             <span class="comment">; error: unknown task 'area'; module 'geometry' has one: write 'geometry.area', …</span></pre>
       <p>
         <code>examples/shop.vela</code> is a program in three files. In the generated C, a module's names are
         prefixed with its path (<code>vela_shapes__1__geometry__0__area</code>), so every module's names stay apart.
@@ -2718,8 +2722,8 @@ show(area(square))             <span class="comment"># error: unknown task 'area
       <pre><span class="keyword">include</span> std/files {File}
 
 <span class="keyword">task</span> main()
-    show(File { path: "notes.txt" }.exists())    <span class="comment"># whether a file that can be read is there</span>
-    <span class="comment"># and open(), read(), line(), write(), close(), rename(), delete(): see Vela Library</span>
+    show(File { path: "notes.txt" }.exists())    <span class="comment">; whether a file that can be read is there</span>
+    <span class="comment">; and open(), read(), line(), write(), close(), rename(), delete(): see Vela Library</span>
 <span class="keyword">fi</span></pre>
     </section>
 

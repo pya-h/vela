@@ -1,4 +1,4 @@
-# A task of another file takes a parameter it changes as any task does.
+; A task of another file takes a parameter it changes as any task does.
 task collatz(hold n: int) -> int
     hold steps = 0
     loop n != 1

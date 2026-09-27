@@ -1,4 +1,4 @@
-# error: 3:18: cannot tell the type of 'slot' from none or 'fail …'; give the array a type first
+; error: 3:18: cannot tell the type of 'slot' from none or 'fail …'; give the array a type first
 task main()
     each slot in [none, none]
         show(1)

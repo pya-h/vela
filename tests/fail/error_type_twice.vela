@@ -1,4 +1,4 @@
-# error: 2:35: a type has one error type: '~' can't appear twice
+; error: 2:35: a type has one error type: '~' can't appear twice
 task parse(t: text) -> int ~ text ~ bool
     <- 1
 fi

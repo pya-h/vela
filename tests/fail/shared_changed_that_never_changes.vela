@@ -1,4 +1,4 @@
-# error: 7:11: 'Point.start' never changes (declared at 3:12); a shared field that changes is 'shared hold start', or 'shared read start', which only the methods of 'Point' change
+; error: 7:11: 'Point.start' never changes (declared at 3:12); a shared field that changes is 'shared hold start', or 'shared read start', which only the methods of 'Point' change
 shape Point
     shared start: int = 7
 fi

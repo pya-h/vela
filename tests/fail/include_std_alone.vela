@@ -1,4 +1,4 @@
-# error: 2:9: 'std' is Vela's library, not one of its modules; include a module of it, as in 'include std/files'
+; error: 2:9: 'std' is Vela's library, not one of its modules; include a module of it, as in 'include std/files'
 include std
 
 task main()

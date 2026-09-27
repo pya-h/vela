@@ -1,4 +1,4 @@
-# error: 2:14: 'T' is already taken at 2:11
+; error: 2:14: 'T' is already taken at 2:11
 task pair<T, T>(a: T, b: T) -> T
     <- a
 fi

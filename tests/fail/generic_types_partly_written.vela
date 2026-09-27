@@ -1,4 +1,4 @@
-# error: 7:10: task 'pair' takes 2 types, so name all of them, as in 'pair<A, B>(…)'
+; error: 7:10: task 'pair' takes 2 types, so name all of them, as in 'pair<A, B>(…)'
 task pair<A, B>(a: A, b: B) -> A
     <- a
 fi

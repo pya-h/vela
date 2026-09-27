@@ -1,4 +1,4 @@
-# An account whose balance only this file can touch, for tests/run/modules.vela.
+; An account whose balance only this file can touch, for tests/run/modules.vela.
 
 kind Problem
     TooLittle(missing: int)

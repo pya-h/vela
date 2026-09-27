@@ -1,9 +1,9 @@
-  1 | # A parameter written `hold x: T` is the task's own copy: the task may change
-    | comment:# A parameter written `hold x: T` is the task's own copy: the task may change
-  2 | # it as it changes any `hold` variable, and the value the caller gave never
-    | comment:# it as it changes any `hold` variable, and the value the caller gave never
-  3 | # changes, so the call needs no mark.
-    | comment:# changes, so the call needs no mark.
+  1 | ; A parameter written `hold x: T` is the task's own copy: the task may change
+    | comment:; A parameter written `hold x: T` is the task's own copy: the task may change
+  2 | ; it as it changes any `hold` variable, and the value the caller gave never
+    | comment:; it as it changes any `hold` variable, and the value the caller gave never
+  3 | ; changes, so the call needs no mark.
+    | comment:; changes, so the call needs no mark.
   5 | include hold_parameters/steps {collatz}
     | keyword:include  module:hold_parameters  operator:/  module:steps  punctuation:{  task:collatz  punctuation:}
   7 | shape Counter
@@ -16,10 +16,10 @@
     | punctuation:.  field:n  operator:=  punctuation:.  field:n  operator:+  number:1
  12 |     fi
     | keyword:fi
- 14 |     # A method takes one too.
-    | comment:# A method takes one too.
- 15 |     alters add_all(hold by: [int; 3])
-    | keyword:alters  method:add_all  punctuation:(  keyword:hold  parameter:by  punctuation::  punctuation:[  type-builtin:int  punctuation:;  number:3  punctuation:]  punctuation:)
+ 14 |     ; A method takes one too.
+    | comment:; A method takes one too.
+ 15 |     alters add_all(hold by: [int#3])
+    | keyword:alters  method:add_all  punctuation:(  keyword:hold  parameter:by  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  punctuation:)
  16 |         by[0] = by[0] + by[1] + by[2]
     | parameter:by  punctuation:[  number:0  punctuation:]  operator:=  parameter:by  punctuation:[  number:0  punctuation:]  operator:+  parameter:by  punctuation:[  number:1  punctuation:]  operator:+  parameter:by  punctuation:[  number:2  punctuation:]
  17 |         .n = .n + by[0]
@@ -44,8 +44,8 @@
     | keyword:<-  variable:steps
  28 | fi
     | keyword:fi
- 30 | # A shape: its fields change, and its alters methods can be called.
-    | comment:# A shape: its fields change, and its alters methods can be called.
+ 30 | ; A shape: its fields change, and its alters methods can be called.
+    | comment:; A shape: its fields change, and its alters methods can be called.
  31 | task bumped(hold c: Counter) -> int
     | keyword:task  task:bumped  punctuation:(  keyword:hold  parameter:c  punctuation::  type:Counter  punctuation:)  operator:->  type-builtin:int
  32 |     c.tick()
@@ -56,8 +56,8 @@
     | keyword:<-  parameter:c  punctuation:.  field:n
  35 | fi
     | keyword:fi
- 37 | # Text is given a part of itself, and a tuple another tuple.
-    | comment:# Text is given a part of itself, and a tuple another tuple.
+ 37 | ; Text is given a part of itself, and a tuple another tuple.
+    | comment:; Text is given a part of itself, and a tuple another tuple.
  38 | task cut(hold t: text, hold pair: (int, int)) -> text, int
     | keyword:task  task:cut  punctuation:(  keyword:hold  parameter:t  punctuation::  type-builtin:text  punctuation:,  keyword:hold  parameter:pair  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:)  operator:->  type-builtin:text  punctuation:,  type-builtin:int
  39 |     when t.len > 2
@@ -72,10 +72,10 @@
     | keyword:<-  parameter:t  punctuation:,  parameter:pair  punctuation:.  field:0
  44 | fi
     | keyword:fi
- 46 | # A slice is its own copy of the caller's: adding to it leaves the caller's
-    | comment:# A slice is its own copy of the caller's: adding to it leaves the caller's
- 47 | # length as it was.
-    | comment:# length as it was.
+ 46 | ; A slice is its own copy of the caller's: adding to it leaves the caller's
+    | comment:; A slice is its own copy of the caller's: adding to it leaves the caller's
+ 47 | ; length as it was.
+    | comment:; length as it was.
  48 | task grown(hold xs: [int]@r, r: region) -> int
     | keyword:task  task:grown  punctuation:(  keyword:hold  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:int
  49 |     xs.add(9)
@@ -86,10 +86,10 @@
     | keyword:<-  parameter:xs  punctuation:.  field:len
  52 | fi
     | keyword:fi
- 54 | # A generic task, and a recursive one.
-    | comment:# A generic task, and a recursive one.
- 55 | task last_of<T>(hold items: [T; 3], fill: T) -> T
-    | keyword:task  task:last_of  punctuation:<  type:T  punctuation:>  punctuation:(  keyword:hold  parameter:items  punctuation::  punctuation:[  type:T  punctuation:;  number:3  punctuation:]  punctuation:,  parameter:fill  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 54 | ; A generic task, and a recursive one.
+    | comment:; A generic task, and a recursive one.
+ 55 | task last_of<T>(hold items: [T#3], fill: T) -> T
+    | keyword:task  task:last_of  punctuation:<  type:T  punctuation:>  punctuation:(  keyword:hold  parameter:items  punctuation::  punctuation:[  type:T  punctuation:#  number:3  punctuation:]  punctuation:,  parameter:fill  punctuation::  type:T  punctuation:)  operator:->  type:T
  56 |     items[2] = fill
     | parameter:items  punctuation:[  number:2  punctuation:]  operator:=  parameter:fill
  57 |     <- items[2]

@@ -1,4 +1,4 @@
-# error: 7:14: 'Shape' is a kind, not a shape; create its values with its variants
+; error: 7:14: 'Shape' is a kind, not a shape; create its values with its variants
 kind Shape
     Circle(radius: float)
 fi

@@ -1,4 +1,4 @@
-# error: 4:8: unknown type 'Nope'
+; error: 4:8: unknown type 'Nope'
 shape Point
     x: int
     y: Nope

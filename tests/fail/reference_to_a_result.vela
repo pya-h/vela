@@ -1,4 +1,4 @@
-# error: 4:16: a reference names a place for as long as its block lasts, so it can't name 'total', a result, which is read by its name
+; error: 4:16: a reference names a place for as long as its block lasts, so it can't name 'total', a result, which is read by its name
 task f() -> total: int
     total <- 1
     bind& t = &total

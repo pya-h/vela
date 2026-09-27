@@ -1,4 +1,4 @@
-# error: 3:14: a tuple holds two or more items, as in '(1, "Ada")'
+; error: 3:14: a tuple holds two or more items, as in '(1, "Ada")'
 task main()
     bind t = (1,)
     show(t.0)

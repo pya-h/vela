@@ -1,4 +1,4 @@
-# error: 3:17: unknown type 'Thing'
+; error: 3:17: unknown type 'Thing'
 kind Maybe
     Just(value: Thing)
     Nothing

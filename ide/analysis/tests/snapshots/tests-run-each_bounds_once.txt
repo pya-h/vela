@@ -1,5 +1,5 @@
-  1 | # The end of an each range is evaluated once, before the loop starts.
-    | comment:# The end of an each range is evaluated once, before the loop starts.
+  1 | ; The end of an each range is evaluated once, before the loop starts.
+    | comment:; The end of an each range is evaluated once, before the loop starts.
   3 | task limit() -> int
     | keyword:task  task:limit  punctuation:(  punctuation:)  operator:->  type-builtin:int
   4 |     show("limit")

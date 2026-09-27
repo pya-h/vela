@@ -1,4 +1,4 @@
-# error: 2:33: 'secret' is private to module 'library'
+; error: 2:33: 'secret' is private to module 'library'
 include modules/library (greet, secret)
 
 task main()

@@ -330,7 +330,7 @@
           <p>Tasks and shapes now take types (<code>task first&lt;T&gt;(xs: [T]@r)</code>,
             <code>shape Box&lt;T&gt;</code>, <a href="#generics">details below</a>); a kind can't yet. Tuples
             (<code>(text, int)</code>, whose items never change, <a href="vela.html#tuples">Tuples</a>), arrays
-            (<code>[int; 4]</code>), and slices (<code>[int]@r</code>, which grow with <code>xs.add(v)</code> and
+            (<code>[int#4]</code>), and slices (<code>[int]@r</code>, which grow with <code>xs.add(v)</code> and
             shrink with <code>xs.del(i)</code>) are all done (<a href="#arrays">details below</a>), and missing values
             and errors have types: <code>maybe T</code> and <code>T ~ E</code>, and a pointer can't be
             <code>none</code>.</p>
@@ -401,7 +401,7 @@
         </div>
         <div class="card">
           <h3>Built-in arrays & slices <span class="badge b-done">Done</span></h3>
-          <p>Arrays <code>[int; 4]</code> held in place, and slices <code>[int]@r</code> that view items in a region, with
+          <p>Arrays <code>[int#4]</code> held in place, and slices <code>[int]@r</code> that view items in a region, with
             every index checked. <a href="vela.html#arrays">The language guide describes them</a>; the reasoning is
             <a href="#arrays">below</a>.</p>
         </div>
@@ -481,11 +481,11 @@ fi
 
 task main()
     bind q, r = divmod(17, 5)
-    show(q)                      # 3
-    show(r)                      # 2
+    show(q)                      ; 3
+    show(r)                      ; 2
 
-    bind whole, _ = divmod(9, 4)  # _ skips a result
-    show(whole)                  # 2
+    bind whole, _ = divmod(9, 4)  ; _ skips a result
+    show(whole)                  ; 2
 fi</pre>
       <ul>
         <li><strong>Sending:</strong> <code>&lt;- a, b</code> must list exactly as many values as the header has types,
@@ -536,13 +536,13 @@ fi</pre>
       <pre>task score(hits: int, misses: int) -&gt; total: int
     total &lt;- hits * 10
     when misses == 0
-        &lt;- total + 50            # a perfect round: send the bonus score and end here
+        &lt;- total + 50            ; a perfect round: send the bonus score and end here
     fi
-    total &lt;- total - misses * 5  # otherwise keep going
+    total &lt;- total - misses * 5  ; otherwise keep going
     when total &lt; 0
         total &lt;- 0
     fi
-fi                              # reaching the end sends total</pre>
+fi                              ; reaching the end sends total</pre>
       <p>
         When <code>misses</code> isn't zero, <code>score</code> runs to its last line, updating
         <code>total</code> each time it reaches a <code>total &lt;-</code> line, and the end sends whatever
@@ -563,15 +563,15 @@ fi                              # reaching the end sends total</pre>
             peak &lt;- n
         fi
         when steps == 1000
-            &lt;-                  # give up and send what we have
+            &lt;-                  ; give up and send what we have
         fi
     fi
 fi
 
 task main()
     bind steps, peak = collatz(27)
-    show(steps)                 # 111
-    show(peak)                  # 9232
+    show(steps)                 ; 111
+    show(peak)                  ; 9232
 fi</pre>
       <p>Named results follow Go's, with Vela's arrows and Vela's rule that every variable has a value:</p>
       <div class="table-wrap">
@@ -662,19 +662,19 @@ fi</pre>
         A program used to be one file. Now each file is a module, and a file includes another with
         <code>include</code> (see <a href="vela.html#modules">Modules</a> in the language guide):
       </p>
-      <pre>include shapes/geometry           # shapes/geometry.vela, named geometry
+      <pre>include shapes/geometry           ; shapes/geometry.vela, named geometry
 include shapes/palette (Color, describe)
-include fuel/prices =&gt; fuel        # another prices.vela, under another name
-include shop/prices {Item =&gt; Product, price_of}   # only these names
+include fuel/prices =&gt; fuel        ; another prices.vela, under another name
+include shop/prices {Item =&gt; Product, price_of}   ; only these names
 
 task main()
     show(geometry.area(geometry.Square(3.0)))
-    show(describe(Color.Red))         # a variant through its kind
+    show(describe(Color.Red))         ; a variant through its kind
     show(price_of(Product.Apple))
 fi
 
-# in shapes/geometry.vela
-priv task pi() -&gt; float           # only this file can call it
+; in shapes/geometry.vela
+priv task pi() -&gt; float           ; only this file can call it
     &lt;- 3.14159
 fi</pre>
       <ul>
@@ -741,20 +741,20 @@ fi</pre>
         is a fixed number of values held in place, and a slice is a view of values in a region (see
         <a href="vela.html#arrays">Arrays</a> and <a href="vela.html#slices">Slices</a> in the language guide):
       </p>
-      <pre>bind scores: [int; 4] = [90, 72, 85, 60]
+      <pre>bind scores: [int#4] = [90, 72, 85, 60]
 each score in scores
     show(score)
 fi
 region r
-bind all = new [int]([0; n]) at r     # [int]@r: n zeros, n known as the program runs
-bind part = all[1..3]                 # the same memory, not a copy
+bind all = new [int]([0#n]) at r     ; [int]@r: n zeros, n known as the program runs
+bind part = all[1..3]                 ; the same memory, not a copy
 part[0] = scores.len
-hold names = new [text]() at r        # no items yet
-names.add("b")                        # last
-names.add(0, "a")                     # before item 0
-show(names.del(1))                    # takes item 1 out: b</pre>
+hold names = new [text]() at r        ; no items yet
+names.add("b")                        ; last
+names.add(0, "a")                     ; before item 0
+show(names.del(1))                    ; takes item 1 out: b</pre>
       <ul>
-        <li><strong><code>[type; count]</code> and <code>[type]</code>.</strong> The item's type comes first, as the type
+        <li><strong><code>[type#count]</code> and <code>[type]</code>.</strong> The item's type comes first, as the type
           is read (an array of <code>int</code>, four of them), rather than Go's <code>[4]int</code> or C's
           <code>int a[4]</code>; a slice is the same brackets without a count.</li>
         <li><strong>A slice lives in a region.</strong> In C, an array is another form of pointer, and a slice is that
@@ -763,7 +763,7 @@ show(names.del(1))                    # takes item 1 out: b</pre>
           at the stack, so that is an error, and copying into a region is written out (<code>new [T](xs) at r</code>, or
           <code>xs.copy() at r</code>, which also copies what the items hold).</li>
         <li><strong><code>new [T](…) at r</code>.</strong> The same form as <code>new T(v) at r</code>: the value in
-          parentheses gives the items (<code>[v; n]</code>, an array, or a slice, copied), and the result is the slice
+          parentheses gives the items (<code>[v#n]</code>, an array, or a slice, copied), and the result is the slice
           itself rather than a pointer to one. A count known only as the program runs is allowed only there, since an
           array's count is part of its type.</li>
         <li><strong><code>xs.len</code>, not <code>len(xs)</code>.</strong> The length reads as part of the value, costs
@@ -784,7 +784,7 @@ show(names.del(1))                    # takes item 1 out: b</pre>
         then). A literal's values join into one
         type: <code>none</code> and a value make a <code>maybe</code>, <code>fail e</code> and a value a
         <code>T ~ E</code>, and a literal of only <code>none</code> takes its type from where it goes
-        (<code>bind slots: [maybe int; 4] = [none; 4]</code>). <strong>Checks.</strong> Every index and slice is checked
+        (<code>bind slots: [maybe int#4] = [none#4]</code>). <strong>Checks.</strong> Every index and slice is checked
         as the program runs and stops it with a message saying where, as integer overflow does (<em>vela: index 4 is out
         of range 0..4 at 7:12 in task 'main'</em>). A constant index or bound out of range, a count below 1, and a type
         whose values would take more than 1 TiB are errors when compiling, the last so that every program the compiler
@@ -794,7 +794,7 @@ show(names.del(1))                    # takes item 1 out: b</pre>
         <strong>C.</strong> An array is a struct holding a C array, which C can copy and return; a slice is a struct of a
         pointer, an <code>int64_t</code> length, and its room. Reading a slice's item, slicing, copying, and filling go
         through small generated functions, so each array or slice is evaluated once. <strong>Studio.</strong> Hover
-        shows the types (<code>[int; 4]</code>, <code>[int]@r</code>, and an <code>each</code> item's), and completion
+        shows the types (<code>[int#4]</code>, <code>[int]@r</code>, and an <code>each</code> item's), and completion
         offers <code>len</code> after a <code>.</code> (and <code>add</code> and <code>del</code> on a slice) and types
         inside a type's brackets, as the file is typed.
       </p>
@@ -855,12 +855,12 @@ shape Box&lt;T&gt;
     value: T
 fi
 
-show(first(ns))                 # 4 — the argument says T is int
-show(first&lt;text@r&gt;(names))       # Ada — or the call writes it out
-bind empty: maybe int = nothing()   # or the place the value goes says it
-bind count = Box { value: 1 }   # Box&lt;int&gt;: the value given says which type
-bind kept: Box&lt;text&gt;@r = Box { value: name }   # its text is in r
-show(biggest(true, false))      # error: task 'biggest' takes a type that is 'ordered' …</pre>
+show(first(ns))                 ; 4 — the argument says T is int
+show(first&lt;text@r&gt;(names))       ; Ada — or the call writes it out
+bind empty: maybe int = nothing()   ; or the place the value goes says it
+bind count = Box { value: 1 }   ; Box&lt;int&gt;: the value given says which type
+bind kept: Box&lt;text&gt;@r = Box { value: name }   ; its text is in r
+show(biggest(true, false))      ; error: task 'biggest' takes a type that is 'ordered' …</pre>
       <ul>
         <li><strong>Angle brackets, as in the header.</strong> <code>&lt;T&gt;</code> declares the types, and a call that
           writes them uses the same brackets, <code>first&lt;int&gt;(xs)</code>. Brackets (<code>[T]</code>) would read as
@@ -936,9 +936,9 @@ show(biggest(true, false))      # error: task 'biggest' takes a type that is 'or
       </p>
       <pre>task find(names: ^Names@r, wanted: text) -&gt; maybe int
     …
-    &lt;- index                  # found: the int becomes a maybe int
+    &lt;- index                  ; found: the int becomes a maybe int
     …
-    &lt;- none                   # not found
+    &lt;- none                   ; not found
 fi
 
 bind x: maybe float = 2.1
@@ -967,7 +967,7 @@ hold y: maybe float = none</pre>
       </p>
       <pre>shape Item
     title: text
-    next: maybe ^Item        # the last item has no next
+    next: maybe ^Item        ; the last item has no next
 fi</pre>
       <ul>
         <li>A <code>maybe ^T</code> compiles to a plain C pointer, with <code>NULL</code> for <code>none</code>, so
@@ -1009,7 +1009,7 @@ fi</pre>
       </p>
       <p><strong>3. Plan B</strong>, the compact form: a block after a value runs only when there is no value, and
         its last line is the value to use instead.</p>
-      <pre>bind y = x { 0.0 }                 # x's value, or 0.0
+      <pre>bind y = x { 0.0 }                 ; x's value, or 0.0
 bind z: float = y * 5.2
 
 bind port = config_port() {
@@ -1017,10 +1017,10 @@ bind port = config_port() {
     8080
 }
 
-bind scaled = x { 1.0 } * 2.2      # works inside expressions
+bind scaled = x { 1.0 } * 2.2      ; works inside expressions
 
 bind first = head {
-    &lt;-                             # nothing to do: leave the task
+    &lt;-                             ; nothing to do: leave the task
 }</pre>
       <ul>
         <li>The value before the block is evaluated once. A plan B binds like <code>.</code> and <code>^</code>, so
@@ -1052,10 +1052,10 @@ task parse(digits: text) -&gt; int ~ ParseError
 fi
 
 task main()
-    bind n = parse("42") { 0 }            # the error is ignored: use 0
+    bind n = parse("42") { 0 }            ; the error is ignored: use 0
 
     bind m = parse("4x") {
-        failure e                         # names the failure for this block
+        failure e                         ; names the failure for this block
         match e
         case Empty
             show("empty")
@@ -1451,7 +1451,7 @@ fi</pre>
 fi
 
 bind a = length_squared(p)
-bind b = p.length_squared()     # the same call</pre>
+bind b = p.length_squared()     ; the same call</pre>
         <div class="pros-cons">
           <div class="pros">
             <strong>Pros</strong>
@@ -1791,11 +1791,11 @@ show(c.total())</pre>
         <code>int(t)</code> sends <code>int ~ ParseError</code> (see
         <a href="vela.html#reading-numbers">Reading a number from text</a>).
       </p>
-      <pre>bind x = float(n)                  # an int as a float, which never fails (done)
-bind whole = int(2.9)              # a float as an int: 2, truncated toward zero (done)
-bind counted = int(n &gt; 3)          # a bool as an int: 1 or 0 (done)
-bind shown = text(3.5) at r        # a number to text makes text, in a region (done)
-bind age = int("42")               # text to a number can fail: int ~ ParseError (done)</pre>
+      <pre>bind x = float(n)                  ; an int as a float, which never fails (done)
+bind whole = int(2.9)              ; a float as an int: 2, truncated toward zero (done)
+bind counted = int(n &gt; 3)          ; a bool as an int: 1 or 0 (done)
+bind shown = text(3.5) at r        ; a number to text makes text, in a region (done)
+bind age = int("42")               ; text to a number can fail: int ~ ParseError (done)</pre>
       <p>
         <span class="badge b-done">Done</span>: the typed form <code>scan("Age: ", int)</code> reads a number from input
         in one step, and needs no region, since a number needs no memory. Its question was how the end of input is told
@@ -1846,7 +1846,7 @@ bind age = int("42")               # text to a number can fail: int ~ ParseError
           that teaches it. <code>or</code> now has one meaning only, the boolean one. <code>~</code> was free (the lexer
           answered it with <em>unexpected character</em>), and the bitwise operators take
           <code>&amp; | &lt;&lt; &gt;&gt;</code> (see <a href="#bitwise">Bitwise operators</a>), so nothing else wants
-          it. Sigils already appear in Vela's types (<code>^Node</code>, <code>text@r</code>, <code>[int; 4]</code>),
+          it. Sigils already appear in Vela's types (<code>^Node</code>, <code>text@r</code>, <code>[int#4]</code>),
           which is where this one goes.</li>
         <li><strong><code>fail</code> splits by what it does.</strong> <span class="badge b-done">Done</span> —
           the verb <code>fail</code> wherever a failure is <em>made</em> (<code>&lt;- fail e</code>, and a failure as a
@@ -1857,8 +1857,8 @@ bind age = int("42")               # text to a number can fail: int ~ ParseError
       </ul>
       <pre><span class="keyword">task</span> age(line: <span class="type">text</span>) -&gt; <span class="type">int</span> ~ ParseError
     <span class="keyword">bind</span> years = int(line) {
-        <span class="keyword">failure</span> e                      <span class="comment"># names the failure: a pattern, like a case</span>
-        &lt;- <span class="keyword">fail</span> e                     <span class="comment"># makes one: the verb</span>
+        <span class="keyword">failure</span> e                      <span class="comment">; names the failure: a pattern, like a case</span>
+        &lt;- <span class="keyword">fail</span> e                     <span class="comment">; makes one: the verb</span>
     }
     <span class="keyword">when</span> years &gt; <span class="number">200</span>
         &lt;- <span class="keyword">fail</span> ParseError.TooLarge
@@ -2008,7 +2008,7 @@ bind age = int("42")               # text to a number can fail: int ~ ParseError
           <code>ParseError</code>, so telling <code>NotANumber</code> from <code>TooLarge</code> means matching the error,
           then matching what it holds. The idea is to let the inner variants be written directly, as if they were the
           outer kind's own, in a <code>case</code> and in a <code>fail</code>:
-          <pre># today
+          <pre>; today
 match e
 case Ended
     reading = false
@@ -2021,17 +2021,17 @@ case NoNumber why
     fi
 fi
 
-# the idea
+; the idea
 match e
 case Ended
     reading = false
-case NotANumber                    # InputError.NoNumber holding ParseError.NotANumber
+case NotANumber                    ; InputError.NoNumber holding ParseError.NotANumber
     show("no number")
 case TooLarge
     show("too large")
 fi
 
-&lt;- fail InputError.NotANumber      # short for fail InputError.NoNumber(ParseError.NotANumber)</pre>
+&lt;- fail InputError.NotANumber      ; short for fail InputError.NoNumber(ParseError.NotANumber)</pre>
           <p><strong>What it would add.</strong> The level of nesting costs nothing to read, so a kind can hold another
           kind wherever that is the honest shape without making every reader pay for it. It keeps two kinds from needing
           two words for one reason: <code>InputError</code> holds a <code>ParseError</code> exactly because

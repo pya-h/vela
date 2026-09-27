@@ -1,6 +1,6 @@
-# Text holding values: `"n = {n}" at r` is new text in `r`, each value turned
-# into text as `str` does. `\{` and `\}` write braces, and text holding no
-# value needs no region.
+; Text holding values: `"n = {n}" at r` is new text in `r`, each value turned
+; into text as `str` does. `\{` and `\}` write braces, and text holding no
+; value needs no region.
 
 shape Point
     x: int
@@ -31,8 +31,8 @@ task labelled<T: shown>(label: text, value: T, r: region) -> text@r
     <- "{label}: {value}" at r
 fi
 
-# `fail` takes the value right after it, text holding values and its region
-# with it.
+; `fail` takes the value right after it, text holding values and its region
+; with it.
 task checked(n: int, r: region) -> int ~ text@r
     when n < 0
         <- fail "{n} is below zero" at r
@@ -44,7 +44,7 @@ task main()
     region r
     bind n = 5
     bind name = "Ada"
-    # Every kind of value, and a value at either end or alone.
+    ; Every kind of value, and a value at either end or alone.
     show("n = {n}" at r)
     show("{n}" at r)
     show("{n} left" at r)
@@ -52,37 +52,37 @@ task main()
     show("pi is about {3.25}, big is {n > 2}, small is {n < 2}" at r)
     show("{-9223372036854775807 - 1}" at r)
     show("{Point { x: 1, y: -2 }} and {Light.Green}" at r)
-    # `@r` names the region too.
+    ; `@r` names the region too.
     show("{name}!"@r)
-    # Values that are text: literals, parts, and text holding values itself.
+    ; Values that are text: literals, parts, and text holding values itself.
     show("[{"x"}] [{name[1..3]}] [{"{n}{n}"}]" at r)
-    # A plan B, a call, and a method call inside the braces.
+    ; A plan B, a call, and a method call inside the braces.
     bind missing: maybe int = none
     show("got {missing { 7 }}, {twice(twice(n))}, {Point { x: n, y: n }.str() at r}" at r)
-    # Spaces inside the braces are not part of the text.
+    ; Spaces inside the braces are not part of the text.
     show("a { n } b" at r)
-    # Braces written with escapes, with and without values.
+    ; Braces written with escapes, with and without values.
     show("\{n\} is {n}" at r)
     show("plain \{ brace \}")
-    # In a join, text holding values takes the join's region.
+    ; In a join, text holding values takes the join's region.
     show("Hi " + "{name}!" at r)
     show(("{n}" + "!")@r)
     show("{n}" + " and " + "{n + 1}" at r)
-    # The result is text like any other.
+    ; The result is text like any other.
     bind line = "{name}={n}" at r
     show(line.len)
     show(line == "Ada=5")
     show("{n}" at r < "6")
     show(labelled("count", n, r))
     show(labelled("name", name, r))
-    # Text in another region, kept in `r`.
+    ; Text in another region, kept in `r`.
     region q
     bind other = "{n * 10}" at q
     bind kept = "kept {other}" at r
     show(kept)
-    # Multi-byte characters around and inside values.
+    ; Multi-byte characters around and inside values.
     show("café {"é"} ☕ {n}" at r)
-    # An error made of text holding values, read with a plan B.
+    ; An error made of text holding values, read with a plan B.
     show(checked(n, r) { 0 })
     bind low = checked(-n, r) { failure e
         show(e)

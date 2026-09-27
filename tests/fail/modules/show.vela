@@ -1,4 +1,4 @@
-# A module named like a builtin task, for a fail fixture.
+; A module named like a builtin task, for a fail fixture.
 
 task hello() -> int
     <- 1

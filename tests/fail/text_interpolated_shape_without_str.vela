@@ -1,4 +1,4 @@
-# error: 8:15: shape 'Point' has no method 'str', which turns its values into text; give it one, written 'str(r: region) -> text@r'
+; error: 8:15: shape 'Point' has no method 'str', which turns its values into text; give it one, written 'str(r: region) -> text@r'
 shape Point
     x: int
 fi

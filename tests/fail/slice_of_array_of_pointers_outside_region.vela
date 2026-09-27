@@ -1,4 +1,4 @@
-# error: 5:25: a slice points into a region, but this array isn't in one; copy it into a slice, as in 'new [^int](xs) at r', or keep the array in a region with 'new [^int; 2](…) at r'
+; error: 5:25: a slice points into a region, but this array isn't in one; copy it into a slice, as in 'new [^int](xs) at r', or keep the array in a region with 'new [^int#2](…) at r'
 task main()
     region r
     bind pointers = [new int(1) at r, new int(2) at r]

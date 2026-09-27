@@ -1,4 +1,4 @@
-# error: 4:5: 'count' isn't a result of this task; assign it with 'count = …'
+; error: 4:5: 'count' isn't a result of this task; assign it with 'count = …'
 task main()
     hold count = 0
     count <- 1

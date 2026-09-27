@@ -1,7 +1,7 @@
-  1 | # A `match` and a `when` used as values: every branch gives the value, on one
-    | comment:# A `match` and a `when` used as values: every branch gives the value, on one
-  2 | # line with `=` for a case, or on the last line of its block.
-    | comment:# line with `=` for a case, or on the last line of its block.
+  1 | ; A `match` and a `when` used as values: every branch gives the value, on one
+    | comment:; A `match` and a `when` used as values: every branch gives the value, on one
+  2 | ; line with `=` for a case, or on the last line of its block.
+    | comment:; line with `=` for a case, or on the last line of its block.
   4 | kind Shape
     | keyword:kind  type:Shape
   5 |     Circle(r: float)
@@ -18,8 +18,8 @@
     | variant:Missing
  12 | fi
     | keyword:fi
- 14 | # The cases give the value, one each.
-    | comment:# The cases give the value, one each.
+ 14 | ; The cases give the value, one each.
+    | comment:; The cases give the value, one each.
  15 | task area(s: Shape) -> float
     | keyword:task  task:area  punctuation:(  parameter:s  punctuation::  type:Shape  punctuation:)  operator:->  type-builtin:float
  16 |     <- match s
@@ -32,10 +32,10 @@
     | keyword:fi
  20 | fi
     | keyword:fi
- 22 | # A case may work first and give the value on its last line, and a chain of
-    | comment:# A case may work first and give the value on its last line, and a chain of
- 23 | # conditions gives it through the branch that holds.
-    | comment:# conditions gives it through the branch that holds.
+ 22 | ; A case may work first and give the value on its last line, and a chain of
+    | comment:; A case may work first and give the value on its last line, and a chain of
+ 23 | ; conditions gives it through the branch that holds.
+    | comment:; conditions gives it through the branch that holds.
  24 | task describe(s: Shape) -> text
     | keyword:task  task:describe  punctuation:(  parameter:s  punctuation::  type:Shape  punctuation:)  operator:->  type-builtin:text
  25 |     <- match s
@@ -64,8 +64,8 @@
     | keyword:fi
  37 | fi
     | keyword:fi
- 39 | # A `when` used as a value needs its `else`.
-    | comment:# A `when` used as a value needs its `else`.
+ 39 | ; A `when` used as a value needs its `else`.
+    | comment:; A `when` used as a value needs its `else`.
  40 | task label(value: int) -> text
     | keyword:task  task:label  punctuation:(  parameter:value  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:text
  41 |     <- when value > 100
@@ -80,18 +80,18 @@
     | keyword:fi
  46 | fi
     | keyword:fi
- 48 | # Takes a maybe, so a value given to it becomes one.
-    | comment:# Takes a maybe, so a value given to it becomes one.
+ 48 | ; Takes a maybe, so a value given to it becomes one.
+    | comment:; Takes a maybe, so a value given to it becomes one.
  49 | task keep(m: maybe int) -> int
     | keyword:task  task:keep  punctuation:(  parameter:m  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  50 |     <- m { -1 }
     | keyword:<-  parameter:m  punctuation:{  operator:-  number:1  punctuation:}
  51 | fi
     | keyword:fi
- 53 | # Where every branch that gives a value gives `none`, the branches still run and
-    | comment:# Where every branch that gives a value gives `none`, the branches still run and
- 54 | # the value becomes the maybe the place it goes expects; the other branch leaves.
-    | comment:# the value becomes the maybe the place it goes expects; the other branch leaves.
+ 53 | ; Where every branch that gives a value gives `none`, the branches still run and
+    | comment:; Where every branch that gives a value gives `none`, the branches still run and
+ 54 | ; the value becomes the maybe the place it goes expects; the other branch leaves.
+    | comment:; the value becomes the maybe the place it goes expects; the other branch leaves.
  55 | task none_or_leave(n: int) -> int
     | keyword:task  task:none_or_leave  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  56 |     <- keep(when n > 1
@@ -116,10 +116,10 @@
     | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variable:circle  punctuation:)  punctuation:,  string:", "  punctuation:,  task:describe  punctuation:(  variant:Circle  punctuation:(  number:0.5  punctuation:)  punctuation:)  punctuation:,  string:", "  punctuation:,  task:describe  punctuation:(  variant:Rect  punctuation:(  number:1.0  punctuation:,  number:1.0  punctuation:)  punctuation:)  punctuation:)
  67 |     show(label(200), " ", label(5))
     | builtin-fn:show  punctuation:(  task:label  punctuation:(  number:200  punctuation:)  punctuation:,  string:" "  punctuation:,  task:label  punctuation:(  number:5  punctuation:)  punctuation:)
- 69 |     # A case that gives `none` makes the whole a maybe, and one that gives a
-    | comment:# A case that gives `none` makes the whole a maybe, and one that gives a
- 70 |     # failure makes it a `T ~ E`.
-    | comment:# failure makes it a `T ~ E`.
+ 69 |     ; A case that gives `none` makes the whole a maybe, and one that gives a
+    | comment:; A case that gives `none` makes the whole a maybe, and one that gives a
+ 70 |     ; failure makes it a `T ~ E`.
+    | comment:; failure makes it a `T ~ E`.
  71 |     bind half = match Ok(8)
     | keyword:bind  variable:half  operator:=  keyword:match  variant:Ok  punctuation:(  number:8  punctuation:)
  72 |     case Ok value = value / 2
@@ -150,10 +150,10 @@
     | keyword:fi
  85 |     show(checked { 0 })
     | builtin-fn:show  punctuation:(  variable:checked  punctuation:{  number:0  punctuation:}  punctuation:)
- 87 |     # A branch may leave the task instead of giving a value, and a value may be
-    | comment:# A branch may leave the task instead of giving a value, and a value may be
- 88 |     # used anywhere: in an argument, or in a larger expression.
-    | comment:# used anywhere: in an argument, or in a larger expression.
+ 87 |     ; A branch may leave the task instead of giving a value, and a value may be
+    | comment:; A branch may leave the task instead of giving a value, and a value may be
+ 88 |     ; used anywhere: in an argument, or in a larger expression.
+    | comment:; used anywhere: in an argument, or in a larger expression.
  89 |     bind doubled = 1 + match Ok(20)
     | keyword:bind  variable:doubled  operator:=  number:1  operator:+  keyword:match  variant:Ok  punctuation:(  number:20  punctuation:)
  90 |     case Ok value = value
@@ -168,10 +168,10 @@
     | keyword:fi
  95 |     show(doubled)
     | builtin-fn:show  punctuation:(  variable:doubled  punctuation:)
- 97 |     # In a region: the value a branch gives goes where the whole one does, and a
-    | comment:# In a region: the value a branch gives goes where the whole one does, and a
- 98 |     # literal lasts, so it fits beside text of a region.
-    | comment:# literal lasts, so it fits beside text of a region.
+ 97 |     ; In a region: the value a branch gives goes where the whole one does, and a
+    | comment:; In a region: the value a branch gives goes where the whole one does, and a
+ 98 |     ; literal lasts, so it fits beside text of a region.
+    | comment:; literal lasts, so it fits beside text of a region.
  99 |     region kept default
     | keyword:region  region:kept  keyword:default
 100 |     bind note = when doubled > 10
@@ -186,10 +186,10 @@
     | keyword:fi
 105 |     show(note)
     | builtin-fn:show  punctuation:(  variable:note  punctuation:)
-107 |     # A plan B's block gives its value the same way, so a `when` or a `match` on
-    | comment:# A plan B's block gives its value the same way, so a `when` or a `match` on
-108 |     # its last line gives it through their branches.
-    | comment:# its last line gives it through their branches.
+107 |     ; A plan B's block gives its value the same way, so a `when` or a `match` on
+    | comment:; A plan B's block gives its value the same way, so a `when` or a `match` on
+108 |     ; its last line gives it through their branches.
+    | comment:; its last line gives it through their branches.
 109 |     bind first: maybe int = none
     | keyword:bind  variable:first  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
 110 |     bind fallback = first {
@@ -208,8 +208,8 @@
     | punctuation:}
 117 |     show(fallback)
     | builtin-fn:show  punctuation:(  variable:fallback  punctuation:)
-119 |     # A `when` used as a value, inside the case of a `match` used as one.
-    | comment:# A `when` used as a value, inside the case of a `match` used as one.
+119 |     ; A `when` used as a value, inside the case of a `match` used as one.
+    | comment:; A `when` used as a value, inside the case of a `match` used as one.
 120 |     each n in 0..3
     | keyword:each  variable:n  keyword:in  number:0  operator:..  number:3
 121 |         show(match Ok(n)
@@ -236,12 +236,12 @@
     | keyword:fi  punctuation:)
 132 |     fi
     | keyword:fi
-134 |     # A branch inside a branch settles a type of its own, which the branches
-    | comment:# A branch inside a branch settles a type of its own, which the branches
-135 |     # around it may widen: here the case giving `none` makes the whole a maybe,
-    | comment:# around it may widen: here the case giving `none` makes the whole a maybe,
-136 |     # so the inner `when` gives a maybe int too.
-    | comment:# so the inner `when` gives a maybe int too.
+134 |     ; A branch inside a branch settles a type of its own, which the branches
+    | comment:; A branch inside a branch settles a type of its own, which the branches
+135 |     ; around it may widen: here the case giving `none` makes the whole a maybe,
+    | comment:; around it may widen: here the case giving `none` makes the whole a maybe,
+136 |     ; so the inner `when` gives a maybe int too.
+    | comment:; so the inner `when` gives a maybe int too.
 137 |     bind inner = match Ok(3)
     | keyword:bind  variable:inner  operator:=  keyword:match  variant:Ok  punctuation:(  number:3  punctuation:)
 138 |     case Ok value
@@ -266,8 +266,8 @@
     | keyword:fi
 148 |     show(inner)
     | builtin-fn:show  punctuation:(  variable:inner  punctuation:)
-150 |     # The same, where the place the value goes widens it: `keep` takes a maybe.
-    | comment:# The same, where the place the value goes widens it: `keep` takes a maybe.
+150 |     ; The same, where the place the value goes widens it: `keep` takes a maybe.
+    | comment:; The same, where the place the value goes widens it: `keep` takes a maybe.
 151 |     show(keep(match Ok(4)
     | builtin-fn:show  punctuation:(  task:keep  punctuation:(  keyword:match  variant:Ok  punctuation:(  number:4  punctuation:)
 152 |     case Ok value
@@ -288,10 +288,10 @@
     | keyword:fi  punctuation:)  punctuation:)
 160 |     show(none_or_leave(2), " ", none_or_leave(0))
     | builtin-fn:show  punctuation:(  task:none_or_leave  punctuation:(  number:2  punctuation:)  punctuation:,  string:" "  punctuation:,  task:none_or_leave  punctuation:(  number:0  punctuation:)  punctuation:)
-162 |     # Branches that all give `none`, or all give a failure: the type comes from
-    | comment:# Branches that all give `none`, or all give a failure: the type comes from
-163 |     # the place the value goes, and each branch becomes part of it.
-    | comment:# the place the value goes, and each branch becomes part of it.
+162 |     ; Branches that all give `none`, or all give a failure: the type comes from
+    | comment:; Branches that all give `none`, or all give a failure: the type comes from
+163 |     ; the place the value goes, and each branch becomes part of it.
+    | comment:; the place the value goes, and each branch becomes part of it.
 164 |     bind empty: maybe int = when doubled > 10
     | keyword:bind  variable:empty  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:when  variable:doubled  operator:>  number:10
 165 |         none

@@ -1,4 +1,4 @@
-# error: 5:15: '{}' in text holds no value; put one inside, as in '{n}', or write a brace as '\{'
+; error: 5:15: '{}' in text holds no value; put one inside, as in '{n}', or write a brace as '\{'
 task main()
     region r
     bind n = 5

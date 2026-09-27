@@ -1,4 +1,4 @@
-# error: 9:14: shape 'Shown' takes a type that is 'shown' as 'T', and [int]@r can't be shown
+; error: 9:14: shape 'Shown' takes a type that is 'shown' as 'T', and [int]@r can't be shown
 shape Shown<T: shown>
     value: T
 fi

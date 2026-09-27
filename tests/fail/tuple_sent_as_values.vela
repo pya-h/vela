@@ -1,4 +1,4 @@
-# error: 3:11: expected 1 value, got 2; this task sends one tuple, so write its values in parentheses, as in '<- (a, b)'
+; error: 3:11: expected 1 value, got 2; this task sends one tuple, so write its values in parentheses, as in '<- (a, b)'
 task pair() -> (int, int)
     <- 1, 2
 fi

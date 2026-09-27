@@ -1,6 +1,6 @@
-# Errors of every type: a shape, an int computed with `fail (…)`, and a
-# `text ~ int` (written without spaces here, which is allowed), handled by
-# `match`, a plan B, and `is failure e`.
+; Errors of every type: a shape, an int computed with `fail (…)`, and a
+; `text ~ int` (written without spaces here, which is allowed), handled by
+; `match`, a plan B, and `is failure e`.
 
 shape Problem
     code: int

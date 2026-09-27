@@ -1,4 +1,4 @@
-# error: 4:18: a 'when' used as a value needs an 'else': without one, nothing gives the value when the condition doesn't hold
+; error: 4:18: a 'when' used as a value needs an 'else': without one, nothing gives the value when the condition doesn't hold
 task main()
     bind n = 7
     bind label = when n > 0

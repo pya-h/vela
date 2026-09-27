@@ -1,7 +1,7 @@
-  1 | # Prices of fuel, for tests/run/aliases.vela, in a file with the same name as
-    | comment:# Prices of fuel, for tests/run/aliases.vela, in a file with the same name as
-  2 | # tests/run/aliases/shop/prices.vela.
-    | comment:# tests/run/aliases/shop/prices.vela.
+  1 | ; Prices of fuel, for tests/run/aliases.vela, in a file with the same name as
+    | comment:; Prices of fuel, for tests/run/aliases.vela, in a file with the same name as
+  2 | ; tests/run/aliases/shop/prices.vela.
+    | comment:; tests/run/aliases/shop/prices.vela.
   4 | kind Size
     | keyword:kind  type:Size
   5 |     Small

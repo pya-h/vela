@@ -1,5 +1,5 @@
-# A `unit ~ E` is a value too: it can be bound, held, stored in a field, and
-# passed to a task, and `case {_}` matches its success.
+; A `unit ~ E` is a value too: it can be bound, held, stored in a field, and
+; passed to a task, and `case {_}` matches its success.
 
 shape Saved
     result: unit ~ text

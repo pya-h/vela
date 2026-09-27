@@ -1,7 +1,7 @@
-  1 | # Float literals, arithmetic in floats, and float remainder. An int doesn't
-    | comment:# Float literals, arithmetic in floats, and float remainder. An int doesn't
-  2 | # become a float on its own, so every int taking part is written 'float(n)'.
-    | comment:# become a float on its own, so every int taking part is written 'float(n)'.
+  1 | ; Float literals, arithmetic in floats, and float remainder. An int doesn't
+    | comment:; Float literals, arithmetic in floats, and float remainder. An int doesn't
+  2 | ; become a float on its own, so every int taking part is written 'float(n)'.
+    | comment:; become a float on its own, so every int taking part is written 'float(n)'.
   4 | shape Vec1
     | keyword:shape  type:Vec1
   5 |     x: float

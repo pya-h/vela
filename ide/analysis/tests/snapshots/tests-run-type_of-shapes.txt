@@ -1,5 +1,5 @@
-  1 | # A module with a shape and a kind, used from tests/run/type_of.vela.
-    | comment:# A module with a shape and a kind, used from tests/run/type_of.vela.
+  1 | ; A module with a shape and a kind, used from tests/run/type_of.vela.
+    | comment:; A module with a shape and a kind, used from tests/run/type_of.vela.
   3 | shape Crate
     | keyword:shape  type:Crate
   4 |     size: int

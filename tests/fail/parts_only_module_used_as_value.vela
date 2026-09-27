@@ -1,4 +1,4 @@
-# error: 5:16: unknown variable 'library'; module 'modules/library' is included with only its parts, which are named alone
+; error: 5:16: unknown variable 'library'; module 'modules/library' is included with only its parts, which are named alone
 include modules/library {greet}
 
 task main()

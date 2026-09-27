@@ -1,4 +1,4 @@
-# error: 7:17: 'Green' is already defined at 4:5
+; error: 7:17: 'Green' is already defined at 4:5
 kind Light
     Red
     Green

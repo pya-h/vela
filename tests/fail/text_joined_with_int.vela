@@ -1,4 +1,4 @@
-# error: 4:19: '+' joins text, but this value is int; turn it into text first, as in 'n.str() at r'
+; error: 4:19: '+' joins text, but this value is int; turn it into text first, as in 'n.str() at r'
 task main()
     region r
     show("n = " + 1 at r)

@@ -1,4 +1,4 @@
-# error: 2:6: 'Chain' can never be created: every variant needs an existing value that can't be created either; use 'maybe' for a value that can be missing
+; error: 2:6: 'Chain' can never be created: every variant needs an existing value that can't be created either; use 'maybe' for a value that can be missing
 kind Chain
     Link(next: ^Chain)
 fi

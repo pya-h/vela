@@ -1,4 +1,4 @@
-# error: 7:10: 'Point' is the name of a shape, so 'Point.x' would name its shared field; choose another name
+; error: 7:10: 'Point' is the name of a shape, so 'Point.x' would name its shared field; choose another name
 shape Point
     x: int
 fi

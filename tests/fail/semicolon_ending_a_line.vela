@@ -1,4 +1,0 @@
-# error: 3:12: expected an expression, got ';'; a statement ends at the end of its line, without ';'
-task main()
-    show(1);
-fi

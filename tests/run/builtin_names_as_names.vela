@@ -1,11 +1,11 @@
-# The names of builtin tasks and types are only reserved as declarations:
-# variables, parameters, and fields may use them; `Light.Red()` is a variant
-# without a payload written with parentheses.
+; The names of builtin tasks and types are only reserved as declarations:
+; variables, parameters, and fields may use them; `Light.Red()` is a variant
+; without a payload written with parentheses.
 
 shape Box
     unit: int
     show: text
-    # A field may be named like a variant of a builtin kind.
+    ; A field may be named like a variant of a builtin kind.
     TooLarge: bool
 fi
 
@@ -18,8 +18,8 @@ task twice(text: int, float: int) -> int
     <- text + float
 fi
 
-# A parameter may be named like a builtin type, and the type a scan reads is a
-# type rather than that value, so this one is never read.
+; A parameter may be named like a builtin type, and the type a scan reads is a
+; type rather than that value, so this one is never read.
 task ignoring(int: int) -> int
     <- scan("", int) { 0 }
 fi
@@ -41,11 +41,11 @@ task main()
     when l is Light.Red
         show("red")
     fi
-    # A field may be named like a variant of a builtin kind, which a variable
-    # may not be, as no variable may be named like any kind's variant.
+    ; A field may be named like a variant of a builtin kind, which a variable
+    ; may not be, as no variable may be named like any kind's variant.
     show(bool.TooLarge)
     show(read("x") { -2 })
-    # A variable named like a builtin type, beside a scan that names that type.
+    ; A variable named like a builtin type, beside a scan that names that type.
     bind int = 3
     show(int + scan("", int) { 0 })
     show(ignoring(9))

@@ -1,7 +1,7 @@
-  1 | # Prices in a shop, for tests/run/aliases.vela. tests/run/aliases/fuel has a
-    | comment:# Prices in a shop, for tests/run/aliases.vela. tests/run/aliases/fuel has a
-  2 | # module named prices too: a module is known by its path.
-    | comment:# module named prices too: a module is known by its path.
+  1 | ; Prices in a shop, for tests/run/aliases.vela. tests/run/aliases/fuel has a
+    | comment:; Prices in a shop, for tests/run/aliases.vela. tests/run/aliases/fuel has a
+  2 | ; module named prices too: a module is known by its path.
+    | comment:; module named prices too: a module is known by its path.
   4 | shape Item
     | keyword:shape  type:Item
   5 |     name: text

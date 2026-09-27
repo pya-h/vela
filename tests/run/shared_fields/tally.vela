@@ -1,10 +1,10 @@
-# A module whose shape keeps shared fields, used from tests/run/shared_fields.vela.
+; A module whose shape keeps shared fields, used from tests/run/shared_fields.vela.
 
 shape Tally
     n: int = 0
-    # Any file reads it; only the methods of Tally change it.
+    ; Any file reads it; only the methods of Tally change it.
     shared read made: int = 0
-    # Any file that sees it may change it.
+    ; Any file that sees it may change it.
     shared hold limit: int = 3
     priv shared hold secret: int = 42
 
@@ -13,7 +13,7 @@ shape Tally
         Tally.made = Tally.made + 1
     fi
 
-    # A method that doesn't change its value may still change shared fields.
+    ; A method that doesn't change its value may still change shared fields.
     reveal() -> int
         Tally.secret = Tally.secret + 1
         <- Tally.secret

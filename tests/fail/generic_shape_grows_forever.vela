@@ -1,4 +1,4 @@
-# error: 4:18: 'Grow' would need more than 24 shapes made for it, one inside the next: a field of it gives it a type built from its own, which never stops. A field can name the shape with the types it takes, as in 'maybe ^Grow<T>'
+; error: 4:18: 'Grow' would need more than 24 shapes made for it, one inside the next: a field of it gives it a type built from its own, which never stops. A field can name the shape with the types it takes, as in 'maybe ^Grow<T>'
 shape Grow<T>
     value: T
     next: maybe ^Grow<Grow<T>>

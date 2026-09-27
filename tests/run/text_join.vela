@@ -1,6 +1,6 @@
-# `a + b at r` joins text into new text in region `r`, as does `(a + b)@r`.
-# The parts may be text of any regions, or text that lasts, and the result is
-# text@r.
+; `a + b at r` joins text into new text in region `r`, as does `(a + b)@r`.
+; The parts may be text of any regions, or text that lasts, and the result is
+; text@r.
 
 shape Person
     first: text
@@ -22,13 +22,13 @@ task main()
     show(name)
     show(name.len)
     show(("<" + name + ">")@r)
-    # A part may be any text: here, calls.
+    ; A part may be any text: here, calls.
     show(loud("a", r) + loud("b", r) at r)
-    # Empty text, a NUL, and characters of several bytes join like any bytes.
+    ; Empty text, a NUL, and characters of several bytes join like any bytes.
     show("" + "" at r == "")
     show(("ab\0" + "cd")@r.len)
     show("caf" + "é ✓" at r)
-    # Joined text can be joined again, and compared and cut like any text.
+    ; Joined text can be joined again, and compared and cut like any text.
     hold line = "" + "" at r
     each word in ["one", "two", "three"]
         line = line + word + "," at r
@@ -36,7 +36,7 @@ task main()
     show(line)
     show(line[0..line.len - 1])
     show(line < "p" + "" at r)
-    # Text in a region inside a loop, freed on every pass.
+    ; Text in a region inside a loop, freed on every pass.
     hold count = 0
     loop count < 2
         region pass
@@ -44,12 +44,12 @@ task main()
         show(greeting)
         count = count + 1
     fi
-    # A slice of joined text.
+    ; A slice of joined text.
     hold names = new [text]() at r
     names.add("x" + "y" at r)
     names.add(names[0] + names[0] at r)
     show(names[1])
-    # A join is one operand of whatever is around it.
+    ; A join is one operand of whatever is around it.
     bind a = "x"
     show(a + "y" at r == "xy")
     when a + a at r < "xz" and a + "" at r == a

@@ -1,4 +1,4 @@
-# error: 2:23: everything a value in region 'r' holds is in 'r', its pointers too; write '@r' for '@s'
+; error: 2:23: everything a value in region 'r' holds is in 'r', its pointers too; write '@r' for '@s'
 task stash(xs: [^text@s]@r, p: ^text@s)
     xs[0] = p
 fi

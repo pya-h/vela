@@ -1,4 +1,4 @@
-# error: 4:12: arithmetic requires numeric operands; the value in this maybe int must be extracted first, as in 'x { … }' or 'when x is {value}'
+; error: 4:12: arithmetic requires numeric operands; the value in this maybe int must be extracted first, as in 'x { … }' or 'when x is {value}'
 task main()
     bind m: maybe int = 1
     show(m + 1)

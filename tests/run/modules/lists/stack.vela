@@ -1,5 +1,5 @@
-# A stack of numbers in a region, for tests/run/modules.vela. It includes a module
-# from the folder above.
+; A stack of numbers in a region, for tests/run/modules.vela. It includes a module
+; from the folder above.
 
 include ../numbers (add)
 

@@ -1,4 +1,4 @@
-# `==` on text compares contents, not addresses.
+; `==` on text compares contents, not addresses.
 
 task same(a: text, b: text) -> bool
     <- a == b
@@ -8,7 +8,7 @@ task main()
     show("apple" == "apple")
     show("apple" == "apples")
     show("apple" != "pear")
-    # A NUL is one of the bytes compared, not the end of the text.
+    ; A NUL is one of the bytes compared, not the end of the text.
     show(same("ab\0x", "ab\0y"))
     show(same("ab\0x", "ab\0x"))
     show(same("ab", "ab\0"))

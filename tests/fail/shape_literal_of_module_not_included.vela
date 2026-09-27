@@ -1,4 +1,4 @@
-# error: 3:14: 'geometry.Point' names nothing: 'geometry' is neither a module this file includes nor a kind
+; error: 3:14: 'geometry.Point' names nothing: 'geometry' is neither a module this file includes nor a kind
 task main()
     bind p = geometry.Point { x: 1.0, y: 2.0 }
 fi

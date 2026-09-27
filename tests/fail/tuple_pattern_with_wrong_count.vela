@@ -1,4 +1,4 @@
-# error: 4:20: this tuple has 2 items, but '( … )' takes 3
+; error: 4:20: this tuple has 2 items, but '( … )' takes 3
 task main()
     hold found: maybe (int, text) = none
     when found is {(a, b, c)}

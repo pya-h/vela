@@ -1,4 +1,4 @@
-# error: 9:5: expected 'case', got '<-'
+; error: 9:5: expected 'case', got '<-'
 kind K
     A
 fi

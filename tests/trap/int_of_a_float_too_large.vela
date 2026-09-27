@@ -1,4 +1,4 @@
-# trap: 9e+27 does not fit in an int at 10:10 in task 'main'
+; trap: 9e+27 does not fit in an int at 10:10 in task 'main'
 task main()
     hold big = 9.0
     hold i = 0

@@ -1,4 +1,4 @@
-# error: 2:11: a module path goes on after '..' with '/', as in 'include ../geometry'
+; error: 2:11: a module path goes on after '..' with '/', as in 'include ../geometry'
 include ..
 
 task main()

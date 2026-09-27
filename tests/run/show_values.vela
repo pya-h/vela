@@ -1,6 +1,6 @@
-# `show` takes any number of values and writes them one after another, with
-# nothing between them, then ends the line. `show()` is an empty line, and the
-# values are written, and do what they ask, left to right.
+; `show` takes any number of values and writes them one after another, with
+; nothing between them, then ends the line. `show()` is an empty line, and the
+; values are written, and do what they ask, left to right.
 
 task noisy(label: text, value: int) -> int
     show("<", label, ">")
@@ -16,36 +16,36 @@ task main()
     bind n = 5
     bind name = "Ada"
 
-    # One value is what it always was.
+    ; One value is what it always was.
     show(n)
     show(name)
 
-    # Several values, of every type `show` writes.
+    ; Several values, of every type `show` writes.
     show("n = ", n)
     show(1, " ", 2.5, " ", true, " ", "text")
     show("", "")
     show(name, "!")
 
-    # An empty line, from `show()` or from text of no bytes.
+    ; An empty line, from `show()` or from text of no bytes.
     show()
     show("")
 
-    # A `maybe` writes its value, or `none`.
+    ; A `maybe` writes its value, or `none`.
     bind missing: maybe int = none
     bind here: maybe int = 7
     show("missing: ", missing, ", here: ", here)
     bind line: maybe text@r = scan("") at r
     show("read: ", line)
 
-    # Values worked out where they are read: fields, items, parts, joins, text
-    # holding values, a plan B, and a call.
+    ; Values worked out where they are read: fields, items, parts, joins, text
+    ; holding values, a plan B, and a call.
     bind xs = [10, 20, 30]
     show("first ", xs[0], " of ", xs.len)
     show("part ", name[0..1], ", joined ", "x" + "y" at r, ", held ", "{n}" at r)
     show("plan B ", missing { 9 }, ", call ", noisy("inner", 3))
     show("a:", noisy("first", 1), " b:", noisy("second", 2))
 
-    # A type a declaration takes that is `shown`.
+    ; A type a declaration takes that is `shown`.
     told("count", n)
     told("name", name)
     told("ok", true)

@@ -1,4 +1,4 @@
-# error: 4:28: 'new [int](…)' makes a slice from '[value; count]', an array, or a slice, but this value is int
+; error: 4:28: 'new [int](…)' makes a slice from '[value#count]', an array, or a slice, but this value is int
 task main()
     region r
     bind items = new [int](5) at r

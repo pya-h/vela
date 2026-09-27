@@ -1,4 +1,4 @@
-# error: 3:19: an array can't hold unit, which has no value
+; error: 3:19: an array can't hold unit, which has no value
 task main()
-    bind values: [unit; 2] = [1, 2]
+    bind values: [unit#2] = [1, 2]
 fi

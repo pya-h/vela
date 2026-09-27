@@ -1,4 +1,4 @@
-# error: 8:5: 'Empty' is already defined at 2:6
+; error: 8:5: 'Empty' is already defined at 2:6
 task Empty()
     show(1)
 fi

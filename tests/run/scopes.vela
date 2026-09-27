@@ -1,5 +1,5 @@
-# Block scoping: variables live until the end of their block, and sibling
-# blocks may reuse names.
+; Block scoping: variables live until the end of their block, and sibling
+; blocks may reuse names.
 
 task main()
     when true

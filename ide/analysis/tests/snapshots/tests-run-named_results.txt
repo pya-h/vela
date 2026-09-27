@@ -1,13 +1,13 @@
-  1 | # Named results: `-> total: int` makes the result a variable of the task.
-    | comment:# Named results: `-> total: int` makes the result a variable of the task.
-  2 | # `total <- value` sets it and keeps going, `<- value` sets it and ends the
-    | comment:# `total <- value` sets it and keeps going, `<- value` sets it and ends the
-  3 | # task, a bare `<-` sends what the results hold, and reaching the end sends
-    | comment:# task, a bare `<-` sends what the results hold, and reaching the end sends
-  4 | # them too. Vela has no zero values, so the checker makes sure each result is
-    | comment:# them too. Vela has no zero values, so the checker makes sure each result is
-  5 | # set before it is read, before a bare `<-`, and before the end.
-    | comment:# set before it is read, before a bare `<-`, and before the end.
+  1 | ; Named results: `-> total: int` makes the result a variable of the task.
+    | comment:; Named results: `-> total: int` makes the result a variable of the task.
+  2 | ; `total <- value` sets it and keeps going, `<- value` sets it and ends the
+    | comment:; `total <- value` sets it and keeps going, `<- value` sets it and ends the
+  3 | ; task, a bare `<-` sends what the results hold, and reaching the end sends
+    | comment:; task, a bare `<-` sends what the results hold, and reaching the end sends
+  4 | ; them too. Vela has no zero values, so the checker makes sure each result is
+    | comment:; them too. Vela has no zero values, so the checker makes sure each result is
+  5 | ; set before it is read, before a bare `<-`, and before the end.
+    | comment:; set before it is read, before a bare `<-`, and before the end.
   7 | shape Node
     | keyword:shape  type:Node
   8 |     value: int
@@ -22,20 +22,20 @@
     | variable:total  keyword:<-  parameter:hits  operator:*  number:10
  14 |     when misses == 0
     | keyword:when  parameter:misses  operator:==  number:0
- 15 |         <- total + 50            # a perfect round: send the bonus and end here
-    | keyword:<-  variable:total  operator:+  number:50  comment:# a perfect round: send the bonus and end here
+ 15 |         <- total + 50            ; a perfect round: send the bonus and end here
+    | keyword:<-  variable:total  operator:+  number:50  comment:; a perfect round: send the bonus and end here
  16 |     fi
     | keyword:fi
- 17 |     total <- total - misses * 5  # otherwise keep going
-    | variable:total  keyword:<-  variable:total  operator:-  parameter:misses  operator:*  number:5  comment:# otherwise keep going
+ 17 |     total <- total - misses * 5  ; otherwise keep going
+    | variable:total  keyword:<-  variable:total  operator:-  parameter:misses  operator:*  number:5  comment:; otherwise keep going
  18 |     when total < 0
     | keyword:when  variable:total  operator:<  number:0
  19 |         total <- 0
     | variable:total  keyword:<-  number:0
  20 |     fi
     | keyword:fi
- 21 | fi                               # reaching the end sends total
-    | keyword:fi  comment:# reaching the end sends total
+ 21 | fi                               ; reaching the end sends total
+    | keyword:fi  comment:; reaching the end sends total
  23 | task collatz(start: int) -> steps: int, peak: int
     | keyword:task  task:collatz  punctuation:(  parameter:start  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:steps  punctuation::  type-builtin:int  punctuation:,  variable:peak  punctuation::  type-builtin:int
  24 |     hold n = start
@@ -64,16 +64,16 @@
     | keyword:fi
  36 |         when steps == 1000
     | keyword:when  variable:steps  operator:==  number:1000
- 37 |             <-                   # give up and send what we have
-    | keyword:<-  comment:# give up and send what we have
+ 37 |             <-                   ; give up and send what we have
+    | keyword:<-  comment:; give up and send what we have
  38 |         fi
     | keyword:fi
  39 |     fi
     | keyword:fi
  40 | fi
     | keyword:fi
- 42 | # A result set in every branch, and one branch that leaves instead.
-    | comment:# A result set in every branch, and one branch that leaves instead.
+ 42 | ; A result set in every branch, and one branch that leaves instead.
+    | comment:; A result set in every branch, and one branch that leaves instead.
  43 | task classify(n: int) -> label: text
     | keyword:task  task:classify  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:label  punctuation::  type-builtin:text
  44 |     when n < 0
@@ -94,8 +94,8 @@
     | keyword:fi
  52 | fi
     | keyword:fi
- 54 | # Every case of a match sets the result.
-    | comment:# Every case of a match sets the result.
+ 54 | ; Every case of a match sets the result.
+    | comment:; Every case of a match sets the result.
  55 | kind Light
     | keyword:kind  type:Light
  56 |     Red
@@ -126,8 +126,8 @@
     | keyword:fi
  70 | fi
     | keyword:fi
- 72 | # A named result in a region the caller gives, built one node at a time.
-    | comment:# A named result in a region the caller gives, built one node at a time.
+ 72 | ; A named result in a region the caller gives, built one node at a time.
+    | comment:; A named result in a region the caller gives, built one node at a time.
  73 | task build(r: region, n: int) -> list: maybe ^Node@r, count: int
     | keyword:task  task:build  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:,  variable:count  punctuation::  type-builtin:int
  74 |     list, count <- none, 0
@@ -140,8 +140,8 @@
     | keyword:fi
  78 | fi
     | keyword:fi
- 80 | # A region of the task's own is freed before the results are sent.
-    | comment:# A region of the task's own is freed before the results are sent.
+ 80 | ; A region of the task's own is freed before the results are sent.
+    | comment:; A region of the task's own is freed before the results are sent.
  81 | task summed(n: int) -> sum: int, made: int
     | keyword:task  task:summed  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:sum  punctuation::  type-builtin:int  punctuation:,  variable:made  punctuation::  type-builtin:int
  82 |     region scratch
@@ -158,8 +158,8 @@
     | keyword:fi
  88 | fi
     | keyword:fi
- 90 | # One call's results set another task's results.
-    | comment:# One call's results set another task's results.
+ 90 | ; One call's results set another task's results.
+    | comment:; One call's results set another task's results.
  91 | task twice(n: int) -> sum: int, made: int
     | keyword:task  task:twice  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:sum  punctuation::  type-builtin:int  punctuation:,  variable:made  punctuation::  type-builtin:int
  92 |     sum, made <- summed(n)

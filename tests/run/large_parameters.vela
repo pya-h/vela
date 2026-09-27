@@ -1,18 +1,18 @@
-# A parameter that never changes, of a large type (here, a shape of twelve
-# ints), is passed by a hidden pointer to where the caller keeps it, which is
-# faster than copying it. Nothing a program can see changes: each task below
-# reads the value it was given, as it was when the call began, however the
-# program changes the place it came from while the task runs.
+; A parameter that never changes, of a large type (here, a shape of twelve
+; ints), is passed by a hidden pointer to where the caller keeps it, which is
+; faster than copying it. Nothing a program can see changes: each task below
+; reads the value it was given, as it was when the call began, however the
+; program changes the place it came from while the task runs.
 
 shape Big
-    a: [int; 12]
+    a: [int#12]
 
-    # A method that changes nothing reads its value the same way.
+    ; A method that changes nothing reads its value the same way.
     first() -> int
         <- .a[0]
     fi
 
-    # Given a copy of the value it changes, which it reads as it was.
+    ; Given a copy of the value it changes, which it reads as it was.
     alters absorb(other: Big)
         .a[0] = .a[0] + 100
         .a[0] = .a[0] + other.a[0]
@@ -29,7 +29,7 @@ kind Held
 fi
 
 task make(start: int) -> Big
-    hold b = Big { a: [0; 12] }
+    hold b = Big { a: [0#12] }
     each i in 0..12
         b.a[i] = start + i
     fi
@@ -44,22 +44,22 @@ task total(b: Big) -> int
     <- sum
 fi
 
-# Given memory in a region, and a pointer to the same memory, which it writes:
-# what it was given stays as it was.
+; Given memory in a region, and a pointer to the same memory, which it writes:
+; what it was given stays as it was.
 task through_pointer(b: Big, p: ^Big@r) -> int
     bind before = b.a[0]
     p^.a[0] = 1000
     <- before * 1000 + b.a[0]
 fi
 
-# Given an item of a slice, and the slice, which it changes and grows.
+; Given an item of a slice, and the slice, which it changes and grows.
 task through_slice(b: Big, hold xs: [Big]@r, r: region) -> int
     xs[0].a[0] = 2000
     xs.add(make(0))
     <- b.a[0]
 fi
 
-# Given its own place too, through a hold& of the caller's caller.
+; Given its own place too, through a hold& of the caller's caller.
 task through_reference(b: Big, p: ^Big@r) -> int
     p^.a[1] = 3000
     <- b.a[1]
@@ -69,13 +69,13 @@ task pass_on(hold& b: Big, p: ^Big@r) -> int
     <- through_reference(b, p)
 fi
 
-# Changes the variable given to it by the caller.
+; Changes the variable given to it by the caller.
 task bump(hold& b: Big) -> int
     b.a[0] = b.a[0] + 500
     <- 0
 fi
 
-# Passed on, and read after deep recursion.
+; Passed on, and read after deep recursion.
 task deep(b: Big, n: int) -> int
     when n == 0
         <- b.a[11]
@@ -83,7 +83,7 @@ task deep(b: Big, n: int) -> int
     <- deep(b, n - 1)
 fi
 
-task largest<T: ordered>(items: [T; 12]) -> T
+task largest<T: ordered>(items: [T#12]) -> T
     hold best = items[0]
     each item in items
         when item > best
@@ -113,8 +113,8 @@ task main()
     region r
     hold p = new Big(make(5)) at r
     show(through_pointer(p^, p), " ", p^.a[0])
-    # A condition read before every round copies what the pointer points to
-    # each time.
+    ; A condition read before every round copies what the pointer points to
+    ; each time.
     hold steps = 0
     loop total(p^) < 1200
         p^.a[1] = p^.a[1] + 20
@@ -129,19 +129,19 @@ task main()
     hold q = new Big(make(9)) at r
     show(pass_on(&q^, q), " ", q^.a[1])
 
-    # Arguments are read left to right: 'b' is read before 'bump' changes it.
+    ; Arguments are read left to right: 'b' is read before 'bump' changes it.
     show(total(b), " ", total(b) + bump(&b), " ", b.a[0])
     show(both(b, bump(&b)), " ", b.a[0])
 
     show(held_total(Held.Some(b), b, 4))
 
-    # A method that changes its value, given a copy of it or of a part of it.
+    ; A method that changes its value, given a copy of it or of a part of it.
     hold c = make(2)
     c.absorb(c)
     c.grow(c.a[1])
     show(c.a[0], " ", c.a[1])
 
-    # A value made by a call that changes a later argument is made first.
+    ; A value made by a call that changes a later argument is made first.
     hold m = 1
     show(first_and(mk(&m), m), " ", copied(c, r))
 fi
@@ -160,7 +160,7 @@ task copied(b: Big, r: region) -> int
     <- items[11]
 fi
 
-# The first is read before the second changes it.
+; The first is read before the second changes it.
 task both(b: Big, changed: int) -> int
     <- b.a[0] + changed
 fi

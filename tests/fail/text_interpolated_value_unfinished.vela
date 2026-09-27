@@ -1,4 +1,4 @@
-# error: 5:15: expected an expression, got '}'
+; error: 5:15: expected an expression, got '}'
 task main()
     region r
     bind n = 5

@@ -1,4 +1,4 @@
-# error: 4:10: '&' marks a place given to a 'hold&' parameter, as in 'f(&a)', or named by a reference, as in 'hold& y = &a'; anywhere else, write the value itself
+; error: 4:10: '&' marks a place given to a 'hold&' parameter, as in 'f(&a)', or named by a reference, as in 'hold& y = &a'; anywhere else, write the value itself
 task main()
     hold a = 1
     show(&a + 1)

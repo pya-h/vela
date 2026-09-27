@@ -1,4 +1,4 @@
-# error: 4:18: a tuple's items always match, so this 'when' always holds and its 'else' would never run; take the tuple apart with 'bind' instead
+; error: 4:18: a tuple's items always match, so this 'when' always holds and its 'else' would never run; take the tuple apart with 'bind' instead
 task main()
     bind pair = (1, 2)
     when pair is (a, b)

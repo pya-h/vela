@@ -1,4 +1,4 @@
-# error: 3:10: '==' can't compare values of type T; it is any type here; require it, as in '<T: same>'
+; error: 3:10: '==' can't compare values of type T; it is any type here; require it, as in '<T: same>'
 task same<T>(a: T, b: T) -> bool
     <- a == b
 fi

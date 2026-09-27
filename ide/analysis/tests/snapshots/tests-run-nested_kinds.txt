@@ -1,7 +1,7 @@
-  1 | # A kind holding another kind: a `match` inside a `case`, and `is` patterns
-    | comment:# A kind holding another kind: a `match` inside a `case`, and `is` patterns
-  2 | # through `Kind.Variant` one inside the other.
-    | comment:# through `Kind.Variant` one inside the other.
+  1 | ; A kind holding another kind: a `match` inside a `case`, and `is` patterns
+    | comment:; A kind holding another kind: a `match` inside a `case`, and `is` patterns
+  2 | ; through `Kind.Variant` one inside the other.
+    | comment:; through `Kind.Variant` one inside the other.
   4 | kind Shape
     | keyword:kind  type:Shape
   5 |     Circle(radius: int)

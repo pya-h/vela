@@ -1,17 +1,17 @@
-  1 | # Notes read from input: `scan` shows a prompt and reads a line into a region,
-    | comment:# Notes read from input: `scan` shows a prompt and reads a line into a region,
-  2 | # giving none once the input ends. Each line is read into a region of its own,
-    | comment:# giving none once the input ends. Each line is read into a region of its own,
-  3 | # and only the notes kept are copied into the slice's region with `copy()`. The
-    | comment:# and only the notes kept are copied into the slice's region with `copy()`. The
-  4 | # notes are shown back last first. Run it and type a few lines (an empty line or
-    | comment:# notes are shown back last first. Run it and type a few lines (an empty line or
-  5 | # Ctrl-D ends them), or give it a file: `./journal < notes.txt`.
-    | comment:# Ctrl-D ends them), or give it a file: `./journal < notes.txt`.
-  7 | # `default` makes the region this task is given the one its allocations use, so
-    | comment:# `default` makes the region this task is given the one its allocations use, so
-  8 | # only what goes somewhere else names a region.
-    | comment:# only what goes somewhere else names a region.
+  1 | ; Notes read from input: `scan` shows a prompt and reads a line into a region,
+    | comment:; Notes read from input: `scan` shows a prompt and reads a line into a region,
+  2 | ; giving none once the input ends. Each line is read into a region of its own,
+    | comment:; giving none once the input ends. Each line is read into a region of its own,
+  3 | ; and only the notes kept are copied into the slice's region with `copy()`. The
+    | comment:; and only the notes kept are copied into the slice's region with `copy()`. The
+  4 | ; notes are shown back last first. Run it and type a few lines (an empty line or
+    | comment:; notes are shown back last first. Run it and type a few lines (an empty line or
+  5 | ; Ctrl-D ends them), or give it a file: `./journal < notes.txt`.
+    | comment:; Ctrl-D ends them), or give it a file: `./journal < notes.txt`.
+  7 | ; `default` makes the region this task is given the one its allocations use, so
+    | comment:; `default` makes the region this task is given the one its allocations use, so
+  8 | ; only what goes somewhere else names a region.
+    | comment:; only what goes somewhere else names a region.
   9 | task read_notes(r: region default) -> [text]@r
     | keyword:task  task:read_notes  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  punctuation:[  type-builtin:text  punctuation:]  operator:@  region:r
  10 |     hold notes = new [text]()
@@ -20,10 +20,10 @@
     | keyword:hold  variable:reading  operator:=  keyword:true
  12 |     loop reading
     | keyword:loop  variable:reading
- 13 |         # Freed at the end of every pass, with the line read into it. Inside this
-    | comment:# Freed at the end of every pass, with the line read into it. Inside this
- 14 |         # block it is the default, so the line needs no `at line_memory`.
-    | comment:# block it is the default, so the line needs no `at line_memory`.
+ 13 |         ; Freed at the end of every pass, with the line read into it. Inside this
+    | comment:; Freed at the end of every pass, with the line read into it. Inside this
+ 14 |         ; block it is the default, so the line needs no `at line_memory`.
+    | comment:; block it is the default, so the line needs no `at line_memory`.
  15 |         region line_memory default
     | keyword:region  region:line_memory  keyword:default
  16 |         bind line = scan("note> ") { "" }
@@ -34,10 +34,10 @@
     | variable:reading  operator:=  keyword:false
  19 |         else
     | keyword:else
- 20 |             # A copy goes where the value it becomes goes, which is the slice's
-    | comment:# A copy goes where the value it becomes goes, which is the slice's
- 21 |             # own region: a default never settles that for it.
-    | comment:# own region: a default never settles that for it.
+ 20 |             ; A copy goes where the value it becomes goes, which is the slice's
+    | comment:; A copy goes where the value it becomes goes, which is the slice's
+ 21 |             ; own region: a default never settles that for it.
+    | comment:; own region: a default never settles that for it.
  22 |             notes.add(line.copy())
     | variable:notes  punctuation:.  field:add  punctuation:(  variable:line  punctuation:.  field:copy  punctuation:(  punctuation:)  punctuation:)
  23 |         fi
@@ -50,8 +50,8 @@
     | keyword:fi
  28 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 29 |     # Written out, as it always could be: a region is named where memory goes.
-    | comment:# Written out, as it always could be: a region is named where memory goes.
+ 29 |     ; Written out, as it always could be: a region is named where memory goes.
+    | comment:; Written out, as it always could be: a region is named where memory goes.
  30 |     region kept
     | keyword:region  region:kept
  31 |     bind name = scan("Your name: ") at kept { "stranger" }
@@ -66,10 +66,10 @@
     | keyword:hold  variable:number  operator:=  variable:notes  punctuation:.  field:len
  36 |     loop notes.len > 0
     | keyword:loop  variable:notes  punctuation:.  field:len  operator:>  number:0
- 37 |         # `show` writes each value in turn, so a line printed once needs no text
-    | comment:# `show` writes each value in turn, so a line printed once needs no text
- 38 |         # of its own, and no region to hold it.
-    | comment:# of its own, and no region to hold it.
+ 37 |         ; `show` writes each value in turn, so a line printed once needs no text
+    | comment:; `show` writes each value in turn, so a line printed once needs no text
+ 38 |         ; of its own, and no region to hold it.
+    | comment:; of its own, and no region to hold it.
  39 |         show(number, ". ", notes.del())
     | builtin-fn:show  punctuation:(  variable:number  punctuation:,  string:". "  punctuation:,  variable:notes  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)
  40 |         number = number - 1

@@ -1,4 +1,4 @@
-# error: 2:33: only a shape's field can be given a value to fall back on, not a parameter
+; error: 2:33: only a shape's field can be given a value to fall back on, not a parameter
 task pad(word: text, width: int = 8) -> int
     <- width
 fi

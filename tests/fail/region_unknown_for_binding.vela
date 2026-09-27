@@ -1,4 +1,4 @@
-# error: 7:14: cannot tell which region 'n' lives in, since its value holds no pointers yet; give it a type, such as 'n: Node@r'
+; error: 7:14: cannot tell which region 'n' lives in, since its value holds no pointers yet; give it a type, such as 'n: Node@r'
 shape Node
     value: int
     next: maybe ^Node

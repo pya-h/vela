@@ -1,4 +1,4 @@
-# error: 4:12: this block already has a default region, 'first', named at 3:12; write 'at second' on the lines that go there, or declare it in an inner block
+; error: 4:12: this block already has a default region, 'first', named at 3:12; write 'at second' on the lines that go there, or declare it in an inner block
 task main()
     region first default
     region second default

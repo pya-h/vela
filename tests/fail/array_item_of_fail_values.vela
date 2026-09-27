@@ -1,4 +1,4 @@
-# error: 3:26: cannot tell the type of this item from none or 'fail …'; give the array a type first
+; error: 3:26: cannot tell the type of this item from none or 'fail …'; give the array a type first
 task pick(n: int) -> float ~ int
     <- [fail 10, fail 20][n]
 fi

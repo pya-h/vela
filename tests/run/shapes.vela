@@ -1,4 +1,4 @@
-# Shapes: literals, field access, field assignment, passing by value
+; Shapes: literals, field access, field assignment, passing by value
 
 shape Point
     x: int

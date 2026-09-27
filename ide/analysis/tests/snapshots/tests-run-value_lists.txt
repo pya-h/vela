@@ -1,7 +1,7 @@
-  1 | # Lists of names: types on some or all of them, `hold` from a call sending
-    | comment:# Lists of names: types on some or all of them, `hold` from a call sending
-  2 | # several results, and `_` dropping a result.
-    | comment:# several results, and `_` dropping a result.
+  1 | ; Lists of names: types on some or all of them, `hold` from a call sending
+    | comment:; Lists of names: types on some or all of them, `hold` from a call sending
+  2 | ; several results, and `_` dropping a result.
+    | comment:; several results, and `_` dropping a result.
   4 | task divmod(a: int, b: int) -> int, int
     | keyword:task  task:divmod  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  type-builtin:int
   5 |     <- a / b, a % b

@@ -304,7 +304,8 @@ impl Parser {
             (Token::Assign, _, _) if expected == "an expression" => "; '=' assigns, as a statement of its own".to_string(),
             (Token::Dot, _, Some(Token::Int(n))) => format!("; a number starts with a digit, as in '0.{}'", n),
             (Token::LBrace, Some(Token::Newline) | None, _) => "; a plan B's '{' goes on the line of its value, and blocks close with 'fi'".to_string(),
-            (Token::Semicolon, _, Some(Token::Newline | Token::Eof) | None) => "; a statement ends at the end of its line, without ';'".to_string(),
+            // A comment written as other languages write one.
+            (Token::Hash, _, _) => "; '#' marks an array's count, as in '[int#4]', and a comment starts with ';'".to_string(),
             // `&` joins the words after a type's `:`, and marks a place given at
             // a call, which starts a value.
             (Token::Amp, _, _) => "; Vela writes 'and' for both at once ('&' gives a place to a 'hold&' parameter, as in 'f(&a)', and joins the words a generic type must allow)".to_string(),
@@ -1296,20 +1297,20 @@ impl Parser {
         Ok(Type::Tuple(items))
     }
 
-    /// After a type's `[`: `T; count]`, an array, or `T]`, a slice. The item
-    /// type may have its own region and error type (`[^int@r; 4]`).
+    /// After a type's `[`: `T#count]`, an array, or `T]`, a slice. The item
+    /// type may have its own region and error type (`[^int@r#4]`).
     fn parse_bracketed_type(&mut self) -> Result<Type> {
         let items = Box::new(self.parse_type_parts()?);
         if self.match_token(Token::RBracket) {
             return Ok(Type::Slice(items, None));
         }
-        if !self.match_token(Token::Semicolon) {
-            return Err(self.unexpected("';' and a count, as in '[int; 4]', or ']' for a slice, as in '[int]@r'"));
+        if !self.match_token(Token::Hash) {
+            return Err(self.unexpected("'#' and a count, as in '[int#4]', or ']' for a slice, as in '[int]@r'"));
         }
         let count_span = self.peek_span();
         let count = match self.peek() {
             Token::Int(n) => *n,
-            _ => return Err(Error::at(count_span, "an array's count is a whole number, as in '[int; 4]'")),
+            _ => return Err(Error::at(count_span, "an array's count is a whole number, as in '[int#4]'")),
         };
         self.advance();
         let Some(count) = u64::try_from(count).ok().filter(|count| *count > 0) else {
@@ -2416,7 +2417,7 @@ impl Parser {
         result.map(|()| Expr::new(ExprKind::Tuple(values), span))
     }
 
-    /// `[a, b, c]` or `[value; count]`, on one line.
+    /// `[a, b, c]` or `[value#count]`, on one line.
     fn parse_array(&mut self) -> Result<Expr> {
         // An array holds its values in a frame of its own, and takes more stack
         // than most expressions, so it counts as a level of its own.
@@ -2430,10 +2431,10 @@ impl Parser {
         let span = self.peek_span();
         self.advance(); // [
         if self.check(Token::RBracket) {
-            return Err(Error::at(span, "an array holds at least one value, as in '[0; 4]'"));
+            return Err(Error::at(span, "an array holds at least one value, as in '[0#4]'"));
         }
         let first = self.parse_expr()?;
-        if self.match_token(Token::Semicolon) {
+        if self.match_token(Token::Hash) {
             let count = self.parse_expr()?;
             self.expect_array_end(span)?;
             return Ok(Expr::new(ExprKind::Repeat { value: Box::new(first), count: Box::new(count) }, span));

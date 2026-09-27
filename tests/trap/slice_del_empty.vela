@@ -1,5 +1,5 @@
-# trap: del() on an empty slice at 9:16 in task 'main'
-# Taking the last item out of a slice that has none left.
+; trap: del() on an empty slice at 9:16 in task 'main'
+; Taking the last item out of a slice that has none left.
 task main()
     region r
     hold items = new [int]() at r

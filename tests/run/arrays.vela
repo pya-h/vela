@@ -1,6 +1,6 @@
-# Arrays: `[type; count]` values held in place, copied whole. Literals list
-# their values or repeat one; `xs[i]` reads and writes an item, `xs.len` is the
-# count, and `each` goes through the items.
+; Arrays: `[type#count]` values held in place, copied whole. Literals list
+; their values or repeat one; `xs[i]` reads and writes an item, `xs.len` is the
+; count, and `each` goes through the items.
 
 shape Point
     x: int
@@ -8,16 +8,16 @@ shape Point
 fi
 
 shape Polygon
-    corners: [Point; 3]
+    corners: [Point#3]
     name: text
 fi
 
 kind Reading
     Missing
-    Samples(values: [float; 2])
+    Samples(values: [float#2])
 fi
 
-task total(xs: [int; 4]) -> int
+task total(xs: [int#4]) -> int
     hold sum = 0
     each x in xs
         sum = sum + x
@@ -25,7 +25,7 @@ task total(xs: [int; 4]) -> int
     <- sum
 fi
 
-task halves(xs: [int; 4]) -> [int; 2], [int; 2]
+task halves(xs: [int#4]) -> [int#2], [int#2]
     <- [xs[0], xs[1]], [xs[2], xs[3]]
 fi
 
@@ -37,19 +37,19 @@ task parse(word: text) -> int ~ text
 fi
 
 task main()
-    bind scores: [int; 4] = [90, 72, 85, 60]
+    bind scores: [int#4] = [90, 72, 85, 60]
     show(scores.len)
     show(scores[2])
     show(total(scores))
 
-    # An array is a value: assigning copies it.
+    ; An array is a value: assigning copies it.
     hold copy = scores
     copy[0] = 0
     show(scores[0])
     show(copy[0])
 
-    # Repeated values, nested arrays, and a count computed from constants.
-    hold grid = [[0; 3]; 2 * 1]
+    ; Repeated values, nested arrays, and a count computed from constants.
+    hold grid = [[0#3]#2 * 1]
     grid[1][2] = 5
     each row in grid
         each cell in row
@@ -57,7 +57,7 @@ task main()
         fi
     fi
 
-    # `each` goes through the array as it was when the loop started.
+    ; `each` goes through the array as it was when the loop started.
     hold numbers = [1, 2, 3]
     each n in numbers
         numbers[2] = 30
@@ -65,8 +65,8 @@ task main()
     fi
     show(numbers[2])
 
-    # Items that are shapes, and arrays in shapes, kinds, and results.
-    hold triangle = Polygon { corners: [Point { x: 0, y: 0 }; 3], name: "t" }
+    ; Items that are shapes, and arrays in shapes, kinds, and results.
+    hold triangle = Polygon { corners: [Point { x: 0, y: 0 }#3], name: "t" }
     triangle.corners[1].x = 4
     triangle.corners[2] = Point { x: 0, y: 3 }
     show(triangle.corners[1].x + triangle.corners[2].y)
@@ -80,11 +80,11 @@ task main()
     bind front, back = halves(scores)
     show(front[1] + back[0])
 
-    # `none` and `fail e` make the items a `maybe` or a `T ~ E`.
+    ; `none` and `fail e` make the items a `maybe` or a `T ~ E`.
     bind slots = [none, 7, none]
     show(slots[0])
     show(slots[1])
-    bind empty: [maybe text; 2] = [none; 2]
+    bind empty: [maybe text#2] = [none#2]
     show(empty[1])
     bind parsed = [parse("one"), fail "skipped"]
     show(parsed[0] { 0 })
@@ -92,13 +92,13 @@ task main()
         show(problem)
         -1
     })
-    hold kept: maybe [int; 2] = none
+    hold kept: maybe [int#2] = none
     kept = [3, 4]
     when kept is {pair}
         show(pair.len + pair[1])
     fi
 
-    # The index is computed first, then the value; a plan B runs in its turn.
+    ; The index is computed first, then the value; a plan B runs in its turn.
     hold order = [10, 20, 30]
     hold missing: maybe int = none
     order[missing { 2 }] = order[missing { 0 }] + 1

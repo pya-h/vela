@@ -1,7 +1,7 @@
-  1 | # Colors described through a private kind and shape, for
-    | comment:# Colors described through a private kind and shape, for
-  2 | # tests/run/module_parts.vela and tests/run/module_braces.vela.
-    | comment:# tests/run/module_parts.vela and tests/run/module_braces.vela.
+  1 | ; Colors described through a private kind and shape, for
+    | comment:; Colors described through a private kind and shape, for
+  2 | ; tests/run/module_parts.vela and tests/run/module_braces.vela.
+    | comment:; tests/run/module_parts.vela and tests/run/module_braces.vela.
   4 | kind Color
     | keyword:kind  type:Color
   5 |     Red

@@ -1,5 +1,5 @@
-# Ranges that end before they start, or where they start, run no steps; a
-# range may start below zero.
+; Ranges that end before they start, or where they start, run no steps; a
+; range may start below zero.
 
 task main()
     each i in 5..2

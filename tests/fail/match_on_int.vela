@@ -1,4 +1,4 @@
-# error: 3:11: match requires a kind, a maybe, or a 'T ~ E' value, got int
+; error: 3:11: match requires a kind, a maybe, or a 'T ~ E' value, got int
 task main()
     match 3
     case _

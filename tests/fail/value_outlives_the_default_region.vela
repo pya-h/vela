@@ -1,4 +1,4 @@
-# error: 7:16: expected type ^int@kept, got ^int@pass; a value can't move to another region: a pointer into one region is never stored in another
+; error: 7:16: expected type ^int@kept, got ^int@pass; a value can't move to another region: a pointer into one region is never stored in another
 task main()
     region kept default
     hold best: ^int@kept = new int(0)

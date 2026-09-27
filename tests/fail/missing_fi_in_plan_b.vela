@@ -1,4 +1,4 @@
-# error: 8:5: expected 'fi' to close the 'when' at 5:9, got '}'
+; error: 8:5: expected 'fi' to close the 'when' at 5:9, got '}'
 task main()
     bind m: maybe int = none
     bind n = m {

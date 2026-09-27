@@ -333,14 +333,14 @@
       <h3>Examples of the rule</h3>
       <pre><code>shape Counter
     shared hold made: int = 0
-    shared event counted on init        # no alters: made is this shape's own shared field
+    shared event counted on init        ; no alters: made is this shape's own shared field
         Counter.made = Counter.made + 1
     fi
 fi
 
 shape Audit
     shared hold seen: int = 0
-    shared alters event noted on init   # alters: seen is its own, but Counter.made is another shape's
+    shared alters event noted on init   ; alters: seen is its own, but Counter.made is another shape's
         Audit.seen = Audit.seen + 1
         Counter.made = Counter.made + 1
     fi
@@ -349,10 +349,10 @@ fi
 task main()
     hold changes = 0
     hold total = 0
-    alters event tally on total         # alters: changes belongs to main, not to the event
+    alters event tally on total         ; alters: changes belongs to main, not to the event
         changes = changes + 1
     fi
-    total = 5                           # tally runs here, and changes becomes 1
+    total = 5                           ; tally runs here, and changes becomes 1
 fi</code></pre>
 
       <div class="suggestion">
@@ -522,10 +522,10 @@ fi</code></pre>
     alters(best) event record on score when score &gt; best
         best = score
     fi
-    score = 3        # record runs: best is 3
-    score = 1        # the condition is false: record does not run
-    score = 7        # record runs: best is 7
-    show(best)       # 7
+    score = 3        ; record runs: best is 3
+    score = 1        ; the condition is false: record does not run
+    score = 7        ; record runs: best is 7
+    show(best)       ; 7
 fi</code></pre>
     </section>
 
@@ -580,9 +580,9 @@ if (score &gt; best) { best = score; }</code></pre>
         <span class="badge b-sugg">Suggestion</span> Treat an event's name like a value with a few built-in members,
         the same way a slice has <code>.len</code> and <code>.add</code>:
       </p>
-      <pre><code>record.pause()      # stop running it
-record.resume()     # run it again
-record.paused       # true or false</code></pre>
+      <pre><code>record.pause()      ; stop running it
+record.resume()     ; run it again
+record.paused       ; true or false</code></pre>
       <p>
         That needs no new keyword. (<code>stop</code> is already one, for loops, and reusing it for events would read
         oddly inside a loop.) An event nobody ever pauses doesn't need the flag, as <a href="#cost">above</a>. Only a

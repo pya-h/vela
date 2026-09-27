@@ -1,4 +1,4 @@
-# A module whose shape keeps its `str` to itself, for a fail fixture.
+; A module whose shape keeps its `str` to itself, for a fail fixture.
 
 shape Point
     x: int

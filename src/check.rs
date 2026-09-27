@@ -878,7 +878,7 @@ impl Checker {
     }
 
     /// Rejects a type written at `span` whose values would take more than
-    /// `MAX_VALUE_BYTES`, such as `[[int; 1000000]; 1000000]`.
+    /// `MAX_VALUE_BYTES`, such as `[[int#1000000]#1000000]`.
     fn check_size(&self, ty: &Type, span: Span) -> Result<()> {
         if value_bytes(ty, &self.sizes) > MAX_VALUE_BYTES {
             return err(span, format!("{} is too large: a value of it would take more than 1 TiB of memory; a slice in a region can be as long as memory allows", ty));
@@ -3906,7 +3906,7 @@ impl Checker {
         Ok(ty)
     }
 
-    /// Checks `[value; count]` outside `new`, an array, and returns its type.
+    /// Checks `[value#count]` outside `new`, an array, and returns its type.
     fn check_repeat(&mut self, value: &mut Expr, count: &mut Expr, span: Span) -> Result<Type> {
         let items = self.check_expr(value)?;
         if items == Type::Unit {
@@ -3919,7 +3919,7 @@ impl Checker {
             let written = if unsettled(&items) { "T".to_string() } else { items.without_regions().to_string() };
             return err(
                 count.span,
-                format!("an array's count is known before the program runs, as in '[0; 8]'; for a count known only as it runs, make a slice in a region, as in 'new [{}]([…; n]) at r'", written),
+                format!("an array's count is known before the program runs, as in '[0#8]'; for a count known only as it runs, make a slice in a region, as in 'new [{}]([…#n]) at r'", written),
             );
         };
         let Some(n) = u64::try_from(n).ok().filter(|n| *n > 0) else {
@@ -4458,7 +4458,7 @@ impl Checker {
     }
 
     /// Checks the value of `new [T](value) at r`, which gives the slice its
-    /// items, of type `items` in `r`: `[v; n]`, whose count may be known only as
+    /// items, of type `items` in `r`: `[v#n]`, whose count may be known only as
     /// the program runs, or an array or slice whose items are copied.
     fn check_slice_source(&mut self, value: &mut Expr, items: &Type, slice: &Type) -> Result<()> {
         if let ExprKind::Repeat { value: item, count } = &mut value.kind {
@@ -4489,7 +4489,7 @@ impl Checker {
             _ if ty.unknown() => Ok(()),
             other => err(
                 value.span,
-                format!("'new [{}](…)' makes a slice from '[value; count]', an array, or a slice, but this value is {}", items, other),
+                format!("'new [{}](…)' makes a slice from '[value#count]', an array, or a slice, but this value is {}", items, other),
             ),
         }
     }
@@ -6044,7 +6044,7 @@ impl Checker {
     }
 
     /// Coerces an array written as a literal item by item, when its values can
-    /// become the items of `expected`, as `[1, none]` or `[none; 4]` become
+    /// become the items of `expected`, as `[1, none]` or `[none#4]` become
     /// arrays of `maybe int`. Whether `expected` is such an array.
     fn coerce_items(&mut self, expr: &mut Expr, expected: &Type) -> Result<bool> {
         // `(1, none)` as a `(int, maybe int)`: each value becomes its item.
@@ -6713,7 +6713,7 @@ fn unsettled(ty: &Type) -> bool {
 }
 
 /// `ty` with a type in place of each `none` and `fail e`, for a message
-/// suggesting an annotation: `[maybe int; 2]` for `[none; 2]`.
+/// suggesting an annotation: `[maybe int#2]` for `[none#2]`.
 fn settled_example(ty: &Type) -> Type {
     match ty {
         Type::None => Type::Maybe(Box::new(Type::Int)),

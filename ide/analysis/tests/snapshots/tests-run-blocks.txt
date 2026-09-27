@@ -1,13 +1,13 @@
-  1 | # A block of its own, `block … fi`: what it declares, its names and regions,
-    | comment:# A block of its own, `block … fi`: what it declares, its names and regions,
-  2 | # ends at its `fi`, so a region closes there, and the files opened in it with
-    | comment:# ends at its `fi`, so a region closes there, and the files opened in it with
-  3 | # it, though the task goes on.
-    | comment:# it, though the task goes on.
+  1 | ; A block of its own, `block … fi`: what it declares, its names and regions,
+    | comment:; A block of its own, `block … fi`: what it declares, its names and regions,
+  2 | ; ends at its `fi`, so a region closes there, and the files opened in it with
+    | comment:; ends at its `fi`, so a region closes there, and the files opened in it with
+  3 | ; it, though the task goes on.
+    | comment:; it, though the task goes on.
   5 | include std/files {File, FileMode, FileError}
     | keyword:include  module:std  operator:/  module:files  punctuation:{  type:File  punctuation:,  type:FileMode  punctuation:,  type:FileError  punctuation:}
-  7 | # A block whose every path sends counts as sending.
-    | comment:# A block whose every path sends counts as sending.
+  7 | ; A block whose every path sends counts as sending.
+    | comment:; A block whose every path sends counts as sending.
   8 | task sign(n: int) -> int
     | keyword:task  task:sign  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
   9 |     block
@@ -24,8 +24,8 @@
     | keyword:fi
  15 | fi
     | keyword:fi
- 17 | # A result set inside a block is set after it.
-    | comment:# A result set inside a block is set after it.
+ 17 | ; A result set inside a block is set after it.
+    | comment:; A result set inside a block is set after it.
  18 | task halves(n: int) -> half: int, rest: int
     | keyword:task  task:halves  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  variable:half  punctuation::  type-builtin:int  punctuation:,  variable:rest  punctuation::  type-builtin:int
  19 |     block
@@ -50,8 +50,8 @@
     | variable:total  operator:=  variable:total  operator:+  variable:step
  30 |     fi
     | keyword:fi
- 31 |     # Another block may use the same name for something else.
-    | comment:# Another block may use the same name for something else.
+ 31 |     ; Another block may use the same name for something else.
+    | comment:; Another block may use the same name for something else.
  32 |     block
     | keyword:block
  33 |         bind step = "three"
@@ -66,10 +66,10 @@
     | keyword:bind  variable:half  punctuation:,  variable:rest  operator:=  task:halves  punctuation:(  number:7  punctuation:)
  38 |     show(half, " ", rest)
     | builtin-fn:show  punctuation:(  variable:half  punctuation:,  string:" "  punctuation:,  variable:rest  punctuation:)
- 40 |     # Blocks nest, each with a default region of its own, and one in a loop
-    | comment:# Blocks nest, each with a default region of its own, and one in a loop
- 41 |     # starts again each round.
-    | comment:# starts again each round.
+ 40 |     ; Blocks nest, each with a default region of its own, and one in a loop
+    | comment:; Blocks nest, each with a default region of its own, and one in a loop
+ 41 |     ; starts again each round.
+    | comment:; starts again each round.
  42 |     each i in 0..3
     | keyword:each  variable:i  keyword:in  number:0  operator:..  number:3
  43 |         block
@@ -94,8 +94,8 @@
     | keyword:fi
  53 |     show(total)
     | builtin-fn:show  punctuation:(  variable:total  punctuation:)
- 55 |     # A reference made in a block names its place until the block ends.
-    | comment:# A reference made in a block names its place until the block ends.
+ 55 |     ; A reference made in a block names its place until the block ends.
+    | comment:; A reference made in a block names its place until the block ends.
  56 |     block
     | keyword:block
  57 |         hold& t = &total
@@ -106,8 +106,8 @@
     | keyword:fi
  60 |     show(total)
     | builtin-fn:show  punctuation:(  variable:total  punctuation:)
- 62 |     # A file opened in a block's region is closed at its fi.
-    | comment:# A file opened in a block's region is closed at its fi.
+ 62 |     ; A file opened in a block's region is closed at its fi.
+    | comment:; A file opened in a block's region is closed at its fi.
  63 |     hold notes = File { path: "notes.txt" }
     | keyword:hold  variable:notes  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
  64 |     block
@@ -138,8 +138,8 @@
     | punctuation:}
  77 |     show(after { "(nothing read)" })
     | builtin-fn:show  punctuation:(  variable:after  punctuation:{  string:"(nothing read)"  punctuation:}  punctuation:)
- 78 |     # And so it opens again.
-    | comment:# And so it opens again.
+ 78 |     ; And so it opens again.
+    | comment:; And so it opens again.
  79 |     block
     | keyword:block
  80 |         region r

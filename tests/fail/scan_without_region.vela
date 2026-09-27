@@ -1,4 +1,4 @@
-# error: 3:32: 'scan' keeps the line it reads in a region, so it names one, as in 'scan("Name: ") at r' or 'scan("Name: ")@r'
+; error: 3:32: 'scan' keeps the line it reads in a region, so it names one, as in 'scan("Name: ") at r' or 'scan("Name: ")@r'
 task main()
     bind name = scan("Name: ") { "nobody" }
 fi

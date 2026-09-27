@@ -1,7 +1,7 @@
-# Tasks generic over regions: a region parameter after the parameter that
-# names it, forwarding a result whose error holds no pointers, a plan B that
-# takes its fallback's region through a `T ~ E`, and a result whose two sides
-# are in regions the caller chooses.
+; Tasks generic over regions: a region parameter after the parameter that
+; names it, forwarding a result whose error holds no pointers, a plan B that
+; takes its fallback's region through a `T ~ E`, and a result whose two sides
+; are in regions the caller chooses.
 
 shape Node
     value: int

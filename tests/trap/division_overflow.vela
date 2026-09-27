@@ -1,5 +1,5 @@
-# trap: integer overflow at 7:23 in task 'main'
-# The one quotient that doesn't fit: the smallest int divided by -1.
+; trap: integer overflow at 7:23 in task 'main'
+; The one quotient that doesn't fit: the smallest int divided by -1.
 task main()
     bind smallest = -9223372036854775807 - 1
     hold divisor = -2

@@ -1,4 +1,4 @@
-# error: 7:32: expected type (int, maybe int), got (int, int); a value already made is never changed inside, so build one that is what this place holds, as in '(v.0, v.1)'
+; error: 7:32: expected type (int, maybe int), got (int, int); a value already made is never changed inside, so build one that is what this place holds, as in '(v.0, v.1)'
 task divide(a: int, b: int) -> (int, int)
     <- (a / b, a % b)
 fi

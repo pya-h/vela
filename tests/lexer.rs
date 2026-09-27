@@ -115,14 +115,15 @@ fn agrees_with_the_compiler_on_every_prefix_of_the_examples() {
 fn agrees_with_the_compiler_on_malformed_input() {
     let cases = [
         "", "\"", "\"abc", "\"a\\", "\"a\\q\" x", "\"a\\q\nb", "\"line one\nline two\"", "_x", "a__b", "café",
-        "élan", "12abc", "1.5e3", "99999999999999999999", "x @ y", "a ! b", "\0", "\"\0\"", "# only a comment",
+        "élan", "12abc", "1.5e3", "99999999999999999999", "x @ y", "a ! b", "\0", "\"\0\"", "; only a comment",
         "task main()\n    show(\"unterminated)\nfi\n", "\"bad \\q then\nunterminated",
-        "x\r\ny", "# comment\r\nfi", "\"a\\\r\nb\"", "\u{feff}task", "1.", "1..5", "a && b", "!x",
+        "x\r\ny", "; comment\r\nfi", "\"a\\\r\nb\"", "\u{feff}task", "1.", "1..5", "a && b", "!x",
         "1__000", "1_", "1_000abc", "_", "a _ b", "{_}", "_é", "__", "case _\n", "^Node@r", "new@r int(1) in r", "@", "region",
-        "\"{", "\"{\"", "\"{n\"", "\"{n\" at r)\nfi", "\"{}\"", "\"}\"", "\"{n # c}\"", "\"{\"{n}\"}\"", "\"\\{\\}\"",
+        "\"{", "\"{\"", "\"{n\"", "\"{n\" at r)\nfi", "\"{}\"", "\"}\"", "\"{n ; c}\"", "\"{\"{n}\"}\"", "\"\\{\\}\"",
         "\"{x {0}}\"", "\"{\"a\nb", "\"{n!}\" x", "\"a {\"b} c\"", "\"{n}\r\n\"", "\"{é}\"", "\"{{n}}\"",
 
         "0x1F", "0xff_ff", "0o17", "0b1_0", "0X1", "0x", "0x_1", "0b12", "0x1F.5", "0x1.type", "t.0x1", "0x8000_0000_0000_0000", "x.type", "type",
+        "[int#4]", "[0 # 4]", "#", "a # b", "x ; y", "show(1);", "\"#;\"", "[int#4] ; [int#4]",
     ];
     for source in cases {
         check_agreement(source, &format!("{:?}", source));
@@ -166,6 +167,10 @@ fn messages_quote_numbers_as_written_and_name_unprintable_escapes() {
     assert_eq!(kinds("0x8000_0000_0000_0000")[0], invalid(1, 1, "integer literal '0x8000_0000_0000_0000' is too large"));
     assert_eq!(kinds("0B1")[0], invalid(1, 1, "invalid number '0B1': its base is written in lowercase, as in '0b1'"));
     assert_eq!(kinds("0o19")[0], invalid(1, 1, "invalid number '0o19': '9' is not an octal digit (0-7)"));
+    // `#` separates a count, and `;` starts a comment: `#` in text is text.
+    assert_eq!(kinds("[int#4]")[2], token(Token::Hash));
+    assert_eq!(kinds("x ; # y")[1], LexKind::Comment);
+    assert_eq!(kinds("\"#\"")[0], token(Token::Text("#".into())));
     // A leading zero alone is a decimal digit.
     assert_eq!(kinds("010")[0], token(Token::Int(10)));
     assert_eq!(kinds("\"a\\\tb\"")[0], invalid(1, 3, "invalid escape: '\\' followed by a tab"));
@@ -189,7 +194,7 @@ fn an_unterminated_string_ends_with_its_line() {
 
 #[test]
 fn comments_are_kept_with_their_extent() {
-    let tokens = highlight("fi # done\n");
+    let tokens = highlight("fi ; done\n");
     let comment: &LexToken = &tokens[1];
     assert_eq!(comment.kind, LexKind::Comment);
     assert_eq!((comment.range.clone(), comment.start, comment.end), (3..9, Span::new(1, 4), Span::new(1, 10)));
@@ -287,7 +292,7 @@ fn underscores_between_digits_are_ignored() {
 #[test]
 fn crlf_line_ends_read_like_lf() {
     // Positions don't count the `\r`, so errors point where they would in an LF file.
-    let tokens = highlight("bind x =\r\nfi # done\r\n");
+    let tokens = highlight("bind x =\r\nfi ; done\r\n");
     let newline = &tokens[3];
     assert_eq!((newline.kind.clone(), newline.start), (token(Token::Newline), Span::new(1, 9)));
     assert_eq!(tokens[4].start, Span::new(2, 1));
@@ -371,7 +376,7 @@ fn braces_in_text_that_hold_no_value_are_errors() {
     assert_eq!(kinds("\"n = {n\" at r)")[0], invalid(1, 6, UNCLOSED_VALUE));
     assert_eq!(kinds("\"a {} b\"")[0], invalid(1, 4, "'{}' in text holds no value; put one inside, as in '{n}', or write a brace as '\\{'"));
     assert_eq!(kinds("\"a } b\"")[0], invalid(1, 4, "a '}' in text closes a value opened with '{'; to write a brace, write '\\}'"));
-    assert_eq!(kinds("\"{n # note}\"")[0], invalid(1, 5, "a value in text can't hold a comment"));
+    assert_eq!(kinds("\"{n ; note}\"")[0], invalid(1, 5, "a value in text can't hold a comment"));
     // An error inside a value is the literal's error.
     assert_eq!(kinds("\"{n!}\"")[0], invalid(1, 4, "unexpected '!'; Vela negates with 'not'"));
     // The literal ends with its line, and the next line lexes as usual.

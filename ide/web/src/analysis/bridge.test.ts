@@ -301,7 +301,7 @@ describe("VelaAnalysis", () => {
     expect(language.blockModifiers).toEqual(["priv"]);
     expect(language.branchKeywords).toEqual(["else", "case"]);
     expect(language.builtinTypes).toEqual(["int", "float", "bool", "text", "unit"]);
-    expect(language.lineComment).toBe("#");
+    expect(language.lineComment).toBe(";");
   });
 
   it("rejects malformed requests", () => {

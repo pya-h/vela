@@ -1,5 +1,5 @@
-# `is` with `none`, `{_}`, and `else`, and `loop … is` walking a kind until its
-# pattern no longer matches.
+; `is` with `none`, `{_}`, and `else`, and `loop … is` walking a kind until its
+; pattern no longer matches.
 
 kind Step
     Walk(left: int)

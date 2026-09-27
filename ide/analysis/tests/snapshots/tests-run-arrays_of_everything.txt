@@ -1,7 +1,7 @@
-  1 | # Arrays returned from tasks and indexed directly, arrays of shapes, kinds,
-    | comment:# Arrays returned from tasks and indexed directly, arrays of shapes, kinds,
-  2 | # pointers into a region, and text, and an array boxed in a region.
-    | comment:# pointers into a region, and text, and an array boxed in a region.
+  1 | ; Arrays returned from tasks and indexed directly, arrays of shapes, kinds,
+    | comment:; Arrays returned from tasks and indexed directly, arrays of shapes, kinds,
+  2 | ; pointers into a region, and text, and an array boxed in a region.
+    | comment:; pointers into a region, and text, and an array boxed in a region.
   4 | shape Point
     | keyword:shape  type:Point
   5 |     x: int
@@ -26,8 +26,8 @@
     | variant:Dimmed  punctuation:(  field:level  punctuation::  type-builtin:int  punctuation:)
  17 | fi
     | keyword:fi
- 19 | task make() -> [int; 3]
-    | keyword:task  task:make  punctuation:(  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:;  number:3  punctuation:]
+ 19 | task make() -> [int#3]
+    | keyword:task  task:make  punctuation:(  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]
  20 |     <- [1, 2, 3]
     | keyword:<-  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
  21 | fi
@@ -72,8 +72,8 @@
     | keyword:bind  variable:a  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
  45 |     bind b = new Node(Node { value: 2, next: a }) at r
     | keyword:bind  variable:b  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:2  punctuation:,  field:next  punctuation::  variable:a  punctuation:}  punctuation:)  keyword:at  region:r
- 46 |     hold ptrs: [^Node; 3]@r = [a, b, a]
-    | keyword:hold  variable:ptrs  punctuation::  punctuation:[  operator:^  type:Node  punctuation:;  number:3  punctuation:]  operator:@  region:r  operator:=  punctuation:[  variable:a  punctuation:,  variable:b  punctuation:,  variable:a  punctuation:]
+ 46 |     hold ptrs: [^Node#3]@r = [a, b, a]
+    | keyword:hold  variable:ptrs  punctuation::  punctuation:[  operator:^  type:Node  punctuation:#  number:3  punctuation:]  operator:@  region:r  operator:=  punctuation:[  variable:a  punctuation:,  variable:b  punctuation:,  variable:a  punctuation:]
  47 |     ptrs[2] = b
     | variable:ptrs  punctuation:[  number:2  punctuation:]  operator:=  variable:b
  48 |     each p in ptrs
@@ -82,12 +82,12 @@
     | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:.  field:value  punctuation:)
  50 |     fi
     | keyword:fi
- 51 |     bind boxed = new [^Node; 3](ptrs) at r
-    | keyword:bind  variable:boxed  operator:=  keyword:new  punctuation:[  operator:^  type:Node  punctuation:;  number:3  punctuation:]  punctuation:(  variable:ptrs  punctuation:)  keyword:at  region:r
+ 51 |     bind boxed = new [^Node#3](ptrs) at r
+    | keyword:bind  variable:boxed  operator:=  keyword:new  punctuation:[  operator:^  type:Node  punctuation:#  number:3  punctuation:]  punctuation:(  variable:ptrs  punctuation:)  keyword:at  region:r
  52 |     show(boxed^[1]^.next { a }^.value)
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:[  number:1  punctuation:]  operator:^  punctuation:.  field:next  punctuation:{  variable:a  punctuation:}  operator:^  punctuation:.  field:value  punctuation:)
- 54 |     hold words: [text; 2] = ["a", "b"]
-    | keyword:hold  variable:words  punctuation::  punctuation:[  type-builtin:text  punctuation:;  number:2  punctuation:]  operator:=  punctuation:[  string:"a"  punctuation:,  string:"b"  punctuation:]
+ 54 |     hold words: [text#2] = ["a", "b"]
+    | keyword:hold  variable:words  punctuation::  punctuation:[  type-builtin:text  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  string:"a"  punctuation:,  string:"b"  punctuation:]
  55 |     words[1] = "c"
     | variable:words  punctuation:[  number:1  punctuation:]  operator:=  string:"c"
  56 |     show(words[1])

@@ -1,4 +1,4 @@
-# error: 3:12: unit is only allowed as a return type
+; error: 3:12: unit is only allowed as a return type
 shape Holder
     value: unit
 fi

@@ -1,4 +1,4 @@
-# error: 7:5: this value is unused; only a task call can be used as a statement
+; error: 7:5: this value is unused; only a task call can be used as a statement
 kind Shape
     Circle(radius: float)
 fi

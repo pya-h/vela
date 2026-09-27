@@ -1,4 +1,4 @@
-# A module with a type error, for a fail fixture.
+; A module with a type error, for a fail fixture.
 
 task twice(n: int) -> int
     <- n * "2"

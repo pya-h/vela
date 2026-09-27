@@ -1,4 +1,4 @@
-# error: 7:5: 'Red' is a variant, not a variable
+; error: 7:5: 'Red' is a variant, not a variable
 kind Color
     Red
 fi

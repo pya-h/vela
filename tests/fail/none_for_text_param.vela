@@ -1,4 +1,4 @@
-# error: 7:11: expected type text, got none
+; error: 7:11: expected type text, got none
 task greet(name: text)
     show(name)
 fi

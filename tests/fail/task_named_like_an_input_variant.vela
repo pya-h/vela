@@ -1,4 +1,4 @@
-# error: 2:6: 'Ended' is a variant of the builtin kind 'InputError' and cannot be redefined
+; error: 2:6: 'Ended' is a variant of the builtin kind 'InputError' and cannot be redefined
 task Ended() -> bool
     <- true
 fi

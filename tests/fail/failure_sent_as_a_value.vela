@@ -1,4 +1,4 @@
-# error: 4:12: 'failure' names a failure in a pattern; to make one, write 'fail', as in '<- fail e'
+; error: 4:12: 'failure' names a failure in a pattern; to make one, write 'fail', as in '<- fail e'
 task save(n: int) -> unit ~ text
     when n > 1
         <- failure "big"

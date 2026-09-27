@@ -1,4 +1,4 @@
-# error: 2:24: 'bool' holds no pointers or text, so it lives in no region; remove '@r'
+; error: 2:24: 'bool' holds no pointers or text, so it lives in no region; remove '@r'
 task f() -> int ~ bool@r
     <- 1
 fi

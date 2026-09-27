@@ -1,4 +1,4 @@
-# error: 7:14: can't tell which type 'T' is for this call of 'nothing', since no argument and nothing this value goes into names one; write it, as in 'nothing<int>(…)'
+; error: 7:14: can't tell which type 'T' is for this call of 'nothing', since no argument and nothing this value goes into names one; write it, as in 'nothing<int>(…)'
 task nothing<T>() -> maybe T
     <- none
 fi

@@ -1,4 +1,4 @@
-# error: 3:16: 'int' takes no types, so '< … >' has nothing to name
+; error: 3:16: 'int' takes no types, so '< … >' has nothing to name
 task main()
     bind n: int<bool> = 1
     show(n)

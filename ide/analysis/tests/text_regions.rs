@@ -35,7 +35,7 @@ task main()
     bind lasting = \"Bob\"
     bind plain = Person { name: lasting, age: 3 }
     bind held = Person { name: kept, age: 36 }
-    bind names = new [text]([lasting; 2]) at r
+    bind names = new [text]([lasting#2]) at r
     bind first = names[0]
     bind node = new Node(Node { label: lasting, next: none }) at r
     bind label = node^.label
@@ -75,7 +75,7 @@ fn hover_shows_text_and_shapes_in_regions_whether_or_not_the_file_checks() {
         // Text of no region in particular lasts, and an array takes a region
         // any of its items has.
         assert_eq!(hover_code(&source, "either ="), "bind either: text", "{}", when);
-        assert_eq!(hover_code(&source, "both ="), "bind both: [text@r; 2]", "{}", when);
+        assert_eq!(hover_code(&source, "both ="), "bind both: [text@r#2]", "{}", when);
     }
 }
 

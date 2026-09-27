@@ -1,4 +1,4 @@
-# error: 4:10: a reference is written 'bind& y = &x', with '&' against 'bind'
+; error: 4:10: a reference is written 'bind& y = &x', with '&' against 'bind'
 task main()
     hold x = 1
     bind &y = &x

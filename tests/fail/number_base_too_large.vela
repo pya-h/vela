@@ -1,4 +1,4 @@
-# error: 3:10: integer literal '0x8000_0000_0000_0000' is too large
+; error: 3:10: integer literal '0x8000_0000_0000_0000' is too large
 task main()
     show(0x8000_0000_0000_0000)
 fi

@@ -1,4 +1,4 @@
-# error: 10:12: 'total' is a read-only field of 'Tally', which only the alters methods of 'Tally' change
+; error: 10:12: 'total' is a read-only field of 'Tally', which only the alters methods of 'Tally' change
 shape Tally
     read total: int = 0
 fi

@@ -1,4 +1,4 @@
-# error: 4:19: after 'new@', write the region and then the type, as in 'new@r int(…)'
+; error: 4:19: after 'new@', write the region and then the type, as in 'new@r int(…)'
 task main()
     region r
     bind p = new@ int(1)

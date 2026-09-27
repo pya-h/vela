@@ -1,4 +1,4 @@
-# error: 6:10: Vela writes 'else when', not 'else if'
+; error: 6:10: Vela writes 'else when', not 'else if'
 task main()
     bind x = 1
     when x == 1

@@ -1,5 +1,5 @@
-# error: 7:18: unknown variable 'nothing'
-# error: 8:27: unknown region 'nowhere'; declare it with 'region nowhere'
+; error: 7:18: unknown variable 'nothing'
+; error: 8:27: unknown region 'nowhere'; declare it with 'region nowhere'
 task main()
     region work
     show(1)

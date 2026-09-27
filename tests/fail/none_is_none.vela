@@ -1,4 +1,4 @@
-# error: 3:18: this value is always none, so there is nothing to match
+; error: 3:18: this value is always none, so there is nothing to match
 task main()
     when none is none
         show(1)

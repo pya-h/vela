@@ -1,4 +1,4 @@
-# error: 2:20: 'T' is a type this task takes, and what a 'T' holds is in the region of the type given for it, so it names none; remove '@r'
+; error: 2:20: 'T' is a type this task takes, and what a 'T' holds is in the region of the type given for it, so it names none; remove '@r'
 task first<T>(x: T@r) -> T
     <- x
 fi

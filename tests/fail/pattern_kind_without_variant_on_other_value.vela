@@ -1,4 +1,4 @@
-# error: 9:15: kind 'Light' has no variant 'Blue'
+; error: 9:15: kind 'Light' has no variant 'Blue'
 kind Light
     Red
     Green

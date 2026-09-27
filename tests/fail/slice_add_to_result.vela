@@ -1,4 +1,4 @@
-# error: 4:5: 'items' is a result; set it with 'items <- …'
+; error: 4:5: 'items' is a result; set it with 'items <- …'
 task make(r: region) -> items: [int]@r
     items <- new [int]() at r
     items.add(1)

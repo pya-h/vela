@@ -1,5 +1,5 @@
-  1 | # Braces bring in a module's names without the module's name.
-    | comment:# Braces bring in a module's names without the module's name.
+  1 | ; Braces bring in a module's names without the module's name.
+    | comment:; Braces bring in a module's names without the module's name.
   3 | include module_parts/shapes/palette {Color, describe}
     | keyword:include  module:module_parts  operator:/  module:shapes  operator:/  module:palette  punctuation:{  type:Color  punctuation:,  task:describe  punctuation:}
   5 | task main()

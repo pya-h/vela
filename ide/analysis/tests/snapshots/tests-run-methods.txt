@@ -1,11 +1,11 @@
-  1 | # Methods of a shape: written inside it, below its fields, and called on a value.
-    | comment:# Methods of a shape: written inside it, below its fields, and called on a value.
-  2 | # A member of the value is written with a dot, `.x`; a method that changes the
-    | comment:# A member of the value is written with a dot, `.x`; a method that changes the
-  3 | # value says `alters` before its name, and only a place that can change may call
-    | comment:# value says `alters` before its name, and only a place that can change may call
-  4 | # one. `.this` is the whole value, and `@this` the region it lives in.
-    | comment:# one. `.this` is the whole value, and `@this` the region it lives in.
+  1 | ; Methods of a shape: written inside it, below its fields, and called on a value.
+    | comment:; Methods of a shape: written inside it, below its fields, and called on a value.
+  2 | ; A member of the value is written with a dot, `.x`; a method that changes the
+    | comment:; A member of the value is written with a dot, `.x`; a method that changes the
+  3 | ; value says `alters` before its name, and only a place that can change may call
+    | comment:; value says `alters` before its name, and only a place that can change may call
+  4 | ; one. `.this` is the whole value, and `@this` the region it lives in.
+    | comment:; one. `.this` is the whole value, and `@this` the region it lives in.
   6 | shape Counter
     | keyword:shape  type:Counter
   7 |     label: text
@@ -18,8 +18,8 @@
     | keyword:<-  punctuation:.  field:count
  12 |     fi
     | keyword:fi
- 14 |     # What the value holds in its own region, sent out of the method.
-    | comment:# What the value holds in its own region, sent out of the method.
+ 14 |     ; What the value holds in its own region, sent out of the method.
+    | comment:; What the value holds in its own region, sent out of the method.
  15 |     nameOf() -> text@this
     | method:nameOf  punctuation:(  punctuation:)  operator:->  type-builtin:text  operator:@  region:this
  16 |         <- .label
@@ -48,8 +48,8 @@
     | keyword:fi
  30 |     fi
     | keyword:fi
- 32 |     # Only its own file may call this one.
-    | comment:# Only its own file may call this one.
+ 32 |     ; Only its own file may call this one.
+    | comment:; Only its own file may call this one.
  33 |     priv alters cap()
     | keyword:priv  keyword:alters  method:cap  punctuation:(  punctuation:)
  34 |         when .count > 3
@@ -60,10 +60,10 @@
     | keyword:fi
  37 |     fi
     | keyword:fi
- 39 |     # The whole value, given to a task, and a new one in its place. The task
-    | comment:# The whole value, given to a task, and a new one in its place. The task
- 40 |     # names the region, since the value the method is called on lives in one.
-    | comment:# names the region, since the value the method is called on lives in one.
+ 39 |     ; The whole value, given to a task, and a new one in its place. The task
+    | comment:; The whole value, given to a task, and a new one in its place. The task
+ 40 |     ; names the region, since the value the method is called on lives in one.
+    | comment:; names the region, since the value the method is called on lives in one.
  41 |     beats(other: Counter@this) -> bool
     | method:beats  punctuation:(  parameter:other  punctuation::  type:Counter  operator:@  region:this  punctuation:)  operator:->  type-builtin:bool
  42 |         <- higher(.this, other)
@@ -104,8 +104,8 @@
     | punctuation:.  field:y  operator:=  punctuation:.  field:y  operator:+  parameter:dy
  65 |     fi
     | keyword:fi
- 67 |     # A method calling itself, on a value it makes.
-    | comment:# A method calling itself, on a value it makes.
+ 67 |     ; A method calling itself, on a value it makes.
+    | comment:; A method calling itself, on a value it makes.
  68 |     stepsTo(goal: int) -> int
     | method:stepsTo  punctuation:(  parameter:goal  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  69 |         when .x >= goal
@@ -134,8 +134,8 @@
     | keyword:<-  punctuation:.  field:items  punctuation:[  number:0  punctuation:]  punctuation:.  method:lengthSquared  punctuation:(  punctuation:)
  83 |     fi
     | keyword:fi
- 85 |     # A method of a value a field points to, and one of a field's own.
-    | comment:# A method of a value a field points to, and one of a field's own.
+ 85 |     ; A method of a value a field points to, and one of a field's own.
+    | comment:; A method of a value a field points to, and one of a field's own.
  86 |     farthest(other: ^Point@this) -> int
     | method:farthest  punctuation:(  parameter:other  punctuation::  operator:^  type:Point  operator:@  region:this  punctuation:)  operator:->  type-builtin:int
  87 |         when other^.lengthSquared() > .here.lengthSquared()
@@ -150,8 +150,8 @@
     | keyword:fi
  92 | fi
     | keyword:fi
- 94 | # An `alters` method keeping a pointer into the region its value lives in.
-    | comment:# An `alters` method keeping a pointer into the region its value lives in.
+ 94 | ; An `alters` method keeping a pointer into the region its value lives in.
+    | comment:; An `alters` method keeping a pointer into the region its value lives in.
  95 | shape Holder
     | keyword:shape  type:Holder
  96 |     held: ^Point
@@ -170,8 +170,8 @@
     | keyword:fi
 105 | fi
     | keyword:fi
-107 | # A method may send a maybe, and be called where its value goes.
-    | comment:# A method may send a maybe, and be called where its value goes.
+107 | ; A method may send a maybe, and be called where its value goes.
+    | comment:; A method may send a maybe, and be called where its value goes.
 108 | shape Bag
     | keyword:shape  type:Bag
 109 |     items: [int]
@@ -210,8 +210,8 @@
     | variable:c  punctuation:.  method:reset  punctuation:(  punctuation:)
 128 |     show(c.total())
     | builtin-fn:show  punctuation:(  variable:c  punctuation:.  method:total  punctuation:(  punctuation:)  punctuation:)
-130 |     # A method that changes nothing is called on anything, a `bind` too.
-    | comment:# A method that changes nothing is called on anything, a `bind` too.
+130 |     ; A method that changes nothing is called on anything, a `bind` too.
+    | comment:; A method that changes nothing is called on anything, a `bind` too.
 131 |     bind fixed = Counter { label: "once", count: 1 }
     | keyword:bind  variable:fixed  operator:=  type:Counter  punctuation:{  field:label  punctuation::  string:"once"  punctuation:,  field:count  punctuation::  number:1  punctuation:}
 132 |     show(fixed.total())
@@ -230,16 +230,16 @@
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  method:stepsTo  punctuation:(  number:7  punctuation:)  punctuation:)
 141 |     region r
     | keyword:region  region:r
-142 |     # Through a pointer, which is where a task changes a value of its own.
-    | comment:# Through a pointer, which is where a task changes a value of its own.
+142 |     ; Through a pointer, which is where a task changes a value of its own.
+    | comment:; Through a pointer, which is where a task changes a value of its own.
 143 |     hold q = new Point(Point { x: 1, y: 1 }) at r
     | keyword:hold  variable:q  operator:=  keyword:new  type:Point  punctuation:(  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:1  punctuation:}  punctuation:)  keyword:at  region:r
 144 |     q^.shift(2, 2)
     | variable:q  operator:^  punctuation:.  method:shift  punctuation:(  number:2  punctuation:,  number:2  punctuation:)
 145 |     show(q^.lengthSquared())
     | builtin-fn:show  punctuation:(  variable:q  operator:^  punctuation:.  method:lengthSquared  punctuation:(  punctuation:)  punctuation:)
-147 |     # A field of a `hold`, and an item of a slice, are places that can change.
-    | comment:# A field of a `hold`, and an item of a slice, are places that can change.
+147 |     ; A field of a `hold`, and an item of a slice, are places that can change.
+    | comment:; A field of a `hold`, and an item of a slice, are places that can change.
 148 |     hold items = new [Point]() at r
     | keyword:hold  variable:items  operator:=  keyword:new  punctuation:[  type:Point  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
 149 |     items.add(Point { x: 6, y: 8 })
@@ -258,8 +258,8 @@
     | variable:items  punctuation:[  number:0  punctuation:]  punctuation:.  method:shift  punctuation:(  number:1  punctuation:,  number:0  punctuation:)
 156 |     show(items[0].lengthSquared())
     | builtin-fn:show  punctuation:(  variable:items  punctuation:[  number:0  punctuation:]  punctuation:.  method:lengthSquared  punctuation:(  punctuation:)  punctuation:)
-158 |     # A method on the value a call sends.
-    | comment:# A method on the value a call sends.
+158 |     ; A method on the value a call sends.
+    | comment:; A method on the value a call sends.
 159 |     show(made().total())
     | builtin-fn:show  punctuation:(  task:made  punctuation:(  punctuation:)  punctuation:.  method:total  punctuation:(  punctuation:)  punctuation:)
 161 |     bind bag = Bag { items: items_of(r) }
@@ -270,8 +270,8 @@
     | keyword:bind  variable:empty  operator:=  type:Bag  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
 164 |     show(empty.firstOf())
     | builtin-fn:show  punctuation:(  variable:empty  punctuation:.  method:firstOf  punctuation:(  punctuation:)  punctuation:)
-166 |     # The text a method sends is in the region the value is in.
-    | comment:# The text a method sends is in the region the value is in.
+166 |     ; The text a method sends is in the region the value is in.
+    | comment:; The text a method sends is in the region the value is in.
 167 |     hold named: Counter@r = Counter { label: "in a region".copy() at r, count: 2 }
     | keyword:hold  variable:named  punctuation::  type:Counter  operator:@  region:r  operator:=  type:Counter  punctuation:{  field:label  punctuation::  string:"in a region"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  field:count  punctuation::  number:2  punctuation:}
 168 |     bind held: text@r = named.nameOf()

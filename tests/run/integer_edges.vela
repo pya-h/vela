@@ -1,6 +1,6 @@
-# Integer arithmetic at the edges of an int. Every result that fits is exact,
-# division truncates toward zero, and a remainder has the dividend's sign.
-# (An operation whose result doesn't fit stops the program: see tests/trap.)
+; Integer arithmetic at the edges of an int. Every result that fits is exact,
+; division truncates toward zero, and a remainder has the dividend's sign.
+; (An operation whose result doesn't fit stops the program: see tests/trap.)
 
 task same(n: int) -> int
     <- n
@@ -15,7 +15,7 @@ task main()
     show(-largest)
     show(smallest / 1)
     show(largest / -1)
-    show(smallest % -1)          # 0: a remainder always fits
+    show(smallest % -1)          ; 0: a remainder always fits
     show(smallest % largest)
     show(same(-7) / 2)
     show(same(-7) % 3)
@@ -23,5 +23,5 @@ task main()
     show(3037000499 * same(3037000499))
     show(same(-4611686018427387904) * 2)
     show(60 * 60 * 24 * 365)
-    show(float(same(1)) / 0.0)   # floats don't stop: this is infinity
+    show(float(same(1)) / 0.0)   ; floats don't stop: this is infinity
 fi

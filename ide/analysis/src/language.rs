@@ -44,7 +44,7 @@ pub fn language() -> Language {
         branch_keywords: BRANCH_KEYWORDS.to_vec(),
         block_closer: BLOCK_CLOSER,
         method_marker: ALTERS,
-        line_comment: "#",
+        line_comment: ";",
         brackets: vec![("(", ")"), ("{", "}"), ("[", "]"), ("\"", "\"")],
     }
 }

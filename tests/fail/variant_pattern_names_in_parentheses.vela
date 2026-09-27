@@ -1,4 +1,4 @@
-# error: 9:19: a pattern names its bindings without parentheses, as in 'case Both value'
+; error: 9:19: a pattern names its bindings without parentheses, as in 'case Both value'
 kind Pair
     Both(a: int, b: int)
 fi

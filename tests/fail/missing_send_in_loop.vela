@@ -1,4 +1,4 @@
-# error: 2:6: task 'first' can finish without sending a value
+; error: 2:6: task 'first' can finish without sending a value
 task first(n: int) -> int
     each i in 0..n
         <- i

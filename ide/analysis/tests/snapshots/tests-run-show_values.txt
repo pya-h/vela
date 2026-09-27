@@ -1,9 +1,9 @@
-  1 | # `show` takes any number of values and writes them one after another, with
-    | comment:# `show` takes any number of values and writes them one after another, with
-  2 | # nothing between them, then ends the line. `show()` is an empty line, and the
-    | comment:# nothing between them, then ends the line. `show()` is an empty line, and the
-  3 | # values are written, and do what they ask, left to right.
-    | comment:# values are written, and do what they ask, left to right.
+  1 | ; `show` takes any number of values and writes them one after another, with
+    | comment:; `show` takes any number of values and writes them one after another, with
+  2 | ; nothing between them, then ends the line. `show()` is an empty line, and the
+    | comment:; nothing between them, then ends the line. `show()` is an empty line, and the
+  3 | ; values are written, and do what they ask, left to right.
+    | comment:; values are written, and do what they ask, left to right.
   5 | task noisy(label: text, value: int) -> int
     | keyword:task  task:noisy  punctuation:(  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:value  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
   6 |     show("<", label, ">")
@@ -26,14 +26,14 @@
     | keyword:bind  variable:n  operator:=  number:5
  17 |     bind name = "Ada"
     | keyword:bind  variable:name  operator:=  string:"Ada"
- 19 |     # One value is what it always was.
-    | comment:# One value is what it always was.
+ 19 |     ; One value is what it always was.
+    | comment:; One value is what it always was.
  20 |     show(n)
     | builtin-fn:show  punctuation:(  variable:n  punctuation:)
  21 |     show(name)
     | builtin-fn:show  punctuation:(  variable:name  punctuation:)
- 23 |     # Several values, of every type `show` writes.
-    | comment:# Several values, of every type `show` writes.
+ 23 |     ; Several values, of every type `show` writes.
+    | comment:; Several values, of every type `show` writes.
  24 |     show("n = ", n)
     | builtin-fn:show  punctuation:(  string:"n = "  punctuation:,  variable:n  punctuation:)
  25 |     show(1, " ", 2.5, " ", true, " ", "text")
@@ -42,14 +42,14 @@
     | builtin-fn:show  punctuation:(  string:""  punctuation:,  string:""  punctuation:)
  27 |     show(name, "!")
     | builtin-fn:show  punctuation:(  variable:name  punctuation:,  string:"!"  punctuation:)
- 29 |     # An empty line, from `show()` or from text of no bytes.
-    | comment:# An empty line, from `show()` or from text of no bytes.
+ 29 |     ; An empty line, from `show()` or from text of no bytes.
+    | comment:; An empty line, from `show()` or from text of no bytes.
  30 |     show()
     | builtin-fn:show  punctuation:(  punctuation:)
  31 |     show("")
     | builtin-fn:show  punctuation:(  string:""  punctuation:)
- 33 |     # A `maybe` writes its value, or `none`.
-    | comment:# A `maybe` writes its value, or `none`.
+ 33 |     ; A `maybe` writes its value, or `none`.
+    | comment:; A `maybe` writes its value, or `none`.
  34 |     bind missing: maybe int = none
     | keyword:bind  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
  35 |     bind here: maybe int = 7
@@ -60,10 +60,10 @@
     | keyword:bind  variable:line  punctuation::  keyword:maybe  type-builtin:text  operator:@  region:r  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r
  38 |     show("read: ", line)
     | builtin-fn:show  punctuation:(  string:"read: "  punctuation:,  variable:line  punctuation:)
- 40 |     # Values worked out where they are read: fields, items, parts, joins, text
-    | comment:# Values worked out where they are read: fields, items, parts, joins, text
- 41 |     # holding values, a plan B, and a call.
-    | comment:# holding values, a plan B, and a call.
+ 40 |     ; Values worked out where they are read: fields, items, parts, joins, text
+    | comment:; Values worked out where they are read: fields, items, parts, joins, text
+ 41 |     ; holding values, a plan B, and a call.
+    | comment:; holding values, a plan B, and a call.
  42 |     bind xs = [10, 20, 30]
     | keyword:bind  variable:xs  operator:=  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  number:30  punctuation:]
  43 |     show("first ", xs[0], " of ", xs.len)
@@ -74,8 +74,8 @@
     | builtin-fn:show  punctuation:(  string:"plan B "  punctuation:,  variable:missing  punctuation:{  number:9  punctuation:}  punctuation:,  string:", call "  punctuation:,  task:noisy  punctuation:(  string:"inner"  punctuation:,  number:3  punctuation:)  punctuation:)
  46 |     show("a:", noisy("first", 1), " b:", noisy("second", 2))
     | builtin-fn:show  punctuation:(  string:"a:"  punctuation:,  task:noisy  punctuation:(  string:"first"  punctuation:,  number:1  punctuation:)  punctuation:,  string:" b:"  punctuation:,  task:noisy  punctuation:(  string:"second"  punctuation:,  number:2  punctuation:)  punctuation:)
- 48 |     # A type a declaration takes that is `shown`.
-    | comment:# A type a declaration takes that is `shown`.
+ 48 |     ; A type a declaration takes that is `shown`.
+    | comment:; A type a declaration takes that is `shown`.
  49 |     told("count", n)
     | task:told  punctuation:(  string:"count"  punctuation:,  variable:n  punctuation:)
  50 |     told("name", name)

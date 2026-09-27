@@ -1,8 +1,8 @@
-# trap: slice 3..2 ends before it starts at 8:16 in task 'main'
-# A slice of an array in a region whose end comes before its start.
+; trap: slice 3..2 ends before it starts at 8:16 in task 'main'
+; A slice of an array in a region whose end comes before its start.
 task main()
     region r
-    bind boxed = new [int; 4]([1, 2, 3, 4]) at r
+    bind boxed = new [int#4]([1, 2, 3, 4]) at r
     hold start = 2
     start = start + 1
     show(boxed^[start..2].len)

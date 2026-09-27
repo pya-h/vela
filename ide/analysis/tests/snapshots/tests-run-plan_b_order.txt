@@ -1,7 +1,7 @@
-  1 | # Where an operand contains a plan B, a call's arguments and an operator's
-    | comment:# Where an operand contains a plan B, a call's arguments and an operator's
-  2 | # sides are evaluated left to right, including calls wrapped around a plan B.
-    | comment:# sides are evaluated left to right, including calls wrapped around a plan B.
+  1 | ; Where an operand contains a plan B, a call's arguments and an operator's
+    | comment:; Where an operand contains a plan B, a call's arguments and an operator's
+  2 | ; sides are evaluated left to right, including calls wrapped around a plan B.
+    | comment:; sides are evaluated left to right, including calls wrapped around a plan B.
   4 | task say(label: text, v: int) -> int
     | keyword:task  task:say  punctuation:(  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
   5 |     show(label)

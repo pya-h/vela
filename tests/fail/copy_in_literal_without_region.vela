@@ -1,4 +1,4 @@
-# error: 9:39: can't tell which region to copy into, since nothing this copy goes into names one; name it, as in 'x.copy() at r' or 'x.copy()@r'
+; error: 9:39: can't tell which region to copy into, since nothing this copy goes into names one; name it, as in 'x.copy() at r' or 'x.copy()@r'
 shape Person
     name: text
 fi

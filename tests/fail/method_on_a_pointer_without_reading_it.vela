@@ -1,4 +1,4 @@
-# error: 13:12: type ^Point@r has no methods; call it on the value it points to, as in 'p^.twice(…)'
+; error: 13:12: type ^Point@r has no methods; call it on the value it points to, as in 'p^.twice(…)'
 shape Point
     x: int
 

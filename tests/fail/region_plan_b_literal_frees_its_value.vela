@@ -1,4 +1,4 @@
-# error: 10:9: this value is in region 'local', which is freed when the plan B ends, so it can't be the plan B's value
+; error: 10:9: this value is in region 'local', which is freed when the plan B ends, so it can't be the plan B's value
 shape Node
     value: int
     next: maybe ^Node

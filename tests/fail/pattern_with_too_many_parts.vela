@@ -1,4 +1,4 @@
-# error: 8:10: a pattern names the variant alone or after its kind, as in 'case Calm' or 'case Kind.Calm': the value's kind tells which module it is from
+; error: 8:10: a pattern names the variant alone or after its kind, as in 'case Calm' or 'case Kind.Calm': the value's kind tells which module it is from
 kind Mood
     Calm
 fi

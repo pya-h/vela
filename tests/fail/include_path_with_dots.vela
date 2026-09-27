@@ -1,4 +1,4 @@
-# error: 2:16: a module path separates its folders with '/', as in 'include shapes/circle'
+; error: 2:16: a module path separates its folders with '/', as in 'include shapes/circle'
 include modules.library
 
 task main()

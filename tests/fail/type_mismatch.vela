@@ -1,4 +1,4 @@
-# error: 3:19: expected type int, got bool
+; error: 3:19: expected type int, got bool
 task main()
     bind x: int = true
 fi

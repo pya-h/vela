@@ -1,4 +1,4 @@
-# error: 3:15: unexpected character '|'; Vela writes 'or'
+; error: 3:15: unexpected character '|'; Vela writes 'or'
 task main()
     show(true | false)
 fi

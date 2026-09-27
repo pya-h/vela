@@ -1,5 +1,5 @@
-  1 | # The kinds example from docs/vela.html
-    | comment:# The kinds example from docs/vela.html
+  1 | ; The kinds example from docs/vela.html
+    | comment:; The kinds example from docs/vela.html
   3 | kind Shape
     | keyword:kind  type:Shape
   4 |     Circle(radius: float)

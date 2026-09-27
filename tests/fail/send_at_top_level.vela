@@ -1,4 +1,4 @@
-# error: 5:1: expected 'task', 'shape', or 'kind', got '<-'; statements go inside a task (is there an extra 'fi' above it?)
+; error: 5:1: expected 'task', 'shape', or 'kind', got '<-'; statements go inside a task (is there an extra 'fi' above it?)
 task main()
 fi
 

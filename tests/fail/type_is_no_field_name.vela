@@ -1,4 +1,4 @@
-# error: 3:5: expected a name, got 'type', which is a reserved word; every value has '.type', its type as code writes it, so nothing else takes the name
+; error: 3:5: expected a name, got 'type', which is a reserved word; every value has '.type', its type as code writes it, so nothing else takes the name
 shape Thing
     type: int
 fi

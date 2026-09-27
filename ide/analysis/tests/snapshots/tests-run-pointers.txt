@@ -1,9 +1,9 @@
-  1 | # Pointers live in regions: `new` allocates in one (written `new T(v) at r`
-    | comment:# Pointers live in regions: `new` allocates in one (written `new T(v) at r`
-  2 | # or `new@r T(v)`), `^` reads and writes through the pointer, and the region
-    | comment:# or `new@r T(v)`), `^` reads and writes through the pointer, and the region
-  3 | # frees everything in it when its block closes.
-    | comment:# frees everything in it when its block closes.
+  1 | ; Pointers live in regions: `new` allocates in one (written `new T(v) at r`
+    | comment:; Pointers live in regions: `new` allocates in one (written `new T(v) at r`
+  2 | ; or `new@r T(v)`), `^` reads and writes through the pointer, and the region
+    | comment:; or `new@r T(v)`), `^` reads and writes through the pointer, and the region
+  3 | ; frees everything in it when its block closes.
+    | comment:; frees everything in it when its block closes.
   5 | shape Point
     | keyword:shape  type:Point
   6 |     x: int

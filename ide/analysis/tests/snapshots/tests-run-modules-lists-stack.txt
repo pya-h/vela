@@ -1,7 +1,7 @@
-  1 | # A stack of numbers in a region, for tests/run/modules.vela. It includes a module
-    | comment:# A stack of numbers in a region, for tests/run/modules.vela. It includes a module
-  2 | # from the folder above.
-    | comment:# from the folder above.
+  1 | ; A stack of numbers in a region, for tests/run/modules.vela. It includes a module
+    | comment:; A stack of numbers in a region, for tests/run/modules.vela. It includes a module
+  2 | ; from the folder above.
+    | comment:; from the folder above.
   4 | include ../numbers (add)
     | keyword:include  operator:..  operator:/  module:numbers  punctuation:(  task:add  punctuation:)
   6 | shape Node

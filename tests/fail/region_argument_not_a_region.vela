@@ -1,4 +1,4 @@
-# error: 7:19: task 'make' takes a region as 'r', such as a 'region r' declared before the call
+; error: 7:19: task 'make' takes a region as 'r', such as a 'region r' declared before the call
 task make(r: region) -> ^int@r
     <- new int(1) at r
 fi

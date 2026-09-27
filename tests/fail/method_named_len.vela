@@ -1,4 +1,4 @@
-# error: 5:5: 'len' is a reserved name: every value or slice already answers to it, so a method can't be called that
+; error: 5:5: 'len' is a reserved name: every value or slice already answers to it, so a method can't be called that
 shape Bag
     items: [int]
 

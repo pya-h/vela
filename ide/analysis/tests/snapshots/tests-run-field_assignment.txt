@@ -1,5 +1,5 @@
-  1 | # Assigning to fields of hold variables, nested fields, and through pointers.
-    | comment:# Assigning to fields of hold variables, nested fields, and through pointers.
+  1 | ; Assigning to fields of hold variables, nested fields, and through pointers.
+    | comment:; Assigning to fields of hold variables, nested fields, and through pointers.
   3 | shape Point
     | keyword:shape  type:Point
   4 |     x: int

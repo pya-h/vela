@@ -1,7 +1,7 @@
-# Plan B: `value { … }` gives the value inside a maybe, or else what its block
-# gives on its last line. A `<-` inside sends from the task. Operands around a
-# plan B are evaluated left to right, `and`/`or` still skip their right side,
-# and a loop condition runs its plan B on every pass.
+; Plan B: `value { … }` gives the value inside a maybe, or else what its block
+; gives on its last line. A `<-` inside sends from the task. Operands around a
+; plan B are evaluated left to right, `and`/`or` still skip their right side,
+; and a loop condition runs its plan B on every pass.
 
 shape Pair
     left: int
@@ -32,8 +32,8 @@ task report(m: maybe int)
     show(n)
 fi
 
-# A call with a plan B as a statement: leave when there's no value, and drop
-# the value otherwise.
+; A call with a plan B as a statement: leave when there's no value, and drop
+; the value otherwise.
 task stop_on_none(m: maybe int)
     noisy("statement", m) { <- }
     show("kept going")
@@ -66,16 +66,16 @@ task main()
     report(9)
     report(none)
 
-    # Nested: fall back to a second maybe.
+    ; Nested: fall back to a second maybe.
     bind backup: maybe int = 7
     show(noisy("a", none) { backup { 0 } })
 
-    # Left to right, even across a plan B.
+    ; Left to right, even across a plan B.
     show(noisy("left", 1) { 0 } + noisy("right", none) { 2 })
     bind pair = Pair { left: noisy("l", none) { 3 }, right: noisy("r", 4) { 0 } }
     show(pair.left * pair.right)
 
-    # A variable changed by a plan B is read before the plan B runs.
+    ; A variable changed by a plan B is read before the plan B runs.
     hold n = 1
     bind total = n + noisy("change", none) {
         n = 100
@@ -84,12 +84,12 @@ task main()
     show(total)
     show(n)
 
-    # `and` and `or` skip their right side, plan B included.
+    ; `and` and `or` skip their right side, plan B included.
     show(check("and", false) and noisy("never", none) { 1 } == 1)
     show(check("or", true) or noisy("never", none) { 1 } == 1)
     show(check("and", true) and noisy("runs", none) { 1 } == 1)
 
-    # A loop condition runs its plan B on every pass.
+    ; A loop condition runs its plan B on every pass.
     hold left: maybe int = 3
     hold passes = 0
     loop left { 0 } > 0
@@ -98,7 +98,7 @@ task main()
     fi
     show(passes)
 
-    # In a `when`, an `each` range, a match subject, and an assignment target.
+    ; In a `when`, an `each` range, a match subject, and an assignment target.
     when noisy("cond", none) { 1 } == 1
         show("yes")
     fi

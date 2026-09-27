@@ -1,4 +1,4 @@
-# error: 3:10: 'first__second': names cannot contain '__'
+; error: 3:10: 'first__second': names cannot contain '__'
 task main()
     bind first__second = 1
     show(1)

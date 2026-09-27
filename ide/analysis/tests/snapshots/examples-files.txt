@@ -1,17 +1,17 @@
-  1 | # Files, with Vela's library: a shopping list written to a file, added to,
-    | comment:# Files, with Vela's library: a shopping list written to a file, added to,
-  2 | # read back line by line, and deleted at the end, so running the example
-    | comment:# read back line by line, and deleted at the end, so running the example
-  3 | # leaves nothing behind.
-    | comment:# leaves nothing behind.
-  4 | #
-    | comment:#
-  5 | # A File is made from its path and opened in a region, which closes it when
-    | comment:# A File is made from its path and opened in a region, which closes it when
-  6 | # the region's block ends; `close()` closes it sooner. Every method that
-    | comment:# the region's block ends; `close()` closes it sooner. Every method that
-  7 | # touches the disk can fail, and a plan B says what to do then.
-    | comment:# touches the disk can fail, and a plan B says what to do then.
+  1 | ; Files, with Vela's library: a shopping list written to a file, added to,
+    | comment:; Files, with Vela's library: a shopping list written to a file, added to,
+  2 | ; read back line by line, and deleted at the end, so running the example
+    | comment:; read back line by line, and deleted at the end, so running the example
+  3 | ; leaves nothing behind.
+    | comment:; leaves nothing behind.
+  4 | ;
+    | comment:;
+  5 | ; A File is made from its path and opened in a region, which closes it when
+    | comment:; A File is made from its path and opened in a region, which closes it when
+  6 | ; the region's block ends; `close()` closes it sooner. Every method that
+    | comment:; the region's block ends; `close()` closes it sooner. Every method that
+  7 | ; touches the disk can fail, and a plan B says what to do then.
+    | comment:; touches the disk can fail, and a plan B says what to do then.
   9 | include std/files {File, FileMode, FileError}
     | keyword:include  module:std  operator:/  module:files  punctuation:{  type:File  punctuation:,  type:FileMode  punctuation:,  type:FileError  punctuation:}
  11 | task said(error: FileError) -> text
@@ -34,10 +34,10 @@
     | keyword:fi
  20 | fi
     | keyword:fi
- 22 | # Writes the list's first items, emptying the file first. The task opens its
-    | comment:# Writes the list's first items, emptying the file first. The task opens its
- 23 | # own copy of the File, which `hold` lets it change.
-    | comment:# own copy of the File, which `hold` lets it change.
+ 22 | ; Writes the list's first items, emptying the file first. The task opens its
+    | comment:; Writes the list's first items, emptying the file first. The task opens its
+ 23 | ; own copy of the File, which `hold` lets it change.
+    | comment:; own copy of the File, which `hold` lets it change.
  24 | task start(hold file: File@r) -> unit ~ FileError
     | keyword:task  task:start  punctuation:(  keyword:hold  parameter:file  punctuation::  type:File  operator:@  region:r  punctuation:)  operator:->  type-builtin:unit  operator:~  type:FileError
  25 |     region w
@@ -58,8 +58,8 @@
     | punctuation:}
  33 |     fi
     | keyword:fi
- 34 |     # The region closes the file here, at the end of its block.
-    | comment:# The region closes the file here, at the end of its block.
+ 34 |     ; The region closes the file here, at the end of its block.
+    | comment:; The region closes the file here, at the end of its block.
  35 | fi
     | keyword:fi
  37 | task main()
@@ -74,10 +74,10 @@
     | builtin-fn:show  punctuation:(  string:"could not start the list: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
  42 |     }
     | punctuation:}
- 44 |     # Adding goes at the end. The file is opened in a block's region, which
-    | comment:# Adding goes at the end. The file is opened in a block's region, which
- 45 |     # closes it at the block's fi, though main goes on.
-    | comment:# closes it at the block's fi, though main goes on.
+ 44 |     ; Adding goes at the end. The file is opened in a block's region, which
+    | comment:; Adding goes at the end. The file is opened in a block's region, which
+ 45 |     ; closes it at the block's fi, though main goes on.
+    | comment:; closes it at the block's fi, though main goes on.
  46 |     block
     | keyword:block
  47 |         region adding
@@ -98,8 +98,8 @@
     | keyword:fi
  55 |     show(list.path, " holds ", list.size() { 0 }, " bytes")
     | builtin-fn:show  punctuation:(  variable:list  punctuation:.  field:path  punctuation:,  string:" holds "  punctuation:,  variable:list  punctuation:.  method:size  punctuation:(  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" bytes"  punctuation:)
- 57 |     # Read back line by line: `line()` gives none at the end of the file.
-    | comment:# Read back line by line: `line()` gives none at the end of the file.
+ 57 |     ; Read back line by line: `line()` gives none at the end of the file.
+    | comment:; Read back line by line: `line()` gives none at the end of the file.
  58 |     list.open(FileMode.Read) at r { failure e
     | variable:list  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Read  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
  59 |         show("could not read: ", said(e))
@@ -122,8 +122,8 @@
     | builtin-fn:show  punctuation:(  string:"could not close: "  punctuation:,  task:said  punctuation:(  variable:e  punctuation:)  punctuation:)
  68 |     }
     | punctuation:}
- 70 |     # Reading a file opened for writing is a mistake the plan B names.
-    | comment:# Reading a file opened for writing is a mistake the plan B names.
+ 70 |     ; Reading a file opened for writing is a mistake the plan B names.
+    | comment:; Reading a file opened for writing is a mistake the plan B names.
  71 |     list.open(FileMode.Append) at r { failure e
     | variable:list  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Append  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  variable:e
  72 |         show("could not add: ", said(e))

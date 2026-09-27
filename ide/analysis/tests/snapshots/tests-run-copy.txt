@@ -1,15 +1,15 @@
-  1 | # Copies into a region: `value.copy() at r` (or `value.copy()@r`) copies what a
-    | comment:# Copies into a region: `value.copy() at r` (or `value.copy()@r`) copies what a
-  2 | # value holds in regions (its text, its slices' items, and what its pointers
-    | comment:# value holds in regions (its text, its slices' items, and what its pointers
-  3 | # point to, all the way down) into `r`. Without a region, the copy goes into the
-    | comment:# point to, all the way down) into `r`. Without a region, the copy goes into the
-  4 | # region of the place it is put in. Each value here is made in a region freed
-    | comment:# region of the place it is put in. Each value here is made in a region freed
-  5 | # before it is read again, so the sanitizers (tests/runtime.rs) catch a copy
-    | comment:# before it is read again, so the sanitizers (tests/runtime.rs) catch a copy
-  6 | # that still points into it. Its input is `copy.in`.
-    | comment:# that still points into it. Its input is `copy.in`.
+  1 | ; Copies into a region: `value.copy() at r` (or `value.copy()@r`) copies what a
+    | comment:; Copies into a region: `value.copy() at r` (or `value.copy()@r`) copies what a
+  2 | ; value holds in regions (its text, its slices' items, and what its pointers
+    | comment:; value holds in regions (its text, its slices' items, and what its pointers
+  3 | ; point to, all the way down) into `r`. Without a region, the copy goes into the
+    | comment:; point to, all the way down) into `r`. Without a region, the copy goes into the
+  4 | ; region of the place it is put in. Each value here is made in a region freed
+    | comment:; region of the place it is put in. Each value here is made in a region freed
+  5 | ; before it is read again, so the sanitizers (tests/runtime.rs) catch a copy
+    | comment:; before it is read again, so the sanitizers (tests/runtime.rs) catch a copy
+  6 | ; that still points into it. Its input is `copy.in`.
+    | comment:; that still points into it. Its input is `copy.in`.
   8 | shape Person
     | keyword:shape  type:Person
   9 |     name: text
@@ -52,18 +52,18 @@
     | variant:Missing  punctuation:(  field:what  punctuation::  type-builtin:text  punctuation:)
  32 | fi
     | keyword:fi
- 34 | # A copy sent back: the result's region names where it goes.
-    | comment:# A copy sent back: the result's region names where it goes.
+ 34 | ; A copy sent back: the result's region names where it goes.
+    | comment:; A copy sent back: the result's region names where it goes.
  35 | task keep(r: region, line: text@s) -> text@r
     | keyword:task  task:keep  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:line  punctuation::  type-builtin:text  operator:@  region:s  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  36 |     <- line.copy()
     | keyword:<-  parameter:line  punctuation:.  field:copy  punctuation:(  punctuation:)
  37 | fi
     | keyword:fi
- 39 | # A copy in a task's named result.
-    | comment:# A copy in a task's named result.
- 40 | task kept_twice(r: region, line: text@s) -> both: [text; 2]@r
-    | keyword:task  task:kept_twice  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:line  punctuation::  type-builtin:text  operator:@  region:s  punctuation:)  operator:->  variable:both  punctuation::  punctuation:[  type-builtin:text  punctuation:;  number:2  punctuation:]  operator:@  region:r
+ 39 | ; A copy in a task's named result.
+    | comment:; A copy in a task's named result.
+ 40 | task kept_twice(r: region, line: text@s) -> both: [text#2]@r
+    | keyword:task  task:kept_twice  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:line  punctuation::  type-builtin:text  operator:@  region:s  punctuation:)  operator:->  variable:both  punctuation::  punctuation:[  type-builtin:text  punctuation:#  number:2  punctuation:]  operator:@  region:r
  41 |     both <- [line.copy(), line.copy()]
     | variable:both  keyword:<-  punctuation:[  parameter:line  punctuation:.  field:copy  punctuation:(  punctuation:)  punctuation:,  parameter:line  punctuation:.  field:copy  punctuation:(  punctuation:)  punctuation:]
  42 | fi
@@ -128,8 +128,8 @@
     | keyword:hold  variable:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:kept  operator:=  keyword:none
  76 |     hold bag = Bag { names: new [text]() at kept, first: none }
     | keyword:hold  variable:bag  operator:=  type:Bag  punctuation:{  field:names  punctuation::  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:kept  punctuation:,  field:first  punctuation::  keyword:none  punctuation:}
- 77 |     hold both: [text; 2]@kept = ["", ""]
-    | keyword:hold  variable:both  punctuation::  punctuation:[  type-builtin:text  punctuation:;  number:2  punctuation:]  operator:@  region:kept  operator:=  punctuation:[  string:""  punctuation:,  string:""  punctuation:]
+ 77 |     hold both: [text#2]@kept = ["", ""]
+    | keyword:hold  variable:both  punctuation::  punctuation:[  type-builtin:text  punctuation:#  number:2  punctuation:]  operator:@  region:kept  operator:=  punctuation:[  string:""  punctuation:,  string:""  punctuation:]
  78 |     hold result: int ~ Problem@kept = 0
     | keyword:hold  variable:result  punctuation::  type-builtin:int  operator:~  type:Problem  operator:@  region:kept  operator:=  number:0
  79 |     each pass in 0..1
@@ -138,8 +138,8 @@
     | keyword:region  region:work
  81 |         bind line = scan("") at work { "nobody" }
     | keyword:bind  variable:line  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:work  punctuation:{  string:"nobody"  punctuation:}
- 83 |         # Text, into the place it goes, or into the region written.
-    | comment:# Text, into the place it goes, or into the region written.
+ 83 |         ; Text, into the place it goes, or into the region written.
+    | comment:; Text, into the place it goes, or into the region written.
  84 |         lines.add(line.copy())
     | variable:lines  punctuation:.  field:add  punctuation:(  variable:line  punctuation:.  field:copy  punctuation:(  punctuation:)  punctuation:)
  85 |         named = line.copy()
@@ -156,8 +156,8 @@
     | variable:lines  punctuation:.  field:add  punctuation:(  task:keep  punctuation:(  region:kept  punctuation:,  variable:line  punctuation:)  punctuation:)
  91 |         both = kept_twice(kept, line)
     | variable:both  operator:=  task:kept_twice  punctuation:(  region:kept  punctuation:,  variable:line  punctuation:)
- 93 |         # Shapes and kinds, and copies inside their literals.
-    | comment:# Shapes and kinds, and copies inside their literals.
+ 93 |         ; Shapes and kinds, and copies inside their literals.
+    | comment:; Shapes and kinds, and copies inside their literals.
  94 |         people.add(Person { name: line.copy(), age: 36 })
     | variable:people  punctuation:.  field:add  punctuation:(  type:Person  punctuation:{  field:name  punctuation::  variable:line  punctuation:.  field:copy  punctuation:(  punctuation:)  punctuation:,  field:age  punctuation::  number:36  punctuation:}  punctuation:)
  95 |         bind worker: Person@work = Person { name: line, age: 7 }
@@ -174,8 +174,8 @@
     | variable:entries  punctuation:.  field:add  punctuation:(  variant:Empty  punctuation:.  field:copy  punctuation:(  punctuation:)  operator:@  region:kept  punctuation:)
 101 |         result = parse(kept, scan("") at work { "" })
     | variable:result  operator:=  task:parse  punctuation:(  region:kept  punctuation:,  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:work  punctuation:{  string:""  punctuation:}  punctuation:)
-103 |         # A slice in a shape, and a maybe.
-    | comment:# A slice in a shape, and a maybe.
+103 |         ; A slice in a shape, and a maybe.
+    | comment:; A slice in a shape, and a maybe.
 104 |         hold names = new [text]() at work
     | keyword:hold  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:work
 105 |         names.add(line)
@@ -188,8 +188,8 @@
     | variable:bag  operator:=  variable:held  punctuation:.  field:copy  punctuation:(  punctuation:)
 109 |         names[0] = "changed"
     | variable:names  punctuation:[  number:0  punctuation:]  operator:=  string:"changed"
-111 |         # Linked nodes: one shared by two pointers, and a cycle.
-    | comment:# Linked nodes: one shared by two pointers, and a cycle.
+111 |         ; Linked nodes: one shared by two pointers, and a cycle.
+    | comment:; Linked nodes: one shared by two pointers, and a cycle.
 112 |         bind nodes = build(work, 5)
     | keyword:bind  variable:nodes  operator:=  task:build  punctuation:(  region:work  punctuation:,  number:5  punctuation:)
 113 |         bind second = nodes^.next { nodes }
@@ -268,10 +268,10 @@
     | keyword:when  variable:list  keyword:is  punctuation:{  variable:head  punctuation:}
 152 |         show(count(head))
     | builtin-fn:show  punctuation:(  task:count  punctuation:(  variable:head  punctuation:)  punctuation:)
-153 |         # The copy of the shared node is shared: a change through one pointer
-    | comment:# The copy of the shared node is shared: a change through one pointer
-154 |         # shows through the other, and the cycle leads back to the copy.
-    | comment:# shows through the other, and the cycle leads back to the copy.
+153 |         ; The copy of the shared node is shared: a change through one pointer
+    | comment:; The copy of the shared node is shared: a change through one pointer
+154 |         ; shows through the other, and the cycle leads back to the copy.
+    | comment:; shows through the other, and the cycle leads back to the copy.
 155 |         bind second = head^.other { head }
     | keyword:bind  variable:second  operator:=  variable:head  operator:^  punctuation:.  field:other  punctuation:{  variable:head  punctuation:}
 156 |         second^.label = "shared"
@@ -282,8 +282,8 @@
     | builtin-fn:show  punctuation:(  variable:second  operator:^  punctuation:.  field:other  punctuation:{  variable:second  punctuation:}  operator:^  punctuation:.  field:label  punctuation:)
 159 |     fi
     | keyword:fi
-161 |     # A long list, copied into the region it is in, and a copy's items are its own.
-    | comment:# A long list, copied into the region it is in, and a copy's items are its own.
+161 |     ; A long list, copied into the region it is in, and a copy's items are its own.
+    | comment:; A long list, copied into the region it is in, and a copy's items are its own.
 162 |     region big
     | keyword:region  region:big
 163 |     bind long = build(big, 100000)

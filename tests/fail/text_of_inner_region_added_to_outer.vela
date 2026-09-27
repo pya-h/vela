@@ -1,4 +1,4 @@
-# error: 8:23: expected type text@outer, got text@inner; this text is in region 'inner', and text here is in region 'outer'
+; error: 8:23: expected type text@outer, got text@inner; this text is in region 'inner', and text here is in region 'outer'
 task main()
     region outer
     hold names = new [text]() at outer

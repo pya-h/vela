@@ -1,5 +1,5 @@
-# `t.len` is how many bytes text has: a field, read without counting. A
-# character outside ASCII takes more than one byte, and a NUL is one of them.
+; `t.len` is how many bytes text has: a field, read without counting. A
+; character outside ASCII takes more than one byte, and a NUL is one of them.
 
 shape Person
     name: text

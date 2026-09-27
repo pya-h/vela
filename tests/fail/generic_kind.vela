@@ -1,4 +1,4 @@
-# error: 2:13: a kind takes no types yet, so 'Wrapper' can't be given any; a task or a shape can, as in 'shape Wrapper<T>'
+; error: 2:13: a kind takes no types yet, so 'Wrapper' can't be given any; a task or a shape can, as in 'shape Wrapper<T>'
 kind Wrapper<T>
     Empty
     Filled(value: T)

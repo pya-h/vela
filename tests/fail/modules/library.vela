@@ -1,5 +1,5 @@
-# A module for the fail fixtures: public and private tasks, shapes, kinds, and
-# fields.
+; A module for the fail fixtures: public and private tasks, shapes, kinds, and
+; fields.
 
 shape Card
     owner: text

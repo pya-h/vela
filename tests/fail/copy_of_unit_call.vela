@@ -1,4 +1,4 @@
-# error: 7:20: 'copy' copies what a value holds in a region, but this has no value
+; error: 7:20: 'copy' copies what a value holds in a region, but this has no value
 task nothing()
 fi
 

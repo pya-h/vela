@@ -1,4 +1,4 @@
-# error: 9:32: expected region 'a', got 'b'
+; error: 9:32: expected region 'a', got 'b'
 task read(p: ^int@r, r: region) -> int
     <- p^
 fi

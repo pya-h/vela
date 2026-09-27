@@ -301,17 +301,17 @@
           Instead of a single <code>^T</code> pointer, Vela could track capabilities at the type level. A capability says what you are allowed to do with a value, and the compiler rejects operations that don't match.
         </p>
         <pre>task copy_name(own src: text) -> text
-    # `own` means this task now owns src; the caller cannot use it after.
+    ; `own` means this task now owns src; the caller cannot use it after.
     <- src
 fi
 
 task print_name(read name: text)
-    # `read` means immutable, temporary access. The owner keeps the value.
+    ; `read` means immutable, temporary access. The owner keeps the value.
     show(name)
 fi
 
 task reset(hold write counter: ^int@r)
-    # `write` means mutable access to memory owned by someone else.
+    ; `write` means mutable access to memory owned by someone else.
     counter^ = 0
 fi</pre>
         <div class="pros-cons">
@@ -352,7 +352,7 @@ fi</pre>
     region arena
     bind buffer: [byte]@arena = allocate(arena, 4096)
     work(buffer)
-    # `buffer` and everything in `arena` are freed here automatically.
+    ; `buffer` and everything in `arena` are freed here automatically.
     <- 0
 fi</pre>
         <p>
@@ -407,7 +407,7 @@ fi</pre>
     loop not eof(f)
         show(read_line(f))
     fi
-    # close(f) runs here, even if a `<-` above had left the task early.
+    ; close(f) runs here, even if a `<-` above had left the task early.
 fi</pre>
         <div class="pros-cons">
           <div class="pros">
@@ -446,9 +446,9 @@ fi</pre>
     None
 fi
 
-# The compiler sees that `Some` always has a non-zero tag, and stores the
-# whole kind in a single int64_t: the payload when the tag is non-zero,
-# and zero for `None`. No extra memory, no indirection.</pre>
+; The compiler sees that `Some` always has a non-zero tag, and stores the
+; whole kind in a single int64_t: the payload when the tag is non-zero,
+; and zero for `None`. No extra memory, no indirection.</pre>
         <div class="note">
           <strong>Why it's cool:</strong> most languages pay for <code>Option&lt;T&gt;</code> with extra memory or branches. Vela could make nullable pointers, booleans-with-missing, and small tagged unions as cheap as their raw counterparts.
         </div>
@@ -462,7 +462,7 @@ fi
         <pre>task leaky(path: text) -> int
     bind f = open(path)
     show(read_line(f))
-    # Error: `f` is owned but never closed.
+    ; Error: `f` is owned but never closed.
     <- 0
 fi</pre>
         <p>
@@ -496,7 +496,7 @@ fi</pre>
     fi
 fi
 
-bind table: [int; 10] = comptime build_lookup_table()</pre>
+bind table: [int#10] = comptime build_lookup_table()</pre>
         <p>
           <code>comptime</code> tasks run in the compiler using the same interpreter (or the same code generator targeting a small VM). They have no I/O and no mutable global state. The result must be a constant value.
         </p>
@@ -515,7 +515,7 @@ bind table: [int; 10] = comptime build_lookup_table()</pre>
         </p>
         <pre>bind a: vec4f = [1.0, 2.0, 3.0, 4.0]
 bind b: vec4f = [5.0, 6.0, 7.0, 8.0]
-bind c: vec4f = a + b   # four additions in one instruction</pre>
+bind c: vec4f = a + b   ; four additions in one instruction</pre>
         <p>
           Vectors support lane-wise arithmetic, shuffles, reductions, and masked operations. The compiler generates the right intrinsics for the target; if SIMD is unavailable, it scalarizes cleanly.
         </p>
@@ -553,7 +553,7 @@ fi</pre>
           An <code>asm</code> block where inputs and outputs are ordinary Vela values, type-checked by the compiler.
         </p>
         <pre>task rdtsc() -> int
-    hold low = 0             # Vela has no uninitialized variables
+    hold low = 0             ; Vela has no uninitialized variables
     hold high = 0
     asm("rdtsc" : "=a"(low), "=d"(high))
     <- (high &lt;&lt; 32) | low
@@ -633,14 +633,14 @@ fi
 
 task do_work()
     perform Log.Message("starting")
-    # ...
+    ; ...
 fi
 
 task main()
     handle do_work()
     case Log.Message msg
         show(msg)
-        resume           # continue the caller
+        resume           ; continue the caller
     fi
 fi</pre>
         <div class="note warn">
@@ -661,15 +661,15 @@ fi</pre>
 fi
 
 task open(path: text) -> File&lt;Open&gt;
-    # ...
+    ; ...
 fi
 
 task close(f: File&lt;Open&gt;) -> File&lt;Closed&gt;
-    # ...
+    ; ...
 fi
 
 task read(f: File&lt;Open&gt;) -> text
-    # ...
+    ; ...
 fi</pre>
         <p>
           This generalizes to session types for protocols: a socket type tracks whether the next allowed action is <code>send</code> or <code>receive</code>, preventing protocol bugs at compile time.
@@ -692,7 +692,7 @@ fi
 
 bind a = Point { x: 1, y: 2 }
 bind b = Point { x: 1, y: 2 }
-show(a == b)   # true, generated automatically</pre>
+show(a == b)   ; true, generated automatically</pre>
         <p>
           Derive is implemented with compile-time reflection (or comptime code generation), so it costs nothing at runtime and adds no hidden vtables.
         </p>

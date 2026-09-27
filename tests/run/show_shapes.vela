@@ -1,7 +1,7 @@
-# A shape or kind says how its values are written with a method `str`, which
-# `show` calls for it: `show(card)` writes what `card.str()` gives. The text goes
-# in a region `show` makes for the line and frees when it ends, so a value is
-# written without the program naming a region at all.
+; A shape or kind says how its values are written with a method `str`, which
+; `show` calls for it: `show(card)` writes what `card.str()` gives. The text goes
+; in a region `show` makes for the line and frees when it ends, so a value is
+; written without the program naming a region at all.
 
 shape Card
     name: text
@@ -11,7 +11,7 @@ shape Card
         <- "{.name} ({.wins})" at r
     fi
 
-    # A method may show the value it is called on.
+    ; A method may show the value it is called on.
     describe()
         show("card: ", .this)
     fi
@@ -31,7 +31,7 @@ kind Light
     fi
 fi
 
-# A shape that takes a type has one `str` for every type it is made for.
+; A shape that takes a type has one `str` for every type it is made for.
 shape Box<T: shown>
     item: T
 
@@ -40,8 +40,8 @@ shape Box<T: shown>
     fi
 fi
 
-# Its `str` may write lines of its own, which land where they happen: between the
-# values written before it and those after.
+; Its `str` may write lines of its own, which land where they happen: between the
+; values written before it and those after.
 shape Loud
     n: int
 
@@ -56,20 +56,20 @@ task main()
     bind card = Card { name: "Ada", wins: 3 }
     bind light = Light.Green(30)
 
-    # A value of its own, and values around it.
+    ; A value of its own, and values around it.
     show(card)
     show(light)
     show("at ", card, " under ", light)
     show(Light.Red)
 
-    # Several values with their own `str` share the line's region.
+    ; Several values with their own `str` share the line's region.
     show(card, " and ", Card { name: "Bob", wins: 1 })
 
-    # A method of the shape itself, which shows the value it is called on.
+    ; A method of the shape itself, which shows the value it is called on.
     card.describe()
 
-    # Where the value comes from doesn't matter: a pointer it points to, a
-    # field, an item of a slice, an item of a tuple, a call's result.
+    ; Where the value comes from doesn't matter: a pointer it points to, a
+    ; field, an item of a slice, an item of a tuple, a call's result.
     bind pointer = new Card(Card { name: "Cleo", wins: 7 }) at r
     show("pointed ", pointer^)
     hold cards = new [Card]() at r
@@ -79,25 +79,25 @@ task main()
     show("in a tuple ", pair.0, " with ", pair.1)
     show("made ", best(cards, r))
 
-    # A shape made for a type, once for each.
+    ; A shape made for a type, once for each.
     show(Box<int> { item: 7 }, " ", Box<text> { item: "hi" })
     show(Box<bool> { item: true })
 
-    # Text the `str` builds lasts as long as writing the line takes.
+    ; Text the `str` builds lasts as long as writing the line takes.
     show("before ", Loud { n: 1 }, " after")
 
-    # A plan B of a value may show one of its own: the line inside it ends
-    # while the line around it is still being written, and each has its own
-    # region.
+    ; A plan B of a value may show one of its own: the line inside it ends
+    ; while the line around it is still being written, and each has its own
+    ; region.
     bind missing: maybe int = none
     show("plan B ", missing { show("inner ", card) 9 })
 
-    # A task that sends from inside a value of a `show` leaves its line
-    # unfinished, and the next thing written goes on with it.
+    ; A task that sends from inside a value of a `show` leaves its line
+    ; unfinished, and the next thing written goes on with it.
     bind gave = give_up(cards)
     show(" -> ", gave)
 
-    # Every pass of a loop frees the region of its own line.
+    ; Every pass of a loop frees the region of its own line.
     hold i = 0
     loop i < 3
         show("pass ", i, ": ", Card { name: "x", wins: i })
@@ -109,9 +109,9 @@ task best(cards: [Card@r]@r, r: region) -> Card@r
     <- cards[0]
 fi
 
-# A `<-` inside one of the values leaves the task before the line ends. The
-# region of the line is freed on the way out, and the line stays unfinished, so
-# what is written next goes on with it.
+; A `<-` inside one of the values leaves the task before the line ends. The
+; region of the line is freed on the way out, and the line stays unfinished, so
+; what is written next goes on with it.
 task give_up(cards: [Card@r]@r) -> int
     bind missing: maybe int = none
     show("gave up on ", cards[0], missing { <- 0 })

@@ -1,4 +1,4 @@
-# error: 8:16: this pointer is a ^int@r ~ text, which may be an error; extract it first, as in 'p { … }' or 'match'
+; error: 8:16: this pointer is a ^int@r ~ text, which may be an error; extract it first, as in 'p { … }' or 'match'
 task get(r: region) -> ^int@r ~ text
     <- new int(1) at r
 fi

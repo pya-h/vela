@@ -1,4 +1,4 @@
-# error: 2:17: a module can't be named 'show', which is a builtin task
+; error: 2:17: a module can't be named 'show', which is a builtin task
 include modules/show
 
 task main()

@@ -1,4 +1,4 @@
-# error: 7:5: expected 'task', 'shape', or 'kind', got identifier 'show'; statements go inside a task (is there an extra 'fi' above it?)
+; error: 7:5: expected 'task', 'shape', or 'kind', got identifier 'show'; statements go inside a task (is there an extra 'fi' above it?)
 task main()
     when true
         show(1)

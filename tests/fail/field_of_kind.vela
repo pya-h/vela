@@ -1,4 +1,4 @@
-# error: 8:12: 'Shape' is a kind and has no fields; use match to read its values
+; error: 8:12: 'Shape' is a kind and has no fields; use match to read its values
 kind Shape
     Circle(radius: float)
 fi

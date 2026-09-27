@@ -1,4 +1,4 @@
-# error: 12:12: shape 'Point' has no method 'area'
+; error: 12:12: shape 'Point' has no method 'area'
 shape Point
     x: int
 

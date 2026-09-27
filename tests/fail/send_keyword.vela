@@ -1,4 +1,4 @@
-# error: 3:5: a task sends its result with '<-', not 'send'
+; error: 3:5: a task sends its result with '<-', not 'send'
 task double(n: int) -> int
     send n * 2
 fi

@@ -1,4 +1,4 @@
-# error: 3:13: this task can't allocate in 'r', which it only names in its types; take it as a parameter, 'r: region'
+; error: 3:13: this task can't allocate in 'r', which it only names in its types; take it as a parameter, 'r: region'
 task keep(line: text@r) -> text@r
     <- line.copy()
 fi

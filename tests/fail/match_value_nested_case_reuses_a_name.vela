@@ -1,4 +1,4 @@
-# error: 12:17: 'other' is already defined at 10:13
+; error: 12:17: 'other' is already defined at 10:13
 kind Reading
     Ok(value: int)
     Missing

@@ -1,4 +1,4 @@
-# A module with a shape and a kind, used from tests/run/type_of.vela.
+; A module with a shape and a kind, used from tests/run/type_of.vela.
 
 shape Crate
     size: int

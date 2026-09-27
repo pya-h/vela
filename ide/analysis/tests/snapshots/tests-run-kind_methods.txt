@@ -1,9 +1,9 @@
-  1 | # Methods of a kind. A kind has no fields, so its methods read the value itself
-    | comment:# Methods of a kind. A kind has no fields, so its methods read the value itself
-  2 | # with `.this`, and take it apart with `match .this`; a method marked `alters`
-    | comment:# with `.this`, and take it apart with `match .this`; a method marked `alters`
-  3 | # moves the value to another variant with `.this = Other`.
-    | comment:# moves the value to another variant with `.this = Other`.
+  1 | ; Methods of a kind. A kind has no fields, so its methods read the value itself
+    | comment:; Methods of a kind. A kind has no fields, so its methods read the value itself
+  2 | ; with `.this`, and take it apart with `match .this`; a method marked `alters`
+    | comment:; with `.this`, and take it apart with `match .this`; a method marked `alters`
+  3 | ; moves the value to another variant with `.this = Other`.
+    | comment:; moves the value to another variant with `.this = Other`.
   5 | kind Light
     | keyword:kind  type:Light
   6 |     Red
@@ -38,10 +38,10 @@
     | keyword:fi
  22 |     fi
     | keyword:fi
- 24 |     # A method that takes no parameters and sends nothing: `()` alone is enough
-    | comment:# A method that takes no parameters and sends nothing: `()` alone is enough
- 25 |     # to tell it from a variant.
-    | comment:# to tell it from a variant.
+ 24 |     ; A method that takes no parameters and sends nothing: `()` alone is enough
+    | comment:; A method that takes no parameters and sends nothing: `()` alone is enough
+ 25 |     ; to tell it from a variant.
+    | comment:; to tell it from a variant.
  26 |     tell()
     | method:tell  punctuation:(  punctuation:)
  27 |         show(.label())
@@ -68,16 +68,16 @@
     | keyword:fi
  39 |     fi
     | keyword:fi
- 41 |     # A method taking parameters, below one that says what it sends.
-    | comment:# A method taking parameters, below one that says what it sends.
+ 41 |     ; A method taking parameters, below one that says what it sends.
+    | comment:; A method taking parameters, below one that says what it sends.
  42 |     alters hold_for(seconds: int)
     | keyword:alters  method:hold_for  punctuation:(  parameter:seconds  punctuation::  type-builtin:int  punctuation:)
  43 |         .this = Amber(seconds)
     | punctuation:.  keyword:this  operator:=  variant:Amber  punctuation:(  parameter:seconds  punctuation:)
  44 |     fi
     | keyword:fi
- 46 |     # Only this file may call a method marked priv.
-    | comment:# Only this file may call a method marked priv.
+ 46 |     ; Only this file may call a method marked priv.
+    | comment:; Only this file may call a method marked priv.
  47 |     priv waits() -> int
     | keyword:priv  method:waits  punctuation:(  punctuation:)  operator:->  type-builtin:int
  48 |         match .this
@@ -94,10 +94,10 @@
     | keyword:fi
  54 |     fi
     | keyword:fi
- 56 |     # A method of a kind may name the value's own region too, though a kind of
-    | comment:# A method of a kind may name the value's own region too, though a kind of
- 57 |     # values that hold nothing in one never has a region to name.
-    | comment:# values that hold nothing in one never has a region to name.
+ 56 |     ; A method of a kind may name the value's own region too, though a kind of
+    | comment:; A method of a kind may name the value's own region too, though a kind of
+ 57 |     ; values that hold nothing in one never has a region to name.
+    | comment:; values that hold nothing in one never has a region to name.
  58 |     sameAs(other: Light) -> bool
     | method:sameAs  punctuation:(  parameter:other  punctuation::  type:Light  punctuation:)  operator:->  type-builtin:bool
  59 |         <- .waits() == other.waits()
@@ -106,8 +106,8 @@
     | keyword:fi
  61 | fi
     | keyword:fi
- 63 | # A kind holding text lives in a region, so its methods may send that text.
-    | comment:# A kind holding text lives in a region, so its methods may send that text.
+ 63 | ; A kind holding text lives in a region, so its methods may send that text.
+    | comment:; A kind holding text lives in a region, so its methods may send that text.
  64 | kind Label
     | keyword:kind  type:Label
  65 |     Empty
@@ -166,14 +166,14 @@
     | builtin-fn:show  punctuation:(  variable:light  punctuation:.  method:sameAs  punctuation:(  variant:Amber  punctuation:(  number:2  punctuation:)  punctuation:)  punctuation:)
  96 |     show(light.sameAs(Red))
     | builtin-fn:show  punctuation:(  variable:light  punctuation:.  method:sameAs  punctuation:(  variant:Red  punctuation:)  punctuation:)
- 98 |     # A method that changes nothing is called on a `bind` too.
-    | comment:# A method that changes nothing is called on a `bind` too.
+ 98 |     ; A method that changes nothing is called on a `bind` too.
+    | comment:; A method that changes nothing is called on a `bind` too.
  99 |     bind fixed = Green
     | keyword:bind  variable:fixed  operator:=  variant:Green
 100 |     show(fixed.label())
     | builtin-fn:show  punctuation:(  variable:fixed  punctuation:.  method:label  punctuation:(  punctuation:)  punctuation:)
-101 |     # And on a variant as it is written.
-    | comment:# And on a variant as it is written.
+101 |     ; And on a variant as it is written.
+    | comment:; And on a variant as it is written.
 102 |     show(Light.Amber(1).label())
     | builtin-fn:show  punctuation:(  type:Light  punctuation:.  variant:Amber  punctuation:(  number:1  punctuation:)  punctuation:.  method:label  punctuation:(  punctuation:)  punctuation:)
 103 |     show(Light.Red.label())
@@ -188,8 +188,8 @@
     | variable:word  punctuation:.  method:clear  punctuation:(  punctuation:)
 109 |     show(word.wordOf())
     | builtin-fn:show  punctuation:(  variable:word  punctuation:.  method:wordOf  punctuation:(  punctuation:)  punctuation:)
-111 |     # Through a pointer into a region.
-    | comment:# Through a pointer into a region.
+111 |     ; Through a pointer into a region.
+    | comment:; Through a pointer into a region.
 112 |     hold here = new Light(Red) at r
     | keyword:hold  variable:here  operator:=  keyword:new  type:Light  punctuation:(  variant:Red  punctuation:)  keyword:at  region:r
 113 |     here^.flip()

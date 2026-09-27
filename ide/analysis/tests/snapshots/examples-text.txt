@@ -1,27 +1,27 @@
-  1 | # Text: what it knows about itself, and how new text is made. A text value is
-    | comment:# Text: what it knows about itself, and how new text is made. A text value is
-  2 | # its bytes and how many there are, so `t.len` costs nothing and a part,
-    | comment:# its bytes and how many there are, so `t.len` costs nothing and a part,
-  3 | # `t[a..b]`, is the same bytes rather than a copy. Text that is built is new, so
-    | comment:# `t[a..b]`, is the same bytes rather than a copy. Text that is built is new, so
-  4 | # it goes in a region: `a + b at r` joins, `x.str() at r` writes a value, and
-    | comment:# it goes in a region: `a + b at r` joins, `x.str() at r` writes a value, and
-  5 | # `"{x} …" at r` holds values in braces.
-    | comment:# `"{x} …" at r` holds values in braces.
+  1 | ; Text: what it knows about itself, and how new text is made. A text value is
+    | comment:; Text: what it knows about itself, and how new text is made. A text value is
+  2 | ; its bytes and how many there are, so `t.len` costs nothing and a part,
+    | comment:; its bytes and how many there are, so `t.len` costs nothing and a part,
+  3 | ; `t[a..b]`, is the same bytes rather than a copy. Text that is built is new, so
+    | comment:; `t[a..b]`, is the same bytes rather than a copy. Text that is built is new, so
+  4 | ; it goes in a region: `a + b at r` joins, `x.str() at r` writes a value, and
+    | comment:; it goes in a region: `a + b at r` joins, `x.str() at r` writes a value, and
+  5 | ; `"{x} …" at r` holds values in braces.
+    | comment:; `"{x} …" at r` holds values in braces.
   7 | shape Card
     | keyword:shape  type:Card
   8 |     name: text
     | field:name  punctuation::  type-builtin:text
   9 |     wins: int
     | field:wins  punctuation::  type-builtin:int
- 11 |     # A shape or a kind says how its values become text with a method named
-    | comment:# A shape or a kind says how its values become text with a method named
- 12 |     # `str`, which takes the region the text goes in. Every way of asking for
-    | comment:# `str`, which takes the region the text goes in. Every way of asking for
- 13 |     # text calls it: `card.str() at r`, `text(card) at r`, and `"{card}"`, and
-    | comment:# text calls it: `card.str() at r`, `text(card) at r`, and `"{card}"`, and
- 14 |     # so does `show(card)`, which needs no region of ours.
-    | comment:# so does `show(card)`, which needs no region of ours.
+ 11 |     ; A shape or a kind says how its values become text with a method named
+    | comment:; A shape or a kind says how its values become text with a method named
+ 12 |     ; `str`, which takes the region the text goes in. Every way of asking for
+    | comment:; `str`, which takes the region the text goes in. Every way of asking for
+ 13 |     ; text calls it: `card.str() at r`, `text(card) at r`, and `"{card}"`, and
+    | comment:; text calls it: `card.str() at r`, `text(card) at r`, and `"{card}"`, and
+ 14 |     ; so does `show(card)`, which needs no region of ours.
+    | comment:; so does `show(card)`, which needs no region of ours.
  15 |     str(r: region) -> text@r
     | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  16 |         <- "{.name} ({.wins} wins)" at r
@@ -30,10 +30,10 @@
     | keyword:fi
  18 | fi
     | keyword:fi
- 20 | # The first word of a line: a part of it, so it lives where the line does. Text
-    | comment:# The first word of a line: a part of it, so it lives where the line does. Text
- 21 | # has no items to read one at a time, so a byte is the part `t[i..i + 1]`.
-    | comment:# has no items to read one at a time, so a byte is the part `t[i..i + 1]`.
+ 20 | ; The first word of a line: a part of it, so it lives where the line does. Text
+    | comment:; The first word of a line: a part of it, so it lives where the line does. Text
+ 21 | ; has no items to read one at a time, so a byte is the part `t[i..i + 1]`.
+    | comment:; has no items to read one at a time, so a byte is the part `t[i..i + 1]`.
  22 | task first_word(line: text@r) -> text@r
     | keyword:task  task:first_word  punctuation:(  parameter:line  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  23 |     each i in 0..line.len
@@ -50,10 +50,10 @@
     | keyword:<-  parameter:line
  29 | fi
     | keyword:fi
- 31 | # The first letter of each word, as new text: the task takes the region to
-    | comment:# The first letter of each word, as new text: the task takes the region to
- 32 | # build it in, and the letters are parts of the name, joined there.
-    | comment:# build it in, and the letters are parts of the name, joined there.
+ 31 | ; The first letter of each word, as new text: the task takes the region to
+    | comment:; The first letter of each word, as new text: the task takes the region to
+ 32 | ; build it in, and the letters are parts of the name, joined there.
+    | comment:; build it in, and the letters are parts of the name, joined there.
  33 | task initials(name: text@r, r: region) -> text@r
     | keyword:task  task:initials  punctuation:(  parameter:name  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  34 |     hold letters = "".copy() at r
@@ -90,36 +90,36 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  51 |     region r
     | keyword:region  region:r
- 53 |     # Length is bytes, not characters: a letter outside ASCII takes more.
-    | comment:# Length is bytes, not characters: a letter outside ASCII takes more.
+ 53 |     ; Length is bytes, not characters: a letter outside ASCII takes more.
+    | comment:; Length is bytes, not characters: a letter outside ASCII takes more.
  54 |     bind name = "Ada Lovelace"
     | keyword:bind  variable:name  operator:=  string:"Ada Lovelace"
  55 |     show(name.len)
     | builtin-fn:show  punctuation:(  variable:name  punctuation:.  field:len  punctuation:)
  56 |     show("café".len)
     | builtin-fn:show  punctuation:(  string:"café"  punctuation:.  field:len  punctuation:)
- 58 |     # Parts view the same bytes, and a bound inside a character stops the
-    | comment:# Parts view the same bytes, and a bound inside a character stops the
- 59 |     # program, so a part never holds half of one.
-    | comment:# program, so a part never holds half of one.
+ 58 |     ; Parts view the same bytes, and a bound inside a character stops the
+    | comment:; Parts view the same bytes, and a bound inside a character stops the
+ 59 |     ; program, so a part never holds half of one.
+    | comment:; program, so a part never holds half of one.
  60 |     show(first_word(name))
     | builtin-fn:show  punctuation:(  task:first_word  punctuation:(  variable:name  punctuation:)  punctuation:)
  61 |     show(name[4..name.len])
     | builtin-fn:show  punctuation:(  variable:name  punctuation:[  number:4  operator:..  variable:name  punctuation:.  field:len  punctuation:]  punctuation:)
  62 |     show("café"[3..5])
     | builtin-fn:show  punctuation:(  string:"café"  punctuation:[  number:3  operator:..  number:5  punctuation:]  punctuation:)
- 64 |     # Text compares by its contents, and orders by its bytes, which is the
-    | comment:# Text compares by its contents, and orders by its bytes, which is the
- 65 |     # order of Unicode: capitals come before small letters.
-    | comment:# order of Unicode: capitals come before small letters.
+ 64 |     ; Text compares by its contents, and orders by its bytes, which is the
+    | comment:; Text compares by its contents, and orders by its bytes, which is the
+ 65 |     ; order of Unicode: capitals come before small letters.
+    | comment:; order of Unicode: capitals come before small letters.
  66 |     show(name == "Ada Lovelace")
     | builtin-fn:show  punctuation:(  variable:name  operator:==  string:"Ada Lovelace"  punctuation:)
  67 |     show("Ada" < "Bob")
     | builtin-fn:show  punctuation:(  string:"Ada"  operator:<  string:"Bob"  punctuation:)
  68 |     show("Zoe" < "ada")
     | builtin-fn:show  punctuation:(  string:"Zoe"  operator:<  string:"ada"  punctuation:)
- 70 |     # New text: joined, written from a value, or holding values.
-    | comment:# New text: joined, written from a value, or holding values.
+ 70 |     ; New text: joined, written from a value, or holding values.
+    | comment:; New text: joined, written from a value, or holding values.
  71 |     show("Hello, " + first_word(name) + "!" at r)
     | builtin-fn:show  punctuation:(  string:"Hello, "  operator:+  task:first_word  punctuation:(  variable:name  punctuation:)  operator:+  string:"!"  keyword:at  region:r  punctuation:)
  72 |     show(initials(name, r))
@@ -138,10 +138,10 @@
     | builtin-fn:show  punctuation:(  string:"{  variable:card  string:} has {  variable:card  punctuation:.  field:wins  operator:*  number:2  string:} points"  keyword:at  region:r  punctuation:)
  79 |     show("\{name\} is written {name.len} bytes long" at r)
     | builtin-fn:show  punctuation:(  string:"  escape:\{  string:name  escape:\}  string: is written {  variable:name  punctuation:.  field:len  string:} bytes long"  keyword:at  region:r  punctuation:)
- 81 |     # A loop that builds text again and again can build in a region of its own,
-    | comment:# A loop that builds text again and again can build in a region of its own,
- 82 |     # freed on every pass, and copy out only what it keeps.
-    | comment:# freed on every pass, and copy out only what it keeps.
+ 81 |     ; A loop that builds text again and again can build in a region of its own,
+    | comment:; A loop that builds text again and again can build in a region of its own,
+ 82 |     ; freed on every pass, and copy out only what it keeps.
+    | comment:; freed on every pass, and copy out only what it keeps.
  83 |     hold longest = "".copy() at r
     | keyword:hold  variable:longest  operator:=  string:""  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
  84 |     each word in ["one", "three", "two"]

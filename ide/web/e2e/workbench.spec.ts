@@ -42,7 +42,7 @@ test("edits and saves a file", async ({ page, studio }) => {
 
   await page.keyboard.press("Control+s");
   await expect(tab(page, "hello.vela")).not.toHaveClass(/dirty/);
-  expect(studio.read("hello.vela")).toBe('# Hello world in Vela\n\ntask main()\n    show("Hello, Vela!")\n    show("saved")\nfi\n');
+  expect(studio.read("hello.vela")).toBe('; Hello world in Vela\n\ntask main()\n    show("Hello, Vela!")\n    show("saved")\nfi\n');
 
   // Undoing back to the saved text shows no unsaved changes.
   await page.keyboard.type("x");
@@ -76,13 +76,13 @@ test("saving over a file changed on disk asks before overwriting", async ({ page
   await openFile(page, "hello.vela");
   await cursorAtEndOf(page, 1);
   await page.keyboard.type(" (mine)");
-  studio.write("hello.vela", "# changed elsewhere\n");
+  studio.write("hello.vela", "; changed elsewhere\n");
   await page.keyboard.press("Control+s");
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: "File changed on disk" })).toBeVisible();
   await dialog.getByRole("button", { name: "Overwrite" }).click();
   await expect(tab(page, "hello.vela")).not.toHaveClass(/dirty/);
-  expect(studio.read("hello.vela")).toContain("# Hello world in Vela (mine)");
+  expect(studio.read("hello.vela")).toContain("; Hello world in Vela (mine)");
 });
 
 test("saving twice in a row is not a conflict", async ({ page, studio }) => {
@@ -102,11 +102,11 @@ test("saving twice in a row is not a conflict", async ({ page, studio }) => {
   await page.keyboard.press("Control+s");
   await expect(tab(page, "hello.vela")).not.toHaveClass(/dirty/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  expect(studio.read("hello.vela")).toContain("# Hello world in Vela (1) (2)\n");
+  expect(studio.read("hello.vela")).toContain("; Hello world in Vela (1) (2)\n");
 });
 
 test("saving a file whose folder was deleted creates both again", async ({ page, studio }) => {
-  studio.write("lib/util.vela", "# util\n");
+  studio.write("lib/util.vela", "; util\n");
   await launch(page, studio);
   await treeRow(page, "lib").click();
   await openFile(page, "lib/util.vela");
@@ -121,16 +121,16 @@ test("saving a file whose folder was deleted creates both again", async ({ page,
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(tab(page, "lib/util.vela")).not.toHaveClass(/dirty/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  expect(studio.read("lib/util.vela")).toBe("# util (kept)\n");
+  expect(studio.read("lib/util.vela")).toBe("; util (kept)\n");
 });
 
 test("a file changed on disk reloads when it has no unsaved changes", async ({ page, studio }) => {
   await launch(page, studio);
   await openFile(page, "hello.vela");
   await cursorAtEndOf(page, 4);
-  studio.write("hello.vela", '# Rewritten\n\ntask main()\n    show("Hello, Vela!")\nfi\n');
+  studio.write("hello.vela", '; Rewritten\n\ntask main()\n    show("Hello, Vela!")\nfi\n');
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(page.locator(".cm-content")).toContainText("# Rewritten");
+  await expect(page.locator(".cm-content")).toContainText("; Rewritten");
   await expect(page.locator(".toast")).toContainText("changed on disk and was reloaded");
   await expect(tab(page, "hello.vela")).not.toHaveClass(/dirty/);
   // Only the changed text is replaced: the cursor stays where it was.
@@ -216,11 +216,11 @@ test("saving over a deleted file that was made again asks before overwriting it"
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: "File deleted" })).toBeVisible();
   // Another program makes the file again before the save goes ahead.
-  studio.write("hello.vela", "# made again elsewhere\n");
+  studio.write("hello.vela", "; made again elsewhere\n");
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(dialog.getByRole("heading", { name: "File changed on disk" })).toBeVisible();
   await dialog.getByRole("button", { name: "Cancel" }).click();
-  expect(studio.read("hello.vela")).toBe("# made again elsewhere\n");
+  expect(studio.read("hello.vela")).toBe("; made again elsewhere\n");
 });
 
 test("a launch link that no longer works says so", async ({ page, studio }) => {

@@ -1,7 +1,7 @@
-  1 | # A stack kept in a region, changed by the tasks of this module, and a kind
-    | comment:# A stack kept in a region, changed by the tasks of this module, and a kind
-  2 | # whose variants are named like the changes to a slice.
-    | comment:# whose variants are named like the changes to a slice.
+  1 | ; A stack kept in a region, changed by the tasks of this module, and a kind
+    | comment:; A stack kept in a region, changed by the tasks of this module, and a kind
+  2 | ; whose variants are named like the changes to a slice.
+    | comment:; whose variants are named like the changes to a slice.
   4 | kind Op
     | keyword:kind  type:Op
   5 |     add(amount: int)

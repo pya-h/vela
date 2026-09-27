@@ -1,4 +1,4 @@
-# error: 14:10: kind 'Light' has no variant 'Circle'
+; error: 14:10: kind 'Light' has no variant 'Circle'
 kind Light
     Red
     Green

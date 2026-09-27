@@ -1,4 +1,4 @@
-# error: 8:22: the error type must differ from the value type, as in 'Person ~ ParseError'
+; error: 8:22: the error type must differ from the value type, as in 'Person ~ ParseError'
 shape Person
     name: text
 fi

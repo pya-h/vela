@@ -1,5 +1,5 @@
-  1 | # Shape literal fields may be given in any order, and a shape may be empty.
-    | comment:# Shape literal fields may be given in any order, and a shape may be empty.
+  1 | ; Shape literal fields may be given in any order, and a shape may be empty.
+    | comment:; Shape literal fields may be given in any order, and a shape may be empty.
   3 | shape Point
     | keyword:shape  type:Point
   4 |     x: int

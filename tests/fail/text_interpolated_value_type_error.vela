@@ -1,4 +1,4 @@
-# error: 5:18: arithmetic requires numeric operands
+; error: 5:18: arithmetic requires numeric operands
 task main()
     region r
     bind n = 5

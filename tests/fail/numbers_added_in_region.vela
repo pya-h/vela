@@ -1,4 +1,4 @@
-# error: 4:19: numbers are added without a region; 'at r' after '+' is for joining text
+; error: 4:19: numbers are added without a region; 'at r' after '+' is for joining text
 task main()
     region r
     show(1 + 2 at r)

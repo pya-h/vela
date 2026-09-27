@@ -1,5 +1,5 @@
-# Variables, parameters, and case bindings that are never read are valid Vela,
-# and their generated C must not trigger unused-variable warnings.
+; Variables, parameters, and case bindings that are never read are valid Vela,
+; and their generated C must not trigger unused-variable warnings.
 shape Point
     x: int
     y: int

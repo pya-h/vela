@@ -1,12 +1,12 @@
-# Methods of a shape: written in its block below its fields, and called on a
-# value. Inside one, `.balance` is a field of the value it is called on and
-# `.note()` another of its methods. A method that changes the value says
-# `alters`, and only a place that can change may call it: here a `hold`
-# variable, and an item of a slice.
+; Methods of a shape: written in its block below its fields, and called on a
+; value. Inside one, `.balance` is a field of the value it is called on and
+; `.note()` another of its methods. A method that changes the value says
+; `alters`, and only a place that can change may call it: here a `hold`
+; variable, and an item of a slice.
 
-# A kind has methods too, which read the value as `.this`. A method named `str`
-# says how the value becomes text; it makes new text, so it takes the region the
-# text goes in, as any task that builds text does.
+; A kind has methods too, which read the value as `.this`. A method named `str`
+; says how the value becomes text; it makes new text, so it takes the region the
+; text goes in, as any task that builds text does.
 kind Refusal
     TooLittle(short: int)
     Closed
@@ -19,12 +19,12 @@ kind Refusal
     fi
 fi
 
-# A field can name the value a literal that leaves it out gives it, so an
-# account is opened by naming its owner alone. One marked `read` is read by any
-# code and changed only by the account's own methods, so no one can reopen a
-# closed account by writing to it. A `shared` field belongs to the shape rather
-# than to any account: one value for the whole program, read as
-# `Account.deposits`, and this one is `read` too, so only the methods count.
+; A field can name the value a literal that leaves it out gives it, so an
+; account is opened by naming its owner alone. One marked `read` is read by any
+; code and changed only by the account's own methods, so no one can reopen a
+; closed account by writing to it. A `shared` field belongs to the shape rather
+; than to any account: one value for the whole program, read as
+; `Account.deposits`, and this one is `read` too, so only the methods count.
 shape Account
     owner: text
     balance: int = 0
@@ -45,8 +45,8 @@ shape Account
         .note("deposit", amount)
     fi
 
-    # A method may fail, as a task may: `unit ~ Refusal` sends nothing, or a
-    # reason why not.
+    ; A method may fail, as a task may: `unit ~ Refusal` sends nothing, or a
+    ; reason why not.
     alters withdraw(amount: int) -> unit ~ Refusal
         when not .open
             <- fail Closed
@@ -62,14 +62,14 @@ shape Account
         .open = false
     fi
 
-    # Only this file may call it. `show` writes each value in turn, so saying
-    # what happened needs no text of its own, and no region to hold it.
+    ; Only this file may call it. `show` writes each value in turn, so saying
+    ; what happened needs no text of its own, and no region to hold it.
     priv note(what: text, amount: int)
         show(what, " ", amount)
     fi
 fi
 
-# A shape that takes a type: its methods use `T` as its fields do.
+; A shape that takes a type: its methods use `T` as its fields do.
 shape Best<T: ordered>
     value: T
 
@@ -85,7 +85,7 @@ task report(result: unit ~ Refusal)
     case {_}
         show("done")
     case failure why
-        # `show` calls a kind's own `str` for it, in a region of its own.
+        ; `show` calls a kind's own `str` for it, in a region of its own.
         show("refused: ", why)
     fi
 fi
@@ -100,14 +100,14 @@ task main()
     ada.close()
     report(ada.withdraw(1))
 
-    # A reference is another name for an account: its alters methods change
-    # the account it names.
+    ; A reference is another name for an account: its alters methods change
+    ; the account it names.
     hold bob = Account { owner: "Bob" }
     hold& current = &bob
     current.deposit(20)
     show(bob)
 
-    # An item of a slice is a place that can change.
+    ; An item of a slice is a place that can change.
     region bank
     hold accounts = new [Account]() at bank
     accounts.add(Account { owner: "Grace", balance: 5 })

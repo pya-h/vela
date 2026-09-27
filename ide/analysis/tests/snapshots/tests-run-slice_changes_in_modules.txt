@@ -1,7 +1,7 @@
-  1 | # Changes to a slice written in a module, and `m.Kind.add(…)`, which names a
-    | comment:# Changes to a slice written in a module, and `m.Kind.add(…)`, which names a
-  2 | # variant of a kind in a module rather than a change to a slice.
-    | comment:# variant of a kind in a module rather than a change to a slice.
+  1 | ; Changes to a slice written in a module, and `m.Kind.add(…)`, which names a
+    | comment:; Changes to a slice written in a module, and `m.Kind.add(…)`, which names a
+  2 | ; variant of a kind in a module rather than a change to a slice.
+    | comment:; variant of a kind in a module rather than a change to a slice.
   4 | include slice_changes/stack (Op)
     | keyword:include  module:slice_changes  operator:/  module:stack  punctuation:(  type:Op  punctuation:)
   6 | task main()

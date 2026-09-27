@@ -1,5 +1,5 @@
-  1 | # Shapes: literals, field access, field assignment, passing by value
-    | comment:# Shapes: literals, field access, field assignment, passing by value
+  1 | ; Shapes: literals, field access, field assignment, passing by value
+    | comment:; Shapes: literals, field access, field assignment, passing by value
   3 | shape Point
     | keyword:shape  type:Point
   4 |     x: int

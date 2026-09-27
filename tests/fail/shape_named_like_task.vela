@@ -1,4 +1,4 @@
-# error: 6:7: 'Point' is already defined at 2:6
+; error: 6:7: 'Point' is already defined at 2:6
 task Point()
     show(1)
 fi

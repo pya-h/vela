@@ -1,4 +1,4 @@
-# error: 8:18: 'Dim' is a variant of kind 'Light', not a shape; its values are written 'Dim(…)'
+; error: 8:18: 'Dim' is a variant of kind 'Light', not a shape; its values are written 'Dim(…)'
 kind Light
     Red
     Dim(level: int)

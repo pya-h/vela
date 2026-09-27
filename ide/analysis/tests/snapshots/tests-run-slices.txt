@@ -1,15 +1,15 @@
-  1 | # Slices: `[type]@r`, a view of items in a region, like a pointer to the first
-    | comment:# Slices: `[type]@r`, a view of items in a region, like a pointer to the first
-  2 | # with a count. `new [T](…) at r` makes one from `[v; n]` (n known only as the
-    | comment:# with a count. `new [T](…) at r` makes one from `[v; n]` (n known only as the
-  3 | # program runs), an array, or another slice, copying the items; `xs[a..b]`
-    | comment:# program runs), an array, or another slice, copying the items; `xs[a..b]`
-  4 | # slices a slice, or an array in a region, without copying. Items are written
-    | comment:# slices a slice, or an array in a region, without copying. Items are written
-  5 | # through a slice even when it is a `bind`, as through a pointer. (tests/runtime.rs
-    | comment:# through a slice even when it is a `bind`, as through a pointer. (tests/runtime.rs
-  6 | # also runs this under sanitizers.)
-    | comment:# also runs this under sanitizers.)
+  1 | ; Slices: `[type]@r`, a view of items in a region, like a pointer to the first
+    | comment:; Slices: `[type]@r`, a view of items in a region, like a pointer to the first
+  2 | ; with a count. `new [T](…) at r` makes one from `[v#n]` (n known only as the
+    | comment:; with a count. `new [T](…) at r` makes one from `[v#n]` (n known only as the
+  3 | ; program runs), an array, or another slice, copying the items; `xs[a..b]`
+    | comment:; program runs), an array, or another slice, copying the items; `xs[a..b]`
+  4 | ; slices a slice, or an array in a region, without copying. Items are written
+    | comment:; slices a slice, or an array in a region, without copying. Items are written
+  5 | ; through a slice even when it is a `bind`, as through a pointer. (tests/runtime.rs
+    | comment:; through a slice even when it is a `bind`, as through a pointer. (tests/runtime.rs
+  6 | ; also runs this under sanitizers.)
+    | comment:; also runs this under sanitizers.)
   8 | shape Node
     | keyword:shape  type:Node
   9 |     value: int
@@ -26,8 +26,8 @@
     | field:used  punctuation::  type-builtin:int
  16 | fi
     | keyword:fi
- 18 | # Only reads, so it names the region without taking it.
-    | comment:# Only reads, so it names the region without taking it.
+ 18 | ; Only reads, so it names the region without taking it.
+    | comment:; Only reads, so it names the region without taking it.
  19 | task sum(xs: [int]@r) -> int
     | keyword:task  task:sum  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
  20 |     hold total = 0
@@ -42,12 +42,12 @@
     | keyword:<-  variable:total
  25 | fi
     | keyword:fi
- 27 | # Allocates, so it takes the region.
-    | comment:# Allocates, so it takes the region.
+ 27 | ; Allocates, so it takes the region.
+    | comment:; Allocates, so it takes the region.
  28 | task squares(r: region, n: int) -> [int]@r
     | keyword:task  task:squares  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
- 29 |     bind out = new [int]([0; n]) at r
-    | keyword:bind  variable:out  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:;  parameter:n  punctuation:]  punctuation:)  keyword:at  region:r
+ 29 |     bind out = new [int]([0#n]) at r
+    | keyword:bind  variable:out  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:#  parameter:n  punctuation:]  punctuation:)  keyword:at  region:r
  30 |     each i in 0..n
     | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:n
  31 |         out[i] = i * i
@@ -62,8 +62,8 @@
     | keyword:task  task:chain  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  operator:^  type:Node  punctuation:]  operator:@  region:r
  37 |     bind first = new Node(Node { value: 0, next: none }) at r
     | keyword:bind  variable:first  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:0  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
- 38 |     bind nodes = new [^Node]([first; n]) at r
-    | keyword:bind  variable:nodes  operator:=  keyword:new  punctuation:[  operator:^  type:Node  punctuation:]  punctuation:(  punctuation:[  variable:first  punctuation:;  parameter:n  punctuation:]  punctuation:)  keyword:at  region:r
+ 38 |     bind nodes = new [^Node]([first#n]) at r
+    | keyword:bind  variable:nodes  operator:=  keyword:new  punctuation:[  operator:^  type:Node  punctuation:]  punctuation:(  punctuation:[  variable:first  punctuation:#  parameter:n  punctuation:]  punctuation:)  keyword:at  region:r
  39 |     each i in 1..n
     | keyword:each  variable:i  keyword:in  number:1  operator:..  parameter:n
  40 |         nodes[i] = new Node(Node { value: i, next: nodes[i - 1] }) at r
@@ -82,14 +82,14 @@
     | keyword:hold  variable:count  operator:=  number:2
  48 |     count = count + 3
     | variable:count  operator:=  variable:count  operator:+  number:3
- 49 |     bind zeros = new [int]([0; count]) at r
-    | keyword:bind  variable:zeros  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:;  variable:count  punctuation:]  punctuation:)  keyword:at  region:r
+ 49 |     bind zeros = new [int]([0#count]) at r
+    | keyword:bind  variable:zeros  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:#  variable:count  punctuation:]  punctuation:)  keyword:at  region:r
  50 |     show(zeros.len)
     | builtin-fn:show  punctuation:(  variable:zeros  punctuation:.  field:len  punctuation:)
  51 |     show(sum(squares(r, 4)))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  task:squares  punctuation:(  region:r  punctuation:,  number:4  punctuation:)  punctuation:)  punctuation:)
- 53 |     # A `bind` slice's items can be written; every view of them sees it.
-    | comment:# A `bind` slice's items can be written; every view of them sees it.
+ 53 |     ; A `bind` slice's items can be written; every view of them sees it.
+    | comment:; A `bind` slice's items can be written; every view of them sees it.
  54 |     bind view = zeros[1..4]
     | keyword:bind  variable:view  operator:=  variable:zeros  punctuation:[  number:1  operator:..  number:4  punctuation:]
  55 |     view[0] = 7
@@ -106,8 +106,8 @@
     | builtin-fn:show  punctuation:(  variable:view  punctuation:.  field:len  operator:+  variable:inner  punctuation:.  field:len  punctuation:)
  61 |     show(zeros[2..2].len)
     | builtin-fn:show  punctuation:(  variable:zeros  punctuation:[  number:2  operator:..  number:2  punctuation:]  punctuation:.  field:len  punctuation:)
- 63 |     # Copies: from an array, and from a slice, into their own memory.
-    | comment:# Copies: from an array, and from a slice, into their own memory.
+ 63 |     ; Copies: from an array, and from a slice, into their own memory.
+    | comment:; Copies: from an array, and from a slice, into their own memory.
  64 |     bind scores = [90, 72, 85, 60]
     | keyword:bind  variable:scores  operator:=  punctuation:[  number:90  punctuation:,  number:72  punctuation:,  number:85  punctuation:,  number:60  punctuation:]
  65 |     bind copied = new [int](scores) at r
@@ -120,20 +120,20 @@
     | builtin-fn:show  punctuation:(  variable:copied  punctuation:[  number:2  punctuation:]  punctuation:)
  69 |     show(sum(again))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:again  punctuation:)  punctuation:)
- 71 |     # An array in a region, reached through a pointer, can be sliced.
-    | comment:# An array in a region, reached through a pointer, can be sliced.
- 72 |     bind boxed = new [int; 4](scores) at r
-    | keyword:bind  variable:boxed  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:;  number:4  punctuation:]  punctuation:(  variable:scores  punctuation:)  keyword:at  region:r
+ 71 |     ; An array in a region, reached through a pointer, can be sliced.
+    | comment:; An array in a region, reached through a pointer, can be sliced.
+ 72 |     bind boxed = new [int#4](scores) at r
+    | keyword:bind  variable:boxed  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:#  number:4  punctuation:]  punctuation:(  variable:scores  punctuation:)  keyword:at  region:r
  73 |     bind middle = boxed^[1..3]
     | keyword:bind  variable:middle  operator:=  variable:boxed  operator:^  punctuation:[  number:1  operator:..  number:3  punctuation:]
  74 |     middle[0] = 0
     | variable:middle  punctuation:[  number:0  punctuation:]  operator:=  number:0
  75 |     show(boxed^[1])
     | builtin-fn:show  punctuation:(  variable:boxed  operator:^  punctuation:[  number:1  punctuation:]  punctuation:)
- 77 |     # Slices in a shape, of pointers, and in a maybe.
-    | comment:# Slices in a shape, of pointers, and in a maybe.
- 78 |     bind buffer = Buffer { items: new [int]([5; 3]) at r, used: 1 }
-    | keyword:bind  variable:buffer  operator:=  type:Buffer  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:5  punctuation:;  number:3  punctuation:]  punctuation:)  keyword:at  region:r  punctuation:,  field:used  punctuation::  number:1  punctuation:}
+ 77 |     ; Slices in a shape, of pointers, and in a maybe.
+    | comment:; Slices in a shape, of pointers, and in a maybe.
+ 78 |     bind buffer = Buffer { items: new [int]([5#3]) at r, used: 1 }
+    | keyword:bind  variable:buffer  operator:=  type:Buffer  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:5  punctuation:#  number:3  punctuation:]  punctuation:)  keyword:at  region:r  punctuation:,  field:used  punctuation::  number:1  punctuation:}
  79 |     buffer.items[2] = 6
     | variable:buffer  punctuation:.  field:items  punctuation:[  number:2  punctuation:]  operator:=  number:6
  80 |     show(sum(buffer.items))
@@ -152,22 +152,22 @@
     | builtin-fn:show  punctuation:(  variable:xs  punctuation:.  field:len  punctuation:)
  87 |     fi
     | keyword:fi
- 89 |     # A region declared in a block frees its slices when the block ends.
-    | comment:# A region declared in a block frees its slices when the block ends.
+ 89 |     ; A region declared in a block frees its slices when the block ends.
+    | comment:; A region declared in a block frees its slices when the block ends.
  90 |     each round in 0..2
     | keyword:each  variable:round  keyword:in  number:0  operator:..  number:2
  91 |         region scratch
     | keyword:region  region:scratch
- 92 |         bind temporary = new [text](["a"; round + 1]) at scratch
-    | keyword:bind  variable:temporary  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:[  string:"a"  punctuation:;  variable:round  operator:+  number:1  punctuation:]  punctuation:)  keyword:at  region:scratch
+ 92 |         bind temporary = new [text](["a"#round + 1]) at scratch
+    | keyword:bind  variable:temporary  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:[  string:"a"  punctuation:#  variable:round  operator:+  number:1  punctuation:]  punctuation:)  keyword:at  region:scratch
  93 |         show(temporary.len)
     | builtin-fn:show  punctuation:(  variable:temporary  punctuation:.  field:len  punctuation:)
  94 |     fi
     | keyword:fi
- 96 |     # Nothing to go through.
-    | comment:# Nothing to go through.
- 97 |     bind none_left = new [int]([0; 0]) at r
-    | keyword:bind  variable:none_left  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:;  number:0  punctuation:]  punctuation:)  keyword:at  region:r
+ 96 |     ; Nothing to go through.
+    | comment:; Nothing to go through.
+ 97 |     bind none_left = new [int]([0#0]) at r
+    | keyword:bind  variable:none_left  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:#  number:0  punctuation:]  punctuation:)  keyword:at  region:r
  98 |     each x in none_left
     | keyword:each  variable:x  keyword:in  variable:none_left
  99 |         show(x)

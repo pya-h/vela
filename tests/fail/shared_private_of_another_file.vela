@@ -1,4 +1,4 @@
-# error: 5:27: 'secret' is a private shared field of 'counters.Counter', which only its own file can use
+; error: 5:27: 'secret' is a private shared field of 'counters.Counter', which only its own file can use
 include modules/counters
 
 task main()

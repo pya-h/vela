@@ -1,4 +1,4 @@
-# error: 4:10: 'x' is already defined at 3:10
+; error: 4:10: 'x' is already defined at 3:10
 task main()
     bind x = 1
     hold x = 2

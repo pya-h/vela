@@ -1,4 +1,4 @@
-# error: 4:19: '@r' names the region of the call right before it, as in 'f(x)@r', or of text joined in parentheses or holding values, as in '(a + b)@r' or '"n = {n}"@r'
+; error: 4:19: '@r' names the region of the call right before it, as in 'f(x)@r', or of text joined in parentheses or holding values, as in '(a + b)@r' or '"n = {n}"@r'
 task main()
     region r
     show("a" + "b"@r)

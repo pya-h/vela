@@ -1,4 +1,4 @@
-# error: 9:15: 'Red' is a variant of kind 'Light', but this value is int
+; error: 9:15: 'Red' is a variant of kind 'Light', but this value is int
 kind Light
     Red
     Green

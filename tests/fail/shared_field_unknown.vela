@@ -1,4 +1,4 @@
-# error: 7:16: shape 'Point' has no shared field 'nothing'
+; error: 7:16: shape 'Point' has no shared field 'nothing'
 shape Point
     x: int
 fi

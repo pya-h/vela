@@ -1,4 +1,4 @@
-# Includes cycle_b, which includes this module again: a fail fixture.
+; Includes cycle_b, which includes this module again: a fail fixture.
 include cycle_b
 
 task a() -> int

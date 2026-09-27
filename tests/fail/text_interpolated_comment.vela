@@ -1,6 +1,6 @@
-# error: 5:18: a value in text can't hold a comment
+; error: 5:18: a value in text can't hold a comment
 task main()
     region r
     bind n = 5
-    show("n = {n # the count}" at r)
+    show("n = {n ; the count}" at r)
 fi

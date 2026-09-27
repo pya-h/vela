@@ -1,5 +1,5 @@
-  1 | # NaN and infinity print the same way under every C compiler.
-    | comment:# NaN and infinity print the same way under every C compiler.
+  1 | ; NaN and infinity print the same way under every C compiler.
+    | comment:; NaN and infinity print the same way under every C compiler.
   2 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
   3 |     bind zero = 0.0

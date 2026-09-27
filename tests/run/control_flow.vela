@@ -1,4 +1,4 @@
-# when/else, loop, each, and early send
+; when/else, loop, each, and early send
 
 task sign(n: int) -> int
     when n < 0

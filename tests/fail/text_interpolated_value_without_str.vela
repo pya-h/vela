@@ -1,4 +1,4 @@
-# error: 6:17: type [int]@r can't be turned into text; numbers, bools, text, and shapes and kinds with a method 'str' can
+; error: 6:17: type [int]@r can't be turned into text; numbers, bools, text, and shapes and kinds with a method 'str' can
 task main()
     region r
     bind n = 5

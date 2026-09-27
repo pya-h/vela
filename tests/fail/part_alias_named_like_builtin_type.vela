@@ -1,4 +1,4 @@
-# error: 2:34: 'int' is a builtin type, so nothing else can be named so
+; error: 2:34: 'int' is a builtin type, so nothing else can be named so
 include modules/library (Card => int)
 
 task main()

@@ -1,4 +1,4 @@
-# error: 7:14: unknown variable 'n'
+; error: 7:14: unknown variable 'n'
 task main()
     bind m: maybe int = 1
     when m is {n}

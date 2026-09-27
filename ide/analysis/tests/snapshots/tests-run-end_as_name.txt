@@ -1,5 +1,5 @@
-  1 | # `end` is not a keyword: blocks close with `fi`, so `end` is an ordinary name.
-    | comment:# `end` is not a keyword: blocks close with `fi`, so `end` is an ordinary name.
+  1 | ; `end` is not a keyword: blocks close with `fi`, so `end` is an ordinary name.
+    | comment:; `end` is not a keyword: blocks close with `fi`, so `end` is an ordinary name.
   2 | task last(end: int) -> int
     | keyword:task  task:last  punctuation:(  parameter:end  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
   3 |     <- end - 1

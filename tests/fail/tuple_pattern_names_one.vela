@@ -1,4 +1,4 @@
-# error: 4:18: a tuple has two or more items, so '( … )' names two or more, as in 'is (x, y)'
+; error: 4:18: a tuple has two or more items, so '( … )' names two or more, as in 'is (x, y)'
 task main()
     bind pair = (1, 2)
     when pair is (a)

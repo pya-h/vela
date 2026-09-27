@@ -1,10 +1,10 @@
-# Reading a number from input: `scan(prompt, int)` shows the prompt, reads a
-# line, and sends the number it holds, or an `InputError` saying why there is
-# none. A number needs no memory, so this form names no region. `InputError` is
-# a builtin kind with two variants, `Ended` (the input is over) and `NoNumber`,
-# which holds the `ParseError` that reading the line gave.
+; Reading a number from input: `scan(prompt, int)` shows the prompt, reads a
+; line, and sends the number it holds, or an `InputError` saying why there is
+; none. A number needs no memory, so this form names no region. `InputError` is
+; a builtin kind with two variants, `Ended` (the input is over) and `NoNumber`,
+; which holds the `ParseError` that reading the line gave.
 
-# Why there is no number, as text.
+; Why there is no number, as text.
 task why(e: InputError) -> text
     match e
     case Ended
@@ -19,31 +19,31 @@ task why(e: InputError) -> text
     fi
 fi
 
-# A kind no file declares is a type like any other, so a shape may keep one.
+; A kind no file declares is a type like any other, so a shape may keep one.
 shape Refused
     why: InputError
     line: int
 fi
 
-# A task may forward the error it was given, and send one of its own: an age
-# read from input, refusing one no person has.
+; A task may forward the error it was given, and send one of its own: an age
+; read from input, refusing one no person has.
 task age() -> int ~ InputError
     bind years = scan("age? ", int) {
         failure e
         <- fail e
     }
     when years > 200
-        # A program may send one itself, written through its kind.
+        ; A program may send one itself, written through its kind.
         <- fail InputError.NoNumber(ParseError.TooLarge)
     fi
     when years < 0
-        # Or as a bare variant, payload and all.
+        ; Or as a bare variant, payload and all.
         <- fail NoNumber(ParseError.NotANumber)
     fi
     <- years
 fi
 
-# Nothing more to read is an error this task sends itself.
+; Nothing more to read is an error this task sends itself.
 task twice() -> int ~ InputError
     bind n = scan("", int) {
         failure e
@@ -53,13 +53,13 @@ task twice() -> int ~ InputError
 fi
 
 task main()
-    # A plan B gives the value to use instead: for 42, for a line that is no
-    # number, and at the end of the input.
+    ; A plan B gives the value to use instead: for 42, for a line that is no
+    ; number, and at the end of the input.
     show(scan("n? ", int) { -1 })
     show(scan("n? ", int) { -1 })
     show(scan("x? ", float) { -1.0 })
 
-    # A match reads the number or the reason there is none.
+    ; A match reads the number or the reason there is none.
     each round in [0, 1, 2, 3]
         match scan("", int)
         case {value}
@@ -69,7 +69,7 @@ task main()
         fi
     fi
 
-    # `is` runs a block for one outcome only.
+    ; `is` runs a block for one outcome only.
     when scan("", int) is {value}
         show("seven: ", value)
     fi
@@ -77,7 +77,7 @@ task main()
         show("bad: ", why(e))
     fi
 
-    # A float reads its fraction, and one too large for a float is too large.
+    ; A float reads its fraction, and one too large for a float is too large.
     show(scan("", float) { -1.0 } + 0.5)
     show(scan("", float) { -1.0 })
     match scan("", float)
@@ -87,11 +87,11 @@ task main()
         show("no float: ", why(e))
     fi
 
-    # A value of either kind is a value like any other: a shape holds one, an
-    # array holds several, and a maybe holds one or none.
+    ; A value of either kind is a value like any other: a shape holds one, an
+    ; array holds several, and a maybe holds one or none.
     bind kept = Refused { why: InputError.NoNumber(ParseError.TooLarge), line: 3 }
     show("line ", kept.line, ": ", why(kept.why))
-    bind ends = [InputError.Ended; 2]
+    bind ends = [InputError.Ended#2]
     show(why(ends[1]))
     hold last: maybe InputError = none
     last = NoNumber(ParseError.NotANumber)
@@ -99,7 +99,7 @@ task main()
         show(why(e))
     fi
 
-    # A task of its own, sending and forwarding.
+    ; A task of its own, sending and forwarding.
     each round in [0, 1, 2, 3]
         match age()
         case {years}
@@ -109,7 +109,7 @@ task main()
         fi
     fi
 
-    # Every line left, added up until the input ends.
+    ; Every line left, added up until the input ends.
     hold total = 0
     hold reading = true
     loop reading
@@ -127,6 +127,6 @@ task main()
     fi
     show("total: ", total)
 
-    # The input has ended, so this one sends its own error.
+    ; The input has ended, so this one sends its own error.
     show(twice() { -1 })
 fi

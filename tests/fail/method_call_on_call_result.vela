@@ -1,4 +1,4 @@
-# error: 11:19: shape 'Point' has no methods; they are written inside it, below its fields
+; error: 11:19: shape 'Point' has no methods; they are written inside it, below its fields
 shape Point
     x: int
 fi

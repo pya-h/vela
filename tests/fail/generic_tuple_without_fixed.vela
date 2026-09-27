@@ -1,4 +1,4 @@
-# error: 3:9: a tuple's items never change, so it can't hold 'T', which may be any type here; require it, as in '<T: fixed>'
+; error: 3:9: a tuple's items never change, so it can't hold 'T', which may be any type here; require it, as in '<T: fixed>'
 task pair<T>(a: T) -> (T, int)
     <- (a, 1)
 fi

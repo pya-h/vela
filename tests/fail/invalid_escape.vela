@@ -1,4 +1,4 @@
-# error: 3:15: invalid escape '\q'
+; error: 3:15: invalid escape '\q'
 task main()
     show("abc \q")
 fi

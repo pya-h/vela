@@ -66,7 +66,7 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     (
         "new",
         "new T(value) at r",
-        "Copies the value into region r and gives a ^T@r. Also written new@r T(value). With a slice type, new [T](items) at r gives a [T]@r of the items: [v; n], an array, or a slice.",
+        "Copies the value into region r and gives a ^T@r. Also written new@r T(value). With a slice type, new [T](items) at r gives a [T]@r of the items: [v#n], an array, or a slice.",
     ),
     ("at", "new T(value) at r", "Allocates in region r, the same as new@r T(value) ('@' is 'at'). It also names where new text goes: a + b at r joins text, as (a + b)@r does, \"n = {n}\" at r holds values, and scan(prompt) at r reads a line."),
     ("in", "each i in a..b", "Counts from a up to, but not including, b. each v in xs goes through the items of an array or slice."),
@@ -89,7 +89,7 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     (
         "type",
         "x.type: text",
-        "The type of the value as code writes it, without regions: [int; 3], [float], ^Point, Box<int>. The compiler knows it, so the value itself is never worked out; in a task that takes types, it is the type each use gives. 'type' is a reserved word, so nothing else takes the name.",
+        "The type of the value as code writes it, without regions: [int#3], [float], ^Point, Box<int>. The compiler knows it, so the value itself is never worked out; in a task that takes types, it is the type each use gives. 'type' is a reserved word, so nothing else takes the name.",
     ),
 ];
 

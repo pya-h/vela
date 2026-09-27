@@ -1,4 +1,4 @@
-# error: 4:5: cannot assign to an item of immutable variable 'days'
+; error: 4:5: cannot assign to an item of immutable variable 'days'
 task main()
     bind days = [1, 2, 3]
     days[0] = 5

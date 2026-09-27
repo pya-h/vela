@@ -1,5 +1,5 @@
-# Types may be used before they are declared, and may point to themselves. A
-# kind holding pointers lives in a region, like the pointers it holds.
+; Types may be used before they are declared, and may point to themselves. A
+; kind holding pointers lives in a region, like the pointers it holds.
 
 shape Segment
     from: Point

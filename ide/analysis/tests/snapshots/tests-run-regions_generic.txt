@@ -1,11 +1,11 @@
-  1 | # Tasks generic over regions: a region parameter after the parameter that
-    | comment:# Tasks generic over regions: a region parameter after the parameter that
-  2 | # names it, forwarding a result whose error holds no pointers, a plan B that
-    | comment:# names it, forwarding a result whose error holds no pointers, a plan B that
-  3 | # takes its fallback's region through a `T ~ E`, and a result whose two sides
-    | comment:# takes its fallback's region through a `T ~ E`, and a result whose two sides
-  4 | # are in regions the caller chooses.
-    | comment:# are in regions the caller chooses.
+  1 | ; Tasks generic over regions: a region parameter after the parameter that
+    | comment:; Tasks generic over regions: a region parameter after the parameter that
+  2 | ; names it, forwarding a result whose error holds no pointers, a plan B that
+    | comment:; names it, forwarding a result whose error holds no pointers, a plan B that
+  3 | ; takes its fallback's region through a `T ~ E`, and a result whose two sides
+    | comment:; takes its fallback's region through a `T ~ E`, and a result whose two sides
+  4 | ; are in regions the caller chooses.
+    | comment:; are in regions the caller chooses.
   6 | shape Node
     | keyword:shape  type:Node
   7 |     value: int

@@ -1,4 +1,4 @@
-# error: 5:5: only a field can be 'read', not a method; a method that changes the value it is called on says 'alters'
+; error: 5:5: only a field can be 'read', not a method; a method that changes the value it is called on says 'alters'
 shape Tally
     total: int = 0
 

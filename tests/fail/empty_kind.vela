@@ -1,4 +1,4 @@
-# error: 2:6: kind 'Nothing' has no variants
+; error: 2:6: kind 'Nothing' has no variants
 kind Nothing
 fi
 

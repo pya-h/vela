@@ -1,4 +1,4 @@
-# error: 6:9: assigning '.this' changes the value this method is called on, so 'alters' goes before its name, as in 'alters reset(…)'
+; error: 6:9: assigning '.this' changes the value this method is called on, so 'alters' goes before its name, as in 'alters reset(…)'
 shape Counter
     count: int
 

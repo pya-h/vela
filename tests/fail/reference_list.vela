@@ -1,4 +1,4 @@
-# error: 4:14: a reference is declared one at a time, each with its own 'hold&'
+; error: 4:14: a reference is declared one at a time, each with its own 'hold&'
 task main()
     hold x = 1
     hold& a, b = &x, &x

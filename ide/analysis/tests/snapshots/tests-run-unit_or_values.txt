@@ -1,7 +1,7 @@
-  1 | # A `unit ~ E` is a value too: it can be bound, held, stored in a field, and
-    | comment:# A `unit ~ E` is a value too: it can be bound, held, stored in a field, and
-  2 | # passed to a task, and `case {_}` matches its success.
-    | comment:# passed to a task, and `case {_}` matches its success.
+  1 | ; A `unit ~ E` is a value too: it can be bound, held, stored in a field, and
+    | comment:; A `unit ~ E` is a value too: it can be bound, held, stored in a field, and
+  2 | ; passed to a task, and `case {_}` matches its success.
+    | comment:; passed to a task, and `case {_}` matches its success.
   4 | shape Saved
     | keyword:shape  type:Saved
   5 |     result: unit ~ text

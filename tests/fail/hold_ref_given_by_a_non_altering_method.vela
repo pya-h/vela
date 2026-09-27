@@ -1,4 +1,4 @@
-# error: 6:18: giving '.n' to 'x' changes the value this method is called on, so 'alters' goes before its name, as in 'alters peek(…)'
+; error: 6:18: giving '.n' to 'x' changes the value this method is called on, so 'alters' goes before its name, as in 'alters peek(…)'
 shape Counter
     n: int = 0
 

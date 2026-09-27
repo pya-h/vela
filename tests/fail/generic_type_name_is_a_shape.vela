@@ -1,4 +1,4 @@
-# error: 6:12: 'Point' is already a type, so it can't name a type task 'first' takes; use another name, as in '<T>'
+; error: 6:12: 'Point' is already a type, so it can't name a type task 'first' takes; use another name, as in '<T>'
 shape Point
     x: int
 fi

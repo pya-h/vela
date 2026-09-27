@@ -1,4 +1,4 @@
-# Vela demo: tasks, shapes, pointers, control flow, and text
+; Vela demo: tasks, shapes, pointers, control flow, and text
 
 shape Point
     x: int
@@ -39,6 +39,6 @@ task main()
 
     region numbers
     bind ptr: ^int@numbers = new int(42) at numbers
-    # Text holding values is new text, so it goes in a region too.
+    ; Text holding values is new text, so it goes in a region too.
     show("the answer is {ptr^}" at numbers)
 fi

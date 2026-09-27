@@ -1,13 +1,13 @@
-  1 | # A tiny to-do list: a linked list of shapes, each pointing to the next one
-    | comment:# A tiny to-do list: a linked list of shapes, each pointing to the next one
-  2 | # (a `maybe ^Item`, since the last item has none), all in one region that
-    | comment:# (a `maybe ^Item`, since the last item has none), all in one region that
-  3 | # frees them together; variants with and without a payload, `is` and plan B to
-    | comment:# frees them together; variants with and without a payload, `is` and plan B to
-  4 | # read maybe values, text compared by contents, and a task with two named
-    | comment:# read maybe values, text compared by contents, and a task with two named
-  5 | # results.
-    | comment:# results.
+  1 | ; A tiny to-do list: a linked list of shapes, each pointing to the next one
+    | comment:; A tiny to-do list: a linked list of shapes, each pointing to the next one
+  2 | ; (a `maybe ^Item`, since the last item has none), all in one region that
+    | comment:; (a `maybe ^Item`, since the last item has none), all in one region that
+  3 | ; frees them together; variants with and without a payload, `is` and plan B to
+    | comment:; frees them together; variants with and without a payload, `is` and plan B to
+  4 | ; read maybe values, text compared by contents, and a task with two named
+    | comment:; read maybe values, text compared by contents, and a task with two named
+  5 | ; results.
+    | comment:; results.
   6 | kind Status
     | keyword:kind  type:Status
   7 |     Todo
@@ -28,10 +28,10 @@
     | field:next  punctuation::  keyword:maybe  operator:^  type:Item
  16 | fi
     | keyword:fi
- 18 | # A status in a region holds its text there, so the task names that region,
-    | comment:# A status in a region holds its text there, so the task names that region,
- 19 | # and so does the text it sends, which may be the reason.
-    | comment:# and so does the text it sends, which may be the reason.
+ 18 | ; A status in a region holds its text there, so the task names that region,
+    | comment:; A status in a region holds its text there, so the task names that region,
+ 19 | ; and so does the text it sends, which may be the reason.
+    | comment:; and so does the text it sends, which may be the reason.
  20 | task describe(s: Status@r) -> text@r
     | keyword:task  task:describe  punctuation:(  parameter:s  punctuation::  type:Status  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  21 |     <- match s
@@ -46,12 +46,12 @@
     | keyword:fi
  26 | fi
     | keyword:fi
- 28 | # `show` writes each value in turn, so the line needs no text of its own: the
-    | comment:# `show` writes each value in turn, so the line needs no text of its own: the
- 29 | # title, the status, and the brackets around it are written one after another.
-    | comment:# title, the status, and the brackets around it are written one after another.
- 30 | # `hold` makes the parameter the task's own copy, which walks down the list.
-    | comment:# `hold` makes the parameter the task's own copy, which walks down the list.
+ 28 | ; `show` writes each value in turn, so the line needs no text of its own: the
+    | comment:; `show` writes each value in turn, so the line needs no text of its own: the
+ 29 | ; title, the status, and the brackets around it are written one after another.
+    | comment:; title, the status, and the brackets around it are written one after another.
+ 30 | ; `hold` makes the parameter the task's own copy, which walks down the list.
+    | comment:; `hold` makes the parameter the task's own copy, which walks down the list.
  31 | task print_list(hold current: maybe ^Item@r)
     | keyword:task  task:print_list  punctuation:(  keyword:hold  parameter:current  punctuation::  keyword:maybe  operator:^  type:Item  operator:@  region:r  punctuation:)
  32 |     loop current is {item}
@@ -64,10 +64,10 @@
     | keyword:fi
  36 | fi
     | keyword:fi
- 38 | # Two things to report, so two results, and naming them makes the counting
-    | comment:# Two things to report, so two results, and naming them makes the counting
- 39 | # read as the task's answer: reaching the end sends what they hold.
-    | comment:# read as the task's answer: reaching the end sends what they hold.
+ 38 | ; Two things to report, so two results, and naming them makes the counting
+    | comment:; Two things to report, so two results, and naming them makes the counting
+ 39 | ; read as the task's answer: reaching the end sends what they hold.
+    | comment:; read as the task's answer: reaching the end sends what they hold.
  40 | task progress(first: maybe ^Item@r) -> done: int, total: int
     | keyword:task  task:progress  punctuation:(  parameter:first  punctuation::  keyword:maybe  operator:^  type:Item  operator:@  region:r  punctuation:)  operator:->  variable:done  punctuation::  type-builtin:int  punctuation:,  variable:total  punctuation::  type-builtin:int
  41 |     hold current = first
@@ -110,8 +110,8 @@
     | keyword:<-  keyword:none
  61 | fi
     | keyword:fi
- 63 | # Adding allocates, so `add` takes the region to allocate in.
-    | comment:# Adding allocates, so `add` takes the region to allocate in.
+ 63 | ; Adding allocates, so `add` takes the region to allocate in.
+    | comment:; Adding allocates, so `add` takes the region to allocate in.
  64 | task add(r: region, title: text, status: Status, next: maybe ^Item@r) -> ^Item@r
     | keyword:task  task:add  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:title  punctuation::  type-builtin:text  punctuation:,  parameter:status  punctuation::  type:Status  punctuation:,  parameter:next  punctuation::  keyword:maybe  operator:^  type:Item  operator:@  region:r  punctuation:)  operator:->  operator:^  type:Item  operator:@  region:r
  65 |     <- new Item(Item { title: title, status: status, next: next }) at r
@@ -120,8 +120,8 @@
     | keyword:fi
  68 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 69 |     # Every item lives in `todos`, which frees them all when main ends.
-    | comment:# Every item lives in `todos`, which frees them all when main ends.
+ 69 |     ; Every item lives in `todos`, which frees them all when main ends.
+    | comment:; Every item lives in `todos`, which frees them all when main ends.
  70 |     region todos
     | keyword:region  region:todos
  71 |     bind third = add(todos, "ship it", Blocked("waiting for review"), none)
@@ -142,16 +142,16 @@
     | variable:tests  operator:^  punctuation:.  field:status  operator:=  variant:Todo
  80 |     fi
     | keyword:fi
- 81 |     # Only the count of done items is wanted now, so the other is dropped.
-    | comment:# Only the count of done items is wanted now, so the other is dropped.
+ 81 |     ; Only the count of done items is wanted now, so the other is dropped.
+    | comment:; Only the count of done items is wanted now, so the other is dropped.
  82 |     bind still_done, _ = progress(first)
     | keyword:bind  variable:still_done  punctuation:,  keyword:_  operator:=  task:progress  punctuation:(  variable:first  punctuation:)
  83 |     show(still_done, " of them now")
     | builtin-fn:show  punctuation:(  variable:still_done  punctuation:,  string:" of them now"  punctuation:)
  84 |     show(find(first, "celebrate") == none)
     | builtin-fn:show  punctuation:(  task:find  punctuation:(  variable:first  punctuation:,  string:"celebrate"  punctuation:)  operator:==  keyword:none  punctuation:)
- 86 |     # A plan B gives a value to use when there is nothing to extract.
-    | comment:# A plan B gives a value to use when there is nothing to extract.
+ 86 |     ; A plan B gives a value to use when there is nothing to extract.
+    | comment:; A plan B gives a value to use when there is nothing to extract.
  87 |     bind start = find(first, "celebrate") { first }
     | keyword:bind  variable:start  operator:=  task:find  punctuation:(  variable:first  punctuation:,  string:"celebrate"  punctuation:)  punctuation:{  variable:first  punctuation:}
  88 |     show(start^.title)

@@ -1,7 +1,7 @@
-  1 | # Named results holding a shape and a maybe, set from a plan B, and sent with
-    | comment:# Named results holding a shape and a maybe, set from a plan B, and sent with
-  2 | # `<-` from inside a plan B.
-    | comment:# `<-` from inside a plan B.
+  1 | ; Named results holding a shape and a maybe, set from a plan B, and sent with
+    | comment:; Named results holding a shape and a maybe, set from a plan B, and sent with
+  2 | ; `<-` from inside a plan B.
+    | comment:; `<-` from inside a plan B.
   4 | shape Point
     | keyword:shape  type:Point
   5 |     x: int

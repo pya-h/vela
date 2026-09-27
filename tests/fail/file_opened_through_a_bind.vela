@@ -1,4 +1,4 @@
-# error: 7:5: 'File.open' changes the value it is called on, so it needs a place that can change, and 'notes' never does (declared at 6:10); a value declared with 'hold' can
+; error: 7:5: 'File.open' changes the value it is called on, so it needs a place that can change, and 'notes' never does (declared at 6:10); a value declared with 'hold' can
 include std/files {File, FileMode}
 
 task main()

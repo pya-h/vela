@@ -1,4 +1,4 @@
-# error: 9:22: 'str' is given its region in the parentheses already, so this is a second one; name it once
+; error: 9:22: 'str' is given its region in the parentheses already, so this is a second one; name it once
 task label(n: int, r: region) -> text@r
     <- "#{n}" at r
 fi

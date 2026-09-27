@@ -1,9 +1,9 @@
-  1 | # Errors of every type: a shape, an int computed with `fail (…)`, and a
-    | comment:# Errors of every type: a shape, an int computed with `fail (…)`, and a
-  2 | # `text ~ int` (written without spaces here, which is allowed), handled by
-    | comment:# `text ~ int` (written without spaces here, which is allowed), handled by
-  3 | # `match`, a plan B, and `is failure e`.
-    | comment:# `match`, a plan B, and `is failure e`.
+  1 | ; Errors of every type: a shape, an int computed with `fail (…)`, and a
+    | comment:; Errors of every type: a shape, an int computed with `fail (…)`, and a
+  2 | ; `text ~ int` (written without spaces here, which is allowed), handled by
+    | comment:; `text ~ int` (written without spaces here, which is allowed), handled by
+  3 | ; `match`, a plan B, and `is failure e`.
+    | comment:; `match`, a plan B, and `is failure e`.
   5 | shape Problem
     | keyword:shape  type:Problem
   6 |     code: int

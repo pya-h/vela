@@ -1,4 +1,4 @@
-# error: 5:12: type ^int@r can't be turned into text; turn the value it points to into text, as in 'p^.str() at r'
+; error: 5:12: type ^int@r can't be turned into text; turn the value it points to into text, as in 'p^.str() at r'
 task main()
     region r
     bind p = new int(3) at r

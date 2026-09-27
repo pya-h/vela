@@ -1,16 +1,16 @@
-  1 | # Tasks that take the region they make text in last, used from another file.
-    | comment:# Tasks that take the region they make text in last, used from another file.
+  1 | ; Tasks that take the region they make text in last, used from another file.
+    | comment:; Tasks that take the region they make text in last, used from another file.
   3 | task label(n: int, into: region) -> text@into
     | keyword:task  task:label  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:,  region:into  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:into
   4 |     <- "#{n}" at into
     | keyword:<-  string:"#{  parameter:n  string:}"  keyword:at  region:into
   5 | fi
     | keyword:fi
-  7 | # One that takes types, too.
-    | comment:# One that takes types, too.
+  7 | ; One that takes types, too.
+    | comment:; One that takes types, too.
   8 | task filled<T>(x: T, into: region) -> [T]@into
     | keyword:task  task:filled  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:x  punctuation::  type:T  punctuation:,  region:into  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  type:T  punctuation:]  operator:@  region:into
-  9 |     <- new [T]([x; 2]) at into
-    | keyword:<-  keyword:new  punctuation:[  type:T  punctuation:]  punctuation:(  punctuation:[  parameter:x  punctuation:;  number:2  punctuation:]  punctuation:)  keyword:at  region:into
+  9 |     <- new [T]([x#2]) at into
+    | keyword:<-  keyword:new  punctuation:[  type:T  punctuation:]  punctuation:(  punctuation:[  parameter:x  punctuation:#  number:2  punctuation:]  punctuation:)  keyword:at  region:into
  10 | fi
     | keyword:fi

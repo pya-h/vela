@@ -1,4 +1,4 @@
-# error: 7:5: only a variable, a field, an item of an array or slice, or the value a pointer points to (p^) can be assigned
+; error: 7:5: only a variable, a field, an item of an array or slice, or the value a pointer points to (p^) can be assigned
 task one() -> int
     <- 1
 fi

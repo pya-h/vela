@@ -1,4 +1,4 @@
-# error: 3:12: 'Bad' contains itself by value (Bad -> Bad); use a pointer such as 'maybe ^Bad<T>'
+; error: 3:12: 'Bad' contains itself by value (Bad -> Bad); use a pointer such as 'maybe ^Bad<T>'
 shape Bad<T>
     inner: Bad<T>
 fi

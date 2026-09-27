@@ -1,4 +1,4 @@
-# error: 11:9: expected type Person@s, got Person@r; a value can't move to another region: what it holds in region 'r' is never stored in region 's'
+; error: 11:9: expected type Person@s, got Person@r; a value can't move to another region: what it holds in region 'r' is never stored in region 's'
 shape Person
     name: text
 fi

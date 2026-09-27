@@ -66,8 +66,9 @@ pub enum Token {
     LBracket,
     RBracket,
     Colon,
-    /// `;`, which separates an array's type or value from its count: `[int; 4]`.
-    Semicolon,
+    /// `#`, which separates an array's type or value from its count, as in
+    /// item #4: `[int#4]`, `[0#4]`.
+    Hash,
     Comma,
     Dot,
     Arrow,
@@ -187,7 +188,7 @@ impl Token {
                 | Token::RBracket
                 | Token::LParen
                 | Token::RParen
-                | Token::Semicolon
+                | Token::Hash
                 | Token::Int(_)
                 | Token::Dot
         )
@@ -213,7 +214,7 @@ impl Token {
             Token::LBracket => "[",
             Token::RBracket => "]",
             Token::Colon => ":",
-            Token::Semicolon => ";",
+            Token::Hash => "#",
             Token::Comma => ",",
             Token::Dot => ".",
             Token::Arrow => "->",
@@ -314,7 +315,7 @@ pub struct LexToken {
 #[derive(Debug, Clone, PartialEq)]
 pub enum LexKind {
     Token(Token),
-    /// A `#` comment, up to (not including) the end of the line.
+    /// A `;` comment, up to (not including) the end of the line.
     Comment,
     /// Text the compiler rejects, with the error it reports. The first
     /// `Invalid` token's error is exactly the error `Lexer::tokenize` returns.
@@ -488,7 +489,8 @@ impl Lexer {
             return LexKind::Token(Token::Newline);
         }
 
-        if c == '#' {
+        // `;` starts a comment, as it adds a remark to a sentence.
+        if c == ';' {
             while !self.at_line_end() && !self.at_end() {
                 self.advance();
             }
@@ -533,7 +535,7 @@ impl Lexer {
             '[' => Token::LBracket,
             ']' => Token::RBracket,
             ':' => Token::Colon,
-            ';' => Token::Semicolon,
+            '#' => Token::Hash,
             ',' => Token::Comma,
             '.' => {
                 if self.peek() == '.' {
@@ -854,7 +856,7 @@ impl Lexer {
                 ));
                 return None;
             }
-            if self.peek() == '#' {
+            if self.peek() == ';' {
                 error.get_or_insert(Error::at(self.location(), "a value in text can't hold a comment"));
                 self.advance();
                 continue;

@@ -1,6 +1,6 @@
-# A pointer always points to something; `maybe ^T` is the one that can be
-# `none`. `is` walks a list, and a plan B supplies a missing pointer. The tasks
-# name the list's region `r` without allocating in it.
+; A pointer always points to something; `maybe ^T` is the one that can be
+; `none`. `is` walks a list, and a plan B supplies a missing pointer. The tasks
+; name the list's region `r` without allocating in it.
 
 shape Node
     value: int

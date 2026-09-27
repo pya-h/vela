@@ -1,4 +1,4 @@
-# error: 2:6: task 'sign' can finish without sending a value
+; error: 2:6: task 'sign' can finish without sending a value
 task sign(x: int) -> int
     when x > 0
         <- 1

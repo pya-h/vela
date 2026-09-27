@@ -1,7 +1,7 @@
-  1 | # Variables, parameters, and case bindings that are never read are valid Vela,
-    | comment:# Variables, parameters, and case bindings that are never read are valid Vela,
-  2 | # and their generated C must not trigger unused-variable warnings.
-    | comment:# and their generated C must not trigger unused-variable warnings.
+  1 | ; Variables, parameters, and case bindings that are never read are valid Vela,
+    | comment:; Variables, parameters, and case bindings that are never read are valid Vela,
+  2 | ; and their generated C must not trigger unused-variable warnings.
+    | comment:; and their generated C must not trigger unused-variable warnings.
   3 | shape Point
     | keyword:shape  type:Point
   4 |     x: int

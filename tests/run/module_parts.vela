@@ -1,7 +1,7 @@
-# A module's names in every position: kinds brought in by name and used
-# through `Kind.Variant`, a module under another name in patterns, maybe,
-# `new`, region types, and arrays. The palette module uses its own private
-# kind and shape.
+; A module's names in every position: kinds brought in by name and used
+; through `Kind.Variant`, a module under another name in patterns, maybe,
+; `new`, region types, and arrays. The palette module uses its own private
+; kind and shape.
 
 include module_parts/shapes/palette (Color, describe)
 include module_parts/shapes/geometry => geo
@@ -31,7 +31,7 @@ task main()
     hold head: geo.Node@r = geo.Node { value: 1, next: none }
     head.next = new@r geo.Node(geo.Node { value: 2, next: none })
     show(head.next { boxed2(r) }^.value)
-    bind corners: [geo.Point; 2] = [geo.Point { x: 0.0, y: 0.0 }; 2]
+    bind corners: [geo.Point#2] = [geo.Point { x: 0.0, y: 0.0 }#2]
     show(corners.len)
 fi
 

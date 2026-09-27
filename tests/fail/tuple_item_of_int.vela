@@ -1,4 +1,4 @@
-# error: 4:12: '.0' reads an item of a tuple, but this value is int
+; error: 4:12: '.0' reads an item of a tuple, but this value is int
 task main()
     bind x = 1
     show(x.0)

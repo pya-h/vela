@@ -1,10 +1,10 @@
-# Files, with Vela's library: a shopping list written to a file, added to,
-# read back line by line, and deleted at the end, so running the example
-# leaves nothing behind.
-#
-# A File is made from its path and opened in a region, which closes it when
-# the region's block ends; `close()` closes it sooner. Every method that
-# touches the disk can fail, and a plan B says what to do then.
+; Files, with Vela's library: a shopping list written to a file, added to,
+; read back line by line, and deleted at the end, so running the example
+; leaves nothing behind.
+;
+; A File is made from its path and opened in a region, which closes it when
+; the region's block ends; `close()` closes it sooner. Every method that
+; touches the disk can fail, and a plan B says what to do then.
 
 include std/files {File, FileMode, FileError}
 
@@ -19,8 +19,8 @@ task said(error: FileError) -> text
     fi
 fi
 
-# Writes the list's first items, emptying the file first. The task opens its
-# own copy of the File, which `hold` lets it change.
+; Writes the list's first items, emptying the file first. The task opens its
+; own copy of the File, which `hold` lets it change.
 task start(hold file: File@r) -> unit ~ FileError
     region w
     file.open(FileMode.Write) at w { failure e
@@ -31,7 +31,7 @@ task start(hold file: File@r) -> unit ~ FileError
             <- fail e
         }
     fi
-    # The region closes the file here, at the end of its block.
+    ; The region closes the file here, at the end of its block.
 fi
 
 task main()
@@ -41,8 +41,8 @@ task main()
         show("could not start the list: ", said(e))
     }
 
-    # Adding goes at the end. The file is opened in a block's region, which
-    # closes it at the block's fi, though main goes on.
+    ; Adding goes at the end. The file is opened in a block's region, which
+    ; closes it at the block's fi, though main goes on.
     block
         region adding
         list.open(FileMode.Append) at adding { failure e
@@ -54,7 +54,7 @@ task main()
     fi
     show(list.path, " holds ", list.size() { 0 }, " bytes")
 
-    # Read back line by line: `line()` gives none at the end of the file.
+    ; Read back line by line: `line()` gives none at the end of the file.
     list.open(FileMode.Read) at r { failure e
         show("could not read: ", said(e))
     }
@@ -67,7 +67,7 @@ task main()
         show("could not close: ", said(e))
     }
 
-    # Reading a file opened for writing is a mistake the plan B names.
+    ; Reading a file opened for writing is a mistake the plan B names.
     list.open(FileMode.Append) at r { failure e
         show("could not add: ", said(e))
     }

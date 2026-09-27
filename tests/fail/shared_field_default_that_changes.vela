@@ -1,4 +1,4 @@
-# error: 3:20: the value field 'x' falls back on is worked out before the program runs, and shared field 'Point.made' can change, so it can't be named there; one that never changes can
+; error: 3:20: the value field 'x' falls back on is worked out before the program runs, and shared field 'Point.made' can change, so it can't be named there; one that never changes can
 shape Point
     x: int = Point.made
     shared hold made: int = 0

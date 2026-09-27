@@ -1,4 +1,4 @@
-# error: 4:12: this tuple has 2 items, 't.0' to 't.1', so it has no item 2
+; error: 4:12: this tuple has 2 items, 't.0' to 't.1', so it has no item 2
 task main()
     bind t = (1, 2)
     show(t.2)

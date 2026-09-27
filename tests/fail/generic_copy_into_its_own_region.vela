@@ -1,4 +1,4 @@
-# error: 11:5: 'setCopy' copies a 'T' into region 'local' at 4:15, and 'local' is declared inside 'setCopy' and freed when it ends, so that copy is only the value itself; this use gives text@outer, which is in region 'outer'. So copy the value before the call, or write 'setCopy' for text@outer itself
+; error: 11:5: 'setCopy' copies a 'T' into region 'local' at 4:15, and 'local' is declared inside 'setCopy' and freed when it ends, so that copy is only the value itself; this use gives text@outer, which is in region 'outer'. So copy the value before the call, or write 'setCopy' for text@outer itself
 task setCopy<T>(xs: [T]@r, v: T)
     region local
     xs[0] = v.copy() at local

@@ -1,6 +1,6 @@
-# error: 5:15: this value is a pointer, ^[int; 2]@r; index the array it points to, as in 'p^[i]'
+; error: 5:15: this value is a pointer, ^[int#2]@r; index the array it points to, as in 'p^[i]'
 task main()
     region r
-    bind boxed = new [int; 2]([1, 2]) at r
+    bind boxed = new [int#2]([1, 2]) at r
     show(boxed[0])
 fi

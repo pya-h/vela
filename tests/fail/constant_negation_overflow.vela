@@ -1,4 +1,4 @@
-# error: 3:10: integer overflow: the result, 9223372036854775808, is more than an int holds (at most 9223372036854775807)
+; error: 3:10: integer overflow: the result, 9223372036854775808, is more than an int holds (at most 9223372036854775807)
 task main()
     show(-(-9223372036854775807 - 1))
 fi

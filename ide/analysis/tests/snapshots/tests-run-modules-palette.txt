@@ -1,5 +1,5 @@
-  1 | # Colors, for tests/run/modules.vela.
-    | comment:# Colors, for tests/run/modules.vela.
+  1 | ; Colors, for tests/run/modules.vela.
+    | comment:; Colors, for tests/run/modules.vela.
   3 | kind Color
     | keyword:kind  type:Color
   4 |     Red

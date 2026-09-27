@@ -1,4 +1,4 @@
-# error: 7:16: expected type int, got text
+; error: 7:16: expected type int, got text
 task twice(n: int) -> int
     <- n * 2
 fi

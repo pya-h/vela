@@ -1,4 +1,4 @@
-# error: 4:10: a 'loop' takes its condition directly, without 'when'
+; error: 4:10: a 'loop' takes its condition directly, without 'when'
 task main()
     hold k = 0
     loop when k < 3

@@ -1,7 +1,7 @@
-  1 | # A bare `<-` in a plan B, in a task with named results, sends the results
-    | comment:# A bare `<-` in a plan B, in a task with named results, sends the results
-  2 | # as they are set so far.
-    | comment:# as they are set so far.
+  1 | ; A bare `<-` in a plan B, in a task with named results, sends the results
+    | comment:; A bare `<-` in a plan B, in a task with named results, sends the results
+  2 | ; as they are set so far.
+    | comment:; as they are set so far.
   4 | task sum_until_none(a: maybe int, b: maybe int) -> total: int, seen: int
     | keyword:task  task:sum_until_none  punctuation:(  parameter:a  punctuation::  keyword:maybe  type-builtin:int  punctuation:,  parameter:b  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  variable:total  punctuation::  type-builtin:int  punctuation:,  variable:seen  punctuation::  type-builtin:int
   5 |     total, seen <- 0, 0

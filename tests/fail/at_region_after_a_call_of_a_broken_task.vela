@@ -1,4 +1,4 @@
-# error: 2:37: unknown type 'Missing'
+; error: 2:37: unknown type 'Missing'
 task label(n: int, into: region) -> Missing@into
     <- n
 fi

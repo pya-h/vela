@@ -1,4 +1,4 @@
-# error: 8:19: kind 'Suit' has no variant 'Clubs'
+; error: 8:19: kind 'Suit' has no variant 'Clubs'
 kind Suit
     Hearts
     Spades

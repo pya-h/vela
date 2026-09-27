@@ -1,4 +1,4 @@
-# error: 2:14: unknown type 'Pointt'
+; error: 2:14: unknown type 'Pointt'
 task area(p: Pointt) -> int
     <- 0
 fi

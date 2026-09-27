@@ -1,4 +1,4 @@
-# error: 7:10: task 'twice' takes no types, so '< … >' has nothing to name
+; error: 7:10: task 'twice' takes no types, so '< … >' has nothing to name
 task twice(x: int) -> int
     <- x * 2
 fi

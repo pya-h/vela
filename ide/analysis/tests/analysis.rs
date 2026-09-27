@@ -583,7 +583,7 @@ fn very_deep_types_are_analyzed_without_a_crash() {
             format!("task f(a: {}int)\n    show(1)\nfi\n", deep),
             format!("task main()\n    bind a: {}int = 1\n    show(a)\nfi\n", deep),
             format!("task main()\n    bind a: {}int = 1\n    show(a)\nfi\n", "maybe ".repeat(20_000)),
-            format!("task f(a: {}int{})\n    show(1)\nfi\n", "[".repeat(20_000), "; 2]".repeat(20_000)),
+            format!("task f(a: {}int{})\n    show(1)\nfi\n", "[".repeat(20_000), "#2]".repeat(20_000)),
             format!("task main()\n    bind a: {}int{}@r = 1\n    show(a)\nfi\n", "[".repeat(20_000), "]".repeat(20_000)),
         ] {
             let analysis = Analysis::new(&source);

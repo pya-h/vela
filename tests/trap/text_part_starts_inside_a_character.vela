@@ -1,5 +1,5 @@
-# trap: text 1..3 cuts through a character at byte 1 at 6:14 in task 'main'
-# "✓" takes three bytes, so a part can't start at its second.
+; trap: text 1..3 cuts through a character at byte 1 at 6:14 in task 'main'
+; "✓" takes three bytes, so a part can't start at its second.
 task main()
     bind mark = "✓!"
     hold start = 1

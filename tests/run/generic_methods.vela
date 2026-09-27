@@ -1,17 +1,17 @@
-# Methods of a shape that takes types. A method names no types of its own: the
-# ones the shape takes stand in it as they do in its fields, and one method is
-# made for each shape the compiler makes. A word the shape asks for holds inside
-# every method of it, so a body may rely on it without saying so again.
+; Methods of a shape that takes types. A method names no types of its own: the
+; ones the shape takes stand in it as they do in its fields, and one method is
+; made for each shape the compiler makes. A word the shape asks for holds inside
+; every method of it, so a body may rely on it without saying so again.
 
 shape Box<T: shown>
     value: T
 
-    # `T` is the type the value is given.
+    ; `T` is the type the value is given.
     valueOf() -> T
         <- .value
     fi
 
-    # The shape asks for `shown`, so the body may show a `T`.
+    ; The shape asks for `shown`, so the body may show a `T`.
     tell()
         show(.value)
     fi
@@ -20,14 +20,14 @@ shape Box<T: shown>
         .value = v
     fi
 
-    # A method of a shape given types may be called from another of its methods.
+    ; A method of a shape given types may be called from another of its methods.
     alters twice(v: T)
         .put(v)
         .tell()
     fi
 fi
 
-# A shape given types, holding another shape given types.
+; A shape given types, holding another shape given types.
 shape Pair<A: shown, B: shown>
     left: A
     right: B
@@ -47,7 +47,7 @@ shape Pair<A: shown, B: shown>
     fi
 fi
 
-# A shape that asks nothing of its type, so it may hold a shape given types.
+; A shape that asks nothing of its type, so it may hold a shape given types.
 shape Holder<T>
     item: T
 
@@ -60,8 +60,8 @@ shape Holder<T>
     fi
 fi
 
-# A shape that takes types and holds a pointer: its values live in a region, and
-# a method may name it.
+; A shape that takes types and holds a pointer: its values live in a region, and
+; a method may name it.
 shape Chain<T: fixed>
     head: T
     next: maybe ^Chain<T>
@@ -104,7 +104,7 @@ task main()
     t.put("again".copy() at r)
     t.tell()
 
-    # The text a method of a made shape sends is in the region the value is in.
+    ; The text a method of a made shape sends is in the region the value is in.
     bind held: text@r = t.valueOf()
     show(held)
 
@@ -114,7 +114,7 @@ task main()
     p.swapIn(2, "two".copy() at r)
     p.tellBoth()
 
-    # A shape given a shape given types, each with its own methods.
+    ; A shape given a shape given types, each with its own methods.
     hold deep: Holder<Box<int>> = Holder { item: Box { value: 3 } }
     show(deep.itemOf().valueOf())
     deep.item.put(5)
@@ -122,7 +122,7 @@ task main()
     deep.set(Box { value: 6 })
     deep.itemOf().tell()
 
-    # A method that changes nothing is called on a `bind` too.
+    ; A method that changes nothing is called on a `bind` too.
     bind fixed: Box<bool> = Box { value: true }
     show(fixed.valueOf())
 
@@ -133,7 +133,7 @@ task main()
     chain^.cut()
     show(lengthOf(chain))
 
-    # A slice of made shapes, each item a place that can change.
+    ; A slice of made shapes, each item a place that can change.
     hold boxes = new [Box<int>]() at r
     boxes.add(Box { value: 20 })
     boxes[0].put(21)

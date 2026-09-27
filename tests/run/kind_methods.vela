@@ -1,6 +1,6 @@
-# Methods of a kind. A kind has no fields, so its methods read the value itself
-# with `.this`, and take it apart with `match .this`; a method marked `alters`
-# moves the value to another variant with `.this = Other`.
+; Methods of a kind. A kind has no fields, so its methods read the value itself
+; with `.this`, and take it apart with `match .this`; a method marked `alters`
+; moves the value to another variant with `.this = Other`.
 
 kind Light
     Red
@@ -21,8 +21,8 @@ kind Light
         fi
     fi
 
-    # A method that takes no parameters and sends nothing: `()` alone is enough
-    # to tell it from a variant.
+    ; A method that takes no parameters and sends nothing: `()` alone is enough
+    ; to tell it from a variant.
     tell()
         show(.label())
     fi
@@ -38,12 +38,12 @@ kind Light
         fi
     fi
 
-    # A method taking parameters, below one that says what it sends.
+    ; A method taking parameters, below one that says what it sends.
     alters hold_for(seconds: int)
         .this = Amber(seconds)
     fi
 
-    # Only this file may call a method marked priv.
+    ; Only this file may call a method marked priv.
     priv waits() -> int
         match .this
             case Amber s
@@ -53,14 +53,14 @@ kind Light
         fi
     fi
 
-    # A method of a kind may name the value's own region too, though a kind of
-    # values that hold nothing in one never has a region to name.
+    ; A method of a kind may name the value's own region too, though a kind of
+    ; values that hold nothing in one never has a region to name.
     sameAs(other: Light) -> bool
         <- .waits() == other.waits()
     fi
 fi
 
-# A kind holding text lives in a region, so its methods may send that text.
+; A kind holding text lives in a region, so its methods may send that text.
 kind Label
     Empty
     Word(text: text)
@@ -95,10 +95,10 @@ task main()
     show(light.sameAs(Amber(2)))
     show(light.sameAs(Red))
 
-    # A method that changes nothing is called on a `bind` too.
+    ; A method that changes nothing is called on a `bind` too.
     bind fixed = Green
     show(fixed.label())
-    # And on a variant as it is written.
+    ; And on a variant as it is written.
     show(Light.Amber(1).label())
     show(Light.Red.label())
 
@@ -108,7 +108,7 @@ task main()
     word.clear()
     show(word.wordOf())
 
-    # Through a pointer into a region.
+    ; Through a pointer into a region.
     hold here = new Light(Red) at r
     here^.flip()
     here^.tell()

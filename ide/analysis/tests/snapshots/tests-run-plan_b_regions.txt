@@ -1,7 +1,7 @@
-  1 | # A plan B with a region of its own runs, and frees it, on every pass of a
-    | comment:# A plan B with a region of its own runs, and frees it, on every pass of a
-  2 | # loop condition, and not at all when `and` doesn't need its value.
-    | comment:# loop condition, and not at all when `and` doesn't need its value.
+  1 | ; A plan B with a region of its own runs, and frees it, on every pass of a
+    | comment:; A plan B with a region of its own runs, and frees it, on every pass of a
+  2 | ; loop condition, and not at all when `and` doesn't need its value.
+    | comment:; loop condition, and not at all when `and` doesn't need its value.
   4 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
   5 |     hold count = 0

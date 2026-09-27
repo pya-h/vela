@@ -1,4 +1,4 @@
-# error: 6:11: method 'File.open' takes the region it makes memory in last, as 'within'; name it after the call, as in '… at r' or '…@r', or in the parentheses
+; error: 6:11: method 'File.open' takes the region it makes memory in last, as 'within'; name it after the call, as in '… at r' or '…@r', or in the parentheses
 include std/files {File, FileMode}
 
 task main()

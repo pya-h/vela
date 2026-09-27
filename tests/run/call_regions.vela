@@ -1,9 +1,9 @@
-# A task or method that takes a region last can be given it after the call, as
-# `new T(v) at r` is: `f(x) at r`, or `f(x)@r`, as well as `f(x, r)`. `at r`
-# names the region of everything before it, so after a `+` chain it is the
-# chain's; `@r` belongs to the call right before it, and parentheses group a
-# part with its own. Where a call leaves the region out, the block's default
-# region is used, as for every other allocation.
+; A task or method that takes a region last can be given it after the call, as
+; `new T(v) at r` is: `f(x) at r`, or `f(x)@r`, as well as `f(x, r)`. `at r`
+; names the region of everything before it, so after a `+` chain it is the
+; chain's; `@r` belongs to the call right before it, and parentheses group a
+; part with its own. Where a call leaves the region out, the block's default
+; region is used, as for every other allocation.
 
 include call_regions/labels (label, filled)
 
@@ -38,42 +38,42 @@ task risky(into: region) -> int ~ Why
     <- fail why() at into
 fi
 
-# Two regions, the one its text is in and the one it makes the new text in.
+; Two regions, the one its text is in and the one it makes the new text in.
 task joined(t: text@a, a: region, into: region) -> text@into
     <- t + "!" at into
 fi
 
 task main()
     region r
-    # The three ways to give a task its region.
+    ; The three ways to give a task its region.
     show(label(1) at r, " ", label(2)@r, " ", label(3, r))
-    # A method, the same way.
+    ; A method, the same way.
     bind tag = Tag { name: "x" }
     show(tag.shown() at r, tag.shown()@r, tag.shown(r))
-    # After a chain, the region is the whole chain's; a part names its own with
-    # `@`, or in parentheses.
+    ; After a chain, the region is the whole chain's; a part names its own with
+    ; `@`, or in parentheses.
     show("a" + label(4)@r at r)
     show(("b" + label(5)@r) + (label(6) at r) at r)
-    # A plan B follows the region.
+    ; A plan B follows the region.
     show(checked("ok") at r { "fallback" }, " ", checked("") at r { "fallback" })
-    # `-`, `not`, and `fail` make no memory, so the region is the call's.
+    ; `-`, `not`, and `fail` make no memory, so the region is the call's.
     bind xs = new [int]([1, 2, 3]) at r
     show(-size(xs) at r)
     show(risky() at r { -1 })
-    # `@r` lets the value go on; parentheses do too.
+    ; `@r` lets the value go on; parentheses do too.
     show(label(7)@r.len, " ", (label(8) at r).len)
-    # A task that takes types, and one of another file.
+    ; A task that takes types, and one of another file.
     bind twos = filled("two") at r
     show(twos.len, " ", twos[1])
-    # `str`, `text(…)`, a copy and `scan` read the same way.
+    ; `str`, `text(…)`, a copy and `scan` read the same way.
     show(42.str() at r, " ", text(2.5)@r, " ", 7.str(r))
     bind line = scan("") at r { "none" }
     show(line.copy() at r, " ", line.copy()@r.len)
-    # With a default region, a call that names none uses it.
+    ; With a default region, a call that names none uses it.
     region d default
     show(label(9), " ", tag.shown())
-    # A region given in the parentheses where the task takes one is that one,
-    # and the region it takes last is still the default.
+    ; A region given in the parentheses where the task takes one is that one,
+    ; and the region it takes last is still the default.
     bind own = label(10) at r
     show(joined(own, r), " ", joined(own, r) at d)
 fi

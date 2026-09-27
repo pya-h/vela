@@ -1,5 +1,5 @@
-# Whole numbers written in another base, in code and in text `int(…)` reads:
-# `0x` hex, `0o` octal, `0b` binary, with underscores between digits in code.
+; Whole numbers written in another base, in code and in text `int(…)` reads:
+; `0x` hex, `0o` octal, `0b` binary, with underscores between digits in code.
 
 task read(written: text) -> int
     <- int(written) { -1 }
@@ -7,7 +7,7 @@ fi
 
 task why(read: int ~ ParseError) -> text
     bind problem = match read
-        case {n} = ParseError.NotANumber   # every read given here fails
+        case {n} = ParseError.NotANumber   ; every read given here fails
         case failure e = e
     fi
     <- match problem
@@ -20,18 +20,18 @@ task main()
     show(0x1F, " ", 0xff_ff, " ", 0xA == 10, " ", 0xABC == 0xabc)
     show(0o17, " ", 0o7_5_5, " ", 0b101, " ", 0b1010_0101)
     show(0x7fff_ffff_ffff_ffff, " ", -0x10, " ", 0x0 + 0o0 + 0b0)
-    # A number in another base is an int like any other.
+    ; A number in another base is an int like any other.
     bind mask = 0b1111
     show(mask * 0x10 + 0o1)
-    # Text is read the same way, with a sign before the base.
+    ; Text is read the same way, with a sign before the base.
     show(read("0x1F"), " ", read("0XaB"), " ", read("0xAb"), " ", read("-0b11"), " ", read("0o17"))
-    # A leading zero alone is only a digit.
+    ; A leading zero alone is only a digit.
     show(read("010"), " ", read("007"), " ", read("0"))
-    # The smallest and largest ints, and one past each.
+    ; The smallest and largest ints, and one past each.
     show(read("-0x8000000000000000"), " ", read("0x7fffffffffffffff"))
     show(read("0x8000000000000000"), " ", read("-0x8000000000000001"))
-    # No digits after the base, a digit the base hasn't, an upper-case base
-    # letter, and underscores are no number.
+    ; No digits after the base, a digit the base hasn't, an upper-case base
+    ; letter, and underscores are no number.
     show(read("0x"), " ", read("0b102"), " ", read("0o8"), " ", read("0X1"), " ", read("0x1_0"), " ", read("0x-1"))
     show(why(int("0xZ")), " ", why(int("0x1_0000_0000_0000_0000")), " ", why(int("0x10000000000000000")))
 fi

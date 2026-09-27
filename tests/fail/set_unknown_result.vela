@@ -1,4 +1,4 @@
-# error: 3:5: 'other' isn't a result of this task; its results are total
+; error: 3:5: 'other' isn't a result of this task; its results are total
 task score(hits: int) -> total: int
     other <- hits
     total <- hits

@@ -959,7 +959,7 @@ impl<'a> Classifier<'a> {
         let mut in_include = false;
         let mut in_include_names = false;
         let mut braces: Vec<Brace> = Vec::new();
-        // How many `[`s are open in a type, as in `[int; 4]`.
+        // How many `[`s are open in a type, as in `[int#4]`.
         let mut type_brackets = 0usize;
         // How many `(`s of tuple types are open, as in `(int, text)`.
         let mut type_parens = 0usize;
@@ -1106,13 +1106,13 @@ impl<'a> Classifier<'a> {
                         self.close_scope(at);
                     }
                 }
-                // `[int; 4]` and `[int]@r` in a type: the item's type, then its count.
+                // `[int#4]` and `[int]@r` in a type: the item's type, then its count.
                 Token::LBracket if was_type => {
                     self.push(range, TokenClass::Punctuation, None);
                     type_brackets += 1;
                     in_type = true;
                 }
-                Token::Semicolon => self.push(range, TokenClass::Punctuation, None),
+                Token::Hash => self.push(range, TokenClass::Punctuation, None),
                 Token::RBracket if type_brackets > 0 => {
                     self.push(range, TokenClass::Punctuation, None);
                     type_brackets -= 1;

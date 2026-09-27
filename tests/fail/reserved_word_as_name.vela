@@ -1,4 +1,4 @@
-# error: 3:10: expected a name, got 'in', which is a reserved word
+; error: 3:10: expected a name, got 'in', which is a reserved word
 task main()
     bind in = 1
     show(in)

@@ -1,4 +1,4 @@
-# trap: integer overflow at 4:18 in task 'main'
+; trap: integer overflow at 4:18 in task 'main'
 task main()
     hold m: maybe int = 9223372036854775807
     show(m { 0 } + 1)

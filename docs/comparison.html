@@ -537,7 +537,7 @@
         package manager yet.
       </p>
       <p>
-        Arrays are written as in Rust, <code>[int; 4]</code>, and are values copied whole, as C's arrays are inside a
+        Arrays are written <code>[int#4]</code>, the count after a <code>#</code> as in item #4 (Rust writes <code>[i32; 4]</code>), and are values copied whole, as C's arrays are inside a
         struct. A slice, <code>[int]@r</code>, is Go's slice or Rust's <code>&amp;[T]</code> as a pointer and a length,
         but like every Vela pointer it points into a region, so it can't outlive its memory. It grows and shrinks, as
         Go's with <code>append</code> or Rust's <code>Vec</code> do, with <code>xs.add(v)</code> and

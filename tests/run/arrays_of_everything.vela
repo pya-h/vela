@@ -1,5 +1,5 @@
-# Arrays returned from tasks and indexed directly, arrays of shapes, kinds,
-# pointers into a region, and text, and an array boxed in a region.
+; Arrays returned from tasks and indexed directly, arrays of shapes, kinds,
+; pointers into a region, and text, and an array boxed in a region.
 
 shape Point
     x: int
@@ -16,7 +16,7 @@ kind Light
     Dimmed(level: int)
 fi
 
-task make() -> [int; 3]
+task make() -> [int#3]
     <- [1, 2, 3]
 fi
 
@@ -43,15 +43,15 @@ task main()
     region r
     bind a = new Node(Node { value: 1, next: none }) at r
     bind b = new Node(Node { value: 2, next: a }) at r
-    hold ptrs: [^Node; 3]@r = [a, b, a]
+    hold ptrs: [^Node#3]@r = [a, b, a]
     ptrs[2] = b
     each p in ptrs
         show(p^.value)
     fi
-    bind boxed = new [^Node; 3](ptrs) at r
+    bind boxed = new [^Node#3](ptrs) at r
     show(boxed^[1]^.next { a }^.value)
 
-    hold words: [text; 2] = ["a", "b"]
+    hold words: [text#2] = ["a", "b"]
     words[1] = "c"
     show(words[1])
 fi

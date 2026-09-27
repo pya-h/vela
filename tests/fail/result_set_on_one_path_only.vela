@@ -1,4 +1,4 @@
-# error: 2:6: task 'score' can finish without setting 'total'
+; error: 2:6: task 'score' can finish without setting 'total'
 task score(hits: int) -> total: int
     when hits > 0
         total <- hits

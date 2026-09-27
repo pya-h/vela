@@ -1,4 +1,4 @@
-# error: 2:6: task 'f' can finish without sending a value
+; error: 2:6: task 'f' can finish without sending a value
 task f(n: int) -> int
     block
         when n > 0

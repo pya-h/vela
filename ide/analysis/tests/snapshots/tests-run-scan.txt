@@ -1,9 +1,9 @@
-  1 | # Reading input: `scan(prompt) at r` (or `scan(prompt)@r`) shows the prompt,
-    | comment:# Reading input: `scan(prompt) at r` (or `scan(prompt)@r`) shows the prompt,
-  2 | # then reads one line into region `r`, without its line break, and gives a
-    | comment:# then reads one line into region `r`, without its line break, and gives a
-  3 | # `maybe text@r`: none once the input has ended. Its input is `scan.in`.
-    | comment:# `maybe text@r`: none once the input has ended. Its input is `scan.in`.
+  1 | ; Reading input: `scan(prompt) at r` (or `scan(prompt)@r`) shows the prompt,
+    | comment:; Reading input: `scan(prompt) at r` (or `scan(prompt)@r`) shows the prompt,
+  2 | ; then reads one line into region `r`, without its line break, and gives a
+    | comment:; then reads one line into region `r`, without its line break, and gives a
+  3 | ; `maybe text@r`: none once the input has ended. Its input is `scan.in`.
+    | comment:; `maybe text@r`: none once the input has ended. Its input is `scan.in`.
   5 | shape Person
     | keyword:shape  type:Person
   6 |     name: text
@@ -12,8 +12,8 @@
     | field:age  punctuation::  type-builtin:int
   8 | fi
     | keyword:fi
- 10 | # Asks in the caller's region, so it takes the region.
-    | comment:# Asks in the caller's region, so it takes the region.
+ 10 | ; Asks in the caller's region, so it takes the region.
+    | comment:; Asks in the caller's region, so it takes the region.
  11 | task ask(r: region, question: text) -> text@r
     | keyword:task  task:ask  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:question  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  12 |     <- scan(question) at r { "no answer" }
@@ -40,8 +40,8 @@
     | keyword:bind  variable:person  punctuation::  type:Person  operator:@  region:r  operator:=  type:Person  punctuation:{  field:name  punctuation::  variable:name  punctuation:,  field:age  punctuation::  number:36  punctuation:}
  25 |     show(person.name == "Ada")
     | builtin-fn:show  punctuation:(  variable:person  punctuation:.  field:name  operator:==  string:"Ada"  punctuation:)
- 27 |     # A Windows line break, and a line of nothing.
-    | comment:# A Windows line break, and a line of nothing.
+ 27 |     ; A Windows line break, and a line of nothing.
+    | comment:; A Windows line break, and a line of nothing.
  28 |     bind windows = scan("")@r { "none" }
     | keyword:bind  variable:windows  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  operator:@  region:r  punctuation:{  string:"none"  punctuation:}
  29 |     show(windows == "crlf")
@@ -58,10 +58,10 @@
     | builtin-fn:show  punctuation:(  string:"ended too early"  punctuation:)
  35 |     fi
     | keyword:fi
- 37 |     # A line longer than any buffer, and one holding a zero byte, which is one
-    | comment:# A line longer than any buffer, and one holding a zero byte, which is one
- 38 |     # of its bytes.
-    | comment:# of its bytes.
+ 37 |     ; A line longer than any buffer, and one holding a zero byte, which is one
+    | comment:; A line longer than any buffer, and one holding a zero byte, which is one
+ 38 |     ; of its bytes.
+    | comment:; of its bytes.
  39 |     bind long = scan("") at r { "" }
     | keyword:bind  variable:long  operator:=  builtin-fn:scan  punctuation:(  string:""  punctuation:)  keyword:at  region:r  punctuation:{  string:""  punctuation:}
  40 |     show(long == "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789")
@@ -74,8 +74,8 @@
     | builtin-fn:show  punctuation:(  variable:zero  operator:==  string:"ab  escape:\0  string:cd"  punctuation:)
  44 |     show(zero.len)
     | builtin-fn:show  punctuation:(  variable:zero  punctuation:.  field:len  punctuation:)
- 46 |     # A prompt in a region, arguments read left to right, and lines dropped.
-    | comment:# A prompt in a region, arguments read left to right, and lines dropped.
+ 46 |     ; A prompt in a region, arguments read left to right, and lines dropped.
+    | comment:; A prompt in a region, arguments read left to right, and lines dropped.
  47 |     hold prompt = new [text]() at r
     | keyword:hold  variable:prompt  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  48 |     prompt.add("Two lines: ")
@@ -86,8 +86,8 @@
     | builtin-fn:scan  punctuation:(  string:"skipped "  punctuation:)  operator:@  region:r
  51 |     scan("")@r { "" }
     | builtin-fn:scan  punctuation:(  string:""  punctuation:)  operator:@  region:r  punctuation:{  string:""  punctuation:}
- 53 |     # Every line left, each in a region freed on its pass.
-    | comment:# Every line left, each in a region freed on its pass.
+ 53 |     ; Every line left, each in a region freed on its pass.
+    | comment:; Every line left, each in a region freed on its pass.
  54 |     hold count = 0
     | keyword:hold  variable:count  operator:=  number:0
  55 |     loop true

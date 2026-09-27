@@ -1,4 +1,4 @@
-# error: 4:23: the value 'new' makes lives in the region it allocates in, so its type names no region; remove '@r'
+; error: 4:23: the value 'new' makes lives in the region it allocates in, so its type names no region; remove '@r'
 task main()
     region r
     bind p = new text@r("a") at r

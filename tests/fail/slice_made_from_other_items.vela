@@ -1,5 +1,5 @@
-# error: 4:29: expected type int, got float
+; error: 4:29: expected type int, got float
 task main()
     region r
-    bind items = new [int]([1.5; 2]) at r
+    bind items = new [int]([1.5#2]) at r
 fi

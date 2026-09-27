@@ -1,15 +1,15 @@
-  1 | # A field marked `read` is set once and then changed only by the alters methods
-    | comment:# A field marked `read` is set once and then changed only by the alters methods
-  2 | # of its own shape, so what a shape keeps true of itself stays so wherever it
-    | comment:# of its own shape, so what a shape keeps true of itself stays so wherever it
-  3 | # is used, in the file that declares it as much as in another. A literal gives
-    | comment:# is used, in the file that declares it as much as in another. A literal gives
-  4 | # such a field exactly when the shape gives it no value to fall back on.
-    | comment:# such a field exactly when the shape gives it no value to fall back on.
+  1 | ; A field marked `read` is set once and then changed only by the alters methods
+    | comment:; A field marked `read` is set once and then changed only by the alters methods
+  2 | ; of its own shape, so what a shape keeps true of itself stays so wherever it
+    | comment:; of its own shape, so what a shape keeps true of itself stays so wherever it
+  3 | ; is used, in the file that declares it as much as in another. A literal gives
+    | comment:; is used, in the file that declares it as much as in another. A literal gives
+  4 | ; such a field exactly when the shape gives it no value to fall back on.
+    | comment:; such a field exactly when the shape gives it no value to fall back on.
   6 | include read_fields/meter {Meter, Mode}
     | keyword:include  module:read_fields  operator:/  module:meter  punctuation:{  type:Meter  punctuation:,  type:Mode  punctuation:}
-  8 | # A shape of this file keeps its `read` fields to its own alters methods too.
-    | comment:# A shape of this file keeps its `read` fields to its own alters methods too.
+  8 | ; A shape of this file keeps its `read` fields to its own alters methods too.
+    | comment:; A shape of this file keeps its `read` fields to its own alters methods too.
   9 | shape Tally
     | keyword:shape  type:Tally
  10 |     read total: int = 0
@@ -22,8 +22,8 @@
     | punctuation:.  field:total  operator:=  punctuation:.  field:total  operator:+  parameter:n
  15 |     fi
     | keyword:fi
- 17 |     # A method of the shape may assign the field of another of its values.
-    | comment:# A method of the shape may assign the field of another of its values.
+ 17 |     ; A method of the shape may assign the field of another of its values.
+    | comment:; A method of the shape may assign the field of another of its values.
  18 |     alters take(other: Tally)
     | keyword:alters  method:take  punctuation:(  parameter:other  punctuation::  type:Tally  punctuation:)
  19 |         .total = .total + other.total
@@ -36,8 +36,8 @@
     | punctuation:.  field:total  operator:=  number:0
  24 |     fi
     | keyword:fi
- 26 |     # One that alters nothing makes a changed copy through one that does.
-    | comment:# One that alters nothing makes a changed copy through one that does.
+ 26 |     ; One that alters nothing makes a changed copy through one that does.
+    | comment:; One that alters nothing makes a changed copy through one that does.
  27 |     cleared() -> Tally@this
     | method:cleared  punctuation:(  punctuation:)  operator:->  type:Tally  operator:@  region:this
  28 |         hold copy = .this
@@ -50,8 +50,8 @@
     | keyword:fi
  32 | fi
     | keyword:fi
- 34 | # A read field that may be missing is still given once, by the literal.
-    | comment:# A read field that may be missing is still given once, by the literal.
+ 34 | ; A read field that may be missing is still given once, by the literal.
+    | comment:; A read field that may be missing is still given once, by the literal.
  35 | shape Seat
     | keyword:shape  type:Seat
  36 |     read holder: maybe text
@@ -104,8 +104,8 @@
     | variable:other  punctuation:.  method:count  punctuation:(  number:4  punctuation:)
  64 |     tally.take(other)
     | variable:tally  punctuation:.  method:take  punctuation:(  variable:other  punctuation:)
- 65 |     # An ordinary field beside it is still assigned by anyone.
-    | comment:# An ordinary field beside it is still assigned by anyone.
+ 65 |     ; An ordinary field beside it is still assigned by anyone.
+    | comment:; An ordinary field beside it is still assigned by anyone.
  66 |     tally.note = "sum"
     | variable:tally  punctuation:.  field:note  operator:=  string:"sum"
  67 |     show(tally.note, " ", tally.total, " ", tally.cleared().total, " ", tally.total)
@@ -118,8 +118,8 @@
     | variable:seat  punctuation:.  method:claim  punctuation:(  string:"ana"  punctuation:)
  72 |     show(seat.holder { "free" })
     | builtin-fn:show  punctuation:(  variable:seat  punctuation:.  field:holder  punctuation:{  string:"free"  punctuation:}  punctuation:)
- 74 |     # A whole new value may take the place of one, as for any variable.
-    | comment:# A whole new value may take the place of one, as for any variable.
+ 74 |     ; A whole new value may take the place of one, as for any variable.
+    | comment:; A whole new value may take the place of one, as for any variable.
  75 |     meter = Meter { label: "fresh" }
     | variable:meter  operator:=  type:Meter  punctuation:{  field:label  punctuation::  string:"fresh"  punctuation:}
  76 |     show(meter.label, " ", meter.count)

@@ -1,4 +1,4 @@
-# error: 4:1: blocks close with 'fi', not 'end'
+; error: 4:1: blocks close with 'fi', not 'end'
 kind Light
     Red(level: int)
 end

@@ -1,6 +1,6 @@
-# error: 2:7: 'Grid' is too large: a value of it would take more than 1 TiB of memory
+; error: 2:7: 'Grid' is too large: a value of it would take more than 1 TiB of memory
 shape Grid
-    cells: [[float; 1000000]; 10000000]
+    cells: [[float#1000000]#10000000]
 fi
 
 task main()

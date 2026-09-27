@@ -1,5 +1,5 @@
-# A shape is a value: `hold b = a` and passing it to a task copy it, so
-# changing the copy leaves the original as it was.
+; A shape is a value: `hold b = a` and passing it to a task copy it, so
+; changing the copy leaves the original as it was.
 
 shape Point
     x: int

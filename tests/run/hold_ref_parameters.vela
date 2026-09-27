@@ -1,6 +1,6 @@
-# A parameter written `hold& x: T` is the caller's place: every change the task
-# makes to `x` is a change there. The call marks the place it gives with `&`,
-# so a reader sees at the call what may change.
+; A parameter written `hold& x: T` is the caller's place: every change the task
+; makes to `x` is a change there. The call marks the place it gives with `&`,
+; so a reader sees at the call what may change.
 
 include hold_ref_parameters/tally {Tally, double}
 
@@ -11,7 +11,7 @@ shape Counter
         .n = .n + 1
     fi
 
-    # A method takes one too, and gives its own fields.
+    ; A method takes one too, and gives its own fields.
     alters add_to(hold& total: int)
         total = total + .n
         double(&.n)
@@ -26,8 +26,8 @@ task swap(hold& a: int, hold& b: int)
     a, b = b, a
 fi
 
-# A shape: its fields change, its alters methods are called, and a field of it
-# is given on to another task.
+; A shape: its fields change, its alters methods are called, and a field of it
+; is given on to another task.
 task bump(hold& c: Counter)
     c.tick()
     c.n = c.n + 5
@@ -35,13 +35,13 @@ task bump(hold& c: Counter)
     c.n = c.n + 1
 fi
 
-# A slice grows where the caller keeps it.
+; A slice grows where the caller keeps it.
 task push_two(hold& xs: [int]@r, r: region)
     xs.add(1)
     xs.add(2)
 fi
 
-# A generic task, and a recursive one, which passes its own place on.
+; A generic task, and a recursive one, which passes its own place on.
 task put<T>(hold& place: T, value: T)
     place = value
 fi
@@ -54,7 +54,7 @@ task count_down(hold& n: int, hold& steps: int)
     fi
 fi
 
-# Text whose region the call settles, and a tuple given a new value.
+; Text whose region the call settles, and a tuple given a new value.
 task rename(hold& t: text@p, to: text@p)
     t = to
 fi
@@ -78,7 +78,7 @@ task main()
     c.add_to(&total)
     show(total, " ", c.n)
 
-    # Two different fields, and two different items of an array.
+    ; Two different fields, and two different items of an array.
     hold pair = Counter { n: 3 }
     hold other = Counter { n: 4 }
     swap(&pair.n, &other.n)

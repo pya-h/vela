@@ -1,4 +1,4 @@
-# error: 5:14: unknown task 'card'; module 'modules/library' has one: list it in 'include modules/library {…}'
+; error: 5:14: unknown task 'card'; module 'modules/library' has one: list it in 'include modules/library {…}'
 include modules/library {greet}
 
 task main()

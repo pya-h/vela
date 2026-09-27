@@ -1,6 +1,6 @@
-# `<`, `>`, `<=`, and `>=` order text by its bytes, which is the order of
-# Unicode for UTF-8: capitals before small letters, and text that starts other
-# text before it. Text of any regions compares, and text is `ordered`.
+; `<`, `>`, `<=`, and `>=` order text by its bytes, which is the order of
+; Unicode for UTF-8: capitals before small letters, and text that starts other
+; text before it. Text of any regions compares, and text is `ordered`.
 
 task biggest<T: ordered>(a: T, b: T) -> T
     when a > b

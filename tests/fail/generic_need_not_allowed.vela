@@ -1,4 +1,4 @@
-# error: 10:10: task 'biggest' takes a type that is 'ordered' as 'T', and bool has no order, so '<' can't compare it
+; error: 10:10: task 'biggest' takes a type that is 'ordered' as 'T', and bool has no order, so '<' can't compare it
 task biggest<T: ordered>(a: T, b: T) -> T
     when a > b
         <- a

@@ -1,4 +1,4 @@
-# A task and a method of another file take the caller's place as any do.
+; A task and a method of another file take the caller's place as any do.
 shape Tally
     count: int = 0
 

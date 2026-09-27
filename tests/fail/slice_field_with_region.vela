@@ -1,4 +1,4 @@
-# error: 3:18: a field lives in the region of the value holding it, so its type names no region; remove '@r'
+; error: 3:18: a field lives in the region of the value holding it, so its type names no region; remove '@r'
 shape Buffer
     items: [int]@r
 fi

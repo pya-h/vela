@@ -1,6 +1,6 @@
-# Patterns in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
-# binding drops a value, and `is` tests one pattern with its names visible
-# only in the block it guards.
+; Patterns in `case` and `is`: `_` matches what earlier cases didn't, `_` in a
+; binding drops a value, and `is` tests one pattern with its names visible
+; only in the block it guards.
 
 task half(n: int) -> maybe int
     when n % 2 == 0
@@ -73,7 +73,7 @@ task main()
         show("some light")
     fi
 
-    # A lone `_` matches anything, without reading the value.
+    ; A lone `_` matches anything, without reading the value.
     match half(3)
     case _
         show("any maybe")

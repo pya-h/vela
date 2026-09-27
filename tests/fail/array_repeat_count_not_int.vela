@@ -1,4 +1,4 @@
-# error: 3:21: expected type int, got float
+; error: 3:20: expected type int, got float
 task main()
-    bind days = [0; 2.5]
+    bind days = [0#2.5]
 fi

@@ -1,4 +1,4 @@
-# error: 4:20: '.width' reads the value a method is called on, and the value field 'height' falls back on is worked out before there is one, so it reads no other field
+; error: 4:20: '.width' reads the value a method is called on, and the value field 'height' falls back on is worked out before there is one, so it reads no other field
 shape Frame
     width: int = 3
     height: int = .width

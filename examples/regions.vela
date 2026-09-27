@@ -1,13 +1,13 @@
-# Regions: a tree built in a region, a scratch region for every loop pass,
-# and the one result that must survive copied into a longer-lived region.
+; Regions: a tree built in a region, a scratch region for every loop pass,
+; and the one result that must survive copied into a longer-lived region.
 
 kind Tree
     Leaf(value: int)
     Branch(left: ^Tree, right: ^Tree)
 fi
 
-# Allocates, so it takes the region to build in. Taken last, the region can be
-# named after a call, as it is after `new`: `build(depth, seed) at r`.
+; Allocates, so it takes the region to build in. Taken last, the region can be
+; named after a call, as it is after `new`: `build(depth, seed) at r`.
 task build(depth: int, seed: int, r: region) -> Tree@r
     when depth == 0
         <- Leaf(seed % 10)
@@ -17,7 +17,7 @@ task build(depth: int, seed: int, r: region) -> Tree@r
     <- Branch(left, right)
 fi
 
-# Only reads, so it names the region without taking it.
+; Only reads, so it names the region without taking it.
 task total(t: Tree@r) -> int
     <- match t
     case Leaf value = value
@@ -25,7 +25,7 @@ task total(t: Tree@r) -> int
     fi
 fi
 
-# Copies a tree, node by node, into another region.
+; Copies a tree, node by node, into another region.
 task copy(t: Tree@from, to: region) -> Tree@to
     match t
     case Leaf value
@@ -39,7 +39,7 @@ task main()
     region kept
     hold best: Tree@kept = Leaf(0)
     each round in 0..5
-        region pass                      # empty again, and freed, on every pass
+        region pass                      ; empty again, and freed, on every pass
         bind candidate = build(6, round) at pass
         show(total(candidate))
         when total(candidate) > total(best)

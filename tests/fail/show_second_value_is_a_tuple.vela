@@ -1,4 +1,4 @@
-# error: 4:19: show expects int, float, bool, text, or a shape or kind with its own 'str'; show its items one at a time, as in 'show(t.0)'
+; error: 4:19: show expects int, float, bool, text, or a shape or kind with its own 'str'; show its items one at a time, as in 'show(t.0)'
 task main()
     bind t = (1, 2)
     show("pair ", t)

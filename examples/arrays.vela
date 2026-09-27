@@ -1,8 +1,8 @@
-# Arrays and slices: a week of fixed readings in an array, and primes found
-# with a slice that grows as the program finds them.
+; Arrays and slices: a week of fixed readings in an array, and primes found
+; with a slice that grows as the program finds them.
 
-# The highest of the readings, and their average.
-task summary(readings: [float; 7]) -> high: float, average: float
+; The highest of the readings, and their average.
+task summary(readings: [float#7]) -> high: float, average: float
     high <- readings[0]
     hold sum = 0.0
     each reading in readings
@@ -11,12 +11,12 @@ task summary(readings: [float; 7]) -> high: float, average: float
             high <- reading
         fi
     fi
-    # `float(n)` turns the count into a float, so the average doesn't depend on
-    # the 7 being written twice.
+    ; `float(n)` turns the count into a float, so the average doesn't depend on
+    ; the 7 being written twice.
     average <- sum / float(readings.len)
 fi
 
-# Sorts the items of a slice in place: a slice writes into the memory it views.
+; Sorts the items of a slice in place: a slice writes into the memory it views.
 task sort(items: [int]@r)
     each i in 1..items.len
         hold j = i
@@ -27,11 +27,11 @@ task sort(items: [int]@r)
     fi
 fi
 
-# The primes below `limit`, by the sieve of Eratosthenes. The slice of primes
-# starts empty and grows as they are found.
+; The primes below `limit`, by the sieve of Eratosthenes. The slice of primes
+; starts empty and grows as they are found.
 task primes(r: region, limit: int) -> [int]@r
     region scratch
-    bind composite = new [bool]([false; limit]) at scratch
+    bind composite = new [bool]([false#limit]) at scratch
     hold found = new [int]() at r
     each n in 2..limit
         when not composite[n]
@@ -43,28 +43,28 @@ task primes(r: region, limit: int) -> [int]@r
             fi
         fi
     fi
-    # Only the primes outlive the scratch region: they were added in `r`.
+    ; Only the primes outlive the scratch region: they were added in `r`.
     <- found
 fi
 
 task main()
-    bind week: [float; 7] = [21.5, 23.0, 19.5, 24.5, 22.0, 18.0, 20.5]
+    bind week: [float#7] = [21.5, 23.0, 19.5, 24.5, 22.0, 18.0, 20.5]
     bind high, average = summary(week)
-    show(high)                               # 24.5
-    show(average)                            # 21.2857
+    show(high)                               ; 24.5
+    show(average)                            ; 21.2857
 
     region r
     bind scores = new [int]([72, 90, 65, 88, 79]) at r
     sort(scores)
-    show(scores[0])                          # 65
-    show(scores[scores.len - 1])             # 90
-    # A part of a slice views the same memory, without copying.
+    show(scores[0])                          ; 65
+    show(scores[scores.len - 1])             ; 90
+    ; A part of a slice views the same memory, without copying.
     bind top = scores[3..5]
-    show(top[0] + top[1])                    # 178
+    show(top[0] + top[1])                    ; 178
 
     hold small = primes(r, 30)
-    show(small.len)                          # 10
-    show(small.del())                        # 29, taken out
-    small.add(0, 1)                          # 1 goes first
-    show(small[0] + small.len)               # 11
+    show(small.len)                          ; 10
+    show(small.del())                        ; 29, taken out
+    small.add(0, 1)                          ; 1 goes first
+    show(small[0] + small.len)               ; 11
 fi

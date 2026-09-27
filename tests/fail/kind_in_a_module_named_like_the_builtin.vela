@@ -1,4 +1,4 @@
-# error: modules/builtin_kind_name.vela:3:6: 'InputError' is a builtin kind and cannot be redefined
+; error: modules/builtin_kind_name.vela:3:6: 'InputError' is a builtin kind and cannot be redefined
 include modules/builtin_kind_name
 
 task main()

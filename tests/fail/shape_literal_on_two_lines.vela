@@ -1,4 +1,4 @@
-# error: 9:9: a shape literal is written on one line, starting after its '{', as in 'Point { x: 1 }'
+; error: 9:9: a shape literal is written on one line, starting after its '{', as in 'Point { x: 1 }'
 shape Point
     x: int
     y: int

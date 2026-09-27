@@ -1,15 +1,15 @@
-  1 | # Regions: memory `new` allocates lives until the block that declared its
-    | comment:# Regions: memory `new` allocates lives until the block that declared its
-  2 | # region closes, on every way out of that block. Tasks take a region to
-    | comment:# region closes, on every way out of that block. Tasks take a region to
-  3 | # allocate in (`r: region`), or only name one in their types (`@r`) to read and
-    | comment:# allocate in (`r: region`), or only name one in their types (`@r`) to read and
-  4 | # link pointers there. A value built without pointers takes the region of the
-    | comment:# link pointers there. A value built without pointers takes the region of the
-  5 | # place it goes. (tests/runtime.rs also runs this under sanitizers, which fail
-    | comment:# place it goes. (tests/runtime.rs also runs this under sanitizers, which fail
-  6 | # on a leak or a use after free.)
-    | comment:# on a leak or a use after free.)
+  1 | ; Regions: memory `new` allocates lives until the block that declared its
+    | comment:; Regions: memory `new` allocates lives until the block that declared its
+  2 | ; region closes, on every way out of that block. Tasks take a region to
+    | comment:; region closes, on every way out of that block. Tasks take a region to
+  3 | ; allocate in (`r: region`), or only name one in their types (`@r`) to read and
+    | comment:; allocate in (`r: region`), or only name one in their types (`@r`) to read and
+  4 | ; link pointers there. A value built without pointers takes the region of the
+    | comment:; link pointers there. A value built without pointers takes the region of the
+  5 | ; place it goes. (tests/runtime.rs also runs this under sanitizers, which fail
+    | comment:; place it goes. (tests/runtime.rs also runs this under sanitizers, which fail
+  6 | ; on a leak or a use after free.)
+    | comment:; on a leak or a use after free.)
   8 | shape Node
     | keyword:shape  type:Node
   9 |     value: int
@@ -34,16 +34,16 @@
     | field:second  punctuation::  operator:^  type-builtin:int
  21 | fi
     | keyword:fi
- 23 | # Allocates, so it takes the region.
-    | comment:# Allocates, so it takes the region.
+ 23 | ; Allocates, so it takes the region.
+    | comment:; Allocates, so it takes the region.
  24 | task push(r: region, list: maybe ^Node@r, value: int) -> ^Node@r
     | keyword:task  task:push  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:,  parameter:value  punctuation::  type-builtin:int  punctuation:)  operator:->  operator:^  type:Node  operator:@  region:r
  25 |     <- new Node(Node { value: value, next: list }) at r
     | keyword:<-  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  parameter:value  punctuation:,  field:next  punctuation::  parameter:list  punctuation:}  punctuation:)  keyword:at  region:r
  26 | fi
     | keyword:fi
- 28 | # Only reads, so it names the region without taking it.
-    | comment:# Only reads, so it names the region without taking it.
+ 28 | ; Only reads, so it names the region without taking it.
+    | comment:; Only reads, so it names the region without taking it.
  29 | task sum(list: maybe ^Node@r) -> int
     | keyword:task  task:sum  punctuation:(  parameter:list  punctuation::  keyword:maybe  operator:^  type:Node  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
  30 |     hold total = 0
@@ -62,8 +62,8 @@
     | keyword:<-  variable:total
  37 | fi
     | keyword:fi
- 39 | # Recursion builds a tree in the caller's region.
-    | comment:# Recursion builds a tree in the caller's region.
+ 39 | ; Recursion builds a tree in the caller's region.
+    | comment:; Recursion builds a tree in the caller's region.
  40 | task build(r: region, depth: int) -> Tree@r
     | keyword:task  task:build  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:depth  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Tree  operator:@  region:r
  41 |     when depth == 0
@@ -92,8 +92,8 @@
     | keyword:fi
  54 | fi
     | keyword:fi
- 56 | # A region passed on under another name.
-    | comment:# A region passed on under another name.
+ 56 | ; A region passed on under another name.
+    | comment:; A region passed on under another name.
  57 | task twice(outer: region, value: int) -> Pair@outer
     | keyword:task  task:twice  punctuation:(  region:outer  punctuation::  keyword:region  punctuation:,  parameter:value  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Pair  operator:@  region:outer
  58 |     <- Pair { first: new int(value) at outer, second: make(outer, value * 2) }
@@ -106,8 +106,8 @@
     | keyword:<-  keyword:new  type-builtin:int  punctuation:(  parameter:value  punctuation:)  keyword:at  region:inner
  63 | fi
     | keyword:fi
- 65 | # A `<-` from inside nested blocks frees the task's regions first.
-    | comment:# A `<-` from inside nested blocks frees the task's regions first.
+ 65 | ; A `<-` from inside nested blocks frees the task's regions first.
+    | comment:; A `<-` from inside nested blocks frees the task's regions first.
  66 | task early(n: int) -> int
     | keyword:task  task:early  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  67 |     region outer
@@ -186,8 +186,8 @@
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  variable:list  punctuation:)  punctuation:)
 108 |     show(sum(none))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  keyword:none  punctuation:)  punctuation:)
-110 |     # A region inside a loop is new, and freed, on every pass.
-    | comment:# A region inside a loop is new, and freed, on every pass.
+110 |     ; A region inside a loop is new, and freed, on every pass.
+    | comment:; A region inside a loop is new, and freed, on every pass.
 111 |     hold total = 0
     | keyword:hold  variable:total  operator:=  number:0
 112 |     each round in 0..1000
@@ -220,8 +220,8 @@
     | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:first  operator:^  operator:+  variable:pair  punctuation:.  field:second  operator:^  punctuation:)
 129 |     show(early(40))
     | builtin-fn:show  punctuation:(  task:early  punctuation:(  number:40  punctuation:)  punctuation:)
-131 |     # A plan B's block can use its own region, and give a value from it.
-    | comment:# A plan B's block can use its own region, and give a value from it.
+131 |     ; A plan B's block can use its own region, and give a value from it.
+    | comment:; A plan B's block can use its own region, and give a value from it.
 132 |     bind missing: maybe int = none
     | keyword:bind  variable:missing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
 133 |     bind rescued = missing {
@@ -268,10 +268,10 @@
     | builtin-fn:show  punctuation:(  variable:e  punctuation:)
 155 |     }
     | punctuation:}
-157 |     # A literal without pointers takes the region of the binding's type, and
-    | comment:# A literal without pointers takes the region of the binding's type, and
-158 |     # can then hold pointers into it.
-    | comment:# can then hold pointers into it.
+157 |     ; A literal without pointers takes the region of the binding's type, and
+    | comment:; A literal without pointers takes the region of the binding's type, and
+158 |     ; can then hold pointers into it.
+    | comment:; can then hold pointers into it.
 159 |     hold head: Node@lists = Node { value: 1, next: none }
     | keyword:hold  variable:head  punctuation::  type:Node  operator:@  region:lists  operator:=  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}
 160 |     head.next = push(lists, none, 2)
@@ -286,18 +286,18 @@
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:first  operator:^  punctuation:)
 165 |     fi
     | keyword:fi
-167 |     # `first(none)` holds no pointer, so its plan B takes the fallback's region.
-    | comment:# `first(none)` holds no pointer, so its plan B takes the fallback's region.
+167 |     ; `first(none)` holds no pointer, so its plan B takes the fallback's region.
+    | comment:; `first(none)` holds no pointer, so its plan B takes the fallback's region.
 168 |     bind fallback: ^Node@lists = first(none) { good }
     | keyword:bind  variable:fallback  punctuation::  operator:^  type:Node  operator:@  region:lists  operator:=  task:first  punctuation:(  keyword:none  punctuation:)  punctuation:{  variable:good  punctuation:}
 169 |     show(fallback^.value)
     | builtin-fn:show  punctuation:(  variable:fallback  operator:^  punctuation:.  field:value  punctuation:)
-170 |     # Pointers into different regions compare, and are never equal.
-    | comment:# Pointers into different regions compare, and are never equal.
+170 |     ; Pointers into different regions compare, and are never equal.
+    | comment:; Pointers into different regions compare, and are never equal.
 171 |     show(good == new Node(Node { value: 7, next: none }) at trees)
     | builtin-fn:show  punctuation:(  variable:good  operator:==  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:7  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:trees  punctuation:)
-173 |     # A pointer to a pointer lives in one region too.
-    | comment:# A pointer to a pointer lives in one region too.
+173 |     ; A pointer to a pointer lives in one region too.
+    | comment:; A pointer to a pointer lives in one region too.
 174 |     bind inner = new int(8) at trees
     | keyword:bind  variable:inner  operator:=  keyword:new  type-builtin:int  punctuation:(  number:8  punctuation:)  keyword:at  region:trees
 175 |     bind outer = new ^int(inner) at trees

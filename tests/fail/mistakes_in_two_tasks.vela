@@ -1,5 +1,5 @@
-# error: 4:10: arithmetic requires numeric operands
-# error: 8:10: unknown variable 'gone'
+; error: 4:10: arithmetic requires numeric operands
+; error: 8:10: unknown variable 'gone'
 task twice(n: int) -> int
     <- n * "2"
 fi

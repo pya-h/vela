@@ -1,4 +1,4 @@
-# error: 7:12: a range can only be used in 'each' or to take part of an array or slice, as in 'xs[1..3]'
+; error: 7:12: a range can only be used in 'each' or to take part of an array or slice, as in 'xs[1..3]'
 task count(n: int)
     show(n)
 fi

@@ -1,4 +1,4 @@
-# error: 5:10: show expects int, float, bool, text, or a shape or kind with its own 'str'
+; error: 5:10: show expects int, float, bool, text, or a shape or kind with its own 'str'
 task main()
     region r
     bind p: maybe ^int@r = none

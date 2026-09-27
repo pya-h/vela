@@ -46,7 +46,7 @@ function code(line: string): string {
   let out = "";
   for (let i = 0; i < line.length; i++) {
     const char = line[i];
-    if (char === "#") break;
+    if (char === ";") break;
     if (char === '"') {
       i = afterText(line, i) - 1;
       out += '""';

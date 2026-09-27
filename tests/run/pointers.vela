@@ -1,6 +1,6 @@
-# Pointers live in regions: `new` allocates in one (written `new T(v) at r`
-# or `new@r T(v)`), `^` reads and writes through the pointer, and the region
-# frees everything in it when its block closes.
+; Pointers live in regions: `new` allocates in one (written `new T(v) at r`
+; or `new@r T(v)`), `^` reads and writes through the pointer, and the region
+; frees everything in it when its block closes.
 
 shape Point
     x: int

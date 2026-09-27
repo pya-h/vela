@@ -1,4 +1,4 @@
-# error: 10:13: expected an error of type Problem, got Problem@r; this value holds text in region 'r', and a 'Problem' here holds text that lasts as long as the program; to keep text of a region, name it, as in 'Problem@r'
+; error: 10:13: expected an error of type Problem, got Problem@r; this value holds text in region 'r', and a 'Problem' here holds text that lasts as long as the program; to keep text of a region, name it, as in 'Problem@r'
 kind Problem
     Bad(line: text)
 fi

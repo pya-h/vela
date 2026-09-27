@@ -1,4 +1,4 @@
-# error: 5:17: a maybe int has no error to name; 'failure e' names the error of a 'T ~ E'
+; error: 5:17: a maybe int has no error to name; 'failure e' names the error of a 'T ~ E'
 task main()
     bind m: maybe int = none
     show(m {

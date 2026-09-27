@@ -107,10 +107,10 @@ describe("editing structure", () => {
     expect(foldable(state, line(3).from, line(3).to)).toBeNull();
   });
 
-  it("toggles # comments", () => {
+  it("toggles ; comments", () => {
     const view = fakeView(stateFor("task main()\n    show(1)|\nfi"));
     toggleComment(view);
-    expect(view.state.doc.line(2).text).toBe("    # show(1)");
+    expect(view.state.doc.line(2).text).toBe("    ; show(1)");
     toggleComment(view);
     expect(view.state.doc.line(2).text).toBe("    show(1)");
   });
@@ -128,7 +128,7 @@ describe("analysis", () => {
     const first = analyzer.file(state.doc);
     expect(analyzer.file(state.doc)).toBe(first);
     expect(first.tokens.some((t) => t.class === "builtin-fn")).toBe(true);
-    const changed = state.update({ changes: { from: 0, insert: "# hi\n" } }).state;
+    const changed = state.update({ changes: { from: 0, insert: "; hi\n" } }).state;
     expect(analyzer.file(changed.doc)).not.toBe(first);
   });
 
@@ -148,7 +148,7 @@ describe("completion", () => {
   it("keeps the same completion source across edits", () => {
     // CodeMirror drops results from a source it doesn't recognize as the same.
     const state = stateFor(PROGRAM);
-    const next = state.update({ changes: { from: 0, insert: "# x\n" } }).state;
+    const next = state.update({ changes: { from: 0, insert: "; x\n" } }).state;
     expect(next.languageDataAt("autocomplete", 5)[0]).toBe(state.languageDataAt("autocomplete", 5)[0]);
   });
 

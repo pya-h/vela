@@ -1,7 +1,7 @@
-  1 | # A shape's shared field is one value for the whole program, never part of a
-    | comment:# A shape's shared field is one value for the whole program, never part of a
-  2 | # value: it is read and changed through the shape's name, `Point.made`.
-    | comment:# value: it is read and changed through the shape's name, `Point.made`.
+  1 | ; A shape's shared field is one value for the whole program, never part of a
+    | comment:; A shape's shared field is one value for the whole program, never part of a
+  2 | ; value: it is read and changed through the shape's name, `Point.made`.
+    | comment:; value: it is read and changed through the shape's name, `Point.made`.
   4 | include shared_fields/tally
     | keyword:include  module:shared_fields  operator:/  module:tally
   6 | kind Mood
@@ -30,18 +30,18 @@
     | keyword:shape  type:Point
  21 |     x: int
     | field:x  punctuation::  type-builtin:int
- 22 |     # A field may fall back on a shared field that never changes.
-    | comment:# A field may fall back on a shared field that never changes.
+ 22 |     ; A field may fall back on a shared field that never changes.
+    | comment:; A field may fall back on a shared field that never changes.
  23 |     y: int = Point.start
     | field:y  punctuation::  type-builtin:int  operator:=  type:Point  punctuation:.  field:start
  24 |     shared start: int = 7
     | keyword:shared  field:start  punctuation::  type-builtin:int  operator:=  number:7
  25 |     shared name: text = "point"
     | keyword:shared  field:name  punctuation::  type-builtin:text  operator:=  string:"point"
- 26 |     # A shared field's first value may name the shared fields above it.
-    | comment:# A shared field's first value may name the shared fields above it.
- 27 |     shared corners: [int; 3] = [Point.start, 2, 3]
-    | keyword:shared  field:corners  punctuation::  punctuation:[  type-builtin:int  punctuation:;  number:3  punctuation:]  operator:=  punctuation:[  type:Point  punctuation:.  field:start  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 26 |     ; A shared field's first value may name the shared fields above it.
+    | comment:; A shared field's first value may name the shared fields above it.
+ 27 |     shared corners: [int#3] = [Point.start, 2, 3]
+    | keyword:shared  field:corners  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  operator:=  punctuation:[  type:Point  punctuation:.  field:start  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
  28 |     shared pair: (int, text) = (1, "one")
     | keyword:shared  field:pair  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:text  punctuation:)  operator:=  punctuation:(  number:1  punctuation:,  string:"one"  punctuation:)
  29 |     shared mood: Mood = Mood.Loud
@@ -54,8 +54,8 @@
     | keyword:shared  keyword:read  field:seen  punctuation::  type-builtin:int  operator:=  number:0
  33 |     shared hold origin: Spot = Spot { x: 0, y: 0 }
     | keyword:shared  keyword:hold  field:origin  punctuation::  type:Spot  operator:=  type:Spot  punctuation:{  field:x  punctuation::  number:0  punctuation:,  field:y  punctuation::  number:0  punctuation:}
- 34 |     shared hold big: [int; 20] = [0; 20]
-    | keyword:shared  keyword:hold  field:big  punctuation::  punctuation:[  type-builtin:int  punctuation:;  number:20  punctuation:]  operator:=  punctuation:[  number:0  punctuation:;  number:20  punctuation:]
+ 34 |     shared hold big: [int#20] = [0#20]
+    | keyword:shared  keyword:hold  field:big  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:20  punctuation:]  operator:=  punctuation:[  number:0  punctuation:#  number:20  punctuation:]
  36 |     alters look()
     | keyword:alters  method:look  punctuation:(  punctuation:)
  37 |         Point.seen = Point.seen + 1
@@ -66,8 +66,8 @@
     | keyword:fi
  40 | fi
     | keyword:fi
- 42 | # Another shape's first value may name these too.
-    | comment:# Another shape's first value may name these too.
+ 42 | ; Another shape's first value may name these too.
+    | comment:; Another shape's first value may name these too.
  43 | shape Grid
     | keyword:shape  type:Grid
  44 |     shared hold side: int = Point.start
@@ -80,12 +80,12 @@
     | parameter:n  operator:=  parameter:n  operator:+  number:1
  49 | fi
     | keyword:fi
- 51 | # Point.big is large, so it is given by a hidden pointer where it is a place that
-    | comment:# Point.big is large, so it is given by a hidden pointer where it is a place that
- 52 | # only the task changes; a shared field is not, so the task gets a copy.
-    | comment:# only the task changes; a shared field is not, so the task gets a copy.
- 53 | task first_after_change(values: [int; 20]) -> int
-    | keyword:task  task:first_after_change  punctuation:(  parameter:values  punctuation::  punctuation:[  type-builtin:int  punctuation:;  number:20  punctuation:]  punctuation:)  operator:->  type-builtin:int
+ 51 | ; Point.big is large, so it is given by a hidden pointer where it is a place that
+    | comment:; Point.big is large, so it is given by a hidden pointer where it is a place that
+ 52 | ; only the task changes; a shared field is not, so the task gets a copy.
+    | comment:; only the task changes; a shared field is not, so the task gets a copy.
+ 53 | task first_after_change(values: [int#20]) -> int
+    | keyword:task  task:first_after_change  punctuation:(  parameter:values  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:20  punctuation:]  punctuation:)  operator:->  type-builtin:int
  54 |     Point.big[0] = 99
     | type:Point  punctuation:.  field:big  punctuation:[  number:0  punctuation:]  operator:=  number:99
  55 |     <- values[0]
@@ -104,8 +104,8 @@
     | builtin-fn:show  punctuation:(  string:"loud"  punctuation:)
  63 |     fi
     | keyword:fi
- 65 |     # Changed through its name, given to a hold& parameter, and through a reference.
-    | comment:# Changed through its name, given to a hold& parameter, and through a reference.
+ 65 |     ; Changed through its name, given to a hold& parameter, and through a reference.
+    | comment:; Changed through its name, given to a hold& parameter, and through a reference.
  66 |     Point.made = Point.made + 1
     | type:Point  punctuation:.  field:made  operator:=  type:Point  punctuation:.  field:made  operator:+  number:1
  67 |     bump(&Point.made)
@@ -118,8 +118,8 @@
     | builtin-fn:show  punctuation:(  type:Point  punctuation:.  field:made  punctuation:)
  71 |     bind& seen_now = &Point.seen
     | keyword:bind  keyword:&  variable:seen_now  operator:=  operator:&  type:Point  punctuation:.  field:seen
- 73 |     # A method changes a read-only shared field of its own shape.
-    | comment:# A method changes a read-only shared field of its own shape.
+ 73 |     ; A method changes a read-only shared field of its own shape.
+    | comment:; A method changes a read-only shared field of its own shape.
  74 |     hold p = Point { x: 1 }
     | keyword:hold  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:}
  75 |     p.look()
@@ -128,16 +128,16 @@
     | variable:p  punctuation:.  method:look  punctuation:(  punctuation:)
  77 |     show(p.x, " ", p.y, " ", Point.seen, " ", seen_now)
     | builtin-fn:show  punctuation:(  variable:p  punctuation:.  field:x  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  field:y  punctuation:,  string:" "  punctuation:,  type:Point  punctuation:.  field:seen  punctuation:,  string:" "  punctuation:,  variable:seen_now  punctuation:)
- 79 |     # A shared value that is a shape: its fields and its methods.
-    | comment:# A shared value that is a shape: its fields and its methods.
+ 79 |     ; A shared value that is a shape: its fields and its methods.
+    | comment:; A shared value that is a shape: its fields and its methods.
  80 |     Point.origin.move(5)
     | type:Point  punctuation:.  field:origin  punctuation:.  method:move  punctuation:(  number:5  punctuation:)
  81 |     Point.origin.y = 2
     | type:Point  punctuation:.  field:origin  punctuation:.  field:y  operator:=  number:2
  82 |     show(Point.origin.x, Point.origin.y)
     | builtin-fn:show  punctuation:(  type:Point  punctuation:.  field:origin  punctuation:.  field:x  punctuation:,  type:Point  punctuation:.  field:origin  punctuation:.  field:y  punctuation:)
- 84 |     # An item of a shared array, and a copy of it given to a task.
-    | comment:# An item of a shared array, and a copy of it given to a task.
+ 84 |     ; An item of a shared array, and a copy of it given to a task.
+    | comment:; An item of a shared array, and a copy of it given to a task.
  85 |     Point.big[0] = 1
     | type:Point  punctuation:.  field:big  punctuation:[  number:0  punctuation:]  operator:=  number:1
  86 |     show(first_after_change(Point.big), " ", Point.big[0])
@@ -146,8 +146,8 @@
     | type:Grid  punctuation:.  field:side  operator:=  type:Grid  punctuation:.  field:side  operator:+  number:1
  89 |     show(Grid.side)
     | builtin-fn:show  punctuation:(  type:Grid  punctuation:.  field:side  punctuation:)
- 91 |     # In loops and conditions, read again each round.
-    | comment:# In loops and conditions, read again each round.
+ 91 |     ; In loops and conditions, read again each round.
+    | comment:; In loops and conditions, read again each round.
  92 |     loop Point.made < 23
     | keyword:loop  type:Point  punctuation:.  field:made  operator:<  number:23
  93 |         Point.made = Point.made + 1
@@ -160,8 +160,8 @@
     | builtin-fn:show  punctuation:(  string:"made "  punctuation:,  type:Point  punctuation:.  field:made  punctuation:)
  97 |     fi
     | keyword:fi
- 99 |     # Another file's shared fields, read and changed as that file allows.
-    | comment:# Another file's shared fields, read and changed as that file allows.
+ 99 |     ; Another file's shared fields, read and changed as that file allows.
+    | comment:; Another file's shared fields, read and changed as that file allows.
 100 |     hold t = tally.Tally {}
     | keyword:hold  variable:t  operator:=  module:tally  punctuation:.  type:Tally  punctuation:{  punctuation:}
 101 |     t.tick()

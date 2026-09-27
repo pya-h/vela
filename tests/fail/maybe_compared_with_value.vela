@@ -1,4 +1,4 @@
-# error: 4:12: a maybe int can only be compared with none; extract its value first, as in 'x { … }'
+; error: 4:12: a maybe int can only be compared with none; extract its value first, as in 'x { … }'
 task main()
     bind m: maybe int = 1
     show(m == 1)

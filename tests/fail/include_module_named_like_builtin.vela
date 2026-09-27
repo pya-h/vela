@@ -1,4 +1,4 @@
-# error: 2:17: a module can't be named 'int', which is a builtin type
+; error: 2:17: a module can't be named 'int', which is a builtin type
 include modules/int
 
 task main()

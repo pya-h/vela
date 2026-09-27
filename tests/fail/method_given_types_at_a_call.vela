@@ -1,4 +1,4 @@
-# error: 12:17: a method takes no types of its own yet, and a variant takes none at all, so 'twice' is given none; call it as 'twice(…)'
+; error: 12:17: a method takes no types of its own yet, and a variant takes none at all, so 'twice' is given none; call it as 'twice(…)'
 shape Point
     x: int
 

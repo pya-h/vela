@@ -1,11 +1,11 @@
-  1 | # Turning a value into text: `x.str() at r`, `x.str()@r`, `x.str(r)`, and
-    | comment:# Turning a value into text: `x.str() at r`, `x.str()@r`, `x.str(r)`, and
-  2 | # `text(x) at r` are the same. Numbers, bools, and text have it built in, and
-    | comment:# `text(x) at r` are the same. Numbers, bools, and text have it built in, and
-  3 | # write a value as `show` does; a shape or kind gives its own with a method
-    | comment:# write a value as `show` does; a shape or kind gives its own with a method
-  4 | # `str(r: region) -> text@r`, which all four forms call.
-    | comment:# `str(r: region) -> text@r`, which all four forms call.
+  1 | ; Turning a value into text: `x.str() at r`, `x.str()@r`, `x.str(r)`, and
+    | comment:; Turning a value into text: `x.str() at r`, `x.str()@r`, `x.str(r)`, and
+  2 | ; `text(x) at r` are the same. Numbers, bools, and text have it built in, and
+    | comment:; `text(x) at r` are the same. Numbers, bools, and text have it built in, and
+  3 | ; write a value as `show` does; a shape or kind gives its own with a method
+    | comment:; write a value as `show` does; a shape or kind gives its own with a method
+  4 | ; `str(r: region) -> text@r`, which all four forms call.
+    | comment:; `str(r: region) -> text@r`, which all four forms call.
   6 | shape Point
     | keyword:shape  type:Point
   7 |     x: int
@@ -44,8 +44,8 @@
     | keyword:fi
  25 | fi
     | keyword:fi
- 27 | # A type that is `shown` is a number, a bool, or text, which all have `str`.
-    | comment:# A type that is `shown` is a number, a bool, or text, which all have `str`.
+ 27 | ; A type that is `shown` is a number, a bool, or text, which all have `str`.
+    | comment:; A type that is `shown` is a number, a bool, or text, which all have `str`.
  28 | task labelled<T: shown>(label: text, value: T, r: region) -> text@r
     | keyword:task  task:labelled  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:value  punctuation::  type:T  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  29 |     <- label + ": " + value.str()@r at r
@@ -104,8 +104,8 @@
     | builtin-fn:show  punctuation:(  task:labelled  punctuation:(  string:"ok"  punctuation:,  keyword:true  punctuation:,  region:r  punctuation:)  punctuation:)
  57 |     show(labelled("name", "Ada", r))
     | builtin-fn:show  punctuation:(  task:labelled  punctuation:(  string:"name"  punctuation:,  string:"Ada"  punctuation:,  region:r  punctuation:)  punctuation:)
- 58 |     # Text a region holds, kept in another region.
-    | comment:# Text a region holds, kept in another region.
+ 58 |     ; Text a region holds, kept in another region.
+    | comment:; Text a region holds, kept in another region.
  59 |     hold kept = new [text]() at r
     | keyword:hold  variable:kept  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  60 |     loop kept.len < 3

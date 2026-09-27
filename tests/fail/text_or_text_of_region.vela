@@ -1,4 +1,4 @@
-# error: 2:38: the error type must differ from the value type, as in 'text ~ ParseError'
+; error: 2:38: the error type must differ from the value type, as in 'text ~ ParseError'
 task parse(digits: text@r) -> text ~ text@r
     <- digits
 fi

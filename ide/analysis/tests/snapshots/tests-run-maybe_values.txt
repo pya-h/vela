@@ -1,9 +1,9 @@
-  1 | # `maybe T`: a plain value or `none` becomes one wherever a maybe is expected,
-    | comment:# `maybe T`: a plain value or `none` becomes one wherever a maybe is expected,
-  2 | # `show` prints the value or `none`, `==` compares with `none`, and `match`
-    | comment:# `show` prints the value or `none`, `==` compares with `none`, and `match`
-  3 | # reads it.
-    | comment:# reads it.
+  1 | ; `maybe T`: a plain value or `none` becomes one wherever a maybe is expected,
+    | comment:; `maybe T`: a plain value or `none` becomes one wherever a maybe is expected,
+  2 | ; `show` prints the value or `none`, `==` compares with `none`, and `match`
+    | comment:; `show` prints the value or `none`, `==` compares with `none`, and `match`
+  3 | ; reads it.
+    | comment:; reads it.
   5 | shape Reading
     | keyword:shape  type:Reading
   6 |     label: text

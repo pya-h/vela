@@ -1,4 +1,4 @@
-# error: 2:27: expected a name, got end of line
+; error: 2:27: expected a name, got end of line
 include modules/library =>
 
 task main()

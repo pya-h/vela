@@ -1,4 +1,4 @@
-# error: 5:22: 'scan' shows a text prompt, as in 'scan("Name: ") at r', but this value is maybe text; the value in this maybe text must be extracted first, as in 'x { … }' or 'when x is {value}'
+; error: 5:22: 'scan' shows a text prompt, as in 'scan("Name: ") at r', but this value is maybe text; the value in this maybe text must be extracted first, as in 'x { … }' or 'when x is {value}'
 task main()
     region r
     bind question: maybe text = none

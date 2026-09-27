@@ -1,7 +1,7 @@
-  1 | # `t.len` is how many bytes text has: a field, read without counting. A
-    | comment:# `t.len` is how many bytes text has: a field, read without counting. A
-  2 | # character outside ASCII takes more than one byte, and a NUL is one of them.
-    | comment:# character outside ASCII takes more than one byte, and a NUL is one of them.
+  1 | ; `t.len` is how many bytes text has: a field, read without counting. A
+    | comment:; `t.len` is how many bytes text has: a field, read without counting. A
+  2 | ; character outside ASCII takes more than one byte, and a NUL is one of them.
+    | comment:; character outside ASCII takes more than one byte, and a NUL is one of them.
   4 | shape Person
     | keyword:shape  type:Person
   5 |     name: text

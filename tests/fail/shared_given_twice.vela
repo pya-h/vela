@@ -1,4 +1,4 @@
-# error: 13:23: 'Point.made' is given as 'a' too, and the call changes it through 'b'; a place the call changes is given once, so keep a copy of it in a variable first, and give that as the other
+; error: 13:23: 'Point.made' is given as 'a' too, and the call changes it through 'b'; a place the call changes is given once, so keep a copy of it in a variable first, and give that as the other
 shape Point
     shared hold made: int = 0
 fi

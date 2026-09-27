@@ -1,5 +1,5 @@
-  1 | # A task of another file takes a parameter it changes as any task does.
-    | comment:# A task of another file takes a parameter it changes as any task does.
+  1 | ; A task of another file takes a parameter it changes as any task does.
+    | comment:; A task of another file takes a parameter it changes as any task does.
   2 | task collatz(hold n: int) -> int
     | keyword:task  task:collatz  punctuation:(  keyword:hold  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
   3 |     hold steps = 0

@@ -1,4 +1,4 @@
-# error: 8:5: cannot assign to a field of immutable variable 'p'
+; error: 8:5: cannot assign to a field of immutable variable 'p'
 shape Point
     x: int
 fi

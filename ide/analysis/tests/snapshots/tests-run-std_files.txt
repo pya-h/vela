@@ -1,11 +1,11 @@
-  1 | # Vela's library comes with the compiler: `include std/files` brings in its
-    | comment:# Vela's library comes with the compiler: `include std/files` brings in its
-  2 | # files module as any module is brought in, with nothing to find on the disk,
-    | comment:# files module as any module is brought in, with nothing to find on the disk,
-  3 | # and a module of the program may include it as well. A test program runs in a
-    | comment:# and a module of the program may include it as well. A test program runs in a
-  4 | # folder holding a copy of its own folder's files, so it writes where it likes.
-    | comment:# folder holding a copy of its own folder's files, so it writes where it likes.
+  1 | ; Vela's library comes with the compiler: `include std/files` brings in its
+    | comment:; Vela's library comes with the compiler: `include std/files` brings in its
+  2 | ; files module as any module is brought in, with nothing to find on the disk,
+    | comment:; files module as any module is brought in, with nothing to find on the disk,
+  3 | ; and a module of the program may include it as well. A test program runs in a
+    | comment:; and a module of the program may include it as well. A test program runs in a
+  4 | ; folder holding a copy of its own folder's files, so it writes where it likes.
+    | comment:; folder holding a copy of its own folder's files, so it writes where it likes.
   6 | include std/files {File, FileMode, FileError}
     | keyword:include  module:std  operator:/  module:files  punctuation:{  type:File  punctuation:,  type:FileMode  punctuation:,  type:FileError  punctuation:}
   7 | include std_files/paths (readable)
@@ -34,28 +34,28 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  21 |     region r
     | keyword:region  region:r
- 22 |     # A File is made from its path, and asked about.
-    | comment:# A File is made from its path, and asked about.
+ 22 |     ; A File is made from its path, and asked about.
+    | comment:; A File is made from its path, and asked about.
  23 |     bind here = File { path: "paths.vela" }
     | keyword:bind  variable:here  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"paths.vela"  punctuation:}
  24 |     show(here.path, " ", here.exists())
     | builtin-fn:show  punctuation:(  variable:here  punctuation:.  field:path  punctuation:,  string:" "  punctuation:,  variable:here  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
  25 |     show(File { path: "no such file" }.exists())
     | builtin-fn:show  punctuation:(  type:File  punctuation:{  field:path  punctuation::  string:"no such file"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
- 26 |     # An empty file is a file; a folder is not one, though a file in it is.
-    | comment:# An empty file is a file; a folder is not one, though a file in it is.
+ 26 |     ; An empty file is a file; a folder is not one, though a file in it is.
+    | comment:; An empty file is a file; a folder is not one, though a file in it is.
  27 |     show(File { path: "empty.txt" }.exists(), " ", File { path: "notes" }.exists(), " ", File { path: "notes/about.txt" }.exists())
     | builtin-fn:show  punctuation:(  type:File  punctuation:{  field:path  punctuation::  string:"empty.txt"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  type:File  punctuation:{  field:path  punctuation::  string:"notes"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  type:File  punctuation:{  field:path  punctuation::  string:"notes/about.txt"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
- 28 |     # A zero byte ends a path to the system, so text holding one names no file.
-    | comment:# A zero byte ends a path to the system, so text holding one names no file.
+ 28 |     ; A zero byte ends a path to the system, so text holding one names no file.
+    | comment:; A zero byte ends a path to the system, so text holding one names no file.
  29 |     show(File { path: "paths.vela\0" }.exists())
     | builtin-fn:show  punctuation:(  type:File  punctuation:{  field:path  punctuation::  string:"paths.vela  escape:\0  string:"  punctuation:}  punctuation:.  method:exists  punctuation:(  punctuation:)  punctuation:)
- 30 |     # Through a module of the program, which names it through the module.
-    | comment:# Through a module of the program, which names it through the module.
+ 30 |     ; Through a module of the program, which names it through the module.
+    | comment:; Through a module of the program, which names it through the module.
  31 |     show(readable("paths.vela"), " ", readable(""))
     | builtin-fn:show  punctuation:(  task:readable  punctuation:(  string:"paths.vela"  punctuation:)  punctuation:,  string:" "  punctuation:,  task:readable  punctuation:(  string:""  punctuation:)  punctuation:)
- 33 |     # Written, then added to, then read back.
-    | comment:# Written, then added to, then read back.
+ 33 |     ; Written, then added to, then read back.
+    | comment:; Written, then added to, then read back.
  34 |     hold notes = File { path: "notes.txt" }
     | keyword:hold  variable:notes  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
  35 |     show(notes.str() at r)
@@ -124,8 +124,8 @@
     | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
  67 |     }
     | punctuation:}
- 69 |     # The whole of a file at once, and lines ended the Windows way.
-    | comment:# The whole of a file at once, and lines ended the Windows way.
+ 69 |     ; The whole of a file at once, and lines ended the Windows way.
+    | comment:; The whole of a file at once, and lines ended the Windows way.
  70 |     hold windows = File { path: "windows.txt" }
     | keyword:hold  variable:windows  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"windows.txt"  punctuation:}
  71 |     windows.open(FileMode.Read) at r { failure e
@@ -162,8 +162,8 @@
     | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
  87 |     }
     | punctuation:}
- 89 |     # Read and written through one opening.
-    | comment:# Read and written through one opening.
+ 89 |     ; Read and written through one opening.
+    | comment:; Read and written through one opening.
  90 |     hold both = File { path: "notes.txt" }
     | keyword:hold  variable:both  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
  91 |     both.open(FileMode.ReadWrite) at r { failure e
@@ -180,8 +180,8 @@
     | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
  97 |     }
     | punctuation:}
- 98 |     # Written over "two", with the rest after it: "\nthree".
-    | comment:# Written over "two", with the rest after it: "\nthree".
+ 98 |     ; Written over "two", with the rest after it: "\nthree".
+    | comment:; Written over "two", with the rest after it: "\nthree".
  99 |     show((both.read() at r { "failed" }).len)
     | builtin-fn:show  punctuation:(  punctuation:(  variable:both  punctuation:.  method:read  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  string:"failed"  punctuation:}  punctuation:)  punctuation:.  field:len  punctuation:)
 100 |     both.close() { failure e
@@ -208,8 +208,8 @@
     | builtin-fn:show  punctuation:(  task:why  punctuation:(  variable:e  punctuation:)  punctuation:)
 111 |     }
     | punctuation:}
-113 |     # What goes wrong.
-    | comment:# What goes wrong.
+113 |     ; What goes wrong.
+    | comment:; What goes wrong.
 114 |     hold wrong = File { path: "notes.txt" }
     | keyword:hold  variable:wrong  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
 115 |     wrong.open(FileMode.Read) at r { failure e
@@ -286,10 +286,10 @@
     | operator:-  number:1
 151 |     }, " ", missing.str() at r)
     | punctuation:}  punctuation:,  string:" "  punctuation:,  variable:missing  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
-153 |     # A region that ends closes the file opened in it; the File kept outside
-    | comment:# A region that ends closes the file opened in it; the File kept outside
-154 |     # it still says what its methods left it, and finds it closed.
-    | comment:# it still says what its methods left it, and finds it closed.
+153 |     ; A region that ends closes the file opened in it; the File kept outside
+    | comment:; A region that ends closes the file opened in it; the File kept outside
+154 |     ; it still says what its methods left it, and finds it closed.
+    | comment:; it still says what its methods left it, and finds it closed.
 155 |     hold kept = File { path: "empty.txt" }
     | keyword:hold  variable:kept  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"empty.txt"  punctuation:}
 156 |     each pass in 0..2
@@ -316,8 +316,8 @@
     | punctuation:}
 167 |     show(kept.str() at r)
     | builtin-fn:show  punctuation:(  variable:kept  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
-169 |     # A copy closes the file for both.
-    | comment:# A copy closes the file for both.
+169 |     ; A copy closes the file for both.
+    | comment:; A copy closes the file for both.
 170 |     hold first = File { path: "empty.txt" }
     | keyword:hold  variable:first  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"empty.txt"  punctuation:}
 171 |     first.open(FileMode.Read) at r { failure e
@@ -340,8 +340,8 @@
     | task:why  punctuation:(  variable:e  punctuation:)
 180 |     })
     | punctuation:}  punctuation:)
-182 |     # Renamed, then deleted.
-    | comment:# Renamed, then deleted.
+182 |     ; Renamed, then deleted.
+    | comment:; Renamed, then deleted.
 183 |     hold moved = File { path: "notes.txt" }
     | keyword:hold  variable:moved  operator:=  type:File  punctuation:{  field:path  punctuation::  string:"notes.txt"  punctuation:}
 184 |     moved.rename("moved.txt") { failure e

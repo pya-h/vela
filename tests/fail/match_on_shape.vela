@@ -1,4 +1,4 @@
-# error: 8:11: 'match' needs a kind, a maybe, or a 'T ~ E', but 'Point' is a shape
+; error: 8:11: 'match' needs a kind, a maybe, or a 'T ~ E', but 'Point' is a shape
 shape Point
     x: int
 fi

@@ -1,4 +1,4 @@
-# error: 4:10: 'len' can't be assigned: an array's length is part of its type
+; error: 4:10: 'len' can't be assigned: an array's length is part of its type
 task main()
     hold days = [1, 2, 3]
     days.len = 4

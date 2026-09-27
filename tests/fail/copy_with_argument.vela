@@ -1,4 +1,4 @@
-# error: 5:27: 'copy' takes no arguments; name the region to copy into after it, as in 'x.copy() at r' or 'x.copy()@r'
+; error: 5:27: 'copy' takes no arguments; name the region to copy into after it, as in 'x.copy() at r' or 'x.copy()@r'
 task main()
     region r
     bind line = scan("") at r { "" }

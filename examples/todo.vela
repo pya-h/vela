@@ -1,8 +1,8 @@
-# A tiny to-do list: a linked list of shapes, each pointing to the next one
-# (a `maybe ^Item`, since the last item has none), all in one region that
-# frees them together; variants with and without a payload, `is` and plan B to
-# read maybe values, text compared by contents, and a task with two named
-# results.
+; A tiny to-do list: a linked list of shapes, each pointing to the next one
+; (a `maybe ^Item`, since the last item has none), all in one region that
+; frees them together; variants with and without a payload, `is` and plan B to
+; read maybe values, text compared by contents, and a task with two named
+; results.
 kind Status
     Todo
     Done
@@ -15,8 +15,8 @@ shape Item
     next: maybe ^Item
 fi
 
-# A status in a region holds its text there, so the task names that region,
-# and so does the text it sends, which may be the reason.
+; A status in a region holds its text there, so the task names that region,
+; and so does the text it sends, which may be the reason.
 task describe(s: Status@r) -> text@r
     <- match s
     case Todo = "todo"
@@ -25,9 +25,9 @@ task describe(s: Status@r) -> text@r
     fi
 fi
 
-# `show` writes each value in turn, so the line needs no text of its own: the
-# title, the status, and the brackets around it are written one after another.
-# `hold` makes the parameter the task's own copy, which walks down the list.
+; `show` writes each value in turn, so the line needs no text of its own: the
+; title, the status, and the brackets around it are written one after another.
+; `hold` makes the parameter the task's own copy, which walks down the list.
 task print_list(hold current: maybe ^Item@r)
     loop current is {item}
         show(item^.title, " [", describe(item^.status), "]")
@@ -35,8 +35,8 @@ task print_list(hold current: maybe ^Item@r)
     fi
 fi
 
-# Two things to report, so two results, and naming them makes the counting
-# read as the task's answer: reaching the end sends what they hold.
+; Two things to report, so two results, and naming them makes the counting
+; read as the task's answer: reaching the end sends what they hold.
 task progress(first: maybe ^Item@r) -> done: int, total: int
     hold current = first
     done, total <- 0, 0
@@ -60,13 +60,13 @@ task find(first: maybe ^Item@r, title: text) -> maybe ^Item@r
     <- none
 fi
 
-# Adding allocates, so `add` takes the region to allocate in.
+; Adding allocates, so `add` takes the region to allocate in.
 task add(r: region, title: text, status: Status, next: maybe ^Item@r) -> ^Item@r
     <- new Item(Item { title: title, status: status, next: next }) at r
 fi
 
 task main()
-    # Every item lives in `todos`, which frees them all when main ends.
+    ; Every item lives in `todos`, which frees them all when main ends.
     region todos
     bind third = add(todos, "ship it", Blocked("waiting for review"), none)
     bind second = add(todos, "write tests", Done, third)
@@ -78,12 +78,12 @@ task main()
     when find(first, "write tests") is {tests}
         tests^.status = Todo
     fi
-    # Only the count of done items is wanted now, so the other is dropped.
+    ; Only the count of done items is wanted now, so the other is dropped.
     bind still_done, _ = progress(first)
     show(still_done, " of them now")
     show(find(first, "celebrate") == none)
 
-    # A plan B gives a value to use when there is nothing to extract.
+    ; A plan B gives a value to use when there is nothing to extract.
     bind start = find(first, "celebrate") { first }
     show(start^.title)
 fi

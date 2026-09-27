@@ -1,8 +1,8 @@
-# Reading a number from text: `int(t)` and `float(t)` send the number, or a
-# `ParseError` saying why the text was none. `ParseError` is a builtin kind with
-# two variants, `NotANumber` and `TooLarge`, which no program declares.
+; Reading a number from text: `int(t)` and `float(t)` send the number, or a
+; `ParseError` saying why the text was none. `ParseError` is a builtin kind with
+; two variants, `NotANumber` and `TooLarge`, which no program declares.
 
-# The reason as text, read with a match on the error.
+; The reason as text, read with a match on the error.
 task why(e: ParseError) -> text
     match e
     case NotANumber
@@ -12,8 +12,8 @@ task why(e: ParseError) -> text
     fi
 fi
 
-# Why a text is no number, or nothing when it is one: a plan B whose body sends
-# has to be a block, so a task of its own reads better here.
+; Why a text is no number, or nothing when it is one: a plan B whose body sends
+; has to be a block, so a task of its own reads better here.
 task reason(t: text) -> text
     match int(t)
     case {_}
@@ -23,7 +23,7 @@ task reason(t: text) -> text
     fi
 fi
 
-# A task may forward the error it was given, and send one of its own.
+; A task may forward the error it was given, and send one of its own.
 task age(line: text) -> int ~ ParseError
     bind years = int(line) {
         failure e
@@ -41,13 +41,13 @@ fi
 task main()
     region r
 
-    # A plan B gives the value to use instead.
+    ; A plan B gives the value to use instead.
     show(int("42") { 0 })
     show(int("4x2") { -1 })
     show(float("2.5") { 0.0 })
     show(float("two") { -1.0 })
 
-    # A match reads the value or the reason.
+    ; A match reads the value or the reason.
     match int("99999999999999999999999")
     case {value}
         show("read ", value)
@@ -55,7 +55,7 @@ task main()
         show("no: ", why(e))
     fi
 
-    # `is` runs a block for one outcome only.
+    ; `is` runs a block for one outcome only.
     when int("7") is {value}
         show("seven: ", value)
     fi
@@ -63,8 +63,8 @@ task main()
         show("empty: ", why(e))
     fi
 
-    # What is a number, and what is not: the text is the number itself, with no
-    # spaces, no '+', no '_', and no exponent, as a written number has none.
+    ; What is a number, and what is not: the text is the number itself, with no
+    ; spaces, no '+', no '_', and no exponent, as a written number has none.
     each t in ["0", "-0", "007", "-12"]
         show(t, " -> ", int(t) { -1 })
     fi
@@ -72,18 +72,18 @@ task main()
         show("[", t, "] -> ", reason(t))
     fi
 
-    # Both edges of an int, and one step past each.
+    ; Both edges of an int, and one step past each.
     show(int("9223372036854775807") { 0 })
     show(int("-9223372036854775808") { 0 })
     show(reason("9223372036854775808"))
     show(reason("-9223372036854775809"))
 
-    # A float reads its fraction, and one too large for a float is too large.
+    ; A float reads its fraction, and one too large for a float is too large.
     show(float("0.1") { 0.0 } + float("0.2") { 0.0 })
     show(float("-0.5") { 0.0 })
     show(float("42") { 0.0 })
 
-    # A task of its own, sending and forwarding.
+    ; A task of its own, sending and forwarding.
     each line in ["30", "300", "-4", "x"]
         match age(line)
         case {years}
@@ -93,7 +93,7 @@ task main()
         fi
     fi
 
-    # Read from input: every line that is a number is added up.
+    ; Read from input: every line that is a number is added up.
     hold total = 0
     hold reading = true
     loop reading

@@ -1,4 +1,4 @@
-# error: 2:42: 'Hearts' is a variant, which keeps its own name; bring in 'Hearts' as it is, or its kind, and write 'Suit.Hearts'
+; error: 2:42: 'Hearts' is a variant, which keeps its own name; bring in 'Hearts' as it is, or its kind, and write 'Suit.Hearts'
 include modules/library (Suit, Hearts => Red)
 
 task main()

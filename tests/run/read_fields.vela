@@ -1,11 +1,11 @@
-# A field marked `read` is set once and then changed only by the alters methods
-# of its own shape, so what a shape keeps true of itself stays so wherever it
-# is used, in the file that declares it as much as in another. A literal gives
-# such a field exactly when the shape gives it no value to fall back on.
+; A field marked `read` is set once and then changed only by the alters methods
+; of its own shape, so what a shape keeps true of itself stays so wherever it
+; is used, in the file that declares it as much as in another. A literal gives
+; such a field exactly when the shape gives it no value to fall back on.
 
 include read_fields/meter {Meter, Mode}
 
-# A shape of this file keeps its `read` fields to its own alters methods too.
+; A shape of this file keeps its `read` fields to its own alters methods too.
 shape Tally
     read total: int = 0
     note: text = "tally"
@@ -14,7 +14,7 @@ shape Tally
         .total = .total + n
     fi
 
-    # A method of the shape may assign the field of another of its values.
+    ; A method of the shape may assign the field of another of its values.
     alters take(other: Tally)
         .total = .total + other.total
     fi
@@ -23,7 +23,7 @@ shape Tally
         .total = 0
     fi
 
-    # One that alters nothing makes a changed copy through one that does.
+    ; One that alters nothing makes a changed copy through one that does.
     cleared() -> Tally@this
         hold copy = .this
         copy.clear()
@@ -31,7 +31,7 @@ shape Tally
     fi
 fi
 
-# A read field that may be missing is still given once, by the literal.
+; A read field that may be missing is still given once, by the literal.
 shape Seat
     read holder: maybe text
 
@@ -62,7 +62,7 @@ task main()
     hold other = Tally { note: "other" }
     other.count(4)
     tally.take(other)
-    # An ordinary field beside it is still assigned by anyone.
+    ; An ordinary field beside it is still assigned by anyone.
     tally.note = "sum"
     show(tally.note, " ", tally.total, " ", tally.cleared().total, " ", tally.total)
 
@@ -71,7 +71,7 @@ task main()
     seat.claim("ana")
     show(seat.holder { "free" })
 
-    # A whole new value may take the place of one, as for any variable.
+    ; A whole new value may take the place of one, as for any variable.
     meter = Meter { label: "fresh" }
     show(meter.label, " ", meter.count)
 fi

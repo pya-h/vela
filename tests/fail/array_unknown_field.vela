@@ -1,4 +1,4 @@
-# error: 4:15: type [int; 3] has no field 'size'; its number of items is '.len'
+; error: 4:15: type [int#3] has no field 'size'; its number of items is '.len'
 task main()
     bind days = [1, 2, 3]
     show(days.size)

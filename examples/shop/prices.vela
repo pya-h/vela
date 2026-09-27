@@ -1,4 +1,4 @@
-# What things cost, in cents. The discount rule is private to this file.
+; What things cost, in cents. The discount rule is private to this file.
 
 kind Item
     Apple
@@ -19,7 +19,7 @@ fi
 
 priv task cheese(grams: int) -> int
     when grams >= 500
-        <- grams * 2        # big pieces cost less per gram
+        <- grams * 2        ; big pieces cost less per gram
     fi
     <- grams * 3
 fi

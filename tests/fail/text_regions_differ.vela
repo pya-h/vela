@@ -1,4 +1,4 @@
-# error: 7:17: expected type text@r, got text@s; this text is in region 's', and text here is in region 'r'
+; error: 7:17: expected type text@r, got text@s; this text is in region 's', and text here is in region 'r'
 task main()
     region r
     region s

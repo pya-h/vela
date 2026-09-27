@@ -1,5 +1,5 @@
-# Prices in a shop, for tests/run/aliases.vela. tests/run/aliases/fuel has a
-# module named prices too: a module is known by its path.
+; Prices in a shop, for tests/run/aliases.vela. tests/run/aliases/fuel has a
+; module named prices too: a module is known by its path.
 
 shape Item
     name: text

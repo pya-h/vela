@@ -1,9 +1,9 @@
-# Where several values must have one type — the items of an array, the branches
-# of a `match` or a `when` used as a value — their types are joined by one rule:
-# a `maybe` or an error side is wrapped around whatever is already there, and a
-# value already made is never changed inside. Parentheses group a type, so both
-# nestings can be written: `maybe int ~ text` is `(maybe int) ~ text`, and
-# `maybe (int ~ text)` is the other one.
+; Where several values must have one type — the items of an array, the branches
+; of a `match` or a `when` used as a value — their types are joined by one rule:
+; a `maybe` or an error side is wrapped around whatever is already there, and a
+; value already made is never changed inside. Parentheses group a type, so both
+; nestings can be written: `maybe int ~ text` is `(maybe int) ~ text`, and
+; `maybe (int ~ text)` is the other one.
 
 task risky(n: int) -> int ~ text
     when n > 0
@@ -16,12 +16,12 @@ task divide(a: int, b: int) -> (int, int)
     <- (a / b, a % b)
 fi
 
-# One type in parentheses is that type, here `int`.
+; One type in parentheses is that type, here `int`.
 task twice(x: (int)) -> int
     <- x * 2
 fi
 
-# Both nestings, written down, as a parameter and as a result.
+; Both nestings, written down, as a parameter and as a result.
 task kept(v: maybe (int ~ text)) -> int
     bind inner = v { <- -1 }
     <- inner { -2 }
@@ -37,8 +37,8 @@ task sent(n: int) -> (maybe int) ~ text
     <- n
 fi
 
-# The same result type, written without parentheses: `~` holds the whole type
-# before it, so this is the one above, not `maybe (int ~ text)`.
+; The same result type, written without parentheses: `~` holds the whole type
+; before it, so this is the one above, not `maybe (int ~ text)`.
 task also(n: int) -> maybe int ~ text
     <- sent(n)
 fi
@@ -47,11 +47,11 @@ task main()
     bind m: maybe int = 3
     show(twice(21))
 
-    # An array of a value and `none`: the wrapper goes around the value.
+    ; An array of a value and `none`: the wrapper goes around the value.
     bind xs = [1, none]
     show(xs[0] { -1 }, " ", xs[1] { -1 })
 
-    # A `maybe int` beside a failure keeps the maybe and gains an error side.
+    ; A `maybe int` beside a failure keeps the maybe and gains an error side.
     bind ys = [m, fail "no"]
     match ys[0]
     case {inside}
@@ -66,11 +66,11 @@ task main()
         show("ys failed: ", e)
     fi
 
-    # An `int ~ text` beside `none` keeps its error side and goes inside a maybe.
+    ; An `int ~ text` beside `none` keeps its error side and goes inside a maybe.
     bind zs = [risky(1), none]
     show(kept(zs[0]), " ", kept(zs[1]), " ", kept(risky(-1)))
 
-    # The branches of a value `match` or `when` are joined by the same rule.
+    ; The branches of a value `match` or `when` are joined by the same rule.
     bind first = when m == none
         fail "nothing"
     else
@@ -84,14 +84,14 @@ task main()
     fi
     show(kept(second))
 
-    # A tuple written out is built item by item, so an item becomes what that
-    # item's type is; one already made is taken apart to build another.
+    ; A tuple written out is built item by item, so an item becomes what that
+    ; item's type is; one already made is taken apart to build another.
     bind pair: (int, maybe int) = (2, 3)
     bind made = divide(17, 5)
     bind widened: (int, maybe int) = (made.0, made.1)
     show(pair.0, " ", pair.1 { -1 }, " ", widened.0, " ", widened.1 { -1 })
 
-    # A task can send either nesting, and each keeps its own outcomes.
+    ; A task can send either nesting, and each keeps its own outcomes.
     show(sent(5) { none } { -4 }, " ", sent(0) { none } { -5 }, " ", sent(-1) { none } { -6 })
     show(also(7) { none } { -7 })
 fi

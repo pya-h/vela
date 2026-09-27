@@ -1,7 +1,7 @@
-  1 | # Types may be used before they are declared, and may point to themselves. A
-    | comment:# Types may be used before they are declared, and may point to themselves. A
-  2 | # kind holding pointers lives in a region, like the pointers it holds.
-    | comment:# kind holding pointers lives in a region, like the pointers it holds.
+  1 | ; Types may be used before they are declared, and may point to themselves. A
+    | comment:; Types may be used before they are declared, and may point to themselves. A
+  2 | ; kind holding pointers lives in a region, like the pointers it holds.
+    | comment:; kind holding pointers lives in a region, like the pointers it holds.
   4 | shape Segment
     | keyword:shape  type:Segment
   5 |     from: Point

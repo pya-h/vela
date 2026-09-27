@@ -1,4 +1,4 @@
-# error: 4:8: an array's length is part of its type, so 'add' can't change it; make a slice in a region, as in 'new [int](xs) at r'
+; error: 4:8: an array's length is part of its type, so 'add' can't change it; make a slice in a region, as in 'new [int](xs) at r'
 task main()
     hold xs = [1, 2, 3]
     xs.add(4)

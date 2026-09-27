@@ -155,9 +155,9 @@
         the way it brings in a <a href="vela.html#modules">module of its own</a>, with <code>include</code> and a path
         that starts with <code>std</code>:
       </p>
-      <pre><span class="keyword">include</span> std/files {File}          <span class="comment"># File, by its own name</span>
-<span class="keyword">include</span> std/files                 <span class="comment"># or through the module: files.File</span>
-<span class="keyword">include</span> std/files =&gt; disk         <span class="comment"># or under a name of the file's choosing: disk.File</span></pre>
+      <pre><span class="keyword">include</span> std/files {File}          <span class="comment">; File, by its own name</span>
+<span class="keyword">include</span> std/files                 <span class="comment">; or through the module: files.File</span>
+<span class="keyword">include</span> std/files =&gt; disk         <span class="comment">; or under a name of the file's choosing: disk.File</span></pre>
       <p>
         Nothing is read from the disk to find it: the library is part of the compiler, so the command, Vela Studio,
         and the web editor all have the same library, and a program needs nothing installed beside the compiler.
@@ -207,9 +207,9 @@
         show("could not open it")
     }
     <span class="keyword">loop</span> notes.line() <span class="keyword">at</span> r { <span class="keyword">none</span> } <span class="keyword">is</span> {line}
-        show(line)                  <span class="comment"># first line</span>
+        show(line)                  <span class="comment">; first line</span>
     <span class="keyword">fi</span>
-<span class="keyword">fi</span>                              <span class="comment"># r's block ends, and closes the file</span></pre>
+<span class="keyword">fi</span>                              <span class="comment">; r's block ends, and closes the file</span></pre>
 
       <h3 id="file">File</h3>
       <p>
@@ -306,10 +306,10 @@
     kept.open(FileMode.Read) <span class="keyword">at</span> round { <span class="keyword">failure</span> e
         show("could not open it")
     }
-<span class="keyword">fi</span>                                  <span class="comment"># round's block ends, and closes the file</span>
-show(kept.str() <span class="keyword">at</span> r)                <span class="comment"># notes.txt (open): what open left it</span>
+<span class="keyword">fi</span>                                  <span class="comment">; round's block ends, and closes the file</span>
+show(kept.str() <span class="keyword">at</span> r)                <span class="comment">; notes.txt (open): what open left it</span>
 show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failure</span> e
-    "closed"                        <span class="comment"># NotOpen</span>
+    "closed"                        <span class="comment">; NotOpen</span>
 })</pre>
       <p>
         <code>examples/files.vela</code> is a whole program: a list written to a file, added to, read back line by
@@ -325,7 +325,7 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
         file, is a <em>native</em> task: its header is Vela, and its body is a function of the runtime that the
         generated C includes.
       </p>
-      <pre><span class="comment"># std/files.vela</span>
+      <pre><span class="comment">; std/files.vela</span>
 <span class="keyword">priv native task</span> path_exists(path: text@p) -&gt; bool</pre>
       <p>
         A native task has no body and no <code>fi</code>, and the compiler writes its body as a call of the runtime

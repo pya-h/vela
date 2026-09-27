@@ -1,4 +1,4 @@
-# error: 5:8: type [int]@r has no methods; a slice adds an item with 'add', as in 'xs.add(v)' or 'xs.add(i, v)'
+; error: 5:8: type [int]@r has no methods; a slice adds an item with 'add', as in 'xs.add(v)' or 'xs.add(i, v)'
 task main()
     region r
     hold xs = new [int]() at r

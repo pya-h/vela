@@ -1,5 +1,5 @@
-# Arithmetic, for tests/run/modules/lists/stack.vela, and a task that takes a
-# type, used from tests/run/modules.vela.
+; Arithmetic, for tests/run/modules/lists/stack.vela, and a task that takes a
+; type, used from tests/run/modules.vela.
 
 shape Sum
     value: int
@@ -10,8 +10,8 @@ task add(a: int, b: int) -> int
     <- total
 fi
 
-# A generic task another file uses, and a private one it uses itself: the task
-# made for each set of types a use gives belongs to this module too.
+; A generic task another file uses, and a private one it uses itself: the task
+; made for each set of types a use gives belongs to this module too.
 task larger<T: ordered>(a: T, b: T) -> T
     <- pickFirst(biggest(a, b), a)
 fi
@@ -27,21 +27,21 @@ priv task biggest<T: ordered>(a: T, b: T) -> T
     <- b
 fi
 
-# A shape that takes types, used from another file, and a task that makes one.
+; A shape that takes types, used from another file, and a task that makes one.
 shape Tally<T: shown>
     value: T
     count: int
 fi
 
-# A shape given types names the region its values live in, since the type given
-# may hold text or pointers, so the task takes the region to name.
+; A shape given types names the region its values live in, since the type given
+; may hold text or pointers, so the task takes the region to name.
 task tallyOf<T: shown>(r: region, value: T) -> Tally<T>@r
     <- Tally { value: value, count: 1 }
 fi
 
-# The kinds reading a number sends belong to no file, so this module writes both
-# without declaring them and without an `include`: as a type it sends, as a type
-# it takes, and as a value it sends itself, through its kind or as a bare variant.
+; The kinds reading a number sends belong to no file, so this module writes both
+; without declaring them and without an `include`: as a type it sends, as a type
+; it takes, and as a value it sends itself, through its kind or as a bare variant.
 task read(t: text) -> int ~ ParseError
     <- int(t) {
         failure e

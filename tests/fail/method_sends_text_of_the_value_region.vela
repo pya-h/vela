@@ -1,4 +1,4 @@
-# error: 14:14: expected type text, got text@r; this text is in region 'r', and text here must last as long as the program, as a literal does
+; error: 14:14: expected type text, got text@r; this text is in region 'r', and text here must last as long as the program, as a literal does
 shape Box<T>
     value: T
 

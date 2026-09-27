@@ -1,4 +1,4 @@
-# error: 9:27: numbers are added without a region, so 'at work' after '+' names the region of none of them; a call that takes its region last names it with '@' right after it, as in 'f(x)@work'
+; error: 9:27: numbers are added without a region, so 'at work' after '+' names the region of none of them; a call that takes its region last names it with '@' right after it, as in 'f(x)@work'
 task count(xs: [int]@q, work: region) -> int
     <- xs.len
 fi

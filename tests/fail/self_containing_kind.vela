@@ -1,4 +1,4 @@
-# error: 4:27: 'List' contains itself by value (List -> List); use a pointer such as 'maybe ^List'
+; error: 4:27: 'List' contains itself by value (List -> List); use a pointer such as 'maybe ^List'
 kind List
     Nil
     Cons(head: int, tail: List)

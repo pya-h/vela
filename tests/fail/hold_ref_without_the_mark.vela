@@ -1,4 +1,4 @@
-# error: 8:12: task 'sample' changes 'x', the place it is given, so the call marks that place with '&', as in '&a'
+; error: 8:12: task 'sample' changes 'x', the place it is given, so the call marks that place with '&', as in '&a'
 task sample(hold& x: int)
     x = 10
 fi

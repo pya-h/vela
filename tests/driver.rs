@@ -184,10 +184,10 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ("nested new", program(format!("{}1{}", "new int(".repeat(deep), ") at r".repeat(deep)))),
         ("nested shape literals", program(format!("{}1{}", "P { x: ".repeat(deep), " }".repeat(deep)))),
         ("region pointer types", format!("task f(p: {}int@r)\nfi\n", "^".repeat(deep))),
-        ("array types", format!("task f(p: {}int{})\nfi\n", "[".repeat(deep), "; 1]".repeat(deep))),
+        ("array types", format!("task f(p: {}int{})\nfi\n", "[".repeat(deep), "#1]".repeat(deep))),
         ("slice types", format!("task f(p: {}int{}@r)\nfi\n", "[".repeat(deep), "]".repeat(deep))),
         ("array literals", program(format!("{}1{}", "[".repeat(deep), "]".repeat(deep)))),
-        ("repeated values", program(format!("{}1{}", "[".repeat(deep), "; 1]".repeat(deep)))),
+        ("repeated values", program(format!("{}1{}", "[".repeat(deep), "#1]".repeat(deep)))),
         ("index chains", program(format!("p{}", "[0]".repeat(deep)))),
         ("slice changes", program(format!("{}0{}", "xs.del(".repeat(deep), ")".repeat(deep)))),
         ("scans", program(format!("{}\"\"{}", "scan(".repeat(deep), ") at r".repeat(deep)))),
@@ -231,11 +231,11 @@ fn deep_nesting_is_an_error_not_a_crash() {
     // chain of indexes as long.
     let arrays = format!("task main()\n    bind a = {}1{}\n    show(a{}.len)\nfi\n", "[".repeat(near / 2 - 1), "]".repeat(near / 2 - 1), "[0]".repeat(near / 2 - 2));
     driver::generate_c(&arrays).unwrap();
-    let indexes = format!("task f(a: {}int{})\n    show(a{})\nfi\n", "[".repeat(near), "; 1]".repeat(near), "[0]".repeat(near));
+    let indexes = format!("task f(a: {}int{})\n    show(a{})\nfi\n", "[".repeat(near), "#1]".repeat(near), "[0]".repeat(near));
     driver::generate_c(&indexes).unwrap();
     // A change to a slice counts two levels (its slice, and its arguments),
     // and each writes its prelude before the one outside it.
-    let dels = format!("task main()\n    region r\n    hold xs = new [int]([0; 1]) at r\n    show({}0{})\nfi\n", "xs.del(".repeat(near / 2 - 1), ")".repeat(near / 2 - 1));
+    let dels = format!("task main()\n    region r\n    hold xs = new [int]([0#1]) at r\n    show({}0{})\nfi\n", "xs.del(".repeat(near / 2 - 1), ")".repeat(near / 2 - 1));
     driver::generate_c(&dels).unwrap();
     // A prompt read by another `scan`, through a plan B: each nests a scan, a
     // plan B, and its block.

@@ -1,4 +1,4 @@
-# error: 3:16: a shared field is a value of its own, not a place elsewhere, so it is 'shared hold', without '&'
+; error: 3:16: a shared field is a value of its own, not a place elsewhere, so it is 'shared hold', without '&'
 shape Point
     shared hold& made: int = 0
 fi

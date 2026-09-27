@@ -1,5 +1,5 @@
-# Named results holding a shape and a maybe, set from a plan B, and sent with
-# `<-` from inside a plan B.
+; Named results holding a shape and a maybe, set from a plan B, and sent with
+; `<-` from inside a plan B.
 
 shape Point
     x: int

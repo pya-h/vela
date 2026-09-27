@@ -60,7 +60,7 @@ pub enum Type {
     Fail(Box<Type>),
     /// `region`: the type of a region parameter, which a task allocates in.
     Region,
-    /// `[T; n]`: `n` values of type `T`, held by value. It holds pointers, and
+    /// `[T#n]`: `n` values of type `T`, held by value. It holds pointers, and
     /// lives in a region, when `T` does.
     Array(Box<Type>, u64),
     /// `[T]@r`: a view of values of type `T` in the region `r`, as a pointer
@@ -389,7 +389,7 @@ impl Type {
             Type::Array(inner, count) => {
                 write!(f, "[")?;
                 inner.write(f, outer)?;
-                write!(f, "; {}]", count)
+                write!(f, "#{}]", count)
             }
             Type::Slice(inner, region) => {
                 write!(f, "[")?;
@@ -729,7 +729,7 @@ pub enum ExprKind {
     Array(Vec<Expr>),
     /// `(a, b)`: a tuple of the values, two or more.
     Tuple(Vec<Expr>),
-    /// `[value; count]`: an array of `count` copies of the value, computed
+    /// `[value#count]`: an array of `count` copies of the value, computed
     /// once; in `new [T](…) at r`, a slice of them, whose count may be known
     /// only as the program runs.
     Repeat { value: Box<Expr>, count: Box<Expr> },
@@ -762,7 +762,7 @@ pub enum ExprKind {
     /// is a shape (no variable is named like one).
     Shared { shape: String, field: String },
     /// `v.type` in a task that takes types, where the value's type names one
-    /// (`T`, `[T; 3]`): its text is known only once the task is made for the
+    /// (`T`, `[T#3]`): its text is known only once the task is made for the
     /// types a use gives, when the checker makes it the `TextLit` it is (see
     /// `Checker::check_type_of`). Nothing after the checker sees one.
     TypeOf(Box<Type>),

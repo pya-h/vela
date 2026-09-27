@@ -1,4 +1,4 @@
-# error: 3:5: expected a value after '<-'
+; error: 3:5: expected a value after '<-'
 task answer() -> int
     <-
 fi

@@ -1,4 +1,4 @@
-# error: 7:10: duplicate case '{…}'
+; error: 7:10: duplicate case '{…}'
 task main()
     bind m: maybe int = 1
     match m

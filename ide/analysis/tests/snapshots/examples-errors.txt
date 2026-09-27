@@ -1,7 +1,7 @@
-  1 | # Errors as values: a task that can fail sends `T ~ E`, and its caller
-    | comment:# Errors as values: a task that can fail sends `T ~ E`, and its caller
-  2 | # handles the error with match, is, or a plan B.
-    | comment:# handles the error with match, is, or a plan B.
+  1 | ; Errors as values: a task that can fail sends `T ~ E`, and its caller
+    | comment:; Errors as values: a task that can fail sends `T ~ E`, and its caller
+  2 | ; handles the error with match, is, or a plan B.
+    | comment:; handles the error with match, is, or a plan B.
   4 | kind ReadingError
     | keyword:kind  type:ReadingError
   5 |     Missing
@@ -10,12 +10,12 @@
     | variant:TooCold  punctuation:(  field:value  punctuation::  type-builtin:int  punctuation:)
   7 |     TooHot(value: int)
     | variant:TooHot  punctuation:(  field:value  punctuation::  type-builtin:int  punctuation:)
-  9 |     # A reason holds a number, so saying why is new text, which goes in the
-    | comment:# A reason holds a number, so saying why is new text, which goes in the
- 10 |     # region the method is given. `show(problem)` calls this for us, in a region
-    | comment:# region the method is given. `show(problem)` calls this for us, in a region
- 11 |     # it makes for the line, so printing a reason names no region at all.
-    | comment:# it makes for the line, so printing a reason names no region at all.
+  9 |     ; A reason holds a number, so saying why is new text, which goes in the
+    | comment:; A reason holds a number, so saying why is new text, which goes in the
+ 10 |     ; region the method is given. `show(problem)` calls this for us, in a region
+    | comment:; region the method is given. `show(problem)` calls this for us, in a region
+ 11 |     ; it makes for the line, so printing a reason names no region at all.
+    | comment:; it makes for the line, so printing a reason names no region at all.
  12 |     str(r: region) -> text@r
     | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  13 |         <- match .this
@@ -36,8 +36,8 @@
     | keyword:task  task:check  punctuation:(  parameter:reading  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:ReadingError
  22 |     bind value = reading { <- fail Missing }
     | keyword:bind  variable:value  operator:=  parameter:reading  punctuation:{  keyword:<-  keyword:fail  variant:Missing  punctuation:}
- 23 |     # Alternatives, so one chain: the first condition that holds sends.
-    | comment:# Alternatives, so one chain: the first condition that holds sends.
+ 23 |     ; Alternatives, so one chain: the first condition that holds sends.
+    | comment:; Alternatives, so one chain: the first condition that holds sends.
  24 |     when value < -50
     | keyword:when  variable:value  operator:<  operator:-  number:50
  25 |         <- fail TooCold(value)
@@ -52,10 +52,10 @@
     | keyword:<-  variable:value
  30 | fi
     | keyword:fi
- 32 | # `unit ~ E` sends nothing when it works: reaching the end succeeds. `hold&`
-    | comment:# `unit ~ E` sends nothing when it works: reaching the end succeeds. `hold&`
- 33 | # makes `sum` the caller's own variable, which the call gives as `&total`.
-    | comment:# makes `sum` the caller's own variable, which the call gives as `&total`.
+ 32 | ; `unit ~ E` sends nothing when it works: reaching the end succeeds. `hold&`
+    | comment:; `unit ~ E` sends nothing when it works: reaching the end succeeds. `hold&`
+ 33 | ; makes `sum` the caller's own variable, which the call gives as `&total`.
+    | comment:; makes `sum` the caller's own variable, which the call gives as `&total`.
  34 | task add_reading(hold& sum: int, reading: maybe int) -> unit ~ ReadingError
     | keyword:task  task:add_reading  punctuation:(  keyword:hold  keyword:&  parameter:sum  punctuation::  type-builtin:int  punctuation:,  parameter:reading  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type:ReadingError
  35 |     bind value = check(reading) {
@@ -72,8 +72,8 @@
     | keyword:fi
  42 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 43 |     # match handles both outcomes.
-    | comment:# match handles both outcomes.
+ 43 |     ; match handles both outcomes.
+    | comment:; match handles both outcomes.
  44 |     match check(21)
     | keyword:match  task:check  punctuation:(  number:21  punctuation:)
  45 |     case {value}
@@ -86,16 +86,16 @@
     | builtin-fn:show  punctuation:(  variable:problem  punctuation:)
  49 |     fi
     | keyword:fi
- 51 |     # is runs a block for one outcome only.
-    | comment:# is runs a block for one outcome only.
+ 51 |     ; is runs a block for one outcome only.
+    | comment:; is runs a block for one outcome only.
  52 |     when check(99) is failure problem
     | keyword:when  task:check  punctuation:(  number:99  punctuation:)  keyword:is  keyword:failure  variable:problem
  53 |         show(problem)
     | builtin-fn:show  punctuation:(  variable:problem  punctuation:)
  54 |     fi
     | keyword:fi
- 56 |     # A plan B gives the value to use instead; `fail e` names the error.
-    | comment:# A plan B gives the value to use instead; `fail e` names the error.
+ 56 |     ; A plan B gives the value to use instead; `fail e` names the error.
+    | comment:; A plan B gives the value to use instead; `fail e` names the error.
  57 |     show(check(none) { 0 })
     | builtin-fn:show  punctuation:(  task:check  punctuation:(  keyword:none  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
  58 |     bind lowest = check(-80) {
@@ -110,8 +110,8 @@
     | punctuation:}
  63 |     show(lowest)
     | builtin-fn:show  punctuation:(  variable:lowest  punctuation:)
- 65 |     # An error can't be ignored by accident: an empty plan B ignores it on purpose.
-    | comment:# An error can't be ignored by accident: an empty plan B ignores it on purpose.
+ 65 |     ; An error can't be ignored by accident: an empty plan B ignores it on purpose.
+    | comment:; An error can't be ignored by accident: an empty plan B ignores it on purpose.
  66 |     hold total = 0
     | keyword:hold  variable:total  operator:=  number:0
  67 |     add_reading(&total, 10) { }

@@ -1,4 +1,4 @@
-# error: 4:5: a method named 'str' turns the value it is called on into text, so it is written 'str(r: region) -> text@r'
+; error: 4:5: a method named 'str' turns the value it is called on into text, so it is written 'str(r: region) -> text@r'
 shape Point
     x: int
     str() -> text

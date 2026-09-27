@@ -1,6 +1,6 @@
-# error: 5:12: 'Loop' contains itself by value (Loop -> Loop); use a pointer such as 'maybe ^Loop'
-# A value a field falls back on can be a literal, whose own left-out fields are
-# filled in to check it, so a shape that held itself would fill itself forever.
+; error: 5:12: 'Loop' contains itself by value (Loop -> Loop); use a pointer such as 'maybe ^Loop'
+; A value a field falls back on can be a literal, whose own left-out fields are
+; filled in to check it, so a shape that held itself would fill itself forever.
 shape Loop
     inner: Loop = Loop {}
 fi

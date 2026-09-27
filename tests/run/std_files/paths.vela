@@ -1,5 +1,5 @@
-# A module of the program that includes the library itself, and writes its
-# File through the module's name.
+; A module of the program that includes the library itself, and writes its
+; File through the module's name.
 
 include std/files
 

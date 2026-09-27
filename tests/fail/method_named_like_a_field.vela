@@ -1,4 +1,4 @@
-# error: 5:5: 'x' is already a field of 'Point', at 3:5; both are written '.x', so a field and a method can't share a name
+; error: 5:5: 'x' is already a field of 'Point', at 3:5; both are written '.x', so a field and a method can't share a name
 shape Point
     x: int
 

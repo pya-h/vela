@@ -1,4 +1,4 @@
-# trap: integer overflow at 7:20 in task 'main'
+; trap: integer overflow at 7:20 in task 'main'
 task main()
     hold n = 9223372036854775807
     each i in n - 1..n

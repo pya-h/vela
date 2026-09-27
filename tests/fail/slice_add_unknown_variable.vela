@@ -1,4 +1,4 @@
-# error: 3:5: unknown variable 'ys'
+; error: 3:5: unknown variable 'ys'
 task main()
     ys.add(2)
 fi

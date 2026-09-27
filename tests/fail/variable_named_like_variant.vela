@@ -1,4 +1,4 @@
-# error: 8:10: 'Red' is already defined at 3:5
+; error: 8:10: 'Red' is already defined at 3:5
 kind Light
     Red
     Green

@@ -1,9 +1,9 @@
-  1 | # `<`, `>`, `<=`, and `>=` order text by its bytes, which is the order of
-    | comment:# `<`, `>`, `<=`, and `>=` order text by its bytes, which is the order of
-  2 | # Unicode for UTF-8: capitals before small letters, and text that starts other
-    | comment:# Unicode for UTF-8: capitals before small letters, and text that starts other
-  3 | # text before it. Text of any regions compares, and text is `ordered`.
-    | comment:# text before it. Text of any regions compares, and text is `ordered`.
+  1 | ; `<`, `>`, `<=`, and `>=` order text by its bytes, which is the order of
+    | comment:; `<`, `>`, `<=`, and `>=` order text by its bytes, which is the order of
+  2 | ; Unicode for UTF-8: capitals before small letters, and text that starts other
+    | comment:; Unicode for UTF-8: capitals before small letters, and text that starts other
+  3 | ; text before it. Text of any regions compares, and text is `ordered`.
+    | comment:; text before it. Text of any regions compares, and text is `ordered`.
   5 | task biggest<T: ordered>(a: T, b: T) -> T
     | keyword:task  task:biggest  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type:T
   6 |     when a > b

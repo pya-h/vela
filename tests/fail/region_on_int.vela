@@ -1,4 +1,4 @@
-# error: 2:15: 'int' holds no pointers or text, so it lives in no region; remove '@r'
+; error: 2:15: 'int' holds no pointers or text, so it lives in no region; remove '@r'
 task f(p: int@r)
 fi
 task main()

@@ -1,7 +1,7 @@
-  1 | # `==`, `!=`, and `<=` on bools, floats, and pointers, and `and` binding
-    | comment:# `==`, `!=`, and `<=` on bools, floats, and pointers, and `and` binding
-  2 | # tighter than `or`.
-    | comment:# tighter than `or`.
+  1 | ; `==`, `!=`, and `<=` on bools, floats, and pointers, and `and` binding
+    | comment:; `==`, `!=`, and `<=` on bools, floats, and pointers, and `and` binding
+  2 | ; tighter than `or`.
+    | comment:; tighter than `or`.
   4 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
   5 |     show(true == true)

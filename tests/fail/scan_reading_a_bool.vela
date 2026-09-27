@@ -1,4 +1,4 @@
-# error: 3:30: 'scan' reads a number, so it names 'int' or 'float', as in 'scan("Age: ", int)'
+; error: 3:30: 'scan' reads a number, so it names 'int' or 'float', as in 'scan("Age: ", int)'
 task main()
     bind yes = scan("Yes? ", bool) { false }
 fi

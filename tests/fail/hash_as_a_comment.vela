@@ -1,0 +1,5 @@
+; error: 3:5: expected an expression, got '#'; '#' marks an array's count, as in '[int#4]', and a comment starts with ';'
+task main()
+    # the count
+    show(1)
+fi

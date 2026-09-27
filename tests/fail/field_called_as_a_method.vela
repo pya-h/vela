@@ -1,4 +1,4 @@
-# error: 8:12: 'x' is a field of shape 'Point', not a method, so it is read without '(…)'
+; error: 8:12: 'x' is a field of shape 'Point', not a method, so it is read without '(…)'
 shape Point
     x: int
 fi

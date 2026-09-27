@@ -1,4 +1,4 @@
-# error: 2:36: expected another result after ','
+; error: 2:36: expected another result after ','
 task divmod(a: int, b: int) -> int,
     <- a / b, a % b
 fi

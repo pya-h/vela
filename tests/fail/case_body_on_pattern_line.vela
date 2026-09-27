@@ -1,4 +1,4 @@
-# error: 5:14: expected the end of the line, got identifier 'show'
+; error: 5:14: expected the end of the line, got identifier 'show'
 task main()
     bind m: maybe int = 1
     match m

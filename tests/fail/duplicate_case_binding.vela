@@ -1,4 +1,4 @@
-# error: 9:22: 'w' is already defined at 9:20
+; error: 9:22: 'w' is already defined at 9:20
 kind Shape
     Rectangle(width: float, height: float)
 fi

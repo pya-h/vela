@@ -1,4 +1,4 @@
-# error: 4:9: a part of text can't be assigned, since text never changes; give the variable other text instead, as in 't = t[0..2]'
+; error: 4:9: a part of text can't be assigned, since text never changes; give the variable other text instead, as in 't = t[0..2]'
 task main()
     hold name = "Ada"
     name[0..1] = "E"

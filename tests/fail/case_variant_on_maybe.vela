@@ -1,4 +1,4 @@
-# error: 9:10: 'Red' is a variant, but this value is maybe int
+; error: 9:10: 'Red' is a variant, but this value is maybe int
 kind Light
     Red
 fi

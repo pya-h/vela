@@ -25,8 +25,8 @@ task main()
     CHECK
     bind scores = [90, 72, 85]
     region r
-    bind points = new [Point]([Point { x: 1, y: 2 }; 3]) at r
-    bind boxed = new [int; 3](scores) at r
+    bind points = new [Point]([Point { x: 1, y: 2 }#3]) at r
+    bind boxed = new [int#3](scores) at r
     bind part = points[1..3]
     bind first = part[0]
     bind count = scores.len
@@ -74,9 +74,9 @@ fn hover_shows_array_and_slice_types_whether_or_not_the_file_checks() {
         let source = program(checks, "show(0)");
         let code = |needle: &str| hover(&source, needle).0;
         let when = if checks { "checked" } else { "declared" };
-        assert_eq!(code("scores ="), "bind scores: [int; 3]", "{}", when);
+        assert_eq!(code("scores ="), "bind scores: [int#3]", "{}", when);
         assert_eq!(code("points ="), "bind points: [Point]@r", "{}", when);
-        assert_eq!(code("boxed ="), "bind boxed: ^[int; 3]@r", "{}", when);
+        assert_eq!(code("boxed ="), "bind boxed: ^[int#3]@r", "{}", when);
         assert_eq!(code("part ="), "bind part: [Point]@r", "{}", when);
         assert_eq!(code("first ="), "bind first: Point", "{}", when);
         assert_eq!(code("count ="), "bind count: int", "{}", when);
@@ -120,11 +120,11 @@ fn completion_offers_types_in_brackets_and_nothing_for_a_count() {
     // An array can't hold unit.
     assert!(!types.contains(&"unit".to_string()), "{:?}", types);
     assert!(labels(&program(true, "bind grid: [[@@")).contains(&"float".to_string()));
-    assert_eq!(labels(&program(true, "bind grid: [int; @@")), Vec::<String>::new());
+    assert_eq!(labels(&program(true, "bind grid: [int#@@")), Vec::<String>::new());
     // The count of a repeated value is a value.
-    assert!(labels(&program(true, "bind zeros = [0; @@")).contains(&"count".to_string()));
+    assert!(labels(&program(true, "bind zeros = [0#@@")).contains(&"count".to_string()));
     // An error type goes on after an array type, with `~`.
-    assert!(labels(&program(true, "hold pair: [int; 2] @@")).contains(&"~".to_string()));
+    assert!(labels(&program(true, "hold pair: [int#2] @@")).contains(&"~".to_string()));
 }
 
 #[test]
@@ -140,7 +140,7 @@ fn completion_continues_array_and_slice_expressions() {
         let when = if checks { "checked" } else { "declared" };
         // After a slice made with `new`, the region it goes in.
         assert!(labels(&program(checks, "bind copy = new [int](scores) @@")).contains(&"at".to_string()), "{}", when);
-        assert!(labels(&program(checks, "bind copy = new [int; 3](scores) @@")).contains(&"at".to_string()), "{}", when);
+        assert!(labels(&program(checks, "bind copy = new [int#3](scores) @@")).contains(&"at".to_string()), "{}", when);
         assert_eq!(labels(&program(checks, "bind copy = new [int](scores) at @@")), ["r"], "{}", when);
         // Once it has one, no second `at`.
         assert!(!labels(&program(checks, "bind copy = new [int](scores) at r @@")).contains(&"at".to_string()), "{}", when);

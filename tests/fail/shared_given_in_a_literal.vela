@@ -1,4 +1,4 @@
-# error: 8:28: 'made' is a shared field of 'Point', one value for the whole program rather than part of each value, so no literal gives it; it is 'Point.made'
+; error: 8:28: 'made' is a shared field of 'Point', one value for the whole program rather than part of each value, so no literal gives it; it is 'Point.made'
 shape Point
     x: int
     shared made: int = 0

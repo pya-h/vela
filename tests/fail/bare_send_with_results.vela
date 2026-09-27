@@ -1,4 +1,4 @@
-# error: 3:5: expected 2 values after '<-', one for each result
+; error: 3:5: expected 2 values after '<-', one for each result
 task divmod(a: int, b: int) -> int, int
     <-
 fi

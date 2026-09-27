@@ -1,4 +1,4 @@
-# error: program has no 'main' task
+; error: program has no 'main' task
 task helper()
     show(1)
 fi

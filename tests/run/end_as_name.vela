@@ -1,4 +1,4 @@
-# `end` is not a keyword: blocks close with `fi`, so `end` is an ordinary name.
+; `end` is not a keyword: blocks close with `fi`, so `end` is an ordinary name.
 task last(end: int) -> int
     <- end - 1
 fi

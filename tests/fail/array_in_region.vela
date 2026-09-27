@@ -1,5 +1,5 @@
-# error: 4:25: '[int; 3]' holds no pointers or text, so it lives in no region; remove '@r'
+; error: 4:24: '[int#3]' holds no pointers or text, so it lives in no region; remove '@r'
 task main()
     region r
-    bind days: [int; 3]@r = [1, 2, 3]
+    bind days: [int#3]@r = [1, 2, 3]
 fi

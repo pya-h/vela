@@ -1,4 +1,4 @@
-# error: 3:10: unknown variable 'missing'
+; error: 3:10: unknown variable 'missing'
 task main()
     show(missing)
 fi

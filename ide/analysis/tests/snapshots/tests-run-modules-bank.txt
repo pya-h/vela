@@ -1,5 +1,5 @@
-  1 | # An account whose balance only this file can touch, for tests/run/modules.vela.
-    | comment:# An account whose balance only this file can touch, for tests/run/modules.vela.
+  1 | ; An account whose balance only this file can touch, for tests/run/modules.vela.
+    | comment:; An account whose balance only this file can touch, for tests/run/modules.vela.
   3 | kind Problem
     | keyword:kind  type:Problem
   4 |     TooLittle(missing: int)

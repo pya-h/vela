@@ -5,17 +5,17 @@
 //!   `tests/run/NAME.out`. Its generated C must also compile as strict ISO C11
 //!   with no warnings (see `STRICT_C_FLAGS`).
 //! - `tests/fail/NAME.vela` must be rejected by the Vela compiler itself (not by
-//!   the C compiler). Its first line is `# error: LINE:COL: MESSAGE` (or
-//!   `# error: MESSAGE` for an error without a position, or
-//!   `# error: modules/other.vela:LINE:COL: MESSAGE` for one in a module the
+//!   the C compiler). Its first line is `; error: LINE:COL: MESSAGE` (or
+//!   `; error: MESSAGE` for an error without a position, or
+//!   `; error: modules/other.vela:LINE:COL: MESSAGE` for one in a module the
 //!   program includes, with its path from the fixture's folder), and the
 //!   compiler's first line of output must be exactly that diagnostic. A fixture
-//!   whose program has several mistakes writes one `# error:` line for each, in
+//!   whose program has several mistakes writes one `; error:` line for each, in
 //!   order, and then those must be exactly the mistakes reported: that is how a
 //!   fixture says a mistake causes no others. The modules fixtures use are in
 //!   `tests/fail/modules/`.
 //! - `tests/trap/NAME.vela` must compile, with strict C, and then stop with a
-//!   runtime error: its first line is `# trap: MESSAGE`, the program's stderr
+//!   runtime error: its first line is `; trap: MESSAGE`, the program's stderr
 //!   must be exactly `vela: MESSAGE`, and what it printed before stopping must
 //!   equal `tests/trap/NAME.out`.
 //! - `examples/NAME.vela` must compile and run, with strict C, and its stdout
@@ -219,7 +219,7 @@ fn check_strict_c(source: &Path, scratch: &Path) -> Option<String> {
 }
 
 /// Compiles `source`, expecting the Vela diagnostics given on the file's first
-/// lines (`# error: TEXT`, one per mistake). One of them must be the first line
+/// lines (`; error: TEXT`, one per mistake). One of them must be the first line
 /// the compiler prints; several must be exactly the mistakes it reports, in
 /// order, which is how a fixture says that nothing else follows from them.
 fn check_fail(source: &Path, scratch: &Path) -> Option<String> {
@@ -227,12 +227,12 @@ fn check_fail(source: &Path, scratch: &Path) -> Option<String> {
     let text = fs::read_to_string(source).unwrap();
     let expected: Vec<String> = text
         .lines()
-        .take_while(|line| line.starts_with('#'))
-        .filter_map(|line| line.strip_prefix("# error: "))
+        .take_while(|line| line.starts_with(';'))
+        .filter_map(|line| line.strip_prefix("; error: "))
         .map(|error| diagnostic_line(source, error.trim()))
         .collect();
     let Some(first) = expected.first() else {
-        return Some(format!("{}: first line must be '# error: TEXT'", name));
+        return Some(format!("{}: first line must be '; error: TEXT'", name));
     };
     let exe = scratch.join(&name);
     let compile = Command::new(VELA).arg(source).arg("-o").arg(&exe).output().unwrap();
@@ -309,7 +309,7 @@ fn run_programs() {
 /// The message a `tests/trap` program's first line says it stops with.
 fn trap_message(source: &Path) -> Option<String> {
     let text = fs::read_to_string(source).unwrap();
-    text.lines().next()?.strip_prefix("# trap: ").map(|message| message.trim().to_string())
+    text.lines().next()?.strip_prefix("; trap: ").map(|message| message.trim().to_string())
 }
 
 #[test]
@@ -320,7 +320,7 @@ fn trapping_programs() {
         .iter()
         .filter_map(|src| match trap_message(src) {
             Some(message) => check_run(src, &src.with_extension("out"), Some(&message), &scratch),
-            None => Some(format!("{}: first line must be '# trap: MESSAGE'", stem(src))),
+            None => Some(format!("{}: first line must be '; trap: MESSAGE'", stem(src))),
         })
         .collect();
     let _ = fs::remove_dir_all(&scratch);
@@ -392,7 +392,7 @@ fn docs_programs() {
 }
 
 /// Every `<pre>` in a docs page that holds a whole program, which a `task main()`
-/// on its own line marks, with the `# error: TEXT` comment that says the page
+/// on its own line marks, with the `; error: TEXT` comment that says the page
 /// means it to be refused, if it has one.
 fn guide_programs(page: &str) -> Vec<(String, Option<String>)> {
     let mut programs = Vec::new();
@@ -405,11 +405,11 @@ fn guide_programs(page: &str) -> Vec<(String, Option<String>)> {
         if !code.lines().any(|line| line == "task main()") {
             continue;
         }
-        // A line the page marks with `# error:` is one it shows being refused;
+        // A line the page marks with `; error:` is one it shows being refused;
         // the message is cut short there with an ellipsis.
         let wanted = code
             .lines()
-            .find_map(|line| line.split_once("# error: "))
+            .find_map(|line| line.split_once("; error: "))
             .map(|(_, message)| message.trim().trim_end_matches('…').trim().to_string());
         programs.push((code, wanted));
     }
@@ -418,7 +418,7 @@ fn guide_programs(page: &str) -> Vec<(String, Option<String>)> {
 
 /// Every whole program in `docs/vela.html` still says what the page says it
 /// does: one the page shows plainly compiles, with strict C, and one it marks
-/// with `# error:` is refused with that message. The page shows what each line
+/// with `; error:` is refused with that message. The page shows what each line
 /// gives in comments rather than as output, so these are not run.
 #[test]
 fn docs_guide_programs() {

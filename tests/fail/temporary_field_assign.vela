@@ -1,4 +1,4 @@
-# error: 11:5: cannot assign to a field of a temporary value
+; error: 11:5: cannot assign to a field of a temporary value
 shape Point
     x: int
 fi

@@ -1,4 +1,4 @@
-# NaN and infinity print the same way under every C compiler.
+; NaN and infinity print the same way under every C compiler.
 task main()
     bind zero = 0.0
     show(zero / zero)

@@ -1,4 +1,4 @@
-# error: 5:10: expected a variant, '{value}', 'none', 'failure e', or '_', got integer 5
+; error: 5:10: expected a variant, '{value}', 'none', 'failure e', or '_', got integer 5
 task main()
     bind n: maybe int = 5
     match n

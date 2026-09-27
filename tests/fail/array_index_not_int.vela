@@ -1,4 +1,4 @@
-# error: 4:15: expected type int, got bool
+; error: 4:15: expected type int, got bool
 task main()
     bind days = [1, 2, 3]
     show(days[true])

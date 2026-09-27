@@ -1,9 +1,9 @@
-# Regions: memory `new` allocates lives until the block that declared its
-# region closes, on every way out of that block. Tasks take a region to
-# allocate in (`r: region`), or only name one in their types (`@r`) to read and
-# link pointers there. A value built without pointers takes the region of the
-# place it goes. (tests/runtime.rs also runs this under sanitizers, which fail
-# on a leak or a use after free.)
+; Regions: memory `new` allocates lives until the block that declared its
+; region closes, on every way out of that block. Tasks take a region to
+; allocate in (`r: region`), or only name one in their types (`@r`) to read and
+; link pointers there. A value built without pointers takes the region of the
+; place it goes. (tests/runtime.rs also runs this under sanitizers, which fail
+; on a leak or a use after free.)
 
 shape Node
     value: int
@@ -20,12 +20,12 @@ shape Pair
     second: ^int
 fi
 
-# Allocates, so it takes the region.
+; Allocates, so it takes the region.
 task push(r: region, list: maybe ^Node@r, value: int) -> ^Node@r
     <- new Node(Node { value: value, next: list }) at r
 fi
 
-# Only reads, so it names the region without taking it.
+; Only reads, so it names the region without taking it.
 task sum(list: maybe ^Node@r) -> int
     hold total = 0
     hold current = list
@@ -36,7 +36,7 @@ task sum(list: maybe ^Node@r) -> int
     <- total
 fi
 
-# Recursion builds a tree in the caller's region.
+; Recursion builds a tree in the caller's region.
 task build(r: region, depth: int) -> Tree@r
     when depth == 0
         <- Leaf(1)
@@ -53,7 +53,7 @@ task count(t: Tree@r) -> int
     fi
 fi
 
-# A region passed on under another name.
+; A region passed on under another name.
 task twice(outer: region, value: int) -> Pair@outer
     <- Pair { first: new int(value) at outer, second: make(outer, value * 2) }
 fi
@@ -62,7 +62,7 @@ task make(inner: region, value: int) -> ^int@inner
     <- new int(value) at inner
 fi
 
-# A `<-` from inside nested blocks frees the task's regions first.
+; A `<-` from inside nested blocks frees the task's regions first.
 task early(n: int) -> int
     region outer
     bind a = new int(n) at outer
@@ -107,7 +107,7 @@ task main()
     show(sum(list))
     show(sum(none))
 
-    # A region inside a loop is new, and freed, on every pass.
+    ; A region inside a loop is new, and freed, on every pass.
     hold total = 0
     each round in 0..1000
         region pass
@@ -128,7 +128,7 @@ task main()
 
     show(early(40))
 
-    # A plan B's block can use its own region, and give a value from it.
+    ; A plan B's block can use its own region, and give a value from it.
     bind missing: maybe int = none
     bind rescued = missing {
         region rescue
@@ -154,8 +154,8 @@ task main()
         show(e)
     }
 
-    # A literal without pointers takes the region of the binding's type, and
-    # can then hold pointers into it.
+    ; A literal without pointers takes the region of the binding's type, and
+    ; can then hold pointers into it.
     hold head: Node@lists = Node { value: 1, next: none }
     head.next = push(lists, none, 2)
     show(sum(head.next) + head.value)
@@ -164,13 +164,13 @@ task main()
         show(p.first^)
     fi
 
-    # `first(none)` holds no pointer, so its plan B takes the fallback's region.
+    ; `first(none)` holds no pointer, so its plan B takes the fallback's region.
     bind fallback: ^Node@lists = first(none) { good }
     show(fallback^.value)
-    # Pointers into different regions compare, and are never equal.
+    ; Pointers into different regions compare, and are never equal.
     show(good == new Node(Node { value: 7, next: none }) at trees)
 
-    # A pointer to a pointer lives in one region too.
+    ; A pointer to a pointer lives in one region too.
     bind inner = new int(8) at trees
     bind outer = new ^int(inner) at trees
     outer^^ = outer^^ + 1

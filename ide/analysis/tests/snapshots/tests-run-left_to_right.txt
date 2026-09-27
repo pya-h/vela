@@ -1,7 +1,7 @@
-  1 | # Values are read left to right: one read before a call that changes it (given
-    | comment:# Values are read left to right: one read before a call that changes it (given
-  2 | # as `&a`, or as the value an alters method is called on) is read as it was.
-    | comment:# as `&a`, or as the value an alters method is called on) is read as it was.
+  1 | ; Values are read left to right: one read before a call that changes it (given
+    | comment:; Values are read left to right: one read before a call that changes it (given
+  2 | ; as `&a`, or as the value an alters method is called on) is read as it was.
+    | comment:; as `&a`, or as the value an alters method is called on) is read as it was.
   4 | shape Counter
     | keyword:shape  type:Counter
   5 |     n: int = 0
@@ -68,8 +68,8 @@
     | builtin-fn:show  punctuation:(  variable:flag  keyword:or  task:bump  punctuation:(  operator:&  variable:n  punctuation:)  operator:==  number:0  punctuation:,  string:" "  punctuation:,  variable:n  punctuation:)
  42 |     show(flag and bump(&n) == 0, " ", n)
     | builtin-fn:show  punctuation:(  variable:flag  keyword:and  task:bump  punctuation:(  operator:&  variable:n  punctuation:)  operator:==  number:0  punctuation:,  string:" "  punctuation:,  variable:n  punctuation:)
- 44 |     # A loop's condition is read again before every round, change and all.
-    | comment:# A loop's condition is read again before every round, change and all.
+ 44 |     ; A loop's condition is read again before every round, change and all.
+    | comment:; A loop's condition is read again before every round, change and all.
  45 |     hold k = 0
     | keyword:hold  variable:k  operator:=  number:0
  46 |     hold rounds = 0
@@ -82,12 +82,12 @@
     | keyword:fi
  50 |     show(k, " ", rounds)
     | builtin-fn:show  punctuation:(  variable:k  punctuation:,  string:" "  punctuation:,  variable:rounds  punctuation:)
- 52 |     # The place given with '&' is found where the argument is read: not at all
-    | comment:# The place given with '&' is found where the argument is read: not at all
- 53 |     # when 'and' skips its right side, again each round of a loop, and in the
-    | comment:# when 'and' skips its right side, again each round of a loop, and in the
- 54 |     # 'else when' that reaches it.
-    | comment:# 'else when' that reaches it.
+ 52 |     ; The place given with '&' is found where the argument is read: not at all
+    | comment:; The place given with '&' is found where the argument is read: not at all
+ 53 |     ; when 'and' skips its right side, again each round of a loop, and in the
+    | comment:; when 'and' skips its right side, again each round of a loop, and in the
+ 54 |     ; 'else when' that reaches it.
+    | comment:; 'else when' that reaches it.
  55 |     hold arr = [0, 0, 0]
     | keyword:hold  variable:arr  operator:=  punctuation:[  number:0  punctuation:,  number:0  punctuation:,  number:0  punctuation:]
  56 |     hold i = 3
@@ -118,8 +118,8 @@
     | builtin-fn:show  punctuation:(  string:"stepped "  punctuation:,  variable:arr  punctuation:[  number:2  punctuation:]  punctuation:)
  69 |     fi
     | keyword:fi
- 71 |     # An assignment finds its place before the value that changes the index.
-    | comment:# An assignment finds its place before the value that changes the index.
+ 71 |     ; An assignment finds its place before the value that changes the index.
+    | comment:; An assignment finds its place before the value that changes the index.
  72 |     hold spot = 0
     | keyword:hold  variable:spot  operator:=  number:0
  73 |     hold slots = [0, 0, 0]

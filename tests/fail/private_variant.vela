@@ -1,4 +1,4 @@
-# error: 4:5: a variant can't be 'priv': every variant is as visible as its kind
+; error: 4:5: a variant can't be 'priv': every variant is as visible as its kind
 kind Door
     Open
     priv Locked

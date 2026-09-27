@@ -1,4 +1,4 @@
-# error: modules/reaches_std.vela:3:9: '../std/helpers' is in a folder named 'std' beside the main file, which would read as Vela's library; give the folder another name
+; error: modules/reaches_std.vela:3:9: '../std/helpers' is in a folder named 'std' beside the main file, which would read as Vela's library; give the folder another name
 include modules/reaches_std
 
 task main()

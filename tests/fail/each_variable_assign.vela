@@ -1,4 +1,4 @@
-# error: 4:9: cannot assign to immutable variable 'i'
+; error: 4:9: cannot assign to immutable variable 'i'
 task main()
     each i in 0..3
         i = 5

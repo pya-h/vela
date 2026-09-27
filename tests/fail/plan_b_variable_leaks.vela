@@ -1,4 +1,4 @@
-# error: 8:10: unknown variable 'fallback'
+; error: 8:10: unknown variable 'fallback'
 task main()
     bind m: maybe int = none
     bind n = m {

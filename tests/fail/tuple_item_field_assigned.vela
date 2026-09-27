@@ -1,4 +1,4 @@
-# error: 8:7: a tuple's items never change; give the whole tuple a new value instead, as in 't = (1, 2)'
+; error: 8:7: a tuple's items never change; give the whole tuple a new value instead, as in 't = (1, 2)'
 shape Point
     x: int
 fi

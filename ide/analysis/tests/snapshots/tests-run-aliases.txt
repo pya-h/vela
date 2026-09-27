@@ -1,9 +1,9 @@
-  1 | # Include aliases: `=>` names an included module or part another way, braces
-    | comment:# Include aliases: `=>` names an included module or part another way, braces
-  2 | # include a module's parts alone, and a variant can be named through its kind.
-    | comment:# include a module's parts alone, and a variant can be named through its kind.
-  3 | # The two modules included here are both files named prices.vela.
-    | comment:# The two modules included here are both files named prices.vela.
+  1 | ; Include aliases: `=>` names an included module or part another way, braces
+    | comment:; Include aliases: `=>` names an included module or part another way, braces
+  2 | ; include a module's parts alone, and a variant can be named through its kind.
+    | comment:; include a module's parts alone, and a variant can be named through its kind.
+  3 | ; The two modules included here are both files named prices.vela.
+    | comment:; The two modules included here are both files named prices.vela.
   5 | include aliases/shop/prices => shop (Item => Product, price_of)
     | keyword:include  module:aliases  operator:/  module:shop  operator:/  module:prices  operator:=>  module:shop  punctuation:(  type:Item  operator:=>  type:Product  punctuation:,  task:price_of  punctuation:)
   6 | include aliases/fuel/prices {Size => Fuel, price_of => fuel_price}
@@ -40,8 +40,8 @@
     | keyword:fi
  25 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 26 |     # The module under another name, and a part of it under another name.
-    | comment:# The module under another name, and a part of it under another name.
+ 26 |     ; The module under another name, and a part of it under another name.
+    | comment:; The module under another name, and a part of it under another name.
  27 |     bind tea: Product = Product { name: "tea", cents: 250 }
     | keyword:bind  variable:tea  punctuation::  type:Product  operator:=  type:Product  punctuation:{  field:name  punctuation::  string:"tea"  punctuation:,  field:cents  punctuation::  number:250  punctuation:}
  28 |     show(price_of(tea, shop.Size.Small))
@@ -62,10 +62,10 @@
     | builtin-fn:show  punctuation:(  number:0  punctuation:)
  36 |     fi
     | keyword:fi
- 38 |     # Parts alone, one of them a kind under another name, whose variants are
-    | comment:# Parts alone, one of them a kind under another name, whose variants are
- 39 |     # named through it.
-    | comment:# named through it.
+ 38 |     ; Parts alone, one of them a kind under another name, whose variants are
+    | comment:; Parts alone, one of them a kind under another name, whose variants are
+ 39 |     ; named through it.
+    | comment:; named through it.
  40 |     bind tank = Fuel.Tank(40)
     | keyword:bind  variable:tank  operator:=  type:Fuel  punctuation:.  variant:Tank  punctuation:(  number:40  punctuation:)
  41 |     when tank is Fuel.Tank liters
@@ -86,8 +86,8 @@
     | builtin-fn:show  punctuation:(  variable:liters  punctuation:)
  49 |     fi
     | keyword:fi
- 51 |     # A kind of this file, through its name and alone.
-    | comment:# A kind of this file, through its name and alone.
+ 51 |     ; A kind of this file, through its name and alone.
+    | comment:; A kind of this file, through its name and alone.
  52 |     show(describe(Mood.Calm))
     | builtin-fn:show  punctuation:(  task:describe  punctuation:(  type:Mood  punctuation:.  variant:Calm  punctuation:)  punctuation:)
  53 |     show(describe(Mood.Busy(3)))

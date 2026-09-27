@@ -1,4 +1,4 @@
-# Integer arithmetic, precedence, unary operators and boolean logic
+; Integer arithmetic, precedence, unary operators and boolean logic
 
 task main()
     show(1 + 2 * 3)

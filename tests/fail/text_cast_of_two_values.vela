@@ -1,4 +1,4 @@
-# error: 4:10: 'text(…)' turns one value into text, as in 'text(n) at r', got 2 values
+; error: 4:10: 'text(…)' turns one value into text, as in 'text(n) at r', got 2 values
 task main()
     region r
     show(text(1, 2) at r)

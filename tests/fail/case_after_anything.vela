@@ -1,4 +1,4 @@
-# error: 11:10: this case comes after '_', which already matches everything
+; error: 11:10: this case comes after '_', which already matches everything
 kind Light
     Red
     Green

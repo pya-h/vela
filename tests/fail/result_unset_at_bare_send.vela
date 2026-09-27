@@ -1,4 +1,4 @@
-# error: 4:5: 'peak' might not be set here
+; error: 4:5: 'peak' might not be set here
 task pair(n: int) -> steps: int, peak: int
     steps <- n
     <-

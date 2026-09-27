@@ -1,9 +1,9 @@
-  1 | # `T ~ E`: a task that can fail sends a value or `fail error`. `match`, `is`,
-    | comment:# `T ~ E`: a task that can fail sends a value or `fail error`. `match`, `is`,
-  2 | # and plan B read the result; `unit ~ E` succeeds with a bare `<-` or by
-    | comment:# and plan B read the result; `unit ~ E` succeeds with a bare `<-` or by
-  3 | # reaching its end.
-    | comment:# reaching its end.
+  1 | ; `T ~ E`: a task that can fail sends a value or `fail error`. `match`, `is`,
+    | comment:; `T ~ E`: a task that can fail sends a value or `fail error`. `match`, `is`,
+  2 | ; and plan B read the result; `unit ~ E` succeeds with a bare `<-` or by
+    | comment:; and plan B read the result; `unit ~ E` succeeds with a bare `<-` or by
+  3 | ; reaching its end.
+    | comment:; reaching its end.
   5 | kind BadSize
     | keyword:kind  type:BadSize
   6 |     Empty

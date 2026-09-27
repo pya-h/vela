@@ -1,4 +1,4 @@
-# error: 2:16: unknown type 'Pointt'
+; error: 2:16: unknown type 'Pointt'
 task make() -> Pointt
     <- 0
 fi

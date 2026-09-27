@@ -1,4 +1,4 @@
-# error: 8:11: expected type maybe int, got int; 'm' is given the place itself, which the task changes, so the place is of exactly its type
+; error: 8:11: expected type maybe int, got int; 'm' is given the place itself, which the task changes, so the place is of exactly its type
 task clear(hold& m: maybe int)
     m = none
 fi

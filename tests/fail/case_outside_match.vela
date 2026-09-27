@@ -1,4 +1,4 @@
-# error: 3:5: expected 'fi' to close the 'task' at 2:1, got 'case' (or a 'case' outside a 'match')
+; error: 3:5: expected 'fi' to close the 'task' at 2:1, got 'case' (or a 'case' outside a 'match')
 task main()
     case 1
 fi

@@ -1,4 +1,4 @@
-# error: 4:15: 'hold& y' is another name for a place, marked with '&', as in '&x'
+; error: 4:15: 'hold& y' is another name for a place, marked with '&', as in '&x'
 task main()
     hold x = 1
     hold& y = x

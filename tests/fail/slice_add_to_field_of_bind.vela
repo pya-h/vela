@@ -1,4 +1,4 @@
-# error: 9:5: 'add' can't change a field of immutable variable 'bag'
+; error: 9:5: 'add' can't change a field of immutable variable 'bag'
 shape Bag
     items: [int]
 fi

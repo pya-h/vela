@@ -1,4 +1,4 @@
-# error: 2:6: 'show' is a builtin task and cannot be redefined
+; error: 2:6: 'show' is a builtin task and cannot be redefined
 task show(x: int)
     <-
 fi

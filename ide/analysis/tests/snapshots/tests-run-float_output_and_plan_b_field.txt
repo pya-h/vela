@@ -1,7 +1,7 @@
-  1 | # How `show` writes large, small, and negative floats, and a field read from
-    | comment:# How `show` writes large, small, and negative floats, and a field read from
-  2 | # the value a plan B gives.
-    | comment:# the value a plan B gives.
+  1 | ; How `show` writes large, small, and negative floats, and a field read from
+    | comment:; How `show` writes large, small, and negative floats, and a field read from
+  2 | ; the value a plan B gives.
+    | comment:; the value a plan B gives.
   4 | shape Point
     | keyword:shape  type:Point
   5 |     x: float

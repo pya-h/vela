@@ -1,6 +1,6 @@
-# `T ~ E`: a task that can fail sends a value or `fail error`. `match`, `is`,
-# and plan B read the result; `unit ~ E` succeeds with a bare `<-` or by
-# reaching its end.
+; `T ~ E`: a task that can fail sends a value or `fail error`. `match`, `is`,
+; and plan B read the result; `unit ~ E` succeeds with a bare `<-` or by
+; reaching its end.
 
 kind BadSize
     Empty

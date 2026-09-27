@@ -1,5 +1,5 @@
-# error: 3:5: 'both' is a result; set it with 'both <- …'
-task pair() -> both: [int; 2]
+; error: 3:5: 'both' is a result; set it with 'both <- …'
+task pair() -> both: [int#2]
     both[0] = 1
     both <- [1, 2]
 fi

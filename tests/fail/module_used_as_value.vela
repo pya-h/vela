@@ -1,4 +1,4 @@
-# error: 5:10: 'library' is a module, not a variable; name something in it, as in 'library.name'
+; error: 5:10: 'library' is a module, not a variable; name something in it, as in 'library.name'
 include modules/library
 
 task main()

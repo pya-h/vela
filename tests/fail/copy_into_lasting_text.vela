@@ -1,4 +1,4 @@
-# error: 6:17: 'copy' makes its copy in a region, but a text here lasts as long as the program, as a literal does; give the place a region, as in 'text@r'
+; error: 6:17: 'copy' makes its copy in a region, but a text here lasts as long as the program, as a literal does; give the place a region, as in 'text@r'
 task main()
     region r
     hold kept = "nothing yet"

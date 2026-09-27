@@ -1,13 +1,13 @@
-  1 | # Text in a region: `text` lasts as long as the program (a literal does), and
-    | comment:# Text in a region: `text` lasts as long as the program (a literal does), and
-  2 | # `text@r` is in region `r`, as the text a value in `r` holds is. Text that
-    | comment:# `text@r` is in region `r`, as the text a value in `r` holds is. Text that
-  3 | # lasts fits wherever text of a region is expected. A shape or kind holding
-    | comment:# lasts fits wherever text of a region is expected. A shape or kind holding
-  4 | # text may name a region (`Person@r`), in which its text is, or none
-    | comment:# text may name a region (`Person@r`), in which its text is, or none
-  5 | # (`Person`), when its text lasts; one holding pointers always names one.
-    | comment:# (`Person`), when its text lasts; one holding pointers always names one.
+  1 | ; Text in a region: `text` lasts as long as the program (a literal does), and
+    | comment:; Text in a region: `text` lasts as long as the program (a literal does), and
+  2 | ; `text@r` is in region `r`, as the text a value in `r` holds is. Text that
+    | comment:; `text@r` is in region `r`, as the text a value in `r` holds is. Text that
+  3 | ; lasts fits wherever text of a region is expected. A shape or kind holding
+    | comment:; lasts fits wherever text of a region is expected. A shape or kind holding
+  4 | ; text may name a region (`Person@r`), in which its text is, or none
+    | comment:; text may name a region (`Person@r`), in which its text is, or none
+  5 | ; (`Person`), when its text lasts; one holding pointers always names one.
+    | comment:; (`Person`), when its text lasts; one holding pointers always names one.
   7 | shape Person
     | keyword:shape  type:Person
   8 |     name: text
@@ -36,8 +36,8 @@
     | field:next  punctuation::  keyword:maybe  operator:^  type:Task
  22 | fi
     | keyword:fi
- 24 | # Reads text of any region; sends text of that region.
-    | comment:# Reads text of any region; sends text of that region.
+ 24 | ; Reads text of any region; sends text of that region.
+    | comment:; Reads text of any region; sends text of that region.
  25 | task longer(a: text@r, b: text@r) -> text@r
     | keyword:task  task:longer  punctuation:(  parameter:a  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  parameter:b  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  26 |     when a == b
@@ -66,10 +66,10 @@
     | keyword:fi
  39 | fi
     | keyword:fi
- 41 | # Keeps text in a value in the caller's region, and reads it back: text a
-    | comment:# Keeps text in a value in the caller's region, and reads it back: text a
- 42 | # value in `r` holds is `text@r`, even when it was a literal.
-    | comment:# value in `r` holds is `text@r`, even when it was a literal.
+ 41 | ; Keeps text in a value in the caller's region, and reads it back: text a
+    | comment:; Keeps text in a value in the caller's region, and reads it back: text a
+ 42 | ; value in `r` holds is `text@r`, even when it was a literal.
+    | comment:; value in `r` holds is `text@r`, even when it was a literal.
  43 | task named(r: region, name: text) -> text@r
     | keyword:task  task:named  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:name  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  44 |     bind boxed = new text(name) at r
@@ -84,12 +84,12 @@
     | builtin-fn:show  punctuation:(  parameter:p  punctuation:.  field:name  punctuation:)
  50 | fi
     | keyword:fi
- 52 | # An array keeps no region of its own, so the one written on it is its text's:
-    | comment:# An array keeps no region of its own, so the one written on it is its text's:
- 53 | # writing the same region on both is the same type.
-    | comment:# writing the same region on both is the same type.
- 54 | task pick(pair: [text@r; 2]@r, i: int) -> text@r
-    | keyword:task  task:pick  punctuation:(  parameter:pair  punctuation::  punctuation:[  type-builtin:text  operator:@  region:r  punctuation:;  number:2  punctuation:]  operator:@  region:r  punctuation:,  parameter:i  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 52 | ; An array keeps no region of its own, so the one written on it is its text's:
+    | comment:; An array keeps no region of its own, so the one written on it is its text's:
+ 53 | ; writing the same region on both is the same type.
+    | comment:; writing the same region on both is the same type.
+ 54 | task pick(pair: [text@r#2]@r, i: int) -> text@r
+    | keyword:task  task:pick  punctuation:(  parameter:pair  punctuation::  punctuation:[  type-builtin:text  operator:@  region:r  punctuation:#  number:2  punctuation:]  operator:@  region:r  punctuation:,  parameter:i  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  55 |     <- pair[i]
     | keyword:<-  parameter:pair  punctuation:[  parameter:i  punctuation:]
  56 | fi
@@ -110,8 +110,8 @@
     | builtin-fn:show  punctuation:(  task:longer  punctuation:(  variable:kept  punctuation:,  string:"Bob"  punctuation:)  punctuation:)
  65 |     show(longer("x", "x"))
     | builtin-fn:show  punctuation:(  task:longer  punctuation:(  string:"x"  punctuation:,  string:"x"  punctuation:)  punctuation:)
- 67 |     # A shape holding text: none of a region, or text of one.
-    | comment:# A shape holding text: none of a region, or text of one.
+ 67 |     ; A shape holding text: none of a region, or text of one.
+    | comment:; A shape holding text: none of a region, or text of one.
  68 |     bind plain = Person { name: "Cy", age: 3 }
     | keyword:bind  variable:plain  operator:=  type:Person  punctuation:{  field:name  punctuation::  string:"Cy"  punctuation:,  field:age  punctuation::  number:3  punctuation:}
  69 |     bind held: Person@r = Person { name: kept, age: 36 }
@@ -136,8 +136,8 @@
     | builtin-fn:show  punctuation:(  task:pick  punctuation:(  punctuation:[  variable:kept  punctuation:,  variable:lasting  punctuation:]  punctuation:,  number:0  punctuation:)  punctuation:)
  80 |     show(pick([kept, "Bob"], 1))
     | builtin-fn:show  punctuation:(  task:pick  punctuation:(  punctuation:[  variable:kept  punctuation:,  string:"Bob"  punctuation:]  punctuation:,  number:1  punctuation:)  punctuation:)
- 82 |     # Text in slices and pointers is in their region.
-    | comment:# Text in slices and pointers is in their region.
+ 82 |     ; Text in slices and pointers is in their region.
+    | comment:; Text in slices and pointers is in their region.
  83 |     hold names = new [text]() at r
     | keyword:hold  variable:names  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  84 |     names.add(lasting)
@@ -158,8 +158,8 @@
     | variable:note  operator:^  operator:=  variable:lasting
  92 |     show(note^)
     | builtin-fn:show  punctuation:(  variable:note  operator:^  punctuation:)
- 94 |     # A shape holding pointers holds its text in its region.
-    | comment:# A shape holding pointers holds its text in its region.
+ 94 |     ; A shape holding pointers holds its text in its region.
+    | comment:; A shape holding pointers holds its text in its region.
  95 |     bind job = new Task(Task { title: "write", status: Status.Blocked(kept), owner: held, next: none }) at r
     | keyword:bind  variable:job  operator:=  keyword:new  type:Task  punctuation:(  type:Task  punctuation:{  field:title  punctuation::  string:"write"  punctuation:,  field:status  punctuation::  type:Status  punctuation:.  variant:Blocked  punctuation:(  variable:kept  punctuation:)  punctuation:,  field:owner  punctuation::  variable:held  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}  punctuation:)  keyword:at  region:r
  96 |     show(describe(job^.status))
@@ -184,8 +184,8 @@
     | builtin-fn:show  punctuation:(  string:"none"  punctuation:)
 106 |     fi
     | keyword:fi
-108 |     # maybe and errors of text of a region.
-    | comment:# maybe and errors of text of a region.
+108 |     ; maybe and errors of text of a region.
+    | comment:; maybe and errors of text of a region.
 109 |     hold found: maybe text@r = none
     | keyword:hold  variable:found  punctuation::  keyword:maybe  type-builtin:text  operator:@  region:r  operator:=  keyword:none
 110 |     found = kept

@@ -1,4 +1,4 @@
-# error: 4:5: this value is unused; only a task call can be used as a statement
+; error: 4:5: this value is unused; only a task call can be used as a statement
 task main()
     bind x = 1
     x

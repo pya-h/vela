@@ -1,4 +1,4 @@
-# error: 3:10: invalid number '0o8': '8' is not an octal digit (0-7)
+; error: 3:10: invalid number '0o8': '8' is not an octal digit (0-7)
 task main()
     show(0o8)
 fi

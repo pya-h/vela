@@ -1,4 +1,4 @@
-# error: 8:19: shape 'Pair' takes 2 types, so name all of them, as in 'Pair<A, B> { … }'
+; error: 8:19: shape 'Pair' takes 2 types, so name all of them, as in 'Pair<A, B> { … }'
 shape Pair<A: fixed, B: fixed>
     left: A
     right: B

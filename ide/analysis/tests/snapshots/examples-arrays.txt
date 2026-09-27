@@ -1,11 +1,11 @@
-  1 | # Arrays and slices: a week of fixed readings in an array, and primes found
-    | comment:# Arrays and slices: a week of fixed readings in an array, and primes found
-  2 | # with a slice that grows as the program finds them.
-    | comment:# with a slice that grows as the program finds them.
-  4 | # The highest of the readings, and their average.
-    | comment:# The highest of the readings, and their average.
-  5 | task summary(readings: [float; 7]) -> high: float, average: float
-    | keyword:task  task:summary  punctuation:(  parameter:readings  punctuation::  punctuation:[  type-builtin:float  punctuation:;  number:7  punctuation:]  punctuation:)  operator:->  variable:high  punctuation::  type-builtin:float  punctuation:,  variable:average  punctuation::  type-builtin:float
+  1 | ; Arrays and slices: a week of fixed readings in an array, and primes found
+    | comment:; Arrays and slices: a week of fixed readings in an array, and primes found
+  2 | ; with a slice that grows as the program finds them.
+    | comment:; with a slice that grows as the program finds them.
+  4 | ; The highest of the readings, and their average.
+    | comment:; The highest of the readings, and their average.
+  5 | task summary(readings: [float#7]) -> high: float, average: float
+    | keyword:task  task:summary  punctuation:(  parameter:readings  punctuation::  punctuation:[  type-builtin:float  punctuation:#  number:7  punctuation:]  punctuation:)  operator:->  variable:high  punctuation::  type-builtin:float  punctuation:,  variable:average  punctuation::  type-builtin:float
   6 |     high <- readings[0]
     | variable:high  keyword:<-  parameter:readings  punctuation:[  number:0  punctuation:]
   7 |     hold sum = 0.0
@@ -22,16 +22,16 @@
     | keyword:fi
  13 |     fi
     | keyword:fi
- 14 |     # `float(n)` turns the count into a float, so the average doesn't depend on
-    | comment:# `float(n)` turns the count into a float, so the average doesn't depend on
- 15 |     # the 7 being written twice.
-    | comment:# the 7 being written twice.
+ 14 |     ; `float(n)` turns the count into a float, so the average doesn't depend on
+    | comment:; `float(n)` turns the count into a float, so the average doesn't depend on
+ 15 |     ; the 7 being written twice.
+    | comment:; the 7 being written twice.
  16 |     average <- sum / float(readings.len)
     | variable:average  keyword:<-  variable:sum  operator:/  type-builtin:float  punctuation:(  parameter:readings  punctuation:.  field:len  punctuation:)
  17 | fi
     | keyword:fi
- 19 | # Sorts the items of a slice in place: a slice writes into the memory it views.
-    | comment:# Sorts the items of a slice in place: a slice writes into the memory it views.
+ 19 | ; Sorts the items of a slice in place: a slice writes into the memory it views.
+    | comment:; Sorts the items of a slice in place: a slice writes into the memory it views.
  20 | task sort(items: [int]@r)
     | keyword:task  task:sort  punctuation:(  parameter:items  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)
  21 |     each i in 1..items.len
@@ -50,16 +50,16 @@
     | keyword:fi
  28 | fi
     | keyword:fi
- 30 | # The primes below `limit`, by the sieve of Eratosthenes. The slice of primes
-    | comment:# The primes below `limit`, by the sieve of Eratosthenes. The slice of primes
- 31 | # starts empty and grows as they are found.
-    | comment:# starts empty and grows as they are found.
+ 30 | ; The primes below `limit`, by the sieve of Eratosthenes. The slice of primes
+    | comment:; The primes below `limit`, by the sieve of Eratosthenes. The slice of primes
+ 31 | ; starts empty and grows as they are found.
+    | comment:; starts empty and grows as they are found.
  32 | task primes(r: region, limit: int) -> [int]@r
     | keyword:task  task:primes  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
  33 |     region scratch
     | keyword:region  region:scratch
- 34 |     bind composite = new [bool]([false; limit]) at scratch
-    | keyword:bind  variable:composite  operator:=  keyword:new  punctuation:[  type-builtin:bool  punctuation:]  punctuation:(  punctuation:[  keyword:false  punctuation:;  parameter:limit  punctuation:]  punctuation:)  keyword:at  region:scratch
+ 34 |     bind composite = new [bool]([false#limit]) at scratch
+    | keyword:bind  variable:composite  operator:=  keyword:new  punctuation:[  type-builtin:bool  punctuation:]  punctuation:(  punctuation:[  keyword:false  punctuation:#  parameter:limit  punctuation:]  punctuation:)  keyword:at  region:scratch
  35 |     hold found = new [int]() at r
     | keyword:hold  variable:found  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
  36 |     each n in 2..limit
@@ -82,47 +82,47 @@
     | keyword:fi
  45 |     fi
     | keyword:fi
- 46 |     # Only the primes outlive the scratch region: they were added in `r`.
-    | comment:# Only the primes outlive the scratch region: they were added in `r`.
+ 46 |     ; Only the primes outlive the scratch region: they were added in `r`.
+    | comment:; Only the primes outlive the scratch region: they were added in `r`.
  47 |     <- found
     | keyword:<-  variable:found
  48 | fi
     | keyword:fi
  50 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 51 |     bind week: [float; 7] = [21.5, 23.0, 19.5, 24.5, 22.0, 18.0, 20.5]
-    | keyword:bind  variable:week  punctuation::  punctuation:[  type-builtin:float  punctuation:;  number:7  punctuation:]  operator:=  punctuation:[  number:21.5  punctuation:,  number:23.0  punctuation:,  number:19.5  punctuation:,  number:24.5  punctuation:,  number:22.0  punctuation:,  number:18.0  punctuation:,  number:20.5  punctuation:]
+ 51 |     bind week: [float#7] = [21.5, 23.0, 19.5, 24.5, 22.0, 18.0, 20.5]
+    | keyword:bind  variable:week  punctuation::  punctuation:[  type-builtin:float  punctuation:#  number:7  punctuation:]  operator:=  punctuation:[  number:21.5  punctuation:,  number:23.0  punctuation:,  number:19.5  punctuation:,  number:24.5  punctuation:,  number:22.0  punctuation:,  number:18.0  punctuation:,  number:20.5  punctuation:]
  52 |     bind high, average = summary(week)
     | keyword:bind  variable:high  punctuation:,  variable:average  operator:=  task:summary  punctuation:(  variable:week  punctuation:)
- 53 |     show(high)                               # 24.5
-    | builtin-fn:show  punctuation:(  variable:high  punctuation:)  comment:# 24.5
- 54 |     show(average)                            # 21.2857
-    | builtin-fn:show  punctuation:(  variable:average  punctuation:)  comment:# 21.2857
+ 53 |     show(high)                               ; 24.5
+    | builtin-fn:show  punctuation:(  variable:high  punctuation:)  comment:; 24.5
+ 54 |     show(average)                            ; 21.2857
+    | builtin-fn:show  punctuation:(  variable:average  punctuation:)  comment:; 21.2857
  56 |     region r
     | keyword:region  region:r
  57 |     bind scores = new [int]([72, 90, 65, 88, 79]) at r
     | keyword:bind  variable:scores  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:72  punctuation:,  number:90  punctuation:,  number:65  punctuation:,  number:88  punctuation:,  number:79  punctuation:]  punctuation:)  keyword:at  region:r
  58 |     sort(scores)
     | task:sort  punctuation:(  variable:scores  punctuation:)
- 59 |     show(scores[0])                          # 65
-    | builtin-fn:show  punctuation:(  variable:scores  punctuation:[  number:0  punctuation:]  punctuation:)  comment:# 65
- 60 |     show(scores[scores.len - 1])             # 90
-    | builtin-fn:show  punctuation:(  variable:scores  punctuation:[  variable:scores  punctuation:.  field:len  operator:-  number:1  punctuation:]  punctuation:)  comment:# 90
- 61 |     # A part of a slice views the same memory, without copying.
-    | comment:# A part of a slice views the same memory, without copying.
+ 59 |     show(scores[0])                          ; 65
+    | builtin-fn:show  punctuation:(  variable:scores  punctuation:[  number:0  punctuation:]  punctuation:)  comment:; 65
+ 60 |     show(scores[scores.len - 1])             ; 90
+    | builtin-fn:show  punctuation:(  variable:scores  punctuation:[  variable:scores  punctuation:.  field:len  operator:-  number:1  punctuation:]  punctuation:)  comment:; 90
+ 61 |     ; A part of a slice views the same memory, without copying.
+    | comment:; A part of a slice views the same memory, without copying.
  62 |     bind top = scores[3..5]
     | keyword:bind  variable:top  operator:=  variable:scores  punctuation:[  number:3  operator:..  number:5  punctuation:]
- 63 |     show(top[0] + top[1])                    # 178
-    | builtin-fn:show  punctuation:(  variable:top  punctuation:[  number:0  punctuation:]  operator:+  variable:top  punctuation:[  number:1  punctuation:]  punctuation:)  comment:# 178
+ 63 |     show(top[0] + top[1])                    ; 178
+    | builtin-fn:show  punctuation:(  variable:top  punctuation:[  number:0  punctuation:]  operator:+  variable:top  punctuation:[  number:1  punctuation:]  punctuation:)  comment:; 178
  65 |     hold small = primes(r, 30)
     | keyword:hold  variable:small  operator:=  task:primes  punctuation:(  region:r  punctuation:,  number:30  punctuation:)
- 66 |     show(small.len)                          # 10
-    | builtin-fn:show  punctuation:(  variable:small  punctuation:.  field:len  punctuation:)  comment:# 10
- 67 |     show(small.del())                        # 29, taken out
-    | builtin-fn:show  punctuation:(  variable:small  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)  comment:# 29, taken out
- 68 |     small.add(0, 1)                          # 1 goes first
-    | variable:small  punctuation:.  field:add  punctuation:(  number:0  punctuation:,  number:1  punctuation:)  comment:# 1 goes first
- 69 |     show(small[0] + small.len)               # 11
-    | builtin-fn:show  punctuation:(  variable:small  punctuation:[  number:0  punctuation:]  operator:+  variable:small  punctuation:.  field:len  punctuation:)  comment:# 11
+ 66 |     show(small.len)                          ; 10
+    | builtin-fn:show  punctuation:(  variable:small  punctuation:.  field:len  punctuation:)  comment:; 10
+ 67 |     show(small.del())                        ; 29, taken out
+    | builtin-fn:show  punctuation:(  variable:small  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)  comment:; 29, taken out
+ 68 |     small.add(0, 1)                          ; 1 goes first
+    | variable:small  punctuation:.  field:add  punctuation:(  number:0  punctuation:,  number:1  punctuation:)  comment:; 1 goes first
+ 69 |     show(small[0] + small.len)               ; 11
+    | builtin-fn:show  punctuation:(  variable:small  punctuation:[  number:0  punctuation:]  operator:+  variable:small  punctuation:.  field:len  punctuation:)  comment:; 11
  70 | fi
     | keyword:fi

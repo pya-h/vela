@@ -1,5 +1,5 @@
-# Colors described through a private kind and shape, for
-# tests/run/module_parts.vela and tests/run/module_braces.vela.
+; Colors described through a private kind and shape, for
+; tests/run/module_parts.vela and tests/run/module_braces.vela.
 
 kind Color
     Red

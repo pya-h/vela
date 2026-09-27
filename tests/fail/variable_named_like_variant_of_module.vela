@@ -1,4 +1,4 @@
-# error: 5:10: 'Hearts' is already the name of a variant of kind 'Suit'
+; error: 5:10: 'Hearts' is already the name of a variant of kind 'Suit'
 include modules/library (Suit, Hearts)
 
 task main()

@@ -1,14 +1,14 @@
-# Numbers read from input: `scan("> ", int)` shows the prompt, reads a line, and
-# sends the number it holds, or an `InputError` saying there is none — because
-# the input ended, or because the line was no number, which holds the
-# `ParseError` that reading it gave. Reading a number from text a program already
-# has is `int(t)`, which sends that `ParseError` on its own, and reads a whole
-# number written in another base too, as code writes one: `0x1F`, `0o17`, `0b101`.
-#
-# Run it and type a few numbers (Ctrl-D, or the end of a file given as input,
-# ends them), or give it a file: `./numbers < readings.txt`.
+; Numbers read from input: `scan("> ", int)` shows the prompt, reads a line, and
+; sends the number it holds, or an `InputError` saying there is none — because
+; the input ended, or because the line was no number, which holds the
+; `ParseError` that reading it gave. Reading a number from text a program already
+; has is `int(t)`, which sends that `ParseError` on its own, and reads a whole
+; number written in another base too, as code writes one: `0x1F`, `0o17`, `0b101`.
+;
+; Run it and type a few numbers (Ctrl-D, or the end of a file given as input,
+; ends them), or give it a file: `./numbers < readings.txt`.
 
-# The numbers a program reads may also come from text it holds.
+; The numbers a program reads may also come from text it holds.
 task from_text()
     each written in ["6", "6.5", "-0", "0x1F", "-0b101", "010", "0b102"]
         match int(written)
@@ -43,10 +43,10 @@ task main()
             fi
         case failure e
             match e
-            # Nothing more to read, so the loop is done.
+            ; Nothing more to read, so the loop is done.
             case Ended
                 reading = false
-            # A line that was no number: the reason says which way.
+            ; A line that was no number: the reason says which way.
             case NoNumber why
                 refused = refused + 1
                 match why
@@ -64,8 +64,8 @@ task main()
     else
         show(count, " read, ", refused, " refused")
         show("total ", total, ", largest ", largest)
-        # An average is a float, so the count becomes one: an int and a float
-        # don't mix on their own.
+        ; An average is a float, so the count becomes one: an int and a float
+        ; don't mix on their own.
         show("average ", float(total) / float(count))
     fi
 fi

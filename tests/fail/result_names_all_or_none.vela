@@ -1,4 +1,4 @@
-# error: 2:40: either every result has a name or none does, and this one has no name, as in '-> steps: int, peak: int'
+; error: 2:40: either every result has a name or none does, and this one has no name, as in '-> steps: int, peak: int'
 task divmod(a: int, b: int) -> q: int, int
     <- a / b, a % b
 fi

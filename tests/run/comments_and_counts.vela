@@ -1,0 +1,15 @@
+; A `;` starts a comment, which runs to the end of its line, as a semicolon
+; adds a remark to a sentence; a `#` separates an array's type or value from
+; its count, as in item #4.
+
+task main()   ; a comment after a header
+    bind week: [int#7] = [1, 2, 3, 4, 5, 6, 7] ; after a statement
+    bind zeros = [0 # 3]                        ; spaces around '#' are allowed
+    bind grid: [[float#2]#3] = [[0.5#2]#3]
+    show(week[3], " ", zeros.len, " ", grid[2][1])
+    show(1);                                    ; a C habit: the ';' is a comment
+    ;show("never")
+    ; A '#' or ';' inside text is text.
+    show("item #4; the fourth")
+    show(week.type, " ", grid.type)
+fi                                              ; and after 'fi'

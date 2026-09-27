@@ -1,4 +1,4 @@
-# error: 3:10: 'total' is already a result of this task, declared at 2:26
+; error: 3:10: 'total' is already a result of this task, declared at 2:26
 task score(hits: int) -> total: int
     bind total = hits
     total <- total

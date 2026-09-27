@@ -1,9 +1,9 @@
-  1 | # Primes below a limit, found twice: into a slice of fixed length filled by
-    | comment:# Primes below a limit, found twice: into a slice of fixed length filled by
-  2 | # index, and into a slice that grows with add. Then del takes them out again,
-    | comment:# index, and into a slice that grows with add. Then del takes them out again,
-  3 | # last first.
-    | comment:# last first.
+  1 | ; Primes below a limit, found twice: into a slice of fixed length filled by
+    | comment:; Primes below a limit, found twice: into a slice of fixed length filled by
+  2 | ; index, and into a slice that grows with add. Then del takes them out again,
+    | comment:; index, and into a slice that grows with add. Then del takes them out again,
+  3 | ; last first.
+    | comment:; last first.
   5 | task is_prime(n: int) -> bool
     | keyword:task  task:is_prime  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
   6 |     each i in 2..(n/2 + 1)
@@ -22,8 +22,8 @@
     | keyword:fi
  14 | task primes_below_no_add(r: region, limit: int) -> [int]@r
     | keyword:task  task:primes_below_no_add  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
- 15 |     bind primes: [int]@r = new [int]([0;limit]) at r  # filled by index; primes_below does the same with add
-    | keyword:bind  variable:primes  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:;  parameter:limit  punctuation:]  punctuation:)  keyword:at  region:r  comment:# filled by index; primes_below does the same with add
+ 15 |     bind primes: [int]@r = new [int]([0#limit]) at r  ; filled by index; primes_below does the same with add
+    | keyword:bind  variable:primes  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:#  parameter:limit  punctuation:]  punctuation:)  keyword:at  region:r  comment:; filled by index; primes_below does the same with add
  16 |     hold idx = 0
     | keyword:hold  variable:idx  operator:=  number:0
  18 |     each i in 2..limit
@@ -92,11 +92,11 @@
     | keyword:fi
  54 |     show("-----------------------")
     | builtin-fn:show  punctuation:(  string:"-----------------------"  punctuation:)
- 55 |     show(results.len) # 15: x has a length of its own, so taking items out of x leaves results' as it was
-    | builtin-fn:show  punctuation:(  variable:results  punctuation:.  field:len  punctuation:)  comment:# 15: x has a length of its own, so taking items out of x leaves results' as it was
+ 55 |     show(results.len) ; 15: x has a length of its own, so taking items out of x leaves results' as it was
+    | builtin-fn:show  punctuation:(  variable:results  punctuation:.  field:len  punctuation:)  comment:; 15: x has a length of its own, so taking items out of x leaves results' as it was
  56 |     show(x.len)
     | builtin-fn:show  punctuation:(  variable:x  punctuation:.  field:len  punctuation:)
- 57 |     # show(x.del())  # would stop the program: vela: del() on an empty slice
-    | comment:# show(x.del())  # would stop the program: vela: del() on an empty slice
+ 57 |     ; show(x.del())  # would stop the program: vela: del() on an empty slice
+    | comment:; show(x.del())  # would stop the program: vela: del() on an empty slice
  58 | fi
     | keyword:fi

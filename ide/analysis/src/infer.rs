@@ -651,7 +651,7 @@ impl<'a> Knowledge<'a> {
                 let type_token = |r: usize| {
                     matches!(
                         self.token(r),
-                        Some(Token::Caret | Token::Maybe | Token::New | Token::AtSign | Token::Dot | Token::Ident(_) | Token::LBracket | Token::RBracket | Token::Semicolon | Token::Int(_) | Token::Tilde)
+                        Some(Token::Caret | Token::Maybe | Token::New | Token::AtSign | Token::Dot | Token::Ident(_) | Token::LBracket | Token::RBracket | Token::Hash | Token::Int(_) | Token::Tilde)
                     )
                 };
                 let new = open.checked_sub(1).and_then(|before| (0..=before).rev().take_while(|&r| type_token(r)).find(|&r| self.token(r) == Some(&Token::New)));
@@ -776,10 +776,10 @@ impl<'a> Knowledge<'a> {
                 _ => None,
             };
         }
-        // `[value; count]` or `[a, b, c]`.
-        if let Some(semicolon) = self.outside_brackets(first, last).find(|&q| self.token(q) == Some(&Token::Semicolon)) {
-            let item = self.span_type(first, semicolon.checked_sub(1)?, depth + 1)?;
-            let count = match (semicolon + 1 == last, self.token(last)) {
+        // `[value#count]` or `[a, b, c]`.
+        if let Some(hash) = self.outside_brackets(first, last).find(|&q| self.token(q) == Some(&Token::Hash)) {
+            let item = self.span_type(first, hash.checked_sub(1)?, depth + 1)?;
+            let count = match (hash + 1 == last, self.token(last)) {
                 (true, Some(Token::Int(n))) => u64::try_from(*n).ok()?,
                 _ => return None,
             };
@@ -1112,7 +1112,7 @@ fn holds_text(ty: &Type, textual: &HashSet<String>) -> bool {
 }
 
 /// A type written in source, such as `int`, `^Point@r`, `maybe ^Node@r`,
-/// `region`, `[int; 4]`, `[^Node]@r`, or `int ~ ParseError`. Written regions
+/// `region`, `[int#4]`, `[^Node]@r`, or `int ~ ParseError`. Written regions
 /// are kept as written.
 pub(crate) fn parse_type(text: &str) -> Option<Type> {
     parse_type_within(text, 0)
@@ -1200,7 +1200,7 @@ fn parse_prefixed_type(text: &str, depth: usize) -> Option<Type> {
                 Err(items) => Type::Tuple(Some(items).filter(|items| items.len() >= 2)?),
             }
         }
-        // `[T; n]` or `[T]`.
+        // `[T#n]` or `[T]`.
         brackets if brackets.starts_with('[') && brackets.ends_with(']') => {
             let inside = brackets.get(1..brackets.len() - 1)?;
             match unbracketed(inside, ";").next() {

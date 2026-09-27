@@ -1,4 +1,4 @@
-# error: 5:1: expected 'fi' to close the 'kind' at 2:1, got 'task'
+; error: 5:1: expected 'fi' to close the 'kind' at 2:1, got 'task'
 kind K
     A
 

@@ -1,13 +1,13 @@
-  1 | # A program in several files. `include` loads another file from this file's
-    | comment:# A program in several files. `include` loads another file from this file's
-  2 | # folder: shop/cart.vela is reached through its name, as `cart.add(…)`. From
-    | comment:# folder: shop/cart.vela is reached through its name, as `cart.add(…)`. From
-  3 | # shop/prices.vela, the braces bring in only the names listed, one of them
-    | comment:# shop/prices.vela, the braces bring in only the names listed, one of them
-  4 | # under another name with `=>`. `priv` keeps a task, shape, kind, or field to
-    | comment:# under another name with `=>`. `priv` keeps a task, shape, kind, or field to
-  5 | # the file that declares it.
-    | comment:# the file that declares it.
+  1 | ; A program in several files. `include` loads another file from this file's
+    | comment:; A program in several files. `include` loads another file from this file's
+  2 | ; folder: shop/cart.vela is reached through its name, as `cart.add(…)`. From
+    | comment:; folder: shop/cart.vela is reached through its name, as `cart.add(…)`. From
+  3 | ; shop/prices.vela, the braces bring in only the names listed, one of them
+    | comment:; shop/prices.vela, the braces bring in only the names listed, one of them
+  4 | ; under another name with `=>`. `priv` keeps a task, shape, kind, or field to
+    | comment:; under another name with `=>`. `priv` keeps a task, shape, kind, or field to
+  5 | ; the file that declares it.
+    | comment:; the file that declares it.
   7 | include shop/cart
     | keyword:include  module:shop  operator:/  module:cart
   8 | include shop/prices {Item => Product, price_of}
@@ -22,19 +22,19 @@
     | variable:basket  operator:=  module:cart  punctuation:.  task:add  punctuation:(  variable:basket  punctuation:,  type:Product  punctuation:.  variant:Bread  punctuation:,  number:1  punctuation:)
  14 |     basket = cart.add(basket, Product.Cheese(600), 1)
     | variable:basket  operator:=  module:cart  punctuation:.  task:add  punctuation:(  variable:basket  punctuation:,  type:Product  punctuation:.  variant:Cheese  punctuation:(  number:600  punctuation:)  punctuation:,  number:1  punctuation:)
- 15 |     show(basket.items)                       # 8
-    | builtin-fn:show  punctuation:(  variable:basket  punctuation:.  field:items  punctuation:)  comment:# 8
- 16 |     show(cart.total(basket))                 # 1690 cents
-    | builtin-fn:show  punctuation:(  module:cart  punctuation:.  task:total  punctuation:(  variable:basket  punctuation:)  punctuation:)  comment:# 1690 cents
- 18 |     # Item came in as Product; its variants are named through it.
-    | comment:# Item came in as Product; its variants are named through it.
+ 15 |     show(basket.items)                       ; 8
+    | builtin-fn:show  punctuation:(  variable:basket  punctuation:.  field:items  punctuation:)  comment:; 8
+ 16 |     show(cart.total(basket))                 ; 1690 cents
+    | builtin-fn:show  punctuation:(  module:cart  punctuation:.  task:total  punctuation:(  variable:basket  punctuation:)  punctuation:)  comment:; 1690 cents
+ 18 |     ; Item came in as Product; its variants are named through it.
+    | comment:; Item came in as Product; its variants are named through it.
  19 |     bind snack: Product = Product.Cheese(100)
     | keyword:bind  variable:snack  punctuation::  type:Product  operator:=  type:Product  punctuation:.  variant:Cheese  punctuation:(  number:100  punctuation:)
- 20 |     show(price_of(snack))                    # 300
-    | builtin-fn:show  punctuation:(  task:price_of  punctuation:(  variable:snack  punctuation:)  punctuation:)  comment:# 300
- 22 |     # `basket.total` would be an error here: the field is private to cart.vela,
-    | comment:# `basket.total` would be an error here: the field is private to cart.vela,
- 23 |     # so only its tasks can change it, and it always matches what was added.
-    | comment:# so only its tasks can change it, and it always matches what was added.
+ 20 |     show(price_of(snack))                    ; 300
+    | builtin-fn:show  punctuation:(  task:price_of  punctuation:(  variable:snack  punctuation:)  punctuation:)  comment:; 300
+ 22 |     ; `basket.total` would be an error here: the field is private to cart.vela,
+    | comment:; `basket.total` would be an error here: the field is private to cart.vela,
+ 23 |     ; so only its tasks can change it, and it always matches what was added.
+    | comment:; so only its tasks can change it, and it always matches what was added.
  24 | fi
     | keyword:fi

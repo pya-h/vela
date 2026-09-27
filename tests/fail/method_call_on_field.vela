@@ -1,4 +1,4 @@
-# error: 8:14: type int has no methods
+; error: 8:14: type int has no methods
 shape Point
     x: int
 fi

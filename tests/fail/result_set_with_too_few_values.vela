@@ -1,4 +1,4 @@
-# error: 3:5: expected 2 values, got 1
+; error: 3:5: expected 2 values, got 1
 task pair(n: int) -> steps: int, peak: int
     steps, peak <- n
 fi

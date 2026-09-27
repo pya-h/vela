@@ -1,4 +1,4 @@
-# error: 2:20: everything a value in region 'r' holds is in 'r'; remove '@s'
+; error: 2:20: everything a value in region 'r' holds is in 'r'; remove '@s'
 task keep(t: (text@s, int)@r)
 fi
 

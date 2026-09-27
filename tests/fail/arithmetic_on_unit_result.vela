@@ -1,4 +1,4 @@
-# error: 9:18: arithmetic requires numeric operands; a 'unit ~ text' has no value, only an error to handle, as in 'x { failure e … }'
+; error: 9:18: arithmetic requires numeric operands; a 'unit ~ text' has no value, only an error to handle, as in 'x { failure e … }'
 task save(n: int) -> unit ~ text
     when n > 9
         <- fail "too big"

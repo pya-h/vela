@@ -1,5 +1,5 @@
-# A module whose file name is a variant of a builtin kind, for a fail fixture:
-# including it would make 'Ended' mean both this module and the variant.
+; A module whose file name is a variant of a builtin kind, for a fail fixture:
+; including it would make 'Ended' mean both this module and the variant.
 task greet() -> text
     <- "hello"
 fi

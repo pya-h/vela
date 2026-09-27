@@ -1,4 +1,4 @@
-# error: 2:29: a type has one error type: '~' can't appear twice
+; error: 2:29: a type has one error type: '~' can't appear twice
 task read(n: int) -> (int ~ text) ~ text
     <- n
 fi

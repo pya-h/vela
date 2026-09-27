@@ -1,4 +1,4 @@
-# error: 7:34: result 2 lives in region 'r', which the task isn't given; take it as a parameter, as in 'r: region'
+; error: 7:34: result 2 lives in region 'r', which the task isn't given; take it as a parameter, as in 'r: region'
 shape Node
     value: int
     next: maybe ^Node

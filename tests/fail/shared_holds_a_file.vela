@@ -1,4 +1,4 @@
-# error: 5:17: shared field 'out' can't hold a 'File', which the region it is opened in closes, and a shared field lives as long as the program
+; error: 5:17: shared field 'out' can't hold a 'File', which the region it is opened in closes, and a shared field lives as long as the program
 include std/files (File)
 
 shape Log

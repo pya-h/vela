@@ -1,5 +1,5 @@
-  1 | # Variants without a payload can be written with or without parentheses.
-    | comment:# Variants without a payload can be written with or without parentheses.
+  1 | ; Variants without a payload can be written with or without parentheses.
+    | comment:; Variants without a payload can be written with or without parentheses.
   3 | kind Light
     | keyword:kind  type:Light
   4 |     Red

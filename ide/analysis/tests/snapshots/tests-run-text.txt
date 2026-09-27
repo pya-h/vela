@@ -1,5 +1,5 @@
-  1 | # Text literals and escapes
-    | comment:# Text literals and escapes
+  1 | ; Text literals and escapes
+    | comment:; Text literals and escapes
   3 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
   4 |     show("plain")

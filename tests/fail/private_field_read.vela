@@ -1,4 +1,4 @@
-# error: 6:15: 'pin' is a private field of 'library.Card', which only its own file can use
+; error: 6:15: 'pin' is a private field of 'library.Card', which only its own file can use
 include modules/library
 
 task main()
