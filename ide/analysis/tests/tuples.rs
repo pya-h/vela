@@ -107,7 +107,7 @@ fn an_item_hovers_with_its_type_and_completes_by_position() {
         assert!(doc.starts_with("An item of a tuple"), "{}", doc);
         let items = completions(&program(checks, "show(pair.@@)"));
         let pairs: Vec<(&str, &str)> = items.iter().map(|item| (item.label.as_str(), item.detail.as_str())).collect();
-        assert_eq!(pairs, [("0", "text"), ("1", "int")], "checks: {}", checks);
+        assert_eq!(pairs, [("0", "text"), ("1", "int"), ("type", "text, the value's type as code writes it")], "checks: {}", checks);
     }
 }
 

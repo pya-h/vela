@@ -1,0 +1,138 @@
+  1 | # `x.type`: the type of a value as code writes it, known to the compiler, so
+    | comment:# `x.type`: the type of a value as code writes it, known to the compiler, so
+  2 | # the value is never worked out. Regions are left out, a shape or kind is its
+    | comment:# the value is never worked out. Regions are left out, a shape or kind is its
+  3 | # own name, and in a task that takes types it is the type each use gives.
+    | comment:# own name, and in a task that takes types it is the type each use gives.
+  5 | include type_of/shapes
+    | keyword:include  module:type_of  operator:/  module:shapes
+  7 | shape Box<T>
+    | keyword:shape  type:Box  punctuation:<  type:T  punctuation:>
+  8 |     value: T
+    | field:value  punctuation::  type:T
+  9 | fi
+    | keyword:fi
+ 11 | shape Point
+    | keyword:shape  type:Point
+ 12 |     x: int
+    | field:x  punctuation::  type-builtin:int
+ 13 |     y: int
+    | field:y  punctuation::  type-builtin:int
+ 15 |     own() -> text
+    | method:own  punctuation:(  punctuation:)  operator:->  type-builtin:text
+ 16 |         <- .type
+    | keyword:<-  punctuation:.  keyword:type
+ 17 |     fi
+    | keyword:fi
+ 19 |     of_x() -> text
+    | method:of_x  punctuation:(  punctuation:)  operator:->  type-builtin:text
+ 20 |         <- .x.type
+    | keyword:<-  punctuation:.  field:x  punctuation:.  keyword:type
+ 21 |     fi
+    | keyword:fi
+ 23 |     inside() -> text
+    | method:inside  punctuation:(  punctuation:)  operator:->  type-builtin:text
+ 24 |         <- .this.type
+    | keyword:<-  punctuation:.  keyword:this  punctuation:.  keyword:type
+ 25 |     fi
+    | keyword:fi
+ 26 | fi
+    | keyword:fi
+ 28 | kind Mood
+    | keyword:kind  type:Mood
+ 29 |     Calm
+    | variant:Calm
+ 30 |     Loud(level: int)
+    | variant:Loud  punctuation:(  field:level  punctuation::  type-builtin:int  punctuation:)
+ 31 | fi
+    | keyword:fi
+ 33 | task named<T>(v: T) -> text
+    | keyword:task  task:named  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:v  punctuation::  type:T  punctuation:)  operator:->  type-builtin:text
+ 34 |     <- v.type
+    | keyword:<-  parameter:v  punctuation:.  keyword:type
+ 35 | fi
+    | keyword:fi
+ 37 | task listed<T>(vs: [T; 2]) -> text
+    | keyword:task  task:listed  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:vs  punctuation::  punctuation:[  type:T  punctuation:;  number:2  punctuation:]  punctuation:)  operator:->  type-builtin:text
+ 38 |     <- vs.type
+    | keyword:<-  parameter:vs  punctuation:.  keyword:type
+ 39 | fi
+    | keyword:fi
+ 41 | task count() -> int
+    | keyword:task  task:count  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 42 |     show("never")
+    | builtin-fn:show  punctuation:(  string:"never"  punctuation:)
+ 43 |     <- 1
+    | keyword:<-  number:1
+ 44 | fi
+    | keyword:fi
+ 46 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 47 |     region r
+    | keyword:region  region:r
+ 48 |     show(1.type, " ", 2.5.type, " ", true.type, " ", "hi".type)
+    | builtin-fn:show  punctuation:(  number:1  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  number:2.5  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  keyword:true  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  string:"hi"  punctuation:.  keyword:type  punctuation:)
+ 49 |     bind xs = [1, 2, 3]
+    | keyword:bind  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 50 |     bind grid = [[0.5; 2]; 3]
+    | keyword:bind  variable:grid  operator:=  punctuation:[  punctuation:[  number:0.5  punctuation:;  number:2  punctuation:]  punctuation:;  number:3  punctuation:]
+ 51 |     show(xs.type, " ", grid.type, " ", grid[0].type, " ", xs.len.type)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:grid  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:grid  punctuation:[  number:0  punctuation:]  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:.  field:len  punctuation:.  keyword:type  punctuation:)
+ 52 |     bind items = new [float]() at r
+    | keyword:bind  variable:items  operator:=  keyword:new  punctuation:[  type-builtin:float  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 53 |     bind words = new [text]() at r
+    | keyword:bind  variable:words  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 54 |     show(items.type, " ", words.type, " ", items[0..0].type)
+    | builtin-fn:show  punctuation:(  variable:items  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:words  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:items  punctuation:[  number:0  operator:..  number:0  punctuation:]  punctuation:.  keyword:type  punctuation:)
+ 55 |     bind p = Point { x: 1, y: 2 }
+    | keyword:bind  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+ 56 |     bind near = new Point(p) at r
+    | keyword:bind  variable:near  operator:=  keyword:new  type:Point  punctuation:(  variable:p  punctuation:)  keyword:at  region:r
+ 57 |     bind far = new ^Point(near) at r
+    | keyword:bind  variable:far  operator:=  keyword:new  operator:^  type:Point  punctuation:(  variable:near  punctuation:)  keyword:at  region:r
+ 58 |     show(p.type, " ", near.type, " ", far.type, " ", near^.type, " ", p.x.type)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:near  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:far  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:near  operator:^  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  field:x  punctuation:.  keyword:type  punctuation:)
+ 59 |     bind m: maybe int = none
+    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 60 |     bind pair = (1, "a")
+    | keyword:bind  variable:pair  operator:=  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)
+ 61 |     show(m.type, " ", pair.type, " ", pair.1.type, " ", Mood.Loud(2).type)
+    | builtin-fn:show  punctuation:(  variable:m  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:pair  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:pair  punctuation:.  field:1  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  type:Mood  punctuation:.  variant:Loud  punctuation:(  number:2  punctuation:)  punctuation:.  keyword:type  punctuation:)
+ 62 |     bind b = Box<int> { value: 3 }
+    | keyword:bind  variable:b  operator:=  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  number:3  punctuation:}
+ 63 |     bind nested = Box<Box<text>> { value: Box<text> { value: "x" } }
+    | keyword:bind  variable:nested  operator:=  type:Box  punctuation:<  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:>  punctuation:{  field:value  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:{  field:value  punctuation::  string:"x"  punctuation:}  punctuation:}
+ 64 |     show(b.type, " ", nested.type, " ", nested.value.type)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:nested  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:nested  punctuation:.  field:value  punctuation:.  keyword:type  punctuation:)
+ 65 |     # A shape or kind of another file is its own name.
+    | comment:# A shape or kind of another file is its own name.
+ 66 |     show(shapes.Crate { size: 1 }.type, " ", shapes.Weather.Sun.type, " ", shapes.Weather.Rain(2).type)
+    | builtin-fn:show  punctuation:(  module:shapes  punctuation:.  type:Crate  punctuation:{  field:size  punctuation::  number:1  punctuation:}  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  module:shapes  punctuation:.  type:Weather  punctuation:.  variant:Sun  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  module:shapes  punctuation:.  type:Weather  punctuation:.  variant:Rain  punctuation:(  number:2  punctuation:)  punctuation:.  keyword:type  punctuation:)
+ 67 |     # Text in a region is text.
+    | comment:# Text in a region is text.
+ 68 |     bind t = "a" + "b" at r
+    | keyword:bind  variable:t  operator:=  string:"a"  operator:+  string:"b"  keyword:at  region:r
+ 69 |     show(t.type)
+    | builtin-fn:show  punctuation:(  variable:t  punctuation:.  keyword:type  punctuation:)
+ 70 |     # In a task that takes types, the type each use gives.
+    | comment:# In a task that takes types, the type each use gives.
+ 71 |     show(named(1), " ", named(xs), " ", named(b), " ", named(near), " ", named(pair))
+    | builtin-fn:show  punctuation:(  task:named  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  task:named  punctuation:(  variable:xs  punctuation:)  punctuation:,  string:" "  punctuation:,  task:named  punctuation:(  variable:b  punctuation:)  punctuation:,  string:" "  punctuation:,  task:named  punctuation:(  variable:near  punctuation:)  punctuation:,  string:" "  punctuation:,  task:named  punctuation:(  variable:pair  punctuation:)  punctuation:)
+ 72 |     show(listed([p, p]), " ", listed(["a", "b"]))
+    | builtin-fn:show  punctuation:(  task:listed  punctuation:(  punctuation:[  variable:p  punctuation:,  variable:p  punctuation:]  punctuation:)  punctuation:,  string:" "  punctuation:,  task:listed  punctuation:(  punctuation:[  string:"a"  punctuation:,  string:"b"  punctuation:]  punctuation:)  punctuation:)
+ 73 |     # Inside a method, `.type` is the type of the value it is called on.
+    | comment:# Inside a method, `.type` is the type of the value it is called on.
+ 74 |     show(p.own(), " ", p.inside(), " ", p.of_x())
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  method:own  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  method:inside  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  method:of_x  punctuation:(  punctuation:)  punctuation:)
+ 75 |     # The value itself is never worked out, as C's sizeof.
+    | comment:# The value itself is never worked out, as C's sizeof.
+ 76 |     show(count().type)
+    | builtin-fn:show  punctuation:(  task:count  punctuation:(  punctuation:)  punctuation:.  keyword:type  punctuation:)
+ 77 |     # It is text like any other.
+    | comment:# It is text like any other.
+ 78 |     bind word = xs.type
+    | keyword:bind  variable:word  operator:=  variable:xs  punctuation:.  keyword:type
+ 79 |     show(word.len, " ", word == "[int; 3]")
+    | builtin-fn:show  punctuation:(  variable:word  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:word  operator:==  string:"[int; 3]"  punctuation:)
+ 80 | fi
+    | keyword:fi

@@ -255,7 +255,7 @@
       <pre>task shape kind  bind hold  when   else loop    each
 in   at    match case new   region and  or      not
 true false none  fi   maybe is     fail failure include priv
-block shared</pre>
+block shared type</pre>
       <p>
         <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>,
         <code>bool</code>, <code>text</code>, <code>unit</code>) aren't reserved words: no task, shape, kind, or
@@ -268,7 +268,8 @@ block shared</pre>
         reserved than those: <code>alters</code> before a method (see <a href="#methods">Methods</a>),
         <code>read</code> before a shape's field (see <a href="#read-fields">Read-only fields</a>),
         <code>default</code> after a region (see <a href="#default-region">A block's default region</a>), and
-        <code>this</code>. The symbols:
+        <code>this</code>. <code>type</code> is reserved everywhere and read only after a dot, as
+        <a href="#type-of"><code>x.type</code></a>. The symbols:
       </p>
       <table>
         <tr><th>Symbol</th><th>Meaning</th></tr>
@@ -647,11 +648,24 @@ show(label)                <span class="comment"># error: unknown variable 'labe
         On <code>int</code>s too, <code>%</code> keeps the sign of the dividend (<code>-7 % 3</code> is
         <code>-1</code>). Comparisons (<code>&lt; &lt;= &gt; &gt;=</code>) work on numbers of the same type.
         Number literals are decimal digits with an optional fraction (<code>42</code>, <code>3.14</code>), and
-        <code>_</code> may separate digits (<code>1_000_000</code>); there are no exponent or hex forms, so
+        <code>_</code> may separate digits (<code>1_000_000</code>); there is no exponent form, so
         <code>1e5</code> is an invalid number. An <code>int</code> literal can be at most
         <code>9223372036854775807</code>, so the smallest <code>int</code> is written
         <code>-9223372036854775807 - 1</code>.
       </p>
+      <p id="number-bases">
+        A whole number may be written in another base after <code>0</code> and a lowercase letter: <code>0x</code>
+        hex (<code>0x1F</code>, digits <code>0-9</code> and <code>a-f</code> in either case), <code>0o</code> octal
+        (<code>0o755</code>), and <code>0b</code> binary (<code>0b1010_0101</code>), with <code>_</code> between
+        digits as in a decimal one. It is an <code>int</code> like any other, at most <code>0x7fff_ffff_ffff_ffff</code>,
+        and always whole. A leading <code>0</code> alone is only a digit, so <code>010</code> is ten, not C's octal
+        eight. A digit the base doesn't have (<em>'2' is not a binary digit (0 or 1)</em>), an uppercase base letter
+        (<code>0X1F</code>), no digits after the base, and an underscore that isn't between two digits are each an
+        invalid number that says which. <a href="#reading-numbers"><code>int(text)</code></a> reads the same bases.
+      </p>
+      <pre>show(<span class="number">0x1F</span>, <span class="string">" "</span>, <span class="number">0o17</span>, <span class="string">" "</span>, <span class="number">0b101</span>)      <span class="comment"># 31 15 5</span>
+show(<span class="number">0xff_ff</span> + <span class="number">1</span>)                  <span class="comment"># 65536</span>
+show(<span class="number">0b102</span>)                        <span class="comment"># error: invalid number '0b102': '2' is not a binary digit (0 or 1)</span></pre>
       <pre>show(<span class="number">7</span> / <span class="number">2</span>)              <span class="comment"># 3, two ints</span>
 show(float(<span class="number">7</span>) / <span class="number">2.0</span>)     <span class="comment"># 3.5, two floats</span>
 show(<span class="number">5.5</span> % <span class="number">2.0</span>)          <span class="comment"># 1.5</span>
@@ -703,10 +717,13 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
       </p>
       <p>
         The text is the number and nothing else: digits, an optional leading <code>-</code>, and for a float one
-        <code>.</code> with digits on both sides. A space (<code>" 4"</code>), a <code>+</code>, a <code>_</code>
+        <code>.</code> with digits on both sides. An <code>int</code> may be written in
+        <a href="#number-bases">another base</a> after its sign, as code writes one: <code>int("0x1F")</code> is 31,
+        <code>int("-0b11")</code> is -3, and <code>int("0o17")</code> is 15, with the base letter lowercase and hex
+        digits in either case; <code>scan(prompt, int)</code> reads them too. A space (<code>" 4"</code>), a <code>+</code>, a <code>_</code>
         (which a <em>written</em> number may hold), an exponent (<code>"1e5"</code>), a fraction read as an
         <code>int</code> (<code>"4.0"</code>), and text with nothing in it are all <code>NotANumber</code>.
-        Leading zeros are fine (<code>"007"</code> is 7). A float is read to the nearest one it can hold, from at
+        Leading zeros are fine (<code>"007"</code> is 7, and <code>"010"</code> is 10). A float is read to the nearest one it can hold, from at
         most 400 significant digits, and one too large to hold is <code>TooLarge</code>; one too small is
         <code>0</code>, as arithmetic gives.
       </p>
@@ -1976,6 +1993,40 @@ save(500) {
           both refused.
         </p>
       </div>
+
+      <h3 id="type-of">The type of a value</h3>
+      <p>
+        Every value has <code>x.type</code>: its type as code writes it, as text. The compiler knows it, so it costs
+        nothing to run, and the value itself is never worked out, as C's <code>sizeof</code> doesn't:
+        <code>f().type</code> never calls <code>f</code>. Regions are left out, since a region's name means nothing
+        where the text is read (<code>[float]</code> for a slice <code>[float]@r</code>, <code>^Point</code> for a
+        <code>^Point@r</code>), a shape or kind is its own name wherever it is read (<code>Crate</code>, not
+        <code>shapes.Crate</code>), and a shape that takes types is written with them, <code>Box&lt;int&gt;</code>. In
+        a <a href="#generics">task that takes types</a> it is the type each use gives, so <code>v.type</code> in
+        <code>named&lt;T&gt;(v: T)</code> is <code>int</code> for <code>named(1)</code>. Inside a method,
+        <code>.type</code> is the type of the value the method is called on. <code>type</code> is a reserved word, so
+        no field, method, or variable takes the name; <code>x.type = …</code> and <code>x.type()</code> are errors
+        that say what it is.
+      </p>
+      <pre><span class="keyword">shape</span> Point
+    x: int
+    y: int
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> named&lt;T&gt;(v: T) -&gt; text
+    <span class="keyword">&lt;-</span> v.type
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">bind</span> xs = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]
+    <span class="keyword">bind</span> items = <span class="keyword">new</span> [float]() <span class="keyword">at</span> r
+    <span class="keyword">bind</span> p = <span class="keyword">new</span> Point(Point { x: <span class="number">1</span>, y: <span class="number">2</span> }) <span class="keyword">at</span> r
+    show(xs.type, <span class="string">" "</span>, items.type, <span class="string">" "</span>, p.type, <span class="string">" "</span>, p^.type)   <span class="comment"># [int; 3] [float] ^Point Point</span>
+    show((<span class="number">1</span>, <span class="string">"a"</span>).type, <span class="string">" "</span>, named(xs))                   <span class="comment"># (int, text) [int; 3]</span>
+    <span class="keyword">bind</span> m: <span class="keyword">maybe</span> int = <span class="keyword">none</span>
+    show(m.type)                                         <span class="comment"># maybe int</span>
+<span class="keyword">fi</span></pre>
 
     </section>
 

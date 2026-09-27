@@ -252,7 +252,8 @@ static inline int64_t vela__rt__int_of_float(double x, const char* at) {
 
 /* Reading a number from text: `int("42")` and `float("2.5")`. The text is the
  * number and nothing else — digits, with an optional leading `-`, and for a
- * float one `.` with digits on both sides. No spaces, no `+`, no `_` (which a
+ * float one `.` with digits on both sides. A whole number may be written in
+ * another base after its sign, `0x1F`, `0o17`, or `0b101`. No spaces, no `+`, no `_` (which a
  * written number may hold), and no exponent, as Vela's own numbers have none;
  * text with nothing in it is no number either. Neither reader touches the text
  * beyond its length, which may hold a `\0` like any other byte. */
@@ -282,17 +283,38 @@ static inline int vela__rt__int_of_text(vela__rt__text t, int64_t* value) {
      * which has no positive counterpart, is read without overflowing. */
     const uint64_t smallest = (uint64_t)INT64_MAX + 1u;
     uint64_t limit = negative ? smallest : (uint64_t)INT64_MAX;
+    /* `0x1F`, `0o17`, `0b101`: a whole number in another base, as Vela writes
+     * one; a leading `0` alone is only a digit, so `010` is ten. */
+    uint64_t base = 10u;
+    if (len - i > 2 && t.bytes[i] == '0') {
+        switch (t.bytes[i + 1]) {
+        case 'x': base = 16u; break;
+        case 'o': base = 8u; break;
+        case 'b': base = 2u; break;
+        default: break;
+        }
+        if (base != 10u) {
+            i += 2;
+        }
+    }
     uint64_t digits = 0;
     for (; i < len; i++) {
         unsigned char c = (unsigned char)t.bytes[i];
-        if (c < '0' || c > '9') {
+        uint64_t digit = base;
+        if (c >= '0' && c <= '9') {
+            digit = (uint64_t)(c - '0');
+        } else if (c >= 'a' && c <= 'f') {
+            digit = (uint64_t)(c - 'a') + 10u;
+        } else if (c >= 'A' && c <= 'F') {
+            digit = (uint64_t)(c - 'A') + 10u;
+        }
+        if (digit >= base) {
             return VELA__RT__READ_NOT_A_NUMBER;
         }
-        uint64_t digit = (uint64_t)(c - '0');
-        if (digits > (limit - digit) / 10u) {
+        if (digits > (limit - digit) / base) {
             return VELA__RT__READ_TOO_LARGE;
         }
-        digits = digits * 10u + digit;
+        digits = digits * base + digit;
     }
     /* Only the smallest int reaches the limit of the negative side, and it is
      * the one value no cast from unsigned could carry. */

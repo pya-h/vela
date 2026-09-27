@@ -1,0 +1,4 @@
+# error: 3:10: expected a name, got 'type', which is a reserved word; every value has '.type', its type as code writes it, so nothing else takes the name
+task main()
+    bind type = 1
+fi

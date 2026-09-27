@@ -1,0 +1,4 @@
+# error: 3:10: invalid number '0x': '0x' is followed by its digits, as in '0xff_ff'
+task main()
+    show(0x + 1)
+fi

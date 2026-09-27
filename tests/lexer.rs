@@ -121,6 +121,8 @@ fn agrees_with_the_compiler_on_malformed_input() {
         "1__000", "1_", "1_000abc", "_", "a _ b", "{_}", "_é", "__", "case _\n", "^Node@r", "new@r int(1) in r", "@", "region",
         "\"{", "\"{\"", "\"{n\"", "\"{n\" at r)\nfi", "\"{}\"", "\"}\"", "\"{n # c}\"", "\"{\"{n}\"}\"", "\"\\{\\}\"",
         "\"{x {0}}\"", "\"{\"a\nb", "\"{n!}\" x", "\"a {\"b} c\"", "\"{n}\r\n\"", "\"{é}\"", "\"{{n}}\"",
+
+        "0x1F", "0xff_ff", "0o17", "0b1_0", "0X1", "0x", "0x_1", "0b12", "0x1F.5", "0x1.type", "t.0x1", "0x8000_0000_0000_0000", "x.type", "type",
     ];
     for source in cases {
         check_agreement(source, &format!("{:?}", source));
@@ -158,6 +160,14 @@ fn messages_quote_numbers_as_written_and_name_unprintable_escapes() {
     assert_eq!(kinds("1_000abc")[0], invalid(1, 1, "invalid number '1_000abc'"));
     assert_eq!(kinds("9_223_372_036_854_775_808")[0], invalid(1, 1, "integer literal '9_223_372_036_854_775_808' is too large"));
     assert_eq!(kinds("1_0.")[0], invalid(1, 1, "invalid number '1_0.': write '1_0.0'"));
+    assert_eq!(kinds("0xff_ff")[0], token(Token::Int(65535)));
+    assert_eq!(kinds("0o17 0b101")[..2], [token(Token::Int(15)), token(Token::Int(5))]);
+    assert_eq!(kinds("0x7fff_ffff_ffff_ffff")[0], token(Token::Int(i64::MAX)));
+    assert_eq!(kinds("0x8000_0000_0000_0000")[0], invalid(1, 1, "integer literal '0x8000_0000_0000_0000' is too large"));
+    assert_eq!(kinds("0B1")[0], invalid(1, 1, "invalid number '0B1': its base is written in lowercase, as in '0b1'"));
+    assert_eq!(kinds("0o19")[0], invalid(1, 1, "invalid number '0o19': '9' is not an octal digit (0-7)"));
+    // A leading zero alone is a decimal digit.
+    assert_eq!(kinds("010")[0], token(Token::Int(10)));
     assert_eq!(kinds("\"a\\\tb\"")[0], invalid(1, 3, "invalid escape: '\\' followed by a tab"));
     assert_eq!(kinds("\"a\\\u{1}b\"")[0], invalid(1, 3, "invalid escape: '\\' followed by a control character"));
     assert_eq!(kinds("\"a\\\u{0}b\"")[0], invalid(1, 3, "invalid escape: '\\' followed by a NUL character"));

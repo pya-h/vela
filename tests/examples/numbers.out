@@ -1,6 +1,10 @@
 6 is 6
 6.5 is no whole number
 -0 is 0
+0x1F is 31
+-0b101 is -5
+010 is 10
+0b102 is no whole number
 > > > that is no number
 > > that does not fit in an int
 > > 4 read, 2 refused

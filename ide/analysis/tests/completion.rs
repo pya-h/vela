@@ -176,8 +176,8 @@ fn fields_follow_the_type_of_the_value() {
     assert_offers(&in_main("show(line.start.@@)"), &["x", "y"], &["finish"]);
     assert_offers(&in_main("show(origin().@@)"), &["x", "y"], &[]);
     assert_offers(&in_main("show(line.finish^.@@)"), &["x", "y"], &[]);
-    // A kind value has no fields.
-    assert_eq!(labels(&in_main("show(figure.@@)")), Vec::<String>::new());
+    // A kind value has no fields, only its type, which every value has.
+    assert_eq!(labels(&in_main("show(figure.@@)")), ["type"]);
 
     // Through a pointer, the field is reached with `^.`, replacing the dot.
     let marked = in_main("show(line.finish.@@)");

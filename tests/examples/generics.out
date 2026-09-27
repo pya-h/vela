@@ -3,11 +3,11 @@ Ada
 91
 2
 Ada
-scores:
+scores: [int]
 91
 78
 91
-names:
+names: [text]
 Ada
 Bo
 none

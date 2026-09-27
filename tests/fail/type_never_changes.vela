@@ -1,0 +1,5 @@
+# error: 4:10: 'type' is the type of the value (text here), which never changes
+task main()
+    hold word = "a"
+    word.type = "int"
+fi

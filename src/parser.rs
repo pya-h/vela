@@ -2247,7 +2247,7 @@ impl Parser {
                     self.advance();
                     return Ok(Expr::new(ExprKind::Field(Box::new(expr), item), span));
                 }
-                let field = self.expect_ident()?;
+                let field = self.expect_member()?;
                 let expr = Expr::new(ExprKind::Field(Box::new(expr), field), span);
                 // A `<` here opens the types a use gives (a method takes none of
                 // its own, which `dotted_name_use` says), never a comparison:
@@ -2299,7 +2299,7 @@ impl Parser {
             }
             // `.this`, `.field`, or `.method(…)`: the value a method is called
             // on, and what it holds.
-            Token::Dot if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) => return self.parse_member_of_this(span),
+            Token::Dot if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::Type)) => return self.parse_member_of_this(span),
             Token::Ident(_) => return self.parse_name_use(span),
             _ => return Err(self.unexpected("an expression")),
         };
@@ -2312,7 +2312,7 @@ impl Parser {
     fn parse_member_of_this(&mut self, span: Span) -> Result<Expr> {
         self.advance(); // .
         let at = self.peek_span();
-        let member = self.expect_ident()?;
+        let member = self.expect_member()?;
         let value = Expr::new(ExprKind::Var(THIS.to_string()), span);
         if member == THIS_WORD {
             return Ok(value);
@@ -2760,6 +2760,15 @@ impl Parser {
         Ok(args)
     }
 
+    /// The name after a dot: a name, or `type`, the one reserved word read
+    /// there (`x.type`).
+    fn expect_member(&mut self) -> Result<String> {
+        if self.match_token(Token::Type) {
+            return Ok(TYPE_WORD.to_string());
+        }
+        self.expect_ident()
+    }
+
     fn expect_ident(&mut self) -> Result<String> {
         match self.peek() {
             Token::Ident(s) => { let v = s.clone(); self.advance(); Ok(v) }
@@ -2772,7 +2781,11 @@ impl Parser {
         match KEYWORDS.iter().find(|(_, keyword)| keyword == self.peek()) {
             Some((word, _)) => Error::at(
                 self.peek_span(),
-                format!("expected a name, got '{}', which is a reserved word", word),
+                format!(
+                    "expected a name, got '{}', which is a reserved word{}",
+                    word,
+                    if *word == TYPE_WORD { "; every value has '.type', its type as code writes it, so nothing else takes the name" } else { "" }
+                ),
             ),
             None => self.unexpected("a name"),
         }

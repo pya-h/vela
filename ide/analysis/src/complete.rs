@@ -271,8 +271,21 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 boost: LOCAL,
             })
         };
+        // Every value's type, as code writes it.
+        let is_value = base.is_some();
+        let type_of = |from_dot: bool| {
+            is_value.then(|| CompletionItem {
+                label: vela::ast::TYPE_WORD.to_string(),
+                kind: CompletionKind::Field,
+                detail: "text, the value's type as code writes it".to_string(),
+                apply: None,
+                snippet: from_dot.then(|| format!(".{}", vela::ast::TYPE_WORD)),
+                boost: LOCAL,
+            })
+        };
         let with_copy = |mut items: Vec<CompletionItem>, from_dot: bool| {
             items.extend(copy(from_dot));
+            items.extend(type_of(from_dot));
             items
         };
         match &base {
@@ -306,7 +319,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 };
                 return (with_copy(vec![len, to_text()], false), word_start, byte);
             }
-            Some(Type::Int | Type::Float | Type::Bool) => return (vec![to_text()], word_start, byte),
+            Some(Type::Int | Type::Float | Type::Bool) => return (with_copy(vec![to_text()], false), word_start, byte),
             Some(Type::Slice(..)) => return (with_copy(members(true, false), false), word_start, byte),
             Some(Type::Ptr(inner, _)) if matches!(**inner, Type::Array(..) | Type::Slice(..)) => {
                 return (with_copy(members(matches!(**inner, Type::Slice(..)), true), true), k.range(dot).start, byte);
@@ -335,8 +348,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
             return (with_copy(Vec::new(), false), word_start, byte);
         };
         // A pointer's members are reached through `^`: `p^.x`.
-        let mut items = owner_members(&k, owner_id, if through_pointer { "^." } else { "" });
-        items.extend(copy(through_pointer));
+        let items = with_copy(owner_members(&k, owner_id, if through_pointer { "^." } else { "" }), through_pointer);
         let from = if through_pointer { k.range(dot).start } else { word_start };
         return (items, from, byte);
     }

@@ -1,0 +1,4 @@
+# error: 3:10: invalid number '0X1F': its base is written in lowercase, as in '0x1F'
+task main()
+    show(0X1F)
+fi

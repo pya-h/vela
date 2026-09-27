@@ -1,0 +1,4 @@
+# error: 3:10: invalid number '0xfg': 'g' is not a hex digit (0-9, a-f)
+task main()
+    show(0xfg)
+fi

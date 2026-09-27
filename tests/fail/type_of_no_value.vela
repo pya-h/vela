@@ -1,0 +1,7 @@
+# error: 6:10: this has no value, so no type to read
+task nothing()
+fi
+
+task main()
+    show(nothing().type)
+fi

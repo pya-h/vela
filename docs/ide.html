@@ -384,7 +384,8 @@ Press Ctrl+C to stop.</pre>
             <code>^.</code>), and inside a method, after a <code>.</code> starting a value, <code>this</code> and the fields and
             methods of the value it is called on; a tuple's items by position after its <code>.</code> (<code>0</code>, <code>1</code>, each with its type), and <code>len</code> after an array's, slice's, or text's (and <code>add</code> and <code>del</code> after a slice's),
             <code>str</code> after a number's, a bool's, or text's, which fills in <code>str() at r</code>, and
-            <code>copy</code> after a value holding text, a slice, or a pointer; <code>int</code> and <code>float</code>
+            <code>copy</code> after a value holding text, a slice, or a pointer, and <code>type</code> after every value's
+            (which hovers with what <a href="vela.html#type-of"><code>x.type</code></a> reads); <code>int</code> and <code>float</code>
             after a <code>scan</code>'s prompt, the two numbers that form reads; the cases still missing after
             <code>case</code> and <code>case Kind.</code>, including <code>{value}</code>,
             <code>none</code>, and <code>failure e</code> (the variants of

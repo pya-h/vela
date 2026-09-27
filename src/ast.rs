@@ -287,6 +287,11 @@ pub const NATIVE: &str = "native";
 /// anywhere else, so a task, a field, or a variable may still be called it.
 pub const DEFAULT: &str = "default";
 
+/// The word after a dot for the type of a value, `x.type`: its type as code
+/// writes it, text the compiler knows. `type` is a reserved word, so no field
+/// or method takes it.
+pub const TYPE_WORD: &str = "type";
+
 /// The word after the dot for the whole value a method is called on (`.this`),
 /// and the name of the region that value lives in (`text@this`).
 pub const THIS_WORD: &str = "this";
@@ -756,6 +761,11 @@ pub enum ExprKind {
     /// field of a name, and the resolver makes it this once it knows the name
     /// is a shape (no variable is named like one).
     Shared { shape: String, field: String },
+    /// `v.type` in a task that takes types, where the value's type names one
+    /// (`T`, `[T; 3]`): its text is known only once the task is made for the
+    /// types a use gives, when the checker makes it the `TextLit` it is (see
+    /// `Checker::check_type_of`). Nothing after the checker sees one.
+    TypeOf(Box<Type>),
     /// `Point { x: 1 }`, or `Box<int> { value: none }` for a shape that takes
     /// types: `types` holds the ones the literal names, empty when the values it
     /// gives say which they are.

@@ -1,0 +1,16 @@
+  1 | # A module with a shape and a kind, used from tests/run/type_of.vela.
+    | comment:# A module with a shape and a kind, used from tests/run/type_of.vela.
+  3 | shape Crate
+    | keyword:shape  type:Crate
+  4 |     size: int
+    | field:size  punctuation::  type-builtin:int
+  5 | fi
+    | keyword:fi
+  7 | kind Weather
+    | keyword:kind  type:Weather
+  8 |     Sun
+    | variant:Sun
+  9 |     Rain(mm: int)
+    | variant:Rain  punctuation:(  field:mm  punctuation::  type-builtin:int  punctuation:)
+ 10 | fi
+    | keyword:fi

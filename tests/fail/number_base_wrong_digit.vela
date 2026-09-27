@@ -1,0 +1,4 @@
+# error: 3:10: invalid number '0b102': '2' is not a binary digit (0 or 1)
+task main()
+    show(0b102)
+fi

@@ -55,6 +55,9 @@ pub enum Token {
     /// `shared`: a shape's field that is one value for the whole program rather
     /// than part of each value, reached through the shape's name, `X.f`.
     Shared,
+    /// `type`: reserved, and read after a dot, `x.type`, the type of a value
+    /// as code writes it.
+    Type,
     Ident(String),
     LParen,
     RParen,
@@ -133,6 +136,7 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("include", Token::Include),
     ("priv", Token::Priv),
     ("shared", Token::Shared),
+    ("type", Token::Type),
 ];
 
 /// The escapes allowed in text literals: the character after `\` and the
@@ -244,6 +248,55 @@ impl Token {
 fn float_text(value: f64) -> String {
     let text = value.to_string();
     if text.contains('.') || !value.is_finite() { text } else { format!("{}.0", text) }
+}
+
+/// The bases a whole number may be written in besides ten, by the letter after
+/// its `0`: the base, and the digits it has, for messages. `int(text)` reads
+/// the same ones (see `vela__rt__read_int`).
+fn based(letter: char) -> Option<(u32, &'static str)> {
+    match letter {
+        'x' => Some((16, "a hex digit (0-9, a-f)")),
+        'o' => Some((8, "an octal digit (0-7)")),
+        'b' => Some((2, "a binary digit (0 or 1)")),
+        _ => None,
+    }
+}
+
+/// Reads `raw`, a whole number written `0x1F`, `0o17`, or `0b101`, or says
+/// what is wrong with it.
+fn read_based(raw: &str) -> std::result::Result<i64, String> {
+    let wrong = |why: String| Err(format!("invalid number '{}': {}", raw, why));
+    let mut chars = raw.chars().skip(1);
+    let letter = chars.next().unwrap_or('x');
+    let lower = letter.to_ascii_lowercase();
+    let Some((base, digit)) = based(lower) else { return wrong("no base".to_string()) };
+    if letter != lower {
+        return wrong(format!("its base is written in lowercase, as in '0{}{}'", lower, &raw[2..]));
+    }
+    let written = &raw[2..];
+    if written.is_empty() {
+        return wrong(format!("'0{}' is followed by its digits, as in '{}'", lower, based_example(lower)));
+    }
+    if written.starts_with('_') || written.ends_with('_') || written.contains("__") {
+        return wrong(format!("an underscore goes between two digits, as in '{}'", based_example(lower)));
+    }
+    if let Some(bad) = written.chars().find(|c| *c != '_' && !c.is_digit(base)) {
+        return wrong(format!("'{}' is not {}", bad, digit));
+    }
+    let digits: String = written.chars().filter(|c| *c != '_').collect();
+    match i64::from_str_radix(&digits, base) {
+        Ok(value) => Ok(value),
+        Err(_) => Err(format!("integer literal '{}' is too large", raw)),
+    }
+}
+
+/// A number written in the base `letter` names, for messages.
+fn based_example(letter: char) -> &'static str {
+    match letter {
+        'x' => "0xff_ff",
+        'o' => "0o755",
+        _ => "0b1010_0101",
+    }
 }
 
 /// A token from `highlight`, with its exact extent in the source.
@@ -613,6 +666,9 @@ impl Lexer {
         // its own `.` starts the next item. (After `..`, a range's end may be a float.)
         let before = |back: usize| self.pos.checked_sub(back).and_then(|at| self.source.get(at)).copied();
         let item = before(1) == Some('.') && before(2) != Some('.');
+        if !item && self.peek() == '0' && self.peek2().is_ascii_alphabetic() && based(self.peek2().to_ascii_lowercase()).is_some() {
+            return self.based_number(loc);
+        }
         digits(self, &mut s, &mut raw);
         if item && !(self.peek().is_ascii_alphabetic() || self.peek() == '_') {
             return match s.parse::<i64>() {
@@ -651,6 +707,30 @@ impl Lexer {
                 Ok(val) => LexKind::Token(Token::Int(val)),
                 Err(_) => invalid(loc, format!("integer literal '{}' is too large", raw)),
             }
+        }
+    }
+
+    /// A whole number written in another base, `0x1F`, `0o17`, or `0b101`
+    /// (see `based`), with underscores between its digits as a decimal one has.
+    fn based_number(&mut self, loc: Span) -> LexKind {
+        let mut raw = String::new();
+        raw.push(self.advance());
+        let letter = self.advance();
+        raw.push(letter);
+        while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
+            raw.push(self.advance());
+        }
+        // `0x1F.5`: a number in another base is whole.
+        if self.peek() == '.' && self.peek2().is_ascii_digit() {
+            raw.push(self.advance());
+            while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
+                raw.push(self.advance());
+            }
+            return invalid(loc, format!("invalid number '{}': a number written in another base is whole", raw));
+        }
+        match read_based(&raw) {
+            Ok(value) => LexKind::Token(Token::Int(value)),
+            Err(message) => invalid(loc, message),
         }
     }
 

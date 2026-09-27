@@ -1645,6 +1645,7 @@ impl Generator {
             ExprKind::NoneLit => Ok("NULL".to_string()),
             // The checker makes every one the `Var` it stands for.
             ExprKind::RegionAfter(_) => Err(Error::internal_at(e.span, "a region written after a call that the checker left as it was")),
+            ExprKind::TypeOf(_) => Err(Error::internal_at(e.span, "a '.type' left for types a task was never made for")),
             ExprKind::Var(name) if self.pointers.contains(name) => Ok(format!("(*{})", c_ident(name))),
             // The place given to a `hold&` parameter: its address, worked out
             // where the argument is, as its value would be (`gen_operands`
@@ -2441,7 +2442,7 @@ fn has_prelude(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::PlanB { .. } | ExprKind::Choice(_) | ExprKind::Edit { .. } | ExprKind::Scan { .. } => true,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
-        | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } => false,
+        | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. }
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Copy { value: inner, .. } | ExprKind::ToText { value: inner, .. } => {
             has_prelude(inner)
@@ -2669,7 +2670,7 @@ impl UsedTypes {
         }
         match &e.kind {
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
-            | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } => {}
+            | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => {}
             ExprKind::New { ty, value, .. } if matches!(**ty, Type::Slice(..)) => {
                 let Some(slice) = &e.ty else { return };
                 match &value.kind {
@@ -2847,7 +2848,7 @@ fn place_reads(target: &Expr, name: &str) -> bool {
 fn expr_reads(e: &Expr, name: &str) -> bool {
     match &e.kind {
         ExprKind::Var(var) | ExprKind::RegionAfter(var) => var == name,
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Shared { .. } => false,
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => false,
         // `new` reads the region it allocates in.
         ExprKind::New { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner)

@@ -194,6 +194,7 @@ describe("VelaAnalysis", () => {
       ["count", "field"],
       ["total", "method"],
       ["step", "method"],
+      ["type", "field"],
     ]);
   });
 
@@ -223,7 +224,7 @@ describe("VelaAnalysis", () => {
   it("completes and describes the changes a slice has", () => {
     const source = "task main()\n    region r\n    hold names = new [text]() at r\n    names.add(\"a\")\n    bind last = names.del()\n    show(last)\n    names.\nfi\n";
     const members = analysis.complete(source, source.indexOf("names.\nfi") + "names.".length).items;
-    expect(members.map((item) => [item.label, item.snippet])).toEqual([["len", undefined], ["add", "add(${value})"], ["del", "del(${index})"], ["copy", "copy()"]]);
+    expect(members.map((item) => [item.label, item.snippet])).toEqual([["len", undefined], ["add", "add(${value})"], ["del", "del(${index})"], ["copy", "copy()"], ["type", undefined]]);
     expect(analysis.hover(source, source.indexOf("last ="))?.code).toBe("bind last: text@r");
     expect(analysis.hover(source, source.indexOf("add("))?.code).toBe("add(value) or add(index, value)");
   });

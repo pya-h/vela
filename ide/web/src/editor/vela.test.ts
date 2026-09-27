@@ -158,8 +158,8 @@ describe("completion", () => {
     expect(words?.from).toBe(PROGRAM.indexOf("|"));
     expect(complete(PROGRAM)).toBeNull();
     expect(complete(PROGRAM, true)?.options.map((o) => o.label)).toContain("bind");
-    // A pointer's fields, and its copy.
-    expect(complete(PROGRAM.replace("|", "show(p.|)"))?.options.map((o) => o.label)).toEqual(["x", "y", "copy"]);
+    // A pointer's fields, its copy, and its type.
+    expect(complete(PROGRAM.replace("|", "show(p.|)"))?.options.map((o) => o.label)).toEqual(["x", "y", "copy", "type"]);
   });
 
   it("inserts snippets with their fields and indentation", () => {

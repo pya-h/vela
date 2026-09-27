@@ -41,7 +41,8 @@ fi
 
 # Every item, one to a line, with a label in front of the first.
 task tellAll<T: shown>(label: text, xs: [T]@r)
-    show(label)
+    # `xs.type` is the type each call gives, as code writes it: `[int]`, `[text]`.
+    show(label, " ", xs.type)
     each v in xs
         show(v)
     fi

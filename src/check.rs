@@ -3399,9 +3399,40 @@ impl Checker {
     fn check_expr_multi(&mut self, expr: &mut Expr) -> Result<Type> {
         self.resolve_constructor(expr);
         self.resolve_empty_plan_b(expr);
+        if matches!(&expr.kind, ExprKind::Field(_, field) if field == TYPE_WORD) {
+            return self.check_type_of(expr);
+        }
         let ty = self.infer_expr(expr)?;
         expr.ty = Some(ty.clone());
         Ok(ty)
+    }
+
+    /// Checks `value.type`, the type of the value as code writes it, and makes
+    /// it the text it is: the compiler knows it, so the value is never worked
+    /// out, as C's `sizeof` doesn't. Regions are left out (`[float]`, `^Point`),
+    /// a shape or kind is its own name wherever it is read, and a shape made for
+    /// types is written as given them (`Box<int>`).
+    fn check_type_of(&mut self, expr: &mut Expr) -> Result<Type> {
+        let ExprKind::Field(base, _) = &mut expr.kind else { return Err(Error::internal_at(expr.span, "a '.type' that isn't one")) };
+        let ty = self.check_expr(base)?;
+        if ty.unknown() {
+            return Ok(Type::Unknown);
+        }
+        if matches!(ty, Type::Unit) {
+            return err(base.span, "this has no value, so no type to read");
+        }
+        expr.kind = match ty.params().is_empty() {
+            true => ExprKind::TextLit(self.written_type(&ty)),
+            false => ExprKind::TypeOf(Box::new(ty)),
+        };
+        expr.ty = Some(Type::Text(None));
+        Ok(Type::Text(None))
+    }
+
+    /// A type as code writes it, for `x.type`: no regions, each shape or kind by
+    /// its own name, and a shape made for types as given them.
+    fn written_type(&self, ty: &Type) -> String {
+        self.unmade(&ty.without_regions()).map_names(&|name| unqualified(name).to_string()).to_string()
     }
 
     /// Checks the values of a list — a send, or the right side of a binding or
@@ -3662,6 +3693,8 @@ impl Checker {
             // arguments (see `check_argument`).
             ExprKind::Ref(_) => err(span, "'&' marks a place given to a 'hold&' parameter, as in 'f(&a)', or named by a reference, as in 'hold& y = &a'; anywhere else, write the value itself"),
             ExprKind::Shared { .. } => Err(Error::internal_at(span, "a shared field read as another value")),
+            // Checked again, as a method call's value is: it is text.
+            ExprKind::TypeOf(_) => Ok(Type::Text(None)),
             ExprKind::Var(name) => {
                 let ty = self.lookup_or_err(name, span)?.ty.clone();
                 if self.unset.contains(name.as_str()) {
@@ -4774,6 +4807,10 @@ impl Checker {
         if base.unknown() || self.owner_of(base).is_some_and(|owner| self.broken.contains(&owner)) {
             return Ok(Type::Unknown);
         }
+        // Read, `.type` never reaches here (see `check_type_of`); changed, it does.
+        if field == TYPE_WORD {
+            return err(span, format!("'type' is the type of the value ({} here), which never changes", self.written_type(base)));
+        }
         match base {
             // A shape given a type this declaration takes: its field's type is
             // the shape's with the types given in place of the names it takes.
@@ -4917,6 +4954,9 @@ impl Checker {
     /// The error for `value.name(…)` where a value of type `base` has no method
     /// `name`.
     fn no_method(&self, base: &Type, name: &str, span: Span) -> Error {
+        if name == TYPE_WORD {
+            return Error::at(span, "'type' is the type of a value, read without '(…)', as in 'x.type'");
+        }
         // A slice's built-in changes are what these usually mean.
         let instead = match name {
             "push" | "append" | "insert" => "; a slice adds an item with 'add', as in 'xs.add(v)' or 'xs.add(i, v)'",
@@ -6457,6 +6497,13 @@ impl Checker {
                 let ty_span = *ty_span;
                 self.substitute_type(ty, given, ty_span)?;
                 self.substitute_expr(value, given, made)
+            }
+            ExprKind::TypeOf(ty) => {
+                self.substitute_type(ty, given, at)?;
+                if ty.params().is_empty() {
+                    e.kind = ExprKind::TextLit(self.written_type(ty));
+                }
+                Ok(())
             }
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } => Ok(()),
             ExprKind::Unary(_, inner)

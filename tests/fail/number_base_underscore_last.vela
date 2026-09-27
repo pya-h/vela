@@ -1,0 +1,4 @@
+# error: 3:10: invalid number '0b1_': an underscore goes between two digits, as in '0b1010_0101'
+task main()
+    show(0b1_)
+fi

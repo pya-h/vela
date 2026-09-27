@@ -2,14 +2,15 @@
 # sends the number it holds, or an `InputError` saying there is none — because
 # the input ended, or because the line was no number, which holds the
 # `ParseError` that reading it gave. Reading a number from text a program already
-# has is `int(t)`, which sends that `ParseError` on its own.
+# has is `int(t)`, which sends that `ParseError` on its own, and reads a whole
+# number written in another base too, as code writes one: `0x1F`, `0o17`, `0b101`.
 #
 # Run it and type a few numbers (Ctrl-D, or the end of a file given as input,
 # ends them), or give it a file: `./numbers < readings.txt`.
 
 # The numbers a program reads may also come from text it holds.
 task from_text()
-    each written in ["6", "6.5", "-0"]
+    each written in ["6", "6.5", "-0", "0x1F", "-0b101", "010", "0b102"]
         match int(written)
         case {value}
             show(written, " is ", value)

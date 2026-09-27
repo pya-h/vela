@@ -86,6 +86,11 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
         "alters name(…)",
         "Marks a method that changes the value it is called on: it may assign .this and what the value holds. Only a place that can change may call it: a hold variable, a field or item of one, or what a pointer points to.",
     ),
+    (
+        "type",
+        "x.type: text",
+        "The type of the value as code writes it, without regions: [int; 3], [float], ^Point, Box<int>. The compiler knows it, so the value itself is never worked out; in a task that takes types, it is the type each use gives. 'type' is a reserved word, so nothing else takes the name.",
+    ),
 ];
 
 /// What `@this` is, in a method's header or body.
