@@ -91,6 +91,12 @@ pub struct Generator {
     /// read through them: the value a method that alters it is called on, every
     /// `hold&` parameter, and the references of the blocks being generated.
     pointers: HashSet<String>,
+    /// The parameters of the task being generated that are passed by a hidden
+    /// pointer (see `HIDDEN_ABOVE`), which are in `pointers` too.
+    hidden: HashSet<String>,
+    /// For each task, by the name it is generated under, which of its
+    /// parameters are passed by a hidden pointer, in order.
+    hidden_params: HashMap<String, Vec<bool>>,
     /// The C names of the regions the `show` calls being generated make for the
     /// values written by their own `str`, innermost last (see `gen_show`). A
     /// `show` nests inside another only through a plan B of one of its values.
@@ -111,6 +117,8 @@ impl Default for Generator {
             task: String::new(),
             altering: HashSet::new(),
             pointers: HashSet::new(),
+            hidden: HashSet::new(),
+            hidden_params: HashMap::new(),
             shown: Vec::new(),
         }
     }
@@ -146,6 +154,16 @@ impl Generator {
                 }
                 Item::Shape(_) => {}
                 Item::Task(_) => {}
+            }
+        }
+        // Which parameters each task takes by a hidden pointer, known before
+        // any call or declaration is written.
+        self.hidden_params.clear();
+        for item in items {
+            if let Item::Task(t) = item {
+                let alters = self.altering.contains(&t.name);
+                let hidden = t.params.iter().map(|p| self.is_hidden(t, p, alters)).collect();
+                self.hidden_params.insert(t.name.clone(), hidden);
             }
         }
         self.copied_through = check::regional_types(items);
@@ -205,7 +223,7 @@ impl Generator {
             if let Item::Task(t) = item
                 && t.types.is_empty()
             {
-                self.w.line(&format!("{};", signature(t, self.altering.contains(&t.name))));
+                self.w.line(&format!("{};", signature(t, self.altering.contains(&t.name), self.hidden_of(&t.name))));
             }
         }
         self.w.blank();
@@ -235,6 +253,75 @@ impl Generator {
         }
 
         Ok(std::mem::take(&mut self.w.out))
+    }
+
+    /// Which parameters of the task generated as `task` are passed by a
+    /// hidden pointer, in order.
+    fn hidden_of(&self, task: &str) -> &[bool] {
+        self.hidden_params.get(task).map_or(&[], Vec::as_slice)
+    }
+
+    /// Whether parameter `p` of `t` is passed by a hidden pointer: one that
+    /// never changes, of a type larger than `HIDDEN_ABOVE` bytes. A native
+    /// task's C is the runtime's, which takes its values as they are.
+    fn is_hidden(&self, t: &TaskDef, p: &Field, alters: bool) -> bool {
+        !t.native && p.passing == Passing::Copy && p.ty != Type::Region && !(alters && p.name == THIS) && self.c_layout(&p.ty).0 > HIDDEN_ABOVE
+    }
+
+    /// The size and alignment, in bytes, of a value of `ty` in the C this
+    /// writes, as a 64-bit target lays it out.
+    fn c_layout(&self, ty: &Type) -> (usize, usize) {
+        match ty {
+            Type::Int | Type::Float | Type::Ptr(..) | Type::None | Type::Region => (8, 8),
+            Type::Maybe(inner) if is_pointer(inner) => (8, 8),
+            Type::Bool => (1, 1),
+            Type::Unit => (0, 1),
+            Type::Text(_) => (16, 8),
+            Type::Slice(..) => (24, 8),
+            Type::Fail(error) => self.c_layout(error),
+            Type::Array(items, count) => {
+                let (size, align) = self.c_layout(items);
+                (size.saturating_mul(usize::try_from(*count).unwrap_or(usize::MAX)), align)
+            }
+            Type::Maybe(inner) => self.struct_layout([&Type::Bool, inner.as_ref()]),
+            Type::Or(value, error) if **value == Type::Unit => self.struct_layout([&Type::Bool, error.as_ref()]),
+            Type::Or(value, error) => self.struct_layout([&Type::Bool, value.as_ref(), error.as_ref()]),
+            Type::Results(types) | Type::Tuple(types) => self.struct_layout(types.iter()),
+            Type::Named(name, _) => {
+                if let Some(shape) = self.shapes.get(name) {
+                    if shape.fields.is_empty() {
+                        return (1, 1);
+                    }
+                    return self.struct_layout(shape.fields.iter().map(|field| &field.ty));
+                }
+                let Some(kind) = self.kinds.get(name) else { return (8, 8) };
+                // The tag, an enum, and the union of the variants' values.
+                let (mut size, mut align) = (0, 1);
+                for variant in &kind.variants {
+                    if !variant.payload.is_empty() {
+                        let (s, a) = self.struct_layout(variant.payload.iter().map(|field| &field.ty));
+                        size = size.max(s);
+                        align = align.max(a);
+                    }
+                }
+                let tag: usize = 4;
+                let align = align.max(4);
+                let data = tag.div_ceil(align) * align;
+                ((data + size).div_ceil(align) * align, align)
+            }
+            _ => (8, 8),
+        }
+    }
+
+    /// The size and alignment of a C struct of members of the `types`.
+    fn struct_layout<'a>(&self, types: impl IntoIterator<Item = &'a Type>) -> (usize, usize) {
+        let (mut size, mut align) = (0usize, 1usize);
+        for ty in types {
+            let (s, a) = self.c_layout(ty);
+            size = size.div_ceil(a) * a + s;
+            align = align.max(a);
+        }
+        (size.div_ceil(align) * align, align)
     }
 
     fn fresh_temp(&mut self, prefix: &str) -> String {
@@ -682,7 +769,10 @@ impl Generator {
     fn gen_task(&mut self, t: &TaskDef) -> Result<()> {
         self.ret = t.ret.clone();
         let alters = self.altering.contains(&t.name);
+        let hidden = self.hidden_of(&t.name).to_vec();
+        self.hidden = t.params.iter().zip(&hidden).filter(|(_, hidden)| **hidden).map(|(p, _)| p.name.clone()).collect();
         self.pointers = t.params.iter().filter(|p| is_pointer_param(p, alters)).map(|p| p.name.clone()).collect();
+        self.pointers.extend(self.hidden.iter().cloned());
         self.regions.clear();
         self.results = t.result_names().map(|(name, _)| name.clone()).collect();
         // A method is named in a runtime message as the program writes it,
@@ -691,7 +781,7 @@ impl Generator {
             Some((owner, method)) if t.owner.is_some() => format!("{}{}{}", owner, MODULE_SEPARATOR, method),
             _ => t.name.clone(),
         };
-        self.w.open(&signature(t, alters));
+        self.w.open(&signature(t, alters, &hidden));
         // A native task's body is the runtime function it stands for, given
         // its parameters as they are (see `ast::NATIVE`).
         if t.native {
@@ -1388,13 +1478,14 @@ impl Generator {
     }
 
     /// Generates operands that are evaluated in order, as a call's arguments or
-    /// an operator's two sides. When one of them has a prelude, they are
-    /// evaluated left to right: every operand before the last prelude is stored
-    /// in a temporary first, so that it is evaluated before that prelude runs
-    /// (the prelude may call tasks or change variables), and so is every other
-    /// operand but the last, since C evaluates the rest in no fixed order.
+    /// an operator's two sides. When one of them has a prelude, or may change
+    /// something (a call, which may change a variable given as `&a`), they are
+    /// evaluated left to right: every operand before the last such one is
+    /// stored in a temporary first, so that it is evaluated before that one
+    /// runs, and so is every other operand but the last, since C evaluates the
+    /// rest in no fixed order.
     fn gen_operands(&mut self, operands: &[&Expr]) -> Result<Vec<String>> {
-        let last_prelude = operands.iter().rposition(|e| has_prelude(e));
+        let last_prelude = operands.iter().rposition(|e| has_prelude(e) || !changes_nothing(e));
         let mut values = Vec::new();
         for (i, operand) in operands.iter().enumerate() {
             let value = self.gen_expr(operand)?;
@@ -1423,6 +1514,77 @@ impl Generator {
             }
         }
         Ok(values)
+    }
+
+    /// The arguments of a call some of whose parameters are passed by a hidden
+    /// pointer (`hidden`, by position), read left to right as `gen_operands`
+    /// reads them. Such a parameter is given the address of where the value is
+    /// kept, a local variable or a part of one, when nothing the call does
+    /// before it starts can change it: no argument after it may change
+    /// anything. A value anywhere else (behind a pointer, in a slice, named by
+    /// a reference) might change while the task runs, through memory the task
+    /// reaches, so it is copied first, as any other value is.
+    fn gen_hidden_operands(&mut self, operands: &[&Expr], hidden: &[bool]) -> Result<Vec<String>> {
+        let last_effect = operands.iter().rposition(|e| !changes_nothing(e));
+        let mut values = Vec::new();
+        for (i, operand) in operands.iter().enumerate() {
+            let effect_after = last_effect.is_some_and(|last| i < last);
+            if hidden.get(i).copied().unwrap_or(false) {
+                if !effect_after && self.kept_place(operand) {
+                    values.push(self.address_of(operand)?);
+                    continue;
+                }
+                let value = self.gen_expr(operand)?;
+                if effect_after {
+                    let tmp = self.fresh_temp("arg");
+                    self.w.line(&format!("{} {} = {};", c_type(operand.ty()?), tmp, value));
+                    values.push(format!("&{}", tmp));
+                } else {
+                    // A copy made where the argument is read, which lasts as long
+                    // as the block, so the call writes no statement of its own.
+                    values.push(format!("&((struct {{ {} value; }}){{ {} }}).value", c_type(operand.ty()?), value));
+                }
+                continue;
+            }
+            let value = self.gen_expr(operand)?;
+            let constant = matches!(
+                operand.kind,
+                ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
+            );
+            if effect_after && !constant {
+                let tmp = self.fresh_temp("arg");
+                let pointer = if matches!(operand.kind, ExprKind::Ref(_)) { "*" } else { "" };
+                self.w.line(&format!("{}{} {} = {};", c_type(operand.ty()?), pointer, tmp, value));
+                values.push(tmp);
+            } else {
+                values.push(value);
+            }
+        }
+        Ok(values)
+    }
+
+    /// Whether `e` is a place in the task's own memory, which only the task
+    /// changes: a local variable (not a reference or a `hold&` parameter, which
+    /// may name memory in a region), a parameter passed by a hidden pointer,
+    /// or a field or an array item of one.
+    fn kept_place(&self, e: &Expr) -> bool {
+        match &e.kind {
+            ExprKind::Var(name) => !self.pointers.contains(name) || self.hidden.contains(name),
+            ExprKind::Field(base, _) if matches!(base.ty, Some(Type::Named(..))) => self.kept_place(base),
+            ExprKind::Index(base, index) if matches!(base.ty, Some(Type::Array(..))) && !matches!(index.kind, ExprKind::Range(..)) => {
+                changes_nothing(index) && self.kept_place(base)
+            }
+            _ => false,
+        }
+    }
+
+    /// The address of a place `kept_place` accepts.
+    fn address_of(&mut self, e: &Expr) -> Result<String> {
+        match &e.kind {
+            ExprKind::Var(name) if self.hidden.contains(name) => Ok(c_ident(name)),
+            ExprKind::Var(name) => Ok(format!("&{}", c_ident(name))),
+            _ => Ok(format!("&{}", self.gen_place(e)?)),
+        }
     }
 
     /// The C expression for `e`. Each kind of expression with more to do than
@@ -1642,7 +1804,9 @@ impl Generator {
             _ => (None, args),
         };
         let rest: Vec<&Expr> = rest.iter().collect();
-        let mut values = self.gen_operands(&rest)?;
+        let offset = usize::from(first.is_some());
+        let hidden: Vec<bool> = (0..rest.len()).map(|i| self.hidden_of(&called).get(i + offset).copied().unwrap_or(false)).collect();
+        let mut values = if hidden.contains(&true) { self.gen_hidden_operands(&rest, &hidden)? } else { self.gen_operands(&rest)? };
         if let Some(first) = first {
             values.insert(0, first);
         }
@@ -2209,18 +2373,29 @@ fn has_prelude(e: &Expr) -> bool {
             has_prelude(inner)
         }
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
-            has_prelude(a) || has_prelude(b)
+            has_prelude(a) || has_prelude(b) || ordered(&[a, b])
         }
         ExprKind::Call { args, .. }
         | ExprKind::Construct { args, .. }
         | ExprKind::Array(args)
         | ExprKind::Tuple(args)
-        | ExprKind::Join { parts: args, .. } => args.iter().any(has_prelude),
-        ExprKind::StructInit { fields, .. } => fields.iter().any(|field| has_prelude(&field.value)),
+        | ExprKind::Join { parts: args, .. } => args.iter().any(has_prelude) || ordered(&args.iter().collect::<Vec<_>>()),
+        ExprKind::StructInit { fields, .. } => {
+            fields.iter().any(|field| has_prelude(&field.value)) || ordered(&fields.iter().map(|field| &field.value).collect::<Vec<_>>())
+        }
         // The checker rewrites a method call into a call; read as one anyway,
         // so nothing here depends on that having happened.
-        ExprKind::MethodCall { value, args, .. } => has_prelude(value) || args.iter().any(has_prelude),
+        ExprKind::MethodCall { value, args, .. } => {
+            has_prelude(value) || args.iter().any(has_prelude) || ordered(&std::iter::once(value.as_ref()).chain(args).collect::<Vec<_>>())
+        }
     }
+}
+
+/// Whether `gen_operands` stores some of `operands` in temporaries to read
+/// them left to right, which is a prelude: one of several may change
+/// something.
+fn ordered(operands: &[&Expr]) -> bool {
+    operands.len() > 1 && operands.iter().any(|e| !changes_nothing(e))
 }
 
 /// The `maybe`, `or`, array, and slice types a program uses, which each need a
@@ -2731,6 +2906,25 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
     }
 }
 
+/// Whether evaluating `e` changes nothing a later value could read: no call,
+/// no change to a slice, no line read. (It may still stop the program.)
+fn changes_nothing(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) => true,
+        ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Unary(_, inner) | ExprKind::Wrap(inner) => changes_nothing(inner),
+        ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => changes_nothing(a) && changes_nothing(b),
+        ExprKind::Array(items) | ExprKind::Tuple(items) => items.iter().all(changes_nothing),
+        _ => false,
+    }
+}
+
+/// A parameter that never changes, of a type larger than this many bytes, is
+/// passed by a hidden pointer, `const T*`, to where the caller keeps the value
+/// (or to a copy the call makes), rather than copied into the task: the task
+/// can't change it, and the call makes sure nothing else does while the task
+/// runs (see `Generator::gen_call`). The user chose 64 bytes: eight words.
+const HIDDEN_ABOVE: usize = 64;
+
 /// Whether parameter `p` of a task is a pointer to the caller's place in C: a
 /// `hold&` one, or the value a method that `alters` it is called on.
 fn is_pointer_param(p: &Field, alters: bool) -> bool {
@@ -2738,11 +2932,17 @@ fn is_pointer_param(p: &Field, alters: bool) -> bool {
 }
 
 /// The C declarator of a task, e.g. `int64_t vela_add(int64_t a, int64_t b)`.
-fn signature(t: &TaskDef, alters: bool) -> String {
+fn signature(t: &TaskDef, alters: bool, hidden: &[bool]) -> String {
     let params: Vec<String> = t
         .params
         .iter()
-        .map(|p| {
+        .enumerate()
+        .map(|(i, p)| {
+            // A large value that never changes is read where the caller keeps
+            // it (see `HIDDEN_ABOVE`).
+            if hidden.get(i).copied().unwrap_or(false) {
+                return format!("const {}* {}", c_type(&p.ty), c_ident(&p.name));
+            }
             // A method that changes the value it is called on is given the
             // place it is in, so what it writes is what the caller holds, and
             // so is a `hold&` parameter.

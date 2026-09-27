@@ -1,0 +1,41 @@
+# Values are read left to right: one read before a call that changes it (given
+# as `&a`, or as the value an alters method is called on) is read as it was.
+
+shape Counter
+    n: int = 0
+
+    alters bump() -> int
+        .n = .n + 10
+        <- 0
+    fi
+fi
+
+task bump(hold& x: int) -> int
+    x = x + 100
+    <- 0
+fi
+
+task pair(a: int, b: int) -> int
+    <- a * 1000 + b
+fi
+
+task main()
+    hold n = 1
+    show(n + bump(&n), " ", n)
+    show(pair(n, bump(&n)), " ", n)
+    show(bump(&n) + n, " ", n)
+    hold c = Counter {}
+    show(c.n + c.bump(), " ", c.n)
+    show(pair(c.n, c.bump()), " ", c.n)
+    hold flag = false
+    show(flag or bump(&n) == 0, " ", n)
+    show(flag and bump(&n) == 0, " ", n)
+
+    # A loop's condition is read again before every round, change and all.
+    hold k = 0
+    hold rounds = 0
+    loop k < 300 and bump(&k) == 0
+        rounds = rounds + 1
+    fi
+    show(k, " ", rounds)
+fi

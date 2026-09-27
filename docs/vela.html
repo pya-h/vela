@@ -348,7 +348,8 @@ true false none  fi   maybe is     fail failure include priv</pre>
         reports that <code>a</code> isn't a result of the task.
       </p>
       <p>
-        Tasks can be called before they are declared, and can call themselves. Arguments are copies, so a task
+        Tasks can be called before they are declared, and can call themselves. Arguments are copies (a large one
+        is passed faster, without a difference a program can see: see <a href="#large-values">large values</a>), so a task
         never changes the caller's value; a parameter never changes either, unless it is written
         <code>hold</code>, and a task changes the caller's own value only through a parameter written
         <code>hold&amp;</code> (see <a href="#parameters">Parameters that change</a>) or a pointer.
@@ -606,6 +607,15 @@ count = count + 1
       <p>
         Assigning copies the value. Shapes are copied whole, so after <code>hold b = a</code>, changing
         <code>b.x</code> leaves <code>a</code> alone.
+      </p>
+      <p id="large-values">
+        Passing a value to a task copies it as well, as far as the program can tell. A task can't change a
+        parameter not written <code>hold</code>, so for a large one (a type of more than 64 bytes, such as a shape
+        of nine ints or an array of them) the compiler passes the address of where the caller keeps it instead,
+        which saves copying it at every call. It does so only where nothing can change the value while the task
+        runs: a local variable, or a field or array item of one, given where no later argument calls a task. A
+        value behind a pointer, in a slice, or named by a reference is copied first, since the task may reach that
+        memory another way. Nothing a program does shows the difference, except that it runs faster.
       </p>
       <p>
         A variable lives until the block that declares it closes. Vela has no shadowing: inside a
@@ -2625,12 +2635,12 @@ show(area(square))             <span class="comment"># error: unknown task 'area
           bool, or text as its value or <code>none</code>, but a <code>maybe</code> of a shape or kind with its own
           <code>str</code> has to be opened first, as in <code>when m is {value}</code>, since that method needs a
           value to run on.</li>
-        <li>The order in which a call's arguments, the parts of a join, the values in text, or an operator's two
-          sides are evaluated isn't defined, which
-          matters only when they call tasks that print, or when more than one of them would stop the program
-          (see <a href="#int-limits">Numbers</a>), which decides the message. (Where one of them contains a plan B, a
-          change to a slice, or a <code>scan</code>, they are evaluated left to right, and <code>show</code> always
-          works out its values left to right.)</li>
+        <li>A call's arguments, the parts of a join, the values in text, and an operator's two sides are evaluated
+          left to right whenever one of them calls a task, has a plan B, changes a slice, or reads a line, so
+          <code>n + bump(&amp;n)</code> reads <code>n</code> before <code>bump</code> changes it, and <code>show</code>
+          always works out its values left to right. Otherwise nothing they do can tell the order apart, except
+          which of two that would stop the program stops it (see <a href="#int-limits">Numbers</a>), which isn't
+          defined.</li>
         <li>An expression, including a shape literal or a call's arguments, must be written on one line.</li>
         <li>Statements aren't yet required to end at a line break (<code>show(1) show(2)</code> on one line is
           accepted).</li>

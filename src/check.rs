@@ -6901,8 +6901,13 @@ fn place_path(e: &Expr) -> Option<Vec<Step>> {
 }
 
 /// Whether two places may be the same, or one part of the other: they start at
-/// the same variable and no step tells them apart.
+/// the same variable and no step tells them apart. A pointer is not what it
+/// points to, so `p` and `p^` are two places.
 fn overlaps(a: &[Step], b: &[Step]) -> bool {
+    let (shorter, longer) = if a.len() <= b.len() { (a, b) } else { (b, a) };
+    if longer.get(shorter.len()) == Some(&Step::Deref) {
+        return false;
+    }
     a.iter().zip(b).all(|pair| match pair {
         (Step::Item(Some(x)), Step::Item(Some(y))) => x == y,
         (Step::Item(_), Step::Item(_)) => true,
