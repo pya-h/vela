@@ -459,8 +459,9 @@ block shared type</pre>
       <ul>
         <li><strong><code>bind x: T</code></strong> is always a copy, a place of its own, even of a large value. The
           call gives any value, as for a plain parameter.</li>
-        <li><strong><code>bind&amp; x: T</code></strong> is the caller's place, only read: never copied, never
-          changed. The call marks it, <code>f(&amp;a)</code>, as for <code>hold&amp;</code>, and gives any place a
+        <li><strong><code>bind&amp; x: T</code></strong> is the caller's place, only read: never copied, and never
+          changed through <code>x</code> (the place itself may still change another way, through a pointer or a
+          shared field, as <a href="safety.html#through-a-pointer">Safety</a> lists). The call marks it, <code>f(&amp;a)</code>, as for <code>hold&amp;</code>, and gives any place a
           <a href="#references"><code>bind&amp;</code> reference</a> may name: a variable (a <code>bind</code> too), a
           field or an array item of one, what a pointer points to, or a parameter, passed on.</li>
       </ul>
@@ -521,13 +522,16 @@ block shared type</pre>
                  <span class="comment">; write 'bind&amp; a: Point' for the caller's place, 'bind a: Point' for a copy of its own, or compare items with '~='</span>
 <span class="keyword">fi</span></pre>
       <p>
-        A part of such a parameter warns too (<code>line.from == line.to</code>), and so does the value a method
-        is called on, <code>.this</code>, which is given the same way. Writing
+        A part of such a parameter warns too (<code>line.from == p</code>), and so does the value a method is called
+        on, <code>.this</code>, which is given the same way, and a kind whose variants carry such values. Two parts
+        of one parameter (<code>line.from == line.to</code>) warn about nothing, since they are where they are
+        alike whichever way it was given, and neither does an item of a slice or what a pointer points to,
+        <code>p^</code>, which are places of their own however the slice or the pointer was given. Writing
         <a href="#bind-parameters"><code>bind</code> or <code>bind&amp;</code></a> says which is meant and silences
-        it, and so does <code>~=</code>, which compares items wherever they are. What a pointer points to,
-        <code>p^</code>, is its own place however the pointer was given, and warns about nothing. In a task that
-        takes types, the warning comes with each use that gives such a type, naming it: the body was checked when any
-        type could be given, and a number compares by value.
+        it; in place of <code>==</code>, so does <code>~=</code>, which compares items wherever they are. In a task
+        that takes types, the warning comes with each use that gives such a type, naming it: the body was checked
+        when any type could be given, and a number compares by value. Vela Studio shows the open file's warnings;
+        a module's own are shown where it is open.
       </p>
 
       <h3 id="references">References</h3>
@@ -567,6 +571,11 @@ count = count + <span class="number">1</span>
           is one word, as for a parameter.</li>
       </ul>
       <p>
+        What a reference can't see is a pointer: two pointers that hold one address, or a pointer to the place a
+        <code>bind&amp;</code> reads, reach it in a way the compiler doesn't follow. Those concerns, and where each
+        stands, are listed in <a href="safety.html">Safety</a>.
+      </p>
+      <p>
         In C, a reference is a pointer to the place, which an optimizing C compiler usually removes, using the place
         itself.
       </p>
@@ -574,11 +583,13 @@ count = count + <span class="number">1</span>
       <h3 id="addresses">Addresses</h3>
       <p>
         <code>&amp;x</code> also says where a place is, in four spots only: <code>show(&amp;x)</code> writes its
-        address, <code>(&amp;x).str() at r</code> and <code>"{&amp;x}" at r</code> make it text, both in C's hex,
+        address, <code>(&amp;x).str() at r</code>, <code>text(&amp;x) at r</code>, and <code>"{&amp;x}" at r</code>
+        make it text, all in C's hex,
         <code>0x7ffd…</code>, which <a href="#reading-numbers"><code>int(text)</code></a> reads back, and
         <code>&amp;a == &amp;b</code> (or <code>!=</code>) asks whether two places are one, whatever they hold. A
         place is what a reference names: a variable, a field or an item of one, what a pointer points to, a
-        <a href="#shared">shared field</a>, or <code>.this</code>; a reference is the place it names.
+        <a href="#shared">shared field</a>, or <code>.this</code>; a reference is the place it names. A length,
+        <code>xs.len</code>, is worked out from the value, not kept in it, so it has no place.
       </p>
       <pre><span class="keyword">hold</span> p = Point { x: <span class="number">1</span>, y: <span class="number">2</span> }
 <span class="keyword">bind</span> q = p                   <span class="comment">; a copy, in a place of its own</span>
@@ -737,7 +748,7 @@ count = count + 1
         of nine ints or an array of them) the compiler passes the address of where the caller keeps it instead,
         which saves copying it at every call. It does so only where nothing can change the value while the task
         runs: a local variable, or a field or array item of one, given where no later argument calls a task. A
-        value behind a pointer, in a slice, or named by a reference is copied first, since the task may reach that
+        value behind a pointer, in a slice or a shared field, or named by a reference is copied first, since the task may reach that
         memory another way. Nothing a program does shows the difference, except that it runs faster, and that
         <code>&amp;x</code> on such a parameter, and <code>==</code> on a shape, an array, or a tuple, read the
         caller's place rather than a copy's (see <a href="#addresses">Addresses</a>). A parameter written
@@ -1685,7 +1696,9 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
         <code>&lt;T: same &amp; shown&gt;</code> may compare its values and write them, and only a type that allows
         both fits. A word is written for everything the body relies on, even where every type that fits one fits
         another today, so a declaration says what it needs, and a word given its own meaning later (by a shape of your
-        own, say) changes nothing that is already written. The one word that means another is <code>ordered</code>,
+        own, say) changes nothing that is already written. (<code>same</code>, <code>similar</code>, and
+        <code>fixed</code> are on the <a href="maywaste.html#words">May Waste</a> list, which keeps an eye on what
+        may not earn its place.) The one word that means another is <code>ordered</code>,
         which means <code>same</code>, since what has an order can be compared; writing both is an error that says to
         keep <code>ordered</code>. <code>ordered</code> doesn't mean <code>shown</code> or <code>fixed</code>: a task
         that compares and prints its values says <code>&lt;T: ordered &amp; shown&gt;</code>, and one that leaves out

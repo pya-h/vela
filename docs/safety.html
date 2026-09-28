@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela — Safety</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-2: #111827;
+      --fg: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --accent-3: #34d399;
+      --accent-4: #f472b6;
+      --accent-5: #fbbf24;
+      --code-bg: #1e293b;
+      --card-bg: #151c2c;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.65;
+    }
+    header {
+      padding: 5rem 1rem 4rem;
+      text-align: center;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(248,113,113,0.1) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(167,139,250,0.12) 0%, transparent 40%),
+        var(--bg-2);
+      border-bottom: 1px solid var(--border);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent-4), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .tagline {
+      margin-top: 1rem;
+      font-size: 1.25rem;
+      color: var(--muted);
+      max-width: 650px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 4rem;
+      font-size: 2rem;
+      color: var(--fg);
+    }
+    h3 {
+      margin: 0 0 0.75rem;
+      color: var(--fg);
+      font-size: 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    p { margin: 1rem 0; }
+    code {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      background: var(--code-bg);
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.35rem;
+      color: var(--accent);
+      font-size: 0.9rem;
+      overflow-wrap: anywhere;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1.25rem;
+      border-radius: 0.75rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      line-height: 1.55;
+    }
+    pre code { background: none; padding: 0; }
+    .keyword { color: var(--accent-2); }
+    .string { color: var(--accent-3); }
+    .comment { color: var(--muted); }
+    .intro {
+      font-size: 1.15rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+    .entry {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin: 1.25rem 0;
+    }
+    .entry dl { margin: 0.75rem 0 0; }
+    .entry dt { color: var(--accent-2); font-weight: 700; margin-top: 0.75rem; }
+    .entry dd { margin: 0.25rem 0 0; color: var(--muted); }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .b-open { background: rgba(248,113,113,0.15); color: #fca5a5; }
+    .b-design { background: rgba(56,189,248,0.15); color: #7dd3fc; }
+    .b-warned { background: rgba(250,204,21,0.15); color: #fde047; }
+    .b-later { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+    .b-checked { background: rgba(52,211,153,0.15); color: #6ee7b7; }
+    .note {
+      background: linear-gradient(90deg, rgba(56,189,248,0.1), transparent);
+      border-left: 4px solid var(--accent);
+      padding: 1.25rem 1.5rem;
+      border-radius: 0 0.75rem 0.75rem 0;
+      margin: 1.5rem 0;
+    }
+    .note strong { color: var(--accent); }
+    .table-wrap { overflow-x: auto; margin: 1.5rem 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--accent-2); font-weight: 700; }
+    td { color: var(--muted); }
+    main a { color: var(--accent); }
+    ul { padding-left: 1.5rem; }
+    li { margin: 0.6rem 0; }
+    footer {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      background: var(--bg-2);
+    }
+    .doc-nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .doc-nav a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"] {
+      color: var(--accent);
+    }
+    @media (max-width: 600px) {
+      h1 { font-size: 2.5rem; }
+      h2 { font-size: 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Safety</h1>
+    <p class="tagline">Where one name can see a change made through another: what the compiler checks today, and the concerns still open.</p>
+    <nav class="doc-nav" aria-label="Vela documentation">
+      <a href="vela.html">Language</a>
+      <a href="regions.html">Regions</a>
+      <a href="std.html">Library</a>
+      <a href="ide.html">Studio</a>
+      <a href="comparison.html">Comparison</a>
+      <a href="future.html">Future</a>
+      <a href="safety.html" aria-current="page">Safety</a>
+      <a href="maywaste.html">May Waste</a>
+      <a href="events.html">Events</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="intro">
+      In Vela a value behaves as a copy: giving it to a task, binding it to another name, or putting it in a shape
+      never lets two names change one thing. Three features give that up on purpose, since they are how two names
+      share one place: a reference (<code>hold&amp;</code>, <code>bind&amp;</code>), a pointer (<code>^T</code>),
+      and a shared field. This page lists what the compiler checks about them today, and the concerns it doesn't
+      settle yet, to come back to. Nothing here changes the language.
+    </p>
+
+    <div class="note">
+      <strong>How to read the marks.</strong>
+      <span class="badge b-checked">checked</span> is refused by the compiler today;
+      <span class="badge b-warned">warned</span> builds, with a <a href="vela.html#warnings">warning</a>;
+      <span class="badge b-design">by design</span> is how the feature is meant to work, written down so it is known;
+      <span class="badge b-open">open</span> is a concern the compiler doesn't catch;
+      <span class="badge b-later">later</span> waits for a feature Vela doesn't have yet.
+    </div>
+
+    <section>
+      <h2 id="checked">What the compiler checks</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Rule</th><th>What it prevents</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>A place a call changes is given once: two <code>hold&amp;</code> parameters, or a
+                <code>hold&amp;</code> and a <code>bind&amp;</code> or a plain parameter, never name one place, and
+                nor do <code>&amp;xs[i]</code> and <code>&amp;xs[j]</code>, which may. A method that
+                <code>alters</code> the value it is called on counts as changing it.</td>
+              <td>A task changing a value through one parameter while it reads it through another. See
+                <a href="vela.html#parameters">Parameters</a>.</td>
+            </tr>
+            <tr>
+              <td>A large plain parameter, <code>x: T</code>, is read where the caller keeps it only when nothing
+                can change it while the task runs: a local variable, or a field or an array item of one, with no
+                later argument that calls a task. Anything else is copied first.</td>
+              <td>A value given as a copy changing under the task. See
+                <a href="vela.html#large-values">Large values</a>.</td>
+            </tr>
+            <tr>
+              <td>A reference names a place: never an item of a slice, which moves when the slice grows, a part
+                taken of a value, a call's value, or a result.</td>
+              <td>A reference to memory that has moved, or to a value that is gone. See
+                <a href="vela.html#references">References</a>.</td>
+            </tr>
+            <tr>
+              <td>A pointer always points to something (a missing one is a <code>maybe ^T</code>), and lives in a
+                region that outlives it.</td>
+              <td>Null pointers, and pointers into memory that was freed. See
+                <a href="regions.html">Regions</a>.</td>
+            </tr>
+            <tr>
+              <td>A tuple's items never change, and hold nothing that changes through a pointer, a slice, or an
+                array.</td>
+              <td>A value that looks fixed changing through another name. See
+                <a href="vela.html#tuples">Tuples</a>.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="concerns">Concerns</h2>
+
+      <div class="entry" id="through-a-pointer">
+        <h3>A reference parameter changed through a pointer <span class="badge b-open">open</span></h3>
+        <p>
+          The rule that a call gives a place it changes once compares the places written at the call. A pointer
+          reaches a place the call doesn't write, so a task given <code>&amp;p^</code> as a <code>bind&amp;</code>
+          and <code>p</code> itself can change what the reference reads:
+        </p>
+        <pre><code><span class="keyword">shape</span> Box
+    v: int
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> f(<span class="keyword">bind&amp;</span> x: Box, p: ^Box@r)
+    p^.v = 99
+    show(x.v)                      <span class="comment">; 99: x is where p points</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">bind</span> p = <span class="keyword">new</span> Box(Box { v: 1 }) <span class="keyword">at</span> r
+    f(&amp;p^, p)
+<span class="keyword">fi</span></code></pre>
+        <p>
+          Two pointers that hold one address slip past the same rule, since the compiler can't tell they do:
+        </p>
+        <pre><code><span class="keyword">task</span> two(<span class="keyword">hold&amp;</span> a: int, <span class="keyword">hold&amp;</span> b: int)
+    a = 1
+    b = 2
+    show(a, <span class="string">" "</span>, b)                <span class="comment">; 2 2</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">bind</span> q = p
+two(&amp;p^.v, &amp;q^.v)</code></pre>
+        <dl>
+          <dt>Why it is hard</dt>
+          <dd>Whether two pointers hold one address is known only when the program runs. A rule written for the
+            compiler has to be cautious: it would refuse or warn about every call that gives a place behind a
+            pointer together with another pointer of that type, or into the same region, most of which are fine.</dd>
+          <dt>Ways it could go</dt>
+          <dd>A warning where a call gives <code>&amp;p^</code> (or a part of it) to a reference parameter and also
+            gives a pointer of the same type, or a place behind another pointer of it. Or, in a build for finding
+            mistakes, a check that the two addresses differ when the call starts, trapping when they don't.</dd>
+        </dl>
+      </div>
+
+      <div class="entry" id="shared-fields">
+        <h3>A reference to a shared field the task changes <span class="badge b-open">open</span></h3>
+        <p>
+          A shared field that changes (<code>shared hold</code>) is one place for the whole program, and every task
+          can reach it by name. A task given it as a <code>bind&amp;</code> reads it where it is, so its own change
+          to the field shows through the reference:
+        </p>
+        <pre><code><span class="keyword">shape</span> Tally
+    <span class="keyword">shared hold</span> count: int = 0
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> report(<span class="keyword">bind&amp;</span> seen: int)
+    Tally.count = Tally.count + 1
+    show(seen)                     <span class="comment">; 1, not the 0 it was given</span>
+<span class="keyword">fi</span>
+
+report(&amp;Tally.count)</code></pre>
+        <p>
+          A plain parameter given a shared field is copied first, so it never sees the change.
+        </p>
+        <dl>
+          <dt>Why it is hard</dt>
+          <dd>The change may come from a task the body calls, or one that task calls, so the compiler would have to
+            know every shared field each task can change.</dd>
+          <dt>Ways it could go</dt>
+          <dd>The checker could learn, for each task, which shared fields it or the tasks it calls may change, and
+            refuse a call that gives one of them to a reference parameter, as it refuses a place given twice. A
+            <code>shared read</code> field, which only its shape's methods change, narrows where to look.</dd>
+        </dl>
+      </div>
+
+      <div class="entry" id="references-read-now">
+        <h3>A reference reads the place as it is now <span class="badge b-design">by design</span></h3>
+        <p>
+          <code>bind&amp; y = &amp;x</code> can't change <code>x</code>, but it reads <code>x</code> as it is each
+          time it is read, and <code>x</code> may change between two reads:
+        </p>
+        <pre><code><span class="keyword">hold</span> x = 1
+<span class="keyword">bind&amp;</span> y = &amp;x
+show(y)                            <span class="comment">; 1</span>
+x = 2
+show(y)                            <span class="comment">; 2</span></code></pre>
+        <p>
+          That is what a reference is for, and a <code>bind&amp;</code> parameter is the same inside the task.
+          What the word promises is that the reader doesn't change the place, not that nothing does. A reader who
+          needs the value to stay as it was keeps a copy: <code>bind v = y</code>, or a
+          <a href="vela.html#bind-parameters"><code>bind x</code></a> parameter.
+        </p>
+      </div>
+
+      <div class="entry" id="chosen-passing">
+        <h3>Where a plain parameter is <span class="badge b-warned">warned</span></h3>
+        <p>
+          A plain parameter, <code>x: T</code>, is a copy, or for a value larger than 64 bytes, the caller's own
+          place. Its value is the same either way, but what reads where the value is sees the difference:
+          <code>&amp;x</code>, and <code>==</code> on a shape, an array, or a tuple, which compare by where the
+          value is. Such a read is a <a href="vela.html#warnings">warning</a> that says which way the compiler went;
+          <code>bind x</code> and <code>bind&amp; x</code> say which is meant.
+        </p>
+      </div>
+
+      <div class="entry" id="threads">
+        <h3>Threads <span class="badge b-later">later</span></h3>
+        <p>
+          Vela has no threads, so every change above happens at a point the program's own order decides. Once two
+          tasks can run at once, each reference, pointer, and shared field is memory two threads may change
+          together, and the rule that a place is given once would have to hold between threads as well as within
+          one call. Whatever Vela adds for running work at once (see <a href="events.html">Events</a> for one
+          idea) will need its own answer here before it is built.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="how">Adding to this page</h2>
+      <p>
+        An entry shows the smallest program that has the concern, says what happens today, and, for an open one,
+        why the compiler doesn't catch it and ways it could. When a concern comes to be checked, it moves to the
+        table above, with a link to where the guide explains the rule.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Vela — safe where it can check, and clear about where it can't yet.</p>
+  </footer>
+</body>
+</html>

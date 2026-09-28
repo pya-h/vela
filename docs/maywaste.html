@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela — May Waste</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-2: #111827;
+      --fg: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --accent-3: #34d399;
+      --accent-4: #f472b6;
+      --accent-5: #fbbf24;
+      --code-bg: #1e293b;
+      --card-bg: #151c2c;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.65;
+    }
+    header {
+      padding: 5rem 1rem 4rem;
+      text-align: center;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(251,191,36,0.1) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(167,139,250,0.12) 0%, transparent 40%),
+        var(--bg-2);
+      border-bottom: 1px solid var(--border);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent-5), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .tagline {
+      margin-top: 1rem;
+      font-size: 1.25rem;
+      color: var(--muted);
+      max-width: 650px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 4rem;
+      font-size: 2rem;
+      color: var(--fg);
+    }
+    h3 {
+      margin: 0 0 0.75rem;
+      color: var(--fg);
+      font-size: 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    p { margin: 1rem 0; }
+    code {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      background: var(--code-bg);
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.35rem;
+      color: var(--accent);
+      font-size: 0.9rem;
+      overflow-wrap: anywhere;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1.25rem;
+      border-radius: 0.75rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      line-height: 1.55;
+    }
+    pre code { background: none; padding: 0; }
+    .keyword { color: var(--accent-2); }
+    .string { color: var(--accent-3); }
+    .comment { color: var(--muted); }
+    .intro {
+      font-size: 1.15rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+    .entry {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin: 1.25rem 0;
+    }
+    .entry dl { margin: 0.75rem 0 0; }
+    .entry dt { color: var(--accent-2); font-weight: 700; margin-top: 0.75rem; }
+    .entry dd { margin: 0.25rem 0 0; color: var(--muted); }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .b-watch { background: rgba(56,189,248,0.15); color: #7dd3fc; }
+    .b-merge { background: rgba(250,204,21,0.15); color: #fde047; }
+    .b-drop { background: rgba(248,113,113,0.15); color: #fca5a5; }
+    .note {
+      background: linear-gradient(90deg, rgba(56,189,248,0.1), transparent);
+      border-left: 4px solid var(--accent);
+      padding: 1.25rem 1.5rem;
+      border-radius: 0 0.75rem 0.75rem 0;
+      margin: 1.5rem 0;
+    }
+    .note strong { color: var(--accent); }
+    .table-wrap { overflow-x: auto; margin: 1.5rem 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--accent-2); font-weight: 700; }
+    td { color: var(--muted); }
+    main a { color: var(--accent); }
+    ul { padding-left: 1.5rem; }
+    li { margin: 0.6rem 0; }
+    footer {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      background: var(--bg-2);
+    }
+    .doc-nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .doc-nav a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"] {
+      color: var(--accent);
+    }
+    @media (max-width: 600px) {
+      h1 { font-size: 2.5rem; }
+      h2 { font-size: 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>May Waste</h1>
+    <p class="tagline">What Vela has today that may not earn its place: words and forms to keep an eye on, and to merge or drop if they never find a use of their own.</p>
+    <nav class="doc-nav" aria-label="Vela documentation">
+      <a href="vela.html">Language</a>
+      <a href="regions.html">Regions</a>
+      <a href="std.html">Library</a>
+      <a href="ide.html">Studio</a>
+      <a href="comparison.html">Comparison</a>
+      <a href="future.html">Future</a>
+      <a href="safety.html">Safety</a>
+      <a href="maywaste.html" aria-current="page">May Waste</a>
+      <a href="events.html">Events</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="intro">
+      Vela means to stay small, and a small language pays for every word it keeps. Each entry here is built and
+      works; none is a mistake. Each is here because today it does little that something else doesn't already do, or
+      because it is one of several ways to write the same thing. Nothing on this page changes the language: it is a
+      list to come back to, so that what never earns a use of its own can go before programs lean on it.
+    </p>
+
+    <div class="note">
+      <strong>How to read the marks.</strong>
+      <span class="badge b-watch">watch</span> keeps it and looks again once programs use it;
+      <span class="badge b-merge">merge</span> means several forms could become one;
+      <span class="badge b-drop">drop?</span> means it may go if nothing needs it. A mark is a note, not a
+      decision: each change is a breaking one and is asked about first.
+    </div>
+
+    <section>
+      <h2 id="words">Words a type asks for</h2>
+
+      <div class="entry" id="same">
+        <h3><code>same</code> <span class="badge b-watch">watch</span></h3>
+        <p>
+          <code>&lt;T: same&gt;</code> lets a task that takes types compare its values with <code>==</code> (see
+          <a href="vela.html#generics">Generics</a>). Since <code>==</code> came to compare every type by its own
+          rule (see <a href="vela.html#comparing">Comparing</a>): numbers by value, text by its bytes, pointers and
+          slices by what they point to, and arrays, shapes and tuples by where they are, almost every type is
+          <code>same</code>. What is left out is a <code>maybe</code> of its own (a kind that carries one compares
+          it), a value that can fail (<code>T ~ E</code>), a region, and a kind that carries a value that can fail.
+        </p>
+        <dl>
+          <dt>Why it may waste</dt>
+          <dd>A word that nearly every type has says little: most bodies could compare their values without it, and
+            a missing <code>same</code> is mostly a word to type, not a mistake caught.</dd>
+          <dt>Why it stays</dt>
+          <dd>It is the one thing between a task's body and a <code>maybe</code> or a failing value compared by
+            mistake, and a shape of your own may one day say it is not <code>same</code> (see
+            <a href="future.html">Future</a>). <code>same</code> means <code>==</code> and never similarity; that
+            is <a href="#similar"><code>similar</code></a>.</dd>
+          <dt>What would settle it</dt>
+          <dd>If shapes never come to choose their own words, <code>same</code> could be what every type but those
+            few has without writing it, as a type has <code>str</code> by default.</dd>
+        </dl>
+      </div>
+
+      <div class="entry" id="similar">
+        <h3><code>similar</code> <span class="badge b-watch">watch</span></h3>
+        <p>
+          <code>&lt;T: similar&gt;</code> lets a body compare its values item by item with <code>~=</code> and
+          <code>&lt;&gt;</code>. The two words take nearly the same types: <code>similar</code> takes a
+          <code>maybe</code> too, and <code>same</code> takes an array, a shape, or a tuple holding a value that can
+          fail, which <code>==</code> compares by where it is without reading it.
+        </p>
+        <dl>
+          <dt>Why it may waste</dt>
+          <dd>Two words that let in nearly the same types could be one.</dd>
+          <dt>Why it stays</dt>
+          <dd>They ask for different costs: <code>==</code> is cheap and <code>~=</code> grows with the value, and
+            the word says which a body means to pay for.</dd>
+        </dl>
+      </div>
+
+      <div class="entry" id="fixed">
+        <h3><code>fixed</code> <span class="badge b-watch">watch</span></h3>
+        <p>
+          <code>&lt;T: fixed&gt;</code> lets a body put a <code>T</code> in a tuple, whose items never change, so
+          the type holds nothing that changes through a pointer, a slice, or an array.
+        </p>
+        <dl>
+          <dt>Why it may waste</dt>
+          <dd>It is needed only by a task that takes types and makes a tuple of them, which is rare.</dd>
+          <dt>Why it stays</dt>
+          <dd>Without it, a tuple built in such a task could hold what changes, which the tuple's own rule
+            refuses everywhere else.</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="forms">Several ways to write one thing</h2>
+
+      <div class="entry" id="text-forms">
+        <h3>Five ways to make text of a value <span class="badge b-merge">merge</span></h3>
+        <pre><code>x.str() <span class="keyword">at</span> r
+x.str()@r
+x.str(r)
+text(x) <span class="keyword">at</span> r
+text(x)@r</code></pre>
+        <p>
+          All five are the same call (see <a href="vela.html#str">Values as text</a>): <code>at r</code> and
+          <code>@r</code> are how every call that takes its region last is written, and <code>text(x)</code> names
+          the type the value becomes, as <code>int(x)</code> and <code>float(x)</code> do.
+        </p>
+        <dl>
+          <dt>Why it may waste</dt>
+          <dd>A reader meets five spellings of one thing, and the guide spends words on each.</dd>
+          <dt>Why it stays for now</dt>
+          <dd>Each follows a rule that holds elsewhere: <code>@r</code> inside a <code>+</code> chain, the region in
+            the parentheses for any task, and <code>text(x)</code> beside <code>int(x)</code>. Dropping one breaks
+            the rule it follows, not only the form.</dd>
+          <dt>What would settle it</dt>
+          <dd>Which forms programs actually use. If <code>text(x)</code> is never written, it can go; if
+            <code>x.str(r)</code> is, the region after the call could be the only other form.</dd>
+        </dl>
+      </div>
+
+      <div class="entry" id="new-forms">
+        <h3><code>new T(v) at r</code> and <code>new@r T(v)</code> <span class="badge b-merge">merge</span></h3>
+        <p>
+          Both copy a value into a region (see <a href="vela.html#regions">Regions</a>) and mean exactly the same.
+        </p>
+        <dl>
+          <dt>Why it may waste</dt>
+          <dd>Two spellings of one thing, which the guide and Studio each have to know.</dd>
+          <dt>Why it stays for now</dt>
+          <dd><code>new@r</code> reads well inside a longer line, as <code>@r</code> does after a call; if the
+            region after a call settles on one form, <code>new</code> follows it.</dd>
+        </dl>
+      </div>
+
+      <div class="entry" id="not-forms">
+        <h3><code>!=</code> and <code>&lt;&gt;</code> beside <code>not</code> <span class="badge b-watch">watch</span></h3>
+        <p>
+          <code>a != b</code> is <code>not (a == b)</code>, and <code>a &lt;&gt; b</code> is
+          <code>not (a ~= b)</code>.
+        </p>
+        <dl>
+          <dt>Why it may waste</dt>
+          <dd>Each is a shorthand for what <code>not</code> already says. <code>&lt;&gt;</code> also has a second
+            job: it is read as the empty types of <code>Box&lt;&gt;</code> and <code>first&lt;&gt;(x)</code>, which
+            the parser and Studio must tell apart.</dd>
+          <dt>Why it stays</dt>
+          <dd>Both are asked for often enough to earn a symbol, and each pairs with the symbol it negates.</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="parameters">Parameters</h2>
+
+      <div class="entry" id="bind-parameters">
+        <h3><code>bind x: T</code> parameters <span class="badge b-watch">watch</span></h3>
+        <p>
+          A <code>bind x: T</code> parameter is always a copy, and a plain <code>x: T</code> is a copy too unless
+          the value takes more than 64 bytes, when the compiler reads it where the caller keeps it (see
+          <a href="vela.html#bind-parameters">Parameters that read</a>). The two differ only for a large value, and
+          only where the body reads where the value is: <code>==</code> on it, or <code>&amp;x</code>.
+        </p>
+        <dl>
+          <dt>Why it may waste</dt>
+          <dd>For a value of 64 bytes or less, <code>bind x</code> and <code>x</code> give the same program, and for
+            a larger one <code>bind x</code> costs a copy the compiler would have saved. Most of its use may be to
+            silence the <a href="vela.html#warnings">warning</a>, which <code>~=</code> does too.</dd>
+          <dt>Why it stays</dt>
+          <dd>It is the one way to say "a place of its own" when a body compares by where a value is; without it,
+            what <code>x == y</code> means would rest on a size.</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="reading">Reading what the compiler knows</h2>
+
+      <div class="entry" id="type-of">
+        <h3><code>x.type</code> <span class="badge b-watch">watch</span></h3>
+        <p>
+          <code>x.type</code> is the type of a value as text, known to the compiler (see
+          <a href="vela.html#type-of">The type of a value</a>).
+        </p>
+        <dl>
+          <dt>Why it may waste</dt>
+          <dd>Outside a task that takes types, the type is written in the code already, so <code>.type</code> is
+            mostly for looking at a program, not for what it does; it also takes <code>type</code> as a reserved
+            word, which no field or variable can be called.</dd>
+          <dt>Why it stays</dt>
+          <dd>In a task that takes types, it says which type a use gave, which nothing else does.</dd>
+        </dl>
+      </div>
+
+      <div class="entry" id="addresses">
+        <h3>Showing an address, <code>show(&amp;x)</code> <span class="badge b-watch">watch</span></h3>
+        <p>
+          <code>&amp;x</code> can be shown and turned into text as well as compared (see
+          <a href="vela.html#addresses">Addresses</a>).
+        </p>
+        <dl>
+          <dt>Why it may waste</dt>
+          <dd>An address differs with every run, so a program's output that shows one can never be tested for;
+            it serves looking into a program, and <code>&amp;a == &amp;b</code> is what a program decides with.</dd>
+          <dt>Why it stays</dt>
+          <dd>Seeing where two names point is how aliasing, hidden parameters, and references are understood, and
+            it costs one writer.</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="how">Adding to this page</h2>
+      <p>
+        An entry names the feature, links to where the guide explains it, and says three things: why it may waste,
+        why it stays, and, where it is known, what would settle it. When a feature here is dropped or merged, its
+        entry says so and when, and links to the change; when it finds a use of its own, the entry goes.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Vela — small by design, and kept that way on purpose.</p>
+  </footer>
+</body>
+</html>
