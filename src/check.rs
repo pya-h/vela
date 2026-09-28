@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::ast::*;
+use crate::codegen;
 use crate::error::{Error, Result};
 use crate::modules::{IncludeScope, ModuleScope, Program};
 
@@ -163,6 +164,10 @@ pub struct Checker {
     /// checker goes on after one, so a file's mistakes are all reported
     /// together (see `record` and `Type::Unknown`).
     errors: Vec<Error>,
+    /// What the program does that it may not mean, found so far: code that
+    /// builds, but whose meaning rests on a choice the compiler made (see
+    /// `warn_chosen`).
+    warnings: Vec<Error>,
     /// The tasks, shapes, and kinds whose own declaration has a mistake. What
     /// they promise isn't known, so a use of one is checked as far as it can be
     /// and then left alone: reporting the declaration's mistake again at every
@@ -345,6 +350,12 @@ impl Checker {
     /// it checks. The items are annotated as far as they checked, so a tool can
     /// read the types around a mistake (see `driver::Partial`).
     pub fn check_program(program: &mut Program) -> Vec<Error> {
+        Checker::check_program_warned(program).0
+    }
+
+    /// `check_program`, with the warnings too: what the program does that it
+    /// may not mean, in source order. A program with warnings still builds.
+    pub fn check_program_warned(program: &mut Program) -> (Vec<Error>, Vec<Error>) {
         let mut checker = Checker::with_type_places(std::mem::take(&mut program.type_places));
         checker.modules = program.modules.iter().map(|scope| (scope.name.clone(), scope.clone())).collect();
         checker.declare_builtin_kinds();
@@ -372,6 +383,8 @@ impl Checker {
         let mut made: Vec<(&String, &String)> = written.iter().collect();
         made.sort_by_key(|(name, _)| std::cmp::Reverse(name.len()));
         let mut errors = std::mem::take(&mut checker.errors);
+        let warnings_at = errors.len();
+        errors.append(&mut checker.warnings);
         for error in &mut errors {
             for (name, form) in &made {
                 if error.message.contains(name.as_str()) {
@@ -382,7 +395,8 @@ impl Checker {
                 error.message = scope.spelling.text(&error.message);
             }
         }
-        in_source_order(errors)
+        let warnings = errors.split_off(warnings_at);
+        (in_source_order(errors), in_source_order(warnings))
     }
 
     /// Whether a task, shape, kind, or variant name written in the current
@@ -591,6 +605,13 @@ impl Checker {
             let given: HashMap<String, Type> = source.types.iter().map(|param| param.name.clone()).zip(types).collect();
             let mut made = Made::default();
             self.substitute_task(&mut task, &given, &mut made)?;
+            for (span, what, param) in &made.reads_chosen {
+                let Some(ty) = made.chosen.get(param) else { continue };
+                let types: Vec<String> = task.given.iter().map(|ty| ty.without_regions().to_string()).collect();
+                let given = format!("where '{}' is given {}, at {}:{}", unqualified(&name), types.join(", "), at.line, at.col);
+                let message = chosen_message(what, param, ty, self.size_of(ty), Some(given));
+                self.warnings.push(Error::at(*span, message));
+            }
             if let Some((compare, ty)) = made.placeless.first() {
                 return err(
                     at,
@@ -4938,6 +4959,10 @@ impl Checker {
                 // An array, a shape, or a tuple is compared by where it is, so
                 // each side is a place; a value made on the spot is none.
                 if self.by_place(&lt) {
+                    let what = format!("'{}' compares {} by where it is", symbol, lt.without_regions());
+                    for side in [&*l, &*r] {
+                        self.warn_chosen(side, &what);
+                    }
                     for side in [&*l, &*r] {
                         if !self.is_place(side) {
                             return err(
@@ -5878,6 +5903,8 @@ impl Checker {
                 format!("'&' takes the address of a place: a variable, a field or an item of one, or what a pointer points to, and this is {}, with no place of its own", what),
             );
         }
+        let written = place_path(place).map_or_else(|| "x".to_string(), |path| path_text(&path));
+        self.warn_chosen(place, &format!("'&{}' is where the place is", written));
         let address = Type::Ptr(Box::new(ty), None);
         e.ty = Some(address.clone());
         Ok(address)
@@ -5949,6 +5976,46 @@ impl Checker {
             );
         }
         Ok(Type::Bool)
+    }
+
+    /// The parameter `e` is, or is a field or an item of, when it is one the
+    /// compiler chooses how to give (`x: T`): a copy, or, for a large value,
+    /// where the caller keeps it (see `codegen::hidden_by_size`). Its name and
+    /// type. A place a pointer points to is its own, however it was given.
+    fn chosen_param(&self, e: &Expr) -> Option<(String, Type)> {
+        let mut at = e;
+        loop {
+            match &at.kind {
+                ExprKind::Var(name) => {
+                    let info = self.lookup(name)?;
+                    let chosen = info.param && info.passing == Passing::Copy && !info.mutable && info.ty != Type::Region;
+                    return chosen.then(|| (name.clone(), info.ty.clone()));
+                }
+                ExprKind::Field(base, _) => at = base,
+                ExprKind::Index(base, index) if !matches!(index.kind, ExprKind::Range(..)) => at = base,
+                _ => return None,
+            }
+        }
+    }
+
+    /// Warns that `what`, at `at`, reads where a parameter the compiler chose
+    /// how to give is (`chosen_param`), which the choice decides: a copy is a
+    /// place of its own, and a large value is where the caller keeps it. The
+    /// warning says which it is, and how to say which is meant.
+    fn warn_chosen(&mut self, e: &Expr, what: &str) {
+        let Some((name, ty)) = self.chosen_param(e) else { return };
+        // A type a declaration takes has no size until a use gives it one,
+        // where the task made for it warns (see `Made::reads_chosen`).
+        if !ty.params().is_empty() {
+            return;
+        }
+        let message = chosen_message(what, &name, &ty, self.size_of(&ty), None);
+        self.warnings.push(Error::at(e.span, message));
+    }
+
+    /// How many bytes a value of `ty` takes in C (see `codegen::Layout`).
+    fn size_of(&self, ty: &Type) -> usize {
+        codegen::Layout { shapes: &self.shapes, kinds: &self.kinds }.of(ty).0
     }
 
     /// The place `e` names, as `place_path` gives it, with a reference it
@@ -6840,6 +6907,12 @@ struct Made {
     /// Each `==` or `!=` that the types given make compare by where values are
     /// (see `Checker::by_place`) with a side that is no place, and the type.
     placeless: Vec<(Span, Type)>,
+    /// The parameters the compiler chooses how to give (`x: T`), with their
+    /// types as the use gives them (see `Checker::chosen_param`).
+    chosen: HashMap<String, Type>,
+    /// Each side of an `==` by place, or an address, that reads where such a
+    /// parameter is: where, what reads it, and the parameter's name.
+    reads_chosen: Vec<(Span, String, String)>,
 }
 
 impl Checker {
@@ -6850,8 +6923,12 @@ impl Checker {
     /// types given it changes nothing, and only fills `made`, which is how the
     /// checker reads a generic task's copies.
     fn substitute_task(&mut self, task: &mut TaskDef, given: &HashMap<String, Type>, made: &mut Made) -> Result<()> {
+        let alters = task.owner.as_ref().is_some_and(|owner| owner.alters);
         for param in &mut task.params {
             self.substitute_type(&mut param.ty, given, param.ty_span)?;
+            if param.passing == Passing::Copy && param.ty != Type::Region && !(alters && param.name == THIS) {
+                made.chosen.insert(param.name.clone(), param.ty.clone());
+            }
         }
         let at = task.span;
         self.substitute_type(&mut task.ret, given, at)?;
@@ -7022,7 +7099,25 @@ impl Checker {
                     && self.by_place(&ty)
                     && !(names_place(a) && names_place(b))
                 {
-                    made.placeless.push((at, ty));
+                    made.placeless.push((at, ty.clone()));
+                }
+                // A side that reads where a parameter the compiler chose how
+                // to give is, now that its type is known.
+                let what = match (&a.kind, &b.kind, &a.ty) {
+                    (ExprKind::Ref(_), _, _) | (_, ExprKind::Ref(_), _) => Some("'&' reads where the place is".to_string()),
+                    (_, _, Some(ty)) if self.by_place(ty) => Some(format!("'==' compares {} by where it is", ty.without_regions())),
+                    _ => None,
+                };
+                if let Some(what) = what {
+                    for side in [&**a, &**b] {
+                        let place = match &side.kind {
+                            ExprKind::Ref(place) => place.as_ref(),
+                            _ => side,
+                        };
+                        if let Some(name) = param_root(place).filter(|name| made.chosen.contains_key(*name)) {
+                            made.reads_chosen.push((side.span, what.clone(), name.to_string()));
+                        }
+                    }
                 }
                 Ok(())
             }
@@ -7680,6 +7775,35 @@ fn in_source_order(errors: Vec<Error>) -> Vec<Error> {
     errors
 }
 
+/// The warning that `what` (`'==' compares Point by where it is`) reads where
+/// the parameter `name`, of type `ty`, is, which the compiler chose from its
+/// `size`; `given` names the use that gave the type, in a task that takes types.
+fn chosen_message(what: &str, name: &str, ty: &Type, size: usize, given: Option<String>) -> String {
+    let written = ty.without_regions();
+    let (whose, subject, words) = if name == THIS {
+        ("the value the method is called on", "'.this'".to_string(), "compare items with '~='".to_string())
+    } else {
+        (
+            "a parameter",
+            format!("'{}'", name),
+            format!("write 'bind& {0}: {1}' for the caller's place, 'bind {0}: {1}' for a copy of its own, or compare items with '~='", name, written),
+        )
+    };
+    let given = given.map(|given| format!(" ({})", given)).unwrap_or_default();
+    let went = if codegen::hidden_by_size(size) {
+        format!(
+            "{} takes {} bytes, more than {}, so {} is where the caller keeps it, or a copy the caller makes first of a value behind a pointer, in a slice, or named by a reference",
+            written,
+            size,
+            codegen::HIDDEN_ABOVE,
+            subject
+        )
+    } else {
+        format!("{} takes {} bytes, so {} is a copy, a place of its own, never the caller's", written, size, subject)
+    };
+    format!("{}, and {} is {}, given as the compiler chose{}: {}; {}", what, subject, whose, given, went, words)
+}
+
 /// The end of the message for changing a parameter that never changes: how to
 /// write one the task may change. Empty for anything else.
 fn param_hint(name: &str, info: &VarInfo) -> String {
@@ -7707,6 +7831,17 @@ enum Step {
 
 /// The place `e` names, as its variable and the steps from it, or `None` for a
 /// value that isn't a place.
+/// The variable a place written as `e` starts at, through its fields and
+/// items, and not through a pointer, whose place is its own.
+fn param_root(e: &Expr) -> Option<&str> {
+    match &e.kind {
+        ExprKind::Var(name) => Some(name),
+        ExprKind::Field(base, _) => param_root(base),
+        ExprKind::Index(base, index) if !matches!(index.kind, ExprKind::Range(..)) => param_root(base),
+        _ => None,
+    }
+}
+
 /// Whether `e` is written as a place: a variable, a shared field, what a
 /// pointer points to, or a field or an item of one. (In a task made for
 /// types, no variant is of a type the task takes, so a name is a variable.)

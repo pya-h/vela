@@ -101,22 +101,25 @@ fn run(opts: &Options) -> Result<(), String> {
     if opts.check {
         // Everything a build checks before generating C, so a program that
         // passes can be built.
-        let items = driver::check_program(path, &source, &mut driver::read_from_disk).map_err(|e| e.render(&opts.input))?;
+        let (items, warnings) = driver::check_program(path, &source, &mut driver::read_from_disk).map_err(|e| e.render(&opts.input))?;
         if !driver::has_main(&items) {
             return Err(driver::BuildError::NoMain.render(&opts.input, &source));
         }
+        warn(&warnings, &opts.input);
         return write_stdout(&format!("checked: {}\n", opts.input));
     }
 
     if opts.emit_c {
         return match &opts.output {
             Some(output) => {
-                let c_code = driver::generate_c_file(path, path, &source, Path::new(output), &mut driver::read_from_disk)
+                let (c_code, warnings) = driver::generate_c_file(path, path, &source, Path::new(output), &mut driver::read_from_disk)
                     .map_err(|e| e.render(&opts.input, &source))?;
+                warn(&warnings, &opts.input);
                 fs::write(output, c_code).map_err(|e| format!("error: cannot write '{}': {}", output, e))
             }
             None => {
-                let c_code = driver::generate_c_program(path, &source, &mut driver::read_from_disk).map_err(|e| e.render(&opts.input))?;
+                let (c_code, warnings) = driver::generate_c_program(path, &source, &mut driver::read_from_disk).map_err(|e| e.render(&opts.input))?;
+                warn(&warnings, &opts.input);
                 write_stdout(&c_code)
             }
         };
@@ -124,9 +127,18 @@ fn run(opts: &Options) -> Result<(), String> {
 
     let output = opts.output.as_deref().unwrap_or("a.out");
     let cc = driver::c_compiler_from_env();
-    driver::build(&source, Path::new(&opts.input), Path::new(output), &cc)
-        .map_err(|e| e.render(&opts.input, &source))?;
+    let warnings = driver::build(&source, Path::new(&opts.input), Path::new(output), &cc).map_err(|e| e.render(&opts.input, &source))?;
+    warn(&warnings, &opts.input);
     write_stdout(&format!("compiled: {}\n", output))
+}
+
+/// Writes a program's warnings to standard error, where its mistakes go; the
+/// program builds all the same.
+fn warn(warnings: &driver::Warnings, input: &str) {
+    let rendered = warnings.render(input);
+    if !rendered.is_empty() {
+        eprintln!("{}", rendered);
+    }
 }
 
 /// Writes to standard output. A closed pipe (`vela x.vela --emit-c | head`)

@@ -450,3 +450,44 @@ fn modules_are_read_next_to_the_program() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A program that builds, with one warning: `==` on a plain parameter's
+/// shape, which the compiler gives as a copy.
+const WARNED: &str = "shape Point\n    x: int\nfi\n\ntask same(a: Point, bind& b: Point) -> bool\n    <- a == b\nfi\n\ntask main()\n    bind p = Point { x: 1 }\n    show(same(p, &p))\nfi\n";
+
+#[test]
+fn warnings_go_to_stderr_and_the_program_still_builds() {
+    let dir = temp_dir("warned");
+    let input = dir.join("warned.vela");
+    std::fs::write(&input, WARNED).unwrap();
+    let input = input.to_str().unwrap();
+    let wanted = format!("{}:6:8: warning: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose", input);
+
+    let out = vela(&[input, "--check"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(stderr(&out).starts_with(&wanted), "{}", stderr(&out));
+    assert!(stderr(&out).contains(" 6 |     <- a == b\n   |        ^"), "{}", stderr(&out));
+    assert_eq!(stderr(&out).matches(": warning: ").count(), 1, "{}", stderr(&out));
+
+    let out = vela(&[input, "--emit-c"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(stderr(&out).starts_with(&wanted), "{}", stderr(&out));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("int main"), "the C is still written");
+
+    let exe = dir.join("warned");
+    let out = vela(&[input, "-o", exe.to_str().unwrap()]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(stderr(&out).starts_with(&wanted), "{}", stderr(&out));
+    let run = Command::new(&exe).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "false\n");
+
+    // Saying how the parameter is given silences it; a mistake is reported
+    // alone, its warnings left until it is fixed.
+    std::fs::write(dir.join("said.vela"), WARNED.replace("same(a: Point", "same(bind a: Point")).unwrap();
+    let out = vela(&[dir.join("said.vela").to_str().unwrap(), "--check"]);
+    assert!(out.status.success() && out.stderr.is_empty(), "{}", stderr(&out));
+    std::fs::write(dir.join("broken.vela"), WARNED.replace("show(same(p, &p))", "show(same(p, &p), missing)")).unwrap();
+    let out = vela(&[dir.join("broken.vela").to_str().unwrap(), "--check"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(stderr(&out).contains(": error: unknown variable 'missing'") && !stderr(&out).contains(": warning: "), "{}", stderr(&out));
+}

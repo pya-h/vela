@@ -453,8 +453,8 @@ block shared type</pre>
         A plain parameter, <code>x: T</code>, leaves the compiler to choose how it is given: a copy, or, for a large
         value, where the caller keeps it (see <a href="#large-values">large values</a>). Nothing the task does
         tells the two apart, except <a href="#comparing"><code>==</code></a> on a shape, an array, or a tuple, and
-        <a href="#addresses"><code>&amp;x</code></a>, which read where the value is. Two words say which one is
-        meant:
+        <a href="#addresses"><code>&amp;x</code></a>, which read where the value is, and which the compiler
+        <a href="#warnings">warns</a> about. Two words say which one is meant:
       </p>
       <ul>
         <li><strong><code>bind x: T</code></strong> is always a copy, a place of its own, even of a large value. The
@@ -499,6 +499,35 @@ block shared type</pre>
         <code>bind&amp; r: region</code> are errors, and only a parameter is <code>bind</code>. In C,
         <code>bind&amp;</code> is a pointer to a <code>const</code> place, and <code>bind</code> is a plain
         parameter.
+      </p>
+
+      <h3 id="warnings">Warnings</h3>
+      <p>
+        A warning is something a program does that it may not mean; unlike a mistake, it doesn't stop the program
+        from building. The <code>vela</code> command writes each to standard error before it goes on, as
+        <code>file:line:col: warning: …</code> with the line and a caret, the way it writes a mistake; while a
+        program has a mistake, only the mistakes are shown. Vela Studio marks warnings in place and lists them
+        under Problems, apart from errors.
+      </p>
+      <p>
+        The one warning so far is about a plain parameter, <code>x: T</code>, whose giving the compiler chose (see
+        <a href="#large-values">large values</a>): <code>==</code> on a shape, an array, or a tuple, and
+        <code>&amp;x</code>, read where the value is, so they depend on that choice. The warning says which way the
+        compiler went, from the type's size, and how to say which is meant:
+      </p>
+      <pre><span class="keyword">task</span> same(a: Point, b: Point) -&gt; bool
+    <span class="keyword">&lt;-</span> a == b     <span class="comment">; warning: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose:</span>
+                 <span class="comment">; Point takes 16 bytes, so 'a' is a copy, a place of its own, never the caller's;</span>
+                 <span class="comment">; write 'bind&amp; a: Point' for the caller's place, 'bind a: Point' for a copy of its own, or compare items with '~='</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        A part of such a parameter warns too (<code>line.from == line.to</code>), and so does the value a method
+        is called on, <code>.this</code>, which is given the same way. Writing
+        <a href="#bind-parameters"><code>bind</code> or <code>bind&amp;</code></a> says which is meant and silences
+        it, and so does <code>~=</code>, which compares items wherever they are. What a pointer points to,
+        <code>p^</code>, is its own place however the pointer was given, and warns about nothing. In a task that
+        takes types, the warning comes with each use that gives such a type, naming it: the body was checked when any
+        type could be given, and a number compares by value.
       </p>
 
       <h3 id="references">References</h3>
@@ -1068,7 +1097,7 @@ show(s == view, <span class="string">" "</span>, s == s.copy() <span class="keyw
         A small parameter is a copy (see <a href="#large-values">large values</a>), a place of its own, so
         <code>==</code> on two shapes given to a task is false even when they are one value outside it; compare
         them with <code>~=</code> there, or take them as <a href="#bind-parameters"><code>bind&amp;</code></a>,
-        the caller's places. Where two places themselves are meant, <code>&amp;a == &amp;b</code> says so
+        the caller's places; the compiler <a href="#warnings">warns</a> where a plain parameter is compared so. Where two places themselves are meant, <code>&amp;a == &amp;b</code> says so
         for any type (see <a href="#addresses">Addresses</a>).
       </p>
       <p id="joining">

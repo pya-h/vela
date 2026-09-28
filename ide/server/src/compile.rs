@@ -70,7 +70,9 @@ pub fn build(workspace: &Workspace, path: &str, cc: &str) -> Result<Result<Progr
         })
     };
     match driver::build_program(&file.content, Path::new(path), &input, &executable, cc, &mut loader) {
-        Ok(()) => Ok(Ok(Program { executable, folder, scratch })),
+        // The editor shows a program's warnings as it is typed, so a build
+        // that succeeds says nothing more.
+        Ok(_warnings) => Ok(Ok(Program { executable, folder, scratch })),
         Err(error) => Ok(Err(failure(&error, path, &file.content))),
     }
 }

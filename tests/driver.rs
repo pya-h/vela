@@ -297,7 +297,7 @@ fn a_program_loads_each_module_once_through_its_loader() {
         ("app/text/labels.vela", "task label(n: int) -> text\n    <- \"shape\"\nfi\n\ntask width(n: int) -> int\n    <- n\nfi\n"),
     ];
     let asked = std::cell::RefCell::new(Vec::new());
-    let items = driver::check_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
+    let items = driver::check_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap().0;
     // Paths are relative to the file with the `include`, with `..` settled, and a
     // module used twice is read once. A module's names in the program start with
     // its path from the main file's folder.
@@ -309,7 +309,7 @@ fn a_program_loads_each_module_once_through_its_loader() {
         _ => None,
     }).collect();
     assert_eq!(names, ["text/labels.label", "text/labels.width", "shapes/geometry.area", "main"]);
-    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
+    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap().0;
     assert!(c.contains("int64_t vela_shapes__1__geometry__0__area(int64_t side)"), "{}", c);
 }
 
@@ -323,7 +323,7 @@ fn the_library_comes_with_the_compiler_and_is_never_read_from_a_loader() {
         ("app/std/files.vela", "task exists() -> int\n    <- 1\nfi\n"),
     ];
     let asked = std::cell::RefCell::new(Vec::new());
-    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
+    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap().0;
     assert_eq!(*asked.borrow(), ["app/tools.vela"]);
     // The library's native task is the runtime's function, and its File the library's.
     assert!(c.contains("return vela__rt__files_path_exists(path);"), "{}", c);
@@ -335,7 +335,7 @@ fn a_module_outside_the_main_folder_keeps_its_path_in_its_names() {
     let main = "include ../common/text => words\n\ntask main()\n    show(words.twice(2))\nfi\n";
     let files = [("common/text.vela", "task twice(n: int) -> int\n    <- n * 2\nfi\n")];
     let asked = std::cell::RefCell::new(Vec::new());
-    let items = driver::check_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
+    let items = driver::check_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap().0;
     // The tasks, in order; the program also holds the builtin kind that reading
     // a number sends, which no file declares.
     let names: Vec<&str> = items.iter().filter_map(|item| match item {
@@ -344,7 +344,7 @@ fn a_module_outside_the_main_folder_keeps_its_path_in_its_names() {
     }).collect();
     assert_eq!(names, ["../common/text.twice", "main"]);
     // In C, `..` is `__2__`, each `/` `__1__`, and the `.` before the name `__0__`.
-    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap();
+    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap().0;
     assert!(c.contains("int64_t vela___2____1__common__1__text__0__twice(int64_t n)"), "{}", c);
 }
 

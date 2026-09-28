@@ -23,6 +23,17 @@ describe("VelaAnalysis", () => {
     expect(tokens.find((t) => t.class === "string")).toMatchObject({ from: source.indexOf('"é') });
   });
 
+  it("reports a warning with its severity, in a file that builds", () => {
+    const source = "shape Point\n    x: int\nfi\n\ntask same(a: Point, b: Point) -> bool\n    <- a == b\nfi\n\ntask main()\n    bind p = Point { x: 1 }\n    show(same(p, p))\nfi\n";
+    const { diagnostics } = analysis.file(source);
+    expect(diagnostics.map((d) => [d.severity, d.line, d.col])).toEqual([
+      ["warning", 6, 8],
+      ["warning", 6, 13],
+    ]);
+    expect(diagnostics[0]?.message).toContain("given as the compiler chose");
+    expect(analysis.file(source.replace("same(a: Point", "same(bind& a: Point").replace("b: Point)", "bind& b: Point)").replace("same(p, p)", "same(&p, &p)")).diagnostics).toEqual([]);
+  });
+
   it("analyzes text holding a lone surrogate, with offsets unchanged", () => {
     const source = 'task main()\n    show("a\ud800")\n    show(missing)\nfi\n';
     const { tokens, diagnostics } = analysis.file(source);

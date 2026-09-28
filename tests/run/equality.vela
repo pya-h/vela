@@ -1,3 +1,5 @@
+; warning: 35:8: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose (where 'same' is given Point, at 82:10): Point takes 32 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: Point' for the caller's place, 'bind a: Point' for a copy of its own, or compare items with '~='
+; warning: 35:13: '==' compares Point by where it is, and 'b' is a parameter, given as the compiler chose (where 'same' is given Point, at 82:10): Point takes 32 bytes, so 'b' is a copy, a place of its own, never the caller's; write 'bind& b: Point' for the caller's place, 'bind b: Point' for a copy of its own, or compare items with '~='
 ; `==` compares each type by its own rule: numbers, bools, and kinds by value,
 ; text by its bytes, a pointer by the address it holds, a slice by its view,
 ; and an array, a shape, or a tuple by where it is. `~=` compares two values

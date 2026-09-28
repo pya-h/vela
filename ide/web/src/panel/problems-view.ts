@@ -41,11 +41,11 @@ export class ProblemsView {
               "button",
               {
                 class: "problem",
-                title: problem.source === "build" ? "Reported by the last build" : "Reported while editing",
+                title: problem.source === "build" ? "Reported by the last build" : problem.severity === "warning" ? "A warning: the program builds, but may not mean this" : "Reported while editing",
                 attrs: { type: "button" },
                 on: { click: () => this.open(problem) },
               },
-              icon("error", "icon problem-icon"),
+              problem.severity === "warning" ? icon("warning", "icon problem-icon problem-warning") : icon("error", "icon problem-icon"),
               h("span", { class: "problem-message", text: problem.message }),
               h("span", { class: "problem-source", text: problem.source === "build" ? "build" : "vela" }),
               problem.line !== null ? h("span", { class: "problem-place", text: `Ln ${problem.line}, Col ${problem.col ?? 1}` }) : null,

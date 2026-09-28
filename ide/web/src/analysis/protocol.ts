@@ -37,7 +37,8 @@ export interface Diagnostic {
   line: number | null;
   col: number | null;
   message: string;
-  severity: "error";
+  /** A warning is something the program may not mean; it builds all the same. */
+  severity: "error" | "warning";
 }
 
 export type SymbolKind =

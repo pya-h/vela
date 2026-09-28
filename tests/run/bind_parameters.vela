@@ -1,3 +1,4 @@
+; warning: 49:9: '&a' is where the place is, and 'a' is a parameter, given as the compiler chose: Wide takes 72 bytes, more than 64, so 'a' is where the caller keeps it, or a copy the caller makes first of a value behind a pointer, in a slice, or named by a reference; write 'bind& a: Wide' for the caller's place, 'bind a: Wide' for a copy of its own, or compare items with '~='
 ; How a parameter is given, written before its name: nothing lets the compiler
 ; choose (a copy, or where the caller keeps a large value), `bind x` is always
 ; a copy, and `bind& x` is the caller's place, only read, which a call gives

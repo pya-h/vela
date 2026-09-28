@@ -44,6 +44,8 @@ pub struct Token {
 #[serde(rename_all = "kebab-case")]
 pub enum Severity {
     Error,
+    /// What the program does that it may not mean; it builds all the same.
+    Warning,
 }
 
 /// A problem the compiler reports.
@@ -140,12 +142,20 @@ impl<'a> Analysis<'a> {
     /// The compiler's diagnostics: every mistake it found, in source order. The
     /// range of each covers the token it points at, or one character when it
     /// points inside a token, or is empty at the end of a line.
+    ///
+    /// The warnings come among them, in source order too: what the program
+    /// does that it may not mean, though it builds.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
-        self.checked.errors.iter().map(|error| self.diagnostic(error)).collect()
+        let errors = self.checked.errors.iter().map(|error| self.diagnostic(error, Severity::Error));
+        let warnings = self.checked.warnings.iter().map(|warning| self.diagnostic(warning, Severity::Warning));
+        let mut all: Vec<Diagnostic> = errors.chain(warnings).collect();
+        // A stable sort: the errors stay first at one position.
+        all.sort_by_key(|d| (d.line.is_none(), d.line, d.col));
+        all
     }
 
-    /// One mistake as the editor marks it.
-    fn diagnostic(&self, error: &Error) -> Diagnostic {
+    /// One mistake, or one warning, as the editor marks it.
+    fn diagnostic(&self, error: &Error, severity: Severity) -> Diagnostic {
         let Some(found) = error.span else {
             return Diagnostic {
                 from: 0,
@@ -153,7 +163,7 @@ impl<'a> Analysis<'a> {
                 line: None,
                 col: None,
                 message: error.message.clone(),
-                severity: Severity::Error,
+                severity,
             };
         };
         // An error in another file is shown at the `include` that leads to it, with
@@ -193,7 +203,7 @@ impl<'a> Analysis<'a> {
             line: Some(span.line),
             col: Some(span.col),
             message,
-            severity: Severity::Error,
+            severity,
         }
     }
 

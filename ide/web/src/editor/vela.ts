@@ -177,7 +177,7 @@ function diagnostics(analyzer: Analyzer): Extension {
       return analyzer.file(view.state.doc, view.state.facet(documentPath)).diagnostics.map((d) => ({
         from: Math.min(d.from, length),
         to: Math.min(Math.max(d.to, d.from), length),
-        severity: "error",
+        severity: d.severity,
         source: "vela",
         message: d.message,
       }));

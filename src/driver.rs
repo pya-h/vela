@@ -52,6 +52,10 @@ pub struct Partial {
     /// `check::Checker::check_program`). Lexing and parsing stop at the first
     /// one, so a program that doesn't parse has exactly one.
     pub errors: Vec<Error>,
+    /// What the program does that it may not mean, in source order (see
+    /// `check::Checker::check_program_warned`). A program with warnings and
+    /// no mistakes builds.
+    pub warnings: Vec<Error>,
     /// The program's files, the main file first; `Span::file` indexes them.
     pub files: Vec<SourceFile>,
     /// How the main file writes the program's names, whose names in `items`
@@ -78,11 +82,11 @@ pub fn front_end_partial(source: &str) -> Partial {
 pub fn front_end_program(path: &Path, source: &str, loader: &mut Loader) -> Partial {
     let (files, loaded) = modules::load(path, source, loader);
     match loaded {
-        Err(error) => Partial { items: None, errors: vec![error], files, spelling: Spelling::default() },
+        Err(error) => Partial { items: None, errors: vec![error], warnings: Vec::new(), files, spelling: Spelling::default() },
         Ok(mut program) => {
-            let errors = Checker::check_program(&mut program);
+            let (errors, warnings) = Checker::check_program_warned(&mut program);
             let spelling = program.modules.first().map(|main| main.spelling.clone()).unwrap_or_default();
-            Partial { items: Some(program.items), errors, files, spelling }
+            Partial { items: Some(program.items), errors, warnings, files, spelling }
         }
     }
 }
@@ -159,16 +163,46 @@ pub fn render_program_error(main_path: &str, files: &[SourceFile], e: &Error) ->
     }
 }
 
+/// What a program that checks does that it may not mean, with its files, to
+/// show them. It builds all the same.
+#[derive(Debug, Default)]
+pub struct Warnings {
+    pub warnings: Vec<Error>,
+    /// The program's files, the main file first.
+    pub files: Vec<SourceFile>,
+}
+
+impl Warnings {
+    /// Every warning as the `vela` command prints it, `path:line:col: warning:
+    /// message` with the source line (see `render_diagnostic`); `main_path`
+    /// names the main file. Empty for none.
+    pub fn render(&self, main_path: &str) -> String {
+        let rendered: Vec<String> = self
+            .warnings
+            .iter()
+            .map(|warning| {
+                let file = warning.span.map_or(0, |span| span.file);
+                match self.files.get(file) {
+                    Some(found) if file > 0 => render_diagnostic(&found.path.display().to_string(), &found.source, warning, "warning"),
+                    Some(main) => render_diagnostic(main_path, &main.source, warning, "warning"),
+                    None => render_diagnostic(main_path, "", warning, "warning"),
+                }
+            })
+            .collect();
+        rendered.join("\n")
+    }
+}
+
 /// Checks the program whose main file is `source`, at `path`, loading its
-/// modules with `loader`.
-pub fn check_program(path: &Path, source: &str, loader: &mut Loader) -> std::result::Result<Vec<Item>, ProgramError> {
+/// modules with `loader`: the checked program, and its warnings.
+pub fn check_program(path: &Path, source: &str, loader: &mut Loader) -> std::result::Result<(Vec<Item>, Warnings), ProgramError> {
     checked(front_end_program(path, source, loader))
 }
 
-/// The checked program, or every mistake that stopped it.
-fn checked(partial: Partial) -> std::result::Result<Vec<Item>, ProgramError> {
+/// The checked program with its warnings, or every mistake that stopped it.
+fn checked(partial: Partial) -> std::result::Result<(Vec<Item>, Warnings), ProgramError> {
     match (partial.items, partial.errors) {
-        (Some(items), errors) if errors.is_empty() => Ok(items),
+        (Some(items), errors) if errors.is_empty() => Ok((items, Warnings { warnings: partial.warnings, files: partial.files })),
         (_, errors) if errors.is_empty() => Err(ProgramError::one(
             Error::internal("the front end produced neither a program nor an error"),
             partial.files,
@@ -186,21 +220,22 @@ pub fn generate_c(source: &str) -> Result<String> {
 
 /// `generate_c` for a program whose main file is `source`, at `path`, loading
 /// its modules with `loader`.
-pub fn generate_c_program(path: &Path, source: &str, loader: &mut Loader) -> std::result::Result<String, ProgramError> {
-    let items = check_program(path, source, loader)?;
-    Generator::new().generate(&items).map_err(|error| ProgramError::one(error, Vec::new()))
+pub fn generate_c_program(path: &Path, source: &str, loader: &mut Loader) -> std::result::Result<(String, Warnings), ProgramError> {
+    let (items, warnings) = check_program(path, source, loader)?;
+    let c_code = Generator::new().generate(&items).map_err(|error| ProgramError::one(error, Vec::new()))?;
+    Ok((c_code, warnings))
 }
 
 /// `generate_c_program` for C to be written to the file `output`, which must
 /// not be a file of the program: the main file, at `input` on the disk, or a
 /// module it includes.
-pub fn generate_c_file(path: &Path, input: &Path, source: &str, output: &Path, loader: &mut Loader) -> std::result::Result<String, BuildError> {
+pub fn generate_c_file(path: &Path, input: &Path, source: &str, output: &Path, loader: &mut Loader) -> std::result::Result<(String, Warnings), BuildError> {
     let partial = front_end_program(path, source, loader);
     let modules = module_paths(&partial);
-    let items = checked(partial)?;
+    let (items, warnings) = checked(partial)?;
     let c_code = Generator::new().generate(&items)?;
     overwrites_source(input, &modules, output)?;
-    Ok(c_code)
+    Ok((c_code, warnings))
 }
 
 /// The paths of the modules a program read, as its loader knows them.
@@ -297,23 +332,24 @@ pub fn has_main(items: &[Item]) -> bool {
 /// `c_compiler_from_env`). `input` names the generated C file and guards
 /// against overwriting the source. The modules the program includes are read
 /// from the disk, next to `input`.
-pub fn build(source: &str, input: &Path, output: &Path, cc: &str) -> std::result::Result<(), BuildError> {
+pub fn build(source: &str, input: &Path, output: &Path, cc: &str) -> std::result::Result<Warnings, BuildError> {
     build_program(source, input, input, output, cc, &mut read_from_disk)
 }
 
 /// `build`, with the program's main file at `path` as `loader` knows it (for
 /// its modules' paths and for messages) and at `input` on the disk.
-pub fn build_program(source: &str, path: &Path, input: &Path, output: &Path, cc: &str, loader: &mut Loader) -> std::result::Result<(), BuildError> {
+pub fn build_program(source: &str, path: &Path, input: &Path, output: &Path, cc: &str, loader: &mut Loader) -> std::result::Result<Warnings, BuildError> {
     let partial = front_end_program(path, source, loader);
     let modules = module_paths(&partial);
-    let items = checked(partial)?;
+    let (items, warnings) = checked(partial)?;
     if !has_main(&items) {
         return Err(BuildError::NoMain);
     }
     let c_code = Generator::new().generate(&items)?;
     overwrites_source(input, &modules, output)?;
     check_output(output)?;
-    compile_c(&c_code, input, output, cc)
+    compile_c(&c_code, input, output, cc)?;
+    Ok(warnings)
 }
 
 /// Rejects an output path the C compiler couldn't write, before compiling, so
@@ -350,10 +386,15 @@ fn check_output(output: &Path) -> std::result::Result<(), BuildError> {
 /// Formats a diagnostic as `path:line:col: error: message`, followed by the
 /// offending source line with a caret under the error column.
 pub fn render_error(path: &str, source: &str, e: &Error) -> String {
+    render_diagnostic(path, source, e, "error")
+}
+
+/// `render_error` for a diagnostic of the kind `kind`: `error` or `warning`.
+pub fn render_diagnostic(path: &str, source: &str, e: &Error, kind: &str) -> String {
     let Some(span) = e.span else {
-        return format!("{}: error: {}", path, e.message);
+        return format!("{}: {}: {}", path, kind, e.message);
     };
-    let mut out = format!("{}:{}:{}: error: {}", path, span.line, span.col, e.message);
+    let mut out = format!("{}:{}:{}: {}: {}", path, span.line, span.col, kind, e.message);
     if let Some(line) = span.line.checked_sub(1).and_then(|i| source.lines().nth(i)) {
         let gutter = span.line.to_string();
         // Keep tabs so the caret lines up with the source line.

@@ -74,6 +74,19 @@ describe("problems", () => {
     expect(problemCount(other)).toBe(2);
   });
 
+  it("keeps a warning's severity, beside errors in line order", () => {
+    const warning: Diagnostic = { ...diagnostic(4, "'==' compares Point by where it is"), severity: "warning" };
+    const files = collectProblems([{ path: "a.vela", diagnostics: [diagnostic(7, "unknown variable 'x'"), warning] }], new Map());
+    expect(files[0]?.problems.map((p) => [p.line, p.severity])).toEqual([
+      [4, "warning"],
+      [7, "error"],
+    ]);
+    expect(problemCount(files)).toBe(2);
+    // A build failure is an error.
+    const built = collectProblems([], new Map([["b.vela", failure("no-main", "program has no 'main' task")]]));
+    expect(built[0]?.problems[0]?.severity).toBe("error");
+  });
+
   it("puts a build error in a module under that module's file", () => {
     const inModule = failure("vela", "unknown variable 'x'", 4, "lib/geometry.vela");
     const closed = collectProblems([], new Map([["main.vela", inModule]]));

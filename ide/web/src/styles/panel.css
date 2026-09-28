@@ -283,6 +283,10 @@
   color: var(--danger);
 }
 
+.problem-icon.problem-warning {
+  color: var(--warning);
+}
+
 .problem-message {
   overflow: hidden;
   text-overflow: ellipsis;

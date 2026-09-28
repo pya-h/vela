@@ -15,6 +15,8 @@ export interface Problem {
   from: number | null;
   to: number | null;
   source: "vela" | "build";
+  /** A warning is something the program may not mean; it builds all the same. */
+  severity: "error" | "warning";
 }
 
 export interface FileProblems {
@@ -32,7 +34,7 @@ export function collectProblems(live: { path: string; diagnostics: Diagnostic[] 
   };
   for (const { path, diagnostics } of live) {
     for (const d of diagnostics) {
-      add({ path, message: d.message, line: d.line, col: d.col, from: d.from, to: d.to, source: "vela" });
+      add({ path, message: d.message, line: d.line, col: d.col, from: d.from, to: d.to, source: "vela", severity: d.severity });
     }
   }
   const analyzed = new Set(live.map((file) => file.path));
@@ -43,7 +45,7 @@ export function collectProblems(live: { path: string; diagnostics: Diagnostic[] 
     // compiler the build used), so the build's may be out of date. (An open
     // file also shows an error in a module it includes, at its `include`.)
     if (failure.kind === "vela" && (analyzed.has(path) || analyzed.has(built))) continue;
-    add({ path, message: failure.message, line: failure.line, col: failure.col, from: null, to: null, source: "build" });
+    add({ path, message: failure.message, line: failure.line, col: failure.col, from: null, to: null, source: "build", severity: "error" });
   }
   return [...byPath.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

@@ -1,0 +1,78 @@
+; warning: 22:12: '==' compares Point by where it is, and '.this' is the value the method is called on, given as the compiler chose: Point takes 16 bytes, so '.this' is a copy, a place of its own, never the caller's; compare items with '~='
+; warning: 22:21: '==' compares Point by where it is, and 'other' is a parameter, given as the compiler chose: Point takes 16 bytes, so 'other' is a copy, a place of its own, never the caller's; write 'bind& other: Point' for the caller's place, 'bind other: Point' for a copy of its own, or compare items with '~='
+; warning: 46:8: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose: Point takes 16 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: Point' for the caller's place, 'bind a: Point' for a copy of its own, or compare items with '~='
+; warning: 46:13: '==' compares Point by where it is, and 'b' is a parameter, given as the compiler chose: Point takes 16 bytes, so 'b' is a copy, a place of its own, never the caller's; write 'bind& b: Point' for the caller's place, 'bind b: Point' for a copy of its own, or compare items with '~='
+; warning: 51:8: '==' compares Wide by where it is, and 'a' is a parameter, given as the compiler chose: Wide takes 72 bytes, more than 64, so 'a' is where the caller keeps it, or a copy the caller makes first of a value behind a pointer, in a slice, or named by a reference; write 'bind& a: Wide' for the caller's place, 'bind a: Wide' for a copy of its own, or compare items with '~='
+; warning: 56:12: '&pair' is where the place is, and 'pair' is a parameter, given as the compiler chose: (int, int) takes 16 bytes, so 'pair' is a copy, a place of its own, never the caller's; write 'bind& pair: (int, int)' for the caller's place, 'bind pair: (int, int)' for a copy of its own, or compare items with '~='
+; warning: 57:13: '==' compares Point by where it is, and 'line' is a parameter, given as the compiler chose: Line takes 32 bytes, so 'line' is a copy, a place of its own, never the caller's; write 'bind& line: Line' for the caller's place, 'bind line: Line' for a copy of its own, or compare items with '~='
+; warning: 57:26: '==' compares Point by where it is, and 'line' is a parameter, given as the compiler chose: Line takes 32 bytes, so 'line' is a copy, a place of its own, never the caller's; write 'bind& line: Line' for the caller's place, 'bind line: Line' for a copy of its own, or compare items with '~='
+; warning: 67:8: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose (where 'generic' is given Point, at 77:62): Point takes 16 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: Point' for the caller's place, 'bind a: Point' for a copy of its own, or compare items with '~='
+; warning: 67:13: '==' compares Point by where it is, and 'b' is a parameter, given as the compiler chose (where 'generic' is given Point, at 77:62): Point takes 16 bytes, so 'b' is a copy, a place of its own, never the caller's; write 'bind& b: Point' for the caller's place, 'bind b: Point' for a copy of its own, or compare items with '~='
+; A plain parameter, `x: T`, is given as the compiler chooses: a copy, or a
+; large value where the caller keeps it. What reads where it is, `==` on an
+; array, a shape, or a tuple, and `&x`, is warned about, with the way the
+; compiler went; `bind x` and `bind& x` say which is meant, and are silent.
+
+shape Point
+    x: int
+    y: int
+
+    ; The value a method is called on is given as the compiler chooses too.
+    same_as(other: Point) -> bool
+        <- .this == other
+    fi
+fi
+
+; Nine ints: more than 64 bytes, so given where the caller keeps it.
+shape Wide
+    a: int
+    b: int
+    c: int
+    d: int
+    e: int
+    f: int
+    g: int
+    h: int
+    i: int
+fi
+
+shape Line
+    from: Point
+    to: Point
+fi
+
+; Warned: copies, never the caller's place.
+task small(a: Point, b: Point) -> bool
+    <- a == b
+fi
+
+; Warned: where the caller keeps it.
+task large(a: Wide, bind& b: Wide) -> bool
+    <- a == b
+fi
+
+; Warned: a part of a parameter, and an address.
+task parts(r: region, line: Line, pair: (int, int)) -> bool
+    show((&pair).str() at r == "")
+    <- line.from == line.to
+fi
+
+; Silent: each says how it is given, and a pointer's place is its own.
+task said(bind a: Point, bind& b: Point, hold c: Point, p: ^Point@r) -> bool
+    <- a == b or b == c or p^ == p^ or &c == &c
+fi
+
+; Warned where a use gives the type.
+task generic<T: same>(a: T, b: T) -> bool
+    <- a == b
+fi
+
+task main()
+    region r
+    bind p = Point { x: 1, y: 2 }
+    bind w = Wide { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
+    show(small(p, p), " ", large(w, &w), " ", p.same_as(p))
+    bind line = Line { from: p, to: p }
+    bind shown = parts(r, line, (1, 2))
+    show(shown, " ", said(p, &p, p, new Point(p) at r), " ", generic(p, p), " ", generic(1, 1))
+fi

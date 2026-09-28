@@ -86,6 +86,8 @@ pub(crate) struct Checked {
     /// Every mistake the compiler found, in source order. A position may be in
     /// another file of the program (see `files`).
     pub errors: Vec<Error>,
+    /// Every warning, in source order (see `driver::Partial::warnings`).
+    pub warnings: Vec<Error>,
     /// The program's files, the analyzed file first, as far as they loaded.
     pub files: Vec<SourceFile>,
     /// The files the program includes, directly or through others, that the
@@ -124,7 +126,7 @@ impl Checked {
         let mut loader = |file: &Path| context.sources.get(&slashed(file)).cloned().ok_or_else(|| io::Error::from(io::ErrorKind::NotFound));
         let partial = driver::front_end_program(path, source, &mut loader);
         let spelling = partial.spelling;
-        let mut checked = Checked { errors: partial.errors, files: partial.files, missing, ..Checked::default() };
+        let mut checked = Checked { errors: partial.errors, warnings: partial.warnings, files: partial.files, missing, ..Checked::default() };
         let Some(items) = partial.items else { return checked };
         let kinds: HashMap<&str, &KindDef> = items
             .iter()

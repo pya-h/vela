@@ -1,0 +1,136 @@
+  1 | ; warning: 22:12: '==' compares Point by where it is, and '.this' is the value the method is called on, given as the compiler chose: Point takes 16 bytes, so '.this' is a copy, a place of its own, never the caller's; compare items with '~='
+    | comment:; warning: 22:12: '==' compares Point by where it is, and '.this' is the value the method is called on, given as the compiler chose: Point takes 16 bytes, so '.this' is a copy, a place of its own, never the caller's; compare items with '~='
+  2 | ; warning: 22:21: '==' compares Point by where it is, and 'other' is a parameter, given as the compiler chose: Point takes 16 bytes, so 'other' is a copy, a place of its own, never the caller's; write 'bind& other: Point' for the caller's place, 'bind other: Point' for a copy of its own, or compare items with '~='
+    | comment:; warning: 22:21: '==' compares Point by where it is, and 'other' is a parameter, given as the compiler chose: Point takes 16 bytes, so 'other' is a copy, a place of its own, never the caller's; write 'bind& other: Point' for the caller's place, 'bind other: Point' for a copy of its own, or compare items with '~='
+  3 | ; warning: 46:8: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose: Point takes 16 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: Point' for the caller's place, 'bind a: Point' for a copy of its own, or compare items with '~='
+    | comment:; warning: 46:8: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose: Point takes 16 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: Point' for the caller's place, 'bind a: Point' for a copy of its own, or compare items with '~='
+  4 | ; warning: 46:13: '==' compares Point by where it is, and 'b' is a parameter, given as the compiler chose: Point takes 16 bytes, so 'b' is a copy, a place of its own, never the caller's; write 'bind& b: Point' for the caller's place, 'bind b: Point' for a copy of its own, or compare items with '~='
+    | comment:; warning: 46:13: '==' compares Point by where it is, and 'b' is a parameter, given as the compiler chose: Point takes 16 bytes, so 'b' is a copy, a place of its own, never the caller's; write 'bind& b: Point' for the caller's place, 'bind b: Point' for a copy of its own, or compare items with '~='
+  5 | ; warning: 51:8: '==' compares Wide by where it is, and 'a' is a parameter, given as the compiler chose: Wide takes 72 bytes, more than 64, so 'a' is where the caller keeps it, or a copy the caller makes first of a value behind a pointer, in a slice, or named by a reference; write 'bind& a: Wide' for the caller's place, 'bind a: Wide' for a copy of its own, or compare items with '~='
+    | comment:; warning: 51:8: '==' compares Wide by where it is, and 'a' is a parameter, given as the compiler chose: Wide takes 72 bytes, more than 64, so 'a' is where the caller keeps it, or a copy the caller makes first of a value behind a pointer, in a slice, or named by a reference; write 'bind& a: Wide' for the caller's place, 'bind a: Wide' for a copy of its own, or compare items with '~='
+  6 | ; warning: 56:12: '&pair' is where the place is, and 'pair' is a parameter, given as the compiler chose: (int, int) takes 16 bytes, so 'pair' is a copy, a place of its own, never the caller's; write 'bind& pair: (int, int)' for the caller's place, 'bind pair: (int, int)' for a copy of its own, or compare items with '~='
+    | comment:; warning: 56:12: '&pair' is where the place is, and 'pair' is a parameter, given as the compiler chose: (int, int) takes 16 bytes, so 'pair' is a copy, a place of its own, never the caller's; write 'bind& pair: (int, int)' for the caller's place, 'bind pair: (int, int)' for a copy of its own, or compare items with '~='
+  7 | ; warning: 57:13: '==' compares Point by where it is, and 'line' is a parameter, given as the compiler chose: Line takes 32 bytes, so 'line' is a copy, a place of its own, never the caller's; write 'bind& line: Line' for the caller's place, 'bind line: Line' for a copy of its own, or compare items with '~='
+    | comment:; warning: 57:13: '==' compares Point by where it is, and 'line' is a parameter, given as the compiler chose: Line takes 32 bytes, so 'line' is a copy, a place of its own, never the caller's; write 'bind& line: Line' for the caller's place, 'bind line: Line' for a copy of its own, or compare items with '~='
+  8 | ; warning: 57:26: '==' compares Point by where it is, and 'line' is a parameter, given as the compiler chose: Line takes 32 bytes, so 'line' is a copy, a place of its own, never the caller's; write 'bind& line: Line' for the caller's place, 'bind line: Line' for a copy of its own, or compare items with '~='
+    | comment:; warning: 57:26: '==' compares Point by where it is, and 'line' is a parameter, given as the compiler chose: Line takes 32 bytes, so 'line' is a copy, a place of its own, never the caller's; write 'bind& line: Line' for the caller's place, 'bind line: Line' for a copy of its own, or compare items with '~='
+  9 | ; warning: 67:8: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose (where 'generic' is given Point, at 77:62): Point takes 16 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: Point' for the caller's place, 'bind a: Point' for a copy of its own, or compare items with '~='
+    | comment:; warning: 67:8: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose (where 'generic' is given Point, at 77:62): Point takes 16 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: Point' for the caller's place, 'bind a: Point' for a copy of its own, or compare items with '~='
+ 10 | ; warning: 67:13: '==' compares Point by where it is, and 'b' is a parameter, given as the compiler chose (where 'generic' is given Point, at 77:62): Point takes 16 bytes, so 'b' is a copy, a place of its own, never the caller's; write 'bind& b: Point' for the caller's place, 'bind b: Point' for a copy of its own, or compare items with '~='
+    | comment:; warning: 67:13: '==' compares Point by where it is, and 'b' is a parameter, given as the compiler chose (where 'generic' is given Point, at 77:62): Point takes 16 bytes, so 'b' is a copy, a place of its own, never the caller's; write 'bind& b: Point' for the caller's place, 'bind b: Point' for a copy of its own, or compare items with '~='
+ 11 | ; A plain parameter, `x: T`, is given as the compiler chooses: a copy, or a
+    | comment:; A plain parameter, `x: T`, is given as the compiler chooses: a copy, or a
+ 12 | ; large value where the caller keeps it. What reads where it is, `==` on an
+    | comment:; large value where the caller keeps it. What reads where it is, `==` on an
+ 13 | ; array, a shape, or a tuple, and `&x`, is warned about, with the way the
+    | comment:; array, a shape, or a tuple, and `&x`, is warned about, with the way the
+ 14 | ; compiler went; `bind x` and `bind& x` say which is meant, and are silent.
+    | comment:; compiler went; `bind x` and `bind& x` say which is meant, and are silent.
+ 16 | shape Point
+    | keyword:shape  type:Point
+ 17 |     x: int
+    | field:x  punctuation::  type-builtin:int
+ 18 |     y: int
+    | field:y  punctuation::  type-builtin:int
+ 20 |     ; The value a method is called on is given as the compiler chooses too.
+    | comment:; The value a method is called on is given as the compiler chooses too.
+ 21 |     same_as(other: Point) -> bool
+    | method:same_as  punctuation:(  parameter:other  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:bool
+ 22 |         <- .this == other
+    | keyword:<-  punctuation:.  keyword:this  operator:==  parameter:other
+ 23 |     fi
+    | keyword:fi
+ 24 | fi
+    | keyword:fi
+ 26 | ; Nine ints: more than 64 bytes, so given where the caller keeps it.
+    | comment:; Nine ints: more than 64 bytes, so given where the caller keeps it.
+ 27 | shape Wide
+    | keyword:shape  type:Wide
+ 28 |     a: int
+    | field:a  punctuation::  type-builtin:int
+ 29 |     b: int
+    | field:b  punctuation::  type-builtin:int
+ 30 |     c: int
+    | field:c  punctuation::  type-builtin:int
+ 31 |     d: int
+    | field:d  punctuation::  type-builtin:int
+ 32 |     e: int
+    | field:e  punctuation::  type-builtin:int
+ 33 |     f: int
+    | field:f  punctuation::  type-builtin:int
+ 34 |     g: int
+    | field:g  punctuation::  type-builtin:int
+ 35 |     h: int
+    | field:h  punctuation::  type-builtin:int
+ 36 |     i: int
+    | field:i  punctuation::  type-builtin:int
+ 37 | fi
+    | keyword:fi
+ 39 | shape Line
+    | keyword:shape  type:Line
+ 40 |     from: Point
+    | field:from  punctuation::  type:Point
+ 41 |     to: Point
+    | field:to  punctuation::  type:Point
+ 42 | fi
+    | keyword:fi
+ 44 | ; Warned: copies, never the caller's place.
+    | comment:; Warned: copies, never the caller's place.
+ 45 | task small(a: Point, b: Point) -> bool
+    | keyword:task  task:small  punctuation:(  parameter:a  punctuation::  type:Point  punctuation:,  parameter:b  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:bool
+ 46 |     <- a == b
+    | keyword:<-  parameter:a  operator:==  parameter:b
+ 47 | fi
+    | keyword:fi
+ 49 | ; Warned: where the caller keeps it.
+    | comment:; Warned: where the caller keeps it.
+ 50 | task large(a: Wide, bind& b: Wide) -> bool
+    | keyword:task  task:large  punctuation:(  parameter:a  punctuation::  type:Wide  punctuation:,  keyword:bind  keyword:&  parameter:b  punctuation::  type:Wide  punctuation:)  operator:->  type-builtin:bool
+ 51 |     <- a == b
+    | keyword:<-  parameter:a  operator:==  parameter:b
+ 52 | fi
+    | keyword:fi
+ 54 | ; Warned: a part of a parameter, and an address.
+    | comment:; Warned: a part of a parameter, and an address.
+ 55 | task parts(r: region, line: Line, pair: (int, int)) -> bool
+    | keyword:task  task:parts  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:line  punctuation::  type:Line  punctuation:,  parameter:pair  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:)  operator:->  type-builtin:bool
+ 56 |     show((&pair).str() at r == "")
+    | builtin-fn:show  punctuation:(  punctuation:(  operator:&  parameter:pair  punctuation:)  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  operator:==  string:""  punctuation:)
+ 57 |     <- line.from == line.to
+    | keyword:<-  parameter:line  punctuation:.  field:from  operator:==  parameter:line  punctuation:.  field:to
+ 58 | fi
+    | keyword:fi
+ 60 | ; Silent: each says how it is given, and a pointer's place is its own.
+    | comment:; Silent: each says how it is given, and a pointer's place is its own.
+ 61 | task said(bind a: Point, bind& b: Point, hold c: Point, p: ^Point@r) -> bool
+    | keyword:task  task:said  punctuation:(  keyword:bind  parameter:a  punctuation::  type:Point  punctuation:,  keyword:bind  keyword:&  parameter:b  punctuation::  type:Point  punctuation:,  keyword:hold  parameter:c  punctuation::  type:Point  punctuation:,  parameter:p  punctuation::  operator:^  type:Point  operator:@  region:r  punctuation:)  operator:->  type-builtin:bool
+ 62 |     <- a == b or b == c or p^ == p^ or &c == &c
+    | keyword:<-  parameter:a  operator:==  parameter:b  keyword:or  parameter:b  operator:==  parameter:c  keyword:or  parameter:p  operator:^  operator:==  parameter:p  operator:^  keyword:or  operator:&  parameter:c  operator:==  operator:&  parameter:c
+ 63 | fi
+    | keyword:fi
+ 65 | ; Warned where a use gives the type.
+    | comment:; Warned where a use gives the type.
+ 66 | task generic<T: same>(a: T, b: T) -> bool
+    | keyword:task  task:generic  punctuation:<  type:T  punctuation::  keyword:same  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type-builtin:bool
+ 67 |     <- a == b
+    | keyword:<-  parameter:a  operator:==  parameter:b
+ 68 | fi
+    | keyword:fi
+ 70 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 71 |     region r
+    | keyword:region  region:r
+ 72 |     bind p = Point { x: 1, y: 2 }
+    | keyword:bind  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+ 73 |     bind w = Wide { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
+    | keyword:bind  variable:w  operator:=  type:Wide  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:2  punctuation:,  field:c  punctuation::  number:3  punctuation:,  field:d  punctuation::  number:4  punctuation:,  field:e  punctuation::  number:5  punctuation:,  field:f  punctuation::  number:6  punctuation:,  field:g  punctuation::  number:7  punctuation:,  field:h  punctuation::  number:8  punctuation:,  field:i  punctuation::  number:9  punctuation:}
+ 74 |     show(small(p, p), " ", large(w, &w), " ", p.same_as(p))
+    | builtin-fn:show  punctuation:(  task:small  punctuation:(  variable:p  punctuation:,  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  task:large  punctuation:(  variable:w  punctuation:,  operator:&  variable:w  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  method:same_as  punctuation:(  variable:p  punctuation:)  punctuation:)
+ 75 |     bind line = Line { from: p, to: p }
+    | keyword:bind  variable:line  operator:=  type:Line  punctuation:{  field:from  punctuation::  variable:p  punctuation:,  field:to  punctuation::  variable:p  punctuation:}
+ 76 |     bind shown = parts(r, line, (1, 2))
+    | keyword:bind  variable:shown  operator:=  task:parts  punctuation:(  region:r  punctuation:,  variable:line  punctuation:,  punctuation:(  number:1  punctuation:,  number:2  punctuation:)  punctuation:)
+ 77 |     show(shown, " ", said(p, &p, p, new Point(p) at r), " ", generic(p, p), " ", generic(1, 1))
+    | builtin-fn:show  punctuation:(  variable:shown  punctuation:,  string:" "  punctuation:,  task:said  punctuation:(  variable:p  punctuation:,  operator:&  variable:p  punctuation:,  variable:p  punctuation:,  keyword:new  type:Point  punctuation:(  variable:p  punctuation:)  keyword:at  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  task:generic  punctuation:(  variable:p  punctuation:,  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  task:generic  punctuation:(  number:1  punctuation:,  number:1  punctuation:)  punctuation:)
+ 78 | fi
+    | keyword:fi

@@ -3,7 +3,10 @@
 //!
 //! - `tests/run/NAME.vela` must compile and run; its stdout must equal
 //!   `tests/run/NAME.out`. Its generated C must also compile as strict ISO C11
-//!   with no warnings (see `STRICT_C_FLAGS`).
+//!   with no warnings (see `STRICT_C_FLAGS`). The warnings the Vela compiler
+//!   prints must be exactly those its `; warning: LINE:COL: MESSAGE` lines
+//!   write, in order, and none where it writes none; so too for a trap test
+//!   and an example.
 //! - `tests/fail/NAME.vela` must be rejected by the Vela compiler itself (not by
 //!   the C compiler). Its first line is `; error: LINE:COL: MESSAGE` (or
 //!   `; error: MESSAGE` for an error without a position, or
@@ -87,6 +90,9 @@ fn check_run(source: &Path, expected_path: &Path, trap: Option<&str>, scratch: &
             name,
             String::from_utf8_lossy(&compile.stderr)
         ));
+    }
+    if let Some(failure) = check_warnings(source, &String::from_utf8_lossy(&compile.stderr)) {
+        return Some(failure);
     }
     if let Some(failure) = check_strict_c(source, scratch) {
         return Some(failure);
@@ -266,12 +272,17 @@ fn check_fail(source: &Path, scratch: &Path) -> Option<String> {
 /// file, `modules/x.vela:LINE:COL: message`, names that file from the
 /// fixture's folder.
 fn diagnostic_line(source: &Path, expected: &str) -> String {
+    diagnostic_line_of(source, expected, "error")
+}
+
+/// `diagnostic_line` for a diagnostic of the kind `kind`: `error` or `warning`.
+fn diagnostic_line_of(source: &Path, expected: &str, kind: &str) -> String {
     if let Some((file, rest)) = expected.split_once(".vela:")
         && !file.contains(' ')
     {
         let path = source.parent().unwrap().join(format!("{}.vela", file));
         let (location, message) = rest.split_once(": ").unwrap();
-        return format!("{}:{}: error: {}", path.display(), location, message);
+        return format!("{}:{}: {}: {}", path.display(), location, kind, message);
     }
     if let Some((location, message)) = expected.split_once(": ") {
         let is_location = location
@@ -282,10 +293,22 @@ fn diagnostic_line(source: &Path, expected: &str) -> String {
                     && c.chars().all(|ch| ch.is_ascii_digit())
             });
         if is_location {
-            return format!("{}:{}: error: {}", source.display(), location, message);
+            return format!("{}:{}: {}: {}", source.display(), location, kind, message);
         }
     }
-    format!("{}: error: {}", source.display(), expected)
+    format!("{}: {}: {}", source.display(), kind, expected)
+}
+
+/// Checks that compiling `source` printed, in `stderr`, exactly the warnings
+/// its `; warning: LINE:COL: MESSAGE` lines write, in order.
+fn check_warnings(source: &Path, stderr: &str) -> Option<String> {
+    let text = fs::read_to_string(source).unwrap();
+    let wanted: Vec<String> = text.lines().filter_map(|line| line.strip_prefix("; warning: ")).map(|warning| diagnostic_line_of(source, warning.trim(), "warning")).collect();
+    let warned: Vec<String> = stderr.lines().filter(|line| line.contains(": warning: ")).map(str::to_string).collect();
+    if warned == wanted {
+        return None;
+    }
+    Some(format!("{}: expected the warnings\n{}\ngot:\n{}", stem(source), wanted.join("\n"), warned.join("\n")))
 }
 
 fn report(suite: &str, failures: Vec<String>) {

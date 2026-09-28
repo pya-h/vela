@@ -288,59 +288,9 @@ impl Generator {
     }
 
     /// The size and alignment, in bytes, of a value of `ty` in the C this
-    /// writes, as a 64-bit target lays it out.
+    /// writes (see `Layout`).
     fn c_layout(&self, ty: &Type) -> (usize, usize) {
-        match ty {
-            Type::Int | Type::Float | Type::Ptr(..) | Type::None | Type::Region => (8, 8),
-            Type::Maybe(inner) if is_pointer(inner) => (8, 8),
-            Type::Bool => (1, 1),
-            Type::Unit => (0, 1),
-            Type::Text(_) => (16, 8),
-            Type::Slice(..) => (24, 8),
-            Type::Fail(error) => self.c_layout(error),
-            Type::Array(items, count) => {
-                let (size, align) = self.c_layout(items);
-                (size.saturating_mul(usize::try_from(*count).unwrap_or(usize::MAX)), align)
-            }
-            Type::Maybe(inner) => self.struct_layout([&Type::Bool, inner.as_ref()]),
-            Type::Or(value, error) if **value == Type::Unit => self.struct_layout([&Type::Bool, error.as_ref()]),
-            Type::Or(value, error) => self.struct_layout([&Type::Bool, value.as_ref(), error.as_ref()]),
-            Type::Results(types) | Type::Tuple(types) => self.struct_layout(types.iter()),
-            Type::Named(name, _) => {
-                if let Some(shape) = self.shapes.get(name) {
-                    if shape.fields.is_empty() {
-                        return (1, 1);
-                    }
-                    return self.struct_layout(shape.fields.iter().map(|field| &field.ty));
-                }
-                let Some(kind) = self.kinds.get(name) else { return (8, 8) };
-                // The tag, an enum, and the union of the variants' values.
-                let (mut size, mut align) = (0, 1);
-                for variant in &kind.variants {
-                    if !variant.payload.is_empty() {
-                        let (s, a) = self.struct_layout(variant.payload.iter().map(|field| &field.ty));
-                        size = size.max(s);
-                        align = align.max(a);
-                    }
-                }
-                let tag: usize = 4;
-                let align = align.max(4);
-                let data = tag.div_ceil(align) * align;
-                ((data + size).div_ceil(align) * align, align)
-            }
-            _ => (8, 8),
-        }
-    }
-
-    /// The size and alignment of a C struct of members of the `types`.
-    fn struct_layout<'a>(&self, types: impl IntoIterator<Item = &'a Type>) -> (usize, usize) {
-        let (mut size, mut align) = (0usize, 1usize);
-        for ty in types {
-            let (s, a) = self.c_layout(ty);
-            size = size.div_ceil(a) * a + s;
-            align = align.max(a);
-        }
-        (size.div_ceil(align) * align, align)
+        Layout { shapes: &self.shapes, kinds: &self.kinds }.of(ty)
     }
 
     fn fresh_temp(&mut self, prefix: &str) -> String {
@@ -2784,6 +2734,79 @@ fn str_task(owner: &str, given: &[Type], exists: impl Fn(&str) -> bool) -> Optio
     exists(&made).then_some(made)
 }
 
+/// How values are laid out in the C the generator writes, from the shapes and
+/// kinds a program declares: shared with the checker, which says in a warning
+/// how a parameter is given (see `hidden_by_size`).
+pub struct Layout<'a> {
+    pub shapes: &'a HashMap<String, ShapeDef>,
+    pub kinds: &'a HashMap<String, KindDef>,
+}
+
+impl Layout<'_> {
+    /// The size and alignment, in bytes, of a value of `ty` in the C the
+    /// generator writes, as a 64-bit target lays it out.
+    pub fn of(&self, ty: &Type) -> (usize, usize) {
+        match ty {
+            Type::Int | Type::Float | Type::Ptr(..) | Type::None | Type::Region => (8, 8),
+            Type::Maybe(inner) if is_pointer(inner) => (8, 8),
+            Type::Bool => (1, 1),
+            Type::Unit => (0, 1),
+            Type::Text(_) => (16, 8),
+            Type::Slice(..) => (24, 8),
+            Type::Fail(error) => self.of(error),
+            Type::Array(items, count) => {
+                let (size, align) = self.of(items);
+                (size.saturating_mul(usize::try_from(*count).unwrap_or(usize::MAX)), align)
+            }
+            Type::Maybe(inner) => self.struct_layout([&Type::Bool, inner.as_ref()]),
+            Type::Or(value, error) if **value == Type::Unit => self.struct_layout([&Type::Bool, error.as_ref()]),
+            Type::Or(value, error) => self.struct_layout([&Type::Bool, value.as_ref(), error.as_ref()]),
+            Type::Results(types) | Type::Tuple(types) => self.struct_layout(types.iter()),
+            Type::Named(name, _) => {
+                if let Some(shape) = self.shapes.get(name) {
+                    if shape.fields.is_empty() {
+                        return (1, 1);
+                    }
+                    return self.struct_layout(shape.fields.iter().map(|field| &field.ty));
+                }
+                let Some(kind) = self.kinds.get(name) else { return (8, 8) };
+                // The tag, an enum, and the union of the variants' values.
+                let (mut size, mut align) = (0, 1);
+                for variant in &kind.variants {
+                    if !variant.payload.is_empty() {
+                        let (s, a) = self.struct_layout(variant.payload.iter().map(|field| &field.ty));
+                        size = size.max(s);
+                        align = align.max(a);
+                    }
+                }
+                let tag: usize = 4;
+                let align = align.max(4);
+                let data = tag.div_ceil(align) * align;
+                ((data + size).div_ceil(align) * align, align)
+            }
+            _ => (8, 8),
+        }
+    }
+
+    /// The size and alignment of a C struct of members of the `types`.
+    fn struct_layout<'a>(&self, types: impl IntoIterator<Item = &'a Type>) -> (usize, usize) {
+        let (mut size, mut align) = (0usize, 1usize);
+        for ty in types {
+            let (s, a) = self.of(ty);
+            size = size.div_ceil(a) * a + s;
+            align = align.max(a);
+        }
+        (size.div_ceil(align) * align, align)
+    }
+}
+
+/// Whether a parameter the compiler chooses how to give (`x: T`) is given by
+/// where the caller keeps it, for a value of `size` bytes: one larger than
+/// `HIDDEN_ABOVE`.
+pub fn hidden_by_size(size: usize) -> bool {
+    size > HIDDEN_ABOVE
+}
+
 /// The generated function that puts a value of type `ty` in a writer.
 fn write_helper(ty: &Type) -> String {
     format!("vela__write__{}", type_word(ty))
@@ -3503,7 +3526,7 @@ fn changes_nothing(e: &Expr) -> bool {
 /// (or to a copy the call makes), rather than copied into the task: the task
 /// can't change it, and the call makes sure nothing else does while the task
 /// runs (see `Generator::gen_call`). The user chose 64 bytes: eight words.
-const HIDDEN_ABOVE: usize = 64;
+pub const HIDDEN_ABOVE: usize = 64;
 
 /// Whether parameter `p` of a task is a pointer to the caller's place in C: a
 /// `hold&` one, or the value a method that `alters` it is called on.
