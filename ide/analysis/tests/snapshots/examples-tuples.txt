@@ -74,6 +74,8 @@
     | variable:scores  punctuation:.  field:add  punctuation:(  punctuation:(  string:"Bob"  punctuation:,  number:78  punctuation:)  punctuation:)
  41 |     scores.add(("Cy", 85))
     | variable:scores  punctuation:.  field:add  punctuation:(  punctuation:(  string:"Cy"  punctuation:,  number:85  punctuation:)  punctuation:)
+ 42 |     show(scores[0])
+    | builtin-fn:show  punctuation:(  variable:scores  punctuation:[  number:0  punctuation:]  punctuation:)
  43 |     bind low, high = range_of(scores)
     | keyword:bind  variable:low  punctuation:,  variable:high  operator:=  task:range_of  punctuation:(  variable:scores  punctuation:)
  44 |     show(high - low)                         ; 13

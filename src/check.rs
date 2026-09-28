@@ -1874,7 +1874,7 @@ impl Checker {
             }
             // Only a type required to be `fixed` is known never to change.
             Type::Param(name) if !self.allows(Need::Fixed, ty) => {
-                Some(format!("'{0}', which may be any type here; require it, as in '<{0}: {1}>'", name, Need::Fixed.word()))
+                Some(format!("'{}', which {}", name, self.why_not(Need::Fixed, ty)))
             }
             Type::Ptr(..) => Some(format!("a pointer ({}), whose value can change", ty)),
             Type::Slice(..) => Some(format!("a slice ({}), whose items can change", ty)),
@@ -5910,10 +5910,7 @@ impl Checker {
     /// Checks that `ty`, given for the type parameter `param`, allows what the
     /// task's header asks of it.
     fn check_need(&self, what: &str, task: &str, param: &TypeParam, ty: &Type, at: Span) -> Result<()> {
-        let Some((need, _)) = param.need else { return Ok(()) };
-        if self.allows(need, ty) {
-            return Ok(());
-        }
+        let Some(&(need, _)) = param.needs.iter().find(|(need, _)| !self.allows(*need, ty)) else { return Ok(()) };
         err(
             at,
             format!(
@@ -5932,7 +5929,7 @@ impl Checker {
     /// allows it when its own word already does.
     fn allows(&self, need: Need, ty: &Type) -> bool {
         if let Type::Param(name) = ty {
-            return self.type_param(name).and_then(|param| param.need).is_some_and(|(own, _)| own.means(need));
+            return self.type_param(name).is_some_and(|param| param.needs.iter().any(|(own, _)| own.means(need)));
         }
         match need {
             Need::Ordered => ty.is_numeric() || matches!(ty, Type::Text(_)),
@@ -5945,10 +5942,10 @@ impl Checker {
     /// Why a type doesn't allow what `need` asks, for the end of a message.
     fn why_not(&self, need: Need, ty: &Type) -> String {
         if let Type::Param(name) = ty {
-            let own = self.type_param(name).and_then(|param| param.need);
-            return match own {
-                Some((own, _)) => format!("is only '{}' here; require it, as in '<{}: {}>'", own.word(), name, need.word()),
-                None => format!("is any type here; require it, as in '<{}: {}>'", name, need.word()),
+            let own: Vec<&str> = self.type_param(name).map(|param| param.needs.iter().map(|(own, _)| own.word()).collect()).unwrap_or_default();
+            return match own.is_empty() {
+                false => format!("is only '{}' here; require it too, as in '<{}: {} & {}>'", own.join(" & "), name, own.join(" & "), need.word()),
+                true => format!("is any type here; require it, as in '<{}: {}>'", name, need.word()),
             };
         }
         match need {

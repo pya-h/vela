@@ -1514,18 +1514,23 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
       <table>
         <tr><th>Word</th><th>What the body may do</th><th>Types that fit</th></tr>
         <tr><td><code>fixed</code></td><td>put a value in a tuple, whose items never change</td><td>numbers, bools, text, tuples of them, and shapes and kinds whose fields are all such</td></tr>
-        <tr><td><code>same</code></td><td><code>==</code> and <code>!=</code></td><td>numbers, bools, text, and tuples of them</td></tr>
+        <tr><td><code>same</code></td><td><code>==</code> and <code>!=</code></td><td>numbers, bools, text, pointers, and tuples of them</td></tr>
         <tr><td><code>shown</code></td><td><code>show</code>, <code>str</code></td><td>anything <code>show</code> writes: numbers, bools, text, pointers, arrays, slices, tuples, and <code>maybe</code>s of such, and shapes and kinds, except those holding a value that can fail without a <code>str</code> of their own</td></tr>
         <tr><td><code>ordered</code></td><td><code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td><td>numbers and text</td></tr>
       </table>
       <p>
-        Each word allows everything the words above it do, since fewer types have an order than can be shown, fewer can
-        be shown than compared, and fewer can be compared than never change: <code>&lt;T: ordered&gt;</code> may compare
-        and show its values too. <code>&amp;</code> joins words (<code>&lt;T: same &amp; shown&gt;</code>), which is read
-        today but never needed yet: every pair of these four is an error saying which one to keep, since each already
-        means the wider ones. It is there for words that may come. No word asks a type for arithmetic: a task that adds
-        its values takes numbers. <code>shown</code> allows every type <code>show</code> writes, a shape or kind with
-        its own <a href="#str"><code>str</code></a> or its default one, so a task that prints its values takes almost any of them.
+        Each word is one thing the body may do, and <code>&amp;</code> asks for several:
+        <code>&lt;T: same &amp; shown&gt;</code> may compare its values and write them, and only a type that allows
+        both fits. A word is written for everything the body relies on, even where every type that fits one fits
+        another today, so a declaration says what it needs, and a word given its own meaning later (by a shape of your
+        own, say) changes nothing that is already written. The one word that means another is <code>ordered</code>,
+        which means <code>same</code>, since what has an order can be compared; writing both is an error that says to
+        keep <code>ordered</code>. <code>ordered</code> doesn't mean <code>shown</code> or <code>fixed</code>: a task
+        that compares and prints its values says <code>&lt;T: ordered &amp; shown&gt;</code>, and one that leaves out
+        a word it uses is an error that says which to add, as in <em>T is only 'ordered' here; require it too, as in
+        '&lt;T: ordered &amp; shown&gt;'</em>. No word asks a type for arithmetic: a task that adds its values takes
+        numbers. <code>shown</code> allows every type <code>show</code> writes, a shape or kind with its own
+        <a href="#str"><code>str</code></a> or its default one, so a task that prints its values takes almost any of them.
       </p>
       <pre><span class="keyword">task</span> first&lt;T&gt;(xs: [T]@r) -&gt; <span class="keyword">maybe</span> T
     <span class="keyword">each</span> v <span class="keyword">in</span> xs

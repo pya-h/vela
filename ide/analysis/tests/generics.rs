@@ -170,7 +170,7 @@ fi
 #[test]
 fn a_word_that_says_nothing_new_is_reported() {
     let source = "\
-task f<T: same & fixed>(x: T) -> T
+task f<T: ordered & same>(x: T) -> T
     <- x
 fi
 
@@ -180,7 +180,9 @@ fi
 ";
     let diagnostics = Analysis::new(source).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
-    assert!(diagnostic.message.contains("already means 'fixed'"), "{}", diagnostic.message);
+    assert!(diagnostic.message.contains("'ordered' already means 'same'"), "{}", diagnostic.message);
+    // Any other pair asks for two things, which says something new.
+    assert_eq!(Analysis::new(&source.replace("ordered & same", "same & fixed")).diagnostics(), Vec::new());
 }
 
 const SHAPES: &str = "\

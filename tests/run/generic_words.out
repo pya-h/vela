@@ -1,0 +1,8 @@
+array: [1, 2]
+shape: Point { x: 1, y: 2 }
+text: hi
+1 == 1: true
+a == b: false
+7 pear
+twice 4
+8

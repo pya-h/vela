@@ -574,8 +574,8 @@ impl Parser {
             if let Some(before) = params.iter().find(|param| param.name == name) {
                 return Err(Error::at(span, format!("'{}' is already taken at {}:{}", name, before.span.line, before.span.col)));
             }
-            let need = if self.match_token(Token::Colon) { self.parse_needs()? } else { None };
-            params.push(TypeParam { name, span, need });
+            let needs = if self.match_token(Token::Colon) { self.parse_needs()? } else { Vec::new() };
+            params.push(TypeParam { name, span, needs });
             if !self.match_token(Token::Comma) {
                 break;
             }
@@ -587,24 +587,24 @@ impl Parser {
     }
 
     /// The words after a type's `:`, joined by `&`: what every type given for it
-    /// must allow. A word another already means is an error, since it says
-    /// nothing new.
-    fn parse_needs(&mut self) -> Result<Option<(Need, Span)>> {
-        let mut kept: Option<(Need, Span)> = None;
+    /// must allow, each one thing. A word another already means is an error,
+    /// since it says nothing new.
+    fn parse_needs(&mut self) -> Result<Vec<(Need, Span)>> {
+        let mut kept: Vec<(Need, Span)> = Vec::new();
         loop {
             let span = self.peek_span();
             let word = self.expect_ident().map_err(|_| Error::at(span, format!("expected what the type must allow: {}", needs_list())))?;
             let Some(need) = Need::from_word(&word) else {
                 return Err(Error::at(span, format!("'{}' isn't something a type can be asked to allow; the words are {}", word, needs_list())));
             };
-            if let Some((before, _)) = kept {
-                let (wider, narrower) = if before.means(need) { (need, before) } else { (before, need) };
-                if wider == narrower {
+            if let Some(&(before, _)) = kept.iter().find(|(before, _)| before.means(need) || need.means(*before)) {
+                if before == need {
                     return Err(Error::at(span, format!("'{}' is written twice", need.word())));
                 }
+                let (narrower, wider) = if before.means(need) { (before, need) } else { (need, before) };
                 return Err(Error::at(span, format!("{}, so '{}' already means '{}'; write '{}' alone", why_means(narrower, wider), narrower.word(), wider.word(), narrower.word())));
             }
-            kept = Some((need, span));
+            kept.push((need, span));
             if !self.match_token(Token::Amp) {
                 return Ok(kept);
             }

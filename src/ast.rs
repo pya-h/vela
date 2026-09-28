@@ -1417,32 +1417,32 @@ pub struct TypeParam {
     pub name: String,
     /// Position of the name.
     pub span: Span,
-    /// What every type given for it must allow, and where the word is written.
-    /// `None` lets any type fit, and its values can only be stored, passed,
-    /// and sent.
-    pub need: Option<(Need, Span)>,
+    /// What every type given for it must allow, each word with where it is
+    /// written: `<T: same & shown>` asks for both. None lets any type fit, and
+    /// its values can only be stored, passed, and sent.
+    pub needs: Vec<(Need, Span)>,
 }
 
 /// What a generic declaration requires of a type given to it, written after the
-/// type's name (`<T: ordered>`). Each word names what the body may do with a
-/// value of that type; a word also allows everything the words after it do,
-/// since fewer types have an order than can be shown, fewer can be shown than
-/// compared, and fewer can be compared than never change.
+/// type's name (`<T: ordered>`). Each word names one thing the body may do with
+/// a value of that type, and `&` asks for several (`<T: same & shown>`); the
+/// only word that means another is `ordered`, since what has an order can be
+/// compared. Each must be written, so a declaration says all it relies on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Need {
-    /// `< > <= >=`, and so `==` and `show` too: a number.
+    /// `< > <= >=`, and so `==` too: a number or text.
     Ordered,
-    /// `show`: a number, a bool, or text.
+    /// `show`, `str`, and text holding values: anything with a text form.
     Shown,
-    /// `==` and `!=`: what those compare (a number, a bool, text, or a tuple
-    /// of them).
+    /// `==` and `!=`: what those compare (a number, a bool, text, a pointer,
+    /// or a tuple of them).
     Same,
     /// A value that never changes, so it can be a tuple's item.
     Fixed,
 }
 
 impl Need {
-    /// The words, from the fewest types to the most.
+    /// The words, in the order messages list them.
     pub const ALL: [Need; 4] = [Need::Ordered, Need::Shown, Need::Same, Need::Fixed];
 
     pub fn word(self) -> &'static str {
@@ -1458,16 +1458,11 @@ impl Need {
         Need::ALL.into_iter().find(|need| need.word() == word)
     }
 
-    /// How many types the word admits, counted from the fewest: a word allows
-    /// everything a wider one does.
-    fn rank(self) -> usize {
-        Need::ALL.iter().position(|need| *need == self).unwrap_or(0)
-    }
-
     /// Whether this word already means `other`, so writing both says nothing
-    /// new: `ordered` means `shown`, which means `same`, which means `fixed`.
+    /// new: each word means itself, and `ordered` means `same`, since what has
+    /// an order can be compared. No other word means another.
     pub fn means(self, other: Need) -> bool {
-        self.rank() <= other.rank()
+        self == other || (self == Need::Ordered && other == Need::Same)
     }
 }
 

@@ -1,5 +1,5 @@
-; error: 2:21: a value that can be compared never changes, so 'same' already means 'fixed'; write 'same' alone
-task tell<T: same & fixed>(value: T) -> T
+; error: 2:24: a value with an order is a number or text, which can be compared, so 'ordered' already means 'same'; write 'ordered' alone
+task tell<T: ordered & same>(value: T) -> T
     <- value
 fi
 

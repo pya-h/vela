@@ -1,0 +1,43 @@
+; Each word a type parameter asks for is one thing its body may do, and `&`
+; asks for several: `shown` writes the value, `same` compares it with `==`,
+; `fixed` puts it in a tuple, and `ordered` compares with `<` (and so `==`).
+
+shape Point
+    x: int
+    y: int
+fi
+
+; `shown` alone takes anything with a text form, arrays and shapes included.
+task tell<T: shown>(label: text, value: T)
+    show(label, ": ", value)
+fi
+
+; Comparing and writing needs both words.
+task check<T: same & shown>(a: T, b: T)
+    show(a, " == ", b, ": ", a == b)
+fi
+
+; An order means `==` too, but writing needs its own word.
+task larger<T: ordered & shown>(a: T, b: T) -> T
+    when a == b or a > b
+        <- a
+    fi
+    <- b
+fi
+
+; A tuple holds only what never changes.
+task twice<T: fixed & shown>(value: T) -> (T, T)
+    show("twice ", value)
+    <- (value, value)
+fi
+
+task main()
+    tell("array", [1, 2])
+    tell("shape", Point { x: 1, y: 2 })
+    tell("text", "hi")
+    check(1, 1)
+    check("a", "b")
+    show(larger(3, 7), " ", larger("fig", "pear"))
+    bind pair = twice(4)
+    show(pair.0 + pair.1)
+fi

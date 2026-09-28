@@ -1,0 +1,9 @@
+; error: 4:10: '==' can't compare values of type T; it is only 'shown' here; require it too, as in '<T: shown & same>'
+task both<T: shown>(a: T, b: T) -> bool
+    show(a)
+    <- a == b
+fi
+
+task main()
+    show(both(1, 2))
+fi

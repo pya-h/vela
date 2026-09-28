@@ -869,11 +869,13 @@ show(biggest(true, false))      ; error: task 'biggest' takes a type that is 'or
           read as comparisons.</li>
         <li><strong>Four words, not traits.</strong> <code>fixed</code>, <code>same</code>, <code>shown</code>, and
           <code>ordered</code> say what a type must allow — be a tuple's item, be compared with <code>==</code>, be
-          shown, be compared with <code>&lt;</code> — and each allows what the wider ones do. A closed set of words keeps
-          the whole feature readable: no interfaces, no <code>impl</code> blocks, no resolution rules. <code>&amp;</code>
-          joins words (<code>&lt;T: same &amp; shown&gt;</code>), which the compiler reads today although no pair of these
-          four is ever needed — each already means the wider ones, so every pair is an error naming the one to keep — and
-          which is there for words that may come. No word asks for arithmetic: a task
+          shown, be compared with <code>&lt;</code> — and each is one thing, joined with <code>&amp;</code> to ask for
+          several (<code>&lt;T: same &amp; shown&gt;</code>; decided 2026-09-28, when <code>shown</code> came to take
+          arrays and shapes that <code>==</code> can't compare). Only <code>ordered</code> means another word,
+          <code>same</code>, since an order compares. A closed set of words keeps the whole feature readable: no
+          interfaces, no <code>impl</code> blocks, no resolution rules. Every word is written even where one set of types
+          sits inside another today, because a later step may let a shape or kind say how it answers a word itself (how
+          it is ordered, say), and then the sets need not nest. No word asks for arithmetic: a task
           that adds its values takes numbers.</li>
         <li><strong>One task per set of types.</strong> The body is checked once, with <code>T</code> standing for the
           type each use gives, and the compiler then makes one task for each set of types the program uses, so a call

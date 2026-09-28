@@ -1,0 +1,11 @@
+; error: 4:14: show can't write T as text; T is only 'ordered' here; require it too, as in '<T: ordered & shown>'
+task larger<T: ordered>(a: T, b: T) -> T
+    when a > b
+        show(a)
+    fi
+    <- b
+fi
+
+task main()
+    show(larger(1, 2))
+fi

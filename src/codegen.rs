@@ -884,10 +884,10 @@ impl Generator {
             // Without one, a shape is written as a literal of its fields that
             // any file reads, `Point { x: 1, y: 2 }`.
             Type::Named(name, _) if self.shapes.contains_key(name) => {
-                let shape = &self.shapes[name];
-                let fields: Vec<Field> = shape.fields.iter().filter(|field| !field.private).cloned().collect();
+                let fields: Vec<Field> = self.shapes.get(name).map(|shape| shape.fields.iter().filter(|field| !field.private).cloned().collect()).unwrap_or_default();
                 let written = self.written_name(name);
                 if fields.is_empty() {
+                    self.w.line("(void)v;");
                     self.w.line(&format!("VELA__RT__PUT(w, \"{} {{}}\");", written));
                 } else {
                     for (i, field) in fields.iter().enumerate() {
@@ -901,7 +901,7 @@ impl Generator {
             // And a kind as the variant it holds, with the values it carries as
             // a call gives them, `Circle(1.5)`.
             Type::Named(name, _) if self.kinds.contains_key(name) => {
-                let kind = self.kinds[name].clone();
+                let Some(kind) = self.kinds.get(name).cloned() else { return Err(Error::internal(format!("no kind '{}' to write", name))) };
                 self.w.open("switch (v.tag)");
                 for variant in &kind.variants {
                     self.w.line(&format!("case {}:", tag_value(&kind.name, &variant.tag)));

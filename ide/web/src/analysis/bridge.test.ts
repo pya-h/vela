@@ -194,6 +194,7 @@ describe("VelaAnalysis", () => {
       ["count", "field"],
       ["total", "method"],
       ["step", "method"],
+      ["str", "builtin-fn"],
       ["type", "field"],
     ]);
   });

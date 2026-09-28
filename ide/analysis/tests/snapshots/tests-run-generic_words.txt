@@ -1,0 +1,74 @@
+  1 | ; Each word a type parameter asks for is one thing its body may do, and `&`
+    | comment:; Each word a type parameter asks for is one thing its body may do, and `&`
+  2 | ; asks for several: `shown` writes the value, `same` compares it with `==`,
+    | comment:; asks for several: `shown` writes the value, `same` compares it with `==`,
+  3 | ; `fixed` puts it in a tuple, and `ordered` compares with `<` (and so `==`).
+    | comment:; `fixed` puts it in a tuple, and `ordered` compares with `<` (and so `==`).
+  5 | shape Point
+    | keyword:shape  type:Point
+  6 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  7 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  8 | fi
+    | keyword:fi
+ 10 | ; `shown` alone takes anything with a text form, arrays and shapes included.
+    | comment:; `shown` alone takes anything with a text form, arrays and shapes included.
+ 11 | task tell<T: shown>(label: text, value: T)
+    | keyword:task  task:tell  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:value  punctuation::  type:T  punctuation:)
+ 12 |     show(label, ": ", value)
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:,  string:": "  punctuation:,  parameter:value  punctuation:)
+ 13 | fi
+    | keyword:fi
+ 15 | ; Comparing and writing needs both words.
+    | comment:; Comparing and writing needs both words.
+ 16 | task check<T: same & shown>(a: T, b: T)
+    | keyword:task  task:check  punctuation:<  type:T  punctuation::  keyword:same  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)
+ 17 |     show(a, " == ", b, ": ", a == b)
+    | builtin-fn:show  punctuation:(  parameter:a  punctuation:,  string:" == "  punctuation:,  parameter:b  punctuation:,  string:": "  punctuation:,  parameter:a  operator:==  parameter:b  punctuation:)
+ 18 | fi
+    | keyword:fi
+ 20 | ; An order means `==` too, but writing needs its own word.
+    | comment:; An order means `==` too, but writing needs its own word.
+ 21 | task larger<T: ordered & shown>(a: T, b: T) -> T
+    | keyword:task  task:larger  punctuation:<  type:T  punctuation::  keyword:ordered  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 22 |     when a == b or a > b
+    | keyword:when  parameter:a  operator:==  parameter:b  keyword:or  parameter:a  operator:>  parameter:b
+ 23 |         <- a
+    | keyword:<-  parameter:a
+ 24 |     fi
+    | keyword:fi
+ 25 |     <- b
+    | keyword:<-  parameter:b
+ 26 | fi
+    | keyword:fi
+ 28 | ; A tuple holds only what never changes.
+    | comment:; A tuple holds only what never changes.
+ 29 | task twice<T: fixed & shown>(value: T) -> (T, T)
+    | keyword:task  task:twice  punctuation:<  type:T  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:value  punctuation::  type:T  punctuation:)  operator:->  punctuation:(  type:T  punctuation:,  type:T  punctuation:)
+ 30 |     show("twice ", value)
+    | builtin-fn:show  punctuation:(  string:"twice "  punctuation:,  parameter:value  punctuation:)
+ 31 |     <- (value, value)
+    | keyword:<-  punctuation:(  parameter:value  punctuation:,  parameter:value  punctuation:)
+ 32 | fi
+    | keyword:fi
+ 34 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 35 |     tell("array", [1, 2])
+    | task:tell  punctuation:(  string:"array"  punctuation:,  punctuation:[  number:1  punctuation:,  number:2  punctuation:]  punctuation:)
+ 36 |     tell("shape", Point { x: 1, y: 2 })
+    | task:tell  punctuation:(  string:"shape"  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:)
+ 37 |     tell("text", "hi")
+    | task:tell  punctuation:(  string:"text"  punctuation:,  string:"hi"  punctuation:)
+ 38 |     check(1, 1)
+    | task:check  punctuation:(  number:1  punctuation:,  number:1  punctuation:)
+ 39 |     check("a", "b")
+    | task:check  punctuation:(  string:"a"  punctuation:,  string:"b"  punctuation:)
+ 40 |     show(larger(3, 7), " ", larger("fig", "pear"))
+    | builtin-fn:show  punctuation:(  task:larger  punctuation:(  number:3  punctuation:,  number:7  punctuation:)  punctuation:,  string:" "  punctuation:,  task:larger  punctuation:(  string:"fig"  punctuation:,  string:"pear"  punctuation:)  punctuation:)
+ 41 |     bind pair = twice(4)
+    | keyword:bind  variable:pair  operator:=  task:twice  punctuation:(  number:4  punctuation:)
+ 42 |     show(pair.0 + pair.1)
+    | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  field:0  operator:+  variable:pair  punctuation:.  field:1  punctuation:)
+ 43 | fi
+    | keyword:fi
