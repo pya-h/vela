@@ -1,6 +1,4 @@
-; error: 5:21: show expects int, float, bool, text, or a shape or kind with its own 'str'; show its items one at a time, as in 'each v in xs'
+; error: 3:21: show can't write [int ~ ParseError#1] as text, since it holds int ~ ParseError; a value that can fail is read first, with a plan B, match, or is
 task main()
-    region r
-    bind xs = new [int]() at r
-    show("items: ", xs)
+    show("items: ", [int("1")])
 fi

@@ -98,9 +98,9 @@ fn a_counter_and_an_item_are_described_apart() {
 #[test]
 fn completion_offers_len_on_arrays_and_len_add_del_and_copy_on_slices() {
     for checks in [true, false] {
-        assert_eq!(labels(&program(checks, "show(scores.@@)")), ["len", "type"], "checks: {}", checks);
+        assert_eq!(labels(&program(checks, "show(scores.@@)")), ["len", "str", "type"], "checks: {}", checks);
         // A slice of values in a region can be copied too.
-        assert_eq!(labels(&program(checks, "show(points.@@)")), ["len", "add", "del", "copy", "type"], "checks: {}", checks);
+        assert_eq!(labels(&program(checks, "show(points.@@)")), ["len", "add", "del", "str", "copy", "type"], "checks: {}", checks);
         let fields = labels(&program(checks, "show(points[0].@@)"));
         assert!(fields.contains(&"x".to_string()) && fields.contains(&"y".to_string()), "{:?}", fields);
     }
@@ -108,7 +108,7 @@ fn completion_offers_len_on_arrays_and_len_add_del_and_copy_on_slices() {
     let through = completions(&program(true, "show(boxed.@@)"));
     // An array behind a pointer is reached through `^`, and the pointer is copied as it is.
     let pairs: Vec<(&str, Option<&str>, Option<&str>)> = through.iter().map(|item| (item.label.as_str(), item.apply.as_deref(), item.snippet.as_deref())).collect();
-    assert_eq!(pairs, [("len", Some("^.len"), None), ("copy", None, Some(".copy()")), ("type", None, Some(".type"))]);
+    assert_eq!(pairs, [("len", Some("^.len"), None), ("str", None, Some(".str() at ${r}")), ("copy", None, Some(".copy()")), ("type", None, Some(".type"))]);
 }
 
 #[test]
@@ -179,9 +179,9 @@ fn changes_to_a_slice_have_types_hovers_and_snippets() {
     assert!(doc.starts_with("Takes the item at the index out"), "{}", doc);
     let items = completions(&program(true, "points.@@"));
     let snippets: Vec<(&str, Option<&str>)> = items.iter().map(|item| (item.label.as_str(), item.snippet.as_deref())).collect();
-    assert_eq!(snippets, [("len", None), ("add", Some("add(${value})")), ("del", Some("del(${index})")), ("copy", Some("copy()")), ("type", None)]);
+    assert_eq!(snippets, [("len", None), ("add", Some("add(${value})")), ("del", Some("del(${index})")), ("str", Some("str() at ${r}")), ("copy", Some("copy()")), ("type", None)]);
     // An array can't change its length.
-    assert_eq!(labels(&program(true, "scores.@@")), ["len", "type"]);
+    assert_eq!(labels(&program(true, "scores.@@")), ["len", "str", "type"]);
 }
 
 #[test]

@@ -78,16 +78,6 @@ static inline void vela__rt__show_text(vela__rt__text x) {
     vela__rt__show_line();
 }
 
-/* `show` on an empty `maybe`. */
-static inline void vela__rt__write_none(void) {
-    fputs("none", stdout);
-}
-
-static inline void vela__rt__show_none(void) {
-    vela__rt__write_none();
-    vela__rt__show_line();
-}
-
 /* `==` on text compares contents. */
 static inline bool vela__rt__text_eq(vela__rt__text a, vela__rt__text b) {
     return a.len == b.len && (a.len == 0 || memcmp(a.bytes, b.bytes, (size_t)a.len) == 0);
@@ -724,6 +714,137 @@ static inline vela__rt__text vela__rt__bool_str(vela__rt__region* r, bool x) {
 /* Text turned into text is a copy of it in `r`. */
 static inline vela__rt__text vela__rt__text_str(vela__rt__region* r, vela__rt__text x) {
     return vela__rt__text_in(r, x.bytes, (size_t)x.len);
+}
+
+/* In a join, a number is written into `room`, a buffer on the caller's stack
+ * (a compound literal, which lasts until the join has read it), so it leaves
+ * nothing behind in the region: `"n = {n}" at r` allocates its text once. */
+#define VELA__RT__NUMBER_ROOM 32
+
+static inline vela__rt__text vela__rt__int_view(char* room, int64_t x) {
+    int len = snprintf(room, VELA__RT__NUMBER_ROOM, "%lld", (long long)x);
+    return (vela__rt__text){ room, (int64_t)len };
+}
+
+static inline vela__rt__text vela__rt__float_view(char* room, double x) {
+    if (isnan(x)) {
+        return VELA__RT__TEXT("nan");
+    }
+    int len = snprintf(room, VELA__RT__NUMBER_ROOM, "%g", x);
+    return (vela__rt__text){ room, (int64_t)len };
+}
+
+/* Writing a value as text, as `show` and `str` do for arrays, slices, tuples,
+ * pointers, and `maybe`s: a writer sends what it is given to the output, or
+ * gathers it into a buffer that `vela__rt__built` makes into text in a region
+ * at the end, so the text is allocated once, at its full length. The buffer is
+ * the C library's, freed once the text is made. */
+typedef struct vela__rt__writer {
+    bool to_output;
+    char* bytes;
+    size_t len;
+    size_t cap;
+} vela__rt__writer;
+
+#define VELA__RT__OUTPUT ((vela__rt__writer){ true, NULL, 0, 0 })
+#define VELA__RT__BUILDER ((vela__rt__writer){ false, NULL, 0, 0 })
+
+static inline void vela__rt__put(vela__rt__writer* w, const char* bytes, size_t n) {
+    if (n == 0) {
+        return;
+    }
+    if (w->to_output) {
+        fwrite(bytes, 1, n, stdout);
+        return;
+    }
+    if (w->cap - w->len < n) {
+        if (n > SIZE_MAX / 2 - w->len) {
+            vela__rt__out_of_memory();
+        }
+        size_t cap = w->cap < 64 ? 64 : w->cap;
+        while (cap - w->len < n) {
+            cap *= 2;
+        }
+        char* grown = realloc(w->bytes, cap);
+        if (grown == NULL) {
+            vela__rt__out_of_memory();
+        }
+        w->bytes = grown;
+        w->cap = cap;
+    }
+    memcpy(w->bytes + w->len, bytes, n);
+    w->len += n;
+}
+
+#define VELA__RT__PUT(w, literal) vela__rt__put((w), (literal), sizeof(literal) - 1)
+
+static inline void vela__rt__put_int(vela__rt__writer* w, int64_t x) {
+    char room[VELA__RT__NUMBER_ROOM];
+    vela__rt__text t = vela__rt__int_view(room, x);
+    vela__rt__put(w, t.bytes, (size_t)t.len);
+}
+
+static inline void vela__rt__put_float(vela__rt__writer* w, double x) {
+    char room[VELA__RT__NUMBER_ROOM];
+    vela__rt__text t = vela__rt__float_view(room, x);
+    vela__rt__put(w, t.bytes, (size_t)t.len);
+}
+
+static inline void vela__rt__put_bool(vela__rt__writer* w, bool x) {
+    if (x) {
+        VELA__RT__PUT(w, "true");
+    } else {
+        VELA__RT__PUT(w, "false");
+    }
+}
+
+/* Text on its own is written as it is. */
+static inline void vela__rt__put_text(vela__rt__writer* w, vela__rt__text x) {
+    vela__rt__put(w, x.bytes, x.len < 0 ? 0 : (size_t)x.len);
+}
+
+/* Text inside another value is written as a literal writes it, in quotes, with
+ * a quote, a backslash, and the characters that have an escape escaped, so
+ * `["a, b"]` and `["a", "b"]` read apart. */
+static inline void vela__rt__put_quoted(vela__rt__writer* w, vela__rt__text x) {
+    VELA__RT__PUT(w, "\"");
+    size_t from = 0;
+    size_t len = x.len < 0 ? 0 : (size_t)x.len;
+    for (size_t i = 0; i < len; i++) {
+        const char* escape = NULL;
+        switch (x.bytes[i]) {
+        case '"': escape = "\\\""; break;
+        case '\\': escape = "\\\\"; break;
+        case '\n': escape = "\\n"; break;
+        case '\t': escape = "\\t"; break;
+        case '\r': escape = "\\r"; break;
+        case '\0': escape = "\\0"; break;
+        default: break;
+        }
+        if (escape != NULL) {
+            vela__rt__put(w, x.bytes + from, i - from);
+            vela__rt__put(w, escape, 2);
+            from = i + 1;
+        }
+    }
+    vela__rt__put(w, x.bytes + from, len - from);
+    VELA__RT__PUT(w, "\"");
+}
+
+/* A pointer is the address it holds, as C writes one in hex: `0x7ffd…`. */
+static inline void vela__rt__put_address(vela__rt__writer* w, const void* p) {
+    char room[VELA__RT__NUMBER_ROOM];
+    int len = snprintf(room, sizeof room, "0x%llx", (unsigned long long)(uintptr_t)p);
+    vela__rt__put(w, room, (size_t)len);
+}
+
+/* What a writer gathered, as text in `r`; the writer's buffer is freed. */
+static inline vela__rt__text vela__rt__built(vela__rt__writer* w, vela__rt__region* r) {
+    vela__rt__text t = vela__rt__text_in(r, w->bytes == NULL ? "" : w->bytes, w->len);
+    free(w->bytes);
+    w->bytes = NULL;
+    w->len = w->cap = 0;
+    return t;
 }
 
 /* Copies: `value.copy() at r` copies what a value holds in regions into region

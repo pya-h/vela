@@ -6,7 +6,7 @@ n = 5
 Ada!
 
 
-missing: none, here: 7
+missing: none, here: { 7 }
 read: none
 first 10 of 3
 part A, joined xy, held 5

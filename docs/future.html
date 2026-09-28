@@ -1660,18 +1660,15 @@ show(c.total())</pre>
           (<a href="#static-region">a static region</a>, <a href="#shared-in-generic-shapes">shared members of a shape
           that takes types</a>). Counting a shape's values exactly needs code that runs when a value is made or goes
           away, which is the <a href="events.html">events</a> idea.</li>
-        <li id="methods-shown-same"><strong>Letting a shape answer <code>==</code>, and fit <code>T: shown</code>:</strong>
+        <li id="methods-shown-same"><strong>Letting a shape answer <code>==</code> (and fit <code>T: shown</code>, done):</strong>
           <code>show(p)</code> is done: a method named
           <a href="vela.html#str"><code>str</code></a> says how a shape or kind is written, and
-          <a href="vela.html#show"><code>show</code></a> calls it in a region it makes for the line. Two halves are
-          left. <code>==</code> has no method behind it, so a <code>same(other: This) -&gt; bool</code> would open it as
-          <code>str</code> opened printing. And a type with <code>str</code> still doesn't fit
-          <code>&lt;T: shown&gt;</code>: the body of a declaration that takes types is checked once, before the types it
-          is given are known, so <code>show(x)</code> in it can't be settled into the call of a method that the type
-          given would name. Letting it would mean checking such a body again for every set of types, which is a change to
-          how declarations that take types are made, not to <code>show</code>. Both are also the smallest step towards
-          interfaces, which Vela has no design for yet, since each is the same question asked of one method at a time:
-          does this type have a member of this name and header?</li>
+          <a href="vela.html#show"><code>show</code></a> calls it in a region it makes for the line. Fitting
+          <code>&lt;T: shown&gt;</code> is done too (2026-09-28): the body is still checked once, and the C made for
+          each set of types writes a value through its type's own writer, which calls the shape's <code>str</code>. One
+          half is left: <code>==</code> has no method behind it, so a <code>same(other: This) -&gt; bool</code> would
+          open it as <code>str</code> opened printing. It is also the smallest step towards interfaces, which Vela has no
+          design for yet, since it asks of one method: does this type have a member of this name and header?</li>
         <li id="methods-elsewhere"><strong>Methods from another module:</strong> a shape's block holds every method it
           has, so a module can't add one to a type it includes. That keeps a type honest — everything it does is in one
           place — at the cost of the "extension method" that makes a foreign type fit local code. If Vela ever wants

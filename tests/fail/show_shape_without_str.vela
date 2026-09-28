@@ -1,4 +1,4 @@
-; error: 7:10: show expects int, float, bool, text, or a shape or kind with its own 'str'; shape 'Plain' has no method 'str', which says how its values are written; give it one, written 'str(r: region) -> text@r'
+; error: 7:10: show can't write Plain as text; shape 'Plain' has no method 'str', which says how its values are written; give it one, written 'str(r: region) -> text@r'
 shape Plain
     x: int
 fi

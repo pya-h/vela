@@ -1,4 +1,4 @@
-; error: 8:21: show expects int, float, bool, text, or a shape or kind with its own 'str'; kind 'Bare' has no method 'str', which says how its values are written; give it one, written 'str(r: region) -> text@r'
+; error: 8:21: show can't write Bare as text; kind 'Bare' has no method 'str', which says how its values are written; give it one, written 'str(r: region) -> text@r'
 kind Bare
     One
     Two

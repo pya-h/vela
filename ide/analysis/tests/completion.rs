@@ -291,7 +291,7 @@ fn hover_describes_declarations() {
     assert_eq!(code_and_doc(hover(&source, "radius", 0)), pair("radius: float", "A payload field of variant Circle."));
     assert_eq!(code_and_doc(hover(&source, "start: p", 0)), pair("start: Point", "A field of shape Line."));
     assert_eq!(code_and_doc(hover(&source, "int\n    y: int", 0)), pair("int", "A 64-bit signed integer. int(x) turns a value into one: a float becomes its whole part, toward zero (a float with none to give, such as nan, stops the program), and a bool becomes 1 or 0."));
-    assert_eq!(hover(&source, "show", 0).code, "task show(value: int | float | bool | text | maybe | anything with str, \u{2026})");
+    assert_eq!(hover(&source, "show", 0).code, "task show(value: anything with str, \u{2026})");
     assert_eq!(hover(&source, "Point {", 0).code, "shape Point\n    x: int\n    y: int\nfi");
     assert_eq!(hover(&source, "Shape\n", 0).code, "kind Shape\n    Circle(radius: float)\n    Rectangle(width: float, height: float)\n    Dot\nfi");
     // The hovered range is the name.

@@ -1,0 +1,80 @@
+; Every value that can be written as text is, by show, str, and text holding
+; values: an array or slice as [a, b], a tuple as (a, b), a maybe as none or
+; { v }, a pointer as its address, and text inside any of them in quotes.
+
+shape Point
+    x: int
+    y: int
+    str(r: region) -> text@r
+        <- "({.x}, {.y})" at r
+    fi
+fi
+
+; A shape large enough to be passed by a hidden pointer, whose own str is
+; called on it.
+shape Wide
+    a: int
+    b: int
+    c: int
+    d: int
+    e: int
+    f: int
+    g: int
+    h: int
+    i: int
+    str(r: region) -> text@r
+        <- "wide {.a + .i}" at r
+    fi
+fi
+
+task told<T: shown>(v: T) -> text
+    show(v)
+    <- v.type
+fi
+
+; An address as text: C's hex, which int(…) reads back.
+task address<T>(p: ^T@r) -> bool
+    region s
+    bind written = p.str() at s
+    bind number = int(written) { -1 }
+    <- written[0..2] == "0x" and number > 0 and "{p}" at s == written
+fi
+
+task main()
+    region r
+    ; Arrays and slices, nested too, and empty.
+    bind xs = [1, 2, 3]
+    bind grid = [[0.5#2]#2]
+    hold words = new [text]() at r
+    words.add("a, b")
+    words.add("say \"hi\"\n\t\\")
+    bind none_yet = new [int]() at r
+    show(xs, " ", grid, " ", none_yet)
+    show(words)
+    ; Tuples, maybes, and both inside others.
+    bind m: maybe int = 4
+    bind n: maybe int = none
+    bind mt: maybe text = "hi"
+    show(m, " ", n, " ", mt, " ", (1, "a", true, 2.5))
+    bind nested: maybe [maybe int#2] = [1, none]
+    show(nested, " ", [(1, m), (2, n)])
+    ; A shape's own str, on its own, in an array, and in a maybe.
+    bind pts = [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }]
+    bind mp: maybe Point = Point { x: 5, y: 6 }
+    show(pts[0], " ", pts, " ", mp)
+    bind wide = Wide { a: 1, b: 0, c: 0, d: 0, e: 0, f: 0, g: 0, h: 0, i: 2 }
+    show([wide, wide], " ", wide.str() at r)
+    ; str makes the same text, once, in a region.
+    bind t = pts.str() at r
+    show(t, " ", t.len, " ", xs.str(r), " ", m.str() at r, " ", n.str() at r)
+    ; Text holding values writes each value as its str does.
+    show("{xs} and {m} and {(1, "a")} and {pts} and {n} and {1} {2.5} {true} {"x"}" at r)
+    ; A pointer is its address; the value it points to is its own text.
+    bind p = new int(7) at r
+    bind mptr: maybe ^int@r = p
+    show(p^, " ", address(p), " ", mptr == none)
+    show("{mptr}"@r == "\{ {p} \}"@r)
+    ; A task that takes a shown type writes whatever it is given.
+    show(told(xs), " ", told(mp), " ", told(words))
+    show(told(pts[0]), " ", told(3))
+fi

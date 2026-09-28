@@ -9,6 +9,6 @@ false
 green
 amber
 red
-a word
+{ "a word" }
 none
 green

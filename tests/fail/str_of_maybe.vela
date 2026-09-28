@@ -1,6 +1,0 @@
-; error: 5:12: type maybe int can't be turned into text; extract its value first, as in 'when x is {value}'
-task main()
-    region r
-    bind m: maybe int = 3
-    show(m.str() at r)
-fi

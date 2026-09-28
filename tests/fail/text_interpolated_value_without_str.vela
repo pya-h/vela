@@ -1,7 +1,6 @@
-; error: 6:17: type [int]@r can't be turned into text; numbers, bools, text, and shapes and kinds with a method 'str' can
+; error: 5:19: 'str' can't write (int, int ~ ParseError) as text, since it holds int ~ ParseError; a value that can fail is read first, with a plan B, match, or is
 task main()
     region r
-    bind n = 5
-    bind xs = new [int]() at r
-    show("xs = {xs}" at r)
+    bind pair = (1, int("2"))
+    show("pair = {pair}" at r)
 fi

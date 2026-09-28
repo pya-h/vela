@@ -1,0 +1,4 @@
+; error: 3:10: show can't write [int ~ ParseError#2] as text, since it holds int ~ ParseError; a value that can fail is read first, with a plan B, match, or is
+task main()
+    show([int("1"), int("2")])
+fi

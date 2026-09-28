@@ -53,9 +53,9 @@ fn untyped_binding() {
 
 #[test]
 fn show_with_a_type_it_cannot_write() {
-    // The checker refuses a slice given to `show`; give a checked call one
-    // afterwards, as a checker bug would.
-    let mut items = parse("task main()\n    region r\n    bind xs = new [int]() at r\n    show(1, 2)\nfi\n");
+    // The checker refuses a value that can fail given to `show`; give a
+    // checked call one afterwards, as a checker bug would.
+    let mut items = parse("task main()\n    region r\n    bind xs = int(\"1\")\n    show(1, 2)\nfi\n");
     let mut checker = Checker::new();
     checker.check_file(&mut items);
     assert!(checker.errors().is_empty(), "{:?}", checker.errors());
@@ -68,7 +68,7 @@ fn show_with_a_type_it_cannot_write() {
 
     let err = Generator::new().generate(&items).unwrap_err();
     assert_eq!(err.span, None);
-    assert_eq!(err.message, "internal compiler error: show called with type [int]@r (at 4:5)");
+    assert_eq!(err.message, "internal compiler error: show called with type int ~ ParseError (at 4:5)");
 }
 
 #[test]

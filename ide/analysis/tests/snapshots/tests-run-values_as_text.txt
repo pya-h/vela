@@ -1,0 +1,150 @@
+  1 | ; Every value that can be written as text is, by show, str, and text holding
+    | comment:; Every value that can be written as text is, by show, str, and text holding
+  2 | ; values: an array or slice as [a, b], a tuple as (a, b), a maybe as none or
+    | comment:; values: an array or slice as [a, b], a tuple as (a, b), a maybe as none or
+  3 | ; { v }, a pointer as its address, and text inside any of them in quotes.
+    | comment:; { v }, a pointer as its address, and text inside any of them in quotes.
+  5 | shape Point
+    | keyword:shape  type:Point
+  6 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  7 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  8 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+  9 |         <- "({.x}, {.y})" at r
+    | keyword:<-  string:"({  punctuation:.  field:x  string:}, {  punctuation:.  field:y  string:})"  keyword:at  region:r
+ 10 |     fi
+    | keyword:fi
+ 11 | fi
+    | keyword:fi
+ 13 | ; A shape large enough to be passed by a hidden pointer, whose own str is
+    | comment:; A shape large enough to be passed by a hidden pointer, whose own str is
+ 14 | ; called on it.
+    | comment:; called on it.
+ 15 | shape Wide
+    | keyword:shape  type:Wide
+ 16 |     a: int
+    | field:a  punctuation::  type-builtin:int
+ 17 |     b: int
+    | field:b  punctuation::  type-builtin:int
+ 18 |     c: int
+    | field:c  punctuation::  type-builtin:int
+ 19 |     d: int
+    | field:d  punctuation::  type-builtin:int
+ 20 |     e: int
+    | field:e  punctuation::  type-builtin:int
+ 21 |     f: int
+    | field:f  punctuation::  type-builtin:int
+ 22 |     g: int
+    | field:g  punctuation::  type-builtin:int
+ 23 |     h: int
+    | field:h  punctuation::  type-builtin:int
+ 24 |     i: int
+    | field:i  punctuation::  type-builtin:int
+ 25 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 26 |         <- "wide {.a + .i}" at r
+    | keyword:<-  string:"wide {  punctuation:.  field:a  operator:+  punctuation:.  field:i  string:}"  keyword:at  region:r
+ 27 |     fi
+    | keyword:fi
+ 28 | fi
+    | keyword:fi
+ 30 | task told<T: shown>(v: T) -> text
+    | keyword:task  task:told  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:v  punctuation::  type:T  punctuation:)  operator:->  type-builtin:text
+ 31 |     show(v)
+    | builtin-fn:show  punctuation:(  parameter:v  punctuation:)
+ 32 |     <- v.type
+    | keyword:<-  parameter:v  punctuation:.  keyword:type
+ 33 | fi
+    | keyword:fi
+ 35 | ; An address as text: C's hex, which int(…) reads back.
+    | comment:; An address as text: C's hex, which int(…) reads back.
+ 36 | task address<T>(p: ^T@r) -> bool
+    | keyword:task  task:address  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:p  punctuation::  operator:^  type:T  operator:@  region:r  punctuation:)  operator:->  type-builtin:bool
+ 37 |     region s
+    | keyword:region  region:s
+ 38 |     bind written = p.str() at s
+    | keyword:bind  variable:written  operator:=  parameter:p  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:s
+ 39 |     bind number = int(written) { -1 }
+    | keyword:bind  variable:number  operator:=  type-builtin:int  punctuation:(  variable:written  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}
+ 40 |     <- written[0..2] == "0x" and number > 0 and "{p}" at s == written
+    | keyword:<-  variable:written  punctuation:[  number:0  operator:..  number:2  punctuation:]  operator:==  string:"0x"  keyword:and  variable:number  operator:>  number:0  keyword:and  string:"{  parameter:p  string:}"  keyword:at  region:s  operator:==  variable:written
+ 41 | fi
+    | keyword:fi
+ 43 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 44 |     region r
+    | keyword:region  region:r
+ 45 |     ; Arrays and slices, nested too, and empty.
+    | comment:; Arrays and slices, nested too, and empty.
+ 46 |     bind xs = [1, 2, 3]
+    | keyword:bind  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 47 |     bind grid = [[0.5#2]#2]
+    | keyword:bind  variable:grid  operator:=  punctuation:[  punctuation:[  number:0.5  punctuation:#  number:2  punctuation:]  punctuation:#  number:2  punctuation:]
+ 48 |     hold words = new [text]() at r
+    | keyword:hold  variable:words  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 49 |     words.add("a, b")
+    | variable:words  punctuation:.  field:add  punctuation:(  string:"a, b"  punctuation:)
+ 50 |     words.add("say \"hi\"\n\t\\")
+    | variable:words  punctuation:.  field:add  punctuation:(  string:"say   escape:\"  string:hi  escape:\"  escape:\n  escape:\t  escape:\\  string:"  punctuation:)
+ 51 |     bind none_yet = new [int]() at r
+    | keyword:bind  variable:none_yet  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 52 |     show(xs, " ", grid, " ", none_yet)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:,  string:" "  punctuation:,  variable:grid  punctuation:,  string:" "  punctuation:,  variable:none_yet  punctuation:)
+ 53 |     show(words)
+    | builtin-fn:show  punctuation:(  variable:words  punctuation:)
+ 54 |     ; Tuples, maybes, and both inside others.
+    | comment:; Tuples, maybes, and both inside others.
+ 55 |     bind m: maybe int = 4
+    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:4
+ 56 |     bind n: maybe int = none
+    | keyword:bind  variable:n  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 57 |     bind mt: maybe text = "hi"
+    | keyword:bind  variable:mt  punctuation::  keyword:maybe  type-builtin:text  operator:=  string:"hi"
+ 58 |     show(m, " ", n, " ", mt, " ", (1, "a", true, 2.5))
+    | builtin-fn:show  punctuation:(  variable:m  punctuation:,  string:" "  punctuation:,  variable:n  punctuation:,  string:" "  punctuation:,  variable:mt  punctuation:,  string:" "  punctuation:,  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:,  keyword:true  punctuation:,  number:2.5  punctuation:)  punctuation:)
+ 59 |     bind nested: maybe [maybe int#2] = [1, none]
+    | keyword:bind  variable:nested  punctuation::  keyword:maybe  punctuation:[  keyword:maybe  type-builtin:int  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  number:1  punctuation:,  keyword:none  punctuation:]
+ 60 |     show(nested, " ", [(1, m), (2, n)])
+    | builtin-fn:show  punctuation:(  variable:nested  punctuation:,  string:" "  punctuation:,  punctuation:[  punctuation:(  number:1  punctuation:,  variable:m  punctuation:)  punctuation:,  punctuation:(  number:2  punctuation:,  variable:n  punctuation:)  punctuation:]  punctuation:)
+ 61 |     ; A shape's own str, on its own, in an array, and in a maybe.
+    | comment:; A shape's own str, on its own, in an array, and in a maybe.
+ 62 |     bind pts = [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }]
+    | keyword:bind  variable:pts  operator:=  punctuation:[  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:3  punctuation:,  field:y  punctuation::  number:4  punctuation:}  punctuation:]
+ 63 |     bind mp: maybe Point = Point { x: 5, y: 6 }
+    | keyword:bind  variable:mp  punctuation::  keyword:maybe  type:Point  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:5  punctuation:,  field:y  punctuation::  number:6  punctuation:}
+ 64 |     show(pts[0], " ", pts, " ", mp)
+    | builtin-fn:show  punctuation:(  variable:pts  punctuation:[  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:pts  punctuation:,  string:" "  punctuation:,  variable:mp  punctuation:)
+ 65 |     bind wide = Wide { a: 1, b: 0, c: 0, d: 0, e: 0, f: 0, g: 0, h: 0, i: 2 }
+    | keyword:bind  variable:wide  operator:=  type:Wide  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:0  punctuation:,  field:c  punctuation::  number:0  punctuation:,  field:d  punctuation::  number:0  punctuation:,  field:e  punctuation::  number:0  punctuation:,  field:f  punctuation::  number:0  punctuation:,  field:g  punctuation::  number:0  punctuation:,  field:h  punctuation::  number:0  punctuation:,  field:i  punctuation::  number:2  punctuation:}
+ 66 |     show([wide, wide], " ", wide.str() at r)
+    | builtin-fn:show  punctuation:(  punctuation:[  variable:wide  punctuation:,  variable:wide  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:wide  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 67 |     ; str makes the same text, once, in a region.
+    | comment:; str makes the same text, once, in a region.
+ 68 |     bind t = pts.str() at r
+    | keyword:bind  variable:t  operator:=  variable:pts  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r
+ 69 |     show(t, " ", t.len, " ", xs.str(r), " ", m.str() at r, " ", n.str() at r)
+    | builtin-fn:show  punctuation:(  variable:t  punctuation:,  string:" "  punctuation:,  variable:t  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:.  field:str  punctuation:(  region:r  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:m  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:,  string:" "  punctuation:,  variable:n  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+ 70 |     ; Text holding values writes each value as its str does.
+    | comment:; Text holding values writes each value as its str does.
+ 71 |     show("{xs} and {m} and {(1, "a")} and {pts} and {n} and {1} {2.5} {true} {"x"}" at r)
+    | builtin-fn:show  punctuation:(  string:"{  variable:xs  string:} and {  variable:m  string:} and {  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)  string:} and {  variable:pts  string:} and {  variable:n  string:} and {  number:1  string:} {  number:2.5  string:} {  keyword:true  string:} {  string:"x"  string:}"  keyword:at  region:r  punctuation:)
+ 72 |     ; A pointer is its address; the value it points to is its own text.
+    | comment:; A pointer is its address; the value it points to is its own text.
+ 73 |     bind p = new int(7) at r
+    | keyword:bind  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  number:7  punctuation:)  keyword:at  region:r
+ 74 |     bind mptr: maybe ^int@r = p
+    | keyword:bind  variable:mptr  punctuation::  keyword:maybe  operator:^  type-builtin:int  operator:@  region:r  operator:=  variable:p
+ 75 |     show(p^, " ", address(p), " ", mptr == none)
+    | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:,  string:" "  punctuation:,  task:address  punctuation:(  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:mptr  operator:==  keyword:none  punctuation:)
+ 76 |     show("{mptr}"@r == "\{ {p} \}"@r)
+    | builtin-fn:show  punctuation:(  string:"{  variable:mptr  string:}"  operator:@  region:r  operator:==  string:"  escape:\{  string: {  variable:p  string:}   escape:\}  string:"  operator:@  region:r  punctuation:)
+ 77 |     ; A task that takes a shown type writes whatever it is given.
+    | comment:; A task that takes a shown type writes whatever it is given.
+ 78 |     show(told(xs), " ", told(mp), " ", told(words))
+    | builtin-fn:show  punctuation:(  task:told  punctuation:(  variable:xs  punctuation:)  punctuation:,  string:" "  punctuation:,  task:told  punctuation:(  variable:mp  punctuation:)  punctuation:,  string:" "  punctuation:,  task:told  punctuation:(  variable:words  punctuation:)  punctuation:)
+ 79 |     show(told(pts[0]), " ", told(3))
+    | builtin-fn:show  punctuation:(  task:told  punctuation:(  variable:pts  punctuation:[  number:0  punctuation:]  punctuation:)  punctuation:,  string:" "  punctuation:,  task:told  punctuation:(  number:3  punctuation:)  punctuation:)
+ 80 | fi
+    | keyword:fi

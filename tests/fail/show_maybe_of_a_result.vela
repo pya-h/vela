@@ -1,0 +1,5 @@
+; error: 4:10: show can't write maybe (int ~ ParseError) as text, since it holds int ~ ParseError; a value that can fail is read first, with a plan B, match, or is
+task main()
+    bind m: maybe (int ~ ParseError) = int("1")
+    show(m)
+fi

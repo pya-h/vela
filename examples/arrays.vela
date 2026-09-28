@@ -58,6 +58,8 @@ task main()
     sort(scores)
     show(scores[0])                          ; 65
     show(scores[scores.len - 1])             ; 90
+    ; A slice, like an array, is written whole: its items in brackets.
+    show(scores)                             ; [65, 72, 79, 88, 90]
     ; A part of a slice views the same memory, without copying.
     bind top = scores[3..5]
     show(top[0] + top[1])                    ; 178
@@ -67,4 +69,5 @@ task main()
     show(small.del())                        ; 29, taken out
     small.add(0, 1)                          ; 1 goes first
     show(small[0] + small.len)               ; 11
+    show("primes: {small}" at r)             ; primes: [1, 2, 3, 5, 7, 11, 13, 17, 19, 23]
 fi

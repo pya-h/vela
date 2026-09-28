@@ -36,6 +36,21 @@ int main(void) {
     whole("0", 0, 0);
     whole("-0", 0, 0);
     whole("007", 0, 7);
+    /* Other bases, after the sign; a leading 0 alone is a digit. */
+    whole("010", 0, 10);
+    whole("0x1F", 0, 31);
+    whole("0xaB", 0, 171);
+    whole("-0b101", 0, -5);
+    whole("0o17", 0, 15);
+    whole("0x7fffffffffffffff", 0, INT64_MAX);
+    whole("-0x8000000000000000", 0, INT64_MIN);
+    whole("0x8000000000000000", 2, 0);
+    whole("0x", 1, 0);
+    whole("0X1", 1, 0);
+    whole("0b2", 1, 0);
+    whole("0o8", 1, 0);
+    whole("0x1_0", 1, 0);
+    whole("0x-1", 1, 0);
     whole("-7", 0, -7);
     whole("9223372036854775807", 0, INT64_MAX);
     whole("-9223372036854775808", 0, INT64_MIN);

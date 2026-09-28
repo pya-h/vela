@@ -790,12 +790,19 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
       <p id="show">
         <code>show</code> takes any number of values and writes them one after another, with nothing between them,
         then ends the line: <code>show("n = ", n)</code> prints <code>n = 5</code>, and any space between the values is
-        one you write. Each value is an <code>int</code>, a <code>float</code>, a <code>bool</code>, or
-        <code>text</code>, or a <code>maybe</code> of one, which writes its value or <code>none</code>. A shape or kind
-        with a <a href="#str">method <code>str</code></a> of its own is a value too: <code>show(card)</code> writes what
-        <code>card.str()</code> gives. The text that takes goes in a region <code>show</code> makes for the line and
-        frees once the line ends, so printing a value of your own names no region at all; a <code>maybe</code> of such a
-        shape or kind has no value to call <code>str</code> on until it is opened, so it is an error.
+        one you write. A number, a bool, and text are written as they are. An array or a slice is written
+        <code>[1, 2, 3]</code> (an empty slice <code>[]</code>), a tuple <code>(1, "a")</code>, and a
+        <code>maybe</code> <code>none</code> or <code>{ 4 }</code>, so it reads apart from the value itself; to write
+        only the value, open it first, as with a plan B, <code>show(m { "none" })</code>. Text inside any of them is
+        written in quotes, with its quotes, backslashes, and line breaks escaped as a literal writes them, so
+        <code>["a, b"]</code> and <code>["a", "b"]</code> read apart. A pointer is written as the address it holds, in
+        C's hex, <code>0x7ffd…</code>, which <a href="#reading-numbers"><code>int(text)</code></a> reads back; the value
+        it points to is <code>p^</code>, written as its own. A shape or kind with a <a href="#str">method
+        <code>str</code></a> of its own is a value too, on its own or inside any of these: <code>show(card)</code>
+        writes what <code>card.str()</code> gives. The text that takes goes in a region <code>show</code> makes for the
+        line and frees once the line ends, so printing a value of your own names no region at all. Everything else is
+        written straight to the output, with no memory made for it. A value that can fail (<code>T ~ E</code>) is read
+        first, so it, and anything holding one, is an error that says so.
         <code>show()</code> writes an empty line. The values are written, and anything they ask for happens, left to
         right, so <code>show("a:", f(), " b:", g())</code> calls <code>f</code> before <code>g</code> however the C
         compiler orders a call's arguments (see <a href="#limits">the limits</a>). A sentence with values in the middle
@@ -817,6 +824,9 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
     show()                                <span class="comment">; an empty line</span>
     <span class="keyword">bind</span> missing: <span class="keyword">maybe</span> int = <span class="keyword">none</span>
     show(<span class="string">"missing: "</span>, missing)            <span class="comment">; missing: none</span>
+    show([n, n * <span class="number">2</span>], <span class="string">" "</span>, (n, <span class="string">"five"</span>))           <span class="comment">; [5, 10] (5, "five")</span>
+    <span class="keyword">bind</span> found: <span class="keyword">maybe</span> text = <span class="string">"Ada"</span>
+    show(found, <span class="string">" "</span>, found { <span class="string">"nobody"</span> })        <span class="comment">; { "Ada" } Ada</span>
     <span class="keyword">bind</span> card = Card { name: <span class="string">"Ada"</span>, wins: <span class="number">3</span> }
     show(<span class="string">"top: "</span>, card)                   <span class="comment">; top: Ada (3), from Card's str</span>
 <span class="keyword">fi</span></pre>
@@ -964,12 +974,15 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         <code>text(x)@r</code>) is the same, named by the type the value becomes. These are the forms of every call that
         takes its region last (see <a href="#region-after-call">The region after a call</a>), so inside a
         <code>+</code> chain, whose <code>at r</code> is the chain's, a value turned into text names its own with
-        <code>@</code>: <code>"(" + .x.str()@r + ")" at r</code>. Numbers, bools, and text have
-        <code>str</code> built in; text turned into text is a copy of it in <code>r</code>. A shape or a kind gives its own with
-        a method written <code>str(r: region) -&gt; text@r</code>, and every one of these forms calls it, as
-        <a href="#show"><code>show(x)</code></a> does when it writes the value. A value without
-        <code>str</code> (a slice, a <code>maybe</code>, a pointer, a shape without the method) is an error saying what
-        can be turned into text, and so is a <code>str</code> without a region. <code>+</code> never turns a value into text
+        <code>@</code>: <code>"(" + .x.str()@r + ")" at r</code>. Numbers, bools, text, pointers, and
+        arrays, slices, tuples, and <code>maybe</code>s of values with <code>str</code> have it built in, written as
+        <a href="#show"><code>show</code></a> writes them (<code>[1, 2]</code>, <code>{ 4 }</code>,
+        <code>0x7ffd…</code>), and the text is made once, at its full length; text turned into text is a copy of it in
+        <code>r</code>. A shape or a kind gives its own with a method written <code>str(r: region) -&gt; text@r</code>,
+        and every one of these forms calls it, as <code>show(x)</code> does when it writes the value, and as an array
+        of them does for each item. A value without <code>str</code> (a value that can fail, or anything holding one,
+        or a shape without the method) is an error saying which part can't be written, and so is a <code>str</code>
+        without a region. <code>+</code> never turns a value into text
         by itself: <code>"n = " + 5 at r</code> is an error that says to turn it into text first.
       </p>
       <pre><span class="keyword">shape</span> Point
@@ -995,7 +1008,7 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         <code>r</code>, so it names its region as a join does, after the text (<code>"…" at r</code>) or with
         <code>@</code> (<code>"…"@r</code>). The braces may hold any value that has <code>str</code>: a name, a call
         with text of its own (<code>"{f("x")}"</code>), arithmetic, a field, a plan B, even text holding values
-        (<code>"{"{n}"}"</code>, which takes the region of the text around it); spaces inside them don't count. A value without <code>str</code> is the same error as its <code>str</code> would be. Text holding no
+        (<code>"{"{n}"}"</code>, which takes the region of the text around it); spaces inside them don't count. The text is made once, at its full length: a number is written straight into it, and text is read where it is, so nothing is left behind in the region but the text itself (a value written by a shape's own <code>str</code> makes that text first). A value without <code>str</code> is the same error as its <code>str</code> would be. Text holding no
         value is a literal as always and needs no region, and <code>\{</code> and <code>\}</code> write braces. In a join
         the text takes the join's region: <code>"Dear " + "{name}," at r</code>. Written without a region, it is an error
         that says to name one (<code>text holding values is new text, so it names the region it goes in …</code>); so are
@@ -1404,8 +1417,10 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
         <li><strong>each.</strong> <code>each v in xs</code> goes through the items in order. An array is gone through as
           it was when the loop started, even if the loop changes it; a slice, as many items as it had then, each read as
           it is.</li>
-        <li><strong>Not yet.</strong> Arrays can't be compared with <code>==</code> or shown whole (show their items one at
-          a time), and a part of an array is a slice, which points into a region.</li>
+        <li><strong>Written whole.</strong> <code>show(xs)</code> writes <code>[1, 2, 3]</code>, and so does
+          <a href="#str"><code>xs.str() at r</code></a>, as it does for a slice and a tuple (<code>(1, "a")</code>).</li>
+        <li><strong>Not yet.</strong> Arrays can't be compared with <code>==</code>, and a part of an array is a slice,
+          which points into a region.</li>
       </ul>
 
       <h3 id="tuples">Tuples</h3>
@@ -1491,7 +1506,7 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
         <tr><th>Word</th><th>What the body may do</th><th>Types that fit</th></tr>
         <tr><td><code>fixed</code></td><td>put a value in a tuple, whose items never change</td><td>numbers, bools, text, tuples of them, and shapes and kinds whose fields are all such</td></tr>
         <tr><td><code>same</code></td><td><code>==</code> and <code>!=</code></td><td>numbers, bools, text, and tuples of them</td></tr>
-        <tr><td><code>shown</code></td><td><code>show</code></td><td>numbers, bools, and text</td></tr>
+        <tr><td><code>shown</code></td><td><code>show</code>, <code>str</code></td><td>anything <code>show</code> writes: numbers, bools, text, pointers, arrays, slices, tuples, and <code>maybe</code>s of such, and shapes and kinds with their own <code>str</code></td></tr>
         <tr><td><code>ordered</code></td><td><code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td><td>numbers and text</td></tr>
       </table>
       <p>
@@ -1500,9 +1515,8 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
         and show its values too. <code>&amp;</code> joins words (<code>&lt;T: same &amp; shown&gt;</code>), which is read
         today but never needed yet: every pair of these four is an error saying which one to keep, since each already
         means the wider ones. It is there for words that may come. No word asks a type for arithmetic: a task that adds
-        its values takes numbers. <code>shown</code> allows the types <code>show</code> writes by itself; a shape or kind
-        with its own <a href="#str"><code>str</code></a> can be shown, but doesn't fit <code>shown</code> yet, so a task
-        that prints one takes it by its own type.
+        its values takes numbers. <code>shown</code> allows every type <code>show</code> writes, a shape or kind with
+        its own <a href="#str"><code>str</code></a> included, so a task that prints its values takes any of them.
       </p>
       <pre><span class="keyword">task</span> first&lt;T&gt;(xs: [T]@r) -&gt; <span class="keyword">maybe</span> T
     <span class="keyword">each</span> v <span class="keyword">in</span> xs
@@ -1527,8 +1541,8 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
     <span class="keyword">bind</span> ns: [int]@r = <span class="keyword">new</span> [int]([<span class="number">4</span>, <span class="number">5</span>]) <span class="keyword">at</span> r
     <span class="keyword">hold</span> names: [text@r]@r = <span class="keyword">new</span> [text]() <span class="keyword">at</span> r
     names.add(<span class="string">"Ada"</span>.copy() <span class="keyword">at</span> r)
-    show(first(ns))                      <span class="comment">; 4 — the argument says T is int</span>
-    show(first&lt;text@r&gt;(names))            <span class="comment">; Ada — or the call writes it out</span>
+    show(first(ns))                      <span class="comment">; { 4 } — the argument says T is int</span>
+    show(first&lt;text@r&gt;(names))            <span class="comment">; { "Ada" } — or the call writes it out</span>
     show(biggest(<span class="number">2</span>, <span class="number">5</span>))                   <span class="comment">; 5</span>
     show(biggest(<span class="number">1.5</span>, <span class="number">0.5</span>))               <span class="comment">; 1.5 — the same task, made for float too</span>
     <span class="keyword">bind</span> empty: <span class="keyword">maybe</span> int = nothing()    <span class="comment">; the place the value goes says T is int</span>
@@ -2759,8 +2773,8 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           search, no trimming, and no case changes yet.</li>
         <li>Input is read a line of text at a time with <code>scan</code>, or a number at a time with
           <code>scan("Age: ", int)</code>; nothing reads part of a line from input; files are read and written with <a href="std.html#files"><code>std/files</code></a>.</li>
-        <li>Arrays and slices can't be compared or shown whole, and an array's count is known before the program runs
-          (see <a href="#arrays">Arrays</a>). Tuples can't be shown whole, and are taken apart in
+        <li>Arrays and slices can't be compared whole, and an array's count is known before the program runs
+          (see <a href="#arrays">Arrays</a>). Tuples are taken apart in
           <code>is</code> and <code>case</code> only in parentheses, as in <code>{(a, b)}</code>
           (see <a href="#tuples">Tuples</a>).</li>
         <li>Tasks and shapes take types; a kind can't yet, and no word asks a type for arithmetic (see
@@ -2769,10 +2783,8 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           inside its shape or kind, never in another module (see <a href="#methods">Methods</a> and
           <a href="future.html#methods-later">the room left to grow</a>).</li>
         <li>There are no packages to share modules between programs (see <a href="#modules">Modules</a>).</li>
-        <li><code>show</code> prints floats with 6 significant digits. It writes a <code>maybe</code> of a number, a
-          bool, or text as its value or <code>none</code>, but a <code>maybe</code> of a shape or kind with its own
-          <code>str</code> has to be opened first, as in <code>when m is {value}</code>, since that method needs a
-          value to run on.</li>
+        <li><code>show</code> prints floats with 6 significant digits, and a value that can fail
+          (<code>T ~ E</code>) has to be read first, alone or inside another value.</li>
         <li>A call's arguments, the parts of a join, the values in text, and an operator's two sides are evaluated
           left to right whenever one of them calls a task, has a plan B, changes a slice, or reads a line, so
           <code>n + bump(&amp;n)</code> reads <code>n</code> before <code>bump</code> changes it, and <code>show</code>

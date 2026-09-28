@@ -205,12 +205,6 @@ impl Generator {
         for ty in &used.scanned {
             self.gen_scan_number(ty);
         }
-        for ty in &used.written {
-            self.gen_show_maybe(ty, false);
-        }
-        for ty in &used.shown {
-            self.gen_show_maybe(ty, true);
-        }
         self.gen_item_helpers(&used);
         self.gen_tuple_eq(&used.tuple_eq);
         self.gen_copies(&used.copied);
@@ -244,6 +238,7 @@ impl Generator {
             }
         }
         self.w.blank();
+        self.gen_writers(&used)?;
 
         // Task definitions
         let mut has_main = false;
@@ -776,18 +771,100 @@ impl Generator {
         self.w.close();
     }
 
-    /// `show` for a `maybe` of a type `show` prints: the value, or `none`,
-    /// ending the line when `ends`, as the runtime's helpers do for the types it
-    /// writes itself (see `written_helper`).
-    fn gen_show_maybe(&mut self, ty: &Type, ends: bool) {
-        let Type::Maybe(inner) = ty else { return };
-        self.w.open(&format!("static void {}({} m)", maybe_helper(ty, ends), c_type(ty)));
-        self.w.open("if (m.has)");
-        self.w.line(&format!("{}(m.value);", written_helper(inner, ends)));
-        self.w.reopen("else");
-        self.w.line(&format!("vela__rt__{}_none();", if ends { "show" } else { "write" }));
+    /// The functions that write values as text, for `show` and `str` (see
+    /// `UsedTypes::note_write`): each type's `write` puts a value in a writer,
+    /// and its `text` makes one text of it in a region. All are declared before
+    /// any is defined, since an array's writes its items'.
+    fn gen_writers(&mut self, used: &UsedTypes) -> Result<()> {
+        for ty in &used.writes {
+            self.w.line(&format!("static void {}(vela__rt__writer* w, {} v);", write_helper(ty), c_type(ty)));
+        }
+        for ty in &used.texts {
+            self.w.line(&format!("static vela__rt__text {}(vela__rt__region* r, {} v);", text_helper(ty), c_type(ty)));
+        }
+        for ty in &used.writes {
+            self.gen_writer(ty)?;
+        }
+        for ty in &used.texts {
+            self.w.open(&format!("static vela__rt__text {}(vela__rt__region* r, {} v)", text_helper(ty), c_type(ty)));
+            match ty {
+                // A shape's or kind's own `str` makes the text itself.
+                Type::Named(owner, _) => self.w.line(&format!("return {};", self.own_str_call(owner, "r")?)),
+                _ => {
+                    self.w.line("vela__rt__writer w = VELA__RT__BUILDER;");
+                    match ty {
+                        Type::Ptr(..) => self.w.line("vela__rt__put_address(&w, (const void*)v);"),
+                        _ => self.w.line(&format!("{}(&w, v);", write_helper(ty))),
+                    }
+                    self.w.line("return vela__rt__built(&w, r);");
+                }
+            }
+            self.w.close();
+        }
+        if !used.writes.is_empty() || !used.texts.is_empty() {
+            self.w.blank();
+        }
+        Ok(())
+    }
+
+    /// The call of the method `str` a shape or kind `owner` gives, on the value
+    /// `v`, into the region `region`.
+    fn own_str_call(&self, owner: &str, region: &str) -> Result<String> {
+        let method = method_name(owner, STR);
+        let value = if self.hidden_of(&method).first().copied().unwrap_or(false) { "&v" } else { "v" };
+        Ok(format!("{}({}, {})", mangle(&method), value, region))
+    }
+
+    /// `write` for a value of type `ty`: `[1, 2]` for an array or slice,
+    /// `(1, "a")` for a tuple, `none` or `{ 4 }` for a `maybe`, and what its own
+    /// `str` gives for a shape or kind, made in a region of its own.
+    fn gen_writer(&mut self, ty: &Type) -> Result<()> {
+        self.w.open(&format!("static void {}(vela__rt__writer* w, {} v)", write_helper(ty), c_type(ty)));
+        match ty {
+            Type::Array(items, _) | Type::Slice(items, _) => {
+                let count = match ty {
+                    Type::Array(_, count) => count.to_string(),
+                    _ => "v.len".to_string(),
+                };
+                self.w.line("VELA__RT__PUT(w, \"[\");");
+                self.w.open(&format!("for (int64_t i = 0; i < {}; i++)", count));
+                self.w.open("if (i > 0)");
+                self.w.line("VELA__RT__PUT(w, \", \");");
+                self.w.close();
+                self.w.line(&put_item(items, "v.items[i]"));
+                self.w.close();
+                self.w.line("VELA__RT__PUT(w, \"]\");");
+            }
+            Type::Tuple(items) => {
+                self.w.line("VELA__RT__PUT(w, \"(\");");
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        self.w.line("VELA__RT__PUT(w, \", \");");
+                    }
+                    self.w.line(&put_item(item, &format!("v.{}", tuple_member(i))));
+                }
+                self.w.line("VELA__RT__PUT(w, \")\");");
+            }
+            Type::Maybe(inner) => {
+                // A `maybe` of a pointer is the pointer, and `none` is NULL.
+                let (empty, value) = if is_pointer(inner) { ("v == NULL", "v".to_string()) } else { ("!v.has", "v.value".to_string()) };
+                self.w.open(&format!("if ({})", empty));
+                self.w.line("VELA__RT__PUT(w, \"none\");");
+                self.w.line("return;");
+                self.w.close();
+                self.w.line("VELA__RT__PUT(w, \"{ \");");
+                self.w.line(&put_item(inner, &value));
+                self.w.line("VELA__RT__PUT(w, \" }\");");
+            }
+            Type::Named(owner, _) => {
+                self.w.line("vela__rt__region r[1] = { VELA__RT__REGION_EMPTY };");
+                self.w.line(&format!("vela__rt__put_text(w, {});", self.own_str_call(owner, "r")?));
+                self.w.line("vela__rt__region_free(r);");
+            }
+            other => return Err(Error::internal(format!("writing a value of type {} as text", other))),
+        }
         self.w.close();
-        self.w.close();
+        Ok(())
     }
 
     fn gen_task(&mut self, t: &TaskDef) -> Result<()> {
@@ -1696,23 +1773,43 @@ impl Generator {
     }
 
     /// `a + b at region`: the parts, evaluated in order, joined into new text.
+    ///
+    /// Each part is read as it is, so the text is allocated once: text joins as
+    /// the text it is, and a number is written into a buffer on the stack that
+    /// lasts until the join has read it. Other values are made into text first.
     fn gen_join(&mut self, parts: &[Expr], region: &str) -> Result<String> {
-        let parts: Vec<&Expr> = parts.iter().collect();
-        let values = self.gen_operands(&parts)?;
+        // What each part reads, and how it becomes text.
+        let read: Vec<(&Expr, Option<&str>)> = parts
+            .iter()
+            .map(|part| match &part.kind {
+                ExprKind::ToText { value, .. } => match value.ty {
+                    Some(Type::Int) => (value.as_ref(), Some("vela__rt__int_view((char[VELA__RT__NUMBER_ROOM]){ 0 }, ")),
+                    Some(Type::Float) => (value.as_ref(), Some("vela__rt__float_view((char[VELA__RT__NUMBER_ROOM]){ 0 }, ")),
+                    Some(Type::Text(_)) => (value.as_ref(), None),
+                    _ => (part, None),
+                },
+                _ => (part, None),
+            })
+            .collect();
+        let values = self.gen_operands(&read.iter().map(|(value, _)| *value).collect::<Vec<_>>())?;
+        let values: Vec<String> =
+            values.into_iter().zip(&read).map(|(value, (_, view))| view.map_or(value.clone(), |view| format!("{}{})", view, value))).collect();
         Ok(format!("vela__rt__join({}, (vela__rt__text[]){{ {} }}, {})", c_ident(region), values.join(", "), values.len()))
     }
 
     /// `value.str() at region`, the expression `e`, on a value with `str` built in.
     fn gen_to_text(&mut self, e: &Expr, value: &Expr, region: &str) -> Result<String> {
+        let _ = e;
         let helper = match value.ty()? {
-            Type::Int => "int",
-            Type::Float => "float",
-            Type::Bool => "bool",
-            Type::Text(_) => "text",
-            other => return Err(Error::internal_at(e.span, format!("'str' on a value of type {}", other))),
+            Type::Int => "vela__rt__int_str".to_string(),
+            Type::Float => "vela__rt__float_str".to_string(),
+            Type::Bool => "vela__rt__bool_str".to_string(),
+            Type::Text(_) => "vela__rt__text_str".to_string(),
+            // A pointer is its address, written as a writer does.
+            other => text_helper(&other.without_regions()),
         };
         let value = self.gen_expr(value)?;
-        Ok(format!("vela__rt__{}_str({}, {})", helper, c_ident(region), value))
+        Ok(format!("{}({}, {})", helper, c_ident(region), value))
     }
 
     /// `value.copy() at region`, the expression `e`.
@@ -1912,13 +2009,11 @@ impl Generator {
             return Ok(());
         };
         for arg in before {
-            let helper = self.shown_helper(e, arg, false)?;
             let value = self.gen_expr(arg)?;
-            self.w.line(&format!("{}({});", helper, value));
+            self.w.line(&shown(e, arg.ty()?, &value, false)?);
         }
-        let helper = self.shown_helper(e, last, true)?;
         let value = self.gen_expr(last)?;
-        self.w.line(&format!("{}({});", helper, value));
+        self.w.line(&shown(e, last.ty()?, &value, true)?);
         Ok(())
     }
 
@@ -1943,16 +2038,6 @@ impl Generator {
             (Type::Float, Type::Int) => format!("((double){})", parenthesized(&expr)),
             (Type::Int, Type::Float) => format!("vela__rt__int_of_float({}, {})", expr, self.location(e.span)),
             _ => return Err(Error::internal_at(e.span, format!("'{}' of a value of type {}", into, from))),
-        })
-    }
-
-    /// The helper that writes the value `arg` given to `show`, ending the line
-    /// when `ends` (see `gen_show`).
-    fn shown_helper(&mut self, e: &Expr, arg: &Expr, ends: bool) -> Result<String> {
-        Ok(match arg.ty()? {
-            Type::Maybe(_) => maybe_helper(arg.ty()?, ends),
-            Type::Int | Type::Float | Type::Bool | Type::Text(_) => written_helper(arg.ty()?, ends),
-            other => return Err(Error::internal_at(e.span, format!("show called with type {}", other))),
         })
     }
 
@@ -2418,6 +2503,46 @@ fn written_helper(ty: &Type, ends: bool) -> String {
     format!("vela__rt__{}_{}", if ends { "show" } else { "write" }, name)
 }
 
+/// The statement `show` writes a value `value` of type `ty` with, ending the
+/// line when `ends`: a number, a bool, or text by the runtime's own helper, and
+/// anything else through a writer to the output (see `Generator::gen_writer`).
+fn shown(e: &Expr, ty: &Type, value: &str, ends: bool) -> Result<String> {
+    let written = match ty {
+        Type::Int | Type::Float | Type::Bool | Type::Text(_) => return Ok(format!("{}({});", written_helper(ty, ends), value)),
+        Type::Ptr(..) => format!("vela__rt__put_address(&VELA__RT__OUTPUT, (const void*){});", value),
+        Type::Array(..) | Type::Slice(..) | Type::Tuple(_) | Type::Maybe(_) | Type::Named(..) => {
+            format!("{}(&VELA__RT__OUTPUT, {});", write_helper(&ty.without_regions()), value)
+        }
+        other => return Err(Error::internal_at(e.span, format!("show called with type {}", other))),
+    };
+    Ok(if ends { format!("{} vela__rt__show_line();", written) } else { written })
+}
+
+/// The statement that writes `value`, of type `ty`, inside another value: text
+/// in quotes, a pointer as its address, and anything but a number or a bool
+/// by its type's `write`.
+fn put_item(ty: &Type, value: &str) -> String {
+    match ty {
+        Type::Int => format!("vela__rt__put_int(w, {});", value),
+        Type::Float => format!("vela__rt__put_float(w, {});", value),
+        Type::Bool => format!("vela__rt__put_bool(w, {});", value),
+        Type::Text(_) => format!("vela__rt__put_quoted(w, {});", value),
+        Type::Ptr(..) => format!("vela__rt__put_address(w, (const void*){});", value),
+        _ => format!("{}(w, {});", write_helper(&ty.without_regions()), value),
+    }
+}
+
+/// The generated function that puts a value of type `ty` in a writer.
+fn write_helper(ty: &Type) -> String {
+    format!("vela__write__{}", type_word(ty))
+}
+
+/// The generated function that makes a value of type `ty` into text in a
+/// region, `x.str() at r`.
+fn text_helper(ty: &Type) -> String {
+    format!("vela__text__{}", type_word(ty))
+}
+
 /// The generated task that reads a number of type `ty` from text: `int("42")`
 /// and `float("2.5")`.
 fn read_helper(ty: &Type) -> String {
@@ -2430,11 +2555,6 @@ fn scan_helper(ty: &Type) -> String {
     format!("vela__scan__{}", if *ty == Type::Int { "int" } else { "float" })
 }
 
-/// The generated task that writes a `maybe` of type `ty`, ending the line when
-/// `ends` (see `written_helper`).
-fn maybe_helper(ty: &Type, ends: bool) -> String {
-    format!("vela__{}__{}", if ends { "show" } else { "write" }, c_type(ty).trim_start_matches("vela__"))
-}
 
 /// Whether the expression contains a plan B, a change to a slice, or a `scan`,
 /// so generating it writes a prelude.
@@ -2480,10 +2600,12 @@ fn ordered(operands: &[&Expr]) -> bool {
 /// an array, filling it. Types are kept without regions.
 struct UsedTypes {
     compounds: Vec<Type>,
-    /// The `maybe` types shown as the last value of a `show`, which end the line.
-    shown: Vec<Type>,
-    /// The `maybe` types shown before another value of the same `show`.
-    written: Vec<Type>,
+    /// The types whose values are written as text through a generated
+    /// `write` (see `note_write`), each after the types inside it.
+    writes: Vec<Type>,
+    /// The types whose values `str` makes into text through a generated
+    /// `text`: those with a `write`, and shapes and kinds with their own `str`.
+    texts: Vec<Type>,
     /// The numbers read from text, `int("42")` and `float("2.5")`, each of which
     /// needs the helper that turns what the runtime reads into a value or a
     /// `ParseError`.
@@ -2520,8 +2642,8 @@ impl UsedTypes {
     fn collect(items: &[Item]) -> UsedTypes {
         let mut used = UsedTypes {
             compounds: Vec::new(),
-            shown: Vec::new(),
-            written: Vec::new(),
+            writes: Vec::new(),
+            texts: Vec::new(),
             read: Vec::new(),
             scanned: Vec::new(),
             slice_at: Vec::new(),
@@ -2599,6 +2721,22 @@ impl UsedTypes {
             }
             _ => {}
         }
+    }
+
+    /// Records that values of type `ty` are written as text, and so are the
+    /// values inside them: a number, a bool, text, and a pointer are put by the
+    /// runtime, and anything else by a `write` of its own.
+    fn note_write(&mut self, ty: &Type) {
+        let ty = ty.without_regions();
+        match &ty {
+            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => return,
+            Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.note_write(inner),
+            Type::Tuple(items) => items.iter().for_each(|item| self.note_write(item)),
+            Type::Named(..) => {}
+            // Nothing else is written as text; the checker made sure of it.
+            _ => return,
+        }
+        note(&mut self.writes, &ty);
     }
 
     /// Records that tuples of type `tuple` are compared, and so are the tuples
@@ -2731,14 +2869,8 @@ impl UsedTypes {
                     note(&mut self.read, &into);
                 }
                 if name == "show" {
-                    for (i, arg) in args.iter().enumerate() {
-                        // Its text may name a region, which C doesn't see. The
-                        // last value ends the line and the others don't, so
-                        // each needs the helper for its place.
-                        if let Some(ty @ Type::Maybe(_)) = &arg.ty {
-                            let ends = i + 1 == args.len();
-                            note(if ends { &mut self.shown } else { &mut self.written }, ty);
-                        }
+                    for ty in args.iter().filter_map(|arg| arg.ty.as_ref()) {
+                        self.note_write(ty);
                     }
                 }
                 args.iter().for_each(|arg| self.expr(arg));
@@ -2760,7 +2892,18 @@ impl UsedTypes {
                 self.expr(value);
             }
             ExprKind::Join { parts, .. } => parts.iter().for_each(|part| self.expr(part)),
-            ExprKind::ToText { value, .. } => self.expr(value),
+            ExprKind::ToText { value, .. } => {
+                if let Some(ty) = &value.ty
+                    && !matches!(ty, Type::Int | Type::Float | Type::Bool | Type::Text(_))
+                {
+                    // A shape's or kind's own `str` needs no `write`.
+                    if !matches!(ty, Type::Named(..)) {
+                        self.note_write(ty);
+                    }
+                    note(&mut self.texts, ty);
+                }
+                self.expr(value)
+            }
             ExprKind::Scan { args, .. } => {
                 // A typed read needs the helper that reads a number and the
                 // struct of the `T ~ InputError` it gives; a line read needs
@@ -3055,8 +3198,8 @@ fn signature(t: &TaskDef, alters: bool, hidden: &[bool]) -> String {
 //   vela__int                     a local or field named like C (`c_ident`)
 //   vela__maybe__int              a `maybe` struct              (`c_type`)
 //   vela__or__int__n_ParseError   an `or` struct                (`c_type`)
-//   vela__show__maybe__int        `show` for a `maybe`          (`maybe_helper`)
-//   vela__write__maybe__int       one written before another    (`maybe_helper`)
+//   vela__write__maybe__int       a value put in a writer       (`write_helper`)
+//   vela__text__array__4__int     a value made into text        (`text_helper`)
 //   vela__array__4__int           an array struct               (`c_type`)
 //   vela__slice__int              a slice struct                (`c_type`)
 //   vela__at__slice__int          a helper for a slice or array (`item_helper`)

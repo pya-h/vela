@@ -1,0 +1,28 @@
+  1 | ; A `;` starts a comment, which runs to the end of its line, as a semicolon
+    | comment:; A `;` starts a comment, which runs to the end of its line, as a semicolon
+  2 | ; adds a remark to a sentence; a `#` separates an array's type or value from
+    | comment:; adds a remark to a sentence; a `#` separates an array's type or value from
+  3 | ; its count, as in item #4.
+    | comment:; its count, as in item #4.
+  5 | task main()   ; a comment after a header
+    | keyword:task  task:main  punctuation:(  punctuation:)  comment:; a comment after a header
+  6 |     bind week: [int#7] = [1, 2, 3, 4, 5, 6, 7] ; after a statement
+    | keyword:bind  variable:week  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:7  punctuation:]  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:,  number:5  punctuation:,  number:6  punctuation:,  number:7  punctuation:]  comment:; after a statement
+  7 |     bind zeros = [0 # 3]                        ; spaces around '#' are allowed
+    | keyword:bind  variable:zeros  operator:=  punctuation:[  number:0  punctuation:#  number:3  punctuation:]  comment:; spaces around '#' are allowed
+  8 |     bind grid: [[float#2]#3] = [[0.5#2]#3]
+    | keyword:bind  variable:grid  punctuation::  punctuation:[  punctuation:[  type-builtin:float  punctuation:#  number:2  punctuation:]  punctuation:#  number:3  punctuation:]  operator:=  punctuation:[  punctuation:[  number:0.5  punctuation:#  number:2  punctuation:]  punctuation:#  number:3  punctuation:]
+  9 |     show(week[3], " ", zeros.len, " ", grid[2][1])
+    | builtin-fn:show  punctuation:(  variable:week  punctuation:[  number:3  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:zeros  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variable:grid  punctuation:[  number:2  punctuation:]  punctuation:[  number:1  punctuation:]  punctuation:)
+ 10 |     show(1);                                    ; a C habit: the ';' is a comment
+    | builtin-fn:show  punctuation:(  number:1  punctuation:)  comment:;                                    ; a C habit: the ';' is a comment
+ 11 |     ;show("never")
+    | comment:;show("never")
+ 12 |     ; A '#' or ';' inside text is text.
+    | comment:; A '#' or ';' inside text is text.
+ 13 |     show("item #4; the fourth")
+    | builtin-fn:show  punctuation:(  string:"item #4; the fourth"  punctuation:)
+ 14 |     show(week.type, " ", grid.type)
+    | builtin-fn:show  punctuation:(  variable:week  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:grid  punctuation:.  keyword:type  punctuation:)
+ 15 | fi                                              ; and after 'fi'
+    | keyword:fi  comment:; and after 'fi'

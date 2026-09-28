@@ -253,7 +253,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         let to_text = || CompletionItem {
             label: vela::ast::STR.to_string(),
             kind: CompletionKind::BuiltinFn,
-            detail: "str() at r, the value as text in a region".to_string(),
+            detail: "str() at r, the value as text in a region, as show writes it".to_string(),
             apply: None,
             snippet: Some(format!("{}() at ${{r}}", vela::ast::STR)),
             boost: LOCAL,
@@ -283,7 +283,17 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 boost: LOCAL,
             })
         };
+        // An array, a slice, a tuple, a pointer, and a `maybe` are written as
+        // text too (see the checker's `writable`); a shape or kind by its own.
+        let written = matches!(base, Some(Type::Array(..) | Type::Slice(..) | Type::Tuple(_) | Type::Ptr(..) | Type::Maybe(_)));
         let with_copy = |mut items: Vec<CompletionItem>, from_dot: bool| {
+            if written && !items.iter().any(|item| item.label == vela::ast::STR) {
+                let mut str_item = to_text();
+                if from_dot {
+                    str_item.snippet = str_item.snippet.map(|snippet| format!(".{}", snippet));
+                }
+                items.push(str_item);
+            }
             items.extend(copy(from_dot));
             items.extend(type_of(from_dot));
             items

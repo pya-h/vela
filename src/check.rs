@@ -4217,13 +4217,6 @@ impl Checker {
         if ty.unknown() {
             return Ok(());
         }
-        let shown = match &ty {
-            Type::Maybe(inner) => inner.as_ref(),
-            other => other,
-        };
-        if matches!(shown, Type::Int | Type::Float | Type::Bool | Type::Text(_)) || self.allows(Need::Shown, shown) {
-            return Ok(());
-        }
         // A shape or kind says how its values are written with its own `str`,
         // which `show` calls in a region of its own. The value is checked again
         // as part of that call, as a method call checks it twice.
@@ -4232,26 +4225,52 @@ impl Checker {
             self.unsettled_types.truncate(types);
             return self.show_with_str(arg);
         }
+        if self.writable(&ty) {
+            return Ok(());
+        }
         if let Some(untold) = self.untold_param(&ty) {
             return err(arg.span, untold);
         }
-        let hint = match &ty {
-            Type::Param(_) => format!("; {} {}", ty, self.why_not(Need::Shown, &ty)),
-            Type::Ptr(..) => "; to show the value it points to, write 'p^'".to_string(),
-            Type::Array(..) | Type::Slice(..) => "; show its items one at a time, as in 'each v in xs'".to_string(),
-            Type::Tuple(_) => "; show its items one at a time, as in 'show(t.0)'".to_string(),
-            // A `maybe` of a shape or kind: its `str` needs a value, and there
-            // is none to call it on until the `maybe` is opened.
-            Type::Maybe(inner) if self.has_own_str(inner) => {
-                format!("; a shape or kind is written by its own 'str', which needs a value, so open the {} first, as in 'when m is {{value}}'", ty)
-            }
-            // A `maybe` of a value that can fail: two to open, the `maybe` first.
-            Type::Maybe(inner) if matches!(inner.as_ref(), Type::Or(..)) => extract_hint(&[&ty]),
-            Type::Or(..) => extract_hint(&[&ty]),
+        err(arg.span, format!("show can't write {}", self.why_unwritable(&ty)))
+    }
+
+    /// Why values of type `ty` can't be written as text, for the end of a
+    /// message: the type, the part of it that can't, and what to do instead.
+    fn why_unwritable(&self, ty: &Type) -> String {
+        let part = self.unwritable_part(ty).unwrap_or_else(|| ty.clone());
+        let holds = if part == *ty { String::new() } else { format!(", since it holds {}", part) };
+        let hint = match &part {
+            Type::Param(_) => format!("; {} {}", part, self.why_not(Need::Shown, &part)),
+            // A value that can fail is read first: a `maybe` of one has two to open.
+            Type::Or(..) if part == *ty => extract_hint(&[ty]),
+            Type::Or(..) => "; a value that can fail is read first, with a plan B, match, or is".to_string(),
+            Type::Maybe(inner) if matches!(inner.as_ref(), Type::Or(..)) => extract_hint(&[&part]),
             Type::Unit => "; this has no value".to_string(),
-            _ => self.no_own_str(&ty),
+            _ => self.no_own_str(&part),
         };
-        err(arg.span, format!("show expects int, float, bool, text, or a shape or kind with its own 'str'{}", hint))
+        format!("{} as text{}{}", ty, holds, hint)
+    }
+
+    /// Whether values of type `ty` can be written as text, by `show`, `str`, and
+    /// text holding values: numbers, bools, and text; a pointer, as its address;
+    /// an array, a slice, a tuple, or a `maybe` whose values can; and a shape or
+    /// kind with its own `str`. A value that can fail is read first, and a
+    /// type a declaration takes can when its word says it is `shown`.
+    fn writable(&self, ty: &Type) -> bool {
+        self.unwritable_part(ty).is_none()
+    }
+
+    /// The first type in `ty`, itself included, whose values can't be written
+    /// as text (see `writable`).
+    fn unwritable_part(&self, ty: &Type) -> Option<Type> {
+        match ty {
+            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => None,
+            Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unwritable_part(inner),
+            Type::Tuple(items) => items.iter().find_map(|item| self.unwritable_part(item)),
+            Type::Param(_) if self.allows(Need::Shown, ty) => None,
+            Type::Named(..) | Type::Applied(_) if self.has_own_str(ty) => None,
+            _ => Some(ty.clone()),
+        }
     }
 
     /// Whether values of type `ty` are written by a method `str` of their own.
@@ -4984,14 +5003,7 @@ impl Checker {
         }
         match base {
             Type::Param(_) if name == STR => Error::at(span, format!("'str' turns a value into text, and {} {}", base, self.why_not(Need::Shown, base))),
-            Type::Ptr(..) if name == STR => Error::at(span, format!("type {} can't be turned into text; turn the value it points to into text, as in 'p^.str() at r'", base)),
-            Type::Maybe(_) | Type::Or(..) if name == STR => {
-                Error::at(span, format!("type {} can't be turned into text; extract its value first, as in 'when x is {{value}}'", base))
-            }
-            _ if name == STR => Error::at(
-                span,
-                format!("type {} can't be turned into text; numbers, bools, text, and shapes and kinds with a method 'str' can", base),
-            ),
+            _ if name == STR => Error::at(span, format!("'str' can't write {}", self.why_unwritable(base))),
             Type::Ptr(..) => Error::at(span, format!("type {} has no methods; call it on the value it points to, as in 'p^.{}(…)'", base, name)),
             Type::Maybe(_) | Type::Or(..) => {
                 Error::at(span, format!("type {} has no methods; extract its value first, as in 'when x is {{value}}'", base))
@@ -5082,7 +5094,7 @@ impl Checker {
     /// Whether values of type `ty` have `str` built in: numbers, bools, text,
     /// and a type a declaration takes that is `shown`, which is one of those.
     fn has_builtin_str(&self, ty: &Type) -> bool {
-        matches!(ty, Type::Int | Type::Float | Type::Bool | Type::Text(_)) || (matches!(ty, Type::Param(_)) && self.allows(Need::Shown, ty))
+        !matches!(ty, Type::Named(..) | Type::Applied(_)) && self.writable(ty)
     }
 
     /// Rewrites `value.str(r)`, a method call on a value with `str` built in,
@@ -5863,7 +5875,7 @@ impl Checker {
         }
         match need {
             Need::Ordered => ty.is_numeric() || matches!(ty, Type::Text(_)),
-            Need::Shown => matches!(ty, Type::Int | Type::Float | Type::Bool | Type::Text(_)),
+            Need::Shown => self.writable(ty),
             Need::Same => comparable(ty),
             Need::Fixed => self.changeable_item(ty).is_none(),
         }

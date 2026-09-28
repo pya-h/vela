@@ -1,7 +1,7 @@
 12.56 6
 a circle, a dot, a rectangle
 high low
-4
+{ 4 }
 0
 21
 big: 21
@@ -9,7 +9,7 @@ big: 21
 zero
 one
 many
-3
+{ 3 }
 4
 -1 0
 none

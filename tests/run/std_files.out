@@ -6,12 +6,12 @@ true false
 notes.txt (idle)
 notes.txt (open) 8
 13
-one false
+{ "one" } false
 2 two three true
 none
 3 [first] [second] [last without a break]
 35
-one
+{ "one" }
 6
 TWO
 already open
@@ -27,7 +27,7 @@ not found
 empty.txt (open) true
 not open
 empty.txt (closed)
-not open
+{ "not open" }
 moved.txt true false
 moved.txt (gone) false
 not found
