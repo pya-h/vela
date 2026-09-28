@@ -4226,6 +4226,7 @@ impl Checker {
             return self.show_with_str(arg);
         }
         if self.writable(&ty) {
+            self.note_written_strs(&ty, arg.span);
             return Ok(());
         }
         if let Some(untold) = self.untold_param(&ty) {
@@ -4334,6 +4335,42 @@ impl Checker {
     /// Whether values of type `ty` are written by a method `str` of their own.
     fn has_own_str(&self, ty: &Type) -> bool {
         self.owner_of(ty).is_some_and(|owner| self.tasks.contains_key(&method_name(&owner, STR)))
+    }
+
+    /// The `str`s that writing a value of type `ty` as text calls, of the
+    /// shapes made for types it holds, itself included, that give their own:
+    /// each is the method of the shape it was made from, made for the same
+    /// types (`Box<int>` calls `Box`'s `str` made for `int`). One written only
+    /// inside another value has no call of its own that makes it.
+    fn written_strs(&self, ty: &Type, seen: &mut Vec<String>, found: &mut Vec<(String, Vec<Type>)>) {
+        match ty {
+            Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.written_strs(inner, seen, found),
+            Type::Tuple(items) => items.iter().for_each(|item| self.written_strs(item, seen, found)),
+            Type::Named(name, _) if !seen.contains(name) => {
+                seen.push(name.clone());
+                if let Some(made) = self.made_of.get(name)
+                    && self.tasks.contains_key(&method_name(&made.name, STR))
+                {
+                    found.push((method_name(&made.name, STR), made.types.clone()));
+                } else if !self.has_own_str(ty) {
+                    for part in self.written_parts(ty).unwrap_or_default() {
+                        self.written_strs(&part, seen, found);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Makes sure each `str` writing a value of type `ty` calls is made (see
+    /// `written_strs`), for a value written at `at`.
+    fn note_written_strs(&mut self, ty: &Type, at: Span) {
+        let mut found = Vec::new();
+        self.written_strs(ty, &mut Vec::new(), &mut found);
+        for (method, types) in found {
+            let given: Vec<TypeArg> = types.into_iter().map(|ty| (ty, at)).collect();
+            self.note_instance(at, &method, &given);
+        }
     }
 
     /// The end of a message about a shape or kind that has no `str` of its own,
@@ -5180,7 +5217,8 @@ impl Checker {
     /// Checks `value.str() at region` on a value with `str` built in, and
     /// returns its type, `text@region`.
     fn check_to_text(&mut self, value: &mut Expr, region: &str, region_span: Span) -> Result<Type> {
-        self.check_expr(value)?;
+        let ty = self.check_expr(value)?;
+        self.note_written_strs(&ty, value.span);
         self.visible_region(region, region_span, true)?;
         Ok(Type::Text(Some(region.to_string())))
     }
@@ -5324,6 +5362,9 @@ impl Checker {
             }
             if self.tasks.contains_key(&method_name(&shape, &field)) {
                 return err(span, format!("'{0}' is a method of every value of '{1}', so it is called on a value, as in 'p.{0}(…)'", field, shape));
+            }
+            if field == TYPE_WORD {
+                return err(span, format!("'type' is read on a value, as in 'p.type', and '{}' is a shape, whose type is its name", unqualified(&shape)));
             }
             // `Card.Hearts`, written as if the shape were a kind.
             if self.variants.values().any(|info| info.variant.tag == field) {
@@ -5942,9 +5983,14 @@ impl Checker {
     /// Why a type doesn't allow what `need` asks, for the end of a message.
     fn why_not(&self, need: Need, ty: &Type) -> String {
         if let Type::Param(name) = ty {
-            let own: Vec<&str> = self.type_param(name).map(|param| param.needs.iter().map(|(own, _)| own.word()).collect()).unwrap_or_default();
+            let owned: Vec<Need> = self.type_param(name).map(|param| param.needs.iter().map(|(own, _)| *own).collect()).unwrap_or_default();
+            let own: Vec<&str> = owned.iter().map(|own| own.word()).collect();
+            // The word asked for replaces any it already means, as `ordered`
+            // does `same`, since writing both is an error.
+            let mut wanted: Vec<&str> = owned.iter().filter(|own| !need.means(**own)).map(|own| own.word()).collect();
+            wanted.push(need.word());
             return match own.is_empty() {
-                false => format!("is only '{}' here; require it too, as in '<{}: {} & {}>'", own.join(" & "), name, own.join(" & "), need.word()),
+                false => format!("is only '{}' here; require it too, as in '<{}: {}>'", own.join(" & "), name, wanted.join(" & ")),
                 true => format!("is any type here; require it, as in '<{}: {}>'", name, need.word()),
             };
         }
@@ -6523,6 +6569,15 @@ impl Checker {
         }
     }
 
+    /// Records the `str`s writing `value` as text calls, once its type is the
+    /// one a use gives (see `written_strs`).
+    fn need_written_strs(&self, value: &Expr, made: &mut Made) {
+        let Some(ty) = &value.ty else { return };
+        let mut found = Vec::new();
+        self.written_strs(ty, &mut Vec::new(), &mut found);
+        made.needed.extend(found.into_iter().map(|(method, types)| (method, types, value.span)));
+    }
+
     fn substitute_expr(&mut self, e: &mut Expr, given: &HashMap<String, Type>, made: &mut Made) -> Result<()> {
         // A copy of a value whose type names a type the task takes, read before
         // the types are put in place of the names: the copy is a value of the
@@ -6548,7 +6603,19 @@ impl Checker {
                 if !types.is_empty() {
                     made.needed.push((name.clone(), types.iter().map(|(ty, _)| ty.clone()).collect(), at));
                 }
-                args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made))
+                args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made))?;
+                // `show(v)`, with `v` of a type given now: the `str`s it calls.
+                if name == "show" {
+                    for arg in args.iter() {
+                        self.need_written_strs(arg, made);
+                    }
+                }
+                Ok(())
+            }
+            ExprKind::ToText { value, .. } => {
+                self.substitute_expr(value, given, made)?;
+                self.need_written_strs(value, made);
+                Ok(())
             }
             // A literal of a shape given the types this task takes becomes a
             // literal of the shape made for them (see `shape_instance`).
@@ -6582,8 +6649,7 @@ impl Checker {
             | ExprKind::Field(inner, _)
             | ExprKind::Fail(inner)
             | ExprKind::Wrap(inner)
-            | ExprKind::Copy { value: inner, .. }
-            | ExprKind::ToText { value: inner, .. } => self.substitute_expr(inner, given, made),
+            | ExprKind::Copy { value: inner, .. } => self.substitute_expr(inner, given, made),
             ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
                 self.substitute_expr(a, given, made)?;
                 self.substitute_expr(b, given, made)

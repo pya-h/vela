@@ -1203,10 +1203,10 @@ fn parse_prefixed_type(text: &str, depth: usize) -> Option<Type> {
         // `[T#n]` or `[T]`.
         brackets if brackets.starts_with('[') && brackets.ends_with(']') => {
             let inside = brackets.get(1..brackets.len() - 1)?;
-            match unbracketed(inside, ";").next() {
-                Some(semicolon) => {
-                    let count = inside.get(semicolon + 1..)?.trim().parse::<u64>().ok().filter(|count| *count > 0)?;
-                    Type::Array(Box::new(parse_type_within(inside.get(..semicolon)?, depth + 1)?), count)
+            match unbracketed(inside, "#").next() {
+                Some(hash) => {
+                    let count = inside.get(hash + 1..)?.trim().parse::<u64>().ok().filter(|count| *count > 0)?;
+                    Type::Array(Box::new(parse_type_within(inside.get(..hash)?, depth + 1)?), count)
                 }
                 None => Type::Slice(Box::new(parse_type_within(inside, depth + 1)?), None),
             }

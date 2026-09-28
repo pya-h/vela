@@ -10,5 +10,8 @@ Tree { value: 1, kids: { [Tree { value: 2, kids: none }, Tree { value: 2, kids: 
 Point { x: 1, y: -2 } 21 Point { x: 1, y: -2 } and Dot
 Rect(1, 2)
 $2.50 Price { item: "tea", cost: $1.99 } [stop, go]
+[#1, #2] (#a, 1)
+{ #1.5 } [{ #1.5 }]
 Point { x: 1, y: -2 } Calm go
+#true [#Loud]
 NotANumber

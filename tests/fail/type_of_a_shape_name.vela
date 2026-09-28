@@ -1,0 +1,7 @@
+; error: 6:16: 'type' is read on a value, as in 'p.type', and 'Point' is a shape, whose type is its name
+shape Point
+    x: int
+fi
+task main()
+    show(Point.type)
+fi

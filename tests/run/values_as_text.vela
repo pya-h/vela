@@ -48,6 +48,7 @@ task main()
     hold words = new [text]() at r
     words.add("a, b")
     words.add("say \"hi\"\n\t\\")
+    words.add("\{x\}")
     bind none_yet = new [int]() at r
     show(xs, " ", grid, " ", none_yet)
     show(words)

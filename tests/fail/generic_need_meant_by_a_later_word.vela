@@ -1,0 +1,4 @@
+; error: 2:21: a value with an order is a number or text, which can be compared, so 'ordered' already means 'same'; write 'ordered' alone
+task tell<T: same & ordered>(value: T) -> T
+    <- value
+fi

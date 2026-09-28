@@ -38,6 +38,10 @@ int main(void) {
     vela__rt__put_quoted(&w, (vela__rt__text){ "a\0b", 3 });
     same("zero", vela__rt__built(&w, r), "\"a\\0b\"");
 
+    /* A brace would start a value in a literal, so it is escaped too. */
+    vela__rt__put_quoted(&w, VELA__RT__TEXT("{x} }{"));
+    same("braces", vela__rt__built(&w, r), "\"\\{x\\} \\}\\{\"");
+
     /* Nothing written is empty text. */
     same("empty", vela__rt__built(&w, r), "");
 

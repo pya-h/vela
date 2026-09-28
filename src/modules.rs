@@ -975,6 +975,9 @@ impl Resolver<'_> {
     fn variant(&self, kind: &Entry, kind_name: &str, tag: &str, at: Span) -> Result<Entry> {
         match self.variants.get(&kind.full).and_then(|tags| tags.get(tag)) {
             Some(entry) => Ok(entry.clone()),
+            None if tag == TYPE_WORD => {
+                err(at, format!("'type' is read on a value, as in 'k.type', and '{}' is a kind, whose type is its name", kind_name))
+            }
             None => err(at, format!("kind '{}' has no variant '{}'", kind_name, tag)),
         }
     }

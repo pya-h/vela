@@ -1,0 +1,4 @@
+; error: 2:21: expected what the type must allow: 'fixed', 'same', 'shown', 'ordered'
+task tell<T: shown &>(value: T) -> T
+    <- value
+fi

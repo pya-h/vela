@@ -794,8 +794,9 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         <code>[1, 2, 3]</code> (an empty slice <code>[]</code>), a tuple <code>(1, "a")</code>, and a
         <code>maybe</code> <code>none</code> or <code>{ 4 }</code>, so it reads apart from the value itself; to write
         only the value, open it first, as with a plan B, <code>show(m { "none" })</code>. Text inside any of them is
-        written in quotes, with its quotes, backslashes, and line breaks escaped as a literal writes them, so
-        <code>["a, b"]</code> and <code>["a", "b"]</code> read apart. A pointer is written as the address it holds, in
+        written in quotes, with its quotes, backslashes, braces, line breaks, and tabs escaped as a literal writes
+        them, so <code>["a, b"]</code> and <code>["a", "b"]</code> read apart, and <code>["\{x\}"]</code> is text
+        rather than a value. A pointer is written as the address it holds, in
         C's hex, <code>0x7ffd…</code>, which <a href="#reading-numbers"><code>int(text)</code></a> reads back; the value
         it points to is <code>p^</code>, written as its own. A shape is written as a literal of the fields any file
         reads, <code>Point { x: 1, y: 2 }</code> (its <code>priv</code> fields and its

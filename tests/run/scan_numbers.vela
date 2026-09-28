@@ -109,7 +109,8 @@ task main()
         fi
     fi
 
-    ; Every line left, added up until the input ends.
+    ; Every line left, added up until the input ends; a line may hold a number
+    ; in another base, as code writes one.
     hold total = 0
     hold reading = true
     loop reading

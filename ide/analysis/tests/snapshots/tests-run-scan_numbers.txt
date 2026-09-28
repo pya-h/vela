@@ -198,43 +198,45 @@
     | keyword:fi
 110 |     fi
     | keyword:fi
-112 |     ; Every line left, added up until the input ends.
-    | comment:; Every line left, added up until the input ends.
-113 |     hold total = 0
+112 |     ; Every line left, added up until the input ends; a line may hold a number
+    | comment:; Every line left, added up until the input ends; a line may hold a number
+113 |     ; in another base, as code writes one.
+    | comment:; in another base, as code writes one.
+114 |     hold total = 0
     | keyword:hold  variable:total  operator:=  number:0
-114 |     hold reading = true
+115 |     hold reading = true
     | keyword:hold  variable:reading  operator:=  keyword:true
-115 |     loop reading
+116 |     loop reading
     | keyword:loop  variable:reading
-116 |         match scan("", int)
+117 |         match scan("", int)
     | keyword:match  builtin-fn:scan  punctuation:(  string:""  punctuation:,  type-builtin:int  punctuation:)
-117 |         case {value}
+118 |         case {value}
     | keyword:case  punctuation:{  variable:value  punctuation:}
-118 |             total = total + value
+119 |             total = total + value
     | variable:total  operator:=  variable:total  operator:+  variable:value
-119 |         case failure e
+120 |         case failure e
     | keyword:case  keyword:failure  variable:e
-120 |             match e
+121 |             match e
     | keyword:match  variable:e
-121 |             case Ended
+122 |             case Ended
     | keyword:case  variant:Ended
-122 |                 reading = false
+123 |                 reading = false
     | variable:reading  operator:=  keyword:false
-123 |             case NoNumber _
+124 |             case NoNumber _
     | keyword:case  variant:NoNumber  keyword:_
-124 |                 show("skipped a line")
+125 |                 show("skipped a line")
     | builtin-fn:show  punctuation:(  string:"skipped a line"  punctuation:)
-125 |             fi
+126 |             fi
     | keyword:fi
-126 |         fi
+127 |         fi
     | keyword:fi
-127 |     fi
+128 |     fi
     | keyword:fi
-128 |     show("total: ", total)
+129 |     show("total: ", total)
     | builtin-fn:show  punctuation:(  string:"total: "  punctuation:,  variable:total  punctuation:)
-130 |     ; The input has ended, so this one sends its own error.
+131 |     ; The input has ended, so this one sends its own error.
     | comment:; The input has ended, so this one sends its own error.
-131 |     show(twice() { -1 })
+132 |     show(twice() { -1 })
     | builtin-fn:show  punctuation:(  task:twice  punctuation:(  punctuation:)  punctuation:{  operator:-  number:1  punctuation:}  punctuation:)
-132 | fi
+133 | fi
     | keyword:fi

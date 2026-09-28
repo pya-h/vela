@@ -190,3 +190,16 @@ fn a_variant_named_like_a_change_is_still_a_variant() {
     assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
     assert_eq!(hover(source, "a =").0, "bind a: Step");
 }
+
+#[test]
+fn an_array_type_written_in_a_header_is_read_while_the_file_does_not_check() {
+    // The count after `#` makes it an array, read from the parameter's type
+    // as written, since the checker stops at the first line.
+    let source = "task top(xs: [int#3], grid: [[float#2]#2]) -> int\n    show(unknown)\n    show(xs.@@, grid[0].@@)\n    <- 0\nfi\n";
+    let first = source.replacen("@@", "", 1);
+    assert_eq!(labels(&first), ["len", "str", "type"]);
+    let second = source.replacen("@@", "", 1).replacen("grid[0].", "grid[0].@@", 1);
+    assert_eq!(labels(&second.replacen("xs.@@", "xs.", 1)), ["len", "str", "type"]);
+    let (code, _) = hover(&source.replace("@@", ""), "grid[0]");
+    assert!(code.contains("[[float#2]#2]"), "{}", code);
+}

@@ -1,0 +1,7 @@
+; error: 6:15: 'type' is read on a value, as in 'k.type', and 'Mood' is a kind, whose type is its name
+kind Mood
+    Calm
+fi
+task main()
+    show(Mood.type)
+fi

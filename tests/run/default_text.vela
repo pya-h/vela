@@ -72,6 +72,15 @@ kind Light
     fi
 fi
 
+; A shape that takes types and has a str of its own is written by it for
+; each type it is given, even when only ever written inside another value.
+shape Tag<T: shown>
+    value: T
+    str(r: region) -> text@r
+        <- "#{.value}" at r
+    fi
+fi
+
 shape Price
     item: text
     cost: Money
@@ -102,8 +111,12 @@ task main()
     show(Figure.Rect(1.0, 2.0).str() at r)
     ; Its own str wins, alone and inside others.
     show(Money { cents: 250 }, " ", Price { item: "tea", cost: Money { cents: 199 } }, " ", [Light.Red, Light.Green])
+    show([Tag<int> { value: 1 }, Tag<int> { value: 2 }], " ", (Tag<text> { value: "a" }, 1))
+    bind mtag: maybe Tag<float> = Tag<float> { value: 1.5 }
+    show(mtag, " ", [mtag].str() at r)
     ; A type given to a task that writes it.
     show(told(r, p), " ", told(r, Mood.Calm), " ", told(r, Light.Green))
+    show(told(r, Tag<bool> { value: true }), " ", told(r, [Tag<Mood> { value: Mood.Loud }]))
     ; The errors of reading a number are a kind like any other.
     match int("x")
     case failure e

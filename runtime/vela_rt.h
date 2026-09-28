@@ -804,8 +804,9 @@ static inline void vela__rt__put_text(vela__rt__writer* w, vela__rt__text x) {
 }
 
 /* Text inside another value is written as a literal writes it, in quotes, with
- * a quote, a backslash, and the characters that have an escape escaped, so
- * `["a, b"]` and `["a", "b"]` read apart. */
+ * a quote, a backslash, a brace (which would start a value), and the
+ * characters that have an escape escaped, so `["a, b"]` and `["a", "b"]` read
+ * apart, and what is written can be pasted back as the same text. */
 static inline void vela__rt__put_quoted(vela__rt__writer* w, vela__rt__text x) {
     VELA__RT__PUT(w, "\"");
     size_t from = 0;
@@ -819,6 +820,8 @@ static inline void vela__rt__put_quoted(vela__rt__writer* w, vela__rt__text x) {
         case '\t': escape = "\\t"; break;
         case '\r': escape = "\\r"; break;
         case '\0': escape = "\\0"; break;
+        case '{': escape = "\\{"; break;
+        case '}': escape = "\\}"; break;
         default: break;
         }
         if (escape != NULL) {

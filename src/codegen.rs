@@ -809,7 +809,14 @@ impl Generator {
 
     /// Whether the shape or kind `owner` gives its own method `str`.
     fn has_own_str(&self, owner: &str) -> bool {
-        self.hidden_params.contains_key(&method_name(owner, STR))
+        self.str_task(owner).is_some()
+    }
+
+    /// The task the method `str` of the shape or kind `owner` is (see
+    /// `str_task`).
+    fn str_task(&self, owner: &str) -> Option<String> {
+        let given = self.shapes.get(owner).map(|shape| shape.given.as_slice()).unwrap_or_default();
+        str_task(owner, given, |task| self.hidden_params.contains_key(task))
     }
 
     /// A shape's or kind's name as its default text writes it: its own name,
@@ -830,7 +837,7 @@ impl Generator {
     /// The call of the method `str` a shape or kind `owner` gives, on the value
     /// `v`, into the region `region`.
     fn own_str_call(&self, owner: &str, region: &str) -> Result<String> {
-        let method = method_name(owner, STR);
+        let method = self.str_task(owner).ok_or_else(|| Error::internal(format!("no method 'str' of '{}' to call", owner)))?;
         let value = if self.hidden_of(&method).first().copied().unwrap_or(false) { "&v" } else { "v" };
         Ok(format!("{}({}, {})", mangle(&method), value, region))
     }
@@ -2592,6 +2599,20 @@ fn put_item(ty: &Type, value: &str) -> String {
     }
 }
 
+/// The task the method `str` of the shape or kind `owner` is, when it gives
+/// one, of the tasks `exists` knows: a shape made for the types `given` has
+/// the `str` of the shape it was made from, made for them (`Box__of__int`
+/// has `Box__on__str__of__int`).
+fn str_task(owner: &str, given: &[Type], exists: impl Fn(&str) -> bool) -> Option<String> {
+    let own = method_name(owner, STR);
+    if exists(&own) {
+        return Some(own);
+    }
+    let source = owner.split("__of__").next().filter(|_| !given.is_empty())?;
+    let made = instance_name(&method_name(source, STR), given);
+    exists(&made).then_some(made)
+}
+
 /// The generated function that puts a value of type `ty` in a writer.
 fn write_helper(ty: &Type) -> String {
     format!("vela__write__{}", type_word(ty))
@@ -2723,19 +2744,20 @@ impl UsedTypes {
             tuple_eq: Vec::new(),
             scans: false,
         };
-        let own_str: HashSet<String> = items
+        let tasks: HashSet<&str> = items
             .iter()
             .filter_map(|item| match item {
-                Item::Task(t) => method_parts(&t.name).filter(|(_, method)| *method == STR).map(|(owner, _)| owner.to_string()),
+                Item::Task(t) => Some(t.name.as_str()),
                 _ => None,
             })
             .collect();
+        let exists = |task: &str| tasks.contains(task);
         for item in items {
             match item {
-                Item::Shape(s) if s.types.is_empty() && !own_str.contains(&s.name) => {
+                Item::Shape(s) if s.types.is_empty() && str_task(&s.name, &s.given, exists).is_none() => {
                     used.parts.insert(s.name.clone(), s.fields.iter().filter(|f| !f.private).map(|f| f.ty.clone()).collect());
                 }
-                Item::Kind(k) if !own_str.contains(&k.name) => {
+                Item::Kind(k) if str_task(&k.name, &[], exists).is_none() => {
                     used.parts.insert(k.name.clone(), k.variants.iter().flat_map(|v| v.payload.iter().map(|f| f.ty.clone())).collect());
                 }
                 _ => {}
