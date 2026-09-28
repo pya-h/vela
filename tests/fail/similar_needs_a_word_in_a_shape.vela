@@ -1,0 +1,8 @@
+; error: 6:19: '~=' can't compare values of type T item by item; T is any type here; require it, as in '<T: similar>'
+shape Box<T>
+    value: T
+
+    alike(v: T) -> bool
+        <- .value ~= v
+    fi
+fi

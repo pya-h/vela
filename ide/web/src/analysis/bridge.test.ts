@@ -142,7 +142,7 @@ describe("VelaAnalysis", () => {
     expect(analysis.hover(source, source.indexOf("T]@r"))?.doc).toContain("A type task first takes");
     // The words after a type's ':', and types where a call names them.
     const words = analysis.complete(source.replace("T: ordered", "T: "), source.indexOf("T: ") + 3).items.map((i) => i.label);
-    expect(words).toEqual(["fixed", "same", "shown", "ordered"]);
+    expect(words).toEqual(["fixed", "same", "similar", "shown", "ordered"]);
     const types = analysis.complete(source.replace("first<int>", "first<>"), source.indexOf("first<int>") + "first<".length).items;
     expect(types.map((i) => i.label)).toEqual(["int", "float", "bool", "text", "maybe"]);
   });

@@ -268,6 +268,14 @@ impl<'a> Analysis<'a> {
     /// types, depending on where the cursor is.
     pub fn complete(&self, offset: usize) -> Completions {
         let byte = self.index.byte_of_utf16(offset);
+        // `first<|>(xs)`, as an editor closing the `<` leaves it: the types a
+        // use gives are being written, though `<>` is read as one operator,
+        // not similar. They are completed as if the two stood apart; nothing
+        // offered reaches past the cursor, so the ranges stay the file's.
+        if byte > 0 && self.source.get(byte - 1..byte + 1) == Some("<>") {
+            let apart = format!("{} {}", self.source.get(..byte).unwrap_or_default(), self.source.get(byte..).unwrap_or_default());
+            return Analysis::with_modules(&apart, self.context.path, self.context.sources).complete(offset);
+        }
         let (items, from, to) = complete::complete(self.source, &self.scan, &self.checked, self.context, byte);
         Completions { from: self.index.utf16_of(from), to: self.index.utf16_of(to), items }
     }

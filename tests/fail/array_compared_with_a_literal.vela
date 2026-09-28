@@ -1,0 +1,5 @@
+; error: 4:15: '==' compares [int#2] by where it is, as it does arrays, shapes, and tuples (and kinds carrying them), and this one is a value made here, with no place of its own; '~=' compares two values item by item
+task main()
+    bind a = [1, 2]
+    show(a == [1, 2])
+fi

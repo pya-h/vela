@@ -1,4 +1,4 @@
-; error: 2:12: '< … >' names the types a declaration takes, as in '<T>'; leave it out when it takes none
+; error: 2:11: '< … >' names the types a declaration takes, as in '<T>'; leave it out when it takes none
 task first<>(x: int) -> int
     <- x
 fi

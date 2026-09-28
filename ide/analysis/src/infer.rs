@@ -820,7 +820,17 @@ impl<'a> Knowledge<'a> {
                 Token::LParen | Token::LBrace | Token::LBracket => brackets += 1,
                 Token::RParen | Token::RBrace | Token::RBracket => brackets = brackets.saturating_sub(1),
                 _ if brackets > 0 => {}
-                Token::Eq | Token::Ne | Token::Lt | Token::Gt | Token::Le | Token::Ge | Token::And | Token::Or | Token::Not => {
+                Token::Eq
+                | Token::Ne
+                | Token::Similar
+                | Token::NotSimilar
+                | Token::Lt
+                | Token::Gt
+                | Token::Le
+                | Token::Ge
+                | Token::And
+                | Token::Or
+                | Token::Not => {
                     return Some(Type::Bool);
                 }
                 Token::Range => return None,

@@ -1,0 +1,13 @@
+; error: 12:10: this use gives 'same' (int, int), which the '==' or '!=' at 7:16 compares by where it is, as it does arrays, shapes, and tuples, and a side there is a value made on the spot, with no place of its own; compare them item by item with '~=' there, and ask for '<T: similar>'
+task make<T>(a: T) -> T
+    <- a
+fi
+
+task same<T: same>(a: T) -> bool
+    <- make(a) == a
+fi
+
+task main()
+    show(same(1))
+    show(same((1, 2)))
+fi

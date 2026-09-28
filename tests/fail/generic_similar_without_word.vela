@@ -1,0 +1,4 @@
+; error: 3:10: '~=' can't compare values of type T item by item; T is any type here; require it, as in '<T: similar>'
+task alike<T>(a: T, b: T) -> bool
+    <- a ~= b
+fi

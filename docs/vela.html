@@ -312,7 +312,8 @@ block shared type</pre>
         <tr><td><code>Name { x: 1 }</code></td><td>a shape literal</td></tr>
         <tr><td><code>0..5</code></td><td>a range, in <code>each</code> and in a slice (<code>xs[1..3]</code>)</td></tr>
         <tr><td><code>=</code></td><td>assignment, the value of a binding, the value a <a href="#field-defaults">field falls back on</a>, and the value a <code>case</code> gives</td></tr>
-        <tr><td><code>+ - * / %</code>, <code>== != &lt; &lt;= &gt; &gt;=</code></td><td>arithmetic and comparison</td></tr>
+        <tr><td><code>+ - * / %</code>, <code>== != &lt; &lt;= &gt; &gt;=</code></td><td>arithmetic and comparison (see <a href="#comparing">Comparing</a>)</td></tr>
+        <tr><td><code>a ~= b</code>, <code>a &lt;&gt; b</code></td><td>whether two values are similar, item by item; <code>not (a ~= b)</code></td></tr>
       </table>
 
       <h3>Tasks</h3>
@@ -795,7 +796,7 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         <tr><th>Operators</th><th>Example</th></tr>
         <tr><td><code>or</code></td><td><code>a or b and c</code> is <code>a or (b and c)</code></td></tr>
         <tr><td><code>and</code></td><td></td></tr>
-        <tr><td><code>== !=</code></td><td></td></tr>
+        <tr><td><code>== != ~= &lt;&gt;</code></td><td></td></tr>
         <tr><td><code>&lt; &lt;= &gt; &gt;=</code></td><td><code>1 &lt; 2 &lt; 3</code> is an error: <code>1 &lt; 2</code> is a <code>bool</code></td></tr>
         <tr><td><code>..</code></td><td><code>0..n + 1</code> is <code>0..(n + 1)</code></td></tr>
         <tr><td><code>+ -</code></td><td></td></tr>
@@ -968,11 +969,49 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         Logic uses words: <code>and</code>, <code>or</code>, and <code>not</code> work on <code>bool</code>, and
         <code>and</code>/<code>or</code> skip the right side when the left side decides the result. Conditions in
         <code>when</code> and <code>loop</code> must be <code>bool</code>: <code>when count</code> is an error.
-        <code>==</code> and <code>!=</code> work on numbers, <code>bool</code>, <code>text</code> (by contents), and
-        pointers (by address); both sides must have the same type, except that pointers into different regions can
-        be compared (they are never equal). A <code>maybe</code> compares only with
-        <code>none</code>. <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, and <code>&gt;=</code> work on
-        numbers and text.
+        <code>==</code> and <code>!=</code> compare each type by a rule of its own, and <code>~=</code> compares two
+        values item by item (see <a href="#comparing">Comparing</a>). <code>&lt;</code>, <code>&gt;</code>,
+        <code>&lt;=</code>, and <code>&gt;=</code> work on numbers and text.
+      </p>
+      <h3 id="comparing">Comparing</h3>
+      <p>
+        <code>==</code> is cheap for every type, so what it compares depends on the type: a number and a
+        <code>bool</code> by value, <code>text</code> by its bytes, a pointer by the address it holds, a slice by its
+        view (the same first item and as many items, so two views of the same items are equal and a copy is not),
+        and a kind by its variant, with what the variant carries compared by that value's own rule. An array, a
+        shape, and a tuple are compared by where they are: <code>a == b</code> is true when both name one place, as a
+        <a href="#references">reference</a> and its place do, and a copy is another place. So each side of such a
+        comparison is a place (a variable, a field or an item of one, or what a pointer points to), and a value made
+        on the spot, such as a literal or a call's value, is an error that suggests <code>~=</code>. A kind that can
+        carry an array, a shape, or a tuple is compared the same way; one carrying only numbers, bools, text,
+        pointers, or slices compares freely, <code>mood == Mood.Calm</code>. Both sides have the same type, though
+        values in different regions compare (pointers and places in two regions are never equal). A
+        <code>maybe</code> compares only with <code>none</code>, and a value that can fail is read first.
+      </p>
+      <p>
+        <code>a ~= b</code> asks whether two values are similar, item by item, which costs as much as the values are
+        long, hence a symbol of its own; <code>a &lt;&gt; b</code> is <code>not (a ~= b)</code>. Numbers, bools, and
+        text compare as <code>==</code> has them; arrays, slices, and tuples item by item; a shape by every field but
+        its <a href="#shared">shared</a> ones, <code>priv</code> ones too, as they are part of the value; a kind by
+        its variant and what that carries; and a <code>maybe</code> when both are empty or both hold similar values
+        (<code>m ~= none</code> is <code>m == none</code>). A pointer is similar to another holding the same address,
+        so nothing loops through a list that points back to itself; <code>p^ ~= q^</code> compares what they point
+        to. A value that can fail is read first.
+      </p>
+      <pre><span class="keyword">hold</span> p = Point { x: <span class="number">1</span>, y: <span class="number">2</span> }
+<span class="keyword">bind</span> q = p
+<span class="keyword">hold&amp;</span> also = &amp;p
+show(p == q, <span class="string">" "</span>, p == also, <span class="string">" "</span>, p ~= q)        <span class="comment">; false true true</span>
+show(p == Point { x: <span class="number">1</span>, y: <span class="number">2</span> })                 <span class="comment">; error: '==' compares Point by where it is; '~=' compares item by item</span>
+show((<span class="number">1</span>, <span class="string">"a"</span>) ~= (<span class="number">1</span>, <span class="string">"a"</span>), <span class="string">" "</span>, [<span class="number">1</span>, <span class="number">2</span>] &lt;&gt; [<span class="number">1</span>, <span class="number">3</span>]) <span class="comment">; true true</span>
+<span class="keyword">bind</span> s = <span class="keyword">new</span> [int]([<span class="number">1</span>, <span class="number">2</span>]) <span class="keyword">at</span> r
+<span class="keyword">bind</span> view = s
+show(s == view, <span class="string">" "</span>, s == s.copy() <span class="keyword">at</span> r, <span class="string">" "</span>, s ~= s.copy() <span class="keyword">at</span> r)  <span class="comment">; true false true</span></pre>
+      <p>
+        A small parameter is a copy (see <a href="#large-values">large values</a>), a place of its own, so
+        <code>==</code> on two shapes given to a task is false even when they are one value outside it; compare
+        them with <code>~=</code> there. Where two places themselves are meant, <code>&amp;a == &amp;b</code> says so
+        for any type (see <a href="#addresses">Addresses</a>).
       </p>
       <p id="joining">
         <code>a + b at r</code> joins text: new text holding the bytes of <code>a</code> and then of <code>b</code>. It is new
@@ -1461,8 +1500,9 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
           it is.</li>
         <li><strong>Written whole.</strong> <code>show(xs)</code> writes <code>[1, 2, 3]</code>, and so does
           <a href="#str"><code>xs.str() at r</code></a>, as it does for a slice and a tuple (<code>(1, "a")</code>).</li>
-        <li><strong>Not yet.</strong> Arrays can't be compared with <code>==</code>, and a part of an array is a slice,
-          which points into a region.</li>
+        <li><strong>Compared.</strong> <code>==</code> compares two arrays by where they are and <code>~=</code> item by
+          item (see <a href="#comparing">Comparing</a>).</li>
+        <li><strong>Not yet.</strong> A part of an array is a slice, which points into a region.</li>
       </ul>
 
       <h3 id="tuples">Tuples</h3>
@@ -1514,9 +1554,10 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
           one is an error. Two items may be
           text of two regions, <code>(text@r, text@s)</code>. In a field, a slice, or after <code>new</code>, items name
           none: they are in that value's region.</li>
-        <li><strong>Comparing.</strong> <code>==</code> and <code>!=</code> compare item by item (text by its characters)
-          when every item is a number, a bool, text, or a tuple of them. <code>&lt;</code> and the other order comparisons
-          are for numbers, so compare items (<code>t.0 &lt; u.0</code>). <code>show</code> takes one item at a time.</li>
+        <li><strong>Comparing.</strong> <code>==</code> and <code>!=</code> compare two tuples by where they are, and
+          <code>~=</code> item by item, text by its characters (see <a href="#comparing">Comparing</a>).
+          <code>&lt;</code> and the other order comparisons are for numbers, so compare items
+          (<code>t.0 &lt; u.0</code>).</li>
         <li><strong>Where they go.</strong> Anywhere a type does: parameters, results, fields, payloads, arrays and slices
           (<code>[(text, int)]@r</code>, whose items are replaced whole, <code>xs[i] = ("Cy", 80)</code>), <code>maybe</code>,
           and after <code>new</code>.</li>
@@ -1547,7 +1588,8 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
       <table>
         <tr><th>Word</th><th>What the body may do</th><th>Types that fit</th></tr>
         <tr><td><code>fixed</code></td><td>put a value in a tuple, whose items never change</td><td>numbers, bools, text, tuples of them, and shapes and kinds whose fields are all such</td></tr>
-        <tr><td><code>same</code></td><td><code>==</code> and <code>!=</code></td><td>numbers, bools, text, pointers, and tuples of them</td></tr>
+        <tr><td><code>same</code></td><td><code>==</code> and <code>!=</code>, each type by its own rule</td><td>numbers, bools, text, pointers, slices, arrays, tuples, shapes, and kinds whose variants carry none of <code>T ~ E</code></td></tr>
+        <tr><td><code>similar</code></td><td><code>~=</code> and <code>&lt;&gt;</code>, item by item</td><td>numbers, bools, text, pointers, and arrays, slices, tuples, <code>maybe</code>s, shapes, and kinds of them</td></tr>
         <tr><td><code>shown</code></td><td><code>show</code>, <code>str</code></td><td>anything <code>show</code> writes: numbers, bools, text, pointers, arrays, slices, tuples, and <code>maybe</code>s of such, and shapes and kinds, except those holding a value that can fail without a <code>str</code> of their own</td></tr>
         <tr><td><code>ordered</code></td><td><code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td><td>numbers and text</td></tr>
       </table>

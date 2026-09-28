@@ -1525,6 +1525,7 @@ fn need_items() -> Vec<CompletionItem> {
     let words = [
         (Need::Fixed, "never changes, so it can be a tuple's item"),
         (Need::Same, "can be compared with == and !="),
+        (Need::Similar, "can be compared item by item with ~= and <>"),
         (Need::Shown, "can be shown"),
         (Need::Ordered, "has an order, so < and > compare it"),
     ];

@@ -1,0 +1,22 @@
+; error: 21:15: expected type Point, got [int#2]
+shape Point
+    x: int
+fi
+kind Held
+    Pair(p: Point)
+    Empty
+fi
+kind Bad
+    Read(n: int ~ ParseError)
+fi
+task make() -> Point
+    <- Point { x: 1 }
+fi
+task main()
+    region r
+    hold p = Point { x: 1 }
+    bind xs = [1, 2]
+    bind h: Held = Held.Empty
+    bind e = int("1")
+    show(p ~= xs)
+fi

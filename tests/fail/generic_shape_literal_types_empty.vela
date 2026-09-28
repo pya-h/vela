@@ -1,0 +1,8 @@
+; error: 7:13: '< … >' names the types a use gives, as in '<int>'; leave it out to let the values say which they are
+shape Box<T>
+    value: T
+fi
+
+task main()
+    show(Box<> { value: 1 }.value)
+fi

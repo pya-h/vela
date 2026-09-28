@@ -867,9 +867,10 @@ show(biggest(true, false))      ; error: task 'biggest' takes a type that is 'or
           an index or a slice type, and braces as a plan B, a pattern, or a shape literal. A <code>&lt;</code> after a
           name starts types only when the matching <code>&gt;</code> is followed by <code>(</code>, so comparisons still
           read as comparisons.</li>
-        <li><strong>Four words, not traits.</strong> <code>fixed</code>, <code>same</code>, <code>shown</code>, and
-          <code>ordered</code> say what a type must allow — be a tuple's item, be compared with <code>==</code>, be
-          shown, be compared with <code>&lt;</code> — and each is one thing, joined with <code>&amp;</code> to ask for
+        <li><strong>Five words, not traits.</strong> <code>fixed</code>, <code>same</code>, <code>similar</code>,
+          <code>shown</code>, and <code>ordered</code> say what a type must allow — be a tuple's item, be compared with
+          <code>==</code>, be compared item by item with <code>~=</code>, be shown, be compared with
+          <code>&lt;</code> — and each is one thing, joined with <code>&amp;</code> to ask for
           several (<code>&lt;T: same &amp; shown&gt;</code>; decided 2026-09-28, when <code>shown</code> came to take
           arrays and shapes that <code>==</code> can't compare). Only <code>ordered</code> means another word,
           <code>same</code>, since an order compares. A closed set of words keeps the whole feature readable: no
@@ -1668,8 +1669,13 @@ show(c.total())</pre>
           <a href="vela.html#show"><code>show</code></a> calls it in a region it makes for the line. Fitting
           <code>&lt;T: shown&gt;</code> is done too (2026-09-28): the body is still checked once, and the C made for
           each set of types writes a value through its type's own writer, which calls the shape's <code>str</code>. One
-          half is left: <code>==</code> has no method behind it, so a <code>same(other: This) -&gt; bool</code> would
-          open it as <code>str</code> opened printing. It is also the smallest step towards interfaces, which Vela has no
+          half is left: <code>==</code> and <code>~=</code> have no method behind them. Since 2026-09-28
+          <code>==</code> compares a shape by where it is, cheaply, and <a href="vela.html#comparing"><code>~=</code></a>
+          item by item, every field but shared ones, so a method a shape gives would change what similarity means for
+          it: a <code>similar(other: This) -&gt; bool</code> (with <code>&lt;&gt;</code> its <code>not</code>) could say
+          which fields matter, or compare a list by its items rather than the address its pointers hold, as
+          <code>str</code> opened printing. Similarity that follows pointers needs a way to stop on a list that points
+          back to itself, which is why <code>~=</code> compares a pointer by its address today. It is also the smallest step towards interfaces, which Vela has no
           design for yet, since it asks of one method: does this type have a member of this name and header?</li>
         <li id="methods-elsewhere"><strong>Methods from another module:</strong> a shape's block holds every method it
           has, so a module can't add one to a type it includes. That keeps a type honest — everything it does is in one

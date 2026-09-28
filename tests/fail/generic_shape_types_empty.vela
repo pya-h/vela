@@ -1,4 +1,4 @@
-; error: 7:17: '< … >' names the types a shape is given, as in '<int>'; leave it out for a shape that takes none
+; error: 7:16: '< … >' names the types a shape is given, as in '<int>'; leave it out for a shape that takes none
 shape Box<T>
     value: T
 fi

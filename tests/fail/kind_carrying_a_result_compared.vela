@@ -1,0 +1,22 @@
+; error: 21:29: '==' can't compare values of type Bad; a kind is compared by its variant and what that carries, and one of its variants carries a value that can fail, which is read first
+shape Point
+    x: int
+fi
+kind Held
+    Pair(p: Point)
+    Empty
+fi
+kind Bad
+    Read(n: int ~ ParseError)
+fi
+task make() -> Point
+    <- Point { x: 1 }
+fi
+task main()
+    region r
+    hold p = Point { x: 1 }
+    bind xs = [1, 2]
+    bind h: Held = Held.Empty
+    bind e = int("1")
+    show(Bad.Read(int("1")) == Bad.Read(int("1")))
+fi

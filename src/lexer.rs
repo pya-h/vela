@@ -92,6 +92,11 @@ pub enum Token {
     /// `~`, which separates a type from the error it can be instead:
     /// `int ~ ParseError`.
     Tilde,
+    /// `~=`: whether two values are similar, item by item.
+    Similar,
+    /// `<>`: whether two values aren't similar, `not (a ~= b)`. Where types
+    /// are read, it is `< … >` with nothing inside.
+    NotSimilar,
     /// `@`, which names the region a type lives in (`^Node@r`) or `new`
     /// allocates in (`new@r T(v)`). The word `at` is `Token::At`.
     AtSign,
@@ -236,6 +241,8 @@ impl Token {
             Token::Assign => "=",
             Token::Caret => "^",
             Token::Tilde => "~",
+            Token::Similar => "~=",
+            Token::NotSimilar => "<>",
             Token::AtSign => "@",
             Token::Underscore => "_",
             // Keywords are found in `KEYWORDS` above.
@@ -558,7 +565,14 @@ impl Lexer {
             '/' => Token::Slash,
             '%' => Token::Percent,
             '^' => Token::Caret,
-            '~' => Token::Tilde,
+            '~' => {
+                if self.peek() == '=' {
+                    self.advance();
+                    Token::Similar
+                } else {
+                    Token::Tilde
+                }
+            }
             '@' => Token::AtSign,
             '=' => {
                 if self.peek() == '=' {
@@ -601,6 +615,9 @@ impl Lexer {
                     // (the parser explains; see `Parser::parse_send`).
                     self.advance();
                     Token::Send
+                } else if self.peek() == '>' {
+                    self.advance();
+                    Token::NotSimilar
                 } else {
                     Token::Lt
                 }

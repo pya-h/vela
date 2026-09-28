@@ -589,6 +589,18 @@ impl Checker {
             let given: HashMap<String, Type> = source.types.iter().map(|param| param.name.clone()).zip(types).collect();
             let mut made = Made::default();
             self.substitute_task(&mut task, &given, &mut made)?;
+            if let Some((compare, ty)) = made.placeless.first() {
+                return err(
+                    at,
+                    format!(
+                        "this use gives '{}' {}, which the '==' or '!=' at {}:{} compares by where it is, as it does arrays, shapes, and tuples, and a side there is a value made on the spot, with no place of its own; compare them item by item with '~=' there, and ask for '<T: similar>'",
+                        unqualified(&name),
+                        ty.without_regions(),
+                        compare.line,
+                        compare.col
+                    ),
+                );
+            }
             for (name, types, at) in made.needed {
                 queue.push((instance_name(&name, &types), name, types, at));
             }
@@ -4775,6 +4787,15 @@ impl Checker {
             return Err(Error::internal_at(span, "a binary operation that is not one"));
         };
         let op = *op;
+        // `first<>(x)`: `<>` reads as 'not similar', so this is a use giving no
+        // types, written where a value would be compared.
+        if op == BinaryOp::NotSimilar
+            && let ExprKind::Var(name) = &l.kind
+            && self.lookup(name).is_none()
+            && (self.tasks.contains_key(name) || self.shapes.contains_key(name))
+        {
+            return err(span, format!("'< … >' names the types a use gives, as in '{}<int>'; leave it out to let the values say which they are", unqualified(name)));
+        }
         // `&a == &b`: where two places are, not what they hold.
         if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && [&**l, &**r].into_iter().any(|side| matches!(side.kind, ExprKind::Ref(_))) {
             return self.check_address_compare(l, r, span);
@@ -4786,7 +4807,16 @@ impl Checker {
         // (see `Type::Unknown`).
         if lt.unknown() || rt.unknown() {
             return Ok(match op {
-                BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge | BinaryOp::And | BinaryOp::Or => Type::Bool,
+                BinaryOp::Eq
+                | BinaryOp::Ne
+                | BinaryOp::Similar
+                | BinaryOp::NotSimilar
+                | BinaryOp::Lt
+                | BinaryOp::Le
+                | BinaryOp::Gt
+                | BinaryOp::Ge
+                | BinaryOp::And
+                | BinaryOp::Or => Type::Bool,
                 _ => Type::Unknown,
             });
         }
@@ -4875,25 +4905,64 @@ impl Checker {
                 if let Some(maybe) = [&lt, &rt].into_iter().find(|t| matches!(t, Type::Maybe(_))) {
                     return err(span, format!("a {} can only be compared with none; extract its value first, as in 'x {{ … }}'", maybe));
                 }
-                // Comparing stores nothing, so pointers into different regions
-                // compare (and are never equal), and so do texts in any regions.
-                let pointers = matches!((&lt, &rt), (Type::Ptr(..), Type::Ptr(..))) && lt.without_regions() == rt.without_regions();
-                let texts = matches!((&lt, &rt), (Type::Text(_), Type::Text(_)));
-                let tuples = matches!((&lt, &rt), (Type::Tuple(_), Type::Tuple(_))) && lt.without_regions() == rt.without_regions();
-                if !pointers && !texts && !tuples {
+                // Comparing stores nothing, so values in different regions
+                // compare (pointers and places into different regions are never
+                // equal), and so do texts in any regions.
+                if lt.without_regions() != rt.without_regions() {
                     self.expect_type(&rt, &lt, r.span)?;
                 }
-                if !comparable(&lt) && !self.allows(Need::Same, &lt) {
+                let symbol = if op == BinaryOp::Eq { "==" } else { "!=" };
+                if !self.comparable(&lt) {
                     if let Some(untold) = self.untold_param(&lt).or_else(|| self.untold_param(&rt)) {
                         return err(span, untold);
                     }
-                    let symbol = if op == BinaryOp::Eq { "==" } else { "!=" };
                     let hint = match &lt {
-                        Type::Tuple(_) => "; tuples compare item by item when every item is a number, a bool, text, or a tuple of them".to_string(),
                         Type::Param(_) => format!("; it {}", self.why_not(Need::Same, &lt)),
-                        _ => String::new(),
+                        Type::Named(name, _) if self.kinds.contains_key(name) => {
+                            "; a kind is compared by its variant and what that carries, and one of its variants carries a value that can fail, which is read first".to_string()
+                        }
+                        _ => extract_hint(&[&lt]),
                     };
                     return err(span, format!("'{}' can't compare values of type {}{}", symbol, lt, hint));
+                }
+                // An array, a shape, or a tuple is compared by where it is, so
+                // each side is a place; a value made on the spot is none.
+                if self.by_place(&lt) {
+                    for side in [&*l, &*r] {
+                        if !self.is_place(side) {
+                            return err(
+                                side.span,
+                                format!(
+                                    "'{}' compares {} by where it is, as it does arrays, shapes, and tuples (and kinds carrying them), and this one is a value made here, with no place of its own; '~=' compares two values item by item",
+                                    symbol,
+                                    lt.without_regions()
+                                ),
+                            );
+                        }
+                    }
+                }
+                Ok(Type::Bool)
+            }
+            BinaryOp::Similar | BinaryOp::NotSimilar => {
+                let symbol = if op == BinaryOp::Similar { "~=" } else { "<>" };
+                // `none` is similar to an empty `maybe`, as `==` has it.
+                let none_and_maybe = matches!((&lt, &rt), (Type::None, Type::Maybe(_)) | (Type::Maybe(_), Type::None));
+                if none_and_maybe {
+                    return Ok(Type::Bool);
+                }
+                if lt.without_regions() != rt.without_regions() {
+                    self.expect_type(&rt, &lt, r.span)?;
+                }
+                if let Some(part) = self.unsimilar_part(&lt) {
+                    if let Some(untold) = self.untold_param(&lt).or_else(|| self.untold_param(&rt)) {
+                        return err(span, untold);
+                    }
+                    let holds = if part == lt { String::new() } else { format!(", since it holds {}", part) };
+                    let hint = match &part {
+                        Type::Param(_) => format!("; {} {}", part, self.why_not(Need::Similar, &part)),
+                        _ => extract_hint(&[&part]),
+                    };
+                    return err(span, format!("'{}' can't compare values of type {} item by item{}{}", symbol, lt, holds, hint));
                 }
                 Ok(Type::Bool)
             }
@@ -6099,8 +6168,113 @@ impl Checker {
         match need {
             Need::Ordered => ty.is_numeric() || matches!(ty, Type::Text(_)),
             Need::Shown => self.writable(ty),
-            Need::Same => comparable(ty),
+            Need::Same => self.comparable(ty),
+            Need::Similar => self.unsimilar_part(ty).is_none(),
             Need::Fixed => self.changeable_item(ty).is_none(),
+        }
+    }
+
+    /// Whether `==` compares values of type `ty`, each by its own rule: a
+    /// number, a bool, and a kind by value, text by its bytes, a pointer by the
+    /// address it holds, a slice by its view (its first item and its length),
+    /// and an array, a shape, and a tuple by where the value is (see
+    /// `by_place`). A `maybe` is only compared with `none`, and a value that
+    /// can fail is read first.
+    fn comparable(&self, ty: &Type) -> bool {
+        match ty {
+            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Slice(..) | Type::Array(..) | Type::Tuple(_) => true,
+            Type::Named(name, _) if self.kinds.contains_key(name) => self.kind_comparable(name, &mut Vec::new()),
+            Type::Named(..) | Type::Applied(_) => self.owner_of(ty).is_some_and(|owner| self.shapes.contains_key(&owner)),
+            Type::Param(_) => self.allows(Need::Same, ty),
+            _ => false,
+        }
+    }
+
+    /// Whether `==` compares values of the kind `name`: its variant, and each
+    /// value a variant carries by that value's own rule, a `maybe` being both
+    /// empty or both holding values that compare.
+    fn kind_comparable(&self, name: &str, seen: &mut Vec<String>) -> bool {
+        if seen.iter().any(|kind| kind == name) {
+            return true;
+        }
+        let Some(kind) = self.kinds.get(name) else { return false };
+        seen.push(name.to_string());
+        let found = kind.variants.iter().flat_map(|variant| &variant.payload).all(|field| {
+            let carried = match &field.ty {
+                Type::Maybe(inner) => inner.as_ref(),
+                other => other,
+            };
+            match carried {
+                Type::Named(inner, _) if self.kinds.contains_key(inner) => self.kind_comparable(inner, seen),
+                other => self.comparable(other),
+            }
+        });
+        seen.pop();
+        found
+    }
+
+    /// Whether `==` compares values of type `ty` by where they are, so both
+    /// sides are places: an array, a shape, a tuple, and a kind that can carry
+    /// one of those, whose variant is compared by value and what it carries by
+    /// that value's own rule.
+    fn by_place(&self, ty: &Type) -> bool {
+        self.by_place_in(ty, &mut Vec::new())
+    }
+
+    fn by_place_in(&self, ty: &Type, seen: &mut Vec<String>) -> bool {
+        match ty {
+            Type::Array(..) | Type::Tuple(_) => true,
+            Type::Named(name, _) if self.shapes.contains_key(name) => true,
+            Type::Named(name, _) => {
+                let Some(kind) = self.kinds.get(name) else { return false };
+                if seen.contains(name) {
+                    return false;
+                }
+                seen.push(name.clone());
+                let found = kind.variants.iter().flat_map(|variant| &variant.payload).any(|field| self.by_place_in(&field.ty, seen));
+                seen.pop();
+                found
+            }
+            Type::Applied(_) => true,
+            _ => false,
+        }
+    }
+
+    /// The first type in `ty`, itself included, whose values `~=` can't
+    /// compare item by item: numbers, bools, text, pointers (by the address
+    /// they hold, so nothing loops), and `maybe`s, arrays, slices, tuples,
+    /// shapes (every field but shared ones), and kinds of those can.
+    fn unsimilar_part(&self, ty: &Type) -> Option<Type> {
+        self.unsimilar_in(ty, &mut Vec::new())
+    }
+
+    fn unsimilar_in(&self, ty: &Type, seen: &mut Vec<String>) -> Option<Type> {
+        match ty {
+            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => None,
+            Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unsimilar_in(inner, seen),
+            Type::Tuple(items) => items.iter().find_map(|item| self.unsimilar_in(item, seen)),
+            Type::Param(_) if self.allows(Need::Similar, ty) => None,
+            // A shape given types this declaration takes: its fields with them.
+            Type::Applied(applied) => {
+                let shape = self.shapes.get(&applied.name)?;
+                let names: HashMap<&str, &Type> = shape.types.iter().map(|param| param.name.as_str()).zip(&applied.types).collect();
+                shape.fields.iter().find_map(|field| self.unsimilar_in(&field.ty.map_params(&mut |param| names.get(param).map(|ty| (*ty).clone())), seen))
+            }
+            Type::Named(name, _) if seen.contains(name) => None,
+            Type::Named(name, _) => {
+                let parts: Vec<Type> = if let Some(shape) = self.shapes.get(name) {
+                    shape.fields.iter().map(|field| field.ty.clone()).collect()
+                } else if let Some(kind) = self.kinds.get(name) {
+                    kind.variants.iter().flat_map(|variant| variant.payload.iter().map(|field| field.ty.clone())).collect()
+                } else {
+                    return Some(ty.clone());
+                };
+                seen.push(name.clone());
+                let found = parts.iter().find_map(|part| self.unsimilar_in(part, seen));
+                seen.pop();
+                found
+            }
+            _ => Some(ty.clone()),
         }
     }
 
@@ -6122,6 +6296,10 @@ impl Checker {
             Need::Ordered => "has no order, so '<' can't compare it".to_string(),
             Need::Shown => "can't be shown".to_string(),
             Need::Same => "can't be compared with '=='".to_string(),
+            Need::Similar => match self.unsimilar_part(ty) {
+                Some(part) if part != *ty => format!("holds {}, which can't be compared item by item", part),
+                _ => "can't be compared item by item".to_string(),
+            },
             Need::Fixed => match self.changeable_item(ty) {
                 Some(what) => format!("holds {}", what),
                 None => "can change".to_string(),
@@ -6603,6 +6781,9 @@ fn keeps_params_of(ty: &Type, inside: Option<&str>, kept: &mut HashMap<String, H
 struct Made {
     needed: Vec<(String, Vec<Type>, Span)>,
     copies: Vec<(String, String, Span)>,
+    /// Each `==` or `!=` that the types given make compare by where values are
+    /// (see `Checker::by_place`) with a side that is no place, and the type.
+    placeless: Vec<(Span, Type)>,
 }
 
 impl Checker {
@@ -6774,6 +6955,21 @@ impl Checker {
             | ExprKind::Fail(inner)
             | ExprKind::Wrap(inner)
             | ExprKind::Copy { value: inner, .. } => self.substitute_expr(inner, given, made),
+            ExprKind::Binary(BinaryOp::Eq | BinaryOp::Ne, a, b) => {
+                self.substitute_expr(a, given, made)?;
+                self.substitute_expr(b, given, made)?;
+                // Where the body compares by place only for the types given:
+                // it was checked once, when any type could be given.
+                if let Some(ty) = a.ty.clone()
+                    && !matches!(a.kind, ExprKind::Ref(_))
+                    && !matches!(b.kind, ExprKind::Ref(_))
+                    && self.by_place(&ty)
+                    && !(names_place(a) && names_place(b))
+                {
+                    made.placeless.push((at, ty));
+                }
+                Ok(())
+            }
             ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
                 self.substitute_expr(a, given, made)?;
                 self.substitute_expr(b, given, made)
@@ -6882,16 +7078,6 @@ fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
         Type::Maybe(inner) | Type::Array(inner, _) => holds_pointers(inner, regional),
         Type::Or(value, error) => holds_pointers(value, regional) || holds_pointers(error, regional),
         Type::Tuple(items) => items.iter().any(|item| holds_pointers(item, regional)),
-        _ => false,
-    }
-}
-
-/// Whether `==` compares values of type `ty`: numbers, bools, text, pointers,
-/// and tuples of them.
-fn comparable(ty: &Type) -> bool {
-    match ty {
-        Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => true,
-        Type::Tuple(items) => items.iter().all(comparable),
         _ => false,
     }
 }
@@ -7462,6 +7648,18 @@ enum Step {
 
 /// The place `e` names, as its variable and the steps from it, or `None` for a
 /// value that isn't a place.
+/// Whether `e` is written as a place: a variable, a shared field, what a
+/// pointer points to, or a field or an item of one. (In a task made for
+/// types, no variant is of a type the task takes, so a name is a variable.)
+fn names_place(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::Var(_) | ExprKind::Shared { .. } | ExprKind::Deref(_) => true,
+        ExprKind::Field(base, _) => names_place(base),
+        ExprKind::Index(base, index) => !matches!(index.kind, ExprKind::Range(..)) && names_place(base),
+        _ => false,
+    }
+}
+
 fn place_path(e: &Expr) -> Option<Vec<Step>> {
     let mut steps = Vec::new();
     let mut at = e;

@@ -1,0 +1,22 @@
+; error: 21:10: '==' compares Point by where it is, as it does arrays, shapes, and tuples (and kinds carrying them), and this one is a value made here, with no place of its own; '~=' compares two values item by item
+shape Point
+    x: int
+fi
+kind Held
+    Pair(p: Point)
+    Empty
+fi
+kind Bad
+    Read(n: int ~ ParseError)
+fi
+task make() -> Point
+    <- Point { x: 1 }
+fi
+task main()
+    region r
+    hold p = Point { x: 1 }
+    bind xs = [1, 2]
+    bind h: Held = Held.Empty
+    bind e = int("1")
+    show(make() == p)
+fi

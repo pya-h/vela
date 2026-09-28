@@ -1,0 +1,8 @@
+; error: 7:15: '< … >' names the types a use gives, as in 'first<int>'; leave it out to let the values say which they are
+task first<T>(x: T) -> T
+    <- x
+fi
+
+task main()
+    show(first<>(1))
+fi

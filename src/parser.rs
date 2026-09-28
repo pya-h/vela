@@ -558,6 +558,10 @@ impl Parser {
     /// `<T, U: ordered>` after a declaration's name: the types it takes, with
     /// what each one must allow. Empty for a declaration that takes none.
     fn parse_type_params(&mut self) -> Result<Vec<TypeParam>> {
+        // `<>` reads as one token, `not similar`, wherever values are.
+        if self.check(Token::NotSimilar) {
+            return Err(Error::at(self.peek_span(), "'< … >' names the types a declaration takes, as in '<T>'; leave it out when it takes none"));
+        }
         if !self.match_token(Token::Lt) {
             return Ok(Vec::new());
         }
@@ -1232,6 +1236,9 @@ impl Parser {
             name = format!("{}{}{}", name, MODULE_SEPARATOR, self.expect_ident()?);
         }
         self.type_parts.push((name.clone(), span));
+        if self.check(Token::NotSimilar) {
+            return Err(Error::at(self.peek_span(), "'< … >' names the types a shape is given, as in '<int>'; leave it out for a shape that takes none"));
+        }
         if self.check(Token::Lt) {
             if Type::builtin(&name).is_some() {
                 return Err(Error::at(self.peek_span(), format!("'{}' takes no types, so '< … >' has nothing to name", name)));
@@ -1933,6 +1940,8 @@ impl Parser {
             Token::And => (BinaryOp::And, 2),
             Token::Eq => (BinaryOp::Eq, 3),
             Token::Ne => (BinaryOp::Ne, 3),
+            Token::Similar => (BinaryOp::Similar, 3),
+            Token::NotSimilar => (BinaryOp::NotSimilar, 3),
             Token::Lt => (BinaryOp::Lt, 4),
             Token::Gt => (BinaryOp::Gt, 4),
             Token::Le => (BinaryOp::Le, 4),
@@ -2526,6 +2535,11 @@ impl Parser {
     /// that: `a < b > (c)` would compare a bool with `>`, and `a < b > {` has no
     /// value after the `>` at all, so both are errors either way.
     fn at_type_args(&self) -> bool {
+        // `Box<> { … }`: no value starts with `{`, so this `<>` is no 'not
+        // similar' but types left empty (see `parse_type_args`).
+        if self.check(Token::NotSimilar) {
+            return matches!(self.tokens.get(self.pos + 1), Some(Token::LBrace));
+        }
         if !self.check(Token::Lt) {
             return false;
         }
@@ -2547,6 +2561,9 @@ impl Parser {
 
     /// After the `<` of the types a call gives: the types and `>`.
     fn parse_type_args(&mut self) -> Result<Vec<TypeArg>> {
+        if self.check(Token::NotSimilar) {
+            return Err(Error::at(self.peek_span(), "'< … >' names the types a use gives, as in '<int>'; leave it out to let the values say which they are"));
+        }
         self.advance(); // <
         let mut types = Vec::new();
         loop {
@@ -2807,12 +2824,14 @@ fn why_means(narrower: Need, wider: Need) -> String {
         Need::Ordered => "a value with an order is a number or text, which",
         Need::Shown => "a value that can be shown",
         Need::Same => "a value that can be compared",
+        Need::Similar => "a value compared item by item",
         Need::Fixed => "a value that never changes",
     };
     let also = match wider {
         Need::Ordered => "has an order",
         Need::Shown => "can be shown",
         Need::Same => "can be compared",
+        Need::Similar => "is compared item by item",
         Need::Fixed => "never changes",
     };
     format!("{} {}", value, also)

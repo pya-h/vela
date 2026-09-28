@@ -206,7 +206,7 @@ impl Generator {
             self.gen_scan_number(ty);
         }
         self.gen_item_helpers(&used);
-        self.gen_tuple_eq(&used.tuple_eq);
+        self.gen_compares(&used)?;
         self.gen_copies(&used.copied);
         self.w.blank();
 
@@ -538,27 +538,166 @@ impl Generator {
         }
     }
 
-    /// `vela__eq__K` for each tuple type compared with `==` or `!=`: whether
-    /// two tuples' items are equal, item by item.
-    fn gen_tuple_eq(&mut self, tuples: &[Type]) {
-        for tuple in tuples {
-            let Type::Tuple(items) = tuple else { continue };
-            self.w.open(&format!("static bool {0}({1} a, {1} b)", copy_helper("eq", tuple), c_type(tuple)));
-            let tests: Vec<String> = items
-                .iter()
-                .enumerate()
-                .map(|(i, item)| {
-                    let (a, b) = (format!("a.{}", tuple_member(i)), format!("b.{}", tuple_member(i)));
-                    match item {
-                        Type::Text(_) => format!("vela__rt__text_eq({}, {})", a, b),
-                        Type::Tuple(_) => format!("{}({}, {})", copy_helper("eq", item), a, b),
-                        _ => format!("{} == {}", a, b),
-                    }
-                })
-                .collect();
-            self.w.line(&format!("return {};", tests.join(" && ")));
+    /// The comparisons a program makes that need a function of their own:
+    /// `vela__same__K` for `==` on a kind (its variant, then what it carries,
+    /// each by its own rule) and on a slice (its view), and `vela__similar__K`
+    /// for `~=`, item by item. Each takes the two values' addresses, and all
+    /// are declared before any is defined, since a kind's calls another's.
+    fn gen_compares(&mut self, used: &UsedTypes) -> Result<()> {
+        for (what, types) in [("same", &used.same), ("similar", &used.similar)] {
+            for ty in types {
+                self.w.line(&format!("static bool {}(const {1}* a, const {1}* b);", copy_helper(what, ty), c_type(ty)));
+            }
+        }
+        for ty in &used.same {
+            self.w.open(&format!("static bool {}(const {1}* a, const {1}* b)", copy_helper("same", ty), c_type(ty)));
+            match ty {
+                Type::Slice(..) => self.w.line("return a->items == b->items && a->len == b->len;"),
+                Type::Named(name, _) => self.gen_kind_compare(name, "same")?,
+                other => return Err(Error::internal(format!("'==' by a function of its own on {}", other))),
+            }
             self.w.close();
         }
+        for ty in &used.similar {
+            self.w.open(&format!("static bool {}(const {1}* a, const {1}* b)", copy_helper("similar", ty), c_type(ty)));
+            match ty {
+                Type::Array(items, count) => {
+                    self.w.open(&format!("for (int64_t i = 0; i < {}; i++)", count));
+                    self.w.open(&format!("if (!({}))", self.compare_item("similar", items, "a->items[i]", "b->items[i]")));
+                    self.w.line("return false;");
+                    self.w.close();
+                    self.w.close();
+                    self.w.line("return true;");
+                }
+                Type::Slice(items, _) => {
+                    self.w.open("if (a->len != b->len)");
+                    self.w.line("return false;");
+                    self.w.close();
+                    self.w.open("for (int64_t i = 0; i < a->len; i++)");
+                    self.w.open(&format!("if (!({}))", self.compare_item("similar", items, "a->items[i]", "b->items[i]")));
+                    self.w.line("return false;");
+                    self.w.close();
+                    self.w.close();
+                    self.w.line("return true;");
+                }
+                Type::Tuple(items) => {
+                    let tests: Vec<String> = items
+                        .iter()
+                        .enumerate()
+                        .map(|(i, item)| self.compare_item("similar", item, &format!("a->{}", tuple_member(i)), &format!("b->{}", tuple_member(i))))
+                        .collect();
+                    self.w.line(&format!("return {};", tests.join(" && ")));
+                }
+                Type::Maybe(inner) => {
+                    self.w.open("if (a->has != b->has)");
+                    self.w.line("return false;");
+                    self.w.close();
+                    self.w.line(&format!("return !a->has || ({});", self.compare_item("similar", inner, "a->value", "b->value")));
+                }
+                // Every field but shared ones, `priv` ones too: they are all
+                // part of the value.
+                Type::Named(name, _) if self.shapes.contains_key(name) => {
+                    let fields: Vec<Field> = self.shapes.get(name).map(|shape| shape.fields.clone()).unwrap_or_default();
+                    if fields.is_empty() {
+                        self.w.line("(void)a;");
+                        self.w.line("(void)b;");
+                        self.w.line("return true;");
+                    } else {
+                        let tests: Vec<String> = fields
+                            .iter()
+                            .map(|field| self.compare_item("similar", &field.ty, &format!("a->{}", c_ident(&field.name)), &format!("b->{}", c_ident(&field.name))))
+                            .collect();
+                        self.w.line(&format!("return {};", tests.join(" && ")));
+                    }
+                }
+                Type::Named(name, _) => self.gen_kind_compare(name, "similar")?,
+                other => return Err(Error::internal(format!("'~=' on {}", other))),
+            }
+            self.w.close();
+        }
+        if !used.same.is_empty() || !used.similar.is_empty() {
+            self.w.blank();
+        }
+        Ok(())
+    }
+
+    /// Whether two values `a` and `b` of type `ty`, both places, compare, as a
+    /// C test, by `how`: `same` (`==`, each by its own rule) or `similar`
+    /// (`~=`, item by item). A number, a bool, and a pointer compare as C does
+    /// either way, and text by its bytes.
+    fn compare_item(&self, how: &str, ty: &Type, a: &str, b: &str) -> String {
+        match ty {
+            Type::Int | Type::Float | Type::Bool | Type::Ptr(..) => format!("{} == {}", a, b),
+            Type::Text(_) => format!("vela__rt__text_eq({}, {})", a, b),
+            // A `maybe` of a pointer is the pointer, `NULL` for none.
+            Type::Maybe(inner) if is_pointer(inner) => format!("{} == {}", a, b),
+            Type::Maybe(inner) if how == "same" => {
+                format!("({0}.has == {1}.has && (!{0}.has || ({2})))", a, b, self.compare_item(how, inner, &format!("{}.value", a), &format!("{}.value", b)))
+            }
+            // By where they are: two places are one only when both values are.
+            _ if how == "same" && !matches!(ty, Type::Slice(..)) && !self.is_kind(ty) => format!("(const void*)&{} == (const void*)&{}", a, b),
+            _ => format!("{}(&{}, &{})", copy_helper(how, ty), a, b),
+        }
+    }
+
+    /// Whether `ty` is a kind.
+    fn is_kind(&self, ty: &Type) -> bool {
+        matches!(ty, Type::Named(name, _) if self.kinds.contains_key(name))
+    }
+
+    /// Whether `==` compares values of type `ty` by where they are (see the
+    /// checker's `by_place`): an array, a shape, a tuple, and a kind that can
+    /// carry one.
+    fn by_place(&self, ty: &Type) -> bool {
+        self.by_place_in(ty, &mut Vec::new())
+    }
+
+    fn by_place_in(&self, ty: &Type, seen: &mut Vec<String>) -> bool {
+        match ty {
+            Type::Array(..) | Type::Tuple(_) => true,
+            Type::Named(name, _) if self.shapes.contains_key(name) => true,
+            Type::Named(name, _) => {
+                let Some(kind) = self.kinds.get(name) else { return false };
+                if seen.contains(name) {
+                    return false;
+                }
+                seen.push(name.clone());
+                let found = kind.variants.iter().flat_map(|variant| &variant.payload).any(|field| self.by_place_in(&field.ty, seen));
+                seen.pop();
+                found
+            }
+            _ => false,
+        }
+    }
+
+    /// The body of `vela__same__K` or `vela__similar__K` (by `how`) for the
+    /// kind `name`: the same variant, and what it carries compared.
+    fn gen_kind_compare(&mut self, name: &str, how: &str) -> Result<()> {
+        let Some(kind) = self.kinds.get(name).cloned() else { return Err(Error::internal(format!("no kind '{}' to compare", name))) };
+        self.w.open("if (a->tag != b->tag)");
+        self.w.line("return false;");
+        self.w.close();
+        if kind.variants.iter().all(|variant| variant.payload.is_empty()) {
+            self.w.line("return true;");
+            return Ok(());
+        }
+        self.w.open("switch (a->tag)");
+        for variant in kind.variants.iter().filter(|variant| !variant.payload.is_empty()) {
+            let tests: Vec<String> = variant
+                .payload
+                .iter()
+                .map(|field| {
+                    let at = |side: &str| format!("{}->data.{}.{}", side, c_ident(&variant.tag), c_ident(&field.name));
+                    self.compare_item(how, &field.ty, &at("a"), &at("b"))
+                })
+                .collect();
+            self.w.line(&format!("case {}:", tag_value(&kind.name, &variant.tag)));
+            self.w.line(&format!("    return {};", tests.join(" && ")));
+        }
+        self.w.line("default:");
+        self.w.line("    return true;");
+        self.w.close();
+        Ok(())
     }
 
     /// For each type a program copies (`x.copy() at r`), `vela__copied__K`, which
@@ -2409,9 +2548,23 @@ impl Generator {
             self.w.close();
             return Ok(result);
         }
+        let refs = [l, r].into_iter().any(|side| matches!(side.kind, ExprKind::Ref(_)));
+        let not = if matches!(op, BinaryOp::Ne | BinaryOp::NotSimilar) { "!" } else { "" };
+        // An array, a shape, a tuple, or a kind carrying one is compared by
+        // where it is: both sides are places (the checker made sure), read as
+        // their addresses rather than as values, which could be copies.
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && !refs && self.by_place(l.ty()?) {
+            let left = self.gen_address(l)?;
+            let right = self.gen_address(r)?;
+            if self.is_kind(l.ty()?) {
+                return Ok(format!("{}{}({}, {})", not, copy_helper("same", l.ty()?), left, right));
+            }
+            let symbol = if op == BinaryOp::Eq { "==" } else { "!=" };
+            return Ok(format!("((const void*)({}) {} (const void*)({}))", left, symbol, right));
+        }
         let [left, right] = <[String; 2]>::try_from(self.gen_operands(&[l, r])?)
             .map_err(|_| Error::internal_at(e.span, "a binary operation without two operands"))?;
-        if matches!(op, BinaryOp::Eq | BinaryOp::Ne) {
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Similar | BinaryOp::NotSimilar) {
             // `m == none` tests a maybe.
             let maybe = match (l.ty()?, r.ty()?) {
                 (Type::Maybe(inner), Type::None) => Some((inner, &left)),
@@ -2419,7 +2572,7 @@ impl Generator {
                 _ => None,
             };
             if let Some((inner, value)) = maybe {
-                let empty = op == BinaryOp::Eq;
+                let empty = matches!(op, BinaryOp::Eq | BinaryOp::Similar);
                 return Ok(match (is_pointer(inner), empty) {
                     (true, true) => format!("{} == NULL", value),
                     (true, false) => format!("{} != NULL", value),
@@ -2434,14 +2587,25 @@ impl Generator {
             let symbol = if op == BinaryOp::Eq { "==" } else { "!=" };
             return Ok(format!("((const void*)({}) {} (const void*)({}))", left, symbol, right));
         }
-        if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && matches!(l.ty()?, Type::Tuple(_)) {
-            let not = if op == BinaryOp::Ne { "!" } else { "" };
-            return Ok(format!("{}{}({}, {})", not, copy_helper("eq", l.ty()?), left, right));
+        // A value compared by a function of its own is given to it by address,
+        // a copy in a compound literal that lasts as long as the expression.
+        let by_address = |value: &str, ty: &Type| format!("(const {}[1]){{ {} }}", c_type(ty), value);
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && (self.is_kind(l.ty()?) || matches!(l.ty()?, Type::Slice(..))) {
+            let ty = l.ty()?;
+            return Ok(format!("{}{}({}, {})", not, copy_helper("same", ty), by_address(&left, ty), by_address(&right, ty)));
         }
-        if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && matches!(l.ty()?, Type::Text(_)) {
-            // Text compares by contents, not by address.
-            let not = if op == BinaryOp::Ne { "!" } else { "" };
+        // Text compares by contents, not by address, alike or similar.
+        if matches!(l.ty()?, Type::Text(_)) && !matches!(op, BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge) {
             return Ok(format!("{}vela__rt__text_eq({}, {})", not, left, right));
+        }
+        if matches!(op, BinaryOp::Similar | BinaryOp::NotSimilar) {
+            let ty = l.ty()?;
+            return Ok(match ty {
+                // A number, a bool, and a pointer are similar when equal.
+                Type::Int | Type::Float | Type::Bool | Type::Ptr(..) => format!("({} {} {})", left, if not.is_empty() { "==" } else { "!=" }, right),
+                Type::Maybe(inner) if is_pointer(inner) => format!("({} {} {})", left, if not.is_empty() { "==" } else { "!=" }, right),
+                _ => format!("{}{}({}, {})", not, copy_helper("similar", ty), by_address(&left, ty), by_address(&right, ty)),
+            });
         }
         if matches!(l.ty()?, Type::Text(_)) {
             // Text is ordered by its bytes.
@@ -2477,6 +2641,7 @@ impl Generator {
             BinaryOp::Div => "/",
             BinaryOp::Mod => "%",
             BinaryOp::Eq => "==",
+            BinaryOp::Similar | BinaryOp::NotSimilar => return Err(Error::internal_at(e.span, "a similarity that is no function")),
             BinaryOp::Ne => "!=",
             BinaryOp::Lt => "<",
             BinaryOp::Gt => ">",
@@ -2714,8 +2879,16 @@ struct UsedTypes {
     array_fill: Vec<Type>,
     /// The types of the values the program copies with `copy()`.
     copied: Vec<Type>,
-    /// The tuple types compared with `==` or `!=`, each after the tuples it holds.
-    tuple_eq: Vec<Type>,
+    /// The kinds and slices `==` compares by a function of its own (see
+    /// `Generator::gen_compares`), and the kinds those kinds carry.
+    same: Vec<Type>,
+    /// The types `~=` compares item by item, and the types inside them.
+    similar: Vec<Type>,
+    /// Each shape's fields, every one, and each kind's carried values, for
+    /// what `~=` and `==` compare inside them.
+    fields: HashMap<String, Vec<Type>>,
+    /// The kinds, which `==` compares by variant rather than by place.
+    kinds: HashSet<String>,
     /// Whether the program calls `scan`.
     scans: bool,
 }
@@ -2747,7 +2920,10 @@ impl UsedTypes {
             slice_pop: Vec::new(),
             array_fill: Vec::new(),
             copied: Vec::new(),
-            tuple_eq: Vec::new(),
+            same: Vec::new(),
+            similar: Vec::new(),
+            fields: HashMap::new(),
+            kinds: HashSet::new(),
             scans: false,
         };
         let tasks: HashSet<&str> = items
@@ -2758,6 +2934,18 @@ impl UsedTypes {
             })
             .collect();
         let exists = |task: &str| tasks.contains(task);
+        for item in items {
+            match item {
+                Item::Shape(s) if s.types.is_empty() => {
+                    used.fields.insert(s.name.clone(), s.fields.iter().map(|f| f.ty.clone()).collect());
+                }
+                Item::Kind(k) => {
+                    used.kinds.insert(k.name.clone());
+                    used.fields.insert(k.name.clone(), k.variants.iter().flat_map(|v| v.payload.iter().map(|f| f.ty.clone())).collect());
+                }
+                _ => {}
+            }
+        }
         for item in items {
             match item {
                 Item::Shape(s) if s.types.is_empty() && str_task(&s.name, &s.given, exists).is_none() => {
@@ -2860,12 +3048,51 @@ impl UsedTypes {
         note(&mut self.writes, &ty);
     }
 
-    /// Records that tuples of type `tuple` are compared, and so are the tuples
-    /// in it, which come first.
-    fn note_tuple_eq(&mut self, tuple: &Type) {
-        let Type::Tuple(items) = tuple.without_regions() else { return };
-        items.iter().for_each(|item| self.note_tuple_eq(item));
-        note(&mut self.tuple_eq, tuple);
+    /// Records that `==` compares values of type `ty`: a kind, and a slice,
+    /// by a function of its own, and so the kinds and slices a kind carries.
+    fn note_same(&mut self, ty: &Type) {
+        let ty = ty.without_regions();
+        match &ty {
+            Type::Slice(..) => note(&mut self.same, &ty),
+            Type::Maybe(inner) => self.note_same(inner),
+            Type::Named(name, _) if self.kinds.contains(name) => {
+                if self.same.contains(&ty) {
+                    return;
+                }
+                note(&mut self.same, &ty);
+                for part in self.fields.get(name).cloned().unwrap_or_default() {
+                    self.note_same(&part);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Records that `~=` compares values of type `ty`, and so the values
+    /// inside them: a number, a bool, text, and a pointer are compared where
+    /// they are, and anything else by a function of its own.
+    fn note_similar(&mut self, ty: &Type) {
+        let ty = ty.without_regions();
+        match &ty {
+            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => {}
+            Type::Maybe(inner) if matches!(inner.as_ref(), Type::Ptr(..)) => {}
+            _ if self.similar.contains(&ty) => {}
+            Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => {
+                note(&mut self.similar, &ty);
+                self.note_similar(inner);
+            }
+            Type::Tuple(items) => {
+                note(&mut self.similar, &ty);
+                items.iter().for_each(|item| self.note_similar(item));
+            }
+            Type::Named(name, _) => {
+                note(&mut self.similar, &ty);
+                for part in self.fields.get(name).cloned().unwrap_or_default() {
+                    self.note_similar(&part);
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Records the types of the names a binding declares, and of the tuples it unpacks.
@@ -2970,10 +3197,13 @@ impl UsedTypes {
             }
             ExprKind::Array(values) | ExprKind::Tuple(values) => values.iter().for_each(|value| self.expr(value)),
             ExprKind::Binary(op, a, b) => {
-                if matches!(op, BinaryOp::Eq | BinaryOp::Ne)
-                    && let Some(tuple @ Type::Tuple(_)) = &a.ty
-                {
-                    self.note_tuple_eq(tuple);
+                let refs = [a, b].into_iter().any(|side| matches!(side.kind, ExprKind::Ref(_)));
+                match (op, &a.ty) {
+                    (BinaryOp::Eq | BinaryOp::Ne, Some(ty)) if !refs => self.note_same(ty),
+                    // `none ~= m` is typed by its other side.
+                    (BinaryOp::Similar | BinaryOp::NotSimilar, Some(Type::None)) => {}
+                    (BinaryOp::Similar | BinaryOp::NotSimilar, Some(ty)) if !matches!(b.ty, Some(Type::None)) => self.note_similar(ty),
+                    _ => {}
                 }
                 self.expr(a);
                 self.expr(b);

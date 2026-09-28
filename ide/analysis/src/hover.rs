@@ -238,13 +238,21 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             };
             let task = parent.map(|p| p.name.as_str()).unwrap_or("?");
             let code = if symbol.detail.is_empty() { symbol.name.clone() } else { format!("{}: {}", symbol.name, symbol.detail) };
+            // Each word joined by `&` is one thing every type given for it allows.
             let allows = match symbol.detail.as_str() {
                 "" => "Its values can be stored, passed, and sent, and nothing else.".to_string(),
-                "ordered" => "Every type given for it has an order, so '<' and '>' compare its values.".to_string(),
-                "shown" => "Every type given for it can be shown.".to_string(),
-                "same" => "Every type given for it can be compared with '=='.".to_string(),
-                "fixed" => "Every type given for it never changes, so it can be a tuple's item.".to_string(),
-                other => format!("Every type given for it must be '{}'.", other),
+                words => words
+                    .split('&')
+                    .map(|word| match word.trim() {
+                        "ordered" => "Every type given for it has an order, so '<' and '>' compare its values, and '==' too.".to_string(),
+                        "shown" => "Every type given for it can be shown.".to_string(),
+                        "same" => "Every type given for it can be compared with '==', each by its own rule (an array, a shape, or a tuple by where it is).".to_string(),
+                        "similar" => "Every type given for it can be compared item by item with '~=' and '<>'.".to_string(),
+                        "fixed" => "Every type given for it never changes, so it can be a tuple's item.".to_string(),
+                        other => format!("Every type given for it must be '{}'.", other),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" "),
             };
             let gives = if what == "shape" { "each value of it is given" } else { "each call gives it" };
             (code, format!("A type {} {} takes, standing for the type {}. {}", what, task, gives, allows))

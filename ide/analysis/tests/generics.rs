@@ -127,7 +127,7 @@ fn a_type_a_task_takes_completes_as_a_type_in_its_own_body() {
 
 #[test]
 fn completion_offers_the_words_a_type_can_be_asked_to_allow() {
-    let words = ["fixed", "same", "shown", "ordered"];
+    let words = ["fixed", "same", "similar", "shown", "ordered"];
     assert_eq!(labels("task f<T: @@>(x: T)\nfi\n"), words);
     assert_eq!(labels("task f<T: same & @@>(x: T)\nfi\n"), words);
     // The name of a type being declared is the writer's to choose.
@@ -270,7 +270,7 @@ fn completion_offers_types_where_a_shape_is_given_them() {
     assert_eq!(labels("shape Box<T>\n    value: @@\nfi\n"), ["int", "float", "bool", "text", "T", "Box", "maybe"]);
     // The words a type can be asked to allow, and nothing where a name is
     // being declared.
-    assert_eq!(labels("shape Box<T: @@>\n    value: T\nfi\n"), ["fixed", "same", "shown", "ordered"]);
+    assert_eq!(labels("shape Box<T: @@>\n    value: T\nfi\n"), ["fixed", "same", "similar", "shown", "ordered"]);
     assert!(labels("shape Box<@@>\n    value: int\nfi\n").is_empty());
 }
 
@@ -324,4 +324,33 @@ fi
     assert_eq!(hover(source, "paired:").0, "bind paired: Pair<Box<text>, int>@r");
     assert_eq!(hover(source, "textOf(b").0, "task textOf(b: Box<text>@r) -> text@r");
     assert_eq!(hover(source, "leftText(p").0, "task leftText(p: Pair<Box<text>, int>@r) -> text@r");
+}
+
+#[test]
+fn similarity_is_an_operator_giving_a_bool_and_its_word_has_a_hover() {
+    let source = "task alike<T: similar & shown>(a: T, b: T) -> bool\n    bind same_items = a ~= b\n    bind apart = a <> b\n    show(a)\n    <- same_items and not apart\nfi\n";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_eq!(class_at_in(source, "~= b"), Some(TokenClass::Operator));
+    assert_eq!(class_at_in(source, "<> b"), Some(TokenClass::Operator));
+    let (_, doc) = hover(source, "T: similar");
+    assert!(doc.contains("item by item with '~=' and '<>'") && doc.contains("can be shown"), "{}", doc);
+    let (code, _) = hover(source, "same_items =");
+    assert!(code.contains("bool"), "{}", code);
+    // Without the word, '~=' is refused and says which word to ask for.
+    let diagnostics = Analysis::new(&source.replace("similar & shown", "shown")).diagnostics();
+    assert!(diagnostics.iter().any(|d| d.message.contains("require it too, as in '<T: shown & similar>'")), "{:?}", diagnostics);
+}
+
+#[test]
+fn types_are_offered_between_a_closed_pair_of_angle_brackets() {
+    // `<>` reads as 'not similar', but an editor closing a `<` leaves one.
+    let labels_at = labels("task first<T>(x: T) -> T\n    <- x\nfi\ntask main()\n    show(first<@@>(1))\nfi\n");
+    assert!(labels_at.contains(&"int".to_string()), "{:?}", labels_at);
+}
+
+/// The class of the token at the first occurrence of `needle` in `source`,
+/// which is ASCII, so bytes and UTF-16 offsets agree.
+fn class_at_in(source: &str, needle: &str) -> Option<TokenClass> {
+    let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
+    Analysis::new(source).tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
 }

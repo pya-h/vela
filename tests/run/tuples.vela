@@ -135,10 +135,12 @@ task main()
     show(id)
     show(name)
 
-    ; Equality, item by item, text by its characters.
-    show((1, "a") == (1, "a"))
-    show((1, (2.5, "a")) != (1, (2.5, "b")))
-    show(pair == ("Ada", 36))
+    ; Similarity, item by item, text by its characters; '==' compares where
+    ; two tuples are.
+    show((1, "a") ~= (1, "a"))
+    show((1, (2.5, "a")) <> (1, (2.5, "b")))
+    show(pair ~= ("Ada", 36))
+    show(pair == pair)
 
     ; Patterns: braces take the value out, parentheses take the tuple apart,
     ; and `hold` names can be assigned.

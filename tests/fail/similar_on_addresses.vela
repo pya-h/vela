@@ -1,0 +1,22 @@
+; error: 21:10: '&' marks a place given to a 'hold&' parameter, as in 'f(&a)', named by a reference, as in 'hold& y = &a', or whose address is shown or compared, as in 'show(&a)' or '&a == &b'; anywhere else, write the value itself
+shape Point
+    x: int
+fi
+kind Held
+    Pair(p: Point)
+    Empty
+fi
+kind Bad
+    Read(n: int ~ ParseError)
+fi
+task make() -> Point
+    <- Point { x: 1 }
+fi
+task main()
+    region r
+    hold p = Point { x: 1 }
+    bind xs = [1, 2]
+    bind h: Held = Held.Empty
+    bind e = int("1")
+    show(&p ~= &p)
+fi

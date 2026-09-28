@@ -1,0 +1,22 @@
+; error: 21:12: '~=' can't compare values of type int ~ ParseError item by item; the value in this int ~ ParseError must be extracted first, as in 'x { … }' or 'when x is {value}'
+shape Point
+    x: int
+fi
+kind Held
+    Pair(p: Point)
+    Empty
+fi
+kind Bad
+    Read(n: int ~ ParseError)
+fi
+task make() -> Point
+    <- Point { x: 1 }
+fi
+task main()
+    region r
+    hold p = Point { x: 1 }
+    bind xs = [1, 2]
+    bind h: Held = Held.Empty
+    bind e = int("1")
+    show(e ~= e)
+fi

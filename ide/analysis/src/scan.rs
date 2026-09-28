@@ -1184,6 +1184,7 @@ impl<'a> Classifier<'a> {
                     }
                 }
                 Token::Plus | Token::Minus | Token::Star | Token::Slash | Token::Percent | Token::Eq | Token::Ne
+                | Token::Similar | Token::NotSimilar
                 | Token::Lt | Token::Gt | Token::Le | Token::Ge | Token::Assign | Token::Range => {
                     self.push(range, TokenClass::Operator, None);
                     if *token == Token::Assign {

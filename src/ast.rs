@@ -681,6 +681,10 @@ pub enum BinaryOp {
     Mod,
     Eq,
     Ne,
+    /// `~=`: similar, item by item (see `Checker::check_similar`).
+    Similar,
+    /// `<>`: not similar.
+    NotSimilar,
     Lt,
     Gt,
     Le,
@@ -1434,22 +1438,25 @@ pub enum Need {
     Ordered,
     /// `show`, `str`, and text holding values: anything with a text form.
     Shown,
-    /// `==` and `!=`: what those compare (a number, a bool, text, a pointer,
-    /// or a tuple of them).
+    /// `==` and `!=`: what those compare, each type by its own rule (see
+    /// `Checker::check_same`).
     Same,
+    /// `~=` and `<>`: values compared item by item.
+    Similar,
     /// A value that never changes, so it can be a tuple's item.
     Fixed,
 }
 
 impl Need {
     /// The words, in the order messages list them.
-    pub const ALL: [Need; 4] = [Need::Ordered, Need::Shown, Need::Same, Need::Fixed];
+    pub const ALL: [Need; 5] = [Need::Ordered, Need::Shown, Need::Same, Need::Similar, Need::Fixed];
 
     pub fn word(self) -> &'static str {
         match self {
             Need::Ordered => "ordered",
             Need::Shown => "shown",
             Need::Same => "same",
+            Need::Similar => "similar",
             Need::Fixed => "fixed",
         }
     }

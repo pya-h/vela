@@ -1,6 +1,0 @@
-; error: 5:12: '==' can't compare values of type [int#2]
-task main()
-    bind a = [1, 2]
-    bind b = [1, 2]
-    show(a == b)
-fi
