@@ -1,0 +1,130 @@
+  1 | ; A shared method belongs to its shape or kind, not to a value of it: it has
+    | comment:; A shared method belongs to its shape or kind, not to a value of it: it has
+  2 | ; no `.this`, is called on the name, `Point.new(1, 2)`, and may change the
+    | comment:; no `.this`, is called on the name, `Point.new(1, 2)`, and may change the
+  3 | ; shape's `shared read` fields. `new` is a keyword, and a shared method's name.
+    | comment:; shape's `shared read` fields. `new` is a keyword, and a shared method's name.
+  5 | include shared_methods/shop (Item, Size => Fit)
+    | keyword:include  module:shared_methods  operator:/  module:shop  punctuation:(  type:Item  punctuation:,  type:Size  operator:=>  type:Fit  punctuation:)
+  7 | shape Point
+    | keyword:shape  type:Point
+  8 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  9 |     y: int
+    | field:y  punctuation::  type-builtin:int
+ 10 |     shared read made: int = 0
+    | keyword:shared  keyword:read  field:made  punctuation::  type-builtin:int  operator:=  number:0
+ 12 |     shared new(x: int, y: int) -> Point
+    | keyword:shared  method:new  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:,  parameter:y  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Point
+ 13 |         Point.made = Point.made + 1
+    | type:Point  punctuation:.  field:made  operator:=  type:Point  punctuation:.  field:made  operator:+  number:1
+ 14 |         <- Point { x: x, y: y }
+    | keyword:<-  type:Point  punctuation:{  field:x  punctuation::  parameter:x  punctuation:,  field:y  punctuation::  parameter:y  punctuation:}
+ 15 |     fi
+    | keyword:fi
+ 17 |     ; Calls another shared method on the shape's name.
+    | comment:; Calls another shared method on the shape's name.
+ 18 |     shared origin() -> Point
+    | keyword:shared  method:origin  punctuation:(  punctuation:)  operator:->  type:Point
+ 19 |         <- Point.new(0, 0)
+    | keyword:<-  type:Point  punctuation:.  method:new  punctuation:(  number:0  punctuation:,  number:0  punctuation:)
+ 20 |     fi
+    | keyword:fi
+ 22 |     ; An ordinary method calls one the same way.
+    | comment:; An ordinary method calls one the same way.
+ 23 |     moved(by: int) -> Point
+    | method:moved  punctuation:(  parameter:by  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Point
+ 24 |         <- Point.new(.x + by, .y + by)
+    | keyword:<-  type:Point  punctuation:.  method:new  punctuation:(  punctuation:.  field:x  operator:+  parameter:by  punctuation:,  punctuation:.  field:y  operator:+  parameter:by  punctuation:)
+ 25 |     fi
+    | keyword:fi
+ 27 |     ; A region it is given, as a task is given one.
+    | comment:; A region it is given, as a task is given one.
+ 28 |     shared label(r: region, x: int) -> text@r
+    | keyword:shared  method:label  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 29 |         <- "at {x}" at r
+    | keyword:<-  string:"at {  parameter:x  string:}"  keyword:at  region:r
+ 30 |     fi
+    | keyword:fi
+ 31 | fi
+    | keyword:fi
+ 33 | ; A shape holding a pointer: made in the region it is given.
+    | comment:; A shape holding a pointer: made in the region it is given.
+ 34 | shape Node
+    | keyword:shape  type:Node
+ 35 |     value: int
+    | field:value  punctuation::  type-builtin:int
+ 36 |     next: maybe ^Node
+    | field:next  punctuation::  keyword:maybe  operator:^  type:Node
+ 38 |     shared single(r: region, value: int) -> Node@r
+    | keyword:shared  method:single  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:value  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Node  operator:@  region:r
+ 39 |         <- Node { value: value, next: none }
+    | keyword:<-  type:Node  punctuation:{  field:value  punctuation::  parameter:value  punctuation:,  field:next  punctuation::  keyword:none  punctuation:}
+ 40 |     fi
+    | keyword:fi
+ 42 |     shared pair(r: region, a: int, b: int) -> Node@r
+    | keyword:shared  method:pair  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Node  operator:@  region:r
+ 43 |         bind last = new Node(Node.single(r, b)) at r
+    | keyword:bind  variable:last  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:.  method:single  punctuation:(  region:r  punctuation:,  parameter:b  punctuation:)  punctuation:)  keyword:at  region:r
+ 44 |         <- Node { value: a, next: last }
+    | keyword:<-  type:Node  punctuation:{  field:value  punctuation::  parameter:a  punctuation:,  field:next  punctuation::  variable:last  punctuation:}
+ 45 |     fi
+    | keyword:fi
+ 46 | fi
+    | keyword:fi
+ 48 | kind Light
+    | keyword:kind  type:Light
+ 49 |     Red
+    | variant:Red
+ 50 |     Green
+    | variant:Green
+ 52 |     shared start() -> Light
+    | keyword:shared  method:start  punctuation:(  punctuation:)  operator:->  type:Light
+ 53 |         <- Light.Red
+    | keyword:<-  type:Light  punctuation:.  variant:Red
+ 54 |     fi
+    | keyword:fi
+ 56 |     next() -> Light
+    | method:next  punctuation:(  punctuation:)  operator:->  type:Light
+ 57 |         match .this
+    | keyword:match  punctuation:.  keyword:this
+ 58 |             case Red
+    | keyword:case  variant:Red
+ 59 |                 <- Light.Green
+    | keyword:<-  type:Light  punctuation:.  variant:Green
+ 60 |             case Green
+    | keyword:case  variant:Green
+ 61 |                 <- Light.Red
+    | keyword:<-  type:Light  punctuation:.  variant:Red
+ 62 |         fi
+    | keyword:fi
+ 63 |     fi
+    | keyword:fi
+ 64 | fi
+    | keyword:fi
+ 66 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 67 |     region r
+    | keyword:region  region:r
+ 68 |     bind p = Point.new(1, 2)
+    | keyword:bind  variable:p  operator:=  type:Point  punctuation:.  method:new  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+ 69 |     show(p, " ", Point.origin().moved(3), " ", Point.made, " ", Point.label(r, 4))
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:,  string:" "  punctuation:,  type:Point  punctuation:.  method:origin  punctuation:(  punctuation:)  punctuation:.  method:moved  punctuation:(  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Point  punctuation:.  field:made  punctuation:,  string:" "  punctuation:,  type:Point  punctuation:.  method:label  punctuation:(  region:r  punctuation:,  number:4  punctuation:)  punctuation:)
+ 70 |     bind list = Node.pair(r, 1, 2)
+    | keyword:bind  variable:list  operator:=  type:Node  punctuation:.  method:pair  punctuation:(  region:r  punctuation:,  number:1  punctuation:,  number:2  punctuation:)
+ 71 |     bind second = list.next { <- }
+    | keyword:bind  variable:second  operator:=  variable:list  punctuation:.  field:next  punctuation:{  keyword:<-  punctuation:}
+ 72 |     show(list.value, " ", second^.value)
+    | builtin-fn:show  punctuation:(  variable:list  punctuation:.  field:value  punctuation:,  string:" "  punctuation:,  variable:second  operator:^  punctuation:.  field:value  punctuation:)
+ 73 |     show(Light.start(), " ", Light.start().next())
+    | builtin-fn:show  punctuation:(  type:Light  punctuation:.  method:start  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Light  punctuation:.  method:start  punctuation:(  punctuation:)  punctuation:.  method:next  punctuation:(  punctuation:)  punctuation:)
+ 74 |     ; Another module's, brought in by name and under another name.
+    | comment:; Another module's, brought in by name and under another name.
+ 75 |     bind cheap = Item.new("pen", -2)
+    | keyword:bind  variable:cheap  operator:=  type:Item  punctuation:.  method:new  punctuation:(  string:"pen"  punctuation:,  operator:-  number:2  punctuation:)
+ 76 |     bind dear = Item.new("lamp", 30)
+    | keyword:bind  variable:dear  operator:=  type:Item  punctuation:.  method:new  punctuation:(  string:"lamp"  punctuation:,  number:30  punctuation:)
+ 77 |     show(cheap.price, " ", Item.made, " ", Fit.of(dear.price), " ", Fit.of(cheap.price))
+    | builtin-fn:show  punctuation:(  variable:cheap  punctuation:.  field:price  punctuation:,  string:" "  punctuation:,  type:Item  punctuation:.  field:made  punctuation:,  string:" "  punctuation:,  type:Fit  punctuation:.  method:of  punctuation:(  variable:dear  punctuation:.  field:price  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Fit  punctuation:.  method:of  punctuation:(  variable:cheap  punctuation:.  field:price  punctuation:)  punctuation:)
+ 78 | fi
+    | keyword:fi

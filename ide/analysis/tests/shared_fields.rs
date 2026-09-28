@@ -147,9 +147,10 @@ fn a_shapes_member_line_offers_the_words_of_a_shared_field() {
     let shape = |line: &str| format!("shape Meter\n    count: int = 0\n    {}\nfi\n\ntask main()\nfi\n", line);
     assert!(labels(&completions(&shape("@@"))).contains(&"shared"));
     assert!(labels(&completions(&shape("priv @@"))).contains(&"shared"));
-    assert_eq!(labels(&completions(&shape("shared @@"))), ["hold", "read"]);
-    assert_eq!(labels(&completions(&shape("priv shared @@"))), ["hold", "read"]);
-    // A kind has no fields, so no shared ones.
-    let kind = "kind Mood\n    Calm\n    @@\nfi\n";
-    assert!(!labels(&completions(kind)).contains(&"shared"));
+    // Or `new`, the name of a shared method.
+    assert_eq!(labels(&completions(&shape("shared @@"))), ["hold", "read", "new"]);
+    assert_eq!(labels(&completions(&shape("priv shared @@"))), ["hold", "read", "new"]);
+    // A kind has no fields, so no shared ones, but shared methods.
+    let kind = "kind Mood\n    Calm\n    shared @@\nfi\n";
+    assert_eq!(labels(&completions(kind)), ["new"]);
 }

@@ -24,12 +24,18 @@ fi
 ; code and changed only by the account's own methods, so no one can reopen a
 ; closed account by writing to it. A `shared` field belongs to the shape rather
 ; than to any account: one value for the whole program, read as
-; `Account.deposits`, and this one is `read` too, so only the methods count.
+; `Account.deposits`, and this one is `read` too, so only the methods count. A
+; `shared` method belongs to the shape too: `Account.new("Bob")` makes one,
+; with no account to be called on.
 shape Account
     owner: text
     balance: int = 0
     read open: bool = true
     shared read deposits: int = 0
+
+    shared new(owner: text) -> Account
+        <- Account { owner: owner }
+    fi
 
     balanceOf() -> int
         <- .balance
@@ -102,7 +108,7 @@ task main()
 
     ; A reference is another name for an account: its alters methods change
     ; the account it names.
-    hold bob = Account { owner: "Bob" }
+    hold bob = Account.new("Bob")
     hold& current = &bob
     current.deposit(20)
     show(bob)

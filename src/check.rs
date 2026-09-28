@@ -3816,6 +3816,9 @@ impl Checker {
                         // `send (x)` written the old way reads as a call.
                         // `X.make(…)` naming no method of X (see `Resolver::shared_method`).
                         if let Some((owner, method)) = method_parts(name) {
+                            if self.shapes.get(owner).is_some_and(|shape| shape.shared.iter().any(|member| member.field.name == method)) {
+                                return Error::at(span, format!("'{0}.{1}' is a shared field, not a method, so it is read as '{0}.{1}', without '(…)'", unqualified(owner), method));
+                            }
                             let what = if self.kinds.contains_key(owner) { "kind" } else { "shape" };
                             let or_variant = if what == "kind" { "variant or " } else { "" };
                             return Error::at(span, format!("{} '{}' has no {}shared method '{}'", what, owner, or_variant, method));

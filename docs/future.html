@@ -1653,8 +1653,8 @@ show(c.total())</pre>
           <code>maybe</code>, and a <code>.first</code>/<code>.last</code> of the kind itself.</li>
         <li id="methods-of-the-type"><strong>A task of the type itself:</strong> option E's <code>Point.origin()</code>,
           a member that makes a value rather than acting on one. <span class="badge b-rec">Decided</span> It becomes
-          <strong>shared members</strong> (decided 2026-09-27; <a href="vela.html#shared">shared fields</a> are done, and
-          shared methods come next): a shape's <code>shared</code> field is one
+          <strong>shared members</strong> (decided 2026-09-27; <a href="vela.html#shared">shared fields</a> and
+          <a href="vela.html#shared-methods">shared methods</a> are done, 2026-09-28): a shape's <code>shared</code> field is one
           value for the whole program rather than one per value, and a <code>shared</code> method has no
           <code>.this</code>. Both are reached only through the shape's name, <code>Point.origin()</code> and
           <code>Point.made</code>, never through a value. A shared field is <code>bind</code> unless it is

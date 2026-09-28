@@ -1,0 +1,10 @@
+; error: 9:16: 'Point.made' is a shared field, not a method, so it is read as 'Point.made', without '(…)'
+; A shared field is read, not called.
+shape Point
+    x: int
+    shared made: int = 0
+fi
+
+task main()
+    show(Point.made())
+fi

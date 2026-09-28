@@ -267,7 +267,9 @@ block shared type</pre>
         <code>TooLarge</code>) and <a href="#reading-input"><code>InputError</code></a> (<code>Ended</code>,
         <code>NoNumber</code>) take their names the same way, and, as for any kind, a variable may not be named
         after a kind or one of its variants; a field may. Nor may a variable be named after a shape, whose
-        <a href="#shared">shared fields</a> <code>Shape.f</code> names. Four words are read by their position and are no more
+        <a href="#shared">shared fields</a> <code>Shape.f</code> names. <code>new</code> is reserved everywhere
+        but after <code>shared</code> and after a dot, where it names a <a href="#shared-methods">shared method</a>,
+        <code>Point.new(…)</code>. Four words are read by their position and are no more
         reserved than those: <code>alters</code> before a method (see <a href="#methods">Methods</a>),
         <code>read</code> before a shape's field (see <a href="#read-fields">Read-only fields</a>),
         <code>default</code> after a region (see <a href="#default-region">A block's default region</a>), and
@@ -1354,6 +1356,59 @@ Ticket { number: 1, limit: 3 }   <span class="comment">; error: 'limit' is a sha
         <code>Point.made</code> names the shape, no variable may be named like a shape, as none may be named like a
         kind. Counting how many values of a shape exist, rather than how many were made by one method, needs code
         that runs when a value is made and when it goes away, which is the <a href="events.html">events</a> idea.
+      </p>
+      <p id="shared-methods">
+        <strong>Shared methods.</strong> A method marked <code>shared</code> belongs to the shape or kind itself
+        too: it is called on the type's name, <code>Point.new(1, 2)</code> (or <code>geometry.Point.new(1, 2)</code>
+        from another file), never on a value, and has no value it is called on, so no <code>.this</code>, no
+        <code>.x</code>, and no <code>@this</code>. It takes parameters, regions among them, and sends what it makes
+        as a task does. Its usual job is making a value, so <code>new</code>, a keyword elsewhere, is the one keyword
+        a method may be named, and only a shared one.
+      </p>
+      <ul>
+        <li>It is never <code>alters</code>, which is about the value a method is called on. It changes a
+          <code>shared hold</code> field as a task may, and its shape's <code>shared read</code> fields, since it is
+          one of the shape's methods.</li>
+        <li>An ordinary method calls one the same way, <code>Point.new(…)</code>, and one called on the name is
+          always shared: <code>Point.area()</code> is an error that says <code>area</code> is called on a value, and
+          <code>p.new(1, 2)</code> one that says to call it on <code>Point</code>.</li>
+        <li><code>priv shared</code> is seen only by its own file. A shared method shares one namespace with the
+          fields and methods of its shape, and a kind's with its variants, since <code>Kind.Name(…)</code> makes a
+          variant.</li>
+        <li><code>str</code> writes the value it is called on, so it is never shared, and a shape that takes types has
+          no shared methods yet, as it has no shared fields.</li>
+      </ul>
+      <pre><span class="keyword">shape</span> Point
+    x: int
+    y: int
+    <span class="keyword">shared</span> <span class="keyword">read</span> made: int = 0
+
+    <span class="keyword">shared</span> new(x: int, y: int) -&gt; Point
+        Point.made = Point.made + 1
+        <span class="keyword">&lt;-</span> Point { x: x, y: y }
+    <span class="keyword">fi</span>
+
+    moved(by: int) -&gt; Point
+        <span class="keyword">&lt;-</span> Point.new(.x + by, .y + by)
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">kind</span> Light
+    Red
+    Green
+
+    <span class="keyword">shared</span> start() -&gt; Light
+        <span class="keyword">&lt;-</span> Light.Red
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">bind</span> p = Point.new(1, 2)
+    show(p.moved(1), " ", Point.made, " ", Light.start())   <span class="comment">; Point { x: 2, y: 3 } 2 Red</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        In C a shared method is a function without the parameter that holds the value, so calling one costs what
+        calling a task does.
       </p>
       <p>
         Shapes and kinds can be used before they are declared. A type cannot contain itself by value, since its

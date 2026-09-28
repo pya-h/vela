@@ -257,10 +257,11 @@ fn nothing_is_offered_in_comments_text_or_new_names() {
         assert_eq!(labels(marked), ["hold", "hold&", "bind", "bind&"], "at {:?}", marked);
     }
     // A field's or a method's name is new, but it may be private, a shape's
-    // field may be read-only or shared, and a method may change its value. A
-    // kind has no fields, so nothing there is read-only or shared.
+    // field may be read-only or shared, and a method may change its value or
+    // be shared. A kind has no fields, so nothing there is read-only, but its
+    // methods may be shared.
     assert_eq!(labels("shape S\n    @@"), ["priv", "read", "shared", "alters"]);
-    assert_eq!(labels("kind K\n    V\n    @@"), ["priv", "alters"]);
+    assert_eq!(labels("kind K\n    V\n    @@"), ["priv", "alters", "shared"]);
 }
 
 /// The hover at the `nth` occurrence of `needle` (offset `shift` into it).

@@ -1,0 +1,54 @@
+  1 | ; A module with shared methods: public ones any file calls on the shape or
+    | comment:; A module with shared methods: public ones any file calls on the shape or
+  2 | ; kind, and a private one only this file does.
+    | comment:; kind, and a private one only this file does.
+  4 | shape Item
+    | keyword:shape  type:Item
+  5 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  6 |     price: int
+    | field:price  punctuation::  type-builtin:int
+  7 |     shared read made: int = 0
+    | keyword:shared  keyword:read  field:made  punctuation::  type-builtin:int  operator:=  number:0
+  9 |     shared new(name: text, price: int) -> Item
+    | keyword:shared  method:new  punctuation:(  parameter:name  punctuation::  type-builtin:text  punctuation:,  parameter:price  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Item
+ 10 |         Item.made = Item.made + 1
+    | type:Item  punctuation:.  field:made  operator:=  type:Item  punctuation:.  field:made  operator:+  number:1
+ 11 |         <- Item { name: name, price: Item.checked(price) }
+    | keyword:<-  type:Item  punctuation:{  field:name  punctuation::  parameter:name  punctuation:,  field:price  punctuation::  type:Item  punctuation:.  method:checked  punctuation:(  parameter:price  punctuation:)  punctuation:}
+ 12 |     fi
+    | keyword:fi
+ 14 |     priv shared checked(price: int) -> int
+    | keyword:priv  keyword:shared  method:checked  punctuation:(  parameter:price  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 15 |         when price < 0
+    | keyword:when  parameter:price  operator:<  number:0
+ 16 |             <- 0
+    | keyword:<-  number:0
+ 17 |         fi
+    | keyword:fi
+ 18 |         <- price
+    | keyword:<-  parameter:price
+ 19 |     fi
+    | keyword:fi
+ 20 | fi
+    | keyword:fi
+ 22 | kind Size
+    | keyword:kind  type:Size
+ 23 |     Small
+    | variant:Small
+ 24 |     Large(extra: int)
+    | variant:Large  punctuation:(  field:extra  punctuation::  type-builtin:int  punctuation:)
+ 26 |     shared of(price: int) -> Size
+    | keyword:shared  method:of  punctuation:(  parameter:price  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Size
+ 27 |         when price > 10
+    | keyword:when  parameter:price  operator:>  number:10
+ 28 |             <- Size.Large(price - 10)
+    | keyword:<-  type:Size  punctuation:.  variant:Large  punctuation:(  parameter:price  operator:-  number:10  punctuation:)
+ 29 |         fi
+    | keyword:fi
+ 30 |         <- Size.Small
+    | keyword:<-  type:Size  punctuation:.  variant:Small
+ 31 |     fi
+    | keyword:fi
+ 32 | fi
+    | keyword:fi

@@ -413,12 +413,14 @@ Press Ctrl+C to stop.</pre>
             <code>total &lt;- </code>, and hover as <code>result total: int</code>. After <code>match</code>, only <code>case</code>; <code>new</code> only where a region can
             be allocated in; <code>include</code> only above a file's tasks, shapes, and kinds; <code>priv</code> before
             those and a shape's fields, with <code>task</code>, <code>shape</code>, and <code>kind</code> after it; and
-            <code>priv</code> and <code>alters</code> at the start of a shape's or a kind's member, with
-            <code>alters</code> after its <code>priv</code>; a shape's also offers <code>read</code> and
-            <code>shared</code>, with <code>hold</code> and <code>read</code> after <code>shared</code>. After a
-            shape's name and a dot, <code>Point.</code>, its <a href="vela.html#shared">shared fields</a> are offered,
-            and never after a value's name or in a literal; one hovers as <code>shared hold made: int</code>, saying
-            who may change it. In a task's or a method's parameters, where a name goes,
+            <code>priv</code>, <code>alters</code>, and <code>shared</code> at the start of a shape's or a kind's
+            member, with <code>alters</code> after its <code>priv</code>; a shape's also offers <code>read</code>,
+            with <code>hold</code>, <code>read</code>, and <code>new</code> after <code>shared</code> (a kind's, only
+            <code>new</code>). After a shape's name and a dot, <code>Point.</code>, its
+            <a href="vela.html#shared">shared fields</a> and <a href="vela.html#shared-methods">shared methods</a> are
+            offered, and after a kind's its variants and shared methods, never after a value's name or in a literal;
+            a shared field hovers as <code>shared hold made: int</code>, saying who may change it, and a shared method
+            as <code>shared new(x: int) -&gt; Point</code>, colored as a method where it is declared and called. In a task's or a method's parameters, where a name goes,
             <code>hold</code> and <code>hold&amp;</code>, which make the parameter the task's own copy to change, or
             the caller's place; such a parameter hovers as <code>hold n: int</code> or <code>hold&amp; n: int</code>,
             and after the <code>&amp;</code> of a call, where a place goes, the variables are offered. A reference,
