@@ -1,4 +1,5 @@
-; error: 5:10: 'str' is a private method of 'Point', which only its own file can use
+; error: 6:10: 'str' is a private method of 'Point', which only its own file can use
+; error: modules/private_str.vela:6:10: a method named 'str' says how the value is written as text wherever it is shown, so it isn't 'priv'
 include modules/private_str
 
 task main()

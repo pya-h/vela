@@ -4231,7 +4231,16 @@ impl Checker {
         if let Some(untold) = self.untold_param(&ty) {
             return err(arg.span, untold);
         }
-        err(arg.span, format!("show can't write {}", self.why_unwritable(&ty)))
+        // A shape or kind can say how it is written itself.
+        let own = match self.owner_of(&ty).filter(|owner| self.shapes.contains_key(owner) || self.kinds.contains_key(owner)) {
+            Some(owner) => format!(
+                "; or give {} '{}' its own method 'str(r: region) -> text@r'",
+                if self.kinds.contains_key(&owner) { "kind" } else { "shape" },
+                unqualified(&owner)
+            ),
+            None => String::new(),
+        };
+        err(arg.span, format!("show can't write {}{}", self.why_unwritable(&ty), own))
     }
 
     /// Why values of type `ty` can't be written as text, for the end of a
@@ -4263,14 +4272,63 @@ impl Checker {
     /// The first type in `ty`, itself included, whose values can't be written
     /// as text (see `writable`).
     fn unwritable_part(&self, ty: &Type) -> Option<Type> {
+        self.unwritable_in(ty, &mut Vec::new())
+    }
+
+    /// `unwritable_part`, with the shapes and kinds already being looked
+    /// through in `seen`: one that holds itself (through a slice, say) is
+    /// written as far as its values go, so it is no reason to refuse.
+    fn unwritable_in(&self, ty: &Type, seen: &mut Vec<String>) -> Option<Type> {
         match ty {
             Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => None,
-            Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unwritable_part(inner),
-            Type::Tuple(items) => items.iter().find_map(|item| self.unwritable_part(item)),
+            Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unwritable_in(inner, seen),
+            Type::Tuple(items) => items.iter().find_map(|item| self.unwritable_in(item, seen)),
             Type::Param(_) if self.allows(Need::Shown, ty) => None,
             Type::Named(..) | Type::Applied(_) if self.has_own_str(ty) => None,
+            // Without its own `str`, a shape is written as its fields that any
+            // file reads, and a kind as its variant with the values it carries.
+            Type::Named(..) | Type::Applied(_) => {
+                let name = match ty {
+                    Type::Applied(applied) => &applied.name,
+                    Type::Named(name, _) => name,
+                    _ => return Some(ty.clone()),
+                };
+                if seen.contains(name) {
+                    return None;
+                }
+                let Some(parts) = self.written_parts(ty) else { return Some(ty.clone()) };
+                seen.push(name.clone());
+                let found = parts.iter().find_map(|part| self.unwritable_in(part, seen));
+                seen.pop();
+                found
+            }
             _ => Some(ty.clone()),
         }
+    }
+
+    /// The types a shape's or kind's default text writes: a shape's fields
+    /// that aren't `priv` (shared ones are no part of a value), with the types
+    /// a shape that takes them is given, or every value a kind's variants
+    /// carry. `None` for no shape or kind.
+    fn written_parts(&self, ty: &Type) -> Option<Vec<Type>> {
+        let (name, given): (&str, &[Type]) = match ty {
+            Type::Named(name, _) => (name, &[]),
+            Type::Applied(applied) => (&applied.name, &applied.types),
+            _ => return None,
+        };
+        if let Some(shape) = self.shapes.get(name) {
+            let names: HashMap<&str, &Type> = shape.types.iter().map(|param| param.name.as_str()).zip(given).collect();
+            return Some(
+                shape
+                    .fields
+                    .iter()
+                    .filter(|field| !field.private)
+                    .map(|field| field.ty.map_params(&mut |param| names.get(param).map(|ty| (*ty).clone())))
+                    .collect(),
+            );
+        }
+        let kind = self.kinds.get(name)?;
+        Some(kind.variants.iter().flat_map(|variant| variant.payload.iter().map(|field| field.ty.clone())).collect())
     }
 
     /// Whether values of type `ty` are written by a method `str` of their own.
@@ -4987,10 +5045,12 @@ impl Checker {
         if let Some(owner) = self.owner_of(base).filter(|owner| self.shapes.contains_key(owner) || self.kinds.contains_key(owner)) {
             let what = if self.kinds.contains_key(&owner) { "kind" } else { "shape" };
             let written = unqualified(&owner);
+            // Without a `str` of its own, one is written by its parts, and one
+            // of them can't be.
             if name == STR {
                 return Error::at(
                     span,
-                    format!("{} '{}' has no method 'str', which turns its values into text; give it one, written 'str(r: region) -> text@r'", what, written),
+                    format!("'str' can't write {}; or give {} '{}' its own method 'str(r: region) -> text@r'", self.why_unwritable(base), what, written),
                 );
             }
             if self.shapes.get(&owner).is_some_and(|shape| shape.fields.iter().any(|field| field.name == name)) {
@@ -5091,10 +5151,11 @@ impl Checker {
         Ok(())
     }
 
-    /// Whether values of type `ty` have `str` built in: numbers, bools, text,
-    /// and a type a declaration takes that is `shown`, which is one of those.
+    /// Whether values of type `ty` have `str` built in: every value that can
+    /// be written as text (see `writable`) but a shape's or kind's with a
+    /// method `str` of its own, which is called instead.
     fn has_builtin_str(&self, ty: &Type) -> bool {
-        !matches!(ty, Type::Named(..) | Type::Applied(_)) && self.writable(ty)
+        !self.has_own_str(ty) && self.writable(ty)
     }
 
     /// Rewrites `value.str(r)`, a method call on a value with `str` built in,
@@ -7139,6 +7200,10 @@ fn example_names(n: usize) -> String {
 /// one header those can call.
 fn check_str_method(t: &TaskDef) -> Result<()> {
     let written = "a method named 'str' turns the value it is called on into text, so it is written 'str(r: region) -> text@r'";
+    // `show` and text holding values write the value from any file.
+    if t.private {
+        return err(t.span, "a method named 'str' says how the value is written as text wherever it is shown, so it isn't 'priv'");
+    }
     if let Some(at) = t.owner.as_ref().and_then(|owner| owner.alters_span) {
         return err(at, "a method named 'str' turns the value it is called on into text without changing it, so it isn't marked 'alters'");
     }

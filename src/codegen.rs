@@ -789,7 +789,7 @@ impl Generator {
             self.w.open(&format!("static vela__rt__text {}(vela__rt__region* r, {} v)", text_helper(ty), c_type(ty)));
             match ty {
                 // A shape's or kind's own `str` makes the text itself.
-                Type::Named(owner, _) => self.w.line(&format!("return {};", self.own_str_call(owner, "r")?)),
+                Type::Named(owner, _) if self.has_own_str(owner) => self.w.line(&format!("return {};", self.own_str_call(owner, "r")?)),
                 _ => {
                     self.w.line("vela__rt__writer w = VELA__RT__BUILDER;");
                     match ty {
@@ -805,6 +805,26 @@ impl Generator {
             self.w.blank();
         }
         Ok(())
+    }
+
+    /// Whether the shape or kind `owner` gives its own method `str`.
+    fn has_own_str(&self, owner: &str) -> bool {
+        self.hidden_params.contains_key(&method_name(owner, STR))
+    }
+
+    /// A shape's or kind's name as its default text writes it: its own name,
+    /// wherever it is read, and a shape made for types written as given them,
+    /// `Box<int>` (see `ShapeDef::given`).
+    fn written_name(&self, name: &str) -> String {
+        match self.shapes.get(name) {
+            Some(shape) if !shape.given.is_empty() => {
+                let base = name.split("__of__").next().unwrap_or(name);
+                let given: Vec<String> =
+                    shape.given.iter().map(|ty| ty.without_regions().map_names(&|inner| self.written_name(inner)).to_string()).collect();
+                format!("{}<{}>", unqualified(base), given.join(", "))
+            }
+            _ => unqualified(name).to_string(),
+        }
     }
 
     /// The call of the method `str` a shape or kind `owner` gives, on the value
@@ -856,10 +876,50 @@ impl Generator {
                 self.w.line(&put_item(inner, &value));
                 self.w.line("VELA__RT__PUT(w, \" }\");");
             }
-            Type::Named(owner, _) => {
+            Type::Named(owner, _) if self.has_own_str(owner) => {
                 self.w.line("vela__rt__region r[1] = { VELA__RT__REGION_EMPTY };");
                 self.w.line(&format!("vela__rt__put_text(w, {});", self.own_str_call(owner, "r")?));
                 self.w.line("vela__rt__region_free(r);");
+            }
+            // Without one, a shape is written as a literal of its fields that
+            // any file reads, `Point { x: 1, y: 2 }`.
+            Type::Named(name, _) if self.shapes.contains_key(name) => {
+                let shape = &self.shapes[name];
+                let fields: Vec<Field> = shape.fields.iter().filter(|field| !field.private).cloned().collect();
+                let written = self.written_name(name);
+                if fields.is_empty() {
+                    self.w.line(&format!("VELA__RT__PUT(w, \"{} {{}}\");", written));
+                } else {
+                    for (i, field) in fields.iter().enumerate() {
+                        let before = if i == 0 { format!("{} {{ ", written) } else { ", ".to_string() };
+                        self.w.line(&format!("VELA__RT__PUT(w, \"{}{}: \");", before, field.name));
+                        self.w.line(&put_item(&field.ty, &format!("v.{}", c_ident(&field.name))));
+                    }
+                    self.w.line("VELA__RT__PUT(w, \" }\");");
+                }
+            }
+            // And a kind as the variant it holds, with the values it carries as
+            // a call gives them, `Circle(1.5)`.
+            Type::Named(name, _) if self.kinds.contains_key(name) => {
+                let kind = self.kinds[name].clone();
+                self.w.open("switch (v.tag)");
+                for variant in &kind.variants {
+                    self.w.line(&format!("case {}:", tag_value(&kind.name, &variant.tag)));
+                    self.w.line(&format!("    VELA__RT__PUT(w, \"{}{}\");", variant.tag, if variant.payload.is_empty() { "" } else { "(" }));
+                    for (i, field) in variant.payload.iter().enumerate() {
+                        if i > 0 {
+                            self.w.line("    VELA__RT__PUT(w, \", \");");
+                        }
+                        self.w.line(&format!("    {}", put_item(&field.ty, &format!("v.data.{}.{}", c_ident(&variant.tag), c_ident(&field.name)))));
+                    }
+                    if !variant.payload.is_empty() {
+                        self.w.line("    VELA__RT__PUT(w, \")\");");
+                    }
+                    self.w.line("    break;");
+                }
+                self.w.line("default:");
+                self.w.line("    break;");
+                self.w.close();
             }
             other => return Err(Error::internal(format!("writing a value of type {} as text", other))),
         }
@@ -2606,6 +2666,9 @@ struct UsedTypes {
     /// The types whose values `str` makes into text through a generated
     /// `text`: those with a `write`, and shapes and kinds with their own `str`.
     texts: Vec<Type>,
+    /// For each shape or kind without its own `str`, the types its default
+    /// text writes: a shape's fields that aren't `priv`, a kind's payloads.
+    parts: HashMap<String, Vec<Type>>,
     /// The numbers read from text, `int("42")` and `float("2.5")`, each of which
     /// needs the helper that turns what the runtime reads into a value or a
     /// `ParseError`.
@@ -2644,6 +2707,7 @@ impl UsedTypes {
             compounds: Vec::new(),
             writes: Vec::new(),
             texts: Vec::new(),
+            parts: HashMap::new(),
             read: Vec::new(),
             scanned: Vec::new(),
             slice_at: Vec::new(),
@@ -2659,6 +2723,24 @@ impl UsedTypes {
             tuple_eq: Vec::new(),
             scans: false,
         };
+        let own_str: HashSet<String> = items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Task(t) => method_parts(&t.name).filter(|(_, method)| *method == STR).map(|(owner, _)| owner.to_string()),
+                _ => None,
+            })
+            .collect();
+        for item in items {
+            match item {
+                Item::Shape(s) if s.types.is_empty() && !own_str.contains(&s.name) => {
+                    used.parts.insert(s.name.clone(), s.fields.iter().filter(|f| !f.private).map(|f| f.ty.clone()).collect());
+                }
+                Item::Kind(k) if !own_str.contains(&k.name) => {
+                    used.parts.insert(k.name.clone(), k.variants.iter().flat_map(|v| v.payload.iter().map(|f| f.ty.clone())).collect());
+                }
+                _ => {}
+            }
+        }
         for item in items {
             match item {
                 // The fields of a shape that takes types hold `T`, which no C
@@ -2732,7 +2814,18 @@ impl UsedTypes {
             Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => return,
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.note_write(inner),
             Type::Tuple(items) => items.iter().for_each(|item| self.note_write(item)),
-            Type::Named(..) => {}
+            // A shape or kind written by default writes its parts; one that
+            // holds itself (through a slice, say) is noted once.
+            Type::Named(name, _) => {
+                if self.writes.contains(&ty) {
+                    return;
+                }
+                note(&mut self.writes, &ty);
+                for part in self.parts.get(name).cloned().unwrap_or_default() {
+                    self.note_write(&part);
+                }
+                return;
+            }
             // Nothing else is written as text; the checker made sure of it.
             _ => return,
         }
@@ -2897,7 +2990,7 @@ impl UsedTypes {
                     && !matches!(ty, Type::Int | Type::Float | Type::Bool | Type::Text(_))
                 {
                     // A shape's or kind's own `str` needs no `write`.
-                    if !matches!(ty, Type::Named(..)) {
+                    if !matches!(ty, Type::Named(name, _) if !self.parts.contains_key(name)) {
                         self.note_write(ty);
                     }
                     note(&mut self.texts, ty);

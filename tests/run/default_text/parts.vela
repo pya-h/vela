@@ -1,0 +1,12 @@
+; A module whose shape and kind are written by default, used from
+; tests/run/default_text.vela: they are written by their own names there.
+
+shape Crate
+    size: int
+    priv code: int = 7
+fi
+
+kind Weather
+    Sun
+    Rain(mm: int)
+fi

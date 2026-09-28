@@ -1,8 +1,0 @@
-; error: 7:10: show can't write Plain as text; shape 'Plain' has no method 'str', which says how its values are written; give it one, written 'str(r: region) -> text@r'
-shape Plain
-    x: int
-fi
-
-task main()
-    show(Plain { x: 1 })
-fi

@@ -285,7 +285,10 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         };
         // An array, a slice, a tuple, a pointer, and a `maybe` are written as
         // text too (see the checker's `writable`); a shape or kind by its own.
-        let written = matches!(base, Some(Type::Array(..) | Type::Slice(..) | Type::Tuple(_) | Type::Ptr(..) | Type::Maybe(_)));
+        let written = matches!(
+            base,
+            Some(Type::Array(..) | Type::Slice(..) | Type::Tuple(_) | Type::Ptr(..) | Type::Maybe(_) | Type::Named(..) | Type::Applied(_))
+        );
         let with_copy = |mut items: Vec<CompletionItem>, from_dot: bool| {
             if written && !items.iter().any(|item| item.label == vela::ast::STR) {
                 let mut str_item = to_text();

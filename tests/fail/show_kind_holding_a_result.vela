@@ -1,0 +1,9 @@
+; error: 8:23: show can't write Outcome as text, since it holds int ~ ParseError; a value that can fail is read first, with a plan B, match, or is; or give kind 'Outcome' its own method 'str(r: region) -> text@r'
+kind Outcome
+    Read(value: int ~ ParseError)
+    Skipped
+fi
+
+task main()
+    show("outcome: ", Outcome.Skipped)
+fi

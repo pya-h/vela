@@ -1,0 +1,14 @@
+Point { x: 1, y: -2 }
+Person { name: "Ada \"the first\"", age: 36, home: { Point { x: 1, y: -2 } } }
+Marker {} Only {}
+Box<int> { value: 3 } Box<Box<text>> { value: Box<text> { value: "x" } }
+Circle(1.5) Rect(2.5, 3.5) Dot Loud
+[Dot, Circle(1)] (Point { x: 1, y: -2 }, Calm)
+Crate { size: 2 } Rain(4) Sun
+1 none
+Tree { value: 1, kids: { [Tree { value: 2, kids: none }, Tree { value: 2, kids: none }] } }
+Point { x: 1, y: -2 } 21 Point { x: 1, y: -2 } and Dot
+Rect(1, 2)
+$2.50 Price { item: "tea", cost: $1.99 } [stop, go]
+Point { x: 1, y: -2 } Calm go
+NotANumber

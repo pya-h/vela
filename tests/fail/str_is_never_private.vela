@@ -1,0 +1,12 @@
+; error: 5:10: a method named 'str' says how the value is written as text wherever it is shown, so it isn't 'priv'
+shape Point
+    x: int
+
+    priv str(r: region) -> text@r
+        <- "({.x})" at r
+    fi
+fi
+
+task main()
+    show(Point { x: 1 })
+fi

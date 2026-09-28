@@ -1,0 +1,198 @@
+  1 | ; A shape or kind without a str of its own is written by default: a shape as a
+    | comment:; A shape or kind without a str of its own is written by default: a shape as a
+  2 | ; literal of the fields any file reads, a kind as its variant with the values
+    | comment:; literal of the fields any file reads, a kind as its variant with the values
+  3 | ; it carries. A str of its own replaces the default.
+    | comment:; it carries. A str of its own replaces the default.
+  5 | include default_text/parts
+    | keyword:include  module:default_text  operator:/  module:parts
+  7 | shape Point
+    | keyword:shape  type:Point
+  8 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  9 |     y: int
+    | field:y  punctuation::  type-builtin:int
+ 10 | fi
+    | keyword:fi
+ 12 | shape Person
+    | keyword:shape  type:Person
+ 13 |     name: text
+    | field:name  punctuation::  type-builtin:text
+ 14 |     read age: int
+    | keyword:read  field:age  punctuation::  type-builtin:int
+ 15 |     ; Neither a private field nor a shared one is written, so a private one may
+    | comment:; Neither a private field nor a shared one is written, so a private one may
+ 16 |     ; even hold a value that can fail.
+    | comment:; even hold a value that can fail.
+ 17 |     priv secret: int ~ ParseError = 0
+    | keyword:priv  field:secret  punctuation::  type-builtin:int  operator:~  type:ParseError  operator:=  number:0
+ 18 |     shared made: int = 0
+    | keyword:shared  field:made  punctuation::  type-builtin:int  operator:=  number:0
+ 19 |     home: maybe Point = none
+    | field:home  punctuation::  keyword:maybe  type:Point  operator:=  keyword:none
+ 20 | fi
+    | keyword:fi
+ 22 | shape Marker
+    | keyword:shape  type:Marker
+ 23 | fi
+    | keyword:fi
+ 25 | shape Only
+    | keyword:shape  type:Only
+ 26 |     priv inside: int = 1
+    | keyword:priv  field:inside  punctuation::  type-builtin:int  operator:=  number:1
+ 27 | fi
+    | keyword:fi
+ 29 | shape Box<T>
+    | keyword:shape  type:Box  punctuation:<  type:T  punctuation:>
+ 30 |     value: T
+    | field:value  punctuation::  type:T
+ 31 | fi
+    | keyword:fi
+ 33 | ; A pointer is written as its address, so a list never writes itself forever.
+    | comment:; A pointer is written as its address, so a list never writes itself forever.
+ 34 | shape Node
+    | keyword:shape  type:Node
+ 35 |     value: int
+    | field:value  punctuation::  type-builtin:int
+ 36 |     next: maybe ^Node = none
+    | field:next  punctuation::  keyword:maybe  operator:^  type:Node  operator:=  keyword:none
+ 37 | fi
+    | keyword:fi
+ 39 | ; A slice of its own shape is written as deep as the values go.
+    | comment:; A slice of its own shape is written as deep as the values go.
+ 40 | shape Tree
+    | keyword:shape  type:Tree
+ 41 |     value: int
+    | field:value  punctuation::  type-builtin:int
+ 42 |     kids: maybe [Tree] = none
+    | field:kids  punctuation::  keyword:maybe  punctuation:[  type:Tree  punctuation:]  operator:=  keyword:none
+ 43 | fi
+    | keyword:fi
+ 45 | kind Figure
+    | keyword:kind  type:Figure
+ 46 |     Circle(radius: float)
+    | variant:Circle  punctuation:(  field:radius  punctuation::  type-builtin:float  punctuation:)
+ 47 |     Rect(w: float, h: float)
+    | variant:Rect  punctuation:(  field:w  punctuation::  type-builtin:float  punctuation:,  field:h  punctuation::  type-builtin:float  punctuation:)
+ 48 |     Dot
+    | variant:Dot
+ 49 | fi
+    | keyword:fi
+ 51 | kind Mood
+    | keyword:kind  type:Mood
+ 52 |     Calm
+    | variant:Calm
+ 53 |     Loud
+    | variant:Loud
+ 54 | fi
+    | keyword:fi
+ 56 | ; A str of its own replaces the default, inside other values too.
+    | comment:; A str of its own replaces the default, inside other values too.
+ 57 | shape Money
+    | keyword:shape  type:Money
+ 58 |     cents: int
+    | field:cents  punctuation::  type-builtin:int
+ 59 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 60 |         <- "${.cents / 100}.{.cents % 100}" at r
+    | keyword:<-  string:"${  punctuation:.  field:cents  operator:/  number:100  string:}.{  punctuation:.  field:cents  operator:%  number:100  string:}"  keyword:at  region:r
+ 61 |     fi
+    | keyword:fi
+ 62 | fi
+    | keyword:fi
+ 64 | kind Light
+    | keyword:kind  type:Light
+ 65 |     Red
+    | variant:Red
+ 66 |     Green
+    | variant:Green
+ 67 |     str(r: region) -> text@r
+    | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 68 |         <- match .this
+    | keyword:<-  keyword:match  punctuation:.  keyword:this
+ 69 |             case Red = "stop"
+    | keyword:case  variant:Red  operator:=  string:"stop"
+ 70 |             case Green = "go"
+    | keyword:case  variant:Green  operator:=  string:"go"
+ 71 |         fi.copy() at r
+    | keyword:fi  punctuation:.  method:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 72 |     fi
+    | keyword:fi
+ 73 | fi
+    | keyword:fi
+ 75 | shape Price
+    | keyword:shape  type:Price
+ 76 |     item: text
+    | field:item  punctuation::  type-builtin:text
+ 77 |     cost: Money
+    | field:cost  punctuation::  type:Money
+ 78 | fi
+    | keyword:fi
+ 80 | task told<T: shown>(r: region, v: T) -> text@r
+    | keyword:task  task:told  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:>  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:v  punctuation::  type:T  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 81 |     <- "{v}" at r
+    | keyword:<-  string:"{  parameter:v  string:}"  keyword:at  region:r
+ 82 | fi
+    | keyword:fi
+ 84 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 85 |     region r
+    | keyword:region  region:r
+ 86 |     bind p = Point { x: 1, y: -2 }
+    | keyword:bind  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  operator:-  number:2  punctuation:}
+ 87 |     show(p)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:)
+ 88 |     show(Person { name: "Ada \"the first\"", age: 36, home: p })
+    | builtin-fn:show  punctuation:(  type:Person  punctuation:{  field:name  punctuation::  string:"Ada   escape:\"  string:the first  escape:\"  string:"  punctuation:,  field:age  punctuation::  number:36  punctuation:,  field:home  punctuation::  variable:p  punctuation:}  punctuation:)
+ 89 |     show(Marker {}, " ", Only {})
+    | builtin-fn:show  punctuation:(  type:Marker  punctuation:{  punctuation:}  punctuation:,  string:" "  punctuation:,  type:Only  punctuation:{  punctuation:}  punctuation:)
+ 90 |     show(Box<int> { value: 3 }, " ", Box<Box<text>> { value: Box<text> { value: "x" } })
+    | builtin-fn:show  punctuation:(  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  number:3  punctuation:}  punctuation:,  string:" "  punctuation:,  type:Box  punctuation:<  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:>  punctuation:{  field:value  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:{  field:value  punctuation::  string:"x"  punctuation:}  punctuation:}  punctuation:)
+ 91 |     show(Figure.Circle(1.5), " ", Figure.Rect(2.5, 3.5), " ", Figure.Dot, " ", Mood.Loud)
+    | builtin-fn:show  punctuation:(  type:Figure  punctuation:.  variant:Circle  punctuation:(  number:1.5  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Figure  punctuation:.  variant:Rect  punctuation:(  number:2.5  punctuation:,  number:3.5  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Figure  punctuation:.  variant:Dot  punctuation:,  string:" "  punctuation:,  type:Mood  punctuation:.  variant:Loud  punctuation:)
+ 92 |     show([Figure.Dot, Figure.Circle(1.0)], " ", (p, Mood.Calm))
+    | builtin-fn:show  punctuation:(  punctuation:[  type:Figure  punctuation:.  variant:Dot  punctuation:,  type:Figure  punctuation:.  variant:Circle  punctuation:(  number:1.0  punctuation:)  punctuation:]  punctuation:,  string:" "  punctuation:,  punctuation:(  variable:p  punctuation:,  type:Mood  punctuation:.  variant:Calm  punctuation:)  punctuation:)
+ 93 |     ; Another module's shape and kind by their own names.
+    | comment:; Another module's shape and kind by their own names.
+ 94 |     show(parts.Crate { size: 2 }, " ", parts.Weather.Rain(4), " ", parts.Weather.Sun)
+    | builtin-fn:show  punctuation:(  module:parts  punctuation:.  type:Crate  punctuation:{  field:size  punctuation::  number:2  punctuation:}  punctuation:,  string:" "  punctuation:,  module:parts  punctuation:.  type:Weather  punctuation:.  variant:Rain  punctuation:(  number:4  punctuation:)  punctuation:,  string:" "  punctuation:,  module:parts  punctuation:.  type:Weather  punctuation:.  variant:Sun  punctuation:)
+ 95 |     bind first = new Node(Node { value: 1 }) at r
+    | keyword:bind  variable:first  operator:=  keyword:new  type:Node  punctuation:(  type:Node  punctuation:{  field:value  punctuation::  number:1  punctuation:}  punctuation:)  keyword:at  region:r
+ 96 |     show(first^.value, " ", first^.next)
+    | builtin-fn:show  punctuation:(  variable:first  operator:^  punctuation:.  field:value  punctuation:,  string:" "  punctuation:,  variable:first  operator:^  punctuation:.  field:next  punctuation:)
+ 97 |     bind leaf: Tree@r = Tree { value: 2 }
+    | keyword:bind  variable:leaf  punctuation::  type:Tree  operator:@  region:r  operator:=  type:Tree  punctuation:{  field:value  punctuation::  number:2  punctuation:}
+ 98 |     show(Tree { value: 1, kids: new [Tree]([leaf, leaf]) at r })
+    | builtin-fn:show  punctuation:(  type:Tree  punctuation:{  field:value  punctuation::  number:1  punctuation:,  field:kids  punctuation::  keyword:new  punctuation:[  type:Tree  punctuation:]  punctuation:(  punctuation:[  variable:leaf  punctuation:,  variable:leaf  punctuation:]  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:)
+ 99 |     ; str, and text holding values, write the same.
+    | comment:; str, and text holding values, write the same.
+100 |     bind t = p.str() at r
+    | keyword:bind  variable:t  operator:=  variable:p  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r
+101 |     show(t, " ", t.len, " ", "{p} and {Figure.Dot}" at r)
+    | builtin-fn:show  punctuation:(  variable:t  punctuation:,  string:" "  punctuation:,  variable:t  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  string:"{  variable:p  string:} and {  type:Figure  punctuation:.  variant:Dot  string:}"  keyword:at  region:r  punctuation:)
+102 |     show(Figure.Rect(1.0, 2.0).str() at r)
+    | builtin-fn:show  punctuation:(  type:Figure  punctuation:.  variant:Rect  punctuation:(  number:1.0  punctuation:,  number:2.0  punctuation:)  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
+103 |     ; Its own str wins, alone and inside others.
+    | comment:; Its own str wins, alone and inside others.
+104 |     show(Money { cents: 250 }, " ", Price { item: "tea", cost: Money { cents: 199 } }, " ", [Light.Red, Light.Green])
+    | builtin-fn:show  punctuation:(  type:Money  punctuation:{  field:cents  punctuation::  number:250  punctuation:}  punctuation:,  string:" "  punctuation:,  type:Price  punctuation:{  field:item  punctuation::  string:"tea"  punctuation:,  field:cost  punctuation::  type:Money  punctuation:{  field:cents  punctuation::  number:199  punctuation:}  punctuation:}  punctuation:,  string:" "  punctuation:,  punctuation:[  type:Light  punctuation:.  variant:Red  punctuation:,  type:Light  punctuation:.  variant:Green  punctuation:]  punctuation:)
+105 |     ; A type given to a task that writes it.
+    | comment:; A type given to a task that writes it.
+106 |     show(told(r, p), " ", told(r, Mood.Calm), " ", told(r, Light.Green))
+    | builtin-fn:show  punctuation:(  task:told  punctuation:(  region:r  punctuation:,  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  task:told  punctuation:(  region:r  punctuation:,  type:Mood  punctuation:.  variant:Calm  punctuation:)  punctuation:,  string:" "  punctuation:,  task:told  punctuation:(  region:r  punctuation:,  type:Light  punctuation:.  variant:Green  punctuation:)  punctuation:)
+107 |     ; The errors of reading a number are a kind like any other.
+    | comment:; The errors of reading a number are a kind like any other.
+108 |     match int("x")
+    | keyword:match  type-builtin:int  punctuation:(  string:"x"  punctuation:)
+109 |     case failure e
+    | keyword:case  keyword:failure  variable:e
+110 |         show(e)
+    | builtin-fn:show  punctuation:(  variable:e  punctuation:)
+111 |     case {v}
+    | keyword:case  punctuation:{  variable:v  punctuation:}
+112 |         show(v)
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:)
+113 |     fi
+    | keyword:fi
+114 | fi
+    | keyword:fi

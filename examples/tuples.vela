@@ -39,7 +39,7 @@ task main()
     scores.add(("Ada", 91))
     scores.add(("Bob", 78))
     scores.add(("Cy", 85))
-
+    show(scores[0])
     bind low, high = range_of(scores)
     show(high - low)                         ; 13
 

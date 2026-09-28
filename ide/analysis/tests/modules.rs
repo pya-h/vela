@@ -243,8 +243,8 @@ fn completion_offers_what_modules_declare() {
     assert!(types.contains(&"Color".to_string()) && types.contains(&"geometry".to_string()) && !types.contains(&"Point".to_string()), "{:?}", types);
 
     // Fields of another module's shape, except private ones.
-    assert_eq!(labels(&main_with("show(corner.@@)")), ["x", "y", "type"]);
-    assert_eq!(labels(&main_with("show(size.@@)")), ["size", "type"]);
+    assert_eq!(labels(&main_with("show(corner.@@)")), ["x", "y", "str", "type"]);
+    assert_eq!(labels(&main_with("show(size.@@)")), ["size", "str", "type"]);
     // A match on another module's kind names its variants alone.
     let cases = labels(&MAIN.replace("    case Circle radius\n        show(radius)\n", "    case @@\n"));
     assert!(cases.contains(&"Circle".to_string()) && !cases.iter().any(|c| c.contains('.')), "{:?}", cases);
@@ -359,7 +359,7 @@ fn types_a_file_cant_write_are_spelled_with_their_module_path() {
         let analysis = Analysis::with_modules(&source, "app/main.vela", &sources);
         assert_eq!(analysis.diagnostics().is_empty(), checks, "{:?}", analysis.diagnostics());
         assert_eq!(analysis.hover(at(&source, "size =", 0)).unwrap().code, "bind size: shapes/geometry.Measure", "checks: {}", checks);
-        assert_eq!(labels(&braces_program(checks, "show(size.@@)")), ["size", "type"], "checks: {}", checks);
+        assert_eq!(labels(&braces_program(checks, "show(size.@@)")), ["size", "str", "type"], "checks: {}", checks);
         // A variant listed alone belongs to a kind the file can't name, spelled
         // as the compiler spells it.
         let circle = analysis.hover(at(&source, "Circle(1.0)", 0)).unwrap();

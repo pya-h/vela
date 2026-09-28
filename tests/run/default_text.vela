@@ -1,0 +1,114 @@
+; A shape or kind without a str of its own is written by default: a shape as a
+; literal of the fields any file reads, a kind as its variant with the values
+; it carries. A str of its own replaces the default.
+
+include default_text/parts
+
+shape Point
+    x: int
+    y: int
+fi
+
+shape Person
+    name: text
+    read age: int
+    ; Neither a private field nor a shared one is written, so a private one may
+    ; even hold a value that can fail.
+    priv secret: int ~ ParseError = 0
+    shared made: int = 0
+    home: maybe Point = none
+fi
+
+shape Marker
+fi
+
+shape Only
+    priv inside: int = 1
+fi
+
+shape Box<T>
+    value: T
+fi
+
+; A pointer is written as its address, so a list never writes itself forever.
+shape Node
+    value: int
+    next: maybe ^Node = none
+fi
+
+; A slice of its own shape is written as deep as the values go.
+shape Tree
+    value: int
+    kids: maybe [Tree] = none
+fi
+
+kind Figure
+    Circle(radius: float)
+    Rect(w: float, h: float)
+    Dot
+fi
+
+kind Mood
+    Calm
+    Loud
+fi
+
+; A str of its own replaces the default, inside other values too.
+shape Money
+    cents: int
+    str(r: region) -> text@r
+        <- "${.cents / 100}.{.cents % 100}" at r
+    fi
+fi
+
+kind Light
+    Red
+    Green
+    str(r: region) -> text@r
+        <- match .this
+            case Red = "stop"
+            case Green = "go"
+        fi.copy() at r
+    fi
+fi
+
+shape Price
+    item: text
+    cost: Money
+fi
+
+task told<T: shown>(r: region, v: T) -> text@r
+    <- "{v}" at r
+fi
+
+task main()
+    region r
+    bind p = Point { x: 1, y: -2 }
+    show(p)
+    show(Person { name: "Ada \"the first\"", age: 36, home: p })
+    show(Marker {}, " ", Only {})
+    show(Box<int> { value: 3 }, " ", Box<Box<text>> { value: Box<text> { value: "x" } })
+    show(Figure.Circle(1.5), " ", Figure.Rect(2.5, 3.5), " ", Figure.Dot, " ", Mood.Loud)
+    show([Figure.Dot, Figure.Circle(1.0)], " ", (p, Mood.Calm))
+    ; Another module's shape and kind by their own names.
+    show(parts.Crate { size: 2 }, " ", parts.Weather.Rain(4), " ", parts.Weather.Sun)
+    bind first = new Node(Node { value: 1 }) at r
+    show(first^.value, " ", first^.next)
+    bind leaf: Tree@r = Tree { value: 2 }
+    show(Tree { value: 1, kids: new [Tree]([leaf, leaf]) at r })
+    ; str, and text holding values, write the same.
+    bind t = p.str() at r
+    show(t, " ", t.len, " ", "{p} and {Figure.Dot}" at r)
+    show(Figure.Rect(1.0, 2.0).str() at r)
+    ; Its own str wins, alone and inside others.
+    show(Money { cents: 250 }, " ", Price { item: "tea", cost: Money { cents: 199 } }, " ", [Light.Red, Light.Green])
+    ; A type given to a task that writes it.
+    show(told(r, p), " ", told(r, Mood.Calm), " ", told(r, Light.Green))
+    ; The errors of reading a number are a kind like any other.
+    match int("x")
+    case failure e
+        show(e)
+    case {v}
+        show(v)
+    fi
+fi

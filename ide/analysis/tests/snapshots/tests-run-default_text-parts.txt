@@ -1,0 +1,20 @@
+  1 | ; A module whose shape and kind are written by default, used from
+    | comment:; A module whose shape and kind are written by default, used from
+  2 | ; tests/run/default_text.vela: they are written by their own names there.
+    | comment:; tests/run/default_text.vela: they are written by their own names there.
+  4 | shape Crate
+    | keyword:shape  type:Crate
+  5 |     size: int
+    | field:size  punctuation::  type-builtin:int
+  6 |     priv code: int = 7
+    | keyword:priv  field:code  punctuation::  type-builtin:int  operator:=  number:7
+  7 | fi
+    | keyword:fi
+  9 | kind Weather
+    | keyword:kind  type:Weather
+ 10 |     Sun
+    | variant:Sun
+ 11 |     Rain(mm: int)
+    | variant:Rain  punctuation:(  field:mm  punctuation::  type-builtin:int  punctuation:)
+ 12 | fi
+    | keyword:fi

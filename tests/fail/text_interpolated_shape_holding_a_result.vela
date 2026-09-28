@@ -1,0 +1,10 @@
+; error: 9:16: 'str' can't write Reading as text, since it holds int ~ ParseError; a value that can fail is read first, with a plan B, match, or is; or give shape 'Reading' its own method 'str(r: region) -> text@r'
+shape Reading
+    value: int ~ ParseError
+fi
+
+task main()
+    region r
+    bind reading = Reading { value: int("1") }
+    show("got {reading}" at r)
+fi

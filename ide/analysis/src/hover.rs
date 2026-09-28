@@ -121,7 +121,7 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
         ),
         (TokenClass::BuiltinFn, _) => (
             format!("task {}(value: anything with str, …)", text),
-            "Writes each value, with nothing between them, then ends the line: show(\"n = \", n) prints n = 5. An array or slice is written [1, 2], a tuple (1, \"a\"), a maybe none or { 4 }, a pointer as its address (0x7ffd…), and text inside any of them in quotes; a shape or kind with a method str of its own is written by it in a region show makes for the line. show() writes an empty line, and the values are written left to right.".to_string(),
+            "Writes each value, with nothing between them, then ends the line: show(\"n = \", n) prints n = 5. An array or slice is written [1, 2], a tuple (1, \"a\"), a maybe none or { 4 }, a pointer as its address (0x7ffd…), and text inside any of them in quotes. A shape is written as a literal of the fields any file reads (Point { x: 1, y: 2 }) and a kind as its variant (Circle(1.5)), unless it has a method str of its own, which writes it in a region show makes for the line. show() writes an empty line, and the values are written left to right.".to_string(),
         ),
         // `.this`: the value the method around it is called on.
         (TokenClass::Keyword, _) if text == vela::ast::THIS_WORD => {
@@ -159,7 +159,7 @@ fn hover_token(k: &Knowledge, token: &crate::scan::Classified) -> Option<((Strin
         }
         (TokenClass::Field, None) if text == vela::ast::STR => (
             "str() at r or str(r) -> text@r".to_string(),
-            "Turns a value into text in region r, written as show writes it (also str()@r, and text(n) at r): a number, a bool, text, an array or slice ([1, 2]), a tuple ((1, \"a\")), a maybe (none or { 4 }), or a pointer (its address, 0x…, which int(…) reads back). A shape or kind gives its own with a method str(r: region) -> text@r.".to_string(),
+            "Turns a value into text in region r, written as show writes it (also str()@r, and text(n) at r): a number, a bool, text, an array or slice ([1, 2]), a tuple ((1, \"a\")), a maybe (none or { 4 }), a pointer (its address, 0x…, which int(…) reads back), a shape (Point { x: 1, y: 2 }), or a kind (Circle(1.5)). A shape or kind replaces its default with a method str(r: region) -> text@r, which is never priv.".to_string(),
         ),
         (TokenClass::Field, None) if text == vela::ast::COPY => (
             "copy() at r or copy()@r".to_string(),
