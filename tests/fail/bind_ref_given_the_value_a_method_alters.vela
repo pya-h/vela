@@ -1,0 +1,31 @@
+; error: 30:12: 'p' is given as the value it is called on too, and the method changes the value it is called on; a place the call changes is given once, so keep a copy of it in a variable first, and give that as the other
+shape Point
+    x: int
+
+    alters grow(bind& by: Point)
+        .x = .x + by.x
+    fi
+fi
+
+task look(bind& p: Point) -> int
+    <- p.x
+fi
+
+task both(bind& a: Point, hold& b: Point)
+    b.x = a.x
+fi
+
+task keep(bind p: Point) -> int
+    <- p.x
+fi
+
+task make() -> Point
+    <- Point { x: 1 }
+fi
+
+task main()
+    region r
+    hold p = Point { x: 1 }
+    hold s = new [Point]([p]) at r
+    p.grow(&p)
+fi

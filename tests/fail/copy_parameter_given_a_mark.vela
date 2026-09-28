@@ -1,4 +1,4 @@
-; error: 8:11: task 'shown' takes a copy as 'x', so leave out '&'; a parameter written 'hold& x: …' is given the place itself
+; error: 8:11: task 'shown' takes a copy as 'x', so leave out '&'; a parameter written 'hold& x: …' or 'bind& x: …' is given the place itself
 task shown(x: int)
     show(x)
 fi

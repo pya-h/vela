@@ -1,0 +1,90 @@
+; How a parameter is given, written before its name: nothing lets the compiler
+; choose (a copy, or where the caller keeps a large value), `bind x` is always
+; a copy, and `bind& x` is the caller's place, only read, which a call gives
+; as `&a`. `hold x` and `hold& x` are the ones a task changes.
+
+; Nine ints: large enough that the compiler reads a plain parameter where the
+; caller keeps it.
+shape Wide
+    a: int
+    b: int
+    c: int
+    d: int
+    e: int
+    f: int
+    g: int
+    h: int
+    i: int
+
+    ; A part of the value a method changes can't be read by it as well, but
+    ; another place can.
+    alters grow(bind& by: Wide)
+        .a = .a + by.a
+    fi
+fi
+
+shape Point
+    x: int
+    y: int
+fi
+
+; `==` compares shapes by where they are, so two `bind&`s given one place are
+; equal, and two copies never are.
+task one(bind& a: Point, bind& b: Point) -> bool
+    <- a == b
+fi
+
+task copies(bind a: Point, bind b: Point) -> bool
+    <- a == b
+fi
+
+; A strict copy is a place of its own; a plain large parameter is where the
+; caller keeps it, as the compiler chose.
+task copied(bind a: Wide, bind& b: Wide) -> bool
+    <- &a == &b
+fi
+
+task chosen(a: Wide, bind& b: Wide) -> bool
+    <- &a == &b
+fi
+
+; An array read where it is, never copied.
+task sum(bind& xs: [int#3], bind start: int) -> int
+    hold total = start
+    each x in xs
+        total = total + x
+    fi
+    <- total
+fi
+
+; A `bind&` passes its place on to another.
+task onward(bind& p: Point) -> bool
+    <- one(&p, &p)
+fi
+
+task written(r: region, bind& p: Point) -> text@r
+    <- "{p.x},{p.y}" at r
+fi
+
+; In a task that takes types, any place of the type given.
+task same_place<T: same>(bind& a: T, bind& b: T) -> bool
+    <- a == b
+fi
+
+task main()
+    region r
+    bind p = Point { x: 1, y: 2 }
+    hold q = p
+    show(one(&p, &p), " ", one(&p, &q), " ", copies(p, p), " ", onward(&q), " ", written(r, &q))
+    hold w = Wide { a: 1, b: 0, c: 0, d: 0, e: 0, f: 0, g: 0, h: 0, i: 0 }
+    bind other = w
+    show(copied(w, &w), " ", chosen(w, &w))
+    w.grow(&other)
+    w.grow(&other)
+    show(w.a)
+    bind xs = [1, 2, 3]
+    show(sum(&xs, 10))
+    ; What a pointer points to, and a field, are places too.
+    bind ptr = new Point(p) at r
+    show(one(&ptr^, &ptr^), " ", one(&ptr^, &p), " ", same_place(&p.x, &p.x), " ", same_place(&xs, &xs), " ", same_place(&p, &q))
+fi

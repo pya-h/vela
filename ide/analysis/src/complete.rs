@@ -486,7 +486,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 .any(|p| matches!(k.token(p), Some(Token::Arrow)) || k.ident(p) == Some(vela::ast::ALTERS))
         });
         let takes = first_token == Some(&Token::Task) || (prev.is_some_and(|q| method_header(&k, q)) && (!in_kind || says_method));
-        let items = if takes { vec![keyword("hold"), keyword("hold&")] } else { Vec::new() };
+        let items = if takes { vec![keyword("hold"), keyword("hold&"), keyword("bind"), keyword("bind&")] } else { Vec::new() };
         return (items, word_start, byte);
     }
 

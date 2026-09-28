@@ -1,0 +1,3 @@
+; error: 2:13: a parameter that is the caller's place is written 'bind& x', with '&' against 'bind'
+task f(bind &x: int)
+fi

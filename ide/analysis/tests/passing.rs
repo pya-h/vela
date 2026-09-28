@@ -81,12 +81,12 @@ fn a_parameter_list_offers_hold() {
     for marked in ["task f(@@)\nfi\n", "task f(a: int, @@)\nfi\n", "task f(ho@@)\nfi\n"] {
         let items = completions(marked);
         let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
-        assert_eq!(labels, ["hold", "hold&"], "{:?}", marked);
+        assert_eq!(labels, ["hold", "hold&", "bind", "bind&"], "{:?}", marked);
     }
     // A method's too, in a shape, and in a kind once the line says it is one.
     for marked in ["shape S\n    n: int\n\n    alters add(@@)\n    fi\nfi\n", "kind K\n    A\n\n    alters m(@@)\n    fi\nfi\n", "kind K\n    A\n\n    m(@@) -> int\n    fi\nfi\n"] {
         let labels: Vec<String> = completions(marked).into_iter().map(|item| item.label).collect();
-        assert_eq!(labels, ["hold", "hold&"], "{:?}", marked);
+        assert_eq!(labels, ["hold", "hold&", "bind", "bind&"], "{:?}", marked);
     }
     // Not after the word, where the parameter's name goes.
     assert!(completions("task f(hold @@)\nfi\n").is_empty());
@@ -197,4 +197,34 @@ fn a_reference_that_only_reads_is_reported_where_it_is_changed() {
     let diagnostics = Analysis::new(&source).diagnostics();
     let [diagnostic] = diagnostics.as_slice() else { panic!("{:?}", diagnostics) };
     assert_eq!(diagnostic.message, "cannot assign to immutable variable 'seen'; 'seen' only reads the place it names, and a reference that changes it is written 'hold& seen = &…'");
+}
+
+#[test]
+fn bind_and_bind_ref_parameters_are_parameters_whose_hover_says_how_they_are_given() {
+    let base = "shape Point\n    x: int\nfi\n\ntask look(bind& p: Point, bind q: Point) -> bool\n    CHECK\n    <- p == q\nfi\n\ntask main()\n    bind a = Point { x: 1 }\n    show(look(&a, a))\nfi\n";
+    for checks in [true, false] {
+        let source = base.replace("CHECK", if checks { "show(0)" } else { "show(unknown)" });
+        if checks {
+            assert_eq!(Analysis::new(&source).diagnostics(), Vec::new());
+        }
+        let (code, doc) = hover(&source, "p: Point");
+        assert_eq!(code, "bind& p: Point", "checks: {}", checks);
+        assert!(doc.contains("read where it is and never changed"), "{}", doc);
+        let (code, doc) = hover(&source, "q: Point");
+        assert_eq!(code, "bind q: Point", "checks: {}", checks);
+        assert!(doc.contains("Always a copy"), "{}", doc);
+        // The words are keywords, and a use of the name is the parameter.
+        let analysis = Analysis::new(&source);
+        let class_at = |needle: &str| {
+            let byte = source.find(needle).unwrap();
+            analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
+        };
+        assert_eq!(class_at("bind& p"), Some(TokenClass::Keyword));
+        assert_eq!(class_at("& p"), Some(TokenClass::Keyword));
+        assert_eq!(class_at("bind q"), Some(TokenClass::Keyword));
+        assert_eq!(class_at("p == q"), Some(TokenClass::Parameter));
+    }
+    // A value given without '&' is reported.
+    let diagnostics = Analysis::new(&base.replace("CHECK", "show(0)").replace("look(&a, a)", "look(a, a)")).diagnostics();
+    assert!(diagnostics.iter().any(|d| d.message.contains("reads 'p' where the caller keeps it, so the call marks that place with '&'")), "{:?}", diagnostics);
 }

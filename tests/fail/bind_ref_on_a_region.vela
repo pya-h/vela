@@ -1,0 +1,3 @@
+; error: 2:8: a region is given as it is, so 'r' can't be 'bind&'
+task f(bind& r: region)
+fi

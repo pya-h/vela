@@ -3508,7 +3508,7 @@ const HIDDEN_ABOVE: usize = 64;
 /// Whether parameter `p` of a task is a pointer to the caller's place in C: a
 /// `hold&` one, or the value a method that `alters` it is called on.
 fn is_pointer_param(p: &Field, alters: bool) -> bool {
-    p.passing == Passing::HoldRef || (alters && p.name == THIS)
+    p.passing.is_ref() || (alters && p.name == THIS)
 }
 
 /// The C declarator of a task, e.g. `int64_t vela_add(int64_t a, int64_t b)`.
@@ -3526,6 +3526,11 @@ fn signature(t: &TaskDef, alters: bool, hidden: &[bool]) -> String {
             // A method that changes the value it is called on is given the
             // place it is in, so what it writes is what the caller holds, and
             // so is a `hold&` parameter.
+            // A `bind&` one is only read there, so it is given a place that
+            // never changes as well.
+            if p.passing == Passing::BindRef {
+                return format!("const {}* {}", c_type(&p.ty), c_ident(&p.name));
+            }
             if is_pointer_param(p, alters) {
                 return format!("{}* {}", c_type(&p.ty), c_ident(&p.name));
             }

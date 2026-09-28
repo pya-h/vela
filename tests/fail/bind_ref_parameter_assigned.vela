@@ -1,0 +1,12 @@
+; error: 11:5: cannot assign to immutable variable 'p'; 'p' is a 'bind&' parameter, which only reads the caller's place, and one that changes it is written 'hold& p: Point'
+shape Point
+    x: int
+
+    alters grow(bind& by: Point)
+        .x = .x + by.x
+    fi
+fi
+
+task f(bind& p: Point)
+    p = Point { x: 2 }
+fi

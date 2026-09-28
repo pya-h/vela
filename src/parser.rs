@@ -999,43 +999,59 @@ impl Parser {
         Ok(Field { name, ty, span, ty_span, private: false, read: false, default_region, passing, default })
     }
 
-    /// `hold` or `hold&` before a task's parameter, which makes it the task's
-    /// own copy to change, or the caller's place (see `Passing`). A shape's field and a variant's value change with
-    /// the value they are part of, and say so.
+    /// `hold`, `hold&`, `bind`, or `bind&` before a task's parameter, which
+    /// makes it the task's own copy to change, the caller's place, always a
+    /// copy, or the caller's place only read (see `Passing`). A shape's field
+    /// and a variant's value change with the value they are part of, and say so.
     fn match_passing(&mut self, slot: Slot) -> Result<Passing> {
-        if !self.check(Token::Hold) {
-            return Ok(Passing::Copy);
-        }
+        let hold = match self.peek() {
+            Token::Hold => true,
+            Token::Bind => false,
+            _ => return Ok(Passing::Copy),
+        };
+        let word = if hold { "hold" } else { "bind" };
         let at = self.peek_span();
         match slot {
             Slot::Param => {}
-            Slot::Field => {
+            Slot::Field if hold => {
                 return Err(Error::at(
                     at,
                     "only a parameter can be 'hold'; a shape's field changes where the value it is part of is held, as in 'hold p = Point {…}' then 'p.x = 1'",
                 ));
             }
+            Slot::Field => {
+                return Err(Error::at(at, "only a parameter can be 'bind'; a shape's field is part of the value holding it, and changes where that value is held"));
+            }
             Slot::Value => {
-                return Err(Error::at(at, "only a parameter can be 'hold', not a variant's value"));
+                return Err(Error::at(at, format!("only a parameter can be '{}', not a variant's value", word)));
             }
         }
         self.advance();
-        let passing = if self.check(Token::Amp) {
+        let by_place = if self.check(Token::Amp) {
             // `hold&` is one word: `hold &x` reads as the `&` of a call.
             let amp = self.peek_span();
-            if amp.line != at.line || amp.col != at.col + "hold".len() {
-                return Err(Error::at(amp, "a parameter that is the caller's place is written 'hold& x', with '&' against 'hold'"));
+            if amp.line != at.line || amp.col != at.col + word.len() {
+                return Err(Error::at(amp, format!("a parameter that is the caller's place is written '{0}& x', with '&' against '{0}'", word)));
             }
             self.advance();
-            Passing::HoldRef
+            true
         } else {
-            Passing::Hold
+            false
         };
-        if self.check(Token::Hold) {
-            return Err(Error::at(self.peek_span(), "'hold' is already written here: a parameter changes or it doesn't"));
+        let passing = match (hold, by_place) {
+            (true, true) => Passing::HoldRef,
+            (true, false) => Passing::Hold,
+            (false, true) => Passing::BindRef,
+            (false, false) => Passing::Bind,
+        };
+        if matches!(self.peek(), Token::Hold | Token::Bind) {
+            return Err(Error::at(
+                self.peek_span(),
+                format!("'{}' is already written here: a parameter is written with one of 'hold', 'hold&', 'bind', and 'bind&', or none", passing.word()),
+            ));
         }
         if self.check(Token::Amp) {
-            return Err(Error::at(self.peek_span(), "'&' marks a place given at a call, as in 'f(&a)'; a parameter's name is written without it, as in 'hold& a: int'"));
+            return Err(Error::at(self.peek_span(), format!("'&' marks a place given at a call, as in 'f(&a)'; a parameter's name is written without it, as in '{}& a: int'", word)));
         }
         Ok(passing)
     }

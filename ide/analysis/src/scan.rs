@@ -1231,7 +1231,8 @@ impl<'a> Classifier<'a> {
                         Token::Match => self.open(ScopeKind::Match),
                         // `(hold n: int`: a parameter the task changes, which
                         // the header declares below, not a variable.
-                        Token::Hold if in_task_header && matches!(tokens.before(p), Some(Token::LParen | Token::Comma)) => {}
+                        // (and `bind`, `hold&`, `bind&`).
+                        Token::Hold | Token::Bind if in_task_header && matches!(tokens.before(p), Some(Token::LParen | Token::Comma)) => {}
                         Token::Bind | Token::Hold => {
                             // `hold& y = &x` and `bind& y = &x`: references.
                             let reference = tokens.token(p + 1) == Some(&Token::Amp);
@@ -1401,18 +1402,32 @@ impl<'a> Classifier<'a> {
             }
             return (TokenClass::Type, self.global(name, &[SymbolKind::Shape, SymbolKind::Kind, SymbolKind::TypeParam]));
         }
-        // `hold n: int` and `hold& n: int`: the word, and its `&`, before a
-        // parameter's name.
+        // `hold n: int`, `hold& n: int`, `bind n: int`, and `bind& n: int`:
+        // the word, and its `&`, before a parameter's name.
         let opens_param = |q: usize| matches!(tokens.before(q), Some(Token::LParen | Token::Comma));
-        let held = before == Some(&Token::Hold) && opens_param(p - 1);
-        let held_ref = before == Some(&Token::Amp) && p >= 2 && tokens.token(p - 2) == Some(&Token::Hold) && opens_param(p - 2);
-        if in_task_header && after == Some(&Token::Colon) && (held || held_ref || matches!(before, Some(Token::LParen | Token::Comma))) {
+        let word_at = |q: usize| match tokens.token(q) {
+            Some(Token::Hold) if opens_param(q) => Some("hold"),
+            Some(Token::Bind) if opens_param(q) => Some("bind"),
+            _ => None,
+        };
+        let marked = match before {
+            Some(Token::Hold | Token::Bind) => word_at(p - 1).map(|word| word.to_string()),
+            Some(Token::Amp) if p >= 2 => word_at(p - 2).map(|word| format!("{}&", word)),
+            _ => None,
+        };
+        if in_task_header && after == Some(&Token::Colon) && (marked.is_some() || matches!(before, Some(Token::LParen | Token::Comma))) {
             let detail = tokens.text_after(p + 1, ends_field);
             // `r: region`, and `r: region default`, which also makes it the
             // default region of the task's body (see `ast::DEFAULT`).
             let takes_region = detail == "region" || detail == format!("region {}", DEFAULT);
             let kind = if takes_region { SymbolKind::Region } else { SymbolKind::Parameter };
-            let intro = if held_ref { Some("hold&") } else if held { Some("hold") } else { None };
+            let intro = match marked.as_deref() {
+                Some("hold&") => Some("hold&"),
+                Some("hold") => Some("hold"),
+                Some("bind&") => Some("bind&"),
+                Some("bind") => Some("bind"),
+                _ => None,
+            };
             return (kind.class(), Some(self.declare_local(p, kind, intro, detail)));
         }
         if in_pattern {

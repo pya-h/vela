@@ -1,0 +1,4 @@
+; error: 3:7: only a parameter can be 'bind', not a variant's value
+kind K
+    V(bind x: int)
+fi

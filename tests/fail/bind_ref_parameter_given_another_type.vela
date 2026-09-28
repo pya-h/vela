@@ -1,0 +1,31 @@
+; error: 30:15: expected type Point, got int; 'p' is given the place itself, which the task reads where it is, so the place is of exactly its type
+shape Point
+    x: int
+
+    alters grow(bind& by: Point)
+        .x = .x + by.x
+    fi
+fi
+
+task look(bind& p: Point) -> int
+    <- p.x
+fi
+
+task both(bind& a: Point, hold& b: Point)
+    b.x = a.x
+fi
+
+task keep(bind p: Point) -> int
+    <- p.x
+fi
+
+task make() -> Point
+    <- Point { x: 1 }
+fi
+
+task main()
+    region r
+    hold p = Point { x: 1 }
+    hold s = new [Point]([p]) at r
+    show(look(&p.x))
+fi

@@ -254,7 +254,7 @@ fn nothing_is_offered_in_comments_text_or_new_names() {
     }
     // A parameter's name is new, but it may be one the task changes.
     for marked in ["task f(@@", "task f(a: int, @@"] {
-        assert_eq!(labels(marked), ["hold", "hold&"], "at {:?}", marked);
+        assert_eq!(labels(marked), ["hold", "hold&", "bind", "bind&"], "at {:?}", marked);
     }
     // A field's or a method's name is new, but it may be private, a shape's
     // field may be read-only or shared, and a method may change its value. A

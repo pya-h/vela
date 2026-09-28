@@ -34,6 +34,8 @@ struct VarInfo {
     result: bool,
     /// Whether the task's header declares it, which no code can change.
     param: bool,
+    /// How a parameter is given (see `Passing`); `Copy` for anything else.
+    passing: Passing,
     /// For a reference, `hold& y = &x` or `bind& y = &x`: the place it names,
     /// from a variable that isn't a reference itself (see `resolved_path`).
     refers: Option<Vec<Step>>,
@@ -2088,7 +2090,8 @@ impl Checker {
         self.scopes = vec![Scope::default()];
         for param in &task.params {
             if param.ty == Type::Region && param.passing != Passing::Copy {
-                self.record(Error::at(param.span, format!("a region never changes, so '{}' can't be '{}'", param.name, if param.passing == Passing::HoldRef { "hold&" } else { "hold" })));
+                let why = if param.passing.changes() { "never changes" } else { "is given as it is" };
+                self.record(Error::at(param.span, format!("a region {}, so '{}' can't be '{}'", why, param.name, param.passing.word())));
             }
             if param.ty == Type::Region {
                 self.define_region(&param.name, param.span, true)?;
@@ -2097,7 +2100,7 @@ impl Checker {
                 // and a parameter the task holds a copy of (`hold x: T`) or the
                 // caller's place (`hold& x: T`).
                 let alters = param.name == THIS && task.owner.as_ref().is_some_and(|owner| owner.alters);
-                self.define_param(&param.name, known(&param.ty), alters || param.passing != Passing::Copy, param.span)?;
+                self.define_param(&param.name, known(&param.ty), alters || param.passing.changes(), param.passing, param.span)?;
             }
         }
         // The regions the header only names in its types.
@@ -2276,16 +2279,17 @@ impl Checker {
             return Err(Error::internal(format!("'{}' defined outside of a task", name)));
         };
         let allocates = ty == Type::Region;
-        scope.names.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false, param: false, refers: None });
+        scope.names.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false, param: false, passing: Passing::Copy, refers: None });
         Ok(())
     }
 
     /// Declares a parameter, which the task's header gives it. Only the value a
     /// method marked `alters` is called on can change.
-    fn define_param(&mut self, name: &str, ty: Type, mutable: bool, span: Span) -> Result<()> {
+    fn define_param(&mut self, name: &str, ty: Type, mutable: bool, passing: Passing, span: Span) -> Result<()> {
         self.define(name, ty, mutable, span)?;
         if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.names.get_mut(name)) {
             info.param = true;
+            info.passing = passing;
         }
         Ok(())
     }
@@ -4076,6 +4080,12 @@ impl Checker {
                     return err(items.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
                 if !info.mutable && matches!(info.ty, Type::Slice(..)) {
+                    if info.param && info.passing == Passing::BindRef {
+                        return err(
+                            items.span,
+                            format!("'{0}' changes '{1}', a 'bind&' parameter, which only reads the caller's place; one that changes it is written 'hold& {1}: {2}'", word, name, info.ty),
+                        );
+                    }
                     if info.param || info.refers.is_some() {
                         let what = if info.param { "a parameter, which never changes" } else { "a 'bind&'" };
                         return err(items.span, format!("'{}' changes '{}', {}{}", word, name, what, param_hint(&name, info)));
@@ -5377,6 +5387,12 @@ impl Checker {
                 if info.refers.is_some() {
                     return refuse(format!("it needs a place that can change, and '{0}' only reads the place it names; a reference that changes it is written 'hold& {0} = &…'", name));
                 }
+                if info.param && info.passing == Passing::BindRef {
+                    return refuse(format!(
+                        "it needs a place that can change, and '{0}' is a 'bind&' parameter, which only reads the caller's place; write 'hold& {0}: {1}' to change it",
+                        name, info.ty
+                    ));
+                }
                 if info.param {
                     return refuse(format!(
                         "it needs a place that can change, and '{0}' is a parameter, which never does; write 'hold {0}: {1}' to change the task's own copy, or 'hold& {0}: {1}' to change the caller's",
@@ -5687,22 +5703,25 @@ impl Checker {
             let expected = self.settled_type(ty, &regions, &given, span)?;
             let actual = arg.ty()?.clone();
             // The place itself is given, so it holds exactly what the task
-            // may write there: nothing becomes a wider type on the way.
-            if *passing == Passing::HoldRef {
+            // may write there, or reads there: nothing becomes a wider type
+            // on the way.
+            if passing.is_ref() {
                 // A region no argument names holds nothing the task could write
                 // there but values that last as long as the program, as the
                 // place's own do.
                 let lasting = expected.map_regions(&mut |region| (region != ANY_REGION).then(|| region.to_string()));
                 if actual != expected && actual != lasting && !actual.unknown() && !expected.unknown() {
-                    if actual.without_regions() == expected.without_regions() {
+                    let reads = *passing == Passing::BindRef;
+                    if actual.without_regions() == expected.without_regions() && !reads {
                         return err(
                             arg.span,
                             format!("expected type {0}, got {1}; the {2} may write a {0} in the place given as '{3}', which a place of type {1} can't hold", expected, actual, what, param),
                         );
                     }
+                    let does = if reads { "reads where it is" } else { "changes" };
                     return err(
                         arg.span,
-                        format!("expected type {}, got {}; '{}' is given the place itself, which the {} changes, so the place is of exactly its type", expected, actual, param, what),
+                        format!("expected type {}, got {}; '{}' is given the place itself, which the {} {}, so the place is of exactly its type", expected, actual, param, what, does),
                     );
                 }
                 continue;
@@ -5955,10 +5974,36 @@ impl Checker {
                 arg.ty = Some(ty.clone());
                 Ok(ty)
             }
+            // A place only read: any place a `bind&` reference may name.
+            (ExprKind::Ref(place), Passing::BindRef) => {
+                let ty = self.check_expr(place)?;
+                if !self.is_place(place) {
+                    return err(
+                        place.span,
+                        format!("{} reads '{}' where the caller keeps it, so it takes a place: a variable, a field or an item of one, or what a pointer points to, and this is a value made here", callee, param),
+                    );
+                }
+                self.read_place(place).map_err(|error| Error { message: error.message.replacen("a reference names a place for as long as its block lasts", &format!("'{}' is read where the caller keeps it while the task runs", param), 1), ..error })?;
+                arg.ty = Some(ty.clone());
+                Ok(ty)
+            }
             (ExprKind::Ref(_), _) => err(
                 arg.span,
-                format!("{} takes a copy as '{1}', so leave out '&'; a parameter written 'hold& {1}: …' is given the place itself", callee, param),
+                format!("{} takes a copy as '{1}', so leave out '&'; a parameter written 'hold& {1}: …' or 'bind& {1}: …' is given the place itself", callee, param),
             ),
+            (_, Passing::BindRef) => {
+                self.check_expr(arg)?;
+                match place_path(arg) {
+                    Some(path) => err(
+                        arg.span,
+                        format!("{} reads '{}' where the caller keeps it, so the call marks that place with '&', as in '&{}'", callee, param, path_text(&path)),
+                    ),
+                    None => err(
+                        arg.span,
+                        format!("{} reads '{}' where the caller keeps it, so it takes a place marked with '&', as in '&a', and this is a value made here; a parameter written '{}: …' takes a copy", callee, param, param),
+                    ),
+                }
+            }
             (_, Passing::HoldRef) => {
                 self.check_expr(arg)?;
                 match place_path(arg) {
@@ -5996,6 +6041,12 @@ impl Checker {
                 }
                 if info.refers.is_some() {
                     return refuse(format!("it needs a place that can change, and '{}' is a 'bind&', which only reads the place it names", name));
+                }
+                if info.param && info.passing == Passing::BindRef {
+                    return refuse(format!(
+                        "it needs a place that can change, and '{0}' is a 'bind&' parameter, which only reads the caller's place; to pass it on to be changed, write 'hold& {0}: {1}'",
+                        name, info.ty
+                    ));
                 }
                 if info.param {
                     return refuse(format!(
@@ -6052,7 +6103,10 @@ impl Checker {
         for (i, ((arg, (param, _)), passing)) in args.iter().zip(&info.params).zip(&info.passing).enumerate() {
             let (place, changed) = match (&arg.kind, passing) {
                 (ExprKind::Ref(place), Passing::HoldRef) => (place.as_ref(), true),
-                (_, Passing::Hold) => continue,
+                // Read where it is while the task runs, so no place given
+                // beside it may change.
+                (ExprKind::Ref(place), Passing::BindRef) => (place.as_ref(), false),
+                (_, Passing::Hold | Passing::Bind) => continue,
                 _ => (arg, i == 0 && alters),
             };
             let Some(path) = self.resolved_path(place) else { continue };
@@ -6060,7 +6114,9 @@ impl Checker {
                 // A value given to a copy is read before the call starts, so a
                 // method may change the value it is called on and be given a
                 // part of it, `c.grow(c.n)`; only a `hold&` beside it names it.
-                let receiver_and_copy = alters && ((i != 0 && !changed && *before_param == THIS) || (i == 0 && !*before_changed));
+                // A `bind&` is read while the method runs, so it is no copy.
+                let read_there = *passing == Passing::BindRef;
+                let receiver_and_copy = alters && !read_there && ((i != 0 && !changed && *before_param == THIS) || (i == 0 && !*before_changed));
                 if (changed || *before_changed) && !receiver_and_copy && overlaps(before, &path) {
                     let name = |param: &str| if param == THIS { "the value it is called on".to_string() } else { format!("'{}'", param) };
                     let relation = if path.len() > before.len() {
@@ -7632,6 +7688,9 @@ fn param_hint(name: &str, info: &VarInfo) -> String {
     }
     if !info.param || name == THIS {
         return String::new();
+    }
+    if info.passing == Passing::BindRef {
+        return format!("; '{0}' is a 'bind&' parameter, which only reads the caller's place, and one that changes it is written 'hold& {0}: {1}'", name, info.ty);
     }
     format!("; a parameter that changes is written 'hold {}: {}', and is the task's own copy", name, info.ty)
 }

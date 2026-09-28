@@ -1,0 +1,31 @@
+; error: 30:17: 'p' is read where the caller keeps it while the task runs, so it can't name an item of a slice, which moves when the slice grows; hold the item's index, or copy the item into a variable
+shape Point
+    x: int
+
+    alters grow(bind& by: Point)
+        .x = .x + by.x
+    fi
+fi
+
+task look(bind& p: Point) -> int
+    <- p.x
+fi
+
+task both(bind& a: Point, hold& b: Point)
+    b.x = a.x
+fi
+
+task keep(bind p: Point) -> int
+    <- p.x
+fi
+
+task make() -> Point
+    <- Point { x: 1 }
+fi
+
+task main()
+    region r
+    hold p = Point { x: 1 }
+    hold s = new [Point]([p]) at r
+    show(look(&s[0]))
+fi

@@ -1,0 +1,4 @@
+; error: 3:5: only a parameter can be 'bind'; a shape's field is part of the value holding it, and changes where that value is held
+shape P
+    bind x: int
+fi

@@ -292,6 +292,7 @@ block shared type</pre>
         <tr><td><code>; …</code></td><td>a comment, to the end of the line</td></tr>
         <tr><td><code>[T#n]</code>, <code>[T]@r</code></td><td>an array type; a slice type (see <a href="#arrays">Arrays</a> and <a href="#slices">Slices</a>)</td></tr>
         <tr><td><code>hold x: T</code>, <code>hold&amp; x: T</code>, <code>f(&amp;a)</code></td><td>a parameter the task changes: its own copy, or the caller's place, which the call marks with <code>&amp;</code> (see <a href="#parameters">Parameters that change</a>)</td></tr>
+        <tr><td><code>bind x: T</code>, <code>bind&amp; x: T</code></td><td>a parameter that is always a copy, or the caller's place only read, given as <code>&amp;a</code> (see <a href="#bind-parameters">Parameters that read</a>)</td></tr>
         <tr><td><code>hold&amp; y = &amp;x</code>, <code>bind&amp; y = &amp;x</code></td><td>another name for the place <code>x</code>, which changes it or only reads it (see <a href="#references">References</a>)</td></tr>
         <tr><td><code>show(&amp;x)</code>, <code>&amp;a == &amp;b</code></td><td>where the place <code>x</code> is, as an address; whether two places are one (see <a href="#addresses">Addresses</a>)</td></tr>
         <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task or shape takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
@@ -428,7 +429,8 @@ block shared type</pre>
           grows, and the task would go on changing the old copy; give the slice and the index instead.</li>
         <li><strong>The mark where it doesn't belong</strong>: <code>&amp;a</code> given to a parameter that takes a
           copy says to leave out <code>&amp;</code>, and <code>a</code> given to a <code>hold&amp;</code> one says to
-          write <code>&amp;a</code>. Nothing else takes <code>&amp;a</code>.</li>
+          write <code>&amp;a</code>. Beside these, only a <a href="#bind-parameters"><code>bind&amp;</code></a>
+          parameter, a reference, and an <a href="#addresses">address</a> take <code>&amp;a</code>.</li>
         <li><strong>One place given twice</strong> where the call changes it: <code>swap(&amp;x, &amp;x)</code>,
           <code>f(x, &amp;x)</code>, <code>c.give(&amp;c.n)</code> (where <code>give</code> alters <code>c</code>),
           and <code>swap(&amp;items[i], &amp;items[1])</code>, whose two items may be the same. The task would see a
@@ -444,6 +446,59 @@ block shared type</pre>
       <p>
         <code>hold&amp;</code> is one word: <code>hold &amp;x</code> is an error that says so. In C, such a parameter
         is a pointer to the place, as the value an <code>alters</code> method is called on already is.
+      </p>
+
+      <h3 id="bind-parameters">Parameters that read</h3>
+      <p>
+        A plain parameter, <code>x: T</code>, leaves the compiler to choose how it is given: a copy, or, for a large
+        value, where the caller keeps it (see <a href="#large-values">large values</a>). Nothing the task does
+        tells the two apart, except <a href="#comparing"><code>==</code></a> on a shape, an array, or a tuple, and
+        <a href="#addresses"><code>&amp;x</code></a>, which read where the value is. Two words say which one is
+        meant:
+      </p>
+      <ul>
+        <li><strong><code>bind x: T</code></strong> is always a copy, a place of its own, even of a large value. The
+          call gives any value, as for a plain parameter.</li>
+        <li><strong><code>bind&amp; x: T</code></strong> is the caller's place, only read: never copied, never
+          changed. The call marks it, <code>f(&amp;a)</code>, as for <code>hold&amp;</code>, and gives any place a
+          <a href="#references"><code>bind&amp;</code> reference</a> may name: a variable (a <code>bind</code> too), a
+          field or an array item of one, what a pointer points to, or a parameter, passed on.</li>
+      </ul>
+      <pre><span class="keyword">shape</span> Point
+    x: int
+    y: int
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> one(<span class="keyword">bind&amp;</span> a: Point, <span class="keyword">bind&amp;</span> b: Point) -&gt; bool
+    <span class="keyword">&lt;-</span> a == b                <span class="comment">; where they are: one place or two</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> sum(<span class="keyword">bind&amp;</span> xs: [int#<span class="number">1000</span>], <span class="keyword">bind</span> start: int) -&gt; int
+    <span class="keyword">hold</span> total = start
+    <span class="keyword">each</span> x <span class="keyword">in</span> xs
+        total = total + x
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> total
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">bind</span> p = Point { x: <span class="number">1</span>, y: <span class="number">2</span> }
+    <span class="keyword">bind</span> q = p
+    show(one(&amp;p, &amp;p), one(&amp;p, &amp;q))   <span class="comment">; truefalse</span>
+    show(one(p, q))                   <span class="comment">; error: task 'one' reads 'a' where the caller keeps it, so the call marks that place with '&amp;'</span>
+<span class="keyword">fi</span></pre>
+      <p>
+        A <code>bind&amp;</code> parameter can't be assigned, have its fields assigned, be added to, be given to a
+        <code>hold&amp;</code>, or call an <code>alters</code> method, each an error that says it only reads. It is
+        read while the task runs, so no place given beside it in the same call may change: <code>f(&amp;a, &amp;a)</code>
+        where <code>f</code> takes <code>bind&amp; x</code> and <code>hold&amp; y</code> is refused, and so is
+        <code>c.grow(&amp;c)</code> where <code>grow</code> alters <code>c</code>, though a plain copy of
+        <code>c</code> would be read before the method runs. It names no item of a slice, which moves when the slice
+        grows, and no value made on the spot (<code>&amp;f()</code>, <code>&amp;t[0..2]</code>); the place is of
+        exactly the parameter's type. A region is given as it is, so <code>bind r: region</code> and
+        <code>bind&amp; r: region</code> are errors, and only a parameter is <code>bind</code>. In C,
+        <code>bind&amp;</code> is a pointer to a <code>const</code> place, and <code>bind</code> is a plain
+        parameter.
       </p>
 
       <h3 id="references">References</h3>
@@ -655,8 +710,10 @@ count = count + 1
         runs: a local variable, or a field or array item of one, given where no later argument calls a task. A
         value behind a pointer, in a slice, or named by a reference is copied first, since the task may reach that
         memory another way. Nothing a program does shows the difference, except that it runs faster, and that
-        <code>&amp;x</code> on such a parameter is the caller's place rather than a copy's (see
-        <a href="#addresses">Addresses</a>).
+        <code>&amp;x</code> on such a parameter, and <code>==</code> on a shape, an array, or a tuple, read the
+        caller's place rather than a copy's (see <a href="#addresses">Addresses</a>). A parameter written
+        <a href="#bind-parameters"><code>bind x</code></a> is always a copy, and <code>bind&amp; x</code> always the
+        caller's place.
       </p>
       <p>
         A variable lives until the block that declares it closes. Vela has no shadowing: inside a
@@ -1010,7 +1067,8 @@ show(s == view, <span class="string">" "</span>, s == s.copy() <span class="keyw
       <p>
         A small parameter is a copy (see <a href="#large-values">large values</a>), a place of its own, so
         <code>==</code> on two shapes given to a task is false even when they are one value outside it; compare
-        them with <code>~=</code> there. Where two places themselves are meant, <code>&amp;a == &amp;b</code> says so
+        them with <code>~=</code> there, or take them as <a href="#bind-parameters"><code>bind&amp;</code></a>,
+        the caller's places. Where two places themselves are meant, <code>&amp;a == &amp;b</code> says so
         for any type (see <a href="#addresses">Addresses</a>).
       </p>
       <p id="joining">

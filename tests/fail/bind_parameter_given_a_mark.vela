@@ -1,0 +1,31 @@
+; error: 30:15: task 'keep' takes a copy as 'p', so leave out '&'; a parameter written 'hold& p: …' or 'bind& p: …' is given the place itself
+shape Point
+    x: int
+
+    alters grow(bind& by: Point)
+        .x = .x + by.x
+    fi
+fi
+
+task look(bind& p: Point) -> int
+    <- p.x
+fi
+
+task both(bind& a: Point, hold& b: Point)
+    b.x = a.x
+fi
+
+task keep(bind p: Point) -> int
+    <- p.x
+fi
+
+task make() -> Point
+    <- Point { x: 1 }
+fi
+
+task main()
+    region r
+    hold p = Point { x: 1 }
+    hold s = new [Point]([p]) at r
+    show(keep(&p))
+fi

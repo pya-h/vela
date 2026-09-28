@@ -1,0 +1,12 @@
+; error: 11:5: 'Point.grow' changes the value it is called on, so it needs a place that can change, and 'x' is a 'bind&' parameter, which only reads the caller's place; write 'hold& x: Point' to change it
+shape Point
+    x: int
+
+    alters grow(bind& by: Point)
+        .x = .x + by.x
+    fi
+fi
+
+task f(bind& x: Point)
+    x.grow(&x)
+fi

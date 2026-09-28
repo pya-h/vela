@@ -1195,6 +1195,35 @@ pub enum Passing {
     /// `hold& x: T`: the caller's place itself, which the call marks,
     /// `f(&a)`; every change to `x` is a change to it.
     HoldRef,
+    /// `bind x: T`: always a copy, even of a large value the compiler would
+    /// otherwise read where the caller keeps it (see `Copy`).
+    Bind,
+    /// `bind& x: T`: the caller's place, read and never changed, which the call
+    /// marks, `f(&a)`.
+    BindRef,
+}
+
+impl Passing {
+    /// Whether the parameter is the caller's place, given as `&a`.
+    pub fn is_ref(self) -> bool {
+        matches!(self, Passing::HoldRef | Passing::BindRef)
+    }
+
+    /// Whether the task may change the parameter.
+    pub fn changes(self) -> bool {
+        matches!(self, Passing::Hold | Passing::HoldRef)
+    }
+
+    /// The words written before the parameter's name, for messages.
+    pub fn word(self) -> &'static str {
+        match self {
+            Passing::Copy => "",
+            Passing::Hold => "hold",
+            Passing::HoldRef => "hold&",
+            Passing::Bind => "bind",
+            Passing::BindRef => "bind&",
+        }
+    }
 }
 
 /// `include shapes/circle`, `include shapes/circle => round`,

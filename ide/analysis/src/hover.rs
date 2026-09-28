@@ -318,6 +318,14 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                 let doc = format!("{} The task's own copy, which it may change; the caller's value never does.", doc);
                 return Some((format!("hold {}", typed(&symbol.name)), doc.trim_start().to_string()));
             }
+            if symbol.intro == Some("bind&") {
+                let doc = format!("{} The caller's place, which the call gives as '&a', read where it is and never changed.", doc);
+                return Some((format!("bind& {}", typed(&symbol.name)), doc.trim_start().to_string()));
+            }
+            if symbol.intro == Some("bind") {
+                let doc = format!("{} Always a copy, even of a large value the compiler would otherwise read where the caller keeps it.", doc);
+                return Some((format!("bind {}", typed(&symbol.name)), doc.trim_start().to_string()));
+            }
             (typed(&symbol.name), doc)
         }
         SymbolKind::Region if symbol.name == vela::ast::THIS_WORD && symbol.intro == Some("@") && is_in_method(k, symbol.name_range.start) => {
