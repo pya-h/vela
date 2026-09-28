@@ -1,0 +1,46 @@
+; `~=` and `<>` compare a maybe with a plain value of the type it holds,
+; either side first: `m ~= v` is true when `m` holds a value similar to `v`,
+; and false when it is empty; `m <> v` is its 'not'.
+
+shape Point
+    x: int
+    y: int
+fi
+
+kind Light
+    Red
+    Green
+    Dim(level: int)
+fi
+
+; In a task that takes a type, a maybe of it compares with a value of it.
+task holds<T: similar>(m: maybe T, v: T) -> bool
+    <- m ~= v
+fi
+
+task main()
+    region r
+    bind some: maybe int = 10
+    bind nothing: maybe int = none
+    show(some ~= 10, " ", 10 ~= some, " ", some ~= 11, " ", nothing ~= 10, " ", 10 ~= nothing)
+    show(some <> 10, " ", some <> 11, " ", nothing <> 10, " ", 3 <> nothing)
+    when some ~= 10
+        show("ok")
+    fi
+    ; Text in any region, a float, a bool.
+    bind name: maybe text@r = "ab" + "c" at r
+    bind rate: maybe float = 0.5
+    bind on: maybe bool = none
+    show(name ~= "abc", " ", "abd" ~= name, " ", rate ~= 0.5, " ", on ~= true, " ", on <> false)
+    ; A shape and a tuple item by item, a kind by its variant and what it carries.
+    bind p: maybe Point = Point { x: 1, y: 2 }
+    bind t: maybe (int, text) = (1, "a")
+    bind light: maybe Light = Light.Dim(3)
+    show(p ~= Point { x: 1, y: 2 }, " ", t ~= (1, "b"), " ", light ~= Light.Dim(3), " ", Light.Red ~= light)
+    ; A pointer by the address it holds.
+    bind first = new int(1) at r
+    bind held: maybe ^int@r = first
+    show(held ~= first, " ", held ~= new int(1) at r)
+    ; In a task that takes a type.
+    show(holds(some, 10), " ", holds(nothing, 10), " ", holds(p, Point { x: 1, y: 2 }), " ", holds(name, "abc"))
+fi

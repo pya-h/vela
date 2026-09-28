@@ -5004,7 +5004,7 @@ impl Checker {
                     return err(span, "'none' can only be compared with a maybe value");
                 }
                 if let Some(maybe) = [&lt, &rt].into_iter().find(|t| matches!(t, Type::Maybe(_))) {
-                    return err(span, format!("a {} can only be compared with none; extract its value first, as in 'x {{ … }}'", maybe));
+                    return err(span, format!("'==' compares a {} only with none; extract its value first, as in 'x {{ … }} == v', or compare what it holds with '~=', as in 'x ~= v'", maybe));
                 }
                 // Comparing stores nothing, so values in different regions
                 // compare (pointers and places into different regions are never
@@ -5059,7 +5059,25 @@ impl Checker {
                 if lt == Type::None || rt == Type::None {
                     return err(span, "'none' can only be compared with a maybe value");
                 }
-                if lt.without_regions() != rt.without_regions() {
+                // `m ~= v`, either side first: a maybe is similar to a plain
+                // value when it holds one similar to it, so the plain side
+                // becomes a maybe and the two compare as maybes do (empty is
+                // similar to empty only).
+                let (lt, wrapped) = match (&lt, &rt) {
+                    (Type::Maybe(inner), plain) | (plain, Type::Maybe(inner)) if !matches!(plain, Type::Maybe(_)) => {
+                        let maybe = Type::Maybe(inner.clone());
+                        if inner.without_regions() != plain.without_regions() {
+                            return err(span, format!("'{}' compares {} with {}, {}, or none, not with {}{}", symbol, maybe, inner, maybe, plain, extract_hint(&[plain])));
+                        }
+                        wrap(if matches!(lt, Type::Maybe(_)) { &mut *r } else { &mut *l }, &maybe);
+                        (maybe, true)
+                    }
+                    (Type::Maybe(inner), other @ Type::Maybe(theirs)) if inner.without_regions() != theirs.without_regions() => {
+                        return err(span, format!("'{}' compares {} with {}, {}, or none, not with {}", symbol, lt, inner, lt, other));
+                    }
+                    _ => (lt, false),
+                };
+                if !wrapped && lt.without_regions() != rt.without_regions() {
                     self.expect_type(&rt, &lt, r.span)?;
                 }
                 if let Some(part) = self.unsimilar_part(&lt) {

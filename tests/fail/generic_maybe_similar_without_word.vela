@@ -1,0 +1,8 @@
+; error: 3:10: '~=' can't compare values of type maybe T item by item, since it holds T; T is any type here; require it, as in '<T: similar>'
+task holds<T>(m: maybe T, v: T) -> bool
+    <- m ~= v
+fi
+
+task main()
+    show(holds(3, 3))
+fi

@@ -1085,7 +1085,9 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         carry an array, a shape, or a tuple is compared the same way; one carrying only numbers, bools, text,
         pointers, or slices compares freely, <code>mood == Mood.Calm</code>. Both sides have the same type, though
         values in different regions compare (pointers and places in two regions are never equal). A
-        <code>maybe</code> compares only with <code>none</code>, and a value that can fail is read first.
+        <code>maybe</code> compares with <code>==</code> only with <code>none</code>, so an empty value is never
+        mistaken for one that holds something; <code>~=</code> compares what it holds (below). A value that can fail
+        is read first.
       </p>
       <p>
         <code>a ~= b</code> asks whether two values are similar, item by item, which costs as much as the values are
@@ -1093,7 +1095,9 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         text compare as <code>==</code> has them; arrays, slices, and tuples item by item; a shape by every field but
         its <a href="#shared">shared</a> ones, <code>priv</code> ones too, as they are part of the value; a kind by
         its variant and what that carries; and a <code>maybe</code> when both are empty or both hold similar values
-        (<code>m ~= none</code> is <code>m == none</code>). A pointer is similar to another holding the same address,
+        (<code>m ~= none</code> is <code>m == none</code>). A <code>maybe</code> is also similar to a plain value of
+        the type it holds, either side first, when it holds a value similar to it: <code>m ~= 10</code> is false when
+        <code>m</code> is empty, and <code>m &lt;&gt; 10</code> is its <code>not</code>. A pointer is similar to another holding the same address,
         so nothing loops through a list that points back to itself; <code>p^ ~= q^</code> compares what they point
         to. A value that can fail is read first.
       </p>
@@ -2101,8 +2105,10 @@ show(total)</pre>
         A value that might be missing has type <code>maybe T</code>. Wherever a <code>maybe</code> is expected (a
         typed binding, an assignment, an argument, a field, or a send), a plain value becomes one, and
         <code>none</code> is the empty one. A <code>maybe</code> can't be used as its value directly:
-        <code>m + 1</code> is an error, and <code>==</code> compares it only with <code>none</code>. A
-        <code>maybe</code> can't hold another <code>maybe</code>.
+        <code>m + 1</code> is an error, and <code>==</code> compares it only with <code>none</code>. What it holds
+        is compared with <code>~=</code>: <code>m ~= 4</code> is true when <code>m</code> holds 4, and false when it
+        holds another number or is empty (see <a href="#comparing">Comparing</a>). A <code>maybe</code> can't hold
+        another <code>maybe</code>.
       </p>
       <pre><span class="keyword">task</span> half(n: int) -&gt; <span class="keyword">maybe</span> int
     <span class="keyword">when</span> n % 2 == 0
@@ -2114,6 +2120,8 @@ show(total)</pre>
 <span class="keyword">bind</span> m = half(7)
 show(m)                    <span class="comment">; none</span>
 show(m == <span class="keyword">none</span>)            <span class="comment">; true</span>
+show(half(8) ~= <span class="number">4</span>, <span class="string">" "</span>, m ~= <span class="number">4</span>) <span class="comment">; true false</span>
+show(half(8) == <span class="number">4</span>)          <span class="comment">; error: '==' compares a maybe int only with none; ... or compare what it holds with '~='</span>
 show(m + 1)                <span class="comment">; error: arithmetic requires numeric operands; the value in this maybe int must be extracted first</span></pre>
       <p>There are three ways to get the value out. <code>match</code> handles both outcomes:</p>
       <pre><span class="keyword">match</span> half(8)

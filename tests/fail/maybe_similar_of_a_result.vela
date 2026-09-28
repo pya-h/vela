@@ -1,0 +1,8 @@
+; error: 7:12: '~=' can't compare values of type maybe Read item by item, since it holds int ~ ParseError; the value in this int ~ ParseError must be extracted first, as in 'x { … }' or 'when x is {value}'
+kind Read
+    Number(n: int ~ ParseError)
+fi
+task main()
+    bind m: maybe Read = none
+    show(m ~= Read.Number(int("1")))
+fi

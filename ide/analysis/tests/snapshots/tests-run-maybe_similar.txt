@@ -1,0 +1,84 @@
+  1 | ; `~=` and `<>` compare a maybe with a plain value of the type it holds,
+    | comment:; `~=` and `<>` compare a maybe with a plain value of the type it holds,
+  2 | ; either side first: `m ~= v` is true when `m` holds a value similar to `v`,
+    | comment:; either side first: `m ~= v` is true when `m` holds a value similar to `v`,
+  3 | ; and false when it is empty; `m <> v` is its 'not'.
+    | comment:; and false when it is empty; `m <> v` is its 'not'.
+  5 | shape Point
+    | keyword:shape  type:Point
+  6 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  7 |     y: int
+    | field:y  punctuation::  type-builtin:int
+  8 | fi
+    | keyword:fi
+ 10 | kind Light
+    | keyword:kind  type:Light
+ 11 |     Red
+    | variant:Red
+ 12 |     Green
+    | variant:Green
+ 13 |     Dim(level: int)
+    | variant:Dim  punctuation:(  field:level  punctuation::  type-builtin:int  punctuation:)
+ 14 | fi
+    | keyword:fi
+ 16 | ; In a task that takes a type, a maybe of it compares with a value of it.
+    | comment:; In a task that takes a type, a maybe of it compares with a value of it.
+ 17 | task holds<T: similar>(m: maybe T, v: T) -> bool
+    | keyword:task  task:holds  punctuation:<  type:T  punctuation::  keyword:similar  punctuation:>  punctuation:(  parameter:m  punctuation::  keyword:maybe  type:T  punctuation:,  parameter:v  punctuation::  type:T  punctuation:)  operator:->  type-builtin:bool
+ 18 |     <- m ~= v
+    | keyword:<-  parameter:m  operator:~=  parameter:v
+ 19 | fi
+    | keyword:fi
+ 21 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 22 |     region r
+    | keyword:region  region:r
+ 23 |     bind some: maybe int = 10
+    | keyword:bind  variable:some  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:10
+ 24 |     bind nothing: maybe int = none
+    | keyword:bind  variable:nothing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 25 |     show(some ~= 10, " ", 10 ~= some, " ", some ~= 11, " ", nothing ~= 10, " ", 10 ~= nothing)
+    | builtin-fn:show  punctuation:(  variable:some  operator:~=  number:10  punctuation:,  string:" "  punctuation:,  number:10  operator:~=  variable:some  punctuation:,  string:" "  punctuation:,  variable:some  operator:~=  number:11  punctuation:,  string:" "  punctuation:,  variable:nothing  operator:~=  number:10  punctuation:,  string:" "  punctuation:,  number:10  operator:~=  variable:nothing  punctuation:)
+ 26 |     show(some <> 10, " ", some <> 11, " ", nothing <> 10, " ", 3 <> nothing)
+    | builtin-fn:show  punctuation:(  variable:some  operator:<>  number:10  punctuation:,  string:" "  punctuation:,  variable:some  operator:<>  number:11  punctuation:,  string:" "  punctuation:,  variable:nothing  operator:<>  number:10  punctuation:,  string:" "  punctuation:,  number:3  operator:<>  variable:nothing  punctuation:)
+ 27 |     when some ~= 10
+    | keyword:when  variable:some  operator:~=  number:10
+ 28 |         show("ok")
+    | builtin-fn:show  punctuation:(  string:"ok"  punctuation:)
+ 29 |     fi
+    | keyword:fi
+ 30 |     ; Text in any region, a float, a bool.
+    | comment:; Text in any region, a float, a bool.
+ 31 |     bind name: maybe text@r = "ab" + "c" at r
+    | keyword:bind  variable:name  punctuation::  keyword:maybe  type-builtin:text  operator:@  region:r  operator:=  string:"ab"  operator:+  string:"c"  keyword:at  region:r
+ 32 |     bind rate: maybe float = 0.5
+    | keyword:bind  variable:rate  punctuation::  keyword:maybe  type-builtin:float  operator:=  number:0.5
+ 33 |     bind on: maybe bool = none
+    | keyword:bind  variable:on  punctuation::  keyword:maybe  type-builtin:bool  operator:=  keyword:none
+ 34 |     show(name ~= "abc", " ", "abd" ~= name, " ", rate ~= 0.5, " ", on ~= true, " ", on <> false)
+    | builtin-fn:show  punctuation:(  variable:name  operator:~=  string:"abc"  punctuation:,  string:" "  punctuation:,  string:"abd"  operator:~=  variable:name  punctuation:,  string:" "  punctuation:,  variable:rate  operator:~=  number:0.5  punctuation:,  string:" "  punctuation:,  variable:on  operator:~=  keyword:true  punctuation:,  string:" "  punctuation:,  variable:on  operator:<>  keyword:false  punctuation:)
+ 35 |     ; A shape and a tuple item by item, a kind by its variant and what it carries.
+    | comment:; A shape and a tuple item by item, a kind by its variant and what it carries.
+ 36 |     bind p: maybe Point = Point { x: 1, y: 2 }
+    | keyword:bind  variable:p  punctuation::  keyword:maybe  type:Point  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
+ 37 |     bind t: maybe (int, text) = (1, "a")
+    | keyword:bind  variable:t  punctuation::  keyword:maybe  punctuation:(  type-builtin:int  punctuation:,  type-builtin:text  punctuation:)  operator:=  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)
+ 38 |     bind light: maybe Light = Light.Dim(3)
+    | keyword:bind  variable:light  punctuation::  keyword:maybe  type:Light  operator:=  type:Light  punctuation:.  variant:Dim  punctuation:(  number:3  punctuation:)
+ 39 |     show(p ~= Point { x: 1, y: 2 }, " ", t ~= (1, "b"), " ", light ~= Light.Dim(3), " ", Light.Red ~= light)
+    | builtin-fn:show  punctuation:(  variable:p  operator:~=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:t  operator:~=  punctuation:(  number:1  punctuation:,  string:"b"  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:light  operator:~=  type:Light  punctuation:.  variant:Dim  punctuation:(  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Light  punctuation:.  variant:Red  operator:~=  variable:light  punctuation:)
+ 40 |     ; A pointer by the address it holds.
+    | comment:; A pointer by the address it holds.
+ 41 |     bind first = new int(1) at r
+    | keyword:bind  variable:first  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:at  region:r
+ 42 |     bind held: maybe ^int@r = first
+    | keyword:bind  variable:held  punctuation::  keyword:maybe  operator:^  type-builtin:int  operator:@  region:r  operator:=  variable:first
+ 43 |     show(held ~= first, " ", held ~= new int(1) at r)
+    | builtin-fn:show  punctuation:(  variable:held  operator:~=  variable:first  punctuation:,  string:" "  punctuation:,  variable:held  operator:~=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:at  region:r  punctuation:)
+ 44 |     ; In a task that takes a type.
+    | comment:; In a task that takes a type.
+ 45 |     show(holds(some, 10), " ", holds(nothing, 10), " ", holds(p, Point { x: 1, y: 2 }), " ", holds(name, "abc"))
+    | builtin-fn:show  punctuation:(  task:holds  punctuation:(  variable:some  punctuation:,  number:10  punctuation:)  punctuation:,  string:" "  punctuation:,  task:holds  punctuation:(  variable:nothing  punctuation:,  number:10  punctuation:)  punctuation:,  string:" "  punctuation:,  task:holds  punctuation:(  variable:p  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:)  punctuation:,  string:" "  punctuation:,  task:holds  punctuation:(  variable:name  punctuation:,  string:"abc"  punctuation:)  punctuation:)
+ 46 | fi
+    | keyword:fi

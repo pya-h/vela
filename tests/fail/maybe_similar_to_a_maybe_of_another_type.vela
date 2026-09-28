@@ -1,0 +1,6 @@
+; error: 5:12: '~=' compares maybe int with int, maybe int, or none, not with maybe text
+task main()
+    bind m: maybe int = 1
+    bind n: maybe text = "1"
+    show(m ~= n)
+fi
