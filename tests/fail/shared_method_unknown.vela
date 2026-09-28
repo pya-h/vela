@@ -1,0 +1,17 @@
+; error: 16:16: shape 'Point' has no shared method 'nothing'
+; A shape without the shared method named.
+shape Point
+    x: int
+
+    shared new(x: int) -> Point
+        <- Point { x: x }
+    fi
+
+    area() -> int
+        <- .x
+    fi
+fi
+
+task main()
+    show(Point.nothing())
+fi

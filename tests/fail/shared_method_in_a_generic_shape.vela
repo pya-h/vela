@@ -1,0 +1,12 @@
+; error: 6:12: a shape that takes types can't have shared methods yet ('Box' takes '<T>'): it is a different shape for every set of types
+; A shape that takes types has no shared methods yet.
+shape Box<T>
+    v: T
+
+    shared make() -> int
+        <- 1
+    fi
+fi
+
+task main()
+fi

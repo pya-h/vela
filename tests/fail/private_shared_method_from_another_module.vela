@@ -1,0 +1,8 @@
+; error: 7:23: 'checked' is a private method of 'Maker', which only its own file can use
+; A private shared method is only for its own file.
+include modules/makers
+
+task main()
+    show(makers.Maker.new(1))
+    show(makers.Maker.checked(1))
+fi

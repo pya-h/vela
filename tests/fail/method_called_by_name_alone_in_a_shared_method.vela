@@ -1,0 +1,20 @@
+; error: 15:12: 'area' is a method of 'Point', so a call names what it is called on, as in 'x.area(…)', on a value of it
+; A method of the shape, called by its name alone, in a shared method.
+shape Point
+    x: int
+
+    shared new(x: int) -> Point
+        <- Point { x: x }
+    fi
+
+    area() -> int
+        <- .x
+    fi
+
+    shared twice() -> int
+        <- area()
+    fi
+fi
+
+task main()
+fi

@@ -1,4 +1,4 @@
-; error: 5:27: kind 'library.Suit' has no variant 'Clubs'
+; error: 5:27: kind 'library.Suit' has no variant or shared method 'Clubs'
 include modules/library
 
 task main()

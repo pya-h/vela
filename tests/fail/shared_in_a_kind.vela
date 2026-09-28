@@ -1,4 +1,4 @@
-; error: 4:5: a kind has no fields, so no shared ones; a shape has them
+; error: 4:5: a kind has no fields, so no shared ones; a shape has them, and a kind has shared methods, as in 'shared make() -> Mood'
 kind Mood
     Calm
     shared made: int = 0

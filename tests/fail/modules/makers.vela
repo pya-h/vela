@@ -1,0 +1,14 @@
+; A module for the fail fixtures: a shape with public and private shared
+; methods.
+
+shape Maker
+    n: int
+
+    shared new(n: int) -> Maker
+        <- Maker { n: Maker.checked(n) }
+    fi
+
+    priv shared checked(n: int) -> int
+        <- n
+    fi
+fi

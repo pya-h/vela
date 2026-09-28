@@ -1,0 +1,18 @@
+; error: 17:12: 'Point.new' is a shared method, called on 'Point' itself, not on a value of it: write 'Point.new(…)'
+; A shared method is called on its shape, not on a value of it.
+shape Point
+    x: int
+
+    shared new(x: int) -> Point
+        <- Point { x: x }
+    fi
+
+    area() -> int
+        <- .x
+    fi
+fi
+
+task main()
+    bind p = Point.new(1)
+    show(p.new(2))
+fi

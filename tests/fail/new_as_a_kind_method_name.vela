@@ -1,0 +1,12 @@
+; error: 6:5: 'new' names only a shared method, one called on 'Suit' itself, as in 'shared new(…) -> Suit', then 'Suit.new(…)'
+; 'new' names only a shared method, of a kind too.
+kind Suit
+    Hearts
+
+    new() -> Suit
+        <- Suit.Hearts
+    fi
+fi
+
+task main()
+fi

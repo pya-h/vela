@@ -1,0 +1,9 @@
+; error: 8:15: kind 'Suit' has no variant or shared method 'make'
+; A kind without the variant or shared method named.
+kind Suit
+    Hearts
+fi
+
+task main()
+    show(Suit.make())
+fi

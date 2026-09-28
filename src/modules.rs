@@ -1026,6 +1026,14 @@ impl Resolver<'_> {
     fn call_as_name(&self, expr: &mut Expr) -> Result<bool> {
         let ExprKind::MethodCall { dotted: Some(dotted), .. } = &expr.kind else { return Ok(false) };
         let parts: Vec<&str> = dotted.split(MODULE_SEPARATOR).collect();
+        // `X.new(…)`: a shared method, called on the shape or kind itself,
+        // whose task is named like any method's (see `method_name`).
+        if let Some(name) = self.shared_method(&parts, expr.span)? {
+            let ExprKind::MethodCall { args, .. } = &mut expr.kind else { return Ok(false) };
+            let args = std::mem::take(args);
+            expr.kind = ExprKind::Call { name, types: Vec::new(), args };
+            return Ok(true);
+        }
         // A name is `Kind.Variant`, `m.f`, or `m.Kind.Variant`; more after it
         // is a method called on the variant, as in `Suit.Spades.name()`.
         let named = match parts.as_slice() {
@@ -1046,6 +1054,26 @@ impl Resolver<'_> {
         let args = std::mem::take(args);
         expr.kind = ExprKind::Call { name, types: Vec::new(), args };
         Ok(true)
+    }
+
+    /// The task a call written `X.m(…)`, `Kind.m(…)`, or `m.X.m(…)` (as
+    /// `parts`) calls: the method `m` of the shape or kind, which the checker
+    /// requires to be shared. A kind's variant is no method, so `Kind.Tag(…)`
+    /// is none. No variable is named like a shape or a kind, so the name is
+    /// the type's.
+    fn shared_method(&self, parts: &[&str], at: Span) -> Result<Option<String>> {
+        let (owner, method) = match parts {
+            [owner, method] if !self.modules.contains_key(*owner) => (owner.to_string(), *method),
+            [module, owner, method] if self.modules.contains_key(*module) => (format!("{}{}{}", module, MODULE_SEPARATOR, owner), *method),
+            _ => return Ok(None),
+        };
+        let Some(entry) = self.lookup(&owner, at, false)? else { return Ok(None) };
+        let variant = self.variants.get(&entry.full).is_some_and(|tags| tags.contains_key(method));
+        match entry.what {
+            What::Shape => Ok(Some(method_name(&entry.full, method))),
+            What::Kind if !variant => Ok(Some(method_name(&entry.full, method))),
+            _ => Ok(None),
+        }
     }
 
     /// `Suit.Hearts` (or `m.Suit.Hearts`), a variant read as a field of a

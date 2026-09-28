@@ -227,7 +227,11 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             } else {
                 ""
             };
-            let doc = format!("A method of {} {}, called on a value of it: value.{}(…).{}", what, owner, symbol.name, changes);
+            let doc = if symbol.shared {
+                format!("A shared method of {0} {1}, called on '{1}' itself: {1}.{2}(…). It has no value it is called on, so no '.this'.", what, owner, symbol.name)
+            } else {
+                format!("A method of {} {}, called on a value of it: value.{}(…).{}", what, owner, symbol.name, changes)
+            };
             let module = from_module(k, symbol);
             (format!("{}{}{}{}", private, alters, symbol.name, symbol.detail), if module.is_empty() { doc } else { format!("{} {}", doc, module) })
         }
@@ -270,8 +274,12 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
                     continue;
                 }
                 let separator = if member.kind == SymbolKind::Field { ": " } else { "" };
-                let private = shared_words(member);
-                let alters = if member.kind == SymbolKind::Method { member.intro.map_or(String::new(), |word| format!("{} ", word)) } else { String::new() };
+                // A method's own word, `alters` or `shared`, is its intro.
+                let (private, alters) = if member.kind == SymbolKind::Method {
+                    (if member.private { "priv ".to_string() } else { String::new() }, member.intro.map_or(String::new(), |word| format!("{} ", word)))
+                } else {
+                    (shared_words(member), String::new())
+                };
                 code.push_str(&format!("    {}{}{}{}{}\n", private, alters, vela::ast::unqualified(&member.name), separator, member.detail));
             }
             code.push_str("fi");

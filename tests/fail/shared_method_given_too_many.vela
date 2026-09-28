@@ -1,0 +1,17 @@
+; error: 16:16: method 'Point.new' expects 1 argument, got 2
+; A shared method takes what its header says, and nothing for a value.
+shape Point
+    x: int
+
+    shared new(x: int) -> Point
+        <- Point { x: x }
+    fi
+
+    area() -> int
+        <- .x
+    fi
+fi
+
+task main()
+    show(Point.new(1, 2))
+fi

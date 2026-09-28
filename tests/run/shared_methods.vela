@@ -1,0 +1,78 @@
+; A shared method belongs to its shape or kind, not to a value of it: it has
+; no `.this`, is called on the name, `Point.new(1, 2)`, and may change the
+; shape's `shared read` fields. `new` is a keyword, and a shared method's name.
+
+include shared_methods/shop (Item, Size => Fit)
+
+shape Point
+    x: int
+    y: int
+    shared read made: int = 0
+
+    shared new(x: int, y: int) -> Point
+        Point.made = Point.made + 1
+        <- Point { x: x, y: y }
+    fi
+
+    ; Calls another shared method on the shape's name.
+    shared origin() -> Point
+        <- Point.new(0, 0)
+    fi
+
+    ; An ordinary method calls one the same way.
+    moved(by: int) -> Point
+        <- Point.new(.x + by, .y + by)
+    fi
+
+    ; A region it is given, as a task is given one.
+    shared label(r: region, x: int) -> text@r
+        <- "at {x}" at r
+    fi
+fi
+
+; A shape holding a pointer: made in the region it is given.
+shape Node
+    value: int
+    next: maybe ^Node
+
+    shared single(r: region, value: int) -> Node@r
+        <- Node { value: value, next: none }
+    fi
+
+    shared pair(r: region, a: int, b: int) -> Node@r
+        bind last = new Node(Node.single(r, b)) at r
+        <- Node { value: a, next: last }
+    fi
+fi
+
+kind Light
+    Red
+    Green
+
+    shared start() -> Light
+        <- Light.Red
+    fi
+
+    next() -> Light
+        match .this
+            case Red
+                <- Light.Green
+            case Green
+                <- Light.Red
+        fi
+    fi
+fi
+
+task main()
+    region r
+    bind p = Point.new(1, 2)
+    show(p, " ", Point.origin().moved(3), " ", Point.made, " ", Point.label(r, 4))
+    bind list = Node.pair(r, 1, 2)
+    bind second = list.next { <- }
+    show(list.value, " ", second^.value)
+    show(Light.start(), " ", Light.start().next())
+    ; Another module's, brought in by name and under another name.
+    bind cheap = Item.new("pen", -2)
+    bind dear = Item.new("lamp", 30)
+    show(cheap.price, " ", Item.made, " ", Fit.of(dear.price), " ", Fit.of(cheap.price))
+fi

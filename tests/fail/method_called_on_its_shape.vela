@@ -1,0 +1,17 @@
+; error: 16:16: 'Point.area' is called on a value of 'Point', as in 'x.area(…)'; only a shared method, written 'shared area(…)', is called on 'Point' itself
+; A method that isn't shared is called on a value.
+shape Point
+    x: int
+
+    shared new(x: int) -> Point
+        <- Point { x: x }
+    fi
+
+    area() -> int
+        <- .x
+    fi
+fi
+
+task main()
+    show(Point.area())
+fi

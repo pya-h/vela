@@ -1,0 +1,20 @@
+; error: 14:12: a method named 'str' writes a value it is called on, so it isn't 'shared'
+; 'str' writes the value it is called on, so it is never shared.
+shape Point
+    x: int
+
+    shared new(x: int) -> Point
+        <- Point { x: x }
+    fi
+
+    area() -> int
+        <- .x
+    fi
+
+    shared str(r: region) -> text@r
+        <- "p" + "" at r
+    fi
+fi
+
+task main()
+fi

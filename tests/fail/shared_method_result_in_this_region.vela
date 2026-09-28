@@ -1,0 +1,13 @@
+; error: 7:36: the result lives in '@this', the region of the value a method is called on, and a shared method has none; take a region, as in 'r: region', and name it
+; '@this' is the region of the value a method is called on, which a shared
+; method has none of.
+shape Label
+    t: text
+
+    shared make(r: region) -> text@this
+        <- "a{1}" at r
+    fi
+fi
+
+task main()
+fi

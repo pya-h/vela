@@ -1,0 +1,32 @@
+; A module with shared methods: public ones any file calls on the shape or
+; kind, and a private one only this file does.
+
+shape Item
+    name: text
+    price: int
+    shared read made: int = 0
+
+    shared new(name: text, price: int) -> Item
+        Item.made = Item.made + 1
+        <- Item { name: name, price: Item.checked(price) }
+    fi
+
+    priv shared checked(price: int) -> int
+        when price < 0
+            <- 0
+        fi
+        <- price
+    fi
+fi
+
+kind Size
+    Small
+    Large(extra: int)
+
+    shared of(price: int) -> Size
+        when price > 10
+            <- Size.Large(price - 10)
+        fi
+        <- Size.Small
+    fi
+fi

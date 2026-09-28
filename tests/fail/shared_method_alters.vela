@@ -1,0 +1,19 @@
+; error: 14:12: a shared method is called on its shape or kind, with no value it could change, so it is never 'alters'
+; A shared method has no value it could change.
+shape Point
+    x: int
+
+    shared new(x: int) -> Point
+        <- Point { x: x }
+    fi
+
+    area() -> int
+        <- .x
+    fi
+
+    shared alters bad()
+    fi
+fi
+
+task main()
+fi

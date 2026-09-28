@@ -17,7 +17,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use serde::Serialize;
-use vela::ast::{ALTERS, BUILTIN_TASKS, DEFAULT, MODULE_SEPARATOR, NATIVE, READ, Span, THIS_WORD, Type, unqualified};
+use vela::ast::{ALTERS, BUILTIN_TASKS, DEFAULT, MODULE_SEPARATOR, NATIVE, NEW_WORD, READ, Span, THIS_WORD, Type, unqualified};
 use vela::lexer::{ESCAPES, LexKind, LexToken, Piece, Token, highlight};
 
 use crate::types::{Context, slashed};
@@ -139,7 +139,8 @@ pub(crate) struct Symbol {
     pub read: bool,
     /// A shape's `shared` field (`shared made: int = 0`): one value for the
     /// whole program, read through the shape's name, never a value's. `intro`
-    /// is `hold` for one any code may change.
+    /// is `hold` for one any code may change. A shared method (`shared
+    /// new(…)`), called on the shape's or kind's name, has `intro` `shared`.
     pub shared: bool,
 }
 
@@ -799,6 +800,30 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
             Token::LParen => parens += 1,
             Token::RParen => parens = parens.saturating_sub(1),
             Token::Newline => parens = 0,
+            // `shared new(…)`: a method of the shape or kind itself, named by a
+            // name or by `new`, a block of its own as any method is.
+            Token::Shared
+                if let (Some(owner), [Block::Shape | Block::Kind]) = (item, blocks.as_slice())
+                    && tokens.starts_member(p)
+                    && matches!(tokens.token(p + 1), Some(Token::Ident(_) | Token::New))
+                    && matches!(tokens.token(p + 2), Some(Token::LParen | Token::Lt)) =>
+            {
+                let name = p + 1;
+                let detail = tokens.text_after(name, never);
+                let id = declare(&mut symbols, name, SymbolKind::Method, detail, Some(owner));
+                if let Some(symbol) = symbols.get_mut(id) {
+                    if tokens.token(name) == Some(&Token::New) {
+                        symbol.name = NEW_WORD.to_string();
+                    }
+                    symbol.range.start = tokens.range(if tokens.before(p) == Some(&Token::Priv) { p - 1 } else { p }).start;
+                    symbol.private = tokens.before(p) == Some(&Token::Priv);
+                    symbol.shared = true;
+                    symbol.intro = Some("shared");
+                }
+                blocks.push(Block::Method);
+                method = Some(id);
+                methods_above = true;
+            }
             // A method, which a shape or a kind declares below its fields or
             // variants: a block of its own, closed by its `fi`.
             Token::Ident(_)
@@ -1039,6 +1064,18 @@ impl<'a> Classifier<'a> {
                 Token::Ident(_) if needs_word => {
                     needs_word = false;
                     self.push(range, TokenClass::Keyword, None);
+                }
+                // `shared new(…)` and `X.new(…)`: the keyword naming a shared
+                // method, read as the name it is there.
+                Token::New
+                    if self.declared_at.contains_key(&p) || (tokens.before(p) == Some(&Token::Dot) && tokens.token(p + 1) == Some(&Token::LParen)) =>
+                {
+                    if self.declared_at.contains_key(&p) {
+                        self.open(ScopeKind::Item);
+                        in_task_header = true;
+                    }
+                    let (class, symbol) = self.identifier(p, NEW_WORD, false, None, in_task_header, in_pattern, &braces);
+                    self.push(range, class, symbol);
                 }
                 Token::Ident(name) => {
                     if let Some(type_follows) = region_now {
@@ -1363,6 +1400,18 @@ impl<'a> Classifier<'a> {
                 None => (TokenClass::Variable, None),
             };
         }
+        // `Point.new(…)` and `Light.start()`: a shared method, called on the
+        // name of its shape or kind (a kind's variant is made the same way).
+        if before == Some(&Token::Dot)
+            && after == Some(&Token::LParen)
+            && let Some(owner) = self.type_before()
+        {
+            let method = self.symbols.iter().position(|s| s.kind == SymbolKind::Method && s.shared && s.parent == Some(owner) && s.name == name);
+            let is_shape = self.symbols.get(owner).is_some_and(|s| s.kind == SymbolKind::Shape);
+            if method.is_some() || is_shape {
+                return (TokenClass::Method, method);
+            }
+        }
         // `Shape.Circle`: a kind's variant, after the kind's name.
         if before == Some(&Token::Dot)
             && let Some(kind) = self.kind_before()
@@ -1646,6 +1695,17 @@ impl<'a> Classifier<'a> {
         let own = self.globals.get(name).copied().filter(|&id| self.symbols.get(id).is_some_and(|s| s.module.is_none()));
         own.or_else(|| self.imports.get(name).copied())
             .filter(|&id| self.symbols.get(id).is_some_and(|s| kinds.contains(&s.kind)))
+    }
+
+    /// The shape or kind named just before the `.` last classified, as in
+    /// `Point.` or `Light.`.
+    fn type_before(&self) -> Option<usize> {
+        let mut classified = self.out.iter().rev().filter(|token| token.class != TokenClass::Comment);
+        let dot = classified.next()?;
+        let named = classified.next()?;
+        let text = self.tokens.source.get(dot.range.clone())?;
+        let id = named.symbol.filter(|_| text == ".")?;
+        self.symbols.get(id).is_some_and(|s| matches!(s.kind, SymbolKind::Shape | SymbolKind::Kind)).then_some(id)
     }
 
     /// The kind named just before the `.` last classified, as in `Shape.`.

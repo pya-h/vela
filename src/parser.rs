@@ -676,6 +676,15 @@ impl Parser {
             if self.check(Token::Fi) || self.at_item_start() { break; }
             self.reject_stray_end()?;
             let private = self.match_token(Token::Priv);
+            self.reject_misplaced_method_words()?;
+            // `shared new(…) -> X`: a method of the shape itself.
+            if self.check(Token::Shared) && self.at_method_from(self.pos + 1) {
+                self.advance(); // shared
+                let method = self.parse_method(&name, "shape", &types, private, true, Above { fields: &fields, shared: &shared, methods: &methods })?;
+                methods.push(method);
+                self.skip_newlines();
+                continue;
+            }
             if self.check(Token::Shared) {
                 let member = self.parse_shared_field(&name, &types, private, &methods)?;
                 reject_same_name(&member.field, &fields, &shared)?;
@@ -683,8 +692,11 @@ impl Parser {
                 self.skip_newlines();
                 continue;
             }
+            if self.check(Token::New) {
+                return Err(Error::at(self.peek_span(), new_only_shared(&name)));
+            }
             if self.at_method() {
-                let method = self.parse_method(&name, "shape", &types, private, Above { fields: &fields, shared: &shared, methods: &methods })?;
+                let method = self.parse_method(&name, "shape", &types, private, false, Above { fields: &fields, shared: &shared, methods: &methods })?;
                 methods.push(method);
                 self.skip_newlines();
                 continue;
@@ -719,9 +731,6 @@ impl Parser {
         }
         if self.check(Token::Shared) {
             return Err(Error::at(self.peek_span(), "'shared' is already written here"));
-        }
-        if self.at_method() {
-            return Err(Error::at(at, "a method can't be 'shared' yet; only a field can"));
         }
         let hold_at = self.peek_span();
         let hold = self.match_token(Token::Hold);
@@ -784,29 +793,64 @@ impl Parser {
     /// one that names types (which `parse_method` refuses), with `alters` allowed
     /// before it.
     fn at_method(&self) -> bool {
-        let mut pos = self.pos;
-        if matches!(self.tokens.get(pos), Some(Token::Ident(word)) if word == ALTERS) && matches!(self.tokens.get(pos + 1), Some(Token::Ident(_))) {
+        self.at_method_from(self.pos)
+    }
+
+    /// `at_method` for the member starting at token `pos`; `new(`, a shared
+    /// method's name, counts too, which `parse_method` reads.
+    fn at_method_from(&self, pos: usize) -> bool {
+        let mut pos = pos;
+        if matches!(self.tokens.get(pos), Some(Token::Ident(word)) if word == ALTERS) && matches!(self.tokens.get(pos + 1), Some(Token::Ident(_) | Token::New)) {
             pos += 1;
         }
-        matches!(self.tokens.get(pos), Some(Token::Ident(_))) && matches!(self.tokens.get(pos + 1), Some(Token::LParen | Token::Lt))
+        matches!(self.tokens.get(pos), Some(Token::Ident(_) | Token::New)) && matches!(self.tokens.get(pos + 1), Some(Token::LParen | Token::Lt))
+    }
+
+    /// Refuses `alters shared f(…)`, which a shared method never is, with the
+    /// cursor at a member of a shape or a kind.
+    fn reject_misplaced_method_words(&self) -> Result<()> {
+        if matches!(self.peek(), Token::Ident(word) if word == ALTERS) && self.tokens.get(self.pos + 1) == Some(&Token::Shared) {
+            return Err(Error::at(self.peek_span(), SHARED_NEVER_ALTERS));
+        }
+        Ok(())
     }
 
     /// A method of the shape or kind `owner`, which takes `types`: its name, its
     /// parameters, what it sends, and its body, with `alters` before it when it
     /// changes the value it is called on. It becomes a task whose first parameter
     /// holds that value (see `method_name` and `THIS`).
-    fn parse_method(&mut self, owner: &str, what: &str, types: &[TypeParam], private: bool, above: Above) -> Result<TaskDef> {
+    fn parse_method(&mut self, owner: &str, what: &str, types: &[TypeParam], private: bool, is_shared: bool, above: Above) -> Result<TaskDef> {
         let Above { fields, shared, methods } = above;
         let opened = self.peek_span();
         let alters_span = match self.peek() {
             Token::Ident(word) if word == ALTERS => {
+                if is_shared {
+                    return Err(Error::at(opened, SHARED_NEVER_ALTERS));
+                }
                 self.advance();
                 Some(opened)
             }
             _ => None,
         };
         let span = self.peek_span();
-        let name = self.expect_ident()?;
+        // `new` is a keyword, and a shared method's name: `X.new(…)` makes an X.
+        let name = match self.peek() {
+            Token::New if is_shared => {
+                self.advance();
+                NEW_WORD.to_string()
+            }
+            Token::New => return Err(Error::at(span, new_only_shared(owner))),
+            _ => self.expect_ident()?,
+        };
+        if is_shared && name == STR {
+            return Err(Error::at(span, "a method named 'str' writes a value it is called on, so it isn't 'shared'"));
+        }
+        if is_shared && !types.is_empty() {
+            return Err(Error::at(
+                span,
+                format!("a shape that takes types can't have shared methods yet ('{}' takes {}): it is a different shape for every set of types", owner, type_param_list(types)),
+            ));
+        }
         reject_member_named_this(&name, span, "a method")?;
         if is_builtin_member(&name) || name == LEN {
             return Err(Error::at(
@@ -842,10 +886,11 @@ impl Parser {
                 format!("a method takes no types of its own yet{}; write a task that takes them, and call it from here", takes),
             ));
         }
-        let mut params = vec![receiver(owner, types, span)];
+        // A shared method has no value it is called on.
+        let mut params = if is_shared { Vec::new() } else { vec![receiver(owner, types, span)] };
         let read = self.parse_field_list(Slot::Param);
         params.extend(if what == "kind" { read.map_err(Parser::kind_member)? } else { read? });
-        if let Some(param) = params.iter().skip(1).find(|param| param.ty == Type::Region && param.name == THIS_WORD) {
+        if let Some(param) = params.iter().skip(usize::from(!is_shared)).find(|param| param.ty == Type::Region && param.name == THIS_WORD) {
             return Err(Error::at(param.span, format!("'{0}' is the region the value this method is called on lives in, written '@{0}', so a region parameter can't take the name", THIS_WORD)));
         }
         let mut results = Vec::new();
@@ -871,7 +916,7 @@ impl Parser {
             span,
             private,
             native: false,
-            owner: Some(Owner { name, alters: alters_span.is_some(), alters_span }),
+            owner: Some(Owner { name, alters: alters_span.is_some(), alters_span, shared: is_shared }),
         })
     }
 
@@ -900,13 +945,28 @@ impl Parser {
             let variant_span = self.peek_span();
             // `priv` goes before a method, whose name is what the checks below read.
             let private = self.match_token(Token::Priv);
+            self.reject_misplaced_method_words()?;
+            // `shared make(…) -> K`: a method of the kind itself.
+            if self.check(Token::Shared) && self.at_method_from(self.pos + 1) {
+                self.advance(); // shared
+                let method = self.parse_method(&name, "kind", &[], private, true, Above { fields: &[], shared: &[], methods: &methods })?;
+                methods.push(method);
+                self.skip_newlines();
+                continue;
+            }
             if self.check(Token::Shared) {
-                return Err(Error::at(self.peek_span(), "a kind has no fields, so no shared ones; a shape has them"));
+                return Err(Error::at(
+                    self.peek_span(),
+                    format!("a kind has no fields, so no shared ones; a shape has them, and a kind has shared methods, as in 'shared make() -> {}'", name),
+                ));
+            }
+            if self.check(Token::New) {
+                return Err(Error::at(self.peek_span(), new_only_shared(&name)));
             }
             // A variant carries its values in parentheses, as a method takes its
             // parameters, so `alters` or a `->` after them tells them apart.
             if self.at_method() && !self.at_variant_payload(&methods) {
-                let method = self.parse_method(&name, "kind", &[], private, Above { fields: &[], shared: &[], methods: &methods })?;
+                let method = self.parse_method(&name, "kind", &[], private, false, Above { fields: &[], shared: &[], methods: &methods })?;
                 methods.push(method);
                 self.skip_newlines();
                 continue;
@@ -925,6 +985,19 @@ impl Parser {
             self.skip_newlines();
         }
         self.expect_fi("kind", opened)?;
+        // `Kind.Tag(…)` makes a variant, so a shared method can't take its name.
+        for method in &methods {
+            let Some(owner) = method.owner.as_ref().filter(|owner| owner.shared) else { continue };
+            if let Some(variant) = variants.iter().find(|variant| variant.tag == owner.name) {
+                return Err(Error::at(
+                    method.span,
+                    format!(
+                        "'{0}' is already a variant of '{1}', at {2}:{3}; '{1}.{0}(…)' makes the variant, so a shared method can't take its name",
+                        owner.name, name, variant.span.line, variant.span.col
+                    ),
+                ));
+            }
+        }
         self.methods.extend(methods.into_iter().map(Item::Task));
         Ok(KindDef { name, variants, span, private: false })
     }
@@ -2325,7 +2398,11 @@ impl Parser {
             }
             // `.this`, `.field`, or `.method(…)`: the value a method is called
             // on, and what it holds.
-            Token::Dot if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::Type)) => return self.parse_member_of_this(span),
+            Token::Dot if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::Type))
+                || (self.tokens.get(self.pos + 1) == Some(&Token::New) && self.tokens.get(self.pos + 2) == Some(&Token::LParen)) =>
+            {
+                return self.parse_member_of_this(span);
+            }
             Token::Ident(_) => return self.parse_name_use(span),
             _ => return Err(self.unexpected("an expression")),
         };
@@ -2698,9 +2775,37 @@ impl Parser {
         result
     }
 
+    /// Whether the `(` at the cursor opens a tuple type followed by the value
+    /// `new` copies, `(int, int)((1, 2))`, rather than arguments alone.
+    fn tuple_type_follows(&self) -> bool {
+        let mut depth = 0usize;
+        for pos in self.pos.. {
+            match self.tokens.get(pos) {
+                Some(Token::LParen) => depth += 1,
+                Some(Token::RParen) => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return self.tokens.get(pos + 1) == Some(&Token::LParen);
+                    }
+                }
+                Some(Token::Newline | Token::Eof) | None => return false,
+                Some(_) => {}
+            }
+        }
+        false
+    }
+
     fn parse_new_inner(&mut self) -> Result<Expr> {
         let span = self.peek_span();
         self.advance(); // new
+        // `new(…)` alone: a shared method's call written without its shape.
+        // (`new (int, int)((1, 2))` names a tuple type, then gives its value.)
+        if self.check(Token::LParen) && !self.tuple_type_follows() {
+            return Err(Error::at(
+                span,
+                "'new' makes a pointer to a value in a region, as in 'new T(v) at r'; a shared method named 'new' is called on its shape or kind, as in 'X.new(…)'",
+            ));
+        }
         let before = if self.match_token(Token::AtSign) {
             let region_span = self.peek_span();
             let region = self.expect_ident()?;
@@ -2800,6 +2905,11 @@ impl Parser {
         if self.match_token(Token::Type) {
             return Ok(TYPE_WORD.to_string());
         }
+        // `X.new(…)`: the one keyword a member may be named, a shared method.
+        if self.check(Token::New) && self.tokens.get(self.pos + 1) == Some(&Token::LParen) {
+            self.advance();
+            return Ok(NEW_WORD.to_string());
+        }
         self.expect_ident()
     }
 
@@ -2891,6 +3001,14 @@ fn receiver(owner: &str, types: &[TypeParam], span: Span) -> Field {
     };
     Field { name: THIS.to_string(), ty, span, ty_span: span, private: false, read: false, default_region: false, passing: Passing::Copy, default: None }
 }
+
+/// The message for `new` named as anything but a shared method of `owner`.
+fn new_only_shared(owner: &str) -> String {
+    format!("'new' names only a shared method, one called on '{0}' itself, as in 'shared new(…) -> {0}', then '{0}.new(…)'", owner)
+}
+
+/// The message for `alters` on a shared method.
+const SHARED_NEVER_ALTERS: &str = "a shared method is called on its shape or kind, with no value it could change, so it is never 'alters'";
 
 /// Refuses a member named `this`, which is the whole value inside a method, so
 /// nothing written after a dot could reach it.

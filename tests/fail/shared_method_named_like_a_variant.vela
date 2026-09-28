@@ -1,0 +1,13 @@
+; error: 7:12: 'Hearts' is already a variant of 'Suit', at 4:5; 'Suit.Hearts(…)' makes the variant, so a shared method can't take its name
+; 'Suit.Hearts(…)' makes the variant, so no shared method takes its name.
+kind Suit
+    Hearts
+    Spades(rank: int)
+
+    shared Hearts() -> Suit
+        <- Suit.Spades(1)
+    fi
+fi
+
+task main()
+fi

@@ -1,0 +1,20 @@
+; error: 15:12: 'new' makes a pointer to a value in a region, as in 'new T(v) at r'; a shared method named 'new' is called on its shape or kind, as in 'X.new(…)'
+; A shared method 'new' is called on its shape, not alone.
+shape Point
+    x: int
+
+    shared new(x: int) -> Point
+        <- Point { x: x }
+    fi
+
+    area() -> int
+        <- .x
+    fi
+
+    shared twice() -> int
+        <- new(1).x
+    fi
+fi
+
+task main()
+fi

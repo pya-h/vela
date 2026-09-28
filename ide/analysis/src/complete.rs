@@ -11,7 +11,7 @@ use vela::ast::{BUILTIN_TASKS, BUILTIN_TYPES, Need, Type, unqualified};
 use vela::lexer::{LexKind, Token};
 
 use crate::infer::{Knowledge, parameter_names, parameters};
-use crate::scan::{Scan, SymbolKind};
+use crate::scan::{Scan, Symbol, SymbolKind};
 use crate::types::{Checked, Context};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -168,15 +168,19 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
             let covered = covered_cases(&k, match_q, line);
             items.retain(|item| !covered.contains(&item.label));
         }
+        // Outside a pattern, the kind's shared methods are called on it too.
+        if !in_pattern {
+            items.extend(shared_methods(&k, kind));
+        }
         return (items, word_start, byte);
     }
 
-    // After a shape's name and `.`: its shared fields, which belong to the
-    // shape itself rather than to any value of it.
+    // After a shape's name and `.`: its shared fields and methods, which
+    // belong to the shape itself rather than to any value of it.
     if let (Some(dot), Some(Token::Dot)) = (prev, prev_token)
         && let Some(shape) = dot.checked_sub(1).and_then(|q| k.symbol_at(q)).filter(|&id| k.symbol(id).is_some_and(|s| s.kind == SymbolKind::Shape))
     {
-        let items = k
+        let mut items: Vec<CompletionItem> = k
             .members(shape, SymbolKind::Field)
             .filter(|(_, field)| field.shared && (field.module.is_none() || !field.private))
             .map(|(_, field)| CompletionItem {
@@ -188,6 +192,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 boost: LOCAL,
             })
             .collect();
+        items.extend(shared_methods(&k, shape));
         return (items, word_start, byte);
     }
 
@@ -377,18 +382,21 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         let items = match blocks.as_slice() {
             [] => item_level_items().into_iter().filter(|item| item.label != "priv" && item.label != "include").collect(),
             // A private method may change its value, and a shape's shared
-            // field may be private.
+            // field or method, or a kind's shared method, may be private.
             [Block::Shape] => vec![keyword(vela::ast::ALTERS), keyword("shared")],
-            [Block::Kind] => vec![keyword(vela::ast::ALTERS)],
+            [Block::Kind] => vec![keyword(vela::ast::ALTERS), keyword("shared")],
             _ => Vec::new(),
         };
         return (items, word_start, byte);
     }
 
-    // After `shared` in a shape: whether the field changes, and who changes it.
-    // (Otherwise its name is being declared.)
+    // After `shared` in a shape: whether the field changes, and who changes it,
+    // or `new`, a shared method's name. (Otherwise its name is being declared.)
     if prev_token == Some(&Token::Shared) && blocks.as_slice() == [Block::Shape] {
-        return (vec![keyword("hold"), keyword(vela::ast::READ)], word_start, byte);
+        return (vec![keyword("hold"), keyword(vela::ast::READ), keyword(vela::ast::NEW_WORD)], word_start, byte);
+    }
+    if prev_token == Some(&Token::Shared) && blocks.as_slice() == [Block::Kind] {
+        return (vec![keyword(vela::ast::NEW_WORD)], word_start, byte);
     }
 
     // `region r default` and `r: region default`: the word that makes a region
@@ -599,7 +607,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
             // A shape's field and a method can be private, a shape's field can
             // be read-only or shared, and a method can change its value.
             Some(Block::Shape) => vec![keyword("priv"), keyword(vela::ast::READ), keyword("shared"), keyword(vela::ast::ALTERS)],
-            Some(Block::Kind) => vec![keyword("priv"), keyword(vela::ast::ALTERS)],
+            Some(Block::Kind) => vec![keyword("priv"), keyword(vela::ast::ALTERS), keyword("shared")],
             Some(_) => {
                 let probe = probe(source, context, word_start, word_end);
                 let exact = Knowledge::new(source, scan, &probe);
@@ -989,18 +997,33 @@ fn owner_members(k: &Knowledge, owner: usize, prefix: &str) -> Vec<CompletionIte
                     boost: LOCAL,
                 };
             }
-            let params = parameter_names(&member.detail);
-            let mut used = Vec::new();
-            let args: Vec<String> = params.iter().map(|p| format!("${{{}}}", unique(&mut used, p))).collect();
-            let (apply, snippet) = if args.is_empty() {
-                (Some(format!("{}{}()", prefix, member.name)), None)
-            } else {
-                (None, Some(format!("{}{}({})", prefix, member.name, args.join(", "))))
-            };
-            let alters = member.intro.map_or(String::new(), |word| format!("{} ", word));
-            CompletionItem { label: member.name.clone(), kind: CompletionKind::Method, detail: format!("{}{}", alters, member.detail), apply, snippet, boost: LOCAL }
+            method_item(member, prefix)
         })
         .collect()
+}
+
+/// The shared methods of the shape or kind `owner`, called on its name
+/// (`Point.new(…)`). Another module's private ones can't be used here.
+fn shared_methods(k: &Knowledge, owner: usize) -> Vec<CompletionItem> {
+    k.members(owner, SymbolKind::Method)
+        .filter(|(_, method)| method.shared && (method.module.is_none() || !method.private))
+        .map(|(_, method)| method_item(method, ""))
+        .collect()
+}
+
+/// A method as offered after a dot, with `prefix` before it: its name, and its
+/// parameters to fill in, headed by its word (`alters` or `shared`).
+fn method_item(member: &Symbol, prefix: &str) -> CompletionItem {
+    let params = parameter_names(&member.detail);
+    let mut used = Vec::new();
+    let args: Vec<String> = params.iter().map(|p| format!("${{{}}}", unique(&mut used, p))).collect();
+    let (apply, snippet) = if args.is_empty() {
+        (Some(format!("{}{}()", prefix, member.name)), None)
+    } else {
+        (None, Some(format!("{}{}({})", prefix, member.name, args.join(", "))))
+    };
+    let alters = member.intro.map_or(String::new(), |word| format!("{} ", word));
+    CompletionItem { label: member.name.clone(), kind: CompletionKind::Method, detail: format!("{}{}", alters, member.detail), apply, snippet, boost: LOCAL }
 }
 
 /// Whether position `q` is on the header line of a method of this file.

@@ -148,6 +148,10 @@ pub const COPY: &str = "copy";
 /// and a shape or kind gives its own, `str(r: region) -> text@r`.
 pub const STR: &str = "str";
 
+/// `new`, a keyword, which also names a shared method: `X.new(…)` (see
+/// `Owner::shared`).
+pub const NEW_WORD: &str = "new";
+
 /// The type whose name, called, turns a value into text: `text(n) at r`.
 pub const TEXT_CAST: &str = "text";
 
@@ -1362,7 +1366,8 @@ pub struct TaskDef {
 }
 
 /// What makes a task a method: it is written inside a shape or a kind, and its
-/// first parameter is the value it is called on (named `THIS`, written `.this`).
+/// first parameter is the value it is called on (named `THIS`, written `.this`),
+/// unless it is `shared`.
 #[derive(Debug, Clone)]
 pub struct Owner {
     /// The method's own name, which a call writes after a dot (`step`).
@@ -1372,12 +1377,20 @@ pub struct Owner {
     pub alters: bool,
     /// Position of `alters`, when it is written.
     pub alters_span: Option<Span>,
+    /// `shared new(…)`: a method of the shape or kind itself, called on its
+    /// name (`X.new(…)`), with no value it is called on, so no `.this` and no
+    /// first parameter holding one.
+    pub shared: bool,
 }
 
 impl TaskDef {
     /// The shape or kind whose method this is: the type of its first parameter,
     /// which holds the value the method is called on. `None` for a task.
     pub fn owner_type(&self) -> Option<&str> {
+        // A shared method has no value it is called on; its name says whose it is.
+        if self.owner.as_ref().is_some_and(|owner| owner.shared) {
+            return method_parts(&self.name).map(|(owner, _)| owner);
+        }
         self.owner.as_ref().and_then(|_| self.params.first()).and_then(|param| match &param.ty {
             Type::Named(name, _) => Some(name.as_str()),
             Type::Applied(applied) => Some(applied.name.as_str()),

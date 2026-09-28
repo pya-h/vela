@@ -1,0 +1,24 @@
+; error: 15:12: 'twice' is a method of 'Point', so a call names what it is called on, as in 'Point.twice(…)'
+; A shared method, called by its name alone, in a method of its shape.
+shape Point
+    x: int
+
+    shared new(x: int) -> Point
+        <- Point { x: x }
+    fi
+
+    area() -> int
+        <- .x
+    fi
+
+    three() -> int
+        <- twice(1).x
+    fi
+
+    shared twice(x: int) -> Point
+        <- Point.new(x)
+    fi
+fi
+
+task main()
+fi

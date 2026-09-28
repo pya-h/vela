@@ -193,6 +193,13 @@ pub struct Checker {
     /// The shape whose method is being checked, shared or not: the only code
     /// that may change its `shared read` fields.
     current_shape: Option<String>,
+    /// The shape or kind whose method is being checked, shared or not, for
+    /// the hint when one of its methods is called by name alone.
+    current_type: Option<String>,
+    /// Where each call written on a value (`x.m(…)`) is, once it is the call
+    /// of its method's task, which may be checked again as a value of another
+    /// call: any other call of a method is written on its shape, `X.m(…)`.
+    on_values: HashSet<(usize, usize, usize)>,
     /// Whether a call was refused for leaving out the region it takes last,
     /// which a chain joined `at r` reads (see `check_join`).
     region_wanted: bool,
@@ -931,7 +938,8 @@ impl Checker {
             // they are called on gives nothing away.
             Item::Task(t) if t.owner.is_some() => {
                 let hidden = t.owner_type().is_some_and(|ty| self.private.contains(ty));
-                (t.private || hidden, "method", &t.name, t.params.iter().skip(1).collect())
+                let receiver = usize::from(t.owner.as_ref().is_some_and(|owner| !owner.shared));
+                (t.private || hidden, "method", &t.name, t.params.iter().skip(receiver).collect())
             }
             Item::Task(t) => (t.private, "task", &t.name, t.params.iter().collect()),
             Item::Shape(s) => (s.private, "shape", &s.name, s.fields.iter().filter(|f| !f.private).collect()),
@@ -1508,7 +1516,7 @@ impl Checker {
     /// given types keeps it, and the shape made for each set of types settles it
     /// (see `settle_applications`).
     fn settle_receiver(&self, task: &mut TaskDef) {
-        if task.owner.is_none() {
+        if task.owner.as_ref().is_none_or(|owner| owner.shared) {
             return;
         }
         let Some(Type::Named(name, region)) = task.params.first_mut().map(|param| &mut param.ty) else { return };
@@ -1587,6 +1595,13 @@ impl Checker {
                     None if several => format!("result {}", i + 1),
                     None => "the result".to_string(),
                 };
+                // `@this` is the region of the value a method is called on.
+                if region == THIS_WORD && t.owner.as_ref().is_some_and(|owner| owner.shared) {
+                    return err(
+                        at,
+                        format!("{} lives in '@{}', the region of the value a method is called on, and a shared method has none; take a region, as in 'r: region', and name it", which, THIS_WORD),
+                    );
+                }
                 return err(
                     at,
                     format!(
@@ -1799,7 +1814,7 @@ impl Checker {
         match self.lookup(name) {
             Some(info) if info.ty == Type::Region => {
                 if allocating && !info.allocates {
-                    if name == THIS_WORD && self.current_method.is_some() {
+                    if name == THIS_WORD && self.called_on_a_value() {
                         return err(span, self.cannot_allocate_in_this("allocate where the value is kept, and give the method what you made"));
                     }
                     return err(
@@ -2106,7 +2121,13 @@ impl Checker {
         self.current_ret = Some(known(&task.ret));
         self.current_method = task.owner.clone();
         self.current_owner = task.owner.as_ref().filter(|owner| owner.alters).and(task.params.first()).and_then(|this| self.owner_of(&this.ty));
-        self.current_shape = task.params.first().filter(|_| task.owner.is_some()).and_then(|this| self.owner_of(&this.ty));
+        self.current_type = task.owner_type().map(str::to_string);
+        self.current_shape = match &task.owner {
+            // A shared method is its shape's own, with no value it is called on.
+            Some(owner) if owner.shared => task.owner_type().filter(|ty| self.shapes.contains_key(*ty)).map(str::to_string),
+            Some(_) => task.params.first().and_then(|this| self.owner_of(&this.ty)),
+            None => None,
+        };
         // Parameters and the task body share one scope, as in C.
         self.scopes = vec![Scope::default()];
         for param in &task.params {
@@ -2154,6 +2175,7 @@ impl Checker {
             self.current_method = None;
             self.current_owner = None;
             self.current_shape = None;
+            self.current_type = None;
             self.result_names.clear();
             self.unset.clear();
             return Ok(());
@@ -2195,6 +2217,7 @@ impl Checker {
         self.current_method = None;
         self.current_owner = None;
         self.current_shape = None;
+        self.current_type = None;
         let ends_well = if self.result_names.is_empty() {
             if whole && sends_value(&task.ret) && !always_sends(&task.body) {
                 err(task.span, format!("task '{}' can finish without sending a value", task.name))
@@ -3715,10 +3738,13 @@ impl Checker {
     fn infer_expr(&mut self, expr: &mut Expr) -> Result<Type> {
         let span = expr.span;
         // A method call becomes the call of the task the method is, which the
-        // rest of this checks as it checks any call.
+        // rest of this checks as it checks any call; any other call of a
+        // method is written on its shape or kind, `X.m(…)`.
         if matches!(expr.kind, ExprKind::MethodCall { .. }) {
             self.check_method_call(expr)?;
+            self.on_values.insert(span.place_key());
         }
+        let on_a_value = self.on_values.contains(&span.place_key());
         if matches!(expr.kind, ExprKind::Shared { .. }) {
             return self.check_shared_use(expr);
         }
@@ -3749,7 +3775,7 @@ impl Checker {
             }
             ExprKind::Field(base, field) => {
                 // `.x` outside a method, named as it is written.
-                if self.current_method.is_none() && matches!(&base.kind, ExprKind::Var(name) if name == THIS) {
+                if !self.called_on_a_value() && matches!(&base.kind, ExprKind::Var(name) if name == THIS) {
                     return err(span, self.not_a_method(&format!("{}{}", MODULE_SEPARATOR, field)));
                 }
                 let base_ty = self.check_expr(base)?;
@@ -3788,6 +3814,23 @@ impl Checker {
                 let info = self.tasks.get(name.as_str()).filter(|_| self.sees(name))
                     .ok_or_else(|| {
                         // `send (x)` written the old way reads as a call.
+                        // `X.make(…)` naming no method of X (see `Resolver::shared_method`).
+                        if let Some((owner, method)) = method_parts(name) {
+                            let what = if self.kinds.contains_key(owner) { "kind" } else { "shape" };
+                            let or_variant = if what == "kind" { "variant or " } else { "" };
+                            return Error::at(span, format!("{} '{}' has no {}shared method '{}'", what, owner, or_variant, method));
+                        }
+                        // `area()` inside a method of the shape that has it.
+                        if let Some(of) = &self.current_type
+                            && let Some(method) = self.tasks.get(&method_name(of, name)).and_then(|info| info.owner.as_ref())
+                        {
+                            let how = match (method.shared, self.called_on_a_value()) {
+                                (true, _) => format!("'{}.{}(…)'", unqualified(of), name),
+                                (false, true) => format!("'.{}(…)', or 'x.{}(…)' on another value", name, name),
+                                (false, false) => format!("'x.{}(…)', on a value of it", name),
+                            };
+                            return Error::at(span, format!("'{}' is a method of '{}', so a call names what it is called on, as in {}", name, unqualified(of), how));
+                        }
                         let hint = match name.as_str() {
                             "send" => "; a task sends its result with '<-'".to_string(),
                             "free" => "; Vela has no 'free': memory in a region is freed when the block declaring the region closes".to_string(),
@@ -3797,6 +3840,22 @@ impl Checker {
                         Error::at(span, format!("unknown task '{}'{}", name, hint))
                     })?
                     .clone();
+                // `X.m(…)`, a method named on its shape or kind: only a shared
+                // one is called that way, and a private one only in its file.
+                if let Some(owner) = info.owner.as_ref().filter(|_| !on_a_value)
+                    && let Some((of, _)) = method_parts(name)
+                {
+                    let written = format!("{}{}{}", unqualified(of), MODULE_SEPARATOR, owner.name);
+                    if !owner.shared {
+                        return err(
+                            span,
+                            format!("'{0}' is called on a value of '{1}', as in 'x.{2}(…)'; only a shared method, written 'shared {2}(…)', is called on '{1}' itself", written, unqualified(of), owner.name),
+                        );
+                    }
+                    if self.private.contains(name.as_str()) && module_of(of) != self.current_module {
+                        return err(span, format!("'{}' is a private method of '{}', which only its own file can use", owner.name, unqualified(of)));
+                    }
+                }
                 // A task whose header has a mistake takes and sends nothing
                 // known, so the call is only checked as far as its arguments
                 // are values of their own (see `broken`).
@@ -3804,9 +3863,14 @@ impl Checker {
                     self.check_each(args);
                     return Ok(Type::Unknown);
                 }
-                self.settle_call_region(span, &format!("task '{}'", name), args, &info.params)?;
+                // A shared method is named as it is written, `X.new`.
+                let callee = match method_parts(name).filter(|_| !on_a_value) {
+                    Some((of, method)) => format!("method '{}{}{}'", unqualified(of), MODULE_SEPARATOR, method),
+                    None => format!("task '{}'", name),
+                };
+                self.settle_call_region(span, &callee, args, &info.params)?;
                 if args.len() != info.params.len() {
-                    return err(span, format!("task '{}' expects {}, got {}", name, count(info.params.len(), "argument"), args.len()));
+                    return err(span, format!("{} expects {}, got {}", callee, count(info.params.len(), "argument"), args.len()));
                 }
                 self.check_call_args(span, name, types, args, &info)
             }
@@ -4188,7 +4252,7 @@ impl Checker {
         // Adding may need more room, which comes from the slice's region.
         match region.as_deref() {
             Some(region) if region != ANY_REGION => match self.lookup(region) {
-                Some(info) if info.ty == Type::Region && !info.allocates && region == THIS_WORD && self.current_method.is_some() => {
+                Some(info) if info.ty == Type::Region && !info.allocates && region == THIS_WORD && self.called_on_a_value() => {
                     err(span, format!("adding to a slice may need more room in its region, and {}", self.cannot_allocate_in_this("add to it where the value is kept, outside the method")))
                 }
                 Some(info) if info.ty == Type::Region && !info.allocates => err(
@@ -5294,6 +5358,9 @@ impl Checker {
         let full = method_name(&owner, &name);
         let info = self.tasks.get(&full).filter(|_| self.sees(&full)).cloned().ok_or_else(|| self.no_method(&ty, &name, span))?;
         let written = format!("{}{}{}", unqualified(&owner), MODULE_SEPARATOR, name);
+        if info.owner.as_ref().is_some_and(|owner| owner.shared) {
+            return err(span, format!("'{0}' is a shared method, called on '{1}' itself, not on a value of it: write '{1}.{2}(…)'", written, unqualified(&owner), name));
+        }
         if self.private.contains(&full) && module_of(&owner) != self.current_module {
             return err(span, format!("'{}' is a private method of '{}', which only its own file can use", name, unqualified(&owner)));
         }
@@ -5469,8 +5536,8 @@ impl Checker {
     /// where the method doesn't say it may change it.
     fn this_cannot_change(&self, span: Span, what: &str) -> Error {
         match &self.current_method {
-            Some(owner) => self.needs_alters(span, what, owner),
-            None => Error::at(span, self.not_a_method(THIS)),
+            Some(owner) if !owner.shared => self.needs_alters(span, what, owner),
+            _ => Error::at(span, self.not_a_method(THIS)),
         }
     }
 
@@ -5645,7 +5712,14 @@ impl Checker {
         }
     }
 
-    /// The error for `.this` or `.x` in a task that is no method.
+    /// Whether the task being checked is a method called on a value, which it
+    /// reads as `.this`: not a task, and not a shared method.
+    fn called_on_a_value(&self) -> bool {
+        self.current_method.as_ref().is_some_and(|owner| !owner.shared)
+    }
+
+    /// The error for `.this` or `.x` in a task that is no method, or in a
+    /// shared method.
     fn not_a_method(&self, written: &str) -> String {
         if self.in_shared.is_some() {
             return format!("'{}' reads the value a method is called on, and a shared field belongs to no value", written);
@@ -5654,6 +5728,9 @@ impl Checker {
             return format!("'{}' reads the value a method is called on, and the value field '{}' falls back on is worked out before there is one, so it reads no other field", written, field);
         }
         let names = if written == THIS { "is the value a method is called on" } else { "names a member of the value a method is called on" };
+        if let Some(owner) = self.current_method.as_ref().filter(|owner| owner.shared) {
+            return format!("'{}' {}, and '{}' is a shared method, called on its shape or kind rather than on a value; take the value as a parameter, or make '{}' a method of the value", written, names, owner.name, owner.name);
+        }
         format!("'{}' {}, and this is a task, which is called on no value", written, names)
     }
 

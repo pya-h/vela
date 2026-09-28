@@ -1,0 +1,20 @@
+; error: 15:13: '.x' names a member of the value a method is called on, and 'bad' is a shared method, called on its shape or kind rather than on a value; take the value as a parameter, or make 'bad' a method of the value
+; A shared method has no value it is called on, so no fields of one.
+shape Point
+    x: int
+
+    shared new(x: int) -> Point
+        <- Point { x: x }
+    fi
+
+    area() -> int
+        <- .x
+    fi
+
+    shared bad() -> int
+        <- .x
+    fi
+fi
+
+task main()
+fi

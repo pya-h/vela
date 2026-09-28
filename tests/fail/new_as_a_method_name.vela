@@ -1,0 +1,12 @@
+; error: 6:5: 'new' names only a shared method, one called on 'Point' itself, as in 'shared new(…) -> Point', then 'Point.new(…)'
+; 'new' names only a shared method.
+shape Point
+    x: int
+
+    new() -> Point
+        <- Point { x: 0 }
+    fi
+fi
+
+task main()
+fi
