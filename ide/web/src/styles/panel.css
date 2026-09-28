@@ -442,6 +442,10 @@ button.status-item:hover {
   color: var(--danger);
 }
 
+.status-item.has-warnings {
+  color: var(--warning);
+}
+
 .status-run {
   overflow: hidden;
   animation: fade-in var(--normal) var(--ease);

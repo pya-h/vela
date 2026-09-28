@@ -144,10 +144,17 @@ impl<'a> Analysis<'a> {
     /// points inside a token, or is empty at the end of a line.
     ///
     /// The warnings come among them, in source order too: what the program
-    /// does that it may not mean, though it builds.
+    /// does that it may not mean, though it builds. Only this file's: a
+    /// module's warnings are its own, shown where it is open, while its
+    /// mistakes stop this file's program too, so they are shown here.
     pub fn diagnostics(&self) -> Vec<Diagnostic> {
         let errors = self.checked.errors.iter().map(|error| self.diagnostic(error, Severity::Error));
-        let warnings = self.checked.warnings.iter().map(|warning| self.diagnostic(warning, Severity::Warning));
+        let warnings = self
+            .checked
+            .warnings
+            .iter()
+            .filter(|warning| warning.span.is_none_or(|span| span.file == 0))
+            .map(|warning| self.diagnostic(warning, Severity::Warning));
         let mut all: Vec<Diagnostic> = errors.chain(warnings).collect();
         // A stable sort: the errors stay first at one position.
         all.sort_by_key(|d| (d.line.is_none(), d.line, d.col));

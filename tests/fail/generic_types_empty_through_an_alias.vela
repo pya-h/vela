@@ -1,0 +1,7 @@
+; error: 6:14: '< … >' names the types a use gives, as in 'pick<int>'; leave it out to let the values say which they are
+; A task brought in under another name, used with no types between '<>'.
+include modules/library (first => pick)
+
+task main()
+    show(pick<>(1))
+fi

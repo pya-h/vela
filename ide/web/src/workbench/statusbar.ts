@@ -37,12 +37,16 @@ export class StatusBar {
     this.setCursor(null);
   }
 
-  setProblems(count: number): void {
-    this.problems.classList.toggle("has-problems", count > 0);
+  /** The errors and the warnings found, which are told apart: a program with only warnings builds. */
+  setProblems(errors: number, warnings = 0): void {
+    this.problems.classList.toggle("has-problems", errors > 0);
+    this.problems.classList.toggle("has-warnings", errors === 0 && warnings > 0);
     this.problems.title = "Show problems";
+    const counted = (count: number, word: string) => (count === 1 ? `1 ${word}` : `${count} ${word}s`);
+    const parts = [...(errors > 0 ? [counted(errors, "error")] : []), ...(warnings > 0 ? [counted(warnings, "warning")] : [])];
     this.problems.replaceChildren(
-      icon(count > 0 ? "error" : "check"),
-      h("span", { text: count === 0 ? "No problems" : count === 1 ? "1 problem" : `${count} problems` }),
+      icon(errors > 0 ? "error" : warnings > 0 ? "warning" : "check"),
+      h("span", { text: parts.length === 0 ? "No problems" : parts.join(", ") }),
     );
   }
 

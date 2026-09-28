@@ -44,6 +44,9 @@ task main()
     bind sentence = "{greeting}, {shown} and {cast}"
     show(sentence)
     show(Card { rank: 3 })
+    ; Values of any type turned into text there, as 'at r' would.
+    bind count = 3
+    show("count {count}, {[1, 2]}, {Card { rank: count }}, nested {"{count + 1}"}")
 
     ; An inner block names its own default; the outer one is back after it.
     each round in 0..3

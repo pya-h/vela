@@ -1,0 +1,10 @@
+; error: 9:18: task 'look' reads 'n' where the caller keeps it, so it takes a place: a variable, a field or an item of one, or what a pointer points to, and this is a length, worked out from the value
+; A 'bind&' parameter reads a place, and the length of text has none.
+task look(bind& n: int) -> int
+    <- n
+fi
+
+task main()
+    bind t = "abc"
+    show(look(&t.len))
+fi

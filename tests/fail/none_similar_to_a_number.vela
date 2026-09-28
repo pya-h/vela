@@ -1,0 +1,5 @@
+; error: 4:15: 'none' can only be compared with a maybe value
+; 'none' is similar only to a maybe, as it equals only one.
+task main()
+    show(none ~= 3)
+fi

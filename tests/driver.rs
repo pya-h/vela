@@ -314,6 +314,20 @@ fn a_program_loads_each_module_once_through_its_loader() {
 }
 
 #[test]
+fn a_warning_in_a_module_names_the_file_of_the_use_that_gave_its_types() {
+    let main = "include compare\n\nshape P\n    x: int\nfi\n\ntask main()\n    bind p = P { x: 1 }\n    show(compare.same(p, p))\nfi\n";
+    let files = [("app/compare.vela", "task same<T: same>(a: T, b: T) -> bool\n    <- a == b\nfi\n")];
+    let asked = std::cell::RefCell::new(Vec::new());
+    let warnings = driver::check_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap().1;
+    let rendered = warnings.render("app/main.vela");
+    // Shown in the module, where the '==' is, naming the use in the main file.
+    assert!(rendered.starts_with("app/compare.vela:2:8: warning: '==' compares P by where it is"), "{}", rendered);
+    assert!(rendered.contains("(where 'same' is given P, at 9:10 in the main file)"), "{}", rendered);
+    assert!(rendered.contains("write 'bind& a: T'"), "{}", rendered);
+    assert_eq!(warnings.warnings.len(), 2);
+}
+
+#[test]
 fn the_library_comes_with_the_compiler_and_is_never_read_from_a_loader() {
     // Vela's library is the compiler's own, so no loader is asked for it, and a
     // file named like one of its modules can't stand in for it.

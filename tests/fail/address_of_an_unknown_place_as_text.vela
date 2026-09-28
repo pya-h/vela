@@ -1,0 +1,10 @@
+; error: 7:14: unknown variable 'z'
+; error: 9:10: unknown variable 'nope'
+; An address of a place whose type is unknown, turned into text, says nothing
+; more: only the mistakes the program has are reported.
+task main()
+    region r
+    bind y = z
+    show("{&y}" at r, (&y).str() at r, text(&y) at r)
+    show(nope)
+fi

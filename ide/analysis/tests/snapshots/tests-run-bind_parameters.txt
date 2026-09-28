@@ -1,5 +1,5 @@
-  1 | ; warning: 49:9: '&a' is where the place is, and 'a' is a parameter, given as the compiler chose: Wide takes 72 bytes, more than 64, so 'a' is where the caller keeps it, or a copy the caller makes first of a value behind a pointer, in a slice, or named by a reference; write 'bind& a: Wide' for the caller's place, 'bind a: Wide' for a copy of its own, or compare items with '~='
-    | comment:; warning: 49:9: '&a' is where the place is, and 'a' is a parameter, given as the compiler chose: Wide takes 72 bytes, more than 64, so 'a' is where the caller keeps it, or a copy the caller makes first of a value behind a pointer, in a slice, or named by a reference; write 'bind& a: Wide' for the caller's place, 'bind a: Wide' for a copy of its own, or compare items with '~='
+  1 | ; warning: 49:9: '&a' is where the place is, and 'a' is a parameter, given as the compiler chose: Wide takes 72 bytes, more than 64, so 'a' is where the caller keeps it, or a copy the caller makes first of a value that might change while the task runs, such as one behind a pointer, in a slice or a shared field, or named by a reference; write 'bind& a: Wide' for the caller's place, or 'bind a: Wide' for a copy of its own
+    | comment:; warning: 49:9: '&a' is where the place is, and 'a' is a parameter, given as the compiler chose: Wide takes 72 bytes, more than 64, so 'a' is where the caller keeps it, or a copy the caller makes first of a value that might change while the task runs, such as one behind a pointer, in a slice or a shared field, or named by a reference; write 'bind& a: Wide' for the caller's place, or 'bind a: Wide' for a copy of its own
   2 | ; How a parameter is given, written before its name: nothing lets the compiler
     | comment:; How a parameter is given, written before its name: nothing lets the compiler
   3 | ; choose (a copy, or where the caller keeps a large value), `bind x` is always
@@ -122,37 +122,67 @@
     | keyword:<-  parameter:a  operator:==  parameter:b
  73 | fi
     | keyword:fi
- 75 | task main()
+ 75 | ; A pointer only read: it stays, and what it points to is its own place, which
+    | comment:; A pointer only read: it stays, and what it points to is its own place, which
+ 76 | ; the task may change through it.
+    | comment:; the task may change through it.
+ 77 | task nudge(bind& spot: ^Point@r) -> int
+    | keyword:task  task:nudge  punctuation:(  keyword:bind  keyword:&  parameter:spot  punctuation::  operator:^  type:Point  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 78 |     spot^.x = spot^.x + 1
+    | parameter:spot  operator:^  punctuation:.  field:x  operator:=  parameter:spot  operator:^  punctuation:.  field:x  operator:+  number:1
+ 79 |     <- spot^.x
+    | keyword:<-  parameter:spot  operator:^  punctuation:.  field:x
+ 80 | fi
+    | keyword:fi
+ 82 | task open(bind& m: maybe ^Point@r) -> int
+    | keyword:task  task:open  punctuation:(  keyword:bind  keyword:&  parameter:m  punctuation::  keyword:maybe  operator:^  type:Point  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 83 |     bind spot = m { <- 0 }
+    | keyword:bind  variable:spot  operator:=  parameter:m  punctuation:{  keyword:<-  number:0  punctuation:}
+ 84 |     <- spot^.x
+    | keyword:<-  variable:spot  operator:^  punctuation:.  field:x
+ 85 | fi
+    | keyword:fi
+ 87 | task kept<T>(bind& a: T) -> T
+    | keyword:task  task:kept  punctuation:<  type:T  punctuation:>  punctuation:(  keyword:bind  keyword:&  parameter:a  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 88 |     <- a
+    | keyword:<-  parameter:a
+ 89 | fi
+    | keyword:fi
+ 91 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 76 |     region r
+ 92 |     region r
     | keyword:region  region:r
- 77 |     bind p = Point { x: 1, y: 2 }
+ 93 |     bind p = Point { x: 1, y: 2 }
     | keyword:bind  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
- 78 |     hold q = p
+ 94 |     hold q = p
     | keyword:hold  variable:q  operator:=  variable:p
- 79 |     show(one(&p, &p), " ", one(&p, &q), " ", copies(p, p), " ", onward(&q), " ", written(r, &q))
+ 95 |     show(one(&p, &p), " ", one(&p, &q), " ", copies(p, p), " ", onward(&q), " ", written(r, &q))
     | builtin-fn:show  punctuation:(  task:one  punctuation:(  operator:&  variable:p  punctuation:,  operator:&  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  task:one  punctuation:(  operator:&  variable:p  punctuation:,  operator:&  variable:q  punctuation:)  punctuation:,  string:" "  punctuation:,  task:copies  punctuation:(  variable:p  punctuation:,  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  task:onward  punctuation:(  operator:&  variable:q  punctuation:)  punctuation:,  string:" "  punctuation:,  task:written  punctuation:(  region:r  punctuation:,  operator:&  variable:q  punctuation:)  punctuation:)
- 80 |     hold w = Wide { a: 1, b: 0, c: 0, d: 0, e: 0, f: 0, g: 0, h: 0, i: 0 }
+ 96 |     hold w = Wide { a: 1, b: 0, c: 0, d: 0, e: 0, f: 0, g: 0, h: 0, i: 0 }
     | keyword:hold  variable:w  operator:=  type:Wide  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:0  punctuation:,  field:c  punctuation::  number:0  punctuation:,  field:d  punctuation::  number:0  punctuation:,  field:e  punctuation::  number:0  punctuation:,  field:f  punctuation::  number:0  punctuation:,  field:g  punctuation::  number:0  punctuation:,  field:h  punctuation::  number:0  punctuation:,  field:i  punctuation::  number:0  punctuation:}
- 81 |     bind other = w
+ 97 |     bind other = w
     | keyword:bind  variable:other  operator:=  variable:w
- 82 |     show(copied(w, &w), " ", chosen(w, &w))
+ 98 |     show(copied(w, &w), " ", chosen(w, &w))
     | builtin-fn:show  punctuation:(  task:copied  punctuation:(  variable:w  punctuation:,  operator:&  variable:w  punctuation:)  punctuation:,  string:" "  punctuation:,  task:chosen  punctuation:(  variable:w  punctuation:,  operator:&  variable:w  punctuation:)  punctuation:)
- 83 |     w.grow(&other)
+ 99 |     w.grow(&other)
     | variable:w  punctuation:.  method:grow  punctuation:(  operator:&  variable:other  punctuation:)
- 84 |     w.grow(&other)
+100 |     w.grow(&other)
     | variable:w  punctuation:.  method:grow  punctuation:(  operator:&  variable:other  punctuation:)
- 85 |     show(w.a)
+101 |     show(w.a)
     | builtin-fn:show  punctuation:(  variable:w  punctuation:.  field:a  punctuation:)
- 86 |     bind xs = [1, 2, 3]
+102 |     bind xs = [1, 2, 3]
     | keyword:bind  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
- 87 |     show(sum(&xs, 10))
+103 |     show(sum(&xs, 10))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  operator:&  variable:xs  punctuation:,  number:10  punctuation:)  punctuation:)
- 88 |     ; What a pointer points to, and a field, are places too.
+104 |     ; What a pointer points to, and a field, are places too.
     | comment:; What a pointer points to, and a field, are places too.
- 89 |     bind ptr = new Point(p) at r
+105 |     bind ptr = new Point(p) at r
     | keyword:bind  variable:ptr  operator:=  keyword:new  type:Point  punctuation:(  variable:p  punctuation:)  keyword:at  region:r
- 90 |     show(one(&ptr^, &ptr^), " ", one(&ptr^, &p), " ", same_place(&p.x, &p.x), " ", same_place(&xs, &xs), " ", same_place(&p, &q))
+106 |     show(one(&ptr^, &ptr^), " ", one(&ptr^, &p), " ", same_place(&p.x, &p.x), " ", same_place(&xs, &xs), " ", same_place(&p, &q))
     | builtin-fn:show  punctuation:(  task:one  punctuation:(  operator:&  variable:ptr  operator:^  punctuation:,  operator:&  variable:ptr  operator:^  punctuation:)  punctuation:,  string:" "  punctuation:,  task:one  punctuation:(  operator:&  variable:ptr  operator:^  punctuation:,  operator:&  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same_place  punctuation:(  operator:&  variable:p  punctuation:.  field:x  punctuation:,  operator:&  variable:p  punctuation:.  field:x  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same_place  punctuation:(  operator:&  variable:xs  punctuation:,  operator:&  variable:xs  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same_place  punctuation:(  operator:&  variable:p  punctuation:,  operator:&  variable:q  punctuation:)  punctuation:)
- 91 | fi
+107 |     hold held: maybe ^Point@r = ptr
+    | keyword:hold  variable:held  punctuation::  keyword:maybe  operator:^  type:Point  operator:@  region:r  operator:=  variable:ptr
+108 |     show(nudge(&ptr), " ", open(&held), " ", kept(&ptr)^.x)
+    | builtin-fn:show  punctuation:(  task:nudge  punctuation:(  operator:&  variable:ptr  punctuation:)  punctuation:,  string:" "  punctuation:,  task:open  punctuation:(  operator:&  variable:held  punctuation:)  punctuation:,  string:" "  punctuation:,  task:kept  punctuation:(  operator:&  variable:ptr  punctuation:)  operator:^  punctuation:.  field:x  punctuation:)
+109 | fi
     | keyword:fi

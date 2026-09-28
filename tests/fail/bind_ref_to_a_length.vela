@@ -1,0 +1,7 @@
+; error: 5:19: a reference names a place for as long as its block lasts, so it can't name 'len', which is worked out from the value, not kept in it
+; A reference names a place, and a length is worked out, not kept.
+task main()
+    bind xs = [1, 2, 3]
+    bind& n = &xs.len
+    show(n)
+fi

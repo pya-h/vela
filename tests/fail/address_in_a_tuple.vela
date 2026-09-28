@@ -1,4 +1,4 @@
-; error: 21:11: '&' marks a place given to a 'hold&' parameter, as in 'f(&a)', named by a reference, as in 'hold& y = &a', or whose address is shown or compared, as in 'show(&a)' or '&a == &b'; anywhere else, write the value itself
+; error: 21:11: '&' marks a place given to a 'hold&' or 'bind&' parameter, as in 'f(&a)', named by a reference, as in 'hold& y = &a', or whose address is shown or compared, as in 'show(&a)' or '&a == &b'; anywhere else, write the value itself
 shape Point
     x: int
     alters bump()

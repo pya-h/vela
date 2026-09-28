@@ -1,7 +1,7 @@
-  1 | ; warning: 35:8: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose (where 'same' is given Point, at 82:10): Point takes 32 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: Point' for the caller's place, 'bind a: Point' for a copy of its own, or compare items with '~='
-    | comment:; warning: 35:8: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose (where 'same' is given Point, at 82:10): Point takes 32 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: Point' for the caller's place, 'bind a: Point' for a copy of its own, or compare items with '~='
-  2 | ; warning: 35:13: '==' compares Point by where it is, and 'b' is a parameter, given as the compiler chose (where 'same' is given Point, at 82:10): Point takes 32 bytes, so 'b' is a copy, a place of its own, never the caller's; write 'bind& b: Point' for the caller's place, 'bind b: Point' for a copy of its own, or compare items with '~='
-    | comment:; warning: 35:13: '==' compares Point by where it is, and 'b' is a parameter, given as the compiler chose (where 'same' is given Point, at 82:10): Point takes 32 bytes, so 'b' is a copy, a place of its own, never the caller's; write 'bind& b: Point' for the caller's place, 'bind b: Point' for a copy of its own, or compare items with '~='
+  1 | ; warning: 41:8: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose (where 'same' is given Point, at 88:10): Point takes 32 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: T' for the caller's place, 'bind a: T' for a copy of its own, or compare items with '~='
+    | comment:; warning: 41:8: '==' compares Point by where it is, and 'a' is a parameter, given as the compiler chose (where 'same' is given Point, at 88:10): Point takes 32 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: T' for the caller's place, 'bind a: T' for a copy of its own, or compare items with '~='
+  2 | ; warning: 41:13: '==' compares Point by where it is, and 'b' is a parameter, given as the compiler chose (where 'same' is given Point, at 88:10): Point takes 32 bytes, so 'b' is a copy, a place of its own, never the caller's; write 'bind& b: T' for the caller's place, 'bind b: T' for a copy of its own, or compare items with '~='
+    | comment:; warning: 41:13: '==' compares Point by where it is, and 'b' is a parameter, given as the compiler chose (where 'same' is given Point, at 88:10): Point takes 32 bytes, so 'b' is a copy, a place of its own, never the caller's; write 'bind& b: T' for the caller's place, 'bind b: T' for a copy of its own, or compare items with '~='
   3 | ; `==` compares each type by its own rule: numbers, bools, and kinds by value,
     | comment:; `==` compares each type by its own rule: numbers, bools, and kinds by value,
   4 | ; text by its bytes, a pointer by the address it holds, a slice by its view,
@@ -54,99 +54,127 @@
     | variant:Tally  punctuation:(  field:n  punctuation::  keyword:maybe  type-builtin:int  punctuation:)
  32 | fi
     | keyword:fi
- 34 | task same<T: same>(a: T, b: T) -> bool
+ 34 | ; A maybe a variant carries compares what it holds, so by where a shape is.
+    | comment:; A maybe a variant carries compares what it holds, so by where a shape is.
+ 35 | kind Slot
+    | keyword:kind  type:Slot
+ 36 |     Filled(point: maybe Point)
+    | variant:Filled  punctuation:(  field:point  punctuation::  keyword:maybe  type:Point  punctuation:)
+ 37 |     Open
+    | variant:Open
+ 38 | fi
+    | keyword:fi
+ 40 | task same<T: same>(a: T, b: T) -> bool
     | keyword:task  task:same  punctuation:<  type:T  punctuation::  keyword:same  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type-builtin:bool
- 35 |     <- a == b
+ 41 |     <- a == b
     | keyword:<-  parameter:a  operator:==  parameter:b
- 36 | fi
+ 42 | fi
     | keyword:fi
- 38 | task alike<T: similar>(a: T, b: T) -> bool
+ 44 | task alike<T: similar>(a: T, b: T) -> bool
     | keyword:task  task:alike  punctuation:<  type:T  punctuation::  keyword:similar  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type-builtin:bool
- 39 |     <- a ~= b
+ 45 |     <- a ~= b
     | keyword:<-  parameter:a  operator:~=  parameter:b
- 40 | fi
+ 46 | fi
     | keyword:fi
- 42 | task main()
+ 48 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 43 |     region r
+ 49 |     region r
     | keyword:region  region:r
- 44 |     ; A shape: one place, a copy, and a reference to the first.
+ 50 |     ; A shape: one place, a copy, and a reference to the first.
     | comment:; A shape: one place, a copy, and a reference to the first.
- 45 |     hold p = Point { x: 1, y: 2 }
+ 51 |     hold p = Point { x: 1, y: 2 }
     | keyword:hold  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
- 46 |     bind q = p
+ 52 |     bind q = p
     | keyword:bind  variable:q  operator:=  variable:p
- 47 |     hold& also = &p
+ 53 |     hold& also = &p
     | keyword:hold  keyword:&  variable:also  operator:=  operator:&  variable:p
- 48 |     show(p == p, " ", p == q, " ", p == also, " ", p != q)
+ 54 |     show(p == p, " ", p == q, " ", p == also, " ", p != q)
     | builtin-fn:show  punctuation:(  variable:p  operator:==  variable:p  punctuation:,  string:" "  punctuation:,  variable:p  operator:==  variable:q  punctuation:,  string:" "  punctuation:,  variable:p  operator:==  variable:also  punctuation:,  string:" "  punctuation:,  variable:p  operator:!=  variable:q  punctuation:)
- 49 |     show(p ~= q, " ", p <> q, " ", p ~= Point { x: 1, y: 2 }, " ", p ~= Point { x: 1, y: 2, note: "m" })
+ 55 |     show(p ~= q, " ", p <> q, " ", p ~= Point { x: 1, y: 2 }, " ", p ~= Point { x: 1, y: 2, note: "m" })
     | builtin-fn:show  punctuation:(  variable:p  operator:~=  variable:q  punctuation:,  string:" "  punctuation:,  variable:p  operator:<>  variable:q  punctuation:,  string:" "  punctuation:,  variable:p  operator:~=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:p  operator:~=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:,  field:note  punctuation::  string:"m"  punctuation:}  punctuation:)
- 50 |     ; Tuples and arrays, nested too.
+ 56 |     ; Tuples and arrays, nested too.
     | comment:; Tuples and arrays, nested too.
- 51 |     bind t = (1, "a")
+ 57 |     bind t = (1, "a")
     | keyword:bind  variable:t  operator:=  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)
- 52 |     bind u = (1, "a")
+ 58 |     bind u = (1, "a")
     | keyword:bind  variable:u  operator:=  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)
- 53 |     show(t == t, " ", t == u, " ", t ~= u, " ", t <> (1, "b"))
+ 59 |     show(t == t, " ", t == u, " ", t ~= u, " ", t <> (1, "b"))
     | builtin-fn:show  punctuation:(  variable:t  operator:==  variable:t  punctuation:,  string:" "  punctuation:,  variable:t  operator:==  variable:u  punctuation:,  string:" "  punctuation:,  variable:t  operator:~=  variable:u  punctuation:,  string:" "  punctuation:,  variable:t  operator:<>  punctuation:(  number:1  punctuation:,  string:"b"  punctuation:)  punctuation:)
- 54 |     bind xs = [1, 2]
+ 60 |     bind xs = [1, 2]
     | keyword:bind  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:]
- 55 |     bind ys = [1, 2]
+ 61 |     bind ys = [1, 2]
     | keyword:bind  variable:ys  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:]
- 56 |     show(xs == ys, " ", xs ~= ys, " ", [[1, 2], [3, 4]] ~= [[1, 2], [3, 4]], " ", [[1, 2], [3, 4]] <> [[1, 2], [3, 5]])
+ 62 |     show(xs == ys, " ", xs ~= ys, " ", [[1, 2], [3, 4]] ~= [[1, 2], [3, 4]], " ", [[1, 2], [3, 4]] <> [[1, 2], [3, 5]])
     | builtin-fn:show  punctuation:(  variable:xs  operator:==  variable:ys  punctuation:,  string:" "  punctuation:,  variable:xs  operator:~=  variable:ys  punctuation:,  string:" "  punctuation:,  punctuation:[  punctuation:[  number:1  punctuation:,  number:2  punctuation:]  punctuation:,  punctuation:[  number:3  punctuation:,  number:4  punctuation:]  punctuation:]  operator:~=  punctuation:[  punctuation:[  number:1  punctuation:,  number:2  punctuation:]  punctuation:,  punctuation:[  number:3  punctuation:,  number:4  punctuation:]  punctuation:]  punctuation:,  string:" "  punctuation:,  punctuation:[  punctuation:[  number:1  punctuation:,  number:2  punctuation:]  punctuation:,  punctuation:[  number:3  punctuation:,  number:4  punctuation:]  punctuation:]  operator:<>  punctuation:[  punctuation:[  number:1  punctuation:,  number:2  punctuation:]  punctuation:,  punctuation:[  number:3  punctuation:,  number:5  punctuation:]  punctuation:]  punctuation:)
- 57 |     ; A slice by its view: the same items, and as many of them.
+ 63 |     ; A slice by its view: the same items, and as many of them.
     | comment:; A slice by its view: the same items, and as many of them.
- 58 |     bind s = new [int]([1, 2, 3]) at r
+ 64 |     bind s = new [int]([1, 2, 3]) at r
     | keyword:bind  variable:s  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)  keyword:at  region:r
- 59 |     bind view = s
+ 65 |     bind view = s
     | keyword:bind  variable:view  operator:=  variable:s
- 60 |     bind copied = new [int](s) at r
+ 66 |     bind copied = new [int](s) at r
     | keyword:bind  variable:copied  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  variable:s  punctuation:)  keyword:at  region:r
- 61 |     show(s == view, " ", s == copied, " ", s[0..2] == s[0..2], " ", s[0..2] == s[0..3], " ", s ~= copied, " ", s[1..3] ~= copied[1..3])
+ 67 |     show(s == view, " ", s == copied, " ", s[0..2] == s[0..2], " ", s[0..2] == s[0..3], " ", s ~= copied, " ", s[1..3] ~= copied[1..3])
     | builtin-fn:show  punctuation:(  variable:s  operator:==  variable:view  punctuation:,  string:" "  punctuation:,  variable:s  operator:==  variable:copied  punctuation:,  string:" "  punctuation:,  variable:s  punctuation:[  number:0  operator:..  number:2  punctuation:]  operator:==  variable:s  punctuation:[  number:0  operator:..  number:2  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:s  punctuation:[  number:0  operator:..  number:2  punctuation:]  operator:==  variable:s  punctuation:[  number:0  operator:..  number:3  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:s  operator:~=  variable:copied  punctuation:,  string:" "  punctuation:,  variable:s  punctuation:[  number:1  operator:..  number:3  punctuation:]  operator:~=  variable:copied  punctuation:[  number:1  operator:..  number:3  punctuation:]  punctuation:)
- 62 |     ; A kind by value, what it carries by its own rule.
+ 68 |     ; A kind by value, what it carries by its own rule.
     | comment:; A kind by value, what it carries by its own rule.
- 63 |     bind loud = Mood.Loud(1, "x")
+ 69 |     bind loud = Mood.Loud(1, "x")
     | keyword:bind  variable:loud  operator:=  type:Mood  punctuation:.  variant:Loud  punctuation:(  number:1  punctuation:,  string:"x"  punctuation:)
- 64 |     show(loud == Mood.Loud(1, "x"), " ", loud == Mood.Calm, " ", Mood.Calm == Mood.Calm, " ", loud != Mood.Loud(2, "x"))
+ 70 |     show(loud == Mood.Loud(1, "x"), " ", loud == Mood.Calm, " ", Mood.Calm == Mood.Calm, " ", loud != Mood.Loud(2, "x"))
     | builtin-fn:show  punctuation:(  variable:loud  operator:==  type:Mood  punctuation:.  variant:Loud  punctuation:(  number:1  punctuation:,  string:"x"  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:loud  operator:==  type:Mood  punctuation:.  variant:Calm  punctuation:,  string:" "  punctuation:,  type:Mood  punctuation:.  variant:Calm  operator:==  type:Mood  punctuation:.  variant:Calm  punctuation:,  string:" "  punctuation:,  variable:loud  operator:!=  type:Mood  punctuation:.  variant:Loud  punctuation:(  number:2  punctuation:,  string:"x"  punctuation:)  punctuation:)
- 65 |     bind h1: Held@r = Held.Pair(p)
+ 71 |     bind h1: Held@r = Held.Pair(p)
     | keyword:bind  variable:h1  punctuation::  type:Held  operator:@  region:r  operator:=  type:Held  punctuation:.  variant:Pair  punctuation:(  variable:p  punctuation:)
- 66 |     bind h2: Held@r = h1
+ 72 |     bind h2: Held@r = h1
     | keyword:bind  variable:h2  punctuation::  type:Held  operator:@  region:r  operator:=  variable:h1
- 67 |     show(h1 == h1, " ", h1 == h2, " ", h1 ~= h2, " ", Listed.Nums(s) ~= Listed.Nums(copied))
+ 73 |     show(h1 == h1, " ", h1 == h2, " ", h1 ~= h2, " ", Listed.Nums(s) ~= Listed.Nums(copied))
     | builtin-fn:show  punctuation:(  variable:h1  operator:==  variable:h1  punctuation:,  string:" "  punctuation:,  variable:h1  operator:==  variable:h2  punctuation:,  string:" "  punctuation:,  variable:h1  operator:~=  variable:h2  punctuation:,  string:" "  punctuation:,  type:Listed  punctuation:.  variant:Nums  punctuation:(  variable:s  punctuation:)  operator:~=  type:Listed  punctuation:.  variant:Nums  punctuation:(  variable:copied  punctuation:)  punctuation:)
- 68 |     bind c1: Held@r = Held.Count(4)
+ 74 |     bind c1: Held@r = Held.Count(4)
     | keyword:bind  variable:c1  punctuation::  type:Held  operator:@  region:r  operator:=  type:Held  punctuation:.  variant:Count  punctuation:(  number:4  punctuation:)
- 69 |     bind c2: Held@r = Held.Count(4)
+ 75 |     bind c2: Held@r = Held.Count(4)
     | keyword:bind  variable:c2  punctuation::  type:Held  operator:@  region:r  operator:=  type:Held  punctuation:.  variant:Count  punctuation:(  number:4  punctuation:)
- 70 |     show(Listed.Nums(s) == Listed.Nums(view), " ", Listed.Nums(s) == Listed.Nums(copied), " ", Listed.Tally(4) == Listed.Tally(4), " ", c1 == c2, " ", c1 ~= c2, " ", Held.Empty ~= Held.Empty)
+ 76 |     show(Listed.Nums(s) == Listed.Nums(view), " ", Listed.Nums(s) == Listed.Nums(copied), " ", Listed.Tally(4) == Listed.Tally(4), " ", c1 == c2, " ", c1 ~= c2, " ", Held.Empty ~= Held.Empty)
     | builtin-fn:show  punctuation:(  type:Listed  punctuation:.  variant:Nums  punctuation:(  variable:s  punctuation:)  operator:==  type:Listed  punctuation:.  variant:Nums  punctuation:(  variable:view  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Listed  punctuation:.  variant:Nums  punctuation:(  variable:s  punctuation:)  operator:==  type:Listed  punctuation:.  variant:Nums  punctuation:(  variable:copied  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Listed  punctuation:.  variant:Tally  punctuation:(  number:4  punctuation:)  operator:==  type:Listed  punctuation:.  variant:Tally  punctuation:(  number:4  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:c1  operator:==  variable:c2  punctuation:,  string:" "  punctuation:,  variable:c1  operator:~=  variable:c2  punctuation:,  string:" "  punctuation:,  type:Held  punctuation:.  variant:Empty  operator:~=  type:Held  punctuation:.  variant:Empty  punctuation:)
- 71 |     ; A maybe: similar when both are empty or both hold similar values.
+ 77 |     ; A maybe: similar when both are empty or both hold similar values.
     | comment:; A maybe: similar when both are empty or both hold similar values.
- 72 |     bind some: maybe int = 3
+ 78 |     bind some: maybe int = 3
     | keyword:bind  variable:some  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:3
- 73 |     bind nothing: maybe int = none
+ 79 |     bind nothing: maybe int = none
     | keyword:bind  variable:nothing  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
- 74 |     show(some ~= nothing, " ", nothing ~= none, " ", none ~= nothing, " ", some <> none)
+ 80 |     show(some ~= nothing, " ", nothing ~= none, " ", none ~= nothing, " ", some <> none)
     | builtin-fn:show  punctuation:(  variable:some  operator:~=  variable:nothing  punctuation:,  string:" "  punctuation:,  variable:nothing  operator:~=  keyword:none  punctuation:,  string:" "  punctuation:,  keyword:none  operator:~=  variable:nothing  punctuation:,  string:" "  punctuation:,  variable:some  operator:<>  keyword:none  punctuation:)
- 75 |     ; A pointer by the address it holds, what it points to by its own rule.
+ 81 |     ; A pointer by the address it holds, what it points to by its own rule.
     | comment:; A pointer by the address it holds, what it points to by its own rule.
- 76 |     bind first = new int(1) at r
+ 82 |     bind first = new int(1) at r
     | keyword:bind  variable:first  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:at  region:r
- 77 |     bind second = new int(1) at r
+ 83 |     bind second = new int(1) at r
     | keyword:bind  variable:second  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:at  region:r
- 78 |     show(first ~= second, " ", first^ ~= second^, " ", "ab" ~= "ab", " ", 1.5 <> 2.5)
+ 84 |     show(first ~= second, " ", first^ ~= second^, " ", "ab" ~= "ab", " ", 1.5 <> 2.5)
     | builtin-fn:show  punctuation:(  variable:first  operator:~=  variable:second  punctuation:,  string:" "  punctuation:,  variable:first  operator:^  operator:~=  variable:second  operator:^  punctuation:,  string:" "  punctuation:,  string:"ab"  operator:~=  string:"ab"  punctuation:,  string:" "  punctuation:,  number:1.5  operator:<>  number:2.5  punctuation:)
- 79 |     ; In a task that takes types, each by its own rule. A small parameter is
+ 85 |     ; In a task that takes types, each by its own rule. A small parameter is
     | comment:; In a task that takes types, each by its own rule. A small parameter is
- 80 |     ; a copy, a place of its own, so two shapes given to 'same' are never one
+ 86 |     ; a copy, a place of its own, so two shapes given to 'same' are never one
     | comment:; a copy, a place of its own, so two shapes given to 'same' are never one
- 81 |     ; place; 'alike' compares their items.
+ 87 |     ; place; 'alike' compares their items.
     | comment:; place; 'alike' compares their items.
- 82 |     show(same(p, q), " ", same(p, also), " ", same(3, 3), " ", alike(p, q), " ", alike([t, u], [u, t]))
+ 88 |     show(same(p, q), " ", same(p, also), " ", same(3, 3), " ", alike(p, q), " ", alike([t, u], [u, t]))
     | builtin-fn:show  punctuation:(  task:same  punctuation:(  variable:p  punctuation:,  variable:q  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same  punctuation:(  variable:p  punctuation:,  variable:also  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same  punctuation:(  number:3  punctuation:,  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  task:alike  punctuation:(  variable:p  punctuation:,  variable:q  punctuation:)  punctuation:,  string:" "  punctuation:,  task:alike  punctuation:(  punctuation:[  variable:t  punctuation:,  variable:u  punctuation:]  punctuation:,  punctuation:[  variable:u  punctuation:,  variable:t  punctuation:]  punctuation:)  punctuation:)
- 83 | fi
+ 89 |     ; A kind carrying a maybe of a shape, and maybes tested for none.
+    | comment:; A kind carrying a maybe of a shape, and maybes tested for none.
+ 90 |     bind slot = Slot.Filled(p)
+    | keyword:bind  variable:slot  operator:=  type:Slot  punctuation:.  variant:Filled  punctuation:(  variable:p  punctuation:)
+ 91 |     bind moods: maybe Mood = none
+    | keyword:bind  variable:moods  punctuation::  keyword:maybe  type:Mood  operator:=  keyword:none
+ 92 |     bind views: maybe [int]@r = none
+    | keyword:bind  variable:views  punctuation::  keyword:maybe  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:none
+ 93 |     show(slot == slot, " ", slot ~= Slot.Filled(q), " ", moods == none, " ", views != none)
+    | builtin-fn:show  punctuation:(  variable:slot  operator:==  variable:slot  punctuation:,  string:" "  punctuation:,  variable:slot  operator:~=  type:Slot  punctuation:.  variant:Filled  punctuation:(  variable:q  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:moods  operator:==  keyword:none  punctuation:,  string:" "  punctuation:,  variable:views  operator:!=  keyword:none  punctuation:)
+ 94 |     ; A value compared with itself, which C would call always true.
+    | comment:; A value compared with itself, which C would call always true.
+ 95 |     bind n = 4
+    | keyword:bind  variable:n  operator:=  number:4
+ 96 |     bind f = 0.5
+    | keyword:bind  variable:f  operator:=  number:0.5
+ 97 |     show(n == n, " ", n ~= n, " ", f == f, " ", n < n, " ", first == first, " ", first ~= first, " ", &n == &n, " ", xs == xs)
+    | builtin-fn:show  punctuation:(  variable:n  operator:==  variable:n  punctuation:,  string:" "  punctuation:,  variable:n  operator:~=  variable:n  punctuation:,  string:" "  punctuation:,  variable:f  operator:==  variable:f  punctuation:,  string:" "  punctuation:,  variable:n  operator:<  variable:n  punctuation:,  string:" "  punctuation:,  variable:first  operator:==  variable:first  punctuation:,  string:" "  punctuation:,  variable:first  operator:~=  variable:first  punctuation:,  string:" "  punctuation:,  operator:&  variable:n  operator:==  operator:&  variable:n  punctuation:,  string:" "  punctuation:,  variable:xs  operator:==  variable:xs  punctuation:)
+ 98 | fi
     | keyword:fi

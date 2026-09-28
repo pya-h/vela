@@ -58,3 +58,9 @@ export function collectProblems(live: { path: string; diagnostics: Diagnostic[] 
 export function problemCount(files: readonly FileProblems[]): number {
   return files.reduce((count, file) => count + file.problems.length, 0);
 }
+
+/** The problems that are errors, and those that are warnings, which don't stop a build. */
+export function severityCounts(files: readonly FileProblems[]): { errors: number; warnings: number } {
+  const warnings = files.reduce((count, file) => count + file.problems.filter((problem) => problem.severity === "warning").length, 0);
+  return { errors: problemCount(files) - warnings, warnings };
+}

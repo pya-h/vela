@@ -121,7 +121,7 @@ See [docs/ide.html](docs/ide.html) for features, shortcuts, and security notes.
 | `std/` | Vela's library, in Vela, which the compiler holds as it is built (`include std/files`) |
 | `examples/` | Example programs |
 | `tests/` | Program tests (`run/`, `fail/`, `trap/`, `examples/`), C runtime tests (`runtime/`), and Rust tests |
-| `docs/` | The language reference, the regions guide, a comparison with other languages, design notes, and the Vela Studio guide |
+| `docs/` | The language reference, the regions guide, a comparison with other languages, design notes, the safety and may-waste lists, and the Vela Studio guide |
 | `ide/` | Vela Studio: `analysis` (language support), `wasm` (it, for the browser), `server` (`vela-studio`), `web` (the page) |
 
 ## Documentation
@@ -132,3 +132,5 @@ See [docs/ide.html](docs/ide.html) for features, shortcuts, and security notes.
 - [Vela Studio](docs/ide.html)
 - [Vela and other languages](docs/comparison.html)
 - [Future directions](docs/future.html), and a [second design notebook](docs/future-2.html)
+- [Safety](docs/safety.html): where one name can see a change made through another, checked and open
+- [May waste](docs/maywaste.html): features to keep an eye on, and to merge or drop if they never earn a use

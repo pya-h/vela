@@ -48,3 +48,8 @@ priv kind Lock
     Open
     Shut
 fi
+
+; A task that takes types, for a use written with an empty "<>".
+task first<T>(x: T) -> T
+    <- x
+fi

@@ -1,4 +1,4 @@
-; warning: 49:9: '&a' is where the place is, and 'a' is a parameter, given as the compiler chose: Wide takes 72 bytes, more than 64, so 'a' is where the caller keeps it, or a copy the caller makes first of a value behind a pointer, in a slice, or named by a reference; write 'bind& a: Wide' for the caller's place, 'bind a: Wide' for a copy of its own, or compare items with '~='
+; warning: 49:9: '&a' is where the place is, and 'a' is a parameter, given as the compiler chose: Wide takes 72 bytes, more than 64, so 'a' is where the caller keeps it, or a copy the caller makes first of a value that might change while the task runs, such as one behind a pointer, in a slice or a shared field, or named by a reference; write 'bind& a: Wide' for the caller's place, or 'bind a: Wide' for a copy of its own
 ; How a parameter is given, written before its name: nothing lets the compiler
 ; choose (a copy, or where the caller keeps a large value), `bind x` is always
 ; a copy, and `bind& x` is the caller's place, only read, which a call gives
@@ -72,6 +72,22 @@ task same_place<T: same>(bind& a: T, bind& b: T) -> bool
     <- a == b
 fi
 
+; A pointer only read: it stays, and what it points to is its own place, which
+; the task may change through it.
+task nudge(bind& spot: ^Point@r) -> int
+    spot^.x = spot^.x + 1
+    <- spot^.x
+fi
+
+task open(bind& m: maybe ^Point@r) -> int
+    bind spot = m { <- 0 }
+    <- spot^.x
+fi
+
+task kept<T>(bind& a: T) -> T
+    <- a
+fi
+
 task main()
     region r
     bind p = Point { x: 1, y: 2 }
@@ -88,4 +104,6 @@ task main()
     ; What a pointer points to, and a field, are places too.
     bind ptr = new Point(p) at r
     show(one(&ptr^, &ptr^), " ", one(&ptr^, &p), " ", same_place(&p.x, &p.x), " ", same_place(&xs, &xs), " ", same_place(&p, &q))
+    hold held: maybe ^Point@r = ptr
+    show(nudge(&ptr), " ", open(&held), " ", kept(&ptr)^.x)
 fi

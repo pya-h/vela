@@ -612,7 +612,15 @@ impl Generator {
                     return false;
                 }
                 seen.push(name.clone());
-                let found = kind.variants.iter().flat_map(|variant| &variant.payload).any(|field| self.by_place_in(&field.ty, seen));
+                let found = kind.variants.iter().flat_map(|variant| &variant.payload).any(|field| {
+                    // A `maybe` a variant carries compares what it holds (see
+                    // `kind_comparable`), so by that value's own rule.
+                    let carried = match &field.ty {
+                        Type::Maybe(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    self.by_place_in(carried, seen)
+                });
                 seen.pop();
                 found
             }
@@ -866,23 +874,23 @@ impl Generator {
     /// any is defined, since an array's writes its items'.
     fn gen_writers(&mut self, used: &UsedTypes) -> Result<()> {
         for ty in &used.writes {
-            self.w.line(&format!("static void {}(vela__rt__writer* w, {} v);", write_helper(ty), c_type(ty)));
+            self.w.line(&format!("static void {}(vela__rt__writer* w, {} v);", write_helper(ty), written_c_type(ty)));
         }
         for ty in &used.texts {
-            self.w.line(&format!("static vela__rt__text {}(vela__rt__region* r, {} v);", text_helper(ty), c_type(ty)));
+            self.w.line(&format!("static vela__rt__text {}(vela__rt__region* r, {} v);", text_helper(ty), written_c_type(ty)));
         }
         for ty in &used.writes {
             self.gen_writer(ty)?;
         }
         for ty in &used.texts {
-            self.w.open(&format!("static vela__rt__text {}(vela__rt__region* r, {} v)", text_helper(ty), c_type(ty)));
+            self.w.open(&format!("static vela__rt__text {}(vela__rt__region* r, {} v)", text_helper(ty), written_c_type(ty)));
             match ty {
                 // A shape's or kind's own `str` makes the text itself.
                 Type::Named(owner, _) if self.has_own_str(owner) => self.w.line(&format!("return {};", self.own_str_call(owner, "r")?)),
                 _ => {
                     self.w.line("vela__rt__writer w = VELA__RT__BUILDER;");
                     match ty {
-                        Type::Ptr(..) => self.w.line("vela__rt__put_address(&w, (const void*)v);"),
+                        Type::Ptr(..) => self.w.line("vela__rt__put_address(&w, v);"),
                         _ => self.w.line(&format!("{}(&w, v);", write_helper(ty))),
                     }
                     self.w.line("return vela__rt__built(&w, r);");
@@ -935,7 +943,7 @@ impl Generator {
     /// `(1, "a")` for a tuple, `none` or `{ 4 }` for a `maybe`, and what its own
     /// `str` gives for a shape or kind, made in a region of its own.
     fn gen_writer(&mut self, ty: &Type) -> Result<()> {
-        self.w.open(&format!("static void {}(vela__rt__writer* w, {} v)", write_helper(ty), c_type(ty)));
+        self.w.open(&format!("static void {}(vela__rt__writer* w, {} v)", write_helper(ty), written_c_type(ty)));
         match ty {
             Type::Array(items, _) | Type::Slice(items, _) => {
                 let count = match ty {
@@ -1778,9 +1786,17 @@ impl Generator {
                 values.push(String::new());
             } else if in_order && !constant {
                 let tmp = self.fresh_temp("arg");
-                // A place given to a `hold&` parameter is its address.
-                let pointer = if matches!(operand.kind, ExprKind::Ref(_)) { "*" } else { "" };
-                self.w.line(&format!("{}{} {} = {};", c_type(operand.ty()?), pointer, tmp, value));
+                let ty = operand.ty()?;
+                match &operand.kind {
+                    // An address read (`&a == &b`), typed `^T`: only compared, so
+                    // kept as one, which a place that never changes gives too.
+                    ExprKind::Ref(place) if place.ty.as_ref().is_some_and(|place| *ty == Type::Ptr(Box::new(place.clone()), None)) => {
+                        self.w.line(&format!("const void* {} = {};", tmp, value));
+                    }
+                    // A place given to a `hold&` parameter is its address.
+                    ExprKind::Ref(_) => self.w.line(&format!("{}* {} = {};", c_type(operand.ty()?), tmp, value)),
+                    _ => self.w.line(&format!("{} {} = {};", c_type(operand.ty()?), tmp, value)),
+                }
                 values.push(tmp);
             } else {
                 values.push(value);
@@ -2510,7 +2526,8 @@ impl Generator {
                 return Ok(format!("{}{}({}, {})", not, copy_helper("same", l.ty()?), left, right));
             }
             let symbol = if op == BinaryOp::Eq { "==" } else { "!=" };
-            return Ok(format!("((const void*)({}) {} (const void*)({}))", left, symbol, right));
+            let (left, right) = (format!("(const void*)({})", left), format!("(const void*)({})", right));
+            return Ok(format!("({} {} {})", left, symbol, other_side(&left, right, "const void*")));
         }
         let [left, right] = <[String; 2]>::try_from(self.gen_operands(&[l, r])?)
             .map_err(|_| Error::internal_at(e.span, "a binary operation without two operands"))?;
@@ -2535,7 +2552,8 @@ impl Generator {
         // changes is `const` in C, so both sides are read as addresses alone.
         if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && [l, r].into_iter().any(|side| matches!(side.kind, ExprKind::Ref(_))) {
             let symbol = if op == BinaryOp::Eq { "==" } else { "!=" };
-            return Ok(format!("((const void*)({}) {} (const void*)({}))", left, symbol, right));
+            let (left, right) = (format!("(const void*)({})", left), format!("(const void*)({})", right));
+            return Ok(format!("({} {} {})", left, symbol, other_side(&left, right, "const void*")));
         }
         // A value compared by a function of its own is given to it by address,
         // a copy in a compound literal that lasts as long as the expression.
@@ -2550,10 +2568,11 @@ impl Generator {
         }
         if matches!(op, BinaryOp::Similar | BinaryOp::NotSimilar) {
             let ty = l.ty()?;
+            let symbol = if not.is_empty() { "==" } else { "!=" };
             return Ok(match ty {
                 // A number, a bool, and a pointer are similar when equal.
-                Type::Int | Type::Float | Type::Bool | Type::Ptr(..) => format!("({} {} {})", left, if not.is_empty() { "==" } else { "!=" }, right),
-                Type::Maybe(inner) if is_pointer(inner) => format!("({} {} {})", left, if not.is_empty() { "==" } else { "!=" }, right),
+                Type::Int | Type::Float | Type::Bool | Type::Ptr(..) => format!("({} {} {})", left, symbol, other_side(&left, right, &c_type(ty))),
+                Type::Maybe(inner) if is_pointer(inner) => format!("({} {} {})", left, symbol, other_side(&left, right, &c_type(ty))),
                 _ => format!("{}{}({}, {})", not, copy_helper("similar", ty), by_address(&left, ty), by_address(&right, ty)),
             });
         }
@@ -2600,6 +2619,10 @@ impl Generator {
             BinaryOp::And => "&&",
             BinaryOp::Or => "||",
         };
+        let right = match op {
+            BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge => other_side(&left, right, &c_type(r.ty()?)),
+            _ => right,
+        };
         Ok(format!("{} {} {}", left, op_s, right))
     }
 
@@ -2621,6 +2644,15 @@ impl Generator {
     }
 }
 
+/// The right side of a comparison, `right`, of C type `c_ty`: as it is, or,
+/// when it is written as the left side is (`x == x`), as a compound literal
+/// of it. A value compared with itself is a question Vela may ask (a float
+/// that isn't a number is unequal to itself), and C's warning about a
+/// comparison that is always true doesn't read through a compound literal.
+fn other_side(left: &str, right: String, c_ty: &str) -> String {
+    if left == right { format!("({}){{ {} }}", c_ty, right) } else { right }
+}
+
 /// `text` in parentheses, unless it already is one parenthesized expression
 /// or a plain name.
 fn parenthesized(text: &str) -> String {
@@ -2632,7 +2664,6 @@ fn is_pointer(ty: &Type) -> bool {
     matches!(ty, Type::Ptr(..))
 }
 
-/// The member of a result struct holding result `i`.
 /// The types of the `wanted` values `values` give: one each, or the several a
 /// call sends, or a tuple's items.
 fn given_types(wanted: usize, values: &[Expr], span: Span) -> Result<Vec<Type>> {
@@ -2814,6 +2845,16 @@ fn write_helper(ty: &Type) -> String {
 
 /// The generated function that makes a value of type `ty` into text in a
 /// region, `x.str() at r`.
+/// The C type a value of `ty` is given to its `write` and `text` helpers as:
+/// its own, but an address for a pointer, which is only written, and may be
+/// the address of a place that never changes (`"{&x}"`).
+fn written_c_type(ty: &Type) -> String {
+    match ty {
+        Type::Ptr(..) => "const void*".to_string(),
+        _ => c_type(ty),
+    }
+}
+
 fn text_helper(ty: &Type) -> String {
     format!("vela__text__{}", type_word(ty))
 }
@@ -3222,7 +3263,8 @@ impl UsedTypes {
             ExprKind::Binary(op, a, b) => {
                 let refs = [a, b].into_iter().any(|side| matches!(side.kind, ExprKind::Ref(_)));
                 match (op, &a.ty) {
-                    (BinaryOp::Eq | BinaryOp::Ne, Some(ty)) if !refs => self.note_same(ty),
+                    // `m == none` tests the maybe, and compares no values.
+                    (BinaryOp::Eq | BinaryOp::Ne, Some(ty)) if !refs && ![&a.ty, &b.ty].contains(&&Some(Type::None)) => self.note_same(ty),
                     // `none ~= m` is typed by its other side.
                     (BinaryOp::Similar | BinaryOp::NotSimilar, Some(Type::None)) => {}
                     (BinaryOp::Similar | BinaryOp::NotSimilar, Some(ty)) if !matches!(b.ty, Some(Type::None)) => self.note_similar(ty),
@@ -3550,9 +3592,10 @@ fn signature(t: &TaskDef, alters: bool, hidden: &[bool]) -> String {
             // place it is in, so what it writes is what the caller holds, and
             // so is a `hold&` parameter.
             // A `bind&` one is only read there, so it is given a place that
-            // never changes as well.
+            // never changes as well: `T const*`, which for a pointer is a
+            // pointer that stays, not what it points to (`T* const*`).
             if p.passing == Passing::BindRef {
-                return format!("const {}* {}", c_type(&p.ty), c_ident(&p.name));
+                return format!("{} const* {}", c_type(&p.ty), c_ident(&p.name));
             }
             if is_pointer_param(p, alters) {
                 return format!("{}* {}", c_type(&p.ty), c_ident(&p.name));

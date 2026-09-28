@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Diagnostic } from "../analysis/protocol";
 import type { BuildFailure } from "../api/types";
 import { exitLine, exitSummary, formatDuration, terminalLines } from "./format";
-import { collectProblems, problemCount } from "./problems";
+import { collectProblems, problemCount, severityCounts } from "./problems";
 
 describe("run output", () => {
   it("formats durations", () => {
@@ -82,9 +82,14 @@ describe("problems", () => {
       [7, "error"],
     ]);
     expect(problemCount(files)).toBe(2);
+    // The status bar tells them apart: warnings alone don't stop a build.
+    expect(severityCounts(files)).toEqual({ errors: 1, warnings: 1 });
+    const warned = collectProblems([{ path: "a.vela", diagnostics: [warning] }], new Map());
+    expect(severityCounts(warned)).toEqual({ errors: 0, warnings: 1 });
     // A build failure is an error.
     const built = collectProblems([], new Map([["b.vela", failure("no-main", "program has no 'main' task")]]));
     expect(built[0]?.problems[0]?.severity).toBe("error");
+    expect(severityCounts(built)).toEqual({ errors: 1, warnings: 0 });
   });
 
   it("puts a build error in a module under that module's file", () => {

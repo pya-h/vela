@@ -28,6 +28,20 @@ task spot<T>(r: region, hold& a: T) -> text@r
     <- "{&a}" at r
 fi
 
+; A place that is only read, turned into text: a `bind&` parameter, and a
+; part of it.
+task read(r: region, bind& p: Point) -> text@r
+    <- "{&p}" + text(&p.x)@r + (&p.y).str()@r at r
+fi
+
+task zero() -> int
+    <- 0
+fi
+
+task make(r: region) -> ^Point@r
+    <- new Point(Point { x: 0, y: 0 }) at r
+fi
+
 task main()
     region r
     hold p = Point { x: 1, y: 2 }
@@ -61,4 +75,9 @@ task main()
     show(&items[0] == &items[0], " ", &items[0] == &items[1], " ", "{&items[1]}" at r != "{&items[0]}" at r)
     hold mood = Mood.Calm
     show(spot(r, &p) == a, " ", spot(r, &mood) == "{&mood}" at r, " ", spot(r, &mood) == a)
+    ; Read only, and read in order beside a call.
+    bind& fixed = &p
+    show(read(r, &p).len > 6, " ", "{&fixed}" at r == a)
+    bind pair = [p, q]
+    show(&pair[zero()] == &pair[zero()], " ", &p == make(r), " ", &make(r)^ == &make(r)^)
 fi

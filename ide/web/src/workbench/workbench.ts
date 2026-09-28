@@ -12,7 +12,7 @@ import type { Entry, Info, Tree } from "../api/types";
 import { editorExtensions } from "../editor/setup";
 import { type Analyzer, documentPath, refreshAnalysis } from "../editor/vela";
 import { Panel } from "../panel/panel";
-import { type Problem, collectProblems, problemCount } from "../panel/problems";
+import { type Problem, collectProblems, problemCount, severityCounts } from "../panel/problems";
 import { ProblemsView } from "../panel/problems-view";
 import { type RunStatus, Runner } from "../panel/runner";
 import { Shell } from "../panel/shell";
@@ -789,9 +789,9 @@ export class Workbench {
       .map((doc) => ({ path: doc.path, diagnostics: this.analyzer.file(this.latest(doc).doc, doc.path).diagnostics }));
     const files = collectProblems(live, this.runner.failures);
     this.problems.update(files);
-    const count = problemCount(files);
-    this.panel.setCount(count);
-    this.statusBar.setProblems(count);
+    this.panel.setCount(problemCount(files));
+    const { errors, warnings } = severityCounts(files);
+    this.statusBar.setProblems(errors, warnings);
   }
 
   /** Opens a problem's file with the problem selected. */

@@ -1,0 +1,16 @@
+; error: 15:15: '==' compares what Slot carries by where it is, as it does arrays, shapes, and tuples (and kinds carrying them), and this one is a value made here, with no place of its own; '~=' compares two values item by item
+; A maybe a variant carries compares what it holds, so a shape by where it
+; is, and a variant made on the spot has no place.
+shape Point
+    x: int
+fi
+
+kind Slot
+    Filled(point: maybe Point)
+    Open
+fi
+
+task main()
+    bind p = Point { x: 1 }
+    show(Slot.Filled(p) == Slot.Filled(p))
+fi

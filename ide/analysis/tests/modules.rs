@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use vela_analysis::{Analysis, CompletionItem, LineIndex, Location, TokenClass};
+use vela_analysis::{Analysis, CompletionItem, LineIndex, Location, Severity, TokenClass};
 
 const MAIN: &str = "\
 include shapes/geometry
@@ -156,6 +156,24 @@ fn an_error_in_a_module_is_shown_at_its_include() {
     // numbers is included by geometry, which this file includes on its first line.
     assert_eq!((diagnostics[0].line, diagnostics[0].col), (Some(1), Some(9)));
     assert_eq!(diagnostics[0].message, "app/numbers.vela:2:10: arithmetic requires numeric operands");
+}
+
+#[test]
+fn a_module_keeps_its_own_warnings() {
+    // A warning in a module the file includes is the module's, shown where it
+    // is open; the file shows its own, marked as warnings.
+    let source = format!("{}\ntask same(a: Pair, b: Pair) -> bool\n    <- a == b\nfi\n\nshape Pair\n    x: int\nfi\n", main_with(""));
+    let mut sources = sources();
+    let numbers = sources.get_mut("app/numbers.vela").unwrap();
+    numbers.push_str("\nshape Two\n    x: int\nfi\n\ntask alike(a: Two, b: Two) -> bool\n    <- a == b\nfi\n");
+    let analysis = Analysis::with_modules(&source, "app/main.vela", &sources);
+    let diagnostics = analysis.diagnostics();
+    let line = source.lines().position(|line| line == "    <- a == b").unwrap() + 1;
+    assert_eq!(
+        diagnostics.iter().map(|d| (d.line, d.col, d.severity)).collect::<Vec<_>>(),
+        [(Some(line), Some(8), Severity::Warning), (Some(line), Some(13), Severity::Warning)]
+    );
+    assert!(diagnostics[0].message.starts_with("'==' compares Pair by where it is, and 'a' is a parameter"), "{}", diagnostics[0].message);
 }
 
 #[test]

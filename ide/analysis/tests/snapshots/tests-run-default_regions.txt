@@ -78,29 +78,35 @@
     | builtin-fn:show  punctuation:(  variable:sentence  punctuation:)
  46 |     show(Card { rank: 3 })
     | builtin-fn:show  punctuation:(  type:Card  punctuation:{  field:rank  punctuation::  number:3  punctuation:}  punctuation:)
- 48 |     ; An inner block names its own default; the outer one is back after it.
+ 47 |     ; Values of any type turned into text there, as 'at r' would.
+    | comment:; Values of any type turned into text there, as 'at r' would.
+ 48 |     bind count = 3
+    | keyword:bind  variable:count  operator:=  number:3
+ 49 |     show("count {count}, {[1, 2]}, {Card { rank: count }}, nested {"{count + 1}"}")
+    | builtin-fn:show  punctuation:(  string:"count {  variable:count  string:}, {  punctuation:[  number:1  punctuation:,  number:2  punctuation:]  string:}, {  type:Card  punctuation:{  field:rank  punctuation::  variable:count  punctuation:}  string:}, nested {  string:"{  variable:count  operator:+  number:1  string:}"  string:}"  punctuation:)
+ 51 |     ; An inner block names its own default; the outer one is back after it.
     | comment:; An inner block names its own default; the outer one is back after it.
- 49 |     each round in 0..3
+ 52 |     each round in 0..3
     | keyword:each  variable:round  keyword:in  number:0  operator:..  number:3
- 50 |         region pass default
+ 53 |         region pass default
     | keyword:region  region:pass  keyword:default
- 51 |         bind line = "pass " + round.str()
+ 54 |         bind line = "pass " + round.str()
     | keyword:bind  variable:line  operator:=  string:"pass "  operator:+  variable:round  punctuation:.  field:str  punctuation:(  punctuation:)
- 52 |         show(line)
+ 55 |         show(line)
     | builtin-fn:show  punctuation:(  variable:line  punctuation:)
- 53 |     fi
+ 56 |     fi
     | keyword:fi
- 54 |     bind after = new [int]([1, 2, 3])
+ 57 |     bind after = new [int]([1, 2, 3])
     | keyword:bind  variable:after  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)
- 55 |     show(after.len, " kept")
+ 58 |     show(after.len, " kept")
     | builtin-fn:show  punctuation:(  variable:after  punctuation:.  field:len  punctuation:,  string:" kept"  punctuation:)
- 57 |     ; A region that is not the default is still written.
+ 60 |     ; A region that is not the default is still written.
     | comment:; A region that is not the default is still written.
- 58 |     region other
+ 61 |     region other
     | keyword:region  region:other
- 59 |     bind elsewhere = new int(1) at other
+ 62 |     bind elsewhere = new int(1) at other
     | keyword:bind  variable:elsewhere  operator:=  keyword:new  type-builtin:int  punctuation:(  number:1  punctuation:)  keyword:at  region:other
- 60 |     show(elsewhere^)
+ 63 |     show(elsewhere^)
     | builtin-fn:show  punctuation:(  variable:elsewhere  operator:^  punctuation:)
- 61 | fi
+ 64 | fi
     | keyword:fi

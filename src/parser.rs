@@ -308,7 +308,7 @@ impl Parser {
             (Token::Hash, _, _) => "; '#' marks an array's count, as in '[int#4]', and a comment starts with ';'".to_string(),
             // `&` joins the words after a type's `:`, and marks a place given at
             // a call, which starts a value.
-            (Token::Amp, _, _) => "; Vela writes 'and' for both at once ('&' gives a place to a 'hold&' parameter, as in 'f(&a)', and joins the words a generic type must allow)".to_string(),
+            (Token::Amp, _, _) => "; Vela writes 'and' for both at once ('&' gives a place to a 'hold&' or 'bind&' parameter, as in 'f(&a)', and joins the words a generic type must allow)".to_string(),
             _ => String::new(),
         };
         Error::at(self.peek_span(), format!("expected {}, got {}{}", expected, self.peek().describe(), hint))
@@ -2949,7 +2949,7 @@ fn pending_region(expr: &Expr) -> bool {
 /// The `pieces` of text holding values, joined into `region`, added to
 /// `parts`: its text as it is, and each value turned into text in the region.
 /// A value that is itself text holding values gives its own pieces.
-fn interpolated_parts(pieces: Vec<Expr>, region: &str, region_span: Span, parts: &mut Vec<Expr>) {
+pub(crate) fn interpolated_parts(pieces: Vec<Expr>, region: &str, region_span: Span, parts: &mut Vec<Expr>) {
     for piece in pieces {
         if pending_region(&piece) {
             if let ExprKind::Join { parts: inner, .. } = piece.kind {

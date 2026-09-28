@@ -606,10 +606,10 @@ impl Checker {
             let mut made = Made::default();
             self.substitute_task(&mut task, &given, &mut made)?;
             for (span, what, param) in &made.reads_chosen {
-                let Some(ty) = made.chosen.get(param) else { continue };
+                let Some((ty, declared)) = made.chosen.get(param) else { continue };
                 let types: Vec<String> = task.given.iter().map(|ty| ty.without_regions().to_string()).collect();
-                let given = format!("where '{}' is given {}, at {}:{}", unqualified(&name), types.join(", "), at.line, at.col);
-                let message = chosen_message(what, param, ty, self.size_of(ty), Some(given));
+                let given = format!("where '{}' is given {}, at {}:{}{}", unqualified(&name), types.join(", "), at.line, at.col, self.file_named(at.file, span.file));
+                let message = chosen_message(what, param, ty, declared, self.size_of(ty), Some(given));
                 self.warnings.push(Error::at(*span, message));
             }
             if let Some((compare, ty)) = made.placeless.first() {
@@ -3731,11 +3731,11 @@ impl Checker {
             // One the call it is written after doesn't take (a variant's, which
             // `settle_call_region` never sees).
             ExprKind::RegionAfter(_) => err(span, "a region is named after a call only when the call takes one last"),
-            // One a call gives a `hold&` parameter is checked with the call's
+            // One a call gives a `hold&` or `bind&` parameter is checked with the call's
             // arguments (see `check_argument`).
             ExprKind::Ref(_) => err(
                 span,
-                "'&' marks a place given to a 'hold&' parameter, as in 'f(&a)', named by a reference, as in 'hold& y = &a', or whose address is shown or compared, as in 'show(&a)' or '&a == &b'; anywhere else, write the value itself",
+                "'&' marks a place given to a 'hold&' or 'bind&' parameter, as in 'f(&a)', named by a reference, as in 'hold& y = &a', or whose address is shown or compared, as in 'show(&a)' or '&a == &b'; anywhere else, write the value itself",
             ),
             ExprKind::Shared { .. } => Err(Error::internal_at(span, "a shared field read as another value")),
             // Checked again, as a method call's value is: it is text.
@@ -4465,7 +4465,7 @@ impl Checker {
     /// `region`, and returns its type,
     /// `text@region`. Every part is text, of any region or lasting.
     #[inline(never)]
-    fn check_join(&mut self, parts: &mut [Expr], region: &mut String, region_span: Span) -> Result<Type> {
+    fn check_join(&mut self, parts: &mut Vec<Expr>, region: &mut String, region_span: Span) -> Result<Type> {
         // Text holding values that no `at r` followed (see
         // `Parser::parse_interpolated`) goes in the block's default region.
         if let Some(field) = &self.in_default {
@@ -4478,6 +4478,9 @@ impl Checker {
             *region = self.region_or_default(None, region_span, || {
                 "text holding values is new text, so it names the region it goes in, as in '\"n = {n}\" at r' or '\"n = {n}\"@r'".to_string()
             })?;
+            // Each value turned into text in that region, as `at r` would.
+            let pieces = std::mem::take(parts);
+            crate::parser::interpolated_parts(pieces, region, region_span, parts);
         }
         let region = region.as_str();
         let mut numbers = true;
@@ -4823,7 +4826,7 @@ impl Checker {
         if op == BinaryOp::NotSimilar
             && let ExprKind::Var(name) = &l.kind
             && self.lookup(name).is_none()
-            && (self.tasks.contains_key(name) || self.shapes.contains_key(name))
+            && [name.clone(), self.in_module(name)].iter().any(|name| self.tasks.contains_key(name) || self.shapes.contains_key(name))
         {
             return err(span, format!("'< … >' names the types a use gives, as in '{}<int>'; leave it out to let the values say which they are", unqualified(name)));
         }
@@ -4959,18 +4962,19 @@ impl Checker {
                 // An array, a shape, or a tuple is compared by where it is, so
                 // each side is a place; a value made on the spot is none.
                 if self.by_place(&lt) {
-                    let what = format!("'{}' compares {} by where it is", symbol, lt.without_regions());
-                    for side in [&*l, &*r] {
-                        self.warn_chosen(side, &what);
+                    let what = self.compared_by_place(symbol, &lt);
+                    if !same_root(l, r) {
+                        for side in [&*l, &*r] {
+                            self.warn_chosen(side, &what);
+                        }
                     }
                     for side in [&*l, &*r] {
                         if !self.is_place(side) {
                             return err(
                                 side.span,
                                 format!(
-                                    "'{}' compares {} by where it is, as it does arrays, shapes, and tuples (and kinds carrying them), and this one is a value made here, with no place of its own; '~=' compares two values item by item",
-                                    symbol,
-                                    lt.without_regions()
+                                    "{}, as it does arrays, shapes, and tuples (and kinds carrying them), and this one is a value made here, with no place of its own; '~=' compares two values item by item",
+                                    what
                                 ),
                             );
                         }
@@ -4984,6 +4988,9 @@ impl Checker {
                 let none_and_maybe = matches!((&lt, &rt), (Type::None, Type::Maybe(_)) | (Type::Maybe(_), Type::None));
                 if none_and_maybe {
                     return Ok(Type::Bool);
+                }
+                if lt == Type::None || rt == Type::None {
+                    return err(span, "'none' can only be compared with a maybe value");
                 }
                 if lt.without_regions() != rt.without_regions() {
                     self.expect_type(&rt, &lt, r.span)?;
@@ -5868,6 +5875,9 @@ impl Checker {
                 }
                 Ok(())
             }
+            ExprKind::Field(base, field) if worked_out(base) => {
+                refuse(&format!("it can't name '{}', which is worked out from the value, not kept in it", field))
+            }
             ExprKind::Field(base, _) => self.read_place(base),
             ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => refuse("it can't name a part taken of a value, which is a new value, not a place"),
             ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..))) => refuse(
@@ -5888,16 +5898,12 @@ impl Checker {
         let ExprKind::Ref(place) = &mut e.kind else { return Err(Error::internal_at(e.span, "an address of no place")) };
         let ty = self.check_expr(place)?;
         if ty.unknown() {
+            // Read as unknown where it is used, as a method call's value is.
+            e.ty = Some(Type::Unknown);
             return Ok(Type::Unknown);
         }
         if !self.is_place(place) {
-            let what = match &place.kind {
-                ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => "a part taken of a value, which is a new value",
-                ExprKind::Call { .. } | ExprKind::MethodCall { .. } => "a call's value, which is made here",
-                ExprKind::Construct { .. } => "a variant, which is a value",
-                ExprKind::Var(_) => "a variant, which is a value",
-                _ => "a value made here",
-            };
+            let what = no_place(place);
             return err(
                 place.span,
                 format!("'&' takes the address of a place: a variable, a field or an item of one, or what a pointer points to, and this is {}, with no place of its own", what),
@@ -5918,6 +5924,8 @@ impl Checker {
             match &at.kind {
                 ExprKind::Var(name) => return self.lookup(name).is_some(),
                 ExprKind::Shared { .. } | ExprKind::Deref(_) => return true,
+                // `xs.len` is worked out from the value, not kept in it.
+                ExprKind::Field(base, _) if worked_out(base) => return false,
                 ExprKind::Field(base, _) => at = base,
                 ExprKind::Index(base, index) if !matches!(index.kind, ExprKind::Range(..)) => at = base,
                 _ => return false,
@@ -5930,11 +5938,19 @@ impl Checker {
     /// type, as a shape and its first field start at the same address and
     /// are still two places.
     fn check_address_compare(&mut self, l: &mut Expr, r: &mut Expr, span: Span) -> Result<Type> {
+        let warned = self.warnings.len();
         let mut side_type = |side: &mut Expr| match side.kind {
             ExprKind::Ref(_) => self.check_address(side),
             _ => self.check_expr(side),
         };
         let (lt, rt) = (side_type(l)?, side_type(r)?);
+        // Two parts of one parameter are where they are alike whichever way
+        // it was given, so the answer doesn't rest on the choice.
+        if let (ExprKind::Ref(a), ExprKind::Ref(b)) = (&l.kind, &r.kind)
+            && same_root(a, b)
+        {
+            self.warnings.truncate(warned);
+        }
         let (lt, rt) = (&lt, &rt);
         if lt.unknown() || rt.unknown() {
             return Ok(Type::Bool);
@@ -5982,19 +5998,32 @@ impl Checker {
     /// compiler chooses how to give (`x: T`): a copy, or, for a large value,
     /// where the caller keeps it (see `codegen::hidden_by_size`). Its name and
     /// type. A place a pointer points to is its own, however it was given.
-    fn chosen_param(&self, e: &Expr) -> Option<(String, Type)> {
-        let mut at = e;
-        loop {
-            match &at.kind {
-                ExprKind::Var(name) => {
-                    let info = self.lookup(name)?;
-                    let chosen = info.param && info.passing == Passing::Copy && !info.mutable && info.ty != Type::Region;
-                    return chosen.then(|| (name.clone(), info.ty.clone()));
-                }
-                ExprKind::Field(base, _) => at = base,
-                ExprKind::Index(base, index) if !matches!(index.kind, ExprKind::Range(..)) => at = base,
-                _ => return None,
-            }
+    fn chosen_param(&self, e: &Expr) -> Option<(String, Type, Span)> {
+        let (name, at) = param_root(e)?;
+        let info = self.lookup(name)?;
+        let chosen = info.param && info.passing == Passing::Copy && !info.mutable && info.ty != Type::Region;
+        chosen.then(|| (name.to_string(), info.ty.clone(), at))
+    }
+
+    /// What `==` (or `!=`, as `symbol`) does with values of `ty`, compared by
+    /// where they are, for a warning: a kind compares its variant by value and
+    /// only what that carries by where it is.
+    fn compared_by_place(&self, symbol: &str, ty: &Type) -> String {
+        match ty {
+            Type::Named(name, _) if self.kinds.contains_key(name) => format!("'{}' compares what {} carries by where it is", symbol, ty.without_regions()),
+            _ => format!("'{}' compares {} by where it is", symbol, ty.without_regions()),
+        }
+    }
+
+    /// `, in module 'm'` (or `, in the main file`) when `file`, where a use
+    /// is, isn't `here`, the file a message about it is shown in; else nothing.
+    fn file_named(&self, file: usize, here: usize) -> String {
+        if file == here {
+            return String::new();
+        }
+        match self.modules.values().find(|module| module.file == file) {
+            Some(module) if !module.name.is_empty() => format!(" in module '{}'", module.name),
+            _ => " in the main file".to_string(),
         }
     }
 
@@ -6003,14 +6032,14 @@ impl Checker {
     /// place of its own, and a large value is where the caller keeps it. The
     /// warning says which it is, and how to say which is meant.
     fn warn_chosen(&mut self, e: &Expr, what: &str) {
-        let Some((name, ty)) = self.chosen_param(e) else { return };
+        let Some((name, ty, at)) = self.chosen_param(e) else { return };
         // A type a declaration takes has no size until a use gives it one,
         // where the task made for it warns (see `Made::reads_chosen`).
         if !ty.params().is_empty() {
             return;
         }
-        let message = chosen_message(what, &name, &ty, self.size_of(&ty), None);
-        self.warnings.push(Error::at(e.span, message));
+        let message = chosen_message(what, &name, &ty, &ty, self.size_of(&ty), None);
+        self.warnings.push(Error::at(at, message));
     }
 
     /// How many bytes a value of `ty` takes in C (see `codegen::Layout`).
@@ -6047,7 +6076,7 @@ impl Checker {
                 if !self.is_place(place) {
                     return err(
                         place.span,
-                        format!("{} reads '{}' where the caller keeps it, so it takes a place: a variable, a field or an item of one, or what a pointer points to, and this is a value made here", callee, param),
+                        format!("{} reads '{}' where the caller keeps it, so it takes a place: a variable, a field or an item of one, or what a pointer points to, and this is {}", callee, param, no_place(place)),
                     );
                 }
                 self.read_place(place).map_err(|error| Error { message: error.message.replacen("a reference names a place for as long as its block lasts", &format!("'{}' is read where the caller keeps it while the task runs", param), 1), ..error })?;
@@ -6354,7 +6383,15 @@ impl Checker {
                     return false;
                 }
                 seen.push(name.clone());
-                let found = kind.variants.iter().flat_map(|variant| &variant.payload).any(|field| self.by_place_in(&field.ty, seen));
+                let found = kind.variants.iter().flat_map(|variant| &variant.payload).any(|field| {
+                    // A `maybe` a variant carries compares what it holds (see
+                    // `kind_comparable`), so by that value's own rule.
+                    let carried = match &field.ty {
+                        Type::Maybe(inner) => inner.as_ref(),
+                        other => other,
+                    };
+                    self.by_place_in(carried, seen)
+                });
                 seen.pop();
                 found
             }
@@ -6908,10 +6945,12 @@ struct Made {
     /// (see `Checker::by_place`) with a side that is no place, and the type.
     placeless: Vec<(Span, Type)>,
     /// The parameters the compiler chooses how to give (`x: T`), with their
-    /// types as the use gives them (see `Checker::chosen_param`).
-    chosen: HashMap<String, Type>,
+    /// types as the use gives them and as the task writes them (see
+    /// `Checker::chosen_param`).
+    chosen: HashMap<String, (Type, Type)>,
     /// Each side of an `==` by place, or an address, that reads where such a
-    /// parameter is: where, what reads it, and the parameter's name.
+    /// parameter is: where the parameter is named, what reads it, and its
+    /// name.
     reads_chosen: Vec<(Span, String, String)>,
 }
 
@@ -6925,9 +6964,13 @@ impl Checker {
     fn substitute_task(&mut self, task: &mut TaskDef, given: &HashMap<String, Type>, made: &mut Made) -> Result<()> {
         let alters = task.owner.as_ref().is_some_and(|owner| owner.alters);
         for param in &mut task.params {
+            // A parameter of a type the task doesn't take has warned already,
+            // when the body was checked (see `warn_chosen`).
+            let takes = !param.ty.params().is_empty();
+            let declared = param.ty.clone();
             self.substitute_type(&mut param.ty, given, param.ty_span)?;
-            if param.passing == Passing::Copy && param.ty != Type::Region && !(alters && param.name == THIS) {
-                made.chosen.insert(param.name.clone(), param.ty.clone());
+            if takes && param.passing == Passing::Copy && param.ty != Type::Region && !(alters && param.name == THIS) {
+                made.chosen.insert(param.name.clone(), (param.ty.clone(), declared));
             }
         }
         let at = task.span;
@@ -7046,6 +7089,7 @@ impl Checker {
                 if name == "show" {
                     for arg in args.iter() {
                         self.need_written_strs(arg, made);
+                        note_chosen_address(arg, made);
                     }
                 }
                 Ok(())
@@ -7053,6 +7097,7 @@ impl Checker {
             ExprKind::ToText { value, .. } => {
                 self.substitute_expr(value, given, made)?;
                 self.need_written_strs(value, made);
+                note_chosen_address(value, made);
                 Ok(())
             }
             // A literal of a shape given the types this task takes becomes a
@@ -7088,7 +7133,8 @@ impl Checker {
             | ExprKind::Fail(inner)
             | ExprKind::Wrap(inner)
             | ExprKind::Copy { value: inner, .. } => self.substitute_expr(inner, given, made),
-            ExprKind::Binary(BinaryOp::Eq | BinaryOp::Ne, a, b) => {
+            ExprKind::Binary(op @ (BinaryOp::Eq | BinaryOp::Ne), a, b) => {
+                let symbol = if *op == BinaryOp::Ne { "!=" } else { "==" };
                 self.substitute_expr(a, given, made)?;
                 self.substitute_expr(b, given, made)?;
                 // Where the body compares by place only for the types given:
@@ -7103,19 +7149,22 @@ impl Checker {
                 }
                 // A side that reads where a parameter the compiler chose how
                 // to give is, now that its type is known.
-                let what = match (&a.kind, &b.kind, &a.ty) {
-                    (ExprKind::Ref(_), _, _) | (_, ExprKind::Ref(_), _) => Some("'&' reads where the place is".to_string()),
-                    (_, _, Some(ty)) if self.by_place(ty) => Some(format!("'==' compares {} by where it is", ty.without_regions())),
-                    _ => None,
-                };
-                if let Some(what) = what {
+                let places = [&**a, &**b].map(|side| match &side.kind {
+                    ExprKind::Ref(place) => place.as_ref(),
+                    _ => side,
+                });
+                if same_root(places[0], places[1]) {
+                    // Two parts of one parameter: alike whichever way it was given.
+                } else if [&**a, &**b].iter().any(|side| matches!(side.kind, ExprKind::Ref(_))) {
+                    note_chosen_address(a, made);
+                    note_chosen_address(b, made);
+                } else if let Some(ty) = &a.ty
+                    && self.by_place(ty)
+                {
+                    let what = self.compared_by_place(symbol, ty);
                     for side in [&**a, &**b] {
-                        let place = match &side.kind {
-                            ExprKind::Ref(place) => place.as_ref(),
-                            _ => side,
-                        };
-                        if let Some(name) = param_root(place).filter(|name| made.chosen.contains_key(*name)) {
-                            made.reads_chosen.push((side.span, what.clone(), name.to_string()));
+                        if let Some((name, at)) = param_root(side).filter(|(name, _)| made.chosen.contains_key(*name)) {
+                            made.reads_chosen.push((at, what.clone(), name.to_string()));
                         }
                     }
                 }
@@ -7777,22 +7826,30 @@ fn in_source_order(errors: Vec<Error>) -> Vec<Error> {
 
 /// The warning that `what` (`'==' compares Point by where it is`) reads where
 /// the parameter `name`, of type `ty`, is, which the compiler chose from its
-/// `size`; `given` names the use that gave the type, in a task that takes types.
-fn chosen_message(what: &str, name: &str, ty: &Type, size: usize, given: Option<String>) -> String {
+/// `size`; `declared` is the type as the task writes it, for the hint, and
+/// `given` names the use that gave the type, in a task that takes types.
+fn chosen_message(what: &str, name: &str, ty: &Type, declared: &Type, size: usize, given: Option<String>) -> String {
     let written = ty.without_regions();
-    let (whose, subject, words) = if name == THIS {
-        ("the value the method is called on", "'.this'".to_string(), "compare items with '~='".to_string())
-    } else {
-        (
+    // An address (`'&x' is where …`) compares no items, so '~=' is no way out.
+    let address = what.starts_with("'&");
+    let (whose, subject, words) = match (name == THIS, address) {
+        (true, false) => ("the value the method is called on", "'.this'".to_string(), "; compare items with '~='".to_string()),
+        (true, true) => ("the value the method is called on", "'.this'".to_string(), String::new()),
+        (false, false) => (
             "a parameter",
             format!("'{}'", name),
-            format!("write 'bind& {0}: {1}' for the caller's place, 'bind {0}: {1}' for a copy of its own, or compare items with '~='", name, written),
-        )
+            format!("; write 'bind& {0}: {1}' for the caller's place, 'bind {0}: {1}' for a copy of its own, or compare items with '~='", name, declared),
+        ),
+        (false, true) => (
+            "a parameter",
+            format!("'{}'", name),
+            format!("; write 'bind& {0}: {1}' for the caller's place, or 'bind {0}: {1}' for a copy of its own", name, declared),
+        ),
     };
     let given = given.map(|given| format!(" ({})", given)).unwrap_or_default();
     let went = if codegen::hidden_by_size(size) {
         format!(
-            "{} takes {} bytes, more than {}, so {} is where the caller keeps it, or a copy the caller makes first of a value behind a pointer, in a slice, or named by a reference",
+            "{} takes {} bytes, more than {}, so {} is where the caller keeps it, or a copy the caller makes first of a value that might change while the task runs, such as one behind a pointer, in a slice or a shared field, or named by a reference",
             written,
             size,
             codegen::HIDDEN_ABOVE,
@@ -7801,7 +7858,7 @@ fn chosen_message(what: &str, name: &str, ty: &Type, size: usize, given: Option<
     } else {
         format!("{} takes {} bytes, so {} is a copy, a place of its own, never the caller's", written, size, subject)
     };
-    format!("{}, and {} is {}, given as the compiler chose{}: {}; {}", what, subject, whose, given, went, words)
+    format!("{}, and {} is {}, given as the compiler chose{}: {}{}", what, subject, whose, given, went, words)
 }
 
 /// The end of the message for changing a parameter that never changes: how to
@@ -7829,17 +7886,52 @@ enum Step {
     Deref,
 }
 
-/// The place `e` names, as its variable and the steps from it, or `None` for a
-/// value that isn't a place.
+/// What `place`, which `is_place` refuses, is instead, for a message: '… and
+/// this is {}, with no place of its own'.
+fn no_place(place: &Expr) -> &'static str {
+    match &place.kind {
+        ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => "a part taken of a value, which is a new value",
+        ExprKind::Field(base, _) if worked_out(base) => "a length, worked out from the value",
+        ExprKind::Call { .. } | ExprKind::MethodCall { .. } => "a call's value, which is made here",
+        ExprKind::Construct { .. } => "a variant, which is a value",
+        ExprKind::Var(_) => "a variant, which is a value",
+        _ => "a value made here",
+    }
+}
+
+/// Whether a field of `base` is worked out from the value rather than kept
+/// in it: `len` of an array, a slice, or text.
+fn worked_out(base: &Expr) -> bool {
+    matches!(base.ty, Some(Type::Array(..) | Type::Slice(..) | Type::Text(_)))
+}
+
+/// Notes `e`, when it is an address (`&x`) of a parameter the compiler chose
+/// how to give, or of a part of one, in a task made for types (see
+/// `Made::reads_chosen`).
+fn note_chosen_address(e: &Expr, made: &mut Made) {
+    let ExprKind::Ref(place) = &e.kind else { return };
+    if let Some((name, at)) = param_root(place).filter(|(name, _)| made.chosen.contains_key(*name)) {
+        let written = place_path(place).map_or_else(|| name.to_string(), |path| path_text(&path));
+        made.reads_chosen.push((at, format!("'&{}' is where the place is", written), name.to_string()));
+    }
+}
+
 /// The variable a place written as `e` starts at, through its fields and
-/// items, and not through a pointer, whose place is its own.
-fn param_root(e: &Expr) -> Option<&str> {
+/// items, and where it is named: not through a pointer or a slice, whose items
+/// are a place of their own, wherever the pointer or the slice is.
+fn param_root(e: &Expr) -> Option<(&str, Span)> {
     match &e.kind {
-        ExprKind::Var(name) => Some(name),
+        ExprKind::Var(name) => Some((name, e.span)),
         ExprKind::Field(base, _) => param_root(base),
-        ExprKind::Index(base, index) if !matches!(index.kind, ExprKind::Range(..)) => param_root(base),
+        ExprKind::Index(base, index) if !matches!(index.kind, ExprKind::Range(..)) && !matches!(base.ty, Some(Type::Slice(..))) => param_root(base),
         _ => None,
     }
+}
+
+/// Whether `a` and `b` are parts of one variable (`line.from`, `line.to`),
+/// which are where they are alike however the variable was given.
+fn same_root(a: &Expr, b: &Expr) -> bool {
+    matches!((param_root(a), param_root(b)), (Some((x, _)), Some((y, _))) if x == y)
 }
 
 /// Whether `e` is written as a place: a variable, a shared field, what a
@@ -7854,6 +7946,8 @@ fn names_place(e: &Expr) -> bool {
     }
 }
 
+/// The place `e` names, as its variable and the steps from it, or `None` for a
+/// value that isn't a place.
 fn place_path(e: &Expr) -> Option<Vec<Step>> {
     let mut steps = Vec::new();
     let mut at = e;
