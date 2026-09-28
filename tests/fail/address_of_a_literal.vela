@@ -1,0 +1,22 @@
+; error: 21:13: '&' takes the address of a place: a variable, a field or an item of one, or what a pointer points to, and this is a value made here, with no place of its own
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+kind Mood
+    Calm
+fi
+task made() -> int
+    <- 1
+fi
+task main()
+    region r
+    hold p = Point { x: 1 }
+    bind n = 1
+    bind t = "abc"
+    bind ptr = new int(1) at r
+    bind m: maybe ^int@r = ptr
+    show("{&"a"}" at r)
+fi

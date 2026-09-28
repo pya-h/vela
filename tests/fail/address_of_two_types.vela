@@ -1,0 +1,22 @@
+; error: 21:13: places of two types are never one place, even where they start at the same address (as a shape and its first field do): this compares a place of Point with one of int
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+kind Mood
+    Calm
+fi
+task made() -> int
+    <- 1
+fi
+task main()
+    region r
+    hold p = Point { x: 1 }
+    bind n = 1
+    bind t = "abc"
+    bind ptr = new int(1) at r
+    bind m: maybe ^int@r = ptr
+    show(&p == &p.x)
+fi

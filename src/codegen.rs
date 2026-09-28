@@ -2428,6 +2428,12 @@ impl Generator {
                 });
             }
         }
+        // `&a == &b` and `&a == p`: where the places are. A place that never
+        // changes is `const` in C, so both sides are read as addresses alone.
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && [l, r].into_iter().any(|side| matches!(side.kind, ExprKind::Ref(_))) {
+            let symbol = if op == BinaryOp::Eq { "==" } else { "!=" };
+            return Ok(format!("((const void*)({}) {} (const void*)({}))", left, symbol, right));
+        }
         if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && matches!(l.ty()?, Type::Tuple(_)) {
             let not = if op == BinaryOp::Ne { "!" } else { "" };
             return Ok(format!("{}{}({}, {})", not, copy_helper("eq", l.ty()?), left, right));

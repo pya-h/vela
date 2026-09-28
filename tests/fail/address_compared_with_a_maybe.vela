@@ -1,0 +1,22 @@
+; error: 21:10: an address is compared with another place's address or with a pointer, but this value is maybe ^int@r; a maybe is opened first, as in 'when m is {p}'
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+kind Mood
+    Calm
+fi
+task made() -> int
+    <- 1
+fi
+task main()
+    region r
+    hold p = Point { x: 1 }
+    bind n = 1
+    bind t = "abc"
+    bind ptr = new int(1) at r
+    bind m: maybe ^int@r = ptr
+    show(m == &n)
+fi

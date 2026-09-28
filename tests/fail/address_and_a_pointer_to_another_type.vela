@@ -1,0 +1,22 @@
+; error: 21:13: a pointer to int never points at a place of type Point, so the two aren't compared
+shape Point
+    x: int
+    alters bump()
+        .x = .x + 1
+    fi
+fi
+kind Mood
+    Calm
+fi
+task made() -> int
+    <- 1
+fi
+task main()
+    region r
+    hold p = Point { x: 1 }
+    bind n = 1
+    bind t = "abc"
+    bind ptr = new int(1) at r
+    bind m: maybe ^int@r = ptr
+    show(&p == ptr)
+fi

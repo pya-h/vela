@@ -1,4 +1,4 @@
-; error: 4:11: '&' marks a place given to a 'hold&' parameter, as in 'f(&a)', or named by a reference, as in 'hold& y = &a'; anywhere else, write the value itself
+; error: 4:11: an address, '&x', is only shown, turned into text with 'str', or compared with '=='; the type of the place is 'x.type'
 task main()
     hold x = 1
     show((&x).type)

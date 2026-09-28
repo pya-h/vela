@@ -3414,6 +3414,11 @@ impl Checker {
     /// types is written as given them (`Box<int>`).
     fn check_type_of(&mut self, expr: &mut Expr) -> Result<Type> {
         let ExprKind::Field(base, _) = &mut expr.kind else { return Err(Error::internal_at(expr.span, "a '.type' that isn't one")) };
+        // An address is no value of its own, so it has no type to read.
+        if let ExprKind::Ref(place) = &base.kind {
+            let example = place_path(place).map_or_else(|| "x".to_string(), |path| path_text(&path));
+            return err(base.span, format!("an address, '&{0}', is only shown, turned into text with 'str', or compared with '=='; the type of the place is '{0}.type'", example));
+        }
         let ty = self.check_expr(base)?;
         if ty.unknown() {
             return Ok(Type::Unknown);
@@ -3691,7 +3696,10 @@ impl Checker {
             ExprKind::RegionAfter(_) => err(span, "a region is named after a call only when the call takes one last"),
             // One a call gives a `hold&` parameter is checked with the call's
             // arguments (see `check_argument`).
-            ExprKind::Ref(_) => err(span, "'&' marks a place given to a 'hold&' parameter, as in 'f(&a)', or named by a reference, as in 'hold& y = &a'; anywhere else, write the value itself"),
+            ExprKind::Ref(_) => err(
+                span,
+                "'&' marks a place given to a 'hold&' parameter, as in 'f(&a)', named by a reference, as in 'hold& y = &a', or whose address is shown or compared, as in 'show(&a)' or '&a == &b'; anywhere else, write the value itself",
+            ),
             ExprKind::Shared { .. } => Err(Error::internal_at(span, "a shared field read as another value")),
             // Checked again, as a method call's value is: it is text.
             ExprKind::TypeOf(_) => Ok(Type::Text(None)),
@@ -4211,6 +4219,10 @@ impl Checker {
     /// one, a shape or kind with its own `str`, or a type a declaration takes
     /// that is `shown`.
     fn check_shown(&mut self, arg: &mut Expr) -> Result<()> {
+        // `show(&x)`: the address of the place.
+        if matches!(arg.kind, ExprKind::Ref(_)) {
+            return self.check_address(arg).map(|_| ());
+        }
         let copies = self.unsettled_copies.len();
         let types = self.unsettled_types.len();
         let ty = self.check_expr(arg)?;
@@ -4763,6 +4775,10 @@ impl Checker {
             return Err(Error::internal_at(span, "a binary operation that is not one"));
         };
         let op = *op;
+        // `&a == &b`: where two places are, not what they hold.
+        if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && [&**l, &**r].into_iter().any(|side| matches!(side.kind, ExprKind::Ref(_))) {
+            return self.check_address_compare(l, r, span);
+        }
         let lt = self.check_expr(l)?;
         let rt = self.check_expr(r)?;
         // With one operand's type unknown, the operation's own type is unknown
@@ -5119,7 +5135,15 @@ impl Checker {
         let name = name.clone();
         let copies = self.unsettled_copies.len();
         let untold = self.unsettled_types.len();
-        let found = self.check_expr(value);
+        // `(&x).str()` and `"{&x}"`: the address of the place, as text. An
+        // address is no value of its own, so it has nothing else.
+        let found = match value.kind {
+            ExprKind::Ref(_) if name != STR => {
+                return err(value.span, format!("an address, '&x', is only shown, turned into text with 'str', or compared with '=='; it has no '{}'", name));
+            }
+            ExprKind::Ref(_) => self.check_address(value),
+            _ => self.check_expr(value),
+        };
         self.unsettled_copies.truncate(copies);
         self.unsettled_types.truncate(untold);
         let ty = found?;
@@ -5217,7 +5241,10 @@ impl Checker {
     /// Checks `value.str() at region` on a value with `str` built in, and
     /// returns its type, `text@region`.
     fn check_to_text(&mut self, value: &mut Expr, region: &str, region_span: Span) -> Result<Type> {
-        let ty = self.check_expr(value)?;
+        let ty = match value.kind {
+            ExprKind::Ref(_) => self.check_address(value)?,
+            _ => self.check_expr(value)?,
+        };
         self.note_written_strs(&ty, value.span);
         self.visible_region(region, region_span, true)?;
         Ok(Type::Text(Some(region.to_string())))
@@ -5737,6 +5764,103 @@ impl Checker {
             ExprKind::Deref(_) | ExprKind::Shared { .. } => Ok(()),
             _ => refuse("it names a variable, a field or an item of one, or what a pointer points to, and not a value made here"),
         }
+    }
+
+    /// Checks `&x` where its address is read (`show(&x)`, `(&x).str()`,
+    /// `"{&x}"`, `&a == &b`), and returns its type: a pointer to the place's
+    /// type, which `show` and `str` write as an address. `x` is a place: a
+    /// variable, a field or an item of one, what a pointer points to, or a
+    /// shared field; a reference is the place it names.
+    fn check_address(&mut self, e: &mut Expr) -> Result<Type> {
+        let ExprKind::Ref(place) = &mut e.kind else { return Err(Error::internal_at(e.span, "an address of no place")) };
+        let ty = self.check_expr(place)?;
+        if ty.unknown() {
+            return Ok(Type::Unknown);
+        }
+        if !self.is_place(place) {
+            let what = match &place.kind {
+                ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => "a part taken of a value, which is a new value",
+                ExprKind::Call { .. } | ExprKind::MethodCall { .. } => "a call's value, which is made here",
+                ExprKind::Construct { .. } => "a variant, which is a value",
+                ExprKind::Var(_) => "a variant, which is a value",
+                _ => "a value made here",
+            };
+            return err(
+                place.span,
+                format!("'&' takes the address of a place: a variable, a field or an item of one, or what a pointer points to, and this is {}, with no place of its own", what),
+            );
+        }
+        let address = Type::Ptr(Box::new(ty), None);
+        e.ty = Some(address.clone());
+        Ok(address)
+    }
+
+    /// Whether `e` names a place `&` can take the address of (see
+    /// `check_address`): a path from a variable or a shared field.
+    fn is_place(&self, e: &Expr) -> bool {
+        let mut at = e;
+        loop {
+            match &at.kind {
+                ExprKind::Var(name) => return self.lookup(name).is_some(),
+                ExprKind::Shared { .. } | ExprKind::Deref(_) => return true,
+                ExprKind::Field(base, _) => at = base,
+                ExprKind::Index(base, index) if !matches!(index.kind, ExprKind::Range(..)) => at = base,
+                _ => return false,
+            }
+        }
+    }
+
+    /// Checks `&a == &b`, or `&a == p` with `p` a pointer, at `span`: where
+    /// two places are, or whether a pointer points at a place. Both are of one
+    /// type, as a shape and its first field start at the same address and
+    /// are still two places.
+    fn check_address_compare(&mut self, l: &mut Expr, r: &mut Expr, span: Span) -> Result<Type> {
+        let mut side_type = |side: &mut Expr| match side.kind {
+            ExprKind::Ref(_) => self.check_address(side),
+            _ => self.check_expr(side),
+        };
+        let (lt, rt) = (side_type(l)?, side_type(r)?);
+        let (lt, rt) = (&lt, &rt);
+        if lt.unknown() || rt.unknown() {
+            return Ok(Type::Bool);
+        }
+        // The side without '&', which is a pointer or a mistake.
+        for (side, ty) in [(&*l, lt), (&*r, rt)] {
+            if matches!(side.kind, ExprKind::Ref(_)) {
+                continue;
+            }
+            let hint = match ty {
+                Type::Maybe(inner) if matches!(inner.as_ref(), Type::Ptr(..)) => "; a maybe is opened first, as in 'when m is {p}'".to_string(),
+                Type::Ptr(..) => String::new(),
+                _ => {
+                    let example = place_path(side).map_or_else(|| "b".to_string(), |path| path_text(&path));
+                    format!("; to compare where two places are, mark both, as in '&a == &{}'", example)
+                }
+            };
+            if !hint.is_empty() {
+                return err(side.span, format!("an address is compared with another place's address or with a pointer, but this value is {}{}", ty, hint));
+            }
+        }
+        let place = |ty: &Type| match ty {
+            Type::Ptr(inner, _) => inner.without_regions(),
+            other => other.without_regions(),
+        };
+        let (left, right) = (place(lt), place(rt));
+        if left != right {
+            let pointed = match (&l.kind, &r.kind) {
+                (ExprKind::Ref(_), ExprKind::Ref(_)) => None,
+                (ExprKind::Ref(_), _) => Some((&right, &left)),
+                _ => Some((&left, &right)),
+            };
+            return err(
+                span,
+                match pointed {
+                    Some((to, place)) => format!("a pointer to {} never points at a place of type {}, so the two aren't compared", to, place),
+                    None => format!("places of two types are never one place, even where they start at the same address (as a shape and its first field do): this compares a place of {} with one of {}", left, right),
+                },
+            );
+        }
+        Ok(Type::Bool)
     }
 
     /// The place `e` names, as `place_path` gives it, with a reference it
