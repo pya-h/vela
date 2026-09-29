@@ -3321,6 +3321,7 @@ impl Checker {
                 expr.ty = Some(ty.clone());
                 Ok(ty)
             }
+            ExprKind::Lookup(..) => err(span, "'[#…]' gives the item in a maybe, a value made here, not the place it is in; assign the item with 'xs[i] = v'"),
             _ => err(span, "only a variable, a field, an item of an array or slice, or the value a pointer points to (p^) can be assigned"),
         }
     }
@@ -4182,18 +4183,28 @@ impl Checker {
         Ok(Type::Text(region.clone()))
     }
 
-    /// Checks `t.at(i)` on a value of type `base_ty`, already checked, and
-    /// returns its type: a maybe of the item, none out of range.
+    /// Checks `xs[#i]` or `t.at(i)` on a value of type `base_ty`, already
+    /// checked, and returns its type: a maybe of the item, none out of range.
     fn check_lookup(&mut self, base_ty: &Type, index: &mut Expr, span: Span) -> Result<Type> {
         let ty = self.check_expr(index)?;
         if base_ty.unknown() {
             return Ok(Type::Unknown);
         }
         self.expect_type(&ty, &Type::Int, index.span)?;
-        match base_ty {
-            Type::Text(_) => Ok(Type::Maybe(Box::new(Type::Char))),
-            other => err(span, format!("'at' reads a byte of text, but this value is {}", other)),
-        }
+        let item = match base_ty {
+            Type::Text(_) => Type::Char,
+            Type::Array(items, _) if matches!(**items, Type::None | Type::Fail(_)) => {
+                return err(span, "cannot tell the type of this item from none or 'fail …'; give the array a type first");
+            }
+            Type::Array(items, _) | Type::Slice(items, _) => (**items).clone(),
+            Type::Ptr(inner, _) if matches!(**inner, Type::Array(..)) => {
+                return err(span, format!("this value is a pointer, {}; look into the array it points to, as in 'p^[#i]'", base_ty));
+            }
+            other => {
+                return err(span, format!("'[#…]' reads an item of an array, a slice, or text, but this value is {}{}", other, extract_hint(&[other])));
+            }
+        };
+        Ok(Type::Maybe(Box::new(item)))
     }
 
     /// Checks `xs[i]`, an item, or `xs[a..b]`, a slice, on `base` of type
@@ -8373,7 +8384,7 @@ fn no_place(place: &Expr) -> &'static str {
     match &place.kind {
         ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => "a part taken of a value, which is a new value",
         ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Text(_))) => "a byte of text, read out of text that never changes",
-        ExprKind::Lookup(..) => "a lookup's value, which is made here",
+        ExprKind::Lookup(..) => "a maybe that '[#…]' or 'at' made here",
         ExprKind::Field(base, _) if worked_out(base) => "a length, worked out from the value",
         ExprKind::Call { .. } | ExprKind::MethodCall { .. } => "a call's value, which is made here",
         ExprKind::Construct { .. } => "a variant, which is a value",

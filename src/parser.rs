@@ -2415,6 +2415,18 @@ impl Parser {
             }
             Token::LBracket => {
                 self.advance();
+                // `xs[#i]`: the item at `i` in a maybe, none out of range.
+                if self.match_token(Token::Hash) {
+                    let index = self.parse_expr()?;
+                    if let ExprKind::Range(..) = index.kind {
+                        return Err(Error::at(
+                            index.span,
+                            "'[#…]' reads one item, or none when it isn't there; a part is written without '#', as in 'xs[a..b]'",
+                        ));
+                    }
+                    self.expect(Token::RBracket)?;
+                    return Ok(Expr::new(ExprKind::Lookup(Box::new(expr), Box::new(index)), span));
+                }
                 let index = self.parse_expr()?;
                 self.expect(Token::RBracket)?;
                 Ok(Expr::new(ExprKind::Index(Box::new(expr), Box::new(index)), span))

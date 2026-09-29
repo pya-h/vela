@@ -1,0 +1,6 @@
+; error: 4:7: '[#…]' gives the item in a maybe, a value made here, not the place it is in; assign the item with 'xs[i] = v'
+task main()
+    hold xs = [1, 2, 3]
+    xs[#0] = 4
+    show(xs)
+fi

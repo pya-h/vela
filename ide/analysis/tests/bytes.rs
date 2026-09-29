@@ -141,3 +141,14 @@ fn nothing_is_offered_inside_a_char() {
     assert!(completions(&program(true, "show('a@@')")).is_empty());
     assert!(completions(&program(true, "show('@@")).is_empty());
 }
+
+#[test]
+fn a_safe_index_is_a_maybe_of_the_item_whether_or_not_the_file_checks() {
+    for checks in [true, false] {
+        let source = program(checks, "bind i = 0\n    bind maybe_letter = word[#1]\n    bind scores = [1, 2]\n    bind maybe_score = scores[#i]");
+        let code = |needle: &str| hover(&source, needle).0;
+        let when = if checks { "checked" } else { "declared" };
+        assert_eq!(code("maybe_letter ="), "bind maybe_letter: maybe char", "{}", when);
+        assert_eq!(code("maybe_score ="), "bind maybe_score: maybe int", "{}", when);
+    }
+}

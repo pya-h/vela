@@ -770,8 +770,9 @@ pub enum ExprKind {
     Field(Box<Expr>, String),
     /// `xs[i]`, an item of an array or slice, or `xs[a..b]`, a slice of it.
     Index(Box<Expr>, Box<Expr>),
-    /// `t.at(i)`: the item at `i`, in a `maybe`, none when `i` is out of range.
-    /// A value, never a place.
+    /// `xs[#i]` or `t.at(i)`: the item at `i` of an array, a slice, or text (a
+    /// char), in a `maybe`, none when `i` is out of range. A value, never a
+    /// place.
     Lookup(Box<Expr>, Box<Expr>),
     /// `[a, b, c]`: an array of the values.
     Array(Vec<Expr>),

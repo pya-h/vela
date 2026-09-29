@@ -1,0 +1,4 @@
+; error: 3:22: cannot tell the type of this item from none or 'fail …'; give the array a type first
+task main()
+    show([none, none][#0])
+fi

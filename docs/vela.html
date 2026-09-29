@@ -252,7 +252,8 @@
         <code>match</code> — closes with <code>fi</code>. Write each statement on its own line, with nothing
         after it but a comment. A <code>;</code> starts a comment, as a semicolon adds a remark to a sentence
         (<code>bind x = 1 ; the first</code>), and a <code>#</code> separates an array's type or value from its count,
-        as in item #4: <code>[int#4]</code>, <code>[0#4]</code>. A <code>#</code> comment is an error that says so, and a
+        as in item #4: <code>[int#4]</code>, <code>[0#4]</code>; first inside an index, it asks for the item safely, as a
+        maybe: <code>xs[#i]</code> (see <a href="#safe-index">Safe index</a>). A <code>#</code> comment is an error that says so, and a
         count written with <code>;</code>, <code>[0; 4]</code>, is an error that says a count follows <code>#</code>.
         Everything after a <code>;</code> is a comment, wherever it is but inside text or a char (<code>';'</code>), so <code>show(1); show(2)</code> is only
         <code>show(1)</code>: Vela has no symbol that separates statements.
@@ -319,7 +320,9 @@ block shared type</pre>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
         <tr><td><code>[a, b]</code>, <code>[v#n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
-        <tr><td><code>t[a..b]</code>, <code>t.len</code></td><td>a part of text, the same bytes (see <a href="#text-parts">Parts of text</a>); how many bytes it has</td></tr>
+        <tr><td><code>xs[#i]</code></td><td>the item at <code>i</code> of an array, slice, or text in a <code>maybe</code>, none out of range (see <a href="#safe-index">Safe index</a>)</td></tr>
+        <tr><td><code>t[a..b]</code>, <code>t[i]</code>, <code>t.at(i)</code>, <code>t.len</code></td><td>a part of text, the same bytes (see <a href="#text-parts">Parts of text</a>); the byte at <code>i</code> as a <code>char</code>, and as a <code>maybe char</code>; how many bytes it has</td></tr>
+        <tr><td><code>'a'</code></td><td>a char, one byte (see <a href="#chars">Chars</a>)</td></tr>
         <tr><td><code>a + b at r</code>, <code>(a + b)@r</code></td><td>text joined into new text in region <code>r</code> (see <a href="#joining">Joining text</a>)</td></tr>
         <tr><td><code>f(x) at r</code>, <code>f(x)@r</code></td><td>the region a task or method takes last, given after the call: <code>at r</code> covers everything before it (a whole <code>+</code> chain), <code>@r</code> only the call right before it (see <a href="#region-after-call">The region after a call</a>)</td></tr>
         <tr><td><code>x.str() at r</code>, <code>x.str(r)</code>, <code>text(x) at r</code></td><td>a value as text in region <code>r</code> (see <a href="#str">Values as text</a>)</td></tr>
@@ -1732,6 +1735,11 @@ copy[0] = 0
 scores[0] = 0               <span class="comment">; error: cannot assign to an item of immutable variable 'scores'</span>
 <span class="keyword">each</span> score <span class="keyword">in</span> scores
     show(score)
+<span class="keyword">fi</span>
+show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="comment">; none { 72 }: a safe index gives a maybe</span>
+<span class="keyword">hold</span> i = <span class="number">0</span>
+<span class="keyword">loop</span> scores[#i] <span class="keyword">is</span> {score}   <span class="comment">; stops at the first none, past the end</span>
+    i = i + <span class="number">1</span>
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>Items.</strong> A literal's values have one type, except that <code>none</code> and a value make a
@@ -1750,6 +1758,12 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
         <li><strong>Index.</strong> An index out of range stops the program with a message saying where, on every C
           compiler (<em>vela: index 4 is out of range 0..4 at 7:12 in task 'main'</em>); a constant index out of
           range is an error when compiling.</li>
+        <li id="safe-index"><strong>Safe index.</strong> <code>xs[#i]</code> reads the same item in a
+          <code>maybe</code>: <code>{ item }</code> when <code>i</code> is in range, <code>none</code> when it isn't, so it
+          never stops the program. It works on arrays, <a href="#slices">slices</a>, and text (a <code>maybe char</code>,
+          as <a href="#text-parts"><code>t.at(i)</code></a> is), and a loop can walk items without their count. It gives a
+          value, not the place of the item, so it is never assigned (<code>xs[i] = v</code> is), and a part is
+          <code>xs[a..b]</code>, without <code>#</code>.</li>
         <li><strong>each.</strong> <code>each v in xs</code> goes through the items in order, as they were when the loop
           started: an array is copied, and a slice is gone through where its items were then, as many as there were,
           even if the loop adds or deletes some (a deleted item is still read). <code>each v in &amp;xs</code> goes
@@ -2878,7 +2892,8 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         <li><strong>The region.</strong> <code>add</code> may need more room, which it takes from the slice's region, so the
           task needs that region itself: a <code>region r</code> it declares, or an <code>r: region</code> parameter (as
           <code>new</code> does). <code>del</code> needs no region.</li>
-        <li><strong>Checks.</strong> An index out of range stops the program (<em>vela: index 5 is out of range 0..3</em>;
+        <li><strong>Checks.</strong> <code>xs[#i]</code> reads an item as a <code>maybe</code>, none out of range (see
+          <a href="#safe-index">Safe index</a>). An index out of range stops the program (<em>vela: index 5 is out of range 0..3</em>;
           for <code>add</code>, the range includes the length), and so does <code>del()</code> on a slice with no items
           (<em>vela: del() on an empty slice</em>).</li>
         <li><strong>Evaluation.</strong> The slice's place is found first, then the arguments, left to right; a change

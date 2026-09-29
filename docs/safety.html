@@ -322,12 +322,12 @@
             <tr>
               <td>Every index and range of an array, a slice, or text is checked (a constant one when compiling),
                 a count below zero stops the program, and a part of text can't cut through a character.
-                <code>t.at(i)</code> gives <code>none</code> out of range instead, and a byte of text, <code>t[i]</code>,
+                <code>xs[#i]</code> and <code>t.at(i)</code> give <code>none</code> out of range instead, and a byte of text, <code>t[i]</code>,
                 is never a place, so text still never changes.</td>
               <td class="when"><span class="badge b-trapped">trapped</span></td>
               <td>Reading or writing outside a value, and text that isn't UTF-8. See
-                <a href="vela.html#arrays">Arrays</a>, <a href="vela.html#slices">Slices</a>, and
-                <a href="vela.html#text-parts">parts of text</a>.</td>
+                <a href="vela.html#arrays">Arrays</a>, <a href="vela.html#slices">Slices</a>,
+                <a href="vela.html#safe-index">Safe index</a>, and <a href="vela.html#text-parts">parts of text</a>.</td>
             </tr>
             <tr>
               <td><code>add</code> and <code>del</code> check their index, and <code>del()</code> on an empty slice

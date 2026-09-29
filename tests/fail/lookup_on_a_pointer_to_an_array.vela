@@ -1,0 +1,6 @@
+; error: 5:11: this value is a pointer, ^[int#2]@r; look into the array it points to, as in 'p^[#i]'
+task main()
+    region r
+    bind p = new [int#2]([1, 2]) at r
+    show(p[#0])
+fi

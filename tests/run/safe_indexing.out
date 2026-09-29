@@ -1,0 +1,10 @@
+none { 1 } none { 9 } { Point { x: 1 } }
+1
+2
+3
+two
+3
+{ 4 } none { 3 }
+{ 'e' } none true
+5 true
+{ { 1 } } { none } none

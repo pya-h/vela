@@ -1,0 +1,5 @@
+; error: 4:14: expected type int, got char
+task main()
+    bind xs = [1, 2, 3]
+    show(xs[#'a'])
+fi

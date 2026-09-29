@@ -792,6 +792,15 @@ impl<'a> Knowledge<'a> {
         let indexes = open.checked_sub(1).is_some_and(|b| {
             matches!(self.token(b), Some(Token::Ident(_) | Token::Text(_) | Token::RParen | Token::RBracket | Token::RBrace | Token::Caret))
         });
+        // `xs[#i]`: the item in a maybe, none out of range.
+        if indexes && self.token(first) == Some(&Token::Hash) {
+            let item = match self.expression_type(open - 1, depth + 1)? {
+                Type::Array(items, _) | Type::Slice(items, _) => *items,
+                Type::Text(_) => Type::Char,
+                _ => return None,
+            };
+            return Some(Type::Maybe(Box::new(item)));
+        }
         if indexes {
             let slicing = self.outside_brackets(first, last).any(|q| self.token(q) == Some(&Token::Range));
             return match (self.expression_type(open - 1, depth + 1)?, slicing) {

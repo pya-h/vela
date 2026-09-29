@@ -397,14 +397,34 @@ impl Generator {
     fn gen_item_helpers(&mut self, used: &UsedTypes) {
         for ty in &used.lookups {
             let maybe = c_type(&Type::Maybe(Box::new(lookup_item(ty))));
-            if let Type::Text(_) = ty {
-                self.w.open(&format!("static {} {}(vela__rt__text t, int64_t i)", maybe, item_helper("lookup", ty)));
-                self.w.open("if (i < 0 || i >= t.len)");
-                self.w.line(&format!("return ({}){{ .has = false }};", maybe));
-                self.w.close();
-                self.w.line(&format!("return ({}){{ .has = true, .value = (uint8_t)t.bytes[i] }};", maybe));
-                self.w.close();
+            // A maybe of a pointer is the pointer, NULL for none.
+            let item = lookup_item(ty);
+            let (none, some) = if is_pointer(&item) {
+                ("NULL".to_string(), "items[i]".to_string())
+            } else {
+                (format!("({}){{ .has = false }}", maybe), format!("({}){{ .has = true, .value = items[i] }}", maybe))
+            };
+            let name = item_helper("lookup", ty);
+            match ty {
+                Type::Text(_) => {
+                    self.w.open(&format!("static {} {}(vela__rt__text t, int64_t i)", maybe, name));
+                    self.w.line("const uint8_t* items = (const uint8_t*)t.bytes;");
+                    self.w.line("int64_t len = t.len;");
+                }
+                Type::Slice(..) => {
+                    self.w.open(&format!("static {} {}({} s, int64_t i)", maybe, name, c_type(ty)));
+                    self.w.line(&format!("{} const* items = s.items;", c_type(&item)));
+                    self.w.line("int64_t len = s.len;");
+                }
+                // `T const*`: the items don't change, whatever they are (a
+                // pointer item stays a pointer to what can change).
+                _ => self.w.open(&format!("static {} {}({} const* items, int64_t len, int64_t i)", maybe, name, c_type(&item))),
             }
+            self.w.open("if (i < 0 || i >= len)");
+            self.w.line(&format!("return {};", none));
+            self.w.close();
+            self.w.line(&format!("return {};", some));
+            self.w.close();
         }
         for slice in &used.slice_at {
             let (ctype, items) = (c_type(slice), c_type(item_type(slice)));
@@ -2015,7 +2035,13 @@ impl Generator {
             ExprKind::Lookup(base, index) => {
                 let [value, index] = <[String; 2]>::try_from(self.gen_operands(&[base, index])?)
                     .map_err(|_| Error::internal_at(e.span, "a lookup without its value"))?;
-                Ok(format!("{}({}, {})", item_helper("lookup", &base.ty()?.without_regions()), value, index))
+                let key = lookup_key(base.ty()?);
+                Ok(match base.ty()? {
+                    // An array's items are read where they are, even in a value
+                    // made for the expression, which lasts as long as it does.
+                    Type::Array(_, count) => format!("{}(({}).items, INT64_C({}), {})", item_helper("lookup", &key), value, count, index),
+                    _ => format!("{}({}, {})", item_helper("lookup", &key), value, index),
+                })
             }
             ExprKind::Array(values) => self.gen_array(e, values),
             ExprKind::Tuple(values) => self.gen_tuple(e, values),
@@ -3411,7 +3437,7 @@ impl UsedTypes {
             ExprKind::Choice(stmt) => self.block(std::slice::from_ref(stmt)),
             ExprKind::Lookup(base, index) => {
                 if let Some(ty) = &base.ty {
-                    note(&mut self.lookups, &ty.without_regions());
+                    note(&mut self.lookups, &lookup_key(ty));
                 }
                 self.expr(base);
                 self.expr(index);
@@ -3915,12 +3941,22 @@ fn item_helper(what: &str, ty: &Type) -> String {
     format!("vela__{}__{}", what, type_word(ty))
 }
 
-/// What a lookup (`t.at(i)`) into a value of type `ty` gives when it finds an
-/// item: a char of text.
+/// What a lookup (`xs[#i]`, `t.at(i)`) into a value of type `ty` gives when
+/// it finds an item: the item, or a char of text.
 fn lookup_item(ty: &Type) -> Type {
     match ty {
         Type::Text(_) => Type::Char,
+        Type::Array(items, _) | Type::Slice(items, _) => items.without_regions(),
         other => other.clone(),
+    }
+}
+
+/// The type a lookup's helper is made for, one per kind of value and item: an
+/// array of any count is read through its items (`[T#0]` stands for them all).
+fn lookup_key(ty: &Type) -> Type {
+    match ty.without_regions() {
+        Type::Array(items, _) => Type::Array(items, 0),
+        other => other,
     }
 }
 
