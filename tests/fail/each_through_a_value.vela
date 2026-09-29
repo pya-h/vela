@@ -1,0 +1,10 @@
+; error: 7:16: 'each v in &…' goes through a place as it is at each pass: a variable, a field or an item of one, or what a pointer points to, and this is a call's value, which is made here; write 'each v in …' to go through a value
+task numbers() -> [int#3]
+    <- [1, 2, 3]
+fi
+
+task main()
+    each v in &numbers()
+        show(v)
+    fi
+fi

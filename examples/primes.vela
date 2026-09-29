@@ -1,6 +1,7 @@
 ; Primes below a limit, found twice: into a slice of fixed length filled by
 ; index, and into a slice that grows with add. Then del takes them out again,
-; last first.
+; last first, and a loop through the slice as it is at each pass meets its end
+; halfway.
 
 task is_prime(n: int) -> bool
     each i in 2..(n/2 + 1)
@@ -55,4 +56,12 @@ priv task main()
     show(results.len) ; 15: x has a length of its own, so taking items out of x leaves results' as it was
     show(x.len)
     ; show(x.del()) would stop the program: vela: del() on an empty slice
+    show("-----------------------")
+    ; each through &y reads y as it is at each pass: every del takes the last
+    ; item off, so the loop meets the end halfway, after 2 to 19
+    hold y = results.copy() at r
+    each p in &y
+        show(p)
+        y.del()
+    fi
 fi

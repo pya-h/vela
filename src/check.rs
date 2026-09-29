@@ -2752,6 +2752,20 @@ impl Checker {
                     }
                     range.ty = Some(Type::Range(Box::new(Type::Int)));
                     Type::Int
+                } else if let ExprKind::Ref(place) = &mut range.kind {
+                    // `each v in &xs`: the items of the place as they are at each
+                    // pass, read through it, so the loop sees every change to it.
+                    let ty = self.check_expr(place)?;
+                    if !ty.unknown() && !self.is_place(place) {
+                        let what = no_place(place);
+                        return err(place.span, format!("'each v in &…' goes through a place as it is at each pass: a variable, a field or an item of one, or what a pointer points to, and this is {}; write 'each v in …' to go through a value", what));
+                    }
+                    range.ty = Some(ty.clone());
+                    match ty {
+                        Type::Array(items, _) | Type::Slice(items, _) => *items,
+                        other if other.unknown() => Type::Unknown,
+                        other => return err(range.span, format!("'each v in &…' goes through the items of an array or slice as they are at each pass, but this value is {}", other)),
+                    }
                 } else {
                     match self.check_expr(range)? {
                         Type::Array(items, _) | Type::Slice(items, _) if unsettled(&items) => {
@@ -5135,6 +5149,7 @@ impl Checker {
                 if lt == Type::None || rt == Type::None {
                     return err(span, "'none' can only be compared with a maybe value");
                 }
+                let (lt, rt) = self.widen_literal(l, r, lt, rt);
                 // `m ~= v`, either side first: a maybe is similar to a plain
                 // value when it holds one similar to it, so the plain side
                 // becomes a maybe and the two compare as maybes do (empty is
@@ -6370,6 +6385,27 @@ impl Checker {
             ExprKind::Deref(_) => Ok(()),
             ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, place.span, &format!("{}, and ", taker.lead())),
             _ => refuse("it needs a place that can change: a 'hold' variable, a field or array item of one, or what a pointer points to (p^), not a value made here".to_string()),
+        }
+    }
+
+    /// `t ~= (1, none)`: a tuple or array written on one side becomes the
+    /// other side's type where it can, as it becomes a written type in a
+    /// binding (`(int, none)` a `(int, maybe int)`). The types of the two
+    /// sides, after that.
+    fn widen_literal(&mut self, l: &mut Expr, r: &mut Expr, lt: Type, rt: Type) -> (Type, Type) {
+        let literal = |e: &Expr| matches!(e.kind, ExprKind::Tuple(_) | ExprKind::Array(_) | ExprKind::Repeat { .. });
+        if lt.without_regions() == rt.without_regions() || lt.unknown() || rt.unknown() || literal(l) == literal(r) {
+            return (lt, rt);
+        }
+        let (written, other) = if literal(r) { (r, &lt) } else { (l, &rt) };
+        let before = written.clone();
+        match self.coerce(written, other) {
+            Ok(()) => (other.clone(), other.clone()),
+            // Left as written, for the mismatch to be told as the two types.
+            Err(_) => {
+                *written = before;
+                (lt, rt)
+            }
         }
     }
 

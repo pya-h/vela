@@ -298,6 +298,7 @@ block shared type</pre>
         <tr><td><code>bind x: T</code>, <code>bind&amp; x: T</code></td><td>a parameter that is always a copy, or the caller's place only read, given as <code>&amp;a</code> (see <a href="#bind-parameters">Parameters that read</a>)</td></tr>
         <tr><td><code>hold&amp; y = &amp;x</code>, <code>bind&amp; y = &amp;x</code></td><td>another name for the place <code>x</code>, which changes it or only reads it (see <a href="#references">References</a>)</td></tr>
         <tr><td><code>show(&amp;x)</code>, <code>&amp;a == &amp;b</code></td><td>where the place <code>x</code> is, as an address; whether two places are one (see <a href="#addresses">Addresses</a>)</td></tr>
+        <tr><td><code>each v in &amp;xs</code></td><td>the items of the place <code>xs</code> as they are at each pass (see <a href="#arrays">Arrays</a>)</td></tr>
         <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task or shape takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
@@ -1099,7 +1100,9 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         its variant and what that carries; and a <code>maybe</code> when both are empty or both hold similar values
         (<code>m ~= none</code> is <code>m == none</code>). A <code>maybe</code> is also similar to a plain value of
         the type it holds, either side first, when it holds a value similar to it: <code>m ~= 10</code> is false when
-        <code>m</code> is empty, and <code>m &lt;&gt; 10</code> is its <code>not</code>. A pointer is similar to another holding the same address,
+        <code>m</code> is empty, and <code>m &lt;&gt; 10</code> is its <code>not</code>. A tuple or array written on one
+        side becomes the other side's type where it can, as it does a written type, so <code>t ~= (1, none)</code> compares
+        a <code>(int, maybe int)</code>. A pointer is similar to another holding the same address,
         so nothing loops through a list that points back to itself; <code>p^ ~= q^</code> compares what they point
         to. A value that can fail is read first.
       </p>
@@ -1652,15 +1655,24 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
           on it is its items' (<code>[text#2]@r</code> and <code>[text@r#2]</code> are one type, and so is
           <code>[text@r#2]@r</code>); writing two different ones is an error.</li>
         <li><strong>Count.</strong> A count is at least 1 and known before the program runs: a number in a type, and a
-          number or arithmetic on numbers (<code>[0; 2 * 8]</code>) in a literal. For a count known only while the
+          number or arithmetic on numbers (<code>[0#2 * 8]</code>) in a literal. For a count known only while the
           program runs, make a slice in a region (see <a href="#slices">Slices</a>). A type whose values would take more
           than 1 TiB of memory is an error.</li>
         <li><strong>Index.</strong> An index out of range stops the program with a message saying where, on every C
           compiler (<em>vela: index 4 is out of range 0..4 at 7:12 in task 'main'</em>); a constant index out of
           range is an error when compiling.</li>
-        <li><strong>each.</strong> <code>each v in xs</code> goes through the items in order. An array is gone through as
-          it was when the loop started, even if the loop changes it; a slice, as many items as it had then, each read as
-          it is.</li>
+        <li><strong>each.</strong> <code>each v in xs</code> goes through the items in order, as they were when the loop
+          started: an array is copied, and a slice is gone through where its items were then, as many as there were,
+          even if the loop adds or deletes some (a deleted item is still read). <code>each v in &amp;xs</code> goes
+          through the place <code>xs</code> as it is at each pass instead: each item is read through it when its turn
+          comes, and the loop ends where <code>xs</code> ends then, so an item deleted is never read and one added is
+          gone through too. The place is a variable, a field or an item of one, or what a pointer points to
+          (<code>each v in &amp;b^.items</code>); the loop changes nothing through it.
+          <pre><span class="keyword">hold</span> xs = <span class="keyword">new</span> [int]([<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>]) <span class="keyword">at</span> r
+<span class="keyword">each</span> v <span class="keyword">in</span> &amp;xs
+    show(v)                   <span class="comment">; 1, then 2: the del leaves one item after it</span>
+    xs.del()
+<span class="keyword">fi</span></pre></li>
         <li><strong>Written whole.</strong> <code>show(xs)</code> writes <code>[1, 2, 3]</code>, and so does
           <a href="#str"><code>xs.str() at r</code></a>, as it does for a slice and a tuple (<code>(1, "a")</code>).</li>
         <li><strong>Compared.</strong> <code>==</code> compares two arrays by where they are and <code>~=</code> item by
@@ -1950,7 +1962,8 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
         <code>each</code> counts from the start of the range up to, but not including, the end. Both ends are
         evaluated once, before the first iteration; the loop variable is immutable. A range such as
         <code>0..5</code> is not a value: it can only appear in <code>each</code> and in a slice. <code>each</code> also
-        goes through the items of an array or slice, as in <code>each score in scores</code> (see <a href="#arrays">Arrays</a>).
+        goes through the items of an array or slice, as in <code>each score in scores</code>, or through a place as it is at
+        each pass, <code>each score in &amp;scores</code> (see <a href="#arrays">Arrays</a>).
       </p>
       <p>
         <code>loop</code> repeats while its condition holds. There is no <code>break</code> or

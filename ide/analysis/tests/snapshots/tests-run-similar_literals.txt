@@ -1,0 +1,24 @@
+  1 | ; A tuple or array written beside '~=' or '<>' becomes the other side's type
+    | comment:; A tuple or array written beside '~=' or '<>' becomes the other side's type
+  2 | ; where it can, as it does a written type.
+    | comment:; where it can, as it does a written type.
+  3 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  4 |     bind t: (int, maybe int) = (1, none)
+    | keyword:bind  variable:t  punctuation::  punctuation:(  type-builtin:int  punctuation:,  keyword:maybe  type-builtin:int  punctuation:)  operator:=  punctuation:(  number:1  punctuation:,  keyword:none  punctuation:)
+  5 |     show(t ~= (1, none), " ", (1, 2) ~= t, " ", t <> (1, 4))
+    | builtin-fn:show  punctuation:(  variable:t  operator:~=  punctuation:(  number:1  punctuation:,  keyword:none  punctuation:)  punctuation:,  string:" "  punctuation:,  punctuation:(  number:1  punctuation:,  number:2  punctuation:)  operator:~=  variable:t  punctuation:,  string:" "  punctuation:,  variable:t  operator:<>  punctuation:(  number:1  punctuation:,  number:4  punctuation:)  punctuation:)
+  6 |     bind a: [maybe int#2] = [1, none]
+    | keyword:bind  variable:a  punctuation::  punctuation:[  keyword:maybe  type-builtin:int  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  number:1  punctuation:,  keyword:none  punctuation:]
+  7 |     show(a ~= [1, none], " ", a ~= [1, 2], " ", [none#2] ~= a)
+    | builtin-fn:show  punctuation:(  variable:a  operator:~=  punctuation:[  number:1  punctuation:,  keyword:none  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:a  operator:~=  punctuation:[  number:1  punctuation:,  number:2  punctuation:]  punctuation:,  string:" "  punctuation:,  punctuation:[  keyword:none  punctuation:#  number:2  punctuation:]  operator:~=  variable:a  punctuation:)
+  8 |     bind m: maybe (int, maybe int) = (2, 3)
+    | keyword:bind  variable:m  punctuation::  keyword:maybe  punctuation:(  type-builtin:int  punctuation:,  keyword:maybe  type-builtin:int  punctuation:)  operator:=  punctuation:(  number:2  punctuation:,  number:3  punctuation:)
+  9 |     show(m ~= (2, 3), " ", m ~= (2, none))
+    | builtin-fn:show  punctuation:(  variable:m  operator:~=  punctuation:(  number:2  punctuation:,  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:m  operator:~=  punctuation:(  number:2  punctuation:,  keyword:none  punctuation:)  punctuation:)
+ 10 |     bind f: (float, text) = (1.5, "x")
+    | keyword:bind  variable:f  punctuation::  punctuation:(  type-builtin:float  punctuation:,  type-builtin:text  punctuation:)  operator:=  punctuation:(  number:1.5  punctuation:,  string:"x"  punctuation:)
+ 11 |     show(f ~= (1.5, "x"))
+    | builtin-fn:show  punctuation:(  variable:f  operator:~=  punctuation:(  number:1.5  punctuation:,  string:"x"  punctuation:)  punctuation:)
+ 12 | fi
+    | keyword:fi

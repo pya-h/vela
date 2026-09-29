@@ -203,3 +203,15 @@ fn an_array_type_written_in_a_header_is_read_while_the_file_does_not_check() {
     let (code, _) = hover(&source.replace("@@", ""), "grid[0]");
     assert!(code.contains("[[float#2]#2]"), "{}", code);
 }
+
+#[test]
+fn an_each_through_a_place_has_the_items_type_whether_or_not_the_file_checks() {
+    let code = "each live in &points\n        show(live.x)\n    fi";
+    // As it checks, with a mistake the checker reads past, and with one the
+    // parser stops at, so that nothing the checker found is there.
+    let parse_stops = PROGRAM.replace("CHECK", "show(").replace("    @@\n", &format!("    {}\n", code)) + "task (";
+    for source in [program(true, code), program(false, code), parse_stops] {
+        assert_eq!(hover(&source, "live in").0, "each live: Point", "{}", source);
+        assert!(labels(&source.replacen("live.x", "live.@@", 1)).contains(&"x".to_string()), "{}", source);
+    }
+}

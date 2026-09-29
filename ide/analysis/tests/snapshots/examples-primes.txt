@@ -2,101 +2,119 @@
     | comment:; Primes below a limit, found twice: into a slice of fixed length filled by
   2 | ; index, and into a slice that grows with add. Then del takes them out again,
     | comment:; index, and into a slice that grows with add. Then del takes them out again,
-  3 | ; last first.
-    | comment:; last first.
-  5 | task is_prime(n: int) -> bool
+  3 | ; last first, and a loop through the slice as it is at each pass meets its end
+    | comment:; last first, and a loop through the slice as it is at each pass meets its end
+  4 | ; halfway.
+    | comment:; halfway.
+  6 | task is_prime(n: int) -> bool
     | keyword:task  task:is_prime  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
-  6 |     each i in 2..(n/2 + 1)
+  7 |     each i in 2..(n/2 + 1)
     | keyword:each  variable:i  keyword:in  number:2  operator:..  punctuation:(  parameter:n  operator:/  number:2  operator:+  number:1  punctuation:)
-  7 |         when n % i == 0
+  8 |         when n % i == 0
     | keyword:when  parameter:n  operator:%  variable:i  operator:==  number:0
-  8 |             <- false
+  9 |             <- false
     | keyword:<-  keyword:false
-  9 |         fi
+ 10 |         fi
     | keyword:fi
- 10 |     fi
+ 11 |     fi
     | keyword:fi
- 11 |     <- true
+ 12 |     <- true
     | keyword:<-  keyword:true
- 12 | fi
+ 13 | fi
     | keyword:fi
- 14 | task primes_below_no_add(r: region, limit: int) -> [int]@r
+ 15 | task primes_below_no_add(r: region, limit: int) -> [int]@r
     | keyword:task  task:primes_below_no_add  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
- 15 |     bind primes: [int]@r = new [int]([0#limit]) at r  ; filled by index; primes_below does the same with add
+ 16 |     bind primes: [int]@r = new [int]([0#limit]) at r  ; filled by index; primes_below does the same with add
     | keyword:bind  variable:primes  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:0  punctuation:#  parameter:limit  punctuation:]  punctuation:)  keyword:at  region:r  comment:; filled by index; primes_below does the same with add
- 16 |     hold idx = 0
+ 17 |     hold idx = 0
     | keyword:hold  variable:idx  operator:=  number:0
- 18 |     each i in 2..limit
+ 19 |     each i in 2..limit
     | keyword:each  variable:i  keyword:in  number:2  operator:..  parameter:limit
- 19 |         when is_prime(i)
+ 20 |         when is_prime(i)
     | keyword:when  task:is_prime  punctuation:(  variable:i  punctuation:)
- 20 |             primes[idx] = i
+ 21 |             primes[idx] = i
     | variable:primes  punctuation:[  variable:idx  punctuation:]  operator:=  variable:i
- 21 |             idx = idx + 1
+ 22 |             idx = idx + 1
     | variable:idx  operator:=  variable:idx  operator:+  number:1
- 22 |         fi
+ 23 |         fi
     | keyword:fi
- 23 |     fi
+ 24 |     fi
     | keyword:fi
- 24 |     <- (primes[0..idx])
+ 25 |     <- (primes[0..idx])
     | keyword:<-  punctuation:(  variable:primes  punctuation:[  number:0  operator:..  variable:idx  punctuation:]  punctuation:)
- 25 | fi
+ 26 | fi
     | keyword:fi
- 27 | task primes_below(r: region, limit: int) -> [int]@r
+ 28 | task primes_below(r: region, limit: int) -> [int]@r
     | keyword:task  task:primes_below  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
- 28 |     hold results: [int]@r = new [int]() at r
+ 29 |     hold results: [int]@r = new [int]() at r
     | keyword:hold  variable:results  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
- 30 |     each i in 2..limit
+ 31 |     each i in 2..limit
     | keyword:each  variable:i  keyword:in  number:2  operator:..  parameter:limit
- 31 |         when is_prime(i)
+ 32 |         when is_prime(i)
     | keyword:when  task:is_prime  punctuation:(  variable:i  punctuation:)
- 32 |             results.add(i)
+ 33 |             results.add(i)
     | variable:results  punctuation:.  field:add  punctuation:(  variable:i  punctuation:)
- 33 |         fi
+ 34 |         fi
     | keyword:fi
- 34 |     fi
+ 35 |     fi
     | keyword:fi
- 35 |     <- results
+ 36 |     <- results
     | keyword:<-  variable:results
- 36 | fi
+ 37 | fi
     | keyword:fi
- 38 | priv task main()
+ 39 | priv task main()
     | keyword:priv  keyword:task  task:main  punctuation:(  punctuation:)
- 39 |     region r
+ 40 |     region r
     | keyword:region  region:r
- 40 |     bind primes_limit = 50
+ 41 |     bind primes_limit = 50
     | keyword:bind  variable:primes_limit  operator:=  number:50
- 41 |     bind results = primes_below(r, primes_limit)
+ 42 |     bind results = primes_below(r, primes_limit)
     | keyword:bind  variable:results  operator:=  task:primes_below  punctuation:(  region:r  punctuation:,  variable:primes_limit  punctuation:)
- 42 |     show("Found: ")
+ 43 |     show("Found: ")
     | builtin-fn:show  punctuation:(  string:"Found: "  punctuation:)
- 43 |     show(results.len)
+ 44 |     show(results.len)
     | builtin-fn:show  punctuation:(  variable:results  punctuation:.  field:len  punctuation:)
- 44 |     show("-----------------------")
+ 45 |     show("-----------------------")
     | builtin-fn:show  punctuation:(  string:"-----------------------"  punctuation:)
- 45 |     each x in results
+ 46 |     each x in results
     | keyword:each  variable:x  keyword:in  variable:results
- 46 |         show(x)
+ 47 |         show(x)
     | builtin-fn:show  punctuation:(  variable:x  punctuation:)
- 47 |     fi
+ 48 |     fi
     | keyword:fi
- 48 |     show("-----------------------")
+ 49 |     show("-----------------------")
     | builtin-fn:show  punctuation:(  string:"-----------------------"  punctuation:)
- 50 |     hold x = results
+ 51 |     hold x = results
     | keyword:hold  variable:x  operator:=  variable:results
- 51 |     loop x.len > 0
+ 52 |     loop x.len > 0
     | keyword:loop  variable:x  punctuation:.  field:len  operator:>  number:0
- 52 |         show(x.del())
+ 53 |         show(x.del())
     | builtin-fn:show  punctuation:(  variable:x  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)
- 53 |     fi
+ 54 |     fi
     | keyword:fi
- 54 |     show("-----------------------")
+ 55 |     show("-----------------------")
     | builtin-fn:show  punctuation:(  string:"-----------------------"  punctuation:)
- 55 |     show(results.len) ; 15: x has a length of its own, so taking items out of x leaves results' as it was
+ 56 |     show(results.len) ; 15: x has a length of its own, so taking items out of x leaves results' as it was
     | builtin-fn:show  punctuation:(  variable:results  punctuation:.  field:len  punctuation:)  comment:; 15: x has a length of its own, so taking items out of x leaves results' as it was
- 56 |     show(x.len)
+ 57 |     show(x.len)
     | builtin-fn:show  punctuation:(  variable:x  punctuation:.  field:len  punctuation:)
- 57 |     ; show(x.del())  # would stop the program: vela: del() on an empty slice
-    | comment:; show(x.del())  # would stop the program: vela: del() on an empty slice
- 58 | fi
+ 58 |     ; show(x.del()) would stop the program: vela: del() on an empty slice
+    | comment:; show(x.del()) would stop the program: vela: del() on an empty slice
+ 59 |     show("-----------------------")
+    | builtin-fn:show  punctuation:(  string:"-----------------------"  punctuation:)
+ 60 |     ; each through &y reads y as it is at each pass: every del takes the last
+    | comment:; each through &y reads y as it is at each pass: every del takes the last
+ 61 |     ; item off, so the loop meets the end halfway, after 2 to 19
+    | comment:; item off, so the loop meets the end halfway, after 2 to 19
+ 62 |     hold y = results.copy() at r
+    | keyword:hold  variable:y  operator:=  variable:results  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+ 63 |     each p in &y
+    | keyword:each  variable:p  keyword:in  operator:&  variable:y
+ 64 |         show(p)
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:)
+ 65 |         y.del()
+    | variable:y  punctuation:.  field:del  punctuation:(  punctuation:)
+ 66 |     fi
+    | keyword:fi
+ 67 | fi
     | keyword:fi

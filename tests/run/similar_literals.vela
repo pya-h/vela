@@ -1,0 +1,12 @@
+; A tuple or array written beside '~=' or '<>' becomes the other side's type
+; where it can, as it does a written type.
+task main()
+    bind t: (int, maybe int) = (1, none)
+    show(t ~= (1, none), " ", (1, 2) ~= t, " ", t <> (1, 4))
+    bind a: [maybe int#2] = [1, none]
+    show(a ~= [1, none], " ", a ~= [1, 2], " ", [none#2] ~= a)
+    bind m: maybe (int, maybe int) = (2, 3)
+    show(m ~= (2, 3), " ", m ~= (2, none))
+    bind f: (float, text) = (1.5, "x")
+    show(f ~= (1.5, "x"))
+fi

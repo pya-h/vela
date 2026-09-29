@@ -1346,9 +1346,32 @@ impl Generator {
                     self.w.close();
                 }
             },
+            // `each v in &xs`: the place is found once, and its length and
+            // items are read through it at each pass, as they are then.
+            StmtKind::Each(name, items, body) if matches!(items.kind, ExprKind::Ref(_)) => {
+                let ExprKind::Ref(place) = &items.kind else { return Err(Error::internal_at(items.span, "each over no place")) };
+                let ty = items.ty()?.clone();
+                let walked = self.fresh_temp("items");
+                let index = self.fresh_temp("index");
+                let (item, len) = match &ty {
+                    Type::Array(item, count) => (item, format!("INT64_C({})", count)),
+                    Type::Slice(item, _) => (item, format!("{}->len", walked)),
+                    other => return Err(Error::internal_at(items.span, format!("each over a place of type {}", other))),
+                };
+                let address = self.gen_address(place)?;
+                self.w.open("");
+                self.w.line(&format!("const {} *{} = {};", c_type(&ty), walked, address));
+                self.w.open(&format!("for (int64_t {0} = 0; {0} < {1}; {0}++)", index, len));
+                self.w.line(&format!("{} {} = {}->items[{}];", c_type(item), c_ident(name), walked, index));
+                self.use_if_unread(name, body);
+                self.gen_block(body)?;
+                self.w.close();
+                self.w.close();
+            }
             StmtKind::Each(name, items, body) if !matches!(items.kind, ExprKind::Range(..)) => {
-                // An array is copied, so the loop sees it as it was when it
-                // started; a slice is a view, whose items are read as they are.
+                // What it goes through is found once: an array is copied, and a
+                // slice is a view found then, so the loop goes through the items
+                // where they were when it started, as many as there were.
                 let ty = items.ty()?.clone();
                 let (item, len) = match &ty {
                     Type::Array(item, count) => (item, format!("INT64_C({})", count)),

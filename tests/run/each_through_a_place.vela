@@ -1,0 +1,47 @@
+; 'each v in xs' goes through the items where they were when it started,
+; as many as there were; 'each v in &xs' reads them through xs at each pass.
+shape Bag
+    items: [int]
+fi
+
+task main()
+    region r
+    hold xs = new [int]() at r
+    each i in 0..4
+        xs.add(i)
+    fi
+    ; As it was when the loop started: deleted items are still read
+    each v in xs
+        show(v)
+        xs.del()
+    fi
+    each i in 0..4
+        xs.add(i * 10)
+    fi
+    ; As it is at each pass: the loop stops where xs now ends
+    each v in &xs
+        show(v)
+        xs.del()
+    fi
+    show("left ", xs.len)
+    ; An item added is gone through too
+    hold ys = new [int]([1]) at r
+    each v in &ys
+        when v < 5
+            ys.add(v + 1)
+        fi
+        show(v)
+    fi
+    ; An array's items as they are now
+    hold arr = [1, 2, 3]
+    each v in &arr
+        when v == 1
+            arr[2] = 30
+        fi
+        show(v)
+    fi
+    bind b = new Bag(Bag { items: new [int]([7, 8]) at r }) at r
+    each v in &b^.items
+        show(v)
+    fi
+fi

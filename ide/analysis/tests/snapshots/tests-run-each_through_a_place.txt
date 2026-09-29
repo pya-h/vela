@@ -1,0 +1,92 @@
+  1 | ; 'each v in xs' goes through the items where they were when it started,
+    | comment:; 'each v in xs' goes through the items where they were when it started,
+  2 | ; as many as there were; 'each v in &xs' reads them through xs at each pass.
+    | comment:; as many as there were; 'each v in &xs' reads them through xs at each pass.
+  3 | shape Bag
+    | keyword:shape  type:Bag
+  4 |     items: [int]
+    | field:items  punctuation::  punctuation:[  type-builtin:int  punctuation:]
+  5 | fi
+    | keyword:fi
+  7 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  8 |     region r
+    | keyword:region  region:r
+  9 |     hold xs = new [int]() at r
+    | keyword:hold  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 10 |     each i in 0..4
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:4
+ 11 |         xs.add(i)
+    | variable:xs  punctuation:.  field:add  punctuation:(  variable:i  punctuation:)
+ 12 |     fi
+    | keyword:fi
+ 13 |     ; As it was when the loop started: deleted items are still read
+    | comment:; As it was when the loop started: deleted items are still read
+ 14 |     each v in xs
+    | keyword:each  variable:v  keyword:in  variable:xs
+ 15 |         show(v)
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:)
+ 16 |         xs.del()
+    | variable:xs  punctuation:.  field:del  punctuation:(  punctuation:)
+ 17 |     fi
+    | keyword:fi
+ 18 |     each i in 0..4
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:4
+ 19 |         xs.add(i * 10)
+    | variable:xs  punctuation:.  field:add  punctuation:(  variable:i  operator:*  number:10  punctuation:)
+ 20 |     fi
+    | keyword:fi
+ 21 |     ; As it is at each pass: the loop stops where xs now ends
+    | comment:; As it is at each pass: the loop stops where xs now ends
+ 22 |     each v in &xs
+    | keyword:each  variable:v  keyword:in  operator:&  variable:xs
+ 23 |         show(v)
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:)
+ 24 |         xs.del()
+    | variable:xs  punctuation:.  field:del  punctuation:(  punctuation:)
+ 25 |     fi
+    | keyword:fi
+ 26 |     show("left ", xs.len)
+    | builtin-fn:show  punctuation:(  string:"left "  punctuation:,  variable:xs  punctuation:.  field:len  punctuation:)
+ 27 |     ; An item added is gone through too
+    | comment:; An item added is gone through too
+ 28 |     hold ys = new [int]([1]) at r
+    | keyword:hold  variable:ys  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:]  punctuation:)  keyword:at  region:r
+ 29 |     each v in &ys
+    | keyword:each  variable:v  keyword:in  operator:&  variable:ys
+ 30 |         when v < 5
+    | keyword:when  variable:v  operator:<  number:5
+ 31 |             ys.add(v + 1)
+    | variable:ys  punctuation:.  field:add  punctuation:(  variable:v  operator:+  number:1  punctuation:)
+ 32 |         fi
+    | keyword:fi
+ 33 |         show(v)
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:)
+ 34 |     fi
+    | keyword:fi
+ 35 |     ; An array's items as they are now
+    | comment:; An array's items as they are now
+ 36 |     hold arr = [1, 2, 3]
+    | keyword:hold  variable:arr  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 37 |     each v in &arr
+    | keyword:each  variable:v  keyword:in  operator:&  variable:arr
+ 38 |         when v == 1
+    | keyword:when  variable:v  operator:==  number:1
+ 39 |             arr[2] = 30
+    | variable:arr  punctuation:[  number:2  punctuation:]  operator:=  number:30
+ 40 |         fi
+    | keyword:fi
+ 41 |         show(v)
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:)
+ 42 |     fi
+    | keyword:fi
+ 43 |     bind b = new Bag(Bag { items: new [int]([7, 8]) at r }) at r
+    | keyword:bind  variable:b  operator:=  keyword:new  type:Bag  punctuation:(  type:Bag  punctuation:{  field:items  punctuation::  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:7  punctuation:,  number:8  punctuation:]  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:)  keyword:at  region:r
+ 44 |     each v in &b^.items
+    | keyword:each  variable:v  keyword:in  operator:&  variable:b  operator:^  punctuation:.  field:items
+ 45 |         show(v)
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:)
+ 46 |     fi
+    | keyword:fi
+ 47 | fi
+    | keyword:fi
