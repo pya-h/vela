@@ -30,8 +30,8 @@
     | keyword:<-  parameter:p  operator:^  operator:+  variable:extra  operator:^
  19 | fi
     | keyword:fi
- 21 | task check(t: Tree@s) -> unit ~ Tree@s
-    | keyword:task  task:check  punctuation:(  parameter:t  punctuation::  type:Tree  operator:@  region:s  punctuation:)  operator:->  type-builtin:unit  operator:~  type:Tree  operator:@  region:s
+ 21 | task check(t: Tree@s) -> nothing ~ Tree@s
+    | keyword:task  task:check  punctuation:(  parameter:t  punctuation::  type:Tree  operator:@  region:s  punctuation:)  operator:->  type-builtin:nothing  operator:~  type:Tree  operator:@  region:s
  22 |     when t is Leaf v
     | keyword:when  parameter:t  keyword:is  variant:Leaf  variable:v
  23 |         when v < 0
@@ -44,8 +44,8 @@
     | keyword:fi
  27 | fi
     | keyword:fi
- 29 | task outer(r: region, n: int) -> unit ~ Tree@r
-    | keyword:task  task:outer  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type:Tree  operator:@  region:r
+ 29 | task outer(r: region, n: int) -> nothing ~ Tree@r
+    | keyword:task  task:outer  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  operator:~  type:Tree  operator:@  region:r
  30 |     <- check(Leaf(n))
     | keyword:<-  task:check  punctuation:(  variant:Leaf  punctuation:(  parameter:n  punctuation:)  punctuation:)
  31 | fi

@@ -40,7 +40,7 @@ pub enum Type {
     /// `text@r`, whose characters are in the region `r`. Text that lasts as
     /// long as the program fits wherever text of a region is expected.
     Text(Option<String>),
-    Unit,
+    Nothing,
     /// The type of the `none` literal: fits any `maybe` type.
     None,
     /// `^T@r`: a pointer into the region `r`. Everything a type holds lives in
@@ -54,7 +54,7 @@ pub enum Type {
     Range(Box<Type>),
     /// `maybe T`: a `T`, or `none`.
     Maybe(Box<Type>),
-    /// `T ~ E`: a `T` on success, or an error `E`. `T` may be `unit`.
+    /// `T ~ E`: a `T` on success, or an error `E`. `T` may be `nothing`.
     Or(Box<Type>, Box<Type>),
     /// The type of `fail e` before it becomes part of a `T ~ E`: the error's type.
     Fail(Box<Type>),
@@ -130,7 +130,7 @@ pub const BUILTIN_TYPES: &[(&str, Type)] = &[
     ("float", Type::Float),
     ("bool", Type::Bool),
     ("text", Type::Text(None)),
-    ("unit", Type::Unit),
+    ("nothing", Type::Nothing),
 ];
 
 /// The builtin tasks, which user code calls like its own tasks (`scan` names
@@ -366,7 +366,7 @@ impl Type {
                 write!(f, "text")?;
                 suffix(f, region)
             }
-            Type::Unit => write!(f, "unit"),
+            Type::Nothing => write!(f, "nothing"),
             Type::None => write!(f, "none"),
             Type::Region => write!(f, "region"),
             Type::Ptr(inner, region) => {
@@ -472,7 +472,7 @@ impl Type {
             Type::Or(value, error) => value.unknown() || error.unknown(),
             Type::Tuple(types) | Type::Results(types) => types.iter().any(Type::unknown),
             Type::Applied(applied) => applied.types.iter().any(Type::unknown),
-            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Unit | Type::None | Type::Region | Type::Named(..) | Type::Param(_) => false,
+            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Nothing | Type::None | Type::Region | Type::Named(..) | Type::Param(_) => false,
         }
     }
 
@@ -652,11 +652,11 @@ impl Type {
         }
     }
 
-    /// The values a task with this return type sends: none for `unit`, each of
+    /// The values a task with this return type sends: none for `nothing`, each of
     /// a `Results`, or the type itself.
     pub fn results(&self) -> &[Type] {
         match self {
-            Type::Unit => &[],
+            Type::Nothing => &[],
             Type::Results(types) => types,
             other => std::slice::from_ref(other),
         }
@@ -1373,7 +1373,7 @@ pub struct TaskDef {
     /// is empty: every `T` in it has been replaced.
     pub given: Vec<Type>,
     pub params: Vec<Field>,
-    /// What the task sends: `unit` for nothing, one type, or `Type::Results`
+    /// What the task sends: `nothing` for no value, one type, or `Type::Results`
     /// for several.
     pub ret: Type,
     /// One entry per result, in order; empty when the task sends nothing.
@@ -1448,7 +1448,7 @@ pub fn type_word(ty: &Type) -> String {
         Type::Float => "float".to_string(),
         Type::Bool => "bool".to_string(),
         Type::Text(_) => "text".to_string(),
-        Type::Unit => "unit".to_string(),
+        Type::Nothing => "nothing".to_string(),
         Type::None => "none".to_string(),
         Type::Region => "region".to_string(),
         Type::Named(name, _) => format!("n_{}", flat_name(name)),

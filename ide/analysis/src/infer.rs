@@ -741,7 +741,7 @@ impl<'a> Knowledge<'a> {
                     && let Some(Type::Slice(items, _)) = p.checked_sub(2).and_then(|base| self.expression_type(base, depth + 1))
                 {
                     return exact(p).or(Some(match op {
-                        vela::ast::EditOp::Add => Type::Unit,
+                        vela::ast::EditOp::Add => Type::Nothing,
                         vela::ast::EditOp::Del => *items,
                     }));
                 }
@@ -1287,13 +1287,13 @@ fn is_name(text: &str) -> bool {
 /// The return type in a task's detail, `(n: int) -> int`, or every result of
 /// `(a: int, b: int) -> int, int`. A result may be named, `-> total: int`.
 pub(crate) fn return_type(detail: &str) -> Type {
-    let Some((_, ret)) = detail.rsplit_once("->") else { return Type::Unit };
+    let Some((_, ret)) = detail.rsplit_once("->") else { return Type::Nothing };
     let written: Vec<&str> = split_list(ret).into_iter().map(result_type).collect();
     if let [only] = written.as_slice() {
-        return parse_type(only).unwrap_or(Type::Unit);
+        return parse_type(only).unwrap_or(Type::Nothing);
     }
     let types: Option<Vec<Type>> = written.into_iter().map(parse_type).collect();
-    types.map_or(Type::Unit, Type::Results)
+    types.map_or(Type::Nothing, Type::Results)
 }
 
 /// One result as written, without the name of a named one: `total: int` is an

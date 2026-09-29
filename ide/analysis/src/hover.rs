@@ -24,7 +24,7 @@ const BUILTIN_TYPE_DOCS: &[(&str, &str)] = &[
     ("float", "A 64-bit floating-point number. float(n) turns an int into one, which always works."),
     ("bool", "true or false."),
     ("text", "UTF-8 text. t.len is how many bytes it has and t[a..b] a part of it, the same bytes; == and < compare contents, a + b at r joins text into region r, and \"n = {n}\" at r is text holding values, each turned into text there (\\{ and \\} write braces). text(n) at r turns a value into text, as n.str() at r does. text lasts as long as the program, as a literal does; text@r is in region r, as the text of a value in r is."),
-    ("unit", "The return type of a task that sends no value."),
+    ("nothing", "The return type of a task that sends no value."),
 ];
 
 /// What `int("42")` sends when the text is no number: the builtin kind, which a

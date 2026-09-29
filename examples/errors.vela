@@ -29,9 +29,9 @@ task check(reading: maybe int) -> int ~ ReadingError
     <- value
 fi
 
-; `unit ~ E` sends nothing when it works: reaching the end succeeds. `hold&`
+; `nothing ~ E` sends nothing when it works: reaching the end succeeds. `hold&`
 ; makes `sum` the caller's own variable, which the call gives as `&total`.
-task add_reading(hold& sum: int, reading: maybe int) -> unit ~ ReadingError
+task add_reading(hold& sum: int, reading: maybe int) -> nothing ~ ReadingError
     bind value = check(reading) {
         failure problem
         <- fail problem

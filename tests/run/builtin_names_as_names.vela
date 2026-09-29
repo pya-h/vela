@@ -3,7 +3,7 @@
 ; without a payload written with parentheses.
 
 shape Box
-    unit: int
+    nothing: int
     show: text
     ; A field may be named like a variant of a builtin kind.
     TooLarge: bool
@@ -33,9 +33,9 @@ fi
 
 task main()
     bind show = 3
-    hold bool = Box { unit: show, show: "shown", TooLarge: false }
-    bool.unit = twice(bool.unit, 1)
-    show(bool.unit)
+    hold bool = Box { nothing: show, show: "shown", TooLarge: false }
+    bool.nothing = twice(bool.nothing, 1)
+    show(bool.nothing)
     show(bool.show)
     bind l = Light.Red()
     when l is Light.Red

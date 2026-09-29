@@ -1,0 +1,8 @@
+; error: 3:12: 'nothing' is only allowed as a return type
+shape Holder
+    value: nothing
+fi
+
+task main()
+    show(1)
+fi

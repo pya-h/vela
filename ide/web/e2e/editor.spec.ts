@@ -224,7 +224,7 @@ test("several results: highlighting, hover, and completion of the names", async 
   const popup = page.locator(".cm-tooltip-autocomplete");
   const option = (label: string) => popup.getByRole("option").filter({ has: page.locator(".cm-completionLabel", { hasText: new RegExp(`^${label}$`) }) });
   await expect(option("bool")).toBeVisible();
-  await expect(option("unit")).toHaveCount(0);
+  await expect(option("nothing")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await page.keyboard.press("Backspace");
   await page.keyboard.press("Backspace");

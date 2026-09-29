@@ -1,8 +1,0 @@
-; error: 3:12: unit is only allowed as a return type
-shape Holder
-    value: unit
-fi
-
-task main()
-    show(1)
-fi

@@ -20,7 +20,7 @@ task last<T>(xs: [T]@r) -> maybe T
     <- seen
 fi
 
-task nothing<T>() -> maybe T
+task empty<T>() -> maybe T
     <- none
 fi
 
@@ -115,9 +115,9 @@ task main()
     show(first<text@r>(names))
 
     ; Or from the place the value goes, including through a plan B.
-    bind nothingYet: maybe int = nothing()
+    bind nothingYet: maybe int = empty()
     show(nothingYet)
-    bind fallback: text = nothing() { "nothing there" }
+    bind fallback: text = empty() { "nothing there" }
     show(fallback)
 
     ; A word says what the body may do with the values.

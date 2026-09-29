@@ -1,9 +1,0 @@
-; error: 2:37: unit is only allowed as a task's whole return type, so it can't be one of several results
-task divmod(a: int, b: int) -> int, unit
-    <- a / b, a % b
-fi
-
-task main()
-    bind q, r = divmod(9, 2)
-    show(q + r)
-fi

@@ -226,7 +226,7 @@
         <li><code class="type">text</code> — UTF-8 text that knows its length, <code>t.len</code>, in bytes; <code>==</code> compares contents. <code>text</code> lasts as long
           as the program, as a literal does, and <code>text@r</code> is in region <code>r</code> (see
           <a href="#text-in-regions">Text in a region</a>)</li>
-        <li><code class="type">unit</code> — the return type of a task that returns nothing; it has no values, so it
+        <li><code class="type">nothing</code> — the return type of a task that sends no value (a task with no <code>-&gt;</code> has it); it has no values, so it
           can't be the type of a variable, parameter, or field</li>
         <li><code class="type">^T@r</code> — pointer to a T in region <code>r</code>; it always points to something (see <a href="#regions">Memory and Regions</a>)</li>
         <li><code class="type">[T#n]</code> — an array: <code>n</code> values of type T, held in place (see <a href="#arrays">Arrays</a>)</li>
@@ -274,7 +274,7 @@ true false none  fi   maybe is     fail failure include priv
 block shared type</pre>
       <p>
         <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>,
-        <code>bool</code>, <code>text</code>, <code>unit</code>) aren't reserved words: no task, shape, kind, or
+        <code>bool</code>, <code>text</code>, <code>nothing</code>) aren't reserved words: no task, shape, kind, or
         variant can take their names, but a variable, parameter, or field can (see <a href="#names">Names</a>). The
         builtin kinds <a href="#reading-numbers"><code>ParseError</code></a> (<code>NotANumber</code>,
         <code>TooLarge</code>) and <a href="#reading-input"><code>InputError</code></a> (<code>Ended</code>,
@@ -336,7 +336,7 @@ block shared type</pre>
         <tr><td><code>a ~= b</code>, <code>a &lt;&gt; b</code></td><td>whether two values are similar, item by item; <code>not (a ~= b)</code></td></tr>
       </table>
 
-      <h3>Tasks</h3>
+      <h3 id="tasks">Tasks</h3>
       <p>
         Functions are called <em>tasks</em>. <code>-&gt; T</code> in the header says a task sends back a value of
         type <code>T</code>, and <code>&lt;-</code> sends it: one arrow points out of the header to the result, the
@@ -660,8 +660,8 @@ show(&amp;p == &amp;p.x)              <span class="comment">; error: places of t
       <p>
         Each result follows the rules of a single one: <code>-&gt; maybe int, bool</code> and
         <code>-&gt; ^Node@r, int</code> work as they read, and the regions of a call's results are settled at the
-        call (see <a href="#regions">Memory and Regions</a>). One value can't be <code>unit</code>, since
-        <code>unit</code> means no value at all. A value sent on from a call, as in <code>halves</code> above,
+        call (see <a href="#regions">Memory and Regions</a>). One value can't be <code>nothing</code>, since
+        <code>nothing</code> means no value at all. A value sent on from a call, as in <code>halves</code> above,
         goes as it is: it doesn't become a <code>maybe</code> or a <code>T ~ E</code> on the way, which a single
         sent value would, and the error says so. Results fail one at a time, not together:
         <code>-&gt; int, int ~ Bad</code> is two results, the second of which may fail, and its receiver gives that
@@ -746,7 +746,7 @@ a, b = b, a                  <span class="comment">; a is 2, b is 1</span>
           <code>&lt;- values</code> line sends its own values, so nothing after it runs and nothing else need be set.</li>
         <li><strong>Whole values.</strong> <code>best &lt;- Point { x: 0, y: 0 }</code> sets a shape result; setting
           one field of it, <code>best.x &lt;- 0</code>, isn't part of this.</li>
-        <li>A task that sends <code>unit ~ E</code> succeeds by reaching its end, so its result has no value to
+        <li>A task that sends <code>nothing ~ E</code> succeeds by reaching its end, so its result has no value to
           name.</li>
       </ul>
 
@@ -1604,7 +1604,7 @@ fixed.step()               <span class="comment">; error: 'Counter.step' changes
         <span class="keyword">fi</span>
     <span class="keyword">fi</span>
 
-    tell(prefix: text) -&gt; unit
+    tell(prefix: text) -&gt; nothing
         show(prefix)
         show(.label())
     <span class="keyword">fi</span>
@@ -1617,7 +1617,7 @@ light.tell(<span class="string">"now:"</span>)         <span class="comment">; n
         Inside a kind, a variant's values and a method's parameters are written alike: <code>Blinking(times: int)</code>
         and <code>tell(prefix: text)</code>. A member is a method when it says <code>alters</code>, names what it sends
         (<code>-&gt; text</code>), takes nothing (<code>label()</code>), or comes after another method. That leaves one
-        case, a kind's first method that takes values and sends nothing, which writes <code>-&gt; unit</code>, as
+        case, a kind's first method that takes values and sends nothing, which writes <code>-&gt; nothing</code>, as
         <code>tell</code> would if it came first; the error for a method read as a variant says so.
       </p>
       <ul>
@@ -1820,7 +1820,7 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
     <span class="keyword">&lt;-</span> b
 <span class="keyword">fi</span>
 
-<span class="keyword">task</span> nothing&lt;T&gt;() -&gt; <span class="keyword">maybe</span> T
+<span class="keyword">task</span> empty&lt;T&gt;() -&gt; <span class="keyword">maybe</span> T
     <span class="keyword">&lt;-</span> <span class="keyword">none</span>
 <span class="keyword">fi</span>
 
@@ -1833,8 +1833,8 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
     show(first&lt;text@r&gt;(names))            <span class="comment">; { "Ada" } — or the call writes it out</span>
     show(biggest(<span class="number">2</span>, <span class="number">5</span>))                   <span class="comment">; 5</span>
     show(biggest(<span class="number">1.5</span>, <span class="number">0.5</span>))               <span class="comment">; 1.5 — the same task, made for float too</span>
-    <span class="keyword">bind</span> empty: <span class="keyword">maybe</span> int = nothing()    <span class="comment">; the place the value goes says T is int</span>
-    <span class="keyword">bind</span> fallback: text = nothing() { <span class="string">"none"</span> }
+    <span class="keyword">bind</span> blank: <span class="keyword">maybe</span> int = empty()    <span class="comment">; the place the value goes says T is int</span>
+    <span class="keyword">bind</span> fallback: text = empty() { <span class="string">"none"</span> }
     show(biggest(<span class="string">"fig"</span>, <span class="string">"pear"</span>))          <span class="comment">; pear — text has an order too</span>
     show(biggest(<span class="keyword">true</span>, <span class="keyword">false</span>))            <span class="comment">; error: task 'biggest' takes a type that is 'ordered' …</span>
 <span class="keyword">fi</span></pre>
@@ -1843,7 +1843,7 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
           written type, a parameter, a field, a <code>&lt;-</code>, or a plan B's value), or written in
           <code>&lt; &gt;</code> after the name, as in the header. Writing them is all or nothing: a task that takes two
           types is given both. When nothing says which type it is, the compiler asks for it:
-          <code>can't tell which type 'T' is for this call of 'nothing' …</code>.</li>
+          <code>can't tell which type 'T' is for this call of 'empty' …</code>.</li>
         <li><strong>Reading <code>&lt;</code>.</strong> A <code>&lt;</code> after a name starts the types of a call only
           when the matching <code>&gt;</code> is followed by <code>(</code>, so <code>a &lt; b</code> is still a
           comparison. (<code>a &lt; b &gt; (c)</code> was never valid Vela: <code>&gt;</code> doesn't compare bools.) Two
@@ -1955,7 +1955,7 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
       <p>
         Tasks, shapes, kinds, and variants share one namespace in a file: no two of them can have the same name, even
         across different kinds, and none can be named like a builtin: the types (<code>int</code>, <code>float</code>,
-        <code>bool</code>, <code>text</code>, <code>unit</code>), the tasks (<code>show</code>, <code>scan</code>), or
+        <code>bool</code>, <code>text</code>, <code>nothing</code>), the tasks (<code>show</code>, <code>scan</code>), or
         the kinds no file declares and their variants (<a href="#reading-numbers"><code>ParseError</code></a> with
         <code>NotANumber</code> and <code>TooLarge</code>, <a href="#reading-input"><code>InputError</code></a> with
         <code>Ended</code> and <code>NoNumber</code>). Another module has names of its own
@@ -2254,7 +2254,7 @@ show(half(<span class="number">8</span>) { <span class="keyword">none</span> } =
       <p>
         A task that can fail sends <code>T ~ E</code>: its value when it works, or an error of type
         <code>E</code>, sent with <code>&lt;- fail error</code>. The error type must differ from the value type, and
-        can be any type but <code>unit</code>, a <code>maybe</code>, or another <code>T ~ E</code>: a type has one
+        can be any type but <code>nothing</code>, a <code>maybe</code>, or another <code>T ~ E</code>: a type has one
         error side, so <code>(int ~ text) ~ text</code> is refused when written, as <code>maybe maybe int</code> is (a
         <a href="#generics">generic</a> may still make either, below). Two words keep the two jobs apart:
         <code>fail</code> is the verb that <em>makes</em> a failure, and <code>failure</code> is the noun that
@@ -2297,7 +2297,7 @@ show(half(<span class="number">8</span>) { <span class="keyword">none</span> } =
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></pre>
       <p>
-        <code>unit ~ E</code> is a task that sends nothing when it works: a bare <code>&lt;-</code>, or reaching the
+        <code>nothing ~ E</code> is a task that sends nothing when it works: a bare <code>&lt;-</code>, or reaching the
         end, succeeds, and <code>case {_}</code> matches that success. A call written as a statement can't drop an error by
         accident: when its <code>~</code> result goes unused, that is an error. (A result kept with <code>bind</code>
         stays a <code>T ~ E</code> that only a <code>match</code> or a plan B opens, but nothing yet checks that
@@ -2305,7 +2305,7 @@ show(half(<span class="number">8</span>) { <span class="keyword">none</span> } =
         the error on purpose. <code>fail</code> binds like <code>-</code> and <code>not</code>, so an error computed
         with operators needs parentheses.
       </p>
-      <pre><span class="keyword">task</span> save(size: int) -&gt; unit ~ text
+      <pre><span class="keyword">task</span> save(size: int) -&gt; nothing ~ text
     <span class="keyword">when</span> size &gt; 100
         <span class="keyword">&lt;-</span> <span class="keyword">fail</span> <span class="string">"too big"</span>
     <span class="keyword">fi</span>

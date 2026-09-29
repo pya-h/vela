@@ -161,11 +161,11 @@ fn statement_items_start_a_line_even_after_invalid_text() {
 
 #[test]
 fn types_are_offered_where_a_type_is_written() {
-    assert_offers(&in_main("bind q: @@"), &["int", "text", "Point", "Shape"], &["unit", "p", "bind"]);
+    assert_offers(&in_main("bind q: @@"), &["int", "text", "Point", "Shape"], &["nothing", "p", "bind"]);
     assert_offers(&in_main("bind q: ^@@"), &["int", "Point"], &["p"]);
     assert_offers(&in_main("bind q = new @@"), &["Point"], &["p"]);
-    assert_offers("task f(a: @@", &["int", "float"], &["unit"]);
-    assert_offers("task f() -> @@", &["unit", "int"], &[]);
+    assert_offers("task f(a: @@", &["int", "float"], &["nothing"]);
+    assert_offers("task f() -> @@", &["nothing", "int"], &[]);
     assert_offers("shape S\n    field: @@", &["float", "S"], &[]);
 }
 
@@ -345,7 +345,7 @@ fn the_kind_reading_a_number_sends_is_known_to_the_editor() {
     let bound = "task main()\n    bind n = int(\"42\")\n    show(n { 0 })\nfi\n";
     assert_eq!(Analysis::new(bound).diagnostics(), Vec::new());
     assert_eq!(hover(bound, "n =", 0).code, "bind n: int ~ ParseError");
-    assert_offers("task f() -> int ~ @@", &["ParseError", "text"], &["unit"]);
+    assert_offers("task f() -> int ~ @@", &["ParseError", "text"], &["nothing"]);
     // Hovering the kind itself shows what it is.
     let named = "task age(line: text) -> int ~ ParseError\n    <- int(line) {\n        failure e\n        <- fail e\n    }\nfi\n\ntask main()\n    show(age(\"1\") { 0 })\nfi\n";
     assert_eq!(Analysis::new(named).diagnostics(), Vec::new());
@@ -373,7 +373,7 @@ fn the_kind_reading_a_number_from_input_sends_is_known_to_the_editor() {
     // The two types this form reads, offered after the prompt, and the kind
     // where an error type goes.
     assert_eq!(labels(&in_main("bind age = scan(\"Age: \", @@)")), ["int", "float"]);
-    assert_offers("task f() -> int ~ @@", &["InputError", "ParseError"], &["unit"]);
+    assert_offers("task f() -> int ~ @@", &["InputError", "ParseError"], &["nothing"]);
     // A region follows a line read, and never a number read.
     assert_offers(&in_main("bind line = scan(\"Name: \") @@"), &["at"], &[]);
     assert_offers(&in_main("bind age = scan(\"Age: \", int) @@"), &[], &["at"]);
@@ -526,12 +526,12 @@ fn in_outcomes(code: &str) -> String {
 
 #[test]
 fn types_offer_maybe_and_error_types() {
-    assert_offers(&in_outcomes("bind x: @@"), &["maybe", "int", "Problem"], &["unit", "m"]);
-    // After `maybe`, another type, but not `maybe` or `unit` again.
-    assert_offers(&in_outcomes("bind x: maybe @@"), &["int", "Problem"], &["maybe", "unit"]);
+    assert_offers(&in_outcomes("bind x: @@"), &["maybe", "int", "Problem"], &["nothing", "m"]);
+    // After `maybe`, another type, but not `maybe` or `nothing` again.
+    assert_offers(&in_outcomes("bind x: maybe @@"), &["int", "Problem"], &["maybe", "nothing"]);
     assert_offers(&in_outcomes("bind x: maybe ^@@"), &["int"], &["m"]);
-    // After `or` in a type, the error type, which is never unit or a maybe.
-    assert_offers("task f() -> int ~ @@\nfi\n", &["text"], &["unit", "maybe"]);
+    // After `or` in a type, the error type, which is never nothing or a maybe.
+    assert_offers("task f() -> int ~ @@\nfi\n", &["text"], &["nothing", "maybe"]);
     assert_offers(&in_outcomes("bind x: int ~ @@"), &["Problem"], &["m", "total"]);
     // `or` between values is still an expression.
     assert_offers(&in_outcomes("show(total == 1 or @@)"), &["total", "m"], &["Problem"]);
@@ -755,7 +755,7 @@ fn types_follow_a_region_and_error_types_follow_a_regional_type() {
     let regions = "shape Node\n    value: int\n    next: maybe ^Node\nfi\n\ntask main()\n    region nodes\n    @@\nfi\n";
     let in_regions = |code: &str| regions.replace("    @@\n", &format!("    {}\n", code));
     assert_offers(&in_regions("bind two = new@nodes @@"), &["int", "Node", "maybe"], &["main", "show", "true"]);
-    assert_offers("shape Node\n    value: int\nfi\ntask f(r: region) -> ^Node@r ~ @@", &["text", "Node"], &["unit", "maybe", "f"]);
+    assert_offers("shape Node\n    value: int\nfi\ntask f(r: region) -> ^Node@r ~ @@", &["text", "Node"], &["nothing", "maybe", "f"]);
 }
 
 #[test]
@@ -860,10 +860,10 @@ fn several_results_are_typed_and_completed() {
     assert_eq!(hover(&broken, "second", 0).code, "bind second: bool");
     assert_eq!(hover(&broken, "r =", 0).code, "bind r: int");
 
-    // Another result type after a comma, where `unit` is not one.
-    assert_offers("task f() -> int, @@", &["int", "text", "maybe"], &["unit", "f"]);
-    assert_offers("task f() -> int, ^@@", &["int"], &["unit"]);
-    assert_offers("task f() -> int, int, @@", &["float"], &["unit"]);
+    // Another result type after a comma, where `nothing` is not one.
+    assert_offers("task f() -> int, @@", &["int", "text", "maybe"], &["nothing", "f"]);
+    assert_offers("task f() -> int, ^@@", &["int"], &["nothing"]);
+    assert_offers("task f() -> int, int, @@", &["float"], &["nothing"]);
     // A parameter list's comma still declares a name.
     assert_offers("task f(a: int, @@", &[], &["int", "a"]);
 
@@ -924,11 +924,11 @@ fn named_results_are_names_of_the_task() {
     assert_eq!(item(inside, "total <- ").snippet.as_deref(), Some("total <- ${value}"));
     assert_eq!(item(inside, "total <- ").detail, "set result int");
 
-    // A result's type is completed after its `:`, where `unit` and `region`
+    // A result's type is completed after its `:`, where `nothing` and `region`
     // are not types a task can send; types after `->` still are offered.
     assert_offers("task f() -> total: @@", &["int", "text", "maybe"], &["total", "region"]);
     assert_offers("task f(r: @@", &["int", "region"], &[]);
-    assert_offers("task f() -> @@", &["int", "unit"], &["region"]);
+    assert_offers("task f() -> @@", &["int", "nothing"], &["region"]);
 
     // Either every result has a name or none does, so a name follows the comma
     // of a named list, as in a parameter list, and nothing is completed there.
@@ -938,7 +938,7 @@ fn named_results_are_names_of_the_task() {
     assert_offers("task f() -> total: int, maybe @@", &[], &["int", "total", "show"]);
     assert_offers("task f() -> total: int, peak: int, @@", &[], &["int", "peak", "show"]);
     // An unnamed list still takes another type.
-    assert_offers("task f() -> maybe int, @@", &["int", "maybe"], &["unit"]);
+    assert_offers("task f() -> maybe int, @@", &["int", "maybe"], &["nothing"]);
 }
 
 

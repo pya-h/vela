@@ -117,8 +117,8 @@ fn completion_offers_types_in_brackets_and_nothing_for_a_count() {
     for expected in ["int", "Point", "maybe"] {
         assert!(types.contains(&expected.to_string()), "{:?} in {:?}", expected, types);
     }
-    // An array can't hold unit.
-    assert!(!types.contains(&"unit".to_string()), "{:?}", types);
+    // An array can't hold nothing.
+    assert!(!types.contains(&"nothing".to_string()), "{:?}", types);
     assert!(labels(&program(true, "bind grid: [[@@")).contains(&"float".to_string()));
     assert_eq!(labels(&program(true, "bind grid: [int#@@")), Vec::<String>::new());
     // The count of a repeated value is a value.

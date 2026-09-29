@@ -51,9 +51,9 @@ shape Account
         .note("deposit", amount)
     fi
 
-    ; A method may fail, as a task may: `unit ~ Refusal` sends nothing, or a
+    ; A method may fail, as a task may: `nothing ~ Refusal` sends nothing, or a
     ; reason why not.
-    alters withdraw(amount: int) -> unit ~ Refusal
+    alters withdraw(amount: int) -> nothing ~ Refusal
         when not .open
             <- fail Closed
         fi
@@ -86,7 +86,7 @@ shape Best<T: ordered>
     fi
 fi
 
-task report(result: unit ~ Refusal)
+task report(result: nothing ~ Refusal)
     match result
     case {_}
         show("done")

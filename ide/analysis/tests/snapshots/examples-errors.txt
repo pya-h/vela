@@ -52,12 +52,12 @@
     | keyword:<-  variable:value
  30 | fi
     | keyword:fi
- 32 | ; `unit ~ E` sends nothing when it works: reaching the end succeeds. `hold&`
-    | comment:; `unit ~ E` sends nothing when it works: reaching the end succeeds. `hold&`
+ 32 | ; `nothing ~ E` sends nothing when it works: reaching the end succeeds. `hold&`
+    | comment:; `nothing ~ E` sends nothing when it works: reaching the end succeeds. `hold&`
  33 | ; makes `sum` the caller's own variable, which the call gives as `&total`.
     | comment:; makes `sum` the caller's own variable, which the call gives as `&total`.
- 34 | task add_reading(hold& sum: int, reading: maybe int) -> unit ~ ReadingError
-    | keyword:task  task:add_reading  punctuation:(  keyword:hold  keyword:&  parameter:sum  punctuation::  type-builtin:int  punctuation:,  parameter:reading  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type:ReadingError
+ 34 | task add_reading(hold& sum: int, reading: maybe int) -> nothing ~ ReadingError
+    | keyword:task  task:add_reading  punctuation:(  keyword:hold  keyword:&  parameter:sum  punctuation::  type-builtin:int  punctuation:,  parameter:reading  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  operator:~  type:ReadingError
  35 |     bind value = check(reading) {
     | keyword:bind  variable:value  operator:=  task:check  punctuation:(  parameter:reading  punctuation:)  punctuation:{
  36 |         failure problem

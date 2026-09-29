@@ -1,0 +1,7 @@
+; error: 2:23: a maybe can't hold 'nothing', which has no value
+task empty() -> maybe nothing
+fi
+
+task main()
+    show(1)
+fi

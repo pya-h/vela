@@ -312,7 +312,7 @@ describe("VelaAnalysis", () => {
     expect(language.blockOpeners).toEqual(["task", "shape", "kind", "when", "loop", "each", "block", "match"]);
     expect(language.blockModifiers).toEqual(["priv"]);
     expect(language.branchKeywords).toEqual(["else", "case"]);
-    expect(language.builtinTypes).toEqual(["int", "float", "bool", "text", "unit"]);
+    expect(language.builtinTypes).toEqual(["int", "float", "bool", "text", "nothing"]);
     expect(language.lineComment).toBe(";");
   });
 

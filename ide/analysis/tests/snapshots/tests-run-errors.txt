@@ -1,7 +1,7 @@
   1 | ; `T ~ E`: a task that can fail sends a value or `fail error`. `match`, `is`,
     | comment:; `T ~ E`: a task that can fail sends a value or `fail error`. `match`, `is`,
-  2 | ; and plan B read the result; `unit ~ E` succeeds with a bare `<-` or by
-    | comment:; and plan B read the result; `unit ~ E` succeeds with a bare `<-` or by
+  2 | ; and plan B read the result; `nothing ~ E` succeeds with a bare `<-` or by
+    | comment:; and plan B read the result; `nothing ~ E` succeeds with a bare `<-` or by
   3 | ; reaching its end.
     | comment:; reaching its end.
   5 | kind BadSize
@@ -52,8 +52,8 @@
     | keyword:fi
  30 | fi
     | keyword:fi
- 32 | task save(size: int) -> unit ~ text
-    | keyword:task  task:save  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type-builtin:text
+ 32 | task save(size: int) -> nothing ~ text
+    | keyword:task  task:save  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  operator:~  type-builtin:text
  33 |     when size > 100
     | keyword:when  parameter:size  operator:>  number:100
  34 |         <- fail "too big"
@@ -90,8 +90,8 @@
     | keyword:<-  keyword:none
  51 | fi
     | keyword:fi
- 53 | task save_twice(size: int) -> unit ~ text
-    | keyword:task  task:save_twice  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type-builtin:text
+ 53 | task save_twice(size: int) -> nothing ~ text
+    | keyword:task  task:save_twice  punctuation:(  parameter:size  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  operator:~  type-builtin:text
  54 |     save(size) { failure e
     | task:save  punctuation:(  parameter:size  punctuation:)  punctuation:{  keyword:failure  variable:e
  55 |         <- fail e

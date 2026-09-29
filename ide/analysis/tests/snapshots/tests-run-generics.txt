@@ -36,8 +36,8 @@
     | keyword:<-  variable:seen
  21 | fi
     | keyword:fi
- 23 | task nothing<T>() -> maybe T
-    | keyword:task  task:nothing  punctuation:<  type:T  punctuation:>  punctuation:(  punctuation:)  operator:->  keyword:maybe  type:T
+ 23 | task empty<T>() -> maybe T
+    | keyword:task  task:empty  punctuation:<  type:T  punctuation:>  punctuation:(  punctuation:)  operator:->  keyword:maybe  type:T
  24 |     <- none
     | keyword:<-  keyword:none
  25 | fi
@@ -192,12 +192,12 @@
     | builtin-fn:show  punctuation:(  task:first  punctuation:<  type-builtin:text  operator:@  region:r  punctuation:>  punctuation:(  variable:names  punctuation:)  punctuation:)
 117 |     ; Or from the place the value goes, including through a plan B.
     | comment:; Or from the place the value goes, including through a plan B.
-118 |     bind nothingYet: maybe int = nothing()
-    | keyword:bind  variable:nothingYet  punctuation::  keyword:maybe  type-builtin:int  operator:=  task:nothing  punctuation:(  punctuation:)
+118 |     bind nothingYet: maybe int = empty()
+    | keyword:bind  variable:nothingYet  punctuation::  keyword:maybe  type-builtin:int  operator:=  task:empty  punctuation:(  punctuation:)
 119 |     show(nothingYet)
     | builtin-fn:show  punctuation:(  variable:nothingYet  punctuation:)
-120 |     bind fallback: text = nothing() { "nothing there" }
-    | keyword:bind  variable:fallback  punctuation::  type-builtin:text  operator:=  task:nothing  punctuation:(  punctuation:)  punctuation:{  string:"nothing there"  punctuation:}
+120 |     bind fallback: text = empty() { "nothing there" }
+    | keyword:bind  variable:fallback  punctuation::  type-builtin:text  operator:=  task:empty  punctuation:(  punctuation:)  punctuation:{  string:"nothing there"  punctuation:}
 121 |     show(fallback)
     | builtin-fn:show  punctuation:(  variable:fallback  punctuation:)
 123 |     ; A word says what the body may do with the values.

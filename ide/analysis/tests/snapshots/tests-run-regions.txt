@@ -154,8 +154,8 @@
     | keyword:<-  task:push  punctuation:(  region:r  punctuation:,  keyword:none  punctuation:,  variable:temporary  operator:^  punctuation:)
  90 | fi
     | keyword:fi
- 92 | task save(n: int) -> unit ~ text
-    | keyword:task  task:save  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:unit  operator:~  type-builtin:text
+ 92 | task save(n: int) -> nothing ~ text
+    | keyword:task  task:save  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  operator:~  type-builtin:text
  93 |     region scratch
     | keyword:region  region:scratch
  94 |     bind copy = new int(n) at scratch

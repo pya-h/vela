@@ -223,7 +223,7 @@ describe("methods", () => {
     ];
     // A variant carries named values; a method after another is one whatever it takes.
     expect([...methodLines(light, WORDS)]).toEqual([3, 6]);
-    const first = ["kind K", "    A", "    tell(prefix: text) -> unit", "    fi", "    alters set(to: int)", "    fi", "fi"];
+    const first = ["kind K", "    A", "    tell(prefix: text) -> nothing", "    fi", "    alters set(to: int)", "    fi", "fi"];
     expect([...methodLines(first, WORDS)]).toEqual([2, 4]);
     // Without anything above it saying otherwise, a kind's first member with
     // named values and nothing after them is a variant, as the parser reads it.

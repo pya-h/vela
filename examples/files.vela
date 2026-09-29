@@ -21,7 +21,7 @@ fi
 
 ; Writes the list's first items, emptying the file first. The task opens its
 ; own copy of the File, which `hold` lets it change.
-task start(hold file: File@r) -> unit ~ FileError
+task start(hold file: File@r) -> nothing ~ FileError
     region w
     file.open(FileMode.Write) at w { failure e
         <- fail e

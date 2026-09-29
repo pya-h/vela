@@ -1,5 +1,0 @@
-; error: 3:14: unit is only allowed as a return type
-task main()
-    bind p: ^unit = none
-    show(1)
-fi

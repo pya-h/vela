@@ -897,7 +897,7 @@ impl Checker {
                     if let Some(param) = t.params.first() {
                         return err(param.span, "task 'main' cannot take parameters");
                     }
-                    if t.ret != Type::Unit {
+                    if t.ret != Type::Nothing {
                         return err(t.ret_span(), "task 'main' cannot return a value");
                     }
                 }
@@ -1588,8 +1588,8 @@ impl Checker {
             if result == Type::Region {
                 return err(span, "a task can't send a region; regions are only parameters, as in 'task build(r: region)'");
             }
-            if result == Type::Unit {
-                return err(span, "unit is only allowed as a task's whole return type, so it can't be one of several results");
+            if result == Type::Nothing {
+                return err(span, "'nothing' is only allowed as a task's whole return type, so it can't be one of several results");
             }
             let ret = self.resolve_type(&result, span, TypePlace::Header)?;
             if let Some(region) = ret.regions().into_iter().find(|r| !named.iter().any(|n| n == r)) {
@@ -1622,11 +1622,11 @@ impl Checker {
             results.push(ret);
         }
         t.ret = match results.len() {
-            0 => Type::Unit,
-            1 => results.into_iter().next().unwrap_or(Type::Unit),
+            0 => Type::Nothing,
+            1 => results.into_iter().next().unwrap_or(Type::Nothing),
             _ => Type::Results(results),
         };
-        // A `unit ~ E` task succeeds by reaching its end or a bare `<-`, so a
+        // A `nothing ~ E` task succeeds by reaching its end or a bare `<-`, so a
         // name for its result would have nothing to hold.
         if !sends_value(&t.ret)
             && let Some((name, at)) = t.result_names().next()
@@ -1846,26 +1846,26 @@ impl Checker {
     }
 
     /// A type written in the source must be a builtin type, a shape, or a kind.
-    /// `unit` is only valid as a return type, which is checked separately, and
-    /// as the value side of `unit ~ E`.
+    /// `nothing` is only valid as a return type, which is checked separately, and
+    /// as the value side of `nothing ~ E`.
     fn check_type(&self, ty: &Type, span: Span) -> Result<()> {
         match ty {
-            Type::Unit => err(self.place(span, "unit"), "unit is only allowed as a return type"),
+            Type::Nothing => err(self.place(span, "nothing"), "'nothing' is only allowed as a return type"),
             Type::Region => err(self.place(span, "region"), "'region' is only the type of a task's parameter, as in 'task build(r: region)'"),
             // Only a task's header lists several types, and `check_header`
             // checks each of them on its own.
             Type::Results(_) => err(span, "several types, separated by commas, are only a task's results"),
             Type::Ptr(inner, _) => self.check_type(inner, span),
             Type::Array(inner, _) | Type::Slice(inner, _) => match inner.as_ref() {
-                Type::Unit => {
+                Type::Nothing => {
                     let what = if matches!(ty, Type::Array(..)) { "an array" } else { "a slice" };
-                    err(self.place(span, "unit"), format!("{} can't hold unit, which has no value", what))
+                    err(self.place(span, "nothing"), format!("{} can't hold 'nothing', which has no value", what))
                 }
                 _ => self.check_type(inner, span),
             },
             Type::Maybe(inner) => match inner.as_ref() {
                 Type::Maybe(_) => err(span, "a maybe can't hold another maybe"),
-                Type::Unit => err(self.place(span, "unit"), "a maybe can't hold unit, which has no value"),
+                Type::Nothing => err(self.place(span, "nothing"), "a maybe can't hold 'nothing', which has no value"),
                 _ => self.check_type(inner, span),
             },
             Type::Or(value, error) => {
@@ -1875,11 +1875,11 @@ impl Checker {
                 if matches!(value.as_ref(), Type::Or(..)) || matches!(error.as_ref(), Type::Or(..)) {
                     return err(self.place(span, "~"), "a type has one error type: '~' can't appear twice");
                 }
-                if **value != Type::Unit {
+                if **value != Type::Nothing {
                     self.check_type(value, span)?;
                 }
                 match error.as_ref() {
-                    Type::Unit => return err(self.place(span, "~"), "the error type can't be unit"),
+                    Type::Nothing => return err(self.place(span, "~"), "the error type can't be 'nothing'"),
                     Type::Maybe(_) => return err(self.place(span, "~"), "the error type can't be a maybe"),
                     _ => self.check_type(error, span)?,
                 }
@@ -1938,12 +1938,12 @@ impl Checker {
             Type::Ptr(..) => Some(format!("a pointer ({}), whose value can change", ty)),
             Type::Slice(..) => Some(format!("a slice ({}), whose items can change", ty)),
             Type::Array(..) => Some(format!("an array ({})", ty)),
-            Type::Unit => Some("unit, which has no value".to_string()),
+            Type::Nothing => Some("'nothing', which has no value".to_string()),
             Type::Named(name, _) if self.changeable.contains(name) => {
                 Some(format!("'{}', which holds a pointer, a slice, or an array", unqualified(name)))
             }
             Type::Maybe(inner) => self.changeable_item(inner),
-            Type::Or(value, error) => self.changeable_item(value).filter(|_| **value != Type::Unit).or_else(|| self.changeable_item(error)),
+            Type::Or(value, error) => self.changeable_item(value).filter(|_| **value != Type::Nothing).or_else(|| self.changeable_item(error)),
             Type::Tuple(items) => items.iter().find_map(|item| self.changeable_item(item)),
             _ => None,
         }
@@ -2614,7 +2614,7 @@ impl Checker {
                     ExprKind::MethodCall { .. } => Ok(()),
                     // A method call left unread, whose mistake is reported, counts as one.
                     ExprKind::PlanB { value, .. }
-                        if e.ty == Some(Type::Unit) || matches!(value.kind, ExprKind::Call { .. } | ExprKind::Scan { .. } | ExprKind::MethodCall { .. }) =>
+                        if e.ty == Some(Type::Nothing) || matches!(value.kind, ExprKind::Call { .. } | ExprKind::Scan { .. } | ExprKind::MethodCall { .. }) =>
                     {
                         Ok(())
                     }
@@ -2795,7 +2795,7 @@ impl Checker {
             }
             StmtKind::Match(expr, cases) => self.check_match(span, expr, cases, None).map(|_| ()),
             StmtKind::Send(values) => {
-                let ret = self.current_ret.clone().unwrap_or(Type::Unit);
+                let ret = self.current_ret.clone().unwrap_or(Type::Nothing);
                 let expected = ret.results();
                 if values.is_empty() {
                     if !self.result_names.is_empty() {
@@ -3080,7 +3080,7 @@ impl Checker {
         }
         if let StmtKind::Expr(e) = &mut last.kind {
             let ty = self.check_expr(e)?;
-            if ty == Type::Unit {
+            if ty == Type::Nothing {
                 return err(e.span, format!("the last line of a {} gives its value, but this has none", branches.each));
             }
             return Ok(Some((ty, e.span)));
@@ -3214,7 +3214,7 @@ impl Checker {
             }
             (PatternKind::Value(names), Type::Maybe(inner)) => self.bound_names(names, inner, false),
             (PatternKind::Value(names), Type::Or(value, _)) => {
-                if **value == Type::Unit && names.name != DISCARD {
+                if **value == Type::Nothing && names.name != DISCARD {
                     return err(names.span, "this success has no value to name; write '{_}'");
                 }
                 self.bound_names(names, value, false)
@@ -3547,7 +3547,7 @@ impl Checker {
         if ty.unknown() {
             return Ok(Type::Unknown);
         }
-        if matches!(ty, Type::Unit) {
+        if matches!(ty, Type::Nothing) {
             return err(base.span, "this has no value, so no type to read");
         }
         expr.kind = match ty.params().is_empty() {
@@ -3744,7 +3744,7 @@ impl Checker {
                 at,
                 format!("cannot infer the type of '{}' from 'fail …'; give it a type, such as '{}: int ~ {}'", name, name, error),
             ),
-            Type::Unit => err(at, "this expression has no value (its type is unit)"),
+            Type::Nothing => err(at, "this expression has no value (its type is 'nothing')"),
             other if unsettled(other) => err(
                 at,
                 format!("cannot infer the type of '{0}' from none or 'fail …' in its value; give it a type, such as '{0}: {1}'", name, settled_example(other)),
@@ -3868,7 +3868,7 @@ impl Checker {
                     for arg in args.iter_mut() {
                         self.check_shown(arg)?;
                     }
-                    return Ok(Type::Unit);
+                    return Ok(Type::Nothing);
                 }
                 // `int(x)` and `float(x)`: a value turned into a number, as
                 // `text(x) at r` turns one into text.
@@ -4024,7 +4024,7 @@ impl Checker {
             ExprKind::Range(..) => err(span, "a range can only be used in 'each' or to take part of an array or slice, as in 'xs[1..3]'"),
             ExprKind::Fail(error) => {
                 let ty = self.check_expr(error)?;
-                if matches!(ty, Type::Unit | Type::None | Type::Fail(_) | Type::Maybe(_) | Type::Or(..)) {
+                if matches!(ty, Type::Nothing | Type::None | Type::Fail(_) | Type::Maybe(_) | Type::Or(..)) {
                     return err(error.span, format!("'fail' needs an error value, got {}", ty));
                 }
                 Ok(Type::Fail(Box::new(ty)))
@@ -4079,9 +4079,9 @@ impl Checker {
                 })?,
             });
         }
-        let items = joined.unwrap_or(Type::Unit);
-        if items == Type::Unit {
-            return err(span, "an array can't hold unit, which has no value");
+        let items = joined.unwrap_or(Type::Nothing);
+        if items == Type::Nothing {
+            return err(span, "an array can't hold 'nothing', which has no value");
         }
         // `none` alone, or `fail e`, becomes part of a type an annotation gives.
         if !unsettled(&items) {
@@ -4097,8 +4097,8 @@ impl Checker {
     /// Checks `[value#count]` outside `new`, an array, and returns its type.
     fn check_repeat(&mut self, value: &mut Expr, count: &mut Expr, span: Span) -> Result<Type> {
         let items = self.check_expr(value)?;
-        if items == Type::Unit {
-            return err(value.span, "an array can't hold unit, which has no value");
+        if items == Type::Nothing {
+            return err(value.span, "an array can't hold 'nothing', which has no value");
         }
         let count_ty = self.check_expr(count)?;
         self.expect_type(&count_ty, &Type::Int, count.span)?;
@@ -4230,7 +4230,7 @@ impl Checker {
     }
 
     /// Checks `items.add(…)` or `items.del(…)`, a change to a slice at `span`,
-    /// and returns its type: `unit` for `add`, the item taken out for `del`.
+    /// and returns its type: `nothing` for `add`, the item taken out for `del`.
     /// The slice must be in a place that can be assigned, since its length
     /// changes, and `add` needs to allocate in the slice's region, which may
     /// need more room.
@@ -4292,7 +4292,7 @@ impl Checker {
             // couldn't work out; the arguments are still read (`Type::Unknown`).
             _ if ty.unknown() => {
                 self.check_each(args);
-                return Ok(Type::Unit);
+                return Ok(Type::Nothing);
             }
             Type::Array(..) => {
                 return err(
@@ -4338,7 +4338,7 @@ impl Checker {
                     span,
                     format!("adding to a slice may need more room in its region '{0}', which this task only names in its types; take it as a parameter, '{0}: region'", region),
                 ),
-                _ => self.visible_region(region, span, true).map(|()| Type::Unit),
+                _ => self.visible_region(region, span, true).map(|()| Type::Nothing),
             },
             _ => err(
                 span,
@@ -4453,7 +4453,7 @@ impl Checker {
             Type::Or(..) if part == *ty => extract_hint(&[ty]),
             Type::Or(..) => "; a value that can fail is read first, with a plan B, match, or is".to_string(),
             Type::Maybe(inner) if matches!(inner.as_ref(), Type::Or(..)) => extract_hint(&[&part]),
-            Type::Unit => "; this has no value".to_string(),
+            Type::Nothing => "; this has no value".to_string(),
             _ => self.no_own_str(&part),
         };
         format!("{} as text{}{}", ty, holds, hint)
@@ -4706,7 +4706,7 @@ impl Checker {
         }
         if !holds_pointers(&ty, &self.regional) && !holds_text(&ty, &self.takes_region) && ty.params().is_empty() {
             let what = match ty {
-                Type::Unit => "this has no value".to_string(),
+                Type::Nothing => "this has no value".to_string(),
                 _ => format!("this value is {}, which holds no text, slice, or pointer; use it as it is", ty),
             };
             return err(span, format!("'copy' copies what a value holds in a region, but {}", what));
@@ -4871,14 +4871,14 @@ impl Checker {
     }
 
     /// Checks a plan B's statements: the last line gives the value, unless every
-    /// path through the block sends, or there is no value to give (`unit ~ E`).
+    /// path through the block sends, or there is no value to give (`nothing ~ E`).
     ///
     /// Returns the plan B's type, and the last line's position, when the last line
     /// settles it: a value holding no pointers (of `ANY_REGION`, such as
     /// `first(none)`) has nothing to extract that lives anywhere, so the plan B
     /// takes the fallback's regions.
     fn check_plan_b_body(&mut self, span: Span, extracted: &Type, body: &mut Block) -> Result<Option<(Type, Span)>> {
-        if *extracted == Type::Unit {
+        if *extracted == Type::Nothing {
             return self.check_block(body).map(|()| None);
         }
         // Whether the plan B has to give a value depends on the type the checker
@@ -4900,7 +4900,7 @@ impl Checker {
         self.check_block(rest)?;
         if let StmtKind::Expr(e) = &mut last.kind {
             let ty = self.check_expr(e)?;
-            if ty == Type::Unit {
+            if ty == Type::Nothing {
                 return err(e.span, format!("the last line of a plan B gives its value, but this has none; expected a value of type {}", extracted));
             }
             // `v { none }`: the whole is a `maybe`, the value when there is one
@@ -5580,7 +5580,7 @@ impl Checker {
             Type::Bool => format!("; a bool becomes a number with 'int', as in '{}(int(ok))'", into),
             Type::Ptr(..) => format!("; to turn the value it points to into a number, write '{}(p^)'", into),
             Type::Maybe(_) | Type::Or(..) => extract_hint(&[&ty]),
-            Type::Unit => "; this has no value".to_string(),
+            Type::Nothing => "; this has no value".to_string(),
             Type::Named(..) | Type::Applied(_) => "; a shape or kind becomes a number only through a task that reads it".to_string(),
             Type::Param(_) => format!("; {} is any type here, and no word requires a number", ty),
             _ => String::new(),
@@ -6806,7 +6806,7 @@ impl Checker {
                     wrap(expr, expected);
                     return Ok(());
                 }
-                if **value != Type::Unit {
+                if **value != Type::Nothing {
                     let fits_value = fits_regions(&actual, value)
                         || matches!(value.as_ref(), Type::Maybe(inner) if actual == Type::None || fits_regions(&actual, inner))
                         || self.coerce_items(expr, value)?;
@@ -6826,7 +6826,7 @@ impl Checker {
     }
 
     /// Gives a call of a generic task the types no argument named, from the type
-    /// of the place its value goes: `bind a: maybe int = nothing()` says that
+    /// of the place its value goes: `bind a: maybe int = empty()` says that
     /// `nothing`'s `T` is `int`. A call whose types are all known already, and
     /// any other expression, is left as it is.
     fn settle_types(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
@@ -6835,7 +6835,7 @@ impl Checker {
             return Ok(());
         }
         let name = name.clone();
-        let sent = expr.ty.clone().unwrap_or(Type::Unit);
+        let sent = expr.ty.clone().unwrap_or(Type::Nothing);
         let mut given: HashMap<String, Type> = HashMap::new();
         self.match_params(&sent, expected, &mut given);
         if given.is_empty() {
@@ -6924,7 +6924,7 @@ fn item_type_example(array: &Type) -> Type {
 /// `maybe`, since the whole then has no value when both are empty. A plan B on
 /// a value holding a `maybe` already gives one anyway, so nothing changes.
 fn gives_a_maybe(extracted: &Type, given: &Type) -> Option<Type> {
-    let plain = !matches!(extracted, Type::Maybe(_) | Type::Unit) && !extracted.unknown();
+    let plain = !matches!(extracted, Type::Maybe(_) | Type::Nothing) && !extracted.unknown();
     (plain && matches!(given, Type::None | Type::Maybe(_))).then(|| Type::Maybe(Box::new(extracted.clone())))
 }
 
@@ -6949,8 +6949,8 @@ fn wrap(expr: &mut Expr, ty: &Type) {
 fn extract_hint(types: &[&Type]) -> String {
     match types.iter().find(|t| matches!(t, Type::Maybe(_) | Type::Or(..) | Type::Fail(_))) {
         Some(Type::Fail(_)) => "; 'fail' takes only the value right after it, so write 'fail (a + b)'".to_string(),
-        Some(Type::Or(value, error)) if **value == Type::Unit => {
-            format!("; a 'unit ~ {}' has no value, only an error to handle, as in 'x {{ failure e … }}'", error)
+        Some(Type::Or(value, error)) if **value == Type::Nothing => {
+            format!("; a 'nothing ~ {}' has no value, only an error to handle, as in 'x {{ failure e … }}'", error)
         }
         Some(ty) => format!("; the value in this {} must be extracted first, as in 'x {{ … }}' or 'when x is {{value}}'", ty),
         None => String::new(),
@@ -7684,7 +7684,7 @@ fn join_types(a: &Type, b: &Type) -> Option<Type> {
     if fits_regions(a, b) {
         return Some(b.clone());
     }
-    let plain = |ty: &Type| !matches!(ty, Type::None | Type::Fail(_) | Type::Unit | Type::Maybe(_) | Type::Or(..));
+    let plain = |ty: &Type| !matches!(ty, Type::None | Type::Fail(_) | Type::Nothing | Type::Maybe(_) | Type::Or(..));
     match (a, b) {
         (Type::Array(x, n), Type::Array(y, m)) if n == m => join_types(x, y).map(|items| Type::Array(Box::new(items), *n)),
         (Type::Tuple(x), Type::Tuple(y)) if x.len() == y.len() => x.iter().zip(y).map(|(x, y)| join_types(x, y)).collect::<Option<Vec<_>>>().map(Type::Tuple),
@@ -7738,7 +7738,7 @@ fn place_region(place: &Expr) -> Option<String> {
 /// shapes and kinds: each part counts at least 8 bytes, which covers padding.
 fn value_bytes(ty: &Type, sizes: &HashMap<String, u128>) -> u128 {
     match ty {
-        Type::Unit => 0,
+        Type::Nothing => 0,
         Type::Named(name, _) => sizes.get(name).copied().unwrap_or(8),
         // A shape given types is as large as the shape itself, whose fields of a
         // type it takes are counted as a word each (see `check_sizes`).
@@ -7759,9 +7759,9 @@ fn fields_bytes(fields: &[Field], sizes: &HashMap<String, u128>) -> u128 {
 }
 
 /// Whether a task with return type `ret` must send a value: every return type
-/// except `unit` and `unit ~ E`, which succeed by reaching their end.
+/// except `nothing` and `nothing ~ E`, which succeed by reaching their end.
 fn sends_value(ret: &Type) -> bool {
-    !matches!(ret, Type::Unit) && !matches!(ret, Type::Or(value, _) if **value == Type::Unit)
+    !matches!(ret, Type::Nothing) && !matches!(ret, Type::Or(value, _) if **value == Type::Nothing)
 }
 
 /// The shapes and kinds a value of type `ty` contains by value (not behind a
@@ -7816,7 +7816,7 @@ fn constructible(ty: &Type, can: &HashSet<&str>) -> bool {
         Type::Ptr(inner, _) | Type::Array(inner, _) => constructible(inner, can),
         // A slice may be empty, as a new one is, which needs no item.
         Type::Slice(..) => true,
-        Type::Or(value, error) => **value == Type::Unit || constructible(value, can) || constructible(error, can),
+        Type::Or(value, error) => **value == Type::Nothing || constructible(value, can) || constructible(error, can),
         Type::Tuple(items) => items.iter().all(|item| constructible(item, can)),
         _ => true,
     }

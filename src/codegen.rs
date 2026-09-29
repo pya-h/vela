@@ -111,7 +111,7 @@ impl Default for Generator {
             kinds: HashMap::new(),
             shapes: HashMap::new(),
             copied_through: HashSet::new(),
-            ret: Type::Unit,
+            ret: Type::Nothing,
             regions: Vec::new(),
             results: Vec::new(),
             task: String::new(),
@@ -352,7 +352,7 @@ impl Generator {
     }
 
     /// The struct of a `maybe T` (`has`, `value`), a `T ~ E` (`ok`, `value`,
-    /// `error`; no `value` for `unit ~ E`), several results (`r0`, `r1`, …),
+    /// `error`; no `value` for `nothing ~ E`), several results (`r0`, `r1`, …),
     /// an array (`items`), or a slice (`items`, a pointer, `len`, and `room`,
     /// where `add` puts more items; see `vela__rt__items_insert`). A
     /// `maybe`'s and an `or`'s members are always initialized, so either can be
@@ -382,7 +382,7 @@ impl Generator {
             }
             Type::Or(value, error) => {
                 self.w.line("bool ok;");
-                if **value != Type::Unit {
+                if **value != Type::Nothing {
                     self.w.line(&format!("{} value;", c_type(value)));
                 }
                 self.w.line(&format!("{} error;", c_type(error)));
@@ -754,7 +754,7 @@ impl Generator {
                 self.w.close();
             }
             Type::Or(value, error) => {
-                let fix_value = **value != Type::Unit && self.needs_fix(value);
+                let fix_value = **value != Type::Nothing && self.needs_fix(value);
                 if fix_value {
                     self.w.open("if (v->ok)");
                     self.w.line(&format!("{}(c, &v->value);", copy_helper("fix", &fix_type(value))));
@@ -1053,7 +1053,7 @@ impl Generator {
             let function = crate::library::native(&t.name).ok_or_else(|| Error::internal_at(t.span, format!("the runtime has no body for the native task '{}'", t.name)))?;
             let args: Vec<String> = t.params.iter().map(|param| c_ident(&param.name)).collect();
             let call = format!("{}({})", function, args.join(", "));
-            self.w.line(&if t.ret == Type::Unit { format!("{};", call) } else { format!("return {};", call) });
+            self.w.line(&if t.ret == Type::Nothing { format!("{};", call) } else { format!("return {};", call) });
             self.w.close();
             return Ok(());
         }
@@ -1070,8 +1070,8 @@ impl Generator {
         }
         self.gen_block(&t.body)?;
         match &t.ret {
-            Type::Unit => self.w.line("return;"),
-            Type::Or(value, _) if **value == Type::Unit => {
+            Type::Nothing => self.w.line("return;"),
+            Type::Or(value, _) if **value == Type::Nothing => {
                 self.w.line(&format!("return {};", success(&t.ret)));
             }
             // Reaching the end of a task sends its results as they are.
@@ -1458,7 +1458,7 @@ impl Generator {
                 // Each value is stored before any of them is, since a place
                 // assigned here may be read by a later value.
                 for (value, expr) in given.iter_mut().zip(values) {
-                    if matches!(expr.ty()?, Type::Unit) {
+                    if matches!(expr.ty()?, Type::Nothing) {
                         // A call that sends nothing, received by `_`: it runs here
                         // (or already has, as a prelude, when it wrote nothing).
                         if !value.is_empty() {
@@ -1867,7 +1867,7 @@ impl Generator {
             let in_order = last_prelude.is_some_and(|last| i < last || (i + 1 < operands.len() && !variable));
             // A value-less operand (`xs.add(v)`, or a call of a task sending
             // nothing, in a list of values) runs in order as a statement.
-            if in_order && *operand.ty()? == Type::Unit {
+            if in_order && *operand.ty()? == Type::Nothing {
                 if !value.is_empty() {
                     self.w.line(&format!("{};", value));
                 }
@@ -2540,8 +2540,8 @@ impl Generator {
                 if let ExprKind::Fail(error) = &inner.kind {
                     return Ok(format!("(({}){{ .ok = false, .error = {} }})", ctype, self.gen_expr(error)?));
                 }
-                if **value == Type::Unit {
-                    return Err(Error::internal_at(e.span, "a value wrapped as the success of 'unit ~ E'"));
+                if **value == Type::Nothing {
+                    return Err(Error::internal_at(e.span, "a value wrapped as the success of 'nothing ~ E'"));
                 }
                 Ok(format!("(({}){{ .ok = true, .value = {} }})", ctype, self.gen_expr(inner)?))
             }
@@ -2583,7 +2583,7 @@ impl Generator {
             },
             _ => extracted,
         };
-        let result = if result_ty == Type::Unit {
+        let result = if result_ty == Type::Nothing {
             String::new()
         } else {
             let result = self.fresh_temp("value");
@@ -2812,7 +2812,7 @@ fn result_member(i: usize) -> String {
     format!("r{}", i)
 }
 
-/// The success of a `unit ~ E` task, as a C compound literal.
+/// The success of a `nothing ~ E` task, as a C compound literal.
 fn success(ret: &Type) -> String {
     format!("(({}){{ .ok = true }})", c_type(ret))
 }
@@ -2888,7 +2888,7 @@ impl Layout<'_> {
             Type::Int | Type::Float | Type::Ptr(..) | Type::None | Type::Region => (8, 8),
             Type::Maybe(inner) if is_pointer(inner) => (8, 8),
             Type::Bool => (1, 1),
-            Type::Unit => (0, 1),
+            Type::Nothing => (0, 1),
             Type::Text(_) => (16, 8),
             Type::Slice(..) => (24, 8),
             Type::Fail(error) => self.of(error),
@@ -2897,7 +2897,7 @@ impl Layout<'_> {
                 (size.saturating_mul(usize::try_from(*count).unwrap_or(usize::MAX)), align)
             }
             Type::Maybe(inner) => self.struct_layout([&Type::Bool, inner.as_ref()]),
-            Type::Or(value, error) if **value == Type::Unit => self.struct_layout([&Type::Bool, error.as_ref()]),
+            Type::Or(value, error) if **value == Type::Nothing => self.struct_layout([&Type::Bool, error.as_ref()]),
             Type::Or(value, error) => self.struct_layout([&Type::Bool, value.as_ref(), error.as_ref()]),
             Type::Results(types) | Type::Tuple(types) => self.struct_layout(types.iter()),
             Type::Named(name, _) => {
@@ -3818,7 +3818,7 @@ fn c_type(ty: &Type) -> String {
         Type::Float => "double".to_string(),
         Type::Bool => "bool".to_string(),
         Type::Text(_) => "vela__rt__text".to_string(),
-        Type::Unit => "void".to_string(),
+        Type::Nothing => "void".to_string(),
         Type::None => "void*".to_string(),
         Type::Ptr(t, _) => format!("{}*", c_type(t)),
         Type::Named(n, _) => mangle(n),

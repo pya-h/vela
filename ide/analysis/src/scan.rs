@@ -27,7 +27,7 @@ use crate::types::{Context, slashed};
 #[serde(rename_all = "kebab-case")]
 pub enum TokenClass {
     Keyword,
-    /// `int`, `float`, `bool`, `text`, `unit` where a type is written.
+    /// `int`, `float`, `bool`, `text`, `nothing` where a type is written.
     TypeBuiltin,
     /// A shape or kind name.
     Type,

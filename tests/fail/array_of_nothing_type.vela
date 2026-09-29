@@ -1,0 +1,4 @@
+; error: 3:19: an array can't hold 'nothing', which has no value
+task main()
+    bind values: [nothing#2] = [1, 2]
+fi

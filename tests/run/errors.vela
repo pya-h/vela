@@ -1,5 +1,5 @@
 ; `T ~ E`: a task that can fail sends a value or `fail error`. `match`, `is`,
-; and plan B read the result; `unit ~ E` succeeds with a bare `<-` or by
+; and plan B read the result; `nothing ~ E` succeeds with a bare `<-` or by
 ; reaching its end.
 
 kind BadSize
@@ -29,7 +29,7 @@ task explain(e: BadSize) -> text
     fi
 fi
 
-task save(size: int) -> unit ~ text
+task save(size: int) -> nothing ~ text
     when size > 100
         <- fail "too big"
     fi
@@ -50,7 +50,7 @@ task lookup(key: text) -> maybe int ~ text
     <- none
 fi
 
-task save_twice(size: int) -> unit ~ text
+task save_twice(size: int) -> nothing ~ text
     save(size) { failure e
         <- fail e
     }

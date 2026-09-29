@@ -1,5 +1,5 @@
 ; error: 9:9: 'fail e' makes a failure, but nothing here is named 'e'; a plan B names its failure with 'failure e' on its first line, and '<- fail e' sends one
-task save(n: int) -> unit ~ text
+task save(n: int) -> nothing ~ text
     <- fail "x"
 fi
 

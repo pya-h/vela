@@ -1,0 +1,8 @@
+; error: 2:30: the error type can't be 'nothing'
+task parse(t: text) -> int ~ nothing
+    <- 1
+fi
+
+task main()
+    show(1)
+fi

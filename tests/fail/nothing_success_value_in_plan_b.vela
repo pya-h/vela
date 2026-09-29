@@ -1,0 +1,7 @@
+; error: 6:24: this expression has no value (its type is 'nothing')
+task save() -> nothing ~ text
+fi
+
+task main()
+    bind done = save() { }
+fi

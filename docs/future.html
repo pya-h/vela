@@ -388,7 +388,7 @@
         </div>
         <div class="card">
           <h3>A complete checker <span class="badge b-done">Done</span></h3>
-          <p>Block scopes, declaration order, unknown types, <code>none</code>, <code>unit</code>, and a send on every path are all checked by Vela, so mistakes no longer surface as C compiler errors.</p>
+          <p>Block scopes, declaration order, unknown types, <code>none</code>, <code>nothing</code>, and a send on every path are all checked by Vela, so mistakes no longer surface as C compiler errors.</p>
         </div>
         <div class="card">
           <h3>Portable C output <span class="badge b-done">Done</span></h3>
@@ -658,7 +658,7 @@ fi</pre>
           join, a loop's body sets nothing for certain since it might not run, and the same state answers reads,
           bare <code>&lt;-</code>s, and the end of the task. A named result is a C local, zero-initialized so that
           a gap in that analysis would still read a defined value, and reaching the end of the task returns them.
-          A <code>unit ~ E</code> task succeeds by reaching its end, so its result has no value to name.
+          A <code>nothing ~ E</code> task succeeds by reaching its end, so its result has no value to name.
         </p>
       </div>
     </section>
@@ -864,7 +864,7 @@ fi
 
 show(first(ns))                 ; 4 — the argument says T is int
 show(first&lt;text@r&gt;(names))       ; Ada — or the call writes it out
-bind empty: maybe int = nothing()   ; or the place the value goes says it
+bind blank: maybe int = empty()   ; or the place the value goes says it
 bind count = Box { value: 1 }   ; Box&lt;int&gt;: the value given says which type
 bind kept: Box&lt;text&gt;@r = Box { value: name }   ; its text is in r
 show(biggest(true, false))      ; error: task 'biggest' takes a type that is 'ordered' …</pre>
@@ -960,7 +960,7 @@ hold y: maybe float = none</pre>
           <code>^maybe int@r</code>. A brace form (<code>maybe{int}</code>) was considered and rejected: braces would
           mean a type argument, a pattern, a plan B, and a shape literal at once, and generics written with braces
           would collide with plan B in expressions.</li>
-        <li>A <code>maybe</code> can't hold another <code>maybe</code>, or <code>unit</code>.</li>
+        <li>A <code>maybe</code> can't hold another <code>maybe</code>, or <code>nothing</code>.</li>
         <li>A plain value never becomes a <code>maybe</code> in arithmetic or comparisons: <code>m + 1</code> is an
           error that says to extract it first, and <code>==</code> compares a <code>maybe</code> only with
           <code>none</code>.</li>
@@ -1091,7 +1091,7 @@ fi</pre>
         <li>In a plan B, a first line <code>failure e</code> names the failure it handles. The form
           <code>{ err: ErrorType</code> was considered and rejected: after a variable,
           <code>res { err: Problem }</code> is already a shape literal, and the error's type is known anyway.</li>
-        <li><code>unit ~ E</code> is a task that sends nothing when it works: a bare <code>&lt;-</code>, or reaching
+        <li><code>nothing ~ E</code> is a task that sends nothing when it works: a bare <code>&lt;-</code>, or reaching
           the end, succeeds.</li>
         <li>A call written as a statement can't drop an error by accident: when its <code>~</code> result is unused,
           that is an error (a variable holding one isn't checked for being used, yet);

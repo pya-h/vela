@@ -1,0 +1,8 @@
+; error: 7:18: 'copy' copies what a value holds in a region, but this has no value
+task empty()
+fi
+
+task main()
+    region r
+    show(empty().copy() at r)
+fi

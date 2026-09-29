@@ -38,8 +38,8 @@
     | comment:; Writes the list's first items, emptying the file first. The task opens its
  23 | ; own copy of the File, which `hold` lets it change.
     | comment:; own copy of the File, which `hold` lets it change.
- 24 | task start(hold file: File@r) -> unit ~ FileError
-    | keyword:task  task:start  punctuation:(  keyword:hold  parameter:file  punctuation::  type:File  operator:@  region:r  punctuation:)  operator:->  type-builtin:unit  operator:~  type:FileError
+ 24 | task start(hold file: File@r) -> nothing ~ FileError
+    | keyword:task  task:start  punctuation:(  keyword:hold  parameter:file  punctuation::  type:File  operator:@  region:r  punctuation:)  operator:->  type-builtin:nothing  operator:~  type:FileError
  25 |     region w
     | keyword:region  region:w
  26 |     file.open(FileMode.Write) at w { failure e

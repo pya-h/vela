@@ -18,7 +18,7 @@ task read(p: ^int@r, r: region) -> int
     <- p^ + extra^
 fi
 
-task check(t: Tree@s) -> unit ~ Tree@s
+task check(t: Tree@s) -> nothing ~ Tree@s
     when t is Leaf v
         when v < 0
             <- fail t
@@ -26,7 +26,7 @@ task check(t: Tree@s) -> unit ~ Tree@s
     fi
 fi
 
-task outer(r: region, n: int) -> unit ~ Tree@r
+task outer(r: region, n: int) -> nothing ~ Tree@r
     <- check(Leaf(n))
 fi
 

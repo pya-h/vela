@@ -1,0 +1,8 @@
+; error: 2:16: 'nothing' is only allowed as a return type
+task ignore(x: nothing)
+    show(1)
+fi
+
+task main()
+    show(2)
+fi

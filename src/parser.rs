@@ -531,7 +531,7 @@ impl Parser {
         let ret = if self.match_token(Token::Arrow) {
             self.parse_results(&mut results)?
         } else {
-            Type::Unit
+            Type::Nothing
         };
         Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None })
     }
@@ -667,7 +667,7 @@ impl Parser {
             }
         }
         Ok(if types.len() == 1 {
-            types.into_iter().next().unwrap_or(Type::Unit)
+            types.into_iter().next().unwrap_or(Type::Nothing)
         } else {
             Type::Results(types)
         })
@@ -909,7 +909,7 @@ impl Parser {
         let ret = if self.match_token(Token::Arrow) {
             self.parse_results(&mut results)?
         } else {
-            Type::Unit
+            Type::Nothing
         };
         if self.check(Token::LBrace) {
             return Err(Error::at(self.peek_span(), "a method's body starts on the line after its header, and closes with 'fi'"));
@@ -1019,7 +1019,7 @@ impl Parser {
     /// line ends after them and it carries at least one; a method is told by
     /// `alters`, by naming what it sends, by taking no parameters, or by another
     /// method above it. A kind's first method that takes parameters and sends
-    /// nothing is the one thing this can't tell apart: it names `-> unit`.
+    /// nothing is the one thing this can't tell apart: it names `-> nothing`.
     fn at_variant_payload(&self, methods: &[TaskDef]) -> bool {
         if !methods.is_empty() || matches!(self.peek(), Token::Ident(word) if word == ALTERS) {
             return false;
@@ -1054,7 +1054,7 @@ impl Parser {
         }
         Error {
             message: format!(
-                "{}; inside a kind a name with values in parentheses is a variant, which carries named values, so a method that takes values says what it sends, as in 'name(…) -> unit'",
+                "{}; inside a kind a name with values in parentheses is a variant, which carries named values, so a method that takes values says what it sends, as in 'name(…) -> nothing'",
                 error.message
             ),
             ..error

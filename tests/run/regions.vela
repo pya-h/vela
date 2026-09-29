@@ -89,7 +89,7 @@ task checked(r: region, n: int) -> ^Node@r ~ text
     <- push(r, none, temporary^)
 fi
 
-task save(n: int) -> unit ~ text
+task save(n: int) -> nothing ~ text
     region scratch
     bind copy = new int(n) at scratch
     when copy^ > 9

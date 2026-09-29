@@ -1,7 +1,7 @@
 ; error: 6:10: this has no value, so no type to read
-task nothing()
+task empty()
 fi
 
 task main()
-    show(nothing().type)
+    show(empty().type)
 fi

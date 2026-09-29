@@ -153,12 +153,12 @@ fn a_type_that_does_not_allow_what_a_task_asks_is_reported() {
 #[test]
 fn a_call_that_names_no_type_and_shows_none_is_reported() {
     let source = "\
-task nothing<T>() -> maybe T
+task empty<T>() -> maybe T
     <- none
 fi
 
 task main()
-    bind x = nothing()
+    bind x = empty()
     show(1)
 fi
 ";

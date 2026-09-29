@@ -1,0 +1,16 @@
+; error: 6:23: a 'nothing ~ Oops' task succeeds by reaching its end or a bare '<-', so 'done' has no value to name
+kind Oops
+    Bad
+fi
+
+task check(n: int) -> done: nothing ~ Oops
+    when n < 0
+        <- fail Bad
+    fi
+fi
+
+task main()
+    check(1) { failure e
+        show("bad")
+    }
+fi

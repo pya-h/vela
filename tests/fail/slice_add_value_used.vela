@@ -1,4 +1,4 @@
-; error: 5:23: this expression has no value (its type is unit)
+; error: 5:23: this expression has no value (its type is 'nothing')
 task main()
     region r
     hold xs = new [int]() at r

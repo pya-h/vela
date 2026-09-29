@@ -54,7 +54,7 @@ shape File
     priv handle: int = -1
 
     ; Opens the file as `mode` says, until `close()` or the end of `within`'s block.
-    alters open(mode: FileMode, within: region) -> unit ~ FileError
+    alters open(mode: FileMode, within: region) -> nothing ~ FileError
         when is_open(.handle)
             <- fail FileError.AlreadyOpen
         fi
@@ -68,7 +68,7 @@ shape File
     fi
 
     ; Closes the file. One its region or a copy closed is closed already.
-    alters close() -> unit ~ FileError
+    alters close() -> nothing ~ FileError
         when not is_open(.handle)
             .left_closed()
             <- fail FileError.NotOpen
@@ -121,7 +121,7 @@ shape File
     fi
 
     ; Writes `t` where writing is.
-    write(t: text@p) -> unit ~ FileError
+    write(t: text@p) -> nothing ~ FileError
         bind status = write_text(.handle, t)
         when status != 0
             <- fail error_of(status)
@@ -148,7 +148,7 @@ shape File
     fi
 
     ; Gives the file another path, on the disk and here.
-    alters rename(to: text@this) -> unit ~ FileError
+    alters rename(to: text@this) -> nothing ~ FileError
         bind status = rename_path(.path, to)
         when status != 0
             <- fail error_of(status)
@@ -157,7 +157,7 @@ shape File
     fi
 
     ; Deletes the file, closing it first when it is open.
-    alters delete() -> unit ~ FileError
+    alters delete() -> nothing ~ FileError
         when is_open(.handle)
             bind closed = close_handle(.handle)
             .handle = -1

@@ -1,0 +1,4 @@
+; error: 3:19: an array can't hold 'nothing', which has no value
+task main()
+    bind values = [show(1)]
+fi

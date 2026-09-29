@@ -1322,7 +1322,7 @@ fn outcome_patterns(ty: &Type) -> Option<Vec<(String, String, String)>> {
     };
     let value = |extracted: &Type| {
         let name = match (extracted, items(extracted)) {
-            (Type::Unit, _) => "{_}".to_string(),
+            (Type::Nothing, _) => "{_}".to_string(),
             (_, Some(parts)) => format!("{{{}}}", parts),
             _ => "{${value}}".to_string(),
         };
@@ -1492,11 +1492,11 @@ fn type_items(k: &Knowledge, at: usize, after_arrow: bool, offer_maybe: bool, af
         ("float", "64-bit floating point"),
         ("bool", "true or false"),
         ("text", "text"),
-        ("unit", "no value"),
+        ("nothing", "no value"),
     ];
     let builtin = BUILTIN_TYPES
         .iter()
-        .filter(|(_, ty)| after_arrow || *ty != Type::Unit)
+        .filter(|(_, ty)| after_arrow || *ty != Type::Nothing)
         .map(|(name, _)| CompletionItem {
             label: name.to_string(),
             kind: CompletionKind::Type,

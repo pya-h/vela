@@ -1,5 +1,5 @@
 ; error: 7:11: this success has no value to name; write '{_}'
-task save() -> unit ~ text
+task save() -> nothing ~ text
 fi
 
 task main()

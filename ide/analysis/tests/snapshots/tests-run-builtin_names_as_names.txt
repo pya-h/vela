@@ -6,8 +6,8 @@
     | comment:; without a payload written with parentheses.
   5 | shape Box
     | keyword:shape  type:Box
-  6 |     unit: int
-    | field:unit  punctuation::  type-builtin:int
+  6 |     nothing: int
+    | field:nothing  punctuation::  type-builtin:int
   7 |     show: text
     | field:show  punctuation::  type-builtin:text
   8 |     ; A field may be named like a variant of a builtin kind.
@@ -56,12 +56,12 @@
     | keyword:task  task:main  punctuation:(  punctuation:)
  35 |     bind show = 3
     | keyword:bind  variable:show  operator:=  number:3
- 36 |     hold bool = Box { unit: show, show: "shown", TooLarge: false }
-    | keyword:hold  variable:bool  operator:=  type:Box  punctuation:{  field:unit  punctuation::  variable:show  punctuation:,  field:show  punctuation::  string:"shown"  punctuation:,  field:TooLarge  punctuation::  keyword:false  punctuation:}
- 37 |     bool.unit = twice(bool.unit, 1)
-    | variable:bool  punctuation:.  field:unit  operator:=  task:twice  punctuation:(  variable:bool  punctuation:.  field:unit  punctuation:,  number:1  punctuation:)
- 38 |     show(bool.unit)
-    | builtin-fn:show  punctuation:(  variable:bool  punctuation:.  field:unit  punctuation:)
+ 36 |     hold bool = Box { nothing: show, show: "shown", TooLarge: false }
+    | keyword:hold  variable:bool  operator:=  type:Box  punctuation:{  field:nothing  punctuation::  variable:show  punctuation:,  field:show  punctuation::  string:"shown"  punctuation:,  field:TooLarge  punctuation::  keyword:false  punctuation:}
+ 37 |     bool.nothing = twice(bool.nothing, 1)
+    | variable:bool  punctuation:.  field:nothing  operator:=  task:twice  punctuation:(  variable:bool  punctuation:.  field:nothing  punctuation:,  number:1  punctuation:)
+ 38 |     show(bool.nothing)
+    | builtin-fn:show  punctuation:(  variable:bool  punctuation:.  field:nothing  punctuation:)
  39 |     show(bool.show)
     | builtin-fn:show  punctuation:(  variable:bool  punctuation:.  field:show  punctuation:)
  40 |     bind l = Light.Red()
