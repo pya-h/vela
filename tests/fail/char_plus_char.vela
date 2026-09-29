@@ -1,0 +1,4 @@
+; error: 3:14: two chars don't add up to a char: move a char by a number, as in 'c + 1', or take one from another for how far apart they are, as in 'c - 'a''
+task main()
+    show('a' + 'b')
+fi

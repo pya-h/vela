@@ -1,0 +1,5 @@
+; error: 4:15: index -1 is out of range: it is less than 0
+task main()
+    bind word = "hello"
+    show(word[-1])
+fi

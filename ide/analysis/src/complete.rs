@@ -324,8 +324,8 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 return (with_copy(items, false), word_start, byte);
             }
             Some(Type::Array(..)) => return (with_copy(members(false, false), false), word_start, byte),
-            // Text's members are its length in bytes and `str`; a number's
-            // and a bool's, `str`.
+            // Text's members are its length in bytes, `at`, and `str`; a
+            // number's, a char's, and a bool's, `str`.
             Some(Type::Text(_)) => {
                 let len = CompletionItem {
                     label: vela::ast::LEN.to_string(),
@@ -335,9 +335,17 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                     snippet: None,
                     boost: LOCAL,
                 };
-                return (with_copy(vec![len, to_text()], false), word_start, byte);
+                let at = CompletionItem {
+                    label: vela::ast::AT.to_string(),
+                    kind: CompletionKind::BuiltinFn,
+                    detail: "at(i), the byte at i as a maybe char, none out of range".to_string(),
+                    apply: None,
+                    snippet: Some(format!("{}(${{i}})", vela::ast::AT)),
+                    boost: LOCAL,
+                };
+                return (with_copy(vec![len, at, to_text()], false), word_start, byte);
             }
-            Some(Type::Int | Type::Unit | Type::Float | Type::Bool) => return (with_copy(vec![to_text()], false), word_start, byte),
+            Some(Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool) => return (with_copy(vec![to_text()], false), word_start, byte),
             Some(Type::Slice(..)) => return (with_copy(members(true, false), false), word_start, byte),
             Some(Type::Ptr(inner, _)) if matches!(**inner, Type::Array(..) | Type::Slice(..)) => {
                 return (with_copy(members(matches!(**inner, Type::Slice(..)), true), true), k.range(dot).start, byte);
@@ -966,8 +974,8 @@ fn probe(source: &str, context: Context, from: usize, to: usize) -> Checked {
     Checked::new(&text, context)
 }
 
-/// Whether `byte` is inside a comment or a text literal, where nothing is
-/// completed.
+/// Whether `byte` is inside a comment, a text literal, or a char, where
+/// nothing is completed.
 fn in_comment_or_text(source: &str, scan: &Scan, byte: usize) -> bool {
     scan.lexed.iter().any(|t| {
         let text = source.get(t.range.clone()).unwrap_or_default();
@@ -975,9 +983,10 @@ fn in_comment_or_text(source: &str, scan: &Scan, byte: usize) -> bool {
         let at_end = t.range.start < byte && byte == t.range.end;
         match &t.kind {
             LexKind::Comment => inside || at_end,
-            LexKind::Token(Token::Text(_)) => inside,
+            LexKind::Token(Token::Text(_) | Token::Char(_)) => inside,
             // A rejected literal; an unterminated one runs to the cursor.
             LexKind::Invalid(_) if text.starts_with('"') => inside || (at_end && !closes_text(text)),
+            LexKind::Invalid(_) if text.starts_with('\'') => inside || (at_end && (text.len() < 2 || !text.ends_with('\''))),
             _ => false,
         }
     })
@@ -1496,6 +1505,7 @@ fn type_items(k: &Knowledge, at: usize, after_arrow: bool, offer_maybe: bool, af
         ("float", "64-bit floating point"),
         ("bool", "true or false"),
         ("unit", "whole number from 0 to 255, one byte"),
+        ("char", "one byte, a character, as 'a'"),
         ("text", "text"),
         ("nothing", "no value"),
     ];

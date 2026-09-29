@@ -41,7 +41,7 @@ export function indentWidth(line: string, tabSize: number): number {
 
 const isBlank = (line: string) => line.trim() === "";
 
-/** A line's code: its comment removed and each string emptied to `""`. */
+/** A line's code: its comment removed, each string emptied to `""`, and each char to `''`. */
 function code(line: string): string {
   let out = "";
   for (let i = 0; i < line.length; i++) {
@@ -52,9 +52,23 @@ function code(line: string): string {
       out += '""';
       continue;
     }
+    if (char === "'") {
+      i = afterChar(line, i) - 1;
+      out += "''";
+      continue;
+    }
     out += char;
   }
   return out;
+}
+
+/** The index just after the char whose opening quote is at `start` (`'a'`, `'\''`). */
+function afterChar(line: string, start: number): number {
+  let i = start + 1;
+  while (i < line.length && line[i] !== "'") {
+    i += line[i] === "\\" ? 2 : 1;
+  }
+  return i + 1;
 }
 
 /**
@@ -78,6 +92,7 @@ function afterValue(line: string, start: number): number {
   while (i < line.length) {
     const char = line[i];
     if (char === '"') i = afterText(line, i);
+    else if (char === "'") i = afterChar(line, i);
     else if (char === "}" && depth === 0) return i + 1;
     else {
       if (char === "{") depth++;

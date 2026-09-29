@@ -345,6 +345,7 @@ impl Parser {
                     Token::Ident(_)
                         | Token::Int(_)
                         | Token::Float(_)
+                        | Token::Char(_)
                         | Token::Text(_)
                         | Token::Interpolated(_)
                         | Token::True
@@ -1631,6 +1632,7 @@ impl Parser {
                 | Token::Fi
                 | Token::Int(_)
                 | Token::Float(_)
+                | Token::Char(_)
                 | Token::Text(_)
                 | Token::Interpolated(_)
                 | Token::Ident(_)
@@ -2429,6 +2431,7 @@ impl Parser {
         let kind = match self.peek() {
             Token::Int(n) => { let v = *n; self.advance(); ExprKind::IntLit(v) }
             Token::Float(n) => { let v = *n; self.advance(); ExprKind::FloatLit(v) }
+            Token::Char(c) => { let v = *c; self.advance(); ExprKind::CharLit(v) }
             Token::Text(s) => { let v = s.clone(); self.advance(); ExprKind::TextLit(v) }
             Token::Interpolated(_) => return self.parse_interpolated(span),
             Token::True => { self.advance(); ExprKind::BoolLit(true) }
@@ -2966,8 +2969,8 @@ impl Parser {
         Ok(args)
     }
 
-    /// The name after a dot: a name, or `type`, the one reserved word read
-    /// there (`x.type`).
+    /// The name after a dot: a name, `type`, the one reserved word read there
+    /// (`x.type`), or `new` and `at` before a `(`.
     fn expect_member(&mut self) -> Result<String> {
         if self.match_token(Token::Type) {
             return Ok(TYPE_WORD.to_string());
@@ -2976,6 +2979,11 @@ impl Parser {
         if self.check(Token::New) && self.tokens.get(self.pos + 1) == Some(&Token::LParen) {
             self.advance();
             return Ok(NEW_WORD.to_string());
+        }
+        // `t.at(i)`: a keyword too, read as the method text has before its `(`.
+        if self.check(Token::At) && self.tokens.get(self.pos + 1) == Some(&Token::LParen) {
+            self.advance();
+            return Ok(AT.to_string());
         }
         self.expect_ident()
     }

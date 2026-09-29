@@ -78,6 +78,16 @@ static inline void vela__rt__show_text(vela__rt__text x) {
     vela__rt__show_line();
 }
 
+/* A char is its byte, written as it is. */
+static inline void vela__rt__write_char(uint8_t c) {
+    putchar(c);
+}
+
+static inline void vela__rt__show_char(uint8_t c) {
+    vela__rt__write_char(c);
+    vela__rt__show_line();
+}
+
 /* `==` on text compares contents. */
 static inline bool vela__rt__text_eq(vela__rt__text a, vela__rt__text b) {
     return a.len == b.len && (a.len == 0 || memcmp(a.bytes, b.bytes, (size_t)a.len) == 0);
@@ -224,6 +234,18 @@ static inline uint8_t vela__rt__unit_of(int64_t x, const char* at) {
     if (x < 0 || x > 255) {
         char written[64];
         snprintf(written, sizeof written, "%lld does not fit in a unit", (long long)x);
+        vela__rt__int_trap(written, at);
+    }
+    return (uint8_t)x;
+}
+
+/* A whole number as a `char`, the byte whose code it is: `char(n)`, and a char
+ * moved by a number, `c + 1`, computed as an int. Any number but 0 to 255 stops
+ * the program, as it does for a unit. */
+static inline uint8_t vela__rt__char_of(int64_t x, const char* at) {
+    if (x < 0 || x > 255) {
+        char written[64];
+        snprintf(written, sizeof written, "%lld does not fit in a char", (long long)x);
         vela__rt__int_trap(written, at);
     }
     return (uint8_t)x;
@@ -546,6 +568,12 @@ static inline vela__rt__text vela__rt__text_part(vela__rt__text text, int64_t fr
 }
 
 /* Room for `len` items of `size` bytes aligned to `align` in region `r`. */
+/* `t[i]`: the byte at `i`, as a char; an index out of range stops the program,
+ * as it does for an array. */
+static inline uint8_t vela__rt__text_at(vela__rt__text t, int64_t i, const char* at) {
+    return (uint8_t)t.bytes[vela__rt__index(i, t.len, at)];
+}
+
 static inline void* vela__rt__region_items(vela__rt__region* r, int64_t len, size_t size, size_t align, const char* at) {
     if (len < 0) {
         fflush(stdout);
@@ -708,6 +736,11 @@ static inline vela__rt__text vela__rt__int_str(vela__rt__region* r, int64_t x) {
     return vela__rt__text_in(r, digits, (size_t)len);
 }
 
+static inline vela__rt__text vela__rt__char_str(vela__rt__region* r, uint8_t c) {
+    char byte = (char)c;
+    return vela__rt__text_in(r, &byte, 1);
+}
+
 static inline vela__rt__text vela__rt__float_str(vela__rt__region* r, double x) {
     if (isnan(x)) {
         return vela__rt__text_in(r, "nan", 3);
@@ -736,6 +769,11 @@ static inline vela__rt__text vela__rt__text_str(vela__rt__region* r, vela__rt__t
 static inline vela__rt__text vela__rt__int_view(char* room, int64_t x) {
     int len = snprintf(room, VELA__RT__NUMBER_ROOM, "%lld", (long long)x);
     return (vela__rt__text){ room, (int64_t)len };
+}
+
+static inline vela__rt__text vela__rt__char_view(char* room, uint8_t c) {
+    room[0] = (char)c;
+    return (vela__rt__text){ room, 1 };
 }
 
 static inline vela__rt__text vela__rt__float_view(char* room, double x) {
@@ -844,6 +882,34 @@ static inline void vela__rt__put_quoted(vela__rt__writer* w, vela__rt__text x) {
     }
     vela__rt__put(w, x.bytes + from, len - from);
     VELA__RT__PUT(w, "\"");
+}
+
+/* A char inside another value, as code writes it: `'a'`, with the escapes text
+ * has and `\'`; a byte no escape writes, a control byte or one of 128 and up
+ * (part of a UTF-8 character), as `char(200)`. */
+static inline void vela__rt__put_char(vela__rt__writer* w, uint8_t c) {
+    const char* escape = NULL;
+    switch (c) {
+    case '\'': escape = "'\\''"; break;
+    case '\\': escape = "'\\\\'"; break;
+    case '\n': escape = "'\\n'"; break;
+    case '\t': escape = "'\\t'"; break;
+    case '\r': escape = "'\\r'"; break;
+    case '\0': escape = "'\\0'"; break;
+    default: break;
+    }
+    if (escape != NULL) {
+        vela__rt__put(w, escape, 4);
+        return;
+    }
+    if (c < 32 || c >= 127) {
+        char room[16];
+        int len = snprintf(room, sizeof room, "char(%u)", (unsigned)c);
+        vela__rt__put(w, room, (size_t)len);
+        return;
+    }
+    char quoted[3] = { '\'', (char)c, '\'' };
+    vela__rt__put(w, quoted, 3);
 }
 
 /* A pointer is the address it holds, as C writes one in hex: `0x7ffd…`. */

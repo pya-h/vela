@@ -135,6 +135,16 @@ describe("plan B braces", () => {
     expect(indentOfLast("task main()\n    bind x = a {\n        0\n    } + b {\n        1\n        }")).toBe(4);
   });
 
+  it("reads a char as a value, never a comment, a brace, or a string", () => {
+    // A `;`, a `{`, or a `"` between single quotes is a char.
+    expect(indentOfLast("task main()\n    bind n = m(';') {\n")).toBe(8);
+    expect(indentOfLast("task main()\n    show('{')\n")).toBe(4);
+    expect(indentOfLast("task main()\n    bind n = m('\"') {\n")).toBe(8);
+    // Its escaped quote doesn't end it, and a char inside a string's value is read too.
+    expect(indentOfLast("task main()\n    show('\\'', '{')\n")).toBe(4);
+    expect(indentOfLast('task main()\n    bind n = m("{f(\'}\')}") {\n')).toBe(8);
+  });
+
   it("reads a { naming the plan B's failure as opening its block", () => {
     expect(indentOfLast('task main()\n    bind n = parse("x") { failure e\n')).toBe(8);
     expect(indentOfLast("task main()\n    bind n = parse(t) { failure _  ; ignored\n")).toBe(8);

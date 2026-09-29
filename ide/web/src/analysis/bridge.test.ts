@@ -155,7 +155,7 @@ describe("VelaAnalysis", () => {
     const words = analysis.complete(source.replace("T: ordered", "T: "), source.indexOf("T: ") + 3).items.map((i) => i.label);
     expect(words).toEqual(["fixed", "same", "similar", "shown", "ordered"]);
     const types = analysis.complete(source.replace("first<int>", "first<>"), source.indexOf("first<int>") + "first<".length).items;
-    expect(types.map((i) => i.label)).toEqual(["int", "float", "bool", "text", "unit", "maybe"]);
+    expect(types.map((i) => i.label)).toEqual(["int", "float", "bool", "text", "unit", "char", "maybe"]);
   });
 
   it("reads a shape that takes types: highlighting, outline, hover, and completion", () => {
@@ -176,7 +176,7 @@ describe("VelaAnalysis", () => {
     expect(analysis.hover(source, source.indexOf("kept:"))?.code).toBe("bind kept: Box<text>@r");
     expect(analysis.hover(source, source.indexOf("count ="))?.code).toBe("bind count: Box<int>");
     const types = analysis.complete(source.replace("Box<int>", "Box<>"), source.indexOf("Box<int>") + "Box<".length).items;
-    expect(types.map((i) => i.label)).toEqual(["int", "float", "bool", "text", "unit", "Box", "maybe"]);
+    expect(types.map((i) => i.label)).toEqual(["int", "float", "bool", "text", "unit", "char", "Box", "maybe"]);
   });
 
   it("reads methods: highlighting, outline, hover, and completion after a dot", () => {
@@ -312,7 +312,7 @@ describe("VelaAnalysis", () => {
     expect(language.blockOpeners).toEqual(["task", "shape", "kind", "when", "loop", "each", "block", "match"]);
     expect(language.blockModifiers).toEqual(["priv"]);
     expect(language.branchKeywords).toEqual(["else", "case"]);
-    expect(language.builtinTypes).toEqual(["int", "float", "bool", "text", "unit", "nothing"]);
+    expect(language.builtinTypes).toEqual(["int", "float", "bool", "text", "unit", "char", "nothing"]);
     expect(language.lineComment).toBe(";");
   });
 

@@ -1,0 +1,4 @@
+; error: 3:14: '*' works on numbers, and a char is a character; turn it into its code first, as in 'int(c) * 2'
+task main()
+    show('a' * 2)
+fi

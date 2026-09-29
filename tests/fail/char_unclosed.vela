@@ -1,0 +1,4 @@
+; error: 3:10: a char isn't closed on its line; end it with a quote, as in 'a'
+task main()
+    show('a)
+fi

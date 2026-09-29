@@ -1,0 +1,4 @@
+; error: 3:11: invalid escape '\q' in a char
+task main()
+    show('\q')
+fi

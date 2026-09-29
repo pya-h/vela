@@ -45,7 +45,7 @@ pub fn language() -> Language {
         block_closer: BLOCK_CLOSER,
         method_marker: ALTERS,
         line_comment: ";",
-        brackets: vec![("(", ")"), ("{", "}"), ("[", "]"), ("\"", "\"")],
+        brackets: vec![("(", ")"), ("{", "}"), ("[", "]"), ("\"", "\""), ("'", "'")],
     }
 }
 

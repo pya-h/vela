@@ -395,6 +395,17 @@ impl Generator {
     /// The helpers for arrays and slices that the program uses, each a C
     /// function so that an array or slice given to it is evaluated once.
     fn gen_item_helpers(&mut self, used: &UsedTypes) {
+        for ty in &used.lookups {
+            let maybe = c_type(&Type::Maybe(Box::new(lookup_item(ty))));
+            if let Type::Text(_) = ty {
+                self.w.open(&format!("static {} {}(vela__rt__text t, int64_t i)", maybe, item_helper("lookup", ty)));
+                self.w.open("if (i < 0 || i >= t.len)");
+                self.w.line(&format!("return ({}){{ .has = false }};", maybe));
+                self.w.close();
+                self.w.line(&format!("return ({}){{ .has = true, .value = (uint8_t)t.bytes[i] }};", maybe));
+                self.w.close();
+            }
+        }
         for slice in &used.slice_at {
             let (ctype, items) = (c_type(slice), c_type(item_type(slice)));
             self.w.open(&format!("static {}* {}({} s, int64_t i, const char* at)", items, item_helper("at", slice), ctype));
@@ -577,7 +588,7 @@ impl Generator {
     /// either way, and text by its bytes.
     fn compare_item(&self, how: &str, ty: &Type, a: &str, b: &str) -> String {
         match ty {
-            Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Ptr(..) => format!("{} == {}", a, b),
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Ptr(..) => format!("{} == {}", a, b),
             Type::Text(_) => format!("vela__rt__text_eq({}, {})", a, b),
             // A `maybe` of a pointer is the pointer, `NULL` for none.
             Type::Maybe(inner) if is_pointer(inner) => format!("{} == {}", a, b),
@@ -1860,7 +1871,7 @@ impl Generator {
             let value = self.gen_expr(operand)?;
             let constant = matches!(
                 operand.kind,
-                ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
+                ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
             );
             // A variable after the last prelude reads the same value whenever C reads it.
             let variable = matches!(operand.kind, ExprKind::Var(_));
@@ -1932,7 +1943,7 @@ impl Generator {
             let value = self.gen_expr(operand)?;
             let constant = matches!(
                 operand.kind,
-                ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
+                ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
             );
             if in_order && !constant {
                 let tmp = self.fresh_temp("arg");
@@ -1977,6 +1988,7 @@ impl Generator {
         match &e.kind {
             ExprKind::IntLit(n) => Ok(n.to_string()),
             ExprKind::FloatLit(n) => Ok(c_float_literal(*n)),
+            ExprKind::CharLit(c) => Ok(format!("((uint8_t){})", c)),
             ExprKind::BoolLit(b) => Ok(if *b { "true".to_string() } else { "false".to_string() }),
             ExprKind::TextLit(s) => Ok(format!("VELA__RT__TEXT(\"{}\")", escape_c_string(s))),
             ExprKind::NoneLit => Ok("NULL".to_string()),
@@ -2000,6 +2012,11 @@ impl Generator {
             ExprKind::Shared { shape, field } => Ok(shared_name(shape, field)),
             ExprKind::Field(base, field) => self.gen_field(base, field),
             ExprKind::Index(base, index) => self.gen_index(e, base, index, None),
+            ExprKind::Lookup(base, index) => {
+                let [value, index] = <[String; 2]>::try_from(self.gen_operands(&[base, index])?)
+                    .map_err(|_| Error::internal_at(e.span, "a lookup without its value"))?;
+                Ok(format!("{}({}, {})", item_helper("lookup", &base.ty()?.without_regions()), value, index))
+            }
             ExprKind::Array(values) => self.gen_array(e, values),
             ExprKind::Tuple(values) => self.gen_tuple(e, values),
             ExprKind::Repeat { value, .. } => self.gen_repeat(e, value),
@@ -2045,6 +2062,7 @@ impl Generator {
                 ExprKind::ToText { value, .. } => match value.ty {
                     Some(Type::Int | Type::Unit) => (value.as_ref(), Some("vela__rt__int_view((char[VELA__RT__NUMBER_ROOM]){ 0 }, ")),
                     Some(Type::Float) => (value.as_ref(), Some("vela__rt__float_view((char[VELA__RT__NUMBER_ROOM]){ 0 }, ")),
+                    Some(Type::Char) => (value.as_ref(), Some("vela__rt__char_view((char[VELA__RT__NUMBER_ROOM]){ 0 }, ")),
                     Some(Type::Text(_)) => (value.as_ref(), None),
                     _ => (part, None),
                 },
@@ -2062,6 +2080,7 @@ impl Generator {
         let _ = e;
         let helper = match value.ty()? {
             Type::Int | Type::Unit => "vela__rt__int_str".to_string(),
+            Type::Char => "vela__rt__char_str".to_string(),
             Type::Float => "vela__rt__float_str".to_string(),
             Type::Bool => "vela__rt__bool_str".to_string(),
             Type::Text(_) => "vela__rt__text_str".to_string(),
@@ -2300,6 +2319,9 @@ impl Generator {
             (Type::Float, Type::Int | Type::Unit) => format!("((double){})", parenthesized(&expr)),
             (Type::Int, Type::Float) => format!("vela__rt__int_of_float({}, {})", expr, self.location(e.span)),
             (Type::Unit, Type::Int) => format!("vela__rt__unit_of({}, {})", expr, self.location(e.span)),
+            (Type::Char, Type::Char) | (Type::Char, Type::Unit) | (Type::Unit, Type::Char) => expr,
+            (Type::Int, Type::Char) => format!("((int64_t){})", parenthesized(&expr)),
+            (Type::Char, Type::Int) => format!("vela__rt__char_of({}, {})", expr, self.location(e.span)),
             (Type::Unit, Type::Float) => {
                 let at = self.location(e.span);
                 format!("vela__rt__unit_of(vela__rt__int_of_float({}, {}), {})", expr, at, at)
@@ -2472,6 +2494,11 @@ impl Generator {
                 let [slice, index] = <[String; 2]>::try_from(self.gen_operands(&[base, index])?)
                     .map_err(|_| Error::internal_at(e.span, "an index without its slice"))?;
                 Ok(format!("(*{}({}, {}, {}))", item_helper("at", base.ty()?), slice, index, at))
+            }
+            Type::Text(_) => {
+                let [text, index] = <[String; 2]>::try_from(self.gen_operands(&[base, index])?)
+                    .map_err(|_| Error::internal_at(e.span, "an index without its text"))?;
+                Ok(format!("vela__rt__text_at({}, {}, {})", text, index, at))
             }
             other => Err(Error::internal_at(e.span, format!("an index into a value of type {}", other))),
         }
@@ -2685,7 +2712,7 @@ impl Generator {
             let symbol = if not.is_empty() { "==" } else { "!=" };
             return Ok(match ty {
                 // A number, a bool, and a pointer are similar when equal.
-                Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Ptr(..) => format!("({} {} {})", left, symbol, other_side(&left, right, &c_type(ty))),
+                Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Ptr(..) => format!("({} {} {})", left, symbol, other_side(&left, right, &c_type(ty))),
                 Type::Maybe(inner) if is_pointer(inner) => format!("({} {} {})", left, symbol, other_side(&left, right, &c_type(ty))),
                 _ => format!("{}{}({}, {})", not, copy_helper("similar", ty), by_address(&left, ty), by_address(&right, ty)),
             });
@@ -2700,6 +2727,13 @@ impl Generator {
                 other => return Err(Error::internal_at(e.span, format!("text operator {:?}", other))),
             };
             return Ok(format!("vela__rt__text_order({}, {}) {} 0", left, right, symbol));
+        }
+        // A char moved by an int is computed as an int, and checked to be a
+        // char; the distance between two chars is an int, computed below.
+        if *e.ty()? == Type::Char {
+            let at = self.location(e.span);
+            let helper = if op == BinaryOp::Add { "add" } else { "sub" };
+            return Ok(format!("vela__rt__char_of(vela__rt__{}({}, {}, {}), {})", helper, left, right, at, at));
         }
         // Units are computed as ints, where no result of two units overflows,
         // and the result is checked to fit in a unit.
@@ -2843,6 +2877,7 @@ fn success(ret: &Type) -> String {
 fn written_helper(ty: &Type, ends: bool) -> String {
     let name = match ty {
         Type::Int | Type::Unit => "int",
+        Type::Char => "char",
         Type::Float => "float",
         Type::Bool => "bool",
         _ => "text",
@@ -2855,7 +2890,7 @@ fn written_helper(ty: &Type, ends: bool) -> String {
 /// anything else through a writer to the output (see `Generator::gen_writer`).
 fn shown(e: &Expr, ty: &Type, value: &str, ends: bool) -> Result<String> {
     let written = match ty {
-        Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Text(_) => return Ok(format!("{}({});", written_helper(ty, ends), value)),
+        Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) => return Ok(format!("{}({});", written_helper(ty, ends), value)),
         Type::Ptr(..) => format!("vela__rt__put_address(&VELA__RT__OUTPUT, (const void*){});", value),
         Type::Array(..) | Type::Slice(..) | Type::Tuple(_) | Type::Maybe(_) | Type::Named(..) => {
             format!("{}(&VELA__RT__OUTPUT, {});", write_helper(&ty.without_regions()), value)
@@ -2871,6 +2906,7 @@ fn shown(e: &Expr, ty: &Type, value: &str, ends: bool) -> Result<String> {
 fn put_item(ty: &Type, value: &str) -> String {
     match ty {
         Type::Int | Type::Unit => format!("vela__rt__put_int(w, {});", value),
+        Type::Char => format!("vela__rt__put_char(w, {});", value),
         Type::Float => format!("vela__rt__put_float(w, {});", value),
         Type::Bool => format!("vela__rt__put_bool(w, {});", value),
         Type::Text(_) => format!("vela__rt__put_quoted(w, {});", value),
@@ -2908,7 +2944,7 @@ impl Layout<'_> {
         match ty {
             Type::Int | Type::Float | Type::Ptr(..) | Type::None | Type::Region => (8, 8),
             Type::Maybe(inner) if is_pointer(inner) => (8, 8),
-            Type::Bool | Type::Unit => (1, 1),
+            Type::Bool | Type::Unit | Type::Char => (1, 1),
             Type::Nothing => (0, 1),
             Type::Text(_) => (16, 8),
             Type::Slice(..) => (24, 8),
@@ -3005,13 +3041,13 @@ fn scan_helper(ty: &Type) -> String {
 fn has_prelude(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::PlanB { .. } | ExprKind::Choice(_) | ExprKind::Edit { .. } | ExprKind::Scan { .. } => true,
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
         | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. }
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Copy { value: inner, .. } | ExprKind::ToText { value: inner, .. } => {
             has_prelude(inner)
         }
-        ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
+        ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             has_prelude(a) || has_prelude(b) || ordered(&[a, b])
         }
         ExprKind::Call { args, .. }
@@ -3061,6 +3097,8 @@ struct UsedTypes {
     /// helper that turns what the runtime reads into a value or an `InputError`.
     scanned: Vec<Type>,
     slice_at: Vec<Type>,
+    /// The values read with a lookup that gives none out of range, `t.at(i)`.
+    lookups: Vec<Type>,
     slice_part: Vec<Type>,
     slice_copy: Vec<Type>,
     slice_fill: Vec<Type>,
@@ -3103,6 +3141,7 @@ impl UsedTypes {
             read: Vec::new(),
             scanned: Vec::new(),
             slice_at: Vec::new(),
+            lookups: Vec::new(),
             slice_part: Vec::new(),
             slice_copy: Vec::new(),
             slice_fill: Vec::new(),
@@ -3219,7 +3258,7 @@ impl UsedTypes {
     fn note_write(&mut self, ty: &Type) {
         let ty = ty.without_regions();
         match &ty {
-            Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => return,
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => return,
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.note_write(inner),
             Type::Tuple(items) => items.iter().for_each(|item| self.note_write(item)),
             // A shape or kind written by default writes its parts; one that
@@ -3266,7 +3305,7 @@ impl UsedTypes {
     fn note_similar(&mut self, ty: &Type) {
         let ty = ty.without_regions();
         match &ty {
-            Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => {}
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => {}
             Type::Maybe(inner) if matches!(inner.as_ref(), Type::Ptr(..)) => {}
             _ if self.similar.contains(&ty) => {}
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => {
@@ -3347,7 +3386,7 @@ impl UsedTypes {
             self.add(ty);
         }
         match &e.kind {
-            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
+            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
             | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => {}
             ExprKind::New { ty, value, .. } if matches!(**ty, Type::Slice(..)) => {
                 let Some(slice) = &e.ty else { return };
@@ -3370,6 +3409,13 @@ impl UsedTypes {
             | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => self.expr(inner),
             // The same statement a `match` or a `when` on its own is.
             ExprKind::Choice(stmt) => self.block(std::slice::from_ref(stmt)),
+            ExprKind::Lookup(base, index) => {
+                if let Some(ty) = &base.ty {
+                    note(&mut self.lookups, &ty.without_regions());
+                }
+                self.expr(base);
+                self.expr(index);
+            }
             ExprKind::Index(base, index) => {
                 match (&index.kind, &base.ty, &e.ty) {
                     // A part of text needs no helper of its own.
@@ -3438,7 +3484,7 @@ impl UsedTypes {
             ExprKind::Join { parts, .. } => parts.iter().for_each(|part| self.expr(part)),
             ExprKind::ToText { value, .. } => {
                 if let Some(ty) = &value.ty
-                    && !matches!(ty, Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Text(_))
+                    && !matches!(ty, Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_))
                 {
                     // A shape's or kind's own `str` needs no `write`.
                     if !matches!(ty, Type::Named(name, _) if !self.parts.contains_key(name)) {
@@ -3535,12 +3581,12 @@ fn place_reads(target: &Expr, name: &str) -> bool {
 fn expr_reads(e: &Expr, name: &str) -> bool {
     match &e.kind {
         ExprKind::Var(var) | ExprKind::RegionAfter(var) => var == name,
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => false,
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => false,
         // `new` reads the region it allocates in.
         ExprKind::New { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner)
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => expr_reads(inner, name),
-        ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
+        ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             expr_reads(a, name) || expr_reads(b, name)
         }
         ExprKind::Call { args, .. } | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => {
@@ -3683,9 +3729,9 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
 /// no change to a slice, no line read. (It may still stop the program.)
 fn changes_nothing(e: &Expr) -> bool {
     match &e.kind {
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) | ExprKind::Shared { .. } => true,
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) | ExprKind::Shared { .. } => true,
         ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Unary(_, inner) | ExprKind::Wrap(inner) => changes_nothing(inner),
-        ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => changes_nothing(a) && changes_nothing(b),
+        ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => changes_nothing(a) && changes_nothing(b),
         ExprKind::Array(items) | ExprKind::Tuple(items) => items.iter().all(changes_nothing),
         _ => false,
     }
@@ -3836,7 +3882,7 @@ fn c_type(ty: &Type) -> String {
         // program has an error (see `Type::Unknown`).
         Type::Unknown => "/*unknown type*/".to_string(),
         Type::Int => "int64_t".to_string(),
-        Type::Unit => "uint8_t".to_string(),
+        Type::Unit | Type::Char => "uint8_t".to_string(),
         Type::Float => "double".to_string(),
         Type::Bool => "bool".to_string(),
         Type::Text(_) => "vela__rt__text".to_string(),
@@ -3867,6 +3913,15 @@ fn item_type(ty: &Type) -> &Type {
 /// `vela__at__slice__int`, `vela__fill__array__4__int`.
 fn item_helper(what: &str, ty: &Type) -> String {
     format!("vela__{}__{}", what, type_word(ty))
+}
+
+/// What a lookup (`t.at(i)`) into a value of type `ty` gives when it finds an
+/// item: a char of text.
+fn lookup_item(ty: &Type) -> Type {
+    match ty {
+        Type::Text(_) => Type::Char,
+        other => other.clone(),
+    }
 }
 
 /// The C name of a generated helper for copies of values of type `ty`:

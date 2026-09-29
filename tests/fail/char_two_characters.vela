@@ -1,0 +1,4 @@
+; error: 3:10: a char holds one character; for more, write text between double quotes, as in "ab"
+task main()
+    show('ab')
+fi

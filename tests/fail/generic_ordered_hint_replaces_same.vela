@@ -1,4 +1,4 @@
-; error: 3:10: '<' compares numbers or text; T is only 'same & shown' here; require it too, as in '<T: shown & ordered>'
+; error: 3:10: '<' compares numbers, chars, or text; T is only 'same & shown' here; require it too, as in '<T: shown & ordered>'
 task less<T: same & shown>(a: T, b: T) -> bool
     <- a < b
 fi

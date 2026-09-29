@@ -1,0 +1,4 @@
+; error: 3:15: 'char' takes an int, a unit, or a char, the code of the character, but this value is text; a byte of text is read with 't[i]', or 't.at(i)', which gives none out of range
+task main()
+    show(char("a"))
+fi

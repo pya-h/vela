@@ -1,0 +1,4 @@
+; error: 3:27: 'scan' reads a number, so it names 'int', 'float', or 'unit', as in 'scan("Age: ", int)'
+task main()
+    show(scan("Letter: ", char) { 'x' })
+fi

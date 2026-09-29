@@ -547,6 +547,7 @@ impl<'a> Knowledge<'a> {
             }),
             Token::Int(_) => Some(Type::Int),
             Token::Float(_) => Some(Type::Float),
+            Token::Char(_) => Some(Type::Char),
             Token::Text(_) => Some(Type::Text(None)),
             Token::True | Token::False => Some(Type::Bool),
             Token::Ident(name) => exact(q).or_else(|| {
@@ -691,6 +692,10 @@ impl<'a> Knowledge<'a> {
                         })
                     });
                 }
+                // `t.at(i)`: a byte of text, or none.
+                if open.checked_sub(1).is_some_and(|p| self.token(p) == Some(&Token::At) && self.token_before(p) == Some(&Token::Dot)) {
+                    return exact(open - 1).or(Some(Type::Maybe(Box::new(Type::Char))));
+                }
                 let Some(callee) = open.checked_sub(1).and_then(|p| self.ident(p).map(|name| (p, name))) else {
                     // A tuple, `(a, b)`, or a parenthesized expression.
                     let values = self.value_list(open + 1, q.checked_sub(1)?);
@@ -793,8 +798,9 @@ impl<'a> Knowledge<'a> {
                 (Type::Array(items, _) | Type::Slice(items, _), false) => Some(*items),
                 (Type::Slice(items, region), true) => Some(Type::Slice(items, region)),
                 (Type::Array(items, _), true) => Some(Type::Slice(items, None)),
-                // A part of text is text where the text is.
+                // A part of text is text where the text is, and a byte of it a char.
                 (text @ Type::Text(_), true) => Some(text),
+                (Type::Text(_), false) => Some(Type::Char),
                 _ => None,
             };
         }
@@ -879,6 +885,10 @@ impl<'a> Knowledge<'a> {
         let mut number: Option<Type> = None;
         for end in operand_ends {
             match (self.expression_type(end, depth + 1), &number) {
+                // A char moved by ints is a char; two chars apart are an int.
+                (Some(Type::Char), Some(Type::Char)) => number = Some(Type::Int),
+                (Some(Type::Char), Some(Type::Int)) | (Some(Type::Int), Some(Type::Char)) => number = Some(Type::Char),
+                (Some(Type::Char), None) => number = Some(Type::Char),
                 (Some(Type::Int), Some(Type::Unit)) => {}
                 (Some(Type::Unit), Some(Type::Int)) => number = Some(Type::Unit),
                 (Some(ty @ (Type::Int | Type::Float | Type::Unit)), _) if number.as_ref().is_none_or(|seen| *seen == ty) => number = Some(ty),

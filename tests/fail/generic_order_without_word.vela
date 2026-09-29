@@ -1,4 +1,4 @@
-; error: 3:12: '>' compares numbers or text; T is any type here; require it, as in '<T: ordered>'
+; error: 3:12: '>' compares numbers, chars, or text; T is any type here; require it, as in '<T: ordered>'
 task biggest<T>(a: T, b: T) -> T
     when a > b
         <- a

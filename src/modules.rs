@@ -1246,7 +1246,7 @@ impl Resolver<'_> {
         }
         match &mut expr.kind {
             // A region is a name of the task, never of the program.
-            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::RegionAfter(_) => Ok(()),
+            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::RegionAfter(_) => Ok(()),
             // Only the resolver makes one, above.
             ExprKind::Shared { .. } | ExprKind::TypeOf(_) => Ok(()),
             // A variable keeps its name. No variable can be named like a variant
@@ -1275,7 +1275,7 @@ impl Resolver<'_> {
             }
             ExprKind::Construct { args, .. } => args.iter_mut().try_for_each(|e| self.expr(e)),
             ExprKind::Field(base, _) | ExprKind::Deref(base) | ExprKind::Ref(base) | ExprKind::Unary(_, base) | ExprKind::Fail(base) | ExprKind::Wrap(base) => self.expr(base),
-            ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
+            ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
                 self.expr(a)?;
                 self.expr(b)
             }

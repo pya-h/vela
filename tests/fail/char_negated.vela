@@ -1,0 +1,4 @@
+; error: 3:10: negation requires a number, got char
+task main()
+    show(-'a')
+fi

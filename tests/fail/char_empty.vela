@@ -1,0 +1,4 @@
+; error: 3:10: '' holds no char; write one between the quotes, as in 'a', or '\'' for a quote
+task main()
+    show('')
+fi

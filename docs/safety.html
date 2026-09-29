@@ -304,10 +304,13 @@
             </tr>
             <tr>
               <td>An <code>int</code> never wraps: overflow, and division or remainder by zero, stop the program;
-                written with numbers alone, they are refused when compiling.</td>
+                written with numbers alone, they are refused when compiling. A <code>unit</code> and a
+                <code>char</code> never wrap either: a result outside 0 to 255 stops the program, and
+                <code>unit(n)</code> and <code>char(n)</code> do the same for a number that doesn't fit.</td>
               <td class="when"><span class="badge b-trapped">trapped</span></td>
-              <td>The undefined behavior C has for them. See
-                <a href="vela.html#int-limits">Numbers</a>.</td>
+              <td>The undefined behavior C has for them, and a byte that quietly wraps around. See
+                <a href="vela.html#int-limits">Numbers</a>, <a href="vela.html#units">Units</a>, and
+                <a href="vela.html#chars">Chars</a>.</td>
             </tr>
             <tr>
               <td><code>int(x)</code> of a <code>float</code> that is <code>nan</code> or too large for an
@@ -318,7 +321,9 @@
             </tr>
             <tr>
               <td>Every index and range of an array, a slice, or text is checked (a constant one when compiling),
-                a count below zero stops the program, and a part of text can't cut through a character.</td>
+                a count below zero stops the program, and a part of text can't cut through a character.
+                <code>t.at(i)</code> gives <code>none</code> out of range instead, and a byte of text, <code>t[i]</code>,
+                is never a place, so text still never changes.</td>
               <td class="when"><span class="badge b-trapped">trapped</span></td>
               <td>Reading or writing outside a value, and text that isn't UTF-8. See
                 <a href="vela.html#arrays">Arrays</a>, <a href="vela.html#slices">Slices</a>, and

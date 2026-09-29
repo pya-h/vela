@@ -1,0 +1,40 @@
+; warning: 35:20: this builds text by hand as chars; 'text' holds characters already, with its length, parts, 't[i]', joining, and '==', so prefer it, as in 'bind word = "abc"' (said once in each file)
+; A char is one byte, written 'a'. A number moves it and the distance between
+; two is an int; t[i] reads a byte of text as a char, and t.at(i) the same in a
+; maybe, none out of range. An array or slice of chars is warned about once in
+; a file, where the first is made.
+task shout(c: char) -> char
+    when c >= 'a' and c <= 'z'
+        <- c - ('a' - 'A')
+    fi
+    <- c
+fi
+
+task main()
+    hold c = 'a'
+    c = c + 1
+    show(c, " ", c.type, " ", 1 + c, " ", c - 1, " ", 'z' - 'a')
+    show(int('A'), " ", char(66), " ", char(unit(67)), " ", unit('D'), " ", char('E'))
+    ; Escapes, as in text, and a quote.
+    show('\\', '\'', '"', "|", '\t', "|")
+    bind word = "hello"
+    show(word[1], " ", word.at(0), " ", word.at(5), " ", word.at(-1))
+    hold i = 0
+    loop word.at(i) is {letter}
+        show(shout(letter))
+        i = i + 1
+    fi
+    ; Chars compare by their codes, and are written as code writes them inside
+    ; other values.
+    show('a' < 'b', " ", c == 'b', " ", c ~= 'b', " ", c <> 'b', " ", ('q', 1))
+    bind m: maybe char = 'x'
+    show(m, " ", m ~= 'x')
+    region r
+    show("c is {c}" at r, " ", c.str() at r, " ", text(c) at r)
+    ; Text built by hand: warned, once, at the first.
+    bind letters = ['h', 'i', '\n', '\'', '\0', char(200)]
+    show(letters)
+    hold more = new [char]() at r
+    more.add('!')
+    show(more)
+fi

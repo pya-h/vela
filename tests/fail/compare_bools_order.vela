@@ -1,4 +1,4 @@
-; error: 3:16: '<' compares numbers or text, not bool
+; error: 3:16: '<' compares numbers, chars, or text, not bool
 task main()
     show(false < true)
 fi

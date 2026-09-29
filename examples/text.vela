@@ -17,11 +17,11 @@ shape Card
     fi
 fi
 
-; The first word of a line: a part of it, so it lives where the line does. Text
-; has no items to read one at a time, so a byte is the part `t[i..i + 1]`.
+; The first word of a line: a part of it, so it lives where the line does.
+; `t[i]` is the byte at `i`, as a char.
 task first_word(line: text@r) -> text@r
     each i in 0..line.len
-        when line[i..i + 1] == " "
+        when line[i] == ' '
             <- line[0..i]
         fi
     fi
@@ -35,7 +35,7 @@ task initials(name: text@r, r: region) -> text@r
     hold start = true
     each i in 0..name.len
         bind letter = name[i..i + 1]
-        when letter == " "
+        when name[i] == ' '
             start = true
         else
             when start

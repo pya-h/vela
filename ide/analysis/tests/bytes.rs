@@ -1,12 +1,13 @@
 //! The byte-sized types in the editor: `unit`, a whole number from 0 to 255,
-//! hovered and completed with the compiler's types, and with the same types
+//! and `char`, a character, with `t[i]` and `t.at(i)`, hovered, completed, and
+//! colored with the compiler's types, and with the same types
 //! read from the declarations while the file doesn't check. In the sources
 //! below, `@@` marks the cursor.
 
 // A panic in a test is a test failure, so these lints do not apply here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
 
-use vela_analysis::{Analysis, CompletionItem, LineIndex};
+use vela_analysis::{Analysis, CompletionItem, LineIndex, TokenClass};
 
 const PROGRAM: &str = "\
 task twice(b: unit) -> unit
@@ -21,6 +22,13 @@ task main()
     bind n = 7
     bind cast = unit(n)
     bind doubled = twice(3)
+    hold c = 'a'
+    bind next_char = c + 1
+    bind apart = 'z' - c
+    bind word = \"hello\"
+    bind first = word[0]
+    bind found = word.at(9)
+    bind quote = '\\''
     @@
 fi
 ";
@@ -48,7 +56,7 @@ fn hover(source: &str, needle: &str) -> (String, String) {
 
 #[test]
 fn the_program_used_by_these_tests_compiles() {
-    let source = program(true, "show(next, wide, cast, doubled)");
+    let source = program(true, "show(next, wide, cast, doubled, next_char, apart, first, found, quote)");
     assert_eq!(Analysis::new(&source).diagnostics(), Vec::new());
 }
 
@@ -88,4 +96,48 @@ fn a_unit_mixed_with_an_int_is_an_error_in_the_editor_too() {
     let source = program(true, "show(n + b)");
     let diagnostics = Analysis::new(&source).diagnostics();
     assert!(diagnostics.iter().any(|d| d.message.starts_with("an int and a unit don't mix")), "{:?}", diagnostics);
+}
+
+#[test]
+fn chars_hover_with_their_type_whether_or_not_the_file_checks() {
+    for checks in [true, false] {
+        let source = program(checks, "show(0)");
+        let code = |needle: &str| hover(&source, needle).0;
+        let when = if checks { "checked" } else { "declared" };
+        assert_eq!(code("c = 'a'"), "hold c: char", "{}", when);
+        assert_eq!(code("next_char ="), "bind next_char: char", "{}", when);
+        assert_eq!(code("apart ="), "bind apart: int", "{}", when);
+        assert_eq!(code("first ="), "bind first: char", "{}", when);
+        assert_eq!(code("found ="), "bind found: maybe char", "{}", when);
+    }
+}
+
+#[test]
+fn a_char_is_colored_as_text_and_its_quote_escape_is_valid() {
+    let source = program(true, "show(quote)");
+    let analysis = Analysis::new(&source);
+    let class_at = |needle: &str, offset: usize| {
+        let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle)) + offset;
+        analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
+    };
+    assert_eq!(class_at("'a'", 1), Some(TokenClass::String));
+    assert_eq!(class_at("'\\''", 1), Some(TokenClass::Escape));
+    assert_eq!(class_at("at(9)", 0), Some(TokenClass::Method));
+}
+
+#[test]
+fn text_offers_at_and_a_char_str() {
+    for checks in [true, false] {
+        let found = labels(&program(checks, "word.@@"));
+        assert!(found.contains(&"at".to_string()), "{:?}", found);
+        let found = labels(&program(checks, "c.@@"));
+        assert!(found.contains(&"str".to_string()), "{:?}", found);
+    }
+    assert!(labels("task f(a: @@").contains(&"char".to_string()));
+}
+
+#[test]
+fn nothing_is_offered_inside_a_char() {
+    assert!(completions(&program(true, "show('a@@')")).is_empty());
+    assert!(completions(&program(true, "show('@@")).is_empty());
 }

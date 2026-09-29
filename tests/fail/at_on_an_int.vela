@@ -1,0 +1,5 @@
+; error: 4:12: type int has no methods
+task main()
+    bind n = 5
+    show(n.at(0))
+fi

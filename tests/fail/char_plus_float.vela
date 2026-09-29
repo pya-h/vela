@@ -1,0 +1,4 @@
+; error: 3:14: a char moves by an int, as in 'c + 1', not by a float
+task main()
+    show('a' + 1.5)
+fi

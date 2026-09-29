@@ -586,7 +586,7 @@ impl<'a> Tokens<'a> {
 pub(crate) fn ends_value(token: &Token) -> bool {
     matches!(
         token,
-        Token::Ident(_) | Token::Int(_) | Token::Float(_) | Token::Text(_) | Token::True | Token::False | Token::None | Token::RParen | Token::RBracket | Token::RBrace | Token::Caret
+        Token::Ident(_) | Token::Int(_) | Token::Float(_) | Token::Char(_) | Token::Text(_) | Token::True | Token::False | Token::None | Token::RParen | Token::RBracket | Token::RBrace | Token::Caret
     )
 }
 
@@ -1050,7 +1050,7 @@ impl<'a> Classifier<'a> {
                 // `t.0`: a tuple's item.
                 Token::Int(_) if p > 0 && tokens.token(p - 1) == Some(&Token::Dot) => self.push(range, TokenClass::Field, None),
                 Token::Int(_) | Token::Float(_) => self.push(range, TokenClass::Number, None),
-                Token::Text(_) => self.string(range),
+                Token::Text(_) | Token::Char(_) => self.string(range),
                 Token::Ident(_) if in_include => {
                     let (class, symbol) = match self.declared_at.get(&p) {
                         // The module's name or alias, or a name brought in and its alias.
@@ -1083,6 +1083,10 @@ impl<'a> Classifier<'a> {
                     }
                     let (class, symbol) = self.identifier(p, NEW_WORD, false, None, in_task_header, in_pattern, &braces);
                     self.push(range, class, symbol);
+                }
+                // `t.at(i)`: the keyword naming the method text has.
+                Token::At if tokens.before(p) == Some(&Token::Dot) && tokens.token(p + 1) == Some(&Token::LParen) => {
+                    self.push(range, TokenClass::Method, None);
                 }
                 Token::Ident(name) => {
                     if let Some(type_follows) = region_now {
@@ -1791,6 +1795,8 @@ impl<'a> Classifier<'a> {
         let text = self.tokens.source.get(range.clone()).unwrap_or_default();
         let mut piece = range.start;
         let mut chars = text.char_indices();
+        // A char literal has one escape text doesn't: `'\''`.
+        let quoted = text.starts_with('\'');
         while let Some((i, c)) = chars.next() {
             if c != '\\' {
                 continue;
@@ -1798,7 +1804,7 @@ impl<'a> Classifier<'a> {
             let start = range.start + i;
             let next = chars.next();
             let end = next.map_or(range.end, |(j, n)| range.start + j + n.len_utf8());
-            let valid = next.is_some_and(|(_, n)| n != '\n' && ESCAPES.iter().any(|(escape, _)| *escape == n));
+            let valid = next.is_some_and(|(_, n)| n != '\n' && (ESCAPES.iter().any(|(escape, _)| *escape == n) || (quoted && n == '\'')));
             self.push(piece..start, TokenClass::String, None);
             self.push(start..end, if valid { TokenClass::Escape } else { TokenClass::Invalid }, None);
             piece = end;

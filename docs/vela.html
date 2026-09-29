@@ -224,6 +224,7 @@
         <li><code class="type">float</code> — 64-bit floating point</li>
         <li><code class="type">bool</code> — true or false</li>
         <li><code class="type">unit</code> — a whole number from 0 to 255 in one byte (see <a href="#units">Units</a>)</li>
+        <li><code class="type">char</code> — one byte, a character, written <code>'a'</code> (see <a href="#chars">Chars</a>)</li>
         <li><code class="type">text</code> — UTF-8 text that knows its length, <code>t.len</code>, in bytes; <code>==</code> compares contents. <code>text</code> lasts as long
           as the program, as a literal does, and <code>text@r</code> is in region <code>r</code> (see
           <a href="#text-in-regions">Text in a region</a>)</li>
@@ -253,7 +254,7 @@
         (<code>bind x = 1 ; the first</code>), and a <code>#</code> separates an array's type or value from its count,
         as in item #4: <code>[int#4]</code>, <code>[0#4]</code>. A <code>#</code> comment is an error that says so, and a
         count written with <code>;</code>, <code>[0; 4]</code>, is an error that says a count follows <code>#</code>.
-        Everything after a <code>;</code> is a comment, wherever it is, so <code>show(1); show(2)</code> is only
+        Everything after a <code>;</code> is a comment, wherever it is but inside text or a char (<code>';'</code>), so <code>show(1); show(2)</code> is only
         <code>show(1)</code>: Vela has no symbol that separates statements.
         (The compiler doesn't insist on the line break yet; see <a href="#limits">Current Limits</a>.)
         Files may use LF or CRLF line endings; a carriage return alone (as old Mac files end lines) is an error.
@@ -275,7 +276,7 @@ true false none  fi   maybe is     fail failure include priv
 block shared type</pre>
       <p>
         <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>,
-        <code>bool</code>, <code>unit</code>, <code>text</code>, <code>nothing</code>) aren't reserved words: no task, shape, kind, or
+        <code>bool</code>, <code>unit</code>, <code>char</code>, <code>text</code>, <code>nothing</code>) aren't reserved words: no task, shape, kind, or
         variant can take their names, but a variable, parameter, or field can (see <a href="#names">Names</a>). The
         builtin kinds <a href="#reading-numbers"><code>ParseError</code></a> (<code>NotANumber</code>,
         <code>TooLarge</code>) and <a href="#reading-input"><code>InputError</code></a> (<code>Ended</code>,
@@ -865,6 +866,43 @@ show(int(b) + <span class="number">1</span>)             <span class="comment">;
 <span class="keyword">bind</span> n = <span class="number">3</span>
 show(b + n)                 <span class="comment">; error: an int and a unit don't mix in arithmetic …</span>
 b = b + <span class="number">1</span>                   <span class="comment">; stops: vela: 256 does not fit in a unit …</span></pre>
+      <p id="chars">
+        <strong>Chars.</strong> A <code>char</code> is one byte, as C's <code>char</code> is: the code of a character,
+        from 0 to 255, so it holds any byte of text. It is written between single quotes, <code>'a'</code>, with the
+        escapes text has (<code>'\n'</code>, <code>'\t'</code>, <code>'\0'</code>, <code>'\\'</code>) and
+        <code>'\''</code> for the quote. Only one byte fits: <code>'ab'</code> and <code>'é'</code> (two bytes in UTF-8)
+        are errors that say to write text instead. A number moves a char, <code>c + 1</code>, <code>1 + c</code>,
+        <code>c - 1</code>, and gives a char; the distance from one char to another, <code>'z' - 'a'</code>, is an
+        <code>int</code>; a result below 0 or above 255 stops the program (<em>vela: 260 does not fit in a char</em>), and
+        one written out is an error. No other arithmetic takes a char: <code>'a' + 'b'</code>, <code>c * 2</code>, and
+        <code>-c</code> are errors, and <code>int(c) * 2</code> works on its code. <code>char(n)</code> turns a code
+        into a char, stopping the program outside 0 to 255, and <code>int(c)</code> and <code>unit(c)</code> give the
+        code back. Chars compare and order by their codes, so <code>c &gt;= 'a' and c &lt;= 'z'</code> tells a small
+        letter. <code>show(c)</code> writes the character itself; inside another value it is written as code writes it,
+        <code>['a', '\n']</code>, and a byte no escape writes as <code>char(200)</code>.
+      </p>
+      <p>
+        Text already holds characters, with its length, parts, <code>t[i]</code>, joining, and <code>==</code>, so an
+        array or slice of chars is text built by hand: the compiler warns about the first one made in each file
+        (<em>this builds text by hand as chars; 'text' holds characters already …</em>) and says nothing about the rest.
+      </p>
+      <pre><span class="keyword">task</span> shout(c: char) -&gt; char
+    <span class="keyword">when</span> c &gt;= <span class="string">'a'</span> <span class="keyword">and</span> c &lt;= <span class="string">'z'</span>
+        <span class="keyword">&lt;-</span> c - (<span class="string">'a'</span> - <span class="string">'A'</span>)       <span class="comment">; a char moved by an int</span>
+    <span class="keyword">fi</span>
+    <span class="keyword">&lt;-</span> c
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">bind</span> word = <span class="string">"vela"</span>
+    <span class="keyword">hold</span> i = <span class="number">0</span>
+    <span class="keyword">loop</span> word.at(i) <span class="keyword">is</span> {c}          <span class="comment">; none past the end</span>
+        show(shout(c))                  <span class="comment">; V, E, L, A</span>
+        i = i + <span class="number">1</span>
+    <span class="keyword">fi</span>
+    show(word[<span class="number">0</span>], <span class="string">" "</span>, int(<span class="string">'A'</span>), <span class="string">" "</span>, char(<span class="number">66</span>))   <span class="comment">; v 65 B</span>
+    show(<span class="string">'a'</span> + <span class="string">'b'</span>)                   <span class="comment">; error: two chars don't add up to a char …</span>
+<span class="keyword">fi</span></pre>
       <p id="conversions">
         <code>float(n)</code>, <code>int(x)</code>, and <code>unit(x)</code> turn a value into a number, called by the
         name of the type they give, as <a href="#str"><code>text(x) at r</code></a> is. They make no memory, so they
@@ -872,6 +910,8 @@ b = b + <span class="number">1</span>                   <span class="comment">; 
         <code>float</code> exactly, and never fails; so does <code>int(b)</code> on a unit.
         <code>unit(x)</code> takes what <code>int(x)</code> takes, and stops the program when the whole number
         isn't from 0 to 255 (<em>300 does not fit in a unit</em>); written out, <code>unit(300)</code> is an error.
+        <code>char(n)</code> takes an <code>int</code>, a <code>unit</code>, or a <code>char</code>, the same way (see
+        <a href="#chars">Chars</a>); a byte of text is <code>t[i]</code>, not <code>char(t)</code>.
         <code>int(x)</code> takes a <code>float</code> or a <code>bool</code>: a float becomes its whole part, toward
         zero, so it rounds neither way (<code>int(2.9)</code> is 2 and <code>int(-2.9)</code> is -2), and a bool becomes
         1 or 0, which counts (<code>int(n &gt; 3)</code>). A float with no whole part to give stops the program, as
@@ -1021,9 +1061,12 @@ b = b + <span class="number">1</span>                   <span class="comment">; 
         is the same bytes, not a copy, so it lives where the text does: a part of <code>text</code> is <code>text</code>, and a
         part of <code>text@r</code> is <code>text@r</code>. Its bounds are checked as a slice's are, and each must fall between
         two characters: <code>"café"[0..4]</code> would end inside the two bytes of <code>é</code>, so it stops the
-        program (<em>vela: text 0..4 cuts through a character at byte 4</em>). Text has no items to read one at a time,
-        so <code>t[i]</code> is an error; the byte at <code>i</code> is the part <code>t[i..i + 1]</code>. Text never
-        changes, so a part can't be assigned either.
+        program (<em>vela: text 0..4 cuts through a character at byte 4</em>). <code>t[i]</code> is the byte at
+        <code>i</code>, as a <a href="#chars"><code>char</code></a>; an index out of range stops the program, as an
+        array's does. <code>t.at(i)</code> reads the same byte as a <code>maybe char</code>, which is <code>none</code>
+        out of range, so a loop can walk text without its length (<code>loop t.at(i) is {c}</code>). A byte is the
+        byte, not a whole character: <code>"é"[0]</code> is the first of the two bytes of <code>é</code>. Text never
+        changes, so neither a part nor a byte can be assigned, and a reference can't name a byte.
       </p>
       <p>
         <code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, and <code>&gt;=</code> order text by its bytes, which is
@@ -1033,7 +1076,7 @@ b = b + <span class="number">1</span>                   <span class="comment">; 
       <pre><span class="keyword">task</span> first_word(line: text@r) -&gt; text@r
     <span class="keyword">hold</span> i = <span class="number">0</span>
     <span class="keyword">loop</span> i &lt; line.len
-        <span class="keyword">when</span> line[i..i + <span class="number">1</span>] == <span class="string">" "</span>
+        <span class="keyword">when</span> line[i] == <span class="string">' '</span>
             <span class="keyword">&lt;-</span> line[<span class="number">0</span>..i]              <span class="comment">; a part: text@r, like the line</span>
         <span class="keyword">fi</span>
         i = i + <span class="number">1</span>
@@ -1118,7 +1161,7 @@ b = b + <span class="number">1</span>                   <span class="comment">; 
         <code>when</code> and <code>loop</code> must be <code>bool</code>: <code>when count</code> is an error.
         <code>==</code> and <code>!=</code> compare each type by a rule of its own, and <code>~=</code> compares two
         values item by item (see <a href="#comparing">Comparing</a>). <code>&lt;</code>, <code>&gt;</code>,
-        <code>&lt;=</code>, and <code>&gt;=</code> work on numbers and text.
+        <code>&lt;=</code>, and <code>&gt;=</code> work on numbers, chars, and text.
       </p>
       <h3 id="comparing">Comparing</h3>
       <p>
@@ -1813,7 +1856,7 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
         <tr><td><code>same</code></td><td><code>==</code> and <code>!=</code>, each type by its own rule</td><td>numbers, bools, text, pointers, slices, arrays, tuples, shapes, and kinds whose variants carry none of <code>T ~ E</code></td></tr>
         <tr><td><code>similar</code></td><td><code>~=</code> and <code>&lt;&gt;</code>, item by item</td><td>numbers, bools, text, pointers, and arrays, slices, tuples, <code>maybe</code>s, shapes, and kinds of them</td></tr>
         <tr><td><code>shown</code></td><td><code>show</code>, <code>str</code></td><td>anything <code>show</code> writes: numbers, bools, text, pointers, arrays, slices, tuples, and <code>maybe</code>s of such, and shapes and kinds, except those holding a value that can fail without a <code>str</code> of their own</td></tr>
-        <tr><td><code>ordered</code></td><td><code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td><td>numbers and text</td></tr>
+        <tr><td><code>ordered</code></td><td><code>&lt;</code>, <code>&gt;</code>, <code>&lt;=</code>, <code>&gt;=</code></td><td>numbers, chars, and text</td></tr>
       </table>
       <p>
         Each word is one thing the body may do, and <code>&amp;</code> asks for several:
@@ -1980,7 +2023,7 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
       <p>
         Tasks, shapes, kinds, and variants share one namespace in a file: no two of them can have the same name, even
         across different kinds, and none can be named like a builtin: the types (<code>int</code>, <code>float</code>,
-        <code>bool</code>, <code>unit</code>, <code>text</code>, <code>nothing</code>), the tasks (<code>show</code>, <code>scan</code>), or
+        <code>bool</code>, <code>unit</code>, <code>char</code>, <code>text</code>, <code>nothing</code>), the tasks (<code>show</code>, <code>scan</code>), or
         the kinds no file declares and their variants (<a href="#reading-numbers"><code>ParseError</code></a> with
         <code>NotANumber</code> and <code>TooLarge</code>, <a href="#reading-input"><code>InputError</code></a> with
         <code>Ended</code> and <code>NoNumber</code>). Another module has names of its own

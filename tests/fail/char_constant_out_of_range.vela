@@ -1,0 +1,4 @@
+; error: 3:14: the result, 322, doesn't fit in a char, which holds 0 to 255
+task main()
+    show('z' + 200)
+fi

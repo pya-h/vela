@@ -7,6 +7,8 @@ use crate::error::{Error, Result};
 pub enum Token {
     Int(i64),
     Float(f64),
+    /// `'a'`: one byte, as a char.
+    Char(u8),
     Text(String),
     /// Text holding values, `"n = {n}"`: its pieces in order.
     Interpolated(Vec<Piece>),
@@ -209,6 +211,7 @@ impl Token {
             Token::Int(n) => return format!("integer {}", n),
             Token::Float(n) => return format!("float {}", float_text(*n)),
             Token::Text(_) | Token::Interpolated(_) => return "text literal".to_string(),
+            Token::Char(_) => return "char literal".to_string(),
             Token::Ident(s) => return format!("identifier '{}'", s),
             Token::Newline => return "end of line".to_string(),
             Token::Eof => return "end of file".to_string(),
@@ -546,6 +549,10 @@ impl Lexer {
             return self.string(loc);
         }
 
+        if c == '\'' {
+            return self.char_literal(loc);
+        }
+
         self.advance();
         let tok = match c {
             '(' => Token::LParen,
@@ -867,6 +874,66 @@ impl Lexer {
             self.reset(mark);
         }
         LexKind::Invalid(error.unwrap_or_else(|| Error::at(loc, "text isn't closed on its line; end it with '\"' (a line break in text is written '\\n')")))
+    }
+
+    /// A char literal, `'a'`: one byte, written as itself or as an escape of
+    /// text (`'\n'`), or `'\''` for the quote. It ends on its line, so a missing
+    /// quote is reported there, as for text.
+    fn char_literal(&mut self, loc: Span) -> LexKind {
+        self.advance(); // opening '
+        let unclosed = || invalid(loc, "a char isn't closed on its line; end it with a quote, as in 'a'");
+        if self.at_end() || self.at_line_end() {
+            return unclosed();
+        }
+        let value = match self.peek() {
+            '\'' => {
+                self.advance();
+                return invalid(loc, "'' holds no char; write one between the quotes, as in 'a', or '\\'' for a quote");
+            }
+            '\\' => {
+                let escape_loc = self.location();
+                self.advance();
+                if self.at_end() || self.at_line_end() {
+                    return unclosed();
+                }
+                let c = self.advance();
+                match ESCAPES.iter().find(|(escape, _)| *escape == c).map(|(_, value)| *value).or((c == '\'').then_some('\'')) {
+                    Some(value) => value,
+                    None => {
+                        self.skip_char_rest();
+                        return invalid(escape_loc, format!("invalid escape '\\{}' in a char", c.escape_debug()));
+                    }
+                }
+            }
+            _ => self.advance(),
+        };
+        if !value.is_ascii() {
+            self.skip_char_rest();
+            return invalid(
+                loc,
+                format!("a char is one byte, and '{}' is {} bytes in UTF-8; write it as text, as in \"{}\"", value, value.len_utf8(), value),
+            );
+        }
+        if self.peek() != '\'' {
+            let closed = self.skip_char_rest();
+            if !closed {
+                return unclosed();
+            }
+            return invalid(loc, "a char holds one character; for more, write text between double quotes, as in \"ab\"");
+        }
+        self.advance(); // closing '
+        LexKind::Token(Token::Char(value as u8))
+    }
+
+    /// Skips the rest of a char literal that went wrong, up to its closing
+    /// quote on the same line: whether there was one.
+    fn skip_char_rest(&mut self) -> bool {
+        while !self.at_end() && !self.at_line_end() {
+            if self.advance() == '\'' {
+                return true;
+            }
+        }
+        false
     }
 
     /// A value in text, `{…}`, with the cursor at its `{`: its tokens, up to the

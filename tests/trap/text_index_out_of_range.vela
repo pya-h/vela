@@ -1,0 +1,5 @@
+; trap: index 5 is out of range 0..5 at 4:14 in task 'main'
+task main()
+    bind word = "hello"
+    show(word[5])
+fi

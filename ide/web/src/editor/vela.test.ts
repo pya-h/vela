@@ -118,7 +118,7 @@ describe("editing structure", () => {
   it("closes brackets and quotes as the language table lists", () => {
     const state = stateFor("|");
     const [brackets] = state.languageDataAt<{ brackets: string[] }>("closeBrackets", 0);
-    expect(brackets?.brackets).toEqual(["(", "{", "[", '"']);
+    expect(brackets?.brackets).toEqual(["(", "{", "[", '"', "'"]);
   });
 });
 

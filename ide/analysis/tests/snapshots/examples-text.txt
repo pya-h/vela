@@ -30,16 +30,16 @@
     | keyword:fi
  18 | fi
     | keyword:fi
- 20 | ; The first word of a line: a part of it, so it lives where the line does. Text
-    | comment:; The first word of a line: a part of it, so it lives where the line does. Text
- 21 | ; has no items to read one at a time, so a byte is the part `t[i..i + 1]`.
-    | comment:; has no items to read one at a time, so a byte is the part `t[i..i + 1]`.
+ 20 | ; The first word of a line: a part of it, so it lives where the line does.
+    | comment:; The first word of a line: a part of it, so it lives where the line does.
+ 21 | ; `t[i]` is the byte at `i`, as a char.
+    | comment:; `t[i]` is the byte at `i`, as a char.
  22 | task first_word(line: text@r) -> text@r
     | keyword:task  task:first_word  punctuation:(  parameter:line  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  23 |     each i in 0..line.len
     | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:line  punctuation:.  field:len
- 24 |         when line[i..i + 1] == " "
-    | keyword:when  parameter:line  punctuation:[  variable:i  operator:..  variable:i  operator:+  number:1  punctuation:]  operator:==  string:" "
+ 24 |         when line[i] == ' '
+    | keyword:when  parameter:line  punctuation:[  variable:i  punctuation:]  operator:==  string:' '
  25 |             <- line[0..i]
     | keyword:<-  parameter:line  punctuation:[  number:0  operator:..  variable:i  punctuation:]
  26 |         fi
@@ -64,8 +64,8 @@
     | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:name  punctuation:.  field:len
  37 |         bind letter = name[i..i + 1]
     | keyword:bind  variable:letter  operator:=  parameter:name  punctuation:[  variable:i  operator:..  variable:i  operator:+  number:1  punctuation:]
- 38 |         when letter == " "
-    | keyword:when  variable:letter  operator:==  string:" "
+ 38 |         when name[i] == ' '
+    | keyword:when  parameter:name  punctuation:[  variable:i  punctuation:]  operator:==  string:' '
  39 |             start = true
     | variable:start  operator:=  keyword:true
  40 |         else

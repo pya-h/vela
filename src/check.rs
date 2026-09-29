@@ -168,6 +168,9 @@ pub struct Checker {
     /// builds, but whose meaning rests on a choice the compiler made (see
     /// `warn_chosen`).
     warnings: Vec<Error>,
+    /// The files already warned about an array or slice of chars, which is
+    /// said once per file (see `warn_char_array`).
+    char_arrays_warned: HashSet<usize>,
     /// The tasks, shapes, and kinds whose own declaration has a mistake. What
     /// they promise isn't known, so a use of one is checked as far as it can be
     /// and then left alone: reporting the declaration's mistake again at every
@@ -3311,6 +3314,9 @@ impl Checker {
                     return err(span, "a slice of values can't be assigned; assign its items one at a time, as in 'xs[i] = v'");
                 }
                 let base_ty = self.check_item_base(base)?;
+                if matches!(base_ty, Type::Text(_)) {
+                    return err(span, "a byte of text can't be assigned, since text never changes; build other text instead, as in 't = t[0..2] + \"x\" at r'");
+                }
                 let ty = self.check_index(base, &base_ty, index, span)?;
                 expr.ty = Some(ty.clone());
                 Ok(ty)
@@ -3527,8 +3533,29 @@ impl Checker {
             return self.check_type_of(expr);
         }
         let ty = self.infer_expr(expr)?;
+        if matches!(expr.kind, ExprKind::Array(_) | ExprKind::Repeat { .. } | ExprKind::New { .. }) {
+            self.warn_char_array(&ty, expr.span);
+        }
         expr.ty = Some(ty.clone());
         Ok(ty)
+    }
+
+    /// Warns, once per file, about an array or slice of chars made at `span`:
+    /// text built by hand, which `text` does already.
+    fn warn_char_array(&mut self, ty: &Type, span: Span) {
+        let chars = match ty {
+            Type::Array(items, _) | Type::Slice(items, _) | Type::Ptr(items, _) => match items.as_ref() {
+                Type::Array(inner, _) => **inner == Type::Char,
+                other => *other == Type::Char,
+            },
+            _ => false,
+        };
+        if chars && self.char_arrays_warned.insert(span.file) {
+            self.warnings.push(Error::at(
+                span,
+                "this builds text by hand as chars; 'text' holds characters already, with its length, parts, 't[i]', joining, and '==', so prefer it, as in 'bind word = \"abc\"' (said once in each file)",
+            ));
+        }
     }
 
     /// Checks `value.type`, the type of the value as code writes it, and makes
@@ -3815,6 +3842,7 @@ impl Checker {
         match &mut expr.kind {
             ExprKind::IntLit(_) => Ok(Type::Int),
             ExprKind::FloatLit(_) => Ok(Type::Float),
+            ExprKind::CharLit(_) => Ok(Type::Char),
             ExprKind::BoolLit(_) => Ok(Type::Bool),
             ExprKind::TextLit(_) => Ok(Type::Text(None)),
             ExprKind::NoneLit => Ok(Type::None),
@@ -3848,6 +3876,10 @@ impl Checker {
             ExprKind::Index(base, index) => {
                 let base_ty = self.check_expr(base)?;
                 self.check_index(base, &base_ty, index, span)
+            }
+            ExprKind::Lookup(base, index) => {
+                let base_ty = self.check_expr(base)?;
+                self.check_lookup(&base_ty, index, span)
             }
             ExprKind::Array(values) => self.check_array(values, span),
             ExprKind::Tuple(values) => self.check_tuple(values),
@@ -4122,7 +4154,14 @@ impl Checker {
     /// text of that region too. Text has no items to read one at a time.
     fn check_text_part(&mut self, region: &Option<String>, index: &mut Expr, span: Span) -> Result<Type> {
         let ExprKind::Range(from, to) = &mut index.kind else {
-            return err(span, "text has no items to read one at a time; a part of it is 't[a..b]', as in 't[i..i + 1]' for the byte at 'i'");
+            // `t[i]`: the byte at `i`, as a char.
+            let ty = self.check_expr(index)?;
+            self.expect_type(&ty, &Type::Int, index.span)?;
+            if let Some(value) = constant_int(index).filter(|value| *value < 0) {
+                return err(index.span, format!("index {} is out of range: it is less than 0", value));
+            }
+            let _ = span;
+            return Ok(Type::Char);
         };
         for bound in [&mut **from, &mut **to] {
             let ty = self.check_expr(bound)?;
@@ -4141,6 +4180,20 @@ impl Checker {
         }
         index.ty = Some(Type::Range(Box::new(Type::Int)));
         Ok(Type::Text(region.clone()))
+    }
+
+    /// Checks `t.at(i)` on a value of type `base_ty`, already checked, and
+    /// returns its type: a maybe of the item, none out of range.
+    fn check_lookup(&mut self, base_ty: &Type, index: &mut Expr, span: Span) -> Result<Type> {
+        let ty = self.check_expr(index)?;
+        if base_ty.unknown() {
+            return Ok(Type::Unknown);
+        }
+        self.expect_type(&ty, &Type::Int, index.span)?;
+        match base_ty {
+            Type::Text(_) => Ok(Type::Maybe(Box::new(Type::Char))),
+            other => err(span, format!("'at' reads a byte of text, but this value is {}", other)),
+        }
     }
 
     /// Checks `xs[i]`, an item, or `xs[a..b]`, a slice, on `base` of type
@@ -4479,7 +4532,7 @@ impl Checker {
     /// written as far as its values go, so it is no reason to refuse.
     fn unwritable_in(&self, ty: &Type, seen: &mut Vec<String>) -> Option<Type> {
         match ty {
-            Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => None,
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => None,
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unwritable_in(inner, seen),
             Type::Tuple(items) => items.iter().find_map(|item| self.unwritable_in(item, seen)),
             Type::Param(_) if self.allows(Need::Shown, ty) => None,
@@ -5067,6 +5120,9 @@ impl Checker {
             lt = byte;
         }
         match op {
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod if lt == Type::Char || rt == Type::Char => {
+                char_arithmetic(op, l, r, &lt, &rt, span)
+            }
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
                 if !lt.is_numeric() || !rt.is_numeric() {
                     if let Some(untold) = self.untold_param(&lt).or_else(|| self.untold_param(&rt)) {
@@ -5240,12 +5296,12 @@ impl Checker {
                         return err(span, untold);
                     }
                     if let Type::Param(_) = &lt {
-                        return err(span, format!("'{}' compares numbers or text; {} {}", symbol, lt, self.why_not(Need::Ordered, &lt)));
+                        return err(span, format!("'{}' compares numbers, chars, or text; {} {}", symbol, lt, self.why_not(Need::Ordered, &lt)));
                     }
                     if matches!(lt, Type::Tuple(_)) {
-                        return err(span, format!("'{}' compares numbers or text; a tuple is only compared with '==' and '!=', or item by item, as in 't.0 < u.0'", symbol));
+                        return err(span, format!("'{}' compares numbers, chars, or text; a tuple is only compared with '==' and '!=', or item by item, as in 't.0 < u.0'", symbol));
                     }
-                    return err(span, format!("'{}' compares numbers or text, not {}{}", symbol, lt, extract_hint(&[&lt])));
+                    return err(span, format!("'{}' compares numbers, chars, or text, not {}{}", symbol, lt, extract_hint(&[&lt])));
                 }
                 // Comparing stores nothing, so texts in any regions compare.
                 if !matches!((&lt, &rt), (Type::Text(_), Type::Text(_))) {
@@ -5510,6 +5566,18 @@ impl Checker {
             }
             return self.builtin_str(expr);
         }
+        // `t.at(i)`: a byte of text, or none (see `ExprKind::Lookup`).
+        if name == AT && matches!(ty, Type::Text(_)) {
+            let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+            let ExprKind::MethodCall { value, mut args, .. } = taken else {
+                return Err(Error::internal_at(span, "a method call that is no longer one"));
+            };
+            if args.len() != 1 {
+                return err(span, format!("'at' takes the index of one byte, as in 't.at(i)', got {}", count(args.len(), "argument")));
+            }
+            expr.kind = ExprKind::Lookup(value, Box::new(args.remove(0)));
+            return Ok(());
+        }
         let owner = self.owner_of(&ty).ok_or_else(|| self.no_method(&ty, &name, span))?;
         let full = method_name(&owner, &name);
         let info = self.tasks.get(&full).filter(|_| self.sees(&full)).cloned().ok_or_else(|| self.no_method(&ty, &name, span))?;
@@ -5594,8 +5662,9 @@ impl Checker {
             return err(*at, format!("'{0}' takes no types, only the value to turn into {0}, as in '{0}(x)'", into));
         }
         let takes = match into {
-            Type::Int => "'int' takes an int, a unit, a float, a bool, or text",
-            Type::Unit => "'unit' takes an int, a unit, a float, a bool, or text",
+            Type::Int => "'int' takes an int, a unit, a char, a float, a bool, or text",
+            Type::Unit => "'unit' takes an int, a unit, a char, a float, a bool, or text",
+            Type::Char => "'char' takes an int, a unit, or a char, the code of the character",
             _ => "'float' takes an int, a unit, a float, or text",
         };
         let [value] = args else {
@@ -5604,10 +5673,12 @@ impl Checker {
         let ty = self.check_expr(value)?;
         let fits = matches!(
             (into, &ty),
-            (Type::Int | Type::Unit, Type::Int | Type::Unit | Type::Float | Type::Bool) | (Type::Float, Type::Int | Type::Unit | Type::Float)
+            (Type::Int | Type::Unit, Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool)
+                | (Type::Float, Type::Int | Type::Unit | Type::Float)
+                | (Type::Char, Type::Int | Type::Unit | Type::Char)
         );
         // `unit(300)`: a number written out that a unit can't hold.
-        if into.is_byte()
+        if (into.is_byte() || *into == Type::Char)
             && ty == Type::Int
             && let Some(n) = constant_int(value)
         {
@@ -5618,10 +5689,11 @@ impl Checker {
         }
         // Text may hold no number at all, which is a mistake in the input rather
         // than in the program, so reading it sends a value or a reason why not.
-        if matches!(ty, Type::Text(_)) {
+        if matches!(ty, Type::Text(_)) && *into != Type::Char {
             return Ok(Type::Or(Box::new(into.clone()), Box::new(Type::Named(PARSE_ERROR.to_string(), None))));
         }
         let hint = match &ty {
+            Type::Text(_) if *into == Type::Char => "; a byte of text is read with 't[i]', or 't.at(i)', which gives none out of range".to_string(),
             Type::Bool => format!("; a bool becomes a number with 'int', as in '{}(int(ok))'", into),
             Type::Ptr(..) => format!("; to turn the value it points to into a number, write '{}(p^)'", into),
             Type::Maybe(_) | Type::Or(..) => extract_hint(&[&ty]),
@@ -6130,6 +6202,7 @@ impl Checker {
             }
             ExprKind::Field(base, _) => self.read_place(base),
             ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => refuse("it can't name a part taken of a value, which is a new value, not a place"),
+            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Text(_))) => refuse("it can't name a byte of text, which never changes; copy the byte into a variable"),
             ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..))) => refuse(
                 "it can't name an item of a slice, which moves when the slice grows; hold the item's index, or copy the item into a variable",
             ),
@@ -6177,6 +6250,7 @@ impl Checker {
                 // `xs.len` is worked out from the value, not kept in it.
                 ExprKind::Field(base, _) if worked_out(base) => return false,
                 ExprKind::Field(base, _) => at = base,
+                ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Text(_))) => return false,
                 ExprKind::Index(base, index) if !matches!(index.kind, ExprKind::Range(..)) => at = base,
                 _ => return false,
             }
@@ -6593,7 +6667,7 @@ impl Checker {
             return self.type_param(name).is_some_and(|param| param.needs.iter().any(|(own, _)| own.means(need)));
         }
         match need {
-            Need::Ordered => ty.is_numeric() || matches!(ty, Type::Text(_)),
+            Need::Ordered => ty.is_numeric() || matches!(ty, Type::Char | Type::Text(_)),
             Need::Shown => self.writable(ty),
             Need::Same => self.comparable(ty),
             Need::Similar => self.unsimilar_part(ty).is_none(),
@@ -6609,7 +6683,7 @@ impl Checker {
     /// can fail is read first.
     fn comparable(&self, ty: &Type) -> bool {
         match ty {
-            Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Slice(..) | Type::Array(..) | Type::Tuple(_) => true,
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Slice(..) | Type::Array(..) | Type::Tuple(_) => true,
             Type::Named(name, _) if self.kinds.contains_key(name) => self.kind_comparable(name, &mut Vec::new()),
             Type::Named(..) | Type::Applied(_) => self.owner_of(ty).is_some_and(|owner| self.shapes.contains_key(&owner)),
             Type::Param(_) => self.allows(Need::Same, ty),
@@ -6685,7 +6759,7 @@ impl Checker {
 
     fn unsimilar_in(&self, ty: &Type, seen: &mut Vec<String>) -> Option<Type> {
         match ty {
-            Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => None,
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => None,
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unsimilar_in(inner, seen),
             Type::Tuple(items) => items.iter().find_map(|item| self.unsimilar_in(item, seen)),
             Type::Param(_) if self.allows(Need::Similar, ty) => None,
@@ -7469,7 +7543,7 @@ impl Checker {
                 }
                 Ok(())
             }
-            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } => Ok(()),
+            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } => Ok(()),
             ExprKind::Unary(_, inner)
             | ExprKind::Deref(inner)
             | ExprKind::Ref(inner)
@@ -7514,7 +7588,7 @@ impl Checker {
                 }
                 Ok(())
             }
-            ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
+            ExprKind::Binary(_, a, b) | ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
                 self.substitute_expr(a, given, made)?;
                 self.substitute_expr(b, given, made)
             }
@@ -7665,7 +7739,7 @@ fn refuse<T>(make: impl FnOnce() -> Error) -> Result<T> {
 
 fn constant_value(expr: &Expr) -> bool {
     match &expr.kind {
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit => true,
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit => true,
         ExprKind::Unary(_, inner) => constant_value(inner),
         ExprKind::Array(values) | ExprKind::Tuple(values) => values.iter().all(constant_value),
         ExprKind::Construct { args, .. } => args.iter().all(constant_value),
@@ -7961,6 +8035,45 @@ fn byte_literal(e: &mut Expr, byte: &Type) -> Result<bool> {
     Ok(true)
 }
 
+/// Checks `l op r` where one side is a char, and returns its type: a char moved
+/// by an int (`c + 1`, `1 + c`, `c - 1`) is a char, and the distance from one
+/// char to another (`c - 'a'`) is an int. Nothing else is arithmetic on chars.
+fn char_arithmetic(op: BinaryOp, l: &Expr, r: &Expr, lt: &Type, rt: &Type, span: Span) -> Result<Type> {
+    let symbol = match op {
+        BinaryOp::Add => "+",
+        BinaryOp::Sub => "-",
+        BinaryOp::Mul => "*",
+        BinaryOp::Div => "/",
+        _ => "%",
+    };
+    let ty = match (op, lt, rt) {
+        (BinaryOp::Add, Type::Char, Type::Int) | (BinaryOp::Add, Type::Int, Type::Char) | (BinaryOp::Sub, Type::Char, Type::Int) => Type::Char,
+        (BinaryOp::Sub, Type::Char, Type::Char) => return Ok(Type::Int),
+        (BinaryOp::Add, Type::Char, Type::Char) => {
+            return err(span, "two chars don't add up to a char: move a char by a number, as in 'c + 1', or take one from another for how far apart they are, as in 'c - 'a''");
+        }
+        (BinaryOp::Sub, Type::Int, Type::Char) => {
+            return err(span, "a char is taken from a char, as in 'c - 'a'', or moved back by a number, as in 'c - 1'; to take a char's code from a number, write 'n - int(c)'");
+        }
+        (BinaryOp::Add | BinaryOp::Sub, _, _) => {
+            let other = if *lt == Type::Char { rt } else { lt };
+            return err(span, format!("a char moves by an int, as in 'c {} 1', not by a {}{}", symbol, other, extract_hint(&[other])));
+        }
+        _ => {
+            return err(span, format!("'{}' works on numbers, and a char is a character; turn it into its code first, as in 'int(c) {} 2'", symbol, symbol));
+        }
+    };
+    // `'z' + 200`: a char and a number both written out, so the result is known.
+    let (char_side, number) = if *lt == Type::Char { (l, r) } else { (r, l) };
+    if let (ExprKind::CharLit(c), Some(n)) = (&char_side.kind, constant_int(number)) {
+        let moved = if op == BinaryOp::Add { i128::from(*c) + i128::from(n) } else { i128::from(*c) - i128::from(n) };
+        if !(0..=255).contains(&moved) {
+            return err(span, format!("the result, {}, doesn't fit in a char, which holds 0 to 255", moved));
+        }
+    }
+    Ok(ty)
+}
+
 /// Checks that `n` fits in the byte type `byte`.
 fn fits_byte(n: i64, byte: &Type, span: Span) -> Result<()> {
     if (0..=255).contains(&n) {
@@ -8102,7 +8215,7 @@ const SCAN_TAKES: &str = "'scan' takes the prompt it shows, and the type of a nu
 /// type, not a value, so it is never checked as one.
 fn scanned_type(arg: &Expr) -> Result<Type> {
     if let ExprKind::Var(name) = &arg.kind {
-        if let Some(number) = number_cast(name) {
+        if let Some(number) = number_cast(name).filter(|number| *number != Type::Char) {
             return Ok(number);
         }
         // Text is what `scan` reads by itself, so naming it says to leave it out.
@@ -8259,6 +8372,8 @@ enum Step {
 fn no_place(place: &Expr) -> &'static str {
     match &place.kind {
         ExprKind::Index(_, index) if matches!(index.kind, ExprKind::Range(..)) => "a part taken of a value, which is a new value",
+        ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Text(_))) => "a byte of text, read out of text that never changes",
+        ExprKind::Lookup(..) => "a lookup's value, which is made here",
         ExprKind::Field(base, _) if worked_out(base) => "a length, worked out from the value",
         ExprKind::Call { .. } | ExprKind::MethodCall { .. } => "a call's value, which is made here",
         ExprKind::Construct { .. } => "a variant, which is a value",
@@ -8309,7 +8424,7 @@ fn names_place(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::Var(_) | ExprKind::Shared { .. } | ExprKind::Deref(_) => true,
         ExprKind::Field(base, _) => names_place(base),
-        ExprKind::Index(base, index) => !matches!(index.kind, ExprKind::Range(..)) && names_place(base),
+        ExprKind::Index(base, index) => !matches!(index.kind, ExprKind::Range(..)) && !matches!(base.ty, Some(Type::Text(_))) && names_place(base),
         _ => false,
     }
 }

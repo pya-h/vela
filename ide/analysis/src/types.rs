@@ -340,10 +340,10 @@ impl Checked {
             ExprKind::Shared { shape, .. } => {
                 self.field_accesses.insert(pos(e.span), shape.clone());
             }
-            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
+            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
             | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::TypeOf(_) => {}
             ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. } => self.expr(inner, kinds),
-            ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
+            ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
                 self.expr(a, kinds);
                 self.expr(b, kinds);
             }

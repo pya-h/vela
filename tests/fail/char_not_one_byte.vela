@@ -1,0 +1,4 @@
+; error: 3:10: a char is one byte, and 'é' is 2 bytes in UTF-8; write it as text, as in "é"
+task main()
+    show('é')
+fi

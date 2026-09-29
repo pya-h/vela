@@ -107,7 +107,7 @@ fn text_completes_its_length_str_and_copy() {
         for value in ["name", "person.name", "line"] {
             let items = completions(&program(checks, &format!("show({}.@@)", value)));
             let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
-            assert_eq!(labels, ["len", "str", "copy", "type"], "{} {}", value, when);
+            assert_eq!(labels, ["len", "at", "str", "copy", "type"], "{} {}", value, when);
             assert_eq!(items[0].detail, "int, the number of bytes", "{} {}", value, when);
         }
     }
@@ -163,7 +163,7 @@ fn a_value_turned_into_text_is_text_of_its_region_whether_or_not_the_file_checks
 fn numbers_bools_and_text_complete_str() {
     for checks in [true, false] {
         let when = if checks { "checked" } else { "declared" };
-        for (value, wanted) in [("count", vec!["str", "type"]), ("true", vec!["str", "type"]), ("name", vec!["len", "str", "copy", "type"])] {
+        for (value, wanted) in [("count", vec!["str", "type"]), ("true", vec!["str", "type"]), ("name", vec!["len", "at", "str", "copy", "type"])] {
             let items = completions(&program(checks, &format!("show({}.@@)", value)));
             let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
             assert_eq!(labels, wanted, "{} {}", value, when);
@@ -214,7 +214,7 @@ fn names_complete_inside_braces_and_not_in_the_text_around_them() {
         assert!(items.iter().any(|item| item.label == "count"), "{}: {:?}", when, items);
         let items = completions(&program(checks, "show(\"{name.@@}\" at r)"));
         let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
-        assert_eq!(labels, ["len", "str", "copy", "type"], "{}", when);
+        assert_eq!(labels, ["len", "at", "str", "copy", "type"], "{}", when);
         assert_eq!(completions(&program(checks, "show(\"co@@ {count}\" at r)")), Vec::new(), "{}", when);
         assert_eq!(completions(&program(checks, "show(\"{count} co@@\" at r)")), Vec::new(), "{}", when);
     }

@@ -1,5 +1,0 @@
-; error: 4:14: text has no items to read one at a time; a part of it is 't[a..b]', as in 't[i..i + 1]' for the byte at 'i'
-task main()
-    bind name = "Ada"
-    show(name[0])
-fi

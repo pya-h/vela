@@ -1,0 +1,4 @@
+; error: 3:14: a char is taken from a char, as in 'c - 'a'', or moved back by a number, as in 'c - 1'; to take a char's code from a number, write 'n - int(c)'
+task main()
+    show(100 - 'a')
+fi

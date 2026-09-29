@@ -42,6 +42,9 @@ pub enum Type {
     Text(Option<String>),
     /// `unit`: a whole number from 0 to 255 in one byte (Rust's `u8`).
     Unit,
+    /// `char`: one byte, as C's `char` is, written `'a'`: the code of a
+    /// character, 0 to 255, so it holds any byte of text.
+    Char,
     /// `nothing`: what a task that sends no value sends. It has no values.
     Nothing,
     /// The type of the `none` literal: fits any `maybe` type.
@@ -134,6 +137,7 @@ pub const BUILTIN_TYPES: &[(&str, Type)] = &[
     ("bool", Type::Bool),
     ("text", Type::Text(None)),
     ("unit", Type::Unit),
+    ("char", Type::Char),
     ("nothing", Type::Nothing),
 ];
 
@@ -170,6 +174,14 @@ pub const FLOAT_CAST: &str = "float";
 /// stops the program when `n` is not from 0 to 255.
 pub const UNIT_CAST: &str = "unit";
 
+/// The type whose name, called, turns a number into a `char`: `char(65)` is
+/// `'A'`, and a number that is not from 0 to 255 stops the program.
+pub const CHAR_CAST: &str = "char";
+
+/// The method text has that reads one byte without stopping the program:
+/// `t.at(i)`, a `maybe char`, none when `i` is out of range.
+pub const AT: &str = "at";
+
 /// The number that `name`, called as a task, turns a value into: `int(x)` and
 /// `float(x)`, which make no memory, so they name no region as `text(x)` does.
 pub fn number_cast(name: &str) -> Option<Type> {
@@ -177,6 +189,7 @@ pub fn number_cast(name: &str) -> Option<Type> {
         INT_CAST => Some(Type::Int),
         FLOAT_CAST => Some(Type::Float),
         UNIT_CAST => Some(Type::Unit),
+        CHAR_CAST => Some(Type::Char),
         _ => None,
     }
 }
@@ -376,6 +389,7 @@ impl Type {
                 suffix(f, region)
             }
             Type::Unit => write!(f, "unit"),
+            Type::Char => write!(f, "char"),
             Type::Nothing => write!(f, "nothing"),
             Type::None => write!(f, "none"),
             Type::Region => write!(f, "region"),
@@ -488,7 +502,7 @@ impl Type {
             Type::Or(value, error) => value.unknown() || error.unknown(),
             Type::Tuple(types) | Type::Results(types) => types.iter().any(Type::unknown),
             Type::Applied(applied) => applied.types.iter().any(Type::unknown),
-            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Unit | Type::Nothing | Type::None | Type::Region | Type::Named(..) | Type::Param(_) => false,
+            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Unit | Type::Char | Type::Nothing | Type::None | Type::Region | Type::Named(..) | Type::Param(_) => false,
         }
     }
 
@@ -747,6 +761,8 @@ impl Expr {
 pub enum ExprKind {
     IntLit(i64),
     FloatLit(f64),
+    /// `'a'`: a char, the byte it is.
+    CharLit(u8),
     BoolLit(bool),
     TextLit(String),
     NoneLit,
@@ -754,6 +770,9 @@ pub enum ExprKind {
     Field(Box<Expr>, String),
     /// `xs[i]`, an item of an array or slice, or `xs[a..b]`, a slice of it.
     Index(Box<Expr>, Box<Expr>),
+    /// `t.at(i)`: the item at `i`, in a `maybe`, none when `i` is out of range.
+    /// A value, never a place.
+    Lookup(Box<Expr>, Box<Expr>),
     /// `[a, b, c]`: an array of the values.
     Array(Vec<Expr>),
     /// `(a, b)`: a tuple of the values, two or more.
@@ -1465,6 +1484,7 @@ pub fn type_word(ty: &Type) -> String {
         Type::Bool => "bool".to_string(),
         Type::Text(_) => "text".to_string(),
         Type::Unit => "unit".to_string(),
+        Type::Char => "char".to_string(),
         Type::Nothing => "nothing".to_string(),
         Type::None => "none".to_string(),
         Type::Region => "region".to_string(),

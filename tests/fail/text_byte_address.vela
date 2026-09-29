@@ -1,0 +1,5 @@
+; error: 4:15: '&' takes the address of a place: a variable, a field or an item of one, or what a pointer points to, and this is a byte of text, read out of text that never changes, with no place of its own
+task main()
+    bind word = "hello"
+    show(&word[0])
+fi
