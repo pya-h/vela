@@ -1,0 +1,108 @@
+  1 | ; A generic may fill in a maybe for T, making a maybe of a maybe, or an
+    | comment:; A generic may fill in a maybe for T, making a maybe of a maybe, or an
+  2 | ; error type for T, making an error type with two error sides.
+    | comment:; error type for T, making an error type with two error sides.
+  3 | task wrap<T>(x: T) -> maybe T
+    | keyword:task  task:wrap  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:x  punctuation::  type:T  punctuation:)  operator:->  keyword:maybe  type:T
+  4 |     <- x
+    | keyword:<-  parameter:x
+  5 | fi
+    | keyword:fi
+  7 | task quiet<T>(x: T ~ text) -> maybe T
+    | keyword:task  task:quiet  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:x  punctuation::  type:T  operator:~  type-builtin:text  punctuation:)  operator:->  keyword:maybe  type:T
+  8 |     <- x { none }
+    | keyword:<-  parameter:x  punctuation:{  keyword:none  punctuation:}
+  9 | fi
+    | keyword:fi
+ 11 | task maybe_again<T>(x: maybe T) -> maybe T
+    | keyword:task  task:maybe_again  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:x  punctuation::  keyword:maybe  type:T  punctuation:)  operator:->  keyword:maybe  type:T
+ 12 |     <- x { none }
+    | keyword:<-  parameter:x  punctuation:{  keyword:none  punctuation:}
+ 13 | fi
+    | keyword:fi
+ 15 | task tryit<T>(x: T) -> T ~ text
+    | keyword:task  task:tryit  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:x  punctuation::  type:T  punctuation:)  operator:->  type:T  operator:~  type-builtin:text
+ 16 |     <- x
+    | keyword:<-  parameter:x
+ 17 | fi
+    | keyword:fi
+ 19 | task look(n: int) -> maybe int ~ text
+    | keyword:task  task:look  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int  operator:~  type-builtin:text
+ 20 |     when n > 5
+    | keyword:when  parameter:n  operator:>  number:5
+ 21 |         <- fail "big"
+    | keyword:<-  keyword:fail  string:"big"
+ 22 |     fi
+    | keyword:fi
+ 23 |     when n < 0
+    | keyword:when  parameter:n  operator:<  number:0
+ 24 |         <- none
+    | keyword:<-  keyword:none
+ 25 |     fi
+    | keyword:fi
+ 26 |     <- n
+    | keyword:<-  parameter:n
+ 27 | fi
+    | keyword:fi
+ 29 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 30 |     bind m: maybe int = none
+    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 31 |     bind k: maybe int = 4
+    | keyword:bind  variable:k  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:4
+ 32 |     bind w = wrap(m)
+    | keyword:bind  variable:w  operator:=  task:wrap  punctuation:(  variable:m  punctuation:)
+ 33 |     show(w, " ", w.type, " ", w == none)
+    | builtin-fn:show  punctuation:(  variable:w  punctuation:,  string:" "  punctuation:,  variable:w  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:w  operator:==  keyword:none  punctuation:)
+ 34 |     show(wrap(wrap(m)), " ", wrap(wrap(m)).type)
+    | builtin-fn:show  punctuation:(  task:wrap  punctuation:(  task:wrap  punctuation:(  variable:m  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:wrap  punctuation:(  task:wrap  punctuation:(  variable:m  punctuation:)  punctuation:)  punctuation:.  keyword:type  punctuation:)
+ 35 |     ; A maybe beside the maybe that holds it: the one it holds is wrapped.
+    | comment:; A maybe beside the maybe that holds it: the one it holds is wrapped.
+ 36 |     show(w ~= m, " ", wrap(k) ~= k, " ", m ~= wrap(k), " ", wrap(m) <> none)
+    | builtin-fn:show  punctuation:(  variable:w  operator:~=  variable:m  punctuation:,  string:" "  punctuation:,  task:wrap  punctuation:(  variable:k  punctuation:)  operator:~=  variable:k  punctuation:,  string:" "  punctuation:,  variable:m  operator:~=  task:wrap  punctuation:(  variable:k  punctuation:)  punctuation:,  string:" "  punctuation:,  task:wrap  punctuation:(  variable:m  punctuation:)  operator:<>  keyword:none  punctuation:)
+ 37 |     ; A plan B giving none, where T is a maybe.
+    | comment:; A plan B giving none, where T is a maybe.
+ 38 |     show(quiet(look(3)), " ", quiet(look(9)), " ", quiet(look(-1)))
+    | builtin-fn:show  punctuation:(  task:quiet  punctuation:(  task:look  punctuation:(  number:3  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:quiet  punctuation:(  task:look  punctuation:(  number:9  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:quiet  punctuation:(  task:look  punctuation:(  operator:-  number:1  punctuation:)  punctuation:)  punctuation:)
+ 39 |     show(maybe_again(wrap(k)), " ", maybe_again(wrap(m)))
+    | builtin-fn:show  punctuation:(  task:maybe_again  punctuation:(  task:wrap  punctuation:(  variable:k  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:maybe_again  punctuation:(  task:wrap  punctuation:(  variable:m  punctuation:)  punctuation:)  punctuation:)
+ 40 |     ; A plan B on a maybe of a maybe gives what it holds.
+    | comment:; A plan B on a maybe of a maybe gives what it holds.
+ 41 |     bind held = wrap(k) { none }
+    | keyword:bind  variable:held  operator:=  task:wrap  punctuation:(  variable:k  punctuation:)  punctuation:{  keyword:none  punctuation:}
+ 42 |     show(held, " ", held.type)
+    | builtin-fn:show  punctuation:(  variable:held  punctuation:,  string:" "  punctuation:,  variable:held  punctuation:.  keyword:type  punctuation:)
+ 43 |     when w is { inner }
+    | keyword:when  variable:w  keyword:is  punctuation:{  variable:inner  punctuation:}
+ 44 |         show("inner ", inner)
+    | builtin-fn:show  punctuation:(  string:"inner "  punctuation:,  variable:inner  punctuation:)
+ 45 |     fi
+    | keyword:fi
+ 46 |     bind r = tryit(look(9))
+    | keyword:bind  variable:r  operator:=  task:tryit  punctuation:(  task:look  punctuation:(  number:9  punctuation:)  punctuation:)
+ 47 |     show(r.type)
+    | builtin-fn:show  punctuation:(  variable:r  punctuation:.  keyword:type  punctuation:)
+ 48 |     match r
+    | keyword:match  variable:r
+ 49 |         case {inner}
+    | keyword:case  punctuation:{  variable:inner  punctuation:}
+ 50 |             match inner
+    | keyword:match  variable:inner
+ 51 |                 case {v}
+    | keyword:case  punctuation:{  variable:v  punctuation:}
+ 52 |                     show(v)
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:)
+ 53 |                 case failure e
+    | keyword:case  keyword:failure  variable:e
+ 54 |                     show("inner failure ", e)
+    | builtin-fn:show  punctuation:(  string:"inner failure "  punctuation:,  variable:e  punctuation:)
+ 55 |             fi
+    | keyword:fi
+ 56 |         case failure e
+    | keyword:case  keyword:failure  variable:e
+ 57 |             show("outer failure ", e)
+    | builtin-fn:show  punctuation:(  string:"outer failure "  punctuation:,  variable:e  punctuation:)
+ 58 |     fi
+    | keyword:fi
+ 59 | fi
+    | keyword:fi

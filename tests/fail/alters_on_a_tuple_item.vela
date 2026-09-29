@@ -1,0 +1,13 @@
+; error: 12:7: 'P.inc' changes the value it is called on, so it needs a place that can change, and a tuple's items never change; give the whole tuple a new value instead, as in 't = (1, 2)'
+shape P
+    n: int
+
+    alters inc()
+        .n = .n + 1
+    fi
+fi
+
+task main()
+    hold t = (1, P { n: 1 })
+    t.1.inc()
+fi

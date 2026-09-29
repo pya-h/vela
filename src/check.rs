@@ -274,6 +274,10 @@ const FILE_SHAPE: &str = "std/files.File";
 const MAX_INSTANCES: usize = 500;
 const MAX_TYPE_DEPTH: usize = 24;
 
+/// The most types one type given to a generic may be built of (see
+/// `type_size`): far more than a program writes, and small enough to handle.
+const MAX_TYPE_SIZE: usize = 1000;
+
 /// The most memory a value may take, in bytes: 1 TiB. A larger type is an
 /// error, so that no C compiler rejects the program for it.
 const MAX_VALUE_BYTES: u128 = 1 << 40;
@@ -632,6 +636,11 @@ impl Checker {
                 );
             }
             for (name, types, at) in made.needed {
+                // `f((v, v))` in `f`: each use doubles the type, which would
+                // grow too large to handle long before it grew too deep.
+                if types.iter().any(|ty| type_size(ty) > MAX_TYPE_SIZE) {
+                    return err(at, format!("this use of '{}' gives a type of more than {} parts; a generic task whose call gives a type built from its own never stops", unqualified(&name), MAX_TYPE_SIZE));
+                }
                 queue.push((instance_name(&name, &types), name, types, at));
             }
             tasks.push(Item::Task(task));
@@ -1176,7 +1185,7 @@ impl Checker {
         let Some(source) = self.shapes.get(name).cloned() else {
             return Err(Error::internal_at(at, format!("no shape '{}' to make for {} types", name, types.len())));
         };
-        if types.iter().any(|ty| type_depth(ty) > MAX_TYPE_DEPTH) {
+        if types.iter().any(|ty| type_depth(ty) > MAX_TYPE_DEPTH || type_size(ty) > MAX_TYPE_SIZE) {
             return err(
                 at,
                 format!(
@@ -2185,7 +2194,10 @@ impl Checker {
         // Whether every path sends a value can only be told of a body that
         // checked: a line with a mistake may well be the one that sends, so a
         // task with a mistake anywhere is not told this as well (see `record`).
-        let whole = self.errors.len() == before && !unsettled;
+        // A method of a shape with a mistake reads its fields as unknown, so its
+        // body settles nothing that reads them (see `broken`).
+        let owner_broken = task.owner.is_some() && method_parts(&task.name).is_some_and(|(of, _)| self.broken.contains(of));
+        let whole = self.errors.len() == before && !unsettled && !owner_broken;
         // The copies the body makes of the values of the types the task takes
         // (substituting no types changes nothing and only reads the body). A
         // copy into a region the header keeps that type in is the value's own
@@ -3872,10 +3884,15 @@ impl Checker {
                             };
                             return Error::at(span, format!("'{}' is a method of '{}', so a call names what it is called on, as in {}", name, unqualified(of), how));
                         }
+                        if !types.is_empty() && self.lookup(name).is_some() {
+                            return Error::at(span, misread_comparison(name));
+                        }
                         let hint = match name.as_str() {
                             "send" => "; a task sends its result with '<-'".to_string(),
                             "free" => "; Vela has no 'free': memory in a region is freed when the block declaring the region closes".to_string(),
                             _ if self.module_used(name).is_some() => format!("; '{0}' is a module, so name a task in it, as in '{0}.name(…)'", name),
+                            // `(i < n, n > (m))`: a `<` after a name whose `>`
+                            // is followed by `(` gives types to a call.
                             _ => self.elsewhere(name),
                         };
                         Error::at(span, format!("unknown task '{}'{}", name, hint))
@@ -3911,6 +3928,13 @@ impl Checker {
                 };
                 self.settle_call_region(span, &callee, args, &info.params)?;
                 if args.len() != info.params.len() {
+                    // `f(a < b, c > (d))` reads as one argument, a call of `a`.
+                    if let Some((name, at)) = args.iter().find_map(|arg| match &arg.kind {
+                        ExprKind::Call { name, types, .. } if !types.is_empty() && self.lookup(name).is_some() && !self.tasks.contains_key(name.as_str()) => Some((name, arg.span)),
+                        _ => None,
+                    }) {
+                        return err(at, misread_comparison(name));
+                    }
                     return err(span, format!("{} expects {}, got {}", callee, count(info.params.len(), "argument"), args.len()));
                 }
                 self.check_call_args(span, name, types, args, &info)
@@ -5124,6 +5148,16 @@ impl Checker {
                         wrap(if matches!(lt, Type::Maybe(_)) { &mut *r } else { &mut *l }, &maybe);
                         (maybe, true)
                     }
+                    // A maybe that a generic made of a maybe (`maybe maybe int`)
+                    // beside the maybe it holds: the one it holds is wrapped.
+                    (Type::Maybe(inner), other @ Type::Maybe(_)) | (other @ Type::Maybe(_), Type::Maybe(inner))
+                        if inner.without_regions() == other.without_regions() =>
+                    {
+                        let maybe = Type::Maybe(inner.clone());
+                        let lt_holds_rt = matches!(&lt, Type::Maybe(held) if held.without_regions() == rt.without_regions());
+                        wrap(if lt_holds_rt { &mut *r } else { &mut *l }, &maybe);
+                        (maybe, true)
+                    }
                     (Type::Maybe(inner), other @ Type::Maybe(theirs)) if inner.without_regions() != theirs.without_regions() => {
                         return err(span, format!("'{}' compares {} with {}, {}, or none, not with {}", symbol, lt, inner, lt, other));
                     }
@@ -5579,6 +5613,9 @@ impl Checker {
             }
             ExprKind::Field(base, field) => {
                 if let Some(ty) = &base.ty {
+                    if matches!(ty, Type::Tuple(_)) {
+                        return refuse("it needs a place that can change, and a tuple's items never change; give the whole tuple a new value instead, as in 't = (1, 2)'".to_string());
+                    }
                     self.read_only_field(ty, field, value.span)?;
                 }
                 self.altered_place(base, method)
@@ -5644,8 +5681,11 @@ impl Checker {
             if def.fields.iter().any(|declared| declared.name == field) {
                 return err(span, format!("'{0}' is a field of every value of '{1}', not a shared one, so it is read on a value, as in 'p.{0}'", field, shape));
             }
-            if self.tasks.contains_key(&method_name(&shape, &field)) {
-                return err(span, format!("'{0}' is a method of every value of '{1}', so it is called on a value, as in 'p.{0}(…)'", field, shape));
+            if let Some(method) = self.tasks.get(&method_name(&shape, &field)).and_then(|info| info.owner.as_ref()) {
+                return err(span, match method.shared {
+                    true => format!("'{0}.{1}' is a shared method, so it is called, as in '{0}.{1}(…)'", unqualified(&shape), field),
+                    false => format!("'{0}' is a method of every value of '{1}', so it is called on a value, as in 'p.{0}(…)'", field, shape),
+                });
             }
             if field == TYPE_WORD {
                 return err(span, format!("'type' is read on a value, as in 'p.type', and '{}' is a shape, whose type is its name", unqualified(&shape)));
@@ -6375,7 +6415,11 @@ impl Checker {
                         "is given as"
                     };
                     let changing = if changed { param.as_str() } else { *before_param };
-                    let how = if changing == THIS { "the method changes the value it is called on".to_string() } else { format!("the call changes it through '{}'", changing) };
+                    let mut how = if changing == THIS { "the method changes the value it is called on".to_string() } else { format!("the call changes it through '{}'", changing) };
+                    // The earlier one changes it: say where this one reads it.
+                    if !changed {
+                        how = format!("{} while it reads it through {}", how, name(param));
+                    }
                     // A reference is named as written, with the place it names.
                     let written = place_path(place).map(|written| path_text(&written)).unwrap_or_default();
                     let subject = if written != path_text(&path) { format!("'{}' names '{}', which", written, path_text(&path)) } else { format!("'{}'", written) };
@@ -6848,6 +6892,15 @@ fn gives_a_maybe(extracted: &Type, given: &Type) -> Option<Type> {
     (plain && matches!(given, Type::None | Type::Maybe(_))).then(|| Type::Maybe(Box::new(extracted.clone())))
 }
 
+/// The error for `(i < n, n > (m))`, which reads as a call of `i` given the
+/// types `n, n`: a `<` after a name whose `>` is followed by `(` starts types.
+fn misread_comparison(name: &str) -> String {
+    format!(
+        "'{0}' is a value, but '{0} < …, … > (…)' reads as a call of '{0}' given the types between '<' and '>'; to compare, put the comparison before the ',' in parentheses, as in '({0} < …), … > (…)'",
+        name
+    )
+}
+
 /// Replaces `expr` with a `Wrap` of itself, of type `ty`.
 fn wrap(expr: &mut Expr, ty: &Type) {
     let span = expr.span;
@@ -7052,6 +7105,27 @@ fn region_conflict(ty: &Type, inside: Option<&str>) -> Option<(String, String)> 
 }
 
 /// How deeply a type is built up: `int` is 1, `maybe int` 2, `(int, maybe int)` 3.
+/// How many types `ty` is built of, itself included, counting up to a little
+/// past `MAX_TYPE_SIZE` only.
+fn type_size(ty: &Type) -> usize {
+    let mut count = 0;
+    let mut pending = vec![ty];
+    while let Some(ty) = pending.pop() {
+        count += 1;
+        if count > MAX_TYPE_SIZE {
+            break;
+        }
+        match ty {
+            Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Array(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => pending.push(inner),
+            Type::Or(value, error) => pending.extend([&**value, &**error]),
+            Type::Applied(applied) => pending.extend(&applied.types),
+            Type::Tuple(types) | Type::Results(types) => pending.extend(types),
+            _ => {}
+        }
+    }
+    count
+}
+
 fn type_depth(ty: &Type) -> usize {
     let inner = match ty {
         Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Array(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => {
@@ -7703,7 +7777,9 @@ fn constructible(ty: &Type, can: &HashSet<&str>) -> bool {
     match ty {
         Type::Named(name, _) => can.contains(name.as_str()),
         Type::Applied(applied) => can.contains(applied.name.as_str()),
-        Type::Ptr(inner, _) | Type::Array(inner, _) | Type::Slice(inner, _) => constructible(inner, can),
+        Type::Ptr(inner, _) | Type::Array(inner, _) => constructible(inner, can),
+        // A slice may be empty, as a new one is, which needs no item.
+        Type::Slice(..) => true,
         Type::Or(value, error) => **value == Type::Unit || constructible(value, can) || constructible(error, can),
         Type::Tuple(items) => items.iter().all(|item| constructible(item, can)),
         _ => true,

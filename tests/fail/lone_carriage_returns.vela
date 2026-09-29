@@ -1,0 +1,2 @@
+; error: 2:12: a line ends with a line feed (LF, as on Linux and macOS) or CR LF (as on Windows), not a carriage return (CR) alone; save the file with LF or CRLF line ends
+task main()    show(1)fi

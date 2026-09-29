@@ -1,0 +1,13 @@
+; error: 12:16: 'K.first' is a method of kind 'K', so it is called, as in 'K.first(…)' when it is shared, or 'k.first(…)' on a value
+kind K
+    A
+    B
+
+    shared first() -> K
+        <- A
+    fi
+fi
+
+task main()
+    bind f = K.first
+fi

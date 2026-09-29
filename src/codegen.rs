@@ -2548,7 +2548,9 @@ impl Generator {
             _ => &value_ty,
         };
         let extracted = match &result_ty {
-            Type::Maybe(inner) if !matches!(held, Type::Maybe(_)) => match (&value_ty, is_pointer(inner)) {
+            // What the value holds may be a maybe itself, when a generic filled
+            // one in (`maybe T` with `T` a `maybe int`).
+            Type::Maybe(inner) if inner.without_regions() == held.without_regions() => match (&value_ty, is_pointer(inner)) {
                 (Type::Maybe(_), _) => subject.clone(),
                 (_, true) => format!("{} ? {} : NULL", present, extracted),
                 (_, false) => {

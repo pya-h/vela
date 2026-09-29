@@ -243,7 +243,7 @@
         as in item #4: <code>[int#4]</code>, <code>[0#4]</code>. Written the other way round, as other languages do, each
         is an error that says which is which.
         (The compiler doesn't insist on the line break yet; see <a href="#limits">Current Limits</a>.)
-        Files may use LF or CRLF line endings.
+        Files may use LF or CRLF line endings; a carriage return alone (as old Mac files end lines) is an error.
       </p>
       <p>
         A statement is a binding, an assignment, a block, a send (<code>&lt;-</code>), a result update
@@ -1434,6 +1434,10 @@ Ticket { number: 1, limit: 3 }   <span class="comment">; error: 'limit' is a sha
 
 <span class="keyword">shape</span> Chain
     next: ^Chain           <span class="comment">; error: 'Chain' can never be created: field 'next' needs an existing ^Chain</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">shape</span> Dir
+    subs: [Dir]            <span class="comment">; ok: a new slice is empty, so it needs no Dir first</span>
 <span class="keyword">fi</span></pre>
       <p>Assigning to a field requires the variable to be a <code>hold</code>, or a <a href="#parameters"><code>hold</code> parameter</a>.</p>
       <pre><span class="keyword">hold</span> q = Point { x: 1, y: 2 }
@@ -1667,9 +1671,10 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
       <h3 id="tuples">Tuples</h3>
       <p>
         A tuple holds two or more values together, each of its own type: <code>(text, int)</code>, written as a value
-        <code>("Ada", 36)</code>. <code>t.0</code>, <code>t.1</code>, … read its items by position, from 0. A tuple is a
+        <code>("Ada", 36)</code>. <code>t.0</code>, <code>t.1</code>, … read its items by position, from 0, each written as
+        a plain number (<code>t.01</code> is an error). A tuple is a
         value, like a shape, and its items never change: a <code>hold</code> tuple takes a whole new tuple, but no item can
-        be assigned. Names take a tuple apart, as a list of names takes a task's several results.
+        be assigned, or changed by a method that <a href="#methods"><code>alters</code></a> the value it is called on. Names take a tuple apart, as a list of names takes a task's several results.
       </p>
       <pre><span class="keyword">task</span> divide(a: int, b: int) -&gt; (int, int)
     <span class="keyword">&lt;-</span> (a / b, a % b)
@@ -1690,7 +1695,7 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
     x, y = divide(<span class="number">20</span>, <span class="number">6</span>)                 <span class="comment">; into hold variables of the items&#x27; types</span>
     (y, x) = (x, y)                      <span class="comment">; swapped</span>
     point.<span class="number">0</span> = <span class="number">5</span>                          <span class="comment">; error: a tuple&#x27;s items never change; …</span>
-    show(pair == (<span class="string">"Ada"</span>, <span class="number">36</span>))            <span class="comment">; true</span>
+    show(pair ~= (<span class="string">"Ada"</span>, <span class="number">36</span>))            <span class="comment">; true: item by item</span>
 <span class="keyword">fi</span></pre>
       <ul>
         <li><strong>Items.</strong> Only values that can't change: numbers, bools, text, other tuples, <code>maybe</code>
@@ -1808,7 +1813,12 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
           <code>can't tell which type 'T' is for this call of 'nothing' …</code>.</li>
         <li><strong>Reading <code>&lt;</code>.</strong> A <code>&lt;</code> after a name starts the types of a call only
           when the matching <code>&gt;</code> is followed by <code>(</code>, so <code>a &lt; b</code> is still a
-          comparison. (<code>a &lt; b &gt; (c)</code> was never valid Vela: <code>&gt;</code> doesn't compare bools.)</li>
+          comparison. (<code>a &lt; b &gt; (c)</code> was never valid Vela: <code>&gt;</code> doesn't compare bools.) Two
+          comparisons joined by a comma can read that way too: <code>(i &lt; n, n &gt; (m))</code> is a call of
+          <code>i</code> given the types <code>n, n</code>, and the error says so when <code>i</code> is a value. Parentheses
+          around either comparison make them two, <code>((i &lt; n), n &gt; (m))</code> or
+          <code>(i &lt; n, (n &gt; (m)))</code>, since parentheses in types pair up and hold no <code>&gt;</code> of
+          their own.</li>
         <li><strong>Regions.</strong> A type a task takes names no region of its own: what a <code>T</code> holds is in
           the region of the type given for it, so <code>T@r</code> is an error. A slice or pointer around it names one as
           usual (<code>[T]@r</code>), and then the type given must live in that region — a call that would keep a value
@@ -2211,7 +2221,8 @@ show(half(<span class="number">8</span>) { <span class="keyword">none</span> } =
         A task that can fail sends <code>T ~ E</code>: its value when it works, or an error of type
         <code>E</code>, sent with <code>&lt;- fail error</code>. The error type must differ from the value type, and
         can be any type but <code>unit</code>, a <code>maybe</code>, or another <code>T ~ E</code>: a type has one
-        error side, so <code>(int ~ text) ~ text</code> is refused, as <code>maybe maybe int</code> is. Two words keep the two jobs apart:
+        error side, so <code>(int ~ text) ~ text</code> is refused when written, as <code>maybe maybe int</code> is (a
+        <a href="#generics">generic</a> may still make either, below). Two words keep the two jobs apart:
         <code>fail</code> is the verb that <em>makes</em> a failure, and <code>failure</code> is the noun that
         <em>names</em> one where it is matched. So <code>case {v}</code> matches a success,
         <code>case failure e</code> a failure, and a plan B's first line <code>failure e</code> names the failure it
@@ -2310,8 +2321,14 @@ save(500) {
           maybe an <code>int</code>. Parentheses group a type, so the other nesting is
           <code>maybe (int ~ text)</code>: nothing, or a result that may have failed. One type in parentheses is only
           that type, and a tuple still needs two or more items. A <code>maybe</code> and an error side nest either way
-          round, but neither nests inside itself: <code>maybe maybe int</code> and <code>(int ~ text) ~ text</code> are
-          both refused.
+          round, but neither nests inside itself when written: <code>maybe maybe int</code> and
+          <code>(int ~ text) ~ text</code> are both refused. A generic can still make one, since the type it is given
+          for <code>T</code> may be a maybe or a <code>T ~ E</code> itself: <code>wrap&lt;T&gt;(x: T) -&gt; maybe T</code>
+          given a <code>maybe int</code> sends a <code>maybe maybe int</code>, whose outer <code>none</code> means the
+          value is missing and whose inner one means it was there and held nothing (it shows as <code>{ none }</code>).
+          <code>~=</code> compares it with the <code>maybe int</code> it holds, a plan B on it gives that
+          <code>maybe int</code>, and a plan B giving <code>none</code> in a generic, as in <code>x { none }</code> with
+          <code>x: T ~ text</code>, gives a <code>maybe T</code> whatever <code>T</code> is.
         </p>
       </div>
 

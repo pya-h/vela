@@ -1,0 +1,6 @@
+; error: 3:18: expected an expression, got '.'; a range is written with two dots, as in '0..3', which leaves 3 out
+task main()
+    each i in 0...3
+        show(i)
+    fi
+fi

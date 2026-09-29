@@ -1,0 +1,24 @@
+  1 | ; A '<' after a name starts types given to a call only when its '>' is
+    | comment:; A '<' after a name starts types given to a call only when its '>' is
+  2 | ; followed by '(' and nothing in parentheses holds that '>'.
+    | comment:; followed by '(' and nothing in parentheses holds that '>'.
+  3 | task first<T>(pair: (T, T)) -> T
+    | keyword:task  task:first  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:pair  punctuation::  punctuation:(  type:T  punctuation:,  type:T  punctuation:)  punctuation:)  operator:->  type:T
+  4 |     <- pair.0
+    | keyword:<-  parameter:pair  punctuation:.  field:0
+  5 | fi
+    | keyword:fi
+  7 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  8 |     bind i = 1
+    | keyword:bind  variable:i  operator:=  number:1
+  9 |     bind n = 5
+    | keyword:bind  variable:n  operator:=  number:5
+ 10 |     show(((i < n), n > (i - 1)))
+    | builtin-fn:show  punctuation:(  punctuation:(  punctuation:(  variable:i  operator:<  variable:n  punctuation:)  punctuation:,  variable:n  operator:>  punctuation:(  variable:i  operator:-  number:1  punctuation:)  punctuation:)  punctuation:)
+ 11 |     show((i < n, (n > (i - 1))))
+    | builtin-fn:show  punctuation:(  punctuation:(  variable:i  operator:<  variable:n  punctuation:,  punctuation:(  variable:n  operator:>  punctuation:(  variable:i  operator:-  number:1  punctuation:)  punctuation:)  punctuation:)  punctuation:)
+ 12 |     show(first<(int, int)>(((1, 2), (3, 4))))
+    | builtin-fn:show  punctuation:(  task:first  punctuation:<  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:>  punctuation:(  punctuation:(  punctuation:(  number:1  punctuation:,  number:2  punctuation:)  punctuation:,  punctuation:(  number:3  punctuation:,  number:4  punctuation:)  punctuation:)  punctuation:)  punctuation:)
+ 13 | fi
+    | keyword:fi

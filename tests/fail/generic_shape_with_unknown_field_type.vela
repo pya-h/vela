@@ -1,0 +1,13 @@
+; error: 4:12: unknown type 'nosuch'
+shape Box<T>
+    item: T
+    other: nosuch
+
+    f(r: region) -> text@r
+        <- "{.item}" at r
+    fi
+fi
+
+task main()
+    show(1)
+fi

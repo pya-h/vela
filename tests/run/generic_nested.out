@@ -1,0 +1,9 @@
+{ none } maybe maybe int false
+{ { none } } maybe maybe maybe int
+true true false true
+{ { 3 } } none { none }
+{ { 4 } } { none }
+{ 4 } maybe int
+inner none
+(maybe int ~ text) ~ text
+inner failure big

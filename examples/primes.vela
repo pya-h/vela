@@ -54,5 +54,5 @@ priv task main()
     show("-----------------------")
     show(results.len) ; 15: x has a length of its own, so taking items out of x leaves results' as it was
     show(x.len)
-    ; show(x.del())  # would stop the program: vela: del() on an empty slice
+    ; show(x.del()) would stop the program: vela: del() on an empty slice
 fi

@@ -292,7 +292,7 @@ impl Parser {
         if self.check(Token::Is) {
             return Error::at(
                 self.peek_span(),
-                "'is' can only test the whole condition of a 'when' or 'loop', as in 'when x is {value}'",
+                "'is' tests a condition of a 'when' or 'loop', on its own or joined with 'and' outside any parentheses, as in 'when x is {value}' or 'when x is {value} and value > 0'",
             );
         }
         let previous = self.pos.checked_sub(1).and_then(|p| self.tokens.get(p));
@@ -304,8 +304,12 @@ impl Parser {
                 format!("; Vela has no '{0}=': write 'x = x {0} value'", op)
             }
             (Token::Assign, Some(Token::Eq), _) => "; to compare, write '=='".to_string(),
+            (Token::Assign, Some(Token::Range), _) => "; Vela has no '..=': a range leaves its end out, so '0..4' goes from 0 to 3".to_string(),
             (Token::Assign, _, _) if expected == "an expression" => "; '=' assigns, as a statement of its own".to_string(),
-            (Token::Dot, _, Some(Token::Int(n))) => format!("; a number starts with a digit, as in '0.{}'", n),
+            // `0...3` and `0..=3`: a range has two dots and leaves its end out.
+            (Token::Dot, Some(Token::Range), _) => "; a range is written with two dots, as in '0..3', which leaves 3 out".to_string(),
+            // `.05`: the digits after the dot lost their leading zeros as a number.
+            (Token::Dot, _, Some(Token::Int(_))) => "; a number starts with a digit, so write '0' before the '.'".to_string(),
             (Token::LBrace, Some(Token::Newline) | None, _) => "; a plan B's '{' goes on the line of its value, and blocks close with 'fi'".to_string(),
             // A comment written as other languages write one.
             (Token::Hash, _, _) => "; '#' marks an array's count, as in '[int#4]', and a comment starts with ';'".to_string(),
@@ -571,7 +575,12 @@ impl Parser {
         let mut params: Vec<TypeParam> = Vec::new();
         loop {
             if self.check(Token::Gt) {
-                return Err(Error::at(self.peek_span(), "'< … >' names the types a declaration takes, as in '<T>'; leave it out when it takes none"));
+                // `<T,>`: a type follows every comma.
+                let message = match params.is_empty() {
+                    true => "'< … >' names the types a declaration takes, as in '<T>'; leave it out when it takes none",
+                    false => "expected the name of another type after ',', as in '<T, U>'; leave the ',' out when there is none",
+                };
+                return Err(Error::at(self.peek_span(), message));
             }
             let span = self.peek_span();
             let name = self.expect_ident()?;
@@ -1404,7 +1413,12 @@ impl Parser {
             return Ok(Type::Slice(items, None));
         }
         if !self.match_token(Token::Hash) {
-            return Err(self.unexpected("'#' and a count, as in '[int#4]', or ']' for a slice, as in '[int]@r'"));
+            let error = self.unexpected("'#' and a count, as in '[int#4]', or ']' for a slice, as in '[int]@r'");
+            // `[int; 4]`: the `;` started a comment, which ended the line.
+            return Err(match self.check(Token::Newline) {
+                true => Error { message: format!("{} (';' starts a comment)", error.message), ..error },
+                false => error,
+            });
         }
         let count_span = self.peek_span();
         let count = match self.peek() {
@@ -2579,7 +2593,7 @@ impl Parser {
         let first = self.parse_expr()?;
         if self.match_token(Token::Hash) {
             let count = self.parse_expr()?;
-            self.expect_array_end(span)?;
+            self.expect_array_end(span, false)?;
             return Ok(Expr::new(ExprKind::Repeat { value: Box::new(first), count: Box::new(count) }, span));
         }
         let mut values = vec![first];
@@ -2589,17 +2603,21 @@ impl Parser {
             }
             values.push(self.parse_expr()?);
         }
-        self.expect_array_end(span)?;
+        // `[0; 4]`: one value, then the `;` of a count written as other
+        // languages write one, which started a comment.
+        self.expect_array_end(span, values.len() == 1)?;
         Ok(Expr::new(ExprKind::Array(values), span))
     }
 
-    /// The `]` closing the array opened at `opened`.
-    fn expect_array_end(&mut self, opened: Span) -> Result<()> {
+    /// The `]` closing the array opened at `opened`; `one` when it holds one
+    /// value so far.
+    fn expect_array_end(&mut self, opened: Span, one: bool) -> Result<()> {
         if self.match_token(Token::RBracket) {
             return Ok(());
         }
         if matches!(self.peek(), Token::Newline | Token::Eof) {
-            return Err(Error::at(self.peek_span(), format!("expected ']' to close the array at {}:{}; an array is written on one line", opened.line, opened.col)));
+            let count = if one { ", with a count after '#', as in '[0#4]' (';' starts a comment)" } else { "" };
+            return Err(Error::at(self.peek_span(), format!("expected ']' to close the array at {}:{}; an array is written on one line{}", opened.line, opened.col, count)));
         }
         Err(self.unexpected("']'"))
     }
@@ -2678,14 +2696,22 @@ impl Parser {
             return false;
         }
         let mut depth = 0usize;
+        // Parentheses in types group one or hold a tuple's, so they pair up
+        // inside the types, and no `>` closes anything inside them: `(i < n),
+        // m > (k)` and `i < n, (m > (k))` are comparisons.
+        let mut grouped = 0usize;
         for p in self.pos + 1.. {
             match self.tokens.get(p) {
+                Some(Token::Gt) if grouped > 0 && depth == 0 => return false,
                 // `>` closes the types, or, nested, one type's own.
                 // A call follows the types a task is given, and a literal the
                 // types a shape is given; nothing else can follow a `>`.
                 Some(Token::Gt) if depth == 0 => return matches!(self.tokens.get(p + 1), Some(Token::LParen | Token::LBrace)),
                 Some(Token::Lt) => depth += 1,
                 Some(Token::Gt) => depth -= 1,
+                Some(Token::LParen) => grouped += 1,
+                Some(Token::RParen) if grouped == 0 => return false,
+                Some(Token::RParen) => grouped -= 1,
                 Some(token) if token.writes_type() => {}
                 _ => return false,
             }

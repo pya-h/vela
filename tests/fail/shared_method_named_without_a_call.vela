@@ -1,0 +1,12 @@
+; error: 11:16: 'C.make' is a shared method, so it is called, as in 'C.make(…)'
+shape C
+    n: int
+
+    shared make() -> C
+        <- C { n: 1 }
+    fi
+fi
+
+task main()
+    bind f = C.make
+fi

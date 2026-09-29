@@ -1,0 +1,4 @@
+; error: 3:20: expected ']' to close the array at 3:14; an array is written on one line, with a count after '#', as in '[0#4]' (';' starts a comment)
+task main()
+    bind x = [0; 4]
+fi

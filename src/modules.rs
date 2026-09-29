@@ -978,7 +978,15 @@ impl Resolver<'_> {
             None if tag == TYPE_WORD => {
                 err(at, format!("'type' is read on a value, as in 'k.type', and '{}' is a kind, whose type is its name", kind_name))
             }
-            None => err(at, format!("kind '{}' has no variant '{}'", kind_name, tag)),
+            None => {
+                // `Kind.m` without `(…)`, naming a method of the kind.
+                let method = method_name(&kind.full, tag);
+                let tables = std::iter::once(&self.own).chain(self.modules.values().map(|module| &module.names));
+                match tables.flat_map(|names| names.values()).any(|entry| entry.full == method) {
+                    true => err(at, format!("'{0}.{1}' is a method of kind '{0}', so it is called, as in '{0}.{1}(…)' when it is shared, or 'k.{1}(…)' on a value", kind_name, tag)),
+                    false => err(at, format!("kind '{}' has no variant '{}'", kind_name, tag)),
+                }
+            }
         }
     }
 

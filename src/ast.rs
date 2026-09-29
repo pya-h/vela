@@ -410,7 +410,12 @@ impl Type {
                 grouped(f, inner, outer)
             }
             Type::Or(value, error) => {
-                value.write(f, outer)?;
+                // `(int ~ text) ~ text`, which only a generic makes: `~` holds
+                // the whole type before it, so the inner one is grouped.
+                match &**value {
+                    Type::Or(..) => grouped(f, value, outer)?,
+                    _ => value.write(f, outer)?,
+                }
                 write!(f, " ~ ")?;
                 error.write(f, outer)
             }

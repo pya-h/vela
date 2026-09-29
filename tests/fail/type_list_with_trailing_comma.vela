@@ -1,0 +1,4 @@
+; error: 2:10: expected the name of another type after ',', as in '<T, U>'; leave the ',' out when there is none
+task f<T,>(x: T)
+    show(x)
+fi

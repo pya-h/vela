@@ -466,8 +466,16 @@ impl Lexer {
         self.col = mark.col;
     }
 
+    /// Whether the next character is a `\r` that isn't part of a CRLF line
+    /// end, as old Mac files end lines: an error, since the file would read as
+    /// one line.
+    fn lone_cr(&self) -> bool {
+        self.peek() == '\r' && self.peek2() != '\n'
+    }
+
     fn skip_whitespace(&mut self) {
-        while matches!(self.peek(), ' ' | '\t' | '\r') {
+        // A `\r` is only the start of a CRLF line end (see `lone_cr`).
+        while matches!(self.peek(), ' ' | '\t') || (self.peek() == '\r' && self.peek2() == '\n') {
             self.advance();
         }
     }
@@ -498,10 +506,15 @@ impl Lexer {
 
         // `;` starts a comment, as it adds a remark to a sentence.
         if c == ';' {
-            while !self.at_line_end() && !self.at_end() {
+            while !self.at_line_end() && !self.at_end() && !self.lone_cr() {
                 self.advance();
             }
             return LexKind::Comment;
+        }
+
+        if self.lone_cr() {
+            self.advance();
+            return invalid(loc, "a line ends with a line feed (LF, as on Linux and macOS) or CR LF (as on Windows), not a carriage return (CR) alone; save the file with LF or CRLF line ends");
         }
 
         if c.is_ascii_alphabetic() {
@@ -690,6 +703,12 @@ impl Lexer {
         }
         digits(self, &mut s, &mut raw);
         if item && !(self.peek().is_ascii_alphabetic() || self.peek() == '_') {
+            // `t.01` and `t.1_0` would read as `t.1` and `t.10`.
+            if raw != s || (s.len() > 1 && s.starts_with('0')) {
+                let plain = s.trim_start_matches('0');
+                let plain = if plain.is_empty() { "0" } else { plain };
+                return invalid(loc, format!("a tuple's item is written as a plain number, as in '.{}', not '.{}'", plain, raw));
+            }
             return match s.parse::<i64>() {
                 Ok(val) => LexKind::Token(Token::Int(val)),
                 Err(_) => invalid(loc, format!("integer literal '{}' is too large", raw)),
@@ -860,7 +879,7 @@ impl Lexer {
         // An error inside a value the line ends in is most likely from the
         // missing `}` (`"n = {n" at r` reads `" at r)` as text), so that is
         // reported instead.
-        let erred_before = error.is_some();
+        let mut erred_before = error.is_some();
         loop {
             self.skip_whitespace();
             if self.at_end() || self.at_line_end() {
@@ -872,6 +891,12 @@ impl Lexer {
                     "a '{' in text opens a value, which ends with '}' on the same line; to write a brace, write '\\{'",
                 ));
                 return None;
+            }
+            // `"{\"a\"}"`: the `\"` ends the text, so the `}` is missed too;
+            // the `\` is the mistake to report.
+            if self.peek() == '\\' && error.is_none() {
+                *error = Some(Error::at(self.location(), "a value in text is code, so text inside it is written with plain quotes, as in '{f(\"a\")}', not '\\\"'"));
+                erred_before = true;
             }
             if self.peek() == ';' {
                 error.get_or_insert(Error::at(self.location(), "a value in text can't hold a comment"));

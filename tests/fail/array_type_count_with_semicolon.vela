@@ -1,0 +1,4 @@
+; error: 3:29: expected '#' and a count, as in '[int#4]', or ']' for a slice, as in '[int]@r', got end of line (';' starts a comment)
+task main()
+    bind x: [int; 4] = [0#4]
+fi

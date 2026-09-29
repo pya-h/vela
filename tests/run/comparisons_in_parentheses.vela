@@ -1,0 +1,13 @@
+; A '<' after a name starts types given to a call only when its '>' is
+; followed by '(' and nothing in parentheses holds that '>'.
+task first<T>(pair: (T, T)) -> T
+    <- pair.0
+fi
+
+task main()
+    bind i = 1
+    bind n = 5
+    show(((i < n), n > (i - 1)))
+    show((i < n, (n > (i - 1))))
+    show(first<(int, int)>(((1, 2), (3, 4))))
+fi

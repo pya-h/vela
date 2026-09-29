@@ -1,0 +1,59 @@
+; A generic may fill in a maybe for T, making a maybe of a maybe, or an
+; error type for T, making an error type with two error sides.
+task wrap<T>(x: T) -> maybe T
+    <- x
+fi
+
+task quiet<T>(x: T ~ text) -> maybe T
+    <- x { none }
+fi
+
+task maybe_again<T>(x: maybe T) -> maybe T
+    <- x { none }
+fi
+
+task tryit<T>(x: T) -> T ~ text
+    <- x
+fi
+
+task look(n: int) -> maybe int ~ text
+    when n > 5
+        <- fail "big"
+    fi
+    when n < 0
+        <- none
+    fi
+    <- n
+fi
+
+task main()
+    bind m: maybe int = none
+    bind k: maybe int = 4
+    bind w = wrap(m)
+    show(w, " ", w.type, " ", w == none)
+    show(wrap(wrap(m)), " ", wrap(wrap(m)).type)
+    ; A maybe beside the maybe that holds it: the one it holds is wrapped.
+    show(w ~= m, " ", wrap(k) ~= k, " ", m ~= wrap(k), " ", wrap(m) <> none)
+    ; A plan B giving none, where T is a maybe.
+    show(quiet(look(3)), " ", quiet(look(9)), " ", quiet(look(-1)))
+    show(maybe_again(wrap(k)), " ", maybe_again(wrap(m)))
+    ; A plan B on a maybe of a maybe gives what it holds.
+    bind held = wrap(k) { none }
+    show(held, " ", held.type)
+    when w is { inner }
+        show("inner ", inner)
+    fi
+    bind r = tryit(look(9))
+    show(r.type)
+    match r
+        case {inner}
+            match inner
+                case {v}
+                    show(v)
+                case failure e
+                    show("inner failure ", e)
+            fi
+        case failure e
+            show("outer failure ", e)
+    fi
+fi

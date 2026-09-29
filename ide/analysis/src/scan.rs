@@ -452,8 +452,15 @@ impl<'a> Tokens<'a> {
             return true;
         }
         let mut depth = 0usize;
+        // Parentheses pair up inside the types, and no `>` inside them closes
+        // anything, as the parser has it (`(i < n), m > (k)` compares).
+        let mut grouped = 0usize;
         for q in p + 1.. {
             match self.token(q) {
+                Some(Token::Gt) if grouped > 0 && depth == 0 => return false,
+                Some(Token::LParen) => grouped += 1,
+                Some(Token::RParen) if grouped == 0 => return false,
+                Some(Token::RParen) => grouped -= 1,
                 // A call follows the types a task is given, and a literal the
                 // types a shape is given.
                 Some(Token::Gt) if depth == 0 => return matches!(self.token(q + 1), Some(Token::LParen | Token::LBrace)),

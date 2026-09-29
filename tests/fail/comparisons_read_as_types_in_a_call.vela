@@ -1,0 +1,10 @@
+; error: 9:7: 'i' is a value, but 'i < …, … > (…)' reads as a call of 'i' given the types between '<' and '>'; to compare, put the comparison before the ',' in parentheses, as in '(i < …), … > (…)'
+task f(a: bool, b: bool)
+    show(a, b)
+fi
+
+task main()
+    bind i = 1
+    bind n = 5
+    f(i < n, n > (i - 1))
+fi

@@ -1,0 +1,6 @@
+; error: 3:18: expected an expression, got '='; Vela has no '..=': a range leaves its end out, so '0..4' goes from 0 to 3
+task main()
+    each i in 0..=3
+        show(i)
+    fi
+fi

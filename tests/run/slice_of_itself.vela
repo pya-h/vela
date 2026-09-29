@@ -1,0 +1,20 @@
+; A shape or kind may hold a slice of itself: a new slice is empty, so
+; no value of it is needed first.
+shape Dir
+    name: text
+    subs: [Dir]
+fi
+
+kind Tree
+    Node(kids: [Tree])
+fi
+
+task main()
+    region r
+    hold d = Dir { name: "a", subs: new [Dir]() at r }
+    d.subs.add(Dir { name: "b", subs: new [Dir]() at r })
+    show(d.subs.len, " ", d.subs[0].name)
+    hold kids = new [Tree]() at r
+    kids.add(Node(new [Tree]() at r))
+    show(Node(kids))
+fi

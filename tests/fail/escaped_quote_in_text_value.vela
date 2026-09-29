@@ -1,0 +1,5 @@
+; error: 4:12: a value in text is code, so text inside it is written with plain quotes, as in '{f("a")}', not '\"'
+task main()
+    region r
+    show("{\"a\"}" at r)
+fi
