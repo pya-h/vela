@@ -1,0 +1,8 @@
+enter: ok
+again: { 10 } none true
+dropped: negative
+{ 4 } none true false
+{ 7 } none
+{ Large(20) } none
+true true
+{ 4 } none true

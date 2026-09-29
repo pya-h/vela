@@ -1,0 +1,7 @@
+; error: 3:25: this plan B can give none, so the whole is maybe int, with no value when the plan B runs, but int is expected here; make the plan B give a value of type int, or expect maybe int
+task read() -> int
+    <- scan("n: ", int) { none }
+fi
+task main()
+    show(read())
+fi

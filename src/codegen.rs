@@ -2476,6 +2476,23 @@ impl Generator {
             Type::Or(..) => (format!("{}.ok", subject), format!("{}.value", subject)),
             other => return Err(Error::internal_at(e.span, format!("plan B on type {}", other))),
         };
+        // A plan B giving `none` made the whole a `maybe` of what the value
+        // holds: the value when it is there, wrapped.
+        let held = match &value_ty {
+            Type::Maybe(inner) | Type::Or(inner, _) => &**inner,
+            _ => &value_ty,
+        };
+        let extracted = match &result_ty {
+            Type::Maybe(inner) if !matches!(held, Type::Maybe(_)) => match (&value_ty, is_pointer(inner)) {
+                (Type::Maybe(_), _) => subject.clone(),
+                (_, true) => format!("{} ? {} : NULL", present, extracted),
+                (_, false) => {
+                    let ctype = c_type(&result_ty);
+                    format!("{} ? ({}){{ .has = true, .value = {} }} : ({}){{ .has = false }}", present, ctype, extracted, ctype)
+                }
+            },
+            _ => extracted,
+        };
         let result = if result_ty == Type::Unit {
             String::new()
         } else {

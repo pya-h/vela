@@ -1,0 +1,68 @@
+; A plan B that gives `none` makes the whole a `maybe`: the value when there
+; is one, and empty when there isn't. It never becomes a plain value, which
+; would have nothing when the plan B runs.
+
+kind Size
+    Small
+    Large(n: int)
+fi
+
+task half(n: int) -> maybe int
+    when n % 2 == 0
+        <- n / 2
+    fi
+    <- none
+fi
+
+task checked(n: int) -> int ~ text
+    when n < 0
+        <- fail "negative"
+    fi
+    <- n
+fi
+
+task sized(n: int) -> Size ~ text
+    when n > 10
+        <- Size.Large(n)
+    fi
+    <- fail "small"
+fi
+
+task point(p: ^int@r, fine: bool) -> ^int@r ~ text
+    when fine
+        <- p
+    fi
+    <- fail "no"
+fi
+
+task main()
+    region r
+    ; A typed scan: a number read, or none when the line isn't one.
+    bind b: maybe int = scan("enter: ", int) { none }
+    when b ~= 10
+        show("ok")
+    fi
+    bind c = scan("again: ", int) { none }
+    show(b, " ", c, " ", c == none)
+    ; A value that can fail, with or without naming the failure.
+    bind good = checked(4) { none }
+    bind bad = checked(-4) {
+        failure e
+        show("dropped: ", e)
+        none
+    }
+    show(good, " ", bad, " ", good ~= 4, " ", bad ~= 4)
+    ; A plan B choosing between a value and none, through a when.
+    bind first = checked(-1) { when good ~= 4 7 else none fi }
+    bind second = checked(-1) { when good ~= 5 7 else none fi }
+    show(first, " ", second)
+    ; A kind, and a pointer.
+    bind big = sized(20) { none }
+    bind small = sized(2) { none }
+    show(big, " ", small)
+    bind three = new int(3) at r
+    show(point(three, true) { none } ~= three, " ", point(three, false) { none } == none)
+    ; On a value that is a maybe already, 'm { none }' is m itself.
+    bind m = half(8) { none }
+    show(m, " ", half(7) { none }, " ", half(8) { none } ~= 4)
+fi

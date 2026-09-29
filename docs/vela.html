@@ -2146,7 +2146,7 @@ show(m + 1)                <span class="comment">; error: arithmetic requires nu
 }</pre>
       <p>
         The value before the block is evaluated once, and the block runs only when it is empty. Its last line gives
-        the value, of the type inside the <code>maybe</code>, and may be a <code>when</code> or a <code>match</code>,
+        the value, of the type inside the <code>maybe</code> (or <code>none</code>, <a href="#plan-b-none">below</a>), and may be a <code>when</code> or a <code>match</code>,
         which gives it through their branches (see <a href="#choices">A match or a when as a value</a>); a
         <code>&lt;-</code> in the block sends from the task as
         usual, and when every path through the block sends, it needs no value line. Names declared in the block
@@ -2156,6 +2156,20 @@ show(m + 1)                <span class="comment">; error: arithmetic requires nu
         shape literal; any other <code>{</code> after a value starts a plan B, and a <code>&lt;-</code> may follow it
         on the same line: <code>m { &lt;- 0 }</code>.
       </p>
+      <p id="plan-b-none">
+        A plan B may give <code>none</code> instead, and the whole is then a <code>maybe</code>: the value when
+        there is one, and empty when the plan B runs. It is a <code>maybe</code> with or without a written type, and
+        never a plain value, which would have nothing to hold when the plan B runs. So a value that can fail becomes
+        a <code>maybe</code> when its error doesn't matter, and on a value that is a <code>maybe</code> already,
+        <code>m { none }</code> is <code>m</code> itself.
+      </p>
+      <pre><span class="keyword">bind</span> b: <span class="keyword">maybe</span> int = scan(<span class="string">"enter:"</span>, int) { <span class="keyword">none</span> }  <span class="comment">; a number, or none when the line isn't one</span>
+<span class="keyword">bind</span> c = scan(<span class="string">"enter:"</span>, int) { <span class="keyword">none</span> }              <span class="comment">; maybe int too</span>
+<span class="keyword">when</span> b ~= <span class="number">10</span>
+    show(<span class="string">"ok"</span>)
+<span class="keyword">fi</span>
+<span class="keyword">bind</span> n: int = scan(<span class="string">"enter:"</span>, int) { <span class="keyword">none</span> }         <span class="comment">; error: this plan B can give none, so the whole is maybe int</span>
+show(half(<span class="number">8</span>) { <span class="keyword">none</span> } == <span class="number">4</span>)                    <span class="comment">; error: '==' compares a maybe int only with none</span></pre>
       <p>
         A task that can fail sends <code>T ~ E</code>: its value when it works, or an error of type
         <code>E</code>, sent with <code>&lt;- fail error</code>. The error type must differ from the value type, and

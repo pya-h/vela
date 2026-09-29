@@ -1,0 +1,13 @@
+; error: 10:27: '==' compares a maybe int only with none; extract its value first, as in 'x { … } == v', or compare what it holds with '~=', as in 'x ~= v'
+; 'm { none }' is still a maybe, which '==' compares only with none.
+task half(n: int) -> maybe int
+    when n % 2 == 0
+        <- n / 2
+    fi
+    <- none
+fi
+task main()
+    when half(4) { none } == 2
+        show("two")
+    fi
+fi

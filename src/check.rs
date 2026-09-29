@@ -4779,9 +4779,14 @@ impl Checker {
         // A plan B is a place the value goes, so a call whose types it settled
         // (see `check_plan_b_body`) learns them from it.
         if !value_ty.params().is_empty() {
+            // What the value holds, where the plan B made the whole a `maybe`.
+            let held = match &settled {
+                Type::Maybe(inner) if !matches!(extracted, Type::Maybe(_)) => (**inner).clone(),
+                _ => settled.clone(),
+            };
             let told = match &value_ty {
-                Type::Maybe(_) => Type::Maybe(Box::new(settled.clone())),
-                Type::Or(_, error) => Type::Or(Box::new(settled.clone()), error.clone()),
+                Type::Maybe(_) => Type::Maybe(Box::new(held)),
+                Type::Or(_, error) => Type::Or(Box::new(held), error.clone()),
                 other => other.clone(),
             };
             self.settle_types(value, &told)?;
@@ -4822,6 +4827,11 @@ impl Checker {
             if ty == Type::Unit {
                 return err(e.span, format!("the last line of a plan B gives its value, but this has none; expected a value of type {}", extracted));
             }
+            // `v { none }`: the whole is a `maybe`, the value when there is one
+            // and empty otherwise, never a plain value, which would have none.
+            if let Some(maybe) = gives_a_maybe(extracted, &ty) {
+                return self.coerce(e, &maybe).map(|()| Some((maybe, e.span)));
+            }
             // A plan B on a call that isn't told which type it is: the
             // fallback's type is the one to use, since it is where the value
             // goes (see `settle_types`).
@@ -4846,7 +4856,11 @@ impl Checker {
         // A `when` or a `match` on the last line gives the value through its own
         // branches, as it does in the block of a case (see `value_block_tail`).
         if gives_value(last) {
-            self.check_branching_value(last)?;
+            let span = last.span;
+            let given = self.check_branching_value(last)?;
+            if let Some(maybe) = given.and_then(|ty| gives_a_maybe(extracted, &ty)) {
+                return self.settle_value(body, &maybe).map(|()| Some((maybe, span)));
+            }
             return self.settle_value(body, extracted).map(|()| None);
         }
         self.check_stmt(last)?;
@@ -6643,6 +6657,17 @@ impl Checker {
         if self.coerce_items(expr, expected)? {
             return Ok(());
         }
+        // `n: int = v { none }`: the plan B made the whole a maybe, which has
+        // no value where the plan B runs.
+        if let (ExprKind::PlanB { value, .. }, Type::Maybe(held)) = (&expr.kind, &actual)
+            && fits_regions(held, expected)
+            && value.ty.as_ref().is_some_and(|ty| !matches!(ty, Type::Maybe(inner) | Type::Or(inner, _) if matches!(**inner, Type::Maybe(_))))
+        {
+            return err(
+                expr.span,
+                format!("this plan B can give none, so the whole is {}, with no value when the plan B runs, but {} is expected here; make the plan B give a value of type {}, or expect {}", actual, expected, expected, actual),
+            );
+        }
         match expected {
             Type::Maybe(inner) if actual == Type::None || fits_regions(&actual, inner) || self.coerce_items(expr, inner)? => {
                 if fits_regions(&actual, inner) {
@@ -6774,6 +6799,15 @@ fn item_type_example(array: &Type) -> Type {
         Type::Array(items, _) => items.without_regions(),
         other => other.without_regions(),
     }
+}
+
+/// The type of a plan B whose block gives `given` where a value of type
+/// `extracted` was expected: a `maybe` of it when the block gives `none` or a
+/// `maybe`, since the whole then has no value when both are empty. A plan B on
+/// a value holding a `maybe` already gives one anyway, so nothing changes.
+fn gives_a_maybe(extracted: &Type, given: &Type) -> Option<Type> {
+    let plain = !matches!(extracted, Type::Maybe(_) | Type::Unit) && !extracted.unknown();
+    (plain && matches!(given, Type::None | Type::Maybe(_))).then(|| Type::Maybe(Box::new(extracted.clone())))
 }
 
 /// Replaces `expr` with a `Wrap` of itself, of type `ty`.

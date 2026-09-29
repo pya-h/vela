@@ -1,0 +1,6 @@
+; error: 4:25: expected type maybe int, got maybe text
+task main()
+    bind word: maybe text = "a"
+    bind n = int("4") { word }
+    show(n)
+fi

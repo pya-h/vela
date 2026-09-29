@@ -229,7 +229,12 @@ impl<'a> Knowledge<'a> {
                 && matches!(self.token(last), Some(Token::Ident(_) | Token::Underscore));
             let brace = if names_error { last.checked_sub(2)? } else { last };
             if self.token(brace) == Some(&Token::LBrace) {
-                self.expression_type(brace.checked_sub(1)?, depth + 1)?.extracted().cloned()?
+                let extracted = self.expression_type(brace.checked_sub(1)?, depth + 1)?.extracted().cloned()?;
+                // One whose last line is `none` is a maybe of what it extracts.
+                match self.plan_b_gives_none(brace) && !matches!(extracted, Type::Maybe(_)) {
+                    true => Type::Maybe(Box::new(extracted)),
+                    false => extracted,
+                }
             } else {
                 self.span_type(first, last, depth + 1)?
             }
@@ -626,6 +631,10 @@ impl<'a> Knowledge<'a> {
                     // the value it extracts.
                     return exact(open).or_else(|| {
                         let extracted = self.expression_type(open.checked_sub(1)?, depth + 1)?.extracted().cloned()?;
+                        // `v { none }` is a maybe of what it extracts.
+                        if self.token(q.checked_sub(1)?) == Some(&Token::None) && open + 2 == q && !matches!(extracted, Type::Maybe(_)) {
+                            return Some(Type::Maybe(Box::new(extracted)));
+                        }
                         // A value without pointers takes its fallback's region.
                         let fallback = || self.expression_type(q.checked_sub(1)?, depth + 1).filter(|f| f.without_regions() == extracted.without_regions());
                         match extracted.regions().contains(&ANY_REGION).then(fallback).flatten() {
@@ -960,6 +969,26 @@ impl<'a> Knowledge<'a> {
     pub fn can_copy(&self, ty: &Type) -> bool {
         let takes_region = self.takes_region();
         holds_pointers(ty, &takes_region) || holds_text(ty, &takes_region)
+    }
+
+    /// Whether the plan B whose `{` ends the line at `open` has `none` alone
+    /// on its last line.
+    fn plan_b_gives_none(&self, open: usize) -> bool {
+        let mut depth = 0usize;
+        let mut p = open + 1;
+        while let Some(token) = self.token(p) {
+            match token {
+                Token::LBrace => depth += 1,
+                Token::RBrace if depth > 0 => depth -= 1,
+                Token::RBrace => {
+                    let mut last = (open + 1..p).rev().filter(|&q| self.token(q) != Some(&Token::Newline));
+                    return last.next().is_some_and(|q| self.token(q) == Some(&Token::None) && self.token(q - 1) == Some(&Token::Newline));
+                }
+                _ => {}
+            }
+            p += 1;
+        }
+        false
     }
 
     /// The position of the bracket that `close` at `q` closes, on the same line.
