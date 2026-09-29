@@ -5,3 +5,5 @@ too cold: -80
 -50
 too hot: 70
 sum: 15
+none { 30 } true false
+warm: 21

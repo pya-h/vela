@@ -71,4 +71,15 @@ task main()
     }
     add_reading(&total, 5) { }
     show("sum: ", total)
+
+    ; A plan B giving none keeps the value when there is one: a maybe, which
+    ; `~=` compares with a plain value, false when it is empty.
+    bind kept = check(-80) { none }
+    bind fine = check(30) { none }
+    show(kept, " ", fine, " ", fine ~= 30, " ", kept ~= 30)
+
+    ; An is joined with and: the value, then a test of it.
+    when check(21) is {value} and value > 20
+        show("warm: ", value)
+    fi
 fi

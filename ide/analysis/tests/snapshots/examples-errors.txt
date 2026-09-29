@@ -128,5 +128,23 @@
     | task:add_reading  punctuation:(  operator:&  variable:total  punctuation:,  number:5  punctuation:)  punctuation:{  punctuation:}
  73 |     show("sum: ", total)
     | builtin-fn:show  punctuation:(  string:"sum: "  punctuation:,  variable:total  punctuation:)
- 74 | fi
+ 75 |     ; A plan B giving none keeps the value when there is one: a maybe, which
+    | comment:; A plan B giving none keeps the value when there is one: a maybe, which
+ 76 |     ; `~=` compares with a plain value, false when it is empty.
+    | comment:; `~=` compares with a plain value, false when it is empty.
+ 77 |     bind kept = check(-80) { none }
+    | keyword:bind  variable:kept  operator:=  task:check  punctuation:(  operator:-  number:80  punctuation:)  punctuation:{  keyword:none  punctuation:}
+ 78 |     bind fine = check(30) { none }
+    | keyword:bind  variable:fine  operator:=  task:check  punctuation:(  number:30  punctuation:)  punctuation:{  keyword:none  punctuation:}
+ 79 |     show(kept, " ", fine, " ", fine ~= 30, " ", kept ~= 30)
+    | builtin-fn:show  punctuation:(  variable:kept  punctuation:,  string:" "  punctuation:,  variable:fine  punctuation:,  string:" "  punctuation:,  variable:fine  operator:~=  number:30  punctuation:,  string:" "  punctuation:,  variable:kept  operator:~=  number:30  punctuation:)
+ 81 |     ; An is joined with and: the value, then a test of it.
+    | comment:; An is joined with and: the value, then a test of it.
+ 82 |     when check(21) is {value} and value > 20
+    | keyword:when  task:check  punctuation:(  number:21  punctuation:)  keyword:is  punctuation:{  variable:value  punctuation:}  keyword:and  variable:value  operator:>  number:20
+ 83 |         show("warm: ", value)
+    | builtin-fn:show  punctuation:(  string:"warm: "  punctuation:,  variable:value  punctuation:)
+ 84 |     fi
+    | keyword:fi
+ 85 | fi
     | keyword:fi

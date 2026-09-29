@@ -190,7 +190,8 @@
         (kinds, <code>match</code>, and a kind's methods), <code>methods.vela</code> (a shape's methods, <code>alters</code>,
         <code>priv</code>, a method that can fail, one of a shape that takes types, <a href="#field-defaults">fields that name the value they fall back on</a>, a <a href="#read-fields"><code>read</code></a> field, and a <a href="#shared">shared</a> one), <code>todo.vela</code> (a linked list in a region, with <code>maybe</code>
         pointers, <code>is</code>, and a plan B), <code>errors.vela</code> (<code>T ~ E</code>, <code>fail</code> and <code>failure</code>, and handling
-        errors with <code>match</code>, <code>is</code>, and a plan B), <code>text.vela</code> (lengths, parts, order,
+        errors with <code>match</code>, <code>is</code> joined with <code>and</code>, and a plan B, one giving
+        <code>none</code> too), <code>text.vela</code> (lengths, parts, order,
         joining, values as text, and text holding values), <code>regions.vela</code> (a tree in a region, a region
         per loop pass, copying a result into a longer-lived region, and <a href="#region-after-call">the region named after a call</a>), <code>arrays.vela</code> (arrays, and slices
         in a region: sorting and a sieve of primes), <code>shop.vela</code> (a program in three files, with
@@ -1086,7 +1087,8 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         pointers, or slices compares freely, <code>mood == Mood.Calm</code>. Both sides have the same type, though
         values in different regions compare (pointers and places in two regions are never equal). A
         <code>maybe</code> compares with <code>==</code> only with <code>none</code>, so an empty value is never
-        mistaken for one that holds something; <code>~=</code> compares what it holds (below). A value that can fail
+        mistaken for one that holds something; <code>~=</code> compares what it holds (below, and see
+        <a href="#maybe-compare">comparing a maybe on purpose</a>). A value that can fail
         is read first.
       </p>
       <p>
@@ -2145,6 +2147,19 @@ show(m == <span class="keyword">none</span>)            <span class="comment">; 
 show(half(8) ~= <span class="number">4</span>, <span class="string">" "</span>, m ~= <span class="number">4</span>) <span class="comment">; true false</span>
 show(half(8) == <span class="number">4</span>)          <span class="comment">; error: '==' compares a maybe int only with none; ... or compare what it holds with '~='</span>
 show(m + 1)                <span class="comment">; error: arithmetic requires numeric operands; the value in this maybe int must be extracted first</span></pre>
+      <p id="maybe-compare">
+        <code>==</code> refuses a <code>maybe</code> beside a plain value so that an empty one is never mistaken
+        for a value by accident. To compare on purpose, say what an empty one means: <code>~=</code> is false when
+        it is empty; a plan B gives the value to compare instead, so pick one that can't be mistaken for a real one;
+        and a <code>when</code>, as a value or joined with <code>and</code>, names the value first.
+      </p>
+      <pre><span class="keyword">bind</span> m = half(<span class="number">8</span>)
+show(m ~= <span class="number">4</span>)                                     <span class="comment">; true, and false when m is empty</span>
+show(m { <span class="number">0</span> } == <span class="number">4</span>)                                <span class="comment">; true: an empty m counts as 0</span>
+<span class="keyword">bind</span> same = <span class="keyword">when</span> m <span class="keyword">is</span> { x } x == <span class="number">4</span> <span class="keyword">else</span> <span class="keyword">false</span> <span class="keyword">fi</span>   <span class="comment">; true</span>
+<span class="keyword">when</span> m <span class="keyword">is</span> { x } <span class="keyword">and</span> x == <span class="number">4</span>                      <span class="comment">; see <a href="#is-and">is joined with and</a></span>
+    show(<span class="string">"four"</span>)
+<span class="keyword">fi</span></pre>
       <p>There are three ways to get the value out. <code>match</code> handles both outcomes:</p>
       <pre><span class="keyword">match</span> half(8)
 <span class="keyword">case</span> {n}
