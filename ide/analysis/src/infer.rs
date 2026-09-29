@@ -874,11 +874,14 @@ impl<'a> Knowledge<'a> {
         // Arithmetic works on two numbers of the same type: an int and a float
         // don't mix (see `check::check_binary`), so a chain of one of them has
         // that type, and one that mixes them, or holds anything else, has none
-        // to read.
+        // to read. A unit beside ints is a unit: the ints of a chain that
+        // checks are numbers written out, which become units there.
         let mut number: Option<Type> = None;
         for end in operand_ends {
-            match self.expression_type(end, depth + 1) {
-                Some(ty @ (Type::Int | Type::Float)) if number.as_ref().is_none_or(|seen| *seen == ty) => number = Some(ty),
+            match (self.expression_type(end, depth + 1), &number) {
+                (Some(Type::Int), Some(Type::Unit)) => {}
+                (Some(Type::Unit), Some(Type::Int)) => number = Some(Type::Unit),
+                (Some(ty @ (Type::Int | Type::Float | Type::Unit)), _) if number.as_ref().is_none_or(|seen| *seen == ty) => number = Some(ty),
                 _ => return None,
             }
         }

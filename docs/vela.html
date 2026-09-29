@@ -223,6 +223,7 @@
         <li><code class="type">int</code> — 64-bit signed integer</li>
         <li><code class="type">float</code> — 64-bit floating point</li>
         <li><code class="type">bool</code> — true or false</li>
+        <li><code class="type">unit</code> — a whole number from 0 to 255 in one byte (see <a href="#units">Units</a>)</li>
         <li><code class="type">text</code> — UTF-8 text that knows its length, <code>t.len</code>, in bytes; <code>==</code> compares contents. <code>text</code> lasts as long
           as the program, as a literal does, and <code>text@r</code> is in region <code>r</code> (see
           <a href="#text-in-regions">Text in a region</a>)</li>
@@ -274,7 +275,7 @@ true false none  fi   maybe is     fail failure include priv
 block shared type</pre>
       <p>
         <code>show</code>, <code>scan</code>, and the builtin types (<code>int</code>, <code>float</code>,
-        <code>bool</code>, <code>text</code>, <code>nothing</code>) aren't reserved words: no task, shape, kind, or
+        <code>bool</code>, <code>unit</code>, <code>text</code>, <code>nothing</code>) aren't reserved words: no task, shape, kind, or
         variant can take their names, but a variable, parameter, or field can (see <a href="#names">Names</a>). The
         builtin kinds <a href="#reading-numbers"><code>ParseError</code></a> (<code>NotANumber</code>,
         <code>TooLarge</code>) and <a href="#reading-input"><code>InputError</code></a> (<code>Ended</code>,
@@ -791,7 +792,7 @@ show(label)                <span class="comment">; error: unknown variable 'labe
 
       <h3>Numbers</h3>
       <p>
-        Arithmetic (<code>+ - * / %</code>) works on <code>int</code> and <code>float</code>, on two numbers of the same
+        Arithmetic (<code>+ - * / %</code>) works on <code>int</code>, <code>float</code>, and <a href="#units"><code>unit</code></a>, on two numbers of the same
         type: two <code>int</code>s give an <code>int</code>, with division truncating toward zero, and two
         <code>float</code>s give a <code>float</code>. An <code>int</code> and a <code>float</code> don't mix, so
         <code>n + 2.5</code> is an error that asks for <a href="#conversions"><code>float(n) + 2.5</code></a> (or
@@ -845,10 +846,32 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         9223372036854775807)</em>), and a division or remainder by a zero written that way, as in <code>n / 0</code>
         (<em>division by zero</em>).
       </p>
+      <p id="units">
+        <strong>Units.</strong> A <code>unit</code> is a whole number from 0 to 255 held in one byte, as Rust's
+        <code>u8</code> and C's <code>uint8_t</code> are. There is no unit literal: a number written out becomes a
+        unit where one is expected (<code>hold b: unit = 200</code>, an argument, a field, an item, a
+        <code>maybe unit</code>), and beside one (<code>b + 1</code>, <code>b &lt; 16</code>, <code>m ~= 7</code>), and
+        one that doesn't fit is an error (<em>256 doesn't fit in a unit, which holds 0 to 255</em>). Arithmetic on
+        units gives a unit, and like an <code>int</code> it never wraps around: a result below 0 or above 255 stops
+        the program (<em>vela: 256 does not fit in a unit at 5:15 in task 'main'</em>). A unit is never negative, so
+        <code>-b</code> is an error. An <code>int</code> and a <code>unit</code> don't mix, as an <code>int</code>
+        and a <code>float</code> don't: <code>int(b) + n</code> or <code>b + unit(n)</code> says which. Units
+        compare, order, show, and turn into text as numbers do, and a generic's <code>ordered</code> takes them.
+      </p>
+      <pre><span class="keyword">hold</span> b: unit = <span class="number">250</span>
+b = b + <span class="number">5</span>                   <span class="comment">; 255</span>
+show(b, <span class="string">" "</span>, b.type)          <span class="comment">; 255 unit</span>
+show(int(b) + <span class="number">1</span>)             <span class="comment">; 256, an int</span>
+<span class="keyword">bind</span> n = <span class="number">3</span>
+show(b + n)                 <span class="comment">; error: an int and a unit don't mix in arithmetic …</span>
+b = b + <span class="number">1</span>                   <span class="comment">; stops: vela: 256 does not fit in a unit …</span></pre>
       <p id="conversions">
-        <code>float(n)</code> and <code>int(x)</code> turn a value into a number, called by the name of the type they
-        give, as <a href="#str"><code>text(x) at r</code></a> is. They make no memory, so they name no region.
-        <code>float(n)</code> turns an <code>int</code> into a <code>float</code> exactly, and never fails.
+        <code>float(n)</code>, <code>int(x)</code>, and <code>unit(x)</code> turn a value into a number, called by the
+        name of the type they give, as <a href="#str"><code>text(x) at r</code></a> is. They make no memory, so they
+        name no region. <code>float(n)</code> turns an <code>int</code> or a <code>unit</code> into a
+        <code>float</code> exactly, and never fails; so does <code>int(b)</code> on a unit.
+        <code>unit(x)</code> takes what <code>int(x)</code> takes, and stops the program when the whole number
+        isn't from 0 to 255 (<em>300 does not fit in a unit</em>); written out, <code>unit(300)</code> is an error.
         <code>int(x)</code> takes a <code>float</code> or a <code>bool</code>: a float becomes its whole part, toward
         zero, so it rounds neither way (<code>int(2.9)</code> is 2 and <code>int(-2.9)</code> is -2), and a bool becomes
         1 or 0, which counts (<code>int(n &gt; 3)</code>). A float with no whole part to give stops the program, as
@@ -858,13 +881,14 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         <code>float(int(ok))</code>, and rounding another way waits for conversions of its own.
       </p>
       <p id="reading-numbers">
-        <strong>Reading a number from text.</strong> <code>int(t)</code> and <code>float(t)</code> on
-        <code>text</code> may fail, since the text comes from outside the program, so they send
-        <code>int ~ ParseError</code> and <code>float ~ ParseError</code>, read with a plan B,
+        <strong>Reading a number from text.</strong> <code>int(t)</code>, <code>float(t)</code>, and
+        <code>unit(t)</code> on <code>text</code> may fail, since the text comes from outside the program, so they send
+        <code>int ~ ParseError</code>, <code>float ~ ParseError</code>, and <code>unit ~ ParseError</code>, read with a plan B,
         <code>match</code>, or <code>is</code> like any <a href="#maybe">error result</a>.
         <code>ParseError</code> is a kind no program declares, with two variants and no values in them:
         <code>NotANumber</code>, when the text is no number at all, and <code>TooLarge</code>, when it is a
-        number the type can't hold (<code>"9223372036854775808"</code> as an <code>int</code>). A program may
+        number the type can't hold (<code>"9223372036854775808"</code> as an <code>int</code>, <code>"300"</code> or
+        <code>"-1"</code> as a <code>unit</code>). A program may
         send one itself, written through its kind (<code>fail ParseError.TooLarge</code>) or as a bare variant
         (<code>fail TooLarge</code>), and no declaration may take the three names.
       </p>
@@ -881,7 +905,8 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         <code>0</code>, as arithmetic gives.
       </p>
       <p>
-        A number read straight from input is <code>scan(prompt, int)</code>, which sends an
+        A number read straight from input is <code>scan(prompt, int)</code> (or <code>float</code>, or
+        <code>unit</code>), which sends an
         <a href="#reading-input"><code>InputError</code></a> instead, since reading input can also end.
       </p>
       <pre><span class="keyword">task</span> main()
@@ -1046,7 +1071,7 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
     show(count)
 <span class="keyword">fi</span></pre>
       <p id="reading-input">
-        <code>scan(prompt, int)</code> and <code>scan(prompt, float)</code> read a number from that line instead of
+        <code>scan(prompt, int)</code>, <code>scan(prompt, float)</code>, and <code>scan(prompt, unit)</code> read a number from that line instead of
         the line itself. A number needs no memory, so this form names no region, and it gives
         <code>int ~ InputError</code>: the number, or why there is none. <code>InputError</code> is a kind no file
         declares, with two variants — <code>Ended</code>, the input is over, and <code>NoNumber</code>, which holds the
@@ -1955,7 +1980,7 @@ scores[0] = 0               <span class="comment">; error: cannot assign to an i
       <p>
         Tasks, shapes, kinds, and variants share one namespace in a file: no two of them can have the same name, even
         across different kinds, and none can be named like a builtin: the types (<code>int</code>, <code>float</code>,
-        <code>bool</code>, <code>text</code>, <code>nothing</code>), the tasks (<code>show</code>, <code>scan</code>), or
+        <code>bool</code>, <code>unit</code>, <code>text</code>, <code>nothing</code>), the tasks (<code>show</code>, <code>scan</code>), or
         the kinds no file declares and their variants (<a href="#reading-numbers"><code>ParseError</code></a> with
         <code>NotANumber</code> and <code>TooLarge</code>, <a href="#reading-input"><code>InputError</code></a> with
         <code>Ended</code> and <code>NoNumber</code>). Another module has names of its own

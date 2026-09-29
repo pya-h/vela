@@ -163,12 +163,12 @@ fn completion_offers_the_patterns_that_take_a_tuple_apart() {
 fn completion_offers_types_inside_a_tuple_type() {
     for checks in [true, false] {
         let labels = |marked: &str| completions(marked).into_iter().map(|item| item.label).collect::<Vec<_>>();
-        let types = ["int".to_string(), "float".to_string(), "bool".to_string(), "text".to_string(), "maybe".to_string()];
+        let types = ["int".to_string(), "float".to_string(), "bool".to_string(), "text".to_string(), "unit".to_string(), "maybe".to_string()];
         assert_eq!(labels(&program(checks, "bind typed: (int, @@) = (1, 2)")), types, "checks: {}", checks);
         assert_eq!(labels(&program(checks, "bind typed: (@@) = (1, 2)")), types, "checks: {}", checks);
         // A parameter, a field, and a result take items of their own.
         assert_eq!(labels("task f(t: (int, @@))\nfi\n"), types);
-        assert_eq!(labels("shape Holder\n    t: (int, @@)\nfi\n"), ["int", "float", "bool", "text", "Holder", "maybe"]);
+        assert_eq!(labels("shape Holder\n    t: (int, @@)\nfi\n"), ["int", "float", "bool", "text", "unit", "Holder", "maybe"]);
         assert_eq!(labels("task f() -> (int, @@)\nfi\n"), types);
         // A name of a binding, and one of a parameter, are still being declared,
         // and a parameter may be one the task changes.

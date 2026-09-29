@@ -1,0 +1,6 @@
+; error: 5:10: an int and a unit don't mix in arithmetic: turn one into the other first, as in 'int(b) + x' or 'b + unit(x)'
+task main()
+    bind b: unit = 2
+    bind n = 3
+    show(n + b)
+fi

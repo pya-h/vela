@@ -1,0 +1,8 @@
+; trap: 256 does not fit in a unit at 5:15 in task 'main'
+task main()
+    hold b: unit = 250
+    loop true
+        b = b + 3
+        show(b)
+    fi
+fi

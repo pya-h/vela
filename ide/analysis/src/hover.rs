@@ -23,6 +23,7 @@ const BUILTIN_TYPE_DOCS: &[(&str, &str)] = &[
     ("int", "A 64-bit signed integer. int(x) turns a value into one: a float becomes its whole part, toward zero (a float with none to give, such as nan, stops the program), and a bool becomes 1 or 0."),
     ("float", "A 64-bit floating-point number. float(n) turns an int into one, which always works."),
     ("bool", "true or false."),
+    ("unit", "A whole number from 0 to 255 in one byte. A number written out becomes one where a unit is expected, and beside one (b + 1); arithmetic that leaves 0 to 255 stops the program. unit(x) turns an int, a float, or a bool into one, and stops the program when it doesn't fit; int(b) and float(b) always work."),
     ("text", "UTF-8 text. t.len is how many bytes it has and t[a..b] a part of it, the same bytes; == and < compare contents, a + b at r joins text into region r, and \"n = {n}\" at r is text holding values, each turned into text there (\\{ and \\} write braces). text(n) at r turns a value into text, as n.str() at r does. text lasts as long as the program, as a literal does; text@r is in region r, as the text of a value in r is."),
     ("nothing", "The return type of a task that sends no value."),
 ];

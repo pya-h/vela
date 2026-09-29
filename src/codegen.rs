@@ -577,7 +577,7 @@ impl Generator {
     /// either way, and text by its bytes.
     fn compare_item(&self, how: &str, ty: &Type, a: &str, b: &str) -> String {
         match ty {
-            Type::Int | Type::Float | Type::Bool | Type::Ptr(..) => format!("{} == {}", a, b),
+            Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Ptr(..) => format!("{} == {}", a, b),
             Type::Text(_) => format!("vela__rt__text_eq({}, {})", a, b),
             // A `maybe` of a pointer is the pointer, `NULL` for none.
             Type::Maybe(inner) if is_pointer(inner) => format!("{} == {}", a, b),
@@ -810,7 +810,7 @@ impl Generator {
     /// runtime reads the text and says which; this turns that into the
     /// `ty ~ ParseError` the program holds.
     fn gen_read_number(&mut self, ty: &Type) {
-        let (from, value) = if *ty == Type::Int { ("vela__rt__int_of_text", "int64_t") } else { ("vela__rt__float_of_text", "double") };
+        let (from, value) = (format!("vela__rt__{}_of_text", type_word(ty)), c_type(ty));
         let or = Type::Or(Box::new(ty.clone()), Box::new(Type::Named(PARSE_ERROR.to_string(), None)));
         let (or_type, tag) = (c_type(&or), tag_type(PARSE_ERROR));
         self.w.open(&format!("static {} {}(vela__rt__text text)", or_type, read_helper(ty)));
@@ -834,7 +834,7 @@ impl Generator {
     /// `ast::input_error_kind`). The runtime shows the prompt, reads the line,
     /// and frees it, so nothing here needs a region.
     fn gen_scan_number(&mut self, ty: &Type) {
-        let (from, value) = if *ty == Type::Int { ("vela__rt__int_of_input", "int64_t") } else { ("vela__rt__float_of_input", "double") };
+        let (from, value) = (format!("vela__rt__{}_of_input", type_word(ty)), c_type(ty));
         let or = Type::Or(Box::new(ty.clone()), Box::new(Type::Named(INPUT_ERROR.to_string(), None)));
         let or_type = c_type(&or);
         self.w.open(&format!("static {} {}(vela__rt__text prompt)", or_type, scan_helper(ty)));
@@ -2043,7 +2043,7 @@ impl Generator {
             .iter()
             .map(|part| match &part.kind {
                 ExprKind::ToText { value, .. } => match value.ty {
-                    Some(Type::Int) => (value.as_ref(), Some("vela__rt__int_view((char[VELA__RT__NUMBER_ROOM]){ 0 }, ")),
+                    Some(Type::Int | Type::Unit) => (value.as_ref(), Some("vela__rt__int_view((char[VELA__RT__NUMBER_ROOM]){ 0 }, ")),
                     Some(Type::Float) => (value.as_ref(), Some("vela__rt__float_view((char[VELA__RT__NUMBER_ROOM]){ 0 }, ")),
                     Some(Type::Text(_)) => (value.as_ref(), None),
                     _ => (part, None),
@@ -2061,7 +2061,7 @@ impl Generator {
     fn gen_to_text(&mut self, e: &Expr, value: &Expr, region: &str) -> Result<String> {
         let _ = e;
         let helper = match value.ty()? {
-            Type::Int => "vela__rt__int_str".to_string(),
+            Type::Int | Type::Unit => "vela__rt__int_str".to_string(),
             Type::Float => "vela__rt__float_str".to_string(),
             Type::Bool => "vela__rt__bool_str".to_string(),
             Type::Text(_) => "vela__rt__text_str".to_string(),
@@ -2277,10 +2277,11 @@ impl Generator {
         Ok(())
     }
 
-    /// `int(x)` or `float(x)`, the expression `e`: a value turned into a number.
-    /// A number turned into its own type is the value itself, a bool is 1 or 0
-    /// as C makes it, and an int is a float exactly. Only a float turned into an
-    /// int can fail, so only it is checked at runtime.
+    /// `int(x)`, `float(x)`, or `unit(x)`, the expression `e`: a value turned
+    /// into a number. A number turned into its own type is the value itself, a
+    /// bool is 1 or 0 as C makes it, and an int or a unit is a float exactly, as
+    /// a unit is an int. A float turned into an int, and a number turned into a
+    /// unit, can fail, so only they are checked at runtime.
     fn gen_number_cast(&mut self, e: &Expr, into: &Type, args: &[Expr]) -> Result<String> {
         let [value] = args else {
             return Err(Error::internal_at(e.span, format!("'{}' called with {}", into, args.len())));
@@ -2293,10 +2294,16 @@ impl Generator {
             return Ok(format!("{}({})", read_helper(into), expr));
         }
         Ok(match (into, &from) {
-            (Type::Int, Type::Int) | (Type::Float, Type::Float) => expr,
-            (Type::Int, Type::Bool) => format!("((int64_t){})", parenthesized(&expr)),
-            (Type::Float, Type::Int) => format!("((double){})", parenthesized(&expr)),
+            (Type::Int, Type::Int) | (Type::Float, Type::Float) | (Type::Unit, Type::Unit) => expr,
+            (Type::Int, Type::Bool | Type::Unit) => format!("((int64_t){})", parenthesized(&expr)),
+            (Type::Unit, Type::Bool) => format!("((uint8_t){})", parenthesized(&expr)),
+            (Type::Float, Type::Int | Type::Unit) => format!("((double){})", parenthesized(&expr)),
             (Type::Int, Type::Float) => format!("vela__rt__int_of_float({}, {})", expr, self.location(e.span)),
+            (Type::Unit, Type::Int) => format!("vela__rt__unit_of({}, {})", expr, self.location(e.span)),
+            (Type::Unit, Type::Float) => {
+                let at = self.location(e.span);
+                format!("vela__rt__unit_of(vela__rt__int_of_float({}, {}), {})", expr, at, at)
+            }
             _ => return Err(Error::internal_at(e.span, format!("'{}' of a value of type {}", into, from))),
         })
     }
@@ -2678,7 +2685,7 @@ impl Generator {
             let symbol = if not.is_empty() { "==" } else { "!=" };
             return Ok(match ty {
                 // A number, a bool, and a pointer are similar when equal.
-                Type::Int | Type::Float | Type::Bool | Type::Ptr(..) => format!("({} {} {})", left, symbol, other_side(&left, right, &c_type(ty))),
+                Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Ptr(..) => format!("({} {} {})", left, symbol, other_side(&left, right, &c_type(ty))),
                 Type::Maybe(inner) if is_pointer(inner) => format!("({} {} {})", left, symbol, other_side(&left, right, &c_type(ty))),
                 _ => format!("{}{}({}, {})", not, copy_helper("similar", ty), by_address(&left, ty), by_address(&right, ty)),
             });
@@ -2693,6 +2700,20 @@ impl Generator {
                 other => return Err(Error::internal_at(e.span, format!("text operator {:?}", other))),
             };
             return Ok(format!("vela__rt__text_order({}, {}) {} 0", left, right, symbol));
+        }
+        // Units are computed as ints, where no result of two units overflows,
+        // and the result is checked to fit in a unit.
+        if *e.ty()? == Type::Unit {
+            let at = self.location(e.span);
+            let whole = match op {
+                BinaryOp::Div => format!("vela__rt__div({}, {}, {})", left, right, at),
+                BinaryOp::Mod => format!("vela__rt__mod({}, {}, {})", left, right, at),
+                BinaryOp::Add => format!("(int64_t){} + (int64_t){}", parenthesized(&left), parenthesized(&right)),
+                BinaryOp::Sub => format!("(int64_t){} - (int64_t){}", parenthesized(&left), parenthesized(&right)),
+                BinaryOp::Mul => format!("(int64_t){} * (int64_t){}", parenthesized(&left), parenthesized(&right)),
+                other => return Err(Error::internal_at(e.span, format!("unit operator {:?}", other))),
+            };
+            return Ok(format!("vela__rt__unit_of({}, {})", whole, at));
         }
         if op == BinaryOp::Mod && *e.ty()? == Type::Float {
             // C's `%` is integer-only.
@@ -2821,7 +2842,7 @@ fn success(ret: &Type) -> String {
 /// ends the line when `ends`, which the last value `show` is given does.
 fn written_helper(ty: &Type, ends: bool) -> String {
     let name = match ty {
-        Type::Int => "int",
+        Type::Int | Type::Unit => "int",
         Type::Float => "float",
         Type::Bool => "bool",
         _ => "text",
@@ -2834,7 +2855,7 @@ fn written_helper(ty: &Type, ends: bool) -> String {
 /// anything else through a writer to the output (see `Generator::gen_writer`).
 fn shown(e: &Expr, ty: &Type, value: &str, ends: bool) -> Result<String> {
     let written = match ty {
-        Type::Int | Type::Float | Type::Bool | Type::Text(_) => return Ok(format!("{}({});", written_helper(ty, ends), value)),
+        Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Text(_) => return Ok(format!("{}({});", written_helper(ty, ends), value)),
         Type::Ptr(..) => format!("vela__rt__put_address(&VELA__RT__OUTPUT, (const void*){});", value),
         Type::Array(..) | Type::Slice(..) | Type::Tuple(_) | Type::Maybe(_) | Type::Named(..) => {
             format!("{}(&VELA__RT__OUTPUT, {});", write_helper(&ty.without_regions()), value)
@@ -2849,7 +2870,7 @@ fn shown(e: &Expr, ty: &Type, value: &str, ends: bool) -> Result<String> {
 /// by its type's `write`.
 fn put_item(ty: &Type, value: &str) -> String {
     match ty {
-        Type::Int => format!("vela__rt__put_int(w, {});", value),
+        Type::Int | Type::Unit => format!("vela__rt__put_int(w, {});", value),
         Type::Float => format!("vela__rt__put_float(w, {});", value),
         Type::Bool => format!("vela__rt__put_bool(w, {});", value),
         Type::Text(_) => format!("vela__rt__put_quoted(w, {});", value),
@@ -2887,7 +2908,7 @@ impl Layout<'_> {
         match ty {
             Type::Int | Type::Float | Type::Ptr(..) | Type::None | Type::Region => (8, 8),
             Type::Maybe(inner) if is_pointer(inner) => (8, 8),
-            Type::Bool => (1, 1),
+            Type::Bool | Type::Unit => (1, 1),
             Type::Nothing => (0, 1),
             Type::Text(_) => (16, 8),
             Type::Slice(..) => (24, 8),
@@ -2966,16 +2987,16 @@ fn text_helper(ty: &Type) -> String {
     format!("vela__text__{}", type_word(ty))
 }
 
-/// The generated task that reads a number of type `ty` from text: `int("42")`
-/// and `float("2.5")`.
+/// The generated task that reads a number of type `ty` from text: `int("42")`,
+/// `float("2.5")`, and `unit("7")`.
 fn read_helper(ty: &Type) -> String {
-    format!("vela__read__{}", if *ty == Type::Int { "int" } else { "float" })
+    format!("vela__read__{}", type_word(ty))
 }
 
 /// The generated task that reads a number of type `ty` from input:
 /// `scan("Age: ", int)`.
 fn scan_helper(ty: &Type) -> String {
-    format!("vela__scan__{}", if *ty == Type::Int { "int" } else { "float" })
+    format!("vela__scan__{}", type_word(ty))
 }
 
 
@@ -3198,7 +3219,7 @@ impl UsedTypes {
     fn note_write(&mut self, ty: &Type) {
         let ty = ty.without_regions();
         match &ty {
-            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => return,
+            Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => return,
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.note_write(inner),
             Type::Tuple(items) => items.iter().for_each(|item| self.note_write(item)),
             // A shape or kind written by default writes its parts; one that
@@ -3245,7 +3266,7 @@ impl UsedTypes {
     fn note_similar(&mut self, ty: &Type) {
         let ty = ty.without_regions();
         match &ty {
-            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => {}
+            Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => {}
             Type::Maybe(inner) if matches!(inner.as_ref(), Type::Ptr(..)) => {}
             _ if self.similar.contains(&ty) => {}
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => {
@@ -3417,7 +3438,7 @@ impl UsedTypes {
             ExprKind::Join { parts, .. } => parts.iter().for_each(|part| self.expr(part)),
             ExprKind::ToText { value, .. } => {
                 if let Some(ty) = &value.ty
-                    && !matches!(ty, Type::Int | Type::Float | Type::Bool | Type::Text(_))
+                    && !matches!(ty, Type::Int | Type::Unit | Type::Float | Type::Bool | Type::Text(_))
                 {
                     // A shape's or kind's own `str` needs no `write`.
                     if !matches!(ty, Type::Named(name, _) if !self.parts.contains_key(name)) {
@@ -3815,6 +3836,7 @@ fn c_type(ty: &Type) -> String {
         // program has an error (see `Type::Unknown`).
         Type::Unknown => "/*unknown type*/".to_string(),
         Type::Int => "int64_t".to_string(),
+        Type::Unit => "uint8_t".to_string(),
         Type::Float => "double".to_string(),
         Type::Bool => "bool".to_string(),
         Type::Text(_) => "vela__rt__text".to_string(),

@@ -372,7 +372,7 @@ fn the_kind_reading_a_number_from_input_sends_is_known_to_the_editor() {
     }
     // The two types this form reads, offered after the prompt, and the kind
     // where an error type goes.
-    assert_eq!(labels(&in_main("bind age = scan(\"Age: \", @@)")), ["int", "float"]);
+    assert_eq!(labels(&in_main("bind age = scan(\"Age: \", @@)")), ["int", "float", "unit"]);
     assert_offers("task f() -> int ~ @@", &["InputError", "ParseError"], &["nothing"]);
     // A region follows a line read, and never a number read.
     assert_offers(&in_main("bind line = scan(\"Name: \") @@"), &["at"], &[]);

@@ -1,4 +1,4 @@
-; error: 3:12: 'int' takes an int, a float, a bool, or text, but this value is T; T is any type here, and no word requires a number
+; error: 3:12: 'int' takes an int, a unit, a float, a bool, or text, but this value is T; T is any type here, and no word requires a number
 task first<T>(value: T) -> int
     <- int(value)
 fi

@@ -1,0 +1,5 @@
+; trap: -1 does not fit in a unit at 4:12 in task 'main'
+task main()
+    bind b: unit = 0
+    show(b - 1)
+fi

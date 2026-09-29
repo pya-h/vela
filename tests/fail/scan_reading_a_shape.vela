@@ -1,4 +1,4 @@
-; error: 8:34: 'scan' reads a number, so it names 'int' or 'float', as in 'scan("Age: ", int)'
+; error: 8:34: 'scan' reads a number, so it names 'int', 'float', or 'unit', as in 'scan("Age: ", int)'
 shape Point
     x: int
     y: int

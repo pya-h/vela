@@ -337,7 +337,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 };
                 return (with_copy(vec![len, to_text()], false), word_start, byte);
             }
-            Some(Type::Int | Type::Float | Type::Bool) => return (with_copy(vec![to_text()], false), word_start, byte),
+            Some(Type::Int | Type::Unit | Type::Float | Type::Bool) => return (with_copy(vec![to_text()], false), word_start, byte),
             Some(Type::Slice(..)) => return (with_copy(members(true, false), false), word_start, byte),
             Some(Type::Ptr(inner, _)) if matches!(**inner, Type::Array(..) | Type::Slice(..)) => {
                 return (with_copy(members(matches!(**inner, Type::Slice(..)), true), true), k.range(dot).start, byte);
@@ -534,7 +534,11 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     if let (Some(q), Some(Token::Comma)) = (prev, prev_token)
         && after_scan_prompt(&k, q)
     {
-        let items = [(vela::ast::INT_CAST, "read a whole number"), (vela::ast::FLOAT_CAST, "read a number with a fraction")]
+        let items = [
+            (vela::ast::INT_CAST, "read a whole number"),
+            (vela::ast::FLOAT_CAST, "read a number with a fraction"),
+            (vela::ast::UNIT_CAST, "read a whole number from 0 to 255"),
+        ]
             .into_iter()
             .map(|(name, detail)| CompletionItem {
                 label: name.to_string(),
@@ -1491,6 +1495,7 @@ fn type_items(k: &Knowledge, at: usize, after_arrow: bool, offer_maybe: bool, af
         ("int", "64-bit signed integer"),
         ("float", "64-bit floating point"),
         ("bool", "true or false"),
+        ("unit", "whole number from 0 to 255, one byte"),
         ("text", "text"),
         ("nothing", "no value"),
     ];

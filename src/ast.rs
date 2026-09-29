@@ -40,6 +40,9 @@ pub enum Type {
     /// `text@r`, whose characters are in the region `r`. Text that lasts as
     /// long as the program fits wherever text of a region is expected.
     Text(Option<String>),
+    /// `unit`: a whole number from 0 to 255 in one byte (Rust's `u8`).
+    Unit,
+    /// `nothing`: what a task that sends no value sends. It has no values.
     Nothing,
     /// The type of the `none` literal: fits any `maybe` type.
     None,
@@ -130,6 +133,7 @@ pub const BUILTIN_TYPES: &[(&str, Type)] = &[
     ("float", Type::Float),
     ("bool", Type::Bool),
     ("text", Type::Text(None)),
+    ("unit", Type::Unit),
     ("nothing", Type::Nothing),
 ];
 
@@ -162,12 +166,17 @@ pub const INT_CAST: &str = "int";
 /// The type whose name, called, turns a value into a `float`: `float(n)`.
 pub const FLOAT_CAST: &str = "float";
 
+/// The type whose name, called, turns a value into a `unit`: `unit(n)`, which
+/// stops the program when `n` is not from 0 to 255.
+pub const UNIT_CAST: &str = "unit";
+
 /// The number that `name`, called as a task, turns a value into: `int(x)` and
 /// `float(x)`, which make no memory, so they name no region as `text(x)` does.
 pub fn number_cast(name: &str) -> Option<Type> {
     match name {
         INT_CAST => Some(Type::Int),
         FLOAT_CAST => Some(Type::Float),
+        UNIT_CAST => Some(Type::Unit),
         _ => None,
     }
 }
@@ -366,6 +375,7 @@ impl Type {
                 write!(f, "text")?;
                 suffix(f, region)
             }
+            Type::Unit => write!(f, "unit"),
             Type::Nothing => write!(f, "nothing"),
             Type::None => write!(f, "none"),
             Type::Region => write!(f, "region"),
@@ -457,7 +467,13 @@ impl Type {
     }
 
     pub fn is_numeric(&self) -> bool {
-        matches!(self, Type::Int | Type::Float)
+        matches!(self, Type::Int | Type::Float | Type::Unit)
+    }
+
+    /// Whether the type is a whole number that fits in a byte, which an int
+    /// literal becomes where one is expected (`hold b: unit = 200`).
+    pub fn is_byte(&self) -> bool {
+        matches!(self, Type::Unit)
     }
 
     /// Whether the type, or any type inside it, is the one the checker could not
@@ -472,7 +488,7 @@ impl Type {
             Type::Or(value, error) => value.unknown() || error.unknown(),
             Type::Tuple(types) | Type::Results(types) => types.iter().any(Type::unknown),
             Type::Applied(applied) => applied.types.iter().any(Type::unknown),
-            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Nothing | Type::None | Type::Region | Type::Named(..) | Type::Param(_) => false,
+            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Unit | Type::Nothing | Type::None | Type::Region | Type::Named(..) | Type::Param(_) => false,
         }
     }
 
@@ -1448,6 +1464,7 @@ pub fn type_word(ty: &Type) -> String {
         Type::Float => "float".to_string(),
         Type::Bool => "bool".to_string(),
         Type::Text(_) => "text".to_string(),
+        Type::Unit => "unit".to_string(),
         Type::Nothing => "nothing".to_string(),
         Type::None => "none".to_string(),
         Type::Region => "region".to_string(),

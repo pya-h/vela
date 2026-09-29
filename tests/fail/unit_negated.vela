@@ -1,0 +1,5 @@
+; error: 4:10: a unit is never negative, so it can't be negated; turn it into an int first, as in '-int(x)'
+task main()
+    bind b: unit = 2
+    show(-b)
+fi

@@ -217,6 +217,18 @@ static inline int64_t vela__rt__neg(int64_t a, const char* at) {
     return -a;
 }
 
+/* A whole number as a `unit`, which holds 0 to 255: `unit(n)`, and the result
+ * of arithmetic on units, computed in 64 bits, where it can't overflow. Any
+ * other number stops the program with a message, as integer overflow does. */
+static inline uint8_t vela__rt__unit_of(int64_t x, const char* at) {
+    if (x < 0 || x > 255) {
+        char written[64];
+        snprintf(written, sizeof written, "%lld does not fit in a unit", (long long)x);
+        vela__rt__int_trap(written, at);
+    }
+    return (uint8_t)x;
+}
+
 /* Float remainder (Vela's `%` on floats); the result has the dividend's sign. */
 static inline double vela__rt__fmod(double a, double b) {
     return fmod(a, b);
@@ -1061,6 +1073,32 @@ static inline int vela__rt__int_of_input(vela__rt__text prompt, int64_t* value) 
         return VELA__RT__READ_ENDED;
     }
     int read = vela__rt__int_of_text((vela__rt__text){ buffer, (int64_t)size }, value);
+    free(buffer);
+    return read;
+}
+
+/* Reading a `unit` from text: a whole number as `int` reads one, and one that
+ * is not from 0 to 255 is a number this type doesn't hold. */
+static inline int vela__rt__unit_of_text(vela__rt__text t, uint8_t* value) {
+    int64_t whole = 0;
+    int read = vela__rt__int_of_text(t, &whole);
+    if (read != VELA__RT__READ_OK) {
+        return read;
+    }
+    if (whole < 0 || whole > 255) {
+        return VELA__RT__READ_TOO_LARGE;
+    }
+    *value = (uint8_t)whole;
+    return VELA__RT__READ_OK;
+}
+
+static inline int vela__rt__unit_of_input(vela__rt__text prompt, uint8_t* value) {
+    char* buffer = NULL;
+    size_t size = 0;
+    if (!vela__rt__read_line(prompt, &buffer, &size)) {
+        return VELA__RT__READ_ENDED;
+    }
+    int read = vela__rt__unit_of_text((vela__rt__text){ buffer, (int64_t)size }, value);
     free(buffer);
     return read;
 }
