@@ -1,0 +1,86 @@
+; An `is` joined with `and`: the names a pattern binds are seen by the parts
+; after its `and` and by the block. Each part is tested only when the ones
+; before it held, and the `else` runs where any of them failed.
+
+kind Shape
+    Circle(r: int)
+    Square(side: int)
+fi
+
+task half(n: int) -> maybe int
+    when n % 2 == 0
+        <- n / 2
+    fi
+    <- none
+fi
+
+task noisy(n: int) -> maybe int
+    show("asked ", n)
+    <- n
+fi
+
+task sign(b: maybe int) -> text
+    when b is { inside } and inside < 0
+        <- "negative"
+    else when b is { inside } and inside == 0
+        <- "zero"
+    else when b == none
+        <- "none"
+    fi
+    <- "positive"
+fi
+
+task main()
+    ; The user's example: a count read, and one that can't be negative.
+    bind b = scan("count: ", int) { none }
+    when b is { inside } and inside < 0
+        show("Invalid count")
+    fi
+    show(sign(-3), " ", sign(0), " ", sign(none), " ", sign(5))
+    ; A bool before the 'is', and two 'is' parts with a test between them.
+    bind wide = true
+    when wide and half(8) is { h } and half(h) is { q } and h > q
+        show(h, " ", q)
+    fi
+    when not wide and half(8) is { h }
+        show("never ", h)
+    else
+        show("not wide")
+    fi
+    ; A later part isn't read when an earlier one failed.
+    when half(3) is { h } and noisy(h) is { n }
+        show("never ", n)
+    else
+        show("odd")
+    fi
+    when half(4) is { h } and noisy(h) is { n } and n > 1
+        show("both ", n)
+    fi
+    ; A variant, a failure, and a tuple beside a test.
+    bind s = Shape.Square(4)
+    when s is Square side and side > 3
+        show("big square ", side)
+    fi
+    bind parsed = int("x")
+    when parsed is failure e and wide
+        show("failed: ", e)
+    fi
+    bind t = (1, 2)
+    when t is (a, c) and a < c
+        show("ordered ", a, c)
+    else
+        show("not ordered")
+    fi
+    ; As a value, through an 'else when', and in a loop.
+    bind word = when b is { n } and n > 100 "big" else when b is { n } and n > 0 "small" else "none" fi
+    show(word)
+    hold i = 10
+    loop half(i) is { h } and h > 1
+        show("half ", h)
+        i = h
+    fi
+    ; 'or' in parentheses is one part.
+    when half(6) is { h } and (h == 3 or h == 4)
+        show("three or four")
+    fi
+fi

@@ -1253,6 +1253,9 @@ impl<'a> Classifier<'a> {
                             braces.clear();
                         }
                         Token::Is => in_pattern = true,
+                        // `m is {x} and x > 0`: no pattern holds an `and`, so
+                        // what follows it is a value that reads the names.
+                        Token::And => in_pattern = false,
                         Token::Failure if plan_b_head => declaring = Some("failure"),
                         // `else when …` continues the block the `else` reopened,
                         // and one `fi` closes the whole chain, so this `when`
@@ -1669,7 +1672,14 @@ impl<'a> Classifier<'a> {
                 _ => false,
             })
             .map_or(tokens.source.len(), |q| tokens.range(q).end);
-        let visible = line_end..tokens.source.len();
+        // `m is {x} and x > 0`: a name an `is` binds is seen from the `and`
+        // after its pattern, which no pattern holds.
+        let joined = match intro {
+            Some("is") => (p..tokens.len()).take_while(|&q| !matches!(tokens.token(q), Some(Token::Newline | Token::Eof) | None)).find(|&q| tokens.token(q) == Some(&Token::And)),
+            _ => None,
+        };
+        let from = joined.map_or(line_end, |and| tokens.range(and).end);
+        let visible = from..tokens.source.len();
         self.symbols.push(Symbol { name, kind, name_range: range.clone(), range, start, visible, intro, detail, parent: None, default: false, read: false, shared: false, module: None, private: false });
         let id = self.symbols.len() - 1;
         if let Some(scope) = self.scopes.last_mut() {

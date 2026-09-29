@@ -1000,6 +1000,17 @@ impl Resolver<'_> {
         Ok(())
     }
 
+    /// Each part of a condition joined with `and`.
+    fn condition(&self, cond: &mut Condition) -> Result<()> {
+        let mut part = Some(cond);
+        while let Some(current) = part {
+            self.expr(&mut current.value)?;
+            current.pattern.iter_mut().try_for_each(|pattern| self.pattern(pattern))?;
+            part = current.and.as_deref_mut();
+        }
+        Ok(())
+    }
+
     /// A pattern's kind, as in `case Shape.Circle`, rewritten to its name in the
     /// program.
     fn pattern(&self, pattern: &mut Pattern) -> Result<()> {
@@ -1185,8 +1196,7 @@ impl Resolver<'_> {
                 values.iter_mut().try_for_each(|e| self.expr(e))
             }
             StmtKind::When(cond, then_block, else_block) => {
-                self.expr(&mut cond.value)?;
-                cond.pattern.iter_mut().try_for_each(|pattern| self.pattern(pattern))?;
+                self.condition(cond)?;
                 self.block(then_block)?;
                 match else_block {
                     Some(block) => self.block(block),
@@ -1195,8 +1205,7 @@ impl Resolver<'_> {
             }
             StmtKind::Block(body) => self.block(body),
             StmtKind::Loop(cond, body) => {
-                self.expr(&mut cond.value)?;
-                cond.pattern.iter_mut().try_for_each(|pattern| self.pattern(pattern))?;
+                self.condition(cond)?;
                 self.block(body)
             }
             StmtKind::Each(_, range, body) => {

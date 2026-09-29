@@ -2719,8 +2719,8 @@ impl Checker {
             // set is set after it; what they declare ends at its `fi`.
             StmtKind::Block(body) => self.check_scoped_block(body),
             StmtKind::Loop(cond, body) => {
-                if let Some(pattern) = &cond.pattern
-                    && matches!(pattern.kind, PatternKind::Tuple(_))
+                if always_holds(cond)
+                    && let Some(pattern) = &cond.pattern
                 {
                     return err(pattern.span, "a tuple's items always match, so this loop would never end; take the tuple apart with 'bind' instead");
                 }
@@ -2843,7 +2843,7 @@ impl Checker {
     ) -> Result<Option<Type>> {
         // A tuple's items always match, so an `else` could never run.
         if let (Some(pattern), Some(_)) = (&cond.pattern, else_block.as_ref())
-            && matches!(pattern.kind, PatternKind::Tuple(_))
+            && always_holds(cond)
         {
             return err(pattern.span, "a tuple's items always match, so this 'when' always holds and its 'else' would never run; take the tuple apart with 'bind' instead");
         }
@@ -2965,6 +2965,18 @@ impl Checker {
     /// `check_value_block`); otherwise the block holds statements and nothing
     /// comes back.
     fn check_condition(&mut self, cond: &mut Condition, body: &mut Block, gives: Option<Branches>) -> Result<Option<(Type, Span)>> {
+        if !cond.single() {
+            // `m is {x} and x > 0`: the names each part binds are seen by the
+            // parts after it and by the block, all in one scope around them.
+            let at = cond.value.span;
+            self.push_scope();
+            let result = self.check_parts(cond).and_then(|()| match gives {
+                Some(branches) => self.check_value_block(Vec::new(), body, at, branches),
+                None => self.check_scoped_block(body).map(|()| None),
+            });
+            self.pop_scope();
+            return result;
+        }
         let found = self.check_expr(&mut cond.value);
         let ty = self.or_unknown(found);
         let Some(pattern) = &cond.pattern else {
@@ -2982,6 +2994,32 @@ impl Checker {
             Some(branches) => self.check_value_block(bindings, body, pattern.span, branches),
             None => self.check_block_with(bindings, body).map(|()| None),
         }
+    }
+
+    /// Checks the parts of a condition joined with `and`, in the scope
+    /// `check_condition` opened: each a `bool`, or an `is` whose names are
+    /// declared there for the parts after it.
+    fn check_parts(&mut self, cond: &mut Condition) -> Result<()> {
+        let mut part = Some(cond);
+        while let Some(current) = part {
+            let found = self.check_expr(&mut current.value);
+            let ty = self.or_unknown(found);
+            match &current.pattern {
+                None => self.expect_type(&ty, &Type::Bool, current.value.span)?,
+                Some(pattern) if matches!(pattern.kind, PatternKind::Any) => {
+                    return err(pattern.span, "'_' matches anything, so this condition would always hold");
+                }
+                Some(pattern) => {
+                    for (name, span, ty, mutable) in self.pattern_bindings(&ty, pattern, false)? {
+                        if name != DISCARD {
+                            self.define(&name, ty, mutable, span)?;
+                        }
+                    }
+                }
+            }
+            part = current.and.as_deref_mut();
+        }
+        Ok(())
     }
 
     /// Checks a block that gives a value, in a new scope that first declares
@@ -7143,7 +7181,7 @@ impl Checker {
                 values.iter_mut().try_for_each(|value| self.substitute_expr(value, given, made))
             }
             StmtKind::When(cond, then_block, else_block) => {
-                self.substitute_expr(&mut cond.value, given, made)?;
+                self.substitute_condition(cond, given, made)?;
                 self.substitute_block(then_block, given, made)?;
                 match else_block {
                     Some(else_block) => self.substitute_block(else_block, given, made),
@@ -7152,7 +7190,7 @@ impl Checker {
             }
             StmtKind::Block(body) => self.substitute_block(body, given, made),
             StmtKind::Loop(cond, body) => {
-                self.substitute_expr(&mut cond.value, given, made)?;
+                self.substitute_condition(cond, given, made)?;
                 self.substitute_block(body, given, made)
             }
             StmtKind::Each(_, range, body) => {
@@ -7189,6 +7227,16 @@ impl Checker {
         let mut found = Vec::new();
         self.written_strs(ty, &mut Vec::new(), &mut found);
         made.needed.extend(found.into_iter().map(|(method, types)| (method, types, value.span)));
+    }
+
+    /// Each part of a condition joined with `and`.
+    fn substitute_condition(&mut self, cond: &mut Condition, given: &HashMap<String, Type>, made: &mut Made) -> Result<()> {
+        let mut part = Some(cond);
+        while let Some(current) = part {
+            self.substitute_expr(&mut current.value, given, made)?;
+            part = current.and.as_deref_mut();
+        }
+        Ok(())
     }
 
     fn substitute_expr(&mut self, e: &mut Expr, given: &HashMap<String, Type>, made: &mut Made) -> Result<()> {
@@ -7680,7 +7728,7 @@ fn always_sends(block: &Block) -> bool {
 /// Whether a condition always holds: `is (x, y)`, whose items always match.
 /// (Every other condition may be false, so its block may not run.)
 fn always_holds(cond: &Condition) -> bool {
-    matches!(&cond.pattern, Some(pattern) if matches!(pattern.kind, PatternKind::Tuple(_)))
+    cond.parts().all(|part| matches!(&part.pattern, Some(pattern) if matches!(pattern.kind, PatternKind::Tuple(_))))
 }
 
 /// The value of an int expression written with literals only (`-5`,

@@ -1015,11 +1015,32 @@ impl Target {
     }
 }
 
-/// The condition of a `when` or `loop`: a `bool`, or `value is pattern`.
+/// The condition of a `when` or `loop`: a `bool`, or `value is pattern`,
+/// and what follows its `and` where an `is` is joined with others
+/// (`m is {x} and x > 0`): the names a pattern binds are seen by the parts
+/// after it and by the block. Without an `is`, `a and b` is one `bool`.
 #[derive(Debug, Clone)]
 pub struct Condition {
     pub value: Expr,
     pub pattern: Option<Pattern>,
+    pub and: Option<Box<Condition>>,
+}
+
+impl Condition {
+    /// A condition of one part.
+    pub fn new(value: Expr, pattern: Option<Pattern>) -> Condition {
+        Condition { value, pattern, and: None }
+    }
+
+    /// This part and the ones joined after it with `and`, in order.
+    pub fn parts(&self) -> impl Iterator<Item = &Condition> {
+        std::iter::successors(Some(self), |part| part.and.as_deref())
+    }
+
+    /// Whether this is one part: a `bool`, or one `is`.
+    pub fn single(&self) -> bool {
+        self.and.is_none()
+    }
 }
 
 #[derive(Debug, Clone)]

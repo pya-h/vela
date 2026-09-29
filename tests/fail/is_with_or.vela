@@ -1,4 +1,4 @@
-; error: 4:19: an 'is' condition can't be combined with 'and' or 'or'; put a 'when' inside it instead
+; error: 4:19: an 'is' is joined with 'and', not 'or': with 'or', the names it binds would be bound on one path only; put the 'or' in parentheses, as in 'm is {x} and (a or b)', or write a 'when' inside
 task main()
     bind m: maybe int = 1
     when m is {n} or true

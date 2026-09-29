@@ -1007,9 +1007,10 @@ loop current is {item}
 fi</pre>
       <p>
         <code>is</code> takes the same patterns as <code>case</code>, including a kind's variants
-        (<code>when light is Dimmed level</code>), and its names are visible only in the block it guards. It is
-        the whole condition of a <code>when</code> or <code>loop</code>: combining it with <code>and</code> or
-        <code>or</code> would make it unclear where the names exist, so that is an error that suggests nesting.
+        (<code>when light is Dimmed level</code>), and its names are visible only in the block it guards and in
+        the parts joined after it with <code>and</code> (<code>when b is {inside} and inside &lt; 0</code>, built
+        2026-09-29; see <a href="vela.html#is-and">the guide</a>). Joining it with <code>or</code>, or writing it
+        after <code>not</code>, would bind its names on one path only, so those are errors.
         Without <code>is</code>, removing null pointers would make every list walk check twice.
       </p>
       <p><strong>3. Plan B</strong>, the compact form: a block after a value runs only when there is no value, and

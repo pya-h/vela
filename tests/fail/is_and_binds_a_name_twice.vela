@@ -1,0 +1,14 @@
+; error: 11:29: 'x' is already defined at 11:16
+task half(n: int) -> maybe int
+    when n % 2 == 0
+        <- n / 2
+    fi
+    <- none
+fi
+task main()
+    bind m = half(4)
+    bind n = half(6)
+    when m is {x} and n is {x}
+        show(x)
+    fi
+fi

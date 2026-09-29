@@ -1992,11 +1992,33 @@ show(total)</pre>
 <span class="keyword">fi</span></pre>
       <p>
         A condition can also test a pattern with <code>is</code>, the same patterns a <code>case</code> takes. The
-        names it binds are visible only in the block it guards (not in the <code>else</code>), and <code>is</code>
-        must be the whole condition: combining it with <code>and</code> or <code>or</code> is an error. A name is a
+        names it binds are visible only in the block it guards (not in the <code>else</code>). A name is a
         <code>bind</code> unless the pattern writes <code>hold</code> before it, and parentheses take a tuple apart
         (see <a href="#tuples">Tuples</a>).
       </p>
+      <p id="is-and">
+        An <code>is</code> can be joined with other parts by <code>and</code>, before or after it, in a
+        <code>when</code>, an <code>else when</code>, a <code>loop</code>, and a <code>when</code> used as a value.
+        The names a pattern binds are seen by the parts after its <code>and</code> and by the block, and each part
+        is tested only when the ones before it held; the <code>else</code> runs when any of them didn't. An
+        <code>is</code> is never joined with <code>or</code>, nor written after <code>not</code>: its names would
+        then be bound on one path only. An <code>or</code> in parentheses is one part:
+        <code>m is {x} and (x == 1 or x == 2)</code>.
+      </p>
+      <pre><span class="keyword">bind</span> b = scan(<span class="string">"count:"</span>, int) { <span class="keyword">none</span> }
+<span class="keyword">when</span> b <span class="keyword">is</span> { inside } <span class="keyword">and</span> inside &lt; <span class="number">0</span>
+    show(<span class="string">"Invalid count"</span>)
+<span class="keyword">fi</span>
+
+<span class="keyword">when</span> ready <span class="keyword">and</span> half(n) <span class="keyword">is</span> {h} <span class="keyword">and</span> half(h) <span class="keyword">is</span> {q} <span class="keyword">and</span> h &gt; q
+    show(h, <span class="string">" "</span>, q)
+<span class="keyword">fi</span>
+
+<span class="keyword">loop</span> half(i) <span class="keyword">is</span> {h} <span class="keyword">and</span> h &gt; <span class="number">1</span>    <span class="comment">; while i halves to more than 1</span>
+    i = h
+<span class="keyword">fi</span>
+
+<span class="keyword">when</span> b <span class="keyword">is</span> {x} <span class="keyword">or</span> x &gt; <span class="number">0</span>             <span class="comment">; error: an 'is' is joined with 'and', not 'or'</span></pre>
       <pre><span class="keyword">when</span> light <span class="keyword">is</span> Dimmed level
     show(level)
 <span class="keyword">fi</span>

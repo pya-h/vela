@@ -1302,6 +1302,21 @@ impl Generator {
                 self.gen_block(body)?;
                 self.w.close();
             }
+            StmtKind::Loop(cond, body) if !cond.single() => {
+                // `loop m is {x} and x > 0`: each part tested inside the one
+                // before, the body inside them all, and a failed part ends it.
+                let matched = self.fresh_temp("matched");
+                self.w.open("while (1)");
+                self.w.line(&format!("bool {} = false;", matched));
+                self.gen_parts(cond, body, &mut |g| {
+                    g.w.line(&format!("{} = true;", matched));
+                    g.gen_block(body)
+                })?;
+                self.w.open(&format!("if (!{})", matched));
+                self.w.line("break;");
+                self.w.close();
+                self.w.close();
+            }
             StmtKind::Loop(cond, body) => match &cond.pattern {
                 None if !has_prelude(&cond.value) => {
                     let c = self.gen_condition(&cond.value)?;
@@ -1639,6 +1654,27 @@ impl Generator {
     /// it, or that binds a pattern, goes inside the `else` instead, since that is
     /// where those statements belong.
     fn gen_when(&mut self, cond: &Condition, then_b: &[Stmt], else_b: Option<&[Stmt]>, into: Option<&str>) -> Result<()> {
+        if !cond.single() {
+            // `when m is {x} and x > 0`: each part tested inside the one before
+            // and the block inside them all, so what a part binds is seen after
+            // it; the `else` runs where any part failed.
+            let matched = self.fresh_temp("matched");
+            if else_b.is_some() {
+                self.w.line(&format!("bool {} = false;", matched));
+            }
+            self.gen_parts(cond, then_b, &mut |g| {
+                if else_b.is_some() {
+                    g.w.line(&format!("{} = true;", matched));
+                }
+                g.gen_branch_block(then_b, into)
+            })?;
+            if let Some(else_b) = else_b {
+                self.w.open(&format!("if (!{})", matched));
+                self.gen_branch_block(else_b, into)?;
+                self.w.close();
+            }
+            return Ok(());
+        }
         match &cond.pattern {
             None => {
                 let c = self.gen_condition(&cond.value)?;
@@ -1657,6 +1693,7 @@ impl Generator {
         while let Some(block) = rest {
             if let [Stmt { kind: StmtKind::When(next, body, after), .. }] = block
                 && next.pattern.is_none()
+                && next.single()
                 && !has_prelude(&next.value)
             {
                 let c = self.gen_condition(&next.value)?;
@@ -1670,6 +1707,34 @@ impl Generator {
             rest = None;
         }
         self.w.close();
+        Ok(())
+    }
+
+    /// The tests of a condition joined with `and`, each inside the one before,
+    /// with what an `is` binds declared in its own; `inner` writes what runs
+    /// when every part holds, inside them all. A part's statements, such as a
+    /// call's with a plan B, run only when the parts before it held.
+    fn gen_parts(&mut self, cond: &Condition, body: &[Stmt], inner: &mut dyn FnMut(&mut Self) -> Result<()>) -> Result<()> {
+        let mut opened = 0;
+        for part in cond.parts() {
+            match &part.pattern {
+                None => {
+                    let c = self.gen_condition(&part.value)?;
+                    self.w.open(&format!("if ({})", c));
+                }
+                Some(pattern) => {
+                    let subject = self.gen_subject(&part.value)?;
+                    let test = self.pattern_test(part.value.ty()?, &subject, pattern)?;
+                    self.w.open(&format!("if ({})", test));
+                    self.gen_pattern_bindings(part.value.ty()?, &subject, pattern, body)?;
+                }
+            }
+            opened += 1;
+        }
+        inner(self)?;
+        for _ in 0..opened {
+            self.w.close();
+        }
         Ok(())
     }
 
@@ -3209,14 +3274,14 @@ impl UsedTypes {
                 }
                 StmtKind::Block(body) => self.block(body),
                 StmtKind::When(cond, then_b, else_b) => {
-                    self.expr(&cond.value);
+                    cond.parts().for_each(|part| self.expr(&part.value));
                     self.block(then_b);
                     if let Some(else_b) = else_b {
                         self.block(else_b);
                     }
                 }
                 StmtKind::Loop(cond, body) => {
-                    self.expr(&cond.value);
+                    cond.parts().for_each(|part| self.expr(&part.value));
                     self.block(body);
                 }
                 StmtKind::Each(_, range, body) => {
@@ -3391,8 +3456,8 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
         StmtKind::Assign(targets, values) => {
             targets.iter().any(|target| target_reads(target, name)) || values.iter().any(expr)
         }
-        StmtKind::When(cond, then_b, else_b) => expr(&cond.value) || body(then_b) || else_b.as_ref().is_some_and(body),
-        StmtKind::Loop(cond, b) => expr(&cond.value) || body(b),
+        StmtKind::When(cond, then_b, else_b) => cond.parts().any(|part| expr(&part.value)) || body(then_b) || else_b.as_ref().is_some_and(body),
+        StmtKind::Loop(cond, b) => cond.parts().any(|part| expr(&part.value)) || body(b),
         StmtKind::Block(b) => body(b),
         StmtKind::Each(_, range, b) => expr(range) || body(b),
         StmtKind::Match(subject, cases) => expr(subject) || cases.iter().any(|case| body(&case.body)),

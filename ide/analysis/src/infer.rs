@@ -412,7 +412,20 @@ impl<'a> Knowledge<'a> {
     /// `case` matches: the `match`'s subject, or the value before `is`.
     fn pattern_subject(&self, case: usize, depth: usize) -> Option<Type> {
         if self.token(case) == Some(&Token::Is) {
-            self.span_type(self.line_start(case) + 1, case.checked_sub(1)?, depth)
+            // The value an `is` matches starts after `when` or `loop`, or after
+            // the `and` joining it to the parts before it (`a and m is {x}`).
+            let line = self.line_start(case) + 1;
+            let mut start = line;
+            let mut nesting = 0usize;
+            for q in line..case {
+                match self.token(q) {
+                    Some(Token::LParen | Token::LBracket | Token::LBrace) => nesting += 1,
+                    Some(Token::RParen | Token::RBracket | Token::RBrace) => nesting = nesting.saturating_sub(1),
+                    Some(Token::And) if nesting == 0 => start = q + 1,
+                    _ => {}
+                }
+            }
+            self.span_type(start, case.checked_sub(1)?, depth)
         } else {
             let matched = self.enclosing_match(case)?;
             self.span_type(matched + 1, self.line_end(matched).checked_sub(1)?, depth)

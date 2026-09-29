@@ -132,7 +132,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         && let Some(variants) = builtin_variants(name)
     {
         let line = k.line_start(dot);
-        let in_pattern = (line..dot).any(|q| matches!(k.token(q), Some(Token::Case | Token::Is)));
+        let in_pattern = in_pattern(&k, line, dot);
         let covered = match k.token(line) == Some(&Token::Case) {
             true => k.enclosing_match(line).map(|match_q| covered_cases(&k, match_q, line)).unwrap_or_default(),
             false => Vec::new(),
@@ -159,7 +159,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         && let Some(kind) = dot.checked_sub(1).and_then(|q| k.symbol_at(q)).filter(|&id| k.symbol(id).is_some_and(|s| s.kind == SymbolKind::Kind))
     {
         let line = k.line_start(dot);
-        let in_pattern = (line..dot).any(|q| matches!(k.token(q), Some(Token::Case | Token::Is)));
+        let in_pattern = in_pattern(&k, line, dot);
         let mut items = kind_variant_items(&k, kind, in_pattern);
         // A `case` offers the variants its match doesn't cover yet.
         if k.token(line) == Some(&Token::Case)
@@ -448,9 +448,10 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     if let (Some(is), Some(Token::Is)) = (prev, prev_token) {
         return (is_pattern_items(source, scan, context, &k, is), word_start, byte);
     }
-    // The rest of the line after `is` is the pattern, whose names are declared.
+    // The rest of the line after `is` is the pattern, whose names are
+    // declared, up to an `and` joining it to what reads them.
     if let Some(q) = prev
-        && (k.line_start(q + 1)..q).any(|p| k.token(p) == Some(&Token::Is))
+        && (k.line_start(q + 1)..=q).rev().find(|&p| matches!(k.token(p), Some(Token::Is | Token::And))).is_some_and(|p| p < q && k.token(p) == Some(&Token::Is))
     {
         return (Vec::new(), word_start, byte);
     }
@@ -694,10 +695,17 @@ fn continuation_items(k: &Knowledge, q: usize) -> Vec<CompletionItem> {
     if names_region_after(k, q) {
         items.push(keyword("at"));
     }
-    if matches!(k.token(line), Some(Token::When | Token::Loop)) && !on_line(&Token::Is) {
+    // After `and`, another part may be an `is`; an `is` is never joined with
+    // `or`, so a condition holding one goes on with `and` alone.
+    let condition = matches!(k.token(line), Some(Token::When | Token::Loop));
+    let last_join = (line..q).rev().find(|&p| matches!(k.token(p), Some(Token::Is | Token::And)));
+    if condition && last_join.is_none_or(|p| k.token(p) == Some(&Token::And)) {
         items.push(keyword("is"));
     }
-    items.extend([keyword("and"), keyword("or")]);
+    items.push(keyword("and"));
+    if !(condition && on_line(&Token::Is)) {
+        items.push(keyword("or"));
+    }
     items
 }
 
@@ -908,6 +916,12 @@ fn ends_type(k: &Knowledge, q: usize) -> bool {
 }
 
 /// Whether the `fail` at position `q` names an error: it follows `is` or
+/// Whether position `q` is in a pattern: after a `case` or an `is` on the
+/// line starting at `line`, with no `and` since, which no pattern holds.
+fn in_pattern(k: &Knowledge, line: usize, q: usize) -> bool {
+    (line..q).rev().find(|&p| matches!(k.token(p), Some(Token::Case | Token::Is | Token::And))).is_some_and(|p| k.token(p) != Some(&Token::And))
+}
+
 /// `case`, or it is the first word inside a plan B's `{`.
 fn starts_plan_b_or_pattern(k: &Knowledge, q: usize) -> bool {
     let mut p = q;

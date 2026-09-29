@@ -1,7 +1,0 @@
-; error: 4:19: an 'is' condition can't be combined with 'and' or 'or'; put a 'when' inside it instead
-task main()
-    bind m: maybe int = 1
-    when m is {n} and n > 0
-        show(n)
-    fi
-fi

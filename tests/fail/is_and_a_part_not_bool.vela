@@ -1,0 +1,14 @@
+; error: 11:23: expected type bool, got int
+task half(n: int) -> maybe int
+    when n % 2 == 0
+        <- n / 2
+    fi
+    <- none
+fi
+task main()
+    bind m = half(4)
+    bind n = half(6)
+    when m is {x} and x
+        show(x)
+    fi
+fi

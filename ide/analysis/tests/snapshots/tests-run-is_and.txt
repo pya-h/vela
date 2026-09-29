@@ -1,0 +1,162 @@
+  1 | ; An `is` joined with `and`: the names a pattern binds are seen by the parts
+    | comment:; An `is` joined with `and`: the names a pattern binds are seen by the parts
+  2 | ; after its `and` and by the block. Each part is tested only when the ones
+    | comment:; after its `and` and by the block. Each part is tested only when the ones
+  3 | ; before it held, and the `else` runs where any of them failed.
+    | comment:; before it held, and the `else` runs where any of them failed.
+  5 | kind Shape
+    | keyword:kind  type:Shape
+  6 |     Circle(r: int)
+    | variant:Circle  punctuation:(  field:r  punctuation::  type-builtin:int  punctuation:)
+  7 |     Square(side: int)
+    | variant:Square  punctuation:(  field:side  punctuation::  type-builtin:int  punctuation:)
+  8 | fi
+    | keyword:fi
+ 10 | task half(n: int) -> maybe int
+    | keyword:task  task:half  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int
+ 11 |     when n % 2 == 0
+    | keyword:when  parameter:n  operator:%  number:2  operator:==  number:0
+ 12 |         <- n / 2
+    | keyword:<-  parameter:n  operator:/  number:2
+ 13 |     fi
+    | keyword:fi
+ 14 |     <- none
+    | keyword:<-  keyword:none
+ 15 | fi
+    | keyword:fi
+ 17 | task noisy(n: int) -> maybe int
+    | keyword:task  task:noisy  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int
+ 18 |     show("asked ", n)
+    | builtin-fn:show  punctuation:(  string:"asked "  punctuation:,  parameter:n  punctuation:)
+ 19 |     <- n
+    | keyword:<-  parameter:n
+ 20 | fi
+    | keyword:fi
+ 22 | task sign(b: maybe int) -> text
+    | keyword:task  task:sign  punctuation:(  parameter:b  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:text
+ 23 |     when b is { inside } and inside < 0
+    | keyword:when  parameter:b  keyword:is  punctuation:{  variable:inside  punctuation:}  keyword:and  variable:inside  operator:<  number:0
+ 24 |         <- "negative"
+    | keyword:<-  string:"negative"
+ 25 |     else when b is { inside } and inside == 0
+    | keyword:else  keyword:when  parameter:b  keyword:is  punctuation:{  variable:inside  punctuation:}  keyword:and  variable:inside  operator:==  number:0
+ 26 |         <- "zero"
+    | keyword:<-  string:"zero"
+ 27 |     else when b == none
+    | keyword:else  keyword:when  parameter:b  operator:==  keyword:none
+ 28 |         <- "none"
+    | keyword:<-  string:"none"
+ 29 |     fi
+    | keyword:fi
+ 30 |     <- "positive"
+    | keyword:<-  string:"positive"
+ 31 | fi
+    | keyword:fi
+ 33 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 34 |     ; The user's example: a count read, and one that can't be negative.
+    | comment:; The user's example: a count read, and one that can't be negative.
+ 35 |     bind b = scan("count: ", int) { none }
+    | keyword:bind  variable:b  operator:=  builtin-fn:scan  punctuation:(  string:"count: "  punctuation:,  type-builtin:int  punctuation:)  punctuation:{  keyword:none  punctuation:}
+ 36 |     when b is { inside } and inside < 0
+    | keyword:when  variable:b  keyword:is  punctuation:{  variable:inside  punctuation:}  keyword:and  variable:inside  operator:<  number:0
+ 37 |         show("Invalid count")
+    | builtin-fn:show  punctuation:(  string:"Invalid count"  punctuation:)
+ 38 |     fi
+    | keyword:fi
+ 39 |     show(sign(-3), " ", sign(0), " ", sign(none), " ", sign(5))
+    | builtin-fn:show  punctuation:(  task:sign  punctuation:(  operator:-  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  task:sign  punctuation:(  number:0  punctuation:)  punctuation:,  string:" "  punctuation:,  task:sign  punctuation:(  keyword:none  punctuation:)  punctuation:,  string:" "  punctuation:,  task:sign  punctuation:(  number:5  punctuation:)  punctuation:)
+ 40 |     ; A bool before the 'is', and two 'is' parts with a test between them.
+    | comment:; A bool before the 'is', and two 'is' parts with a test between them.
+ 41 |     bind wide = true
+    | keyword:bind  variable:wide  operator:=  keyword:true
+ 42 |     when wide and half(8) is { h } and half(h) is { q } and h > q
+    | keyword:when  variable:wide  keyword:and  task:half  punctuation:(  number:8  punctuation:)  keyword:is  punctuation:{  variable:h  punctuation:}  keyword:and  task:half  punctuation:(  variable:h  punctuation:)  keyword:is  punctuation:{  variable:q  punctuation:}  keyword:and  variable:h  operator:>  variable:q
+ 43 |         show(h, " ", q)
+    | builtin-fn:show  punctuation:(  variable:h  punctuation:,  string:" "  punctuation:,  variable:q  punctuation:)
+ 44 |     fi
+    | keyword:fi
+ 45 |     when not wide and half(8) is { h }
+    | keyword:when  keyword:not  variable:wide  keyword:and  task:half  punctuation:(  number:8  punctuation:)  keyword:is  punctuation:{  variable:h  punctuation:}
+ 46 |         show("never ", h)
+    | builtin-fn:show  punctuation:(  string:"never "  punctuation:,  variable:h  punctuation:)
+ 47 |     else
+    | keyword:else
+ 48 |         show("not wide")
+    | builtin-fn:show  punctuation:(  string:"not wide"  punctuation:)
+ 49 |     fi
+    | keyword:fi
+ 50 |     ; A later part isn't read when an earlier one failed.
+    | comment:; A later part isn't read when an earlier one failed.
+ 51 |     when half(3) is { h } and noisy(h) is { n }
+    | keyword:when  task:half  punctuation:(  number:3  punctuation:)  keyword:is  punctuation:{  variable:h  punctuation:}  keyword:and  task:noisy  punctuation:(  variable:h  punctuation:)  keyword:is  punctuation:{  variable:n  punctuation:}
+ 52 |         show("never ", n)
+    | builtin-fn:show  punctuation:(  string:"never "  punctuation:,  variable:n  punctuation:)
+ 53 |     else
+    | keyword:else
+ 54 |         show("odd")
+    | builtin-fn:show  punctuation:(  string:"odd"  punctuation:)
+ 55 |     fi
+    | keyword:fi
+ 56 |     when half(4) is { h } and noisy(h) is { n } and n > 1
+    | keyword:when  task:half  punctuation:(  number:4  punctuation:)  keyword:is  punctuation:{  variable:h  punctuation:}  keyword:and  task:noisy  punctuation:(  variable:h  punctuation:)  keyword:is  punctuation:{  variable:n  punctuation:}  keyword:and  variable:n  operator:>  number:1
+ 57 |         show("both ", n)
+    | builtin-fn:show  punctuation:(  string:"both "  punctuation:,  variable:n  punctuation:)
+ 58 |     fi
+    | keyword:fi
+ 59 |     ; A variant, a failure, and a tuple beside a test.
+    | comment:; A variant, a failure, and a tuple beside a test.
+ 60 |     bind s = Shape.Square(4)
+    | keyword:bind  variable:s  operator:=  type:Shape  punctuation:.  variant:Square  punctuation:(  number:4  punctuation:)
+ 61 |     when s is Square side and side > 3
+    | keyword:when  variable:s  keyword:is  variant:Square  variable:side  keyword:and  variable:side  operator:>  number:3
+ 62 |         show("big square ", side)
+    | builtin-fn:show  punctuation:(  string:"big square "  punctuation:,  variable:side  punctuation:)
+ 63 |     fi
+    | keyword:fi
+ 64 |     bind parsed = int("x")
+    | keyword:bind  variable:parsed  operator:=  type-builtin:int  punctuation:(  string:"x"  punctuation:)
+ 65 |     when parsed is failure e and wide
+    | keyword:when  variable:parsed  keyword:is  keyword:failure  variable:e  keyword:and  variable:wide
+ 66 |         show("failed: ", e)
+    | builtin-fn:show  punctuation:(  string:"failed: "  punctuation:,  variable:e  punctuation:)
+ 67 |     fi
+    | keyword:fi
+ 68 |     bind t = (1, 2)
+    | keyword:bind  variable:t  operator:=  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+ 69 |     when t is (a, c) and a < c
+    | keyword:when  variable:t  keyword:is  punctuation:(  variable:a  punctuation:,  variable:c  punctuation:)  keyword:and  variable:a  operator:<  variable:c
+ 70 |         show("ordered ", a, c)
+    | builtin-fn:show  punctuation:(  string:"ordered "  punctuation:,  variable:a  punctuation:,  variable:c  punctuation:)
+ 71 |     else
+    | keyword:else
+ 72 |         show("not ordered")
+    | builtin-fn:show  punctuation:(  string:"not ordered"  punctuation:)
+ 73 |     fi
+    | keyword:fi
+ 74 |     ; As a value, through an 'else when', and in a loop.
+    | comment:; As a value, through an 'else when', and in a loop.
+ 75 |     bind word = when b is { n } and n > 100 "big" else when b is { n } and n > 0 "small" else "none" fi
+    | keyword:bind  variable:word  operator:=  keyword:when  variable:b  keyword:is  punctuation:{  variable:n  punctuation:}  keyword:and  variable:n  operator:>  number:100  string:"big"  keyword:else  keyword:when  variable:b  keyword:is  punctuation:{  variable:n  punctuation:}  keyword:and  variable:n  operator:>  number:0  string:"small"  keyword:else  string:"none"  keyword:fi
+ 76 |     show(word)
+    | builtin-fn:show  punctuation:(  variable:word  punctuation:)
+ 77 |     hold i = 10
+    | keyword:hold  variable:i  operator:=  number:10
+ 78 |     loop half(i) is { h } and h > 1
+    | keyword:loop  task:half  punctuation:(  variable:i  punctuation:)  keyword:is  punctuation:{  variable:h  punctuation:}  keyword:and  variable:h  operator:>  number:1
+ 79 |         show("half ", h)
+    | builtin-fn:show  punctuation:(  string:"half "  punctuation:,  variable:h  punctuation:)
+ 80 |         i = h
+    | variable:i  operator:=  variable:h
+ 81 |     fi
+    | keyword:fi
+ 82 |     ; 'or' in parentheses is one part.
+    | comment:; 'or' in parentheses is one part.
+ 83 |     when half(6) is { h } and (h == 3 or h == 4)
+    | keyword:when  task:half  punctuation:(  number:6  punctuation:)  keyword:is  punctuation:{  variable:h  punctuation:}  keyword:and  punctuation:(  variable:h  operator:==  number:3  keyword:or  variable:h  operator:==  number:4  punctuation:)
+ 84 |         show("three or four")
+    | builtin-fn:show  punctuation:(  string:"three or four"  punctuation:)
+ 85 |     fi
+    | keyword:fi
+ 86 | fi
+    | keyword:fi

@@ -1,0 +1,14 @@
+; error: 11:29: an 'is' is joined with 'and', not 'or': with 'or', the names it binds would be bound on one path only; put the 'or' in parentheses, as in 'm is {x} and (a or b)', or write a 'when' inside
+task half(n: int) -> maybe int
+    when n % 2 == 0
+        <- n / 2
+    fi
+    <- none
+fi
+task main()
+    bind m = half(4)
+    bind n = half(6)
+    when m is {x} and x > 0 or true
+        show(x)
+    fi
+fi

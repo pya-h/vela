@@ -1,0 +1,14 @@
+; error: 11:16: an 'is' can't follow 'not': the names it binds would be bound only where it doesn't match; match the other outcome instead, as in 'm is none'
+task half(n: int) -> maybe int
+    when n % 2 == 0
+        <- n / 2
+    fi
+    <- none
+fi
+task main()
+    bind m = half(4)
+    bind n = half(6)
+    when not m is {x}
+        show("empty")
+    fi
+fi

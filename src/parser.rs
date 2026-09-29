@@ -104,6 +104,9 @@ pub struct Parser {
     methods: Vec<Item>,
 }
 
+/// An `is` joined with `or`, or after one.
+const IS_WITH_OR: &str = "an 'is' is joined with 'and', not 'or': with 'or', the names it binds would be bound on one path only; put the 'or' in parentheses, as in 'm is {x} and (a or b)', or write a 'when' inside";
+
 impl Parser {
     /// `tokens` and `spans` are parallel, as produced by `Lexer::tokenize`.
     pub fn new(tokens: Vec<Token>, spans: Vec<Span>) -> Self {
@@ -2001,24 +2004,62 @@ impl Parser {
         Ok(expr)
     }
 
-    /// A `when` or `loop` condition, `value` or `value is pattern`,
-    /// explaining `=` written for `==`.
+    /// A `when` or `loop` condition: `value`, `value is pattern`, or parts
+    /// like these joined with `and` (`m is {x} and x > 0`), explaining `=`
+    /// written for `==`. The parts are read above `and`, so that one can be an
+    /// `is`; where none is, they become one `bool` as `and` makes it, and an
+    /// `or` after them goes on as it does in any value. An `is` is never joined
+    /// with `or`, nor after `not`: a name it binds would be bound on one path
+    /// only.
     fn parse_condition(&mut self) -> Result<Condition> {
-        let value = self.parse_expr()?;
-        if self.check(Token::Assign) {
-            return Err(Error::at(self.peek_span(), "'=' assigns; to compare, write '=='"));
+        const AND_PRECEDENCE: u8 = 2;
+        let mut parts = Vec::new();
+        let mut joins = Vec::new();
+        loop {
+            let value = self.parse_binary(AND_PRECEDENCE + 1)?;
+            if self.check(Token::Assign) {
+                return Err(Error::at(self.peek_span(), "'=' assigns; to compare, write '=='"));
+            }
+            let is_at = self.peek_span();
+            let pattern = match self.match_token(Token::Is) {
+                true => {
+                    if matches!(value.kind, ExprKind::Unary(UnaryOp::Not, _)) {
+                        return Err(Error::at(
+                            is_at,
+                            "an 'is' can't follow 'not': the names it binds would be bound only where it doesn't match; match the other outcome instead, as in 'm is none'",
+                        ));
+                    }
+                    Some(self.parse_pattern("is")?)
+                }
+                false => None,
+            };
+            parts.push((value, pattern));
+            let join = self.peek_span();
+            if !self.match_token(Token::And) {
+                break;
+            }
+            joins.push(join);
         }
-        if !self.match_token(Token::Is) {
-            return Ok(Condition { value, pattern: None });
+        let matched = parts.iter().any(|(_, pattern)| pattern.is_some());
+        if matched && self.check(Token::Or) {
+            return Err(Error::at(self.peek_span(), IS_WITH_OR));
         }
-        let pattern = self.parse_pattern("is")?;
-        if self.check(Token::And) || self.check(Token::Or) {
-            return Err(Error::at(
-                self.peek_span(),
-                "an 'is' condition can't be combined with 'and' or 'or'; put a 'when' inside it instead",
-            ));
+        if !matched {
+            // `a and b`, and maybe `or c`: one value, as `parse_expr` reads it.
+            let mut values = parts.into_iter().map(|(value, _)| value);
+            let first = values.next().ok_or_else(|| Error::at(self.peek_span(), "expected a condition"))?;
+            let joined = values.zip(joins).fold(first, |left, (right, span)| Expr::new(ExprKind::Binary(BinaryOp::And, Box::new(left), Box::new(right)), span));
+            let value = self.parse_operators(joined, 1)?;
+            if self.check(Token::Is) {
+                return Err(Error::at(self.peek_span(), IS_WITH_OR));
+            }
+            if self.check(Token::Assign) {
+                return Err(Error::at(self.peek_span(), "'=' assigns; to compare, write '=='"));
+            }
+            return Ok(Condition::new(value, None));
         }
-        Ok(Condition { value, pattern: Some(pattern) })
+        let chained = parts.into_iter().rev().fold(None, |and, (value, pattern)| Some(Box::new(Condition { value, pattern, and })));
+        chained.map(|chained| *chained).ok_or_else(|| Error::at(self.peek_span(), "expected a condition"))
     }
 
     /// The binary operator `token` stands for, with its precedence (higher
