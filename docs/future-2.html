@@ -245,6 +245,8 @@
     }
     .doc-nav {
       display: flex;
+      flex-wrap: wrap;
+      row-gap: 0.5rem;
       justify-content: center;
       gap: 1.5rem;
       margin-top: 1.5rem;
@@ -280,6 +282,8 @@
       <a href="comparison.html">Comparison</a>
       <a href="future.html">Future</a>
       <a href="future-2.html" aria-current="page">Future (Kimi)</a>
+      <a href="safety.html">Safety</a>
+      <a href="maywaste.html">May Waste</a>
       <a href="events.html">Events</a>
     </nav>
   </header>
@@ -344,7 +348,7 @@ fi</pre>
       </div>
 
       <div class="option">
-        <h3><span aria-hidden="true">🧭</span> Named Regions: <code>T@arena</code></h3>
+        <h3><span aria-hidden="true">🧭</span> Named Regions: <code>T@arena</code> <span class="badge b-done">Done</span></h3>
         <p>
           Make regions first-class and named. A value's type can include the region it lives in, and references cannot escape that region. This is stronger than arenas alone: it lets the compiler prove a reference is still valid.
         </p>
@@ -431,8 +435,8 @@ fi</pre>
         </div>
         <div class="note">
           <strong>With regions:</strong> memory no longer needs it, since a region is already released on every way out of its
-          block. <code>defer</code> is still the right tool for everything else a block acquires, such as files, locks, and
-          sockets, and the generated C would run deferred code at the same exits where regions are freed.
+          block. <code>defer</code> is still the right tool for everything else a block acquires, such as locks and sockets (a file
+          is closed by the region it was opened in, see <a href="std.html#file-regions">Vela Library</a>), and the generated C would run deferred code at the same exits where regions are freed.
         </div>
       </div>
 
@@ -693,6 +697,12 @@ fi
 bind a = Point { x: 1, y: 2 }
 bind b = Point { x: 1, y: 2 }
 show(a == b)   ; true, generated automatically</pre>
+        <div class="note">
+          <strong>Partly there without a word:</strong> every value can already be shown (<code>show(a)</code> writes
+          <code>Point { x: 1, y: 2 }</code>, see <a href="vela.html#str">values as text</a>) and compared item by item
+          with <code>~=</code> (<code>a ~= b</code> is true). <code>a == b</code> compares where they are, so it is false
+          here (see <a href="vela.html#comparing">Comparing</a>). What derive would still add is hashing and copies.
+        </div>
         <p>
           Derive is implemented with compile-time reflection (or comptime code generation), so it costs nothing at runtime and adds no hidden vtables.
         </p>

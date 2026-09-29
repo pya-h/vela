@@ -151,6 +151,8 @@
     .badge-slow { background: rgba(248,113,113,0.15); color: #fca5a5; }
     .doc-nav {
       display: flex;
+      flex-wrap: wrap;
+      row-gap: 0.5rem;
       justify-content: center;
       gap: 1.5rem;
       margin-top: 1.5rem;
@@ -176,6 +178,9 @@
       <a href="ide.html">Studio</a>
       <a href="comparison.html" aria-current="page">Comparison</a>
       <a href="future.html">Future</a>
+      <a href="future-2.html">Future (Kimi)</a>
+      <a href="safety.html">Safety</a>
+      <a href="maywaste.html">May Waste</a>
       <a href="events.html">Events</a>
     </nav>
   </header>
@@ -438,15 +443,16 @@
       <h2>Safety</h2>
       <p>
         Vela provides static type safety and exhaustive pattern matching on kinds, which catches many bugs
-        at compile time: there are no implicit conversions (except that mixing <code>int</code> and
-        <code>float</code> in arithmetic gives a <code>float</code>, and a plain value becomes a <code>maybe</code> where
-        one is expected), every value-returning task must produce a value on every path (a <code>&lt;- value</code>,
+        at compile time: there are no implicit conversions (an <code>int</code> and a <code>float</code> don't mix in arithmetic
+        until one is turned into the other, and only a plain value becomes a <code>maybe</code> where one is
+        expected), every value-returning task must produce a value on every path (a <code>&lt;- value</code>,
         or named results that are set), a missing value is a <code>maybe T</code> that must be checked
         before use (pointers can't be null), and a failure is a <code>T ~ E</code> whose error a call statement can't ignore by
         accident. Memory is freed through regions, whose pointers the checker keeps from outliving them, so freed
         memory can't be used or freed again. Integer overflow and division by zero stop the program with a message
         instead of being undefined, as they are in C, and so does an index out of range of an array or slice. It is much safer than C, but its guarantees are narrower than
-        Rust's (which also rules out data races) or those of GC'd languages.
+        Rust's (which also rules out data races) or those of GC'd languages; <a href="safety.html">Safety</a> lists
+        what the compiler checks and where it can't yet.
       </p>
       <div class="table-wrap">
         <table>
@@ -474,7 +480,9 @@
       <p>
         Vela aims for Go-like minimalism: one way to define functions, one way to define records, one way to
         define unions. It avoids the dualities that plague other languages (structs vs classes, interfaces vs
-        traits, references vs pointers).
+        traits). It does have both references and pointers, but they don't overlap: a reference
+        (<code>hold&amp;</code>, <code>bind&amp;</code>) is another name for a place, never stored and never null, and a
+        pointer (<code>^T</code>) is a value kept in a region.
       </p>
       <ul>
         <li><strong>Minimal:</strong> Go, Vela.</li>
@@ -497,11 +505,11 @@
         A Vela task or shape can take types as well as values — <code>task first&lt;T&gt;(xs: [T]@r) -&gt; maybe T</code>,
         <code>shape Box&lt;T&gt;</code> — and one task or shape is made for each set of types used, as C++ templates and
         Rust generics are. What a type must allow is said
-        with one of four words rather than a system of its own: <code>fixed</code>, <code>same</code>,
-        <code>shown</code>, and <code>ordered</code>, where Rust has traits and <code>impl</code> blocks, C++ concepts (or
+        with one of five words rather than a system of its own: <code>fixed</code>, <code>same</code>,
+        <code>similar</code>, <code>shown</code>, and <code>ordered</code>, where Rust has traits and <code>impl</code> blocks, C++ concepts (or
         nothing, and errors deep inside a template), and Go interfaces used as constraints. That makes generic code
         readable and its errors short, and it is the limit too: there is no way to ask for a type that can be added, or
-        for one that has a method, so a task that needs more than the four words takes concrete types. A kind can't take
+        for one that has a method, so a task that needs more than the five words takes concrete types. A kind can't take
         types yet, where Rust's <code>enum</code> and C++'s templates can. Go's generics
         arrived late and Vela's are small on purpose; C++ and Rust go much further, with the compile times and the error
         messages that come with it.
@@ -514,6 +522,27 @@
         <code>&amp;mut self</code> and C++ leaves off <code>const</code>, and only a value that can change may call it. Go puts
         methods anywhere in the package and Rust in <code>impl</code> blocks, possibly several; Vela keeps them in the
         type's own block, so one place shows everything a type does, and no other module can add to it.
+      </p>
+      <p>
+        A parameter says how it is given, where C++ has <code>T</code>, <code>const T&amp;</code>, and <code>T&amp;</code>,
+        C# has <code>in</code> and <code>ref</code>, and Swift <code>inout</code>: <code>x: T</code> is read and
+        never changed, <code>hold x: T</code> is the task's own copy to change, <code>hold&amp; x: T</code> changes the
+        caller's place, and <code>bind&amp; x: T</code> reads it where it is. The call marks a place it gives with
+        <code>&amp;</code>, as C#'s <code>ref</code> and Swift's <code>&amp;</code> do, so a change is visible where
+        the call is written. Rust's borrow checker makes sure two names never change one value; Vela checks one call
+        at a time, refusing a place given twice where the call changes it, and lists what it doesn't check yet on
+        <a href="safety.html">Safety</a>. A plain parameter larger than 64 bytes is passed by address when nothing can
+        change it during the call, which C++ programmers write by hand as <code>const T&amp;</code>.
+      </p>
+      <p>
+        <code>==</code> is cheap for every type, so an array, a shape, or a tuple is compared by where it is, as Java,
+        C#, and Python's <code>is</code> compare objects; <code>~=</code> compares item by item, as Rust's derived
+        <code>PartialEq</code>, Java's <code>equals</code>, and Python's <code>==</code> do, and its cost is in the
+        symbol. Every value can be shown without a line of code (<code>show(p)</code> writes <code>Point { x: 1, y: 2 }</code>),
+        as Rust's <code>#[derive(Debug)]</code> and Python's <code>repr</code> give, and a shape's own
+        <code>str</code> method replaces it. A shape can have <code>shared</code> fields and methods, one for the whole
+        program, as <code>static</code> members are in C++, Java, C#, and Swift, named through the shape
+        (<code>Tally.count</code>) and never through a value.
       </p>
       <p>
         Results can also be named, as in Go: <code>-&gt; total: int</code>, set with <code>total &lt;- value</code>

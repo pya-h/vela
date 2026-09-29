@@ -97,6 +97,8 @@
     }
     .doc-nav {
       display: flex;
+      flex-wrap: wrap;
+      row-gap: 0.5rem;
       justify-content: center;
       gap: 1.5rem;
       margin-top: 1.5rem;
@@ -143,6 +145,9 @@
       <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html">Future</a>
+      <a href="future-2.html">Future (Kimi)</a>
+      <a href="safety.html">Safety</a>
+      <a href="maywaste.html">May Waste</a>
       <a href="events.html">Events</a>
     </nav>
   </header>
@@ -300,7 +305,8 @@
         <code>close()</code> that finds it so sets <code>state</code> to <code>Closed</code>). The state is what the
         File's methods left it, and what the file is, its methods tell.
       </p>
-      <pre><span class="keyword">hold</span> kept = File { path: "notes.txt" }
+      <pre><span class="keyword">region</span> r
+<span class="keyword">hold</span> kept = File { path: "notes.txt" }
 <span class="keyword">each</span> pass <span class="keyword">in</span> 0..1
     <span class="keyword">region</span> round
     kept.open(FileMode.Read) <span class="keyword">at</span> round { <span class="keyword">failure</span> e
@@ -309,8 +315,8 @@
 <span class="keyword">fi</span>                                  <span class="comment">; round's block ends, and closes the file</span>
 show(kept.str() <span class="keyword">at</span> r)                <span class="comment">; notes.txt (open): what open left it</span>
 show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failure</span> e
-    "closed"                        <span class="comment">; NotOpen</span>
-})</pre>
+    "closed"                        <span class="comment">; NotOpen, so the plan B runs</span>
+})                                  <span class="comment">; { "closed" }: line() gives a maybe text, none at the end</span></pre>
       <p>
         <code>examples/files.vela</code> is a whole program: a list written to a file, added to, read back line by
         line, and deleted.

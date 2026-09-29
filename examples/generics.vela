@@ -1,9 +1,10 @@
 ; Tasks that take types: `task first<T>(…)` works for a slice of anything, and
 ; `task biggest<T: ordered>(…)` for anything with an order. The word after a
 ; type's `:` says what the body may do with its values: `ordered` compares them
-; with `<` and `>`, `shown` shows them, `same` compares them with `==`, and
-; `fixed` lets them be a tuple's items. The type comes from the arguments, from
-; the place the value goes, or written in `< >` at the call.
+; with `<` and `>`, `shown` shows them, `same` compares them with `==`, `similar`
+; compares them item by item with `~=`, and `fixed` lets them be a tuple's
+; items. The type comes from the arguments, from the place the value goes, or
+; written in `< >` at the call.
 
 ; The first item of a slice, whatever it holds.
 task first<T>(xs: [T]@r) -> maybe T

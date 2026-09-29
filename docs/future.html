@@ -265,6 +265,8 @@
     }
     .doc-nav {
       display: flex;
+      flex-wrap: wrap;
+      row-gap: 0.5rem;
       justify-content: center;
       gap: 1.5rem;
       margin-top: 1.5rem;
@@ -290,6 +292,9 @@
       <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html" aria-current="page">Future</a>
+      <a href="future-2.html">Future (Kimi)</a>
+      <a href="safety.html">Safety</a>
+      <a href="maywaste.html">May Waste</a>
       <a href="events.html">Events</a>
     </nav>
   </header>
@@ -320,7 +325,7 @@
           <p>Started: <a href="std.html">Vela's library</a> comes with the compiler, brought in with
             <code>include std/files</code>, and its first module reads, writes, renames, and deletes files, each opened
             in a region that closes it. Networking, math, and text search are still to come. Before it, only
-            <code>show</code> and <code>scan</code> (which reads a line of input, or a number from it) exist, with text's own operations (<a href="vela.html#text-parts">parts</a>, <a href="vela.html#joining">joining</a>, and <a href="vela.html#str">values as text</a>). Numbers convert with <a href="vela.html#conversions"><code>float(n)</code> and <code>int(x)</code></a>, which read text too, but there are no files, networking, or math utilities, and text has no search or trimming.</p>
+            <code>show</code> and <code>scan</code> (which reads a line of input, or a number from it) exist, with text's own operations (<a href="vela.html#text-parts">parts</a>, <a href="vela.html#joining">joining</a>, and <a href="vela.html#str">values as text</a>). Numbers convert with <a href="vela.html#conversions"><code>float(n)</code> and <code>int(x)</code></a>, which read text too; beyond files there is no networking or math module, and text has no search or trimming.</p>
         </div>
         <div class="card">
           <h3>No module system <span class="badge b-done">Done</span></h3>

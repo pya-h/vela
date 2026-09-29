@@ -202,6 +202,9 @@
       <a href="ide.html" aria-current="page">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html">Future</a>
+      <a href="future-2.html">Future (Kimi)</a>
+      <a href="safety.html">Safety</a>
+      <a href="maywaste.html">May Waste</a>
       <a href="events.html">Events</a>
     </nav>
   </header>
@@ -325,11 +328,13 @@ Press Ctrl+C to stop.</pre>
           the one under the cursor is highlighted). Drag its edge to resize it; double-click the
           edge to reset.</li>
         <li><strong>Tabs and editor:</strong> one tab per open file; a dot marks unsaved changes. With no file open,
-          a welcome screen lists the folder's programs and the main shortcuts.</li>
+          a welcome screen lists the folder's programs and the main shortcuts, with <em>New File…</em> and
+          <em>Open File…</em> buttons.</li>
         <li><strong>Panel:</strong> <em>Problems</em> (errors in your files), <em>Output</em> (the program you ran),
-          and <em>Terminal</em> (a shell in the folder). Drag its top edge to resize it.</li>
+          and <em>Terminal</em> (a shell in the folder). Drag its top edge to resize it; the button at its right hides it,
+          and Output has a button that clears it.</li>
         <li><strong>Status bar:</strong> the problem count and the last run's result (click either to open its tab),
-          the cursor position, and the file's language.</li>
+          the cursor position (with how many characters are selected, when some are), and the file's language.</li>
       </ul>
       <p>Sizes, open tabs, expanded folders, the panel's tab, and the theme are remembered for next time.</p>
     </section>
@@ -473,7 +478,9 @@ Press Ctrl+C to stop.</pre>
         <li><strong>Explorer:</strong> create files and folders (a name like <code>lib/util.vela</code> creates the
           folder too), rename (a name with folders moves the entry), and delete, from the buttons, the right-click
           menu, or the keyboard. Hidden files and folders, <code>target/</code>, <code>node_modules/</code>, links to
-          folders, and names holding <code>:</code> or <code>\</code> aren't listed.</li>
+          folders, and names holding <code>:</code> or <code>\</code> aren't listed. <em>Refresh</em> reads the folder
+          again, and <em>Collapse folders</em> closes them all. The list stops at 10,000 entries and 16 folders deep,
+          and then says <em>Some files aren't shown</em>.</li>
         <li><strong>Saving:</strong> <kbd>Ctrl</kbd>+<kbd>S</kbd> saves the file, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>
           saves all. Closing a tab or leaving the page with unsaved changes asks first.</li>
         <li><strong>Changes made elsewhere</strong> are noticed when you come back to the page: a file without
@@ -491,7 +498,8 @@ Press Ctrl+C to stop.</pre>
         <li>The run ends with a summary line, <code>── exited with code 0 · 3 ms ──</code>, and the status bar keeps
           the result. <kbd>Shift</kbd>+<kbd>F5</kbd> or the Stop button ends a program; running again replaces the
           one that is running, even when the new build fails.</li>
-        <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> builds without running.</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd> builds without running, and says so when the build has no
+          errors. Running or building with no <code>.vela</code> file open says to open one.</li>
         <li><strong>When a build fails,</strong> a Vela error (or a missing <code>task main()</code>) opens
           <strong>Problems</strong>, where clicking it selects the spot (an error in a module is listed under the
           module's file); a failure of the C compiler opens Output with its message. A build error stays listed until
@@ -524,7 +532,10 @@ Press Ctrl+C to stop.</pre>
       <h2 id="shortcuts">Keyboard Shortcuts</h2>
       <p>
         On a Mac, <kbd>⌘</kbd> replaces <kbd>Ctrl</kbd> except where the table says otherwise; completion stays
-        <kbd>⌃</kbd>+<kbd>Space</kbd> and the terminal <kbd>⌃</kbd>+<kbd>`</kbd>. Browser shortcuts such as
+        <kbd>⌃</kbd>+<kbd>Space</kbd> (or <kbd>⌥</kbd><kbd>`</kbd>) and the terminal <kbd>⌃</kbd>+<kbd>`</kbd>. The
+        running and panel shortcuts (run, build, show or hide the panel, show Problems) answer to either
+        <kbd>Ctrl</kbd> or <kbd>⌘</kbd> on every system, so on a Mac <kbd>⌃</kbd><kbd>J</kbd> toggles the panel too
+        rather than reaching the terminal. Browser shortcuts such as
         <kbd>Ctrl</kbd>+<kbd>W</kbd> still belong to the browser. In the Terminal and Output tabs, keys go to the
         program, except saving, opening a file, going to a declaration, and the running and panel shortcuts; so
         <kbd>Ctrl</kbd>+<kbd>B</kbd>, for example, reaches the shell.
@@ -556,7 +567,7 @@ Press Ctrl+C to stop.</pre>
 
             <tr><td class="group" colspan="3">Editing</td></tr>
             <tr><td>Find / replace</td><td><kbd>Ctrl</kbd>+<kbd>F</kbd> / <kbd>Ctrl</kbd>+<kbd>H</kbd></td><td><kbd>⌘</kbd><kbd>F</kbd> / <kbd>⌘</kbd><kbd>⌥</kbd><kbd>F</kbd></td></tr>
-            <tr><td>Next / previous match</td><td><kbd>F3</kbd> / <kbd>Shift</kbd>+<kbd>F3</kbd></td><td><kbd>⌘</kbd><kbd>G</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>G</kbd></td></tr>
+            <tr><td>Next / previous match</td><td><kbd>F3</kbd> / <kbd>Shift</kbd>+<kbd>F3</kbd>, or <kbd>Ctrl</kbd>+<kbd>G</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd></td><td><kbd>⌘</kbd><kbd>G</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>G</kbd></td></tr>
             <tr><td>Go to line</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>G</kbd></td><td><kbd>⌘</kbd><kbd>⌥</kbd><kbd>G</kbd></td></tr>
             <tr><td>Select the next occurrence / all occurrences</td><td><kbd>Ctrl</kbd>+<kbd>D</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></td><td><kbd>⌘</kbd><kbd>D</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>L</kbd></td></tr>
             <tr><td>Add a cursor above / below</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd></td><td><kbd>⌘</kbd><kbd>⌥</kbd><kbd>↑</kbd> / <kbd>↓</kbd></td></tr>
@@ -567,6 +578,11 @@ Press Ctrl+C to stop.</pre>
             <tr><td>Fold / unfold the block</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd> / <kbd>]</kbd></td><td><kbd>⌘</kbd><kbd>⌥</kbd><kbd>[</kbd> / <kbd>]</kbd></td></tr>
             <tr><td>Fold / unfold everything</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>[</kbd> / <kbd>]</kbd></td><td><kbd>⌃</kbd><kbd>⌥</kbd><kbd>[</kbd> / <kbd>]</kbd></td></tr>
             <tr><td>Undo / redo</td><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td><kbd>⌘</kbd><kbd>Z</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Z</kbd></td></tr>
+            <tr><td>Indent / outdent the line</td><td><kbd>Ctrl</kbd>+<kbd>]</kbd> / <kbd>[</kbd></td><td><kbd>⌘</kbd><kbd>]</kbd> / <kbd>[</kbd></td></tr>
+            <tr><td>Indent the selection again</td><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>\</kbd></td><td><kbd>⌘</kbd><kbd>⌥</kbd><kbd>\</kbd></td></tr>
+            <tr><td>Select the enclosing part</td><td><kbd>Ctrl</kbd>+<kbd>I</kbd></td><td><kbd>⌘</kbd><kbd>I</kbd></td></tr>
+            <tr><td>Go to the matching bracket</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>\</kbd></td><td><kbd>⌘</kbd><kbd>⇧</kbd><kbd>\</kbd></td></tr>
+            <tr><td>Undo / redo a selection change</td><td><kbd>Ctrl</kbd>+<kbd>U</kbd> / <kbd>Alt</kbd>+<kbd>U</kbd></td><td><kbd>⌘</kbd><kbd>U</kbd> / <kbd>⌘</kbd><kbd>⇧</kbd><kbd>U</kbd></td></tr>
             <tr><td>Let <kbd>Tab</kbd> move focus out of the editor</td><td><kbd>Ctrl</kbd>+<kbd>M</kbd></td><td><kbd>⇧</kbd><kbd>⌥</kbd><kbd>M</kbd></td></tr>
 
             <tr><td class="group" colspan="3">Explorer, tabs, and panels</td></tr>

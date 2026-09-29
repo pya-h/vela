@@ -97,6 +97,8 @@
     }
     .doc-nav {
       display: flex;
+      flex-wrap: wrap;
+      row-gap: 0.5rem;
       justify-content: center;
       gap: 1.5rem;
       margin-top: 1.5rem;
@@ -143,6 +145,9 @@
       <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html">Future</a>
+      <a href="future-2.html">Future (Kimi)</a>
+      <a href="safety.html">Safety</a>
+      <a href="maywaste.html">May Waste</a>
       <a href="events.html">Events</a>
     </nav>
   </header>
@@ -199,7 +204,12 @@
         file with <a href="std.html#files"><code>std/files</code></a>: written, added to, read line by line, and
         deleted), <code>numbers.vela</code> (numbers read
         from input with <code>scan("> ", int)</code>, and from text with <code>int(t)</code>, with the reasons there is
-        no number), and <code>demo.vela</code> (tasks, shapes, pointers, control flow, and text).
+        no number), <code>generics.vela</code> (tasks that take types, and the words that say what a type allows),
+        <code>tuples.vela</code> (tuples made, read, and taken apart), <code>primes.vela</code> (a slice filled by index
+        and one grown with <code>add</code>, emptied with <code>del</code>, and <a href="#arrays">a loop through a
+        slice as it is at each pass</a>), <code>journal.vela</code> (notes read from input into a region per line,
+        with a <a href="#default-region">default region</a> and <code>copy()</code>), and <code>demo.vela</code>
+        (tasks, shapes, pointers, control flow, and text).
       </p>
       <div class="note">
         Prefer an editor? <a href="ide.html">Vela Studio</a> highlights Vela, shows errors as you type, completes
@@ -240,8 +250,10 @@
         <code>match</code> — closes with <code>fi</code>. Write each statement on its own line, with nothing
         after it but a comment. A <code>;</code> starts a comment, as a semicolon adds a remark to a sentence
         (<code>bind x = 1 ; the first</code>), and a <code>#</code> separates an array's type or value from its count,
-        as in item #4: <code>[int#4]</code>, <code>[0#4]</code>. Written the other way round, as other languages do, each
-        is an error that says which is which.
+        as in item #4: <code>[int#4]</code>, <code>[0#4]</code>. A <code>#</code> comment is an error that says so, and a
+        count written with <code>;</code>, <code>[0; 4]</code>, is an error that says a count follows <code>#</code>.
+        Everything after a <code>;</code> is a comment, wherever it is, so <code>show(1); show(2)</code> is only
+        <code>show(1)</code>: Vela has no symbol that separates statements.
         (The compiler doesn't insist on the line break yet; see <a href="#limits">Current Limits</a>.)
         Files may use LF or CRLF line endings; a carriage return alone (as old Mac files end lines) is an error.
       </p>
@@ -270,11 +282,12 @@ block shared type</pre>
         after a kind or one of its variants; a field may. Nor may a variable be named after a shape, whose
         <a href="#shared">shared fields</a> <code>Shape.f</code> names. <code>new</code> is reserved everywhere
         but after <code>shared</code> and after a dot, where it names a <a href="#shared-methods">shared method</a>,
-        <code>Point.new(…)</code>. Four words are read by their position and are no more
+        <code>Point.new(…)</code>. Five words are read by their position and are no more
         reserved than those: <code>alters</code> before a method (see <a href="#methods">Methods</a>),
         <code>read</code> before a shape's field (see <a href="#read-fields">Read-only fields</a>),
-        <code>default</code> after a region (see <a href="#default-region">A block's default region</a>), and
-        <code>this</code>. <code>type</code> is reserved everywhere and read only after a dot, as
+        <code>default</code> after a region (see <a href="#default-region">A block's default region</a>),
+        <code>this</code>, and <code>native</code> before a task of the standard library (see
+        <a href="std.html#native">How the library is made</a>). <code>type</code> is reserved everywhere and read only after a dot, as
         <a href="#type-of"><code>x.type</code></a>. The symbols:
       </p>
       <table>
@@ -313,6 +326,8 @@ block shared type</pre>
         <tr><td><code>x.copy()</code>, <code>x.copy() at r</code></td><td>a copy of a value in the region where it goes, or in <code>r</code> (also <code>x.copy()@r</code>; see <a href="#copy">Copying into another region</a>)</td></tr>
         <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, or variant of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
         <tr><td><code>Kind.Variant</code></td><td>a variant, named through its kind (see <a href="#kinds">Kinds</a>)</td></tr>
+        <tr><td><code>Shape.f</code>, <code>Shape.m(…)</code>, <code>Kind.m(…)</code></td><td>a shared field of a shape, and a shared method of a shape or kind, named through it (see <a href="#shared">Shared fields</a> and <a href="#shared-methods">shared methods</a>)</td></tr>
+        <tr><td><code>x.type</code></td><td>the type of <code>x</code>, as text (see <a href="#type-of">The type of a value</a>)</td></tr>
         <tr><td><code>name =&gt; other</code></td><td>on an <code>include</code> line: the name a module or a name brought in is written with in this file</td></tr>
         <tr><td><code>Name { x: 1 }</code></td><td>a shape literal</td></tr>
         <tr><td><code>0..5</code></td><td>a range, in <code>each</code> and in a slice (<code>xs[1..3]</code>)</td></tr>
@@ -555,7 +570,8 @@ count = count + <span class="number">1</span>
 
 <span class="keyword">bind</span> a = <span class="number">1</span>
 <span class="keyword">bind&amp;</span> b = &amp;a          <span class="comment">; b reads a, and never changes it</span>
-<span class="keyword">hold&amp;</span> d = &amp;a          <span class="comment">; error: 'a' never changes; 'bind&amp; d = &amp;a' names it only to read it</span></pre>
+<span class="keyword">hold&amp;</span> d = &amp;a          <span class="comment">; error: 'hold&amp; d' names a place to change it, … and 'a' never does …;</span>
+                        <span class="comment">;   'bind&amp; d = &amp;a' names it only to read it</span></pre>
       <p>
         <code>hold&amp;</code> takes the places a <code>hold&amp;</code> parameter does, and <code>bind&amp;</code> takes
         those and also a <code>bind</code>, a parameter, and another <code>bind&amp;</code>. Neither names an item of a
@@ -902,9 +918,14 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         <tr><td><code>..</code></td><td><code>0..n + 1</code> is <code>0..(n + 1)</code></td></tr>
         <tr><td><code>+ -</code></td><td></td></tr>
         <tr><td><code>* / %</code></td><td><code>2 + 3 * 4</code> is <code>14</code></td></tr>
-        <tr><td><code>-x</code>, <code>not x</code></td><td><code>not a == b</code> is <code>(not a) == b</code>; write <code>not (a == b)</code></td></tr>
+        <tr><td><code>-x</code>, <code>not x</code>, <code>fail e</code>, <code>&amp;x</code></td><td><code>not a == b</code> is <code>(not a) == b</code>; write <code>not (a == b)</code>. <code>&amp;p^.x</code> is the place <code>p^.x</code></td></tr>
         <tr><td><code>a.x</code>, <code>p^</code>, <code>xs[i]</code>, <code>f(x)</code>, <code>x { … }</code></td><td><code>p^.x</code> reads a field through a pointer; <code>x { 0 } * 2</code> is <code>(x { 0 }) * 2</code></td></tr>
       </table>
+      <p>
+        <code>at r</code> after text joined with <code>+</code>, or after a call, names the region of the whole chain
+        before it: <code>first + " " + last at r</code> (see <a href="#joining">joining text</a> and
+        <a href="#region-after-call">the region after a call</a>).
+      </p>
 
       <h3>Text, Output, Input, and Logic</h3>
       <p>
@@ -2781,9 +2802,11 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
           built into every slice, as <code>len</code> is, so no <a href="#methods">method</a> can take their names.</li>
         <li><strong>Where.</strong> The slice changes where it is kept, so it must be in a place that can be assigned: a
           <code>hold</code> variable, a field of one, anything behind a pointer (<code>bag^.items.add(v)</code>), or an item of
-          another slice. A <code>bind</code>, a parameter, a result, a call's value, and a part taken with
-          <code>xs[a..b]</code> can't change; keep them in a <code>hold</code> variable first. To change a caller's slice,
-          a task takes a pointer to what holds it.</li>
+          another slice. A <code>bind</code>, a plain or <code>bind</code> parameter, a result, a call's value, and a part
+          taken with <code>xs[a..b]</code> can't change; keep them in a <code>hold</code> variable first. A
+          <a href="#parameters"><code>hold</code> parameter</a> changes the task's own copy, and a
+          <code>hold&amp;</code> parameter the caller's slice (<code>task grow(hold&amp; xs: [int]@r, r: region)</code>,
+          called <code>grow(&amp;xs, r)</code>), as does a pointer to what holds it.</li>
         <li><strong>The region.</strong> <code>add</code> may need more room, which it takes from the slice's region, so the
           task needs that region itself: a <code>region r</code> it declares, or an <code>r: region</code> parameter (as
           <code>new</code> does). <code>del</code> needs no region.</li>
@@ -2875,7 +2898,11 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         <code>@this</code>. A method may send what the value holds there, and take more of it; each call works the region
         out from the value, so one method serves every region.
       </p>
-      <pre><span class="keyword">shape</span> Named
+      <pre><span class="keyword">shape</span> Node
+    value: int
+<span class="keyword">fi</span>
+
+<span class="keyword">shape</span> Named
     name: text
     node: ^Node
 
@@ -3070,7 +3097,7 @@ show(area(square))             <span class="comment">; error: unknown task 'area
 
 <span class="keyword">task</span> main()
     show(File { path: "notes.txt" }.exists())    <span class="comment">; whether a file that can be read is there</span>
-    <span class="comment">; and open(), read(), line(), write(), close(), rename(), delete(): see Vela Library</span>
+    <span class="comment">; and open(), read(), line(), lines(), ended(), size(), write(), close(), rename(), delete(): see Vela Library</span>
 <span class="keyword">fi</span></pre>
     </section>
 
@@ -3106,8 +3133,7 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           search, no trimming, and no case changes yet.</li>
         <li>Input is read a line of text at a time with <code>scan</code>, or a number at a time with
           <code>scan("Age: ", int)</code>; nothing reads part of a line from input; files are read and written with <a href="std.html#files"><code>std/files</code></a>.</li>
-        <li>Arrays and slices can't be compared whole, and an array's count is known before the program runs
-          (see <a href="#arrays">Arrays</a>). Tuples are taken apart in
+        <li>An array's count is known before the program runs (see <a href="#arrays">Arrays</a>). Tuples are taken apart in
           <code>is</code> and <code>case</code> only in parentheses, as in <code>{(a, b)}</code>
           (see <a href="#tuples">Tuples</a>).</li>
         <li>Tasks and shapes take types; a kind can't yet, and no word asks a type for arithmetic (see
@@ -3128,7 +3154,9 @@ show(area(square))             <span class="comment">; error: unknown task 'area
         <li>Statements aren't yet required to end at a line break (<code>show(1) show(2)</code> on one line is
           accepted).</li>
         <li>Code may nest at most 100 levels deep (parentheses, operators in a row, blocks inside blocks; a
-          <code>new</code>, an array literal, and a tuple count as two, and a plan B as three); deeper code is an error rather than a crash.</li>
+          <code>new</code>, an array literal, and a tuple count as two, and a plan B as three); deeper code is an error rather than a crash.
+          Text holding values may hold text holding values at most 32 deep, and a chain of modules including each other at
+          most 100 long.</li>
       </ul>
     </section>
 
@@ -3209,9 +3237,9 @@ CC=clang cargo test</pre>
         <li>Vela is intentionally small. It is not meant to replace Rust or C, but to explore how little syntax is needed for a safe, compiled systems language.</li>
         <li>Memory is managed with regions rather than a garbage collector or a borrow checker: lifetimes are blocks, visible in the source, and a few type rules keep every pointer valid.</li>
         <li>The compiler generates readable C, making it easy to debug and interoperate with existing C code.</li>
-        <li>Syntax uses keywords over punctuation to keep source code friendly and self-documenting; the few symbols (<code>-&gt;</code>, <code>&lt;-</code>, <code>^</code>, <code>@</code>) each stand for one idea.</li>
+        <li>Syntax uses keywords over punctuation to keep source code friendly and self-documenting; the few symbols (<code>-&gt;</code>, <code>&lt;-</code>, <code>^</code>, <code>@</code>, <code>~</code>, <code>&amp;</code>, <code>#</code>, <code>;</code>, and the comparisons <code>~=</code> and <code>&lt;&gt;</code>) each stand for one idea.</li>
         <li>Missing values and failures are types (<code>maybe T</code>, <code>T ~ E</code>) rather than conventions such as null pointers or error codes, so the checker makes sure they are handled.</li>
-        <li>A member of a value is always written after a dot, <code>.count</code> inside a method as <code>c.count</code> outside it, so nothing comes into scope unseen, and a method that changes its value says so with <code>alters</code>, which is also the only time the generated C passes it a pointer.</li>
+        <li>A member of a value is always written after a dot, <code>.count</code> inside a method as <code>c.count</code> outside it, so nothing comes into scope unseen, and a method that changes its value says so with <code>alters</code>, as a parameter that changes the caller's place says so with <code>hold&amp;</code>.</li>
       </ul>
     </section>
   </main>

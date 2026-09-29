@@ -219,6 +219,9 @@
       <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
       <a href="future.html">Future</a>
+      <a href="future-2.html">Future (Kimi)</a>
+      <a href="safety.html">Safety</a>
+      <a href="maywaste.html">May Waste</a>
       <a href="events.html">Events</a>
     </nav>
   </header>
@@ -875,6 +878,7 @@ no spare yet
           <tr><td><code>r: region</code></td><td>A region the caller passes by name</td><td>Allocate in <code>r</code>, read and link pointers in it, send pointers into it</td></tr>
           <tr><td><code>list: maybe ^Node@r</code> only</td><td>Whatever region the caller's argument is in</td><td>Read and link pointers in <code>r</code>, send pointers into it; not allocate</td></tr>
           <tr><td><code>-&gt; ^Node@r</code></td><td>The result is in <code>r</code></td><td>Only if a parameter names <code>r</code></td></tr>
+          <tr><td><code>hold&amp; list: maybe ^Node@r</code></td><td>The caller's own place, given as <code>&amp;list</code></td><td>Change it, putting in it only pointers into <code>r</code></td></tr>
         </table>
       </div>
       <pre class="program" data-file="05_generic.vela"><span class="keyword">shape</span> Node
@@ -938,6 +942,43 @@ no spare yet
           before the task returns, so the result can't point into it. A result can only be in a region the header's
           parameters name.</li>
       </ul>
+
+      <p>
+        A parameter that changes the caller's value is written <code>hold&amp;</code>, and the call gives the place with
+        <code>&amp;</code> (see <a href="vela.html#parameters">Parameters that change</a>). Its type names a region like
+        any other, so what the task puts there stays in that region: <code>prepend</code> links a new node into the
+        caller's list, and <code>grow</code> adds to the caller's slice, both in <code>r</code>. A place of another
+        region is refused, since the task would leave a pointer to <code>r</code> in it: given a list of a region
+        <code>s</code>, <code>prepend(&amp;other, r, 3)</code> is <em>expected region 's', got 'r'</em>.
+      </p>
+      <pre class="program" data-file="05_hold_ref.vela"><span class="keyword">shape</span> Node
+    value: int
+    next: <span class="keyword">maybe</span> ^Node
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> prepend(<span class="keyword">hold&amp;</span> list: <span class="keyword">maybe</span> ^Node@r, r: <span class="keyword">region</span>, value: int)
+    list = <span class="keyword">new</span> Node(Node { value: value, next: list }) <span class="keyword">at</span> r
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> grow(<span class="keyword">hold&amp;</span> xs: [int]@r, r: <span class="keyword">region</span>)
+    xs.add(xs.len)
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">hold</span> list: <span class="keyword">maybe</span> ^Node@r = <span class="keyword">none</span>
+    prepend(&amp;list, r, <span class="number">1</span>)
+    prepend(&amp;list, r, <span class="number">2</span>)
+    <span class="keyword">when</span> list <span class="keyword">is</span> {first}
+        show(first^.value)
+    <span class="keyword">fi</span>
+    <span class="keyword">hold</span> xs = <span class="keyword">new</span> [int]() <span class="keyword">at</span> r
+    grow(&amp;xs, r)
+    grow(&amp;xs, r)
+    show(xs)
+<span class="keyword">fi</span></pre>
+<pre class="output" aria-label="Output">2
+[0, 1]</pre>
 
       <p>
         A task that takes its region <em>last</em> can be given it after the call instead, as <code>new</code> is:
@@ -1295,8 +1336,10 @@ not a digit
         twice as large, whose items are copied in, and the old one stays in the region until the region is freed (or
         grows in place, when nothing was allocated after it). Each pass builds <code>stack</code> in <code>work</code>, so
         its blocks are freed with the pass, and <code>numbers</code> is unchanged: a copy into another region never shares
-        items. A <code>bind</code> slice, a parameter, or a part <code>xs[a..b]</code> can't change its length; a task
-        changes its caller's slice through a pointer to what holds it, as in <code>bag^.items.add(v)</code>.
+        items. A <code>bind</code> slice, a plain or <code>bind</code> parameter, or a part <code>xs[a..b]</code> can't
+        change its length. A <code>hold</code> parameter changes the task's own copy; a task changes its caller's slice
+        through a <code>hold&amp;</code> parameter, as <code>grow</code> does in <a href="#lesson-tasks">Lesson 5</a>, or
+        through a pointer to what holds it, as in <code>bag^.items.add(v)</code>.
       </p>
 
       <h3 id="default-region">Lesson 10: A default region</h3>
@@ -1401,7 +1444,7 @@ pass 1
           <tr><td><code>a tuple's items never change, so it can't hold a pointer (^int@a), whose value can change</code></td><td>A tuple holds no pointer and no slice. Keep them in a shape, whose fields can change, or hold the values themselves. Text of a region is fine in a tuple.</td></tr>
           <tr><td><code>expected type text, got text@r; this text is in region 'r', and text here must last as long as the program</code></td><td>Text of a region is going somewhere that outlives the region. Keep it in a <code>text@r</code> (or a <code>Person@r</code>), or, for a task's parameter or result, name the region in the header.</td></tr>
           <tr><td><code>adding to a slice may need more room in its region 'r', which this task only names in its types</code></td><td>The task adds to a slice in a region it wasn't given. Take the region as a parameter, <code>r: region</code>, and pass it from the caller.</td></tr>
-          <tr><td><code>'add' changes 'xs', which is immutable</code></td><td>A <code>bind</code> slice or a parameter can't change its length. Keep the slice in a <code>hold</code> variable, or change it through a pointer to what holds it.</td></tr>
+          <tr><td><code>'add' changes 'xs', which is immutable</code></td><td>A <code>bind</code> slice can't change its length; keep it in a <code>hold</code> variable. A parameter gets its own message: write it <code>hold xs</code> to change the task's own copy, or <code>hold&amp; xs</code>, given <code>&amp;xs</code>, to change the caller's.</td></tr>
           <tr><td><code>'Node' holds pointers, so it lives in a region</code></td><td>Write <code>Node@r</code> where the shape is used.</td></tr>
           <tr><td><code>'Point' holds no pointers or text, so it lives in no region</code></td><td>Remove <code>@r</code>: plain values need none.</td></tr>
           <tr><td><code>a field lives in the region of the value holding it</code></td><td>In a <code>shape</code> or <code>kind</code>, write <code>^Node</code>, not <code>^Node@r</code>.</td></tr>
@@ -1719,8 +1762,8 @@ chosen = item^.title
     <section>
       <h2 id="ideas">9. Ideas for regions</h2>
       <div class="note warn">
-        None of this is implemented. These are proposals, each with what it would cost and how it fits the rest of the
-        language. Badges: <span class="badge b-rec">Recommended</span> <span class="badge b-maybe">Worth trying</span>
+        These are proposals, each with what it would cost and how it fits the rest of the language; the ones built since
+        are marked <strong>Done</strong>, and the rest are not implemented. Badges: <span class="badge b-rec">Recommended</span> <span class="badge b-maybe">Worth trying</span>
         <span class="badge b-later">Later</span> <span class="badge b-no">Not recommended</span>.
       </div>
 

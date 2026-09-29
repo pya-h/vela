@@ -20,13 +20,13 @@ are values held in place, and slices (`[int]@r`) view items in a region, made wi
 (or empty, `new [int]() at r`) and changed with `xs.add(v)`, `xs.add(i, v)`, `xs.del(i)`, and `xs.del()`;
 every index is checked, and `xs.len` is the count. Text knows its length in bytes, `t.len`, has parts that
 are views of the same bytes, `t[0..3]`, is ordered by `<`, and is joined into a region with `a + b at r`; `n.str() at r` (or `text(n) at r`)
-writes a value as text, and a shape or kind gives its own with a method `str`. `float(n)` and `int(x)` turn a value into a
+writes a value as text: every value has one (`Point { x: 1, y: 2 }`), and a shape or kind may give its own with a method `str`. `float(n)` and `int(x)` turn a value into a
 number the same way, by the name of the type: a float becomes its whole part toward zero, a bool 1 or 0. Text
 read as a number may not be one, so `int(line)` sends `int ~ ParseError`, a builtin kind whose variants are
 `NotANumber` and `TooLarge`. Text holds values written inside
 it, `"{name} is {age}" at r`, and `\{` and `\}` write braces. `show` takes any number of values and writes them
-one after another, then ends the line (`show("n = ", n)`, and `show()` for an empty one); a shape or kind with
-its own `str` is a value it writes too, `show(card)`, in a region it makes for the line and frees after it.
+one after another, then ends the line (`show("n = ", n)`, and `show()` for an empty one); any value is one it writes, `show(card)`,
+with a shape's or kind's own `str` in a region it makes for the line and frees after it.
 `scan("Name: ") at r` shows a prompt and reads a line into a region, giving `none` once the input has ended, and
 `scan("Age: ", int)` reads a number from that line instead, needing no region and sending `int ~ InputError`,
 whose variants are `Ended` and `NoNumber`, holding the `ParseError` that reading the line gave. `value.copy()` copies a value (its text, its slices'
@@ -34,7 +34,7 @@ items, and what its pointers point to) into the region where it goes, or `value.
 values together (`(text, int)`, read as `t.0`), their items never change, and names take them apart
 (`bind name, age = pair`, or `when found is {(name, age)}` in a pattern). A task or a shape can take types as well as
 values (`task first<T>(xs: [T]@r) -> maybe T`, `shape Box<T>`), with a word saying what may be done with them
-(`fixed`, `same`, `shown`, `ordered`, joined with `&`); the type comes from the arguments or the values given,
+(`fixed`, `same`, `similar`, `shown`, `ordered`, joined with `&`); the type comes from the arguments or the values given,
 from the place the value goes, or written at the use (`first<int>(ns)`, `Box<int> { value: none }`), and one
 task or shape is made for each set of types used. The types a shape is given name no region, as its fields
 don't: `Box<text>@r` holds its text in `r`. A program can span
@@ -46,7 +46,21 @@ own library comes with the compiler and is included the same way, with a path st
 variant can be written through its kind, `Size.Small`. A shape or a kind has methods, written in its block below
 its fields or variants and called on a value (`c.total()`); inside one, `.count` is a field of the value, `.this`
 the value itself, and `@this` the region it lives in, and a method that changes its value says `alters` before its
-name, so only a place that can change may call it.
+name, so only a place that can change may call it. A shape may have `shared` fields and methods, one for the whole
+program, named through it (`Tally.count`, `Point.new(…)`), fields that fall back on a value (`n: int = 0`), and
+`read` fields only its methods change.
+
+A parameter is read and never changed (`x: T`), or says how it is given: `hold x: T` is the task's own copy to
+change, `hold& x: T` changes the caller's place, which the call marks, `f(&a)`, `bind x: T` is always a copy, and
+`bind& x: T` reads the caller's place where it is. A call never gives one place twice where it changes it, and a
+plain parameter larger than 64 bytes is read where the caller keeps it when nothing can change it meanwhile, with a
+warning where that choice shows. `hold& y = &x` and `bind& y = &x` name a place in a block too. `==` compares an
+array, a shape, or a tuple by where it is, and `~=` (and `<>`, its opposite) item by item; a `maybe` is compared
+with `==` only with `none`, and with `~=` with a plain value too, which an empty one never matches. `&x` shows or
+compares where a place is, `x.type` is its type as text, and whole numbers may be written in hex, octal, or
+binary (`0xff`, `0o17`, `0b101`). A plan B giving `none` makes the whole a `maybe`, and a condition may join an
+`is` with `and`, as in `when found is {v} and v > 0`. `each v in xs` goes through a slice as it was when the loop
+started, and `each v in &xs` as it is at each pass. `block … fi` runs statements in a block of their own.
 
 ```
 task fib(n: int) -> int
@@ -132,5 +146,6 @@ See [docs/ide.html](docs/ide.html) for features, shortcuts, and security notes.
 - [Vela Studio](docs/ide.html)
 - [Vela and other languages](docs/comparison.html)
 - [Future directions](docs/future.html), and a [second design notebook](docs/future-2.html)
-- [Safety](docs/safety.html): where one name can see a change made through another, checked and open
+- [Safety](docs/safety.html): what the compiler checks, what stops a running program, and what isn't checked yet
+- [Events](docs/events.html): an idea for running work at once, not built
 - [May waste](docs/maywaste.html): features to keep an eye on, and to merge or drop if they never earn a use
