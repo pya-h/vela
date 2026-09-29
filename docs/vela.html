@@ -319,6 +319,7 @@ block shared type</pre>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
         <tr><td><code>[a, b]</code>, <code>[v#n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
+        <tr><td><code>[a, b, ...] at r</code></td><td>a slice of the values in region <code>r</code>, as <code>new [T]([a, b]) at r</code> (see <a href="#slice-shortcut">Written by its values</a>)</td></tr>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
         <tr><td><code>xs[#i]</code></td><td>the item at <code>i</code> of an array, slice, or text in a <code>maybe</code>, none out of range (see <a href="#safe-index">Safe index</a>)</td></tr>
         <tr><td><code>t[a..b]</code>, <code>t[i]</code>, <code>t.at(i)</code>, <code>t.len</code></td><td>a part of text, the same bytes (see <a href="#text-parts">Parts of text</a>); the byte at <code>i</code> as a <code>char</code>, and as a <code>maybe char</code>; how many bytes it has</td></tr>
@@ -2828,6 +2829,27 @@ first.next = push(nodes, <span class="keyword">none</span>, 2)                <s
         copying the items into <code>r</code>: <code>[v#n]</code> for <code>n</code> copies of <code>v</code>, where
         <code>n</code> may be known only as the program runs, an array, or another slice. <code>new [T]() at r</code>
         makes one with no items.
+      </p>
+      <p id="slice-shortcut">
+        <strong>Written by its values.</strong> <code>[1, 2, ...] at r</code> is the short form of
+        <code>new [int]([1, 2]) at r</code>: the <code>...</code> after the last value says the brackets make a slice,
+        which can grow, rather than an array, and the type of the items is worked out from the values. <code>@r</code>
+        names the region too (<code>[1, 2, ...]@r</code>), and in a block with a <a href="#default-region">default
+        region</a> neither is needed. Both forms are the same slice, so either can be given, assigned
+        (<code>xs = [7, ...] at r</code> makes <code>xs</code> a new slice), or passed. Where the values don't say the
+        type, the long form does: <code>[...]</code> holds none (<code>new [int]() at r</code>), and
+        <code>[none, ...]</code> doesn't say what a value would be (<code>new [maybe int]([none]) at r</code>). An array
+        never becomes a slice: <code>[1, 2]</code> where a slice is expected is an error that shows both forms, and
+        <code>[1, 2] at r</code> is one too, since an array names no region.
+      </p>
+      <pre><span class="keyword">hold</span> xs = [<span class="number">1</span>, <span class="number">2</span>, ...] <span class="keyword">at</span> r      <span class="comment">; [int]@r, as new [int]([1, 2]) at r</span>
+xs.add(<span class="number">3</span>)
+xs = [<span class="number">7</span>, ...]@r                  <span class="comment">; a new slice</span>
+show(total([<span class="number">10</span>, <span class="number">20</span>, ...] <span class="keyword">at</span> r))    <span class="comment">; a slice made to be passed</span>
+xs = [<span class="string">"a"</span>, ...] <span class="keyword">at</span> r              <span class="comment">; error: expected type [int]@r, got [text]@r</span></pre>
+      <p>
+        A slice made to be passed or shown stays in its region until the region ends, as every value in a region
+        does, although nothing reads it after its line (see <a href="safety.html#temporaries">Safety</a>).
       </p>
       <pre><span class="keyword">task</span> squares(r: region, n: int) -&gt; [int]@r
     <span class="keyword">bind</span> out = <span class="keyword">new</span> [int]([0#n]) <span class="keyword">at</span> r

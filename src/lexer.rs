@@ -78,6 +78,9 @@ pub enum Token {
     /// `include shop/cart => basket`.
     FatArrow,
     Range,
+    /// `...`: after the last value in brackets, `[1, 2, ...]`, it makes a slice
+    /// of the values rather than an array.
+    Ellipsis,
     Plus,
     Minus,
     Star,
@@ -229,6 +232,7 @@ impl Token {
             Token::FatArrow => "=>",
             Token::Send => "<-",
             Token::Range => "..",
+            Token::Ellipsis => "...",
             Token::Plus => "+",
             Token::Minus => "-",
             Token::Star => "*",
@@ -567,7 +571,12 @@ impl Lexer {
             '.' => {
                 if self.peek() == '.' {
                     self.advance();
-                    Token::Range
+                    if self.peek() == '.' {
+                        self.advance();
+                        Token::Ellipsis
+                    } else {
+                        Token::Range
+                    }
                 } else {
                     Token::Dot
                 }

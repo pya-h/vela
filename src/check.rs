@@ -3840,6 +3840,9 @@ impl Checker {
         if matches!(expr.kind, ExprKind::Shared { .. }) {
             return self.check_shared_use(expr);
         }
+        if matches!(expr.kind, ExprKind::Shortcut { .. }) {
+            self.expand_shortcut(expr)?;
+        }
         match &mut expr.kind {
             ExprKind::IntLit(_) => Ok(Type::Int),
             ExprKind::FloatLit(_) => Ok(Type::Float),
@@ -4034,6 +4037,8 @@ impl Checker {
                 self.coerce(value, &pointee)?;
                 Ok(Type::Ptr(Box::new(pointee), Some(allocates)))
             }
+            // `expand_shortcut` above made it the `New` it stands for.
+            ExprKind::Shortcut { .. } => Err(Error::internal_at(span, "a shortcut that was not expanded")),
             ExprKind::Deref(e) => {
                 let ty = self.check_expr(e)?;
                 if ty.unknown() {
@@ -4181,6 +4186,36 @@ impl Checker {
         }
         index.ty = Some(Type::Range(Box::new(Type::Int)));
         Ok(Type::Text(region.clone()))
+    }
+
+    /// Makes `[1, 2, ...] at r` the `new [int]([1, 2]) at r` it stands for,
+    /// with the items' type worked out from the values, which are checked here
+    /// for it and again by the `New`.
+    fn expand_shortcut(&mut self, expr: &mut Expr) -> Result<()> {
+        let span = expr.span;
+        let ExprKind::Shortcut { value, .. } = &mut expr.kind else { return Ok(()) };
+        let copies = self.unsettled_copies.len();
+        let found = self.check_expr(value);
+        self.unsettled_copies.truncate(copies);
+        let items = match found? {
+            Type::Array(items, _) => *items,
+            // What went wrong is reported already (see `Type::Unknown`).
+            _ => Type::Unknown,
+        };
+        if matches!(items, Type::None | Type::Fail(_)) {
+            return err(span, "can't tell the type of a slice's items from none or 'fail …'; name it, as in 'new [maybe int]([none]) at r'");
+        }
+        let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+        let ExprKind::Shortcut { value, region, region_span } = taken else {
+            return Err(Error::internal_at(span, "a shortcut that is no longer one"));
+        };
+        let region = self.region_or_default(region.as_ref(), region_span, || {
+            "a slice written by its values goes in a region, as in '[1, 2, ...] at r' or '[1, 2, ...]@r'".to_string()
+        })?;
+        let region = Some(region);
+        let ty = Type::Slice(Box::new(items.without_regions()), None);
+        expr.kind = ExprKind::New { ty: Box::new(ty), ty_span: span, value, region, region_span };
+        Ok(())
     }
 
     /// Checks `xs[#i]` or `t.at(i)` on a value of type `base_ty`, already
@@ -7561,7 +7596,8 @@ impl Checker {
             | ExprKind::Field(inner, _)
             | ExprKind::Fail(inner)
             | ExprKind::Wrap(inner)
-            | ExprKind::Copy { value: inner, .. } => self.substitute_expr(inner, given, made),
+            | ExprKind::Copy { value: inner, .. }
+            | ExprKind::Shortcut { value: inner, .. } => self.substitute_expr(inner, given, made),
             ExprKind::Binary(op @ (BinaryOp::Eq | BinaryOp::Ne), a, b) => {
                 let symbol = if *op == BinaryOp::Ne { "!=" } else { "==" };
                 self.substitute_expr(a, given, made)?;
@@ -8107,6 +8143,9 @@ fn fits_int(value: i128, span: Span) -> Result<()> {
 /// nothing when there is nothing useful to say.
 fn mismatch_hint(actual: &Type, expected: &Type) -> String {
     match (actual, expected) {
+        (Type::Array(items, _), Type::Slice(wanted, _)) if items.without_regions() == wanted.without_regions() => {
+            "; an array never becomes a slice: write the values as a slice, as in '[1, 2, ...] at r', or copy them into one, as in 'new [int](xs) at r'".to_string()
+        }
         (Type::Int | Type::Float, Type::Unit) => "; turn it into a unit with 'unit(x)', which stops the program when it isn't from 0 to 255".to_string(),
         (Type::Unit, Type::Int | Type::Float) => format!("; turn it into {0} with '{1}(b)'", if *expected == Type::Int { "an int" } else { "a float" }, expected),
         (Type::None, Type::Ptr(..)) => format!("; a pointer can't be none, so use 'maybe {}'", expected),

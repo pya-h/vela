@@ -2012,6 +2012,8 @@ impl Generator {
             ExprKind::BoolLit(b) => Ok(if *b { "true".to_string() } else { "false".to_string() }),
             ExprKind::TextLit(s) => Ok(format!("VELA__RT__TEXT(\"{}\")", escape_c_string(s))),
             ExprKind::NoneLit => Ok("NULL".to_string()),
+            // The checker makes every one the `New` it stands for.
+            ExprKind::Shortcut { .. } => Err(Error::internal_at(e.span, "a shortcut the checker left as it was")),
             // The checker makes every one the `Var` it stands for.
             ExprKind::RegionAfter(_) => Err(Error::internal_at(e.span, "a region written after a call that the checker left as it was")),
             ExprKind::TypeOf(_) => Err(Error::internal_at(e.span, "a '.type' left for types a task was never made for")),
@@ -3070,7 +3072,7 @@ fn has_prelude(e: &Expr) -> bool {
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
         | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. }
-        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Copy { value: inner, .. } | ExprKind::ToText { value: inner, .. } => {
+        | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Copy { value: inner, .. } | ExprKind::Shortcut { value: inner, .. } | ExprKind::ToText { value: inner, .. } => {
             has_prelude(inner)
         }
         ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
@@ -3414,6 +3416,7 @@ impl UsedTypes {
         match &e.kind {
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
             | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => {}
+            ExprKind::Shortcut { value, .. } => self.expr(value),
             ExprKind::New { ty, value, .. } if matches!(**ty, Type::Slice(..)) => {
                 let Some(slice) = &e.ty else { return };
                 match &value.kind {
@@ -3631,7 +3634,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::Join { parts, region, .. } => region == name || parts.iter().any(|part| expr_reads(part, name)),
         ExprKind::ToText { value, region, .. } => region == name || expr_reads(value, name),
         // `copy` reads the region it copies into.
-        ExprKind::Copy { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
+        ExprKind::Copy { value, region, .. } | ExprKind::Shortcut { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
         // `add` reads the region it may allocate in.
         ExprKind::Edit { items, op, args } => {
             let region = match &items.ty {

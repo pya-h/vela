@@ -1,0 +1,4 @@
+; error: 3:21: a slice written by its values goes in a region, as in '[1, 2, ...] at r' or '[1, 2, ...]@r'
+task main()
+    show([1, 2, ...])
+fi

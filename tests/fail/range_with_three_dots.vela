@@ -1,4 +1,4 @@
-; error: 3:18: expected an expression, got '.'; a range is written with two dots, as in '0..3', which leaves 3 out
+; error: 3:16: expected an expression, got '...'; a range is written with two dots, as in '0..3', which leaves 3 out, and '...' ends the values of a slice, as in '[1, 2, ...] at r'
 task main()
     each i in 0...3
         show(i)

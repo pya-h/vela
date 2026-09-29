@@ -1,0 +1,32 @@
+; `[a, b, ...] at r` is a slice written by its values: the short form of
+; `new [T]([a, b]) at r`, with T worked out from the values. `...` after the
+; last value says it is a slice, which can grow, not an array. `@r` names the
+; region too, and a block's default region needs neither.
+task total(xs: [int]@r) -> int
+    hold sum = 0
+    each x in xs
+        sum = sum + x
+    fi
+    <- sum
+fi
+
+task main()
+    region r
+    hold xs = [1, 2, ...] at r
+    xs.add(3)
+    show(xs, " ", total(xs), " ", total([10, 20, ...]@r))
+    ; The same as the long form, and a slice given again is a new one.
+    show(xs ~= new [int]([1, 2, 3]) at r)
+    xs = [7, ...] at r
+    show(xs)
+    bind names: [text@r]@r = ["ada", "bo", ...] at r
+    show(names)
+    bind maybes = [1, none, ...] at r
+    show(maybes)
+    bind grid = [[1, 2], [3, 4], ...] at r
+    show(grid[1])
+    region kept default
+    hold ys = [4, 5, ...]
+    ys.add(6)
+    show(ys)
+fi

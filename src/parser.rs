@@ -307,7 +307,7 @@ impl Parser {
             (Token::Assign, Some(Token::Range), _) => "; Vela has no '..=': a range leaves its end out, so '0..4' goes from 0 to 3".to_string(),
             (Token::Assign, _, _) if expected == "an expression" => "; '=' assigns, as a statement of its own".to_string(),
             // `0...3` and `0..=3`: a range has two dots and leaves its end out.
-            (Token::Dot, Some(Token::Range), _) => "; a range is written with two dots, as in '0..3', which leaves 3 out".to_string(),
+            (Token::Ellipsis, _, _) => "; a range is written with two dots, as in '0..3', which leaves 3 out, and '...' ends the values of a slice, as in '[1, 2, ...] at r'".to_string(),
             // `.05`: the digits after the dot lost their leading zeros as a number.
             (Token::Dot, _, Some(Token::Int(_))) => "; a number starts with a digit, so write '0' before the '.'".to_string(),
             (Token::LBrace, Some(Token::Newline) | None, _) => "; a plan B's '{' goes on the line of its value, and blocks close with 'fi'".to_string(),
@@ -2212,6 +2212,13 @@ impl Parser {
         match place_region(&mut expr, &region, region_span, true) {
             Placing::Placed => {}
             Placing::Already => return Err(Error::at(at, REGION_ALREADY_NAMED)),
+            // `[1, 2] at r`: an array, which is no slice and names no region.
+            Placing::Nowhere if matches!(expr.kind, ExprKind::Array(_) | ExprKind::Repeat { .. }) => {
+                return Err(Error::at(
+                    at,
+                    "an array holds its values in place and names no region; a slice of them ends with '...', as in '[1, 2, ...] at r'",
+                ));
+            }
             Placing::Nowhere => {
                 return Err(Error::at(
                     at,
@@ -2378,6 +2385,13 @@ impl Parser {
             }
         }
         self.leave(levels);
+        // `[1, 2]@r`: an array, which is no slice and names no region.
+        if self.check(Token::AtSign) && matches!(expr.kind, ExprKind::Array(_) | ExprKind::Repeat { .. }) {
+            return Err(Error::at(
+                self.peek_span(),
+                "an array holds its values in place and names no region; a slice of them ends with '...', as in '[1, 2, ...]@r'",
+            ));
+        }
         if self.check(Token::AtSign) {
             return Err(Error::at(
                 self.peek_span(),
@@ -2605,6 +2619,10 @@ impl Parser {
         if self.check(Token::RBracket) {
             return Err(Error::at(span, "an array holds at least one value, as in '[0#4]'"));
         }
+        // `[...]`: a slice of no values, which says nothing of their type.
+        if self.check(Token::Ellipsis) {
+            return Err(Error::at(span, "a slice of no values can't tell what type its items are; name it, as in 'new [int]() at r'"));
+        }
         let first = self.parse_expr()?;
         if self.match_token(Token::Hash) {
             let count = self.parse_expr()?;
@@ -2616,12 +2634,31 @@ impl Parser {
             if self.check(Token::Newline) {
                 return Err(Error::at(self.peek_span(), "an array is written on one line, as in '[1, 2, 3]'"));
             }
+            // `[1, 2, ...]`: the values of a slice, which can grow.
+            if self.match_token(Token::Ellipsis) {
+                self.expect_array_end(span, false)?;
+                let value = Expr::new(ExprKind::Array(values), span);
+                return self.parse_shortcut(value, span);
+            }
             values.push(self.parse_expr()?);
         }
         // `[0; 4]`: one value, then the `;` of a count written as other
         // languages write one, which started a comment.
         self.expect_array_end(span, values.len() == 1)?;
         Ok(Expr::new(ExprKind::Array(values), span))
+    }
+
+    /// The region after a shortcut's values, `[1, 2, ...] at r` or
+    /// `[1, 2, ...]@r`, or none, for the block's default; `value` is what the
+    /// brackets hold.
+    fn parse_shortcut(&mut self, value: Expr, span: Span) -> Result<Expr> {
+        let (region, region_span) = if self.match_token(Token::At) || self.match_token(Token::AtSign) {
+            let region_span = self.peek_span();
+            (Some(self.expect_ident()?), region_span)
+        } else {
+            (None, self.peek_span())
+        };
+        Ok(Expr::new(ExprKind::Shortcut { value: Box::new(value), region, region_span }, span))
     }
 
     /// The `]` closing the array opened at `opened`; `one` when it holds one

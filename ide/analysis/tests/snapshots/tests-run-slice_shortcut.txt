@@ -1,0 +1,62 @@
+  1 | ; `[a, b, ...] at r` is a slice written by its values: the short form of
+    | comment:; `[a, b, ...] at r` is a slice written by its values: the short form of
+  2 | ; `new [T]([a, b]) at r`, with T worked out from the values. `...` after the
+    | comment:; `new [T]([a, b]) at r`, with T worked out from the values. `...` after the
+  3 | ; last value says it is a slice, which can grow, not an array. `@r` names the
+    | comment:; last value says it is a slice, which can grow, not an array. `@r` names the
+  4 | ; region too, and a block's default region needs neither.
+    | comment:; region too, and a block's default region needs neither.
+  5 | task total(xs: [int]@r) -> int
+    | keyword:task  task:total  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+  6 |     hold sum = 0
+    | keyword:hold  variable:sum  operator:=  number:0
+  7 |     each x in xs
+    | keyword:each  variable:x  keyword:in  parameter:xs
+  8 |         sum = sum + x
+    | variable:sum  operator:=  variable:sum  operator:+  variable:x
+  9 |     fi
+    | keyword:fi
+ 10 |     <- sum
+    | keyword:<-  variable:sum
+ 11 | fi
+    | keyword:fi
+ 13 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 14 |     region r
+    | keyword:region  region:r
+ 15 |     hold xs = [1, 2, ...] at r
+    | keyword:hold  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 16 |     xs.add(3)
+    | variable:xs  punctuation:.  field:add  punctuation:(  number:3  punctuation:)
+ 17 |     show(xs, " ", total(xs), " ", total([10, 20, ...]@r))
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:,  string:" "  punctuation:,  task:total  punctuation:(  variable:xs  punctuation:)  punctuation:,  string:" "  punctuation:,  task:total  punctuation:(  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  keyword:...  punctuation:]  operator:@  region:r  punctuation:)  punctuation:)
+ 18 |     ; The same as the long form, and a slice given again is a new one.
+    | comment:; The same as the long form, and a slice given again is a new one.
+ 19 |     show(xs ~= new [int]([1, 2, 3]) at r)
+    | builtin-fn:show  punctuation:(  variable:xs  operator:~=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)  keyword:at  region:r  punctuation:)
+ 20 |     xs = [7, ...] at r
+    | variable:xs  operator:=  punctuation:[  number:7  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 21 |     show(xs)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:)
+ 22 |     bind names: [text@r]@r = ["ada", "bo", ...] at r
+    | keyword:bind  variable:names  punctuation::  punctuation:[  type-builtin:text  operator:@  region:r  punctuation:]  operator:@  region:r  operator:=  punctuation:[  string:"ada"  punctuation:,  string:"bo"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 23 |     show(names)
+    | builtin-fn:show  punctuation:(  variable:names  punctuation:)
+ 24 |     bind maybes = [1, none, ...] at r
+    | keyword:bind  variable:maybes  operator:=  punctuation:[  number:1  punctuation:,  keyword:none  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 25 |     show(maybes)
+    | builtin-fn:show  punctuation:(  variable:maybes  punctuation:)
+ 26 |     bind grid = [[1, 2], [3, 4], ...] at r
+    | keyword:bind  variable:grid  operator:=  punctuation:[  punctuation:[  number:1  punctuation:,  number:2  punctuation:]  punctuation:,  punctuation:[  number:3  punctuation:,  number:4  punctuation:]  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 27 |     show(grid[1])
+    | builtin-fn:show  punctuation:(  variable:grid  punctuation:[  number:1  punctuation:]  punctuation:)
+ 28 |     region kept default
+    | keyword:region  region:kept  keyword:default
+ 29 |     hold ys = [4, 5, ...]
+    | keyword:hold  variable:ys  operator:=  punctuation:[  number:4  punctuation:,  number:5  punctuation:,  keyword:...  punctuation:]
+ 30 |     ys.add(6)
+    | variable:ys  punctuation:.  field:add  punctuation:(  number:6  punctuation:)
+ 31 |     show(ys)
+    | builtin-fn:show  punctuation:(  variable:ys  punctuation:)
+ 32 | fi
+    | keyword:fi

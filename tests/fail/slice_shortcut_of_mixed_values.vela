@@ -1,0 +1,5 @@
+; error: 4:14: an array's values have one type, but this one is text and the ones before it are int
+task main()
+    region r
+    show([1, "two", ...] at r)
+fi

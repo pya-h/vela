@@ -1,0 +1,5 @@
+; error: 4:10: can't tell the type of a slice's items from none or 'fail …'; name it, as in 'new [maybe int]([none]) at r'
+task main()
+    region r
+    show([none, none, ...] at r)
+fi

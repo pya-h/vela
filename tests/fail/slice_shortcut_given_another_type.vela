@@ -1,0 +1,7 @@
+; error: 5:10: expected type [int]@r, got [text]@r
+task main()
+    region r
+    hold xs = [1, 2, ...] at r
+    xs = ["a", ...] at r
+    show(xs)
+fi

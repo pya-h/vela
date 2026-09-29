@@ -1,0 +1,8 @@
+; error: 7:16: expected type [int]@_, got [int#2]; an array never becomes a slice: write the values as a slice, as in '[1, 2, ...] at r', or copy them into one, as in 'new [int](xs) at r'
+task total(xs: [int]@r) -> int
+    <- xs.len
+fi
+
+task main()
+    show(total([1, 2]))
+fi

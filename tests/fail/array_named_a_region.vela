@@ -1,0 +1,6 @@
+; error: 4:22: an array holds its values in place and names no region; a slice of them ends with '...', as in '[1, 2, ...] at r'
+task main()
+    region r
+    bind xs = [1, 2] at r
+    show(xs)
+fi

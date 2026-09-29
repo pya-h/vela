@@ -663,6 +663,36 @@ show(v[0], <span class="string">" "</span>, v[1])                  <span class="
         </dl>
       </div>
 
+      <div class="entry" id="temporaries">
+        <h3>A value made for one line lasts as long as its region <span class="badge b-open">open</span></h3>
+        <p>
+          A region frees its memory all at once, when it ends. A value made in it only to be shown or passed, and
+          never kept, holds its memory until then too:
+        </p>
+        <pre><code><span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">each</span> i <span class="keyword">in</span> 0..1000000
+        show([i, i + 1, ...] <span class="keyword">at</span> r)       <span class="comment">; a million slices in r, freed when main ends</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></code></pre>
+        <p>
+          Nothing is read after it is freed, so this is memory held longer than needed, never memory misused. A
+          region made inside the loop (<code>region pass default</code>) frees each pass's values as it ends, which
+          is how to write this today.
+        </p>
+        <dl>
+          <dt>Why it is hard</dt>
+          <dd>An arena frees everything it holds at once, not one value. And a value given to a task that takes
+            <code>[int]@r</code> may be kept by the task in something else in <code>r</code>, so only the compiler's
+            own uses (<code>show</code>, a comparison) are known to keep nothing.</dd>
+          <dt>Ways it could go</dt>
+          <dd>A value only shown or compared going in a hidden region freed when its line ends, as the text
+            <code>show</code> builds for a value's own <code>str</code> already does. Giving the space back when the
+            value is the last thing the region made, by moving the arena's end back. A warning for a value made in a
+            loop into a region the loop doesn't declare.</dd>
+        </dl>
+      </div>
+
       <div class="entry" id="which-trap">
         <h3>Which of two stops comes first <span class="badge b-design">by design</span></h3>
         <p>

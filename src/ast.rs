@@ -801,6 +801,16 @@ pub enum ExprKind {
         region: Option<String>,
         region_span: Span,
     },
+    /// `[1, 2, ...] at r`: a slice written by its values, in region `r` (or
+    /// the block's default when none is written), the short form of
+    /// `new [int]([1, 2]) at r`. The checker works out the items' type from the
+    /// values and makes it the `New` it stands for, so nothing after the
+    /// checker sees one.
+    Shortcut {
+        value: Box<Expr>,
+        region: Option<String>,
+        region_span: Span,
+    },
     Deref(Box<Expr>),
     /// `&a`: the place `a` given to a `hold&` parameter, which the task
     /// changes. Only an argument is one (see `check::check_call_args`).

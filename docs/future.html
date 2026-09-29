@@ -1969,6 +1969,16 @@ bind age = int("42")               ; text to a number can fail: int ~ ParseError
           <a href="vela.html#slice-changes">Adding and taking out items</a>). A second kind of slice could never reuse that
           space and always grow into new room in its region, so no older copy ever sees another's items, at the cost of
           memory. That behavior stays as it is; this would be a separate kind of slice, with syntax still to be chosen.</li>
+        <li id="array-to-slice"><strong>Turning an array into a slice:</strong> an array never becomes a slice today:
+          <code>[1, 2]</code> where a slice is expected is an error, and the values are given again as a slice
+          (<code>[1, 2, ...] at r</code>, see <a href="vela.html#slice-shortcut">Written by its values</a>) or copied,
+          <code>new [int](xs) at r</code>. Ways that would help sometimes: a short word for the copy
+          (<code>xs.slice() at r</code>, or <code>xs...</code> at a call), a slice that views an array a pointer
+          already holds in a region without copying it (<code>p^[..]</code>, as <code>p^[0..n]</code> does now for a
+          part), and letting a task that only reads its items take an array or a slice alike, as a read-only view
+          (<code>xs: [int]@view</code>). The last is the most useful and the largest: a view that can't grow could
+          point at an array on the stack, which a slice may not, since it can outlive it. Not decided whether Vela
+          wants any of these, nor their syntax.</li>
         <li id="static-region"><strong>A static region:</strong> a shared field can't hold anything that lives in a
           region today (a slice, <code>text@r</code>, a pointer, a <code>File</code>), since every region ends before
           the program does. A <code>static</code> region would be one that lives as long as the program: it doesn't exist
