@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 
 /* `show` writes each of its values, then ends the line: the `write_` helpers
  * write one value, and the `show_` ones write a value and end the line, which
@@ -568,6 +569,82 @@ static inline vela__rt__text vela__rt__text_part(vela__rt__text text, int64_t fr
 }
 
 /* Room for `len` items of `size` bytes aligned to `align` in region `r`. */
+/* Maps. Each map type's table is generated for its key and value types (see
+ * the code generator's `gen_map_helpers`): an array of entries, `{ hash, key,
+ * value }`, in the order keys were first added, and an index of 4-byte slots,
+ * twice as many, found by the key's hash and searched in order from there. A
+ * slot is 0 when empty, 1 where a key was taken out, and otherwise its entry's
+ * number plus 2. An entry taken out keeps its place with a hash of 0 until the
+ * entries fill, when the table is made again: in place when half of them are
+ * gone, or twice as large in the map's region. So a map that keeps adding and
+ * taking out keys stays the same size, and the order of the keys never depends
+ * on the hash. */
+
+/* The seed every hash starts from: chosen once each run, so the slots a key
+ * lands in can't be foreseen from outside the program, while the order a map
+ * gives its keys in, which doesn't depend on it, stays the same every run. */
+static inline uint64_t vela__rt__hash_seed(void) {
+    static uint64_t seed = 0;
+    if (seed == 0) {
+        uint64_t local = 0;
+        seed = ((uint64_t)time(NULL) * UINT64_C(0x9e3779b97f4a7c15)) ^ (uint64_t)(uintptr_t)&local ^ UINT64_C(0x243f6a8885a308d3);
+        seed |= 1;
+    }
+    return seed;
+}
+
+/* Mixes the bits of `x` so each one changes about half of the result. */
+static inline uint64_t vela__rt__mix(uint64_t x) {
+    x ^= x >> 32;
+    x *= UINT64_C(0xd6e8feb86659fd93);
+    x ^= x >> 32;
+    x *= UINT64_C(0xd6e8feb86659fd93);
+    x ^= x >> 32;
+    return x;
+}
+
+/* The hash of `len` bytes, eight at a time, after `h`. */
+static inline uint64_t vela__rt__hash_bytes(uint64_t h, const char* bytes, int64_t len) {
+    size_t n = len < 0 ? 0 : (size_t)len;
+    size_t i = 0;
+    for (; i + 8 <= n; i += 8) {
+        uint64_t word;
+        memcpy(&word, bytes + i, 8);
+        h = (h ^ word) * UINT64_C(0x100000001b3);
+        h ^= h >> 29;
+    }
+    uint64_t tail = 0;
+    if (i < n) {
+        memcpy(&tail, bytes + i, n - i);
+    }
+    return vela__rt__mix(h ^ tail ^ ((uint64_t)n << 56));
+}
+
+/* A hash as a map keeps it: never 0, which marks an entry taken out. */
+static inline uint64_t vela__rt__kept_hash(uint64_t h) {
+    return h == 0 ? 1 : h;
+}
+
+static inline _Noreturn void vela__rt__no_key(const char* at) {
+    vela__rt__int_trap("no such key in the map", at);
+}
+
+/* The room for `count` values of `size` bytes in `r`, zeroed when `zero`; a
+ * map more than 2^30 keys large stops the program, as its slots number them in
+ * 32 bits. */
+static inline void* vela__rt__map_room(vela__rt__region* r, int64_t count, size_t size, size_t align, bool zero) {
+    if (count > (INT64_C(1) << 31)) {
+        fflush(stdout);
+        fputs("vela: a map can't hold more than 2^30 keys\n", stderr);
+        abort();
+    }
+    void* room = vela__rt__region_alloc(r, (size_t)count * size, align);
+    if (zero) {
+        memset(room, 0, (size_t)count * size);
+    }
+    return room;
+}
+
 /* `t[i]`: the byte at `i`, as a char; an index out of range stops the program,
  * as it does for an array. */
 static inline uint8_t vela__rt__text_at(vela__rt__text t, int64_t i, const char* at) {

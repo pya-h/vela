@@ -1,0 +1,115 @@
+; Maps: `[K: V]@r`, a hash map with its table in region r, keys in the order
+; they were first added. `m[k] = v` adds or replaces, `m[k]` reads (and stops
+; the program when the key is missing), `m[#k]` is a maybe, `m.del(k)` takes a
+; key out and gives its value as a maybe. A map value is a handle: copies share
+; one map, and `.copy()` makes another. `[:V]` is `[text: V]`, whose pairs in
+; `new` take bare names as keys; `["a": 1] at r` is the short form of `new`.
+shape Point
+    x: int
+    y: int
+fi
+
+shape Inventory
+    counts: [text: int]
+    alters bump(name: text@this)
+        .counts[name] = .counts[#name] { 0 } + 1
+    fi
+fi
+
+task total(m: [text: int]@r) -> int
+    hold sum = 0
+    each _, v in m
+        sum = sum + v
+    fi
+    <- sum
+fi
+
+task first<K: same, V>(m: [K: V]@r) -> maybe K
+    each k in m.keys
+        <- k
+    fi
+    <- none
+fi
+task main()
+    region r
+    hold ages = new [text: int](["ana": 31, "bo": 25]) at r
+    ages["cy"] = 40
+    ages["ana"] = 32
+    show(ages, " ", ages.len, " ", ages["bo"], " ", ages[#"zed"], " ", ages[#"cy"])
+    show(ages.has("bo"), " ", ages.del("bo"), " ", ages.del("bo"), " ", ages)
+    each name, age in ages
+        show(name, "=", age)
+    fi
+    each name in ages.keys
+        show(name)
+    fi
+    each age in ages.values
+        show(age)
+    fi
+    show(ages.keys at r, " ", ages.values at r)
+    hold sizes = new [:float]([width: 1.5, height: 2.0, "full size": 3.0]) at r
+    show(sizes, " ", sizes.type)
+    show(new [text: int]() at r, " ", ["a": 1, "b": 2]@r)
+    hold copy = ages.copy() at r
+    copy["new"] = 1
+    show(ages.len, " ", copy.len, " ", ages == copy, " ", ages == ages, " ", ages ~= ages.copy() at r)
+    ; Taking keys out and adding others keeps the table the same size.
+    hold big = new [int: int]() at r
+    each i in 0..1000
+        big[i] = i * i
+    fi
+    each i in 0..990
+        big.del(i)
+    fi
+    show(big, " ", big.len)
+    hold grid = new [(int, int): char]() at r
+    grid[(1, 2)] = 'x'
+    show(grid[(1, 2)], " ", grid[#(2, 1)])
+    region p
+    bind points = new [^int: text]() at p
+    show(points.len)
+    hold places = new [text: Point]() at r
+    places["home"] = Point { x: 1, y: 2 }
+    places["home"].x = 5
+    show(places, " ", "{places}" at r)
+    hold inv = Inventory { counts: new [text: int]() at r }
+    inv.bump("apple")
+    inv.bump("apple")
+    inv.bump("pear")
+    show(inv, " ", total(inv.counts), " ", first(inv.counts))
+    hold a = ["x": 1, "y": 2] at r
+    hold b = a
+    b["z"] = 3
+    show(a.len, " ", a == b, " ", ["y": 2, "x": 1] at r ~= ["x": 1, "y": 2] at r)
+    hold lists = new [int: [int]]() at r
+    lists[1] = [1, 2, ...] at r
+    lists[1].add(3)
+    show(lists)
+    hold nested = new [text: [text: int]]() at r
+    nested["in"] = ["k": 1] at r
+    nested["in"]["j"] = 2
+    show(nested)
+    hold live = ["a": 1] at r
+    each k, v in &live
+        when v < 3
+            live[k + "!" at r] = v + 1
+        fi
+    fi
+    show(live)
+    bind keep = [a, b] 
+    show(keep[0] == keep[1])
+    hold copies = [a, a, ...] at r
+    region s
+    bind moved = copies.copy() at s
+    moved[0]["w"] = 9
+    show(moved[1].has("w"), " ", a.has("w"))
+    hold many = new [int: int]() at r
+    each i in 0..200000
+        many[i * 7] = i
+    fi
+    hold found = 0
+    each i in 0..200000
+        found = found + many[#i * 7] { 0 }
+    fi
+    show(many.len, " ", found)
+fi

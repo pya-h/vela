@@ -1,0 +1,5 @@
+; error: 4:22: a key of a '[:V]' map is a name, which is its own text, or text in quotes, as in '[width: 1.5, "full name": 2.0]'
+task main()
+    region r
+    show(new [:int]([1: 2]) at r)
+fi

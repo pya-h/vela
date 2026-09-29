@@ -51,7 +51,19 @@ enum Placing {
 /// them makes memory; `@r` belongs to the call right before it and looks
 /// through nothing. Which calls take a region is the checker's to say.
 fn place_region(expr: &mut Expr, region: &str, span: Span, through_prefix: bool) -> Placing {
+    // `m.keys at r`: a map's keys made into a slice in `r` (the checker says
+    // so when the value is no map).
+    if let ExprKind::Field(_, word) = &expr.kind
+        && let Some(op @ (MapOp::Keys | MapOp::Values)) = MapOp::from_word(word)
+    {
+        let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+        if let ExprKind::Field(map, _) = taken {
+            expr.kind = ExprKind::MapOp { map, op, key: None, region: Some(region.to_string()), region_span: span };
+        }
+        return Placing::Placed;
+    }
     match &mut expr.kind {
+        ExprKind::MapOp { region: Some(_), .. } => Placing::Already,
         ExprKind::Call { args, .. } | ExprKind::MethodCall { args, .. } => {
             if matches!(args.last(), Some(Expr { kind: ExprKind::RegionAfter(_), .. })) {
                 return Placing::Already;
@@ -75,6 +87,7 @@ fn place_region(expr: &mut Expr, region: &str, span: Span, through_prefix: bool)
 /// Whether `@r` right after `expr` names a region `place_region` can give it.
 fn takes_region_after(expr: &Expr) -> bool {
     matches!(expr.kind, ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Scan { .. } | ExprKind::Copy { .. })
+        || matches!(&expr.kind, ExprKind::Field(_, word) if matches!(MapOp::from_word(word), Some(MapOp::Keys | MapOp::Values)))
 }
 
 /// Where a `name: type` is written, which settles what may follow the type: a
@@ -1406,15 +1419,27 @@ impl Parser {
         Ok(Type::Tuple(items))
     }
 
-    /// After a type's `[`: `T#count]`, an array, or `T]`, a slice. The item
-    /// type may have its own region and error type (`[^int@r#4]`).
+    /// After a type's `[`: `T#count]`, an array, `T]`, a slice, or `K: V]`, a
+    /// map, with `:V]` for `text: V]`. The item type may have its own region and
+    /// error type (`[^int@r#4]`).
     fn parse_bracketed_type(&mut self) -> Result<Type> {
+        // `[:float]`: a map whose keys are text.
+        if self.match_token(Token::Colon) {
+            let value = Box::new(self.parse_type_parts()?);
+            self.expect(Token::RBracket)?;
+            return Ok(Type::Map(Box::new(Type::Text(None)), value, None));
+        }
         let items = Box::new(self.parse_type_parts()?);
         if self.match_token(Token::RBracket) {
             return Ok(Type::Slice(items, None));
         }
+        if self.match_token(Token::Colon) {
+            let value = Box::new(self.parse_type_parts()?);
+            self.expect(Token::RBracket)?;
+            return Ok(Type::Map(items, value, None));
+        }
         if !self.match_token(Token::Hash) {
-            let error = self.unexpected("'#' and a count, as in '[int#4]', or ']' for a slice, as in '[int]@r'");
+            let error = self.unexpected("'#' and a count, as in '[int#4]', ']' for a slice, as in '[int]@r', or ':' and a value type for a map, as in '[text: int]@r'");
             // `[int; 4]`: the `;` started a comment, which ended the line.
             return Err(match self.check(Token::Newline) {
                 true => Error { message: format!("{} (';' starts a comment)", error.message), ..error },
@@ -1767,13 +1792,22 @@ impl Parser {
         let opened = self.peek_span();
         self.advance(); // each
         let span = self.peek_span();
-        let name = self.expect_ident()?;
+        // `_` drops a map's key or value (the checker allows it only there).
+        let name = if self.match_token(Token::Underscore) { DISCARD.to_string() } else { self.expect_ident()? };
+        // `each k, v in m`: a map's key, and the value that goes with it.
+        let second = if self.match_token(Token::Comma) {
+            let at = self.peek_span();
+            let second = if self.match_token(Token::Underscore) { DISCARD.to_string() } else { self.expect_ident()? };
+            Some((second, at))
+        } else {
+            None
+        };
         self.expect(Token::In)?;
         let range = self.parse_expr()?;
         self.skip_newlines();
         let body = self.parse_block()?;
         self.expect_fi("each", opened)?;
-        Ok(Stmt::new(StmtKind::Each(name, range, body), span))
+        Ok(Stmt::new(StmtKind::Each(name, second, range, body), span))
     }
 
     /// A `match`. A case written `case p = value` gives that value, and one
@@ -2623,11 +2657,20 @@ impl Parser {
         if self.check(Token::Ellipsis) {
             return Err(Error::at(span, "a slice of no values can't tell what type its items are; name it, as in 'new [int]() at r'"));
         }
+        if self.check(Token::Colon) {
+            return Err(Error::at(span, "a map written by its pairs holds at least one; an empty map names its types, as in 'new [text: int]() at r'"));
+        }
         let first = self.parse_expr()?;
         if self.match_token(Token::Hash) {
             let count = self.parse_expr()?;
             self.expect_array_end(span, false)?;
             return Ok(Expr::new(ExprKind::Repeat { value: Box::new(first), count: Box::new(count) }, span));
+        }
+        // `["a": 1, "b": 2]`: the pairs of a map.
+        if self.match_token(Token::Colon) {
+            let value = self.parse_expr()?;
+            let pairs = self.parse_pairs_after(vec![(first, value)], span, false)?;
+            return self.pairs_with_region(pairs, span);
         }
         let mut values = vec![first];
         while self.match_token(Token::Comma) {
@@ -2646,6 +2689,55 @@ impl Parser {
         // languages write one, which started a comment.
         self.expect_array_end(span, values.len() == 1)?;
         Ok(Expr::new(ExprKind::Array(values), span))
+    }
+
+    /// The pairs of a map after its first, up to and including the `]`; with
+    /// `names`, a key is a bare name, its own text, or text in quotes (the
+    /// `[:V]` form of `new`).
+    fn parse_pairs_after(&mut self, mut pairs: Vec<(Expr, Expr)>, opened: Span, names: bool) -> Result<Vec<(Expr, Expr)>> {
+        while self.match_token(Token::Comma) {
+            if self.check(Token::Newline) {
+                return Err(Error::at(self.peek_span(), "a map's pairs are written on one line, as in '[\"a\": 1, \"b\": 2]'"));
+            }
+            let key = if names { self.parse_named_key()? } else { self.parse_expr()? };
+            if !self.match_token(Token::Colon) {
+                return Err(self.unexpected("':' and the value that goes with the key"));
+            }
+            pairs.push((key, self.parse_expr()?));
+        }
+        if !self.match_token(Token::RBracket) {
+            if matches!(self.peek(), Token::Newline | Token::Eof) {
+                return Err(Error::at(self.peek_span(), format!("expected ']' to close the map at {}:{}; a map's pairs are written on one line", opened.line, opened.col)));
+            }
+            return Err(self.unexpected("',' and another pair, or ']'"));
+        }
+        Ok(pairs)
+    }
+
+    /// A key of the `[:V]` form: a bare name, which is its own text, or text.
+    fn parse_named_key(&mut self) -> Result<Expr> {
+        let span = self.peek_span();
+        match self.peek().clone() {
+            Token::Ident(name) => {
+                self.advance();
+                Ok(Expr::new(ExprKind::TextLit(name), span))
+            }
+            Token::Text(text) => {
+                self.advance();
+                Ok(Expr::new(ExprKind::TextLit(text), span))
+            }
+            _ => Err(Error::at(span, "a key of a '[:V]' map is a name, which is its own text, or text in quotes, as in '[width: 1.5, \"full name\": 2.0]'")),
+        }
+    }
+
+    /// A map's pairs, with the region written after them, if any: a shortcut
+    /// for a map of its own, or pairs given to `new`.
+    fn pairs_with_region(&mut self, pairs: Vec<(Expr, Expr)>, span: Span) -> Result<Expr> {
+        let value = Expr::new(ExprKind::Pairs(pairs), span);
+        if self.check(Token::At) || self.check(Token::AtSign) {
+            return self.parse_shortcut(value, span);
+        }
+        Ok(value)
     }
 
     /// The region after a shortcut's values, `[1, 2, ...] at r` or
@@ -2936,16 +3028,31 @@ impl Parser {
             None
         };
         let ty_span = self.peek_span();
+        // `new [:float](…)`: a map whose keys are text, written as names.
+        let named_keys = self.check(Token::LBracket) && self.tokens.get(self.pos + 1) == Some(&Token::Colon);
         let ty = self.parse_type()?;
         self.expect(Token::LParen)?;
         // `new [T]() at r` makes an empty slice; its value is an array of no
-        // values, which no literal can write.
+        // values, which no literal can write. `new [K: V]() at r` makes an
+        // empty map, of no pairs.
         let value = if self.check(Token::RParen) && matches!(ty, Type::Slice(..)) {
             Expr::new(ExprKind::Array(Vec::new()), self.peek_span())
+        } else if self.check(Token::RParen) && matches!(ty, Type::Map(..)) {
+            Expr::new(ExprKind::Pairs(Vec::new()), self.peek_span())
+        } else if named_keys && self.check(Token::LBracket) {
+            let opened = self.peek_span();
+            self.advance(); // [
+            let key = self.parse_named_key()?;
+            if !self.match_token(Token::Colon) {
+                return Err(self.unexpected("':' and the value that goes with the key"));
+            }
+            let value = self.parse_expr()?;
+            let pairs = self.parse_pairs_after(vec![(key, value)], opened, true)?;
+            Expr::new(ExprKind::Pairs(pairs), opened)
         } else if self.check(Token::RParen) {
             return Err(Error::at(
                 self.peek_span(),
-                format!("'new' needs the value to put in the region, as in 'new {}(…) at r'; only a slice can be made empty, as in 'new [int]() at r'", ty),
+                format!("'new' needs the value to put in the region, as in 'new {}(…) at r'; only a slice or a map can be made empty, as in 'new [int]() at r' or 'new [text: int]() at r'", ty),
             ));
         } else {
             self.parse_expr()?
@@ -3105,6 +3212,7 @@ fn mentions_region(ty: &Type) -> bool {
     match ty {
         Type::Region => true,
         Type::Ptr(inner, _) | Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => mentions_region(inner),
+        Type::Map(key, value, _) => mentions_region(key) || mentions_region(value),
         Type::Tuple(items) => items.iter().any(mentions_region),
         _ => false,
     }

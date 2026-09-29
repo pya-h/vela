@@ -292,7 +292,7 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         // text too (see the checker's `writable`); a shape or kind by its own.
         let written = matches!(
             base,
-            Some(Type::Array(..) | Type::Slice(..) | Type::Tuple(_) | Type::Ptr(..) | Type::Maybe(_) | Type::Named(..) | Type::Applied(_))
+            Some(Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Tuple(_) | Type::Ptr(..) | Type::Maybe(_) | Type::Named(..) | Type::Applied(_))
         );
         let with_copy = |mut items: Vec<CompletionItem>, from_dot: bool| {
             if written && !items.iter().any(|item| item.label == vela::ast::STR) {
@@ -324,6 +324,26 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
                 return (with_copy(items, false), word_start, byte);
             }
             Some(Type::Array(..)) => return (with_copy(members(false, false), false), word_start, byte),
+            // A map's number of keys, what it answers, its sides as slices, and
+            // taking a key out; a key is added with `m[k] = v`.
+            Some(Type::Map(..)) => {
+                let member = |label: &str, kind: CompletionKind, detail: &str, snippet: Option<&str>| CompletionItem {
+                    label: label.to_string(),
+                    kind,
+                    detail: detail.to_string(),
+                    apply: None,
+                    snippet: snippet.map(str::to_string),
+                    boost: LOCAL,
+                };
+                let items = vec![
+                    member("len", CompletionKind::Field, "int, the number of keys", None),
+                    member("has", CompletionKind::BuiltinFn, "has(key), whether the map holds the key", Some("has(${key})")),
+                    member("keys", CompletionKind::Field, "keys at r, the keys as a slice in r, in order", Some("keys at ${r}")),
+                    member("values", CompletionKind::Field, "values at r, the values as a slice in r, in order", Some("values at ${r}")),
+                    member("del", CompletionKind::BuiltinFn, "del(key), takes the key out and gives its value, or none", Some("del(${key})")),
+                ];
+                return (with_copy(items, false), word_start, byte);
+            }
             // Text's members are its length in bytes, `at`, and `str`; a
             // number's, a char's, and a bool's, `str`.
             Some(Type::Text(_)) => {

@@ -1,0 +1,5 @@
+; trap: no such key in the map at 4:24 in task 'main'
+task main()
+    region r
+    show(["a": 1] at r ["b"])
+fi

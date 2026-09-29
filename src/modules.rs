@@ -1216,7 +1216,7 @@ impl Resolver<'_> {
                 self.condition(cond)?;
                 self.block(body)
             }
-            StmtKind::Each(_, range, body) => {
+            StmtKind::Each(_, _, range, body) => {
                 self.expr(range)?;
                 self.block(body)
             }
@@ -1280,6 +1280,14 @@ impl Resolver<'_> {
                 self.expr(b)
             }
             ExprKind::Array(values) | ExprKind::Tuple(values) => values.iter_mut().try_for_each(|e| self.expr(e)),
+            ExprKind::Pairs(pairs) => pairs.iter_mut().try_for_each(|(key, value)| {
+                self.expr(key)?;
+                self.expr(value)
+            }),
+            ExprKind::MapOp { map, key, .. } => {
+                self.expr(map)?;
+                key.as_deref_mut().map_or(Ok(()), |key| self.expr(key))
+            }
             ExprKind::New { ty, ty_span, value, .. } => {
                 **ty = self.ty(ty, *ty_span)?;
                 self.expr(value)

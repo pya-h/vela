@@ -234,16 +234,20 @@ impl Checked {
                 }
                 self.block(body, kinds);
             }
-            StmtKind::Each(_, range, body) => {
-                // A counter, or an item of an array or slice, once the checker
-                // knows which.
-                let item = match (&range.kind, &range.ty) {
-                    (ExprKind::Range(..), _) => Some(Type::Int),
-                    (_, Some(Type::Array(items, _) | Type::Slice(items, _))) => Some((**items).clone()),
-                    _ => None,
+            StmtKind::Each(_, second, range, body) => {
+                // A counter, an item of an array or slice, or a map's key and
+                // value, once the checker knows which.
+                let (item, value) = match (&range.kind, &range.ty) {
+                    (ExprKind::Range(..), _) => (Some(Type::Int), None),
+                    (_, Some(Type::Array(items, _) | Type::Slice(items, _))) => (Some((**items).clone()), None),
+                    (_, Some(Type::Map(key, value, _))) => (Some((**key).clone()), Some((**value).clone())),
+                    _ => (None, None),
                 };
                 if let Some(item) = item {
                     self.declare(stmt.span, item);
+                }
+                if let (Some((_, at)), Some(value)) = (second, value) {
+                    self.declare(*at, value);
                 }
                 self.expr(range, kinds);
                 self.block(body, kinds);
@@ -329,7 +333,7 @@ impl Checked {
                         self.field_accesses.insert(pos(e.span), shape.clone());
                     }
                     // `len`, and a tuple's items: members no declaration names.
-                    Some(Type::Array(..) | Type::Slice(..) | Type::Tuple(_)) => {
+                    Some(Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Tuple(_)) => {
                         self.field_accesses.insert(pos(e.span), String::new());
                     }
                     _ => {}
@@ -356,6 +360,18 @@ impl Checked {
                 self.field_accesses.insert(pos(e.span), owner.to_string());
                 for arg in args {
                     self.expr(arg, kinds);
+                }
+            }
+            ExprKind::Pairs(pairs) => {
+                for (key, value) in pairs {
+                    self.expr(key, kinds);
+                    self.expr(value, kinds);
+                }
+            }
+            ExprKind::MapOp { map, key, .. } => {
+                self.expr(map, kinds);
+                if let Some(key) = key {
+                    self.expr(key, kinds);
                 }
             }
             ExprKind::Call { args, .. } | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => {

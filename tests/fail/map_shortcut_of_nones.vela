@@ -1,0 +1,5 @@
+; error: 4:10: can't tell the type of a map's values from none or 'fail …'; name it, as in 'new [text: maybe int](["a": none]) at r'
+task main()
+    region r
+    show(["a": none] at r)
+fi

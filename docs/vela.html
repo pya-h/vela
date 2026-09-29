@@ -205,7 +205,7 @@
         deleted), <code>numbers.vela</code> (numbers read
         from input with <code>scan("> ", int)</code>, and from text with <code>int(t)</code>, with the reasons there is
         no number), <code>generics.vela</code> (tasks that take types, and the words that say what a type allows),
-        <code>tuples.vela</code> (tuples made, read, and taken apart), <code>primes.vela</code> (a slice filled by index
+        <code>tuples.vela</code> (tuples made, read, and taken apart), <code>maps.vela</code> (words counted in a map), <code>primes.vela</code> (a slice filled by index
         and one grown with <code>add</code>, emptied with <code>del</code>, and <a href="#arrays">a loop through a
         slice as it is at each pass</a>), <code>journal.vela</code> (notes read from input into a region per line,
         with a <a href="#default-region">default region</a> and <code>copy()</code>), and <code>demo.vela</code>
@@ -233,6 +233,7 @@
         <li><code class="type">^T@r</code> — pointer to a T in region <code>r</code>; it always points to something (see <a href="#regions">Memory and Regions</a>)</li>
         <li><code class="type">[T#n]</code> — an array: <code>n</code> values of type T, held in place (see <a href="#arrays">Arrays</a>)</li>
         <li><code class="type">[T]@r</code> — a slice: a view of values of type T in region <code>r</code> (see <a href="#slices">Slices</a>)</li>
+        <li><code class="type">[K: V]@r</code> — a map from keys of type K to values of type V, its table in region <code>r</code>; <code>[:V]</code> is <code>[text: V]</code> (see <a href="#maps">Maps</a>)</li>
         <li><code class="type">(T, U)</code> — a tuple: two or more values held together, whose items never change (see <a href="#tuples">Tuples</a>)</li>
         <li><code class="type">maybe T</code> — a T, or <code>none</code> (see <a href="#maybe">Maybe and Errors</a>)</li>
         <li><code class="type">T ~ E</code> — a T, or an error E, sent by a task that can fail; <code>~</code> holds the whole
@@ -319,6 +320,8 @@ block shared type</pre>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
         <tr><td><code>[a, b]</code>, <code>[v#n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
+        <tr><td><code>[K: V]@r</code>, <code>[:V]@r</code>, <code>["a": 1] at r</code></td><td>a map type; one whose keys are text; a map written by its pairs, as <code>new [text: int](["a": 1]) at r</code> (see <a href="#maps">Maps</a>)</td></tr>
+        <tr><td><code>m[k]</code>, <code>m[#k]</code>, <code>m[k] = v</code>, <code>each k, v in m</code></td><td>a key's value, which stops the program without the key; the same as a <code>maybe</code>; the key added or given a new value; the keys and values in the order the keys were added</td></tr>
         <tr><td><code>[a, b, ...] at r</code></td><td>a slice of the values in region <code>r</code>, as <code>new [T]([a, b]) at r</code> (see <a href="#slice-shortcut">Written by its values</a>)</td></tr>
         <tr><td><code>xs[i]</code>, <code>xs[a..b]</code>, <code>xs.len</code></td><td>an item of an array or slice; a slice of it; how many items it has</td></tr>
         <tr><td><code>xs[#i]</code></td><td>the item at <code>i</code> of an array, slice, or text in a <code>maybe</code>, none out of range (see <a href="#safe-index">Safe index</a>)</td></tr>
@@ -2943,6 +2946,65 @@ xs = [<span class="string">"a"</span>, ...] <span class="keyword">at</span> r   
         slice, use the slice you changed, and give a copy that must keep its items items of its own:
         <code>new [T](xs) at r</code>.
       </p>
+
+      <h3 id="maps">Maps</h3>
+      <p>
+        A map, <code>[K: V]@r</code>, holds a value of type <code>V</code> for each key of type <code>K</code>, found by
+        the key's hash in about the same time however many keys it holds. Its table is in region <code>r</code>, and
+        like a slice it names that region in its type except in a field and after <code>new</code>.
+        <code>[:V]</code> is written for <code>[text: V]</code>, the most usual map. It is made with <code>new</code>, from
+        its pairs or none, or written by its pairs: <code>["a": 1, "b": 2] at r</code> is the short form of
+        <code>new [text: int](["a": 1, "b": 2]) at r</code>, with the keys' and values' types worked out from the pairs,
+        <code>@r</code> naming the region too and a block's <a href="#default-region">default region</a> needing
+        neither. A key in the pairs is any value, a variable too; in the <code>[:V]</code> form of <code>new</code> a key
+        is a bare name, which is its own text, or text in quotes: <code>new [:float]([width: 1.5, "full size": 2.0])</code>.
+        The same key written out twice is an error.
+      </p>
+      <pre><span class="keyword">region</span> r
+<span class="keyword">hold</span> ages = new [text: int]([<span class="string">"ana"</span>: <span class="number">31</span>]) <span class="keyword">at</span> r
+ages[<span class="string">"bo"</span>] = <span class="number">25</span>                      <span class="comment">; adds the key</span>
+ages[<span class="string">"ana"</span>] = <span class="number">32</span>                     <span class="comment">; gives it a new value</span>
+show(ages[<span class="string">"bo"</span>], <span class="string">" "</span>, ages.len)         <span class="comment">; 25 2</span>
+show(ages[#<span class="string">"cy"</span>], <span class="string">" "</span>, ages.has(<span class="string">"cy"</span>))  <span class="comment">; none false</span>
+show(ages.del(<span class="string">"bo"</span>), <span class="string">" "</span>, ages)       <span class="comment">; { 25 } ["ana": 32]</span>
+<span class="keyword">each</span> name, age <span class="keyword">in</span> ages                  <span class="comment">; in the order the keys were added</span>
+    show(name, <span class="string">" is "</span>, age)
+<span class="keyword">fi</span>
+<span class="keyword">hold</span> sizes = new [:float]([width: <span class="number">1.5</span>, height: <span class="number">2.0</span>]) <span class="keyword">at</span> r
+<span class="keyword">bind</span> names = ages.keys <span class="keyword">at</span> r            <span class="comment">; [text]@r: ["ana"]</span>
+show(ages[<span class="string">"zed"</span>])                        <span class="comment">; stops: vela: no such key in the map …</span></pre>
+      <ul>
+        <li><strong>Reading and writing.</strong> <code>m[k]</code> is the key's value, and stops the program when the map
+          doesn't hold the key; <code>m[#k]</code> is the value as a <code>maybe</code>, <code>none</code> without it, as
+          <a href="#safe-index"><code>xs[#i]</code></a> is for an item. <code>m[k] = v</code> adds the key, or gives it a new
+          value, on a line of its own. A value in a map is changed in place, as a slice's item is: <code>m[k].x = 1</code>, or
+          a method that alters it. <code>m.has(k)</code> is whether the map holds the key, <code>m.del(k)</code> takes it out
+          and gives its value as a <code>maybe</code>, and <code>m.len</code> is how many keys it holds.</li>
+        <li><strong>Going through it.</strong> <code>each k, v in m</code> goes through the keys and values in the order the
+          keys were first added (a key given a new value keeps its place), whatever their hashes, so a program writes the
+          same thing every run. <code>_</code> drops either. <code>each k in m.keys</code> and <code>each v in m.values</code>
+          go through one side without making anything; <code>m.keys at r</code> and <code>m.values at r</code> make that
+          side a slice in <code>r</code>, in the same order. As for a slice, <code>each k, v in m</code> goes through the
+          entries there when the loop started and <code>each k, v in &amp;m</code> through the map as it is at each pass,
+          keys added during the loop included; a key taken out before its turn is skipped.</li>
+        <li><strong>Keys.</strong> A key is compared and hashed, so it is an <code>int</code>, a <code>unit</code>, a
+          <code>char</code>, a <code>bool</code>, <code>text</code> (by its bytes), a pointer (by the address it holds), or a
+          tuple of them. A <code>float</code> can't be one, since <code>nan</code> is equal to nothing, itself included. A
+          key looked for may be text of any region; a key added lives where the map does.</li>
+        <li><strong>One map, several names.</strong> A map value is a handle to its table: <code>bind b = a</code>, a
+          field, and an argument all name the same map, so a key <code>b</code> adds is in <code>a</code> too, and
+          <code>a == b</code> says whether they are the same map. <code>a ~= b</code> compares what they hold: the same
+          keys, each with a similar value, in any order. <code>a.copy() at r</code> makes a separate map in
+          <code>r</code>, with its keys and values copied too, and <code>new [text: int](a) at r</code> does the same.
+          Changing a map, <code>m[k] = v</code> and <code>m.del(k)</code>, needs a <code>hold</code> place, as a slice's
+          <code>add</code> does: a task that adds keys takes <code>hold m: [text: int]@r</code>, and since its copy of the
+          handle names the caller's map, the keys it adds are there after the call.</li>
+        <li><strong>Memory.</strong> The table grows in the map's region, doubling when more than half of its entries
+          are in use, and a table whose keys were mostly taken out is packed again in place, so a map that keeps adding
+          and taking out keys stays the same size. A reference can't name a value in a map, which moves when the map
+          grows (see <a href="safety.html#map-values">Safety</a>). The slots a key lands in depend on a hash started
+          from a number chosen each run, so they can't be foreseen from outside the program.</li>
+      </ul>
 
       <h3 id="copy">Copying into another region</h3>
       <p>

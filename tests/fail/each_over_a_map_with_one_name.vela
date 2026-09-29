@@ -1,0 +1,8 @@
+; error: 5:15: a map gives a key and its value each pass, so name both, as in 'each k, value in …'; for its keys alone, go through '.keys', as in 'each k in m.keys'
+task main()
+    region r
+    bind m = ["a": 1] at r
+    each k in m
+        show(k)
+    fi
+fi

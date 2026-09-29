@@ -1,0 +1,8 @@
+; error: 2:15: a map's key is compared and hashed, so it is an int, a unit, a char, a bool, text, a pointer, or a tuple of them, not [int]@r
+task count(m: [[int]@r: int]@r) -> int
+    <- m.len
+fi
+
+task main()
+    show(0)
+fi

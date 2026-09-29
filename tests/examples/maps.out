@@ -1,0 +1,8 @@
+the: 3
+cat: 1
+and: 2
+dog: 1
+bird: 1
+5 words, 'the' 3 times, 'cow' 0 times
+["apple": 0.5, "pear": 0.75, "plum": 1.25]
+{ 0.75 } false ["apple", "plum"]

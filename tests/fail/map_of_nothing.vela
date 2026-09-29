@@ -1,0 +1,7 @@
+; error: 2:18: a map can't hold 'nothing', which has no value
+task f(m: [text: nothing]@r)
+fi
+
+task main()
+    show(0)
+fi

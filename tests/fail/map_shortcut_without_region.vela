@@ -1,0 +1,4 @@
+; error: 3:10: a map written by its pairs goes in a region, as in '["a": 1] at r' or '["a": 1]@r'
+task main()
+    show(["a": 1])
+fi

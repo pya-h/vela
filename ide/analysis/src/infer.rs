@@ -308,8 +308,26 @@ impl<'a> Knowledge<'a> {
     /// range, or an item of the array or slice after `in`.
     fn each_type(&self, id: usize, depth: usize) -> Option<Type> {
         let Some((first, last)) = self.each_items(id) else { return Some(Type::Int) };
+        let symbol = self.symbol(id)?;
+        let name = self.at_byte(symbol.name_range.start)?;
+        // `each k, v in m`: the second name is the value, the first the key.
+        let second = self.token_before(name) == Some(&Token::Comma);
+        // `each k in m.keys`: one side of a map.
+        if last >= first + 2
+            && self.token(last - 1) == Some(&Token::Dot)
+            && let Some(side) = self.ident(last).and_then(vela::ast::MapOp::from_word)
+            && let Some(Type::Map(key, value, _)) = self.span_type(first, last - 2, depth)
+        {
+            return match side {
+                vela::ast::MapOp::Keys => Some(*key),
+                vela::ast::MapOp::Values => Some(*value),
+                vela::ast::MapOp::Has => None,
+            };
+        }
         match self.span_type(first, last, depth)? {
             Type::Array(items, _) | Type::Slice(items, _) => Some(*items),
+            Type::Map(_, value, _) if second => Some(*value),
+            Type::Map(key, _, _) => Some(*key),
             _ => None,
         }
     }
@@ -318,7 +336,11 @@ impl<'a> Knowledge<'a> {
     /// array or slice it goes through; `None` when it counts through a range.
     pub fn each_items(&self, id: usize) -> Option<(usize, usize)> {
         let symbol = self.symbol(id)?;
-        let name = self.at_byte(symbol.name_range.start)?;
+        let mut name = self.at_byte(symbol.name_range.start)?;
+        // `each k, v in m`: what it goes through follows the second name.
+        if self.token(name + 1) == Some(&Token::Comma) {
+            name += 2;
+        }
         let (first, last) = (name + 2, self.line_end(name).checked_sub(1)?);
         let counts = self.token(name + 1) != Some(&Token::In)
             || first > last
@@ -1165,7 +1187,7 @@ fn named_types(ty: &Type) -> Vec<String> {
 /// `regional` that do.
 fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
     match ty {
-        Type::Ptr(..) | Type::Slice(..) => true,
+        Type::Ptr(..) | Type::Slice(..) | Type::Map(..) => true,
         Type::Named(name, _) => regional.contains(name),
         Type::Maybe(inner) | Type::Array(inner, _) => holds_pointers(inner, regional),
         Type::Or(value, error) => holds_pointers(value, regional) || holds_pointers(error, regional),

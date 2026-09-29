@@ -396,6 +396,49 @@ struct Tokens<'a> {
     significant: Vec<usize>,
 }
 
+/// Whether the name at `p` is a key of a `[:V]` map's pairs given to `new`,
+/// `new [:V]([name: v, …])`, which is text rather than a name: it is followed by
+/// `:`, and the `[` its pairs open follows `(` after the type's `]`, whose `[`
+/// is followed by `:`.
+fn named_key(tokens: &Tokens, p: usize) -> bool {
+    if tokens.token(p + 1) != Some(&Token::Colon) || !matches!(tokens.before(p), Some(Token::LBracket | Token::Comma)) {
+        return false;
+    }
+    // The `[` that opens the pairs: back past the pairs before this one.
+    let mut depth = 0usize;
+    let mut at = p;
+    let open = loop {
+        let Some(before) = at.checked_sub(1) else { return false };
+        at = before;
+        match tokens.token(at) {
+            Some(Token::RBracket | Token::RParen | Token::RBrace) => depth += 1,
+            Some(Token::LParen | Token::LBrace) if depth == 0 => return false,
+            Some(Token::LBracket) if depth == 0 => break at,
+            Some(Token::LBracket | Token::LParen | Token::LBrace) => depth -= 1,
+            Some(Token::Newline) | None => return false,
+            _ => {}
+        }
+    };
+    // `(` after the type's `]`, and the type's `[` followed by `:`.
+    let (Some(paren), Some(close)) = (open.checked_sub(1), open.checked_sub(2)) else { return false };
+    if tokens.token(paren) != Some(&Token::LParen) || tokens.token(close) != Some(&Token::RBracket) {
+        return false;
+    }
+    let mut depth = 0usize;
+    let mut at = close;
+    loop {
+        let Some(before) = at.checked_sub(1) else { return false };
+        at = before;
+        match tokens.token(at) {
+            Some(Token::RBracket) => depth += 1,
+            Some(Token::LBracket) if depth == 0 => return tokens.token(at + 1) == Some(&Token::Colon),
+            Some(Token::LBracket) => depth -= 1,
+            Some(Token::Newline) | None => return false,
+            _ => {}
+        }
+    }
+}
+
 impl<'a> Tokens<'a> {
     fn new(source: &'a str, all: &'a [LexToken]) -> Self {
         let significant = all
@@ -1025,6 +1068,10 @@ impl<'a> Classifier<'a> {
             let was_type = std::mem::take(&mut in_type);
             let was_after_type = std::mem::take(&mut after_type);
             let declaring_now = declaring.take();
+            // `each k, v in m`: the name after the comma is the loop's too.
+            if *token == Token::Comma && p >= 2 && tokens.token(p - 2) == Some(&Token::Each) {
+                declaring = Some("each");
+            }
             let region_now = region_next.take();
             if !matches!(token, Token::Newline | Token::Failure) {
                 plan_b_head = false;
@@ -1084,6 +1131,8 @@ impl<'a> Classifier<'a> {
                     let (class, symbol) = self.identifier(p, NEW_WORD, false, None, in_task_header, in_pattern, &braces);
                     self.push(range, class, symbol);
                 }
+                // `new [:float]([width: 1.5])`: a bare name that is its own text.
+                Token::Ident(_) if named_key(tokens, p) => self.push(range, TokenClass::String, None),
                 // `t.at(i)`: the keyword naming the method text has.
                 Token::At if tokens.before(p) == Some(&Token::Dot) && tokens.token(p + 1) == Some(&Token::LParen) => {
                     self.push(range, TokenClass::Method, None);

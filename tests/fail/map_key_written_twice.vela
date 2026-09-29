@@ -1,0 +1,5 @@
+; error: 4:27: the key "a" is written twice, first at 4:11; a map holds one value for each key
+task main()
+    region r
+    show(["a": 1, "b": 2, "a": 3] at r)
+fi

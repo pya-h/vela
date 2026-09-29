@@ -1,0 +1,6 @@
+; error: 5:7: 'len' can't be assigned: it is how many keys the map holds, which 'm[k] = v' and 'm.del(k)' change
+task main()
+    region r
+    hold m = ["a": 1] at r
+    m.len = 3
+fi

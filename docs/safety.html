@@ -322,6 +322,7 @@
             <tr>
               <td>Every index and range of an array, a slice, or text is checked (a constant one when compiling),
                 a count below zero stops the program, and a part of text can't cut through a character.
+                <code>m[k]</code> on a key a map doesn't hold stops the program too, and <code>m[#k]</code> gives none.
                 <code>xs[#i]</code> and <code>t.at(i)</code> give <code>none</code> out of range instead, and a byte of text, <code>t[i]</code>,
                 is never a place, so text still never changes.</td>
               <td class="when"><span class="badge b-trapped">trapped</span></td>
@@ -412,15 +413,26 @@ two(&amp;p^.v, &amp;q^.v)</code></pre>
           to the field shows through the reference:
         </p>
         <pre><code><span class="keyword">shape</span> Tally
-    <span class="keyword">shared hold</span> count: int = 0
+    n: int
+
+    <span class="keyword">alters</span> grow(<span class="keyword">hold</span> m: [int: Tally]@r)
+        <span class="keyword">each</span> i <span class="keyword">in</span> 1..9
+            m[i] = Tally { n: 0 }      <span class="comment">; the ninth key moves the table</span>
+        <span class="keyword">fi</span>
+        .n = 9                         <span class="comment">; written where the value was</span>
+    <span class="keyword">fi</span>
 <span class="keyword">fi</span>
 
-<span class="keyword">task</span> report(<span class="keyword">bind&amp;</span> seen: int)
-    Tally.count = Tally.count + 1
-    show(seen)                     <span class="comment">; 1, not the 0 it was given</span>
-<span class="keyword">fi</span>
-
-report(&amp;Tally.count)</code></pre>
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">hold</span> m = [0: Tally { n: 1 }] <span class="keyword">at</span> r
+    m[0].grow(m)
+    show(m[0].n)                       <span class="comment">; 1, not 9</span>
+    <span class="keyword">each</span> k, v <span class="keyword">in</span> m                  <span class="comment">; the entries there when the loop started</span>
+        m.del(k)                       <span class="comment">; taking out and adding may pack them in place</span>
+        m[k + 100] = v
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></code></pre>
         <p>
           A plain parameter given a shared field is copied first, so it never sees the change. A method called on a
           shared field is the same: in <code>Tally.last.bump()</code>, a <code>bump</code> that sets
@@ -510,6 +522,66 @@ show(y)                            <span class="comment">; 2</span></code></pre>
             back to its index when the call ends. Or read the item through the slice and its index at each use of
             <code>.this</code>.</dd>
         </dl>
+      </div>
+
+      <div class="entry" id="map-values">
+        <h3>A value in a map, while the map changes <span class="badge b-open">open</span></h3>
+        <p>
+          A map's values are in its table, which moves when the map grows and is packed again in place when most of
+          its keys were taken out. So a reference never names a value in a map (<code>hold&amp; v = &amp;m[k]</code> is
+          refused, as for a slice's item). Two uses aren't held to that rule, and see the table as it was:
+        </p>
+        <pre><code><span class="keyword">shape</span> Tally
+    n: int
+
+    <span class="keyword">alters</span> grow(m: [text: Tally]@r)
+        m[<span class="string">"b"</span>] = Tally { n: 0 }          <span class="comment">; may move the table</span>
+        .n = 9                         <span class="comment">; written where the value was</span>
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">hold</span> m = [<span class="string">"a"</span>: Tally { n: 1 }] <span class="keyword">at</span> r
+    m[<span class="string">"a"</span>].grow(m)
+    <span class="keyword">each</span> k, v <span class="keyword">in</span> m                  <span class="comment">; the entries there when the loop started</span>
+        m.del(k)                       <span class="comment">; taking out and adding may pack them in place</span>
+        m[k + <span class="string">"!"</span> <span class="keyword">at</span> r] = v
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></code></pre>
+        <p>
+          The first is the slice case above (<a href="#method-on-a-slice-item">a method on an item of a slice that
+          grows</a>): the method's change can be lost. The second is a loop through a map that takes keys out and adds
+          others: when the table is packed in place during the loop, an entry can move under it, so it may see one twice
+          or skip one. No memory is misused either way, since a table stays in its region until the region ends.
+        </p>
+        <dl>
+          <dt>Why it is hard</dt>
+          <dd>As for a slice, the map changes through a name the rule that a place is given once can't follow. And a
+            loop that sees each entry once while the map changes needs the table to wait until it ends.</dd>
+          <dt>Ways it could go</dt>
+          <dd>The ways listed for a slice's item. For the loop, packing a table only by growing it into new room while a
+            loop goes through it, or refusing <code>m[k] = v</code> and <code>m.del(k)</code> on the map a loop goes
+            through, as long as it can be told apart.</dd>
+        </dl>
+      </div>
+
+      <div class="entry" id="map-copies">
+        <h3>Copies of a map are one map <span class="badge b-design">by design</span></h3>
+        <p>
+          A map value is a handle to its table, so every copy of it, a variable, a field, an argument, names the same
+          map, and a key one of them adds is there for all:
+        </p>
+        <pre><code><span class="keyword">hold</span> a = [<span class="string">"x"</span>: 1] <span class="keyword">at</span> r
+<span class="keyword">hold</span> b = a
+b[<span class="string">"y"</span>] = 2
+show(a.len, <span class="string">" "</span>, a == b)                 <span class="comment">; 2 true</span>
+<span class="keyword">hold</span> c = a.copy() <span class="keyword">at</span> r                <span class="comment">; a map of its own</span></code></pre>
+        <p>
+          This is what Go does, and what copying a slice does for its items. Copying every key and value at each
+          assignment would hide a cost that grows with the map; <code>.copy()</code> says when one is wanted, and
+          <code>==</code> says whether two names are the same map.
+        </p>
       </div>
 
       <div class="entry" id="slice-copies">

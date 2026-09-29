@@ -1382,6 +1382,7 @@ impl Checker {
             })),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner), region.clone()),
             Type::Slice(inner, region) => Type::Slice(boxed(inner), region.clone()),
+            Type::Map(key, value, region) => Type::Map(boxed(key), boxed(value), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner), *count),
             Type::Range(inner) => Type::Range(boxed(inner)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner)),
@@ -1428,6 +1429,15 @@ impl Checker {
             }
             Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Array(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => {
                 self.settle_applications(inner, at)
+            }
+            // A map's key given by a use of a generic declaration: one that is
+            // compared and hashed, as a written key must be.
+            Type::Map(key, value, _) => {
+                if let Some(why) = key_problem(key, &|_| false) {
+                    return err(at, format!("a map's key is compared and hashed, so it is an int, a unit, a char, a bool, text, a pointer, or a tuple of them, not {}, which this use gives", why));
+                }
+                self.settle_applications(key, at)?;
+                self.settle_applications(value, at)
             }
             Type::Or(value, error) => {
                 self.settle_applications(value, at)?;
@@ -1736,6 +1746,23 @@ impl Checker {
                 let inner = self.resolve_regions(inner, span, place, region.as_deref())?;
                 Ok(Type::Slice(Box::new(inner), region.clone()))
             }
+            Type::Map(key, value, region) => {
+                given(region)?;
+                if needs_region && region.is_none() {
+                    return err(span, format!("a map lives in a region, so its type names one, as in '{}@r'", ty));
+                }
+                if let (Some(region), Some(inside)) = (region, inside)
+                    && region != inside
+                {
+                    return err(
+                        self.place(span, &format!("@{}", region)),
+                        format!("everything a value in region '{0}' holds is in '{0}', its maps too; write '@{0}' for '@{1}'", inside, region),
+                    );
+                }
+                let key = self.resolve_regions(key, span, place, region.as_deref())?;
+                let value = self.resolve_regions(value, span, place, region.as_deref())?;
+                Ok(Type::Map(Box::new(key), Box::new(value), region.clone()))
+            }
             Type::Array(inner, count) => Ok(Type::Array(Box::new(self.resolve_regions(inner, span, place, inside)?), *count)),
             // Text inside a value of a region is in that region.
             Type::Text(region) => {
@@ -1859,6 +1886,16 @@ impl Checker {
             // checks each of them on its own.
             Type::Results(_) => err(span, "several types, separated by commas, are only a task's results"),
             Type::Ptr(inner, _) => self.check_type(inner, span),
+            Type::Map(key, value, _) => {
+                if let Some(why) = key_problem(key, &|name| self.type_param(name).is_some()) {
+                    return err(span, format!("a map's key is compared and hashed, so it is an int, a unit, a char, a bool, text, a pointer, or a tuple of them, not {}", why));
+                }
+                if **value == Type::Nothing {
+                    return err(self.place(span, "nothing"), "a map can't hold 'nothing', which has no value");
+                }
+                self.check_type(key, span)?;
+                self.check_type(value, span)
+            }
             Type::Array(inner, _) | Type::Slice(inner, _) => match inner.as_ref() {
                 Type::Nothing => {
                     let what = if matches!(ty, Type::Array(..)) { "an array" } else { "a slice" };
@@ -1940,6 +1977,7 @@ impl Checker {
             }
             Type::Ptr(..) => Some(format!("a pointer ({}), whose value can change", ty)),
             Type::Slice(..) => Some(format!("a slice ({}), whose items can change", ty)),
+            Type::Map(..) => Some(format!("a map ({}), whose values can change", ty)),
             Type::Array(..) => Some(format!("an array ({})", ty)),
             Type::Nothing => Some("'nothing', which has no value".to_string()),
             Type::Named(name, _) if self.changeable.contains(name) => {
@@ -2687,6 +2725,16 @@ impl Checker {
                 for target in targets.iter_mut() {
                     places.push(self.check_target(target, &mut assigned)?);
                 }
+                // `m[a], m[b] = 1, 2`: a key's value may be added, which only
+                // the line setting it alone does.
+                if targets.len() > 1
+                    && let Some(at) = targets.iter().find_map(|target| match target {
+                        Target::Place(Expr { kind: ExprKind::Index(map, _), span, .. }) if matches!(map.ty, Some(Type::Map(..))) => Some(*span),
+                        _ => None,
+                    })
+                {
+                    return err(at, "a map's value is set on a line of its own, as in 'm[k] = v', since it may add the key");
+                }
                 // `y = &x`: '=' writes a value; nothing points a name elsewhere.
                 if let Some(marked) = values.iter().find(|value| matches!(value.kind, ExprKind::Ref(_))) {
                     let reference = targets.iter().find_map(|target| match target {
@@ -2745,53 +2793,21 @@ impl Checker {
                 self.unset = entry;
                 Ok(())
             }
-            StmtKind::Each(name, range, body) => {
-                // A range is only valid here, so it is checked here rather than
-                // as an ordinary expression.
-                let item = if let ExprKind::Range(start, end) = &mut range.kind {
-                    for bound in [start, end] {
-                        let bty = self.check_expr(bound)?;
-                        self.expect_type(&bty, &Type::Int, bound.span)?;
-                    }
-                    range.ty = Some(Type::Range(Box::new(Type::Int)));
-                    Type::Int
-                } else if let ExprKind::Ref(place) = &mut range.kind {
-                    // `each v in &xs`: the items of the place as they are at each
-                    // pass, read through it, so the loop sees every change to it.
-                    let ty = self.check_expr(place)?;
-                    if !ty.unknown() && !self.is_place(place) {
-                        let what = no_place(place);
-                        return err(place.span, format!("'each v in &…' goes through a place as it is at each pass: a variable, a field or an item of one, or what a pointer points to, and this is {}; write 'each v in …' to go through a value", what));
-                    }
-                    range.ty = Some(ty.clone());
-                    match ty {
-                        Type::Array(items, _) | Type::Slice(items, _) => *items,
-                        other if other.unknown() => Type::Unknown,
-                        other => return err(range.span, format!("'each v in &…' goes through the items of an array or slice as they are at each pass, but this value is {}", other)),
-                    }
-                } else {
-                    match self.check_expr(range)? {
-                        Type::Array(items, _) | Type::Slice(items, _) if unsettled(&items) => {
-                            return err(range.span, format!("cannot tell the type of '{}' from none or 'fail …'; give the array a type first", name));
-                        }
-                        Type::Array(items, _) | Type::Slice(items, _) => *items,
-                        // What it goes through couldn't be worked out, so what
-                        // each item is can't be either; the body is still checked
-                        // with the name declared (see `Type::Unknown`).
-                        other if other.unknown() => Type::Unknown,
-                        other => {
-                            return err(
-                                range.span,
-                                format!("each goes through a range, such as 0..n, or the items of an array or slice, but this value is {}{}", other, extract_hint(&[&other])),
-                            );
-                        }
-                    }
-                };
-                // The loop variable and the body share one scope.
+            StmtKind::Each(name, second, range, body) => {
+                let (item, value) = self.check_each_source(name, second.as_ref(), range)?;
+                if name == DISCARD && value.is_none() {
+                    return err(span, "'_' drops a map's key or value, as in 'each _, v in m'; a loop over this gives one item each pass, so name it");
+                }
+                // The loop variables and the body share one scope; `_` names none.
                 let entry = self.unset.clone();
                 self.push_scope();
-                let result = self.define(name, item, false, span)
-                    .and_then(|()| self.check_block(body));
+                let mut result = if name == DISCARD { Ok(()) } else { self.define(name, item, false, span) };
+                if let (Ok(()), Some((second, at)), Some(value)) = (&result, second.as_ref(), value)
+                    && second != DISCARD
+                {
+                    result = self.define(second, value, false, *at);
+                }
+                let result = result.and_then(|()| self.check_block(body));
                 self.pop_scope();
                 self.unset = entry;
                 result
@@ -3293,6 +3309,7 @@ impl Checker {
                     }
                     Type::Array(..) => return err(span, "'len' can't be assigned: an array's length is part of its type"),
                     Type::Slice(..) => return err(span, "'len' can't be assigned: a slice's length changes with 'xs.add(…)' and 'xs.del(…)', or by slicing it, as in 'xs = xs[0..2]'"),
+                    Type::Map(..) => return err(span, "'len' can't be assigned: it is how many keys the map holds, which 'm[k] = v' and 'm.del(k)' change"),
                     Type::Text(_) => return err(span, "'len' can't be assigned: it is how many bytes the text has, and text never changes; give the variable other text instead"),
                     _ => {}
                 }
@@ -3318,6 +3335,10 @@ impl Checker {
                     return err(span, "a byte of text can't be assigned, since text never changes; build other text instead, as in 't = t[0..2] + \"x\" at r'");
                 }
                 let ty = self.check_index(base, &base_ty, index, span)?;
+                // A key added is kept in the map, so it lives where the map does.
+                if let Type::Map(key, _, _) = &base_ty {
+                    self.coerce(index, key)?;
+                }
                 expr.ty = Some(ty.clone());
                 Ok(ty)
             }
@@ -3348,9 +3369,12 @@ impl Checker {
     fn check_item_base(&mut self, base: &mut Expr) -> Result<Type> {
         if let ExprKind::Var(name) = &base.kind {
             let info = self.lookup_or_err(name, base.span)?;
-            if matches!(info.ty, Type::Array(..)) {
+            if matches!(info.ty, Type::Array(..) | Type::Map(..)) {
                 if info.result {
                     return err(base.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
+                }
+                if !info.mutable && matches!(info.ty, Type::Map(..)) {
+                    return err(base.span, format!("'m[k] = v' changes '{}', which is immutable; keep the map in a 'hold' variable to change it{}", name, param_hint(name, info)));
                 }
                 if !info.mutable {
                     return err(base.span, format!("cannot assign to an item of immutable variable '{}'{}", name, param_hint(name, info)));
@@ -3359,7 +3383,9 @@ impl Checker {
             return self.check_expr(base);
         }
         let ty = self.check_expr(base)?;
-        if matches!(ty, Type::Array(..)) {
+        // `m[k] = v` may add the key, which changes the map as `add` changes a
+        // slice, so the map is in a place that can change.
+        if matches!(ty, Type::Array(..) | Type::Map(..)) {
             self.assignable_array(base)?;
         }
         Ok(ty)
@@ -3387,7 +3413,8 @@ impl Checker {
                 }
                 self.assignable_array(base)
             }
-            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..))) => Ok(()),
+            // A value in a map is in its table in a region, as a slice's item is.
+            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..) | Type::Map(..))) => Ok(()),
             ExprKind::Index(base, _) => self.assignable_array(base),
             _ => err(place.span, "cannot assign to an item of a temporary value"),
         }
@@ -3840,8 +3867,23 @@ impl Checker {
         if matches!(expr.kind, ExprKind::Shared { .. }) {
             return self.check_shared_use(expr);
         }
+        // `["a": 1]` alone: a map of its own, in the block's default region.
+        if matches!(expr.kind, ExprKind::Pairs(_)) {
+            let value = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+            expr.kind = ExprKind::Shortcut { value: Box::new(Expr::new(value, span)), region: None, region_span: span };
+        }
         if matches!(expr.kind, ExprKind::Shortcut { .. }) {
             self.expand_shortcut(expr)?;
+        }
+        // `m.keys`: a map's keys made into a slice in the block's default region.
+        if let ExprKind::Field(base, word) = &mut expr.kind
+            && let Some(op @ (MapOp::Keys | MapOp::Values)) = MapOp::from_word(word)
+            && matches!(self.check_expr(base)?, Type::Map(..))
+        {
+            let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+            if let ExprKind::Field(map, _) = taken {
+                expr.kind = ExprKind::MapOp { map, op, key: None, region: None, region_span: span };
+            }
         }
         match &mut expr.kind {
             ExprKind::IntLit(_) => Ok(Type::Int),
@@ -4025,6 +4067,14 @@ impl Checker {
                 })?;
                 *region = Some(allocates.clone());
                 self.visible_region(&allocates, *region_span, true)?;
+                // `new [K: V](…) at r` makes the map, its table in `r`.
+                if let Type::Map(key, value_ty, _) = &**ty {
+                    let key = self.in_region(key, &allocates);
+                    let value_ty = self.in_region(value_ty, &allocates);
+                    let map = Type::Map(Box::new(key.clone()), Box::new(value_ty.clone()), Some(allocates));
+                    self.check_map_source(value, &key, &value_ty, &map)?;
+                    return Ok(map);
+                }
                 // `new [T](…) at r` makes the slice itself, with its items in `r`.
                 if let Type::Slice(items, _) = &**ty {
                     let items = self.in_region(items, &allocates);
@@ -4038,7 +4088,11 @@ impl Checker {
                 Ok(Type::Ptr(Box::new(pointee), Some(allocates)))
             }
             // `expand_shortcut` above made it the `New` it stands for.
-            ExprKind::Shortcut { .. } => Err(Error::internal_at(span, "a shortcut that was not expanded")),
+            ExprKind::Shortcut { .. } | ExprKind::Pairs(_) => Err(Error::internal_at(span, "a shortcut that was not expanded")),
+            ExprKind::MapOp { map, op, key, region, region_span } => {
+                let (op, region_span) = (*op, *region_span);
+                self.check_map_op(map, op, key.as_deref_mut(), region, region_span)
+            }
             ExprKind::Deref(e) => {
                 let ty = self.check_expr(e)?;
                 if ty.unknown() {
@@ -4193,6 +4247,9 @@ impl Checker {
     /// for it and again by the `New`.
     fn expand_shortcut(&mut self, expr: &mut Expr) -> Result<()> {
         let span = expr.span;
+        if matches!(&expr.kind, ExprKind::Shortcut { value, .. } if matches!(value.kind, ExprKind::Pairs(_))) {
+            return self.expand_map_shortcut(expr);
+        }
         let ExprKind::Shortcut { value, .. } = &mut expr.kind else { return Ok(()) };
         let copies = self.unsettled_copies.len();
         let found = self.check_expr(value);
@@ -4218,9 +4275,199 @@ impl Checker {
         Ok(())
     }
 
+    /// Checks what `each` goes through, and returns the type of the name it
+    /// gives each pass, and of the second name's value for a map: a range's
+    /// numbers, an array's or a slice's items (`&xs` for the place as it is at
+    /// each pass), a map's keys and values (`each k, v in m`), or one side of a
+    /// map, `m.keys` or `m.values`, gone through without making a slice.
+    fn check_each_source(&mut self, name: &str, second: Option<&(String, Span)>, range: &mut Expr) -> Result<(Type, Option<Type>)> {
+        let one = |ty: Type| -> Result<(Type, Option<Type>)> {
+            match second {
+                Some((second, at)) => err(
+                    *at,
+                    format!("'each {}, {}' names a key and its value, which only a map gives; this gives one item at a time, so name one", name, second),
+                ),
+                None => Ok((ty, None)),
+            }
+        };
+        let map_pair = |key: Type, value: Type, span: Span| -> Result<(Type, Option<Type>)> {
+            match second {
+                Some(_) => Ok((key, Some(value))),
+                None => err(
+                    span,
+                    format!("a map gives a key and its value each pass, so name both, as in 'each {}, value in …'; for its keys alone, go through '.keys', as in 'each {} in m.keys'", name, name),
+                ),
+            }
+        };
+        // A range is only valid here, so it is checked here rather than as an
+        // ordinary expression.
+        if let ExprKind::Range(start, end) = &mut range.kind {
+            for bound in [start, end] {
+                let bty = self.check_expr(bound)?;
+                self.expect_type(&bty, &Type::Int, bound.span)?;
+            }
+            range.ty = Some(Type::Range(Box::new(Type::Int)));
+            return one(Type::Int);
+        }
+        // `each k in m.keys`: one side of a map, gone through where it is.
+        if let ExprKind::Field(base, word) = &mut range.kind
+            && let Some(op @ (MapOp::Keys | MapOp::Values)) = MapOp::from_word(word)
+            && let Type::Map(key, value, region) = self.check_expr(base)?
+        {
+            let item = if op == MapOp::Keys { *key } else { *value };
+            let taken = std::mem::replace(&mut range.kind, ExprKind::NoneLit);
+            if let ExprKind::Field(map, _) = taken {
+                range.kind = ExprKind::MapOp { map, op, key: None, region: None, region_span: range.span };
+            }
+            range.ty = Some(Type::Slice(Box::new(item.clone()), region));
+            return one(item);
+        }
+        if let ExprKind::Ref(place) = &mut range.kind {
+            // `each v in &xs`: the items of the place as they are at each pass,
+            // read through it, so the loop sees every change to it.
+            let ty = self.check_expr(place)?;
+            if !ty.unknown() && !self.is_place(place) {
+                let what = no_place(place);
+                return err(place.span, format!("'each v in &…' goes through a place as it is at each pass: a variable, a field or an item of one, or what a pointer points to, and this is {}; write 'each v in …' to go through a value", what));
+            }
+            range.ty = Some(ty.clone());
+            return match ty {
+                Type::Array(items, _) | Type::Slice(items, _) => one(*items),
+                Type::Map(key, value, _) => map_pair(*key, *value, range.span),
+                other if other.unknown() => Ok((Type::Unknown, second.map(|_| Type::Unknown))),
+                other => err(range.span, format!("'each v in &…' goes through the items of an array, a slice, or a map as they are at each pass, but this value is {}", other)),
+            };
+        }
+        match self.check_expr(range)? {
+            Type::Array(items, _) | Type::Slice(items, _) if unsettled(&items) => {
+                err(range.span, format!("cannot tell the type of '{}' from none or 'fail …'; give the array a type first", name))
+            }
+            Type::Array(items, _) | Type::Slice(items, _) => one(*items),
+            Type::Map(key, value, _) => map_pair(*key, *value, range.span),
+            // What it goes through couldn't be worked out, so what each item is
+            // can't be either; the body is still checked with the names declared
+            // (see `Type::Unknown`).
+            other if other.unknown() => Ok((Type::Unknown, second.map(|_| Type::Unknown))),
+            other => err(
+                range.span,
+                format!("each goes through a range, such as 0..n, the items of an array or slice, or a map's keys and values, but this value is {}{}", other, extract_hint(&[&other])),
+            ),
+        }
+    }
+
+    /// Makes `["a": 1] at r` the `new [text: int](["a": 1]) at r` it stands for,
+    /// with the keys' and the values' types worked out from the pairs, as the
+    /// items of two arrays would be.
+    fn expand_map_shortcut(&mut self, expr: &mut Expr) -> Result<()> {
+        let span = expr.span;
+        let ExprKind::Shortcut { value, .. } = &mut expr.kind else { return Ok(()) };
+        let ExprKind::Pairs(pairs) = &value.kind else { return Ok(()) };
+        let side = |pick: fn(&(Expr, Expr)) -> &Expr| Expr::new(ExprKind::Array(pairs.iter().map(|pair| pick(pair).clone()).collect()), span);
+        let (mut keys, mut values) = (side(|pair| &pair.0), side(|pair| &pair.1));
+        let copies = self.unsettled_copies.len();
+        let found = self.check_expr(&mut keys).and_then(|keys| Ok((keys, self.check_expr(&mut values)?)));
+        self.unsettled_copies.truncate(copies);
+        let (key_ty, value_ty) = match found? {
+            (Type::Array(key, _), Type::Array(value, _)) => (*key, *value),
+            _ => (Type::Unknown, Type::Unknown),
+        };
+        for (ty, what) in [(&key_ty, "keys"), (&value_ty, "values")] {
+            if matches!(ty, Type::None | Type::Fail(_)) {
+                return err(span, format!("can't tell the type of a map's {} from none or 'fail …'; name it, as in 'new [text: maybe int]([\"a\": none]) at r'", what));
+            }
+        }
+        let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+        let ExprKind::Shortcut { value, region, region_span } = taken else {
+            return Err(Error::internal_at(span, "a shortcut that is no longer one"));
+        };
+        let region = self.region_or_default(region.as_ref(), region_span, || {
+            "a map written by its pairs goes in a region, as in '[\"a\": 1] at r' or '[\"a\": 1]@r'".to_string()
+        })?;
+        let ty = Type::Map(Box::new(key_ty.without_regions()), Box::new(value_ty.without_regions()), None);
+        expr.kind = ExprKind::New { ty: Box::new(ty), ty_span: span, value, region: Some(region), region_span };
+        Ok(())
+    }
+
+    /// Checks what a new map is made from: its pairs, each key and value going
+    /// into the map as a value goes into its place, or another map, copied.
+    fn check_map_source(&mut self, value: &mut Expr, key: &Type, value_ty: &Type, map: &Type) -> Result<()> {
+        let ExprKind::Pairs(pairs) = &mut value.kind else {
+            let ty = self.check_expr(value)?;
+            return match &ty {
+                Type::Map(k, v, _) if fits_regions(k, key) && fits_regions(v, value_ty) => Ok(()),
+                _ if ty.unknown() => Ok(()),
+                _ => err(value.span, format!("a new map is made from its pairs, as in 'new {}([k: v])', or from another map it copies, but this value is {}", map.without_regions(), ty)),
+            };
+        };
+        let mut written: Vec<(String, Span)> = Vec::new();
+        for (k, v) in pairs.iter_mut() {
+            self.check_expr(k)?;
+            self.coerce(k, key)?;
+            self.check_expr(v)?;
+            self.coerce(v, value_ty)?;
+            // The same key written out twice: the second would replace the first.
+            if let Some(text) = constant_key(k) {
+                if let Some((_, at)) = written.iter().find(|(seen, _)| *seen == text) {
+                    return err(k.span, format!("the key {} is written twice, first at {}:{}; a map holds one value for each key", text, at.line, at.col));
+                }
+                written.push((text, k.span));
+            }
+        }
+        value.ty = Some(map.clone());
+        Ok(())
+    }
+
+    /// Checks `m.has(k)`, and `m.keys` and `m.values` made into a slice in
+    /// `region` (the block's default when none is written), and returns the
+    /// type: a bool, or the slice.
+    fn check_map_op(&mut self, map: &mut Expr, op: MapOp, key: Option<&mut Expr>, region: &mut Option<String>, region_span: Span) -> Result<Type> {
+        let ty = self.check_expr(map)?;
+        let Type::Map(key_ty, value_ty, _) = &ty else {
+            if ty.unknown() {
+                return Ok(Type::Unknown);
+            }
+            return err(map.span, format!("'{}' asks a map, but this value is {}{}", op.word(), ty, extract_hint(&[&ty])));
+        };
+        if op == MapOp::Has {
+            let Some(key) = key else { return Err(Error::internal_at(map.span, "'has' without its key")) };
+            self.check_key(key_ty, key)?;
+            return Ok(Type::Bool);
+        }
+        let item = if op == MapOp::Keys { (**key_ty).clone() } else { (**value_ty).clone() };
+        let word = op.word();
+        let made = self.region_or_default(region.as_ref(), region_span, || {
+            format!("'{0}' makes a slice, so it names the region it goes in, as in 'm.{0} at r' or 'm.{0}@r'; 'each k in m.{0}' goes through them without one", word)
+        })?;
+        self.visible_region(&made, region_span, true)?;
+        *region = Some(made.clone());
+        // The slice holds the map's keys or values themselves: text in them
+        // is where the map's is, which must last as long as the new slice.
+        let item = item.map_regions(&mut |_| Some(made.clone()));
+        Ok(Type::Slice(Box::new(item), Some(made)))
+    }
+
+    /// Checks `key`, a key looked for in a map whose keys are of type `wanted`:
+    /// any key of that type, in any region, since looking only compares (a
+    /// number written out becomes a unit or the like, as elsewhere). A range
+    /// takes a part, which a map has none of.
+    fn check_key(&mut self, wanted: &Type, key: &mut Expr) -> Result<()> {
+        if matches!(key.kind, ExprKind::Range(..)) {
+            return err(key.span, "a map has no parts: '[…]' takes one key, as in 'm[k]'");
+        }
+        let ty = self.check_expr(key)?;
+        if ty.unknown() || wanted.unknown() || ty.without_regions() == wanted.without_regions() {
+            return Ok(());
+        }
+        self.coerce(key, wanted).map_err(|error| Error { message: error.message.replacen("expected type", "expected a key of type", 1), ..error })
+    }
+
     /// Checks `xs[#i]` or `t.at(i)` on a value of type `base_ty`, already
     /// checked, and returns its type: a maybe of the item, none out of range.
     fn check_lookup(&mut self, base_ty: &Type, index: &mut Expr, span: Span) -> Result<Type> {
+        if let Type::Map(key, value, _) = base_ty {
+            self.check_key(key, index)?;
+            return Ok(Type::Maybe(value.clone()));
+        }
         let ty = self.check_expr(index)?;
         if base_ty.unknown() {
             return Ok(Type::Unknown);
@@ -4235,6 +4482,7 @@ impl Checker {
             Type::Ptr(inner, _) if matches!(**inner, Type::Array(..)) => {
                 return err(span, format!("this value is a pointer, {}; look into the array it points to, as in 'p^[#i]'", base_ty));
             }
+            Type::Map(..) => return Err(Error::internal_at(span, "a map's lookup read as an item's")),
             other => {
                 return err(span, format!("'[#…]' reads an item of an array, a slice, or text, but this value is {}{}", other, extract_hint(&[other])));
             }
@@ -4256,6 +4504,10 @@ impl Checker {
         }
         if let Type::Text(region) = base_ty {
             return self.check_text_part(region, index, span);
+        }
+        if let Type::Map(key, value, _) = base_ty {
+            self.check_key(key, index)?;
+            return Ok((**value).clone());
         }
         let items = match base_ty {
             // `[none, none][i]`: an item that is only a literal can be wrapped
@@ -4342,7 +4594,7 @@ impl Checker {
                 if info.result {
                     return err(items.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
-                if !info.mutable && matches!(info.ty, Type::Slice(..)) {
+                if !info.mutable && matches!(info.ty, Type::Slice(..) | Type::Map(..)) {
                     if info.param && info.passing == Passing::BindRef {
                         return err(
                             items.span,
@@ -4353,7 +4605,8 @@ impl Checker {
                         let what = if info.param { "a parameter, which never changes" } else { "a 'bind&'" };
                         return err(items.span, format!("'{}' changes '{}', {}{}", word, name, what, param_hint(&name, info)));
                     }
-                    return err(items.span, format!("'{}' changes '{}', which is immutable; keep the slice in a 'hold' variable to change it", word, name));
+                    let what = if matches!(info.ty, Type::Map(..)) { "map" } else { "slice" };
+                    return err(items.span, format!("'{}' changes '{}', which is immutable; keep the {} in a 'hold' variable to change it", word, name, what));
                 }
                 self.check_expr(items)?
             }
@@ -4385,6 +4638,16 @@ impl Checker {
                 ty
             }
         };
+        if let Type::Map(key, value, _) = &ty {
+            return match (op, &mut *args) {
+                (EditOp::Del, [k]) => {
+                    self.check_key(key, k)?;
+                    Ok(Type::Maybe(value.clone()))
+                }
+                (EditOp::Del, _) => err(span, format!("'del' takes the key to take out of the map, as in 'm.del(k)', got {}", count(args.len(), "argument"))),
+                (EditOp::Add, _) => err(span, "a map adds a key, or gives it a new value, with 'm[k] = v'"),
+            };
+        }
         let (item, region) = match &ty {
             Type::Slice(item, region) => ((**item).clone(), region.clone()),
             // Whether this is a slice at all depends on a type the checker
@@ -4580,6 +4843,7 @@ impl Checker {
         match ty {
             Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => None,
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unwritable_in(inner, seen),
+            Type::Map(key, value, _) => self.unwritable_in(key, seen).or_else(|| self.unwritable_in(value, seen)),
             Type::Tuple(items) => items.iter().find_map(|item| self.unwritable_in(item, seen)),
             Type::Param(_) if self.allows(Need::Shown, ty) => None,
             Type::Named(..) | Type::Applied(_) if self.has_own_str(ty) => None,
@@ -4642,6 +4906,10 @@ impl Checker {
     fn written_strs(&self, ty: &Type, seen: &mut Vec<String>, found: &mut Vec<(String, Vec<Type>)>) {
         match ty {
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.written_strs(inner, seen, found),
+            Type::Map(key, value, _) => {
+                self.written_strs(key, seen, found);
+                self.written_strs(value, seen, found);
+            }
             Type::Tuple(items) => items.iter().for_each(|item| self.written_strs(item, seen, found)),
             Type::Named(name, _) if !seen.contains(name) => {
                 seen.push(name.clone());
@@ -5420,7 +5688,8 @@ impl Checker {
             _ if field.parse::<u64>().is_ok() => {
                 err(span, format!("'.{}' reads an item of a tuple, but this value is {}{}", field, base, extract_hint(&[base])))
             }
-            Type::Array(..) | Type::Slice(..) | Type::Text(_) if field == LEN => Ok(Type::Int),
+            Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Text(_) if field == LEN => Ok(Type::Int),
+            Type::Map(..) => err(span, format!("type {} has no field '{}'; its number of keys is '.len', and its keys and values are '.keys at r' and '.values at r'", base, field)),
             Type::Text(_) => err(span, format!("type {} has no field '{}'; how many bytes it has is '.len'", base, field)),
             Type::Array(..) | Type::Slice(..) => {
                 err(span, format!("type {} has no field '{}'; its number of items is '.len'", base, field))
@@ -5612,6 +5881,24 @@ impl Checker {
             }
             return self.builtin_str(expr);
         }
+        // `m.has(k)`: whether a map holds the key (see `ExprKind::MapOp`).
+        if let Type::Map(..) = ty
+            && let Some(op) = MapOp::from_word(&name)
+        {
+            if op != MapOp::Has {
+                return err(span, format!("'{0}' is written without parentheses, with the region its slice goes in after it, as in 'm.{0} at r'", name));
+            }
+            let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+            let ExprKind::MethodCall { value, mut args, .. } = taken else {
+                return Err(Error::internal_at(span, "a method call that is no longer one"));
+            };
+            if args.len() != 1 {
+                return err(span, format!("'has' takes the key to look for, as in 'm.has(k)', got {}", count(args.len(), "argument")));
+            }
+            let key = Box::new(args.remove(0));
+            expr.kind = ExprKind::MapOp { map: value, op, key: Some(key), region: None, region_span: span };
+            return Ok(());
+        }
         // `t.at(i)`: a byte of text, or none (see `ExprKind::Lookup`).
         if name == AT && matches!(ty, Type::Text(_)) {
             let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
@@ -5800,7 +6087,7 @@ impl Checker {
             }
             // A slice's items are in a region, behind a pointer, so they can
             // always be written, as what a pointer points to can.
-            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..))) => Ok(()),
+            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..) | Type::Map(..))) => Ok(()),
             ExprKind::Index(base, _) => self.altered_place(base, method),
             ExprKind::Deref(_) => Ok(()),
             ExprKind::Shared { shape, field } => self.changeable_shared(shape, field, value.span, &format!("'{}' changes the value it is called on, and ", method)),
@@ -6252,6 +6539,9 @@ impl Checker {
             ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Slice(..))) => refuse(
                 "it can't name an item of a slice, which moves when the slice grows; hold the item's index, or copy the item into a variable",
             ),
+            ExprKind::Index(base, _) if matches!(base.ty, Some(Type::Map(..))) => refuse(
+                "it can't name a value in a map, which moves when the map grows; hold the key, or copy the value into a variable",
+            ),
             ExprKind::Index(base, _) => self.read_place(base),
             ExprKind::Deref(_) | ExprKind::Shared { .. } => Ok(()),
             _ => refuse("it names a variable, a field or an item of one, or what a pointer points to, and not a value made here"),
@@ -6528,7 +6818,7 @@ impl Checker {
                 }
                 match &base.ty {
                     Some(Type::Tuple(_)) => return refuse("it needs a place that can change, and a tuple's items never do".to_string()),
-                    Some(Type::Array(..) | Type::Slice(..) | Type::Text(_)) => {
+                    Some(Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Text(_)) => {
                         return refuse(format!("it needs a place that can change, and '{}' is worked out from the value, not kept in it", field));
                     }
                     Some(ty) => self.read_only_field(ty, field, place.span)?,
@@ -6542,6 +6832,10 @@ impl Checker {
             ExprKind::Index(base, _) => match &base.ty {
                 Some(Type::Slice(..)) => refuse(
                     "it can't be an item of a slice, which moves when the slice grows; give the slice and the item's index, or copy the item into a 'hold' variable, change it, and put it back"
+                        .to_string(),
+                ),
+                Some(Type::Map(..)) => refuse(
+                    "it can't be a value in a map, which moves when the map grows; give the map and the key, or copy the value into a 'hold' variable, change it, and put it back"
                         .to_string(),
                 ),
                 Some(Type::Text(_)) => refuse("it needs a place that can change, and text never does".to_string()),
@@ -6729,7 +7023,7 @@ impl Checker {
     /// can fail is read first.
     fn comparable(&self, ty: &Type) -> bool {
         match ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Slice(..) | Type::Array(..) | Type::Tuple(_) => true,
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Slice(..) | Type::Map(..) | Type::Array(..) | Type::Tuple(_) => true,
             Type::Named(name, _) if self.kinds.contains_key(name) => self.kind_comparable(name, &mut Vec::new()),
             Type::Named(..) | Type::Applied(_) => self.owner_of(ty).is_some_and(|owner| self.shapes.contains_key(&owner)),
             Type::Param(_) => self.allows(Need::Same, ty),
@@ -6807,6 +7101,7 @@ impl Checker {
         match ty {
             Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => None,
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unsimilar_in(inner, seen),
+            Type::Map(key, value, _) => self.unsimilar_in(key, seen).or_else(|| self.unsimilar_in(value, seen)),
             Type::Tuple(items) => items.iter().find_map(|item| self.unsimilar_in(item, seen)),
             Type::Param(_) if self.allows(Need::Similar, ty) => None,
             // A shape given types this declaration takes: its fields with them.
@@ -7222,6 +7517,7 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
     let lasting = |a: &Option<String>, e: &Option<String>| region(a, e) || a.is_none();
     match (actual, expected) {
         (Type::Ptr(a, ar), Type::Ptr(e, er)) | (Type::Slice(a, ar), Type::Slice(e, er)) => region(ar, er) && fits_regions(a, e),
+        (Type::Map(ak, av, ar), Type::Map(ek, ev, er)) => region(ar, er) && fits_regions(ak, ek) && fits_regions(av, ev),
         (Type::Array(a, an), Type::Array(e, en)) => an == en && fits_regions(a, e),
         // A shape given types: the same shape and types, of a fitting region.
         (Type::Applied(a), Type::Applied(e)) if a.name == e.name && a.types.len() == e.types.len() => {
@@ -7302,6 +7598,10 @@ fn region_conflict(ty: &Type, inside: Option<&str>) -> Option<(String, String)> 
             Some(region) => conflict(region).or_else(|| region_conflict(inner, Some(region))),
             None => region_conflict(inner, inside),
         },
+        Type::Map(key, value, region) => {
+            let inside = region.as_deref().or(inside);
+            region.as_deref().and_then(conflict).or_else(|| region_conflict(key, inside)).or_else(|| region_conflict(value, inside))
+        }
         Type::Text(Some(region)) | Type::Named(_, Some(region)) => conflict(region),
         Type::Applied(applied) => match applied.region.as_deref() {
             Some(region) => conflict(region).or_else(|| applied.types.iter().find_map(|ty| region_conflict(ty, Some(region)))),
@@ -7327,7 +7627,7 @@ fn type_size(ty: &Type) -> usize {
         }
         match ty {
             Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Array(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => pending.push(inner),
-            Type::Or(value, error) => pending.extend([&**value, &**error]),
+            Type::Or(value, error) | Type::Map(value, error, _) => pending.extend([&**value, &**error]),
             Type::Applied(applied) => pending.extend(&applied.types),
             Type::Tuple(types) | Type::Results(types) => pending.extend(types),
             _ => {}
@@ -7341,7 +7641,7 @@ fn type_depth(ty: &Type) -> usize {
         Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Array(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => {
             type_depth(inner)
         }
-        Type::Or(value, error) => type_depth(value).max(type_depth(error)),
+        Type::Or(value, error) | Type::Map(value, error, _) => type_depth(value).max(type_depth(error)),
         Type::Applied(applied) => applied.types.iter().map(type_depth).max().unwrap_or(0),
         Type::Tuple(types) | Type::Results(types) => types.iter().map(type_depth).max().unwrap_or(0),
         _ => 0,
@@ -7378,6 +7678,10 @@ fn keeps_params_of(ty: &Type, inside: Option<&str>, kept: &mut HashMap<String, H
             }
         }
         Type::Ptr(inner, region) | Type::Slice(inner, region) => keeps_params_of(inner, region.as_deref().or(inside), kept),
+        Type::Map(key, value, region) => {
+            keeps_params_of(key, region.as_deref().or(inside), kept);
+            keeps_params_of(value, region.as_deref().or(inside), kept);
+        }
         Type::Array(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => keeps_params_of(inner, inside, kept),
         Type::Or(value, error) => {
             keeps_params_of(value, inside, kept);
@@ -7477,7 +7781,7 @@ impl Checker {
                 self.substitute_condition(cond, given, made)?;
                 self.substitute_block(body, given, made)
             }
-            StmtKind::Each(_, range, body) => {
+            StmtKind::Each(_, _, range, body) => {
                 self.substitute_expr(range, given, made)?;
                 self.substitute_block(body, given, made)
             }
@@ -7598,6 +7902,14 @@ impl Checker {
             | ExprKind::Wrap(inner)
             | ExprKind::Copy { value: inner, .. }
             | ExprKind::Shortcut { value: inner, .. } => self.substitute_expr(inner, given, made),
+            ExprKind::Pairs(pairs) => pairs.iter_mut().try_for_each(|(key, value)| {
+                self.substitute_expr(key, given, made)?;
+                self.substitute_expr(value, given, made)
+            }),
+            ExprKind::MapOp { map, key, .. } => {
+                self.substitute_expr(map, given, made)?;
+                key.as_deref_mut().map_or(Ok(()), |key| self.substitute_expr(key, given, made))
+            }
             ExprKind::Binary(op @ (BinaryOp::Eq | BinaryOp::Ne), a, b) => {
                 let symbol = if *op == BinaryOp::Ne { "!=" } else { "==" };
                 self.substitute_expr(a, given, made)?;
@@ -7675,6 +7987,10 @@ fn unify_params(pattern: &Type, actual: &Type, given: &mut HashMap<String, Type>
         (Type::Ptr(p, _), Type::Ptr(a, _)) | (Type::Slice(p, _), Type::Slice(a, _)) | (Type::Array(p, _), Type::Array(a, _)) => {
             unify_params(p, a, given)
         }
+        (Type::Map(pk, pv, _), Type::Map(ak, av, _)) => {
+            unify_params(pk, ak, given);
+            unify_params(pv, av, given)
+        }
         // A shape given types: the same shape, whose types stand for each other
         // (a value of a shape made for its types is read as one, see
         // `Checker::unmade`).
@@ -7709,6 +8025,11 @@ pub fn unify_regions(pattern: &Type, actual: &Type, regions: &mut HashMap<String
             record(pr, ar);
             unify_regions(p, a, regions);
         }
+        (Type::Map(pk, pv, pr), Type::Map(ak, av, ar)) => {
+            record(pr, ar);
+            unify_regions(pk, ak, regions);
+            unify_regions(pv, av, regions);
+        }
         (Type::Array(p, _), Type::Array(a, _)) => unify_regions(p, a, regions),
         (Type::Tuple(p), Type::Tuple(a)) => p.iter().zip(a).for_each(|(p, a)| unify_regions(p, a, regions)),
         (Type::Named(p, pr), Type::Named(a, ar)) if p == a => record(pr, ar),
@@ -7733,7 +8054,7 @@ pub fn unify_regions(pattern: &Type, actual: &Type, regions: &mut HashMap<String
 /// in `regional` that do.
 fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
     match ty {
-        Type::Ptr(..) | Type::Slice(..) => true,
+        Type::Ptr(..) | Type::Slice(..) | Type::Map(..) => true,
         Type::Named(name, _) => regional.contains(name),
         // A shape given types holds what its own fields hold and what the types
         // given hold, since a field may be one of them.
@@ -7751,7 +8072,7 @@ fn holds_pointers(ty: &Type, regional: &HashSet<String>) -> bool {
 /// value can change, given the shapes and kinds in `changeable` that do.
 fn holds_changeable(ty: &Type, changeable: &HashSet<String>) -> bool {
     match ty {
-        Type::Ptr(..) | Type::Slice(..) | Type::Array(..) => true,
+        Type::Ptr(..) | Type::Slice(..) | Type::Map(..) | Type::Array(..) => true,
         Type::Named(name, _) => changeable.contains(name),
         Type::Applied(applied) => {
             changeable.contains(&applied.name) || applied.types.iter().any(|ty| holds_changeable(ty, changeable))
@@ -7902,7 +8223,7 @@ fn place_region(place: &Expr) -> Option<String> {
         },
         ExprKind::Field(base, _) => place_region(base),
         ExprKind::Index(base, _) => match base.ty.as_ref()? {
-            Type::Slice(_, region) => region.clone(),
+            Type::Slice(_, region) | Type::Map(_, _, region) => region.clone(),
             _ => place_region(base),
         },
         _ => None,
@@ -7920,6 +8241,7 @@ fn value_bytes(ty: &Type, sizes: &HashMap<String, u128>) -> u128 {
         Type::Applied(applied) => sizes.get(&applied.name).copied().unwrap_or(8),
         Type::Array(items, count) => value_bytes(items, sizes).saturating_mul(u128::from(*count)),
         Type::Slice(..) => 24,
+        Type::Map(..) => 8,
         Type::Maybe(inner) => value_bytes(inner, sizes).saturating_add(8),
         Type::Or(value, error) => value_bytes(value, sizes).saturating_add(value_bytes(error, sizes)).saturating_add(8),
         Type::Fail(inner) | Type::Range(inner) => value_bytes(inner, sizes),
@@ -7972,6 +8294,11 @@ fn named_types(ty: &Type) -> Vec<&str> {
             names
         }
         Type::Ptr(inner, _) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => named_types(inner),
+        Type::Map(key, value, _) => {
+            let mut names = named_types(key);
+            names.extend(named_types(value));
+            names
+        }
         Type::Tuple(items) => items.iter().flat_map(named_types).collect(),
         Type::Or(value, error) => {
             let mut names = named_types(value);
@@ -7989,8 +8316,8 @@ fn constructible(ty: &Type, can: &HashSet<&str>) -> bool {
         Type::Named(name, _) => can.contains(name.as_str()),
         Type::Applied(applied) => can.contains(applied.name.as_str()),
         Type::Ptr(inner, _) | Type::Array(inner, _) => constructible(inner, can),
-        // A slice may be empty, as a new one is, which needs no item.
-        Type::Slice(..) => true,
+        // A slice or a map may be empty, as a new one is, which needs no item.
+        Type::Slice(..) | Type::Map(..) => true,
         Type::Or(value, error) => **value == Type::Nothing || constructible(value, can) || constructible(error, can),
         Type::Tuple(items) => items.iter().all(|item| constructible(item, can)),
         _ => true,
@@ -8068,8 +8395,31 @@ fn check_constant_arithmetic(op: BinaryOp, l: &Expr, r: &Expr, span: Span) -> Re
     fits_int(exact, span)
 }
 
-/// Rejects `value`, the exact result of a constant int operation at `span`,
-/// when it doesn't fit in an `int`.
+/// A key written out, as text a message can quote: `"a"`, `4`, `'x'`, `true`.
+fn constant_key(e: &Expr) -> Option<String> {
+    match &e.kind {
+        ExprKind::TextLit(text) => Some(format!("\"{}\"", text)),
+        ExprKind::CharLit(c) => Some(format!("'{}'", char::from(*c).escape_default())),
+        ExprKind::BoolLit(b) => Some(b.to_string()),
+        _ => constant_int(e).map(|n| n.to_string()),
+    }
+}
+
+/// Why `key` can't be a map's key, or `None` when it can: a value compared by
+/// what it is and hashed, with nothing inside that changes or has no order of
+/// its own (a float's nan is equal to nothing, itself included).
+/// A type a generic declaration takes (`is_param` says which names are) is
+/// checked where a use gives it one (see `settle_applications`).
+fn key_problem(key: &Type, is_param: &dyn Fn(&str) -> bool) -> Option<String> {
+    match key {
+        Type::Int | Type::Unit | Type::Char | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Unknown | Type::Param(_) => None,
+        Type::Named(name, _) if is_param(name) => None,
+        Type::Tuple(items) => items.iter().find_map(|item| key_problem(item, is_param)),
+        Type::Float => Some("a float, which nan makes unequal to itself".to_string()),
+        other => Some(format!("{}", other)),
+    }
+}
+
 /// Makes `e`, when it is a number written out (`200`, `-1`, `3 - 1`), a value
 /// of the byte type `byte` (a unit), if it fits: whether it did.
 fn byte_literal(e: &mut Expr, byte: &Type) -> Result<bool> {
@@ -8129,6 +8479,8 @@ fn fits_byte(n: i64, byte: &Type, span: Span) -> Result<()> {
     err(span, format!("{} doesn't fit in a {}, which holds 0 to 255", n, byte))
 }
 
+/// Rejects `value`, the exact result of a constant int operation at `span`,
+/// when it doesn't fit in an `int`.
 fn fits_int(value: i128, span: Span) -> Result<()> {
     if value > i128::from(i64::MAX) {
         return err(span, format!("integer overflow: the result, {}, is more than an int holds (at most {})", value, i64::MAX));
@@ -8150,6 +8502,7 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
         (Type::Unit, Type::Int | Type::Float) => format!("; turn it into {0} with '{1}(b)'", if *expected == Type::Int { "an int" } else { "a float" }, expected),
         (Type::None, Type::Ptr(..)) => format!("; a pointer can't be none, so use 'maybe {}'", expected),
         (Type::None, Type::Slice(..)) => format!("; a slice can't be none, so use 'maybe {}'", expected),
+        (Type::None, Type::Map(..)) => format!("; a map can't be none, so use 'maybe {}'", expected),
         (Type::None, Type::Or(value, _)) if value.ptr_inner().is_some() => {
             format!("; a pointer can't be none, so use 'maybe {}'", value)
         }
@@ -8435,7 +8788,7 @@ fn no_place(place: &Expr) -> &'static str {
 /// Whether a field of `base` is worked out from the value rather than kept
 /// in it: `len` of an array, a slice, or text.
 fn worked_out(base: &Expr) -> bool {
-    matches!(base.ty, Some(Type::Array(..) | Type::Slice(..) | Type::Text(_)))
+    matches!(base.ty, Some(Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Text(_)))
 }
 
 /// Notes `e`, when it is an address (`&x`) of a parameter the compiler chose
@@ -8456,7 +8809,7 @@ fn param_root(e: &Expr) -> Option<(&str, Span)> {
     match &e.kind {
         ExprKind::Var(name) => Some((name, e.span)),
         ExprKind::Field(base, _) => param_root(base),
-        ExprKind::Index(base, index) if !matches!(index.kind, ExprKind::Range(..)) && !matches!(base.ty, Some(Type::Slice(..))) => param_root(base),
+        ExprKind::Index(base, index) if !matches!(index.kind, ExprKind::Range(..)) && !matches!(base.ty, Some(Type::Slice(..) | Type::Map(..))) => param_root(base),
         _ => None,
     }
 }

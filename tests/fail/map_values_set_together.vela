@@ -1,0 +1,6 @@
+; error: 5:6: a map's value is set on a line of its own, as in 'm[k] = v', since it may add the key
+task main()
+    region r
+    hold m = ["a": 1] at r
+    m["a"], m["b"] = 1, 2
+fi

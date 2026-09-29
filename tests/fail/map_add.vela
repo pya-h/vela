@@ -1,0 +1,6 @@
+; error: 5:7: a map adds a key, or gives it a new value, with 'm[k] = v'
+task main()
+    region r
+    hold m = ["a": 1] at r
+    m.add("b")
+fi

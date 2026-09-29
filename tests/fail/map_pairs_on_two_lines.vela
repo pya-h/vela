@@ -1,0 +1,6 @@
+; error: 4:18: a map's pairs are written on one line, as in '["a": 1, "b": 2]'
+task main()
+    region r
+    show(["a": 1,
+        "b": 2] at r)
+fi

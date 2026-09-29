@@ -1,0 +1,8 @@
+; error: 5:13: 'each i, x' names a key and its value, which only a map gives; this gives one item at a time, so name one
+task main()
+    region r
+    bind xs = [1, 2, ...] at r
+    each i, x in xs
+        show(i, x)
+    fi
+fi

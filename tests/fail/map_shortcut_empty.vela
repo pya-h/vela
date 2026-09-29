@@ -1,0 +1,5 @@
+; error: 4:10: a map written by its pairs holds at least one; an empty map names its types, as in 'new [text: int]() at r'
+task main()
+    region r
+    show([:] at r)
+fi

@@ -587,11 +587,10 @@
       </p>
       <div class="note">
         <strong>When to choose Vela:</strong> learning about compilers and language design, experiments, and
-        small demos where you want C performance without C syntax. (Vela reads input a line at a time, or a number at a
-        time, but has no files; see
-        <a href="vela.html#limits">Current Limits</a>.)
+        small demos where you want C performance without C syntax. (Vela reads input a line or a number at a time, and
+        files through its <a href="std.html">library</a>; see <a href="vela.html#limits">Current Limits</a>.)
         <br><br>
-        <strong>When to avoid Vela:</strong> production systems, large teams, programs that need maps or sets, rich
+        <strong>When to avoid Vela:</strong> production systems, large teams, programs that need sets, rich
         standard libraries, or concurrency support, and long-running programs whose data changes piece by piece, since
         regions free memory in bulk (see <a href="regions.html#limits">the workarounds</a>).
       </div>

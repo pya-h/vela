@@ -1,0 +1,9 @@
+; error: 7:7: expected type text@r, got text@s; this text is in region 's', and text here is in region 'r'
+task main()
+    region r
+    region s
+    hold m = new [text: int]() at r
+    bind line = "k".copy() at s
+    m[line] = 1
+    show(m)
+fi

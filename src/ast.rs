@@ -73,6 +73,11 @@ pub enum Type {
     /// to the first and how many there are. Like a pointer, it names its region
     /// everywhere but in a field and after `new`.
     Slice(Box<Type>, Option<String>),
+    /// `[K: V]@r`: a hash map from keys of type `K` to values of type `V`, its
+    /// table in the region `r`. A value is a handle: copies share one map. Like
+    /// a slice, it names its region everywhere but in a field and after `new`.
+    /// `[:V]` is written for `[text: V]`.
+    Map(Box<Type>, Box<Type>, Option<String>),
     /// `(int, text)`: two or more values held together, read as `t.0`, `t.1`.
     /// Its items never change, so they are only values that can't change
     /// (no pointers, slices, or arrays). Each item has its own regions:
@@ -425,6 +430,14 @@ impl Type {
                 write!(f, "]")?;
                 suffix(f, region)
             }
+            Type::Map(key, value, region) => {
+                write!(f, "[")?;
+                key.write(f, region.as_deref().or(outer))?;
+                write!(f, ": ")?;
+                value.write(f, region.as_deref().or(outer))?;
+                write!(f, "]")?;
+                suffix(f, region)
+            }
             Type::Range(inner) => {
                 write!(f, "range of ")?;
                 inner.write(f, outer)
@@ -499,7 +512,7 @@ impl Type {
         match self {
             Type::Unknown => true,
             Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Array(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => inner.unknown(),
-            Type::Or(value, error) => value.unknown() || error.unknown(),
+            Type::Or(value, error) | Type::Map(value, error, _) => value.unknown() || error.unknown(),
             Type::Tuple(types) | Type::Results(types) => types.iter().any(Type::unknown),
             Type::Applied(applied) => applied.types.iter().any(Type::unknown),
             Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Unit | Type::Char | Type::Nothing | Type::None | Type::Region | Type::Named(..) | Type::Param(_) => false,
@@ -537,6 +550,7 @@ impl Type {
             Type::Text(region) => Type::Text(region.as_deref().and_then(f)),
             Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.as_deref().and_then(&mut *f)),
+            Type::Map(key, value, region) => Type::Map(boxed(key, f), boxed(value, f), region.as_deref().and_then(&mut *f)),
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
@@ -560,6 +574,7 @@ impl Type {
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner), region.clone()),
+            Type::Map(key, value, region) => Type::Map(boxed(key), boxed(value), region.clone()),
             Type::Range(inner) => Type::Range(boxed(inner)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner)),
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
@@ -596,6 +611,13 @@ impl Type {
                 Type::Slice(Box::new(inner.map_regions_of_names(f)), region)
             }
             Type::Slice(inner, region) => Type::Slice(Box::new(inner.map_regions_of_names(f)), region.clone()),
+            Type::Map(key, value, None) => {
+                let region = f("");
+                Type::Map(Box::new(key.map_regions_of_names(f)), Box::new(value.map_regions_of_names(f)), region)
+            }
+            Type::Map(key, value, region) => {
+                Type::Map(Box::new(key.map_regions_of_names(f)), Box::new(value.map_regions_of_names(f)), region.clone())
+            }
             Type::Array(inner, count) => Type::Array(Box::new(inner.map_regions_of_names(f)), *count),
             Type::Range(inner) => Type::Range(Box::new(inner.map_regions_of_names(f))),
             Type::Maybe(inner) => Type::Maybe(Box::new(inner.map_regions_of_names(f))),
@@ -621,6 +643,7 @@ impl Type {
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.clone()),
+            Type::Map(key, value, region) => Type::Map(boxed(key, f), boxed(value, f), region.clone()),
             Type::Range(inner) => Type::Range(boxed(inner, f)),
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
@@ -645,6 +668,10 @@ impl Type {
             Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) => {
                 inner.collect_params(names)
             }
+            Type::Map(key, value, _) => {
+                key.collect_params(names);
+                value.collect_params(names);
+            }
             Type::Or(value, error) => {
                 value.collect_params(names);
                 error.collect_params(names);
@@ -666,6 +693,11 @@ impl Type {
             Type::Ptr(inner, region) | Type::Slice(inner, region) => {
                 regions.extend(region.as_deref());
                 inner.collect_regions(regions);
+            }
+            Type::Map(key, value, region) => {
+                regions.extend(region.as_deref());
+                key.collect_regions(regions);
+                value.collect_regions(regions);
             }
             Type::Named(_, region) | Type::Text(region) => regions.extend(region.as_deref()),
             Type::Applied(applied) => {
@@ -801,6 +833,21 @@ pub enum ExprKind {
         region: Option<String>,
         region_span: Span,
     },
+    /// `["a": 1, name: 2]`: the pairs of a map, given to `new [K: V](…)`, or a
+    /// map of their own in the block's default region (as a `Shortcut` is,
+    /// with `at r` or `@r` written after it).
+    Pairs(Vec<(Expr, Expr)>),
+    /// `m.has(k)`, `m.keys at r`, `m.values at r`: what a map answers or makes.
+    /// `key` is the key `has` looks for; `region` is where `keys` and `values`
+    /// make their slice (the block's default when none is written, and none
+    /// at all where `each` goes through them without making one).
+    MapOp {
+        map: Box<Expr>,
+        op: MapOp,
+        key: Option<Box<Expr>>,
+        region: Option<String>,
+        region_span: Span,
+    },
     /// `[1, 2, ...] at r`: a slice written by its values, in region `r` (or
     /// the block's default when none is written), the short form of
     /// `new [int]([1, 2]) at r`. The checker works out the items' type from the
@@ -930,6 +977,37 @@ pub enum ExprKind {
     },
 }
 
+/// What `ExprKind::MapOp` asks of a map.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MapOp {
+    /// `m.has(k)`: whether the key is in the map.
+    Has,
+    /// `m.keys at r`: its keys, as a slice, in the order they were added.
+    Keys,
+    /// `m.values at r`: its values, in the same order.
+    Values,
+}
+
+impl MapOp {
+    /// The operation written after a dot: `has`, `keys`, or `values`.
+    pub fn from_word(word: &str) -> Option<MapOp> {
+        match word {
+            "has" => Some(MapOp::Has),
+            "keys" => Some(MapOp::Keys),
+            "values" => Some(MapOp::Values),
+            _ => None,
+        }
+    }
+
+    pub fn word(self) -> &'static str {
+        match self {
+            MapOp::Has => "has",
+            MapOp::Keys => "keys",
+            MapOp::Values => "values",
+        }
+    }
+}
+
 /// A change `ExprKind::Edit` makes to a slice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditOp {
@@ -1006,7 +1084,9 @@ pub enum StmtKind {
     /// `block … fi`: statements in a block of their own, whose names, regions,
     /// and the files opened in them end at its `fi`.
     Block(Block),
-    Each(String, Expr, Block),
+    /// `each v in xs`, and `each k, v in m` for a map: the second name, with
+    /// where it is written, is the value that goes with the key.
+    Each(String, Option<(String, Span)>, Expr, Block),
     Match(Expr, Vec<Case>),
     /// `<-`, `<- value`, or `<- a, b`: one value per result.
     Send(Vec<Expr>),
@@ -1512,6 +1592,7 @@ pub fn type_word(ty: &Type) -> String {
         Type::Fail(error) => format!("fail__{}", type_word(error)),
         Type::Array(items, count) => format!("array__{}__{}", count, type_word(items)),
         Type::Slice(items, _) => format!("slice__{}", type_word(items)),
+        Type::Map(key, value, _) => format!("map__{}__{}", type_word(key), type_word(value)),
         Type::Results(types) => format!("results__{}__{}", types.len(), types.iter().map(type_word).collect::<Vec<_>>().join("__")),
         Type::Tuple(items) => format!("tuple__{}__{}", items.len(), items.iter().map(type_word).collect::<Vec<_>>().join("__")),
     }

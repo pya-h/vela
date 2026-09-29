@@ -1,0 +1,36 @@
+; Maps: counting words. A map, [K: V]@r, holds a value for each key, found by
+; the key's hash, and goes through its keys in the order they were first added.
+; `m[k] = v` adds a key or gives it a new value, `m[#k]` reads one as a maybe,
+; and `[:V]` is a map whose keys are text.
+
+; How many times each word appears in `line`, in the order words first appear.
+; The words are parts of the line, so they live where it does, and the map,
+; made in the region the task is given, holds them there too.
+task count_words(line: text@r, r: region) -> [text: int]@r
+    hold counts: [text: int]@r = new [text: int]() at r
+    hold start = 0
+    each i in 0..line.len + 1
+        when i == line.len or line[#i] ~= ' '
+            when i > start
+                bind word = line[start..i]
+                counts[word] = counts[#word] { 0 } + 1
+            fi
+            start = i + 1
+        fi
+    fi
+    <- counts
+fi
+
+task main()
+    region r
+    bind counts = count_words("the cat and the dog and the bird".copy() at r, r)
+    each word, n in counts
+        show(word, ": ", n)
+    fi
+    show(counts.len, " words, 'the' ", counts["the"], " times, 'cow' ", counts[#"cow"] { 0 }, " times")
+    ; A map written by its pairs, with names as its text keys.
+    hold prices = new [:float]([apple: 0.5, pear: 0.75]) at r
+    prices["plum"] = 1.25
+    show(prices)
+    show(prices.del("pear"), " ", prices.has("pear"), " ", prices.keys at r)
+fi

@@ -1,0 +1,6 @@
+; error: 3:10: '_' drops a map's key or value, as in 'each _, v in m'; a loop over this gives one item each pass, so name it
+task main()
+    each _ in 0..3
+        show(1)
+    fi
+fi

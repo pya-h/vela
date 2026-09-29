@@ -1,0 +1,7 @@
+; error: 5:17: 'hold& v' names a place to change it, so it can't be a value in a map, which moves when the map grows; give the map and the key, or copy the value into a 'hold' variable, change it, and put it back
+task main()
+    region r
+    hold m = ["a": 1] at r
+    hold& v = &m["a"]
+    show(v)
+fi

@@ -1,0 +1,24 @@
+["ana": 32, "bo": 25, "cy": 40] 3 25 none { 40 }
+true { 25 } none ["ana": 32, "cy": 40]
+ana=32
+cy=40
+ana
+cy
+32
+40
+["ana", "cy"] [32, 40]
+["width": 1.5, "height": 2, "full size": 3] [text: float]
+[:] ["a": 1, "b": 2]
+2 3 false true true
+[990: 980100, 991: 982081, 992: 984064, 993: 986049, 994: 988036, 995: 990025, 996: 992016, 997: 994009, 998: 996004, 999: 998001] 10
+x none
+0
+["home": Point { x: 5, y: 2 }] ["home": Point { x: 5, y: 2 }]
+Inventory { counts: ["apple": 2, "pear": 1] } 3 { "apple" }
+3 true true
+[1: [1, 2, 3]]
+["in": ["k": 1, "j": 2]]
+["a": 1, "a!": 2, "a!!": 3]
+true
+true false
+200000 19999900000
