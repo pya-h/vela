@@ -1,0 +1,5 @@
+; A shape another file names through an alias, inside a map's type.
+
+shape Point
+    x: int
+fi

@@ -1,0 +1,8 @@
+  1 | ; A shape another file names through an alias, inside a map's type.
+    | comment:; A shape another file names through an alias, inside a map's type.
+  3 | shape Point
+    | keyword:shape  type:Point
+  4 |     x: int
+    | field:x  punctuation::  type-builtin:int
+  5 | fi
+    | keyword:fi

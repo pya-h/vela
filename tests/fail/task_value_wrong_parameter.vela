@@ -1,0 +1,10 @@
+; error: 8:29: expected type (text) -> int, got (int) -> int
+; A task value of another type.
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    bind f: (text) -> int = sq
+    show(f)
+fi

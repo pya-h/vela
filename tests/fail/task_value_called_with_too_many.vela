@@ -1,0 +1,10 @@
+; error: 9:10: 'f' is a task of type (int) -> int, which takes 1 argument, got 2
+; A task value is called with the values its type takes.
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    bind f = sq
+    show(f(1, 2))
+fi

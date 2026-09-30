@@ -1479,6 +1479,11 @@ impl Parser {
     /// `maybe (int ~ text)`, since `maybe int ~ text` reads as `(maybe int) ~ text`.
     fn parse_tuple_type(&mut self, opened: Span) -> Result<Type> {
         let mut items = Vec::new();
+        // `() -> int`: a task that takes nothing.
+        if self.check(Token::RParen) && self.tokens.get(self.pos + 1) == Some(&Token::Arrow) {
+            self.advance(); // )
+            return self.parse_task_type(items);
+        }
         loop {
             // `()` and `(int,)`: a missing item, rather than a missing name;
             // `(int, text,)`: the comma is the one after the last item.
@@ -1496,12 +1501,28 @@ impl Parser {
         if !self.match_token(Token::RParen) {
             return Err(self.unexpected("',' and another item, or ')' to close the tuple"));
         }
+        // `(int, text) -> int`: a task's type.
+        if self.check(Token::Arrow) {
+            return self.parse_task_type(items);
+        }
         // One item, with no comma after it (which the loop reports above): the
         // parentheses group that type rather than making a tuple of it.
         if items.len() == 1 {
             return Ok(items.remove(0));
         }
         Ok(Type::Tuple(items))
+    }
+
+    /// At the `->` after the parameters of a task's type, `(int, text) -> int`:
+    /// what the task sends, one type, `nothing` when it sends no value. The
+    /// arrow is always written, since `(int)` alone is `int` in parentheses.
+    fn parse_task_type(&mut self, params: Vec<Type>) -> Result<Type> {
+        self.advance(); // ->
+        if matches!(self.peek(), Token::Newline | Token::Eof | Token::RParen | Token::RBracket | Token::Comma | Token::Assign | Token::Fi) {
+            return Err(Error::at(self.peek_span(), "a task's type names what the task sends after '->', or 'nothing' when it sends no value, as in '(int) -> nothing'"));
+        }
+        let ret = self.parse_type_parts()?;
+        Ok(Type::Task(Box::new(TaskType { params, ret })))
     }
 
     /// After a type's `[`: `T#count]`, an array, `T]`, a slice, or `K: V]`, a
@@ -2514,6 +2535,15 @@ impl Parser {
                     levels += 1;
                     expr = self.parse_suffix(expr)?;
                 }
+                // `ops[0](x)`, `pick()(x)`, or `(f)(x)`: the task a value holds,
+                // called. A name's own call is read with the name.
+                Token::LParen if parenthesized || calls_value(&expr) => {
+                    self.enter()?;
+                    levels += 1;
+                    let span = self.peek_span();
+                    let args = self.parse_arg_list()?;
+                    expr = Expr::new(ExprKind::Invoke { callee: Box::new(expr), args }, span);
+                }
                 // `f(x)@r`: the region of the call right before it, which a
                 // further suffix may follow (`x.str()@r.len`).
                 Token::AtSign if takes_region_after(&expr) => {
@@ -3430,6 +3460,17 @@ pub(crate) fn interpolated_parts(pieces: Vec<Expr>, region: &str, region_span: S
 
 /// The operator a step statement writes (see `ast::StmtKind::Step`), with how
 /// it is written.
+/// Whether a `(` right after `expr` calls the task its value holds: after an
+/// item, a call, a pointer's value, or a tuple's item (`t.0(x)`). A name's own
+/// call, and a method's, are read with the name.
+fn calls_value(expr: &Expr) -> bool {
+    match &expr.kind {
+        ExprKind::Index(..) | ExprKind::Call { .. } | ExprKind::Invoke { .. } | ExprKind::Deref(_) | ExprKind::MethodCall { .. } => true,
+        ExprKind::Field(_, item) => item.bytes().all(|b| b.is_ascii_digit()),
+        _ => false,
+    }
+}
+
 fn step_operator(token: &Token) -> Option<(BinaryOp, &'static str)> {
     Some(match token {
         Token::Increment => (BinaryOp::Add, "++"),

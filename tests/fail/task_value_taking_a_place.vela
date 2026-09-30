@@ -1,0 +1,10 @@
+; error: 8:14: task 'bump' takes 'n' as 'hold&', the caller's place, so it can't be a value yet; a task value's parameters take values
+; A task whose parameter is the caller's place can't be a value yet.
+task bump(hold& n: int)
+    n = n + 1
+fi
+
+task main()
+    bind f = bump
+    show(f)
+fi

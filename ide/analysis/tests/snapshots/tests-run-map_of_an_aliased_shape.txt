@@ -1,0 +1,18 @@
+  1 | ; A map's key and value types name a module's shape as any type does, through
+    | comment:; A map's key and value types name a module's shape as any type does, through
+  2 | ; the name the file gives the module.
+    | comment:; the name the file gives the module.
+  4 | include map_of_an_aliased_shape/geo => g
+    | keyword:include  module:map_of_an_aliased_shape  operator:/  module:geo  operator:=>  module:g
+  6 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  7 |     region r
+    | keyword:region  region:r
+  8 |     hold m: [text: g.Point]@r = ["a": g.Point { x: 1 }] at r
+    | keyword:hold  variable:m  punctuation::  punctuation:[  type-builtin:text  punctuation::  module:g  punctuation:.  type:Point  punctuation:]  operator:@  region:r  operator:=  punctuation:[  string:"a"  punctuation::  module:g  punctuation:.  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:}  punctuation:]  keyword:at  region:r
+  9 |     m["b"] = g.Point { x: 2 }
+    | variable:m  punctuation:[  string:"b"  punctuation:]  operator:=  module:g  punctuation:.  type:Point  punctuation:{  field:x  punctuation::  number:2  punctuation:}
+ 10 |     show(m)
+    | builtin-fn:show  punctuation:(  variable:m  punctuation:)
+ 11 | fi
+    | keyword:fi

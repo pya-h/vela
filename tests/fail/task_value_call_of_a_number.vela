@@ -1,0 +1,6 @@
+; error: 5:10: 'n' is of type int, not a task, so it can't be called
+; A variable that holds no task is not called.
+task main()
+    bind n = 3
+    show(n(1))
+fi

@@ -214,6 +214,8 @@ impl Token {
                 | Token::Hash
                 | Token::Int(_)
                 | Token::Dot
+                // `Box<(int) -> int>`: a task's type.
+                | Token::Arrow
         )
     }
 

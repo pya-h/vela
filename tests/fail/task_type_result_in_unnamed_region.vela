@@ -1,0 +1,6 @@
+; error: 4:33: what this task sends lives in region 'r', which none of its parameters names, so no call could say which region that is
+; A task type whose result lives in a region none of its parameters names.
+task main()
+    hold f: maybe (int) -> text@r = none
+    show(f)
+fi

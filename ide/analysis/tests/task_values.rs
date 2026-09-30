@@ -1,0 +1,91 @@
+//! Task values in the editor: a task named without `()`, a task's type written
+//! `(int) -> int`, and the call of a value that holds a task, hovered with their
+//! types whether or not the file checks.
+
+// A panic in a test is a test failure, so these lints do not apply here.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::indexing_slicing, clippy::panic)]
+
+use vela_analysis::{Analysis, LineIndex, TokenClass};
+
+const PROGRAM: &str = "\
+task square(n: int) -> int
+    <- n * n
+fi
+
+task head(t: text@r) -> text@r
+    <- t[0..1]
+fi
+
+task apply(f: (int) -> int, x: int) -> int
+    <- f(x)
+fi
+
+task add(a: int, b: int) -> int
+    <- a + b
+fi
+
+task pick() -> (int, int) -> int
+    <- add
+fi
+
+task main()
+    CHECK
+    bind value = square
+    bind lettered = head
+    bind applied = apply(square, 2)
+    bind called = value(3)
+    bind picked = pick()(1, 2)
+    hold kept: maybe (int) -> int = none
+    show(value, lettered, applied, called, picked, kept)
+fi
+";
+
+/// The program as it checks, as it parses but doesn't check, and as it
+/// doesn't parse, where the types are read from the source alone.
+const WHEN: [&str; 3] = ["checked", "declared", "unparsed"];
+
+fn program(when: &str) -> String {
+    let source = PROGRAM.replace("CHECK", if when == "checked" { "show(0)" } else { "show(unknown)" });
+    if when == "unparsed" { source + "task g(\n" } else { source }
+}
+
+fn hover(source: &str, needle: &str) -> String {
+    let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
+    Analysis::new(source).hover(LineIndex::new(source).utf16_of(byte)).unwrap_or_else(|| panic!("no hover at {:?}", needle)).code
+}
+
+#[test]
+fn the_program_used_by_these_tests_compiles() {
+    assert_eq!(Analysis::new(&program("checked")).diagnostics(), Vec::new());
+}
+
+#[test]
+fn a_task_value_hovers_with_its_type_whether_or_not_the_file_checks() {
+    for when in WHEN {
+        let source = program(when);
+        assert_eq!(hover(&source, "value ="), "bind value: (int) -> int", "{}", when);
+        assert_eq!(hover(&source, "lettered ="), "bind lettered: (text@r) -> text@r", "{}", when);
+        assert_eq!(hover(&source, "applied ="), "bind applied: int", "{}", when);
+        assert_eq!(hover(&source, "called ="), "bind called: int", "{}", when);
+        assert_eq!(hover(&source, "picked ="), "bind picked: int", "{}", when);
+        assert_eq!(hover(&source, "kept:"), "hold kept: maybe (int) -> int", "{}", when);
+    }
+}
+
+#[test]
+fn a_parameter_of_a_task_type_hovers_with_it() {
+    let source = program("checked");
+    assert_eq!(hover(&source, "f: (int)"), "f: (int) -> int");
+}
+
+#[test]
+fn a_parameter_after_one_of_a_task_type_is_a_parameter() {
+    let source = "task twice(f: (int) -> nothing, n: int) -> int\n    f(n)\n    <- n\nfi\n";
+    let byte = source.find("n: int").unwrap();
+    let token = Analysis::new(source).tokens().into_iter().find(|t| t.from == byte).unwrap();
+    assert_eq!(token.class, TokenClass::Parameter);
+    // The header's own arrow still starts its results.
+    let ret = source.rfind("int").unwrap();
+    let token = Analysis::new(source).tokens().into_iter().find(|t| t.from == ret).unwrap();
+    assert_eq!(token.class, TokenClass::TypeBuiltin);
+}

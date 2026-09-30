@@ -1,0 +1,162 @@
+; Task values: a task named without `()` is a value of its type, written as a
+; header without names, `(int) -> int`. A variable, a parameter, a field, an
+; item, or a result holds one, and a call runs the task it holds.
+
+include task_values/ops
+
+shape Big
+    a: int
+    b: int
+    c: int
+    d: int
+    e: int
+    f: int
+    g: int
+    h: int
+    i: int
+fi
+
+shape Op
+    name: text
+    run: (int, int) -> int
+fi
+
+shape Box<T>
+    value: T
+fi
+
+kind Action
+    Run(f: (int) -> int)
+    Stop
+fi
+
+task square(n: int) -> int
+    <- n * n
+fi
+
+task add(a: int, b: int) -> int
+    <- a + b
+fi
+
+task mul(a: int, b: int) -> int
+    <- a * b
+fi
+
+task neg(n: int) -> int
+    <- -n
+fi
+
+task apply(f: (int) -> int, x: int) -> int
+    <- f(x)
+fi
+
+; A large value is read where the caller keeps it, as a task's own is.
+task first_of(b: Big) -> int
+    <- b.a
+fi
+
+; A `hold` copy of a large value: the value calls it through a function that
+; takes the value as its type does.
+task bump(hold b: Big) -> int
+    b.a = b.a + 1
+    <- b.a
+fi
+
+task greet(name: text)
+    show("hi ", name)
+fi
+
+task twice(f: (text) -> nothing, t: text)
+    f(t)
+    f(t)
+fi
+
+task pick(which: int) -> (int, int) -> int
+    when which == 0
+        <- add
+    fi
+    <- mul
+fi
+
+; Regions in a task's type are its own, as a header's are: `(text@a) -> text@a`
+; takes text of any region and gives text of the same one.
+task head(t: text@r) -> text@r
+    <- t[0..1]
+fi
+
+task on(f: (text@a) -> text@a, t: text@b) -> text@b
+    <- f(t)
+fi
+
+task repeat<T>(f: (T) -> T, x: T) -> T
+    <- f(f(x))
+fi
+
+task safe(n: int) -> int ~ text
+    when n < 0
+        <- fail "negative"
+    fi
+    <- n
+fi
+
+task main()
+    show(apply(square, 7))
+    bind f = square
+    show(f(3), " ", f == square, " ", f == neg, " ", f ~= square)
+    show(f, " ", f.type)
+    bind table = [Op { name: "add", run: add }, Op { name: "mul", run: mul }]
+    each op in table
+        show(op.name, " ", op.run(4, 5))
+    fi
+    show(pick(0)(6, 7), " ", pick(1)(6, 7))
+
+    bind big = Big { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
+    bind g = first_of
+    bind h = bump
+    show(g(big), " ", h(big), " ", big.a)
+    twice(greet, "Ada")
+
+    hold m: maybe (int) -> int = none
+    show(m)
+    m = square
+    when m is {k}
+        show(k(9))
+    fi
+
+    region r
+    bind word = "hello" + "!" at r
+    show(on(head, word))
+    show(repeat(square, 3))
+    bind checked: (int) -> int ~ text = safe
+    show(checked(3) { 0 }, " ", checked(-1) { 0 })
+
+    bind v = ops.sq
+    show(v(4), " ", ops.table()(5))
+    bind handler = ops.Handler {}
+    show(handler.run(6), " ", handler)
+    ops.Handler.chosen = neg
+    show(ops.Handler.chosen(2))
+
+    bind a = Action.Run(neg)
+    match a
+        case Run run
+            show(run(8))
+        case Stop
+            show("stop")
+    fi
+    show(a == Action.Run(neg), " ", a == Action.Run(ops.sq))
+
+    bind fs = [neg, ops.sq, ...] at r
+    bind gs = fs.copy() at r
+    show(gs[0](3), " ", fs[1](3), " ", (neg, 2))
+    bind named = ["neg": neg] at r
+    show(named["neg"](1), " ", named)
+    show("{f}" at r)
+
+    ; A shape given a task's type, a generic task given a task, and a tuple's item.
+    bind boxed = Box<(int) -> int> { value: neg }
+    show(boxed.value(1), " ", boxed)
+    bind kept = repeat(neg, 5)
+    bind pair = (square, 2)
+    show(kept, " ", pair.0(pair.1))
+fi

@@ -1,0 +1,10 @@
+; error: 9:12: this value is a maybe (int) -> int, which may be none; extract the task first, as in 'when f is {g}' or 'f { … }'
+; A field holding a maybe of a task is extracted before it is called.
+shape Hook
+    run: maybe (int) -> int
+fi
+
+task main()
+    bind h = Hook { run: none }
+    show(h.run(1))
+fi

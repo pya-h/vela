@@ -253,6 +253,14 @@
                 <a href="vela.html#region-lifetime">A region lives until its block closes</a>.</td>
             </tr>
             <tr>
+              <td>A task value always holds a task (a missing one is a <code>maybe</code>), is called with the
+                values its type takes, and its type says the regions of what it takes and sends, as a header does, so
+                it holds nothing in any region and can go anywhere.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>Calling through a null or stray function pointer, or with the wrong values. See
+                <a href="vela.html#task-values">Tasks as values</a>.</td>
+            </tr>
+            <tr>
               <td>A tuple's items never change, neither assigned nor changed by a method that <code>alters</code>
                 them, and hold nothing that changes through a pointer, a slice, or an array.</td>
               <td class="when"><span class="badge b-checked">checked</span></td>

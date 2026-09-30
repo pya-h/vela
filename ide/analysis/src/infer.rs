@@ -607,6 +607,10 @@ impl<'a> Knowledge<'a> {
                 // `palette.Red`: a module's variant, recorded at the module's name.
                 if let Some((full, start)) = self.qualified_at(q).filter(|(_, start)| *start != q) {
                     return exact(start).or_else(|| {
+                        // `m.square`: a module's task named as a value.
+                        if let Some(task) = self.global(&full, SymbolKind::Task) {
+                            return task_value_type(&self.symbol(task)?.detail);
+                        }
                         let variant = self.global(&full, SymbolKind::Variant)?;
                         self.variant_value(variant, None, depth)
                     });
@@ -677,9 +681,12 @@ impl<'a> Knowledge<'a> {
                     };
                 }
                 let id = self.symbol_at(q)?;
-                match self.symbol(id)?.kind {
+                let symbol = self.symbol(id)?;
+                match symbol.kind {
                     SymbolKind::Parameter | SymbolKind::Variable | SymbolKind::Region | SymbolKind::Macro => self.symbol_type(id, depth + 1),
                     SymbolKind::Variant => self.variant_value(id, None, depth),
+                    // `square`, a task named as a value.
+                    SymbolKind::Task => task_value_type(&symbol.detail),
                     _ => None,
                 }
             }),
@@ -748,6 +755,12 @@ impl<'a> Knowledge<'a> {
                 // `t.at(i)`: a byte of text, or none.
                 if open.checked_sub(1).is_some_and(|p| self.token(p) == Some(&Token::At) && self.token_before(p) == Some(&Token::Dot)) {
                     return exact(open - 1).or(Some(Type::Maybe(Box::new(Type::Char))));
+                }
+                // `pick()(x)` or `ops[0](x)`: the call of the task a value holds.
+                if let Some(before) = open.checked_sub(1).filter(|&p| matches!(self.token(p), Some(Token::RParen | Token::RBracket)))
+                    && let Some(Type::Task(task)) = self.expression_type(before, depth + 1)
+                {
+                    return exact(open).or(Some(task.ret));
                 }
                 let Some(callee) = open.checked_sub(1).and_then(|p| self.ident(p).map(|name| (p, name))) else {
                     // A tuple, `(a, b)`, or a parenthesized expression.
@@ -820,6 +833,12 @@ impl<'a> Knowledge<'a> {
                         start -= 2;
                     }
                     return exact(start).or_else(|| self.variant_value(variant, Some((open, q)), depth));
+                }
+                // `f(x)`, where `f` holds a task: what that task sends.
+                if let Some(id) = self.symbol_at(p).filter(|&id| self.symbol(id).is_some_and(|s| matches!(s.kind, SymbolKind::Parameter | SymbolKind::Variable)))
+                    && let Some(Type::Task(task)) = self.symbol_type(id, depth + 1)
+                {
+                    return exact(p).or(Some(task.ret));
                 }
                 // A module's task or variant is recorded at the module's name.
                 let (name, p) = self.qualified_at(p)?;
@@ -1287,12 +1306,76 @@ fn parse_type_within(text: &str, depth: usize) -> Option<Type> {
         return None;
     }
     let text = text.trim();
+    // `(int) -> int`, maybe after `maybe` or `^`: a task's type, whose result
+    // takes every `~` and `@` after its arrow.
+    if unbracketed(text, "->").next().is_some() {
+        return parse_task_type(text, depth);
+    }
     // `~` gives a type its error side, with or without spaces around it.
     if let Some(at) = unbracketed(text, "~").next() {
         let (value, error) = (text.get(..at)?, text.get(at + "~".len()..)?);
         return Some(Type::Or(Box::new(parse_simple_type(value, depth)?), Box::new(parse_simple_type(error, depth)?)));
     }
     parse_simple_type(text, depth)
+}
+
+/// `(int, text) -> int`, after any `maybe` and `^`: a task's type, with its
+/// regions named as the checker names them (see `TaskType::normalized`).
+fn parse_task_type(text: &str, depth: usize) -> Option<Type> {
+    let mut text = text.trim();
+    let mut prefixes = Vec::new();
+    loop {
+        if let Some(inner) = text.strip_prefix('^') {
+            prefixes.push(true);
+            text = inner.trim_start();
+        } else if let Some(inner) = text.strip_prefix("maybe ") {
+            prefixes.push(false);
+            text = inner.trim_start();
+        } else {
+            break;
+        }
+        if prefixes.len() > vela::parser::MAX_NESTING {
+            return None;
+        }
+    }
+    let close = closing_paren(text)?;
+    let ret = text.get(close + 1..)?.trim_start().strip_prefix("->")?;
+    let inside = text.get(1..close)?;
+    let params: Vec<Type> = match inside.trim() {
+        "" => Vec::new(),
+        _ => split_list(inside).into_iter().map(|param| parse_type_within(param, depth + 1)).collect::<Option<_>>()?,
+    };
+    let ret = parse_type_within(ret, depth + 1)?;
+    let mut ty = Type::Task(Box::new(vela::ast::TaskType { params, ret }.normalized()));
+    for pointer in prefixes.into_iter().rev() {
+        ty = if pointer { Type::Ptr(Box::new(ty), None) } else { Type::Maybe(Box::new(ty)) };
+    }
+    Some(ty)
+}
+
+/// Where the `)` closing the `(` that `text` starts with is.
+fn closing_paren(text: &str) -> Option<usize> {
+    if !text.starts_with('(') {
+        return None;
+    }
+    let mut depth = 0usize;
+    text.char_indices()
+        .find(|&(_, c)| {
+            match c {
+                '(' | '[' => depth += 1,
+                ')' | ']' => depth = depth.saturating_sub(1),
+                _ => {}
+            }
+            c == ')' && depth == 0
+        })
+        .map(|(at, _)| at)
+}
+
+/// The type of a task whose detail is `detail`, `(n: int) -> int`, as a value:
+/// `(int) -> int`.
+pub(crate) fn task_value_type(detail: &str) -> Option<Type> {
+    let params: Vec<Type> = parameters(detail).into_iter().map(|(_, ty)| ty).collect::<Option<_>>()?;
+    Some(Type::Task(Box::new(vela::ast::TaskType { params, ret: return_type(detail) }.normalized())))
 }
 
 /// The bytes where `needle` starts in `text` outside brackets and parentheses.
@@ -1397,7 +1480,13 @@ fn is_name(text: &str) -> bool {
 /// The return type in a task's detail, `(n: int) -> int`, or every result of
 /// `(a: int, b: int) -> int, int`. A result may be named, `-> total: int`.
 pub(crate) fn return_type(detail: &str) -> Type {
-    let Some((_, ret)) = detail.rsplit_once("->") else { return Type::Nothing };
+    // The results follow the `)` closing the parameters, which may hold task
+    // types with arrows of their own.
+    let after = match closing_paren(detail) {
+        Some(close) => detail.get(close + 1..).unwrap_or(""),
+        None => detail,
+    };
+    let Some(ret) = after.trim_start().strip_prefix("->") else { return Type::Nothing };
     let written: Vec<&str> = split_list(ret).into_iter().map(result_type).collect();
     if let [only] = written.as_slice() {
         return parse_type(only).unwrap_or(Type::Nothing);

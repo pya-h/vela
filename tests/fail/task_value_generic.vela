@@ -1,0 +1,10 @@
+; error: 8:14: task 'first' takes types, so it can't be a value yet; only a task that takes none can
+; A task that takes types can't be named as a value yet.
+task first<T>(x: T) -> T
+    <- x
+fi
+
+task main()
+    bind f = first
+    show(f)
+fi

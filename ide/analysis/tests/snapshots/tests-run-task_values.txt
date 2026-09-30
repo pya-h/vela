@@ -1,0 +1,270 @@
+  1 | ; Task values: a task named without `()` is a value of its type, written as a
+    | comment:; Task values: a task named without `()` is a value of its type, written as a
+  2 | ; header without names, `(int) -> int`. A variable, a parameter, a field, an
+    | comment:; header without names, `(int) -> int`. A variable, a parameter, a field, an
+  3 | ; item, or a result holds one, and a call runs the task it holds.
+    | comment:; item, or a result holds one, and a call runs the task it holds.
+  5 | include task_values/ops
+    | keyword:include  module:task_values  operator:/  module:ops
+  7 | shape Big
+    | keyword:shape  type:Big
+  8 |     a: int
+    | field:a  punctuation::  type-builtin:int
+  9 |     b: int
+    | field:b  punctuation::  type-builtin:int
+ 10 |     c: int
+    | field:c  punctuation::  type-builtin:int
+ 11 |     d: int
+    | field:d  punctuation::  type-builtin:int
+ 12 |     e: int
+    | field:e  punctuation::  type-builtin:int
+ 13 |     f: int
+    | field:f  punctuation::  type-builtin:int
+ 14 |     g: int
+    | field:g  punctuation::  type-builtin:int
+ 15 |     h: int
+    | field:h  punctuation::  type-builtin:int
+ 16 |     i: int
+    | field:i  punctuation::  type-builtin:int
+ 17 | fi
+    | keyword:fi
+ 19 | shape Op
+    | keyword:shape  type:Op
+ 20 |     name: text
+    | field:name  punctuation::  type-builtin:text
+ 21 |     run: (int, int) -> int
+    | field:run  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 22 | fi
+    | keyword:fi
+ 24 | shape Box<T>
+    | keyword:shape  type:Box  punctuation:<  type:T  punctuation:>
+ 25 |     value: T
+    | field:value  punctuation::  type:T
+ 26 | fi
+    | keyword:fi
+ 28 | kind Action
+    | keyword:kind  type:Action
+ 29 |     Run(f: (int) -> int)
+    | variant:Run  punctuation:(  field:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:)
+ 30 |     Stop
+    | variant:Stop
+ 31 | fi
+    | keyword:fi
+ 33 | task square(n: int) -> int
+    | keyword:task  task:square  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 34 |     <- n * n
+    | keyword:<-  parameter:n  operator:*  parameter:n
+ 35 | fi
+    | keyword:fi
+ 37 | task add(a: int, b: int) -> int
+    | keyword:task  task:add  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 38 |     <- a + b
+    | keyword:<-  parameter:a  operator:+  parameter:b
+ 39 | fi
+    | keyword:fi
+ 41 | task mul(a: int, b: int) -> int
+    | keyword:task  task:mul  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 42 |     <- a * b
+    | keyword:<-  parameter:a  operator:*  parameter:b
+ 43 | fi
+    | keyword:fi
+ 45 | task neg(n: int) -> int
+    | keyword:task  task:neg  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 46 |     <- -n
+    | keyword:<-  operator:-  parameter:n
+ 47 | fi
+    | keyword:fi
+ 49 | task apply(f: (int) -> int, x: int) -> int
+    | keyword:task  task:apply  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 50 |     <- f(x)
+    | keyword:<-  parameter:f  punctuation:(  parameter:x  punctuation:)
+ 51 | fi
+    | keyword:fi
+ 53 | ; A large value is read where the caller keeps it, as a task's own is.
+    | comment:; A large value is read where the caller keeps it, as a task's own is.
+ 54 | task first_of(b: Big) -> int
+    | keyword:task  task:first_of  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
+ 55 |     <- b.a
+    | keyword:<-  parameter:b  punctuation:.  field:a
+ 56 | fi
+    | keyword:fi
+ 58 | ; A `hold` copy of a large value: the value calls it through a function that
+    | comment:; A `hold` copy of a large value: the value calls it through a function that
+ 59 | ; takes the value as its type does.
+    | comment:; takes the value as its type does.
+ 60 | task bump(hold b: Big) -> int
+    | keyword:task  task:bump  punctuation:(  keyword:hold  parameter:b  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
+ 61 |     b.a = b.a + 1
+    | parameter:b  punctuation:.  field:a  operator:=  parameter:b  punctuation:.  field:a  operator:+  number:1
+ 62 |     <- b.a
+    | keyword:<-  parameter:b  punctuation:.  field:a
+ 63 | fi
+    | keyword:fi
+ 65 | task greet(name: text)
+    | keyword:task  task:greet  punctuation:(  parameter:name  punctuation::  type-builtin:text  punctuation:)
+ 66 |     show("hi ", name)
+    | builtin-fn:show  punctuation:(  string:"hi "  punctuation:,  parameter:name  punctuation:)
+ 67 | fi
+    | keyword:fi
+ 69 | task twice(f: (text) -> nothing, t: text)
+    | keyword:task  task:twice  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:text  punctuation:)  operator:->  type-builtin:nothing  punctuation:,  parameter:t  punctuation::  type-builtin:text  punctuation:)
+ 70 |     f(t)
+    | parameter:f  punctuation:(  parameter:t  punctuation:)
+ 71 |     f(t)
+    | parameter:f  punctuation:(  parameter:t  punctuation:)
+ 72 | fi
+    | keyword:fi
+ 74 | task pick(which: int) -> (int, int) -> int
+    | keyword:task  task:pick  punctuation:(  parameter:which  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 75 |     when which == 0
+    | keyword:when  parameter:which  operator:==  number:0
+ 76 |         <- add
+    | keyword:<-  task:add
+ 77 |     fi
+    | keyword:fi
+ 78 |     <- mul
+    | keyword:<-  task:mul
+ 79 | fi
+    | keyword:fi
+ 81 | ; Regions in a task's type are its own, as a header's are: `(text@a) -> text@a`
+    | comment:; Regions in a task's type are its own, as a header's are: `(text@a) -> text@a`
+ 82 | ; takes text of any region and gives text of the same one.
+    | comment:; takes text of any region and gives text of the same one.
+ 83 | task head(t: text@r) -> text@r
+    | keyword:task  task:head  punctuation:(  parameter:t  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 84 |     <- t[0..1]
+    | keyword:<-  parameter:t  punctuation:[  number:0  operator:..  number:1  punctuation:]
+ 85 | fi
+    | keyword:fi
+ 87 | task on(f: (text@a) -> text@a, t: text@b) -> text@b
+    | keyword:task  task:on  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:text  operator:@  region:a  punctuation:)  operator:->  type-builtin:text  operator:@  region:a  punctuation:,  parameter:t  punctuation::  type-builtin:text  operator:@  region:b  punctuation:)  operator:->  type-builtin:text  operator:@  region:b
+ 88 |     <- f(t)
+    | keyword:<-  parameter:f  punctuation:(  parameter:t  punctuation:)
+ 89 | fi
+    | keyword:fi
+ 91 | task repeat<T>(f: (T) -> T, x: T) -> T
+    | keyword:task  task:repeat  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:f  punctuation::  punctuation:(  type:T  punctuation:)  operator:->  type:T  punctuation:,  parameter:x  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 92 |     <- f(f(x))
+    | keyword:<-  parameter:f  punctuation:(  parameter:f  punctuation:(  parameter:x  punctuation:)  punctuation:)
+ 93 | fi
+    | keyword:fi
+ 95 | task safe(n: int) -> int ~ text
+    | keyword:task  task:safe  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type-builtin:text
+ 96 |     when n < 0
+    | keyword:when  parameter:n  operator:<  number:0
+ 97 |         <- fail "negative"
+    | keyword:<-  keyword:fail  string:"negative"
+ 98 |     fi
+    | keyword:fi
+ 99 |     <- n
+    | keyword:<-  parameter:n
+100 | fi
+    | keyword:fi
+102 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+103 |     show(apply(square, 7))
+    | builtin-fn:show  punctuation:(  task:apply  punctuation:(  task:square  punctuation:,  number:7  punctuation:)  punctuation:)
+104 |     bind f = square
+    | keyword:bind  variable:f  operator:=  task:square
+105 |     show(f(3), " ", f == square, " ", f == neg, " ", f ~= square)
+    | builtin-fn:show  punctuation:(  variable:f  punctuation:(  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:f  operator:==  task:square  punctuation:,  string:" "  punctuation:,  variable:f  operator:==  task:neg  punctuation:,  string:" "  punctuation:,  variable:f  operator:~=  task:square  punctuation:)
+106 |     show(f, " ", f.type)
+    | builtin-fn:show  punctuation:(  variable:f  punctuation:,  string:" "  punctuation:,  variable:f  punctuation:.  keyword:type  punctuation:)
+107 |     bind table = [Op { name: "add", run: add }, Op { name: "mul", run: mul }]
+    | keyword:bind  variable:table  operator:=  punctuation:[  type:Op  punctuation:{  field:name  punctuation::  string:"add"  punctuation:,  field:run  punctuation::  task:add  punctuation:}  punctuation:,  type:Op  punctuation:{  field:name  punctuation::  string:"mul"  punctuation:,  field:run  punctuation::  task:mul  punctuation:}  punctuation:]
+108 |     each op in table
+    | keyword:each  variable:op  keyword:in  variable:table
+109 |         show(op.name, " ", op.run(4, 5))
+    | builtin-fn:show  punctuation:(  variable:op  punctuation:.  field:name  punctuation:,  string:" "  punctuation:,  variable:op  punctuation:.  field:run  punctuation:(  number:4  punctuation:,  number:5  punctuation:)  punctuation:)
+110 |     fi
+    | keyword:fi
+111 |     show(pick(0)(6, 7), " ", pick(1)(6, 7))
+    | builtin-fn:show  punctuation:(  task:pick  punctuation:(  number:0  punctuation:)  punctuation:(  number:6  punctuation:,  number:7  punctuation:)  punctuation:,  string:" "  punctuation:,  task:pick  punctuation:(  number:1  punctuation:)  punctuation:(  number:6  punctuation:,  number:7  punctuation:)  punctuation:)
+113 |     bind big = Big { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
+    | keyword:bind  variable:big  operator:=  type:Big  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:2  punctuation:,  field:c  punctuation::  number:3  punctuation:,  field:d  punctuation::  number:4  punctuation:,  field:e  punctuation::  number:5  punctuation:,  field:f  punctuation::  number:6  punctuation:,  field:g  punctuation::  number:7  punctuation:,  field:h  punctuation::  number:8  punctuation:,  field:i  punctuation::  number:9  punctuation:}
+114 |     bind g = first_of
+    | keyword:bind  variable:g  operator:=  task:first_of
+115 |     bind h = bump
+    | keyword:bind  variable:h  operator:=  task:bump
+116 |     show(g(big), " ", h(big), " ", big.a)
+    | builtin-fn:show  punctuation:(  variable:g  punctuation:(  variable:big  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:h  punctuation:(  variable:big  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:big  punctuation:.  field:a  punctuation:)
+117 |     twice(greet, "Ada")
+    | task:twice  punctuation:(  task:greet  punctuation:,  string:"Ada"  punctuation:)
+119 |     hold m: maybe (int) -> int = none
+    | keyword:hold  variable:m  punctuation::  keyword:maybe  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  keyword:none
+120 |     show(m)
+    | builtin-fn:show  punctuation:(  variable:m  punctuation:)
+121 |     m = square
+    | variable:m  operator:=  task:square
+122 |     when m is {k}
+    | keyword:when  variable:m  keyword:is  punctuation:{  variable:k  punctuation:}
+123 |         show(k(9))
+    | builtin-fn:show  punctuation:(  variable:k  punctuation:(  number:9  punctuation:)  punctuation:)
+124 |     fi
+    | keyword:fi
+126 |     region r
+    | keyword:region  region:r
+127 |     bind word = "hello" + "!" at r
+    | keyword:bind  variable:word  operator:=  string:"hello"  operator:+  string:"!"  keyword:at  region:r
+128 |     show(on(head, word))
+    | builtin-fn:show  punctuation:(  task:on  punctuation:(  task:head  punctuation:,  variable:word  punctuation:)  punctuation:)
+129 |     show(repeat(square, 3))
+    | builtin-fn:show  punctuation:(  task:repeat  punctuation:(  task:square  punctuation:,  number:3  punctuation:)  punctuation:)
+130 |     bind checked: (int) -> int ~ text = safe
+    | keyword:bind  variable:checked  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type-builtin:text  operator:=  task:safe
+131 |     show(checked(3) { 0 }, " ", checked(-1) { 0 })
+    | builtin-fn:show  punctuation:(  variable:checked  punctuation:(  number:3  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:,  string:" "  punctuation:,  variable:checked  punctuation:(  operator:-  number:1  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)
+133 |     bind v = ops.sq
+    | keyword:bind  variable:v  operator:=  module:ops  punctuation:.  task:sq
+134 |     show(v(4), " ", ops.table()(5))
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:(  number:4  punctuation:)  punctuation:,  string:" "  punctuation:,  module:ops  punctuation:.  task:table  punctuation:(  punctuation:)  punctuation:(  number:5  punctuation:)  punctuation:)
+135 |     bind handler = ops.Handler {}
+    | keyword:bind  variable:handler  operator:=  module:ops  punctuation:.  type:Handler  punctuation:{  punctuation:}
+136 |     show(handler.run(6), " ", handler)
+    | builtin-fn:show  punctuation:(  variable:handler  punctuation:.  field:run  punctuation:(  number:6  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:handler  punctuation:)
+137 |     ops.Handler.chosen = neg
+    | module:ops  punctuation:.  type:Handler  punctuation:.  field:chosen  operator:=  task:neg
+138 |     show(ops.Handler.chosen(2))
+    | builtin-fn:show  punctuation:(  module:ops  punctuation:.  type:Handler  punctuation:.  method:chosen  punctuation:(  number:2  punctuation:)  punctuation:)
+140 |     bind a = Action.Run(neg)
+    | keyword:bind  variable:a  operator:=  type:Action  punctuation:.  variant:Run  punctuation:(  task:neg  punctuation:)
+141 |     match a
+    | keyword:match  variable:a
+142 |         case Run run
+    | keyword:case  variant:Run  variable:run
+143 |             show(run(8))
+    | builtin-fn:show  punctuation:(  variable:run  punctuation:(  number:8  punctuation:)  punctuation:)
+144 |         case Stop
+    | keyword:case  variant:Stop
+145 |             show("stop")
+    | builtin-fn:show  punctuation:(  string:"stop"  punctuation:)
+146 |     fi
+    | keyword:fi
+147 |     show(a == Action.Run(neg), " ", a == Action.Run(ops.sq))
+    | builtin-fn:show  punctuation:(  variable:a  operator:==  type:Action  punctuation:.  variant:Run  punctuation:(  task:neg  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:a  operator:==  type:Action  punctuation:.  variant:Run  punctuation:(  module:ops  punctuation:.  task:sq  punctuation:)  punctuation:)
+149 |     bind fs = [neg, ops.sq, ...] at r
+    | keyword:bind  variable:fs  operator:=  punctuation:[  task:neg  punctuation:,  module:ops  punctuation:.  task:sq  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+150 |     bind gs = fs.copy() at r
+    | keyword:bind  variable:gs  operator:=  variable:fs  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
+151 |     show(gs[0](3), " ", fs[1](3), " ", (neg, 2))
+    | builtin-fn:show  punctuation:(  variable:gs  punctuation:[  number:0  punctuation:]  punctuation:(  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:fs  punctuation:[  number:1  punctuation:]  punctuation:(  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  punctuation:(  task:neg  punctuation:,  number:2  punctuation:)  punctuation:)
+152 |     bind named = ["neg": neg] at r
+    | keyword:bind  variable:named  operator:=  punctuation:[  string:"neg"  punctuation::  type:neg  punctuation:]  keyword:at  region:r
+153 |     show(named["neg"](1), " ", named)
+    | builtin-fn:show  punctuation:(  variable:named  punctuation:[  string:"neg"  punctuation:]  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:named  punctuation:)
+154 |     show("{f}" at r)
+    | builtin-fn:show  punctuation:(  string:"{  variable:f  string:}"  keyword:at  region:r  punctuation:)
+156 |     ; A shape given a task's type, a generic task given a task, and a tuple's item.
+    | comment:; A shape given a task's type, a generic task given a task, and a tuple's item.
+157 |     bind boxed = Box<(int) -> int> { value: neg }
+    | keyword:bind  variable:boxed  operator:=  type:Box  punctuation:<  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  task:neg  punctuation:}
+158 |     show(boxed.value(1), " ", boxed)
+    | builtin-fn:show  punctuation:(  variable:boxed  punctuation:.  field:value  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:boxed  punctuation:)
+159 |     bind kept = repeat(neg, 5)
+    | keyword:bind  variable:kept  operator:=  task:repeat  punctuation:(  task:neg  punctuation:,  number:5  punctuation:)
+160 |     bind pair = (square, 2)
+    | keyword:bind  variable:pair  operator:=  punctuation:(  task:square  punctuation:,  number:2  punctuation:)
+161 |     show(kept, " ", pair.0(pair.1))
+    | builtin-fn:show  punctuation:(  variable:kept  punctuation:,  string:" "  punctuation:,  variable:pair  punctuation:.  field:0  punctuation:(  variable:pair  punctuation:.  field:1  punctuation:)  punctuation:)
+162 | fi
+    | keyword:fi

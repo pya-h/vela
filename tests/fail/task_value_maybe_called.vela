@@ -1,0 +1,10 @@
+; error: 9:10: 'm' is a maybe (int) -> int, which may be none; extract the task first, as in 'when f is {g}' or 'f { … }'
+; A maybe of a task is extracted before it is called.
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    hold m: maybe (int) -> int = sq
+    show(m(2))
+fi

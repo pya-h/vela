@@ -1,0 +1,6 @@
+; error: 4:20: a task takes no 'nothing', which has no value; '()' takes no values, as in '() -> int'
+; A task type takes no 'nothing', which has no value.
+task main()
+    hold f: maybe (nothing) -> int = none
+    show(f)
+fi

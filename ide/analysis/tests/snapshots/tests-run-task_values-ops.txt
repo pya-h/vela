@@ -1,0 +1,26 @@
+  1 | ; A module's tasks named as values, and a shape whose fields and shared field
+    | comment:; A module's tasks named as values, and a shape whose fields and shared field
+  2 | ; hold tasks.
+    | comment:; hold tasks.
+  4 | task sq(n: int) -> int
+    | keyword:task  task:sq  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  5 |     <- n * n
+    | keyword:<-  parameter:n  operator:*  parameter:n
+  6 | fi
+    | keyword:fi
+  8 | task table() -> (int) -> int
+    | keyword:task  task:table  punctuation:(  punctuation:)  operator:->  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  9 |     <- sq
+    | keyword:<-  task:sq
+ 10 | fi
+    | keyword:fi
+ 12 | shape Handler
+    | keyword:shape  type:Handler
+ 13 |     name: text = "sq"
+    | field:name  punctuation::  type-builtin:text  operator:=  string:"sq"
+ 14 |     run: (int) -> int = sq
+    | field:run  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  task:sq
+ 15 |     shared hold chosen: (int) -> int = sq
+    | keyword:shared  keyword:hold  field:chosen  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  task:sq
+ 16 | fi
+    | keyword:fi

@@ -1,0 +1,16 @@
+; A module's tasks named as values, and a shape whose fields and shared field
+; hold tasks.
+
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task table() -> (int) -> int
+    <- sq
+fi
+
+shape Handler
+    name: text = "sq"
+    run: (int) -> int = sq
+    shared hold chosen: (int) -> int = sq
+fi

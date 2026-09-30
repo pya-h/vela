@@ -1,0 +1,11 @@
+; error: 10:18: a task value takes values only, so no region is named after its call
+; A task value takes no region after its call.
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    region r
+    bind f = sq
+    show(f(2) at r)
+fi

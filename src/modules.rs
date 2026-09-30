@@ -1131,7 +1131,8 @@ impl Resolver<'_> {
         // `m.P`: a macro of a module this file includes.
         if let Some(module) = self.modules.get(name.as_str()) {
             let entry = self.member(name, module, tag, expr.span)?;
-            if entry.what == What::Macro {
+            // `m.square`: a task of the module, named as a value.
+            if matches!(entry.what, What::Macro | What::Task) {
                 expr.kind = ExprKind::Var(entry.full);
                 return Ok(true);
             }
@@ -1203,6 +1204,11 @@ impl Resolver<'_> {
             Type::Or(value, error) => Type::Or(Box::new(self.ty(value, span)?), Box::new(self.ty(error, span)?)),
             Type::Results(types) => Type::Results(types.iter().map(|t| self.ty(t, span)).collect::<Result<_>>()?),
             Type::Tuple(items) => Type::Tuple(items.iter().map(|t| self.ty(t, span)).collect::<Result<_>>()?),
+            Type::Map(key, value, region) => Type::Map(Box::new(self.ty(key, span)?), Box::new(self.ty(value, span)?), region.clone()),
+            Type::Task(task) => Type::Task(Box::new(TaskType {
+                params: task.params.iter().map(|t| self.ty(t, span)).collect::<Result<_>>()?,
+                ret: self.ty(&task.ret, span)?,
+            })),
             other => other.clone(),
         })
     }
@@ -1288,7 +1294,11 @@ impl Resolver<'_> {
             // A region is a name of the task, never of the program.
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::RegionAfter(_) => Ok(()),
             // Only the resolver makes one, above.
-            ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::Macro { .. } => Ok(()),
+            ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::Macro { .. } | ExprKind::TaskValue(_) => Ok(()),
+            ExprKind::Invoke { callee, args } => {
+                self.expr(callee)?;
+                args.iter_mut().try_for_each(|e| self.expr(e))
+            }
             // A variable keeps its name. No variable can be named like a variant
             // or a macro (see `Checker::define`), so one written as a value is renamed.
             ExprKind::Var(name) => self.rename(name, span, &[What::Variant, What::Macro]),

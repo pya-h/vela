@@ -105,6 +105,9 @@ pub struct Generator {
     /// values written by their own `str`, innermost last (see `gen_show`). A
     /// `show` nests inside another only through a plan B of one of its values.
     shown: Vec<String>,
+    /// The tasks named as values whose C takes its values otherwise than
+    /// their type does, each given a function that does (see `gen_adapter`).
+    adapted: HashSet<String>,
 }
 
 impl Default for Generator {
@@ -125,6 +128,7 @@ impl Default for Generator {
             hidden: HashSet::new(),
             hidden_params: HashMap::new(),
             shown: Vec::new(),
+            adapted: HashSet::new(),
         }
     }
 }
@@ -207,6 +211,11 @@ impl Generator {
                 self.w.line(&format!("typedef struct {0} {0};", map_entry(ty)));
             }
         }
+        // A task type is a pointer to a function, whose types need only be
+        // declared, as the lines above do.
+        for ty in &used.tasks {
+            self.gen_task_type(ty);
+        }
         for item in items {
             if let Item::Kind(k) = item {
                 self.gen_tag_enum(k);
@@ -260,6 +269,10 @@ impl Generator {
             }
         }
         self.w.blank();
+        self.adapted.clear();
+        for name in &used.task_values {
+            self.gen_adapter(items, name);
+        }
         self.gen_writers(&used)?;
 
         // Task definitions
@@ -294,6 +307,89 @@ impl Generator {
         }
 
         Ok(std::mem::take(&mut self.w.out))
+    }
+
+    /// Which parameters a task of type `task` takes by a hidden pointer: each
+    /// that is larger than `HIDDEN_ABOVE`, as a task's plain parameter is.
+    fn hidden_of_type(&self, task: &TaskType) -> Vec<bool> {
+        task.params.iter().map(|param| self.c_layout(param).0 > HIDDEN_ABOVE).collect()
+    }
+
+    /// The C type of task type `ty`: a pointer to a function taking its values
+    /// as a task takes them, `typedef int64_t (*vela__task__1__int__int)(int64_t);`.
+    fn gen_task_type(&mut self, ty: &Type) {
+        let Type::Task(task) = ty else { return };
+        let hidden = self.hidden_of_type(task);
+        let params: Vec<String> = task
+            .params
+            .iter()
+            .zip(&hidden)
+            .map(|(param, hidden)| if *hidden { format!("const {}*", c_type(param)) } else { c_type(param) })
+            .collect();
+        let params = if params.is_empty() { "void".to_string() } else { params.join(", ") };
+        self.w.line(&format!("typedef {} (*{})({});", c_type(&task.ret), c_type(ty), params));
+    }
+
+    /// For task `name`, named as a value, a function taking its values as its
+    /// type does, when the task's own C takes them otherwise: a large `hold`
+    /// or `bind` parameter is copied into the task, where a task value reads
+    /// it where the caller keeps it, and a native task takes every value as it
+    /// is (see `is_hidden`).
+    fn gen_adapter(&mut self, items: &[Item], name: &str) {
+        let Some(t) = items.iter().find_map(|item| match item {
+            Item::Task(t) if t.name == name => Some(t),
+            _ => None,
+        }) else {
+            return;
+        };
+        let task = TaskType { params: t.params.iter().map(|param| param.ty.clone()).collect(), ret: t.ret.clone() };
+        let wanted = self.hidden_of_type(&task);
+        let own = self.hidden_of(name).to_vec();
+        if wanted == own {
+            return;
+        }
+        let params: Vec<String> = t
+            .params
+            .iter()
+            .zip(&wanted)
+            .enumerate()
+            .map(|(i, (param, hidden))| if *hidden { format!("const {}* v{}", c_type(&param.ty), i) } else { format!("{} v{}", c_type(&param.ty), i) })
+            .collect();
+        let args: Vec<String> = wanted
+            .iter()
+            .zip(own.iter().chain(std::iter::repeat(&false)))
+            .enumerate()
+            .map(|(i, (wanted, own))| match (wanted, own) {
+                (true, false) => format!("*v{}", i),
+                (false, true) => format!("&v{}", i),
+                _ => format!("v{}", i),
+            })
+            .collect();
+        let params = if params.is_empty() { "void".to_string() } else { params.join(", ") };
+        let call = format!("{}({})", mangle(name), args.join(", "));
+        self.w.open(&format!("static {} {}({})", c_type(&t.ret), adapter_name(name), params));
+        self.w.line(&if t.ret == Type::Nothing { format!("{};", call) } else { format!("return {};", call) });
+        self.w.close();
+        self.adapted.insert(name.to_string());
+    }
+
+    /// The C value of task `name` named as a value: its function, or the one
+    /// that takes its values as its type does (see `gen_adapter`).
+    fn task_value(&self, name: &str) -> String {
+        if self.adapted.contains(name) { adapter_name(name) } else { mangle(name) }
+    }
+
+    /// `f(x)`, the call of the task value `callee` holds: the value is read
+    /// first, then the arguments, left to right, each given as the task's type
+    /// takes it.
+    fn gen_invoke(&mut self, e: &Expr, callee: &Expr, args: &[Expr]) -> Result<String> {
+        let Type::Task(task) = callee.ty()? else { return Err(Error::internal_at(e.span, "a call of a value that holds no task")) };
+        let mut hidden = vec![false];
+        hidden.extend(self.hidden_of_type(task));
+        let operands: Vec<&Expr> = std::iter::once(callee).chain(args).collect();
+        let values = if hidden.contains(&true) { self.gen_hidden_operands(&operands, &hidden, true)? } else { self.gen_operands(&operands)? };
+        let Some((function, values)) = values.split_first() else { return Err(Error::internal_at(e.span, "a call without the value it calls")) };
+        Ok(format!("({})({})", function, values.join(", ")))
     }
 
     /// Which parameters of the task generated as `task` are passed by a
@@ -934,7 +1030,7 @@ impl Generator {
     /// either way, and text by its bytes.
     fn compare_item(&self, how: &str, ty: &Type, a: &str, b: &str) -> String {
         match ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Ptr(..) => format!("{} == {}", a, b),
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Ptr(..) | Type::Task(_) => format!("{} == {}", a, b),
             // `==` on maps is which map: the handle.
             Type::Map(..) if how == "same" => format!("{} == {}", a, b),
             Type::Text(_) => format!("vela__rt__text_eq({}, {})", a, b),
@@ -1289,6 +1385,7 @@ impl Generator {
                     self.w.line("vela__rt__writer w = VELA__RT__BUILDER;");
                     match ty {
                         Type::Ptr(..) => self.w.line("vela__rt__put_address(&w, v);"),
+                        Type::Task(_) => self.w.line(&format!("(void)v; VELA__RT__PUT(&w, \"{}\");", task_text(ty))),
                         _ => self.w.line(&format!("{}(&w, v);", write_helper(ty))),
                     }
                     self.w.line("return vela__rt__built(&w, r);");
@@ -2466,6 +2563,8 @@ impl Generator {
             ExprKind::TextLit(s) => Ok(format!("VELA__RT__TEXT(\"{}\")", escape_c_string(s))),
             ExprKind::NoneLit => Ok("NULL".to_string()),
             ExprKind::Macro { name, .. } => Ok(macro_name(name)),
+            ExprKind::TaskValue(name) => Ok(self.task_value(name)),
+            ExprKind::Invoke { callee, args } => self.gen_invoke(e, callee, args),
             // The checker makes every one the `New` it stands for.
             ExprKind::Shortcut { .. } => Err(Error::internal_at(e.span, "a shortcut the checker left as it was")),
             ExprKind::Pairs(_) => Err(Error::internal_at(e.span, "a map's pairs outside the 'new' they are given to")),
@@ -3258,7 +3357,7 @@ impl Generator {
             let symbol = if not.is_empty() { "==" } else { "!=" };
             return Ok(match ty {
                 // A number, a bool, and a pointer are similar when equal.
-                Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Ptr(..) => format!("({} {} {})", left, symbol, other_side(&left, right, &c_type(ty))),
+                Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Ptr(..) | Type::Task(_) => format!("({} {} {})", left, symbol, other_side(&left, right, &c_type(ty))),
                 Type::Maybe(inner) if is_pointer(inner) => format!("({} {} {})", left, symbol, other_side(&left, right, &c_type(ty))),
                 _ => format!("{}{}({}, {})", not, copy_helper("similar", ty), by_address(&left, ty), by_address(&right, ty)),
             });
@@ -3451,12 +3550,19 @@ fn shown(e: &Expr, ty: &Type, value: &str, ends: bool) -> Result<String> {
     let written = match ty {
         Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) => return Ok(format!("{}({});", written_helper(ty, ends), value)),
         Type::Ptr(..) => format!("vela__rt__put_address(&VELA__RT__OUTPUT, (const void*){});", value),
+        Type::Task(_) => format!("(void)({}); VELA__RT__PUT(&VELA__RT__OUTPUT, \"{}\");", value, task_text(ty)),
         Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Tuple(_) | Type::Maybe(_) | Type::Named(..) => {
             format!("{}(&VELA__RT__OUTPUT, {});", write_helper(&ty.without_regions()), value)
         }
         other => return Err(Error::internal_at(e.span, format!("show called with type {}", other))),
     };
     Ok(if ends { format!("{} vela__rt__show_line();", written) } else { written })
+}
+
+/// What a task value is written as: its type, `task (int) -> int`, with each
+/// shape or kind by its own name. A value can't say which task it holds.
+fn task_text(ty: &Type) -> String {
+    format!("task {}", ty.map_names(&|name| unqualified(name).to_string()))
 }
 
 /// The statement that writes `value`, of type `ty`, inside another value: text
@@ -3470,6 +3576,7 @@ fn put_item(ty: &Type, value: &str) -> String {
         Type::Bool => format!("vela__rt__put_bool(w, {});", value),
         Type::Text(_) => format!("vela__rt__put_quoted(w, {});", value),
         Type::Ptr(..) => format!("vela__rt__put_address(w, (const void*){});", value),
+        Type::Task(_) => format!("(void)({}); VELA__RT__PUT(w, \"{}\");", value, task_text(ty)),
         _ => format!("{}(w, {});", write_helper(&ty.without_regions()), value),
     }
 }
@@ -3501,7 +3608,7 @@ impl Layout<'_> {
     /// generator writes, as a 64-bit target lays it out.
     pub fn of(&self, ty: &Type) -> (usize, usize) {
         match ty {
-            Type::Int | Type::Float | Type::Ptr(..) | Type::None | Type::Region => (8, 8),
+            Type::Int | Type::Float | Type::Ptr(..) | Type::None | Type::Region | Type::Task(_) => (8, 8),
             Type::Maybe(inner) if is_pointer(inner) => (8, 8),
             Type::Bool | Type::Unit | Type::Char => (1, 1),
             Type::Nothing => (0, 1),
@@ -3601,7 +3708,11 @@ fn has_prelude(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::PlanB { .. } | ExprKind::Choice(_) | ExprKind::Edit { .. } | ExprKind::Scan { .. } => true,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
-        | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => false,
+        | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::TaskValue(_) => false,
+        ExprKind::Invoke { callee, args } => {
+            let all: Vec<&Expr> = std::iter::once(callee.as_ref()).chain(args).collect();
+            all.iter().any(|e| has_prelude(e)) || ordered(&all)
+        }
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. }
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Copy { value: inner, .. } | ExprKind::Shortcut { value: inner, .. } | ExprKind::ToText { value: inner, .. } => {
             has_prelude(inner)
@@ -3688,6 +3799,12 @@ struct UsedTypes {
     kinds: HashSet<String>,
     /// Whether the program calls `scan`.
     scans: bool,
+    /// The task types values have, each after the task types inside it, by
+    /// the C type each is (see `Generator::gen_task_type`).
+    tasks: Vec<Type>,
+    task_words: HashSet<String>,
+    /// The tasks named as values, in the order first named.
+    task_values: Vec<String>,
 }
 
 /// Types in the order they were first noted, with a set beside them so that
@@ -3760,6 +3877,9 @@ impl UsedTypes {
             fields: HashMap::new(),
             kinds: HashSet::new(),
             scans: false,
+            tasks: Vec::new(),
+            task_words: HashSet::new(),
+            task_values: Vec::new(),
         };
         let tasks: HashSet<&str> = items
             .iter()
@@ -3831,6 +3951,18 @@ impl UsedTypes {
         }
         match ty {
             Type::Ptr(inner, _) | Type::Range(inner) | Type::Fail(inner) => self.add(inner),
+            // Every type it takes and sends has a C type first, which its own
+            // names; its regions are its own, so they are left as they are.
+            Type::Task(task) => {
+                if self.task_words.contains(&type_word(ty)) {
+                    return;
+                }
+                task.params.iter().for_each(|param| self.add(param));
+                self.add(&task.ret);
+                if self.task_words.insert(type_word(ty)) {
+                    self.tasks.push(ty.clone());
+                }
+            }
             Type::Maybe(inner) => {
                 self.add(inner);
                 if !is_pointer(inner) && !self.compounds.contains(ty) {
@@ -3893,7 +4025,7 @@ impl UsedTypes {
     fn note_write(&mut self, ty: &Type) {
         let ty = ty.without_regions();
         match &ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => return,
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) => return,
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.note_write(inner),
             Type::Map(key, value, _) => {
                 self.note_write(key);
@@ -3944,7 +4076,7 @@ impl UsedTypes {
     fn note_similar(&mut self, ty: &Type) {
         let ty = ty.without_regions();
         match &ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => {}
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) => {}
             Type::Maybe(inner) if matches!(inner.as_ref(), Type::Ptr(..)) => {}
             _ if self.similar.contains(&ty) => {}
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => {
@@ -4035,6 +4167,15 @@ impl UsedTypes {
         match &e.kind {
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
             | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => {}
+            ExprKind::TaskValue(name) => {
+                if !self.task_values.contains(name) {
+                    self.task_values.push(name.clone());
+                }
+            }
+            ExprKind::Invoke { callee, args } => {
+                self.expr(callee);
+                args.iter().for_each(|arg| self.expr(arg));
+            }
             ExprKind::Shortcut { value, .. } => self.expr(value),
             ExprKind::Pairs(pairs) => pairs.iter().for_each(|(key, value)| {
                 self.expr(key);
@@ -4250,7 +4391,8 @@ fn place_reads(target: &Expr, name: &str) -> bool {
 fn expr_reads(e: &Expr, name: &str) -> bool {
     match &e.kind {
         ExprKind::Var(var) | ExprKind::RegionAfter(var) => var == name,
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => false,
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::TaskValue(_) => false,
+        ExprKind::Invoke { callee, args } => expr_reads(callee, name) || args.iter().any(|arg| expr_reads(arg, name)),
         // `new` reads the region it allocates in.
         ExprKind::New { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner)
@@ -4404,7 +4546,7 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
 /// no change to a slice, no line read. (It may still stop the program.)
 fn changes_nothing(e: &Expr) -> bool {
     match &e.kind {
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::Shared { .. } => true,
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::Shared { .. } | ExprKind::TaskValue(_) => true,
         ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Unary(_, inner) | ExprKind::Wrap(inner) => changes_nothing(inner),
         ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => changes_nothing(a) && changes_nothing(b),
         ExprKind::Array(items) | ExprKind::Tuple(items) => items.iter().all(changes_nothing),
@@ -4478,6 +4620,12 @@ fn signature(t: &TaskDef, alters: bool, hidden: &[bool]) -> String {
 //
 // A region is a local or parameter like any other (`c_ident`); regions don't
 // change C types, so `^int@a` and `^int@b` are both `int64_t*`.
+
+/// The C name of the function that takes task `name`'s values as its type
+/// does (see `Generator::gen_adapter`). No Vela name holds `__`.
+fn adapter_name(name: &str) -> String {
+    format!("{}__as_value", mangle(name))
+}
 
 /// The C name of a task, shape, or kind.
 fn mangle(name: &str) -> String {
@@ -4580,6 +4728,8 @@ fn c_type(ty: &Type) -> String {
         Type::Results(_) | Type::Tuple(_) | Type::Array(..) | Type::Slice(..) => format!("vela__{}", type_word(ty)),
         // A map is a pointer to its table's header, in its region.
         Type::Map(..) => format!("vela__{}*", type_word(ty)),
+        // A task is a pointer to its function (see `Generator::gen_task_type`).
+        Type::Task(_) => format!("vela__{}", type_word(ty)),
     }
 }
 

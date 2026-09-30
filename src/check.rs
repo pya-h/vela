@@ -1569,6 +1569,7 @@ impl Checker {
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
             Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| self.unmade(ty)).collect()),
             Type::Results(types) => Type::Results(types.iter().map(|ty| self.unmade(ty)).collect()),
+            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| self.unmade(ty)).collect(), ret: self.unmade(&task.ret) })),
             other => other.clone(),
         }
     }
@@ -1623,6 +1624,10 @@ impl Checker {
                 self.settle_applications(error, at)
             }
             Type::Tuple(types) | Type::Results(types) => types.iter_mut().try_for_each(|ty| self.settle_applications(ty, at)),
+            Type::Task(task) => {
+                task.params.iter_mut().try_for_each(|ty| self.settle_applications(ty, at))?;
+                self.settle_applications(&mut task.ret, at)
+            }
             _ => Ok(()),
         }
     }
@@ -2034,6 +2039,20 @@ impl Checker {
                 }
                 Ok(ty.clone())
             }
+            // Its regions are its own, as a header's are, so it names them as a
+            // header does, and what it sends is in regions its parameters name.
+            Type::Task(task) => {
+                let params = task.params.iter().map(|param| self.resolve_regions(param, span, TypePlace::Header, None)).collect::<Result<Vec<_>>>()?;
+                let ret = self.resolve_regions(&task.ret, span, TypePlace::Header, None)?;
+                let named: Vec<&str> = params.iter().flat_map(Type::regions).collect();
+                if let Some(region) = ret.regions().into_iter().find(|region| !named.contains(region)) {
+                    return err(
+                        self.place(span, &format!("@{}", region)),
+                        format!("what this task sends lives in region '{}', which none of its parameters names, so no call could say which region that is", region),
+                    );
+                }
+                Ok(Type::Task(Box::new(TaskType { params, ret }.normalized())))
+            }
             Type::Maybe(inner) => Ok(Type::Maybe(Box::new(self.resolve_regions(inner, span, place, inside)?))),
             Type::Tuple(items) => Ok(Type::Tuple(items.iter().map(|item| self.resolve_regions(item, span, place, inside)).collect::<Result<_>>()?)),
             Type::Or(value, error) => Ok(Type::Or(
@@ -2135,6 +2154,23 @@ impl Checker {
                     }
                 }
                 Ok(())
+            }
+            // `(int) -> int`: its parameters are values, and it sends one value
+            // or nothing, as a header does.
+            Type::Task(task) => {
+                for param in &task.params {
+                    match param {
+                        Type::Nothing => return err(self.place(span, "nothing"), "a task takes no 'nothing', which has no value; '()' takes no values, as in '() -> int'"),
+                        Type::Region => return err(self.place(span, "region"), "a task that takes a region can't be a value yet; its type takes values only"),
+                        _ => self.check_type(param, span)?,
+                    }
+                }
+                match &task.ret {
+                    Type::Nothing => Ok(()),
+                    Type::Region => err(self.place(span, "region"), "a task can't send a region; regions are only parameters, as in 'task build(r: region)'"),
+                    Type::Or(value, _) if **value == Type::Nothing => self.check_type(&task.ret, span),
+                    ret => self.check_type(ret, span),
+                }
             }
             // `T`: the type each use of a generic declaration gives it.
             Type::Named(name, _) if self.type_param(name).is_some() => Ok(()),
@@ -2565,6 +2601,10 @@ impl Checker {
         if self.shapes.contains_key(&full) {
             return err(span, format!("'{0}' is the name of a shape, so '{0}.x' would name its shared field; choose another name", name));
         }
+        // Nor may a task value take a task's name, which `name(…)` would call.
+        if (is_task(&ty) || matches!(&ty, Type::Maybe(inner) if is_task(inner))) && self.tasks.contains_key(&full) {
+            return err(span, format!("'{0}' is the name of a task, so '{0}(…)' would call it rather than this task value; choose another name", name));
+        }
         // Nor may it take a module's name, which `name.x` would read as.
         if let Some(at) = self.module_used(name) {
             return err(span, format!("'{}' is the name of a module this file includes, at {}:{}", name, at.line, at.col));
@@ -2912,6 +2952,14 @@ impl Checker {
                 // `scan`, or one that gives no value.
                 match &e.kind {
                     ExprKind::Call { name, .. } if matches!(e.ty, Some(Type::Or(..))) => err(e.span, ignored_error(name)),
+                    ExprKind::Invoke { callee, .. } if matches!(e.ty, Some(Type::Or(..))) => {
+                        let name = match &callee.kind {
+                            ExprKind::Var(name) => name.clone(),
+                            _ => "this task".to_string(),
+                        };
+                        err(e.span, ignored_error(&name))
+                    }
+                    ExprKind::Invoke { .. } => Ok(()),
                     // `int(x)` and `float(x)` read like calls, but they only give
                     // a number back: on its own, the line does nothing.
                     ExprKind::Call { name, .. } if number_cast(name).is_some() => {
@@ -3832,6 +3880,7 @@ impl Checker {
     fn check_expr_multi(&mut self, expr: &mut Expr) -> Result<Type> {
         self.resolve_constructor(expr);
         self.resolve_empty_plan_b(expr);
+        self.resolve_task_use(expr);
         if matches!(&expr.kind, ExprKind::Field(_, field) if field == TYPE_WORD) {
             return self.check_type_of(expr);
         }
@@ -4128,6 +4177,120 @@ impl Checker {
         }
     }
 
+    /// Rewrites a name that names a task and no variable into the task's value,
+    /// and `f(x)`, where `f` is a variable of a task's type, into the call of
+    /// the task it holds. A variable named like a task that holds no task leaves
+    /// `f(x)` the task's call, as it always was; one named like no task makes it
+    /// a call of the variable, which says what the variable holds.
+    fn resolve_task_use(&self, expr: &mut Expr) {
+        match &mut expr.kind {
+            ExprKind::Var(name) if self.lookup(name).is_none() => {
+                let full = self.full_name(name);
+                if self.tasks.get(&full).is_some_and(|info| info.owner.is_none()) {
+                    expr.kind = ExprKind::TaskValue(full);
+                }
+            }
+            // `X.f(…)`: a shared field that holds a task, called, where the
+            // shape has no method of that name.
+            ExprKind::Call { name, types, args }
+                if types.is_empty()
+                    && !self.tasks.contains_key(name.as_str())
+                    && method_parts(name).is_some_and(|(owner, field)| {
+                        self.shapes.get(owner).is_some_and(|shape| shape.shared.iter().any(|member| member.field.name == field && (is_task(&member.field.ty) || matches!(&member.field.ty, Type::Maybe(inner) if is_task(inner)))))
+                    }) =>
+            {
+                let Some((owner, field)) = method_parts(name) else { return };
+                let callee = Expr::new(ExprKind::Shared { shape: owner.to_string(), field: field.to_string() }, expr.span);
+                let args = std::mem::take(args);
+                expr.kind = ExprKind::Invoke { callee: Box::new(callee), args };
+            }
+            ExprKind::Call { name, types, args } if types.is_empty() => {
+                let Some(info) = self.lookup(name) else { return };
+                let holds_task = is_task(&info.ty) || matches!(&info.ty, Type::Maybe(inner) if is_task(inner));
+                let calls_other = self.tasks.contains_key(&self.full_name(name)) || BUILTIN_TASKS.contains(&name.as_str()) || number_cast(name).is_some();
+                if info.ty == Type::Region || (!holds_task && calls_other) {
+                    return;
+                }
+                let callee = Expr::new(ExprKind::Var(std::mem::take(name)), expr.span);
+                let args = std::mem::take(args);
+                expr.kind = ExprKind::Invoke { callee: Box::new(callee), args };
+            }
+            _ => {}
+        }
+    }
+
+    /// The type of `square`, task `name` named as a value (see
+    /// `ExprKind::TaskValue`): its header, without names. Only a task whose
+    /// caller gives it values is one: none that takes types, a region, or a
+    /// place, or that sends several values.
+    fn task_value_type(&self, name: &str, span: Span) -> Result<Type> {
+        if self.broken.contains(name) {
+            return Ok(Type::Unknown);
+        }
+        let Some(info) = self.tasks.get(name) else { return Err(Error::internal_at(span, format!("no task '{}' to name as a value", name))) };
+        let written = unqualified(name);
+        if !info.types.is_empty() {
+            return err(span, format!("task '{}' takes types, so it can't be a value yet; only a task that takes none can", written));
+        }
+        for ((param, ty), passing) in info.params.iter().zip(&info.passing) {
+            if *ty == Type::Region {
+                return err(span, format!("task '{}' takes a region, '{}', so it can't be a value yet; a task value takes values only", written, param));
+            }
+            if passing.is_ref() {
+                return err(
+                    span,
+                    format!("task '{}' takes '{}' as '{}', the caller's place, so it can't be a value yet; a task value's parameters take values", written, param, passing.word()),
+                );
+            }
+        }
+        if matches!(info.ret, Type::Results(_)) {
+            return err(span, format!("task '{}' sends several values, so it can't be a value yet; a task value sends one value or nothing", written));
+        }
+        let params = info.params.iter().map(|(_, ty)| ty.clone()).collect();
+        Ok(Type::Task(Box::new(TaskType { params, ret: info.ret.clone() }.normalized())))
+    }
+
+    /// Checks `f(x)`, the call of the task value `callee` holds, and returns
+    /// what it sends: its arguments are checked as a named task's are, against
+    /// the task's type, whose regions stand for the caller's regions its values
+    /// show.
+    fn check_invoke(&mut self, callee: &mut Expr, args: &mut [Expr], span: Span) -> Result<Type> {
+        let ty = self.check_expr(callee)?;
+        if ty.unknown() {
+            self.check_each(args);
+            return Ok(Type::Unknown);
+        }
+        let named = match &callee.kind {
+            ExprKind::Var(name) => format!("'{}'", name),
+            _ => "this value".to_string(),
+        };
+        let task = match &ty {
+            Type::Task(task) => task.clone(),
+            Type::Maybe(inner) if is_task(inner) => {
+                return err(callee.span, format!("{} is a {}, which may be none; extract the task first, as in 'when f is {{g}}' or 'f {{ … }}'", named, ty));
+            }
+            _ => return err(callee.span, format!("{} is of type {}, not a task, so it can't be called", named, ty)),
+        };
+        if let Some(at) = region_after(args) {
+            return err(at, "a task value takes values only, so no region is named after its call");
+        }
+        if args.len() != task.params.len() {
+            return err(span, format!("{} is a task of type {}, which takes {}, got {}", named, ty, count(task.params.len(), "argument"), args.len()));
+        }
+        let info = TaskInfo {
+            types: Vec::new(),
+            params: task.params.iter().enumerate().map(|(i, ty)| (format!("value {}", i + 1), ty.clone())).collect(),
+            passing: vec![Passing::Copy; task.params.len()],
+            ret: task.ret.clone(),
+            owner: None,
+        };
+        let written = match &callee.kind {
+            ExprKind::Var(name) => name.clone(),
+            _ => "value".to_string(),
+        };
+        self.check_call_args(span, &written, &mut Vec::new(), args, &info)
+    }
+
     /// Rewrites `name {}` into an empty plan B when `name` is a variable rather
     /// than a shape: the parser reads both as a shape literal.
     fn resolve_empty_plan_b(&self, expr: &mut Expr) {
@@ -4197,6 +4360,8 @@ impl Checker {
             // Checked again, as a method call's value is: it is text.
             ExprKind::TypeOf(_) => Ok(Type::Text(None)),
             ExprKind::Macro { value, .. } => Ok(value.ty.clone().unwrap_or(Type::Unknown)),
+            ExprKind::TaskValue(name) => self.task_value_type(name, span),
+            ExprKind::Invoke { callee, args } => self.check_invoke(callee, args, span),
             // A macro whose value has a mistake, which is told once, where it is written.
             ExprKind::Var(name) if self.lookup(name).is_none() && self.sees(name) && self.macros.contains_key(name.as_str()) => Ok(Type::Unknown),
             ExprKind::Var(name) => {
@@ -5158,7 +5323,7 @@ impl Checker {
     /// written as far as its values go, so it is no reason to refuse.
     fn unwritable_in(&self, ty: &Type, seen: &mut Vec<String>) -> Option<Type> {
         match ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => None,
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) => None,
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unwritable_in(inner, seen),
             Type::Map(key, value, _) => self.unwritable_in(key, seen).or_else(|| self.unwritable_in(value, seen)),
             Type::Tuple(items) => items.iter().find_map(|item| self.unwritable_in(item, seen)),
@@ -6245,6 +6410,21 @@ impl Checker {
             expr.kind = ExprKind::Lookup(value, Box::new(args.remove(0)));
             return Ok(());
         }
+        // `op.run(4, 5)`: a field that holds a task, called, where the value
+        // has no method of that name.
+        let method = self.owner_of(&ty).is_some_and(|owner| self.tasks.contains_key(&method_name(&owner, &name)));
+        if !method
+            && let Ok(field) = self.field_type(&ty, &name, span)
+            && (is_task(&field) || matches!(&field, Type::Maybe(inner) if is_task(inner)))
+        {
+            let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+            let ExprKind::MethodCall { value, args, .. } = taken else {
+                return Err(Error::internal_at(span, "a method call that is no longer one"));
+            };
+            let callee = Expr::new(ExprKind::Field(value, name), span);
+            expr.kind = ExprKind::Invoke { callee: Box::new(callee), args };
+            return Ok(());
+        }
         let owner = self.owner_of(&ty).ok_or_else(|| self.no_method(&ty, &name, span))?;
         let full = method_name(&owner, &name);
         let info = self.tasks.get(&full).filter(|_| self.sees(&full)).cloned().ok_or_else(|| self.no_method(&ty, &name, span))?;
@@ -7272,6 +7452,10 @@ impl Checker {
         let ty = ty.map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| ANY_REGION.to_string())));
         let mut ty = ty.map_params(&mut |name| given.get(name).cloned());
         self.settle_applications(&mut ty, at)?;
+        // A task type given the caller's types names their regions its own way.
+        if !given.is_empty() {
+            ty = ty.normalized_tasks();
+        }
         Ok(ty)
     }
 
@@ -7358,7 +7542,7 @@ impl Checker {
     /// can fail is read first.
     fn comparable(&self, ty: &Type) -> bool {
         match ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Slice(..) | Type::Map(..) | Type::Array(..) | Type::Tuple(_) => true,
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Slice(..) | Type::Map(..) | Type::Array(..) | Type::Tuple(_) | Type::Task(_) => true,
             Type::Named(name, _) if self.kinds.contains_key(name) => self.kind_comparable(name, &mut Vec::new()),
             Type::Named(..) | Type::Applied(_) => self.owner_of(ty).is_some_and(|owner| self.shapes.contains_key(&owner)),
             Type::Param(_) => self.allows(Need::Same, ty),
@@ -7434,7 +7618,7 @@ impl Checker {
 
     fn unsimilar_in(&self, ty: &Type, seen: &mut Vec<String>) -> Option<Type> {
         match ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) => None,
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) => None,
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unsimilar_in(inner, seen),
             Type::Map(key, value, _) => self.unsimilar_in(key, seen).or_else(|| self.unsimilar_in(value, seen)),
             Type::Tuple(items) => items.iter().find_map(|item| self.unsimilar_in(item, seen)),
@@ -7992,6 +8176,10 @@ fn type_size(ty: &Type) -> usize {
             Type::Or(value, error) | Type::Map(value, error, _) => pending.extend([&**value, &**error]),
             Type::Applied(applied) => pending.extend(&applied.types),
             Type::Tuple(types) | Type::Results(types) => pending.extend(types),
+            Type::Task(task) => {
+                pending.extend(&task.params);
+                pending.push(&task.ret);
+            }
             _ => {}
         }
     }
@@ -8006,6 +8194,7 @@ fn type_depth(ty: &Type) -> usize {
         Type::Or(value, error) | Type::Map(value, error, _) => type_depth(value).max(type_depth(error)),
         Type::Applied(applied) => applied.types.iter().map(type_depth).max().unwrap_or(0),
         Type::Tuple(types) | Type::Results(types) => types.iter().map(type_depth).max().unwrap_or(0),
+        Type::Task(task) => task.params.iter().chain([&task.ret]).map(type_depth).max().unwrap_or(0),
         _ => 0,
     };
     inner + 1
@@ -8261,7 +8450,11 @@ impl Checker {
                 }
                 Ok(())
             }
-            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } => Ok(()),
+            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TaskValue(_) => Ok(()),
+            ExprKind::Invoke { callee, args } => {
+                self.substitute_expr(callee, given, made)?;
+                args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made))
+            }
             ExprKind::Unary(_, inner)
             | ExprKind::Deref(inner)
             | ExprKind::Ref(inner)
@@ -8373,6 +8566,10 @@ fn unify_params(pattern: &Type, actual: &Type, given: &mut HashMap<String, Type>
             unify_params(pv, av, given);
             unify_params(pe, ae, given);
         }
+        (Type::Task(p), Type::Task(a)) if p.params.len() == a.params.len() => {
+            p.params.iter().zip(&a.params).for_each(|(p, a)| unify_params(p, a, given));
+            unify_params(&p.ret, &a.ret, given);
+        }
         // A plain value given where a `maybe` or a `T ~ E` is expected becomes
         // one, so it names the type inside.
         (Type::Maybe(p), a) | (Type::Or(p, _), a) => unify_params(p, a, given),
@@ -8454,6 +8651,19 @@ fn holds_changeable(ty: &Type, changeable: &HashSet<String>) -> bool {
 
 /// Where the region written after a call is (`f(x) at r`), when the parser
 /// added one as the call's last argument (see `ExprKind::RegionAfter`).
+/// `ty` with no region anywhere in it, a task type's own regions too.
+fn strip_all_regions(ty: &Type) -> Type {
+    match ty {
+        Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(strip_all_regions).collect(), ret: strip_all_regions(&task.ret) })),
+        other => other.without_regions(),
+    }
+}
+
+/// Whether `ty` is a task's type, `(int) -> int`.
+fn is_task(ty: &Type) -> bool {
+    matches!(ty, Type::Task(_))
+}
+
 fn region_after(args: &[Expr]) -> Option<Span> {
     args.last().filter(|arg| matches!(arg.kind, ExprKind::RegionAfter(_))).map(|arg| arg.span)
 }
@@ -8475,7 +8685,7 @@ fn refuse<T>(make: impl FnOnce() -> Error) -> Result<T> {
 
 fn constant_value(expr: &Expr) -> bool {
     match &expr.kind {
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } => true,
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::TaskValue(_) => true,
         // A value the checker has already made part of a `maybe`, as an
         // array's items and a shared field's value are.
         ExprKind::Unary(_, inner) | ExprKind::Wrap(inner) => constant_value(inner),
@@ -8684,6 +8894,7 @@ fn named_types(ty: &Type) -> Vec<&str> {
             names.extend(named_types(error));
             names
         }
+        Type::Task(task) => task.params.iter().chain([&task.ret]).flat_map(named_types).collect(),
         _ => Vec::new(),
     }
 }
@@ -9154,6 +9365,11 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
         }
         (_, Type::Or(_, error)) if fits_regions(actual, error) => "; an error is given with 'fail', as in '<- fail e'".to_string(),
         (Type::Fail(_), _) => "; 'fail …' is an error, which only a 'T ~ E' can hold".to_string(),
+        // A task's regions are its own: `text` is text that lasts, and `text@r`
+        // text of any region.
+        (Type::Task(_), Type::Task(_)) if strip_all_regions(actual) == strip_all_regions(expected) => {
+            "; a task's type says which regions its values are in, as its header does: 'text' is text that lasts as long as the program, and 'text@r' text of any region the caller gives".to_string()
+        }
         (Type::Maybe(inner) | Type::Or(inner, _), _) if fits_regions(inner, expected) => {
             "; extract its value first, as in 'x { … }' or 'when x is {value}'".to_string()
         }

@@ -99,6 +99,9 @@ pub enum Type {
     /// Boxed so that a `Type` stays small: they are held by the thousand while
     /// a program is checked, and deeply nested ones are checked on a small stack.
     Applied(Box<Applied>),
+    /// `(int, text) -> int`: a task as a value, which a variable, a field, or a
+    /// parameter holds and a call runs (see `TaskType`). Boxed, as `Applied` is.
+    Task(Box<TaskType>),
     /// `T`: a type a generic declaration takes, standing for the type given at
     /// each use. It appears only inside the declaration that names it; a use is
     /// checked with the type itself in its place. Its regions are the given
@@ -127,6 +130,47 @@ impl Applied {
     /// The same shape, given `types`.
     pub fn with_types(&self, types: Vec<Type>) -> Applied {
         Applied { name: self.name.clone(), types, region: self.region.clone() }
+    }
+}
+
+/// A task's type, `(int, text) -> int`: the types of its parameters, and what it
+/// sends (`nothing` for no value), written as a header without names. Its regions
+/// are its own, as a header's are: `(text@r) -> text@r` takes text of any region
+/// and sends text of the same one, so a task value holds nothing in a region and
+/// goes anywhere. The checker names them in the order they first appear (see
+/// `TaskType::normalized`), so two types that say the same are equal.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TaskType {
+    pub params: Vec<Type>,
+    pub ret: Type,
+}
+
+/// The names a task type's regions are given, in the order they first appear
+/// (see `TaskType::normalized`); a type with more names the rest `r7`, `r8`, ….
+const TASK_REGIONS: [&str; 6] = ["r", "s", "t", "u", "v", "w"];
+
+impl TaskType {
+    /// The same type with its regions named in the order they first appear,
+    /// `r`, then `s`, and so on, so that `(text@a) -> text@a` and
+    /// `(text@b) -> text@b`, which say the same, are equal.
+    pub fn normalized(&self) -> TaskType {
+        let mut names: Vec<String> = Vec::new();
+        let mut rename = |region: &str| -> Option<String> {
+            if region == ANY_REGION {
+                return Some(region.to_string());
+            }
+            let at = match names.iter().position(|name| name == region) {
+                Some(at) => at,
+                None => {
+                    names.push(region.to_string());
+                    names.len() - 1
+                }
+            };
+            Some(TASK_REGIONS.get(at).map_or_else(|| format!("r{}", at + 1), |name| name.to_string()))
+        };
+        let params = self.params.iter().map(|ty| ty.map_regions(&mut rename)).collect();
+        let ret = self.ret.map_regions(&mut rename);
+        TaskType { params, ret }
     }
 }
 
@@ -423,6 +467,18 @@ impl Type {
                 suffix(f, &applied.region)
             }
             Type::Param(name) => write!(f, "{}", name),
+            // Its regions are its own, so none is left out for an outer one.
+            Type::Task(task) => {
+                write!(f, "(")?;
+                for (i, ty) in task.params.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    ty.write(f, None)?;
+                }
+                write!(f, ") -> ")?;
+                task.ret.write(f, None)
+            }
             Type::Array(inner, count) => {
                 write!(f, "[")?;
                 inner.write(f, outer)?;
@@ -452,9 +508,20 @@ impl Type {
             }
             Type::Or(value, error) => {
                 // `(int ~ text) ~ text`, which only a generic makes: `~` holds
-                // the whole type before it, so the inner one is grouped.
+                // the whole type before it, so the inner one is grouped, as is
+                // a task, whose result would take the `~`.
                 match &**value {
                     Type::Or(..) => grouped(f, value, outer)?,
+                    Type::Task(_) => {
+                        write!(f, "(")?;
+                        value.write(f, outer)?;
+                        write!(f, ")")?;
+                    }
+                    Type::Maybe(inner) if matches!(**inner, Type::Task(_)) => {
+                        write!(f, "(")?;
+                        value.write(f, outer)?;
+                        write!(f, ")")?;
+                    }
                     _ => value.write(f, outer)?,
                 }
                 write!(f, " ~ ")?;
@@ -519,6 +586,7 @@ impl Type {
             Type::Or(value, error) | Type::Map(value, error, _) => value.unknown() || error.unknown(),
             Type::Tuple(types) | Type::Results(types) => types.iter().any(Type::unknown),
             Type::Applied(applied) => applied.types.iter().any(Type::unknown),
+            Type::Task(task) => task.params.iter().any(Type::unknown) || task.ret.unknown(),
             Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Unit | Type::Char | Type::Nothing | Type::None | Type::Region | Type::Named(..) | Type::Param(_) => false,
         }
     }
@@ -575,6 +643,7 @@ impl Type {
                 types: applied.types.iter().map(|ty| ty.map_names(f)).collect(),
                 region: applied.region.clone(),
             })),
+            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_names(f)).collect(), ret: task.ret.map_names(f) })),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner), region.clone()),
@@ -644,6 +713,7 @@ impl Type {
                 types: applied.types.iter().map(|ty| ty.map_params(&mut *f)).collect(),
                 region: applied.region.clone(),
             })),
+            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_params(&mut *f)).collect(), ret: task.ret.map_params(f) })),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.clone()),
@@ -654,6 +724,35 @@ impl Type {
             Type::Fail(error) => Type::Fail(boxed(error, f)),
             Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_params(&mut *f)).collect()),
             Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| ty.map_params(&mut *f)).collect()),
+            other => other.clone(),
+        }
+    }
+
+    /// The type with each task type in it given its regions' names anew (see
+    /// `TaskType::normalized`), as a type made of others, whose regions it
+    /// takes, needs once they are put in: `(T) -> T` given `text@a`.
+    pub fn normalized_tasks(&self) -> Type {
+        let boxed = |t: &Type| Box::new(t.normalized_tasks());
+        match self {
+            Type::Task(task) => {
+                let task = TaskType { params: task.params.iter().map(Type::normalized_tasks).collect(), ret: task.ret.normalized_tasks() };
+                Type::Task(Box::new(task.normalized()))
+            }
+            Type::Applied(applied) => Type::Applied(Box::new(Applied {
+                name: applied.name.clone(),
+                types: applied.types.iter().map(Type::normalized_tasks).collect(),
+                region: applied.region.clone(),
+            })),
+            Type::Ptr(inner, region) => Type::Ptr(boxed(inner), region.clone()),
+            Type::Array(inner, count) => Type::Array(boxed(inner), *count),
+            Type::Slice(inner, region) => Type::Slice(boxed(inner), region.clone()),
+            Type::Map(key, value, region) => Type::Map(boxed(key), boxed(value), region.clone()),
+            Type::Range(inner) => Type::Range(boxed(inner)),
+            Type::Maybe(inner) => Type::Maybe(boxed(inner)),
+            Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
+            Type::Fail(error) => Type::Fail(boxed(error)),
+            Type::Results(types) => Type::Results(types.iter().map(Type::normalized_tasks).collect()),
+            Type::Tuple(items) => Type::Tuple(items.iter().map(Type::normalized_tasks).collect()),
             other => other.clone(),
         }
     }
@@ -669,6 +768,10 @@ impl Type {
         match self {
             Type::Param(name) => names.push(name),
             Type::Applied(applied) => applied.types.iter().for_each(|ty| ty.collect_params(names)),
+            Type::Task(task) => {
+                task.params.iter().for_each(|ty| ty.collect_params(names));
+                task.ret.collect_params(names);
+            }
             Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) => {
                 inner.collect_params(names)
             }
@@ -808,6 +911,15 @@ pub enum ExprKind {
     /// name: the macro's name in the program, and the literal it stands for.
     Macro { name: String, value: Box<Expr> },
     Var(String),
+    /// `square`: a task named as a value, without `()`, which the checker makes
+    /// of a `Var` naming a task and no variable. It holds the task's name in the
+    /// program, and its type is the task's (see `TaskType`).
+    TaskValue(String),
+    /// `f(x)` where `f` is a variable of a task type, or `ops[0](x)` and
+    /// `pick()(x)`: the task a value holds, called. The parser makes one of a
+    /// call after any value but a name, and the checker of a `Call` naming a
+    /// variable.
+    Invoke { callee: Box<Expr>, args: Vec<Expr> },
     Field(Box<Expr>, String),
     /// `xs[i]`, an item of an array or slice, or `xs[a..b]`, a slice of it.
     Index(Box<Expr>, Box<Expr>),
@@ -1611,6 +1723,7 @@ pub fn type_word(ty: &Type) -> String {
         Type::Map(key, value, _) => format!("map__{}__{}", type_word(key), type_word(value)),
         Type::Results(types) => format!("results__{}__{}", types.len(), types.iter().map(type_word).collect::<Vec<_>>().join("__")),
         Type::Tuple(items) => format!("tuple__{}__{}", items.len(), items.iter().map(type_word).collect::<Vec<_>>().join("__")),
+        Type::Task(task) => format!("task__{}__{}__{}", task.params.len(), task.params.iter().map(type_word).collect::<Vec<_>>().join("__"), type_word(&task.ret)),
     }
 }
 

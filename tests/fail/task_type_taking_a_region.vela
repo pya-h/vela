@@ -1,0 +1,6 @@
+; error: 4:20: a task that takes a region can't be a value yet; its type takes values only
+; A task type takes values only.
+task main()
+    hold f: maybe (region) -> int = none
+    show(f)
+fi

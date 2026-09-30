@@ -1,0 +1,11 @@
+; error: 9:10: 'sq' is the name of a task, so 'sq(…)' would call it rather than this task value; choose another name
+; A task value named like a task, whose call would call the task.
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    bind other = sq
+    hold sq: (int) -> int = other
+    show(sq)
+fi

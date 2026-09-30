@@ -364,7 +364,13 @@ impl Checked {
                 self.field_accesses.insert(pos(e.span), shape.clone());
             }
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
-            | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::TypeOf(_) => {}
+            | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::TypeOf(_) | ExprKind::TaskValue(_) => {}
+            ExprKind::Invoke { callee, args } => {
+                self.expr(callee, kinds);
+                for arg in args {
+                    self.expr(arg, kinds);
+                }
+            }
             ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. } | ExprKind::Shortcut { value: inner, .. } => self.expr(inner, kinds),
             ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
                 self.expr(a, kinds);

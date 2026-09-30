@@ -1203,10 +1203,12 @@ impl<'a> Classifier<'a> {
                     // A field's value in a shape literal is not a type.
                     in_type = !matches!(braces.last(), Some(Brace::Literal(_)));
                 }
+                // `(int) -> int`: a task's type, whose arrow follows the `)` of
+                // the types it takes; any other arrow starts a header's results.
                 Token::Arrow => {
                     self.push(range, TokenClass::Operator, None);
                     in_type = true;
-                    in_results = true;
+                    in_results |= !(was_after_type && tokens.before(p) == Some(&Token::RParen));
                 }
                 Token::Caret => {
                     self.push(range, TokenClass::Operator, None);

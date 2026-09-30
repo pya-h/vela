@@ -1,0 +1,24 @@
+49
+9 true false true
+task (int) -> int (int) -> int
+add 9
+mul 20
+13 42
+1 2 1
+hi Ada
+hi Ada
+none
+81
+h
+81
+3 0
+16 25
+36 Handler { name: "sq", run: task (int) -> int }
+-2
+-8
+true false
+-3 9 (task (int) -> int, 2)
+-1 ["neg": task (int) -> int]
+task (int) -> int
+-1 Box<(int) -> int> { value: task (int) -> int }
+5 4

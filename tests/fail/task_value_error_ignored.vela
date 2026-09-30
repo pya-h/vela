@@ -1,0 +1,10 @@
+; error: 9:5: the error 'f' may send is ignored; handle it with a plan B, as in 'f(…) { failure e … }', or with match
+; The error a task value may send is handled.
+task safe(n: int) -> int ~ text
+    <- n
+fi
+
+task main()
+    bind f = safe
+    f(2)
+fi

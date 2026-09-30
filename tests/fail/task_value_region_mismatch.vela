@@ -1,0 +1,15 @@
+; error: 14:13: expected type (text@r) -> text@r, got (text) -> text; a task's type says which regions its values are in, as its header does: 'text' is text that lasts as long as the program, and 'text@r' text of any region the caller gives
+; A task taking text that lasts, given where a task taking text of any region is expected.
+task shout(t: text) -> text
+    <- t
+fi
+
+task on(f: (text@a) -> text@a, t: text@b) -> text@b
+    <- f(t)
+fi
+
+task main()
+    region r
+    bind w = "a" + "b" at r
+    show(on(shout, w))
+fi

@@ -1,0 +1,11 @@
+; A map's key and value types name a module's shape as any type does, through
+; the name the file gives the module.
+
+include map_of_an_aliased_shape/geo => g
+
+task main()
+    region r
+    hold m: [text: g.Point]@r = ["a": g.Point { x: 1 }] at r
+    m["b"] = g.Point { x: 2 }
+    show(m)
+fi
