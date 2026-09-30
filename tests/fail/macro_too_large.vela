@@ -1,0 +1,2 @@
+; error: 2:33: the value doesn't fit in an int
+macro BIG = 9223372036854775807 + 1

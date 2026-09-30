@@ -195,8 +195,31 @@ impl<'a> Knowledge<'a> {
             (SymbolKind::Variable, Some("case" | "is")) => self.case_binding_type(id, depth + 1),
             (SymbolKind::Variable, Some("failure")) => self.plan_b_error_type(id, depth + 1),
             (SymbolKind::Variable, _) if !symbol.detail.is_empty() => parse_type(&symbol.detail),
+            (SymbolKind::Macro, _) => self.macro_type(symbol, depth),
             // Text of no region in particular lasts, as the checker settles it.
             (SymbolKind::Variable, _) => self.initializer_type(symbol, depth).map(|ty| vela::check::lasting(&ty, &self.types_holding(holds_pointers))),
+            _ => None,
+        }
+    }
+
+    /// The type of a macro's value, `= 3.14159`: in this file, of the value as
+    /// written; in another, of the literal it starts with.
+    fn macro_type(&self, symbol: &Symbol, depth: usize) -> Option<Type> {
+        if symbol.module.is_none() {
+            let name = self.at_byte(symbol.name_range.start)?;
+            let end = self.line_end(name).checked_sub(1)?;
+            return self.span_type(name + 2, end, depth + 1);
+        }
+        let value = symbol.detail.strip_prefix('=')?.trim_start();
+        let first = value.chars().next()?;
+        match first {
+            '"' => Some(Type::Text(None)),
+            '\'' => Some(Type::Char),
+            _ if value.starts_with("true") || value.starts_with("false") => Some(Type::Bool),
+            '0'..='9' | '-' => {
+                let number: String = value.chars().take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_')).collect();
+                Some(if number.contains('.') || number.contains('e') { Type::Float } else { Type::Int })
+            }
             _ => None,
         }
     }

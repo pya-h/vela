@@ -1,0 +1,2 @@
+; error: 2:12: a macro's type is its value's, so none is written: 'macro LIMIT = …'
+macro LIMIT: int = 10

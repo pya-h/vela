@@ -1,4 +1,4 @@
-; error: 5:10: module 'library' has no task, shape, kind, or variant named 'gret'
+; error: 5:10: module 'library' has no task, shape, kind, variant, or macro named 'gret'
 include modules/library
 
 task main()

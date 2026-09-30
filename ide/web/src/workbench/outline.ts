@@ -16,6 +16,7 @@ export const SYMBOL_BADGES: Record<SymbolKind, { text: string; className: string
   variable: { text: "B", className: "kind-variable" },
   region: { text: "R", className: "kind-region" },
   "type-param": { text: "T", className: "kind-type-param" },
+  macro: { text: "#", className: "kind-macro" },
   // The outline lists a file's own declarations, never a module it uses.
   module: { text: "M", className: "kind-module" },
 };

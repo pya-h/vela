@@ -3,6 +3,9 @@
 ; last first, and a loop through the slice as it is at each pass meets its end
 ; halfway.
 
+; How far the search goes: a macro, a value the compiler knows.
+macro LIMIT = 50
+
 task is_prime(n: int) -> bool
     each i in 2..(n/2 + 1)
         when n % i == 0
@@ -38,8 +41,7 @@ fi
 
 priv task main()
     region r
-    bind primes_limit = 50
-    bind results = primes_below(r, primes_limit)
+    bind results = primes_below(r, LIMIT)
     show("Found: ")
     show(results.len)
     show("-----------------------")

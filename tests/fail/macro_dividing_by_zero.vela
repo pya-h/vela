@@ -1,0 +1,2 @@
+; error: 2:17: division by zero
+macro RATE = 10 / (5 - 5)

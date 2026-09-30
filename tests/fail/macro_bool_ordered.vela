@@ -1,0 +1,2 @@
+; error: 2:20: '<' orders numbers, chars, and text, not bools
+macro WRONG = true < false

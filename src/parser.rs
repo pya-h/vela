@@ -2,6 +2,9 @@ use crate::ast::*;
 use crate::error::{Error, Result};
 use crate::lexer::{KEYWORDS, LexKind, LexToken, Piece, Token};
 
+/// The mistake of a macro written inside a task, shape, or kind.
+const MISPLACED_MACRO: &str = "a macro is written outside every task, shape, and kind, as in 'macro P = 3.14159' at the start of a line";
+
 /// How deeply code may nest: parentheses, operators in a row, unary
 /// operators, `^` in types, and blocks inside blocks each add a level. Every
 /// compiler stage walks the tree recursively, so without a limit deeply nested
@@ -385,6 +388,10 @@ impl Parser {
         if self.match_token(Token::Fi) {
             return Ok(());
         }
+        // An indented macro was meant to be inside the block.
+        if self.at_macro_after(0) && self.peek_span().col > 1 {
+            return Err(Error::at(self.peek_span(), MISPLACED_MACRO));
+        }
         if self.is_at_end() || self.at_item_start() || matches!(self.peek(), Token::Else | Token::Case | Token::RBrace) {
             // Directly in a task, an `else` or `case` has no block to belong to.
             let hint = match self.peek() {
@@ -453,8 +460,8 @@ impl Parser {
         match self.peek() {
             Token::Task | Token::Shape | Token::Kind | Token::Include => true,
             // `priv` also marks a shape's field.
-            Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind)),
-            _ => false,
+            Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind)) || self.at_macro_after(1),
+            _ => self.at_macro_after(0),
         }
     }
 
@@ -469,6 +476,31 @@ impl Parser {
         matches!(next, Token::Eof | Token::Task | Token::Shape | Token::Kind | Token::Priv)
     }
 
+    /// Whether the tokens `ahead` of the cursor start a macro, `macro NAME`.
+    /// `macro` is a word only there (see `ast::MACRO`).
+    fn at_macro_after(&self, ahead: usize) -> bool {
+        matches!(self.tokens.get(self.pos + ahead), Some(Token::Ident(word)) if word == MACRO)
+            && matches!(self.tokens.get(self.pos + ahead + 1), Some(Token::Ident(_)))
+    }
+
+    /// `macro NAME = value`, at `macro`, on a line of its own.
+    fn parse_macro(&mut self) -> Result<MacroDef> {
+        self.advance(); // macro
+        let span = self.peek_span();
+        let name = self.expect_ident()?;
+        if self.check(Token::Colon) {
+            return Err(Error::at(self.peek_span(), format!("a macro's type is its value's, so none is written: 'macro {} = …'", name)));
+        }
+        if !self.match_token(Token::Assign) {
+            return Err(self.unexpected(&format!("'=' and the value macro '{}' stands for", name)));
+        }
+        let value = self.parse_expr()?;
+        if !matches!(self.peek(), Token::Newline | Token::Eof) {
+            return Err(self.unexpected("the end of the line: a macro is written on a line of its own"));
+        }
+        Ok(MacroDef { name, value, span, private: false })
+    }
+
     fn parse_item(&mut self) -> Result<Item> {
         self.skip_newlines();
         if self.check(Token::Priv) {
@@ -479,17 +511,22 @@ impl Parser {
                 _ if self.at_native() => self.parse_native().map(Item::Task)?,
                 Token::Shape => self.parse_shape().map(Item::Shape)?,
                 Token::Kind => self.parse_kind().map(Item::Kind)?,
-                _ => return Err(Error::at(span, "'priv' goes before a task, shape, or kind, or a shape's field")),
+                _ if self.at_macro_after(0) => self.parse_macro().map(Item::Macro)?,
+                _ => return Err(Error::at(span, "'priv' goes before a task, shape, kind, or macro, or a shape's field")),
             };
             match &mut item {
                 Item::Task(t) => t.private = true,
                 Item::Shape(s) => s.private = true,
                 Item::Kind(k) => k.private = true,
+                Item::Macro(m) => m.private = true,
             }
             return Ok(item);
         }
         if self.at_native() {
             return self.parse_native().map(Item::Task);
+        }
+        if self.at_macro_after(0) {
+            return self.parse_macro().map(Item::Macro);
         }
         match self.peek() {
             Token::Task => self.parse_task().map(Item::Task),
@@ -569,7 +606,7 @@ impl Parser {
         self.skip_newlines();
         // A body written anyway is read, so that loading says what is wrong: in
         // a program, that it has no native tasks at all.
-        if !matches!(self.peek(), Token::Task | Token::Shape | Token::Kind | Token::Priv | Token::Eof) && !self.at_native() {
+        if !matches!(self.peek(), Token::Task | Token::Shape | Token::Kind | Token::Priv | Token::Eof) && !self.at_native() && !self.at_macro_after(0) {
             task.body = self.parse_block()?;
             self.expect_fi("task", opened)?;
         }
@@ -1499,7 +1536,8 @@ impl Parser {
                 self.parse_simple_stmt(span)
             }
             Token::Region => self.parse_region(),
-            Token::Priv => Err(Error::at(span, "'priv' goes before a task, shape, or kind, or a shape's field, not a statement")),
+            Token::Priv => Err(Error::at(span, "'priv' goes before a task, shape, kind, or macro, or a shape's field, not a statement")),
+            _ if self.at_macro_after(0) => Err(Error::at(span, MISPLACED_MACRO)),
             Token::Ident(name) if name == "free" && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::New)) => Err(
                 Error::at(span, "Vela has no 'free': memory in a region is freed when the block declaring the region closes"),
             ),

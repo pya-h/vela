@@ -17,7 +17,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use serde::Serialize;
-use vela::ast::{ALTERS, BUILTIN_TASKS, DEFAULT, MODULE_SEPARATOR, NATIVE, NEW_WORD, READ, Span, THIS_WORD, Type, unqualified};
+use vela::ast::{ALTERS, BUILTIN_TASKS, DEFAULT, MACRO, MODULE_SEPARATOR, NATIVE, NEW_WORD, READ, Span, THIS_WORD, Type, unqualified};
 use vela::lexer::{ESCAPES, LexKind, LexToken, Piece, Token, highlight};
 
 use crate::types::{Context, slashed};
@@ -78,6 +78,8 @@ pub enum SymbolKind {
     Module,
     /// A type a generic declaration takes, `T` in `task first<T>(…)`.
     TypeParam,
+    /// `macro P = 3.14159`: a name for a value the compiler computes.
+    Macro,
 }
 
 impl SymbolKind {
@@ -93,6 +95,8 @@ impl SymbolKind {
             SymbolKind::Region => TokenClass::Region,
             SymbolKind::Module => TokenClass::Module,
             SymbolKind::TypeParam => TokenClass::Type,
+            // A value that never changes, as a variant is.
+            SymbolKind::Macro => TokenClass::Variant,
         }
     }
 }
@@ -318,7 +322,7 @@ fn included_modules(
             for &i in &kept {
                 let Some(symbol) = theirs.get(i) else { continue };
                 let mut symbol = symbol.clone();
-                if matches!(symbol.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Variant) {
+                if matches!(symbol.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Variant | SymbolKind::Macro) {
                     declared.entry(symbol.name.clone()).or_insert(symbols.len());
                     // A variant keeps its name: only a whole declaration takes an alias.
                     let kind = symbol.parent.and_then(|parent| theirs.get(parent)).map(|kind| kind.name.as_str());
@@ -343,7 +347,7 @@ fn included_modules(
         }
         for written in &line.names {
             let found = declared.get(&written.name).copied().filter(|&id| {
-                symbols.get(id).is_some_and(|s| !s.private && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Variant))
+                symbols.get(id).is_some_and(|s| !s.private && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Variant | SymbolKind::Macro))
             });
             if let Some(id) = found {
                 declared_at.insert(written.at, id);
@@ -832,6 +836,30 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                             q += 1;
                         }
                     }
+                }
+            }
+            // `macro P = 3.14159`, or `priv macro P = …`, at the start of a
+            // line outside every item: a declaration of its own line.
+            Token::Ident(word)
+                if word == MACRO
+                    && tokens.ident(p + 1).is_some()
+                    && matches!(tokens.before(p), None | Some(Token::Newline | Token::Priv))
+                    && tokens.get(if tokens.before(p) == Some(&Token::Priv) { p - 1 } else { p }).is_some_and(|t| t.start.col == 1) =>
+            {
+                for open in [method.take(), item.take()].into_iter().flatten() {
+                    close(&mut symbols, open, last_end);
+                }
+                methods_above = false;
+                blocks.clear();
+                let detail = tokens.text_after(p + 1, never);
+                let id = declare(&mut symbols, p + 1, SymbolKind::Macro, detail, None);
+                if let Some(symbol) = symbols.get_mut(id) {
+                    let first = if tokens.before(p) == Some(&Token::Priv) { p - 1 } else { p };
+                    let mut last = p + 1;
+                    while !matches!(tokens.token(last + 1), None | Some(Token::Newline | Token::Eof)) {
+                        last += 1;
+                    }
+                    symbol.range = tokens.range(first).start..tokens.range(last).end;
                 }
             }
             Token::When | Token::Loop | Token::Each | Token::Block | Token::Match => blocks.push(Block::Inner),
@@ -1412,6 +1440,10 @@ impl<'a> Classifier<'a> {
         if name == READ && self.declared_at.get(&(p + 1)).and_then(|&id| self.symbols.get(id)).is_some_and(|s| s.kind == SymbolKind::Field && s.read) {
             return (TokenClass::Keyword, None);
         }
+        // `macro P = …`: the word before a macro's name.
+        if name == MACRO && self.declared_at.get(&(p + 1)).and_then(|&id| self.symbols.get(id)).is_some_and(|s| s.kind == SymbolKind::Macro) {
+            return (TokenClass::Keyword, None);
+        }
         // `native task …`: a task of Vela's library whose body is C.
         if name == NATIVE && after == Some(&Token::Task) {
             return (TokenClass::Keyword, None);
@@ -1608,7 +1640,7 @@ impl<'a> Classifier<'a> {
             let kind = self.symbols.get(id).map_or(SymbolKind::Variable, |s| s.kind);
             return (kind.class(), Some(id));
         }
-        if let Some(id) = self.global(name, &[SymbolKind::Variant, SymbolKind::Task, SymbolKind::Shape, SymbolKind::Kind]) {
+        if let Some(id) = self.global(name, &[SymbolKind::Variant, SymbolKind::Macro, SymbolKind::Task, SymbolKind::Shape, SymbolKind::Kind]) {
             let kind = self.symbols.get(id).map_or(SymbolKind::Variable, |s| s.kind);
             return (kind.class(), Some(id));
         }

@@ -1,0 +1,90 @@
+  1 | ; Macros: `macro NAME = value` outside every task, a value the compiler
+    | comment:; Macros: `macro NAME = value` outside every task, a value the compiler
+  2 | ; computes from literals, other macros, and operators on them. Its type is its
+    | comment:; computes from literals, other macros, and operators on them. Its type is its
+  3 | ; value's, and each use is that value, a C `#define`.
+    | comment:; value's, and each use is that value, a C `#define`.
+  5 | include macros/limits (LIMIT => MAX, GREETING)
+    | keyword:include  module:macros  operator:/  module:limits  punctuation:(  variant:LIMIT  operator:=>  variant:MAX  punctuation:,  variant:GREETING  punctuation:)
+  7 | macro P = 3.14159
+    | keyword:macro  variant:P  operator:=  number:3.14159
+  8 | macro TAU = P * 2.0
+    | keyword:macro  variant:TAU  operator:=  variant:P  operator:*  number:2.0
+  9 | macro SIZE = 4
+    | keyword:macro  variant:SIZE  operator:=  number:4
+ 10 | macro LAST = SIZE - 1
+    | keyword:macro  variant:LAST  operator:=  variant:SIZE  operator:-  number:1
+ 11 | macro NAME = "vela"
+    | keyword:macro  variant:NAME  operator:=  string:"vela"
+ 12 | macro TITLE = NAME + "!"
+    | keyword:macro  variant:TITLE  operator:=  variant:NAME  operator:+  string:"!"
+ 13 | macro FIRST = 'a'
+    | keyword:macro  variant:FIRST  operator:=  string:'a'
+ 14 | macro NEXT = FIRST + 1
+    | keyword:macro  variant:NEXT  operator:=  variant:FIRST  operator:+  number:1
+ 15 | macro BIG = SIZE > 2 and not false
+    | keyword:macro  variant:BIG  operator:=  variant:SIZE  operator:>  number:2  keyword:and  keyword:not  keyword:false
+ 16 | macro SMALL = unit(200)
+    | keyword:macro  variant:SMALL  operator:=  type-builtin:unit  punctuation:(  number:200  punctuation:)
+ 17 | macro LOWEST = -9223372036854775807 - 1
+    | keyword:macro  variant:LOWEST  operator:=  operator:-  number:9223372036854775807  operator:-  number:1
+ 18 | macro WHOLE = int(2.9)
+    | keyword:macro  variant:WHOLE  operator:=  type-builtin:int  punctuation:(  number:2.9  punctuation:)
+ 19 | macro HALF = float(SIZE) / 2.0
+    | keyword:macro  variant:HALF  operator:=  type-builtin:float  punctuation:(  variant:SIZE  punctuation:)  operator:/  number:2.0
+ 20 | ; A macro may name one declared below it.
+    | comment:; A macro may name one declared below it.
+ 21 | macro AREA = SIDE * SIDE
+    | keyword:macro  variant:AREA  operator:=  variant:SIDE  operator:*  variant:SIDE
+ 22 | macro SIDE = 3
+    | keyword:macro  variant:SIDE  operator:=  number:3
+ 24 | shape Circle
+    | keyword:shape  type:Circle
+ 25 |     radius: float = 1.0
+    | field:radius  punctuation::  type-builtin:float  operator:=  number:1.0
+ 26 |     shared unit_area: float = P
+    | keyword:shared  field:unit_area  punctuation::  type-builtin:float  operator:=  variant:P
+ 27 | fi
+    | keyword:fi
+ 29 | task circle_area(c: Circle) -> float
+    | keyword:task  task:circle_area  punctuation:(  parameter:c  punctuation::  type:Circle  punctuation:)  operator:->  type-builtin:float
+ 30 |     <- P * c.radius * c.radius
+    | keyword:<-  variant:P  operator:*  parameter:c  punctuation:.  field:radius  operator:*  parameter:c  punctuation:.  field:radius
+ 31 | fi
+    | keyword:fi
+ 33 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 34 |     show(P, " ", TAU, " ", HALF, " ", circle_area(Circle { radius: 2.0 }), " ", Circle.unit_area)
+    | builtin-fn:show  punctuation:(  variant:P  punctuation:,  string:" "  punctuation:,  variant:TAU  punctuation:,  string:" "  punctuation:,  variant:HALF  punctuation:,  string:" "  punctuation:,  task:circle_area  punctuation:(  type:Circle  punctuation:{  field:radius  punctuation::  number:2.0  punctuation:}  punctuation:)  punctuation:,  string:" "  punctuation:,  type:Circle  punctuation:.  field:unit_area  punctuation:)
+ 35 |     show(SIZE, " ", LAST, " ", LOWEST, " ", WHOLE, " ", AREA)
+    | builtin-fn:show  punctuation:(  variant:SIZE  punctuation:,  string:" "  punctuation:,  variant:LAST  punctuation:,  string:" "  punctuation:,  variant:LOWEST  punctuation:,  string:" "  punctuation:,  variant:WHOLE  punctuation:,  string:" "  punctuation:,  variant:AREA  punctuation:)
+ 36 |     show(NAME, " ", TITLE, " ", NAME.len, " ", TITLE[4], " ", FIRST, " ", NEXT, " ", BIG)
+    | builtin-fn:show  punctuation:(  variant:NAME  punctuation:,  string:" "  punctuation:,  variant:TITLE  punctuation:,  string:" "  punctuation:,  variant:NAME  punctuation:.  field:len  punctuation:,  string:" "  punctuation:,  variant:TITLE  punctuation:[  number:4  punctuation:]  punctuation:,  string:" "  punctuation:,  variant:FIRST  punctuation:,  string:" "  punctuation:,  variant:NEXT  punctuation:,  string:" "  punctuation:,  variant:BIG  punctuation:)
+ 37 |     ; An int macro is a unit where one is expected, as a literal is.
+    | comment:; An int macro is a unit where one is expected, as a literal is.
+ 38 |     hold b: unit = SIZE
+    | keyword:hold  variable:b  punctuation::  type-builtin:unit  operator:=  variant:SIZE
+ 39 |     show(b + SMALL, " ", SMALL)
+    | builtin-fn:show  punctuation:(  variable:b  operator:+  variant:SMALL  punctuation:,  string:" "  punctuation:,  variant:SMALL  punctuation:)
+ 40 |     bind xs = [0#SIZE]
+    | keyword:bind  variable:xs  operator:=  punctuation:[  number:0  punctuation:#  variant:SIZE  punctuation:]
+ 41 |     show(xs, " ", xs[LAST])
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:[  variant:LAST  punctuation:]  punctuation:)
+ 42 |     each i in 0..SIDE
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  variant:SIDE
+ 43 |         show(i)
+    | builtin-fn:show  punctuation:(  variable:i  punctuation:)
+ 44 |     fi
+    | keyword:fi
+ 45 |     when SIZE == 4
+    | keyword:when  variant:SIZE  operator:==  number:4
+ 46 |         show("four")
+    | builtin-fn:show  punctuation:(  string:"four"  punctuation:)
+ 47 |     fi
+    | keyword:fi
+ 48 |     ; Another file's macros, through its module or brought in.
+    | comment:; Another file's macros, through its module or brought in.
+ 49 |     show(MAX, " ", GREETING, " ", limits.DOUBLE_LIMIT, " ", limits.spare())
+    | builtin-fn:show  punctuation:(  variant:MAX  punctuation:,  string:" "  punctuation:,  variant:GREETING  punctuation:,  string:" "  punctuation:,  module:limits  punctuation:.  variant:DOUBLE_LIMIT  punctuation:,  string:" "  punctuation:,  module:limits  punctuation:.  task:spare  punctuation:(  punctuation:)  punctuation:)
+ 50 | fi
+    | keyword:fi

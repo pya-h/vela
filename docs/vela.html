@@ -286,8 +286,9 @@ block shared type</pre>
         after a kind or one of its variants; a field may. Nor may a variable be named after a shape, whose
         <a href="#shared">shared fields</a> <code>Shape.f</code> names. <code>new</code> is reserved everywhere
         but after <code>shared</code> and after a dot, where it names a <a href="#shared-methods">shared method</a>,
-        <code>Point.new(…)</code>. Five words are read by their position and are no more
+        <code>Point.new(…)</code>. Six words are read by their position and are no more
         reserved than those: <code>alters</code> before a method (see <a href="#methods">Methods</a>),
+        <code>macro</code> at the start of a line outside every task (see <a href="#macros">Macros</a>),
         <code>read</code> before a shape's field (see <a href="#read-fields">Read-only fields</a>),
         <code>default</code> after a region (see <a href="#default-region">A block's default region</a>),
         <code>this</code>, and <code>native</code> before a task of the standard library (see
@@ -333,7 +334,8 @@ block shared type</pre>
         <tr><td><code>"n = {n}" at r</code>, <code>"n = {n}"@r</code></td><td>text holding values, in region <code>r</code>; <code>\{</code> and <code>\}</code> write braces (see <a href="#interpolation">Text holding values</a>)</td></tr>
         <tr><td><code>xs.add(v)</code>, <code>xs.add(i, v)</code>, <code>xs.del(i)</code>, <code>xs.del()</code></td><td>add a value to a slice, last or before item <code>i</code>; take item <code>i</code>, or the last, out of it and give it</td></tr>
         <tr><td><code>x.copy()</code>, <code>x.copy() at r</code></td><td>a copy of a value in the region where it goes, or in <code>r</code> (also <code>x.copy()@r</code>; see <a href="#copy">Copying into another region</a>)</td></tr>
-        <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, or variant of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
+        <tr><td><code>macro NAME = value</code></td><td>a name for a value the compiler computes, outside every task (see <a href="#macros">Macros</a>)</td></tr>
+        <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, variant, or macro of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
         <tr><td><code>Kind.Variant</code></td><td>a variant, named through its kind (see <a href="#kinds">Kinds</a>)</td></tr>
         <tr><td><code>Shape.f</code>, <code>Shape.m(…)</code>, <code>Kind.m(…)</code></td><td>a shared field of a shape, and a shared method of a shape or kind, named through it (see <a href="#shared">Shared fields</a> and <a href="#shared-methods">shared methods</a>)</td></tr>
         <tr><td><code>x.type</code></td><td>the type of <code>x</code>, as text (see <a href="#type-of">The type of a value</a>)</td></tr>
@@ -2031,6 +2033,47 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
           is an error that says to require <code>shown</code> too.</li>
       </ul>
 
+      <h3 id="macros">Macros</h3>
+      <p>
+        A macro names a value the compiler computes. It is written outside every task, shape, and kind, at the start
+        of a line, as <code>macro NAME = value</code>, and its type is its value's: no type is written. Each use of the
+        name is that value, and nothing can change it. In C, a macro is a <code>#define</code> holding the value, and each
+        use names it.
+      </p>
+      <pre><code>macro P = 3.14159
+macro TAU = P * 2.0          ; 6.28318, a float
+macro SIZE = 4
+macro LAST = SIZE - 1        ; 3, an int
+macro NAME = "vela"
+macro TITLE = NAME + "!"     ; "vela!", text
+macro FIRST = 'a'
+macro BIG = SIZE &gt; 2         ; true
+macro SMALL = unit(200)
+priv macro SECRET = 42       ; only this file names it
+
+task main()
+    show(TAU, " ", TITLE, " ", LAST)   ; 6.28318 vela! 3
+    bind xs = [0#SIZE]                 ; [0, 0, 0, 0]
+    hold b: unit = SIZE                ; an int macro is a unit where one is expected, as 4 is
+fi</code></pre>
+      <p>
+        A value is anything the compiler can work out: literals of numbers, <code>unit</code>s, chars, bools, and text;
+        other macros, declared above or below; the operators on them (<code>+ - * / %</code>, comparisons,
+        <code>and</code>, <code>or</code>, <code>not</code>, and <code>+</code> joining text); and the conversions
+        <code>int(…)</code>, <code>float(…)</code>, <code>unit(…)</code>, and <code>char(…)</code>. They follow the rules
+        they follow in a task, and what would stop the program when it runs stops the compiler instead: a division by zero,
+        an int that overflows, a char or a unit outside 0..255, and a float that is no number. A call, a variable, an
+        array, text holding values (<code>"{NAME}!"</code>), and <code>none</code> are made when the program runs, so no
+        macro can be one; nor can a macro be computed from itself, through others or not.
+      </p>
+      <p>
+        A macro is a name of its file, as a task is: another file names it <code>m.NAME</code>, or <code>NAME</code> after
+        <code>include m (NAME)</code>, and <code>priv macro</code> keeps it to its own file (see <a href="#modules">Modules</a>).
+        No variable takes a macro's name, so <code>P</code> always means the macro. A macro is a value, not a place:
+        <code>P = 3.0</code> and <code>&amp;P</code> are errors. Macros that take values, as C's
+        <code>#define MAX(a, b)</code> does, are an idea for later (see <a href="future.html#macro-tasks">Macros that take values</a>).
+      </p>
+
       <h3 id="names">Names</h3>
       <p>
         A name starts with an ASCII letter and continues with ASCII letters, digits, and <code>_</code>, but cannot
@@ -2039,15 +2082,15 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
         in Vela.
       </p>
       <p>
-        Tasks, shapes, kinds, and variants share one namespace in a file: no two of them can have the same name, even
+        Tasks, shapes, kinds, variants, and <a href="#macros">macros</a> share one namespace in a file: no two of them can have the same name, even
         across different kinds, and none can be named like a builtin: the types (<code>int</code>, <code>float</code>,
         <code>bool</code>, <code>unit</code>, <code>char</code>, <code>text</code>, <code>nothing</code>), the tasks (<code>show</code>, <code>scan</code>), or
         the kinds no file declares and their variants (<a href="#reading-numbers"><code>ParseError</code></a> with
         <code>NotANumber</code> and <code>TooLarge</code>, <a href="#reading-input"><code>InputError</code></a> with
         <code>Ended</code> and <code>NoNumber</code>). Another module has names of its own
         (see <a href="#modules">Modules</a>). Every type you write must be a builtin, a shape, or a kind. A variable
-        can't take the name of a variant, a kind, or a module the file includes, so a bare <code>Red</code> always means
-        the variant, and <code>Light.Red</code> a variant of <code>Light</code>.
+        can't take the name of a variant, a macro, a kind, or a module the file includes, so a bare <code>Red</code> always means
+        the variant, <code>P</code> the macro, and <code>Light.Red</code> a variant of <code>Light</code>.
       </p>
 
       <h3 id="control-flow">Control Flow</h3>

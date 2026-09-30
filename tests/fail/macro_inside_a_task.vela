@@ -1,0 +1,4 @@
+; error: 3:5: a macro is written outside every task, shape, and kind, as in 'macro P = 3.14159' at the start of a line
+task main()
+    macro LIMIT = 10
+fi

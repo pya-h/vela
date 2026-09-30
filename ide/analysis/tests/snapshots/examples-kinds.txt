@@ -6,93 +6,97 @@
     | comment:; `alters` may move the value to another variant, or the same one with new
   4 | ; values.
     | comment:; values.
-  6 | kind Shape
+  6 | ; Pi, to as many places as the areas need.
+    | comment:; Pi, to as many places as the areas need.
+  7 | macro P = 3.14159
+    | keyword:macro  variant:P  operator:=  number:3.14159
+  9 | kind Shape
     | keyword:kind  type:Shape
-  7 |     Circle(radius: float)
+ 10 |     Circle(radius: float)
     | variant:Circle  punctuation:(  field:radius  punctuation::  type-builtin:float  punctuation:)
-  8 |     Rectangle(width: float, height: float)
+ 11 |     Rectangle(width: float, height: float)
     | variant:Rectangle  punctuation:(  field:width  punctuation::  type-builtin:float  punctuation:,  field:height  punctuation::  type-builtin:float  punctuation:)
-  9 |     Dot
+ 12 |     Dot
     | variant:Dot
- 11 |     ; A method named `str` says how the value becomes text. It makes new text,
+ 14 |     ; A method named `str` says how the value becomes text. It makes new text,
     | comment:; A method named `str` says how the value becomes text. It makes new text,
- 12 |     ; so it takes the region the text goes in; `show(shape)` calls it, in a
+ 15 |     ; so it takes the region the text goes in; `show(shape)` calls it, in a
     | comment:; so it takes the region the text goes in; `show(shape)` calls it, in a
- 13 |     ; region of its own, and so does `"{shape}"`.
+ 16 |     ; region of its own, and so does `"{shape}"`.
     | comment:; region of its own, and so does `"{shape}"`.
- 14 |     str(r: region) -> text@r
+ 17 |     str(r: region) -> text@r
     | method:str  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
- 15 |         <- match .this
+ 18 |         <- match .this
     | keyword:<-  keyword:match  punctuation:.  keyword:this
- 16 |         case Circle radius = "circle of {radius}" at r
+ 19 |         case Circle radius = "circle of {radius}" at r
     | keyword:case  variant:Circle  variable:radius  operator:=  string:"circle of {  variable:radius  string:}"  keyword:at  region:r
- 17 |         case Rectangle w h = "rectangle {w} by {h}" at r
+ 20 |         case Rectangle w h = "rectangle {w} by {h}" at r
     | keyword:case  variant:Rectangle  variable:w  variable:h  operator:=  string:"rectangle {  variable:w  string:} by {  variable:h  string:}"  keyword:at  region:r
- 18 |         case Dot = "dot"
+ 21 |         case Dot = "dot"
     | keyword:case  variant:Dot  operator:=  string:"dot"
- 19 |         fi
+ 22 |         fi
     | keyword:fi
- 20 |     fi
+ 23 |     fi
     | keyword:fi
- 22 |     ; Every case gives the value, so the match is the value this method sends.
+ 25 |     ; Every case gives the value, so the match is the value this method sends.
     | comment:; Every case gives the value, so the match is the value this method sends.
- 23 |     area() -> float
+ 26 |     area() -> float
     | method:area  punctuation:(  punctuation:)  operator:->  type-builtin:float
- 24 |         <- match .this
+ 27 |         <- match .this
     | keyword:<-  keyword:match  punctuation:.  keyword:this
- 25 |         case Circle radius = 3.14159 * radius * radius
-    | keyword:case  variant:Circle  variable:radius  operator:=  number:3.14159  operator:*  variable:radius  operator:*  variable:radius
- 26 |         case Rectangle w h = w * h
+ 28 |         case Circle radius = P * radius * radius
+    | keyword:case  variant:Circle  variable:radius  operator:=  variant:P  operator:*  variable:radius  operator:*  variable:radius
+ 29 |         case Rectangle w h = w * h
     | keyword:case  variant:Rectangle  variable:w  variable:h  operator:=  variable:w  operator:*  variable:h
- 27 |         case Dot = 0.0
+ 30 |         case Dot = 0.0
     | keyword:case  variant:Dot  operator:=  number:0.0
- 28 |         fi
+ 31 |         fi
     | keyword:fi
- 29 |     fi
+ 32 |     fi
     | keyword:fi
- 31 |     alters grow()
+ 34 |     alters grow()
     | keyword:alters  method:grow  punctuation:(  punctuation:)
- 32 |         match .this
+ 35 |         match .this
     | keyword:match  punctuation:.  keyword:this
- 33 |         case Circle radius
+ 36 |         case Circle radius
     | keyword:case  variant:Circle  variable:radius
- 34 |             .this = Circle(radius * 2.0)
+ 37 |             .this = Circle(radius * 2.0)
     | punctuation:.  keyword:this  operator:=  variant:Circle  punctuation:(  variable:radius  operator:*  number:2.0  punctuation:)
- 35 |         case Rectangle w h
+ 38 |         case Rectangle w h
     | keyword:case  variant:Rectangle  variable:w  variable:h
- 36 |             .this = Rectangle(w * 2.0, h * 2.0)
+ 39 |             .this = Rectangle(w * 2.0, h * 2.0)
     | punctuation:.  keyword:this  operator:=  variant:Rectangle  punctuation:(  variable:w  operator:*  number:2.0  punctuation:,  variable:h  operator:*  number:2.0  punctuation:)
- 37 |         case Dot
+ 40 |         case Dot
     | keyword:case  variant:Dot
- 38 |             .this = Circle(1.0)
+ 41 |             .this = Circle(1.0)
     | punctuation:.  keyword:this  operator:=  variant:Circle  punctuation:(  number:1.0  punctuation:)
- 39 |         fi
+ 42 |         fi
     | keyword:fi
- 40 |     fi
+ 43 |     fi
     | keyword:fi
- 41 | fi
+ 44 | fi
     | keyword:fi
- 43 | task main()
+ 46 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 44 |     bind c = Circle(5.0)
+ 47 |     bind c = Circle(5.0)
     | keyword:bind  variable:c  operator:=  variant:Circle  punctuation:(  number:5.0  punctuation:)
- 45 |     show(c, " covers ", c.area())
+ 48 |     show(c, " covers ", c.area())
     | builtin-fn:show  punctuation:(  variable:c  punctuation:,  string:" covers "  punctuation:,  variable:c  punctuation:.  method:area  punctuation:(  punctuation:)  punctuation:)
- 47 |     ; Only a `hold` value can change.
+ 50 |     ; Only a `hold` value can change.
     | comment:; Only a `hold` value can change.
- 48 |     hold rect = Rectangle(3.0, 4.0)
+ 51 |     hold rect = Rectangle(3.0, 4.0)
     | keyword:hold  variable:rect  operator:=  variant:Rectangle  punctuation:(  number:3.0  punctuation:,  number:4.0  punctuation:)
- 49 |     rect.grow()
+ 52 |     rect.grow()
     | variable:rect  punctuation:.  method:grow  punctuation:(  punctuation:)
- 50 |     show(rect, " covers ", rect.area())
+ 53 |     show(rect, " covers ", rect.area())
     | builtin-fn:show  punctuation:(  variable:rect  punctuation:,  string:" covers "  punctuation:,  variable:rect  punctuation:.  method:area  punctuation:(  punctuation:)  punctuation:)
- 52 |     hold d = Dot
+ 55 |     hold d = Dot
     | keyword:hold  variable:d  operator:=  variant:Dot
- 53 |     show(d)
+ 56 |     show(d)
     | builtin-fn:show  punctuation:(  variable:d  punctuation:)
- 54 |     d.grow()
+ 57 |     d.grow()
     | variable:d  punctuation:.  method:grow  punctuation:(  punctuation:)
- 55 |     show(d)
+ 58 |     show(d)
     | builtin-fn:show  punctuation:(  variable:d  punctuation:)
- 56 | fi
+ 59 | fi
     | keyword:fi

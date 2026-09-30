@@ -431,7 +431,7 @@ impl State {
                     return err(part.span, format!("'{}' is already listed at {}:{}; a name is brought in once", part.name, earlier.span.line, earlier.span.col));
                 }
                 let Some(entry) = table.and_then(|table| table.get(&part.name)) else {
-                    return err(part.span, format!("module '{}' has no task, shape, kind, or variant named '{}'", label, part.name));
+                    return err(part.span, format!("module '{}' has no task, shape, kind, variant, or macro named '{}'", label, part.name));
                 };
                 if entry.private {
                     return err(part.span, format!("'{}' is private to module '{}'", part.name, label));
@@ -662,6 +662,7 @@ enum What {
     Shape,
     Kind,
     Variant,
+    Macro,
 }
 
 impl What {
@@ -671,11 +672,12 @@ impl What {
             What::Shape => "shape",
             What::Kind => "kind",
             What::Variant => "variant",
+            What::Macro => "macro",
         }
     }
 }
 
-/// A task, shape, kind, or variant declared in a module.
+/// A task, shape, kind, variant, or macro declared in a module.
 #[derive(Debug, Clone)]
 struct Entry {
     /// Its name in the whole program: `shapes/geometry.area`, or `area` in the
@@ -734,6 +736,7 @@ fn own_names(module: &Module) -> Names {
                     add(&variant.tag, What::Variant, k.private, variant.span, Some(full(&k.name)));
                 }
             }
+            Item::Macro(m) => add(&m.name, What::Macro, m.private, m.span, None),
         }
     }
     names
@@ -844,6 +847,10 @@ impl Resolver<'_> {
                     }
                 }
                 Ok(())
+            }
+            Item::Macro(m) => {
+                m.name = self.own_full(&m.name);
+                self.expr(&mut m.value)
             }
         }
     }
@@ -963,7 +970,7 @@ impl Resolver<'_> {
             );
         }
         let Some(entry) = module.names.get(member) else {
-            return err(at, format!("module '{}' has no task, shape, kind, or variant named '{}'", module_name, member));
+            return err(at, format!("module '{}' has no task, shape, kind, variant, or macro named '{}'", module_name, member));
         };
         if entry.private {
             return err(at, format!("'{}' is private to module '{}'", member, module_name));
@@ -1059,7 +1066,7 @@ impl Resolver<'_> {
             [module, _] if self.modules.contains_key(*module) => true,
             // `m.Blue.str()` is a method called on the variant `m.Blue`.
             [module, second, _] if self.modules.contains_key(*module) => {
-                !self.modules.get(*module).and_then(|names| names.names.get(*second)).is_some_and(|entry| entry.what == What::Variant)
+                !self.modules.get(*module).and_then(|names| names.names.get(*second)).is_some_and(|entry| matches!(entry.what, What::Variant | What::Macro))
             }
             [kind, _] => self.kind(kind, expr.span)?.is_some(),
             _ => false,
@@ -1104,6 +1111,14 @@ impl Resolver<'_> {
     fn variant_as_field(&self, expr: &mut Expr) -> Result<bool> {
         let ExprKind::Field(base, tag) = &expr.kind else { return Ok(false) };
         let ExprKind::Var(name) = &base.kind else { return Ok(false) };
+        // `m.P`: a macro of a module this file includes.
+        if let Some(module) = self.modules.get(name.as_str()) {
+            let entry = self.member(name, module, tag, expr.span)?;
+            if entry.what == What::Macro {
+                expr.kind = ExprKind::Var(entry.full);
+                return Ok(true);
+            }
+        }
         if let Some(kind) = self.kind(name, base.span)? {
             let variant = self.variant(&kind, name, tag, expr.span)?;
             // Where the kind is written, as for `Kind.Variant(…)`.
@@ -1118,6 +1133,10 @@ impl Resolver<'_> {
             false => self.lookup(name, base.span, false)?.filter(|entry| entry.what == What::Shape),
         };
         if let Some(entry) = entry {
+            // `P.len`: a field of a macro's value.
+            if entry.what == What::Macro {
+                return Ok(false);
+            }
             if entry.what == What::Shape {
                 let field = tag.clone();
                 // Where the field's name is written, as for a field of a value.
@@ -1248,10 +1267,10 @@ impl Resolver<'_> {
             // A region is a name of the task, never of the program.
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::RegionAfter(_) => Ok(()),
             // Only the resolver makes one, above.
-            ExprKind::Shared { .. } | ExprKind::TypeOf(_) => Ok(()),
+            ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::Macro { .. } => Ok(()),
             // A variable keeps its name. No variable can be named like a variant
-            // (see `Checker::define`), so a variant written as a value is renamed.
-            ExprKind::Var(name) => self.rename(name, span, &[What::Variant]),
+            // or a macro (see `Checker::define`), so one written as a value is renamed.
+            ExprKind::Var(name) => self.rename(name, span, &[What::Variant, What::Macro]),
             ExprKind::Call { name, types, args } => {
                 self.rename(name, span, &[What::Task, What::Variant])?;
                 for (ty, at) in types.iter_mut() {

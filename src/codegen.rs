@@ -153,7 +153,7 @@ impl Generator {
                     self.shapes.insert(s.name.clone(), s.clone());
                 }
                 Item::Shape(_) => {}
-                Item::Task(_) => {}
+                Item::Task(_) | Item::Macro(_) => {}
             }
         }
         // Which parameters each task takes by a hidden pointer, known before
@@ -173,6 +173,19 @@ impl Generator {
         self.w = CWriter::default();
         self.w.line("#include \"vela_rt.h\"");
         self.w.blank();
+
+        // Macros, each the value the checker computed for it.
+        let mut defined = false;
+        for item in items {
+            if let Item::Macro(m) = item {
+                let value = self.macro_value(&m.value)?;
+                self.w.line(&format!("#define {} {}", macro_name(&m.name), value));
+                defined = true;
+            }
+        }
+        if defined {
+            self.w.blank();
+        }
 
         // Types. A typedef for every shape, kind, `maybe`, and `or` comes first,
         // so any type can point to any other (or to itself); then the kinds' tag
@@ -198,7 +211,7 @@ impl Generator {
             match def {
                 TypeDef::Item(Item::Shape(s)) => self.gen_shape(s),
                 TypeDef::Item(Item::Kind(k)) => self.gen_kind(k),
-                TypeDef::Item(Item::Task(_)) => {}
+                TypeDef::Item(Item::Task(_) | Item::Macro(_)) => {}
                 TypeDef::Compound(ty) => self.gen_compound(ty),
             }
         }
@@ -332,6 +345,16 @@ impl Generator {
             self.w.line(&format!("{},", tag_value(&k.name, &v.tag)));
         }
         self.w.close_with(&format!(" {};", tag_type));
+    }
+
+    /// The C a macro's `#define` holds: its value, as a literal of its type.
+    fn macro_value(&mut self, value: &Expr) -> Result<String> {
+        Ok(match (&value.kind, value.ty()?) {
+            (ExprKind::IntLit(i64::MIN), Type::Int) => "(-INT64_C(9223372036854775807) - 1)".to_string(),
+            (ExprKind::IntLit(n), Type::Int) => format!("INT64_C({})", n),
+            (ExprKind::IntLit(n), _) => format!("((uint8_t){})", n),
+            _ => self.gen_expr(value)?,
+        })
     }
 
     fn gen_kind(&mut self, k: &KindDef) {
@@ -2262,7 +2285,7 @@ impl Generator {
             let value = self.gen_expr(operand)?;
             let constant = matches!(
                 operand.kind,
-                ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
+                ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
             );
             // A variable after the last prelude reads the same value whenever C reads it.
             let variable = matches!(operand.kind, ExprKind::Var(_));
@@ -2334,7 +2357,7 @@ impl Generator {
             let value = self.gen_expr(operand)?;
             let constant = matches!(
                 operand.kind,
-                ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
+                ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
             );
             if in_order && !constant {
                 let tmp = self.fresh_temp("arg");
@@ -2383,6 +2406,7 @@ impl Generator {
             ExprKind::BoolLit(b) => Ok(if *b { "true".to_string() } else { "false".to_string() }),
             ExprKind::TextLit(s) => Ok(format!("VELA__RT__TEXT(\"{}\")", escape_c_string(s))),
             ExprKind::NoneLit => Ok("NULL".to_string()),
+            ExprKind::Macro { name, .. } => Ok(macro_name(name)),
             // The checker makes every one the `New` it stands for.
             ExprKind::Shortcut { .. } => Err(Error::internal_at(e.span, "a shortcut the checker left as it was")),
             ExprKind::Pairs(_) => Err(Error::internal_at(e.span, "a map's pairs outside the 'new' they are given to")),
@@ -3504,7 +3528,7 @@ fn scan_helper(ty: &Type) -> String {
 fn has_prelude(e: &Expr) -> bool {
     match &e.kind {
         ExprKind::PlanB { .. } | ExprKind::Choice(_) | ExprKind::Edit { .. } | ExprKind::Scan { .. } => true,
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
         | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. }
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Copy { value: inner, .. } | ExprKind::Shortcut { value: inner, .. } | ExprKind::ToText { value: inner, .. } => {
@@ -3683,7 +3707,7 @@ impl UsedTypes {
                     used.add(&t.ret);
                     used.block(&t.body);
                 }
-                Item::Task(_) => {}
+                Item::Task(_) | Item::Macro(_) => {}
             }
         }
         used
@@ -3893,7 +3917,7 @@ impl UsedTypes {
             self.add(ty);
         }
         match &e.kind {
-            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit
+            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
             | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => {}
             ExprKind::Shortcut { value, .. } => self.expr(value),
             ExprKind::Pairs(pairs) => pairs.iter().for_each(|(key, value)| {
@@ -4109,7 +4133,7 @@ fn place_reads(target: &Expr, name: &str) -> bool {
 fn expr_reads(e: &Expr, name: &str) -> bool {
     match &e.kind {
         ExprKind::Var(var) | ExprKind::RegionAfter(var) => var == name,
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => false,
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => false,
         // `new` reads the region it allocates in.
         ExprKind::New { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner)
@@ -4155,7 +4179,7 @@ fn type_name(item: &Item) -> Option<&str> {
         Item::Shape(s) if !s.types.is_empty() => None,
         Item::Shape(s) => Some(&s.name),
         Item::Kind(k) => Some(&k.name),
-        Item::Task(_) => None,
+        Item::Task(_) | Item::Macro(_) => None,
     }
 }
 
@@ -4248,7 +4272,7 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
     match def {
         TypeDef::Item(Item::Shape(s)) => s.fields.iter().flat_map(|f| value_dependencies(&f.ty)).collect(),
         TypeDef::Item(Item::Kind(k)) => k.variants.iter().flat_map(|v| &v.payload).flat_map(|f| value_dependencies(&f.ty)).collect(),
-        TypeDef::Item(Item::Task(_)) => Vec::new(),
+        TypeDef::Item(Item::Task(_) | Item::Macro(_)) => Vec::new(),
         TypeDef::Compound(Type::Maybe(inner)) => value_dependencies(inner),
         TypeDef::Compound(Type::Or(value, error)) => value_dependencies(value).into_iter().chain(value_dependencies(error)).collect(),
         TypeDef::Compound(Type::Results(types) | Type::Tuple(types)) => types.iter().flat_map(value_dependencies).collect(),
@@ -4263,7 +4287,7 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
 /// no change to a slice, no line read. (It may still stop the program.)
 fn changes_nothing(e: &Expr) -> bool {
     match &e.kind {
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) | ExprKind::Shared { .. } => true,
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::Shared { .. } => true,
         ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Unary(_, inner) | ExprKind::Wrap(inner) => changes_nothing(inner),
         ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) => changes_nothing(a) && changes_nothing(b),
         ExprKind::Array(items) | ExprKind::Tuple(items) => items.iter().all(changes_nothing),
@@ -4354,6 +4378,11 @@ fn tag_type(kind: &str) -> String {
 #[inline(never)]
 fn shared_name(shape: &str, field: &str) -> String {
     format!("vela_{}__shared_{}", c_name(shape), field)
+}
+
+/// The C name of a macro, a `#define`.
+fn macro_name(name: &str) -> String {
+    format!("VELA_MACRO_{}", c_name(name))
 }
 
 fn tag_value(kind: &str, tag: &str) -> String {

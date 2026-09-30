@@ -1,0 +1,6 @@
+; error: 5:10: 'LIMIT' is already defined at 2:7, as a macro
+macro LIMIT = 10
+
+task main()
+    hold LIMIT = 11
+fi

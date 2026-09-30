@@ -165,6 +165,10 @@ pub const STR: &str = "str";
 /// `Owner::shared`).
 pub const NEW_WORD: &str = "new";
 
+/// `macro P = 3.14159`, a word only at the start of a line outside every task,
+/// so it names no keyword (see `ast::MacroDef`).
+pub const MACRO: &str = "macro";
+
 /// The type whose name, called, turns a value into text: `text(n) at r`.
 pub const TEXT_CAST: &str = "text";
 
@@ -798,6 +802,9 @@ pub enum ExprKind {
     BoolLit(bool),
     TextLit(String),
     NoneLit,
+    /// A macro named as a value, `P` or `math.P`, which the checker makes of the
+    /// name: the macro's name in the program, and the literal it stands for.
+    Macro { name: String, value: Box<Expr> },
     Var(String),
     Field(Box<Expr>, String),
     /// `xs[i]`, an item of an array or slice, or `xs[a..b]`, a slice of it.
@@ -1473,6 +1480,7 @@ pub enum Item {
     Task(TaskDef),
     Shape(ShapeDef),
     Kind(KindDef),
+    Macro(MacroDef),
 }
 
 impl Item {
@@ -1482,6 +1490,7 @@ impl Item {
             Item::Task(t) => &t.name,
             Item::Shape(s) => &s.name,
             Item::Kind(k) => &k.name,
+            Item::Macro(m) => &m.name,
         }
     }
 }
@@ -1760,5 +1769,18 @@ pub struct KindDef {
     /// Position of the kind name.
     pub span: Span,
     /// `priv kind`: only its own file can name it or its variants.
+    pub private: bool,
+}
+
+/// `macro P = 3.14159`: a name for a value the compiler computes, outside every
+/// task, shape, and kind. Its type is its value's, and C has it as a `#define`.
+#[derive(Debug, Clone)]
+pub struct MacroDef {
+    pub name: String,
+    /// As written; the checker computes it into a literal (see `Checker::macros`).
+    pub value: Expr,
+    /// Position of the macro's name.
+    pub span: Span,
+    /// `priv macro`: only its own file can name it.
     pub private: bool,
 }

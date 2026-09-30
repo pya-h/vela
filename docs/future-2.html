@@ -510,6 +510,11 @@ bind table: [int#10] = comptime build_lookup_table()</pre>
           <a href="vela.html#generics">Types a declaration takes</a>). Vela stays one language from runtime to compile
           time.
         </div>
+        <p>
+          A first step is built: a <a href="vela.html#macros">macro</a>, <code>macro SIZE = 4</code>, is a value the
+          compiler computes from literals, other macros, and operators, and <a href="future.html#macro-tasks">macros that
+          take values</a> are planned. A <code>comptime</code> task would be the step after, running whole tasks.
+        </p>
       </div>
 
       <div class="option">

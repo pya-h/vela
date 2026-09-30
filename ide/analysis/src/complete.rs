@@ -1699,7 +1699,8 @@ enum Members {
 fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<CompletionItem> {
     let Some(index) = k.scan.modules.iter().position(|m| m.symbol == module) else { return Vec::new() };
     let types_only = members == Members::Types;
-    let kinds: &[SymbolKind] = if types_only { &[SymbolKind::Shape, SymbolKind::Kind] } else { &[SymbolKind::Task, SymbolKind::Shape, SymbolKind::Kind, SymbolKind::Variant] };
+    let kinds: &[SymbolKind] =
+        if types_only { &[SymbolKind::Shape, SymbolKind::Kind] } else { &[SymbolKind::Task, SymbolKind::Shape, SymbolKind::Kind, SymbolKind::Variant, SymbolKind::Macro] };
     let module_name = k.symbol(module).map_or("", |s| s.name.as_str());
     // A declaration's own name, which the file may write another way.
     let own_name = |s: &crate::scan::Symbol| {
@@ -1731,6 +1732,7 @@ fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<Completio
                     let kind_name = s.parent.and_then(|p| k.symbol(p)).map(|p| p.name.as_str()).unwrap_or_default();
                     (CompletionKind::Variant, format!("{} {}", kind_name, s.detail).trim().to_string(), None, snippet)
                 }
+                SymbolKind::Macro => (CompletionKind::Variant, format!("macro {}", s.detail), None, None),
                 SymbolKind::Shape if !types_only => (CompletionKind::Type, "shape".to_string(), None, literal_snippet(k, id, &label)),
                 SymbolKind::Shape => (CompletionKind::Type, "shape".to_string(), None, None),
                 _ => (CompletionKind::Type, "kind".to_string(), None, None),
@@ -1837,6 +1839,8 @@ fn item_level_items() -> Vec<CompletionItem> {
         snippet("task -> type", "a task that sends a value", "task ${name}(${}) -> ${type}\n\t<- ${value}\nfi"),
         snippet("shape", "a shape with a field", "shape ${Name}\n\t${field}: ${type}\nfi"),
         snippet("kind", "a kind with a variant", "kind ${Name}\n\t${Variant}\nfi"),
+        keyword("macro"),
+        snippet("macro", "a value the compiler computes", "macro ${NAME} = ${value}"),
     ]
 }
 
@@ -1963,6 +1967,9 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
             snippet,
             boost: GLOBAL,
         });
+    }
+    for (label, value) in visible_globals(k, &[SymbolKind::Macro]) {
+        items.push(CompletionItem { label, kind: CompletionKind::Variant, detail: format!("macro {}", value.detail), apply: None, snippet: None, boost: GLOBAL });
     }
     // A shape's value is a literal with every field: `Point { x: ${x}, y: ${y} }`.
     for (label, shape) in visible_globals(k, &[SymbolKind::Shape]) {

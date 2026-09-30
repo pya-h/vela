@@ -1,0 +1,6 @@
+; error: 2:15: a macro's value is computed when compiling, from literals, other macros, and operators on them, so it can't be a call, 'largest(…)'
+macro LIMIT = largest()
+
+task largest() -> int
+    <- 10
+fi

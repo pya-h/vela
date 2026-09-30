@@ -1,0 +1,6 @@
+; error: 5:10: 'SPARE' is private to module 'limits'
+include macros/limits
+
+task main()
+    show(limits.SPARE)
+fi

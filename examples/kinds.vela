@@ -3,6 +3,9 @@
 ; `alters` may move the value to another variant, or the same one with new
 ; values.
 
+; Pi, to as many places as the areas need.
+macro P = 3.14159
+
 kind Shape
     Circle(radius: float)
     Rectangle(width: float, height: float)
@@ -22,7 +25,7 @@ kind Shape
     ; Every case gives the value, so the match is the value this method sends.
     area() -> float
         <- match .this
-        case Circle radius = 3.14159 * radius * radius
+        case Circle radius = P * radius * radius
         case Rectangle w h = w * h
         case Dot = 0.0
         fi

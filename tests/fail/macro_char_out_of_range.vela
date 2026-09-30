@@ -1,0 +1,2 @@
+; error: 2:18: the value, 322, is outside a char's 0..255
+macro LAST = 'z' + 200

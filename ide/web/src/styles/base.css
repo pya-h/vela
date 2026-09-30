@@ -337,6 +337,10 @@ kbd {
   background: color-mix(in srgb, var(--syn-region) 16%, transparent);
   color: var(--syn-region);
 }
+.kind-macro {
+  background: color-mix(in srgb, var(--syn-variant) 16%, transparent);
+  color: var(--syn-variant);
+}
 .kind-type-param {
   background: color-mix(in srgb, var(--syn-type) 12%, transparent);
   color: var(--syn-type);

@@ -1,0 +1,16 @@
+  1 | ; The macros tests/run/macros.vela takes from another file.
+    | comment:; The macros tests/run/macros.vela takes from another file.
+  3 | macro LIMIT = 10
+    | keyword:macro  variant:LIMIT  operator:=  number:10
+  4 | macro GREETING = "hello"
+    | keyword:macro  variant:GREETING  operator:=  string:"hello"
+  5 | macro DOUBLE_LIMIT = LIMIT * 2 + SPARE
+    | keyword:macro  variant:DOUBLE_LIMIT  operator:=  variant:LIMIT  operator:*  number:2  operator:+  variant:SPARE
+  6 | priv macro SPARE = 1
+    | keyword:priv  keyword:macro  variant:SPARE  operator:=  number:1
+  8 | task spare() -> int
+    | keyword:task  task:spare  punctuation:(  punctuation:)  operator:->  type-builtin:int
+  9 |     <- SPARE
+    | keyword:<-  variant:SPARE
+ 10 | fi
+    | keyword:fi

@@ -1,0 +1,6 @@
+; error: 4:6: 'area' is already defined at 2:7
+macro area = 10
+
+task area() -> int
+    <- 1
+fi

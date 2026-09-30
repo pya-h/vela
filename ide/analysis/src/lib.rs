@@ -214,14 +214,14 @@ impl<'a> Analysis<'a> {
         }
     }
 
-    /// The file's tasks, shapes, and kinds, in source order.
+    /// The file's tasks, shapes, kinds, and macros, in source order.
     pub fn outline(&self) -> Vec<OutlineItem> {
         let symbols = &self.scan.symbols;
         let children_of = |parent: usize| symbols.iter().enumerate().filter(move |(_, s)| s.parent == Some(parent));
         symbols
             .iter()
             .enumerate()
-            .filter(|(_, s)| s.module.is_none() && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind))
+            .filter(|(_, s)| s.module.is_none() && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Macro))
             .map(|(id, _)| self.outline_item(id, &children_of))
             .collect()
     }

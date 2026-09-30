@@ -54,7 +54,9 @@ export type SymbolKind =
   | "region"
   | "module"
   /** A type a task takes, `T` in `task first<T>(…)`. */
-  | "type-param";
+  | "type-param"
+  /** `macro P = 3.14159`: a value the compiler computes. */
+  | "macro";
 
 export interface OutlineItem {
   name: string;

@@ -1,0 +1,2 @@
+; error: 2:12: expected '=' and the value macro 'LIMIT' stands for, got end of line
+macro LIMIT

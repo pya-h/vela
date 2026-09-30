@@ -5,6 +5,67 @@ use crate::codegen;
 use crate::error::{Error, Result};
 use crate::modules::{IncludeScope, ModuleScope, Program};
 
+/// A macro: its value as written, and the literal it is once computed (see
+/// `Checker::macro_value`).
+#[derive(Debug, Clone)]
+struct MacroInfo {
+    written: Expr,
+    value: Option<Expr>,
+    /// Where its name is written.
+    span: Span,
+}
+
+/// A value the compiler computes, as a macro's is.
+#[derive(Debug, Clone, PartialEq)]
+enum Constant {
+    Int(i64),
+    Unit(u8),
+    Float(f64),
+    Char(u8),
+    Bool(bool),
+    Text(String),
+}
+
+impl Constant {
+    fn of(e: &Expr) -> Option<Constant> {
+        match (&e.kind, &e.ty) {
+            (ExprKind::IntLit(n), Some(Type::Unit)) => u8::try_from(*n).ok().map(Constant::Unit),
+            (ExprKind::IntLit(n), _) => Some(Constant::Int(*n)),
+            (ExprKind::FloatLit(x), _) => Some(Constant::Float(*x)),
+            (ExprKind::CharLit(c), _) => Some(Constant::Char(*c)),
+            (ExprKind::BoolLit(b), _) => Some(Constant::Bool(*b)),
+            (ExprKind::TextLit(t), _) => Some(Constant::Text(t.clone())),
+            (ExprKind::Macro { value, .. }, _) => Constant::of(value),
+            _ => None,
+        }
+    }
+
+    fn ty(&self) -> Type {
+        match self {
+            Constant::Int(_) => Type::Int,
+            Constant::Unit(_) => Type::Unit,
+            Constant::Float(_) => Type::Float,
+            Constant::Char(_) => Type::Char,
+            Constant::Bool(_) => Type::Bool,
+            Constant::Text(_) => Type::Text(None),
+        }
+    }
+
+    /// The literal this is, checked, at `span`.
+    fn literal(self, span: Span) -> Expr {
+        let ty = self.ty();
+        let kind = match self {
+            Constant::Int(n) => ExprKind::IntLit(n),
+            Constant::Unit(n) => ExprKind::IntLit(i64::from(n)),
+            Constant::Float(x) => ExprKind::FloatLit(x),
+            Constant::Char(c) => ExprKind::CharLit(c),
+            Constant::Bool(b) => ExprKind::BoolLit(b),
+            Constant::Text(t) => ExprKind::TextLit(t),
+        };
+        Expr { kind, span, ty: Some(ty) }
+    }
+}
+
 #[derive(Clone)]
 struct VariantInfo {
     /// The kind the variant belongs to.
@@ -106,6 +167,8 @@ pub struct Checker {
     /// kind's module outside the main file (`geometry.Circle`). Tags are unique
     /// across the kinds of a module.
     variants: HashMap<String, VariantInfo>,
+    /// Every macro, by its name in the program.
+    macros: HashMap<String, MacroInfo>,
     /// Each module of the program, by name; the main file's is empty.
     modules: HashMap<String, ModuleScope>,
     /// The tasks, shapes, kinds, and variants marked `priv` (a variant through
@@ -706,6 +769,7 @@ impl Checker {
                 Item::Task(t) => t.private,
                 Item::Shape(s) => s.private,
                 Item::Kind(k) => k.private,
+                Item::Macro(m) => m.private,
             };
             if private {
                 self.private.insert(item.name().to_string());
@@ -763,6 +827,12 @@ impl Checker {
                     let params = t.params.iter().map(|p| (p.name.clone(), p.ty.clone())).collect();
                     self.tasks.insert(t.name.clone(), TaskInfo { types: t.types.clone(), params, passing: t.params.iter().map(|p| p.passing).collect(), ret: t.ret.clone(), owner: t.owner.clone() });
                 }
+                Item::Macro(m) => {
+                    if taken(&m.name, m.span) {
+                        continue;
+                    }
+                    self.macros.insert(m.name.clone(), MacroInfo { written: m.value.clone(), value: None, span: m.span });
+                }
             }
         }
         for error in found {
@@ -793,7 +863,7 @@ impl Checker {
             let name = match item {
                 Item::Shape(s) => s.name.clone(),
                 Item::Kind(k) => k.name.clone(),
-                Item::Task(_) => continue,
+                Item::Task(_) | Item::Macro(_) => continue,
             };
             if let Err((error, cycle)) = self.check_value_cycle(&name, &mut acyclic, &mut order) {
                 self.record(error);
@@ -894,6 +964,7 @@ impl Checker {
                     kind.variants = k.variants.clone();
                 }
             }
+            Item::Macro(m) => m.value = self.macro_value(&m.name, &mut Vec::new())?,
             Item::Task(t) => {
                 self.check_header(t)?;
                 if t.name == "main" {
@@ -907,6 +978,75 @@ impl Checker {
             }
         }
         Ok(())
+    }
+
+    /// The literal macro `name` stands for, computed once. `through` holds the
+    /// macros whose values are being computed, which the value can't name.
+    fn macro_value(&mut self, name: &str, through: &mut Vec<String>) -> Result<Expr> {
+        let Some(info) = self.macros.get(name) else { return Err(Error::internal(format!("no macro '{}'", name))) };
+        if let Some(value) = &info.value {
+            return Ok(value.clone());
+        }
+        let (written, span) = (info.written.clone(), info.span);
+        if let Some(first) = through.iter().position(|macro_name| macro_name == name) {
+            let mut chain: Vec<&str> = through.iter().skip(first).map(|m| unqualified(m)).collect();
+            chain.push(unqualified(name));
+            return err(span, format!("macro '{}' is computed from itself: {}", unqualified(name), chain.join(" from ")));
+        }
+        through.push(name.to_string());
+        let module = std::mem::replace(&mut self.current_module, module_of(name).to_string());
+        let value = self.fold_constant(&written, through);
+        self.current_module = module;
+        through.pop();
+        let value = value?.literal(span);
+        if let Some(info) = self.macros.get_mut(name) {
+            info.value = Some(value.clone());
+        }
+        Ok(value)
+    }
+
+    /// What `e`, a macro's value, is: literals, other macros, and the
+    /// operators and conversions of numbers, chars, bools and text on them.
+    fn fold_constant(&mut self, e: &Expr, through: &mut Vec<String>) -> Result<Constant> {
+        let span = e.span;
+        let not_constant = |what: &str| -> Result<Constant> {
+            err(span, format!("a macro's value is computed when compiling, from literals, other macros, and operators on them, so it can't be {}", what))
+        };
+        match &e.kind {
+            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::Macro { .. } => {
+                Constant::of(e).ok_or_else(|| Error::internal_at(span, "a literal that is no constant"))
+            }
+            ExprKind::Var(name) if self.macros.contains_key(name.as_str()) => {
+                let value = self.macro_value(name, through)?;
+                Constant::of(&value).ok_or_else(|| Error::internal_at(span, "a macro that is no constant"))
+            }
+            ExprKind::Var(name) => not_constant(&format!("'{}', which is no macro", unqualified(name))),
+            ExprKind::Unary(op, operand) => {
+                let value = self.fold_constant(operand, through)?;
+                match (op, value) {
+                    (UnaryOp::Neg, Constant::Int(n)) => n.checked_neg().map(Constant::Int).ok_or_else(|| Error::at(span, "the value doesn't fit in an int")),
+                    (UnaryOp::Neg, Constant::Float(x)) => Ok(Constant::Float(-x)),
+                    (UnaryOp::Not, Constant::Bool(b)) => Ok(Constant::Bool(!b)),
+                    (UnaryOp::Neg, other) => err(span, format!("'-' makes an int or a float negative, not a {}", other.ty())),
+                    (UnaryOp::Not, other) => err(span, format!("'not' is for a bool, not a {}", other.ty())),
+                }
+            }
+            ExprKind::Binary(op, l, r) => {
+                let (a, b) = (self.fold_constant(l, through)?, self.fold_constant(r, through)?);
+                fold_binary(*op, a, b, span)
+            }
+            ExprKind::Call { name, args, .. } if [INT_CAST, FLOAT_CAST, CHAR_CAST, UNIT_CAST].contains(&name.as_str()) => {
+                let [arg] = args.as_slice() else { return err(span, format!("'{}(…)' takes one value", name)) };
+                let value = self.fold_constant(arg, through)?;
+                fold_cast(name, value, span)
+            }
+            ExprKind::Call { name, .. } => not_constant(&format!("a call, '{}(…)'", unqualified(name))),
+            ExprKind::Join { .. } => not_constant("text holding values; join text with '+', as in 'macro TITLE = NAME + \"!\"'"),
+            ExprKind::NoneLit => not_constant("'none'"),
+            ExprKind::Array(_) | ExprKind::Repeat { .. } => not_constant("an array"),
+            ExprKind::Tuple(_) => not_constant("a tuple"),
+            _ => not_constant("anything that makes a value when the program runs"),
+        }
     }
 
     /// Settles how large a value of each shape and kind can be, in `order`,
@@ -956,6 +1096,8 @@ impl Checker {
             Item::Task(t) => (t.private, "task", &t.name, t.params.iter().collect()),
             Item::Shape(s) => (s.private, "shape", &s.name, s.fields.iter().filter(|f| !f.private).collect()),
             Item::Kind(k) => (k.private, "kind", &k.name, k.variants.iter().flat_map(|v| &v.payload).collect()),
+            // A macro's type is a builtin one.
+            Item::Macro(_) => return Ok(()),
         };
         if private {
             return Ok(());
@@ -2082,7 +2224,7 @@ impl Checker {
             match item {
                 Item::Shape(s) => types.push((s.name.as_str(), vec![s.fields.iter().map(|f| f.ty.clone()).collect()])),
                 Item::Kind(k) => types.push((k.name.as_str(), k.variants.iter().map(|v| v.payload.iter().map(|f| f.ty.clone()).collect()).collect())),
-                Item::Task(_) => {}
+                Item::Task(_) | Item::Macro(_) => {}
             }
         }
         for made in self.made_of.keys() {
@@ -2351,6 +2493,14 @@ impl Checker {
             }
             return err(span, format!("'{}' is already defined at {}:{}", name, at.line, at.col));
         }
+        // Nor like a macro, which a bare name would read as.
+        if let Some(info) = self.macros.get(&self.in_module(name)) {
+            let at = info.span;
+            if at.file != span.file {
+                return err(span, format!("'{}' is already the name of a macro this file includes", name));
+            }
+            return err(span, format!("'{}' is already defined at {}:{}, as a macro", name, at.line, at.col));
+        }
         // Nor like a kind, which `Kind.Variant` would read as.
         if self.kinds.contains_key(&self.in_module(name)) {
             return err(span, format!("'{0}' is the name of a kind, so '{0}.x' would name its variant; choose another name", name));
@@ -2554,6 +2704,8 @@ impl Checker {
                 Error::at(span, self.not_a_method(THIS))
             } else if self.sees(name) && self.variants.contains_key(name) {
                 Error::at(span, format!("'{}' is a variant, not a variable", name))
+            } else if self.sees(name) && self.macros.contains_key(name) {
+                Error::at(span, format!("'{}' is a macro, a value that never changes, not a variable", unqualified(name)))
             } else if self.module_used(name).is_some() {
                 Error::at(span, format!("'{0}' is a module, not a variable; name something in it, as in '{0}.name'", name))
             } else if self.kinds.contains_key(&self.full_name(name)) {
@@ -3830,6 +3982,16 @@ impl Checker {
     /// into a `Construct` node. Variables can't share a variant's name, so a
     /// bare name is never ambiguous.
     fn resolve_constructor(&self, expr: &mut Expr) {
+        // A macro named as a value is the literal it stands for, which the C
+        // names by the macro (see `ExprKind::Macro`). A broken one stays a name.
+        if let ExprKind::Var(name) = &expr.kind
+            && self.lookup(name).is_none()
+            && self.sees(name)
+            && let Some(value) = self.macros.get(name.as_str()).and_then(|info| info.value.clone())
+        {
+            expr.kind = ExprKind::Macro { name: name.clone(), value: Box::new(value) };
+            return;
+        }
         let variant = |name: &str| {
             self.variants.get(name).filter(|_| self.sees(name)).map(|info| (info.kind.clone(), info.variant.tag.clone()))
         };
@@ -3904,6 +4066,9 @@ impl Checker {
             ExprKind::Shared { .. } => Err(Error::internal_at(span, "a shared field read as another value")),
             // Checked again, as a method call's value is: it is text.
             ExprKind::TypeOf(_) => Ok(Type::Text(None)),
+            ExprKind::Macro { value, .. } => Ok(value.ty.clone().unwrap_or(Type::Unknown)),
+            // A macro whose value has a mistake, which is told once, where it is written.
+            ExprKind::Var(name) if self.lookup(name).is_none() && self.sees(name) && self.macros.contains_key(name.as_str()) => Ok(Type::Unknown),
             ExprKind::Var(name) => {
                 let ty = self.lookup_or_err(name, span)?.ty.clone();
                 if self.unset.contains(name.as_str()) {
@@ -7465,7 +7630,7 @@ fn types_holding(items: &[Item], holds: fn(&Type, &HashSet<String>) -> bool) -> 
         match item {
             Item::Shape(s) => s.fields.iter().map(|f| f.ty.clone()).collect(),
             Item::Kind(k) => k.variants.iter().flat_map(|v| &v.payload).map(|f| f.ty.clone()).collect(),
-            Item::Task(_) => Vec::new(),
+            Item::Task(_) | Item::Macro(_) => Vec::new(),
         }
     };
     // The items whose fields name each type, to look at again when it turns
@@ -7893,7 +8058,7 @@ impl Checker {
                 }
                 Ok(())
             }
-            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } => Ok(()),
+            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } => Ok(()),
             ExprKind::Unary(_, inner)
             | ExprKind::Deref(inner)
             | ExprKind::Ref(inner)
@@ -8107,7 +8272,7 @@ fn refuse<T>(make: impl FnOnce() -> Error) -> Result<T> {
 
 fn constant_value(expr: &Expr) -> bool {
     match &expr.kind {
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit => true,
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } => true,
         ExprKind::Unary(_, inner) => constant_value(inner),
         ExprKind::Array(values) | ExprKind::Tuple(values) => values.iter().all(constant_value),
         ExprKind::Construct { args, .. } => args.iter().all(constant_value),
@@ -8349,9 +8514,142 @@ fn always_holds(cond: &Condition) -> bool {
 /// `60 * 60 * 24`), which the program computes the same way every time, or
 /// `None` for any other expression. Its parts have been checked, so each of
 /// them fits in an `int`.
+/// How `op` is written.
+fn binary_symbol(op: BinaryOp) -> &'static str {
+    match op {
+        BinaryOp::Add => "+",
+        BinaryOp::Sub => "-",
+        BinaryOp::Mul => "*",
+        BinaryOp::Div => "/",
+        BinaryOp::Mod => "%",
+        BinaryOp::Eq => "==",
+        BinaryOp::Ne => "!=",
+        BinaryOp::Similar => "~=",
+        BinaryOp::NotSimilar => "<>",
+        BinaryOp::Lt => "<",
+        BinaryOp::Gt => ">",
+        BinaryOp::Le => "<=",
+        BinaryOp::Ge => ">=",
+        BinaryOp::And => "and",
+        BinaryOp::Or => "or",
+    }
+}
+
+/// `name(value)`, a conversion in a macro's value, with the mistakes it has
+/// when the program runs.
+fn fold_cast(name: &str, value: Constant, span: Span) -> Result<Constant> {
+    use Constant::*;
+    let byte = |n: i64, ty: &str| u8::try_from(n).map_err(|_| Error::at(span, format!("the value, {}, is outside a {}'s 0..255", n, ty)));
+    match (name, value) {
+        (INT_CAST, Int(n)) => Ok(Int(n)),
+        (INT_CAST, Unit(n) | Char(n)) => Ok(Int(i64::from(n))),
+        (INT_CAST, Bool(b)) => Ok(Int(i64::from(b))),
+        // As `vela__rt__int_of` does: toward zero, and a float outside the ints stops.
+        (INT_CAST, Float(x)) if x.is_finite() && x.trunc() >= -9_223_372_036_854_775_808.0 && x.trunc() < 9_223_372_036_854_775_808.0 => Ok(Int(x.trunc() as i64)),
+        (INT_CAST, Float(_)) => err(span, "the value doesn't fit in an int"),
+        (FLOAT_CAST, Float(x)) => Ok(Float(x)),
+        (FLOAT_CAST, Int(n)) => Ok(Float(n as f64)),
+        (FLOAT_CAST, Unit(n)) => Ok(Float(f64::from(n))),
+        (UNIT_CAST, Int(n)) => Ok(Unit(byte(n, "unit")?)),
+        (UNIT_CAST, Unit(n) | Char(n)) => Ok(Unit(n)),
+        (UNIT_CAST, Bool(b)) => Ok(Unit(u8::from(b))),
+        (CHAR_CAST, Int(n)) => Ok(Char(byte(n, "char")?)),
+        (CHAR_CAST, Unit(n) | Char(n)) => Ok(Char(n)),
+        (_, value) => err(span, format!("'{}(…)' doesn't take a {} in a macro's value", name, value.ty())),
+    }
+}
+
+/// `a op b` in a macro's value (see `Checker::fold_constant`), with the types
+/// and the mistakes the operator has when the program runs.
+fn fold_binary(op: BinaryOp, a: Constant, b: Constant, span: Span) -> Result<Constant> {
+    use Constant::*;
+    let symbol = binary_symbol(op);
+    let too_large = |what: &str| Error::at(span, format!("the value doesn't fit in {}", what));
+    let byte = |n: i64, ty: &str| u8::try_from(n).map_err(|_| Error::at(span, format!("the value, {}, is outside a {}'s 0..255", n, ty)));
+    let float = |x: f64| if x.is_finite() { Ok(Float(x)) } else { err(span, "the value is no number a float can hold, as dividing by zero gives") };
+    match (op, a, b) {
+        (BinaryOp::And, Bool(x), Bool(y)) => Ok(Bool(x && y)),
+        (BinaryOp::Or, Bool(x), Bool(y)) => Ok(Bool(x || y)),
+        (BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge, x, y) if x.ty() == y.ty() => {
+            let order = match (&x, &y) {
+                (Int(x), Int(y)) => x.partial_cmp(y),
+                (Unit(x), Unit(y)) | (Char(x), Char(y)) => x.partial_cmp(y),
+                (Float(x), Float(y)) => x.partial_cmp(y),
+                (Bool(x), Bool(y)) => x.partial_cmp(y),
+                (Text(x), Text(y)) => x.as_bytes().partial_cmp(y.as_bytes()),
+                _ => None,
+            };
+            let Some(order) = order else { return Ok(Bool(op == BinaryOp::Ne)) };
+            if matches!(x, Bool(_)) && !matches!(op, BinaryOp::Eq | BinaryOp::Ne) {
+                return err(span, format!("'{}' orders numbers, chars, and text, not bools", symbol));
+            }
+            Ok(Bool(match op {
+                BinaryOp::Eq => order.is_eq(),
+                BinaryOp::Ne => order.is_ne(),
+                BinaryOp::Lt => order.is_lt(),
+                BinaryOp::Gt => order.is_gt(),
+                BinaryOp::Le => order.is_le(),
+                _ => order.is_ge(),
+            }))
+        }
+        (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod, Int(x), Int(y)) => {
+            if y == 0 && matches!(op, BinaryOp::Div | BinaryOp::Mod) {
+                return err(span, if op == BinaryOp::Div { "division by zero" } else { "remainder of division by zero" });
+            }
+            let value = match op {
+                BinaryOp::Add => x.checked_add(y),
+                BinaryOp::Sub => x.checked_sub(y),
+                BinaryOp::Mul => x.checked_mul(y),
+                BinaryOp::Div => x.checked_div(y),
+                _ if y == -1 => Some(0),
+                _ => x.checked_rem(y),
+            };
+            value.map(Int).ok_or_else(|| too_large("an int"))
+        }
+        // A unit beside an int: the int is a unit too, as a literal is.
+        (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod, x @ (Unit(_) | Int(_)), y @ (Unit(_) | Int(_))) => {
+            let wide = |c: Constant| -> Result<i64> {
+                match c {
+                    Unit(n) => Ok(i64::from(n)),
+                    Int(n) => Ok(i64::from(byte(n, "unit")?)),
+                    _ => Ok(0),
+                }
+            };
+            let (x, y) = (wide(x)?, wide(y)?);
+            if y == 0 && matches!(op, BinaryOp::Div | BinaryOp::Mod) {
+                return err(span, if op == BinaryOp::Div { "division by zero" } else { "remainder of division by zero" });
+            }
+            let value = match op {
+                BinaryOp::Add => x + y,
+                BinaryOp::Sub => x - y,
+                BinaryOp::Mul => x * y,
+                BinaryOp::Div => x / y,
+                _ => x % y,
+            };
+            Ok(Unit(byte(value, "unit")?))
+        }
+        (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod, Float(x), Float(y)) => float(match op {
+            BinaryOp::Add => x + y,
+            BinaryOp::Sub => x - y,
+            BinaryOp::Mul => x * y,
+            BinaryOp::Div => x / y,
+            _ => x % y,
+        }),
+        (BinaryOp::Add, Char(c), Int(n)) | (BinaryOp::Add, Int(n), Char(c)) => Ok(Char(byte(i64::from(c) + n, "char")?)),
+        (BinaryOp::Sub, Char(c), Int(n)) => Ok(Char(byte(i64::from(c) - n, "char")?)),
+        (BinaryOp::Sub, Char(c), Char(d)) => Ok(Int(i64::from(c) - i64::from(d))),
+        (BinaryOp::Add, Text(x), Text(y)) => Ok(Text(x + &y)),
+        (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod, Int(_), Float(_)) | (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod, Float(_), Int(_)) => {
+            err(span, "an int and a float don't mix in arithmetic: turn one into the other first, as in 'float(n) + 2.5' (or 'n + int(2.5)', which truncates)")
+        }
+        (_, x, y) => err(span, format!("'{}' isn't defined for {} and {} in a macro's value", symbol, x.ty(), y.ty())),
+    }
+}
+
 fn constant_int(e: &Expr) -> Option<i64> {
     match &e.kind {
         ExprKind::IntLit(n) => Some(*n),
+        ExprKind::Macro { value, .. } => constant_int(value),
         ExprKind::Unary(UnaryOp::Neg, operand) => constant_int(operand)?.checked_neg(),
         ExprKind::Binary(op, l, r) => {
             let (a, b) = (constant_int(l)?, constant_int(r)?);
@@ -8401,6 +8699,7 @@ fn constant_key(e: &Expr) -> Option<String> {
         ExprKind::TextLit(text) => Some(format!("\"{}\"", text)),
         ExprKind::CharLit(c) => Some(format!("'{}'", char::from(*c).escape_default())),
         ExprKind::BoolLit(b) => Some(b.to_string()),
+        ExprKind::Macro { value, .. } => constant_key(value),
         _ => constant_int(e).map(|n| n.to_string()),
     }
 }
@@ -8781,6 +9080,7 @@ fn no_place(place: &Expr) -> &'static str {
         ExprKind::Call { .. } | ExprKind::MethodCall { .. } => "a call's value, which is made here",
         ExprKind::Construct { .. } => "a variant, which is a value",
         ExprKind::Var(_) => "a variant, which is a value",
+        ExprKind::Macro { .. } => "a macro, a value the compiler computed",
         _ => "a value made here",
     }
 }
