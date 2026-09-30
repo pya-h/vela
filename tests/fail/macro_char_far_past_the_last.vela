@@ -1,0 +1,6 @@
+; error: 2:12: the value, 9223372036854775904, is outside a char's 0..255
+#FAR = 'a' + 9223372036854775807
+
+task main()
+    show(FAR)
+fi

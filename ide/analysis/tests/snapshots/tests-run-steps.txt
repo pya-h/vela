@@ -132,29 +132,47 @@
     | variable:t  operator:+=  string:"{  variable:x  string:}!"
  70 |     show(t)
     | builtin-fn:show  punctuation:(  variable:t  punctuation:)
- 71 |     ; A count in a loop.
+ 71 |     ; A place may convert a number, which is no task; text joined with '+'
+    | comment:; A place may convert a number, which is no task; text joined with '+'
+ 72 |     ; goes in part by part.
+    | comment:; goes in part by part.
+ 73 |     hold small: unit = 1
+    | keyword:hold  variable:small  punctuation::  type-builtin:unit  operator:=  number:1
+ 74 |     xs[int(small)] += 10
+    | variable:xs  punctuation:[  type-builtin:int  punctuation:(  variable:small  punctuation:)  punctuation:]  operator:+=  number:10
+ 75 |     xs[int(small)]++
+    | variable:xs  punctuation:[  type-builtin:int  punctuation:(  variable:small  punctuation:)  punctuation:]  operator:++
+ 76 |     show(xs)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:)
+ 77 |     t += "f" + "g"
+    | variable:t  operator:+=  string:"f"  operator:+  string:"g"
+ 78 |     t += "h{x}" + "i"
+    | variable:t  operator:+=  string:"h{  variable:x  string:}"  operator:+  string:"i"
+ 79 |     show(t)
+    | builtin-fn:show  punctuation:(  variable:t  punctuation:)
+ 80 |     ; A count in a loop.
     | comment:; A count in a loop.
- 72 |     hold total = 0
+ 81 |     hold total = 0
     | keyword:hold  variable:total  operator:=  number:0
- 73 |     each n in 1..5
+ 82 |     each n in 1..5
     | keyword:each  variable:n  keyword:in  number:1  operator:..  number:5
- 74 |         total += n
+ 83 |         total += n
     | variable:total  operator:+=  variable:n
- 75 |     fi
+ 84 |     fi
     | keyword:fi
- 76 |     show(total)
+ 85 |     show(total)
     | builtin-fn:show  punctuation:(  variable:total  punctuation:)
- 77 |     ; A step ends a block or a plan B on one line, as an assignment does.
+ 86 |     ; A step ends a block or a plan B on one line, as an assignment does.
     | comment:; A step ends a block or a plan B on one line, as an assignment does.
- 78 |     hold misses = 0
+ 87 |     hold misses = 0
     | keyword:hold  variable:misses  operator:=  number:0
- 79 |     check(-1) { misses++ }
+ 88 |     check(-1) { misses++ }
     | task:check  punctuation:(  operator:-  number:1  punctuation:)  punctuation:{  variable:misses  operator:++  punctuation:}
- 80 |     check(1) { misses++ }
+ 89 |     check(1) { misses++ }
     | task:check  punctuation:(  number:1  punctuation:)  punctuation:{  variable:misses  operator:++  punctuation:}
- 81 |     when misses > 0 misses += 10 else misses-- fi
+ 90 |     when misses > 0 misses += 10 else misses-- fi
     | keyword:when  variable:misses  operator:>  number:0  variable:misses  operator:+=  number:10  keyword:else  variable:misses  operator:--  keyword:fi
- 82 |     show(misses)
+ 91 |     show(misses)
     | builtin-fn:show  punctuation:(  variable:misses  punctuation:)
- 83 | fi
+ 92 | fi
     | keyword:fi

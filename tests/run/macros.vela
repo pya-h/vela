@@ -17,6 +17,9 @@ include macros/limits (LIMIT => MAX, GREETING)
 #LOWEST = -9223372036854775807 - 1
 #WHOLE = int(2.9)
 #HALF = float(SIZE) / 2.0
+; A number beside a unit is a unit, and a float becomes one toward zero.
+#UNDER = SMALL > 100 and SMALL == 200
+#CUT = unit(2.9)
 ; A macro may name one declared below it.
 #AREA = SIDE * SIDE
 #SIDE = 3
@@ -37,6 +40,7 @@ task main()
     ; An int macro is a unit where one is expected, as a literal is.
     hold b: unit = SIZE
     show(b + SMALL, " ", SMALL)
+    show(UNDER, " ", CUT)
     bind xs = [0#SIZE]
     show(xs, " ", xs[LAST])
     each i in 0..SIDE

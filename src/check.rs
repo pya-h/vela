@@ -12,6 +12,9 @@ use crate::parser::MAX_NESTING;
 struct MacroInfo {
     written: Expr,
     value: Option<Expr>,
+    /// Why its value couldn't be computed, once tried: each macro computed
+    /// from it, and each use, gets that again without computing it again.
+    failed: Option<Error>,
     /// Where its name is written.
     span: Span,
 }
@@ -835,7 +838,7 @@ impl Checker {
                     if taken(&m.name, m.span) {
                         continue;
                     }
-                    self.macros.insert(m.name.clone(), MacroInfo { written: m.value.clone(), value: None, span: m.span });
+                    self.macros.insert(m.name.clone(), MacroInfo { written: m.value.clone(), value: None, failed: None, span: m.span });
                 }
             }
         }
@@ -993,6 +996,9 @@ impl Checker {
         if let Some(value) = &info.value {
             return Ok(value.clone());
         }
+        if let Some(error) = &info.failed {
+            return Err(error.clone());
+        }
         let (written, span) = (info.written.clone(), info.span);
         if let Some(first) = through.iter().position(|macro_name| macro_name == name) {
             let mut chain: Vec<&str> = through.iter().skip(first).map(|m| unqualified(m)).collect();
@@ -1009,11 +1015,14 @@ impl Checker {
         let value = self.fold_constant(&written, through);
         self.current_module = module;
         through.pop();
-        let value = value?.literal(span);
+        let value = value.map(|value| value.literal(span));
         if let Some(info) = self.macros.get_mut(name) {
-            info.value = Some(value.clone());
+            match &value {
+                Ok(value) => info.value = Some(value.clone()),
+                Err(error) => info.failed = Some(error.clone()),
+            }
         }
-        Ok(value)
+        value
     }
 
     /// What `e`, a macro's value, is: literals, other macros, and the
@@ -2539,8 +2548,9 @@ impl Checker {
             }
             return err(span, format!("'{}' is already defined at {}:{}", name, at.line, at.col));
         }
+        let full = self.in_module(name);
         // Nor like a macro, which a bare name would read as.
-        if let Some(info) = self.macros.get(&self.in_module(name)) {
+        if let Some(info) = self.macros.get(&full) {
             let at = info.span;
             if at.file != span.file {
                 return err(span, format!("'{}' is already the name of a macro this file includes", name));
@@ -2548,11 +2558,11 @@ impl Checker {
             return err(span, format!("'{}' is already defined at {}:{}, as a macro", name, at.line, at.col));
         }
         // Nor like a kind, which `Kind.Variant` would read as.
-        if self.kinds.contains_key(&self.in_module(name)) {
+        if self.kinds.contains_key(&full) {
             return err(span, format!("'{0}' is the name of a kind, so '{0}.x' would name its variant; choose another name", name));
         }
         // Nor like a shape, which `Shape.f` would read as, for its shared field.
-        if self.shapes.contains_key(&self.in_module(name)) {
+        if self.shapes.contains_key(&full) {
             return err(span, format!("'{0}' is the name of a shape, so '{0}.x' would name its shared field; choose another name", name));
         }
         // Nor may it take a module's name, which `name.x` would read as.
@@ -2849,6 +2859,14 @@ impl Checker {
             };
             return err(at, format!("'{}' counts an int, a unit, or a char by one, and this is {}{}", symbol, a_type(&ty), hint));
         }
+        // `f += 1`: a whole number written out doesn't become a float (a
+        // power's may be an int, `f **= 2`).
+        if ty == Type::Float
+            && op != BinaryOp::Pow
+            && let ExprKind::IntLit(n) = value.kind
+        {
+            return err(value.span, format!("'{}' on a float takes a float, and {} is an int; write it '{}.0', as in 'x {} {}.0'", symbol, n, n, symbol, n));
+        }
         let place = target.clone();
         let value = std::mem::replace(value, Expr::new(ExprKind::NoneLit, at));
         let changed = match &ty {
@@ -2859,15 +2877,10 @@ impl Checker {
                         "'+=' joins text into the region the text is in, and this text lasts as long as the program, in no region; keep it in a region, as in 'hold t: text@r = …', or write 't = t + u at r'",
                     );
                 };
-                // `t += "{n}!"`: text holding values goes into the same region.
+                // `t += "{n}!"` and `t += a + b`: text holding values, and
+                // text joined, go into the same region, part by part.
                 let mut parts = vec![place];
-                if crate::parser::pending_region(&value) {
-                    if let ExprKind::Join { parts: pieces, .. } = value.kind {
-                        crate::parser::interpolated_parts(pieces, &region, at, &mut parts);
-                    }
-                } else {
-                    parts.push(value);
-                }
+                step_parts(value, &region, at, &mut parts);
                 Expr::new(ExprKind::Join { parts, region, region_span: at }, at)
             }
             Type::Text(_) => return err(at, format!("'{}' works on numbers; text is only joined, with '+='", symbol)),
@@ -8751,6 +8764,9 @@ fn fold_cast(name: &str, value: Constant, span: Span) -> Result<Constant> {
         (UNIT_CAST, Int(n)) => Ok(Unit(byte(n, "unit")?)),
         (UNIT_CAST, Unit(n) | Char(n)) => Ok(Unit(n)),
         (UNIT_CAST, Bool(b)) => Ok(Unit(u8::from(b))),
+        // Toward zero, as `unit(x)` does when the program runs.
+        (UNIT_CAST, Float(x)) if x.is_finite() && (0.0..256.0).contains(&x.trunc()) => Ok(Unit(x.trunc() as u8)),
+        (UNIT_CAST, Float(x)) => err(span, format!("the value, {}, is outside a unit's 0..255", x.trunc())),
         (CHAR_CAST, Int(n)) => Ok(Char(byte(n, "char")?)),
         (CHAR_CAST, Unit(n) | Char(n)) => Ok(Char(n)),
         (_, value) => err(span, format!("'{}(…)' doesn't take a {} in a macro's value", name, value.ty())),
@@ -8764,10 +8780,24 @@ fn fold_binary(op: BinaryOp, a: Constant, b: Constant, span: Span) -> Result<Con
     let symbol = binary_symbol(op);
     let too_large = |what: &str| Error::at(span, format!("the value doesn't fit in {}", what));
     let byte = |n: i64, ty: &str| u8::try_from(n).map_err(|_| Error::at(span, format!("the value, {}, is outside a {}'s 0..255", n, ty)));
-    let float = |x: f64| if x.is_finite() { Ok(Float(x)) } else { err(span, "the value is no number a float can hold, as dividing by zero gives") };
+    // A float that isn't finite: from dividing by zero, too large, or no number.
+    let float = |x: f64, by_zero: bool| match x {
+        _ if x.is_finite() => Ok(Float(x)),
+        _ if by_zero => err(span, "the value is no number a float can hold, as dividing by zero gives"),
+        _ if x.is_nan() => err(span, "the value is no number at all (nan), which a float here can't be"),
+        _ => err(span, "the value is too large for a float"),
+    };
     match (op, a, b) {
         (BinaryOp::And, Bool(x), Bool(y)) => Ok(Bool(x && y)),
         (BinaryOp::Or, Bool(x), Bool(y)) => Ok(Bool(x || y)),
+        // A number beside a unit is a unit, as a literal is.
+        (BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge, x @ (Unit(_) | Int(_)), y @ (Unit(_) | Int(_))) if x.ty() != y.ty() => {
+            let unit = |c: Constant| match c {
+                Int(n) => byte(n, "unit").map(Unit),
+                other => Ok(other),
+            };
+            fold_binary(op, unit(x)?, unit(y)?, span)
+        }
         (BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge, x, y) if x.ty() == y.ty() => {
             let order = match (&x, &y) {
                 (Int(x), Int(y)) => x.partial_cmp(y),
@@ -8826,15 +8856,21 @@ fn fold_binary(op: BinaryOp, a: Constant, b: Constant, span: Span) -> Result<Con
             };
             Ok(Unit(byte(value, "unit")?))
         }
-        (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod, Float(x), Float(y)) => float(match op {
-            BinaryOp::Add => x + y,
-            BinaryOp::Sub => x - y,
-            BinaryOp::Mul => x * y,
-            BinaryOp::Div => x / y,
-            _ => x % y,
-        }),
-        (BinaryOp::Add, Char(c), Int(n)) | (BinaryOp::Add, Int(n), Char(c)) => Ok(Char(byte(i64::from(c) + n, "char")?)),
-        (BinaryOp::Sub, Char(c), Int(n)) => Ok(Char(byte(i64::from(c) - n, "char")?)),
+        (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod, Float(x), Float(y)) => float(
+            match op {
+                BinaryOp::Add => x + y,
+                BinaryOp::Sub => x - y,
+                BinaryOp::Mul => x * y,
+                BinaryOp::Div => x / y,
+                _ => x % y,
+            },
+            matches!(op, BinaryOp::Div | BinaryOp::Mod) && y == 0.0,
+        ),
+        // Worked out wide, so a huge int gives its true sum in the message.
+        (BinaryOp::Add | BinaryOp::Sub, Char(c), Int(n)) | (BinaryOp::Add, Int(n), Char(c)) => {
+            let value = if op == BinaryOp::Add { i128::from(c) + i128::from(n) } else { i128::from(c) - i128::from(n) };
+            u8::try_from(value).map(Char).map_err(|_| Error::at(span, format!("the value, {}, is outside a char's 0..255", value)))
+        }
         (BinaryOp::Sub, Char(c), Char(d)) => Ok(Int(i64::from(c) - i64::from(d))),
         (BinaryOp::Add, Text(x), Text(y)) => Ok(Text(x + &y)),
         // As `check_power` types a power: an int raised to a unit or to 0 or
@@ -8858,7 +8894,8 @@ fn fold_binary(op: BinaryOp, a: Constant, b: Constant, span: Span) -> Result<Con
                 Float(x) => *x,
                 _ => 0.0,
             };
-            float(wide(&x).powf(wide(&y)))
+            let (x, y) = (wide(&x), wide(&y));
+            float(x.powf(y), x == 0.0 && y < 0.0)
         }
         (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod, Int(_), Float(_)) | (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod, Float(_), Int(_)) => {
             err(span, "an int and a float don't mix in arithmetic: turn one into the other first, as in 'float(n) + 2.5' (or 'n + int(2.5)', which truncates)")
@@ -8960,11 +8997,26 @@ fn byte_literal(e: &mut Expr, byte: &Type) -> Result<bool> {
 /// Where a place written by a step (see `Checker::step_to_assignment`) calls a
 /// task or changes something, which naming it twice would do twice; `None` for
 /// a place made only of names, fields, items, pointers, and arithmetic.
+/// The parts `value` adds to text with `+=`, into `region`: those of a
+/// `+` chain, and the pieces of text holding values that names no region.
+fn step_parts(value: Expr, region: &str, at: Span, parts: &mut Vec<Expr>) {
+    match value.kind {
+        ExprKind::Binary(BinaryOp::Add, left, right) => {
+            step_parts(*left, region, at, parts);
+            step_parts(*right, region, at, parts);
+        }
+        ExprKind::Join { parts: pieces, region: named, .. } if named.is_empty() => crate::parser::interpolated_parts(pieces, region, at, parts),
+        kind => parts.push(Expr { kind, ..value }),
+    }
+}
+
 fn changing_part(e: &Expr) -> Option<Span> {
     match &e.kind {
         ExprKind::Var(_) | ExprKind::Macro { .. } | ExprKind::Shared { .. } | ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) => None,
         ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Unary(_, inner) => changing_part(inner),
         ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => changing_part(a).or_else(|| changing_part(b)),
+        // `xs[int(b)]`: a conversion is no task, and gives the same value each time.
+        ExprKind::Call { name, args, .. } if [INT_CAST, FLOAT_CAST, UNIT_CAST, CHAR_CAST].contains(&name.as_str()) => args.iter().find_map(changing_part),
         _ => Some(e.span),
     }
 }

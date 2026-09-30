@@ -1,0 +1,6 @@
+; error: 2:6: the value, 300, is outside a unit's 0..255
+#U = unit(300.5)
+
+task main()
+    show(U)
+fi

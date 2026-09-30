@@ -68,6 +68,15 @@ task main()
     t += "de"
     t += "{x}!"
     show(t)
+    ; A place may convert a number, which is no task; text joined with '+'
+    ; goes in part by part.
+    hold small: unit = 1
+    xs[int(small)] += 10
+    xs[int(small)]++
+    show(xs)
+    t += "f" + "g"
+    t += "h{x}" + "i"
+    show(t)
     ; A count in a loop.
     hold total = 0
     each n in 1..5

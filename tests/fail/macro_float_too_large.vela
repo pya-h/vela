@@ -1,0 +1,6 @@
+; error: 2:13: the value is too large for a float
+#HUGE = 2.0 ** 1024
+
+task main()
+    show(HUGE)
+fi
