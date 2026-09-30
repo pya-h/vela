@@ -86,6 +86,17 @@ pub enum Token {
     Star,
     /// `**`: a number raised to a power.
     Power,
+    /// `++` and `--`, after a place: one more, or one less.
+    Increment,
+    Decrement,
+    /// `+=`, `-=`, `*=`, `/=`, `%=`, and `**=`: a place given the result of its
+    /// operator on it and a value.
+    PlusAssign,
+    MinusAssign,
+    StarAssign,
+    SlashAssign,
+    PercentAssign,
+    PowerAssign,
     Slash,
     Percent,
     Eq,
@@ -239,6 +250,14 @@ impl Token {
             Token::Minus => "-",
             Token::Star => "*",
             Token::Power => "**",
+            Token::Increment => "++",
+            Token::Decrement => "--",
+            Token::PlusAssign => "+=",
+            Token::MinusAssign => "-=",
+            Token::StarAssign => "*=",
+            Token::SlashAssign => "/=",
+            Token::PercentAssign => "%=",
+            Token::PowerAssign => "**=",
             Token::Slash => "/",
             Token::Percent => "%",
             Token::Eq => "==",
@@ -584,21 +603,53 @@ impl Lexer {
                     Token::Dot
                 }
             }
+            // `x++` and `x += 1`, statements of their own (see `ast::StmtKind::Step`).
+            '+' if self.peek() == '+' => {
+                self.advance();
+                Token::Increment
+            }
+            '+' if self.peek() == '=' => {
+                self.advance();
+                Token::PlusAssign
+            }
             '+' => Token::Plus,
             '-' => {
                 if self.peek() == '>' {
                     self.advance();
                     Token::Arrow
+                } else if self.peek() == '-' {
+                    self.advance();
+                    Token::Decrement
+                } else if self.peek() == '=' {
+                    self.advance();
+                    Token::MinusAssign
                 } else {
                     Token::Minus
                 }
+            }
+            '*' if self.peek() == '*' && self.peek2() == '=' => {
+                self.advance();
+                self.advance();
+                Token::PowerAssign
             }
             '*' if self.peek() == '*' => {
                 self.advance();
                 Token::Power
             }
+            '*' if self.peek() == '=' => {
+                self.advance();
+                Token::StarAssign
+            }
             '*' => Token::Star,
+            '/' if self.peek() == '=' => {
+                self.advance();
+                Token::SlashAssign
+            }
             '/' => Token::Slash,
+            '%' if self.peek() == '=' => {
+                self.advance();
+                Token::PercentAssign
+            }
             '%' => Token::Percent,
             '^' => Token::Caret,
             '~' => {

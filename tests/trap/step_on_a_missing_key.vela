@@ -1,0 +1,8 @@
+; trap: no such key in the map at 7:11 in task 'main'
+task main()
+    region r
+    hold counts = ["seen": 1] at r
+    counts["seen"]++
+    show(counts)
+    counts["new"]++
+fi

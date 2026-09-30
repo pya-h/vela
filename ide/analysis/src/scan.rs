@@ -1313,6 +1313,8 @@ impl<'a> Classifier<'a> {
                     }
                 }
                 Token::Plus | Token::Minus | Token::Star | Token::Power | Token::Slash | Token::Percent | Token::Eq | Token::Ne
+                | Token::Increment | Token::Decrement | Token::PlusAssign | Token::MinusAssign | Token::StarAssign
+                | Token::SlashAssign | Token::PercentAssign | Token::PowerAssign
                 | Token::Similar | Token::NotSimilar
                 | Token::Lt | Token::Gt | Token::Le | Token::Ge | Token::Assign | Token::Range => {
                     self.push(range, TokenClass::Operator, None);

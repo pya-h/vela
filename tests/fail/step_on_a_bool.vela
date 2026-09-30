@@ -1,0 +1,5 @@
+; error: 4:10: '--' counts an int, a unit, or a char by one, and this is a bool
+task main()
+    hold ready = false
+    ready--
+fi

@@ -6,7 +6,7 @@ task summary(readings: [float#7]) -> high: float, average: float
     high <- readings[0]
     hold sum = 0.0
     each reading in readings
-        sum = sum + reading
+        sum += reading
         when reading > high
             high <- reading
         fi
@@ -22,7 +22,7 @@ task sort(items: [int]@r)
         hold j = i
         loop j > 0 and items[j - 1] > items[j]
             items[j - 1], items[j] = items[j], items[j - 1]
-            j = j - 1
+            j--
         fi
     fi
 fi
@@ -39,7 +39,7 @@ task primes(r: region, limit: int) -> [int]@r
             hold multiple = n * n
             loop multiple < limit
                 composite[multiple] = true
-                multiple = multiple + n
+                multiple += n
             fi
         fi
     fi

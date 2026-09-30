@@ -1,0 +1,6 @@
+; error: 5:5: 'LIMIT' is a macro, a value that never changes, not a variable
+#LIMIT = 3
+
+task main()
+    LIMIT++
+fi

@@ -82,8 +82,8 @@
     | keyword:alters  method:deposit  punctuation:(  parameter:amount  punctuation::  type-builtin:int  punctuation:)
  49 |         .balance = .balance + amount
     | punctuation:.  field:balance  operator:=  punctuation:.  field:balance  operator:+  parameter:amount
- 50 |         Account.deposits = Account.deposits + 1
-    | type:Account  punctuation:.  field:deposits  operator:=  type:Account  punctuation:.  field:deposits  operator:+  number:1
+ 50 |         Account.deposits++
+    | type:Account  punctuation:.  field:deposits  operator:++
  51 |         .note("deposit", amount)
     | punctuation:.  method:note  punctuation:(  string:"deposit"  punctuation:,  parameter:amount  punctuation:)
  52 |     fi

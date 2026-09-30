@@ -110,8 +110,8 @@
     | keyword:hold  variable:count  operator:=  number:0
  62 |     loop list.line() at r { none } is {item}
     | keyword:loop  variable:list  punctuation:.  method:line  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:{  keyword:none  punctuation:}  keyword:is  punctuation:{  variable:item  punctuation:}
- 63 |         count = count + 1
-    | variable:count  operator:=  variable:count  operator:+  number:1
+ 63 |         count++
+    | variable:count  operator:++
  64 |         show(count, ". ", item)
     | builtin-fn:show  punctuation:(  variable:count  punctuation:,  string:". "  punctuation:,  variable:item  punctuation:)
  65 |     fi

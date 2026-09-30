@@ -1,0 +1,5 @@
+; error: 4:7: division by zero
+task main()
+    hold x = 1
+    x /= 0
+fi

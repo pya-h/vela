@@ -66,8 +66,8 @@
     | keyword:<-  keyword:fail  variable:problem
  38 |     }
     | punctuation:}
- 39 |     sum = sum + value
-    | parameter:sum  operator:=  parameter:sum  operator:+  variable:value
+ 39 |     sum += value
+    | parameter:sum  operator:+=  variable:value
  40 | fi
     | keyword:fi
  42 | task main()

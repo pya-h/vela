@@ -2776,9 +2776,65 @@ impl Checker {
         }
     }
 
+    /// Makes `x++`, `x--`, or `x op= v` the assignment it is, `x = x op v`,
+    /// which the rest checks as it checks any. The place is written twice, so
+    /// nothing in it may call a task or change anything. `++` and `--` count
+    /// whole numbers and chars; `t += u` on text joins into the region `t` is
+    /// in.
+    fn step_to_assignment(&mut self, stmt: &mut Stmt) -> Result<()> {
+        let StmtKind::Step { target, op, value, symbol, at } = &mut stmt.kind else { return Ok(()) };
+        let (op, symbol, at) = (*op, *symbol, *at);
+        if let Some(inside) = changing_part(target) {
+            return err(
+                inside,
+                format!("'{}' names its place twice, reading and then setting it, so the place can't call a task or change anything; keep that part in a variable first, as in 'bind i = next()' and then 'xs[i] {} …'", symbol, symbol),
+            );
+        }
+        let ty = self.check_expr(&mut target.clone())?;
+        let counts = matches!(symbol, "++" | "--");
+        if counts && !matches!(ty, Type::Int | Type::Unit | Type::Char | Type::Unknown) {
+            let hint = match ty {
+                Type::Float => format!("; for a float, write 'x {} 1.0'", if symbol == "++" { "+=" } else { "-=" }),
+                _ => String::new(),
+            };
+            return err(at, format!("'{}' counts an int, a unit, or a char by one, and this is {}{}", symbol, a_type(&ty), hint));
+        }
+        let place = target.clone();
+        let value = std::mem::replace(value, Expr::new(ExprKind::NoneLit, at));
+        let changed = match &ty {
+            Type::Text(region) if op == BinaryOp::Add => {
+                let Some(region) = region.clone() else {
+                    return err(
+                        at,
+                        "'+=' joins text into the region the text is in, and this text lasts as long as the program, in no region; keep it in a region, as in 'hold t: text@r = …', or write 't = t + u at r'",
+                    );
+                };
+                // `t += "{n}!"`: text holding values goes into the same region.
+                let mut parts = vec![place];
+                if crate::parser::pending_region(&value) {
+                    if let ExprKind::Join { parts: pieces, .. } = value.kind {
+                        crate::parser::interpolated_parts(pieces, &region, at, &mut parts);
+                    }
+                } else {
+                    parts.push(value);
+                }
+                Expr::new(ExprKind::Join { parts, region, region_span: at }, at)
+            }
+            Type::Text(_) => return err(at, format!("'{}' works on numbers; text is only joined, with '+='", symbol)),
+            _ => Expr::new(ExprKind::Binary(op, Box::new(place), Box::new(value)), at),
+        };
+        let target = std::mem::replace(target, Expr::new(ExprKind::NoneLit, at));
+        stmt.kind = StmtKind::Assign(vec![Target::Place(target)], vec![changed]);
+        Ok(())
+    }
+
     fn check_stmt_kind(&mut self, stmt: &mut Stmt) -> Result<()> {
+        if matches!(stmt.kind, StmtKind::Step { .. }) {
+            self.step_to_assignment(stmt)?;
+        }
         let span = stmt.span;
         match &mut stmt.kind {
+            StmtKind::Step { .. } => Err(Error::internal_at(span, "a step left as it was")),
             StmtKind::Expr(e) => {
                 // `fail e` names a plan B's error only on its first line.
                 if let ExprKind::Fail(inner) = &e.kind
@@ -7938,6 +7994,10 @@ impl Checker {
         let at = stmt.span;
         match &mut stmt.kind {
             StmtKind::Expr(e) => self.substitute_expr(e, given, made),
+            StmtKind::Step { target, value, .. } => {
+                self.substitute_expr(target, given, made)?;
+                self.substitute_expr(value, given, made)
+            }
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => {
                 values.iter_mut().try_for_each(|value| self.substitute_expr(value, given, made))
             }
@@ -8775,6 +8835,27 @@ fn byte_literal(e: &mut Expr, byte: &Type) -> Result<bool> {
     fits_byte(n, byte, e.span)?;
     e.ty = Some(byte.clone());
     Ok(true)
+}
+
+/// Where a place written by a step (see `Checker::step_to_assignment`) calls a
+/// task or changes something, which naming it twice would do twice; `None` for
+/// a place made only of names, fields, items, pointers, and arithmetic.
+fn changing_part(e: &Expr) -> Option<Span> {
+    match &e.kind {
+        ExprKind::Var(_) | ExprKind::Macro { .. } | ExprKind::Shared { .. } | ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) => None,
+        ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Unary(_, inner) => changing_part(inner),
+        ExprKind::Index(a, b) | ExprKind::Binary(_, a, b) => changing_part(a).or_else(|| changing_part(b)),
+        _ => Some(e.span),
+    }
+}
+
+/// A type as a message names one: 'a float', 'text'.
+fn a_type(ty: &Type) -> String {
+    match ty {
+        Type::Text(_) => "text".to_string(),
+        Type::Int => "an int".to_string(),
+        other => format!("a {}", other),
+    }
 }
 
 /// Checks `l ** r` and returns its type. An int raised to a power it can't be

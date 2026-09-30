@@ -1,0 +1,5 @@
+; error: 4:11: expected ')', got '++'; '++' goes after a place, on a line of its own, as in 'x++', and gives no value
+task main()
+    hold x = 1
+    show(x++)
+fi

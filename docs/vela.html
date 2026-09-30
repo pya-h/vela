@@ -343,6 +343,7 @@ block shared type</pre>
         <tr><td><code>0..5</code></td><td>a range, in <code>each</code> and in a slice (<code>xs[1..3]</code>)</td></tr>
         <tr><td><code>=</code></td><td>assignment, the value of a binding, the value a <a href="#field-defaults">field falls back on</a>, and the value a <code>case</code> gives</td></tr>
         <tr><td><code>+ - * / %</code>, <code>== != &lt; &lt;= &gt; &gt;=</code></td><td>arithmetic and comparison (see <a href="#comparing">Comparing</a>)</td></tr>
+        <tr><td><code>x++</code>, <code>x--</code>, <code>x += v</code></td><td>a place counted by one, or given its operator's result with <code>v</code> (also <code>-= *= /= %= **=</code>); statements of their own (see <a href="#steps">Steps</a>)</td></tr>
         <tr><td><code>a ** b</code></td><td><code>a</code> raised to the power <code>b</code>, before <code>*</code>, grouping from the right (see <a href="#powers">Powers</a>)</td></tr>
         <tr><td><code>a ~= b</code>, <code>a &lt;&gt; b</code></td><td>whether two values are similar, item by item; <code>not (a ~= b)</code></td></tr>
       </table>
@@ -769,6 +770,33 @@ a, b = b, a                  <span class="comment">; a is 2, b is 1</span>
 <span class="keyword">hold</span> count = 0
 count = count + 1
 <span class="keyword">hold</span> total: float = 0.0     <span class="comment">; the type can be written out</span></pre>
+      <p id="steps">
+        <strong>Steps.</strong> <code>x++</code> and <code>x--</code> count a place up or down by one, and
+        <code>x += v</code> gives it <code>x + v</code>, as do <code>-=</code>, <code>*=</code>, <code>/=</code>,
+        <code>%=</code>, and <code>**=</code> with their operators. Each is a statement on a line of its own, as
+        <code>=</code> is, and gives no value: <code>show(x++)</code>, <code>++x</code>, and <code>y = x += 1</code>
+        are errors. A step is the assignment it stands for, with that operator's types and stops: the place must be
+        one that can change (a <code>hold</code> variable, or a field, an item, a map's value, or what a pointer points
+        to), an int that overflows stops the program, <code>x /= 0</code> is refused, and <code>x **= k</code> on an
+        int asks for a <a href="#powers">power</a> that stays an int.
+      </p>
+      <pre><span class="keyword">hold</span> count = 0
+count++                     <span class="comment">; 1</span>
+count += 10                 <span class="comment">; 11</span>
+count **= 2                 <span class="comment">; 121</span>
+<span class="keyword">hold</span> c = 'a'
+c++                         <span class="comment">; 'b': a char counts to the next one, and a unit counts too</span>
+<span class="keyword">hold</span> f = 1.5
+f++                         <span class="comment">; error: '++' counts an int, a unit, or a char by one, and this is a float; for a float, write 'x += 1.0'</span>
+words[w] += 1               <span class="comment">; stops when w is no key of the map, as words[w] does</span>
+<span class="keyword">hold</span> t: text@r = "a" + "b" <span class="keyword">at</span> r
+t += "{count}!"             <span class="comment">; "ab121!", joined into r, the region t is in</span></pre>
+      <p>
+        On text, <code>+=</code> joins, into the region the text is in, so text that lasts as long as the program
+        (<code>hold t = "ab"</code>) can't take it: write <code>t = t + u at r</code>, or keep the text in a region.
+        The place is named twice, read and then set, so nothing in it may call a task: <code>xs[next()] += 1</code>
+        asks for the index in a variable first.
+      </p>
       <p>
         Assigning copies the value. Shapes are copied whole, so after <code>hold b = a</code>, changing
         <code>b.x</code> leaves <code>a</code> alone.

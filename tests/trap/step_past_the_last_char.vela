@@ -1,0 +1,7 @@
+; trap: 256 does not fit in a char at 6:6 in task 'main'
+task main()
+    hold c = char(254)
+    c++
+    show(int(c))
+    c++
+fi

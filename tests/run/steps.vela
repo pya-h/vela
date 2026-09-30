@@ -1,0 +1,71 @@
+; Steps: `x++` and `x--` count a place by one, and `x += v`, `-=`, `*=`, `/=`,
+; `%=`, and `**=` give it the result of the operator on itself and the value,
+; with the operator's types and its stops. Each is a statement of its own. On
+; text, `+=` joins into the region the text is in.
+
+shape Counter
+    hits: int = 0
+fi
+
+task main()
+    region r
+    hold x = 5
+    x++
+    x++
+    x--
+    x += 10
+    x -= 3
+    x *= 2
+    x /= 4
+    x %= 5
+    show(x)
+    x = 3
+    x **= 4
+    show(x)
+    hold f = 1.5
+    f += 1.0
+    f *= 2.0
+    f **= 2
+    f /= 5.0
+    f -= 0.5
+    show(f)
+    ; A char counts to the next one.
+    hold c = 'a'
+    c++
+    c += 2
+    c--
+    show(c)
+    ; A number written out is a unit beside a unit.
+    hold b: unit = 250
+    b++
+    b += 2
+    show(b)
+    ; Items, fields, pointers, and a map's values are places too.
+    hold xs = [1, 2, 3]
+    xs[1] += 40
+    xs[0]++
+    hold i = 2
+    xs[i] *= 10
+    show(xs)
+    hold k = Counter {}
+    k.hits++
+    k.hits += 5
+    show(k.hits)
+    hold p = new int(3) at r
+    p^ += 4
+    show(p^)
+    hold words = ["a": 1] at r
+    words["a"] += 9
+    words["a"]++
+    show(words)
+    hold t: text@r = "ab" + "c" at r
+    t += "de"
+    t += "{x}!"
+    show(t)
+    ; A count in a loop.
+    hold total = 0
+    each n in 1..5
+        total += n
+    fi
+    show(total)
+fi

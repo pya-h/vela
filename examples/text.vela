@@ -39,7 +39,8 @@ task initials(name: text@r, r: region) -> text@r
             start = true
         else
             when start
-                letters = letters + letter at r
+                ; `+=` joins into the region `letters` is in, r.
+                letters += letter
             fi
             start = false
         fi

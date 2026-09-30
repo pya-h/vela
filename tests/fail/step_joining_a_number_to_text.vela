@@ -1,0 +1,6 @@
+; error: 5:10: '+' joins text, but this value is int; turn it into text first, as in 'n.str() at r'
+task main()
+    region r
+    hold t: text@r = "a" + "b" at r
+    t += 5
+fi

@@ -1,0 +1,7 @@
+; trap: integer overflow at 6:6 in task 'main'
+task main()
+    hold n = 9223372036854775806
+    n++
+    show(n)
+    n++
+fi

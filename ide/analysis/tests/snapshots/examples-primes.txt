@@ -38,8 +38,8 @@
     | keyword:when  task:is_prime  punctuation:(  variable:i  punctuation:)
  24 |             primes[idx] = i
     | variable:primes  punctuation:[  variable:idx  punctuation:]  operator:=  variable:i
- 25 |             idx = idx + 1
-    | variable:idx  operator:=  variable:idx  operator:+  number:1
+ 25 |             idx++
+    | variable:idx  operator:++
  26 |         fi
     | keyword:fi
  27 |     fi

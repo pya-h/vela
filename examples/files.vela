@@ -60,7 +60,7 @@ task main()
     }
     hold count = 0
     loop list.line() at r { none } is {item}
-        count = count + 1
+        count++
         show(count, ". ", item)
     fi
     list.close() { failure e

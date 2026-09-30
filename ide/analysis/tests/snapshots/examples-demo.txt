@@ -38,8 +38,8 @@
     | keyword:loop  variable:i  operator:<  number:5
  26 |         show(i)
     | builtin-fn:show  punctuation:(  variable:i  punctuation:)
- 27 |         i = i + 1
-    | variable:i  operator:=  variable:i  operator:+  number:1
+ 27 |         i++
+    | variable:i  operator:++
  28 |     fi
     | keyword:fi
  30 |     each n in 0..3

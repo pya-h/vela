@@ -64,8 +64,8 @@
     | keyword:each  variable:v  keyword:in  parameter:xs
  36 |         when v == wanted
     | keyword:when  variable:v  operator:==  parameter:wanted
- 37 |             seen = seen + 1
-    | variable:seen  operator:=  variable:seen  operator:+  number:1
+ 37 |             seen++
+    | variable:seen  operator:++
  38 |         fi
     | keyword:fi
  39 |     fi

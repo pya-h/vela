@@ -1,5 +1,0 @@
-; error: 4:9: expected an expression, got '='; Vela has no '**=': write 'x = x ** value'
-task main()
-    hold x = 3
-    x **= 2
-fi

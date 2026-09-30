@@ -34,7 +34,7 @@ task countOf<T: same>(xs: [T]@r, wanted: T) -> int
     hold seen = 0
     each v in xs
         when v == wanted
-            seen = seen + 1
+            seen++
         fi
     fi
     <- seen

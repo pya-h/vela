@@ -36,7 +36,7 @@ task add_reading(hold& sum: int, reading: maybe int) -> nothing ~ ReadingError
         failure problem
         <- fail problem
     }
-    sum = sum + value
+    sum += value
 fi
 
 task main()

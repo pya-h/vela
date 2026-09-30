@@ -37,6 +37,6 @@ task main()
         ; `show` writes each value in turn, so a line printed once needs no text
         ; of its own, and no region to hold it.
         show(number, ". ", notes.del())
-        number = number - 1
+        number--
     fi
 fi

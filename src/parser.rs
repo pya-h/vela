@@ -327,6 +327,15 @@ impl Parser {
             // `.05`: the digits after the dot lost their leading zeros as a number.
             (Token::Dot, _, Some(Token::Int(_))) => "; a number starts with a digit, so write '0' before the '.'".to_string(),
             (Token::LBrace, Some(Token::Newline) | None, _) => "; a plan B's '{' goes on the line of its value, and blocks close with 'fi'".to_string(),
+            // `show(x++)` or `++x`: a step is a statement of its own.
+            (Token::Increment | Token::Decrement, _, _) => {
+                let symbol = self.peek().describe();
+                format!("; {0} goes after a place, on a line of its own, as in 'x{1}', and gives no value", symbol, symbol.trim_matches('\''))
+            }
+            (Token::PlusAssign | Token::MinusAssign | Token::StarAssign | Token::SlashAssign | Token::PercentAssign | Token::PowerAssign, _, _) => {
+                let symbol = self.peek().describe();
+                format!("; {} changes a place, on a line of its own, as in 'x {} 2', and gives no value", symbol, symbol.trim_matches('\''))
+            }
             // A comment written as other languages write one.
             (Token::Hash, _, _) => "; '#' marks an array's count, as in '[int#4]', and a comment starts with ';'".to_string(),
             // `&` joins the words after a type's `:`, and marks a place given at
@@ -1586,6 +1595,18 @@ impl Parser {
         if self.check(Token::Comma) || self.check(Token::Assign) {
             return self.parse_assignment(span, Target::Place(expr));
         }
+        if let Some((op, symbol)) = step_operator(self.peek()) {
+            let at = self.peek_span();
+            self.advance();
+            let value = match symbol {
+                "++" | "--" => Expr::new(ExprKind::IntLit(1), at),
+                _ => self.parse_expr()?,
+            };
+            if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi) {
+                return Err(self.unexpected(&format!("the end of the line: '{}' is a statement of its own", symbol)));
+            }
+            return Ok(Stmt::new(StmtKind::Step { target: expr, op, value, symbol, at }, span));
+        }
         Ok(Stmt::new(StmtKind::Expr(expr), span))
     }
 
@@ -1595,6 +1616,9 @@ impl Parser {
         let mut targets = vec![first];
         while self.match_token(Token::Comma) {
             targets.push(self.parse_target()?);
+        }
+        if let Some((_, symbol)) = step_operator(self.peek()) {
+            return Err(Error::at(self.peek_span(), format!("'{0}' changes one place, so each goes on a line of its own, as in 'a {0} …'", symbol)));
         }
         if !self.match_token(Token::Assign) {
             return Err(Error::at(
@@ -3360,7 +3384,7 @@ fn dotted_name(expr: &Expr) -> Option<(String, Span)> {
 
 /// Whether `expr` is text holding values whose region is still to come (see
 /// `Parser::parse_interpolated`).
-fn pending_region(expr: &Expr) -> bool {
+pub(crate) fn pending_region(expr: &Expr) -> bool {
     matches!(&expr.kind, ExprKind::Join { region, .. } if region.is_empty())
 }
 
@@ -3383,4 +3407,20 @@ pub(crate) fn interpolated_parts(pieces: Vec<Expr>, region: &str, region_span: S
         let into = Expr::new(ExprKind::Var(region.to_string()), region_span);
         parts.push(Expr::new(ExprKind::MethodCall { value: Box::new(piece), name: STR.to_string(), args: vec![into], dotted: None }, span));
     }
+}
+
+/// The operator a step statement writes (see `ast::StmtKind::Step`), with how
+/// it is written.
+fn step_operator(token: &Token) -> Option<(BinaryOp, &'static str)> {
+    Some(match token {
+        Token::Increment => (BinaryOp::Add, "++"),
+        Token::Decrement => (BinaryOp::Sub, "--"),
+        Token::PlusAssign => (BinaryOp::Add, "+="),
+        Token::MinusAssign => (BinaryOp::Sub, "-="),
+        Token::StarAssign => (BinaryOp::Mul, "*="),
+        Token::SlashAssign => (BinaryOp::Div, "/="),
+        Token::PercentAssign => (BinaryOp::Mod, "%="),
+        Token::PowerAssign => (BinaryOp::Pow, "**="),
+        _ => return None,
+    })
 }

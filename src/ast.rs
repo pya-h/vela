@@ -1088,6 +1088,11 @@ pub enum StmtKind {
     },
     /// `a, b = b, a`: the places assigned, and the values, as in a binding.
     Assign(Vec<Target>, Vec<Expr>),
+    /// `x++`, `x--`, or `x += v` (and `-=`, `*=`, `/=`, `%=`, `**=`): the place
+    /// given its operator's result on itself and the value, which is one for
+    /// `++` and `--`. `symbol` is the operator as written, and `at` where. The
+    /// checker makes it the assignment it is (see `Checker::check_step`).
+    Step { target: Expr, op: BinaryOp, value: Expr, symbol: &'static str, at: Span },
     When(Condition, Block, Option<Block>),
     Loop(Condition, Block),
     /// `block … fi`: statements in a block of their own, whose names, regions,

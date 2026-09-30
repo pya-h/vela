@@ -24,7 +24,7 @@ task main()
     hold i = 0
     loop i < 5
         show(i)
-        i = i + 1
+        i++
     fi
 
     each n in 0..3

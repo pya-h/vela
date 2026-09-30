@@ -22,7 +22,7 @@ task primes_below_no_add(r: region, limit: int) -> [int]@r
     each i in 2..limit
         when is_prime(i)
             primes[idx] = i
-            idx = idx + 1
+            idx++
         fi
     fi
     <- (primes[0..idx])

@@ -40,10 +40,10 @@ task main()
     loop reading
         match scan("> ", int)
         case {value}
-            count = count + 1
-            total = total + value
+            count++
+            total += value
             ; An int raised to 2, a constant, stays an exact int.
-            squares = squares + float(value ** 2)
+            squares += float(value ** 2)
             when count == 1 or value > largest
                 largest = value
             fi
@@ -54,7 +54,7 @@ task main()
                 reading = false
             ; A line that was no number: the reason says which way.
             case NoNumber why
-                refused = refused + 1
+                refused++
                 match why
                 case NotANumber
                     show("that is no number")

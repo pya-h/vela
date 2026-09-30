@@ -1627,6 +1627,8 @@ impl Generator {
 
     fn gen_stmt(&mut self, stmt: &Stmt) -> Result<()> {
         match &stmt.kind {
+            // The checker makes every one the assignment it is.
+            StmtKind::Step { .. } => return Err(Error::internal_at(stmt.span, "a step the checker left as it was")),
             // A change to a slice drops the item `del` gives, and a `scan` the line.
             StmtKind::Expr(Expr { kind: ExprKind::Edit { items, op, args }, span, .. }) => {
                 self.gen_edit(*span, items, *op, args, true)?;
@@ -3892,6 +3894,10 @@ impl UsedTypes {
         for stmt in block {
             match &stmt.kind {
                 StmtKind::Expr(e) => self.expr(e),
+                StmtKind::Step { target, value, .. } => {
+                    self.expr(target);
+                    self.expr(value);
+                }
                 StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter().for_each(|value| self.expr(value)),
                 StmtKind::Region { .. } => {}
                 StmtKind::Binding { names, init, .. } => {
@@ -4108,6 +4114,7 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
     let body = |b: &Block| block_reads(b, name);
     match &stmt.kind {
         StmtKind::Expr(e) => expr(e),
+        StmtKind::Step { target, value, .. } => expr(target) || expr(value),
         StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter().any(expr),
         StmtKind::Region { .. } => false,
         StmtKind::Binding { init, .. } => init.iter().any(expr),

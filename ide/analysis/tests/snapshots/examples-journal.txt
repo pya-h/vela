@@ -72,8 +72,8 @@
     | comment:; of its own, and no region to hold it.
  39 |         show(number, ". ", notes.del())
     | builtin-fn:show  punctuation:(  variable:number  punctuation:,  string:". "  punctuation:,  variable:notes  punctuation:.  field:del  punctuation:(  punctuation:)  punctuation:)
- 40 |         number = number - 1
-    | variable:number  operator:=  variable:number  operator:-  number:1
+ 40 |         number--
+    | variable:number  operator:--
  41 |     fi
     | keyword:fi
  42 | fi

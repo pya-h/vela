@@ -12,8 +12,8 @@
     | keyword:hold  variable:sum  operator:=  number:0.0
   8 |     each reading in readings
     | keyword:each  variable:reading  keyword:in  parameter:readings
-  9 |         sum = sum + reading
-    | variable:sum  operator:=  variable:sum  operator:+  variable:reading
+  9 |         sum += reading
+    | variable:sum  operator:+=  variable:reading
  10 |         when reading > high
     | keyword:when  variable:reading  operator:>  variable:high
  11 |             high <- reading
@@ -42,8 +42,8 @@
     | keyword:loop  variable:j  operator:>  number:0  keyword:and  parameter:items  punctuation:[  variable:j  operator:-  number:1  punctuation:]  operator:>  parameter:items  punctuation:[  variable:j  punctuation:]
  24 |             items[j - 1], items[j] = items[j], items[j - 1]
     | parameter:items  punctuation:[  variable:j  operator:-  number:1  punctuation:]  punctuation:,  parameter:items  punctuation:[  variable:j  punctuation:]  operator:=  parameter:items  punctuation:[  variable:j  punctuation:]  punctuation:,  parameter:items  punctuation:[  variable:j  operator:-  number:1  punctuation:]
- 25 |             j = j - 1
-    | variable:j  operator:=  variable:j  operator:-  number:1
+ 25 |             j--
+    | variable:j  operator:--
  26 |         fi
     | keyword:fi
  27 |     fi
@@ -74,8 +74,8 @@
     | keyword:loop  variable:multiple  operator:<  parameter:limit
  41 |                 composite[multiple] = true
     | variable:composite  punctuation:[  variable:multiple  punctuation:]  operator:=  keyword:true
- 42 |                 multiple = multiple + n
-    | variable:multiple  operator:=  variable:multiple  operator:+  variable:n
+ 42 |                 multiple += n
+    | variable:multiple  operator:+=  variable:n
  43 |             fi
     | keyword:fi
  44 |         fi

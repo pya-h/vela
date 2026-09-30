@@ -47,7 +47,7 @@ shape Account
 
     alters deposit(amount: int)
         .balance = .balance + amount
-        Account.deposits = Account.deposits + 1
+        Account.deposits++
         .note("deposit", amount)
     fi
 

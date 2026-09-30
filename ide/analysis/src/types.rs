@@ -205,6 +205,10 @@ impl Checked {
     fn statement(&mut self, stmt: &Stmt, kinds: &Declarations) {
         match &stmt.kind {
             StmtKind::Expr(e) => self.expr(e, kinds),
+            StmtKind::Step { target, value, .. } => {
+                self.expr(target, kinds);
+                self.expr(value, kinds);
+            }
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter().for_each(|value| self.expr(value, kinds)),
             StmtKind::Region { .. } => {
                 self.declare(stmt.span, Type::Region);

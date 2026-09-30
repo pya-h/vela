@@ -72,93 +72,95 @@
     | keyword:else
  41 |             when start
     | keyword:when  variable:start
- 42 |                 letters = letters + letter at r
-    | variable:letters  operator:=  variable:letters  operator:+  variable:letter  keyword:at  region:r
- 43 |             fi
+ 42 |                 ; `+=` joins into the region `letters` is in, r.
+    | comment:; `+=` joins into the region `letters` is in, r.
+ 43 |                 letters += letter
+    | variable:letters  operator:+=  variable:letter
+ 44 |             fi
     | keyword:fi
- 44 |             start = false
+ 45 |             start = false
     | variable:start  operator:=  keyword:false
- 45 |         fi
+ 46 |         fi
     | keyword:fi
- 46 |     fi
+ 47 |     fi
     | keyword:fi
- 47 |     <- letters
+ 48 |     <- letters
     | keyword:<-  variable:letters
- 48 | fi
+ 49 | fi
     | keyword:fi
- 50 | task main()
+ 51 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 51 |     region r
+ 52 |     region r
     | keyword:region  region:r
- 53 |     ; Length is bytes, not characters: a letter outside ASCII takes more.
+ 54 |     ; Length is bytes, not characters: a letter outside ASCII takes more.
     | comment:; Length is bytes, not characters: a letter outside ASCII takes more.
- 54 |     bind name = "Ada Lovelace"
+ 55 |     bind name = "Ada Lovelace"
     | keyword:bind  variable:name  operator:=  string:"Ada Lovelace"
- 55 |     show(name.len)
+ 56 |     show(name.len)
     | builtin-fn:show  punctuation:(  variable:name  punctuation:.  field:len  punctuation:)
- 56 |     show("café".len)
+ 57 |     show("café".len)
     | builtin-fn:show  punctuation:(  string:"café"  punctuation:.  field:len  punctuation:)
- 58 |     ; Parts view the same bytes, and a bound inside a character stops the
+ 59 |     ; Parts view the same bytes, and a bound inside a character stops the
     | comment:; Parts view the same bytes, and a bound inside a character stops the
- 59 |     ; program, so a part never holds half of one.
+ 60 |     ; program, so a part never holds half of one.
     | comment:; program, so a part never holds half of one.
- 60 |     show(first_word(name))
+ 61 |     show(first_word(name))
     | builtin-fn:show  punctuation:(  task:first_word  punctuation:(  variable:name  punctuation:)  punctuation:)
- 61 |     show(name[4..name.len])
+ 62 |     show(name[4..name.len])
     | builtin-fn:show  punctuation:(  variable:name  punctuation:[  number:4  operator:..  variable:name  punctuation:.  field:len  punctuation:]  punctuation:)
- 62 |     show("café"[3..5])
+ 63 |     show("café"[3..5])
     | builtin-fn:show  punctuation:(  string:"café"  punctuation:[  number:3  operator:..  number:5  punctuation:]  punctuation:)
- 64 |     ; Text compares by its contents, and orders by its bytes, which is the
+ 65 |     ; Text compares by its contents, and orders by its bytes, which is the
     | comment:; Text compares by its contents, and orders by its bytes, which is the
- 65 |     ; order of Unicode: capitals come before small letters.
+ 66 |     ; order of Unicode: capitals come before small letters.
     | comment:; order of Unicode: capitals come before small letters.
- 66 |     show(name == "Ada Lovelace")
+ 67 |     show(name == "Ada Lovelace")
     | builtin-fn:show  punctuation:(  variable:name  operator:==  string:"Ada Lovelace"  punctuation:)
- 67 |     show("Ada" < "Bob")
+ 68 |     show("Ada" < "Bob")
     | builtin-fn:show  punctuation:(  string:"Ada"  operator:<  string:"Bob"  punctuation:)
- 68 |     show("Zoe" < "ada")
+ 69 |     show("Zoe" < "ada")
     | builtin-fn:show  punctuation:(  string:"Zoe"  operator:<  string:"ada"  punctuation:)
- 70 |     ; New text: joined, written from a value, or holding values.
+ 71 |     ; New text: joined, written from a value, or holding values.
     | comment:; New text: joined, written from a value, or holding values.
- 71 |     show("Hello, " + first_word(name) + "!" at r)
+ 72 |     show("Hello, " + first_word(name) + "!" at r)
     | builtin-fn:show  punctuation:(  string:"Hello, "  operator:+  task:first_word  punctuation:(  variable:name  punctuation:)  operator:+  string:"!"  keyword:at  region:r  punctuation:)
- 72 |     show(initials(name, r))
+ 73 |     show(initials(name, r))
     | builtin-fn:show  punctuation:(  task:initials  punctuation:(  variable:name  punctuation:,  region:r  punctuation:)  punctuation:)
- 73 |     show(42.str() at r)
+ 74 |     show(42.str() at r)
     | builtin-fn:show  punctuation:(  number:42  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
- 74 |     show(text(2.5) at r)
+ 75 |     show(text(2.5) at r)
     | builtin-fn:show  punctuation:(  type-builtin:text  punctuation:(  number:2.5  punctuation:)  keyword:at  region:r  punctuation:)
- 75 |     bind card = Card { name: "Ada", wins: 3 }
+ 76 |     bind card = Card { name: "Ada", wins: 3 }
     | keyword:bind  variable:card  operator:=  type:Card  punctuation:{  field:name  punctuation::  string:"Ada"  punctuation:,  field:wins  punctuation::  number:3  punctuation:}
- 76 |     show(card.str() at r)
+ 77 |     show(card.str() at r)
     | builtin-fn:show  punctuation:(  variable:card  punctuation:.  method:str  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:)
- 77 |     show(card)
+ 78 |     show(card)
     | builtin-fn:show  punctuation:(  variable:card  punctuation:)
- 78 |     show("{card} has {card.wins * 2} points" at r)
+ 79 |     show("{card} has {card.wins * 2} points" at r)
     | builtin-fn:show  punctuation:(  string:"{  variable:card  string:} has {  variable:card  punctuation:.  field:wins  operator:*  number:2  string:} points"  keyword:at  region:r  punctuation:)
- 79 |     show("\{name\} is written {name.len} bytes long" at r)
+ 80 |     show("\{name\} is written {name.len} bytes long" at r)
     | builtin-fn:show  punctuation:(  string:"  escape:\{  string:name  escape:\}  string: is written {  variable:name  punctuation:.  field:len  string:} bytes long"  keyword:at  region:r  punctuation:)
- 81 |     ; A loop that builds text again and again can build in a region of its own,
+ 82 |     ; A loop that builds text again and again can build in a region of its own,
     | comment:; A loop that builds text again and again can build in a region of its own,
- 82 |     ; freed on every pass, and copy out only what it keeps.
+ 83 |     ; freed on every pass, and copy out only what it keeps.
     | comment:; freed on every pass, and copy out only what it keeps.
- 83 |     hold longest = "".copy() at r
+ 84 |     hold longest = "".copy() at r
     | keyword:hold  variable:longest  operator:=  string:""  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
- 84 |     each word in ["one", "three", "two"]
+ 85 |     each word in ["one", "three", "two"]
     | keyword:each  variable:word  keyword:in  punctuation:[  string:"one"  punctuation:,  string:"three"  punctuation:,  string:"two"  punctuation:]
- 85 |         region pass
+ 86 |         region pass
     | keyword:region  region:pass
- 86 |         bind padded = "[{word}]" at pass
+ 87 |         bind padded = "[{word}]" at pass
     | keyword:bind  variable:padded  operator:=  string:"[{  variable:word  string:}]"  keyword:at  region:pass
- 87 |         when padded.len > longest.len
+ 88 |         when padded.len > longest.len
     | keyword:when  variable:padded  punctuation:.  field:len  operator:>  variable:longest  punctuation:.  field:len
- 88 |             longest = padded.copy() at r
+ 89 |             longest = padded.copy() at r
     | variable:longest  operator:=  variable:padded  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r
- 89 |         fi
+ 90 |         fi
     | keyword:fi
- 90 |     fi
+ 91 |     fi
     | keyword:fi
- 91 |     show(longest)
+ 92 |     show(longest)
     | builtin-fn:show  punctuation:(  variable:longest  punctuation:)
- 92 | fi
+ 93 | fi
     | keyword:fi

@@ -74,14 +74,14 @@
     | keyword:match  builtin-fn:scan  punctuation:(  string:"> "  punctuation:,  type-builtin:int  punctuation:)
  42 |         case {value}
     | keyword:case  punctuation:{  variable:value  punctuation:}
- 43 |             count = count + 1
-    | variable:count  operator:=  variable:count  operator:+  number:1
- 44 |             total = total + value
-    | variable:total  operator:=  variable:total  operator:+  variable:value
+ 43 |             count++
+    | variable:count  operator:++
+ 44 |             total += value
+    | variable:total  operator:+=  variable:value
  45 |             ; An int raised to 2, a constant, stays an exact int.
     | comment:; An int raised to 2, a constant, stays an exact int.
- 46 |             squares = squares + float(value ** 2)
-    | variable:squares  operator:=  variable:squares  operator:+  type-builtin:float  punctuation:(  variable:value  operator:**  number:2  punctuation:)
+ 46 |             squares += float(value ** 2)
+    | variable:squares  operator:+=  type-builtin:float  punctuation:(  variable:value  operator:**  number:2  punctuation:)
  47 |             when count == 1 or value > largest
     | keyword:when  variable:count  operator:==  number:1  keyword:or  variable:value  operator:>  variable:largest
  48 |                 largest = value
@@ -102,8 +102,8 @@
     | comment:; A line that was no number: the reason says which way.
  56 |             case NoNumber why
     | keyword:case  variant:NoNumber  variable:why
- 57 |                 refused = refused + 1
-    | variable:refused  operator:=  variable:refused  operator:+  number:1
+ 57 |                 refused++
+    | variable:refused  operator:++
  58 |                 match why
     | keyword:match  variable:why
  59 |                 case NotANumber

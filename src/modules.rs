@@ -1214,6 +1214,10 @@ impl Resolver<'_> {
     fn stmt(&self, stmt: &mut Stmt) -> Result<()> {
         match &mut stmt.kind {
             StmtKind::Expr(e) => self.expr(e),
+            StmtKind::Step { target, value, .. } => {
+                self.expr(target)?;
+                self.expr(value)
+            }
             StmtKind::Binding { names, init, .. } => {
                 names.iter_mut().try_for_each(|bound| self.bound(bound))?;
                 init.iter_mut().try_for_each(|e| self.expr(e))
