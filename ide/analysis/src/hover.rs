@@ -75,6 +75,11 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     ("maybe", "maybe T", "A T, or none. Read it with match, is, or a plan B: x { fallback }."),
     ("none", "none", "The empty maybe. A pointer can't be none; use maybe ^T."),
     ("is", "value is pattern", "The condition holds when the pattern matches; its names are visible in the block."),
+    (
+        "$",
+        "$d or $d(values)",
+        "A startup decorator, on a line above a task: d(task, values) runs once where the program starts, before main. The nearest runs first, and the task stays an ordinary task. d takes the task first and sends nothing, and its values hold no variable or region, since none exists yet.",
+    ),
     ("fail", "fail error", "Makes a failure, for a task whose type has a ~ side: <- fail e sends one. A pattern names a failure with 'failure' instead."),
     ("failure", "failure e", "Names the failure a pattern matches: case failure e, when x is failure e, and a plan B's first line. 'fail' makes one."),
     ("_", "_", "Matches anything left, or drops a value without naming it."),

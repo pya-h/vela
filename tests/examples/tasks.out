@@ -1,3 +1,4 @@
+rule ready: 4 passes it? true
 even: 3
 big: 3
 odd: 3

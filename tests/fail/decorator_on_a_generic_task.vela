@@ -1,0 +1,13 @@
+; error: 7:2: task 'first' takes types, so it can't be a value yet; only a task that takes none can
+; A task that takes types can't be a value yet, so no decorator takes it.
+task reg(f: (int) -> int)
+    show(f(1))
+fi
+
+$reg
+task first<T>(x: T) -> T
+    <- x
+fi
+
+task main()
+fi

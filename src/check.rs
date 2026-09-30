@@ -450,6 +450,7 @@ impl Checker {
         let mut checker = Checker::with_type_places(std::mem::take(&mut program.type_places));
         checker.modules = program.modules.iter().map(|scope| (scope.name.clone(), scope.clone())).collect();
         checker.declare_builtin_kinds();
+        add_startups(&mut program.items);
         checker.check_file(&mut program.items);
         // What a program with a mistake would be made into is never generated,
         // and the parts of it a mistake left unchecked would only cause more, so
@@ -2482,7 +2483,11 @@ impl Checker {
             return Ok(());
         }
         let before = self.errors.len();
-        self.check_block(&mut task.body)?;
+        if is_startup(&task.name) {
+            self.check_startup(&mut task.body);
+        } else {
+            self.check_block(&mut task.body)?;
+        }
         // Whether every path sends a value can only be told of a body that
         // checked: a line with a mistake may well be the one that sends, so a
         // task with a mistake anywhere is not told this as well (see `record`).
@@ -4241,6 +4246,70 @@ impl Checker {
             }
             _ => {}
         }
+    }
+
+    /// Checks the startup decorators in `body` (see `add_startups`), each a
+    /// call `d(task, args)`: that `d` takes a task of the task's type first,
+    /// and that it sends nothing, since what it sent would go nowhere.
+    fn check_startup(&mut self, body: &mut Block) {
+        for stmt in body.iter_mut() {
+            let fits = self.decorator_fits(stmt);
+            if self.keep_going(fits) {
+                // No region exists where the program starts.
+                let checked = self.check_stmt(stmt).map_err(|mut error| {
+                    const NO_REGION: &str = "a decorator's values are worked out where the program starts, before any region exists, so none of them can be made in one";
+                    if error.message.starts_with("unknown region") {
+                        error.message = NO_REGION.to_string();
+                    } else if error.message.starts_with("unknown variable") {
+                        error.message.push_str("; a decorator's values are worked out where the program starts, where no variable exists yet");
+                    } else if error.message.contains("region") {
+                        error.message = format!("{}; but {}", error.message, NO_REGION);
+                    }
+                    error
+                });
+                self.keep_going(checked);
+            }
+        }
+        for stmt in body.iter() {
+            if let StmtKind::Expr(call) = &stmt.kind
+                && let ExprKind::Call { name, .. } = &call.kind
+                && let Some(ty) = call.ty.as_ref().filter(|ty| !matches!(ty, Type::Nothing | Type::Unknown))
+            {
+                let message = format!("a startup decorator sends nothing, since it runs where the program starts and nothing takes what it sends; '{}' sends {}", unqualified(name), ty);
+                self.record(Error::at(call.span, message));
+            }
+        }
+    }
+
+    /// Whether the startup decorator `stmt`, the call `d(task, args)`, takes
+    /// the task first and as many values as it is given, said as a decorator's
+    /// mistake rather than a call's. A generic decorator is left to the call.
+    fn decorator_fits(&self, stmt: &Stmt) -> Result<()> {
+        let StmtKind::Expr(call) = &stmt.kind else { return Ok(()) };
+        let ExprKind::Call { name, args, .. } = &call.kind else { return Ok(()) };
+        let Some(info) = self.tasks.get(&self.full_name(name)).filter(|info| info.types.is_empty() && info.owner.is_none()) else { return Ok(()) };
+        let Some(ExprKind::Var(decorated)) = args.first().map(|arg| &arg.kind) else { return Ok(()) };
+        let written = unqualified(name);
+        let first = match info.params.first() {
+            Some((_, ty)) if is_task(ty) => ty,
+            other => {
+                let takes = other.map_or("nothing".to_string(), |(_, ty)| format!("{} first", ty));
+                return err(
+                    call.span,
+                    format!("task '{}' takes {}, so it can't be a decorator: a decorator takes the task written below it first, as in 'task {}(f: (int) -> int)'", written, takes, written),
+                );
+            }
+        };
+        if args.len() != info.params.len() {
+            let values = info.params.len() - 1;
+            let takes = if values == 0 { "the task and nothing else, so it is written '$".to_string() + written + "'" } else { format!("the task and {}, written '${}(…)'", count(values, "value"), written) };
+            return err(call.span, format!("decorator '{}' takes {}, got {}", written, takes, count(args.len() - 1, "value")));
+        }
+        let value = self.task_value_type(&self.full_name(decorated), call.span)?;
+        if !value.unknown() && value != *first {
+            return err(call.span, format!("task '{}' is a {}, and decorator '{}' takes a {} first", unqualified(decorated), value, written, first));
+        }
+        Ok(())
     }
 
     /// The type of `square`, task `name` named as a value (see
@@ -9576,6 +9645,44 @@ fn count(n: usize, noun: &str) -> String {
 
 /// The program's name for `name` declared in module `module`: `module.name`,
 /// or just `name` in the main file.
+/// Gathers the startup decorators of each module's tasks, each a call
+/// `d(task, args)`, into a task of the module (see `ast::STARTUP`), which runs
+/// where the program starts: the modules in the program's order, their tasks in
+/// the order written, and a task's decorators the nearest first, as Python runs
+/// them. Its body is checked as any task's, with no variable or region yet.
+fn add_startups(items: &mut Vec<Item>) {
+    let mut startups: Vec<TaskDef> = Vec::new();
+    for item in items.iter_mut() {
+        let Item::Task(task) = item else { continue };
+        if task.decorators.is_empty() {
+            continue;
+        }
+        let name = qualify(module_of(&task.name), STARTUP);
+        let calls = std::mem::take(&mut task.decorators).into_iter().rev().map(|call| {
+            let span = call.span;
+            Stmt::new(StmtKind::Expr(call), span)
+        });
+        match startups.iter_mut().find(|startup| startup.name == name) {
+            Some(startup) => startup.body.extend(calls),
+            None => startups.push(TaskDef {
+                name,
+                types: Vec::new(),
+                given: Vec::new(),
+                params: Vec::new(),
+                ret: Type::Nothing,
+                results: Vec::new(),
+                body: calls.collect(),
+                span: task.span,
+                private: true,
+                native: false,
+                owner: None,
+                decorators: Vec::new(),
+            }),
+        }
+    }
+    items.extend(startups.into_iter().map(Item::Task));
+}
+
 fn qualify(module: &str, name: &str) -> String {
     if module.is_empty() { name.to_string() } else { format!("{}{}{}", module, MODULE_SEPARATOR, name) }
 }

@@ -1,0 +1,13 @@
+; error: 7:2: decorator 'tag' takes the task and 2 values, written '$tag(…)', got 1 value
+; A decorator is given as many values as it takes after the task.
+task tag(f: (int) -> int, name: text, times: int)
+    show(name, times)
+fi
+
+$tag("x")
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+fi

@@ -1,0 +1,68 @@
+  1 | ; Startup decorators: `$d` or `$d(values)` before a task runs `d(task, values)`
+    | comment:; Startup decorators: `$d` or `$d(values)` before a task runs `d(task, values)`
+  2 | ; once where the program starts, before `main`: the modules first, then the
+    | comment:; once where the program starts, before `main`: the modules first, then the
+  3 | ; tasks in the order written, and a task's decorators the nearest first. The
+    | comment:; tasks in the order written, and a task's decorators the nearest first. The
+  4 | ; task stays an ordinary task, which the program may call itself.
+    | comment:; task stays an ordinary task, which the program may call itself.
+  6 | include startup_decorators/web
+    | keyword:include  module:startup_decorators  operator:/  module:web
+  8 | #GREETING = "hi"
+    | keyword:#  variant:GREETING  operator:=  string:"hi"
+ 10 | task log(f: (text) -> text)
+    | keyword:task  task:log  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:text  punctuation:)  operator:->  type-builtin:text  punctuation:)
+ 11 |     show("log ", f("x"))
+    | builtin-fn:show  punctuation:(  string:"log "  punctuation:,  parameter:f  punctuation:(  string:"x"  punctuation:)  punctuation:)
+ 12 | fi
+    | keyword:fi
+ 14 | task tagged(f: (text) -> text, tag: text, times: int)
+    | keyword:task  task:tagged  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:text  punctuation:)  operator:->  type-builtin:text  punctuation:,  parameter:tag  punctuation::  type-builtin:text  punctuation:,  parameter:times  punctuation::  type-builtin:int  punctuation:)
+ 15 |     show("tagged ", tag, " x", times)
+    | builtin-fn:show  punctuation:(  string:"tagged "  punctuation:,  parameter:tag  punctuation:,  string:" x"  punctuation:,  parameter:times  punctuation:)
+ 16 | fi
+    | keyword:fi
+ 18 | ; The nearest decorator runs first: `log`, then `web.route`.
+    | comment:; The nearest decorator runs first: `log`, then `web.route`.
+ 19 | $web.route("/")
+    | keyword:$  module:web  punctuation:.  task:route  punctuation:(  string:"/"  punctuation:)
+ 20 | $log
+    | keyword:$  task:log
+ 21 | task home(who: text) -> text
+    | keyword:task  task:home  punctuation:(  parameter:who  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text
+ 22 |     <- "home"
+    | keyword:<-  string:"home"
+ 23 | fi
+    | keyword:fi
+ 25 | ; Several on one line, and values worked out where the program starts: a
+    | comment:; Several on one line, and values worked out where the program starts: a
+ 26 | ; macro, arithmetic, and a task's call.
+    | comment:; macro, arithmetic, and a task's call.
+ 27 | $log $tagged(GREETING, twice(3))
+    | keyword:$  task:log  keyword:$  task:tagged  punctuation:(  variant:GREETING  punctuation:,  task:twice  punctuation:(  number:3  punctuation:)  punctuation:)
+ 28 | task other(who: text) -> text
+    | keyword:task  task:other  punctuation:(  parameter:who  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text
+ 29 |     <- "other"
+    | keyword:<-  string:"other"
+ 30 | fi
+    | keyword:fi
+ 32 | task twice(n: int) -> int
+    | keyword:task  task:twice  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 33 |     <- n * 2
+    | keyword:<-  parameter:n  operator:*  number:2
+ 34 | fi
+    | keyword:fi
+ 36 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 37 |     show("main: ", web.Pages.count, " pages")
+    | builtin-fn:show  punctuation:(  string:"main: "  punctuation:,  module:web  punctuation:.  type:Pages  punctuation:.  field:count  punctuation:,  string:" pages"  punctuation:)
+ 38 |     when web.Pages.home is {page}
+    | keyword:when  module:web  punctuation:.  type:Pages  punctuation:.  field:home  keyword:is  punctuation:{  variable:page  punctuation:}
+ 39 |         show(page("Ada"))
+    | builtin-fn:show  punctuation:(  variable:page  punctuation:(  string:"Ada"  punctuation:)  punctuation:)
+ 40 |     fi
+    | keyword:fi
+ 41 |     show(other("me"))
+    | builtin-fn:show  punctuation:(  task:other  punctuation:(  string:"me"  punctuation:)  punctuation:)
+ 42 | fi
+    | keyword:fi

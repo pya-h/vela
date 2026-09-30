@@ -1,0 +1,13 @@
+; error: 7:2: a startup decorator sends nothing, since it runs where the program starts and nothing takes what it sends; 'give' sends int
+; A startup decorator sends nothing.
+task give(f: (int) -> int) -> int
+    <- f(1)
+fi
+
+$give
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+fi

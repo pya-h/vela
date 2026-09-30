@@ -301,6 +301,14 @@ impl Generator {
                 let value = self.gen_expr(value)?;
                 self.w.line(&format!("{} = {};", name, value));
             }
+            // The startup decorators, after the shared fields they may fill.
+            for item in items {
+                if let Item::Task(t) = item
+                    && is_startup(&t.name)
+                {
+                    self.w.line(&format!("{}();", mangle(&t.name)));
+                }
+            }
             self.w.line("vela_main();");
             self.w.line("return 0;");
             self.w.close();

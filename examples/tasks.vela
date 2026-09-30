@@ -1,13 +1,20 @@
-; Tasks as values, and lambdas. A task's name without `()` is a value of its
-; type, written as its header without names: `(int) -> int`. A lambda is a task
-; with no name, written where its value goes, which takes nothing from the code
-; around it.
+; Tasks as values, lambdas, and a decorator. A task's name without `()` is a
+; value of its type, written as its header without names: `(int) -> int`. A
+; lambda is a task with no name, written where its value goes, which takes
+; nothing from the code around it. A startup decorator, `$d` above a task, runs
+; `d(task)` once, before `main`.
 
 shape Rule
     name: text
     check: (int) -> bool
 fi
 
+; Says that a rule is ready, trying it on 4.
+task announce(rule: (int) -> bool)
+    show("rule ready: 4 passes it? ", rule(4))
+fi
+
+$announce
 task is_even(n: int) -> bool
     <- n % 2 == 0
 fi

@@ -71,6 +71,9 @@ pub enum Token {
     /// `#`, which separates an array's type or value from its count, as in
     /// item #4: `[int#4]`, `[0#4]`.
     Hash,
+    /// `$`, which marks a decorator before a task: `$d`, `$d(args)`, or the
+    /// wrappers `$(w1, w2(a))`.
+    Dollar,
     Comma,
     Dot,
     Arrow,
@@ -241,6 +244,7 @@ impl Token {
             Token::RBracket => "]",
             Token::Colon => ":",
             Token::Hash => "#",
+            Token::Dollar => "$",
             Token::Comma => ",",
             Token::Dot => ".",
             Token::Arrow => "->",
@@ -591,6 +595,7 @@ impl Lexer {
             ']' => Token::RBracket,
             ':' => Token::Colon,
             '#' => Token::Hash,
+            '$' => Token::Dollar,
             ',' => Token::Comma,
             '.' => {
                 if self.peek() == '.' {

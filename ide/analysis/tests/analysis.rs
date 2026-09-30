@@ -312,7 +312,7 @@ task first(n: int) -> int
     <- twice
 
 task second()
-    show(first(1) $)
+    show(first(1) `)
 fi
 ";
     let analysis = Analysis::new(source);
@@ -322,7 +322,7 @@ fi
     assert_eq!(class_at(source, "\"not done", 0), TokenClass::String);
     assert_eq!(class_at(source, "<- twice", 0), TokenClass::Keyword);
     assert_eq!(class_at(source, "second", 0), TokenClass::Task);
-    assert_eq!(class_at(source, "$", 0), TokenClass::Invalid);
+    assert_eq!(class_at(source, "`", 0), TokenClass::Invalid);
     let outline: Vec<(String, usize)> = analysis.outline().into_iter().map(|item| (item.name, item.to)).collect();
     // The unclosed task ends at its last token.
     let first_end = at(source, "twice\n\ntask", 0) + "twice".len();

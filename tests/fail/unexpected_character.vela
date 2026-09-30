@@ -1,4 +1,4 @@
-; error: 3:10: unexpected character '$'
+; error: 3:10: unexpected character '`'
 task main()
-    show($)
+    show(`)
 fi

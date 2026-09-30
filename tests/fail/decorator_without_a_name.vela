@@ -1,0 +1,13 @@
+; error: 7:2: expected the name of a task after '$', as in '$register' or '$route("/")', got end of line
+; '$' is followed by the decorator's name.
+task reg(f: (int) -> int)
+    show(f(1))
+fi
+
+$
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+fi

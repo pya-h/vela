@@ -2129,7 +2129,7 @@ fi</code></pre>
           captures pays nothing.</li>
       </ul>
 
-      <h3 id="decorators">Decorators <span class="badge b-med">Decided</span></h3>
+      <h3 id="decorators">Decorators <span class="badge b-med">Startup ones done; wrappers decided</span></h3>
       <p>
         A decorator is a task whose first parameter is a task. It is called like any task, and it can also be written
         before another task's header, in one of two ways:
@@ -2143,7 +2143,8 @@ fi</code></pre>
         <li><strong>Startup decorators, <code>$d</code> or <code>$d(args)</code>,</strong> run once where the program
           starts, in the order the tasks are written, as Python and FastAPI run theirs where a function is defined. The
           task stays an ordinary task, called as usual. This is how a future web module could let a program declare its
-          routes by writing <code>$get("/")</code> above each handler.</li>
+          routes by writing <code>$get("/")</code> above each handler. Built: see
+          <a href="vela.html#decorators">Decorators</a>.</li>
         <li><strong>Wrapper decorators, <code>$(dt1, dt2(a))</code>,</strong> run each time the task is called, the
           leftmost outermost: each is given the rest of the chain as a task of the decorated task's type, then its own
           values, then the task's values, and decides when to call it, or whether to. The compiler writes each layer as a
@@ -2312,7 +2313,8 @@ fi
               with <code>else when</code> chains)</li>
             <li><s>Region-based allocation</s> (done: <a href="regions.html">regions</a>)</li>
             <li><s>Tasks as values</s> and <s>lambdas</s> (done: <a href="vela.html#task-values">tasks as values</a>,
-              <a href="vela.html#lambdas">lambdas</a>), then <a href="#decorators">decorators</a> and type groups</li>
+              <a href="vela.html#lambdas">lambdas</a>), <s>startup decorators</s> (done: <a href="vela.html#decorators">decorators</a>), then
+              <a href="#decorators">wrapper decorators</a> and type groups</li>
             <li>Region brackets with inferred region arguments (<s>generated copies between regions</s>: done, <a href="vela.html#copy"><code>.copy()</code></a>)</li>
           </ul>
         </div>

@@ -368,6 +368,7 @@ impl Parser {
             (Token::Hash, _, _) => "; '#' marks an array's count, as in '[int#4]', and a comment starts with ';'".to_string(),
             // `&` joins the words after a type's `:`, and marks a place given at
             // a call, which starts a value.
+            (Token::Dollar, _, _) => "; '$' marks a decorator, written on the lines above a task (not a method), as in '$register' or '$route(\"/\")'".to_string(),
             (Token::Amp, _, _) => "; Vela writes 'and' for both at once ('&' gives a place to a 'hold&' or 'bind&' parameter, as in 'f(&a)', and joins the words a generic type must allow)".to_string(),
             _ => String::new(),
         };
@@ -557,6 +558,9 @@ impl Parser {
 
     fn parse_item(&mut self) -> Result<Item> {
         self.skip_newlines();
+        if self.check(Token::Dollar) {
+            return self.parse_decorated();
+        }
         if self.check(Token::Priv) {
             let span = self.peek_span();
             self.advance();
@@ -620,6 +624,50 @@ impl Parser {
         }
     }
 
+    /// Decorators, `$d` or `$d(args)`, several on a line or on lines of their
+    /// own, and the task they are written before, at the first `$`.
+    fn parse_decorated(&mut self) -> Result<Item> {
+        let first = self.peek_span();
+        let mut decorators = Vec::new();
+        while self.check(Token::Dollar) {
+            self.advance(); // $
+            if self.check(Token::LParen) {
+                return Err(Error::at(self.peek_span(), "wrapper decorators, '$(w)', are not built yet; a startup decorator is written '$d' or '$d(values)'"));
+            }
+            let span = self.peek_span();
+            if !matches!(self.peek(), Token::Ident(_)) {
+                return Err(self.unexpected("the name of a task after '$', as in '$register' or '$route(\"/\")'"));
+            }
+            let name = self.expect_ident()?;
+            let name = self.qualified(name)?;
+            let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
+            decorators.push((name, args, span));
+            if !self.check(Token::Dollar) {
+                if !matches!(self.peek(), Token::Newline) {
+                    return Err(self.unexpected("another decorator or the end of the line: a task starts on the line after its decorators"));
+                }
+                self.skip_newlines();
+            }
+        }
+        let decorated = matches!(self.peek(), Token::Task) || self.at_native() || (self.check(Token::Priv) && !self.at_macro_after(1) && matches!(self.tokens.get(self.pos + 1), Some(Token::Task)));
+        let decorated = decorated || (self.check(Token::Priv) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(word)) if word == NATIVE));
+        if !decorated {
+            return Err(Error::at(first, format!("a decorator goes on the lines above a task, and {} follows it", self.peek().describe())));
+        }
+        let mut item = self.parse_item()?;
+        if let Item::Task(task) = &mut item {
+            task.decorators = decorators
+                .into_iter()
+                .map(|(name, args, span)| {
+                    let mut given = vec![Expr::new(ExprKind::Var(task.name.clone()), span)];
+                    given.extend(args);
+                    Expr::new(ExprKind::Call { name, types: Vec::new(), args: given }, span)
+                })
+                .collect();
+        }
+        Ok(item)
+    }
+
     fn parse_task(&mut self) -> Result<TaskDef> {
         let opened = self.peek_span();
         let mut task = self.parse_task_header()?;
@@ -647,7 +695,7 @@ impl Parser {
         } else {
             Type::Nothing
         };
-        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None })
+        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None, decorators: Vec::new() })
     }
 
     /// Whether the cursor is at `native task` (see `ast::NATIVE`).
@@ -1045,6 +1093,7 @@ impl Parser {
             private,
             native: false,
             owner: Some(Owner { name, alters: alters_span.is_some(), alters_span, shared: is_shared }),
+            decorators: Vec::new(),
         })
     }
 
@@ -2844,6 +2893,7 @@ impl Parser {
             private: true,
             native: false,
             owner: None,
+            decorators: Vec::new(),
         }));
         Ok(Expr::new(ExprKind::Var(name), span))
     }

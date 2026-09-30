@@ -1,0 +1,42 @@
+; Startup decorators: `$d` or `$d(values)` before a task runs `d(task, values)`
+; once where the program starts, before `main`: the modules first, then the
+; tasks in the order written, and a task's decorators the nearest first. The
+; task stays an ordinary task, which the program may call itself.
+
+include startup_decorators/web
+
+#GREETING = "hi"
+
+task log(f: (text) -> text)
+    show("log ", f("x"))
+fi
+
+task tagged(f: (text) -> text, tag: text, times: int)
+    show("tagged ", tag, " x", times)
+fi
+
+; The nearest decorator runs first: `log`, then `web.route`.
+$web.route("/")
+$log
+task home(who: text) -> text
+    <- "home"
+fi
+
+; Several on one line, and values worked out where the program starts: a
+; macro, arithmetic, and a task's call.
+$log $tagged(GREETING, twice(3))
+task other(who: text) -> text
+    <- "other"
+fi
+
+task twice(n: int) -> int
+    <- n * 2
+fi
+
+task main()
+    show("main: ", web.Pages.count, " pages")
+    when web.Pages.home is {page}
+        show(page("Ada"))
+    fi
+    show(other("me"))
+fi

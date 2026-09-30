@@ -1,0 +1,13 @@
+; error: 7:6: unknown variable 'who'; a decorator's values are worked out where the program starts, where no variable exists yet
+; A decorator's values are worked out where the program starts, where no variable is.
+task tag(f: (int) -> int, name: text)
+    show(name)
+fi
+
+$tag(who)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+fi

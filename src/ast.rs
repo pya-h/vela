@@ -409,6 +409,16 @@ pub fn is_lambda(name: &str) -> bool {
     unqualified(name).starts_with(LAMBDA_PREFIX)
 }
 
+/// The name of the task each module's startup decorators are gathered into
+/// (see `TaskDef::decorators`), with the module's path in front of it
+/// (`web.startup__`). No Vela name holds `__`, so no program can name it.
+pub const STARTUP: &str = "startup__";
+
+/// Whether `name`, with its module or without, is a module's startup task.
+pub fn is_startup(name: &str) -> bool {
+    unqualified(name) == STARTUP
+}
+
 /// Task `name` as a message names it: `task 'f'`, or `this lambda`.
 pub fn shown_task(name: &str) -> String {
     if is_lambda(name) { "this lambda".to_string() } else { format!("task '{}'", name) }
@@ -1663,6 +1673,10 @@ pub struct TaskDef {
     /// What makes this task a method of a shape or a kind, and not a task the
     /// program can name; `None` for a task.
     pub owner: Option<Owner>,
+    /// `$d` and `$d(args)` before the task: its startup decorators, each the
+    /// call `d(task, args)` that runs once where the program starts, in the
+    /// order written (the nearest the task runs first; see `STARTUP`).
+    pub decorators: Vec<Expr>,
 }
 
 /// What makes a task a method: it is written inside a shape or a kind, and its

@@ -1,0 +1,44 @@
+  1 | ; A module whose decorator keeps the pages it is given, as a web module would
+    | comment:; A module whose decorator keeps the pages it is given, as a web module would
+  2 | ; keep its routes, and a page of its own, registered with a private task.
+    | comment:; keep its routes, and a page of its own, registered with a private task.
+  4 | shape Pages
+    | keyword:shape  type:Pages
+  5 |     shared hold count: int = 0
+    | keyword:shared  keyword:hold  field:count  punctuation::  type-builtin:int  operator:=  number:0
+  6 |     shared hold home: maybe (text) -> text = none
+    | keyword:shared  keyword:hold  field:home  punctuation::  keyword:maybe  punctuation:(  type-builtin:text  punctuation:)  operator:->  type-builtin:text  operator:=  keyword:none
+  7 | fi
+    | keyword:fi
+  9 | ; Keeps the page for `path`; here only "/" is kept.
+    | comment:; Keeps the page for `path`; here only "/" is kept.
+ 10 | task route(page: (text) -> text, path: text)
+    | keyword:task  task:route  punctuation:(  parameter:page  punctuation::  punctuation:(  type-builtin:text  punctuation:)  operator:->  type-builtin:text  punctuation:,  parameter:path  punctuation::  type-builtin:text  punctuation:)
+ 11 |     Pages.count++
+    | type:Pages  punctuation:.  field:count  operator:++
+ 12 |     when path == "/"
+    | keyword:when  parameter:path  operator:==  string:"/"
+ 13 |         Pages.home = page
+    | type:Pages  punctuation:.  field:home  operator:=  parameter:page
+ 14 |     fi
+    | keyword:fi
+ 15 |     show("route ", path)
+    | builtin-fn:show  punctuation:(  string:"route "  punctuation:,  parameter:path  punctuation:)
+ 16 | fi
+    | keyword:fi
+ 18 | priv task count(page: (text) -> text)
+    | keyword:priv  keyword:task  task:count  punctuation:(  parameter:page  punctuation::  punctuation:(  type-builtin:text  punctuation:)  operator:->  type-builtin:text  punctuation:)
+ 19 |     show("web counts ", page("web"))
+    | builtin-fn:show  punctuation:(  string:"web counts "  punctuation:,  parameter:page  punctuation:(  string:"web"  punctuation:)  punctuation:)
+ 20 | fi
+    | keyword:fi
+ 22 | $count
+    | keyword:$  task:count
+ 23 | $route("/about")
+    | keyword:$  task:route  punctuation:(  string:"/about"  punctuation:)
+ 24 | priv task about(who: text) -> text
+    | keyword:priv  keyword:task  task:about  punctuation:(  parameter:who  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text
+ 25 |     <- "about"
+    | keyword:<-  string:"about"
+ 26 | fi
+    | keyword:fi

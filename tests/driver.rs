@@ -167,7 +167,8 @@ fn deep_nesting_is_an_error_not_a_crash() {
     let cases = [
         ("parentheses", program(format!("{}1{}", "(".repeat(deep), ")".repeat(deep)))),
         ("an operator chain", program(vec!["1"; deep].join(" + "))),
-        ("unary operators", program(format!("{}1", "-".repeat(deep)))),
+        // Spaced, since `--` is a step.
+        ("unary operators", program(format!("{}1", "- ".repeat(deep)))),
         ("calls", format!("task id(n: int) -> int\n    <- n\nfi\n{}", program(format!("{}1{}", "id(".repeat(deep), ")".repeat(deep))))),
         ("blocks", format!("task main()\n{}fi\n", "when true\n".repeat(deep) + &"fi\n".repeat(deep))),
         ("pointer types", format!("task f(p: {}int)\nfi\n", "^".repeat(deep))),
@@ -197,6 +198,7 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ("tuple items", program(format!("t{}", ".0".repeat(deep)))),
         ("unpacked names", format!("task main()\n    bind {}a{} = t\nfi\n", "(".repeat(deep), ", b)".repeat(deep))),
         ("unpacked places", format!("task main()\n    {}a{} = t\nfi\n", "(".repeat(deep), ", b)".repeat(deep))),
+        ("nested lambdas", program(format!("{}1{}", "(x: int) -> int <- ".repeat(deep), " fi".repeat(deep)))),
     ];
     for (what, source) in cases {
         let error = driver::generate_c(&source).expect_err(what);

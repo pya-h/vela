@@ -1,0 +1,13 @@
+; error: 7:21: a decorator's values are worked out where the program starts, before any region exists, so none of them can be made in one
+; No region exists where the program starts.
+task keep(f: (int) -> int, p: ^int@r)
+    show(p^)
+fi
+
+$keep(new int(1) at r)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+fi

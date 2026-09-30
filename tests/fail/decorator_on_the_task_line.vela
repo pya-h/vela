@@ -1,0 +1,12 @@
+; error: 7:6: expected another decorator or the end of the line: a task starts on the line after its decorators, got 'task'
+; A task starts on the line after its decorators.
+task reg(f: (int) -> int)
+    show(f(1))
+fi
+
+$reg task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+fi

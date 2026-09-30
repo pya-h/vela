@@ -1,0 +1,13 @@
+; error: 7:2: decorator 'reg' takes the task and nothing else, so it is written '$reg', got 1 value
+; A decorator is given as many values as it takes after the task.
+task reg(f: (int) -> int)
+    show(f(1))
+fi
+
+$reg(1)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+fi

@@ -1,0 +1,9 @@
+; error: 3:2: unknown task 'nope'
+; A decorator names a task.
+$nope
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+fi

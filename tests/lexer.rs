@@ -133,10 +133,10 @@ fn agrees_with_the_compiler_on_malformed_input() {
 #[test]
 fn invalid_text_becomes_a_token_and_lexing_continues() {
     assert_eq!(
-        kinds("x $ y"),
+        kinds("x ` y"),
         [
             token(Token::Ident("x".into())),
-            invalid(1, 3, "unexpected character '$'"),
+            invalid(1, 3, "unexpected character '`'"),
             token(Token::Ident("y".into())),
             token(Token::Eof),
         ]

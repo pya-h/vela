@@ -1,0 +1,13 @@
+; error: 7:2: task 'shout' is a (text) -> int, and decorator 'reg' takes a (int) -> int first
+; A decorator takes a task of the type of the one below it.
+task reg(f: (int) -> int)
+    show(f(1))
+fi
+
+$reg
+task shout(t: text) -> int
+    <- t.len
+fi
+
+task main()
+fi

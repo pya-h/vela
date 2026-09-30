@@ -1,0 +1,9 @@
+route /about
+web counts about
+log home
+route /
+tagged hi x6
+log other
+main: 2 pages
+home
+other

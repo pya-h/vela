@@ -1,0 +1,13 @@
+; error: 7:2: task 'plain' takes int first, so it can't be a decorator: a decorator takes the task written below it first, as in 'task plain(f: (int) -> int)'
+; A decorator takes the task first.
+task plain(n: int)
+    show(n)
+fi
+
+$plain
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+fi

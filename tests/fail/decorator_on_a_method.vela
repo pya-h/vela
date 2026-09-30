@@ -1,0 +1,17 @@
+; error: 10:5: expected a name, got '$'; '$' marks a decorator, written on the lines above a task (not a method), as in '$register' or '$route("/")'
+; A method takes no decorator yet.
+task reg(f: (int) -> int)
+    show(f(1))
+fi
+
+shape P
+    x: int
+
+    $reg
+    get() -> int
+        <- .x
+    fi
+fi
+
+task main()
+fi

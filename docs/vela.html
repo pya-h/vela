@@ -320,6 +320,7 @@ block shared type</pre>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
         <tr><td><code>(int, text) -&gt; int</code>, <code>square</code>, <code>f(x)</code></td><td>a task's type; a task named as a value, without <code>()</code>; the call of the task a value holds (see <a href="#task-values">Tasks as values</a>)</td></tr>
+        <tr><td><code>$d</code>, <code>$d(values)</code></td><td>a startup decorator, above a task: runs <code>d(task, values)</code> once, before <code>main</code> (see <a href="#decorators">Decorators</a>)</td></tr>
         <tr><td><code>(x: int) -&gt; int &lt;- x * 2 fi</code></td><td>a lambda: a task with no name, written where its value goes, its body on the header's line or the lines after it (see <a href="#lambdas">Lambdas</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v#n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>[K: V]@r</code>, <code>[:V]@r</code>, <code>["a": 1] at r</code></td><td>a map type; one whose keys are text; a map written by its pairs, as <code>new [text: int](["a": 1]) at r</code> (see <a href="#maps">Maps</a>)</td></tr>
@@ -2246,6 +2247,47 @@ fi</code></pre>
         task or method that takes types yet.
       </p>
 
+      <h3 id="decorators">Decorators</h3>
+      <p>
+        A startup decorator is a task written above another task with <code>$</code>: <code>$d</code>, or
+        <code>$d(values)</code> for one that takes values. Where the program starts, before <code>main</code>, it runs
+        <code>d(task, values)</code> once, as Python and FastAPI run theirs where a function is defined, so a module can
+        keep what it is given (a web module its routes, say) in a <a href="#shared">shared field</a>. The task below it
+        stays an ordinary task, which the program calls as usual.
+      </p>
+      <pre><code>shape Routes
+    shared hold count: int = 0
+fi
+
+task route(page: (text) -&gt; text, path: text)
+    Routes.count++
+    show("route ", path, ": ", page("Ada"))
+fi
+
+task log(page: (text) -&gt; text)
+    show("log ", page("Bob"))
+fi
+
+$route("/")
+$log
+task home(who: text) -&gt; text
+    &lt;- "home"
+fi
+
+task main()                                       ; before it: log home, route /: home
+    show(Routes.count, " route")                  ; 1 route
+    show(home("me"))                              ; home: still a task
+fi</code></pre>
+      <p>
+        A decorator takes the task first, of the task's type (see <a href="#task-values">Tasks as values</a>), then the
+        values written after its name, and sends nothing. Several go on lines of their own or on one line,
+        <code>$log $route("/")</code>, and the one nearest the task runs first, as in Python. They run after every
+        shared field has its first value: the modules a program includes first, then each file's tasks in the order they
+        are written. A decorator's values are worked out where the program starts, so they can be literals, macros,
+        shared fields, and calls, but no variable or region, since none exists yet. A decorator may come from a module,
+        <code>$web.route("/")</code>. Only a task takes decorators, not a method, and only one that can be a value.
+      </p>
+
       <h3 id="names">Names</h3>
       <p>
         A name starts with an ASCII letter and continues with ASCII letters, digits, and <code>_</code>, but cannot
@@ -3533,6 +3575,8 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           method (see <a href="#task-values">Tasks as values</a>).</li>
         <li>A lambda takes nothing from the code around it, and can't be written inside a task or method that takes
           types (see <a href="#lambdas">Lambdas</a>).</li>
+        <li>Only a task takes decorators, not a method; a startup decorator sends nothing, and wrapper decorators,
+          <code>$(w)</code>, are not built yet (see <a href="#decorators">Decorators</a>).</li>
         <li>A method takes no types of its own, can't allocate in the region its value lives in, and is written
           inside its shape or kind, never in another module (see <a href="#methods">Methods</a> and
           <a href="future.html#methods-later">the room left to grow</a>).</li>

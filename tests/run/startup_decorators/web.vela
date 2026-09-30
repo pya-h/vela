@@ -1,0 +1,26 @@
+; A module whose decorator keeps the pages it is given, as a web module would
+; keep its routes, and a page of its own, registered with a private task.
+
+shape Pages
+    shared hold count: int = 0
+    shared hold home: maybe (text) -> text = none
+fi
+
+; Keeps the page for `path`; here only "/" is kept.
+task route(page: (text) -> text, path: text)
+    Pages.count++
+    when path == "/"
+        Pages.home = page
+    fi
+    show("route ", path)
+fi
+
+priv task count(page: (text) -> text)
+    show("web counts ", page("web"))
+fi
+
+$count
+$route("/about")
+priv task about(who: text) -> text
+    <- "about"
+fi
