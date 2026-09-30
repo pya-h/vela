@@ -4,6 +4,7 @@
 //! variable's annotation or initializer, a `case` binding's payload field,
 //! and so on.
 
+use std::cell::OnceCell;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
@@ -23,6 +24,10 @@ pub(crate) struct Knowledge<'a> {
     pub checked: &'a Checked,
     /// Indices into `scan.lexed` of the tokens other than comments and `Eof`.
     sig: Vec<usize>,
+    /// The shapes and kinds holding pointers, and those that can be given a
+    /// region, found once (see `types_holding`).
+    regional: OnceCell<HashSet<String>>,
+    takes_region: OnceCell<HashSet<String>>,
 }
 
 impl<'a> Knowledge<'a> {
@@ -34,7 +39,7 @@ impl<'a> Knowledge<'a> {
             .filter(|(_, t)| !matches!(t.kind, LexKind::Comment | LexKind::Token(Token::Eof)))
             .map(|(i, _)| i)
             .collect();
-        Knowledge { source, scan, checked, sig }
+        Knowledge { source, scan, checked, sig, regional: OnceCell::new(), takes_region: OnceCell::new() }
     }
 
     pub fn len(&self) -> usize {
@@ -197,7 +202,7 @@ impl<'a> Knowledge<'a> {
             (SymbolKind::Variable, _) if !symbol.detail.is_empty() => parse_type(&symbol.detail),
             (SymbolKind::Macro, _) => self.macro_type(symbol, depth),
             // Text of no region in particular lasts, as the checker settles it.
-            (SymbolKind::Variable, _) => self.initializer_type(symbol, depth).map(|ty| vela::check::lasting(&ty, &self.types_holding(holds_pointers))),
+            (SymbolKind::Variable, _) => self.initializer_type(symbol, depth).map(|ty| vela::check::lasting(&ty, self.regional())),
             _ => None,
         }
     }
@@ -218,7 +223,10 @@ impl<'a> Knowledge<'a> {
             _ if value.starts_with("true") || value.starts_with("false") => Some(Type::Bool),
             '0'..='9' | '-' => {
                 let number: String = value.chars().take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_')).collect();
-                Some(if number.contains('.') || number.contains('e') { Type::Float } else { Type::Int })
+                // `0xfe` is an int, though it holds an `e`.
+                let digits = number.trim_start_matches('-');
+                let based = digits.starts_with('0') && matches!(digits.as_bytes().get(1), Some(b'x' | b'o' | b'b'));
+                Some(if !based && (number.contains('.') || number.contains('e')) { Type::Float } else { Type::Int })
             }
             _ => None,
         }
@@ -670,7 +678,7 @@ impl<'a> Knowledge<'a> {
                 }
                 let id = self.symbol_at(q)?;
                 match self.symbol(id)?.kind {
-                    SymbolKind::Parameter | SymbolKind::Variable | SymbolKind::Region => self.symbol_type(id, depth + 1),
+                    SymbolKind::Parameter | SymbolKind::Variable | SymbolKind::Region | SymbolKind::Macro => self.symbol_type(id, depth + 1),
                     SymbolKind::Variant => self.variant_value(id, None, depth),
                     _ => None,
                 }
@@ -946,7 +954,10 @@ impl<'a> Knowledge<'a> {
         // raised to a unit or to a number written out is an int, a unit raised
         // to a unit or a number a unit, and anything else a float.
         for &base in bases.iter().rev() {
-            let written = operand_ends.get(base).zip(operand_ends.get(base + 1)).is_some_and(|(&end, &next)| next == end + 2 && matches!(self.token(next), Some(Token::Int(_))));
+            // A power written out, `2` or `(1 + 1)`: never negative.
+            let written = operand_ends.get(base).zip(operand_ends.get(base + 1)).is_some_and(|(&end, &next)| {
+                (end + 2..=next).all(|q| matches!(self.token(q), Some(Token::Int(_) | Token::LParen | Token::RParen | Token::Plus | Token::Star | Token::Power)))
+            });
             let power = match (types.get(base).cloned().flatten(), types.get(base + 1).cloned().flatten()) {
                 (Some(Type::Int), Some(Type::Unit)) => Type::Int,
                 (Some(Type::Int), Some(Type::Int)) if written => Type::Int,
@@ -1073,7 +1084,7 @@ impl<'a> Knowledge<'a> {
     /// or a pointer, directly or in shapes and kinds by value.
     pub fn can_copy(&self, ty: &Type) -> bool {
         let takes_region = self.takes_region();
-        holds_pointers(ty, &takes_region) || holds_text(ty, &takes_region)
+        holds_pointers(ty, takes_region) || holds_text(ty, takes_region)
     }
 
     /// Whether the plan B whose `{` ends the line at `open` has `none` alone
@@ -1141,14 +1152,14 @@ impl<'a> Knowledge<'a> {
         let mut regions = HashMap::new();
         for (declared, (first, last)) in fields {
             if let (Some(declared), Some(actual)) = (declared, self.span_type(first, last, depth + 1)) {
-                vela::check::unify_regions(&vela::check::in_region(&declared, OWN, &takes_region), &actual, &mut regions);
+                vela::check::unify_regions(&vela::check::in_region(&declared, OWN, takes_region), &actual, &mut regions);
             }
         }
         // A value holding only text that lasts as long as the program names no
         // region, unless it holds pointers.
         match regions.remove(OWN) {
             Some(region) => Type::Named(name.to_string(), Some(region)),
-            None if self.types_holding(holds_pointers).contains(name) => Type::Named(name.to_string(), Some(ANY_REGION.to_string())),
+            None if self.regional().contains(name) => Type::Named(name.to_string(), Some(ANY_REGION.to_string())),
             None => Type::named(name),
         }
     }
@@ -1162,16 +1173,23 @@ impl<'a> Knowledge<'a> {
     /// `ty`, a field's type or the type after `new`, in a value of region
     /// `region`, as the checker settles it (see `vela::check::in_region`).
     fn in_region(&self, ty: &Type, region: &str) -> Type {
-        vela::check::in_region(ty, region, &self.takes_region())
+        vela::check::in_region(ty, region, self.takes_region())
     }
 
     /// The shapes and kinds that can be given a region, as the checker finds
     /// them: those whose fields, as written, hold pointers or text (see
     /// `vela::check::regional_types` and `vela::check::textual_types`).
-    fn takes_region(&self) -> HashSet<String> {
-        let mut takes = self.types_holding(holds_pointers);
-        takes.extend(self.types_holding(holds_text));
-        takes
+    fn takes_region(&self) -> &HashSet<String> {
+        self.takes_region.get_or_init(|| {
+            let mut takes = self.regional().clone();
+            takes.extend(self.types_holding(holds_text));
+            takes
+        })
+    }
+
+    /// The shapes and kinds with a field, as written, that holds a pointer.
+    fn regional(&self) -> &HashSet<String> {
+        self.regional.get_or_init(|| self.types_holding(holds_pointers))
     }
 
     /// The shapes and kinds with a field, as written, for which `holds` is

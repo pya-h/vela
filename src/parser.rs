@@ -185,7 +185,7 @@ impl Parser {
             }
             path.push(self.expect_ident()?);
             if self.check(Token::Dot) {
-                if self.tokens.get(self.pos + 1) == Some(&Token::Ident("vela".to_string())) {
+                if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(word)) if word == "vela") {
                     return Err(Error::at(self.peek_span(), format!("a module is named without '.vela', as in 'include {}'", path.join("/"))));
                 }
                 return Err(Error::at(self.peek_span(), "a module path separates its folders with '/', as in 'include shapes/circle'"));
@@ -267,12 +267,12 @@ impl Parser {
             .unwrap_or_default()
     }
 
-    fn advance(&mut self) -> Token {
-        let tok = self.peek().clone();
+    /// Moves past the current token. What it was is read with `peek` first,
+    /// so nothing is copied for a token only stepped over.
+    fn advance(&mut self) {
         if !self.is_at_end() {
             self.pos += 1;
         }
-        tok
     }
 
     fn is_at_end(&self) -> bool {
@@ -313,11 +313,17 @@ impl Parser {
         }
         let previous = self.pos.checked_sub(1).and_then(|p| self.tokens.get(p));
         let next = self.tokens.get(self.pos + 1);
+        // A `#` starting a line outside every block, where a macro goes.
+        let macro_line = match previous {
+            None | Some(Token::Newline) => self.peek_span().col == 1,
+            Some(Token::Priv) => true,
+            _ => false,
+        };
         let hint = match (self.peek(), previous, next) {
             (Token::Assign, Some(op @ (Token::Plus | Token::Minus | Token::Star | Token::Power | Token::Slash | Token::Percent)), _) => {
                 let op = op.describe();
                 let op = op.trim_matches('\'');
-                format!("; Vela has no '{0}=': write 'x = x {0} value'", op)
+                format!("; '{0}=' is one symbol, written without a space, as in 'x {0}= 2'", op)
             }
             (Token::Assign, Some(Token::Eq), _) => "; to compare, write '=='".to_string(),
             (Token::Assign, Some(Token::Range), _) => "; Vela has no '..=': a range leaves its end out, so '0..4' goes from 0 to 3".to_string(),
@@ -337,6 +343,15 @@ impl Parser {
                 format!("; {} changes a place, on a line of its own, as in 'x {} 2', and gives no value", symbol, symbol.trim_matches('\''))
             }
             // A comment written as other languages write one.
+            // `#task = 1`, `#MAX(a, b) = …`, and `#define N 4` at a line's start:
+            // a macro written as it can't be.
+            (Token::Hash, _, Some(next)) if macro_line && !matches!(next, Token::Ident(_)) && next.describe().trim_matches('\'').bytes().all(|b| b.is_ascii_lowercase()) => {
+                format!("; a macro is named by a name of its own, and {} is one of Vela's words", next.describe())
+            }
+            (Token::Hash, _, Some(Token::Ident(_))) if macro_line && self.tokens.get(self.pos + 2) == Some(&Token::LParen) => {
+                "; a macro is a value, '#NAME = value', and macros that take values are not in Vela yet".to_string()
+            }
+            (Token::Hash, _, Some(Token::Ident(_))) if macro_line => "; a macro is written '#NAME = value', and a comment starts with ';'".to_string(),
             (Token::Hash, _, _) => "; '#' marks an array's count, as in '[int#4]', and a comment starts with ';'".to_string(),
             // `&` joins the words after a type's `:`, and marks a place given at
             // a call, which starts a value.
@@ -398,7 +413,8 @@ impl Parser {
             return Ok(());
         }
         // An indented macro was meant to be inside the block.
-        if self.at_macro_after(0) && self.peek_span().col > 1 {
+        let first = if self.check(Token::Priv) { 1 } else { 0 };
+        if self.at_macro_after(first) && self.peek_span().col > 1 {
             return Err(Error::at(self.peek_span(), MISPLACED_MACRO));
         }
         if self.is_at_end() || self.at_item_start() || matches!(self.peek(), Token::Else | Token::Case | Token::RBrace) {
@@ -1540,7 +1556,7 @@ impl Parser {
             // `else`, `case`, and `}` can't start a statement: they end an
             // enclosing block, so this one is missing its end.
             let ends_outer = matches!(self.peek(), Token::Else | Token::Case | Token::RBrace);
-            if self.is_at_end() || self.at_item_start() || ends_outer || stops.iter().any(|t| self.check(t.clone())) {
+            if self.is_at_end() || self.at_item_start() || ends_outer || stops.contains(self.peek()) {
                 break;
             }
             self.reject_stray_end_in(stops.contains(&Token::RBrace))?;
@@ -1602,7 +1618,9 @@ impl Parser {
                 "++" | "--" => Expr::new(ExprKind::IntLit(1), at),
                 _ => self.parse_expr()?,
             };
-            if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi) {
+            // A statement ends its line, or a block or plan B on one line:
+            // `when ok x++ else x-- fi`, `f() { n++ }`.
+            if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::RBrace) {
                 return Err(self.unexpected(&format!("the end of the line: '{}' is a statement of its own", symbol)));
             }
             return Ok(Stmt::new(StmtKind::Step { target: expr, op, value, symbol, at }, span));
@@ -2387,7 +2405,8 @@ impl Parser {
     /// none comes. (A function of its own: `parse_primary`'s frame is on the
     /// stack once per nesting level.)
     fn parse_interpolated(&mut self, span: Span) -> Result<Expr> {
-        let Token::Interpolated(pieces) = self.advance() else { return Err(Error::internal_at(span, "text holding values that isn't")) };
+        let Token::Interpolated(pieces) = self.peek().clone() else { return Err(Error::internal_at(span, "text holding values that isn't")) };
+        self.advance();
         let mut parts = Vec::new();
         for piece in pieces {
             match piece {

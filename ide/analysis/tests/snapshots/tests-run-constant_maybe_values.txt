@@ -1,0 +1,32 @@
+  1 | ; Values already made part of a maybe are values the compiler works out: a
+    | comment:; Values already made part of a maybe are values the compiler works out: a
+  2 | ; shared field's first value named again, an array or tuple holding none.
+    | comment:; shared field's first value named again, an array or tuple holding none.
+  4 | shape A
+    | keyword:shape  type:A
+  5 |     shared u: maybe int = 4
+    | keyword:shared  field:u  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:4
+  6 |     shared v: maybe int = A.u
+    | keyword:shared  field:v  punctuation::  keyword:maybe  type-builtin:int  operator:=  type:A  punctuation:.  field:u
+  7 |     shared arr: [maybe int#2] = [none, 3]
+    | keyword:shared  field:arr  punctuation::  punctuation:[  keyword:maybe  type-builtin:int  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  keyword:none  punctuation:,  number:3  punctuation:]
+  8 |     shared t2: (int, maybe int) = (1, none)
+    | keyword:shared  field:t2  punctuation::  punctuation:(  type-builtin:int  punctuation:,  keyword:maybe  type-builtin:int  punctuation:)  operator:=  punctuation:(  number:1  punctuation:,  keyword:none  punctuation:)
+  9 | fi
+    | keyword:fi
+ 10 | shape B
+    | keyword:shape  type:B
+ 11 |     w: [maybe int#2] = [none, 3]
+    | field:w  punctuation::  punctuation:[  keyword:maybe  type-builtin:int  punctuation:#  number:2  punctuation:]  operator:=  punctuation:[  keyword:none  punctuation:,  number:3  punctuation:]
+ 12 |     t: (int, maybe int) = A.t2
+    | field:t  punctuation::  punctuation:(  type-builtin:int  punctuation:,  keyword:maybe  type-builtin:int  punctuation:)  operator:=  type:A  punctuation:.  field:t2
+ 13 | fi
+    | keyword:fi
+ 14 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 15 |     bind b = B {}
+    | keyword:bind  variable:b  operator:=  type:B  punctuation:{  punctuation:}
+ 16 |     show(A.v, " ", A.arr, " ", b.w, " ", b.t)
+    | builtin-fn:show  punctuation:(  type:A  punctuation:.  field:v  punctuation:,  string:" "  punctuation:,  type:A  punctuation:.  field:arr  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  field:w  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  field:t  punctuation:)
+ 17 | fi
+    | keyword:fi

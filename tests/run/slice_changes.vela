@@ -19,6 +19,14 @@ kind Step
     del
 fi
 
+; Adds a hundred items, which moves the slice's items to a bigger block.
+task grow(hold& xs: [int]@r, r: region) -> int
+    each i in 0..100
+        xs.add(i)
+    fi
+    <- 42
+fi
+
 task show_all(xs: [int]@r)
     each x in xs
         show(x)
@@ -197,4 +205,10 @@ task main()
     ; A kind's variants may be named 'add' and 'del'.
     show(value_of(Step.add(3)) + value_of(Step.del))
     show(evens(r, 7).len)
+
+    ; An item set to a value that moves the slice's items is found after it.
+    hold moved = [1, 2, ...] at r
+    moved[0] = grow(&moved, r)
+    moved[1] += grow(&moved, r)
+    show(moved[0], " ", moved[1], " ", moved.len)
 fi

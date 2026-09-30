@@ -1,0 +1,22 @@
+; A copy in each branch of a when or match used as a value goes into the
+; region of the place the whole goes: a variable, or the result it is sent as.
+
+task pick(m: maybe text, r: region) -> text@r
+    <- match m
+    case {v} = v.copy()
+    case none = "none".copy()
+    fi
+fi
+
+task main()
+    region r
+    hold t: text@r = "x".copy() at r
+    region w
+    bind a = "abc".copy() at w
+    t = when a.len > 2
+        a.copy()
+    else
+        "short".copy()
+    fi
+    show(t, " ", pick("hi", r), " ", pick(none, r))
+fi

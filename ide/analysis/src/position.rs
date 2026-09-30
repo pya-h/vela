@@ -105,12 +105,42 @@ impl<'a> LineIndex<'a> {
         self.utf16_of(range.start)..self.utf16_of(range.end)
     }
 
+    /// A converter for byte offsets given in increasing order, which counts
+    /// each character once instead of from its line's start each time.
+    pub(crate) fn cursor(&self) -> Utf16Cursor<'_, 'a> {
+        Utf16Cursor { index: self, byte: 0, utf16: 0 }
+    }
+
     fn floor_char_boundary(&self, byte: usize) -> usize {
         let mut byte = byte.min(self.source.len());
         while !self.source.is_char_boundary(byte) {
             byte -= 1;
         }
         byte
+    }
+}
+
+/// See `LineIndex::cursor`.
+pub(crate) struct Utf16Cursor<'i, 'a> {
+    index: &'i LineIndex<'a>,
+    /// The last offset converted, a character boundary, and its UTF-16 offset.
+    byte: usize,
+    utf16: usize,
+}
+
+impl Utf16Cursor<'_, '_> {
+    /// The UTF-16 offset of `byte`, as `LineIndex::utf16_of` gives it. An
+    /// offset before the last one starts over from its line.
+    pub(crate) fn utf16_of(&mut self, byte: usize) -> usize {
+        let byte = self.index.floor_char_boundary(byte);
+        if byte < self.byte {
+            self.utf16 = self.index.utf16_of(byte);
+        } else {
+            let text = self.index.source.get(self.byte..byte).unwrap_or_default();
+            self.utf16 += if text.is_ascii() { text.len() } else { text.chars().map(char::len_utf16).sum() };
+        }
+        self.byte = byte;
+        self.utf16
     }
 }
 
@@ -161,5 +191,18 @@ mod tests {
         assert_eq!(index.byte_of(Span::new(0, 1)), 5);
         assert_eq!(index.utf16_of(99), 5);
         assert_eq!(index.byte_of_utf16(99), 5);
+    }
+
+    #[test]
+    fn a_cursor_converts_offsets_in_order_as_the_index_does() {
+        let source = "é𝄞x\n𝄞y ab\ncd é";
+        let index = LineIndex::new(source);
+        let mut cursor = index.cursor();
+        let offsets: Vec<usize> = source.char_indices().map(|(byte, _)| byte).chain([source.len(), source.len() + 3]).collect();
+        for &byte in &offsets {
+            assert_eq!(cursor.utf16_of(byte), index.utf16_of(byte), "at {}", byte);
+        }
+        // An offset before the last one starts over.
+        assert_eq!(cursor.utf16_of(2), index.utf16_of(2));
     }
 }

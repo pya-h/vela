@@ -11,7 +11,7 @@
 //! file that stands for one of them is rewritten to it, so the checker and the
 //! code generator see one program in which every name means one thing.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
@@ -233,9 +233,16 @@ impl State {
         self.visit(main, loader)?;
         let tables: Vec<Names> = self.modules.iter().map(own_names).collect();
         let variants = variants_of_kinds(&self.modules);
+        // Every name in the program, by the identity of its module.
+        let mut by_module: HashMap<&str, Vec<&str>> = HashMap::new();
+        for entry in tables.iter().flat_map(HashMap::values) {
+            if let Some((id, _)) = entry.full.rsplit_once(MODULE_SEPARATOR) {
+                by_module.entry(id).or_default().push(&entry.full);
+            }
+        }
         let mut scopes = Vec::new();
         for index in 0..self.modules.len() {
-            scopes.push(self.resolve(index, &tables, &variants)?);
+            scopes.push(self.resolve(index, &tables, &variants, &by_module)?);
         }
         let mut items = Vec::new();
         for index in std::mem::take(&mut self.order) {
@@ -273,7 +280,11 @@ impl State {
         let main_folder = self.module_path(0).parent().map(Path::to_path_buf).unwrap_or_default();
         let in_library = self.modules.get(index).is_some_and(|module| library::is_library(&module.id));
         let mut targets = Vec::new();
-        for (i, include) in includes.iter().enumerate() {
+        // The includes seen so far, by the file each names and by the name it
+        // is known by, to find one included twice.
+        let mut files: HashMap<PathBuf, Span> = HashMap::new();
+        let mut locals: HashMap<&str, Span> = HashMap::new();
+        for include in &includes {
             if let Some(local) = include.local_name() {
                 check_module_name(local, include.local_span())?;
             }
@@ -291,15 +302,13 @@ impl State {
                 None => module_file(&folder, &include.path),
             };
             let key = include_key(&folder, include);
-            let earlier = includes.iter().take(i);
-            if let Some(earlier) = earlier.clone().find(|earlier| include_key(&folder, earlier) == key) {
-                let at = earlier.name_span;
+            if let Some(at) = files.get(&key) {
                 return err(include.name_span, format!("this module is already included at {}:{}; a file includes each module once", at.line, at.col));
             }
+            files.insert(key.clone(), include.name_span);
             if let Some(local) = include.local_name()
-                && let Some(earlier) = earlier.clone().find(|earlier| earlier.local_name() == Some(local))
+                && let Some(&at) = locals.get(local)
             {
-                let at = earlier.local_span();
                 return err(
                     include.local_span(),
                     format!(
@@ -307,6 +316,9 @@ impl State {
                         local, at.line, at.col
                     ),
                 );
+            }
+            if let Some(local) = include.local_name() {
+                locals.insert(local, include.local_span());
             }
             let target = match self.by_path.get(&key) {
                 Some(&target) => {
@@ -378,7 +390,7 @@ impl State {
 
     /// Resolves the names in module `index`, and returns what the checker needs
     /// to know about it.
-    fn resolve(&mut self, index: usize, tables: &[Names], variants: &Variants) -> Result<ModuleScope> {
+    fn resolve(&mut self, index: usize, tables: &[Names], variants: &Variants, by_module: &HashMap<&str, Vec<&str>>) -> Result<ModuleScope> {
         let Some(module) = self.modules.get(index) else { return Ok(ModuleScope::default()) };
         let mut own = tables.get(index).cloned().unwrap_or_default();
         // The builtin kinds are written like declared ones, in every file: a task
@@ -408,8 +420,9 @@ impl State {
                 }
                 // A part given another name is named only by it.
                 let hidden = include.parts.iter().filter_map(|part| part.alias.clone().map(|alias| (part.name.clone(), alias))).collect();
-                let names = tables.get(target).cloned().unwrap_or_default();
-                resolver.modules.insert(local.to_string(), ModuleNames { names, hidden });
+                if let Some(names) = tables.get(target) {
+                    resolver.modules.insert(local.to_string(), ModuleNames { names, hidden });
+                }
             }
             if include.local_name() != Some(include.file_name()) {
                 resolver.unnamed.push((include.file_name().to_string(), include.local_name().map(str::to_string), include.written()));
@@ -478,7 +491,7 @@ impl State {
                 resolver.imports.insert(written.to_string(), (entry, at));
             }
         }
-        let spelling = spelling(module, tables.get(index), tables, variants, &imports, &includes);
+        let spelling = spelling(module, tables.get(index), tables, variants, by_module, &imports, &includes);
         let scope = ModuleScope { name: module.id.clone(), file: module.file, includes, imports, spelling };
         let Some(module) = self.modules.get_mut(index) else { return Ok(scope) };
         let mut items = std::mem::take(&mut module.items);
@@ -495,7 +508,15 @@ impl State {
 /// How module `module`, which declares `own`, writes the program's names (see
 /// `Spelling`), given the names its `include` lines bring in (`imports`, as in
 /// `ModuleScope`) and the modules it includes (`includes`).
-fn spelling(module: &Module, own: Option<&Names>, tables: &[Names], variants: &Variants, imports: &[(String, String, Span)], includes: &[IncludeScope]) -> Spelling {
+fn spelling(
+    module: &Module,
+    own: Option<&Names>,
+    tables: &[Names],
+    variants: &Variants,
+    by_module: &HashMap<&str, Vec<&str>>,
+    imports: &[(String, String, Span)],
+    includes: &[IncludeScope],
+) -> Spelling {
     let mut names = HashMap::new();
     if let Some(own) = own {
         for (written, entry) in own {
@@ -524,13 +545,9 @@ fn spelling(module: &Module, own: Option<&Names>, tables: &[Names], variants: &V
     // A name the file can't write, of a module whose identity reads like the
     // name the file gives another module (`c.Thing` from `c.vela`, where
     // `include x => c`), starts with `./`, to tell them apart.
-    let taken = |id: &str| includes.iter().any(|include| include.local.as_deref() == Some(id) && include.id != id);
-    for (_, entry) in tables.iter().flatten() {
-        if let Some((id, _)) = entry.full.rsplit_once(MODULE_SEPARATOR)
-            && taken(id)
-        {
-            names.entry(entry.full.clone()).or_insert_with(|| format!("./{}", entry.full));
-        }
+    let taken: HashSet<&str> = includes.iter().filter_map(|include| include.local.as_deref().filter(|local| *local != include.id)).collect();
+    for full in taken.iter().filter_map(|id| by_module.get(id)).flatten() {
+        names.entry(full.to_string()).or_insert_with(|| format!("./{}", full));
     }
     // The main file's names are already written as the program names them.
     names.retain(|full, written| full != written);
@@ -770,8 +787,8 @@ fn variants_of_kinds(modules: &[Module]) -> Variants {
 }
 
 /// What a file can name of a module it includes under a name.
-struct ModuleNames {
-    names: Names,
+struct ModuleNames<'a> {
+    names: &'a Names,
     /// The parts brought in under another name, which the module's name can't
     /// reach: each part's name, with its alias and where that is written.
     hidden: HashMap<String, Binding>,
@@ -781,7 +798,7 @@ struct ModuleNames {
 struct Resolver<'a> {
     own: Names,
     /// The modules this one includes, by the name it names each by.
-    modules: HashMap<String, ModuleNames>,
+    modules: HashMap<String, ModuleNames<'a>>,
     /// The names brought in by name, by the name this file writes (an alias if
     /// there is one), with where each is brought in.
     imports: HashMap<String, (Entry, Span)>,
@@ -988,7 +1005,7 @@ impl Resolver<'_> {
             None => {
                 // `Kind.m` without `(…)`, naming a method of the kind.
                 let method = method_name(&kind.full, tag);
-                let tables = std::iter::once(&self.own).chain(self.modules.values().map(|module| &module.names));
+                let tables = std::iter::once(&self.own).chain(self.modules.values().map(|module| module.names));
                 match tables.flat_map(|names| names.values()).any(|entry| entry.full == method) {
                     true => err(at, format!("'{0}.{1}' is a method of kind '{0}', so it is called, as in '{0}.{1}(…)' when it is shared, or 'k.{1}(…)' on a value", kind_name, tag)),
                     false => err(at, format!("kind '{}' has no variant '{}'", kind_name, tag)),

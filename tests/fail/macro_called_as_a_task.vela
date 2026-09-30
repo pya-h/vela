@@ -1,0 +1,6 @@
+; error: 5:10: unknown task 'N'; it is a macro, a value that never changes, so it is used without '()'
+#N = 3
+
+task main()
+    show(N())
+fi

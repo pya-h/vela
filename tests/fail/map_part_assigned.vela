@@ -1,0 +1,6 @@
+; error: 5:6: a map has no parts: '[…]' takes one key, as in 'm[k] = v'
+task main()
+    region r
+    hold m = new [int: int]() at r
+    m[1..2] = 5
+fi

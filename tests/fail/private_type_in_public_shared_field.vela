@@ -1,0 +1,12 @@
+; error: 8:15: shape 'Public' is public, but 'Secret' is private to its file, so other files couldn't name it; make the field 'priv' too, or the type public
+priv shape Secret
+    n: int
+fi
+
+shape Public
+    x: int
+    shared s: Secret = Secret { n: 5 }
+fi
+
+task main()
+fi

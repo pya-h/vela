@@ -12,127 +12,149 @@
     | field:hits  punctuation::  type-builtin:int  operator:=  number:0
   8 | fi
     | keyword:fi
- 10 | task main()
-    | keyword:task  task:main  punctuation:(  punctuation:)
- 11 |     region r
-    | keyword:region  region:r
- 12 |     hold x = 5
-    | keyword:hold  variable:x  operator:=  number:5
- 13 |     x++
-    | variable:x  operator:++
- 14 |     x++
-    | variable:x  operator:++
- 15 |     x--
-    | variable:x  operator:--
- 16 |     x += 10
-    | variable:x  operator:+=  number:10
- 17 |     x -= 3
-    | variable:x  operator:-=  number:3
- 18 |     x *= 2
-    | variable:x  operator:*=  number:2
- 19 |     x /= 4
-    | variable:x  operator:/=  number:4
- 20 |     x %= 5
-    | variable:x  operator:%=  number:5
- 21 |     show(x)
-    | builtin-fn:show  punctuation:(  variable:x  punctuation:)
- 22 |     x = 3
-    | variable:x  operator:=  number:3
- 23 |     x **= 4
-    | variable:x  operator:**=  number:4
- 24 |     show(x)
-    | builtin-fn:show  punctuation:(  variable:x  punctuation:)
- 25 |     hold f = 1.5
-    | keyword:hold  variable:f  operator:=  number:1.5
- 26 |     f += 1.0
-    | variable:f  operator:+=  number:1.0
- 27 |     f *= 2.0
-    | variable:f  operator:*=  number:2.0
- 28 |     f **= 2
-    | variable:f  operator:**=  number:2
- 29 |     f /= 5.0
-    | variable:f  operator:/=  number:5.0
- 30 |     f -= 0.5
-    | variable:f  operator:-=  number:0.5
- 31 |     show(f)
-    | builtin-fn:show  punctuation:(  variable:f  punctuation:)
- 32 |     ; A char counts to the next one.
-    | comment:; A char counts to the next one.
- 33 |     hold c = 'a'
-    | keyword:hold  variable:c  operator:=  string:'a'
- 34 |     c++
-    | variable:c  operator:++
- 35 |     c += 2
-    | variable:c  operator:+=  number:2
- 36 |     c--
-    | variable:c  operator:--
- 37 |     show(c)
-    | builtin-fn:show  punctuation:(  variable:c  punctuation:)
- 38 |     ; A number written out is a unit beside a unit.
-    | comment:; A number written out is a unit beside a unit.
- 39 |     hold b: unit = 250
-    | keyword:hold  variable:b  punctuation::  type-builtin:unit  operator:=  number:250
- 40 |     b++
-    | variable:b  operator:++
- 41 |     b += 2
-    | variable:b  operator:+=  number:2
- 42 |     show(b)
-    | builtin-fn:show  punctuation:(  variable:b  punctuation:)
- 43 |     ; Items, fields, pointers, and a map's values are places too.
-    | comment:; Items, fields, pointers, and a map's values are places too.
- 44 |     hold xs = [1, 2, 3]
-    | keyword:hold  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
- 45 |     xs[1] += 40
-    | variable:xs  punctuation:[  number:1  punctuation:]  operator:+=  number:40
- 46 |     xs[0]++
-    | variable:xs  punctuation:[  number:0  punctuation:]  operator:++
- 47 |     hold i = 2
-    | keyword:hold  variable:i  operator:=  number:2
- 48 |     xs[i] *= 10
-    | variable:xs  punctuation:[  variable:i  punctuation:]  operator:*=  number:10
- 49 |     show(xs)
-    | builtin-fn:show  punctuation:(  variable:xs  punctuation:)
- 50 |     hold k = Counter {}
-    | keyword:hold  variable:k  operator:=  type:Counter  punctuation:{  punctuation:}
- 51 |     k.hits++
-    | variable:k  punctuation:.  field:hits  operator:++
- 52 |     k.hits += 5
-    | variable:k  punctuation:.  field:hits  operator:+=  number:5
- 53 |     show(k.hits)
-    | builtin-fn:show  punctuation:(  variable:k  punctuation:.  field:hits  punctuation:)
- 54 |     hold p = new int(3) at r
-    | keyword:hold  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  number:3  punctuation:)  keyword:at  region:r
- 55 |     p^ += 4
-    | variable:p  operator:^  operator:+=  number:4
- 56 |     show(p^)
-    | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:)
- 57 |     hold words = ["a": 1] at r
-    | keyword:hold  variable:words  operator:=  punctuation:[  string:"a"  punctuation::  number:1  punctuation:]  keyword:at  region:r
- 58 |     words["a"] += 9
-    | variable:words  punctuation:[  string:"a"  punctuation:]  operator:+=  number:9
- 59 |     words["a"]++
-    | variable:words  punctuation:[  string:"a"  punctuation:]  operator:++
- 60 |     show(words)
-    | builtin-fn:show  punctuation:(  variable:words  punctuation:)
- 61 |     hold t: text@r = "ab" + "c" at r
-    | keyword:hold  variable:t  punctuation::  type-builtin:text  operator:@  region:r  operator:=  string:"ab"  operator:+  string:"c"  keyword:at  region:r
- 62 |     t += "de"
-    | variable:t  operator:+=  string:"de"
- 63 |     t += "{x}!"
-    | variable:t  operator:+=  string:"{  variable:x  string:}!"
- 64 |     show(t)
-    | builtin-fn:show  punctuation:(  variable:t  punctuation:)
- 65 |     ; A count in a loop.
-    | comment:; A count in a loop.
- 66 |     hold total = 0
-    | keyword:hold  variable:total  operator:=  number:0
- 67 |     each n in 1..5
-    | keyword:each  variable:n  keyword:in  number:1  operator:..  number:5
- 68 |         total += n
-    | variable:total  operator:+=  variable:n
- 69 |     fi
+ 10 | task check(n: int) -> nothing ~ text
+    | keyword:task  task:check  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  operator:~  type-builtin:text
+ 11 |     when n < 0
+    | keyword:when  parameter:n  operator:<  number:0
+ 12 |         <- fail "negative"
+    | keyword:<-  keyword:fail  string:"negative"
+ 13 |     fi
     | keyword:fi
- 70 |     show(total)
+ 14 | fi
+    | keyword:fi
+ 16 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 17 |     region r
+    | keyword:region  region:r
+ 18 |     hold x = 5
+    | keyword:hold  variable:x  operator:=  number:5
+ 19 |     x++
+    | variable:x  operator:++
+ 20 |     x++
+    | variable:x  operator:++
+ 21 |     x--
+    | variable:x  operator:--
+ 22 |     x += 10
+    | variable:x  operator:+=  number:10
+ 23 |     x -= 3
+    | variable:x  operator:-=  number:3
+ 24 |     x *= 2
+    | variable:x  operator:*=  number:2
+ 25 |     x /= 4
+    | variable:x  operator:/=  number:4
+ 26 |     x %= 5
+    | variable:x  operator:%=  number:5
+ 27 |     show(x)
+    | builtin-fn:show  punctuation:(  variable:x  punctuation:)
+ 28 |     x = 3
+    | variable:x  operator:=  number:3
+ 29 |     x **= 4
+    | variable:x  operator:**=  number:4
+ 30 |     show(x)
+    | builtin-fn:show  punctuation:(  variable:x  punctuation:)
+ 31 |     hold f = 1.5
+    | keyword:hold  variable:f  operator:=  number:1.5
+ 32 |     f += 1.0
+    | variable:f  operator:+=  number:1.0
+ 33 |     f *= 2.0
+    | variable:f  operator:*=  number:2.0
+ 34 |     f **= 2
+    | variable:f  operator:**=  number:2
+ 35 |     f /= 5.0
+    | variable:f  operator:/=  number:5.0
+ 36 |     f -= 0.5
+    | variable:f  operator:-=  number:0.5
+ 37 |     show(f)
+    | builtin-fn:show  punctuation:(  variable:f  punctuation:)
+ 38 |     ; A char counts to the next one.
+    | comment:; A char counts to the next one.
+ 39 |     hold c = 'a'
+    | keyword:hold  variable:c  operator:=  string:'a'
+ 40 |     c++
+    | variable:c  operator:++
+ 41 |     c += 2
+    | variable:c  operator:+=  number:2
+ 42 |     c--
+    | variable:c  operator:--
+ 43 |     show(c)
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:)
+ 44 |     ; A number written out is a unit beside a unit.
+    | comment:; A number written out is a unit beside a unit.
+ 45 |     hold b: unit = 250
+    | keyword:hold  variable:b  punctuation::  type-builtin:unit  operator:=  number:250
+ 46 |     b++
+    | variable:b  operator:++
+ 47 |     b += 2
+    | variable:b  operator:+=  number:2
+ 48 |     show(b)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:)
+ 49 |     ; Items, fields, pointers, and a map's values are places too.
+    | comment:; Items, fields, pointers, and a map's values are places too.
+ 50 |     hold xs = [1, 2, 3]
+    | keyword:hold  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
+ 51 |     xs[1] += 40
+    | variable:xs  punctuation:[  number:1  punctuation:]  operator:+=  number:40
+ 52 |     xs[0]++
+    | variable:xs  punctuation:[  number:0  punctuation:]  operator:++
+ 53 |     hold i = 2
+    | keyword:hold  variable:i  operator:=  number:2
+ 54 |     xs[i] *= 10
+    | variable:xs  punctuation:[  variable:i  punctuation:]  operator:*=  number:10
+ 55 |     show(xs)
+    | builtin-fn:show  punctuation:(  variable:xs  punctuation:)
+ 56 |     hold k = Counter {}
+    | keyword:hold  variable:k  operator:=  type:Counter  punctuation:{  punctuation:}
+ 57 |     k.hits++
+    | variable:k  punctuation:.  field:hits  operator:++
+ 58 |     k.hits += 5
+    | variable:k  punctuation:.  field:hits  operator:+=  number:5
+ 59 |     show(k.hits)
+    | builtin-fn:show  punctuation:(  variable:k  punctuation:.  field:hits  punctuation:)
+ 60 |     hold p = new int(3) at r
+    | keyword:hold  variable:p  operator:=  keyword:new  type-builtin:int  punctuation:(  number:3  punctuation:)  keyword:at  region:r
+ 61 |     p^ += 4
+    | variable:p  operator:^  operator:+=  number:4
+ 62 |     show(p^)
+    | builtin-fn:show  punctuation:(  variable:p  operator:^  punctuation:)
+ 63 |     hold words = ["a": 1] at r
+    | keyword:hold  variable:words  operator:=  punctuation:[  string:"a"  punctuation::  number:1  punctuation:]  keyword:at  region:r
+ 64 |     words["a"] += 9
+    | variable:words  punctuation:[  string:"a"  punctuation:]  operator:+=  number:9
+ 65 |     words["a"]++
+    | variable:words  punctuation:[  string:"a"  punctuation:]  operator:++
+ 66 |     show(words)
+    | builtin-fn:show  punctuation:(  variable:words  punctuation:)
+ 67 |     hold t: text@r = "ab" + "c" at r
+    | keyword:hold  variable:t  punctuation::  type-builtin:text  operator:@  region:r  operator:=  string:"ab"  operator:+  string:"c"  keyword:at  region:r
+ 68 |     t += "de"
+    | variable:t  operator:+=  string:"de"
+ 69 |     t += "{x}!"
+    | variable:t  operator:+=  string:"{  variable:x  string:}!"
+ 70 |     show(t)
+    | builtin-fn:show  punctuation:(  variable:t  punctuation:)
+ 71 |     ; A count in a loop.
+    | comment:; A count in a loop.
+ 72 |     hold total = 0
+    | keyword:hold  variable:total  operator:=  number:0
+ 73 |     each n in 1..5
+    | keyword:each  variable:n  keyword:in  number:1  operator:..  number:5
+ 74 |         total += n
+    | variable:total  operator:+=  variable:n
+ 75 |     fi
+    | keyword:fi
+ 76 |     show(total)
     | builtin-fn:show  punctuation:(  variable:total  punctuation:)
- 71 | fi
+ 77 |     ; A step ends a block or a plan B on one line, as an assignment does.
+    | comment:; A step ends a block or a plan B on one line, as an assignment does.
+ 78 |     hold misses = 0
+    | keyword:hold  variable:misses  operator:=  number:0
+ 79 |     check(-1) { misses++ }
+    | task:check  punctuation:(  operator:-  number:1  punctuation:)  punctuation:{  variable:misses  operator:++  punctuation:}
+ 80 |     check(1) { misses++ }
+    | task:check  punctuation:(  number:1  punctuation:)  punctuation:{  variable:misses  operator:++  punctuation:}
+ 81 |     when misses > 0 misses += 10 else misses-- fi
+    | keyword:when  variable:misses  operator:>  number:0  variable:misses  operator:+=  number:10  keyword:else  variable:misses  operator:--  keyword:fi
+ 82 |     show(misses)
+    | builtin-fn:show  punctuation:(  variable:misses  punctuation:)
+ 83 | fi
     | keyword:fi

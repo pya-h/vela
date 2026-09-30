@@ -129,14 +129,9 @@ impl<'a> Analysis<'a> {
     /// Every piece of source to highlight, in order and without overlaps.
     /// Whitespace and newlines are not included.
     pub fn tokens(&self) -> Vec<Token> {
-        self.scan
-            .tokens
-            .iter()
-            .map(|t| {
-                let range = self.index.utf16_range(&t.range);
-                Token { from: range.start, to: range.end, class: t.class }
-            })
-            .collect()
+        // The tokens are in order, so one cursor converts them all in a pass.
+        let mut cursor = self.index.cursor();
+        self.scan.tokens.iter().map(|t| Token { from: cursor.utf16_of(t.range.start), to: cursor.utf16_of(t.range.end), class: t.class }).collect()
     }
 
     /// The compiler's diagnostics: every mistake it found, in source order. The
@@ -217,19 +212,22 @@ impl<'a> Analysis<'a> {
     /// The file's tasks, shapes, kinds, and macros, in source order.
     pub fn outline(&self) -> Vec<OutlineItem> {
         let symbols = &self.scan.symbols;
-        let children_of = |parent: usize| symbols.iter().enumerate().filter(move |(_, s)| s.parent == Some(parent));
+        // Each symbol's children, in order, found in one pass.
+        let mut children = vec![Vec::new(); symbols.len()];
+        for (id, symbol) in symbols.iter().enumerate() {
+            if let Some(list) = symbol.parent.and_then(|parent| children.get_mut(parent)) {
+                list.push(id);
+            }
+        }
         symbols
             .iter()
             .enumerate()
             .filter(|(_, s)| s.module.is_none() && matches!(s.kind, SymbolKind::Task | SymbolKind::Shape | SymbolKind::Kind | SymbolKind::Macro))
-            .map(|(id, _)| self.outline_item(id, &children_of))
+            .map(|(id, _)| self.outline_item(id, &children))
             .collect()
     }
 
-    fn outline_item<'s, I>(&self, id: usize, children_of: &impl Fn(usize) -> I) -> OutlineItem
-    where
-        I: Iterator<Item = (usize, &'s scan::Symbol)>,
-    {
+    fn outline_item(&self, id: usize, children: &[Vec<usize>]) -> OutlineItem {
         let symbol = self.scan.symbols.get(id);
         let range = symbol.map(|s| self.index.utf16_range(&s.range)).unwrap_or_default();
         let name = symbol.map(|s| self.index.utf16_range(&s.name_range)).unwrap_or_default();
@@ -241,7 +239,7 @@ impl<'a> Analysis<'a> {
             to: range.end,
             name_from: name.start,
             name_to: name.end,
-            children: children_of(id).map(|(child, _)| self.outline_item(child, children_of)).collect(),
+            children: children.get(id).into_iter().flatten().map(|&child| self.outline_item(child, children)).collect(),
         }
     }
 

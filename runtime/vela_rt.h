@@ -66,6 +66,15 @@ typedef struct vela__rt__text {
 
 /* The text of a C string literal, which may hold a `\0`: its length is the
  * literal's size, less the `\0` C adds. */
+/* Marks a helper the compiler writes for a type whether or not the program
+ * calls it, such as a map's: clang warns of an unused static function of the
+ * program's own file. */
+#if defined(__GNUC__) || defined(__clang__)
+#define VELA__RT__MAYBE_UNUSED __attribute__((unused))
+#else
+#define VELA__RT__MAYBE_UNUSED
+#endif
+
 #define VELA__RT__TEXT(literal) ((vela__rt__text){ (literal), (int64_t)sizeof(literal) - 1 })
 
 static inline void vela__rt__write_text(vela__rt__text x) {
@@ -548,6 +557,28 @@ static inline void* vela__rt__region_grow(vela__rt__region* r, size_t size) {
     return chunk->data;
 }
 
+/* A new newest chunk of `capacity` bytes (at least `size`) whose first `size`
+ * bytes are taken: for text growing at the chunk's tip, which stays at the tip
+ * of the new one to grow in place again (see `vela__rt__join`). */
+static inline void* vela__rt__region_grow_newest(vela__rt__region* r, size_t size, size_t capacity) {
+    size_t header = sizeof(vela__rt__chunk);
+    if (capacity < size) {
+        capacity = size;
+    }
+    if (capacity > SIZE_MAX - header) {
+        vela__rt__out_of_memory();
+    }
+    vela__rt__chunk* chunk = malloc(header + capacity);
+    if (chunk == NULL) {
+        vela__rt__out_of_memory();
+    }
+    chunk->size = capacity;
+    chunk->used = size;
+    chunk->previous = r->newest;
+    r->newest = chunk;
+    return chunk->data;
+}
+
 /* `size` bytes aligned to `align` (a power of two) in region `r`. */
 static inline void* vela__rt__region_alloc(vela__rt__region* r, size_t size, size_t align) {
     vela__rt__chunk* chunk = r->newest;
@@ -832,7 +863,29 @@ static inline vela__rt__text vela__rt__join(vela__rt__region* r, const vela__rt_
     if (len > SIZE_MAX) {
         vela__rt__out_of_memory();
     }
-    char* bytes = vela__rt__region_alloc(r, (size_t)len, 1);
+    /* Text that ends where the newest chunk hands out memory, as `t` does in
+     * `t += u` in a loop, grows in place: nothing is past the chunk's tip, so
+     * only the other parts are copied. When the chunk is full, the text moves
+     * to a new chunk twice its size, so a loop of joins copies each byte a
+     * few times, not once per join. */
+    vela__rt__chunk* chunk = r->newest;
+    bool at_tip = count > 0 && parts[0].len > 0 && chunk != NULL && parts[0].bytes + parts[0].len == (const char*)chunk->data + chunk->used;
+    if (at_tip) {
+        size_t rest = (size_t)len - (size_t)parts[0].len;
+        if (rest <= chunk->size - chunk->used) {
+            char* tail = (char*)chunk->data + chunk->used;
+            chunk->used += rest;
+            for (size_t i = 1; i < count; i++) {
+                if (parts[i].len > 0) {
+                    memcpy(tail, parts[i].bytes, (size_t)parts[i].len);
+                    tail += parts[i].len;
+                }
+            }
+            return (vela__rt__text){ parts[0].bytes, (int64_t)len };
+        }
+    }
+    char* bytes = !at_tip ? vela__rt__region_alloc(r, (size_t)len, 1)
+                          : vela__rt__region_grow_newest(r, (size_t)len, (size_t)len <= SIZE_MAX / 2 ? (size_t)len * 2 : (size_t)len);
     size_t at = 0;
     for (size_t i = 0; i < count; i++) {
         if (parts[i].len > 0) {

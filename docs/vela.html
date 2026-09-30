@@ -3085,7 +3085,9 @@ show(ages[<span class="string">"zed"</span>])                        <span class
           keys were first added (a key given a new value keeps its place), whatever their hashes, so a program writes the
           same thing every run. <code>_</code> drops either. <code>each k in m.keys</code> and <code>each v in m.values</code>
           go through one side without making anything; <code>m.keys at r</code> and <code>m.values at r</code> make that
-          side a slice in <code>r</code>, in the same order. As for a slice, <code>each k, v in m</code> goes through the
+          side a slice in <code>r</code>, in the same order. The slice holds the keys or values themselves, so where
+          they hold text or pointers, <code>r</code> is the map's own region (copy the slice to keep them elsewhere,
+          <code>(m.keys at r).copy() at q</code>). As for a slice, <code>each k, v in m</code> goes through the
           entries there when the loop started and <code>each k, v in &amp;m</code> through the map as it is at each pass,
           keys added during the loop included; a key taken out before its turn is skipped.</li>
         <li><strong>Keys.</strong> A key is compared and hashed, so it is an <code>int</code>, a <code>unit</code>, a
@@ -3102,8 +3104,9 @@ show(ages[<span class="string">"zed"</span>])                        <span class
           handle names the caller's map, the keys it adds are there after the call.</li>
         <li><strong>Memory.</strong> The table grows in the map's region, doubling when more than half of its entries
           are in use, and a table whose keys were mostly taken out is packed again in place, so a map that keeps adding
-          and taking out keys stays the same size. A reference can't name a value in a map, which moves when the map
-          grows (see <a href="safety.html#map-values">Safety</a>). The slots a key lands in depend on a hash started
+          and taking out keys stays the same size. A reference can't name a value in a map, and a slice can't point into
+          one (copy the array first, <code>new [int](m[k]) at r</code>), since it moves when the map grows or is packed
+          (see <a href="safety.html#map-values">Safety</a>). The slots a key lands in depend on a hash started
           from a number chosen each run, so they can't be foreseen from outside the program.</li>
       </ul>
 

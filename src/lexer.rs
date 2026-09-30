@@ -745,8 +745,12 @@ impl Lexer {
         if s.contains("__") {
             return invalid(loc, format!("'{}': names cannot contain '__'", s));
         }
+        // Every keyword is two to seven lowercase letters, so most names are
+        // told apart without comparing them to each.
+        let could_be_keyword = (2..=7).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_lowercase());
         let token = KEYWORDS
             .iter()
+            .filter(|_| could_be_keyword)
             .find(|(word, _)| *word == s)
             .map(|(_, token)| token.clone())
             .unwrap_or(Token::Ident(s));

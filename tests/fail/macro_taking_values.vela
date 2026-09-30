@@ -1,0 +1,5 @@
+; error: 2:1: expected 'task', 'shape', or 'kind', got '#'; a macro is a value, '#NAME = value', and macros that take values are not in Vela yet
+#MAX(a, b) = a
+
+task main()
+fi

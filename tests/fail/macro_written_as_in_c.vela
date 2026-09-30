@@ -1,0 +1,5 @@
+; error: 2:1: expected 'task', 'shape', or 'kind', got '#'; a macro is written '#NAME = value', and a comment starts with ';'
+#define LIMIT 4
+
+task main()
+fi

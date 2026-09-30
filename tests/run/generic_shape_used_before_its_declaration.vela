@@ -1,0 +1,21 @@
+; A generic shape named with its types before it is declared: in a field, and
+; in a task's header.
+
+shape B
+    a: A<int>
+fi
+shape A<T>
+    v: T
+fi
+task first(b: C<text>) -> text
+    <- b.w
+fi
+shape C<T>
+    w: T
+    inner: maybe A<T>
+fi
+task main()
+    bind b = B { a: A { v: 3 } }
+    show(b.a.v)
+    show(first(C { w: "hi", inner: none }))
+fi

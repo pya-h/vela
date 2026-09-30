@@ -1,0 +1,14 @@
+; error: 4:13: 'K' contains itself by value (K -> K); use a pointer such as 'maybe ^K'
+kind K
+    Leaf
+    Node(k: K)
+fi
+
+shape B
+    n: int
+    shared t: K = K.Leaf
+fi
+
+task main()
+    show("x")
+fi

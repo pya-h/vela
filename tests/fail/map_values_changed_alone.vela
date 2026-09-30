@@ -1,0 +1,6 @@
+; error: 5:7: 'm.values' alone is only gone through, as in 'each v in m.values'; 'm.values at r' makes a slice of them in a region
+task main()
+    region r
+    hold m = new [int: int]() at r
+    m.values.add(3)
+fi

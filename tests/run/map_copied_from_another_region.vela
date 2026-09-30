@@ -1,0 +1,14 @@
+; A new map copies another's keys and values into its own region, so the
+; other may be in a region freed before it.
+
+task main()
+    region outer
+    hold keep = new [text: int]() at outer
+    when true
+        region inner
+        hold m = new [text: int]() at inner
+        m["a long key that is copied".copy() at inner] = 1
+        keep = new [text: int](m) at outer
+    fi
+    show(keep)
+fi

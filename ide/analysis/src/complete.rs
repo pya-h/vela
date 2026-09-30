@@ -1739,7 +1739,7 @@ fn member_items(k: &Knowledge, module: usize, members: Members) -> Vec<Completio
                     let kind_name = s.parent.and_then(|p| k.symbol(p)).map(|p| p.name.as_str()).unwrap_or_default();
                     (CompletionKind::Variant, format!("{} {}", kind_name, s.detail).trim().to_string(), None, snippet)
                 }
-                SymbolKind::Macro => (CompletionKind::Variant, format!("macro {}", s.detail), None, None),
+                SymbolKind::Macro => (CompletionKind::Variant, format!("#{} {}", s.name, s.detail), None, None),
                 SymbolKind::Shape if !types_only => (CompletionKind::Type, "shape".to_string(), None, literal_snippet(k, id, &label)),
                 SymbolKind::Shape => (CompletionKind::Type, "shape".to_string(), None, None),
                 _ => (CompletionKind::Type, "kind".to_string(), None, None),
@@ -1975,7 +1975,7 @@ fn expression_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
         });
     }
     for (label, value) in visible_globals(k, &[SymbolKind::Macro]) {
-        items.push(CompletionItem { label, kind: CompletionKind::Variant, detail: format!("macro {}", value.detail), apply: None, snippet: None, boost: GLOBAL });
+        items.push(CompletionItem { label, kind: CompletionKind::Variant, detail: format!("#{} {}", value.name, value.detail), apply: None, snippet: None, boost: GLOBAL });
     }
     // A shape's value is a literal with every field: `Point { x: ${x}, y: ${y} }`.
     for (label, shape) in visible_globals(k, &[SymbolKind::Shape]) {

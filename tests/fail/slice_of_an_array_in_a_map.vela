@@ -1,0 +1,8 @@
+; error: 6:21: a slice can't point into a value in a map, which moves when the map grows or is packed; copy the array into a slice first, as in 'new [int](m[k]) at r'
+task main()
+    region r
+    hold m = new [int: [int#2]]() at r
+    m[0] = [1, 2]
+    bind part = m[0][0..2]
+    show(part)
+fi

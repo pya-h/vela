@@ -18,12 +18,19 @@ task main()
     bind root = 2.0 ** 0.5
     bind mixed = 9 ** 0.5
     bind chained = 2 * n ** 2
-    show(exact, fraction, by_unit, small, root, mixed, chained)
+    bind grouped = n ** (1 + 1)
+    bind inverse = n ** -1
+    show(exact, fraction, by_unit, small, root, mixed, chained, grouped, inverse)
 fi
 ";
 
-fn program(checks: bool) -> String {
-    PROGRAM.replace("CHECK", if checks { "show(0)" } else { "show(unknown)" })
+/// The program as it checks, as it parses but doesn't check, and as it
+/// doesn't parse, where the types are read from the source alone.
+const WHEN: [&str; 3] = ["checked", "declared", "unparsed"];
+
+fn program(when: &str) -> String {
+    let source = PROGRAM.replace("CHECK", if when == "checked" { "show(0)" } else { "show(unknown)" });
+    if when == "unparsed" { source + "task g(\n" } else { source }
 }
 
 fn hover(source: &str, needle: &str) -> String {
@@ -33,14 +40,13 @@ fn hover(source: &str, needle: &str) -> String {
 
 #[test]
 fn the_program_used_by_these_tests_compiles() {
-    assert_eq!(Analysis::new(&program(true)).diagnostics(), Vec::new());
+    assert_eq!(Analysis::new(&program("checked")).diagnostics(), Vec::new());
 }
 
 #[test]
 fn a_power_hovers_with_its_type_whether_or_not_the_file_checks() {
-    for checks in [true, false] {
-        let source = program(checks);
-        let when = if checks { "checked" } else { "declared" };
+    for when in WHEN {
+        let source = program(when);
         assert_eq!(hover(&source, "exact ="), "bind exact: int", "{}", when);
         assert_eq!(hover(&source, "fraction ="), "bind fraction: float", "{}", when);
         assert_eq!(hover(&source, "by_unit ="), "bind by_unit: int", "{}", when);
@@ -48,12 +54,14 @@ fn a_power_hovers_with_its_type_whether_or_not_the_file_checks() {
         assert_eq!(hover(&source, "root ="), "bind root: float", "{}", when);
         assert_eq!(hover(&source, "mixed ="), "bind mixed: float", "{}", when);
         assert_eq!(hover(&source, "chained ="), "bind chained: int", "{}", when);
+        assert_eq!(hover(&source, "grouped ="), "bind grouped: int", "{}", when);
+        assert_eq!(hover(&source, "inverse ="), "bind inverse: float", "{}", when);
     }
 }
 
 #[test]
 fn a_power_is_one_operator() {
-    let source = program(true);
+    let source = program("checked");
     let byte = source.find("**").unwrap();
     let token = Analysis::new(&source).tokens().into_iter().find(|t| t.from == byte).unwrap();
     assert_eq!((token.to - token.from, token.class), (2, TokenClass::Operator));

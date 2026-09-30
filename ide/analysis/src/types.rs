@@ -109,22 +109,30 @@ pub(crate) struct Checked {
 impl Checked {
     pub fn new(source: &str, context: Context) -> Checked {
         let path = Path::new(context.path);
-        // Every file reachable through the files the editor has, reading the
-        // ones it doesn't as empty, so it can fetch them all at once.
-        let mut missing = Vec::new();
-        let mut discover = |file: &Path| -> io::Result<String> {
-            let file = slashed(file);
-            if let Some(source) = context.sources.get(&file) {
-                return Ok(source.clone());
-            }
-            if !missing.contains(&file) {
-                missing.push(file);
-            }
-            Ok(String::new())
+        let mut absent = false;
+        let mut loader = |file: &Path| {
+            let found = context.sources.get(&slashed(file)).cloned();
+            absent |= found.is_none();
+            found.ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))
         };
-        let _ = modules::load(path, source, &mut discover);
-        let mut loader = |file: &Path| context.sources.get(&slashed(file)).cloned().ok_or_else(|| io::Error::from(io::ErrorKind::NotFound));
         let partial = driver::front_end_program(path, source, &mut loader);
+        // Every file reachable through the files the editor has, reading the
+        // ones it doesn't as empty, so it can fetch them all at once. Only
+        // needed when one was missing.
+        let mut missing = Vec::new();
+        if absent {
+            let mut discover = |file: &Path| -> io::Result<String> {
+                let file = slashed(file);
+                if let Some(source) = context.sources.get(&file) {
+                    return Ok(source.clone());
+                }
+                if !missing.contains(&file) {
+                    missing.push(file);
+                }
+                Ok(String::new())
+            };
+            let _ = modules::load(path, source, &mut discover);
+        }
         let spelling = partial.spelling;
         let mut checked = Checked { errors: partial.errors, warnings: partial.warnings, files: partial.files, missing, ..Checked::default() };
         let Some(items) = partial.items else { return checked };

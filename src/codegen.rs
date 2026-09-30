@@ -71,6 +71,10 @@ impl CWriter {
 pub struct Generator {
     w: CWriter,
     temp_counter: u64,
+    /// An expression written as other C than its own while a value is made:
+    /// the item a step reads, `m[k]` in `m[k] += 1`, read through the
+    /// address it was found at (see the `Assign` arm of `gen_stmt`).
+    replaced: Option<(*const Expr, String)>,
     kinds: HashMap<String, KindDef>,
     shapes: HashMap<String, ShapeDef>,
     /// The shapes and kinds holding text or pointers, whose values a copy
@@ -117,6 +121,7 @@ impl Default for Generator {
             task: String::new(),
             altering: HashSet::new(),
             pointers: HashSet::new(),
+            replaced: None,
             hidden: HashSet::new(),
             hidden_params: HashMap::new(),
             shown: Vec::new(),
@@ -207,7 +212,7 @@ impl Generator {
                 self.gen_tag_enum(k);
             }
         }
-        for def in type_order(items, &used.compounds)? {
+        for def in type_order(items, &used.compounds.list)? {
             match def {
                 TypeDef::Item(Item::Shape(s)) => self.gen_shape(s),
                 TypeDef::Item(Item::Kind(k)) => self.gen_kind(k),
@@ -224,7 +229,7 @@ impl Generator {
         self.gen_item_helpers(&used);
         self.gen_map_helpers(&used);
         self.gen_compares(&used)?;
-        self.gen_copies(&used.copied);
+        self.gen_copies(&used.copied.list);
         self.w.blank();
 
         // Shared fields: one variable each for the whole program, given its
@@ -440,8 +445,10 @@ impl Generator {
 
     /// The hash and the equality of each type of key a map has, then each map
     /// type's table: made, searched, added to, remade, read, taken from, and
-    /// read out as slices. They are `static inline`, so a program that uses
-    /// only some of them builds without a warning for the rest.
+    /// read out as slices. They are `static inline` and marked as maybe unused,
+    /// so a program that uses only some of them builds without a warning for
+    /// the rest (clang warns of an unused `static inline` function of the
+    /// program itself, not only of a header's).
     fn gen_map_helpers(&mut self, used: &UsedTypes) {
         for key in &used.map_keys {
             let (ctype, word) = (c_type(key), type_word(key));
@@ -467,10 +474,10 @@ impl Generator {
                     .join(" && "),
                 _ => "a == b".to_string(),
             };
-            self.w.open(&format!("static inline uint64_t vela__hash__{}({} k)", word, ctype));
+            self.w.open(&format!("VELA__RT__MAYBE_UNUSED static inline uint64_t vela__hash__{}({} k)", word, ctype));
             self.w.line(&format!("return {};", hash));
             self.w.close();
-            self.w.open(&format!("static inline bool vela__keyeq__{0}({1} a, {1} b)", word, ctype));
+            self.w.open(&format!("VELA__RT__MAYBE_UNUSED static inline bool vela__keyeq__{0}({1} a, {1} b)", word, ctype));
             self.w.line(&format!("return {};", same));
             self.w.close();
         }
@@ -487,7 +494,7 @@ impl Generator {
             let same = |a: &str| format!("vela__keyeq__{}({}, key)", type_word(key), a);
             let name = |what: &str| item_helper(what, map);
             // Made, with room for `hint` keys.
-            self.w.open(&format!("static inline {}* {}(vela__rt__region* r, int64_t hint)", m, name("map_new")));
+            self.w.open(&format!("VELA__RT__MAYBE_UNUSED static inline {}* {}(vela__rt__region* r, int64_t hint)", m, name("map_new")));
             self.w.line(&format!("{0}* m = vela__rt__region_alloc(r, sizeof({0}), _Alignof({0}));", m));
             self.w.line("int64_t cap = 8;");
             self.w.open("while (cap < hint)");
@@ -503,7 +510,7 @@ impl Generator {
             self.w.line("return m;");
             self.w.close();
             // The slot holding `key`, or -1.
-            self.w.open(&format!("static inline int64_t {}(const {}* m, {} key, uint64_t h)", name("map_slot"), m, k));
+            self.w.open(&format!("VELA__RT__MAYBE_UNUSED static inline int64_t {}(const {}* m, {} key, uint64_t h)", name("map_slot"), m, k));
             self.w.line("uint64_t i = h & m->mask;");
             self.w.open("for (;;)");
             self.w.line("uint32_t s = m->slots[i];");
@@ -517,7 +524,7 @@ impl Generator {
             self.w.close();
             self.w.close();
             // Entry `entry` in the first slot free from its hash on.
-            self.w.open(&format!("static inline void {}({}* m, uint64_t h, int64_t entry)", name("map_place"), m));
+            self.w.open(&format!("VELA__RT__MAYBE_UNUSED static inline void {}({}* m, uint64_t h, int64_t entry)", name("map_place"), m));
             self.w.line("uint64_t i = h & m->mask;");
             self.w.open("while (m->slots[i] >= 2)");
             self.w.line("i = (i + 1) & m->mask;");
@@ -526,7 +533,7 @@ impl Generator {
             self.w.close();
             // Made again when its entries are full: twice as large when more
             // than half of them are kept, and in place when half are gone.
-            self.w.open(&format!("static inline void {}({}* m)", name("map_remake"), m));
+            self.w.open(&format!("VELA__RT__MAYBE_UNUSED static inline void {}({}* m)", name("map_remake"), m));
             self.w.line("int64_t kept = 0;");
             self.w.open("if (m->live * 2 > m->cap || m->live == m->cap)");
             self.w.line("int64_t cap = m->cap < 8 ? 8 : m->cap * 2;");
@@ -554,7 +561,7 @@ impl Generator {
             self.w.close();
             self.w.close();
             // `m[key] = value`: the key's value replaced, or the key added last.
-            self.w.open(&format!("static inline void {}({}* m, {} key, {} value)", name("map_set"), m, k, v));
+            self.w.open(&format!("VELA__RT__MAYBE_UNUSED static inline void {}({}* m, {} key, {} value)", name("map_set"), m, k, v));
             self.w.line(&format!("uint64_t h = {};", hash));
             self.w.line(&format!("int64_t s = {}(m, key, h);", name("map_slot")));
             self.w.open("if (s >= 0)");
@@ -570,7 +577,7 @@ impl Generator {
             self.w.line("m->live++;");
             self.w.close();
             // `m[key]`, where the value is: the program stops without the key.
-            self.w.open(&format!("static inline {}* {}({}* m, {} key, const char* at)", v, name("map_at"), m, k));
+            self.w.open(&format!("VELA__RT__MAYBE_UNUSED static inline {}* {}({}* m, {} key, const char* at)", v, name("map_at"), m, k));
             self.w.line(&format!("int64_t s = {}(m, key, {});", name("map_slot"), hash));
             self.w.open("if (s < 0)");
             self.w.line("vela__rt__no_key(at);");
@@ -578,7 +585,7 @@ impl Generator {
             self.w.line("return &m->entries[m->slots[s] - 2].value;");
             self.w.close();
             // `m[#key]`: the value, or none.
-            self.w.open(&format!("static inline {} {}(const {}* m, {} key)", maybe, name("lookup"), m, k));
+            self.w.open(&format!("VELA__RT__MAYBE_UNUSED static inline {} {}(const {}* m, {} key)", maybe, name("lookup"), m, k));
             self.w.line(&format!("int64_t s = {}(m, key, {});", name("map_slot"), hash));
             self.w.open("if (s < 0)");
             self.w.line(&format!("return {};", none));
@@ -586,7 +593,7 @@ impl Generator {
             self.w.line(&format!("return {};", some("m->entries[m->slots[s] - 2].value")));
             self.w.close();
             // `m.del(key)`: the key taken out, and its value given, or none.
-            self.w.open(&format!("static inline {} {}({}* m, {} key)", maybe, name("map_del"), m, k));
+            self.w.open(&format!("VELA__RT__MAYBE_UNUSED static inline {} {}({}* m, {} key)", maybe, name("map_del"), m, k));
             self.w.line(&format!("int64_t s = {}(m, key, {});", name("map_slot"), hash));
             self.w.open("if (s < 0)");
             self.w.line(&format!("return {};", none));
@@ -598,12 +605,12 @@ impl Generator {
             self.w.line(&format!("return {};", some("entry->value")));
             self.w.close();
             // `m.has(key)`.
-            self.w.open(&format!("static inline bool {}(const {}* m, {} key)", name("map_has"), m, k));
+            self.w.open(&format!("VELA__RT__MAYBE_UNUSED static inline bool {}(const {}* m, {} key)", name("map_has"), m, k));
             self.w.line(&format!("return {}(m, key, {}) >= 0;", name("map_slot"), hash));
             self.w.close();
             // `new [K: V]([k: v, …])`: the pairs added in order, so a key
             // given twice keeps its last value.
-            self.w.open(&format!("static inline {0}* {1}(vela__rt__region* r, int64_t n, {2} const* keys, {3} const* values)", m, name("map_of"), k, v));
+            self.w.open(&format!("VELA__RT__MAYBE_UNUSED static inline {0}* {1}(vela__rt__region* r, int64_t n, {2} const* keys, {3} const* values)", m, name("map_of"), k, v));
             self.w.line(&format!("{}* m = {}(r, n * 2);", m, name("map_new")));
             self.w.open("for (int64_t i = 0; i < n; i++)");
             self.w.line(&format!("{}(m, keys[i], values[i]);", name("map_set")));
@@ -614,7 +621,7 @@ impl Generator {
             for (what, ty, member) in [("map_keys", &**key, "key"), ("map_values", &**value, "value")] {
                 let slice = c_type(&Type::Slice(Box::new(ty.clone()), None));
                 let item = c_type(ty);
-                self.w.open(&format!("static inline {} {}(vela__rt__region* r, const {}* m)", slice, name(what), m));
+                self.w.open(&format!("VELA__RT__MAYBE_UNUSED static inline {} {}(vela__rt__region* r, const {}* m)", slice, name(what), m));
                 self.w.open("if (m->live == 0)");
                 self.w.line(&format!("return ({}){{ .items = vela__rt__no_items(), .len = 0 }};", slice));
                 self.w.close();
@@ -1692,6 +1699,27 @@ impl Generator {
                 // The checker guarantees every place is a variable, field, or
                 // deref, all of which generate valid C lvalues.
                 if let ([Target::Place(lhs)], [rhs]) = (targets.as_slice(), values.as_slice())
+                    && let ExprKind::Index(_, index) = &lhs.kind
+                    && !matches!(index.kind, ExprKind::Range(..))
+                    && let ExprKind::Binary(_, read, by) = &rhs.kind
+                    && read.span == lhs.span
+                    && matches!(read.kind, ExprKind::Index(..))
+                    && changes_nothing(by)
+                    && !has_prelude(by)
+                {
+                    // A step, `m[k] += v` or `xs[i]++`, which the checker made
+                    // `m[k] = m[k] + v` (the item read has the place's own
+                    // position): the item is found once, its key hashed or its
+                    // index checked once, and read and set through its address.
+                    // What is added changes nothing, so the address stays good.
+                    let place = self.gen_place(lhs)?;
+                    let pointer = self.fresh_temp("place");
+                    self.w.line(&format!("{}* {} = &{};", c_type(lhs.ty()?), pointer, place));
+                    self.replaced = Some((&**read as *const Expr, format!("(*{})", pointer)));
+                    let value = self.gen_expr(rhs);
+                    self.replaced = None;
+                    self.w.line(&format!("*{} = {};", pointer, value?));
+                } else if let ([Target::Place(lhs)], [rhs]) = (targets.as_slice(), values.as_slice())
                     && let ExprKind::Index(map, key) = &lhs.kind
                     && let Some(map_ty @ Type::Map(..)) = &map.ty
                 {
@@ -1701,7 +1729,31 @@ impl Generator {
                         .map_err(|_| Error::internal_at(stmt.span, "a map's value set without its map"))?;
                     self.w.line(&format!("{}({}, {}, {});", helper, map, key, value));
                 } else if let ([Target::Place(lhs)], [rhs]) = (targets.as_slice(), values.as_slice()) {
-                    if (has_prelude(rhs) || !changes_nothing(rhs)) && !matches!(lhs.kind, ExprKind::Var(_)) {
+                    if (has_prelude(rhs) || !changes_nothing(rhs))
+                        && let ExprKind::Index(base, index) = &lhs.kind
+                        && let Some(slice_ty @ Type::Slice(..)) = &base.ty
+                        && !matches!(index.kind, ExprKind::Range(..))
+                        && matches!(base.kind, ExprKind::Var(_) | ExprKind::Field(..) | ExprKind::Deref(_))
+                    {
+                        // `xs[i] = grow(&xs)`: the value may move the slice's
+                        // items (`xs.add(…)`), so the slice's place and the
+                        // index are found first, and the item after the value,
+                        // in the slice as it is then.
+                        let slice = self.gen_place(base)?;
+                        let pointer = self.fresh_temp("slice");
+                        self.w.line(&format!("{} const* {} = &{};", c_type(slice_ty), pointer, slice));
+                        let at = self.gen_expr(index)?;
+                        let position = self.fresh_temp("index");
+                        self.w.line(&format!("int64_t {} = {};", position, at));
+                        // C sequences neither side of `=` first, so the value
+                        // is kept before the item is found.
+                        let value = self.gen_expr(rhs)?;
+                        let kept = self.fresh_temp("value");
+                        self.w.line(&format!("{} {} = {};", c_type(lhs.ty()?), kept, value));
+                        let helper = item_helper("at", slice_ty);
+                        let location = self.location(lhs.span);
+                        self.w.line(&format!("*{}(*{}, {}, {}) = {};", helper, pointer, position, location, kept));
+                    } else if (has_prelude(rhs) || !changes_nothing(rhs)) && !matches!(lhs.kind, ExprKind::Var(_)) {
                         // Find the place before the value's prelude runs, which
                         // might change what the place refers to.
                         let place = self.gen_place(lhs)?;
@@ -2401,6 +2453,11 @@ impl Generator {
     /// a word has a function of its own: this function's frame is on the
     /// stack once per nesting level of an expression.
     fn gen_expr(&mut self, e: &Expr) -> Result<String> {
+        if let Some((replaced, text)) = &self.replaced
+            && std::ptr::eq(*replaced, e)
+        {
+            return Ok(text.clone());
+        }
         match &e.kind {
             ExprKind::IntLit(n) => Ok(n.to_string()),
             ExprKind::FloatLit(n) => Ok(c_float_literal(*n)),
@@ -3318,8 +3375,7 @@ fn other_side(left: &str, right: String, c_ty: &str) -> String {
     if left == right { format!("({}){{ {} }}", c_ty, right) } else { right }
 }
 
-/// `text` in parentheses, unless it already is one parenthesized expression
-/// or a plain name.
+/// `text` in parentheses, unless it is a plain name or number.
 fn parenthesized(text: &str) -> String {
     let simple = text.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
     if simple { text.to_string() } else { format!("({})", text) }
@@ -3588,43 +3644,43 @@ fn ordered(operands: &[&Expr]) -> bool {
 /// slice, reading an item, slicing, copying into a region, and filling one; for
 /// an array, filling it. Types are kept without regions.
 struct UsedTypes {
-    compounds: Vec<Type>,
+    compounds: TypeList,
     /// The types whose values are written as text through a generated
     /// `write` (see `note_write`), each after the types inside it.
-    writes: Vec<Type>,
+    writes: TypeList,
     /// The types whose values `str` makes into text through a generated
     /// `text`: those with a `write`, and shapes and kinds with their own `str`.
-    texts: Vec<Type>,
+    texts: TypeList,
     /// For each shape or kind without its own `str`, the types its default
     /// text writes: a shape's fields that aren't `priv`, a kind's payloads.
     parts: HashMap<String, Vec<Type>>,
     /// The numbers read from text, `int("42")` and `float("2.5")`, each of which
     /// needs the helper that turns what the runtime reads into a value or a
     /// `ParseError`.
-    read: Vec<Type>,
+    read: TypeList,
     /// The numbers read from input, `scan("Age: ", int)`, each of which needs the
     /// helper that turns what the runtime reads into a value or an `InputError`.
-    scanned: Vec<Type>,
-    slice_at: Vec<Type>,
+    scanned: TypeList,
+    slice_at: TypeList,
     /// The types of the maps' keys, each tuple after its items.
-    map_keys: Vec<Type>,
+    map_keys: TypeList,
     /// The values read with a lookup that gives none out of range, `t.at(i)`.
-    lookups: Vec<Type>,
-    slice_part: Vec<Type>,
-    slice_copy: Vec<Type>,
-    slice_fill: Vec<Type>,
-    slice_add: Vec<Type>,
-    slice_insert: Vec<Type>,
-    slice_del: Vec<Type>,
-    slice_pop: Vec<Type>,
-    array_fill: Vec<Type>,
+    lookups: TypeList,
+    slice_part: TypeList,
+    slice_copy: TypeList,
+    slice_fill: TypeList,
+    slice_add: TypeList,
+    slice_insert: TypeList,
+    slice_del: TypeList,
+    slice_pop: TypeList,
+    array_fill: TypeList,
     /// The types of the values the program copies with `copy()`.
-    copied: Vec<Type>,
+    copied: TypeList,
     /// The kinds and slices `==` compares by a function of its own (see
     /// `Generator::gen_compares`), and the kinds those kinds carry.
-    same: Vec<Type>,
+    same: TypeList,
     /// The types `~=` compares item by item, and the types inside them.
-    similar: Vec<Type>,
+    similar: TypeList,
     /// Each shape's fields, every one, and each kind's carried values, for
     /// what `~=` and `==` compare inside them.
     fields: HashMap<String, Vec<Type>>,
@@ -3634,37 +3690,73 @@ struct UsedTypes {
     scans: bool,
 }
 
-/// Adds `ty`, without regions, to `list` unless it is there.
-fn note(list: &mut Vec<Type>, ty: &Type) {
-    let ty = ty.without_regions();
-    if !list.contains(&ty) {
-        list.push(ty);
+/// Types in the order they were first noted, with a set beside them so that
+/// noting one again, and asking whether one is there, takes no search.
+#[derive(Default)]
+struct TypeList {
+    list: Vec<Type>,
+    set: HashSet<Type>,
+}
+
+impl TypeList {
+    fn contains(&self, ty: &Type) -> bool {
+        self.set.contains(ty)
     }
+
+    fn is_empty(&self) -> bool {
+        self.list.is_empty()
+    }
+
+    /// Adds `ty` as it is, unless it is there.
+    fn insert(&mut self, ty: Type) {
+        if !self.set.contains(&ty) {
+            self.set.insert(ty.clone());
+            self.list.push(ty);
+        }
+    }
+
+    fn iter(&self) -> std::slice::Iter<'_, Type> {
+        self.list.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a TypeList {
+    type Item = &'a Type;
+    type IntoIter = std::slice::Iter<'a, Type>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.list.iter()
+    }
+}
+
+/// Adds `ty`, without regions, to `list` unless it is there.
+fn note(list: &mut TypeList, ty: &Type) {
+    list.insert(ty.without_regions());
 }
 
 impl UsedTypes {
     fn collect(items: &[Item]) -> UsedTypes {
         let mut used = UsedTypes {
-            compounds: Vec::new(),
-            writes: Vec::new(),
-            texts: Vec::new(),
+            compounds: TypeList::default(),
+            writes: TypeList::default(),
+            texts: TypeList::default(),
             parts: HashMap::new(),
-            read: Vec::new(),
-            scanned: Vec::new(),
-            slice_at: Vec::new(),
-            map_keys: Vec::new(),
-            lookups: Vec::new(),
-            slice_part: Vec::new(),
-            slice_copy: Vec::new(),
-            slice_fill: Vec::new(),
-            slice_add: Vec::new(),
-            slice_insert: Vec::new(),
-            slice_del: Vec::new(),
-            slice_pop: Vec::new(),
-            array_fill: Vec::new(),
-            copied: Vec::new(),
-            same: Vec::new(),
-            similar: Vec::new(),
+            read: TypeList::default(),
+            scanned: TypeList::default(),
+            slice_at: TypeList::default(),
+            map_keys: TypeList::default(),
+            lookups: TypeList::default(),
+            slice_part: TypeList::default(),
+            slice_copy: TypeList::default(),
+            slice_fill: TypeList::default(),
+            slice_add: TypeList::default(),
+            slice_insert: TypeList::default(),
+            slice_del: TypeList::default(),
+            slice_pop: TypeList::default(),
+            array_fill: TypeList::default(),
+            copied: TypeList::default(),
+            same: TypeList::default(),
+            similar: TypeList::default(),
             fields: HashMap::new(),
             kinds: HashSet::new(),
             scans: false,
@@ -3733,31 +3825,35 @@ impl UsedTypes {
     /// struct, so they are left out.
     fn add(&mut self, ty: &Type) {
         let ty = &ty.without_regions();
+        // One recorded already had every type inside it recorded first.
+        if self.compounds.contains(ty) {
+            return;
+        }
         match ty {
             Type::Ptr(inner, _) | Type::Range(inner) | Type::Fail(inner) => self.add(inner),
             Type::Maybe(inner) => {
                 self.add(inner);
                 if !is_pointer(inner) && !self.compounds.contains(ty) {
-                    self.compounds.push(ty.clone());
+                    self.compounds.insert(ty.clone());
                 }
             }
             Type::Or(value, error) => {
                 self.add(value);
                 self.add(error);
                 if !self.compounds.contains(ty) {
-                    self.compounds.push(ty.clone());
+                    self.compounds.insert(ty.clone());
                 }
             }
             Type::Results(types) | Type::Tuple(types) => {
                 types.iter().for_each(|item| self.add(item));
                 if !self.compounds.contains(ty) {
-                    self.compounds.push(ty.clone());
+                    self.compounds.insert(ty.clone());
                 }
             }
             Type::Array(inner, _) | Type::Slice(inner, _) => {
                 self.add(inner);
                 if !self.compounds.contains(ty) {
-                    self.compounds.push(ty.clone());
+                    self.compounds.insert(ty.clone());
                 }
             }
             // A map's helpers give a maybe of a value and slices of its keys
@@ -3772,7 +3868,7 @@ impl UsedTypes {
                 self.add(&Type::Slice(key.clone(), None));
                 self.add(&Type::Slice(value.clone(), None));
                 self.note_key(key);
-                self.compounds.push(ty.clone());
+                self.compounds.insert(ty.clone());
             }
             _ => {}
         }
@@ -3788,7 +3884,7 @@ impl UsedTypes {
         if let Type::Tuple(items) = &key {
             items.iter().for_each(|item| self.note_key(item));
         }
-        self.map_keys.push(key);
+        self.map_keys.insert(key);
     }
 
     /// Records that values of type `ty` are written as text, and so are the

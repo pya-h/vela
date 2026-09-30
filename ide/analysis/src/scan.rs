@@ -78,7 +78,7 @@ pub enum SymbolKind {
     Module,
     /// A type a generic declaration takes, `T` in `task first<T>(…)`.
     TypeParam,
-    /// `macro P = 3.14159`: a name for a value the compiler computes.
+    /// `#P = 3.14159`: a name for a value the compiler computes.
     Macro,
 }
 
@@ -839,12 +839,14 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                 }
             }
             // `#P = 3.14159`, or `priv #P = …`, at the start of a line
-            // outside every item: a declaration of its own line.
+            // outside every item: a declaration of its own line. One in the
+            // first column also closes a task still missing its `fi`.
             Token::Hash
                 if tokens.ident(p + 1).is_some()
                     && matches!(tokens.token(p + 2), None | Some(Token::Assign | Token::Colon | Token::Newline | Token::Eof))
                     && matches!(tokens.before(p), None | Some(Token::Newline | Token::Priv))
-                    && tokens.get(if tokens.before(p) == Some(&Token::Priv) { p - 1 } else { p }).is_some_and(|t| t.start.col == 1) =>
+                    && ((item.is_none() && method.is_none() && blocks.is_empty())
+                        || tokens.get(if tokens.before(p) == Some(&Token::Priv) { p - 1 } else { p }).is_some_and(|t| t.start.col == 1)) =>
             {
                 for open in [method.take(), item.take()].into_iter().flatten() {
                     close(&mut symbols, open, last_end);

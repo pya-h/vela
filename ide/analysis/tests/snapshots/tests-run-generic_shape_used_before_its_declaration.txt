@@ -1,0 +1,40 @@
+  1 | ; A generic shape named with its types before it is declared: in a field, and
+    | comment:; A generic shape named with its types before it is declared: in a field, and
+  2 | ; in a task's header.
+    | comment:; in a task's header.
+  4 | shape B
+    | keyword:shape  type:B
+  5 |     a: A<int>
+    | field:a  punctuation::  type:A  punctuation:<  type-builtin:int  punctuation:>
+  6 | fi
+    | keyword:fi
+  7 | shape A<T>
+    | keyword:shape  type:A  punctuation:<  type:T  punctuation:>
+  8 |     v: T
+    | field:v  punctuation::  type:T
+  9 | fi
+    | keyword:fi
+ 10 | task first(b: C<text>) -> text
+    | keyword:task  task:first  punctuation:(  parameter:b  punctuation::  type:C  punctuation:<  type-builtin:text  punctuation:>  punctuation:)  operator:->  type-builtin:text
+ 11 |     <- b.w
+    | keyword:<-  parameter:b  punctuation:.  field:w
+ 12 | fi
+    | keyword:fi
+ 13 | shape C<T>
+    | keyword:shape  type:C  punctuation:<  type:T  punctuation:>
+ 14 |     w: T
+    | field:w  punctuation::  type:T
+ 15 |     inner: maybe A<T>
+    | field:inner  punctuation::  keyword:maybe  type:A  punctuation:<  type:T  punctuation:>
+ 16 | fi
+    | keyword:fi
+ 17 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 18 |     bind b = B { a: A { v: 3 } }
+    | keyword:bind  variable:b  operator:=  type:B  punctuation:{  field:a  punctuation::  type:A  punctuation:{  field:v  punctuation::  number:3  punctuation:}  punctuation:}
+ 19 |     show(b.a.v)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:.  field:a  punctuation:.  field:v  punctuation:)
+ 20 |     show(first(C { w: "hi", inner: none }))
+    | builtin-fn:show  punctuation:(  task:first  punctuation:(  type:C  punctuation:{  field:w  punctuation::  string:"hi"  punctuation:,  field:inner  punctuation::  keyword:none  punctuation:}  punctuation:)  punctuation:)
+ 21 | fi
+    | keyword:fi

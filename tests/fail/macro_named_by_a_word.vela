@@ -1,0 +1,5 @@
+; error: 2:1: expected 'task', 'shape', or 'kind', got '#'; a macro is named by a name of its own, and 'task' is one of Vela's words
+#task = 1
+
+task main()
+fi

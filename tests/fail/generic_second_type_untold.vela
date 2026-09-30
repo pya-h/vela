@@ -1,0 +1,8 @@
+; error: 7:25: can't tell which type 'B' is for this call of 'f', since no argument and nothing this value goes into names one; write it, as in 'f<int, int>(…)'
+task f<A, B>() -> maybe A
+    <- none
+fi
+
+task main()
+    bind x: maybe int = f()
+fi

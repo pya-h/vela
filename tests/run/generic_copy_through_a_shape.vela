@@ -1,0 +1,16 @@
+; A generic task copies a T into a region its header keeps T in through a
+; shape given T: [Box<T>]@r.
+
+shape Box<T>
+    v: T
+fi
+task first_copy<T>(r: region, bs: [Box<T>]@r) -> T
+    <- bs[0].v.copy() at r
+fi
+task main()
+    region q
+    bind s = "hi".copy() at q
+    hold bs = new [Box<text>]() at q
+    bs.add(Box<text> { v: s })
+    show(first_copy(q, bs))
+fi

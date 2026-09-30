@@ -1,0 +1,64 @@
+  1 | ; maybe (T ~ E): a value and a fail become the T ~ E, which the maybe wraps
+    | comment:; maybe (T ~ E): a value and a fail become the T ~ E, which the maybe wraps
+  2 | ; outside, as an array joining none with them names it.
+    | comment:; outside, as an array joining none with them names it.
+  4 | task f(n: int) -> maybe (int ~ text)
+    | keyword:task  task:f  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  punctuation:(  type-builtin:int  operator:~  type-builtin:text  punctuation:)
+  5 |     when n == 0
+    | keyword:when  parameter:n  operator:==  number:0
+  6 |         <- none
+    | keyword:<-  keyword:none
+  7 |     fi
+    | keyword:fi
+  8 |     when n < 0
+    | keyword:when  parameter:n  operator:<  number:0
+  9 |         <- fail "negative"
+    | keyword:<-  keyword:fail  string:"negative"
+ 10 |     fi
+    | keyword:fi
+ 11 |     <- n
+    | keyword:<-  parameter:n
+ 12 | fi
+    | keyword:fi
+ 14 | task describe(v: maybe (int ~ text)) -> text
+    | keyword:task  task:describe  punctuation:(  parameter:v  punctuation::  keyword:maybe  punctuation:(  type-builtin:int  operator:~  type-builtin:text  punctuation:)  punctuation:)  operator:->  type-builtin:text
+ 15 |     when v is {r}
+    | keyword:when  parameter:v  keyword:is  punctuation:{  variable:r  punctuation:}
+ 16 |         match r
+    | keyword:match  variable:r
+ 17 |             case {n}
+    | keyword:case  punctuation:{  variable:n  punctuation:}
+ 18 |                 <- "ok"
+    | keyword:<-  string:"ok"
+ 19 |             case failure e
+    | keyword:case  keyword:failure  variable:e
+ 20 |                 <- e
+    | keyword:<-  variable:e
+ 21 |         fi
+    | keyword:fi
+ 22 |     fi
+    | keyword:fi
+ 23 |     <- "none"
+    | keyword:<-  string:"none"
+ 24 | fi
+    | keyword:fi
+ 26 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 27 |     bind ys = [1, fail "no", none]
+    | keyword:bind  variable:ys  operator:=  punctuation:[  number:1  punctuation:,  keyword:fail  string:"no"  punctuation:,  keyword:none  punctuation:]
+ 28 |     bind x: maybe (int ~ text) = fail "x"
+    | keyword:bind  variable:x  punctuation::  keyword:maybe  punctuation:(  type-builtin:int  operator:~  type-builtin:text  punctuation:)  operator:=  keyword:fail  string:"x"
+ 29 |     bind y: maybe (int ~ text) = 5
+    | keyword:bind  variable:y  punctuation::  keyword:maybe  punctuation:(  type-builtin:int  operator:~  type-builtin:text  punctuation:)  operator:=  number:5
+ 30 |     show(describe(f(0)), " ", describe(f(-1)), " ", describe(f(2)))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  task:f  punctuation:(  number:0  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:describe  punctuation:(  task:f  punctuation:(  operator:-  number:1  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:describe  punctuation:(  task:f  punctuation:(  number:2  punctuation:)  punctuation:)  punctuation:)
+ 31 |     show(describe(x), " ", describe(y), " ", ys.len)
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variable:x  punctuation:)  punctuation:,  string:" "  punctuation:,  task:describe  punctuation:(  variable:y  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:ys  punctuation:.  field:len  punctuation:)
+ 32 |     each v in ys
+    | keyword:each  variable:v  keyword:in  variable:ys
+ 33 |         show(describe(v))
+    | builtin-fn:show  punctuation:(  task:describe  punctuation:(  variable:v  punctuation:)  punctuation:)
+ 34 |     fi
+    | keyword:fi
+ 35 | fi
+    | keyword:fi

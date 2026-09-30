@@ -529,7 +529,8 @@ show(y)                            <span class="comment">; 2</span></code></pre>
         <p>
           A map's values are in its table, which moves when the map grows and is packed again in place when most of
           its keys were taken out. So a reference never names a value in a map (<code>hold&amp; v = &amp;m[k]</code> is
-          refused, as for a slice's item). Two uses aren't held to that rule, and see the table as it was:
+          refused, as for a slice's item), and a slice never points into one (<code>m[k][0..2]</code> is refused
+          for an array value, whose part would come to point at another key's value). Two uses aren't held to that rule, and see the table as it was:
         </p>
         <pre><code><span class="keyword">shape</span> Tally
     n: int

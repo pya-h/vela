@@ -29,6 +29,8 @@ fi
 
 const CONSTS: &str = "\
 #LIMIT = 10
+#MASK = 0xfe
+#DOWN = -0x1e
 #GREETING = \"hello\"
 priv #SECRET = 42
 ";
@@ -145,4 +147,38 @@ fn a_mistake_in_a_macro_is_shown_in_the_editor() {
     let diagnostics = Analysis::new(source).diagnostics();
     assert_eq!(diagnostics.len(), 1, "{:?}", diagnostics);
     assert!(diagnostics[0].message.starts_with("an int and a float don't mix"), "{:?}", diagnostics);
+}
+
+#[test]
+fn a_macro_in_another_base_is_an_int_though_it_holds_an_e() {
+    let source = program(true, "show(consts.MASK, consts.DOWN)");
+    for needle in ["MASK,", "DOWN)"] {
+        let (code, doc) = hover(&source, needle);
+        assert!(code.starts_with('#'), "{}", code);
+        assert!(doc.contains("of type int"), "{}: {}", needle, doc);
+    }
+}
+
+#[test]
+fn an_indented_macro_outside_every_task_is_still_a_macro() {
+    let source = "  #P = 3\ntask main()\n    show(P)\nfi\n";
+    let analysis = Analysis::new(source);
+    assert_eq!(analysis.diagnostics(), Vec::new());
+    let outline: Vec<(String, SymbolKind)> = analysis.outline().into_iter().map(|item| (item.name, item.kind)).collect();
+    assert_eq!(outline, [("P".to_string(), SymbolKind::Macro), ("main".to_string(), SymbolKind::Task)]);
+    let byte = source.find("P)").unwrap();
+    assert_eq!(analysis.hover(LineIndex::new(source).utf16_of(byte)).map(|h| h.code).as_deref(), Some("#P = 3"));
+}
+
+#[test]
+fn values_made_of_macros_have_types_when_the_file_does_not_parse() {
+    let source = "#N = 2\n#TAU = N * 3\ntask main()\n    bind z = N\n    bind w = N + 1\n    show(z, w)\nfi\ntask g(\n";
+    let analysis = Analysis::new(source);
+    let hover = |needle: &str| {
+        let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
+        analysis.hover(LineIndex::new(source).utf16_of(byte)).unwrap_or_else(|| panic!("no hover at {:?}", needle))
+    };
+    assert_eq!(hover("z =").code, "bind z: int");
+    assert_eq!(hover("w =").code, "bind w: int");
+    assert!(hover("TAU").doc.contains("of type int"), "{}", hover("TAU").doc);
 }

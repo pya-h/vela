@@ -1,0 +1,5 @@
+; error: 2:2: 'show' is a builtin task and cannot be redefined
+#show = 3
+
+task main()
+fi

@@ -31,7 +31,7 @@ impl Span {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     Int,
     Float,
@@ -114,7 +114,7 @@ pub enum Type {
 }
 
 /// A shape with the types it is given, `Box<int>` (see `Type::Applied`).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Applied {
     pub name: String,
     /// The types it is given, always at least one.

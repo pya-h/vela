@@ -398,3 +398,11 @@ fn values_nested_too_deeply_are_an_error_not_a_crash() {
     };
     std::thread::Builder::new().stack_size(1 << 20).spawn(run).unwrap().join().unwrap();
 }
+
+#[test]
+fn every_keyword_is_two_to_seven_lowercase_letters() {
+    // The lexer looks a name up among the keywords only when it has this form.
+    for (word, _) in KEYWORDS {
+        assert!((2..=7).contains(&word.len()) && word.bytes().all(|b| b.is_ascii_lowercase()), "{:?}", word);
+    }
+}

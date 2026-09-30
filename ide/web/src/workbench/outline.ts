@@ -66,7 +66,7 @@ export class Outline {
       return;
     }
     if (rows.length === 0) {
-      this.list.replaceChildren(h("p", { class: "outline-empty", text: "No tasks, shapes, or kinds yet." }));
+      this.list.replaceChildren(h("p", { class: "outline-empty", text: "No tasks, shapes, kinds, or macros yet." }));
       return;
     }
     this.list.replaceChildren(

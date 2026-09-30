@@ -1,0 +1,8 @@
+; error: 4:5: a macro is written outside every task, shape, and kind, as in '#P = 3.14159' at the start of a line
+shape S
+    x: int
+    priv #N = 3
+fi
+
+task main()
+fi

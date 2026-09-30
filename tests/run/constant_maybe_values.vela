@@ -1,0 +1,17 @@
+; Values already made part of a maybe are values the compiler works out: a
+; shared field's first value named again, an array or tuple holding none.
+
+shape A
+    shared u: maybe int = 4
+    shared v: maybe int = A.u
+    shared arr: [maybe int#2] = [none, 3]
+    shared t2: (int, maybe int) = (1, none)
+fi
+shape B
+    w: [maybe int#2] = [none, 3]
+    t: (int, maybe int) = A.t2
+fi
+task main()
+    bind b = B {}
+    show(A.v, " ", A.arr, " ", b.w, " ", b.t)
+fi

@@ -1,0 +1,12 @@
+; error: 9:24: the map's keys hold what is in region 'inner', and 'm.keys' holds them, not copies, so it goes there too, as in 'm.keys at inner'; to keep them in 'outer', copy that, as in '(m.keys at inner).copy() at outer'
+task main()
+    region outer
+    hold ks = new [text]() at outer
+    when true
+        region inner
+        hold m = new [text: int]() at inner
+        m["hello world, a long key".copy() at inner] = 1
+        ks = m.keys at outer
+    fi
+    show(ks)
+fi

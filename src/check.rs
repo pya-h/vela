@@ -4,6 +4,7 @@ use crate::ast::*;
 use crate::codegen;
 use crate::error::{Error, Result};
 use crate::modules::{IncludeScope, ModuleScope, Program};
+use crate::parser::MAX_NESTING;
 
 /// A macro: its value as written, and the literal it is once computed (see
 /// `Checker::macro_value`).
@@ -200,6 +201,9 @@ pub struct Checker {
     /// name of the task made for them, the generic task's name, the types, and
     /// where the call that needs it is.
     instances: Vec<(String, String, Vec<Type>, Span)>,
+    /// The names of the tasks in `instances`, and of those taken from it, so
+    /// each set of types is noted once.
+    noted_instances: HashSet<String>,
     /// The shapes being made for their types, innermost last: a field of one may
     /// name a shape given types of its own, which needs that shape made first
     /// (see `shape_instance`).
@@ -964,7 +968,9 @@ impl Checker {
                     kind.variants = k.variants.clone();
                 }
             }
-            Item::Macro(m) => m.value = self.macro_value(&m.name, &mut Vec::new())?,
+            // A macro whose name was refused has no value to compute.
+            Item::Macro(m) if self.macros.contains_key(&m.name) => m.value = self.macro_value(&m.name, &mut Vec::new())?,
+            Item::Macro(_) => {}
             Item::Task(t) => {
                 self.check_header(t)?;
                 if t.name == "main" {
@@ -992,6 +998,11 @@ impl Checker {
             let mut chain: Vec<&str> = through.iter().skip(first).map(|m| unqualified(m)).collect();
             chain.push(unqualified(name));
             return err(span, format!("macro '{}' is computed from itself: {}", unqualified(name), chain.join(" from ")));
+        }
+        // Each macro computed from another waits for it, so a chain as deep
+        // as the parser's nesting is as far as they go.
+        if through.len() >= MAX_NESTING {
+            return err(span, format!("a chain of macros, each computed from the next, is at most {} long, and '{}' is the {}st", MAX_NESTING, unqualified(name), MAX_NESTING + 1));
         }
         through.push(name.to_string());
         let module = std::mem::replace(&mut self.current_module, module_of(name).to_string());
@@ -1094,7 +1105,8 @@ impl Checker {
                 (t.private || hidden, "method", &t.name, t.params.iter().skip(receiver).collect())
             }
             Item::Task(t) => (t.private, "task", &t.name, t.params.iter().collect()),
-            Item::Shape(s) => (s.private, "shape", &s.name, s.fields.iter().filter(|f| !f.private).collect()),
+            // Its shared fields are named on it, `X.f`, so theirs count too.
+            Item::Shape(s) => (s.private, "shape", &s.name, s.fields.iter().chain(s.shared.iter().map(|m| &m.field)).filter(|f| !f.private).collect()),
             Item::Kind(k) => (k.private, "kind", &k.name, k.variants.iter().flat_map(|v| &v.payload).collect()),
             // A macro's type is a builtin one.
             Item::Macro(_) => return Ok(()),
@@ -1375,7 +1387,17 @@ impl Checker {
         self.making_shapes.push(key.clone());
         let fields = self.instance_fields(&source, types);
         self.making_shapes.pop();
-        let fields = fields?;
+        let fields = match fields {
+            Ok(fields) => fields,
+            // Not made after all: a later use gets the same error, not one
+            // about a shape with no fields.
+            Err(error) => {
+                self.shapes.remove(&key);
+                self.written_names.remove(&key);
+                self.made_of.remove(&key);
+                return Err(error);
+            }
+        };
         if let Some(shape) = self.shapes.get_mut(&key) {
             shape.fields = fields.clone();
         }
@@ -1479,7 +1501,13 @@ impl Checker {
         let given: HashMap<String, Type> = source.types.iter().map(|param| param.name.clone()).zip(types).collect();
         let mut fields = Vec::new();
         for field in &source.fields {
-            let ty = field.ty.map_params(&mut |param| given.get(param).cloned());
+            // A shape used before its declaration is checked has its fields
+            // as written, where `T` is still a name: read with its types in
+            // scope, `T` is the type it takes.
+            let outer = std::mem::replace(&mut self.type_params, source.types.clone());
+            let read = self.resolve_type(&field.ty, field.ty_span, TypePlace::Field);
+            self.type_params = outer;
+            let ty = read?.map_params(&mut |param| given.get(param).cloned());
             let ty = self.resolve_type(&ty, field.ty_span, TypePlace::Field)?;
             fields.push(Field { ty, ..field.clone() });
         }
@@ -1613,16 +1641,26 @@ impl Checker {
     /// Whether a value of type `ty` holds a `File` of `std/files`, directly or
     /// in a shape, kind, or tuple it holds by value.
     fn holds_file(&self, ty: &Type) -> bool {
+        self.holds_file_in(ty, &mut Vec::new())
+    }
+
+    /// `holds_file`, having looked into the shapes and kinds in `seen` already,
+    /// so a type holding itself, which is refused later, is looked into once.
+    fn holds_file_in<'t>(&'t self, ty: &'t Type, seen: &mut Vec<&'t str>) -> bool {
         match ty {
             Type::Named(name, _) if name == FILE_SHAPE => true,
             Type::Named(name, _) => {
-                let fields = self.shapes.get(name).map(|shape| shape.fields.iter().collect::<Vec<_>>()).unwrap_or_default();
-                let payloads = self.kinds.get(name).map(|kind| kind.variants.iter().flat_map(|variant| &variant.payload).collect::<Vec<_>>()).unwrap_or_default();
-                fields.into_iter().chain(payloads).any(|field| self.holds_file(&field.ty))
+                if seen.contains(&name.as_str()) {
+                    return false;
+                }
+                seen.push(name);
+                let fields = self.shapes.get(name).into_iter().flat_map(|shape| &shape.fields);
+                let payloads = self.kinds.get(name).into_iter().flat_map(|kind| kind.variants.iter().flat_map(|variant| &variant.payload));
+                fields.chain(payloads).any(|field| self.holds_file_in(&field.ty, seen))
             }
-            Type::Maybe(inner) | Type::Array(inner, _) => self.holds_file(inner),
-            Type::Or(value, error) => self.holds_file(value) || self.holds_file(error),
-            Type::Tuple(items) => items.iter().any(|item| self.holds_file(item)),
+            Type::Maybe(inner) | Type::Array(inner, _) => self.holds_file_in(inner, seen),
+            Type::Or(value, error) => self.holds_file_in(value, seen) || self.holds_file_in(error, seen),
+            Type::Tuple(items) => items.iter().any(|item| self.holds_file_in(item, seen)),
             _ => false,
         }
     }
@@ -1695,6 +1733,15 @@ impl Checker {
     /// result's regions must be regions the task is given.
     fn check_header(&mut self, t: &mut TaskDef) -> Result<()> {
         self.enter_type_params(&t.types);
+        // The task's types are out of scope after its header, whether or not
+        // it checks, so a declaration after it can't name them.
+        let checked = self.check_header_in_scope(t);
+        self.type_params.clear();
+        checked
+    }
+
+    /// `check_header`, with the task's types in scope.
+    fn check_header_in_scope(&mut self, t: &mut TaskDef) -> Result<()> {
         // `r: region default` makes the region the task is given its body's
         // default (see `ast::DEFAULT`): only a region can be one, and a task
         // takes one at most, as a block declares one at most.
@@ -1796,7 +1843,6 @@ impl Checker {
         }
         let params = t.params.iter().map(|p| (p.name.clone(), p.ty.clone())).collect();
         self.tasks.insert(t.name.clone(), TaskInfo { types: t.types.clone(), params, passing: t.params.iter().map(|p| p.passing).collect(), ret: t.ret.clone(), owner: t.owner.clone() });
-        self.type_params.clear();
         Ok(())
     }
 
@@ -2684,11 +2730,14 @@ impl Checker {
 
     /// The name of the innermost region this code can allocate in, if any.
     fn innermost_region(&self) -> Option<&str> {
+        // A scope's names are in no order, so of its regions the one
+        // declared last is taken.
         self.scopes
             .iter()
             .rev()
-            .flat_map(|scope| scope.names.iter())
-            .find(|(_, info)| info.ty == Type::Region && info.allocates)
+            .find_map(|scope| {
+                scope.names.iter().filter(|(_, info)| info.ty == Type::Region && info.allocates).max_by_key(|(_, info)| (info.span.line, info.span.col))
+            })
             .map(|(name, _)| name.as_str())
     }
 
@@ -2785,9 +2834,10 @@ impl Checker {
         let StmtKind::Step { target, op, value, symbol, at } = &mut stmt.kind else { return Ok(()) };
         let (op, symbol, at) = (*op, *symbol, *at);
         if let Some(inside) = changing_part(target) {
+            let example = if matches!(symbol, "++" | "--") { format!("xs[i]{}", symbol) } else { format!("xs[i] {} …", symbol) };
             return err(
                 inside,
-                format!("'{}' names its place twice, reading and then setting it, so the place can't call a task or change anything; keep that part in a variable first, as in 'bind i = next()' and then 'xs[i] {} …'", symbol, symbol),
+                format!("'{}' names its place twice, reading and then setting it, so the place can't call a task or change anything; keep that part in a variable first, as in 'bind i = next()' and then '{}'", symbol, example),
             );
         }
         let ty = self.check_expr(&mut target.clone())?;
@@ -3533,8 +3583,12 @@ impl Checker {
             }
             ExprKind::Index(base, index) => {
                 if matches!(index.kind, ExprKind::Range(..)) {
-                    if matches!(self.check_expr(base)?, Type::Text(_)) {
-                        return err(span, "a part of text can't be assigned, since text never changes; give the variable other text instead, as in 't = t[0..2]'");
+                    match self.check_expr(base)? {
+                        Type::Text(_) => {
+                            return err(span, "a part of text can't be assigned, since text never changes; give the variable other text instead, as in 't = t[0..2]'");
+                        }
+                        Type::Map(..) => return err(span, "a map has no parts: '[…]' takes one key, as in 'm[k] = v'"),
+                        _ => {}
                     }
                     return err(span, "a slice of values can't be assigned; assign its items one at a time, as in 'xs[i] = v'");
                 }
@@ -3682,7 +3736,7 @@ impl Checker {
             }
             other => return err(expr.span, format!("match requires a kind, a maybe, or a 'T ~ E' value, got {}", other)),
         };
-        let mut seen: Vec<String> = Vec::new();
+        let mut seen: HashSet<String> = HashSet::new();
         let mut matched_all = false;
         // Every case is a path of its own, and a result is set after the match
         // only where every case that runs on sets it.
@@ -3705,7 +3759,7 @@ impl Checker {
             } else if seen.contains(&label) {
                 return err(case.pattern.span, format!("duplicate case '{}'", label));
             }
-            seen.push(label);
+            seen.insert(label);
             match gives {
                 Some(words) => {
                     let found = self.check_value_block(bindings, &mut case.body, case.pattern.span, words);
@@ -3730,7 +3784,7 @@ impl Checker {
         // anything, but then a case is missing, which is the error below.
         self.join_branches(entry, branches);
         if !matched_all
-            && let Some(missing) = needed.iter().find(|n| !seen.contains(n))
+            && let Some(missing) = needed.iter().find(|n| !seen.contains(*n))
         {
             return err(span, format!("missing case '{}' in match", missing));
         }
@@ -4094,10 +4148,17 @@ impl Checker {
             self.expand_shortcut(expr)?;
         }
         // `m.keys`: a map's keys made into a slice in the block's default region.
+        // The base is checked once: a field of that name on anything else is
+        // read from the type found (checking it again would double the work
+        // at each `.values` of a chain of them).
         if let ExprKind::Field(base, word) = &mut expr.kind
             && let Some(op @ (MapOp::Keys | MapOp::Values)) = MapOp::from_word(word)
-            && matches!(self.check_expr(base)?, Type::Map(..))
+            && (self.called_on_a_value() || !matches!(&base.kind, ExprKind::Var(name) if name == THIS))
         {
+            let base_ty = self.check_expr(base)?;
+            if !matches!(base_ty, Type::Map(..)) {
+                return self.field_type(&base_ty, word, span);
+            }
             let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
             if let ExprKind::Field(map, _) = taken {
                 expr.kind = ExprKind::MapOp { map, op, key: None, region: None, region_span: span };
@@ -4204,6 +4265,7 @@ impl Checker {
                             "send" => "; a task sends its result with '<-'".to_string(),
                             "free" => "; Vela has no 'free': memory in a region is freed when the block declaring the region closes".to_string(),
                             _ if self.module_used(name).is_some() => format!("; '{0}' is a module, so name a task in it, as in '{0}.name(…)'", name),
+                            _ if self.macros.contains_key(name) => "; it is a macro, a value that never changes, so it is used without '()'".to_string(),
                             // `(i < n, n > (m))`: a `<` after a name whose `>`
                             // is followed by `(` gives types to a call.
                             _ => self.elsewhere(name),
@@ -4614,13 +4676,16 @@ impl Checker {
     fn check_map_source(&mut self, value: &mut Expr, key: &Type, value_ty: &Type, map: &Type) -> Result<()> {
         let ExprKind::Pairs(pairs) = &mut value.kind else {
             let ty = self.check_expr(value)?;
+            // Another map's keys and values are copied into the new one's
+            // region, as `a.copy() at r` copies them, so theirs may be any.
             return match &ty {
-                Type::Map(k, v, _) if fits_regions(k, key) && fits_regions(v, value_ty) => Ok(()),
+                Type::Map(k, v, _) if k.without_regions() == key.without_regions() && v.without_regions() == value_ty.without_regions() => Ok(()),
                 _ if ty.unknown() => Ok(()),
+                Type::Map(..) => err(value.span, format!("a new {} copies the keys and values of a map of the same types, but this map is {}", map.without_regions(), ty.without_regions())),
                 _ => err(value.span, format!("a new map is made from its pairs, as in 'new {}([k: v])', or from another map it copies, but this value is {}", map.without_regions(), ty)),
             };
         };
-        let mut written: Vec<(String, Span)> = Vec::new();
+        let mut written: HashMap<String, Span> = HashMap::new();
         for (k, v) in pairs.iter_mut() {
             self.check_expr(k)?;
             self.coerce(k, key)?;
@@ -4628,10 +4693,10 @@ impl Checker {
             self.coerce(v, value_ty)?;
             // The same key written out twice: the second would replace the first.
             if let Some(text) = constant_key(k) {
-                if let Some((_, at)) = written.iter().find(|(seen, _)| *seen == text) {
+                if let Some(at) = written.get(&text) {
                     return err(k.span, format!("the key {} is written twice, first at {}:{}; a map holds one value for each key", text, at.line, at.col));
                 }
-                written.push((text, k.span));
+                written.insert(text, k.span);
             }
         }
         value.ty = Some(map.clone());
@@ -4661,9 +4726,16 @@ impl Checker {
         })?;
         self.visible_region(&made, region_span, true)?;
         *region = Some(made.clone());
-        // The slice holds the map's keys or values themselves: text in them
-        // is where the map's is, which must last as long as the new slice.
-        let item = item.map_regions(&mut |_| Some(made.clone()));
+        // The slice holds the map's keys or values themselves, not copies:
+        // text in them is where the map's is, so the slice goes there too, as
+        // a slice's items are in its region.
+        if let Some(held) = item.regions().into_iter().find(|held| *held != made && *held != ANY_REGION) {
+            let side = if op == MapOp::Keys { "keys" } else { "values" };
+            return err(
+                region_span,
+                format!("the map's {0} hold what is in region '{1}', and 'm.{2}' holds them, not copies, so it goes there too, as in 'm.{2} at {1}'; to keep them in '{3}', copy that, as in '(m.{2} at {1}).copy() at {3}'", side, held, word, made),
+            );
+        }
         Ok(Type::Slice(Box::new(item), Some(made)))
     }
 
@@ -4782,6 +4854,17 @@ impl Checker {
             return err(index.span, format!("slice {}..{} ends before it starts", start, end));
         }
         index.ty = Some(Type::Range(Box::new(Type::Int)));
+        // A map's table is packed again in place as keys are taken out, so a
+        // part of an array in it would come to point at another key's value.
+        if !matches!(base_ty, Type::Slice(..)) && in_map_value(base) {
+            return err(
+                span,
+                format!(
+                    "a slice can't point into a value in a map, which moves when the map grows or is packed; copy the array into a slice first, as in 'new [{}](m[k]) at r'",
+                    items.without_regions()
+                ),
+            );
+        }
         let region = match base_ty {
             Type::Slice(_, region) => region.clone(),
             _ => match place_region(base) {
@@ -5345,6 +5428,9 @@ impl Checker {
             (ExprKind::Repeat { value, .. }, Type::Array(items, _)) => self.settle_copies(value, items),
             (ExprKind::Tuple(values), Type::Tuple(items)) => values.iter_mut().zip(items).try_for_each(|(value, item)| self.settle_copies(value, item)),
             (ExprKind::Wrap(inner), Type::Maybe(value) | Type::Or(value, _)) => self.settle_copies(inner, value),
+            // A `when` or `match` giving a value: each branch's value goes
+            // where the whole does.
+            (ExprKind::Choice(stmt), _) => self.settle_branch_values(stmt, expected),
             (ExprKind::StructInit { name, fields, .. }, Type::Named(_, Some(region))) => {
                 let Some(shape) = self.shapes.get(name.as_str()).cloned() else { return Ok(()) };
                 fields.iter_mut().try_for_each(|field| match shape.fields.iter().find(|f| f.name == field.name) {
@@ -5919,6 +6005,11 @@ impl Checker {
                 err(span, format!("'.{}' reads an item of a tuple, but this value is {}{}", field, base, extract_hint(&[base])))
             }
             Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Text(_) if field == LEN => Ok(Type::Int),
+            // `m.keys` alone is read only by `each`, so it is no field either.
+            Type::Map(..) if field == "keys" || field == "values" => {
+                let one = if field == "keys" { "k" } else { "v" };
+                err(span, format!("'m.{0}' alone is only gone through, as in 'each {1} in m.{0}'; 'm.{0} at r' makes a slice of them in a region", field, one))
+            }
             Type::Map(..) => err(span, format!("type {} has no field '{}'; its number of keys is '.len', and its keys and values are '.keys at r' and '.values at r'", base, field)),
             Type::Text(_) => err(span, format!("type {} has no field '{}'; how many bytes it has is '.len'", base, field)),
             Type::Array(..) | Type::Slice(..) => {
@@ -6680,10 +6771,11 @@ impl Checker {
         // A type no argument names is worked out from the place the value goes
         // (see `settle_types`), or written at the call.
         let missing: Vec<&TypeParam> = info.types.iter().filter(|param| !given.contains_key(&param.name)).collect();
+        let shown = sent.params();
+        if let Some(param) = missing.iter().find(|param| !shown.contains(&param.name.as_str())) {
+            return err(span, self.untold_type(task, &param.name));
+        }
         if let Some(param) = missing.first() {
-            if !sent.params().contains(&param.name.as_str()) {
-                return err(span, self.untold_type(task, &param.name));
-            }
             self.unsettled_types.push((span, task.to_string(), param.name.clone()));
         }
         *written = info
@@ -7390,11 +7482,13 @@ impl Checker {
     /// The error for a type a call neither names nor shows in its arguments or
     /// in the place its value goes.
     fn untold_type(&self, task: &str, param: &str) -> String {
+        let count = self.tasks.get(task).map_or(1, |info| info.types.len().max(1));
         format!(
-            "can't tell which type '{}' is for this call of '{}', since no argument and nothing this value goes into names one; write it, as in '{}<int>(…)'",
+            "can't tell which type '{}' is for this call of '{}', since no argument and nothing this value goes into names one; write it, as in '{}<{}>(…)'",
             param,
             unqualified(task),
-            unqualified(task)
+            unqualified(task),
+            vec!["int"; count].join(", ")
         )
     }
 
@@ -7420,7 +7514,7 @@ impl Checker {
         }
         let types: Vec<Type> = given.iter().map(|(ty, _)| ty.clone()).collect();
         let key = instance_name(task, &types);
-        if !self.instances.iter().any(|(name, ..)| *name == key) {
+        if self.noted_instances.insert(key.clone()) {
             self.instances.push((key, task.to_string(), types, at));
         }
     }
@@ -7494,6 +7588,14 @@ impl Checker {
                 wrap(expr, expected);
                 return Ok(());
             }
+            // `maybe (T ~ E)`: a value or a `fail e` becomes the `T ~ E`, which
+            // the maybe then wraps, outside, as a join names it (see
+            // `join_types`).
+            Type::Maybe(inner) if matches!(**inner, Type::Or(..)) && fits(&actual, inner) => {
+                self.coerce(expr, inner)?;
+                wrap(expr, expected);
+                return Ok(());
+            }
             Type::Or(value, error) => {
                 if let Type::Fail(given) = &actual {
                     if !fits_regions(given, error) {
@@ -7558,7 +7660,12 @@ impl Checker {
         }
         let types = types.clone();
         expr.ty = Some(sent.map_params(&mut |param| given.get(param).cloned()));
-        if types.iter().any(|(ty, _)| !ty.params().is_empty()) {
+        // Some are still untold: the call waits for them, under the name of
+        // the first.
+        if let Some(untold) = types.iter().find_map(|(ty, _)| ty.params().first().map(|param| param.to_string())) {
+            if let Some(entry) = self.unsettled_types.iter_mut().rev().find(|(at, _, _)| *at == expr.span) {
+                entry.2 = untold;
+            }
             return Ok(());
         }
         if let Some(at) = self.unsettled_types.iter().rposition(|(at, _, _)| *at == expr.span) {
@@ -7930,6 +8037,8 @@ fn keeps_params_of(ty: &Type, inside: Option<&str>, kept: &mut HashMap<String, H
             keeps_params_of(error, inside, kept);
         }
         Type::Tuple(types) | Type::Results(types) => types.iter().for_each(|ty| keeps_params_of(ty, inside, kept)),
+        // `Box<T>@r`: the types a shape is given are in its region.
+        Type::Applied(applied) => applied.types.iter().for_each(|ty| keeps_params_of(ty, applied.region.as_deref().or(inside), kept)),
         _ => {}
     }
 }
@@ -8354,7 +8463,9 @@ fn refuse<T>(make: impl FnOnce() -> Error) -> Result<T> {
 fn constant_value(expr: &Expr) -> bool {
     match &expr.kind {
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } => true,
-        ExprKind::Unary(_, inner) => constant_value(inner),
+        // A value the checker has already made part of a `maybe`, as an
+        // array's items and a shared field's value are.
+        ExprKind::Unary(_, inner) | ExprKind::Wrap(inner) => constant_value(inner),
         ExprKind::Array(values) | ExprKind::Tuple(values) => values.iter().all(constant_value),
         ExprKind::Construct { args, .. } => args.iter().all(constant_value),
         ExprKind::Repeat { value, count } => constant_value(value) && constant_value(count),
@@ -8461,6 +8572,15 @@ fn join_types(a: &Type, b: &Type) -> Option<Type> {
 /// The region of the array `place` names, when it is in one: behind a
 /// pointer, or an item of a slice. `None` for an array in a variable or a
 /// temporary value.
+/// Whether `place` is a value in a map, or part of one: `m[k]`, `m[k].xs`.
+fn in_map_value(place: &Expr) -> bool {
+    match &place.kind {
+        ExprKind::Field(base, _) => in_map_value(base),
+        ExprKind::Index(base, _) => matches!(base.ty, Some(Type::Map(..))) || in_map_value(base),
+        _ => false,
+    }
+}
+
 fn place_region(place: &Expr) -> Option<String> {
     match &place.kind {
         ExprKind::Deref(pointer) => match pointer.ty.as_ref()? {

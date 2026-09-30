@@ -1,0 +1,35 @@
+; maybe (T ~ E): a value and a fail become the T ~ E, which the maybe wraps
+; outside, as an array joining none with them names it.
+
+task f(n: int) -> maybe (int ~ text)
+    when n == 0
+        <- none
+    fi
+    when n < 0
+        <- fail "negative"
+    fi
+    <- n
+fi
+
+task describe(v: maybe (int ~ text)) -> text
+    when v is {r}
+        match r
+            case {n}
+                <- "ok"
+            case failure e
+                <- e
+        fi
+    fi
+    <- "none"
+fi
+
+task main()
+    bind ys = [1, fail "no", none]
+    bind x: maybe (int ~ text) = fail "x"
+    bind y: maybe (int ~ text) = 5
+    show(describe(f(0)), " ", describe(f(-1)), " ", describe(f(2)))
+    show(describe(x), " ", describe(y), " ", ys.len)
+    each v in ys
+        show(describe(v))
+    fi
+fi

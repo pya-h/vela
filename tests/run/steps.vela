@@ -7,6 +7,12 @@ shape Counter
     hits: int = 0
 fi
 
+task check(n: int) -> nothing ~ text
+    when n < 0
+        <- fail "negative"
+    fi
+fi
+
 task main()
     region r
     hold x = 5
@@ -68,4 +74,10 @@ task main()
         total += n
     fi
     show(total)
+    ; A step ends a block or a plan B on one line, as an assignment does.
+    hold misses = 0
+    check(-1) { misses++ }
+    check(1) { misses++ }
+    when misses > 0 misses += 10 else misses-- fi
+    show(misses)
 fi
