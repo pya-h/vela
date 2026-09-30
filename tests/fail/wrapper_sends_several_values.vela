@@ -1,0 +1,14 @@
+; error: 7:3: wrapper 'two' sends several values, and a wrapper sends one value or nothing, as a task value does
+; A wrapper sends one value or nothing.
+task two(next: (int) -> int, n: int) -> int, int
+    <- next(n), n
+fi
+
+$(two)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

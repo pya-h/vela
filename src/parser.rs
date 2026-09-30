@@ -629,19 +629,14 @@ impl Parser {
     fn parse_decorated(&mut self) -> Result<Item> {
         let first = self.peek_span();
         let mut decorators = Vec::new();
+        let mut wrappers = Vec::new();
         while self.check(Token::Dollar) {
             self.advance(); // $
             if self.check(Token::LParen) {
-                return Err(Error::at(self.peek_span(), "wrapper decorators, '$(w)', are not built yet; a startup decorator is written '$d' or '$d(values)'"));
+                self.parse_wrappers(&mut wrappers)?;
+            } else {
+                decorators.push(self.parse_startup_decorator()?);
             }
-            let span = self.peek_span();
-            if !matches!(self.peek(), Token::Ident(_)) {
-                return Err(self.unexpected("the name of a task after '$', as in '$register' or '$route(\"/\")'"));
-            }
-            let name = self.expect_ident()?;
-            let name = self.qualified(name)?;
-            let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
-            decorators.push((name, args, span));
             if !self.check(Token::Dollar) {
                 if !matches!(self.peek(), Token::Newline) {
                     return Err(self.unexpected("another decorator or the end of the line: a task starts on the line after its decorators"));
@@ -656,6 +651,7 @@ impl Parser {
         }
         let mut item = self.parse_item()?;
         if let Item::Task(task) = &mut item {
+            task.wrappers = wrappers;
             task.decorators = decorators
                 .into_iter()
                 .map(|(name, args, span)| {
@@ -666,6 +662,45 @@ impl Parser {
                 .collect();
         }
         Ok(item)
+    }
+
+    /// `d` or `d(values)` after a `$`: a startup decorator's name and values.
+    fn parse_startup_decorator(&mut self) -> Result<(String, Vec<Expr>, Span)> {
+        let span = self.peek_span();
+        if !matches!(self.peek(), Token::Ident(_)) {
+            return Err(self.unexpected("the name of a task after '$', as in '$register' or '$route(\"/\")'"));
+        }
+        let name = self.expect_ident()?;
+        let name = self.qualified(name)?;
+        let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
+        Ok((name, args, span))
+    }
+
+    /// `(w1, w2(values), …)` after a `$`: wrapper decorators, each kept as the
+    /// call of its name with its own values.
+    fn parse_wrappers(&mut self, wrappers: &mut Vec<Expr>) -> Result<()> {
+        let opened = self.peek_span();
+        self.advance(); // (
+        if self.check(Token::RParen) {
+            return Err(Error::at(opened, "'$( … )' names the wrappers of the task below it, as in '$(timed)' or '$(timed, logged(\"sq\"))'; leave it out when there are none"));
+        }
+        loop {
+            let span = self.peek_span();
+            if !matches!(self.peek(), Token::Ident(_)) {
+                return Err(self.unexpected("the name of a wrapper, as in '$(timed)' or '$(logged(\"sq\"))'"));
+            }
+            let name = self.expect_ident()?;
+            let name = self.qualified(name)?;
+            let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
+            wrappers.push(Expr::new(ExprKind::Call { name, types: Vec::new(), args }, span));
+            if !self.match_token(Token::Comma) {
+                break;
+            }
+        }
+        if !self.match_token(Token::RParen) {
+            return Err(self.unexpected("',' and another wrapper, or ')' to close the wrappers"));
+        }
+        Ok(())
     }
 
     fn parse_task(&mut self) -> Result<TaskDef> {
@@ -695,7 +730,7 @@ impl Parser {
         } else {
             Type::Nothing
         };
-        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None, decorators: Vec::new() })
+        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None, decorators: Vec::new(), wrappers: Vec::new() })
     }
 
     /// Whether the cursor is at `native task` (see `ast::NATIVE`).
@@ -1094,6 +1129,7 @@ impl Parser {
             native: false,
             owner: Some(Owner { name, alters: alters_span.is_some(), alters_span, shared: is_shared }),
             decorators: Vec::new(),
+            wrappers: Vec::new(),
         })
     }
 
@@ -2894,6 +2930,7 @@ impl Parser {
             native: false,
             owner: None,
             decorators: Vec::new(),
+            wrappers: Vec::new(),
         }));
         Ok(Expr::new(ExprKind::Var(name), span))
     }

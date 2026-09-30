@@ -1,0 +1,14 @@
+; error: 7:3: task 'plain' takes int first, so it can't be a wrapper: a wrapper takes the rest of the chain first, a task of the type of the task it wraps, as in 'task plain(next: (int) -> int, n: int) -> int'
+; A wrapper takes the rest of the chain first.
+task plain(n: int) -> int
+    <- n
+fi
+
+$(plain)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

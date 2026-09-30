@@ -1,0 +1,15 @@
+; error: 8:3: wrapper 'logged' takes the next task, 1 value of its own, then the 1 value of task 'sq'; 2 values given
+; A wrapper is given as many values as it takes.
+task logged(next: (int) -> int, label: text, n: int) -> int
+    show(label)
+    <- next(n)
+fi
+
+$(logged("a", "b"))
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

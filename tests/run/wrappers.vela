@@ -1,0 +1,111 @@
+; Wrapper decorators: `$(w1, w2(values))` before a task makes every call of it
+; run w1, which is given the rest of the chain as a task of the task's type,
+; then its own values, then the task's; w2 in turn is given the task itself.
+; The leftmost is outermost, and each may change what the task sends.
+
+include wrappers/trace
+
+#TIMES = 3
+
+; Sends twice what the rest sends.
+task doubled(next: (int) -> int, n: int) -> int
+    <- next(n) * 2
+fi
+
+; Takes any task of one int, whatever it sends.
+task noted<R>(next: (int) -> R, n: int) -> R
+    show("noted ", n)
+    <- next(n)
+fi
+
+; Runs the rest of the chain `times` times, and sends the last result.
+task repeated(next: (int) -> int, times: int, n: int) -> int
+    hold last = 0
+    each i in 0..times
+        last = next(n + i)
+    fi
+    <- last
+fi
+
+; Changes what the task sends: text in place of an int.
+task worded(next: (int, int) -> int, a: int, b: int) -> text
+    when next(a, b) > 10
+        <- "big"
+    fi
+    <- "small"
+fi
+
+; A task of text of any region, wrapped: the region goes through.
+task first_letter(next: (text@r) -> text@r, t: text@r) -> text@r
+    <- next(t)[0..1]
+fi
+
+; Wraps a task that sends nothing.
+task framed(next: (text) -> nothing, t: text)
+    show("[")
+    next(t)
+    show("]")
+fi
+
+task register(f: (int) -> int)
+    show("registered: plus_one(5) = ", f(5))
+fi
+
+$(trace.traced("sq"), doubled, noted)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+$(repeated(TIMES))
+task loud(n: int) -> int
+    show("loud ", n)
+    <- n
+fi
+
+$(worded)
+task add(a: int, b: int) -> int
+    <- a + b
+fi
+
+$(first_letter)
+task rest(t: text@r) -> text@r
+    <- t[1..t.len]
+fi
+
+$(framed)
+task say(t: text)
+    show(t)
+fi
+
+; Calling itself goes through the chain again.
+$(trace.traced("fact"))
+task fact(n: int) -> int
+    when n <= 1
+        <- 1
+    fi
+    <- n * fact(n - 1)
+fi
+
+; A startup decorator is given the task as callers see it, wrapped.
+$register
+$(doubled)
+task plus_one(n: int) -> int
+    <- n + 1
+fi
+
+task apply(f: (int) -> int, x: int) -> int
+    <- f(x)
+fi
+
+task main()
+    show(sq(3))
+    show(apply(sq, 2))
+    show(loud(10))
+    show(add(2, 3), " ", add(20, 3))
+    show(rest("abc"))
+    say("hi")
+    show(fact(3))
+    show(plus_one(1))
+    show(trace.half(9))
+    show(trace.half(-4))
+fi

@@ -1,0 +1,14 @@
+; error: 7:3: task 'count' takes 't: text', and wrapper 'other' takes 'n: int' in its place
+; A wrapper takes the task's values as the task does.
+task other(next: (text) -> int, n: int) -> int
+    <- 1
+fi
+
+$(other)
+task count(t: text) -> int
+    <- t.len
+fi
+
+task main()
+    show(count("a"))
+fi

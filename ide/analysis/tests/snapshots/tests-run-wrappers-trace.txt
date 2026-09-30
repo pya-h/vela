@@ -1,0 +1,40 @@
+  1 | ; A module's wrappers, and a task of its own that one wraps.
+    | comment:; A module's wrappers, and a task of its own that one wraps.
+  3 | ; Writes what goes in and what comes out.
+    | comment:; Writes what goes in and what comes out.
+  4 | task traced(next: (int) -> int, label: text, n: int) -> int
+    | keyword:task  task:traced  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  5 |     show("> ", label, "(", n, ")")
+    | builtin-fn:show  punctuation:(  string:"> "  punctuation:,  parameter:label  punctuation:,  string:"("  punctuation:,  parameter:n  punctuation:,  string:")"  punctuation:)
+  6 |     bind result = next(n)
+    | keyword:bind  variable:result  operator:=  parameter:next  punctuation:(  parameter:n  punctuation:)
+  7 |     show("< ", label, " = ", result)
+    | builtin-fn:show  punctuation:(  string:"< "  punctuation:,  parameter:label  punctuation:,  string:" = "  punctuation:,  variable:result  punctuation:)
+  8 |     <- result
+    | keyword:<-  variable:result
+  9 | fi
+    | keyword:fi
+ 11 | ; Calls the task only for a number it can take.
+    | comment:; Calls the task only for a number it can take.
+ 12 | task guarded(next: (int) -> int, n: int) -> int
+    | keyword:task  task:guarded  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 13 |     when n < 0
+    | keyword:when  parameter:n  operator:<  number:0
+ 14 |         show("refused ", n)
+    | builtin-fn:show  punctuation:(  string:"refused "  punctuation:,  parameter:n  punctuation:)
+ 15 |         <- 0
+    | keyword:<-  number:0
+ 16 |     fi
+    | keyword:fi
+ 17 |     <- next(n)
+    | keyword:<-  parameter:next  punctuation:(  parameter:n  punctuation:)
+ 18 | fi
+    | keyword:fi
+ 20 | $(guarded, traced("half"))
+    | keyword:$  punctuation:(  task:guarded  punctuation:,  task:traced  punctuation:(  string:"half"  punctuation:)  punctuation:)
+ 21 | task half(n: int) -> int
+    | keyword:task  task:half  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 22 |     <- n / 2
+    | keyword:<-  parameter:n  operator:/  number:2
+ 23 | fi
+    | keyword:fi

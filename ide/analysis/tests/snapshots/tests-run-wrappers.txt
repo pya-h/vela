@@ -1,0 +1,186 @@
+  1 | ; Wrapper decorators: `$(w1, w2(values))` before a task makes every call of it
+    | comment:; Wrapper decorators: `$(w1, w2(values))` before a task makes every call of it
+  2 | ; run w1, which is given the rest of the chain as a task of the task's type,
+    | comment:; run w1, which is given the rest of the chain as a task of the task's type,
+  3 | ; then its own values, then the task's; w2 in turn is given the task itself.
+    | comment:; then its own values, then the task's; w2 in turn is given the task itself.
+  4 | ; The leftmost is outermost, and each may change what the task sends.
+    | comment:; The leftmost is outermost, and each may change what the task sends.
+  6 | include wrappers/trace
+    | keyword:include  module:wrappers  operator:/  module:trace
+  8 | #TIMES = 3
+    | keyword:#  variant:TIMES  operator:=  number:3
+ 10 | ; Sends twice what the rest sends.
+    | comment:; Sends twice what the rest sends.
+ 11 | task doubled(next: (int) -> int, n: int) -> int
+    | keyword:task  task:doubled  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 12 |     <- next(n) * 2
+    | keyword:<-  parameter:next  punctuation:(  parameter:n  punctuation:)  operator:*  number:2
+ 13 | fi
+    | keyword:fi
+ 15 | ; Takes any task of one int, whatever it sends.
+    | comment:; Takes any task of one int, whatever it sends.
+ 16 | task noted<R>(next: (int) -> R, n: int) -> R
+    | keyword:task  task:noted  punctuation:<  type:R  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type:R  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type:R
+ 17 |     show("noted ", n)
+    | builtin-fn:show  punctuation:(  string:"noted "  punctuation:,  parameter:n  punctuation:)
+ 18 |     <- next(n)
+    | keyword:<-  parameter:next  punctuation:(  parameter:n  punctuation:)
+ 19 | fi
+    | keyword:fi
+ 21 | ; Runs the rest of the chain `times` times, and sends the last result.
+    | comment:; Runs the rest of the chain `times` times, and sends the last result.
+ 22 | task repeated(next: (int) -> int, times: int, n: int) -> int
+    | keyword:task  task:repeated  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:times  punctuation::  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 23 |     hold last = 0
+    | keyword:hold  variable:last  operator:=  number:0
+ 24 |     each i in 0..times
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:times
+ 25 |         last = next(n + i)
+    | variable:last  operator:=  parameter:next  punctuation:(  parameter:n  operator:+  variable:i  punctuation:)
+ 26 |     fi
+    | keyword:fi
+ 27 |     <- last
+    | keyword:<-  variable:last
+ 28 | fi
+    | keyword:fi
+ 30 | ; Changes what the task sends: text in place of an int.
+    | comment:; Changes what the task sends: text in place of an int.
+ 31 | task worded(next: (int, int) -> int, a: int, b: int) -> text
+    | keyword:task  task:worded  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:text
+ 32 |     when next(a, b) > 10
+    | keyword:when  parameter:next  punctuation:(  parameter:a  punctuation:,  parameter:b  punctuation:)  operator:>  number:10
+ 33 |         <- "big"
+    | keyword:<-  string:"big"
+ 34 |     fi
+    | keyword:fi
+ 35 |     <- "small"
+    | keyword:<-  string:"small"
+ 36 | fi
+    | keyword:fi
+ 38 | ; A task of text of any region, wrapped: the region goes through.
+    | comment:; A task of text of any region, wrapped: the region goes through.
+ 39 | task first_letter(next: (text@r) -> text@r, t: text@r) -> text@r
+    | keyword:task  task:first_letter  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r  punctuation:,  parameter:t  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 40 |     <- next(t)[0..1]
+    | keyword:<-  parameter:next  punctuation:(  parameter:t  punctuation:)  punctuation:[  number:0  operator:..  number:1  punctuation:]
+ 41 | fi
+    | keyword:fi
+ 43 | ; Wraps a task that sends nothing.
+    | comment:; Wraps a task that sends nothing.
+ 44 | task framed(next: (text) -> nothing, t: text)
+    | keyword:task  task:framed  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:text  punctuation:)  operator:->  type-builtin:nothing  punctuation:,  parameter:t  punctuation::  type-builtin:text  punctuation:)
+ 45 |     show("[")
+    | builtin-fn:show  punctuation:(  string:"["  punctuation:)
+ 46 |     next(t)
+    | parameter:next  punctuation:(  parameter:t  punctuation:)
+ 47 |     show("]")
+    | builtin-fn:show  punctuation:(  string:"]"  punctuation:)
+ 48 | fi
+    | keyword:fi
+ 50 | task register(f: (int) -> int)
+    | keyword:task  task:register  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:)
+ 51 |     show("registered: plus_one(5) = ", f(5))
+    | builtin-fn:show  punctuation:(  string:"registered: plus_one(5) = "  punctuation:,  parameter:f  punctuation:(  number:5  punctuation:)  punctuation:)
+ 52 | fi
+    | keyword:fi
+ 54 | $(trace.traced("sq"), doubled, noted)
+    | keyword:$  punctuation:(  module:trace  punctuation:.  task:traced  punctuation:(  string:"sq"  punctuation:)  punctuation:,  task:doubled  punctuation:,  task:noted  punctuation:)
+ 55 | task sq(n: int) -> int
+    | keyword:task  task:sq  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 56 |     <- n * n
+    | keyword:<-  parameter:n  operator:*  parameter:n
+ 57 | fi
+    | keyword:fi
+ 59 | $(repeated(TIMES))
+    | keyword:$  punctuation:(  task:repeated  punctuation:(  variant:TIMES  punctuation:)  punctuation:)
+ 60 | task loud(n: int) -> int
+    | keyword:task  task:loud  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 61 |     show("loud ", n)
+    | builtin-fn:show  punctuation:(  string:"loud "  punctuation:,  parameter:n  punctuation:)
+ 62 |     <- n
+    | keyword:<-  parameter:n
+ 63 | fi
+    | keyword:fi
+ 65 | $(worded)
+    | keyword:$  punctuation:(  task:worded  punctuation:)
+ 66 | task add(a: int, b: int) -> int
+    | keyword:task  task:add  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 67 |     <- a + b
+    | keyword:<-  parameter:a  operator:+  parameter:b
+ 68 | fi
+    | keyword:fi
+ 70 | $(first_letter)
+    | keyword:$  punctuation:(  task:first_letter  punctuation:)
+ 71 | task rest(t: text@r) -> text@r
+    | keyword:task  task:rest  punctuation:(  parameter:t  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 72 |     <- t[1..t.len]
+    | keyword:<-  parameter:t  punctuation:[  number:1  operator:..  parameter:t  punctuation:.  field:len  punctuation:]
+ 73 | fi
+    | keyword:fi
+ 75 | $(framed)
+    | keyword:$  punctuation:(  task:framed  punctuation:)
+ 76 | task say(t: text)
+    | keyword:task  task:say  punctuation:(  parameter:t  punctuation::  type-builtin:text  punctuation:)
+ 77 |     show(t)
+    | builtin-fn:show  punctuation:(  parameter:t  punctuation:)
+ 78 | fi
+    | keyword:fi
+ 80 | ; Calling itself goes through the chain again.
+    | comment:; Calling itself goes through the chain again.
+ 81 | $(trace.traced("fact"))
+    | keyword:$  punctuation:(  module:trace  punctuation:.  task:traced  punctuation:(  string:"fact"  punctuation:)  punctuation:)
+ 82 | task fact(n: int) -> int
+    | keyword:task  task:fact  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 83 |     when n <= 1
+    | keyword:when  parameter:n  operator:<=  number:1
+ 84 |         <- 1
+    | keyword:<-  number:1
+ 85 |     fi
+    | keyword:fi
+ 86 |     <- n * fact(n - 1)
+    | keyword:<-  parameter:n  operator:*  task:fact  punctuation:(  parameter:n  operator:-  number:1  punctuation:)
+ 87 | fi
+    | keyword:fi
+ 89 | ; A startup decorator is given the task as callers see it, wrapped.
+    | comment:; A startup decorator is given the task as callers see it, wrapped.
+ 90 | $register
+    | keyword:$  task:register
+ 91 | $(doubled)
+    | keyword:$  punctuation:(  task:doubled  punctuation:)
+ 92 | task plus_one(n: int) -> int
+    | keyword:task  task:plus_one  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 93 |     <- n + 1
+    | keyword:<-  parameter:n  operator:+  number:1
+ 94 | fi
+    | keyword:fi
+ 96 | task apply(f: (int) -> int, x: int) -> int
+    | keyword:task  task:apply  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 97 |     <- f(x)
+    | keyword:<-  parameter:f  punctuation:(  parameter:x  punctuation:)
+ 98 | fi
+    | keyword:fi
+100 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+101 |     show(sq(3))
+    | builtin-fn:show  punctuation:(  task:sq  punctuation:(  number:3  punctuation:)  punctuation:)
+102 |     show(apply(sq, 2))
+    | builtin-fn:show  punctuation:(  task:apply  punctuation:(  task:sq  punctuation:,  number:2  punctuation:)  punctuation:)
+103 |     show(loud(10))
+    | builtin-fn:show  punctuation:(  task:loud  punctuation:(  number:10  punctuation:)  punctuation:)
+104 |     show(add(2, 3), " ", add(20, 3))
+    | builtin-fn:show  punctuation:(  task:add  punctuation:(  number:2  punctuation:,  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  task:add  punctuation:(  number:20  punctuation:,  number:3  punctuation:)  punctuation:)
+105 |     show(rest("abc"))
+    | builtin-fn:show  punctuation:(  task:rest  punctuation:(  string:"abc"  punctuation:)  punctuation:)
+106 |     say("hi")
+    | task:say  punctuation:(  string:"hi"  punctuation:)
+107 |     show(fact(3))
+    | builtin-fn:show  punctuation:(  task:fact  punctuation:(  number:3  punctuation:)  punctuation:)
+108 |     show(plus_one(1))
+    | builtin-fn:show  punctuation:(  task:plus_one  punctuation:(  number:1  punctuation:)  punctuation:)
+109 |     show(trace.half(9))
+    | builtin-fn:show  punctuation:(  module:trace  punctuation:.  task:half  punctuation:(  number:9  punctuation:)  punctuation:)
+110 |     show(trace.half(-4))
+    | builtin-fn:show  punctuation:(  module:trace  punctuation:.  task:half  punctuation:(  operator:-  number:4  punctuation:)  punctuation:)
+111 | fi
+    | keyword:fi

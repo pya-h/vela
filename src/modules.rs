@@ -833,7 +833,7 @@ impl Resolver<'_> {
                     other => self.ty(other, spans.first().copied().unwrap_or(t.span))?,
                 };
                 // A decorator's call names the program's things as the body does.
-                let result = t.decorators.iter_mut().try_for_each(|call| self.expr(call)).and_then(|()| self.block(&mut t.body));
+                let result = t.decorators.iter_mut().chain(t.wrappers.iter_mut()).try_for_each(|call| self.expr(call)).and_then(|()| self.block(&mut t.body));
                 self.params.clear();
                 result
             }

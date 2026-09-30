@@ -2,7 +2,8 @@
 ; value of its type, written as its header without names: `(int) -> int`. A
 ; lambda is a task with no name, written where its value goes, which takes
 ; nothing from the code around it. A startup decorator, `$d` above a task, runs
-; `d(task)` once, before `main`.
+; `d(task)` once, before `main`; a wrapper, `$(w)`, runs `w` at every call of
+; the task, which is given the task to call.
 
 shape Rule
     name: text
@@ -14,7 +15,13 @@ task announce(rule: (int) -> bool)
     show("rule ready: 4 passes it? ", rule(4))
 fi
 
+; Wraps a rule so that no negative number passes it.
+task never_negative(rule: (int) -> bool, n: int) -> bool
+    <- n >= 0 and rule(n)
+fi
+
 $announce
+$(never_negative)
 task is_even(n: int) -> bool
     <- n % 2 == 0
 fi
@@ -41,7 +48,7 @@ fi
 
 task main()
     region r
-    bind xs = [3, 8, 15, 4, 23, 42, ...] at r
+    bind xs = [3, 8, 15, 4, 23, 42, -6, ...] at r
     bind even = Rule { name: "even", check: is_even }
     bind big = Rule { name: "big", check: (n: int) -> bool <- n > 10 fi }
     bind odd = Rule { name: "odd", check: (n: int) -> bool <- not is_even(n) fi }

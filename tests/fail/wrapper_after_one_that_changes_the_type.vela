@@ -1,0 +1,18 @@
+; error: 11:3: what comes after wrapper 'doubled' is a (int) -> text, and wrapper 'doubled' takes a (int) -> int first
+; What a wrapper sends is what the one before it is given.
+task worded(next: (int) -> int, n: int) -> text
+    <- "x"
+fi
+
+task doubled(next: (int) -> int, n: int) -> int
+    <- next(n) * 2
+fi
+
+$(doubled, worded)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

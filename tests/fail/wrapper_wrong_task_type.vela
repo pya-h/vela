@@ -1,0 +1,14 @@
+; error: 7:3: task 'sq' is a (int) -> int, and wrapper 'wants' takes a (text) -> int first
+; A wrapper takes a task of the type of what comes after it.
+task wants(next: (text) -> int, t: text) -> int
+    <- next(t)
+fi
+
+$(wants)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

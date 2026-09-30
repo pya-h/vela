@@ -283,6 +283,12 @@ pub struct Checker {
     /// regions of the code around it, which it takes nothing from, for the
     /// message when its body names one.
     lambda_outer: HashMap<String, HashSet<String>>,
+    /// Each task with wrappers, and its wrappers' calls as written, until
+    /// `settle_wrappers` makes its layers' bodies (see `add_wrappers`).
+    wrapped: Vec<(String, Vec<Expr>)>,
+    /// Each task whose body calls a wrapper, with how many values the task it
+    /// wraps takes, for `check_wrapper_values`.
+    wrapper_layers: HashMap<String, usize>,
 }
 
 /// What a call needs to know about a task: the types it takes, its parameters,
@@ -451,6 +457,7 @@ impl Checker {
         checker.modules = program.modules.iter().map(|scope| (scope.name.clone(), scope.clone())).collect();
         checker.declare_builtin_kinds();
         add_startups(&mut program.items);
+        checker.add_wrappers(&mut program.items);
         checker.check_file(&mut program.items);
         // What a program with a mistake would be made into is never generated,
         // and the parts of it a mistake left unchecked would only cause more, so
@@ -602,6 +609,7 @@ impl Checker {
             }
         }
         self.check_declarations(items);
+        self.settle_wrappers(items);
         for item in items.iter_mut() {
             if let Item::Task(t) = item {
                 self.current_module = module_of(&t.name).to_string();
@@ -2488,6 +2496,9 @@ impl Checker {
         } else {
             self.check_block(&mut task.body)?;
         }
+        if let Some(&takes) = self.wrapper_layers.get(&task.name) {
+            self.check_wrapper_values(&task.body, takes);
+        }
         // Whether every path sends a value can only be told of a body that
         // checked: a line with a mistake may well be the one that sends, so a
         // task with a mistake anywhere is not told this as well (see `record`).
@@ -4277,6 +4288,212 @@ impl Checker {
             {
                 let message = format!("a startup decorator sends nothing, since it runs where the program starts and nothing takes what it sends; '{}' sends {}", unqualified(name), ty);
                 self.record(Error::at(call.span, message));
+            }
+        }
+    }
+
+    /// Moves the body of each task with wrappers, `$(w1, w2(a))`, into a task of
+    /// its own, the innermost layer, and makes a task for each other layer: the
+    /// task itself calls `w1`, giving it the next layer, its own values, and the
+    /// task's values, and so on inward (see `ast::layer_name`). Every call of the
+    /// task, and every value of it, goes through the whole chain, the task
+    /// calling itself too. What each layer sends is worked out once the headers
+    /// are checked (see `settle_wrappers`), so each layer's header sends what the
+    /// task does until then.
+    fn add_wrappers(&mut self, items: &mut Vec<Item>) {
+        let mut layers = Vec::new();
+        for item in items.iter_mut() {
+            let Item::Task(task) = item else { continue };
+            if task.wrappers.is_empty() {
+                continue;
+            }
+            let calls = std::mem::take(&mut task.wrappers);
+            let at = calls.first().map_or(task.span, |call| call.span);
+            if !task.types.is_empty() {
+                self.record(Error::at(at, format!("task '{}' takes types, so it can't have wrappers yet: each wrapper is given it as a value, and only a task that takes none can be one", unqualified(&task.name))));
+                continue;
+            }
+            if task.native {
+                self.record(Error::at(at, format!("native task '{}' has no body of Vela's to wrap", unqualified(&task.name))));
+                continue;
+            }
+            let count = calls.len();
+            let unnamed = |task: &TaskDef| task.ret.results().iter().enumerate().map(|(i, _)| ResultDef { name: None, ty_span: task.result_span(i) }).collect::<Vec<_>>();
+            let mut inner = task.clone();
+            inner.name = layer_name(&task.name, count);
+            inner.private = true;
+            inner.decorators = Vec::new();
+            for k in 1..count {
+                let mut layer = task.clone();
+                layer.name = layer_name(&task.name, k);
+                layer.private = true;
+                layer.decorators = Vec::new();
+                layer.body = Vec::new();
+                layer.results = unnamed(task);
+                layers.push(layer);
+            }
+            // Each layer is the task in a message.
+            for k in 1..=count {
+                let layer = layer_name(&task.name, k);
+                self.written_names.insert(unqualified(&layer).to_string(), unqualified(&task.name).to_string());
+            }
+            task.results = unnamed(task);
+            task.body = Vec::new();
+            layers.push(inner);
+            self.wrapped.push((task.name.clone(), calls));
+        }
+        items.extend(layers.into_iter().map(Item::Task));
+    }
+
+    /// Works out what each layer of each task with wrappers sends, from the
+    /// innermost out, and writes its body: the call of its wrapper.
+    fn settle_wrappers(&mut self, items: &mut [Item]) {
+        let places: HashMap<String, usize> = items.iter().enumerate().filter(|(_, item)| matches!(item, Item::Task(_))).map(|(i, item)| (item.name().to_string(), i)).collect();
+        for (task, calls) in std::mem::take(&mut self.wrapped) {
+            self.current_module = module_of(&task).to_string();
+            let settled = self.settle_wrapped(items, &places, &task, &calls);
+            if !self.keep_going(settled) {
+                // What the layers send isn't known, so neither is what the task does.
+                self.broken.insert(task.clone());
+                for k in 1..calls.len() {
+                    self.broken.insert(layer_name(&task, k));
+                }
+            }
+        }
+        self.current_module.clear();
+    }
+
+    fn settle_wrapped(&mut self, items: &mut [Item], places: &HashMap<String, usize>, task: &str, calls: &[Expr]) -> Result<()> {
+        if self.broken.contains(task) {
+            return Ok(());
+        }
+        let Some(info) = self.tasks.get(task) else { return Ok(()) };
+        let params: Vec<(String, Type)> = info.params.clone();
+        let types: Vec<Type> = params.iter().map(|(_, ty)| ty.clone()).collect();
+        let layers = calls.len();
+        let mut sends = self.tasks.get(&layer_name(task, layers)).map_or(Type::Unknown, |inner| inner.ret.clone());
+        let written_task = unqualified(task);
+        for (k, call) in calls.iter().enumerate().rev() {
+            let ExprKind::Call { name, args, .. } = &call.kind else { return Err(Error::internal_at(call.span, "a wrapper that is no call")) };
+            let written = unqualified(name);
+            let full = self.full_name(name);
+            let Some(wrapper) = self.tasks.get(&full).filter(|wrapper| wrapper.owner.is_none()).cloned() else {
+                return err(call.span, format!("unknown task '{}'; a wrapper is a task that takes the task it wraps first", name));
+            };
+            match wrapper.params.first() {
+                Some((_, ty)) if is_task(ty) => {}
+                other => {
+                    let takes = other.map_or("nothing".to_string(), |(_, ty)| format!("{} first", ty));
+                    return err(
+                        call.span,
+                        format!("task '{}' takes {}, so it can't be a wrapper: a wrapper takes the rest of the chain first, a task of the type of the task it wraps, as in 'task {}(next: (int) -> int, n: int) -> int'", written, takes, written),
+                    );
+                }
+            }
+            let own = wrapper.params.len().checked_sub(1 + types.len());
+            if own != Some(args.len()) {
+                let message = match own {
+                    None => format!(
+                        "wrapper '{}' takes {} after the next task, and task '{}' takes {}, which a wrapper takes after its own values",
+                        written,
+                        count(wrapper.params.len() - 1, "value"),
+                        written_task,
+                        count(types.len(), "value")
+                    ),
+                    Some(own) => format!(
+                        "wrapper '{}' takes the next task, {} of its own, then the {} of task '{}'; {} given",
+                        written,
+                        count(own, "value"),
+                        count(types.len(), "value"),
+                        written_task,
+                        count(args.len(), "value")
+                    ),
+                };
+                return err(call.span, message);
+            }
+            if matches!(wrapper.ret, Type::Results(_)) {
+                return err(call.span, format!("wrapper '{}' sends several values, and a wrapper sends one value or nothing, as a task value does", written));
+            }
+            // The wrapper's types and regions, from the next task and the task's
+            // values, which are known here; its own values are the call's to say.
+            let next = Type::Task(Box::new(TaskType { params: types.clone(), ret: sends.clone() }.normalized()));
+            let own = wrapper.params.len() - types.len();
+            // A wrapper that takes no types takes these as they are, which is
+            // said as the wrapper's mistake rather than its call's.
+            if wrapper.types.is_empty() && !sends.unknown() {
+                if let Some((_, first)) = wrapper.params.first()
+                    && *first != next
+                {
+                    let chain = if k + 1 == layers { format!("task '{}'", written_task) } else { format!("what comes after wrapper '{}'", written) };
+                    return err(call.span, format!("{} is a {}, and wrapper '{}' takes a {} first", chain, next, written, first));
+                }
+                for ((param, ty), (value, given)) in wrapper.params.iter().skip(own).zip(&params) {
+                    if !ty.unknown() && !given.unknown() && strip_all_regions(ty) != strip_all_regions(given) {
+                        return err(call.span, format!("task '{}' takes '{}: {}', and wrapper '{}' takes '{}: {}' in its place", written_task, value, given, written, param, ty));
+                    }
+                }
+            }
+            let pairs = wrapper.params.iter().map(|(_, ty)| ty).zip(std::iter::once(&next).chain(std::iter::repeat_n(&Type::Unknown, own - 1)).chain(&types));
+            let mut given = HashMap::new();
+            let mut regions = HashMap::new();
+            for (pattern, actual) in pairs.filter(|(_, actual)| !actual.unknown()) {
+                unify_params(pattern, actual, &mut given);
+                unify_regions(pattern, actual, &mut regions);
+            }
+            let sent = self.settled_type(&wrapper.ret, &regions, &given, call.span)?;
+            if let Some(param) = sent.params().first() {
+                return err(call.span, format!("wrapper '{}' sends a {}, and '{}' is given by none of the next task and the task's values, so what it sends is not known here", written, sent, param));
+            }
+            if sent.regions().contains(&ANY_REGION) {
+                return err(call.span, format!("wrapper '{}' sends a value in a region none of the task's values is in, so the task can't send it", written));
+            }
+            let layer = if k == 0 { task.to_string() } else { layer_name(task, k) };
+            if layer == "main" && sent != Type::Nothing {
+                return err(call.span, format!("task 'main' cannot return a value, and wrapper '{}' sends {}", written, sent));
+            }
+            // The call of the wrapper, given the next layer, its own values, and
+            // the task's.
+            let mut given_args = vec![Expr::new(ExprKind::Var(layer_name(task, k + 1)), call.span)];
+            given_args.extend(args.iter().cloned());
+            given_args.extend(params.iter().map(|(param, _)| Expr::new(ExprKind::Var(param.clone()), call.span)));
+            let wrapped = Expr::new(ExprKind::Call { name: name.clone(), types: Vec::new(), args: given_args }, call.span);
+            let body = match sent {
+                Type::Nothing => Stmt::new(StmtKind::Expr(wrapped), call.span),
+                _ => Stmt::new(StmtKind::Send(vec![wrapped]), call.span),
+            };
+            if let Some(info) = self.tasks.get_mut(&layer) {
+                info.ret = sent.clone();
+            }
+            if let Some(Item::Task(def)) = places.get(&layer).and_then(|&i| items.get_mut(i)) {
+                def.results = if sent == Type::Nothing { Vec::new() } else { vec![ResultDef { name: None, ty_span: call.span }] };
+                def.ret = sent.clone();
+                def.body = vec![body];
+            }
+            self.wrapper_layers.insert(layer, types.len());
+            sends = sent;
+        }
+        Ok(())
+    }
+
+    /// Records a mistake for each value of its own the wrapper called in
+    /// `body` is given that the compiler can't work out: a wrapper's values are
+    /// the same at every call, as a field's default is.
+    fn check_wrapper_values(&mut self, body: &Block, takes: usize) {
+        let Some(stmt) = body.first() else { return };
+        let call = match &stmt.kind {
+            StmtKind::Expr(call) => call,
+            StmtKind::Send(values) => match values.first() {
+                Some(call) => call,
+                None => return,
+            },
+            _ => return,
+        };
+        let ExprKind::Call { name, args, .. } = &call.kind else { return };
+        let own = args.len().saturating_sub(1 + takes);
+        for value in args.iter().skip(1).take(own) {
+            if !constant_value(value) {
+                let message = format!("a wrapper's values are the same at every call, so each is one the compiler works out: a literal, a macro, or a task's name, as a field's default is; '{}' is given something else", unqualified(name));
+                self.record(Error::at(value.span, message));
             }
         }
     }
@@ -9677,6 +9894,7 @@ fn add_startups(items: &mut Vec<Item>) {
                 native: false,
                 owner: None,
                 decorators: Vec::new(),
+                wrappers: Vec::new(),
             }),
         }
     }

@@ -1,0 +1,14 @@
+; error: 7:3: wrapper 'tiny' takes 0 values after the next task, and task 'sq' takes 1 value, which a wrapper takes after its own values
+; A wrapper takes every value of the task it wraps.
+task tiny(next: (int) -> int) -> int
+    <- next(1)
+fi
+
+$(tiny)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

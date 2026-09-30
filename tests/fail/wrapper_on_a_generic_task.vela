@@ -1,0 +1,15 @@
+; error: 8:3: task 'first' takes types, so it can't have wrappers yet: each wrapper is given it as a value, and only a task that takes none can be one
+; A task that takes types can't have wrappers yet.
+task logged(next: (int) -> int, label: text, n: int) -> int
+    show(label)
+    <- next(n)
+fi
+
+$(logged("a"))
+task first<T>(x: T) -> T
+    <- x
+fi
+
+task main()
+    show(first(1))
+fi

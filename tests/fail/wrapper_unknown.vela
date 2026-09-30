@@ -1,0 +1,10 @@
+; error: 3:3: unknown task 'nope'; a wrapper is a task that takes the task it wraps first
+; A wrapper names a task.
+$(nope)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

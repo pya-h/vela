@@ -77,8 +77,8 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     ("is", "value is pattern", "The condition holds when the pattern matches; its names are visible in the block."),
     (
         "$",
-        "$d or $d(values)",
-        "A startup decorator, on a line above a task: d(task, values) runs once where the program starts, before main. The nearest runs first, and the task stays an ordinary task. d takes the task first and sends nothing, and its values hold no variable or region, since none exists yet.",
+        "$d, $d(values), or $(w1, w2(values))",
+        "A decorator, on a line above a task. $d is a startup decorator: d(task, values) runs once where the program starts, before main, the nearest first; d takes the task first and sends nothing. $(w1, w2) wraps the task: each call of it runs w1, given the rest of the chain as a task of the task's type, its own values, and the task's values, and what w1 sends is what the call gives. A decorator's values hold no variable or region; a wrapper's are literals, macros, or tasks' names.",
     ),
     ("fail", "fail error", "Makes a failure, for a task whose type has a ~ side: <- fail e sends one. A pattern names a failure with 'failure' instead."),
     ("failure", "failure e", "Names the failure a pattern matches: case failure e, when x is failure e, and a plan B's first line. 'fail' makes one."),

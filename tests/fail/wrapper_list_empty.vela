@@ -1,0 +1,10 @@
+; error: 3:2: '$( … )' names the wrappers of the task below it, as in '$(timed)' or '$(timed, logged("sq"))'; leave it out when there are none
+; '$( … )' names at least one wrapper.
+$()
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

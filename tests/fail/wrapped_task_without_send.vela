@@ -1,0 +1,17 @@
+; error: 9:6: task 'sq' can finish without sending a value
+; A wrapped task's body sends a value on every path, as any task's does.
+task logged(next: (int) -> int, label: text, n: int) -> int
+    show(label)
+    <- next(n)
+fi
+
+$(logged("a"))
+task sq(n: int) -> int
+    when n > 0
+        <- n
+    fi
+fi
+
+task main()
+    show(sq(1))
+fi

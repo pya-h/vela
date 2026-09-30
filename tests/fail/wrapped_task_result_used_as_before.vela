@@ -1,0 +1,14 @@
+; error: 13:19: expected type int, got text
+; A wrapper that changes what a task sends changes it for every caller.
+task worded(next: (int) -> int, n: int) -> text
+    <- "x"
+fi
+
+$(worded)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    bind n: int = sq(2)
+fi

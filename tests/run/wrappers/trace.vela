@@ -1,0 +1,23 @@
+; A module's wrappers, and a task of its own that one wraps.
+
+; Writes what goes in and what comes out.
+task traced(next: (int) -> int, label: text, n: int) -> int
+    show("> ", label, "(", n, ")")
+    bind result = next(n)
+    show("< ", label, " = ", result)
+    <- result
+fi
+
+; Calls the task only for a number it can take.
+task guarded(next: (int) -> int, n: int) -> int
+    when n < 0
+        show("refused ", n)
+        <- 0
+    fi
+    <- next(n)
+fi
+
+$(guarded, traced("half"))
+task half(n: int) -> int
+    <- n / 2
+fi

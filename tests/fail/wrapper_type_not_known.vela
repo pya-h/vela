@@ -1,0 +1,14 @@
+; error: 7:3: wrapper 'made' sends a maybe T, and 'T' is given by none of the next task and the task's values, so what it sends is not known here
+; What a wrapper sends is known from the task it wraps.
+task made<T>(next: (int) -> int, n: int) -> maybe T
+    <- none
+fi
+
+$(made)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

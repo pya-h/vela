@@ -1,0 +1,19 @@
+; error: 12:10: a wrapper's values are the same at every call, so each is one the compiler works out: a literal, a macro, or a task's name, as a field's default is; 'logged' is given something else
+; A wrapper's values are ones the compiler works out.
+task logged(next: (int) -> int, label: text, n: int) -> int
+    show(label)
+    <- next(n)
+fi
+
+task name() -> text
+    <- "x"
+fi
+
+$(logged(name()))
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

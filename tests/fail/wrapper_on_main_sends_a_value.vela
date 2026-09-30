@@ -1,0 +1,11 @@
+; error: 8:3: task 'main' cannot return a value, and wrapper 'give' sends int
+; Task main sends nothing, wrapped too.
+task give(next: () -> nothing) -> int
+    next()
+    <- 1
+fi
+
+$(give)
+task main()
+    show(1)
+fi

@@ -321,6 +321,7 @@ block shared type</pre>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
         <tr><td><code>(int, text) -&gt; int</code>, <code>square</code>, <code>f(x)</code></td><td>a task's type; a task named as a value, without <code>()</code>; the call of the task a value holds (see <a href="#task-values">Tasks as values</a>)</td></tr>
         <tr><td><code>$d</code>, <code>$d(values)</code></td><td>a startup decorator, above a task: runs <code>d(task, values)</code> once, before <code>main</code> (see <a href="#decorators">Decorators</a>)</td></tr>
+        <tr><td><code>$(w1, w2(values))</code></td><td>wrapper decorators, above a task: each call of it runs <code>w1</code>, given the rest of the chain, its values, and the task's (see <a href="#decorators">Decorators</a>)</td></tr>
         <tr><td><code>(x: int) -&gt; int &lt;- x * 2 fi</code></td><td>a lambda: a task with no name, written where its value goes, its body on the header's line or the lines after it (see <a href="#lambdas">Lambdas</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v#n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>[K: V]@r</code>, <code>[:V]@r</code>, <code>["a": 1] at r</code></td><td>a map type; one whose keys are text; a map written by its pairs, as <code>new [text: int](["a": 1]) at r</code> (see <a href="#maps">Maps</a>)</td></tr>
@@ -2287,6 +2288,47 @@ fi</code></pre>
         shared fields, and calls, but no variable or region, since none exists yet. A decorator may come from a module,
         <code>$web.route("/")</code>. Only a task takes decorators, not a method, and only one that can be a value.
       </p>
+      <p>
+        A wrapper decorator, <code>$(w)</code> or <code>$(w1, w2(values), …)</code>, runs at every call of the task
+        instead of once. Calling the task calls the leftmost wrapper, giving it the rest of the chain as a task of the
+        task's type, then its own values, then the task's values; it decides when to call the rest, or whether to, and
+        what it sends is what the call gives. The next wrapper is given the one after it, and the last is given the task
+        itself, as Python's <code>@w1 @w2</code> wrap a function.
+      </p>
+      <pre><code>task traced(next: (int) -&gt; int, label: text, n: int) -&gt; int
+    show("&gt; ", label, " ", n)
+    bind result = next(n)
+    show("&lt; ", label, " ", result)
+    &lt;- result
+fi
+
+task doubled(next: (int) -&gt; int, n: int) -&gt; int
+    &lt;- next(n) * 2
+fi
+
+$(traced("sq"), doubled)
+task sq(n: int) -&gt; int
+    &lt;- n * n
+fi
+
+task main()
+    show(sq(3))                                   ; &gt; sq 3, &lt; sq 18, then 18
+fi</code></pre>
+      <p>
+        Every call of the task goes through its wrappers: a call by its name, its value (<code>apply(sq, 2)</code>), a
+        startup decorator's, and the task calling itself. A wrapper may send another type than the task does, and the
+        task then sends that to its callers; the one before it takes a task sending it. A wrapper that takes types fits
+        any task its types allow, <code>task noted&lt;R&gt;(next: (int) -&gt; R, n: int) -&gt; R</code>, and one of a
+        region's text, <code>(text@r) -&gt; text@r</code>, passes the region through. A wrapper's own values are the same
+        at every call, so each is one the compiler works out: a literal, a <a href="#macros">macro</a>, or a task's
+        name, as a <a href="#field-defaults">field's default</a> is.
+      </p>
+      <p>
+        The compiler writes each layer of the chain as a task of its own, and the task's body as the last, so a wrapper
+        costs a call of a task, which the C compiler can inline; no value is kept for it. A wrapper takes as many of
+        the task's values as the task takes, of their types, so one wrapper fits the tasks of one list of parameters;
+        <a href="future.html#decorators">type groups</a>, next, let one fit any.
+      </p>
 
       <h3 id="names">Names</h3>
       <p>
@@ -3575,8 +3617,9 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           method (see <a href="#task-values">Tasks as values</a>).</li>
         <li>A lambda takes nothing from the code around it, and can't be written inside a task or method that takes
           types (see <a href="#lambdas">Lambdas</a>).</li>
-        <li>Only a task takes decorators, not a method; a startup decorator sends nothing, and wrapper decorators,
-          <code>$(w)</code>, are not built yet (see <a href="#decorators">Decorators</a>).</li>
+        <li>Only a task takes decorators, not a method, nor a task that takes types; a startup decorator sends nothing;
+          a wrapper's own values are ones the compiler works out, and a wrapper fits the tasks of one list of parameters
+          (see <a href="#decorators">Decorators</a>).</li>
         <li>A method takes no types of its own, can't allocate in the region its value lives in, and is written
           inside its shape or kind, never in another module (see <a href="#methods">Methods</a> and
           <a href="future.html#methods-later">the room left to grow</a>).</li>

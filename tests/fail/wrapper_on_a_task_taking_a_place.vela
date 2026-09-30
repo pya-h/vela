@@ -1,0 +1,15 @@
+; error: 8:3: task 'put' takes 'n' as 'hold&', the caller's place, so it can't be a value yet; a task value's parameters take values
+; A task taking a place can't be a value, so no wrapper takes it.
+task logged(next: (int) -> int, label: text, n: int) -> int
+    show(label)
+    <- next(n)
+fi
+
+$(logged("a"))
+task put(hold& n: int) -> int
+    n = 1
+    <- n
+fi
+
+task main()
+fi

@@ -45,7 +45,7 @@ fn a_decorator_names_its_task_and_its_mark_explains_itself() {
         let source = program(checked);
         assert_eq!(hover(&source, "log $"), "task log(f: (int) -> int)");
         assert_eq!(hover(&source, "tag(\"sq"), "task tag(f: (int) -> int, name: text)");
-        assert_eq!(hover(&source, "$log"), "$d or $d(values)");
+        assert_eq!(hover(&source, "$log"), "$d, $d(values), or $(w1, w2(values))");
         let at = LineIndex::new(&source).utf16_of(source.find("$tag").unwrap());
         let class = Analysis::new(&source).tokens().into_iter().find(|t| t.from == at).map(|t| t.class);
         assert_eq!(class, Some(TokenClass::Keyword));
@@ -61,4 +61,28 @@ fn a_decorator_that_does_not_fit_is_reported_where_it_is_written() {
     assert_eq!(diagnostics.len(), 1);
     assert_eq!((diagnostics[0].line, diagnostics[0].col), (Some(9), Some(2)));
     assert!(diagnostics[0].message.starts_with("decorator 'tag' takes the task and 1 value"), "{}", diagnostics[0].message);
+}
+
+#[test]
+fn a_wrapped_task_is_called_as_its_wrappers_make_it() {
+    let source = "\
+task worded(next: (int) -> int, n: int) -> text
+    <- \"x\"
+fi
+
+$(worded)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    bind said = sq(2)
+    show(said)
+fi
+";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_eq!(hover(source, "said ="), "bind said: text");
+    assert_eq!(hover(source, "worded)"), "task worded(next: (int) -> int, n: int) -> text");
+    let names: Vec<String> = Analysis::new(source).outline().into_iter().map(|item| item.name).collect();
+    assert_eq!(names, ["worded", "sq", "main"]);
 }

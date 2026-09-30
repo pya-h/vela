@@ -419,6 +419,16 @@ pub fn is_startup(name: &str) -> bool {
     unqualified(name) == STARTUP
 }
 
+/// The name of the task layer `k` of task `name`'s wrappers becomes: the one
+/// that calls wrapper `k + 1`, or, for the last, the task's own body
+/// (`sq__layer__2`). No Vela name holds `__`, so no program can name it.
+pub fn layer_name(name: &str, k: usize) -> String {
+    format!("{}{}{}", name, LAYER, k)
+}
+
+/// What a wrapper layer's name holds after its task's (see `layer_name`).
+pub const LAYER: &str = "__layer__";
+
 /// Task `name` as a message names it: `task 'f'`, or `this lambda`.
 pub fn shown_task(name: &str) -> String {
     if is_lambda(name) { "this lambda".to_string() } else { format!("task '{}'", name) }
@@ -1677,6 +1687,10 @@ pub struct TaskDef {
     /// call `d(task, args)` that runs once where the program starts, in the
     /// order written (the nearest the task runs first; see `STARTUP`).
     pub decorators: Vec<Expr>,
+    /// `$(w1, w2(a))` before the task: its wrapper decorators, leftmost
+    /// outermost, each the call `w(values)` as written, without the task that
+    /// comes next or the task's values (see `Checker::add_wrappers`).
+    pub wrappers: Vec<Expr>,
 }
 
 /// What makes a task a method: it is written inside a shape or a kind, and its
