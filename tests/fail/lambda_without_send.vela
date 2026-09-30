@@ -1,0 +1,10 @@
+; error: 4:14: this lambda can finish without sending a value
+; A lambda that sends a value sends it on every path.
+task main()
+    bind f = (x: int) -> int
+        when x > 0
+            <- 1
+        fi
+    fi
+    show(f(1))
+fi

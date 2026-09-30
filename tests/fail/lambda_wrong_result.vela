@@ -1,0 +1,5 @@
+; error: 4:34: expected type text, got int
+; A lambda sends what its header says.
+task main()
+    bind f = (x: int) -> text <- x fi
+fi

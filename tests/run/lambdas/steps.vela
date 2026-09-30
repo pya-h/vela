@@ -1,0 +1,10 @@
+; A module's lambdas: its own tasks, which another file gets as values.
+
+task step() -> (int) -> int
+    <- (n: int) -> int <- n + 1 fi
+fi
+
+shape Stepper
+    by: (int) -> int = (n: int) -> int <- n * 10 fi
+    shared hold next: (int) -> int = (n: int) -> int <- n - 1 fi
+fi

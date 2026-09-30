@@ -1,0 +1,9 @@
+; error: 8:16: expected type (int) -> int, got (text) -> int
+; A lambda given where a task of another type goes.
+task apply(f: (int) -> int, x: int) -> int
+    <- f(x)
+fi
+
+task main()
+    show(apply((t: text) -> int <- t.len fi, 3))
+fi

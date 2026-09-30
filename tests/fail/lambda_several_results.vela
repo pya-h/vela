@@ -1,0 +1,5 @@
+; error: 4:23: a lambda sends one value or nothing, as a task value does; send a tuple for several, as in '-> (int, int)'
+; A lambda sends one value or nothing, as a task value does.
+task main()
+    bind f = (x: int) -> int, int <- x, x fi
+fi

@@ -118,6 +118,17 @@ pub struct Parser {
     /// The methods of the shape or kind just read, each a task of its own (see
     /// `method_name`), which the file's items take in after it.
     methods: Vec<Item>,
+    /// The lambdas of the item just read, each a task of its own (see
+    /// `ast::lambda_name`), which the file's items take in after it.
+    lambdas: Vec<Item>,
+    /// How many lambdas the file has so far, which numbers the next one.
+    lambda_count: usize,
+    /// Whether the code being read is a generic task's or a generic shape's or
+    /// kind's method, where no lambda is written yet.
+    in_generic: bool,
+    /// The position of a `<-` that may send without starting a line: the first
+    /// token of a lambda's body written on the line of its header.
+    send_after_header: Option<usize>,
 }
 
 /// An `is` joined with `or`, or after one.
@@ -126,7 +137,7 @@ const IS_WITH_OR: &str = "an 'is' is joined with 'and', not 'or': with 'or', the
 impl Parser {
     /// `tokens` and `spans` are parallel, as produced by `Lexer::tokenize`.
     pub fn new(tokens: Vec<Token>, spans: Vec<Span>) -> Self {
-        Parser { tokens, spans, pos: 0, depth: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), methods: Vec::new() }
+        Parser { tokens, spans, pos: 0, depth: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None }
     }
 
     /// The `include` lines of the file parsed.
@@ -155,6 +166,8 @@ impl Parser {
             items.push(self.parse_item()?);
             // The methods of a shape or a kind are tasks of the file, after it.
             items.append(&mut self.methods);
+            // So are its lambdas.
+            items.append(&mut self.lambdas);
             self.skip_newlines();
         }
         Ok(items)
@@ -614,7 +627,9 @@ impl Parser {
             return Err(Error::at(self.peek_span(), "a task's body starts on the line after its header, and closes with 'fi'"));
         }
         self.skip_newlines();
+        let outer = std::mem::replace(&mut self.in_generic, !task.types.is_empty());
         task.body = self.parse_block()?;
+        self.in_generic = outer;
         self.expect_fi("task", opened)?;
         Ok(task)
     }
@@ -1014,7 +1029,9 @@ impl Parser {
             return Err(Error::at(self.peek_span(), "a method's body starts on the line after its header, and closes with 'fi'"));
         }
         self.skip_newlines();
+        let outer = std::mem::replace(&mut self.in_generic, !types.is_empty());
         let body = self.parse_block()?;
+        self.in_generic = outer;
         self.expect_fi("method", opened)?;
         Ok(TaskDef {
             name: method_name(owner, &name),
@@ -2146,7 +2163,7 @@ impl Parser {
     /// otherwise end the statement and send.
     fn parse_send(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
-        let starts_line = self.pos == 0 || matches!(self.tokens.get(self.pos - 1), Some(Token::Newline | Token::LBrace));
+        let starts_line = self.pos == 0 || matches!(self.tokens.get(self.pos - 1), Some(Token::Newline | Token::LBrace)) || self.send_after_header == Some(self.pos);
         if !starts_line {
             return Err(self.misplaced_send());
         }
@@ -2640,6 +2657,7 @@ impl Parser {
             Token::None => { self.advance(); ExprKind::NoneLit }
             Token::New => return self.parse_new(),
             Token::LBracket => return self.parse_array(),
+            Token::LParen if self.at_lambda() => return self.parse_lambda(),
             Token::LParen => return self.parse_parenthesized(),
             // A `match` or a `when` where a value is expected: its branches give
             // the value, each on the last line of its block.
@@ -2740,6 +2758,122 @@ impl Parser {
         // `place_region`); until then its position is where one would be written.
         let region_span = self.peek_span();
         Ok(Expr::new(ExprKind::Scan { args, region: None, region_span }, span))
+    }
+
+    /// Whether the cursor, at `(`, starts a lambda: parentheses closed on their
+    /// line and followed by `->`, which follows no value.
+    fn at_lambda(&self) -> bool {
+        // A lambda takes nothing, or starts with a parameter: what follows the
+        // `(` tells first, so that nested parentheses aren't each read to their
+        // end.
+        let next = self.tokens.get(self.pos + 1);
+        let takes = matches!(next, Some(Token::RParen | Token::Hold | Token::Bind))
+            || (matches!(next, Some(Token::Ident(_))) && self.tokens.get(self.pos + 2) == Some(&Token::Colon));
+        if !takes {
+            return false;
+        }
+        let mut depth = 0usize;
+        for (at, token) in self.tokens.iter().enumerate().skip(self.pos) {
+            match token {
+                Token::LParen | Token::LBracket => depth += 1,
+                Token::RParen | Token::RBracket => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return *token == Token::RParen && self.tokens.get(at + 1) == Some(&Token::Arrow);
+                    }
+                }
+                Token::Newline | Token::Eof => return false,
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// `(params) -> type`, then its body on the lines after it or on its own
+    /// line, and `fi`, at `(`: a task with no name, which takes nothing from the
+    /// task around it. It becomes a task of the file (see `ast::lambda_name`),
+    /// and the value here names it.
+    fn parse_lambda(&mut self) -> Result<Expr> {
+        let span = self.peek_span();
+        if self.in_generic {
+            return Err(Error::at(span, "a lambda can't be written in a task or method that takes types yet; write a task of its own and name it, as in 'apply(double, x)'"));
+        }
+        let params = self.parse_field_list(Slot::Param)?;
+        for param in &params {
+            if param.ty == Type::Region {
+                return Err(Error::at(param.span, format!("a lambda takes values only, so '{}' can't be a region; a task value takes none", param.name)));
+            }
+            if param.passing.is_ref() {
+                return Err(Error::at(
+                    param.span,
+                    format!("a lambda takes values, so '{}' can't be '{}', the caller's place; write 'hold {}' for a copy it may change", param.name, param.passing.word(), param.name),
+                ));
+            }
+        }
+        let arrow = self.peek_span();
+        self.expect(Token::Arrow)?;
+        if matches!(self.peek(), Token::Newline | Token::Fi | Token::Eof) {
+            return Err(Error::at(arrow, "a lambda names what it sends after '->', or 'nothing', as in '(x: int) -> int'"));
+        }
+        let mut results = Vec::new();
+        let ret = self.parse_results(&mut results)?;
+        if matches!(ret, Type::Results(_)) {
+            return Err(Error::at(arrow, "a lambda sends one value or nothing, as a task value does; send a tuple for several, as in '-> (int, int)'"));
+        }
+        if self.check(Token::LBrace) {
+            return Err(Error::at(self.peek_span(), "a lambda's body follows its header, on its line or the lines after it, and closes with 'fi'"));
+        }
+        let body = if matches!(self.peek(), Token::Newline | Token::Eof) {
+            let body = self.parse_block()?;
+            self.expect_fi("lambda", span)?;
+            body
+        } else {
+            self.parse_lambda_line(span)?
+        };
+        self.lambda_count += 1;
+        let name = lambda_name(self.lambda_count);
+        self.lambdas.push(Item::Task(TaskDef {
+            name: name.clone(),
+            types: Vec::new(),
+            given: Vec::new(),
+            params,
+            ret,
+            results,
+            body,
+            span,
+            private: true,
+            native: false,
+            owner: None,
+        }));
+        Ok(Expr::new(ExprKind::Var(name), span))
+    }
+
+    /// A lambda's body on the line of its header, opened at `opened`, and its
+    /// `fi`, which ends the line's statements: `(x: int) -> int <- x * 2 fi`.
+    fn parse_lambda_line(&mut self, opened: Span) -> Result<Block> {
+        // It may start by sending, though `<-` starts no line there.
+        let outer = self.send_after_header.replace(self.pos);
+        let mut body = Vec::new();
+        let result = loop {
+            if self.match_token(Token::Fi) {
+                break Ok(());
+            }
+            if matches!(self.peek(), Token::Newline | Token::Eof) {
+                break Err(Error::at(
+                    self.peek_span(),
+                    format!(
+                        "a lambda whose body starts on its header's line closes with 'fi' on that line, as in '(x: int) -> int <- x * 2 fi'; for a longer one, start the body on the next line (the lambda is at {}:{})",
+                        opened.line, opened.col
+                    ),
+                ));
+            }
+            match self.parse_stmt() {
+                Ok(stmt) => body.push(stmt),
+                Err(error) => break Err(error),
+            }
+        };
+        self.send_after_header = outer;
+        result.map(|()| body)
     }
 
     /// `(value)`, or a tuple, `(a, b, …)`, on one line.

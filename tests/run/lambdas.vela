@@ -1,0 +1,87 @@
+; Lambdas: tasks with no name, written where their value goes. Each takes only
+; its parameters, and nothing from the code around it.
+
+include lambdas/steps
+
+shape Op
+    name: text
+    run: (int, int) -> int
+fi
+
+task apply(f: (int) -> int, x: int) -> int
+    <- f(x)
+fi
+
+task each_of(xs: [int]@r, f: (int) -> nothing)
+    each x in xs
+        f(x)
+    fi
+fi
+
+; A lambda whose type names a region: it sends text of the region it is given.
+task trimmed(t: text@r, f: (text@r) -> text@r) -> text@r
+    <- f(t)
+fi
+
+; A lambda that makes another, and sends it.
+task adder() -> (int) -> int
+    <- (x: int) -> int
+        bind inner = (y: int) -> int <- y + 100 fi
+        <- inner(x)
+    fi
+fi
+
+task main()
+    ; On one line, and on lines of its own.
+    bind double = (x: int) -> int <- x * 2 fi
+    show(double(21))
+    show(apply((x: int) -> int
+        bind y = x + 1
+        <- y * y
+    fi, 3))
+
+    ; A lambda that sends nothing, and one that takes nothing.
+    bind say = (t: text) -> nothing show("say ", t) fi
+    say("hi")
+    bind seven = () -> int <- 7 fi
+    show(seven())
+
+    ; Called where it is written.
+    show(((n: int) -> int <- n - 1 fi)(10))
+
+    ; A copy it may change.
+    bind count_down = (hold n: int) -> int
+        hold taken = 0
+        loop n > 0
+            n--
+            taken++
+        fi
+        <- taken
+    fi
+    show(count_down(5))
+
+    ; In a shape's field, a slice, and a branch.
+    bind ops = [Op { name: "add", run: (a: int, b: int) -> int <- a + b fi }, Op { name: "mul", run: (a: int, b: int) -> int <- a * b fi }]
+    each op in ops
+        show(op.name, " ", op.run(3, 9))
+    fi
+    region r
+    each_of([1, 2, 3, ...] at r, (x: int) -> nothing show("item ", x) fi)
+    hold pick = double
+    when ops.len > 1
+        pick = (x: int) -> int <- x + 1000 fi
+    fi
+    show(pick(5))
+
+    ; Regions in its type: its own, as a header's are.
+    show(trimmed("  padded  ", (t: text@r) -> text@r <- t[2..8] fi))
+
+    ; Made inside another.
+    show(adder()(1))
+
+    ; A module's lambdas.
+    show(steps.step()(1))
+    bind s = steps.Stepper {}
+    show(s.by(4))
+    show(steps.Stepper.next(4))
+fi

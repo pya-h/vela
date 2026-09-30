@@ -1,0 +1,10 @@
+; error: 4:14: a lambda can't be written in a task or method that takes types yet; write a task of its own and name it, as in 'apply(double, x)'
+; A lambda is not written inside a task that takes types yet.
+task first<T>(x: T) -> T
+    bind f = (n: int) -> int <- n fi
+    <- x
+fi
+
+task main()
+    show(first(1))
+fi

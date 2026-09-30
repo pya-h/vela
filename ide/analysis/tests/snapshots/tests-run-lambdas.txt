@@ -1,0 +1,146 @@
+  1 | ; Lambdas: tasks with no name, written where their value goes. Each takes only
+    | comment:; Lambdas: tasks with no name, written where their value goes. Each takes only
+  2 | ; its parameters, and nothing from the code around it.
+    | comment:; its parameters, and nothing from the code around it.
+  4 | include lambdas/steps
+    | keyword:include  module:lambdas  operator:/  module:steps
+  6 | shape Op
+    | keyword:shape  type:Op
+  7 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  8 |     run: (int, int) -> int
+    | field:run  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  9 | fi
+    | keyword:fi
+ 11 | task apply(f: (int) -> int, x: int) -> int
+    | keyword:task  task:apply  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 12 |     <- f(x)
+    | keyword:<-  parameter:f  punctuation:(  parameter:x  punctuation:)
+ 13 | fi
+    | keyword:fi
+ 15 | task each_of(xs: [int]@r, f: (int) -> nothing)
+    | keyword:task  task:each_of  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  punctuation:)
+ 16 |     each x in xs
+    | keyword:each  variable:x  keyword:in  parameter:xs
+ 17 |         f(x)
+    | parameter:f  punctuation:(  variable:x  punctuation:)
+ 18 |     fi
+    | keyword:fi
+ 19 | fi
+    | keyword:fi
+ 21 | ; A lambda whose type names a region: it sends text of the region it is given.
+    | comment:; A lambda whose type names a region: it sends text of the region it is given.
+ 22 | task trimmed(t: text@r, f: (text@r) -> text@r) -> text@r
+    | keyword:task  task:trimmed  punctuation:(  parameter:t  punctuation::  type-builtin:text  operator:@  region:r  punctuation:,  parameter:f  punctuation::  punctuation:(  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 23 |     <- f(t)
+    | keyword:<-  parameter:f  punctuation:(  parameter:t  punctuation:)
+ 24 | fi
+    | keyword:fi
+ 26 | ; A lambda that makes another, and sends it.
+    | comment:; A lambda that makes another, and sends it.
+ 27 | task adder() -> (int) -> int
+    | keyword:task  task:adder  punctuation:(  punctuation:)  operator:->  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 28 |     <- (x: int) -> int
+    | keyword:<-  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 29 |         bind inner = (y: int) -> int <- y + 100 fi
+    | keyword:bind  variable:inner  operator:=  punctuation:(  parameter:y  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:y  operator:+  number:100  keyword:fi
+ 30 |         <- inner(x)
+    | keyword:<-  variable:inner  punctuation:(  parameter:x  punctuation:)
+ 31 |     fi
+    | keyword:fi
+ 32 | fi
+    | keyword:fi
+ 34 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 35 |     ; On one line, and on lines of its own.
+    | comment:; On one line, and on lines of its own.
+ 36 |     bind double = (x: int) -> int <- x * 2 fi
+    | keyword:bind  variable:double  operator:=  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:*  number:2  keyword:fi
+ 37 |     show(double(21))
+    | builtin-fn:show  punctuation:(  variable:double  punctuation:(  number:21  punctuation:)  punctuation:)
+ 38 |     show(apply((x: int) -> int
+    | builtin-fn:show  punctuation:(  task:apply  punctuation:(  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 39 |         bind y = x + 1
+    | keyword:bind  variable:y  operator:=  parameter:x  operator:+  number:1
+ 40 |         <- y * y
+    | keyword:<-  variable:y  operator:*  variable:y
+ 41 |     fi, 3))
+    | keyword:fi  punctuation:,  number:3  punctuation:)  punctuation:)
+ 43 |     ; A lambda that sends nothing, and one that takes nothing.
+    | comment:; A lambda that sends nothing, and one that takes nothing.
+ 44 |     bind say = (t: text) -> nothing show("say ", t) fi
+    | keyword:bind  variable:say  operator:=  punctuation:(  parameter:t  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:nothing  builtin-fn:show  punctuation:(  string:"say "  punctuation:,  parameter:t  punctuation:)  keyword:fi
+ 45 |     say("hi")
+    | variable:say  punctuation:(  string:"hi"  punctuation:)
+ 46 |     bind seven = () -> int <- 7 fi
+    | keyword:bind  variable:seven  operator:=  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:<-  number:7  keyword:fi
+ 47 |     show(seven())
+    | builtin-fn:show  punctuation:(  variable:seven  punctuation:(  punctuation:)  punctuation:)
+ 49 |     ; Called where it is written.
+    | comment:; Called where it is written.
+ 50 |     show(((n: int) -> int <- n - 1 fi)(10))
+    | builtin-fn:show  punctuation:(  punctuation:(  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:n  operator:-  number:1  keyword:fi  punctuation:)  punctuation:(  number:10  punctuation:)  punctuation:)
+ 52 |     ; A copy it may change.
+    | comment:; A copy it may change.
+ 53 |     bind count_down = (hold n: int) -> int
+    | keyword:bind  variable:count_down  operator:=  punctuation:(  keyword:hold  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 54 |         hold taken = 0
+    | keyword:hold  variable:taken  operator:=  number:0
+ 55 |         loop n > 0
+    | keyword:loop  parameter:n  operator:>  number:0
+ 56 |             n--
+    | parameter:n  operator:--
+ 57 |             taken++
+    | variable:taken  operator:++
+ 58 |         fi
+    | keyword:fi
+ 59 |         <- taken
+    | keyword:<-  variable:taken
+ 60 |     fi
+    | keyword:fi
+ 61 |     show(count_down(5))
+    | builtin-fn:show  punctuation:(  variable:count_down  punctuation:(  number:5  punctuation:)  punctuation:)
+ 63 |     ; In a shape's field, a slice, and a branch.
+    | comment:; In a shape's field, a slice, and a branch.
+ 64 |     bind ops = [Op { name: "add", run: (a: int, b: int) -> int <- a + b fi }, Op { name: "mul", run: (a: int, b: int) -> int <- a * b fi }]
+    | keyword:bind  variable:ops  operator:=  punctuation:[  type:Op  punctuation:{  field:name  punctuation::  string:"add"  punctuation:,  field:run  punctuation::  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:a  operator:+  parameter:b  keyword:fi  punctuation:}  punctuation:,  type:Op  punctuation:{  field:name  punctuation::  string:"mul"  punctuation:,  field:run  punctuation::  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:a  operator:*  parameter:b  keyword:fi  punctuation:}  punctuation:]
+ 65 |     each op in ops
+    | keyword:each  variable:op  keyword:in  variable:ops
+ 66 |         show(op.name, " ", op.run(3, 9))
+    | builtin-fn:show  punctuation:(  variable:op  punctuation:.  field:name  punctuation:,  string:" "  punctuation:,  variable:op  punctuation:.  field:run  punctuation:(  number:3  punctuation:,  number:9  punctuation:)  punctuation:)
+ 67 |     fi
+    | keyword:fi
+ 68 |     region r
+    | keyword:region  region:r
+ 69 |     each_of([1, 2, 3, ...] at r, (x: int) -> nothing show("item ", x) fi)
+    | task:each_of  punctuation:(  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:,  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  builtin-fn:show  punctuation:(  string:"item "  punctuation:,  parameter:x  punctuation:)  keyword:fi  punctuation:)
+ 70 |     hold pick = double
+    | keyword:hold  variable:pick  operator:=  variable:double
+ 71 |     when ops.len > 1
+    | keyword:when  variable:ops  punctuation:.  field:len  operator:>  number:1
+ 72 |         pick = (x: int) -> int <- x + 1000 fi
+    | variable:pick  operator:=  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:+  number:1000  keyword:fi
+ 73 |     fi
+    | keyword:fi
+ 74 |     show(pick(5))
+    | builtin-fn:show  punctuation:(  variable:pick  punctuation:(  number:5  punctuation:)  punctuation:)
+ 76 |     ; Regions in its type: its own, as a header's are.
+    | comment:; Regions in its type: its own, as a header's are.
+ 77 |     show(trimmed("  padded  ", (t: text@r) -> text@r <- t[2..8] fi))
+    | builtin-fn:show  punctuation:(  task:trimmed  punctuation:(  string:"  padded  "  punctuation:,  punctuation:(  parameter:t  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r  keyword:<-  parameter:t  punctuation:[  number:2  operator:..  number:8  punctuation:]  keyword:fi  punctuation:)  punctuation:)
+ 79 |     ; Made inside another.
+    | comment:; Made inside another.
+ 80 |     show(adder()(1))
+    | builtin-fn:show  punctuation:(  task:adder  punctuation:(  punctuation:)  punctuation:(  number:1  punctuation:)  punctuation:)
+ 82 |     ; A module's lambdas.
+    | comment:; A module's lambdas.
+ 83 |     show(steps.step()(1))
+    | builtin-fn:show  punctuation:(  module:steps  punctuation:.  task:step  punctuation:(  punctuation:)  punctuation:(  number:1  punctuation:)  punctuation:)
+ 84 |     bind s = steps.Stepper {}
+    | keyword:bind  variable:s  operator:=  module:steps  punctuation:.  type:Stepper  punctuation:{  punctuation:}
+ 85 |     show(s.by(4))
+    | builtin-fn:show  punctuation:(  variable:s  punctuation:.  field:by  punctuation:(  number:4  punctuation:)  punctuation:)
+ 86 |     show(steps.Stepper.next(4))
+    | builtin-fn:show  punctuation:(  module:steps  punctuation:.  type:Stepper  punctuation:.  method:next  punctuation:(  number:4  punctuation:)  punctuation:)
+ 87 | fi
+    | keyword:fi

@@ -486,6 +486,43 @@ impl<'a> Tokens<'a> {
         matches!(self.token(end), Some(Token::Newline | Token::Eof) | None)
     }
 
+    /// Whether the `(` at position `p` starts a lambda, `(x: int) -> int … fi`:
+    /// its parentheses close on their line and `->` follows them, as the
+    /// parser reads it; and they name a parameter, or take none where no type
+    /// is written, since `() -> int` is also the type of a task that takes none.
+    fn starts_lambda(&self, p: usize) -> bool {
+        // A header's parameters, and a call's values, follow a name.
+        if self.token(p) != Some(&Token::LParen) || self.before(p).is_some_and(|before| ends_value(before) || matches!(before, Token::Gt | Token::New)) {
+            return false;
+        }
+        // What follows the `(` tells first, so that nested parentheses aren't
+        // each read to their end.
+        if self.token(p + 1) == Some(&Token::RParen) {
+            return self.token(p + 2) == Some(&Token::Arrow)
+                && !matches!(self.before(p), Some(Token::Arrow | Token::Colon | Token::Maybe | Token::Caret | Token::LBracket | Token::Lt | Token::Tilde));
+        }
+        if !matches!(self.token(p + 1), Some(Token::Hold | Token::Bind)) && !(self.ident(p + 1).is_some() && self.token(p + 2) == Some(&Token::Colon)) {
+            return false;
+        }
+        let mut depth = 0usize;
+        let mut q = p;
+        let close = loop {
+            match self.token(q) {
+                Some(Token::LParen | Token::LBracket) => depth += 1,
+                Some(Token::RParen | Token::RBracket) => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        break q;
+                    }
+                }
+                Some(Token::Newline | Token::Eof) | None => return false,
+                _ => {}
+            }
+            q += 1;
+        };
+        self.token(close) == Some(&Token::RParen) && self.token(close + 1) == Some(&Token::Arrow)
+    }
+
     /// Whether the `<` at position `p` opens the types a declaration takes or a
     /// use gives: one right after the name of a `task` or `shape`, or one whose
     /// matching `>` is followed by `(` (a call) or `{` (a shape literal), as the
@@ -865,6 +902,11 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                 }
             }
             Token::When | Token::Loop | Token::Each | Token::Block | Token::Match => blocks.push(Block::Inner),
+            // A lambda is a block of its own, closed by its `fi`.
+            Token::LParen if tokens.starts_lambda(p) => {
+                blocks.push(Block::Inner);
+                parens += 1;
+            }
             Token::Fi => {
                 if blocks.pop() == Some(Block::Method)
                     && let Some(open) = method.take()
@@ -1057,6 +1099,10 @@ impl<'a> Classifier<'a> {
         // In a task header after `->`, where each comma starts another result
         // type.
         let mut in_results = false;
+        // In a lambda's parameters, and in its results, which end where its
+        // body starts on their line.
+        let mut lambda_params = false;
+        let mut lambda_results = false;
         // In the names of a `bind` or `hold`, where each comma declares
         // another one.
         let mut declaring_list: Option<&'static str> = None;
@@ -1103,12 +1149,21 @@ impl<'a> Classifier<'a> {
                 declaring = Some("each");
             }
             let region_now = region_next.take();
+            // A lambda's body on the line of its header: what follows its
+            // results is no type, and declares no parameter.
+            if lambda_results && (*token == Token::Send || (matches!(token, Token::Ident(_)) && !was_type && region_now.is_none())) {
+                lambda_results = false;
+                in_task_header = false;
+                in_results = false;
+            }
             if !matches!(token, Token::Newline | Token::Failure) {
                 plan_b_head = false;
             }
 
             match token {
                 Token::Newline => {
+                    lambda_params = false;
+                    lambda_results = false;
                     in_include = false;
                     in_include_names = false;
                     in_task_header = false;
@@ -1186,6 +1241,15 @@ impl<'a> Classifier<'a> {
                             _ => declaring_now,
                         };
                         let (class, symbol) = self.identifier(p, name, was_type, declaring_now, in_task_header, in_pattern, &braces);
+                        // A lambda's body may start on its header's line, where
+                        // its parameters are already seen.
+                        if lambda_params
+                            && class == TokenClass::Parameter
+                            && let Some(param) = symbol.and_then(|id| self.symbols.get_mut(id))
+                            && param.range.start == range.start
+                        {
+                            param.visible.start = range.end;
+                        }
                         self.push(range, class, symbol);
                         after_type = was_type;
                     }
@@ -1200,15 +1264,21 @@ impl<'a> Classifier<'a> {
                 }
                 Token::Colon => {
                     self.push(range, TokenClass::Punctuation, None);
-                    // A field's value in a shape literal is not a type.
-                    in_type = !matches!(braces.last(), Some(Brace::Literal(_)));
+                    // A field's value in a shape literal is not a type, though a
+                    // lambda's parameter there has one.
+                    in_type = in_task_header || !matches!(braces.last(), Some(Brace::Literal(_)));
                 }
                 // `(int) -> int`: a task's type, whose arrow follows the `)` of
                 // the types it takes; any other arrow starts a header's results.
                 Token::Arrow => {
                     self.push(range, TokenClass::Operator, None);
                     in_type = true;
-                    in_results |= !(was_after_type && tokens.before(p) == Some(&Token::RParen));
+                    let results = !(was_after_type && tokens.before(p) == Some(&Token::RParen));
+                    in_results |= results;
+                    if lambda_params && results {
+                        lambda_params = false;
+                        lambda_results = true;
+                    }
                 }
                 Token::Caret => {
                     self.push(range, TokenClass::Operator, None);
@@ -1251,6 +1321,14 @@ impl<'a> Classifier<'a> {
                     type_brackets -= 1;
                     // `@r` or `or E` may follow the type.
                     after_type = true;
+                }
+                // `(x: int) -> int … fi`: a lambda, whose header declares its
+                // parameters, which its body sees, as a task's does.
+                Token::LParen if !was_type && tokens.starts_lambda(p) => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    self.open(ScopeKind::Other);
+                    in_task_header = true;
+                    lambda_params = true;
                 }
                 // `(int, text)` in a type: each item's type.
                 Token::LParen if was_type => {

@@ -1,0 +1,52 @@
+; Tasks as values, and lambdas. A task's name without `()` is a value of its
+; type, written as its header without names: `(int) -> int`. A lambda is a task
+; with no name, written where its value goes, which takes nothing from the code
+; around it.
+
+shape Rule
+    name: text
+    check: (int) -> bool
+fi
+
+task is_even(n: int) -> bool
+    <- n % 2 == 0
+fi
+
+; How many of the numbers pass a rule.
+task count(xs: [int]@r, keep: (int) -> bool) -> int
+    hold n = 0
+    each x in xs
+        when keep(x)
+            n++
+        fi
+    fi
+    <- n
+fi
+
+; Each number changed by a task, into a new slice.
+task mapped(xs: [int]@r, change: (int) -> int, out: region) -> [int]@out
+    hold ys = new [int]() at out
+    each x in xs
+        ys.add(change(x))
+    fi
+    <- ys
+fi
+
+task main()
+    region r
+    bind xs = [3, 8, 15, 4, 23, 42, ...] at r
+    bind even = Rule { name: "even", check: is_even }
+    bind big = Rule { name: "big", check: (n: int) -> bool <- n > 10 fi }
+    bind odd = Rule { name: "odd", check: (n: int) -> bool <- not is_even(n) fi }
+    bind rules = [even, big, odd]
+    each rule in rules
+        show(rule.name, ": ", count(xs, rule.check))
+    fi
+    bind doubled = mapped(xs, (x: int) -> int <- x * 2 fi, r)
+    show(doubled)
+    bind squared = mapped(xs, (x: int) -> int
+        bind y = x * x
+        <- y
+    fi, r)
+    show(squared)
+fi

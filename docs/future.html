@@ -2067,7 +2067,7 @@ bind age = int("42")               ; text to a number can fail: int ~ ParseError
         decorators, and type groups. Lambdas that do take values from around them are planned <a href="#lambdas">below</a>.
       </p>
 
-      <h3 id="lambdas-now">Lambdas <span class="badge b-med">Decided</span></h3>
+      <h3 id="lambdas-now">Lambdas <span class="badge b-done">Done</span></h3>
       <p>
         A task without a name, written where a value goes: its header without the word <code>task</code> or a name,
         then its body and <code>fi</code>, on lines of its own or on one line.
@@ -2080,7 +2080,8 @@ fi, 5))</code></pre>
       <p>
         The first version takes nothing from the task around it: its body sees its own parameters, the program's tasks,
         macros, and shared fields, and no variable of the task it is written in (naming one is an error that points
-        here). The compiler makes each one a task of its own, so a lambda is exactly as cheap as a named task.
+        here). The compiler makes each one a task of its own, so a lambda is exactly as cheap as a named task. Built:
+        see <a href="vela.html#lambdas">Lambdas</a>.
       </p>
 
       <h3 id="lambdas">Lambdas that take values from around them <span class="badge b-idea">Idea</span></h3>
@@ -2310,8 +2311,8 @@ fi
             <li><s>Pattern-match expressions</s> (done: <a href="vela.html#choices">a match or a when as a value</a>,
               with <code>else when</code> chains)</li>
             <li><s>Region-based allocation</s> (done: <a href="regions.html">regions</a>)</li>
-            <li><s>Tasks as values</s> (done: <a href="vela.html#task-values">tasks as values</a>), then lambdas,
-              <a href="#decorators">decorators</a>, and type groups</li>
+            <li><s>Tasks as values</s> and <s>lambdas</s> (done: <a href="vela.html#task-values">tasks as values</a>,
+              <a href="vela.html#lambdas">lambdas</a>), then <a href="#decorators">decorators</a> and type groups</li>
             <li>Region brackets with inferred region arguments (<s>generated copies between regions</s>: done, <a href="vela.html#copy"><code>.copy()</code></a>)</li>
           </ul>
         </div>

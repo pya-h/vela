@@ -910,6 +910,15 @@ impl<'a> Knowledge<'a> {
         if first > last || depth > MAX_DEPTH {
             return None;
         }
+        // `(x: int) -> int …`: a lambda, whose header, up to its body, gives
+        // its type.
+        if self.token(first) == Some(&Token::LParen)
+            && let Some(close) = self.matching_close(first, last)
+            && self.token(close + 1) == Some(&Token::Arrow)
+        {
+            let end = (close + 2..=last).find(|&q| matches!(self.token(q), Some(Token::Send | Token::Fi))).map_or(last, |q| q.saturating_sub(1));
+            return task_value_type(self.source.get(self.range(first).start..self.range(end).end)?);
+        }
         // `a + b at r`: text joined into `r`.
         if let (Some(at), Some(region)) = (last.checked_sub(1), self.ident(last))
             && self.token(at) == Some(&Token::At)
@@ -1138,6 +1147,24 @@ impl<'a> Knowledge<'a> {
                         return Some(p);
                     }
                     depth -= 1;
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    /// The position of the `)` closing the `(` at `open`, no further than `last`.
+    fn matching_close(&self, open: usize, last: usize) -> Option<usize> {
+        let mut depth = 0usize;
+        for p in open..=last {
+            match self.token(p)? {
+                Token::LParen => depth += 1,
+                Token::RParen => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return Some(p);
+                    }
                 }
                 _ => {}
             }

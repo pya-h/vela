@@ -1,0 +1,5 @@
+; error: 4:15: a lambda takes values only, so 'r' can't be a region; a task value takes none
+; A lambda takes no region.
+task main()
+    bind f = (r: region) -> nothing show(1) fi
+fi

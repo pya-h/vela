@@ -394,6 +394,26 @@ pub fn method_name(owner: &str, method: &str) -> String {
     format!("{}__on__{}", owner, method)
 }
 
+/// The name of the task the `n`th lambda of a file becomes: `lambda__1`. No
+/// Vela name holds `__`, so it can be no declaration of a program, and a
+/// module's path stays in front of it (`ops.lambda__1`).
+pub fn lambda_name(n: usize) -> String {
+    format!("{}{}", LAMBDA_PREFIX, n)
+}
+
+/// What the name of every task a lambda becomes starts with (see `lambda_name`).
+pub const LAMBDA_PREFIX: &str = "lambda__";
+
+/// Whether `name`, with its module or without, is the task a lambda became.
+pub fn is_lambda(name: &str) -> bool {
+    unqualified(name).starts_with(LAMBDA_PREFIX)
+}
+
+/// Task `name` as a message names it: `task 'f'`, or `this lambda`.
+pub fn shown_task(name: &str) -> String {
+    if is_lambda(name) { "this lambda".to_string() } else { format!("task '{}'", name) }
+}
+
 /// The shape or kind, and the method, in the name of the task a method becomes.
 pub fn method_parts(name: &str) -> Option<(&str, &str)> {
     name.split_once("__on__")

@@ -1,0 +1,6 @@
+; error: 4:34: a lambda whose body starts on its header's line closes with 'fi' on that line, as in '(x: int) -> int <- x * 2 fi'; for a longer one, start the body on the next line (the lambda is at 4:14)
+; A lambda started on its header's line ends there.
+task main()
+    bind f = (x: int) -> int <- x
+    show(f(1))
+fi

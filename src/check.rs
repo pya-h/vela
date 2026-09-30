@@ -276,6 +276,13 @@ pub struct Checker {
     /// Whether a call was refused for leaving out the region it takes last,
     /// which a chain joined `at r` reads (see `check_join`).
     region_wanted: bool,
+    /// The task a lambda became, while its body is checked (see
+    /// `ast::lambda_name`).
+    current_lambda: Option<String>,
+    /// For each lambda, the names its value's place sees: the variables and
+    /// regions of the code around it, which it takes nothing from, for the
+    /// message when its body names one.
+    lambda_outer: HashMap<String, HashSet<String>>,
 }
 
 /// What a call needs to know about a task: the types it takes, its parameters,
@@ -2072,6 +2079,12 @@ impl Checker {
                     if name == THIS_WORD && self.called_on_a_value() {
                         return err(span, self.cannot_allocate_in_this("allocate where the value is kept, and give the method what you made"));
                     }
+                    if self.current_lambda.is_some() {
+                        return err(
+                            span,
+                            format!("this lambda can't allocate in '{0}', which it only names in its types, and a lambda takes no region; allocate in a region of its own, or write a task that takes '{0}: region'", name),
+                        );
+                    }
                     return err(
                         span,
                         format!("this task can't allocate in '{0}', which it only names in its types; take it as a parameter, '{0}: region'", name),
@@ -2080,6 +2093,10 @@ impl Checker {
                 Ok(())
             }
             Some(_) => err(span, format!("'{}' is a variable, not a region", name)),
+            None if self.current_lambda.as_ref().and_then(|lambda| self.lambda_outer.get(lambda)).is_some_and(|outer| outer.contains(name)) => err(
+                span,
+                format!("region '{0}' belongs to the code around this lambda, and a lambda takes nothing from it; declare a region of its own inside it, or call a task that takes '{0}: region'", name),
+            ),
             None => err(span, format!("unknown region '{0}'; declare it with 'region {0}'", name)),
         }
     }
@@ -2402,6 +2419,7 @@ impl Checker {
             self.check_size(result, task.result_span(i))?;
         }
         self.current_ret = Some(known(&task.ret));
+        self.current_lambda = is_lambda(&task.name).then(|| task.name.clone());
         self.current_method = task.owner.clone();
         self.current_owner = task.owner.as_ref().filter(|owner| owner.alters).and(task.params.first()).and_then(|this| self.owner_of(&this.ty));
         self.current_type = task.owner_type().map(str::to_string);
@@ -2499,6 +2517,7 @@ impl Checker {
             }
         }
         self.scopes.clear();
+        self.current_lambda = None;
         self.current_ret = None;
         self.current_method = None;
         self.current_owner = None;
@@ -2506,7 +2525,7 @@ impl Checker {
         self.current_type = None;
         let ends_well = if self.result_names.is_empty() {
             if whole && sends_value(&task.ret) && !always_sends(&task.body) {
-                err(task.span, format!("task '{}' can finish without sending a value", task.name))
+                err(task.span, format!("{} can finish without sending a value", shown_task(&task.name)))
             } else {
                 Ok(())
             }
@@ -2515,7 +2534,7 @@ impl Checker {
             && let Some(name) = self.first_unset()
         {
             // Reaching the end sends the results, so they must all be set.
-            err(task.span, format!("task '{}' can finish without setting '{}'", task.name, name))
+            err(task.span, format!("{} can finish without setting '{}'", shown_task(&task.name), name))
         } else {
             Ok(())
         };
@@ -2821,6 +2840,11 @@ impl Checker {
                     hint if hint.is_empty() => self.elsewhere(name),
                     hint => hint,
                 };
+                if let Some(outer) = self.current_lambda.as_ref().and_then(|lambda| self.lambda_outer.get(lambda))
+                    && outer.contains(name)
+                {
+                    return Error::at(span, format!("'{0}' belongs to the code around this lambda, and a lambda takes nothing from it; give '{0}' as a parameter, or call a task that takes it (lambdas that keep what they use are planned)", name));
+                }
                 Error::at(span, format!("unknown variable '{}'{}", name, hint))
             }
         })
@@ -4360,7 +4384,13 @@ impl Checker {
             // Checked again, as a method call's value is: it is text.
             ExprKind::TypeOf(_) => Ok(Type::Text(None)),
             ExprKind::Macro { value, .. } => Ok(value.ty.clone().unwrap_or(Type::Unknown)),
-            ExprKind::TaskValue(name) => self.task_value_type(name, span),
+            ExprKind::TaskValue(name) => {
+                if is_lambda(name) {
+                    let seen = self.scopes.iter().flat_map(|scope| scope.names.keys().cloned()).collect();
+                    self.lambda_outer.insert(name.clone(), seen);
+                }
+                self.task_value_type(name, span)
+            }
             ExprKind::Invoke { callee, args } => self.check_invoke(callee, args, span),
             // A macro whose value has a mistake, which is told once, where it is written.
             ExprKind::Var(name) if self.lookup(name).is_none() && self.sees(name) && self.macros.contains_key(name.as_str()) => Ok(Type::Unknown),
@@ -6820,6 +6850,9 @@ impl Checker {
             return format!("'{}' reads the value a method is called on, and the value field '{}' falls back on is worked out before there is one, so it reads no other field", written, field);
         }
         let names = if written == THIS { "is the value a method is called on" } else { "names a member of the value a method is called on" };
+        if self.current_lambda.is_some() {
+            return format!("'{}' {}, and a lambda takes nothing from the method around it; give the value as a parameter", written, names);
+        }
         if let Some(owner) = self.current_method.as_ref().filter(|owner| owner.shared) {
             return format!("'{}' {}, and '{}' is a shared method, called on its shape or kind rather than on a value; take the value as a parameter, or make '{}' a method of the value", written, names, owner.name, owner.name);
         }

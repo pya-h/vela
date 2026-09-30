@@ -261,6 +261,12 @@
                 <a href="vela.html#task-values">Tasks as values</a>.</td>
             </tr>
             <tr>
+              <td>A lambda takes nothing from the code around it, so it never reads a variable or a region after the
+                task that wrote it has ended.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>A closure reading a dead stack frame. See <a href="vela.html#lambdas">Lambdas</a>.</td>
+            </tr>
+            <tr>
               <td>A tuple's items never change, neither assigned nor changed by a method that <code>alters</code>
                 them, and hold nothing that changes through a pointer, a slice, or an array.</td>
               <td class="when"><span class="badge b-checked">checked</span></td>
