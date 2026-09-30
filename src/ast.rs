@@ -754,6 +754,8 @@ pub enum BinaryOp {
     Mul,
     Div,
     Mod,
+    /// `**`: `a` raised to the power `b` (see `Checker::check_power`).
+    Pow,
     Eq,
     Ne,
     /// `~=`: similar, item by item (see `Checker::check_similar`).

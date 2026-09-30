@@ -1,0 +1,4 @@
+; error: 3:15: '**' raises a number to a power, and this is a bool
+task main()
+    show(true ** 2)
+fi

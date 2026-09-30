@@ -228,6 +228,38 @@ static inline int64_t vela__rt__neg(int64_t a, const char* at) {
     return -a;
 }
 
+/* `a ** b` for ints, where `b` is 0 or more (the checker makes any other power
+ * a float): exact, by squaring, stopping the program when the result doesn't
+ * fit. A square that overflows means the result would too, since the result is
+ * multiplied by it or by a larger power. */
+static inline int64_t vela__rt__pow(int64_t a, int64_t b, const char* at) {
+    int64_t result = 1;
+    while (b > 0) {
+        if (b & 1) {
+            result = vela__rt__mul(result, a, at);
+        }
+        b >>= 1;
+        if (b > 0) {
+            a = vela__rt__mul(a, a, at);
+        }
+    }
+    return result;
+}
+
+/* `a ** b` for units, stopping the program when the result passes 255. */
+static inline uint8_t vela__rt__unit_pow(uint8_t a, uint8_t b, const char* at) {
+    int64_t result = 1;
+    for (unsigned i = 0; i < b; i++) {
+        result *= a;
+        if (result > 255) {
+            char written[64];
+            snprintf(written, sizeof written, "%u ** %u does not fit in a unit", (unsigned)a, (unsigned)b);
+            vela__rt__int_trap(written, at);
+        }
+    }
+    return (uint8_t)result;
+}
+
 /* A whole number as a `unit`, which holds 0 to 255: `unit(n)`, and the result
  * of arithmetic on units, computed in 64 bits, where it can't overflow. Any
  * other number stops the program with a message, as integer overflow does. */

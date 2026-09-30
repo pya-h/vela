@@ -1,0 +1,34 @@
+; Powers, `a ** b`. A `-` before a number takes it alone, so `-2 ** 2` is
+; `(-2) ** 2`; `**` comes before `*` and `/`, and groups from the right. An int
+; raised to a unit, or to a constant 0 or more, is an exact int; an int raised
+; to any other int may be a fraction, so it is a float, as is any power with a
+; float. A unit raised to a unit is a unit.
+
+#KILO = 2 ** 10
+#ROOT_TWO = 2.0 ** 0.5
+#HALF = 2 ** -1
+#BYTE = unit(2) ** 7
+
+task cube(x: float) -> float
+    <- x ** 3
+fi
+
+task main()
+    show(2 ** 10, " ", -2 ** 2, " ", -2 ** 3, " ", 2 ** 3 ** 2, " ", 2 * 3 ** 2, " ", (2 * 3) ** 2)
+    show(0 ** 0, " ", 0 ** 5, " ", (-1) ** 7, " ", 1 ** 1000000, " ", 10 ** 18)
+    ; An int to the power of an int that may be negative is a float.
+    hold k = 3
+    show(2 ** k, " ", (2 ** k).type, " ", 2 ** -1, " ", 2 ** -k)
+    ; A unit exponent is never negative, so the power is an int.
+    hold u: unit = 5
+    show(3 ** u, " ", (3 ** u).type, " ", unit(3) ** u, " ", (unit(3) ** u).type)
+    hold b: unit = 2
+    show(b ** 7, " ", (b ** 7).type)
+    ; Floats: C's pow.
+    show(2.0 ** 3, " ", 9 ** 0.5, " ", 2.0 ** 0.5, " ", 4.0 ** -0.5, " ", cube(1.5))
+    show((-8.0) ** (1.0 / 3.0))
+    ; Big exact powers, by squaring.
+    hold three = 3
+    show(three ** 39)
+    show(KILO, " ", ROOT_TWO, " ", HALF, " ", BYTE)
+fi

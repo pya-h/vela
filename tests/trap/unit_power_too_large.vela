@@ -1,0 +1,10 @@
+; trap: 3 ** 6 does not fit in a unit at 9:12 in task 'main'
+task main()
+    hold b: unit = 3
+    hold e: unit = 4
+    show(b ** e)
+    e = 5
+    show(b ** e)
+    e = 6
+    show(b ** e)
+fi

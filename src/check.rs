@@ -5582,6 +5582,14 @@ impl Checker {
 
     fn check_binary(&mut self, op: BinaryOp, l: &mut Expr, r: &mut Expr, span: Span, lt: &Type, rt: &Type) -> Result<Type> {
         let (mut lt, mut rt) = (lt.clone(), rt.clone());
+        if op == BinaryOp::Pow {
+            // `b ** 2`: an exponent written out is a unit beside a unit base.
+            // A base written out stays an int, so `2 ** b` is an int.
+            if lt == Type::Unit && byte_literal(r, &Type::Unit)? {
+                rt = Type::Unit;
+            }
+            return check_power(l, r, &lt, &rt, span);
+        }
         // `b + 1`, `b < 200`, `m ~= 7`: a number written out beside a unit, or
         // a maybe of one, is one.
         let byte_in = |ty: &Type| match ty {
@@ -5599,6 +5607,7 @@ impl Checker {
             lt = byte;
         }
         match op {
+            BinaryOp::Pow => Err(Error::internal_at(span, "a power checked as other arithmetic")),
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod if lt == Type::Char || rt == Type::Char => {
                 char_arithmetic(op, l, r, &lt, &rt, span)
             }
@@ -7456,6 +7465,18 @@ impl Checker {
         if let Some(untold) = self.untold_param(expected) {
             return err(expr.span, untold);
         }
+        // `2 ** n`: an int raised to an int that may be negative is a float.
+        if actual == Type::Float
+            && *expected == Type::Int
+            && let ExprKind::Binary(BinaryOp::Pow, l, r) = &expr.kind
+            && l.ty == Some(Type::Int)
+            && r.ty == Some(Type::Int)
+        {
+            return err(
+                expr.span,
+                "expected type int, got float: an int raised to an int that may be negative is a float; raise it to a unit, as in 'n ** unit(k)', or to a constant 0 or more, as in 'n ** 2', for an int",
+            );
+        }
         err(expr.span, format!("expected type {}, got {}{}", expected, actual, mismatch_hint(&actual, expected)))
     }
 
@@ -8510,10 +8531,6 @@ fn always_holds(cond: &Condition) -> bool {
     cond.parts().all(|part| matches!(&part.pattern, Some(pattern) if matches!(pattern.kind, PatternKind::Tuple(_))))
 }
 
-/// The value of an int expression written with literals only (`-5`,
-/// `60 * 60 * 24`), which the program computes the same way every time, or
-/// `None` for any other expression. Its parts have been checked, so each of
-/// them fits in an `int`.
 /// How `op` is written.
 fn binary_symbol(op: BinaryOp) -> &'static str {
     match op {
@@ -8522,6 +8539,7 @@ fn binary_symbol(op: BinaryOp) -> &'static str {
         BinaryOp::Mul => "*",
         BinaryOp::Div => "/",
         BinaryOp::Mod => "%",
+        BinaryOp::Pow => "**",
         BinaryOp::Eq => "==",
         BinaryOp::Ne => "!=",
         BinaryOp::Similar => "~=",
@@ -8639,6 +8657,29 @@ fn fold_binary(op: BinaryOp, a: Constant, b: Constant, span: Span) -> Result<Con
         (BinaryOp::Sub, Char(c), Int(n)) => Ok(Char(byte(i64::from(c) - n, "char")?)),
         (BinaryOp::Sub, Char(c), Char(d)) => Ok(Int(i64::from(c) - i64::from(d))),
         (BinaryOp::Add, Text(x), Text(y)) => Ok(Text(x + &y)),
+        // As `check_power` types a power: an int raised to a unit or to 0 or
+        // more is an int, a unit raised to a unit a unit, anything else a float.
+        (BinaryOp::Pow, Int(x), Int(y)) if y >= 0 => int_power(x, y).map(Int).ok_or_else(|| too_large("an int")),
+        (BinaryOp::Pow, Int(x), Unit(y)) => int_power(x, i64::from(y)).map(Int).ok_or_else(|| too_large("an int")),
+        (BinaryOp::Pow, x @ (Unit(_) | Int(_)), y @ (Unit(_) | Int(_))) if matches!(x, Unit(_)) => {
+            let (Unit(x), Int(_) | Unit(_)) = (&x, &y) else { return err(span, "a unit is raised to a unit's power") };
+            let y = match y {
+                Unit(y) => i64::from(y),
+                Int(y) => i64::from(byte(y, "unit")?),
+                _ => 0,
+            };
+            let value = int_power(i64::from(*x), y).ok_or_else(|| too_large("a unit"))?;
+            Ok(Unit(byte(value, "unit")?))
+        }
+        (BinaryOp::Pow, x @ (Int(_) | Unit(_) | Float(_)), y @ (Int(_) | Unit(_) | Float(_))) => {
+            let wide = |c: &Constant| match c {
+                Int(n) => *n as f64,
+                Unit(n) => f64::from(*n),
+                Float(x) => *x,
+                _ => 0.0,
+            };
+            float(wide(&x).powf(wide(&y)))
+        }
         (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod, Int(_), Float(_)) | (BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod, Float(_), Int(_)) => {
             err(span, "an int and a float don't mix in arithmetic: turn one into the other first, as in 'float(n) + 2.5' (or 'n + int(2.5)', which truncates)")
         }
@@ -8646,6 +8687,10 @@ fn fold_binary(op: BinaryOp, a: Constant, b: Constant, span: Span) -> Result<Con
     }
 }
 
+/// The value of an int expression written with literals only (`-5`,
+/// `60 * 60 * 24`), which the program computes the same way every time, or
+/// `None` for any other expression. Its parts have been checked, so each of
+/// them fits in an `int`.
 fn constant_int(e: &Expr) -> Option<i64> {
     match &e.kind {
         ExprKind::IntLit(n) => Some(*n),
@@ -8662,6 +8707,7 @@ fn constant_int(e: &Expr) -> Option<i64> {
                 // `checked_rem` leaves out for the smallest int.
                 BinaryOp::Mod if b == -1 => Some(0),
                 BinaryOp::Mod => a.checked_rem(b),
+                BinaryOp::Pow if b >= 0 => int_power(a, b),
                 _ => None,
             }
         }
@@ -8729,6 +8775,53 @@ fn byte_literal(e: &mut Expr, byte: &Type) -> Result<bool> {
     fits_byte(n, byte, e.span)?;
     e.ty = Some(byte.clone());
     Ok(true)
+}
+
+/// Checks `l ** r` and returns its type. An int raised to a power it can't be
+/// told is 0 or more may be a fraction, so it is a float, as is any power with a
+/// float; an int raised to a unit or to a constant 0 or more stays an int, and a
+/// unit raised to a unit a unit.
+fn check_power(l: &Expr, r: &Expr, lt: &Type, rt: &Type, span: Span) -> Result<Type> {
+    let number = |ty: &Type| matches!(ty, Type::Int | Type::Float | Type::Unit);
+    if !number(lt) || !number(rt) {
+        let other = if number(lt) { rt } else { lt };
+        let hint = match other {
+            Type::Char => "; a char is a character, so turn it into its code first, as in 'int(c) ** 2'".to_string(),
+            _ => extract_hint(&[lt, rt]),
+        };
+        let what = if matches!(other, Type::Text(_)) { format!("{}", other) } else { format!("a {}", other) };
+        return err(span, format!("'**' raises a number to a power, and this is {}{}", what, hint));
+    }
+    match (lt, rt) {
+        (Type::Unit, Type::Unit) => Ok(Type::Unit),
+        (Type::Unit, Type::Int) => err(
+            r.span,
+            "a unit is raised to a unit's power, as in 'b ** 2' or 'b ** unit(n)'; for an int, write 'int(b) ** n'",
+        ),
+        (Type::Int, Type::Unit) => Ok(Type::Int),
+        (Type::Int, Type::Int) => match constant_int(r) {
+            Some(exponent) if exponent >= 0 => {
+                if let Some(base) = constant_int(l)
+                    && int_power(base, exponent).is_none()
+                {
+                    return err(span, format!("integer overflow: {} ** {} doesn't fit in an int, which holds {} to {}", base, exponent, i64::MIN, i64::MAX));
+                }
+                Ok(Type::Int)
+            }
+            _ => Ok(Type::Float),
+        },
+        _ => Ok(Type::Float),
+    }
+}
+
+/// `base ** exponent` for ints, `exponent` 0 or more, or `None` when it doesn't fit.
+fn int_power(base: i64, exponent: i64) -> Option<i64> {
+    match base {
+        0 => Some(i64::from(exponent == 0)),
+        1 => Some(1),
+        -1 => Some(if exponent % 2 == 0 { 1 } else { -1 }),
+        _ => base.checked_pow(u32::try_from(exponent).ok()?),
+    }
 }
 
 /// Checks `l op r` where one side is a char, and returns its type: a char moved

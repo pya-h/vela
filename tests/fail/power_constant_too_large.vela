@@ -1,0 +1,4 @@
+; error: 3:13: integer overflow: 10 ** 19 doesn't fit in an int, which holds -9223372036854775808 to 9223372036854775807
+task main()
+    show(10 ** 19)
+fi

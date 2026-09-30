@@ -1,0 +1,2 @@
+; error: 2:14: the value, 256, is outside a unit's 0..255
+#B = unit(4) ** 4

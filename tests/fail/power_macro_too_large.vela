@@ -1,0 +1,2 @@
+; error: 2:11: the value doesn't fit in an int
+#HUGE = 7 ** 40

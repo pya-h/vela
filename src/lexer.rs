@@ -84,6 +84,8 @@ pub enum Token {
     Plus,
     Minus,
     Star,
+    /// `**`: a number raised to a power.
+    Power,
     Slash,
     Percent,
     Eq,
@@ -236,6 +238,7 @@ impl Token {
             Token::Plus => "+",
             Token::Minus => "-",
             Token::Star => "*",
+            Token::Power => "**",
             Token::Slash => "/",
             Token::Percent => "%",
             Token::Eq => "==",
@@ -589,6 +592,10 @@ impl Lexer {
                 } else {
                     Token::Minus
                 }
+            }
+            '*' if self.peek() == '*' => {
+                self.advance();
+                Token::Power
             }
             '*' => Token::Star,
             '/' => Token::Slash,

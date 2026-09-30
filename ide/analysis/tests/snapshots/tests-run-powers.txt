@@ -1,0 +1,62 @@
+  1 | ; Powers, `a ** b`. A `-` before a number takes it alone, so `-2 ** 2` is
+    | comment:; Powers, `a ** b`. A `-` before a number takes it alone, so `-2 ** 2` is
+  2 | ; `(-2) ** 2`; `**` comes before `*` and `/`, and groups from the right. An int
+    | comment:; `(-2) ** 2`; `**` comes before `*` and `/`, and groups from the right. An int
+  3 | ; raised to a unit, or to a constant 0 or more, is an exact int; an int raised
+    | comment:; raised to a unit, or to a constant 0 or more, is an exact int; an int raised
+  4 | ; to any other int may be a fraction, so it is a float, as is any power with a
+    | comment:; to any other int may be a fraction, so it is a float, as is any power with a
+  5 | ; float. A unit raised to a unit is a unit.
+    | comment:; float. A unit raised to a unit is a unit.
+  7 | #KILO = 2 ** 10
+    | keyword:#  variant:KILO  operator:=  number:2  operator:**  number:10
+  8 | #ROOT_TWO = 2.0 ** 0.5
+    | keyword:#  variant:ROOT_TWO  operator:=  number:2.0  operator:**  number:0.5
+  9 | #HALF = 2 ** -1
+    | keyword:#  variant:HALF  operator:=  number:2  operator:**  operator:-  number:1
+ 10 | #BYTE = unit(2) ** 7
+    | keyword:#  variant:BYTE  operator:=  type-builtin:unit  punctuation:(  number:2  punctuation:)  operator:**  number:7
+ 12 | task cube(x: float) -> float
+    | keyword:task  task:cube  punctuation:(  parameter:x  punctuation::  type-builtin:float  punctuation:)  operator:->  type-builtin:float
+ 13 |     <- x ** 3
+    | keyword:<-  parameter:x  operator:**  number:3
+ 14 | fi
+    | keyword:fi
+ 16 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 17 |     show(2 ** 10, " ", -2 ** 2, " ", -2 ** 3, " ", 2 ** 3 ** 2, " ", 2 * 3 ** 2, " ", (2 * 3) ** 2)
+    | builtin-fn:show  punctuation:(  number:2  operator:**  number:10  punctuation:,  string:" "  punctuation:,  operator:-  number:2  operator:**  number:2  punctuation:,  string:" "  punctuation:,  operator:-  number:2  operator:**  number:3  punctuation:,  string:" "  punctuation:,  number:2  operator:**  number:3  operator:**  number:2  punctuation:,  string:" "  punctuation:,  number:2  operator:*  number:3  operator:**  number:2  punctuation:,  string:" "  punctuation:,  punctuation:(  number:2  operator:*  number:3  punctuation:)  operator:**  number:2  punctuation:)
+ 18 |     show(0 ** 0, " ", 0 ** 5, " ", (-1) ** 7, " ", 1 ** 1000000, " ", 10 ** 18)
+    | builtin-fn:show  punctuation:(  number:0  operator:**  number:0  punctuation:,  string:" "  punctuation:,  number:0  operator:**  number:5  punctuation:,  string:" "  punctuation:,  punctuation:(  operator:-  number:1  punctuation:)  operator:**  number:7  punctuation:,  string:" "  punctuation:,  number:1  operator:**  number:1000000  punctuation:,  string:" "  punctuation:,  number:10  operator:**  number:18  punctuation:)
+ 19 |     ; An int to the power of an int that may be negative is a float.
+    | comment:; An int to the power of an int that may be negative is a float.
+ 20 |     hold k = 3
+    | keyword:hold  variable:k  operator:=  number:3
+ 21 |     show(2 ** k, " ", (2 ** k).type, " ", 2 ** -1, " ", 2 ** -k)
+    | builtin-fn:show  punctuation:(  number:2  operator:**  variable:k  punctuation:,  string:" "  punctuation:,  punctuation:(  number:2  operator:**  variable:k  punctuation:)  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  number:2  operator:**  operator:-  number:1  punctuation:,  string:" "  punctuation:,  number:2  operator:**  operator:-  variable:k  punctuation:)
+ 22 |     ; A unit exponent is never negative, so the power is an int.
+    | comment:; A unit exponent is never negative, so the power is an int.
+ 23 |     hold u: unit = 5
+    | keyword:hold  variable:u  punctuation::  type-builtin:unit  operator:=  number:5
+ 24 |     show(3 ** u, " ", (3 ** u).type, " ", unit(3) ** u, " ", (unit(3) ** u).type)
+    | builtin-fn:show  punctuation:(  number:3  operator:**  variable:u  punctuation:,  string:" "  punctuation:,  punctuation:(  number:3  operator:**  variable:u  punctuation:)  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  type-builtin:unit  punctuation:(  number:3  punctuation:)  operator:**  variable:u  punctuation:,  string:" "  punctuation:,  punctuation:(  type-builtin:unit  punctuation:(  number:3  punctuation:)  operator:**  variable:u  punctuation:)  punctuation:.  keyword:type  punctuation:)
+ 25 |     hold b: unit = 2
+    | keyword:hold  variable:b  punctuation::  type-builtin:unit  operator:=  number:2
+ 26 |     show(b ** 7, " ", (b ** 7).type)
+    | builtin-fn:show  punctuation:(  variable:b  operator:**  number:7  punctuation:,  string:" "  punctuation:,  punctuation:(  variable:b  operator:**  number:7  punctuation:)  punctuation:.  keyword:type  punctuation:)
+ 27 |     ; Floats: C's pow.
+    | comment:; Floats: C's pow.
+ 28 |     show(2.0 ** 3, " ", 9 ** 0.5, " ", 2.0 ** 0.5, " ", 4.0 ** -0.5, " ", cube(1.5))
+    | builtin-fn:show  punctuation:(  number:2.0  operator:**  number:3  punctuation:,  string:" "  punctuation:,  number:9  operator:**  number:0.5  punctuation:,  string:" "  punctuation:,  number:2.0  operator:**  number:0.5  punctuation:,  string:" "  punctuation:,  number:4.0  operator:**  operator:-  number:0.5  punctuation:,  string:" "  punctuation:,  task:cube  punctuation:(  number:1.5  punctuation:)  punctuation:)
+ 29 |     show((-8.0) ** (1.0 / 3.0))
+    | builtin-fn:show  punctuation:(  punctuation:(  operator:-  number:8.0  punctuation:)  operator:**  punctuation:(  number:1.0  operator:/  number:3.0  punctuation:)  punctuation:)
+ 30 |     ; Big exact powers, by squaring.
+    | comment:; Big exact powers, by squaring.
+ 31 |     hold three = 3
+    | keyword:hold  variable:three  operator:=  number:3
+ 32 |     show(three ** 39)
+    | builtin-fn:show  punctuation:(  variable:three  operator:**  number:39  punctuation:)
+ 33 |     show(KILO, " ", ROOT_TWO, " ", HALF, " ", BYTE)
+    | builtin-fn:show  punctuation:(  variant:KILO  punctuation:,  string:" "  punctuation:,  variant:ROOT_TWO  punctuation:,  string:" "  punctuation:,  variant:HALF  punctuation:,  string:" "  punctuation:,  variant:BYTE  punctuation:)
+ 34 | fi
+    | keyword:fi

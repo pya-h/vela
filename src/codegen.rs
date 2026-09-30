@@ -3215,6 +3215,15 @@ impl Generator {
             };
             return Ok(format!("vela__rt__text_order({}, {}) {} 0", left, right, symbol));
         }
+        // `**`: an int or unit power is exact and checked, and any other is C's `pow`.
+        if op == BinaryOp::Pow {
+            let at = self.location(e.span);
+            return Ok(match e.ty()? {
+                Type::Int => format!("vela__rt__pow({}, (int64_t){}, {})", left, parenthesized(&right), at),
+                Type::Unit => format!("vela__rt__unit_pow({}, {}, {})", left, right, at),
+                _ => format!("pow((double){}, (double){})", parenthesized(&left), parenthesized(&right)),
+            });
+        }
         // A char moved by an int is computed as an int, and checked to be a
         // char; the distance between two chars is an int, computed below.
         if *e.ty()? == Type::Char {
@@ -3258,6 +3267,7 @@ impl Generator {
             BinaryOp::Mul => "*",
             BinaryOp::Div => "/",
             BinaryOp::Mod => "%",
+            BinaryOp::Pow => return Err(Error::internal_at(e.span, "a power that is no function")),
             BinaryOp::Eq => "==",
             BinaryOp::Similar | BinaryOp::NotSimilar => return Err(Error::internal_at(e.span, "a similarity that is no function")),
             BinaryOp::Ne => "!=",

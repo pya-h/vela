@@ -314,7 +314,7 @@ impl Parser {
         let previous = self.pos.checked_sub(1).and_then(|p| self.tokens.get(p));
         let next = self.tokens.get(self.pos + 1);
         let hint = match (self.peek(), previous, next) {
-            (Token::Assign, Some(op @ (Token::Plus | Token::Minus | Token::Star | Token::Slash | Token::Percent)), _) => {
+            (Token::Assign, Some(op @ (Token::Plus | Token::Minus | Token::Star | Token::Power | Token::Slash | Token::Percent)), _) => {
                 let op = op.describe();
                 let op = op.trim_matches('\'');
                 format!("; Vela has no '{0}=': write 'x = x {0} value'", op)
@@ -2192,12 +2192,17 @@ impl Parser {
             Token::Star => (BinaryOp::Mul, 7),
             Token::Slash => (BinaryOp::Div, 7),
             Token::Percent => (BinaryOp::Mod, 7),
+            Token::Power => (BinaryOp::Pow, Self::POWER_PRECEDENCE),
             _ => return None,
         })
     }
 
     /// Precedence of `..`: between comparisons and `+`/`-`.
     const RANGE_PRECEDENCE: u8 = 5;
+
+    /// Precedence of `**`, above `*` and below a prefix `-`, which takes only the
+    /// value right after it: `-2 ** 2` is `(-2) ** 2`. It groups from the right.
+    const POWER_PRECEDENCE: u8 = 8;
 
     /// Precedence of `+`, whose chains `at r` joins.
     const ADD_PRECEDENCE: u8 = 6;
@@ -2261,7 +2266,9 @@ impl Parser {
             self.enter()?;
             levels += 1;
             self.advance();
-            let right = self.parse_binary(precedence + 1)?;
+            // `2 ** 3 ** 2` is `2 ** (3 ** 2)`.
+            let next = if op == BinaryOp::Pow { precedence } else { precedence + 1 };
+            let right = self.parse_binary(next)?;
             left = Expr::new(ExprKind::Binary(op, Box::new(left), Box::new(right)), span);
         }
         self.leave(levels);

@@ -343,6 +343,7 @@ block shared type</pre>
         <tr><td><code>0..5</code></td><td>a range, in <code>each</code> and in a slice (<code>xs[1..3]</code>)</td></tr>
         <tr><td><code>=</code></td><td>assignment, the value of a binding, the value a <a href="#field-defaults">field falls back on</a>, and the value a <code>case</code> gives</td></tr>
         <tr><td><code>+ - * / %</code>, <code>== != &lt; &lt;= &gt; &gt;=</code></td><td>arithmetic and comparison (see <a href="#comparing">Comparing</a>)</td></tr>
+        <tr><td><code>a ** b</code></td><td><code>a</code> raised to the power <code>b</code>, before <code>*</code>, grouping from the right (see <a href="#powers">Powers</a>)</td></tr>
         <tr><td><code>a ~= b</code>, <code>a &lt;&gt; b</code></td><td>whether two values are similar, item by item; <code>not (a ~= b)</code></td></tr>
       </table>
 
@@ -801,7 +802,7 @@ show(label)                <span class="comment">; error: unknown variable 'labe
 
       <h3>Numbers</h3>
       <p>
-        Arithmetic (<code>+ - * / %</code>) works on <code>int</code>, <code>float</code>, and <a href="#units"><code>unit</code></a>, on two numbers of the same
+        Arithmetic (<code>+ - * / %</code>, and <a href="#powers"><code>**</code></a>) works on <code>int</code>, <code>float</code>, and <a href="#units"><code>unit</code></a>, on two numbers of the same
         type: two <code>int</code>s give an <code>int</code>, with division truncating toward zero, and two
         <code>float</code>s give a <code>float</code>. An <code>int</code> and a <code>float</code> don't mix, so
         <code>n + 2.5</code> is an error that asks for <a href="#conversions"><code>float(n) + 2.5</code></a> (or
@@ -855,6 +856,33 @@ show(<span class="number">7</span> / <span class="number">2.0</span>)           
         9223372036854775807)</em>), and a division or remainder by a zero written that way, as in <code>n / 0</code>
         (<em>division by zero</em>).
       </p>
+      <p id="powers">
+        <strong>Powers.</strong> <code>a ** b</code> is <code>a</code> raised to the power <code>b</code>. It comes
+        before <code>*</code> and <code>/</code> (<code>2 * 3 ** 2</code> is 18) and groups from the right
+        (<code>2 ** 3 ** 2</code> is <code>2 ** 9</code>, 512). A <code>-</code> before a value takes that value
+        alone, so <code>-2 ** 2</code> is <code>(-2) ** 2</code>, 4, where Python and written math give -4; write
+        <code>-(2 ** 2)</code> for that. The type depends on what can be known when compiling:
+      </p>
+      <ul>
+        <li>An <code>int</code> raised to a <a href="#units"><code>unit</code></a>, or to a constant 0 or more
+          (<code>n ** 2</code>, <code>n ** SIZE</code>), is an <code>int</code>, computed exactly, and a result too large
+          for an <code>int</code> stops the program as <code>*</code> does (<em>integer overflow</em>).</li>
+        <li>An <code>int</code> raised to any other <code>int</code> may be a fraction (<code>2 ** -1</code> is 0.5),
+          and whether the exponent is negative is known only when the program runs, so the power is a
+          <code>float</code>: <code>2 ** k</code> is a float even when <code>k</code> is 3.</li>
+        <li>A power with a <code>float</code> on either side is a <code>float</code>, computed by C's
+          <code>pow</code>: <code>9 ** 0.5</code> is 3, and <code>(-8.0) ** (1.0 / 3.0)</code> is nan. Here an
+          <code>int</code> and a <code>float</code> mix, as they do in no other arithmetic.</li>
+        <li>A <code>unit</code> raised to a <code>unit</code> is a <code>unit</code>, and one past 255 stops the
+          program (<em>3 ** 6 does not fit in a unit</em>). A number written out as the exponent is a unit there
+          (<code>b ** 2</code>); a unit raised to an <code>int</code> variable asks for <code>int(b) ** n</code> or
+          <code>b ** unit(n)</code>.</li>
+      </ul>
+      <pre>show(<span class="number">2</span> ** <span class="number">10</span>, <span class="string">" "</span>, <span class="number">2</span> ** <span class="number">-1</span>, <span class="string">" "</span>, <span class="number">2.0</span> ** <span class="number">0.5</span>)    <span class="comment">; 1024 0.5 1.41421</span>
+<span class="keyword">hold</span> k = <span class="number">3</span>
+show((<span class="number">2</span> ** k).type)                <span class="comment">; float</span>
+show(<span class="number">2</span> ** unit(k))                  <span class="comment">; 8, an int</span>
+<span class="keyword">hold</span> x: int = <span class="number">2</span> ** k             <span class="comment">; error: expected type int, got float: an int raised to an int that may be negative is a float …</span></pre>
       <p id="units">
         <strong>Units.</strong> A <code>unit</code> is a whole number from 0 to 255 held in one byte, as Rust's
         <code>u8</code> and C's <code>uint8_t</code> are. There is no unit literal: a number written out becomes a

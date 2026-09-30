@@ -896,6 +896,8 @@ impl<'a> Knowledge<'a> {
         let mut operand_ends = Vec::new();
         // Whether an operand comes next, so that a `-` there is unary minus.
         let mut expect_operand = true;
+        // The operands raised to the power of the next one, by their place.
+        let mut bases = Vec::new();
         for p in first..=last {
             let token = self.token(p)?;
             match token {
@@ -916,8 +918,11 @@ impl<'a> Knowledge<'a> {
                     return Some(Type::Bool);
                 }
                 Token::Range => return None,
-                Token::Plus | Token::Minus | Token::Star | Token::Slash | Token::Percent => {
+                Token::Plus | Token::Minus | Token::Star | Token::Slash | Token::Percent | Token::Power => {
                     if !expect_operand {
+                        if *token == Token::Power {
+                            bases.push(operand_ends.len());
+                        }
                         operand_ends.push(p.checked_sub(1)?);
                     }
                     expect_operand = true;
@@ -936,9 +941,29 @@ impl<'a> Knowledge<'a> {
         // that type, and one that mixes them, or holds anything else, has none
         // to read. A unit beside ints is a unit: the ints of a chain that
         // checks are numbers written out, which become units there.
+        let mut types: Vec<Option<Type>> = operand_ends.iter().map(|&end| self.expression_type(end, depth + 1)).collect();
+        // `a ** b`, as the checker types it (see `check::check_power`): an int
+        // raised to a unit or to a number written out is an int, a unit raised
+        // to a unit or a number a unit, and anything else a float.
+        for &base in bases.iter().rev() {
+            let written = operand_ends.get(base).zip(operand_ends.get(base + 1)).is_some_and(|(&end, &next)| next == end + 2 && matches!(self.token(next), Some(Token::Int(_))));
+            let power = match (types.get(base).cloned().flatten(), types.get(base + 1).cloned().flatten()) {
+                (Some(Type::Int), Some(Type::Unit)) => Type::Int,
+                (Some(Type::Int), Some(Type::Int)) if written => Type::Int,
+                (Some(Type::Unit), Some(Type::Unit)) => Type::Unit,
+                (Some(Type::Unit), Some(Type::Int)) if written => Type::Unit,
+                (Some(Type::Int | Type::Unit | Type::Float), Some(Type::Int | Type::Unit | Type::Float)) => Type::Float,
+                _ => return None,
+            };
+            for side in [base, base + 1] {
+                if let Some(ty) = types.get_mut(side) {
+                    *ty = Some(power.clone());
+                }
+            }
+        }
         let mut number: Option<Type> = None;
-        for end in operand_ends {
-            match (self.expression_type(end, depth + 1), &number) {
+        for ty in types {
+            match (ty, &number) {
                 // A char moved by ints is a char; two chars apart are an int.
                 (Some(Type::Char), Some(Type::Char)) => number = Some(Type::Int),
                 (Some(Type::Char), Some(Type::Int)) | (Some(Type::Int), Some(Type::Char)) => number = Some(Type::Char),
