@@ -12,7 +12,10 @@
 pub const ROOT: &str = "std";
 
 /// Each module of the library: its name after `std/`, and its source.
-pub const MODULES: &[(&str, &str)] = &[("files", include_str!("../std/files.vela"))];
+pub const MODULES: &[(&str, &str)] = &[("files", include_str!("../std/files.vela")), ("math", include_str!("../std/math.vela"))];
+
+/// Euler's number in `std/math`, whose powers are computed by `exp`.
+pub const MATH_E: &str = "std/math.e";
 
 /// Each native task of the library, by its name in the program, with the
 /// runtime function that is its body, which takes the same parameters.
@@ -29,6 +32,20 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/files.rename_path", "vela__rt__files_rename"),
     ("std/files.remove_path", "vela__rt__files_remove"),
     ("std/files.status", "vela__rt__files_status"),
+    // `std/math`'s tasks are C's own functions of `math.h`, but for `log`,
+    // which takes its base.
+    ("std/math.pow", "pow"),
+    ("std/math.sin", "sin"),
+    ("std/math.cos", "cos"),
+    ("std/math.tan", "tan"),
+    ("std/math.asin", "asin"),
+    ("std/math.acos", "acos"),
+    ("std/math.atan", "atan"),
+    ("std/math.sinh", "sinh"),
+    ("std/math.cosh", "cosh"),
+    ("std/math.tanh", "tanh"),
+    ("std/math.exp", "exp"),
+    ("std/math.log", "vela__rt__math_log"),
 ];
 
 /// The source of the library's module `name` (`files` for `std/files`).

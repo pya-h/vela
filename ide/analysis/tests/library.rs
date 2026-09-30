@@ -80,7 +80,7 @@ fn completion_offers_the_library() {
     let at_path = labels("include @@\n");
     assert!(at_path.contains(&"std/files".to_string()), "{:?}", at_path);
     let after_root = labels("include std/@@\n");
-    assert_eq!(after_root, ["files"]);
+    assert_eq!(after_root, ["files", "math"]);
 }
 
 #[test]
@@ -94,3 +94,35 @@ fn native_is_a_word_only_before_task() {
     assert!(analysis.diagnostics()[0].message.starts_with("'native' marks a task whose body the compiler writes in C"));
 }
 
+
+const MATH: &str = "\
+include std/math (P)
+
+task main()
+    bind angle = P / 2.0
+    bind rise = math.sin(angle)
+    bind grown = math.e ** 2.0
+    show(rise, grown, math.log(100.0, 10.0))
+    @@
+fi
+";
+
+#[test]
+fn the_math_module_hovers_and_completes_its_macros_and_tasks() {
+    let source = MATH.replace("    @@\n", "");
+    let none = HashMap::new();
+    let analysis = Analysis::with_modules(&source, "app/main.vela", &none);
+    assert_eq!(analysis.diagnostics(), Vec::new());
+    let sin = analysis.hover(at(&source, "sin(angle)")).unwrap();
+    assert_eq!(sin.code, "task math.sin(x: float) -> float");
+    let pi = analysis.hover(at(&source, "P / 2.0")).unwrap();
+    assert_eq!(pi.code, "#P = 3.141592653589793");
+    assert!(pi.doc.contains("of type float"), "{}", pi.doc);
+    assert_eq!(analysis.hover(at(&source, "rise =")).unwrap().code, "bind rise: float");
+    assert_eq!(analysis.hover(at(&source, "grown =")).unwrap().code, "bind grown: float");
+    let found = labels(&MATH.replace("    @@\n", "    show(math.@@)\n"));
+    for name in ["P", "e", "pow", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "exp", "log"] {
+        assert!(found.contains(&name.to_string()), "{} in {:?}", name, found);
+    }
+    assert!(labels("include std/@@").contains(&"math".to_string()));
+}

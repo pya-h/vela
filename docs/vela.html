@@ -3330,8 +3330,11 @@ show(area(square))             <span class="comment">; error: unknown task 'area
         <strong>Vela's library.</strong> A path that starts with <code>std</code> names a module of the library that
         comes with the compiler, and is included like any other: <code>include std/files {File}</code>. It is read
         from the compiler, never from the disk, so a folder of the program's own can't be named <code>std</code>, and
-        <code>std</code> is no reserved word: a variable may still be called so. What the library has, and how it is
-        made, is in <a href="std.html">Vela Library</a>.
+        <code>std</code> is no reserved word: a variable may still be called so. It has two modules:
+        <a href="std.html#files"><code>std/files</code></a>, files on the disk, and
+        <a href="std.html#math"><code>std/math</code></a>, with <code>math.P</code>, <code>math.e</code>, powers,
+        trigonometry, <code>exp</code>, and <code>log</code>. What the library has, and how it is made, is in
+        <a href="std.html">Vela Library</a>.
       </p>
       <pre><span class="keyword">include</span> std/files {File}
 

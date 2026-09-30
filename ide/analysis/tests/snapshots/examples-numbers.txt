@@ -16,119 +16,131 @@
     | comment:; Run it and type a few numbers (Ctrl-D, or the end of a file given as input,
   9 | ; ends them), or give it a file: `./numbers < readings.txt`.
     | comment:; ends them), or give it a file: `./numbers < readings.txt`.
- 11 | ; The numbers a program reads may also come from text it holds.
+ 11 | include std/math
+    | keyword:include  module:std  operator:/  module:math
+ 13 | ; The numbers a program reads may also come from text it holds.
     | comment:; The numbers a program reads may also come from text it holds.
- 12 | task from_text()
+ 14 | task from_text()
     | keyword:task  task:from_text  punctuation:(  punctuation:)
- 13 |     each written in ["6", "6.5", "-0", "0x1F", "-0b101", "010", "0b102"]
+ 15 |     each written in ["6", "6.5", "-0", "0x1F", "-0b101", "010", "0b102"]
     | keyword:each  variable:written  keyword:in  punctuation:[  string:"6"  punctuation:,  string:"6.5"  punctuation:,  string:"-0"  punctuation:,  string:"0x1F"  punctuation:,  string:"-0b101"  punctuation:,  string:"010"  punctuation:,  string:"0b102"  punctuation:]
- 14 |         match int(written)
+ 16 |         match int(written)
     | keyword:match  type-builtin:int  punctuation:(  variable:written  punctuation:)
- 15 |         case {value}
+ 17 |         case {value}
     | keyword:case  punctuation:{  variable:value  punctuation:}
- 16 |             show(written, " is ", value)
+ 18 |             show(written, " is ", value)
     | builtin-fn:show  punctuation:(  variable:written  punctuation:,  string:" is "  punctuation:,  variable:value  punctuation:)
- 17 |         case failure why
+ 19 |         case failure why
     | keyword:case  keyword:failure  variable:why
- 18 |             match why
+ 20 |             match why
     | keyword:match  variable:why
- 19 |             case NotANumber
+ 21 |             case NotANumber
     | keyword:case  variant:NotANumber
- 20 |                 show(written, " is no whole number")
+ 22 |                 show(written, " is no whole number")
     | builtin-fn:show  punctuation:(  variable:written  punctuation:,  string:" is no whole number"  punctuation:)
- 21 |             case TooLarge
+ 23 |             case TooLarge
     | keyword:case  variant:TooLarge
- 22 |                 show(written, " does not fit in an int")
+ 24 |                 show(written, " does not fit in an int")
     | builtin-fn:show  punctuation:(  variable:written  punctuation:,  string:" does not fit in an int"  punctuation:)
- 23 |             fi
+ 25 |             fi
     | keyword:fi
- 24 |         fi
+ 26 |         fi
     | keyword:fi
- 25 |     fi
+ 27 |     fi
     | keyword:fi
- 26 | fi
+ 28 | fi
     | keyword:fi
- 28 | task main()
+ 30 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 29 |     from_text()
+ 31 |     from_text()
     | task:from_text  punctuation:(  punctuation:)
- 31 |     hold count = 0
+ 33 |     hold count = 0
     | keyword:hold  variable:count  operator:=  number:0
- 32 |     hold refused = 0
+ 34 |     hold refused = 0
     | keyword:hold  variable:refused  operator:=  number:0
- 33 |     hold total = 0
+ 35 |     hold total = 0
     | keyword:hold  variable:total  operator:=  number:0
- 34 |     hold largest = 0
+ 36 |     hold largest = 0
     | keyword:hold  variable:largest  operator:=  number:0
- 35 |     hold reading = true
+ 37 |     ; The squares add up to how far the numbers spread from zero.
+    | comment:; The squares add up to how far the numbers spread from zero.
+ 38 |     hold squares = 0.0
+    | keyword:hold  variable:squares  operator:=  number:0.0
+ 39 |     hold reading = true
     | keyword:hold  variable:reading  operator:=  keyword:true
- 36 |     loop reading
+ 40 |     loop reading
     | keyword:loop  variable:reading
- 37 |         match scan("> ", int)
+ 41 |         match scan("> ", int)
     | keyword:match  builtin-fn:scan  punctuation:(  string:"> "  punctuation:,  type-builtin:int  punctuation:)
- 38 |         case {value}
+ 42 |         case {value}
     | keyword:case  punctuation:{  variable:value  punctuation:}
- 39 |             count = count + 1
+ 43 |             count = count + 1
     | variable:count  operator:=  variable:count  operator:+  number:1
- 40 |             total = total + value
+ 44 |             total = total + value
     | variable:total  operator:=  variable:total  operator:+  variable:value
- 41 |             when count == 1 or value > largest
+ 45 |             ; An int raised to 2, a constant, stays an exact int.
+    | comment:; An int raised to 2, a constant, stays an exact int.
+ 46 |             squares = squares + float(value ** 2)
+    | variable:squares  operator:=  variable:squares  operator:+  type-builtin:float  punctuation:(  variable:value  operator:**  number:2  punctuation:)
+ 47 |             when count == 1 or value > largest
     | keyword:when  variable:count  operator:==  number:1  keyword:or  variable:value  operator:>  variable:largest
- 42 |                 largest = value
+ 48 |                 largest = value
     | variable:largest  operator:=  variable:value
- 43 |             fi
+ 49 |             fi
     | keyword:fi
- 44 |         case failure e
+ 50 |         case failure e
     | keyword:case  keyword:failure  variable:e
- 45 |             match e
+ 51 |             match e
     | keyword:match  variable:e
- 46 |             ; Nothing more to read, so the loop is done.
+ 52 |             ; Nothing more to read, so the loop is done.
     | comment:; Nothing more to read, so the loop is done.
- 47 |             case Ended
+ 53 |             case Ended
     | keyword:case  variant:Ended
- 48 |                 reading = false
+ 54 |                 reading = false
     | variable:reading  operator:=  keyword:false
- 49 |             ; A line that was no number: the reason says which way.
+ 55 |             ; A line that was no number: the reason says which way.
     | comment:; A line that was no number: the reason says which way.
- 50 |             case NoNumber why
+ 56 |             case NoNumber why
     | keyword:case  variant:NoNumber  variable:why
- 51 |                 refused = refused + 1
+ 57 |                 refused = refused + 1
     | variable:refused  operator:=  variable:refused  operator:+  number:1
- 52 |                 match why
+ 58 |                 match why
     | keyword:match  variable:why
- 53 |                 case NotANumber
+ 59 |                 case NotANumber
     | keyword:case  variant:NotANumber
- 54 |                     show("that is no number")
+ 60 |                     show("that is no number")
     | builtin-fn:show  punctuation:(  string:"that is no number"  punctuation:)
- 55 |                 case TooLarge
+ 61 |                 case TooLarge
     | keyword:case  variant:TooLarge
- 56 |                     show("that does not fit in an int")
+ 62 |                     show("that does not fit in an int")
     | builtin-fn:show  punctuation:(  string:"that does not fit in an int"  punctuation:)
- 57 |                 fi
+ 63 |                 fi
     | keyword:fi
- 58 |             fi
+ 64 |             fi
     | keyword:fi
- 59 |         fi
+ 65 |         fi
     | keyword:fi
- 60 |     fi
+ 66 |     fi
     | keyword:fi
- 62 |     when count == 0
+ 68 |     when count == 0
     | keyword:when  variable:count  operator:==  number:0
- 63 |         show("no numbers")
+ 69 |         show("no numbers")
     | builtin-fn:show  punctuation:(  string:"no numbers"  punctuation:)
- 64 |     else
+ 70 |     else
     | keyword:else
- 65 |         show(count, " read, ", refused, " refused")
+ 71 |         show(count, " read, ", refused, " refused")
     | builtin-fn:show  punctuation:(  variable:count  punctuation:,  string:" read, "  punctuation:,  variable:refused  punctuation:,  string:" refused"  punctuation:)
- 66 |         show("total ", total, ", largest ", largest)
+ 72 |         show("total ", total, ", largest ", largest)
     | builtin-fn:show  punctuation:(  string:"total "  punctuation:,  variable:total  punctuation:,  string:", largest "  punctuation:,  variable:largest  punctuation:)
- 67 |         ; An average is a float, so the count becomes one: an int and a float
+ 73 |         ; An average is a float, so the count becomes one: an int and a float
     | comment:; An average is a float, so the count becomes one: an int and a float
- 68 |         ; don't mix on their own.
+ 74 |         ; don't mix on their own.
     | comment:; don't mix on their own.
- 69 |         show("average ", float(total) / float(count))
+ 75 |         show("average ", float(total) / float(count))
     | builtin-fn:show  punctuation:(  string:"average "  punctuation:,  type-builtin:float  punctuation:(  variable:total  punctuation:)  operator:/  type-builtin:float  punctuation:(  variable:count  punctuation:)  punctuation:)
- 70 |     fi
+ 76 |         show("root mean square ", math.pow(squares / float(count), 0.5))
+    | builtin-fn:show  punctuation:(  string:"root mean square "  punctuation:,  module:math  punctuation:.  task:pow  punctuation:(  variable:squares  operator:/  type-builtin:float  punctuation:(  variable:count  punctuation:)  punctuation:,  number:0.5  punctuation:)  punctuation:)
+ 77 |     fi
     | keyword:fi
- 71 | fi
+ 78 | fi
     | keyword:fi

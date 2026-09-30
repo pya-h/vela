@@ -1,0 +1,6 @@
+; error: 5:10: module 'math' has no task, shape, kind, variant, or macro named 'sqrt'
+include std/math
+
+task main()
+    show(math.sqrt(2.0))
+fi

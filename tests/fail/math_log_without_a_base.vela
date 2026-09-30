@@ -1,0 +1,6 @@
+; error: 5:10: task 'math.log' expects 2 arguments, got 1
+include std/math
+
+task main()
+    show(math.log(10.0))
+fi

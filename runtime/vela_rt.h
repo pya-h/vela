@@ -228,6 +228,22 @@ static inline int64_t vela__rt__neg(int64_t a, const char* at) {
     return -a;
 }
 
+/* `log(x, base)` of `std/math`: the power `base` is raised to for `x`. The
+ * bases 2, 10, and e are C's own functions, which are exact where a quotient of
+ * logarithms may not be (log(1000) / log(10) is 2.9999999999999996). */
+static inline double vela__rt__math_log(double x, double base) {
+    if (base == 2.0) {
+        return log2(x);
+    }
+    if (base == 10.0) {
+        return log10(x);
+    }
+    if (base == 2.718281828459045) {
+        return log(x);
+    }
+    return log(x) / log(base);
+}
+
 /* `a ** b` for ints, where `b` is 0 or more (the checker makes any other power
  * a float): exact, by squaring, stopping the program when the result doesn't
  * fit. A square that overflows means the result would too, since the result is

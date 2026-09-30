@@ -1,0 +1,38 @@
+  1 | ; std/math: the macros P and e, powers, trigonometry, exp, and log with its
+    | comment:; std/math: the macros P and e, powers, trigonometry, exp, and log with its
+  2 | ; base. `math.e ** x` is computed as `math.exp(x)`.
+    | comment:; base. `math.e ** x` is computed as `math.exp(x)`.
+  4 | include std/math (P, e, sin, cos)
+    | keyword:include  module:std  operator:/  module:math  punctuation:(  variant:P  punctuation:,  variant:e  punctuation:,  task:sin  punctuation:,  task:cos  punctuation:)
+  6 | #DEGREE = P / 180.0
+    | keyword:#  variant:DEGREE  operator:=  variant:P  operator:/  number:180.0
+  8 | task degrees(angle: float) -> float
+    | keyword:task  task:degrees  punctuation:(  parameter:angle  punctuation::  type-builtin:float  punctuation:)  operator:->  type-builtin:float
+  9 |     <- angle / DEGREE
+    | keyword:<-  parameter:angle  operator:/  variant:DEGREE
+ 10 | fi
+    | keyword:fi
+ 12 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 13 |     show(P, " ", math.P, " ", e, " ", math.e)
+    | builtin-fn:show  punctuation:(  variant:P  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  variant:P  punctuation:,  string:" "  punctuation:,  variant:e  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  variant:e  punctuation:)
+ 14 |     show(sin(P / 2.0), " ", cos(0.0), " ", cos(P), " ", math.tan(P / 4.0))
+    | builtin-fn:show  punctuation:(  task:sin  punctuation:(  variant:P  operator:/  number:2.0  punctuation:)  punctuation:,  string:" "  punctuation:,  task:cos  punctuation:(  number:0.0  punctuation:)  punctuation:,  string:" "  punctuation:,  task:cos  punctuation:(  variant:P  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:tan  punctuation:(  variant:P  operator:/  number:4.0  punctuation:)  punctuation:)
+ 15 |     show(degrees(math.asin(1.0)), " ", degrees(math.acos(0.0)), " ", degrees(math.atan(1.0)))
+    | builtin-fn:show  punctuation:(  task:degrees  punctuation:(  module:math  punctuation:.  task:asin  punctuation:(  number:1.0  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:degrees  punctuation:(  module:math  punctuation:.  task:acos  punctuation:(  number:0.0  punctuation:)  punctuation:)  punctuation:,  string:" "  punctuation:,  task:degrees  punctuation:(  module:math  punctuation:.  task:atan  punctuation:(  number:1.0  punctuation:)  punctuation:)  punctuation:)
+ 16 |     show(math.sinh(0.0), " ", math.cosh(0.0), " ", math.tanh(0.0), " ", math.sinh(1.0))
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:sinh  punctuation:(  number:0.0  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:cosh  punctuation:(  number:0.0  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:tanh  punctuation:(  number:0.0  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:sinh  punctuation:(  number:1.0  punctuation:)  punctuation:)
+ 17 |     show(math.pow(2.0, 10.0), " ", math.pow(2.0, 0.5), " ", math.pow(4.0, -0.5))
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:pow  punctuation:(  number:2.0  punctuation:,  number:10.0  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:pow  punctuation:(  number:2.0  punctuation:,  number:0.5  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:pow  punctuation:(  number:4.0  punctuation:,  operator:-  number:0.5  punctuation:)  punctuation:)
+ 18 |     show(math.exp(0.0), " ", math.exp(1.0), " ", e ** 2.0, " ", math.e ** 2, " ", e ** -1.0)
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:exp  punctuation:(  number:0.0  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:exp  punctuation:(  number:1.0  punctuation:)  punctuation:,  string:" "  punctuation:,  variant:e  operator:**  number:2.0  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  variant:e  operator:**  number:2  punctuation:,  string:" "  punctuation:,  variant:e  operator:**  operator:-  number:1.0  punctuation:)
+ 19 |     show(math.log(1000.0, 10.0), " ", math.log(1024.0, 2.0), " ", math.log(e, e), " ", math.log(math.exp(3.0), e))
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:log  punctuation:(  number:1000.0  punctuation:,  number:10.0  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:log  punctuation:(  number:1024.0  punctuation:,  number:2.0  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:log  punctuation:(  variant:e  punctuation:,  variant:e  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:log  punctuation:(  module:math  punctuation:.  task:exp  punctuation:(  number:3.0  punctuation:)  punctuation:,  variant:e  punctuation:)  punctuation:)
+ 20 |     show(math.log(81.0, 3.0), " ", math.log(0.5, 2.0))
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:log  punctuation:(  number:81.0  punctuation:,  number:3.0  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:log  punctuation:(  number:0.5  punctuation:,  number:2.0  punctuation:)  punctuation:)
+ 21 |     ; Outside what a task takes: nan, or infinity, as a float gives.
+    | comment:; Outside what a task takes: nan, or infinity, as a float gives.
+ 22 |     show(math.log(-1.0, 10.0), " ", math.asin(2.0), " ", math.log(0.0, 10.0))
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:log  punctuation:(  operator:-  number:1.0  punctuation:,  number:10.0  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:asin  punctuation:(  number:2.0  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:log  punctuation:(  number:0.0  punctuation:,  number:10.0  punctuation:)  punctuation:)
+ 23 | fi
+    | keyword:fi

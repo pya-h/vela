@@ -1,4 +1,4 @@
-; error: 5:12: expected type float, got int
+; error: 5:12: expected type float, got int; an int doesn't become a float on its own: write a float as '1.0', or turn an int into one with 'float(n)'
 task main()
     hold x = 1.5
     hold y = 0

@@ -1,0 +1,48 @@
+; std/math: numbers beyond arithmetic. A program brings it in with
+; `include std/math`, then names `math.sin(x)` and `math.P`, or brings in
+; what it uses with `include std/math (sin, P)`. Every task takes and gives
+; floats, and a value outside what a task takes gives nan, as C's does.
+
+; Pi, the ratio of a circle's length to its width.
+#P = 3.141592653589793
+
+; Euler's number, whose powers `exp` gives: `math.e ** x` is computed as
+; `math.exp(x)`.
+#e = 2.718281828459045
+
+; `x` raised to the power `y`, as `x ** y` is for floats.
+native task pow(x: float, y: float) -> float
+
+; The sine of `x`, an angle in radians.
+native task sin(x: float) -> float
+
+; The cosine of `x`, an angle in radians.
+native task cos(x: float) -> float
+
+; The tangent of `x`, an angle in radians.
+native task tan(x: float) -> float
+
+; The angle, in radians from -P/2 to P/2, whose sine is `x`.
+native task asin(x: float) -> float
+
+; The angle, in radians from 0 to P, whose cosine is `x`.
+native task acos(x: float) -> float
+
+; The angle, in radians from -P/2 to P/2, whose tangent is `x`.
+native task atan(x: float) -> float
+
+; The hyperbolic sine of `x`.
+native task sinh(x: float) -> float
+
+; The hyperbolic cosine of `x`.
+native task cosh(x: float) -> float
+
+; The hyperbolic tangent of `x`.
+native task tanh(x: float) -> float
+
+; `e` raised to the power `x`.
+native task exp(x: float) -> float
+
+; The power `base` is raised to for `x`: `log(100.0, 10.0)` is 2. With `e` as
+; the base, it is the natural logarithm, and bases 2, 10, and `e` are exact.
+native task log(x: float, base: float) -> float

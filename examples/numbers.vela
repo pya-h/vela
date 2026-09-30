@@ -8,6 +8,8 @@
 ; Run it and type a few numbers (Ctrl-D, or the end of a file given as input,
 ; ends them), or give it a file: `./numbers < readings.txt`.
 
+include std/math
+
 ; The numbers a program reads may also come from text it holds.
 task from_text()
     each written in ["6", "6.5", "-0", "0x1F", "-0b101", "010", "0b102"]
@@ -32,12 +34,16 @@ task main()
     hold refused = 0
     hold total = 0
     hold largest = 0
+    ; The squares add up to how far the numbers spread from zero.
+    hold squares = 0.0
     hold reading = true
     loop reading
         match scan("> ", int)
         case {value}
             count = count + 1
             total = total + value
+            ; An int raised to 2, a constant, stays an exact int.
+            squares = squares + float(value ** 2)
             when count == 1 or value > largest
                 largest = value
             fi
@@ -67,5 +73,6 @@ task main()
         ; An average is a float, so the count becomes one: an int and a float
         ; don't mix on their own.
         show("average ", float(total) / float(count))
+        show("root mean square ", math.pow(squares / float(count), 0.5))
     fi
 fi

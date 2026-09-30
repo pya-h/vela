@@ -8891,6 +8891,7 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
             "; an array never becomes a slice: write the values as a slice, as in '[1, 2, ...] at r', or copy them into one, as in 'new [int](xs) at r'".to_string()
         }
         (Type::Int | Type::Float, Type::Unit) => "; turn it into a unit with 'unit(x)', which stops the program when it isn't from 0 to 255".to_string(),
+        (Type::Int, Type::Float) => "; an int doesn't become a float on its own: write a float as '1.0', or turn an int into one with 'float(n)'".to_string(),
         (Type::Unit, Type::Int | Type::Float) => format!("; turn it into {0} with '{1}(b)'", if *expected == Type::Int { "an int" } else { "a float" }, expected),
         (Type::None, Type::Ptr(..)) => format!("; a pointer can't be none, so use 'maybe {}'", expected),
         (Type::None, Type::Slice(..)) => format!("; a slice can't be none, so use 'maybe {}'", expected),

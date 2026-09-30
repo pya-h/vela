@@ -1,0 +1,6 @@
+; error: 5:19: expected type float, got int; an int doesn't become a float on its own: write a float as '1.0', or turn an int into one with 'float(n)'
+include std/math
+
+task main()
+    show(math.sin(1))
+fi

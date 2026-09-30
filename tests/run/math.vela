@@ -1,0 +1,23 @@
+; std/math: the macros P and e, powers, trigonometry, exp, and log with its
+; base. `math.e ** x` is computed as `math.exp(x)`.
+
+include std/math (P, e, sin, cos)
+
+#DEGREE = P / 180.0
+
+task degrees(angle: float) -> float
+    <- angle / DEGREE
+fi
+
+task main()
+    show(P, " ", math.P, " ", e, " ", math.e)
+    show(sin(P / 2.0), " ", cos(0.0), " ", cos(P), " ", math.tan(P / 4.0))
+    show(degrees(math.asin(1.0)), " ", degrees(math.acos(0.0)), " ", degrees(math.atan(1.0)))
+    show(math.sinh(0.0), " ", math.cosh(0.0), " ", math.tanh(0.0), " ", math.sinh(1.0))
+    show(math.pow(2.0, 10.0), " ", math.pow(2.0, 0.5), " ", math.pow(4.0, -0.5))
+    show(math.exp(0.0), " ", math.exp(1.0), " ", e ** 2.0, " ", math.e ** 2, " ", e ** -1.0)
+    show(math.log(1000.0, 10.0), " ", math.log(1024.0, 2.0), " ", math.log(e, e), " ", math.log(math.exp(3.0), e))
+    show(math.log(81.0, 3.0), " ", math.log(0.5, 2.0))
+    ; Outside what a task takes: nan, or infinity, as a float gives.
+    show(math.log(-1.0, 10.0), " ", math.asin(2.0), " ", math.log(0.0, 10.0))
+fi

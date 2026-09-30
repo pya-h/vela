@@ -1745,7 +1745,9 @@ show(c.total())</pre>
           <a href="vela.html#default-region">default region</a>, which is a region's name, not a value), so the two never
           meet. Open: whether a method's <code>this</code> and a <code>region</code> parameter are ever allowed one
           (a region has no value to default to, so no), and whether named arguments, above, should land first so that a
-          call can leave out a middle parameter by naming the rest.</li>
+          call can leave out a middle parameter by naming the rest. The first user waiting in the library:
+          <a href="std.html#math"><code>math.log(x, base)</code></a> takes its base today, and would take
+          <code>base: float = 10.0</code>, so that <code>math.log(1000.0)</code> is 3.</li>
         <li><strong>Statements end at a line break:</strong> today <code>show(1) show(2)</code> on one line is accepted;
           requiring the break, and allowing one inside <code>( )</code> and
           <code>{ }</code>, would make long calls and literals splittable</li>

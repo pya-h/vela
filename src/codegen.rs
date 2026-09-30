@@ -3217,6 +3217,10 @@ impl Generator {
         }
         // `**`: an int or unit power is exact and checked, and any other is C's `pow`.
         if op == BinaryOp::Pow {
+            // `math.e ** x` is `exp(x)`, which C computes more closely than `pow`.
+            if matches!(&l.kind, ExprKind::Macro { name, .. } if name == crate::library::MATH_E) {
+                return Ok(format!("exp((double){})", parenthesized(&right)));
+            }
             let at = self.location(e.span);
             return Ok(match e.ty()? {
                 Type::Int => format!("vela__rt__pow({}, (int64_t){}, {})", left, parenthesized(&right), at),
