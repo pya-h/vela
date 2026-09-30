@@ -2057,6 +2057,143 @@ bind age = int("42")               ; text to a number can fail: int ~ ParseError
     </section>
 
     <section>
+      <h2 id="task-values"><span class="icon" aria-hidden="true">🪝</span> Tasks as Values, Lambdas, and Decorators</h2>
+      <p>
+        <strong>Where it stands.</strong> <span class="badge b-done">Done</span> — tasks are values
+        (<a href="vela.html#task-values">Tasks as values</a>): a task's type is written <code>(int, text) -&gt; int</code>,
+        a task named without <code>()</code> is its value, and a variable, field, item, or result holding one is called
+        like a task. In C a task value is a pointer to a function, so it costs nothing. <strong>Decided, not built
+        yet</strong> (in this order): lambdas that take nothing from the task around them, startup decorators, wrapper
+        decorators, and type groups. Lambdas that do take values from around them are planned <a href="#lambdas">below</a>.
+      </p>
+
+      <h3 id="lambdas-now">Lambdas <span class="badge b-med">Decided</span></h3>
+      <p>
+        A task without a name, written where a value goes: its header without the word <code>task</code> or a name,
+        then its body and <code>fi</code>, on lines of its own or on one line.
+      </p>
+      <pre><code>bind double = (x: int) -&gt; int &lt;- x * 2 fi
+show(apply((n: int) -&gt; int
+    show("got ", n)
+    &lt;- n + 1
+fi, 5))</code></pre>
+      <p>
+        The first version takes nothing from the task around it: its body sees its own parameters, the program's tasks,
+        macros, and shared fields, and no variable of the task it is written in (naming one is an error that points
+        here). The compiler makes each one a task of its own, so a lambda is exactly as cheap as a named task.
+      </p>
+
+      <h3 id="lambdas">Lambdas that take values from around them <span class="badge b-idea">Idea</span></h3>
+      <p>
+        A lambda that uses a variable of the task around it has to keep that value somewhere, for as long as the lambda
+        can be called, which can be after the task has ended. Other languages keep it on a garbage-collected heap (Go,
+        Python, JavaScript) or let the programmer choose between moving and borrowing (Rust's <code>move</code>). Vela
+        has regions, and a region already answers "how long does this memory live". So a lambda that captures names the
+        regions it takes values from, and keeps what it captured in one of them:
+      </p>
+      <pre><code>task counter(r: region, start: int) -&gt; [r]() -&gt; int
+    hold n = start
+    &lt;- [r]() -&gt; int
+        n++                         ; its own copy of n, kept in r
+        &lt;- n
+    fi
+fi
+
+task main()
+    region r
+    bind next = counter(r, 10)
+    show(next(), " ", next())       ; 11 12
+fi</code></pre>
+      <ul>
+        <li><strong>The capture list, <code>[r1, r2]</code></strong>, names the regions whose values the lambda may take:
+          a pointer, a slice, or text of one of them, and any value that lives in no region (a number, a bool, text that
+          lasts, a task). A value of a region the list doesn't name is an error, as a value escaping its region is today.</li>
+        <li><strong>Where the captured values live.</strong> Everything the lambda keeps goes in one block of memory, its
+          environment, allocated in a region the list names, and the lambda's type says so, <code>[r]() -&gt; int</code>,
+          so it can't outlive that region: the same rule as a pointer's <code>^T@r</code>. A lambda of a type with no
+          <code>[…]</code> is one that captures nothing, which goes anywhere, as task values do now.</li>
+        <li><strong>By copy.</strong> A captured value is copied into the environment when the lambda is made, as a
+          <code>hold</code> parameter is. A <code>hold</code> variable captured may be changed by the lambda, and the
+          change stays in its own copy (the counter above). A captured place (<code>hold&amp;</code>) is not allowed: it
+          would be a reference that outlives its block.</li>
+        <li><strong>An open question.</strong> A value in a region holds pointers into that region only
+          (<a href="vela.html#regions">Memory and Regions</a>). An environment in <code>r</code> holding a pointer into
+          <code>r2</code> breaks that rule, so either a capture list names one region, or environments get a rule of their
+          own: kept in the region that ends first, which the others must outlive. The first is simpler; the second is
+          what <code>[r1, r2]</code> suggests.</li>
+        <li><strong>What it costs.</strong> A capturing lambda is two words, the function and its environment, and a call
+          passes the environment as a hidden argument; making one allocates the environment in its region (a bump, the
+          cheapest allocation there is). A task value that captures nothing stays one word with no hidden argument, and
+          goes where a capturing type is expected through a small function the compiler writes, so code that never
+          captures pays nothing.</li>
+      </ul>
+
+      <h3 id="decorators">Decorators <span class="badge b-med">Decided</span></h3>
+      <p>
+        A decorator is a task whose first parameter is a task. It is called like any task, and it can also be written
+        before another task's header, in one of two ways:
+      </p>
+      <pre><code>$register("/home")                ; startup: runs register(home, "/home") once, before main
+$(timed, logged("home"))          ; wrappers: home(n) runs timed, which runs logged, which runs home
+task home(n: int) -&gt; text
+    …
+fi</code></pre>
+      <ul>
+        <li><strong>Startup decorators, <code>$d</code> or <code>$d(args)</code>,</strong> run once where the program
+          starts, in the order the tasks are written, as Python and FastAPI run theirs where a function is defined. The
+          task stays an ordinary task, called as usual. This is how a future web module could let a program declare its
+          routes by writing <code>$get("/")</code> above each handler.</li>
+        <li><strong>Wrapper decorators, <code>$(dt1, dt2(a))</code>,</strong> run each time the task is called, the
+          leftmost outermost: each is given the rest of the chain as a task of the decorated task's type, then its own
+          values, then the task's values, and decides when to call it, or whether to. The compiler writes each layer as a
+          hidden task, so no lambda that captures is needed, and the C compiler can inline the whole chain.</li>
+        <li><strong>Type groups, <code>P...</code>,</strong> let one wrapper fit a task of any parameters:
+          <pre><code>task timed&lt;P..., R&gt;(f: (P...) -&gt; R, args: P...) -&gt; R
+    bind start = clock()
+    bind result = f(args...)
+    show("took ", clock() - start)
+    &lt;- result
+fi</code></pre>
+          The compiler fills a group in for each use, as it fills in a type, so it costs nothing when running.</li>
+      </ul>
+
+      <h3 id="task-value-ideas">What these make possible <span class="badge b-idea">Ideas</span></h3>
+      <ul>
+        <li id="pipes"><strong>Pipes, <code>value |&gt; task(args)</code>:</strong> the value goes to the task's first
+          parameter, and <code>|&gt;&gt;</code> to its second, and so on, from the notes that started decorators. It is
+          sugar over calls, and a pipe of tasks held as values (<code>value |&gt; steps[i]</code>) works the same way.</li>
+        <li><strong>Calls the compiler can see through.</strong> A task value that is a known task and never changes
+          (<code>bind f = square</code>, a wrapper's <code>next</code>) can be called directly rather than through the
+          pointer, which lets C inline it: a higher-order task given a fixed task then costs what the loop written out
+          costs. The same goes for a generic task given a task: making one copy per task given (as for types) removes the
+          pointer entirely, at the cost of a larger program, so it would be chosen only for small tasks.</li>
+        <li><strong>A library of higher-order tasks:</strong> once lambdas and generics meet, <code>std</code> could give
+          <code>map</code>, <code>keep</code> (filter), <code>fold</code>, <code>sort_by</code>, and <code>find</code> over
+          slices, each taking the slice's region for what it makes, as <code>copy()</code> does.</li>
+        <li><strong>A one-value lambda:</strong> <code>(x: int) -&gt; int = x * 2</code>, as a <code>case</code> gives its
+          value with <code>=</code>, for the many lambdas that are one expression; and, where the place a lambda goes says
+          its type, parameters without types: <code>apply((x) = x * 2, 3)</code>.</li>
+        <li><strong>More tasks as values:</strong> a generic task given its types, <code>first&lt;int&gt;</code>; a method
+          named on its shape, <code>Point.area</code>, a <code>(Point) -&gt; float</code>; and task types taking places,
+          <code>(hold&amp; int) -&gt; nothing</code>, or sending several values. Each is refused today with a reason.</li>
+        <li><strong>A table of startup decorators made when compiling:</strong> for a decorator that only records its
+          tasks, the compiler could write the table itself, one entry per use with its values, into the program's data,
+          with no call at start at all. The count of uses is known when compiling, so the table is a fixed array, and a
+          decorator's registry needs no region that lasts.</li>
+        <li><strong>Startup decorators that fail:</strong> a decorator sending <code>nothing ~ E</code>, whose failure
+          stops the program before <code>main</code> with its message, as a route declared twice should.</li>
+        <li><strong>Decorators on methods, and on shapes:</strong> a wrapper on a method works as on a task, with
+          <code>.this</code> among the values it passes on; a startup decorator on a shape could register the shape (for
+          a serializer, say) once shapes can be named as values.</li>
+        <li><strong>Type groups beyond wrappers:</strong> <code>show(args...)</code> to write every value of a group, a
+          group's count known when compiling, and a group made into a tuple, <code>(args...)</code>, where its values
+          allow it.</li>
+        <li><strong>Events:</strong> the <a href="events.html">events</a> design names what runs when something happens;
+          task values and lambdas are the pieces it would be built from.</li>
+      </ul>
+    </section>
+
+    <section>
       <h2 id="undecided"><span class="icon" aria-hidden="true">🤔</span> Ideas We Haven't Decided On</h2>
       <p>
         Ideas that may or may not become part of Vela. Unlike <a href="#lower-priority">Lower priority</a>, which holds
@@ -2173,6 +2310,8 @@ fi
             <li><s>Pattern-match expressions</s> (done: <a href="vela.html#choices">a match or a when as a value</a>,
               with <code>else when</code> chains)</li>
             <li><s>Region-based allocation</s> (done: <a href="regions.html">regions</a>)</li>
+            <li><s>Tasks as values</s> (done: <a href="vela.html#task-values">tasks as values</a>), then lambdas,
+              <a href="#decorators">decorators</a>, and type groups</li>
             <li>Region brackets with inferred region arguments (<s>generated copies between regions</s>: done, <a href="vela.html#copy"><code>.copy()</code></a>)</li>
           </ul>
         </div>
