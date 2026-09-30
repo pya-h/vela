@@ -1,0 +1,2 @@
+; error: 2:1: a macro is written with '#' before its name, as in '#LIMIT = …'
+macro LIMIT = 10

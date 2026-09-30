@@ -1779,7 +1779,7 @@ show(c.total())</pre>
         <li><strong>Type inference:</strong> let the compiler infer more types without annotations</li>
         <li><strong>Sum-type exhaustiveness:</strong> already present; keep it mandatory</li>
         <li><strong>Compile-time constants:</strong> <span class="badge b-done">Done</span> — as macros,
-          <code>macro MAX_SIZE = 1024</code>, a value the compiler computes and C holds as a <code>#define</code> (see
+          <code>#MAX_SIZE = 1024</code>, a value the compiler computes and C holds as a <code>#define</code> (see
           <a href="vela.html#macros">Macros</a>). Macros that take values, and a macro as an array's count in a type,
           are next: see <a href="#macro-tasks">Macros that take values</a>.</li>
         <li><strong>Compile-time use of tuples:</strong> a tuple's items never change, so a tuple built from constants
@@ -1796,19 +1796,25 @@ show(c.total())</pre>
 
       <h3 id="macro-tasks">Macros that take values</h3>
       <p>
-        A macro names one value today (<a href="vela.html#macros">Macros</a>). C's <code>#define MAX(a, b)</code> takes
-        values too, and so could Vela's, written as a macro whose name takes names, with one expression after the
-        <code>=</code>:
+        A macro names one value today, <code>#SIZE = 4</code> (<a href="vela.html#macros">Macros</a>). C's
+        <code>#define MAX(a, b)</code> takes values too, and so could Vela's, written as a task whose name has the
+        macro's <code>#</code> before it, <code>task #NAME(…)</code>, with no types, sending one expression:
       </p>
-      <pre><code>macro SQUARE(x) = x * x
-macro MIDDLE(a, b) = (a + b) / 2
-macro AREA = SQUARE(SIDE)        ; a constant, computed when compiling
+      <pre><code>task #SQUARE(x)
+    &lt;- x * x
+fi
+
+task #MIDDLE(a, b)
+    &lt;- (a + b) / 2
+fi
+
+#AREA = SQUARE(SIDE)             ; a constant, computed when compiling
 
 task main()
     show(SQUARE(3), " ", SQUARE(1.5), " ", MIDDLE(low, high))
 fi</code></pre>
       <p>
-        A use is written as a call, and the compiler reads the expression with each argument in place of its name, then
+        A use is written as a call, without the <code>#</code>, as a plain macro's is, and the compiler reads the expression with each argument in place of its name, then
         checks it as it checks the expression written out, so <code>SQUARE</code> takes whatever <code>*</code> takes.
         Where C pastes text, this would keep the mistakes C's macros are known for out:
       </p>
@@ -1820,7 +1826,7 @@ fi</code></pre>
         <li><strong>Its own names:</strong> a name in the expression that isn't a parameter means what it means where the
           macro is declared, never a variable of the file using it.</li>
         <li><strong>Constants stay constants:</strong> with constant arguments, the value is computed when compiling, so a
-          plain macro can be made of one (<code>macro AREA = SQUARE(SIDE)</code>).</li>
+          plain macro can be made of one (<code>#AREA = SQUARE(SIDE)</code>).</li>
         <li><strong>C:</strong> a use with constant arguments is its value; any other is written as a
           <code>static inline</code> function for the types it is given, as a generic task's use is, rather than a
           <code>#define</code>, whose arguments C would paste twice.</li>
@@ -1829,8 +1835,8 @@ fi</code></pre>
         Beside it, a macro could be an array's count where a type is written, as C's <code>int items[SIZE]</code> is:
         <code>[int#SIZE]</code>, which today takes only a number (a value's count, <code>[0#SIZE]</code>, already takes a
         macro). Open questions: whether a macro that takes values may hold a <code>when</code> or <code>match</code> as a value,
-        whether its parameters may be written with types (<code>macro SQUARE(x: float)</code>), which would make it a task
-        by another name, and how Studio hovers a use, with the expression it stands for.
+        whether its body may hold more than one line before the <code>&lt;-</code>, whether its parameters may be written
+        with types (<code>task #SQUARE(x: float)</code>), which would make it a task by another name, and how Studio hovers a use, with the expression it stands for.
       </p>
 
       <h3 id="conversions">Type conversions (casting)</h3>

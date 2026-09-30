@@ -1,9 +1,9 @@
 ; The macros tests/run/macros.vela takes from another file.
 
-macro LIMIT = 10
-macro GREETING = "hello"
-macro DOUBLE_LIMIT = LIMIT * 2 + SPARE
-priv macro SPARE = 1
+#LIMIT = 10
+#GREETING = "hello"
+#DOUBLE_LIMIT = LIMIT * 2 + SPARE
+priv #SPARE = 1
 
 task spare() -> int
     <- SPARE

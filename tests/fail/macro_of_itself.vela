@@ -1,3 +1,3 @@
-; error: 2:7: macro 'LIMIT' is computed from itself: LIMIT from TOTAL from LIMIT
-macro LIMIT = TOTAL - 1
-macro TOTAL = LIMIT + 1
+; error: 2:2: macro 'LIMIT' is computed from itself: LIMIT from TOTAL from LIMIT
+#LIMIT = TOTAL - 1
+#TOTAL = LIMIT + 1

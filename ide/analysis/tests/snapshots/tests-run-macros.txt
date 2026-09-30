@@ -1,43 +1,43 @@
-  1 | ; Macros: `macro NAME = value` outside every task, a value the compiler
-    | comment:; Macros: `macro NAME = value` outside every task, a value the compiler
+  1 | ; Macros: `#NAME = value` outside every task, a value the compiler
+    | comment:; Macros: `#NAME = value` outside every task, a value the compiler
   2 | ; computes from literals, other macros, and operators on them. Its type is its
     | comment:; computes from literals, other macros, and operators on them. Its type is its
   3 | ; value's, and each use is that value, a C `#define`.
     | comment:; value's, and each use is that value, a C `#define`.
   5 | include macros/limits (LIMIT => MAX, GREETING)
     | keyword:include  module:macros  operator:/  module:limits  punctuation:(  variant:LIMIT  operator:=>  variant:MAX  punctuation:,  variant:GREETING  punctuation:)
-  7 | macro P = 3.14159
-    | keyword:macro  variant:P  operator:=  number:3.14159
-  8 | macro TAU = P * 2.0
-    | keyword:macro  variant:TAU  operator:=  variant:P  operator:*  number:2.0
-  9 | macro SIZE = 4
-    | keyword:macro  variant:SIZE  operator:=  number:4
- 10 | macro LAST = SIZE - 1
-    | keyword:macro  variant:LAST  operator:=  variant:SIZE  operator:-  number:1
- 11 | macro NAME = "vela"
-    | keyword:macro  variant:NAME  operator:=  string:"vela"
- 12 | macro TITLE = NAME + "!"
-    | keyword:macro  variant:TITLE  operator:=  variant:NAME  operator:+  string:"!"
- 13 | macro FIRST = 'a'
-    | keyword:macro  variant:FIRST  operator:=  string:'a'
- 14 | macro NEXT = FIRST + 1
-    | keyword:macro  variant:NEXT  operator:=  variant:FIRST  operator:+  number:1
- 15 | macro BIG = SIZE > 2 and not false
-    | keyword:macro  variant:BIG  operator:=  variant:SIZE  operator:>  number:2  keyword:and  keyword:not  keyword:false
- 16 | macro SMALL = unit(200)
-    | keyword:macro  variant:SMALL  operator:=  type-builtin:unit  punctuation:(  number:200  punctuation:)
- 17 | macro LOWEST = -9223372036854775807 - 1
-    | keyword:macro  variant:LOWEST  operator:=  operator:-  number:9223372036854775807  operator:-  number:1
- 18 | macro WHOLE = int(2.9)
-    | keyword:macro  variant:WHOLE  operator:=  type-builtin:int  punctuation:(  number:2.9  punctuation:)
- 19 | macro HALF = float(SIZE) / 2.0
-    | keyword:macro  variant:HALF  operator:=  type-builtin:float  punctuation:(  variant:SIZE  punctuation:)  operator:/  number:2.0
+  7 | #P = 3.14159
+    | keyword:#  variant:P  operator:=  number:3.14159
+  8 | #TAU = P * 2.0
+    | keyword:#  variant:TAU  operator:=  variant:P  operator:*  number:2.0
+  9 | #SIZE = 4
+    | keyword:#  variant:SIZE  operator:=  number:4
+ 10 | #LAST = SIZE - 1
+    | keyword:#  variant:LAST  operator:=  variant:SIZE  operator:-  number:1
+ 11 | #NAME = "vela"
+    | keyword:#  variant:NAME  operator:=  string:"vela"
+ 12 | #TITLE = NAME + "!"
+    | keyword:#  variant:TITLE  operator:=  variant:NAME  operator:+  string:"!"
+ 13 | #FIRST = 'a'
+    | keyword:#  variant:FIRST  operator:=  string:'a'
+ 14 | #NEXT = FIRST + 1
+    | keyword:#  variant:NEXT  operator:=  variant:FIRST  operator:+  number:1
+ 15 | #BIG = SIZE > 2 and not false
+    | keyword:#  variant:BIG  operator:=  variant:SIZE  operator:>  number:2  keyword:and  keyword:not  keyword:false
+ 16 | #SMALL = unit(200)
+    | keyword:#  variant:SMALL  operator:=  type-builtin:unit  punctuation:(  number:200  punctuation:)
+ 17 | #LOWEST = -9223372036854775807 - 1
+    | keyword:#  variant:LOWEST  operator:=  operator:-  number:9223372036854775807  operator:-  number:1
+ 18 | #WHOLE = int(2.9)
+    | keyword:#  variant:WHOLE  operator:=  type-builtin:int  punctuation:(  number:2.9  punctuation:)
+ 19 | #HALF = float(SIZE) / 2.0
+    | keyword:#  variant:HALF  operator:=  type-builtin:float  punctuation:(  variant:SIZE  punctuation:)  operator:/  number:2.0
  20 | ; A macro may name one declared below it.
     | comment:; A macro may name one declared below it.
- 21 | macro AREA = SIDE * SIDE
-    | keyword:macro  variant:AREA  operator:=  variant:SIDE  operator:*  variant:SIDE
- 22 | macro SIDE = 3
-    | keyword:macro  variant:SIDE  operator:=  number:3
+ 21 | #AREA = SIDE * SIDE
+    | keyword:#  variant:AREA  operator:=  variant:SIDE  operator:*  variant:SIDE
+ 22 | #SIDE = 3
+    | keyword:#  variant:SIDE  operator:=  number:3
  24 | shape Circle
     | keyword:shape  type:Circle
  25 |     radius: float = 1.0

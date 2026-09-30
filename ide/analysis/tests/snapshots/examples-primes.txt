@@ -8,8 +8,8 @@
     | comment:; halfway.
   6 | ; How far the search goes: a macro, a value the compiler knows.
     | comment:; How far the search goes: a macro, a value the compiler knows.
-  7 | macro LIMIT = 50
-    | keyword:macro  variant:LIMIT  operator:=  number:50
+  7 | #LIMIT = 50
+    | keyword:#  variant:LIMIT  operator:=  number:50
   9 | task is_prime(n: int) -> bool
     | keyword:task  task:is_prime  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
  10 |     each i in 2..(n/2 + 1)

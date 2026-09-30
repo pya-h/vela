@@ -1,4 +1,4 @@
-//! Macros in the editor: `macro P = 3.14159` outside every task, colored,
+//! Macros in the editor: `#P = 3.14159` outside every task, colored,
 //! hovered with the type of its value, listed in the outline, and completed by
 //! name, through its module, and as a word at the top level. In the sources
 //! below, `@@` marks the cursor.
@@ -13,10 +13,10 @@ use vela_analysis::{Analysis, CompletionItem, LineIndex, SymbolKind, TokenClass}
 const PROGRAM: &str = "\
 include consts
 
-macro P = 3.14159
-macro TAU = P * 2.0
-macro SIZE = 4
-priv macro NAME = \"vela\"
+#P = 3.14159
+#TAU = P * 2.0
+#SIZE = 4
+priv #NAME = \"vela\"
 
 task main()
     CHECK
@@ -28,9 +28,9 @@ fi
 ";
 
 const CONSTS: &str = "\
-macro LIMIT = 10
-macro GREETING = \"hello\"
-priv macro SECRET = 42
+#LIMIT = 10
+#GREETING = \"hello\"
+priv #SECRET = 42
 ";
 
 fn sources() -> HashMap<String, String> {
@@ -73,13 +73,13 @@ fn a_macro_hovers_with_its_value_and_type_whether_or_not_the_file_checks() {
         let source = program(checks, "show(0)");
         let when = if checks { "checked" } else { "declared" };
         let (code, doc) = hover(&source, "TAU =");
-        assert_eq!(code, "macro TAU = P * 2.0", "{}", when);
+        assert_eq!(code, "#TAU = P * 2.0", "{}", when);
         assert!(doc.contains("of type float"), "{}: {}", when, doc);
-        assert_eq!(hover(&source, "NAME =").0, "priv macro NAME = \"vela\"", "{}", when);
+        assert_eq!(hover(&source, "NAME =").0, "priv #NAME = \"vela\"", "{}", when);
         // A use hovers as the macro it names, here and in another module.
-        assert_eq!(hover(&source, "SIZE * 2").0, "macro SIZE = 4", "{}", when);
+        assert_eq!(hover(&source, "SIZE * 2").0, "#SIZE = 4", "{}", when);
         let (code, doc) = hover(&source, "LIMIT\n");
-        assert_eq!(code, "macro consts.LIMIT = 10", "{}", when);
+        assert_eq!(code, "#LIMIT = 10", "{}", when);
         assert!(doc.contains("of type int"), "{}: {}", when, doc);
         assert_eq!(hover(&source, "twice =").0, "bind twice: int", "{}", when);
         assert_eq!(hover(&source, "limit =").0, "bind limit: int", "{}", when);
@@ -95,7 +95,14 @@ fn a_macro_is_colored_as_a_value_that_never_changes() {
         let byte = source.find(needle).unwrap_or_else(|| panic!("no {:?}", needle));
         analysis.tokens().into_iter().find(|t| t.from <= byte && byte < t.to).map(|t| t.class)
     };
-    assert_eq!(class_at("macro P"), Some(TokenClass::Keyword));
+    assert_eq!(class_at("#P"), Some(TokenClass::Keyword));
+    // `#` in an array's count is punctuation.
+    let counted = "task main()\n    bind xs = [0#3]\n    show(xs[#1])\nfi\n";
+    let hashes: Vec<TokenClass> = Analysis::new(counted).tokens().into_iter().filter(|t| &counted[t.from..t.to] == "#").map(|t| t.class).collect();
+    assert_eq!(hashes, [TokenClass::Punctuation, TokenClass::Punctuation]);
+    // Nor is a comment written as other languages write one a macro.
+    let noted = "task main()\nfi\n# the count\n";
+    assert!(Analysis::new(noted).outline().iter().all(|item| item.kind != SymbolKind::Macro));
     assert_eq!(class_at("P = 3"), Some(TokenClass::Variant));
     assert_eq!(class_at("P * 2.0\n    bind"), Some(TokenClass::Variant));
     assert_eq!(class_at("LIMIT\n"), Some(TokenClass::Variant));
@@ -125,13 +132,16 @@ fn macros_are_offered_by_name_through_their_module_and_as_a_word() {
         assert!(found.contains(&"LIMIT".to_string()) && found.contains(&"GREETING".to_string()), "{:?}", found);
         assert!(!found.contains(&"SECRET".to_string()), "{:?}", found);
     }
-    let found = labels("task main()\nfi\n\n@@");
-    assert!(found.contains(&"macro".to_string()), "{:?}", found);
+    let found = completions("task main()\nfi\n\n@@");
+    let snippet = found.iter().find(|item| item.label == "macro").expect("a macro snippet");
+    assert_eq!(snippet.snippet.as_deref(), Some("#${NAME} = ${value}"));
+    // A new macro's name is its own.
+    assert_eq!(labels("task main()\nfi\n\n#@@"), Vec::<String>::new());
 }
 
 #[test]
 fn a_mistake_in_a_macro_is_shown_in_the_editor() {
-    let source = "macro A = 1 + 2.0\n\ntask main()\n    show(A)\nfi\n";
+    let source = "#A = 1 + 2.0\n\ntask main()\n    show(A)\nfi\n";
     let diagnostics = Analysis::new(source).diagnostics();
     assert_eq!(diagnostics.len(), 1, "{:?}", diagnostics);
     assert!(diagnostics[0].message.starts_with("an int and a float don't mix"), "{:?}", diagnostics);

@@ -556,6 +556,13 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
         return (Vec::new(), word_start, byte);
     }
 
+    // `#NAME`: a macro's new name, at the start of a line.
+    if let (Some(q), Some(Token::Hash)) = (prev, prev_token)
+        && matches!(k.token(q.wrapping_sub(1)), None | Some(Token::Newline | Token::Priv))
+    {
+        return (Vec::new(), word_start, byte);
+    }
+
     // Types.
     // After a `scan`'s prompt: the type of a number to read, the only two types
     // this form takes.
@@ -1839,8 +1846,7 @@ fn item_level_items() -> Vec<CompletionItem> {
         snippet("task -> type", "a task that sends a value", "task ${name}(${}) -> ${type}\n\t<- ${value}\nfi"),
         snippet("shape", "a shape with a field", "shape ${Name}\n\t${field}: ${type}\nfi"),
         snippet("kind", "a kind with a variant", "kind ${Name}\n\t${Variant}\nfi"),
-        keyword("macro"),
-        snippet("macro", "a value the compiler computes", "macro ${NAME} = ${value}"),
+        snippet("macro", "a value the compiler computes", "#${NAME} = ${value}"),
     ]
 }
 

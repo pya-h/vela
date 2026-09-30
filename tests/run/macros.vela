@@ -1,25 +1,25 @@
-; Macros: `macro NAME = value` outside every task, a value the compiler
+; Macros: `#NAME = value` outside every task, a value the compiler
 ; computes from literals, other macros, and operators on them. Its type is its
 ; value's, and each use is that value, a C `#define`.
 
 include macros/limits (LIMIT => MAX, GREETING)
 
-macro P = 3.14159
-macro TAU = P * 2.0
-macro SIZE = 4
-macro LAST = SIZE - 1
-macro NAME = "vela"
-macro TITLE = NAME + "!"
-macro FIRST = 'a'
-macro NEXT = FIRST + 1
-macro BIG = SIZE > 2 and not false
-macro SMALL = unit(200)
-macro LOWEST = -9223372036854775807 - 1
-macro WHOLE = int(2.9)
-macro HALF = float(SIZE) / 2.0
+#P = 3.14159
+#TAU = P * 2.0
+#SIZE = 4
+#LAST = SIZE - 1
+#NAME = "vela"
+#TITLE = NAME + "!"
+#FIRST = 'a'
+#NEXT = FIRST + 1
+#BIG = SIZE > 2 and not false
+#SMALL = unit(200)
+#LOWEST = -9223372036854775807 - 1
+#WHOLE = int(2.9)
+#HALF = float(SIZE) / 2.0
 ; A macro may name one declared below it.
-macro AREA = SIDE * SIDE
-macro SIDE = 3
+#AREA = SIDE * SIDE
+#SIDE = 3
 
 shape Circle
     radius: float = 1.0

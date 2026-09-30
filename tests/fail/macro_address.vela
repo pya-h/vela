@@ -1,5 +1,5 @@
 ; error: 5:11: '&' takes the address of a place: a variable, a field or an item of one, or what a pointer points to, and this is a macro, a value the compiler computed, with no place of its own
-macro LIMIT = 10
+#LIMIT = 10
 
 task main()
     show(&LIMIT)

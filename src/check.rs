@@ -1041,7 +1041,7 @@ impl Checker {
                 fold_cast(name, value, span)
             }
             ExprKind::Call { name, .. } => not_constant(&format!("a call, '{}(…)'", unqualified(name))),
-            ExprKind::Join { .. } => not_constant("text holding values; join text with '+', as in 'macro TITLE = NAME + \"!\"'"),
+            ExprKind::Join { .. } => not_constant("text holding values; join text with '+', as in '#TITLE = NAME + \"!\"'"),
             ExprKind::NoneLit => not_constant("'none'"),
             ExprKind::Array(_) | ExprKind::Repeat { .. } => not_constant("an array"),
             ExprKind::Tuple(_) => not_constant("a tuple"),

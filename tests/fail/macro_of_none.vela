@@ -1,2 +1,2 @@
-; error: 2:17: a macro's value is computed when compiling, from literals, other macros, and operators on them, so it can't be 'none'
-macro NOTHING = none
+; error: 2:12: a macro's value is computed when compiling, from literals, other macros, and operators on them, so it can't be 'none'
+#NOTHING = none

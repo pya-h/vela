@@ -1,2 +1,2 @@
-; error: 2:20: '<' orders numbers, chars, and text, not bools
-macro WRONG = true < false
+; error: 2:15: '<' orders numbers, chars, and text, not bools
+#WRONG = true < false

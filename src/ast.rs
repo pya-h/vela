@@ -165,8 +165,8 @@ pub const STR: &str = "str";
 /// `Owner::shared`).
 pub const NEW_WORD: &str = "new";
 
-/// `macro P = 3.14159`, a word only at the start of a line outside every task,
-/// so it names no keyword (see `ast::MacroDef`).
+/// The word other languages declare a macro with, `macro P = …`, which Vela
+/// writes `#P = …` (see `ast::MacroDef`); only an error names it.
 pub const MACRO: &str = "macro";
 
 /// The type whose name, called, turns a value into text: `text(n) at r`.
@@ -1772,7 +1772,7 @@ pub struct KindDef {
     pub private: bool,
 }
 
-/// `macro P = 3.14159`: a name for a value the compiler computes, outside every
+/// `#P = 3.14159`: a name for a value the compiler computes, outside every
 /// task, shape, and kind. Its type is its value's, and C has it as a `#define`.
 #[derive(Debug, Clone)]
 pub struct MacroDef {
@@ -1781,6 +1781,6 @@ pub struct MacroDef {
     pub value: Expr,
     /// Position of the macro's name.
     pub span: Span,
-    /// `priv macro`: only its own file can name it.
+    /// `priv #P = …`: only its own file can name it.
     pub private: bool,
 }

@@ -4,7 +4,7 @@
 ; halfway.
 
 ; How far the search goes: a macro, a value the compiler knows.
-macro LIMIT = 50
+#LIMIT = 50
 
 task is_prime(n: int) -> bool
     each i in 2..(n/2 + 1)

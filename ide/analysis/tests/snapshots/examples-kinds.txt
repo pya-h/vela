@@ -8,8 +8,8 @@
     | comment:; values.
   6 | ; Pi, to as many places as the areas need.
     | comment:; Pi, to as many places as the areas need.
-  7 | macro P = 3.14159
-    | keyword:macro  variant:P  operator:=  number:3.14159
+  7 | #P = 3.14159
+    | keyword:#  variant:P  operator:=  number:3.14159
   9 | kind Shape
     | keyword:kind  type:Shape
  10 |     Circle(radius: float)

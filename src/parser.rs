@@ -3,7 +3,7 @@ use crate::error::{Error, Result};
 use crate::lexer::{KEYWORDS, LexKind, LexToken, Piece, Token};
 
 /// The mistake of a macro written inside a task, shape, or kind.
-const MISPLACED_MACRO: &str = "a macro is written outside every task, shape, and kind, as in 'macro P = 3.14159' at the start of a line";
+const MISPLACED_MACRO: &str = "a macro is written outside every task, shape, and kind, as in '#P = 3.14159' at the start of a line";
 
 /// How deeply code may nest: parentheses, operators in a row, unary
 /// operators, `^` in types, and blocks inside blocks each add a level. Every
@@ -476,20 +476,36 @@ impl Parser {
         matches!(next, Token::Eof | Token::Task | Token::Shape | Token::Kind | Token::Priv)
     }
 
-    /// Whether the tokens `ahead` of the cursor start a macro, `macro NAME`.
-    /// `macro` is a word only there (see `ast::MACRO`).
+    /// Whether the tokens `ahead` of the cursor, on a line the cursor starts,
+    /// start a macro: `#NAME =`, or `#NAME` with a type or nothing after it,
+    /// which `parse_macro` explains. `# the count`, a comment as other
+    /// languages write one, is none.
     fn at_macro_after(&self, ahead: usize) -> bool {
-        matches!(self.tokens.get(self.pos + ahead), Some(Token::Ident(word)) if word == MACRO)
-            && matches!(self.tokens.get(self.pos + ahead + 1), Some(Token::Ident(_)))
+        let at = |offset: usize| self.tokens.get(self.pos + ahead + offset);
+        let starts = |index: usize| index == 0 || self.tokens.get(index - 1) == Some(&Token::Newline);
+        let hash = self.pos + ahead;
+        let line_start = starts(hash) || (hash > 0 && self.tokens.get(hash - 1) == Some(&Token::Priv) && starts(hash - 1));
+        line_start
+            && at(0) == Some(&Token::Hash)
+            && matches!(at(1), Some(Token::Ident(_)))
+            && matches!(at(2), Some(Token::Assign | Token::Colon | Token::Newline | Token::Eof) | None)
     }
 
-    /// `macro NAME = value`, at `macro`, on a line of its own.
+    /// Whether the cursor is at `macro NAME =`, a macro as other languages
+    /// write it (see `ast::MACRO`).
+    fn at_macro_word(&self) -> bool {
+        matches!(self.peek(), Token::Ident(word) if word == MACRO)
+            && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_)))
+            && matches!(self.tokens.get(self.pos + 2), Some(Token::Assign | Token::Colon))
+    }
+
+    /// `#NAME = value`, at `#`, on a line of its own.
     fn parse_macro(&mut self) -> Result<MacroDef> {
-        self.advance(); // macro
+        self.advance(); // #
         let span = self.peek_span();
         let name = self.expect_ident()?;
         if self.check(Token::Colon) {
-            return Err(Error::at(self.peek_span(), format!("a macro's type is its value's, so none is written: 'macro {} = …'", name)));
+            return Err(Error::at(self.peek_span(), format!("a macro's type is its value's, so none is written: '#{} = …'", name)));
         }
         if !self.match_token(Token::Assign) {
             return Err(self.unexpected(&format!("'=' and the value macro '{}' stands for", name)));
@@ -527,6 +543,13 @@ impl Parser {
         }
         if self.at_macro_after(0) {
             return self.parse_macro().map(Item::Macro);
+        }
+        if self.at_macro_word() {
+            let name = match self.tokens.get(self.pos + 1) {
+                Some(Token::Ident(name)) => name.clone(),
+                _ => String::new(),
+            };
+            return Err(Error::at(self.peek_span(), format!("a macro is written with '#' before its name, as in '#{} = …'", name)));
         }
         match self.peek() {
             Token::Task => self.parse_task().map(Item::Task),

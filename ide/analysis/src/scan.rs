@@ -17,7 +17,7 @@ use std::ops::Range;
 use std::path::Path;
 
 use serde::Serialize;
-use vela::ast::{ALTERS, BUILTIN_TASKS, DEFAULT, MACRO, MODULE_SEPARATOR, NATIVE, NEW_WORD, READ, Span, THIS_WORD, Type, unqualified};
+use vela::ast::{ALTERS, BUILTIN_TASKS, DEFAULT, MODULE_SEPARATOR, NATIVE, NEW_WORD, READ, Span, THIS_WORD, Type, unqualified};
 use vela::lexer::{ESCAPES, LexKind, LexToken, Piece, Token, highlight};
 
 use crate::types::{Context, slashed};
@@ -838,11 +838,11 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                     }
                 }
             }
-            // `macro P = 3.14159`, or `priv macro P = …`, at the start of a
-            // line outside every item: a declaration of its own line.
-            Token::Ident(word)
-                if word == MACRO
-                    && tokens.ident(p + 1).is_some()
+            // `#P = 3.14159`, or `priv #P = …`, at the start of a line
+            // outside every item: a declaration of its own line.
+            Token::Hash
+                if tokens.ident(p + 1).is_some()
+                    && matches!(tokens.token(p + 2), None | Some(Token::Assign | Token::Colon | Token::Newline | Token::Eof))
                     && matches!(tokens.before(p), None | Some(Token::Newline | Token::Priv))
                     && tokens.get(if tokens.before(p) == Some(&Token::Priv) { p - 1 } else { p }).is_some_and(|t| t.start.col == 1) =>
             {
@@ -1237,6 +1237,10 @@ impl<'a> Classifier<'a> {
                     type_brackets += 1;
                     in_type = true;
                 }
+                // `#P = …`: the mark before a macro's name, which declares it.
+                Token::Hash if self.declared_at.get(&(p + 1)).and_then(|&id| self.symbols.get(id)).is_some_and(|s| s.kind == SymbolKind::Macro) => {
+                    self.push(range, TokenClass::Keyword, None);
+                }
                 Token::Hash => self.push(range, TokenClass::Punctuation, None),
                 Token::RBracket if type_brackets > 0 => {
                     self.push(range, TokenClass::Punctuation, None);
@@ -1438,10 +1442,6 @@ impl<'a> Classifier<'a> {
         // `read path: text`: the word before a field only its shape's methods
         // assign.
         if name == READ && self.declared_at.get(&(p + 1)).and_then(|&id| self.symbols.get(id)).is_some_and(|s| s.kind == SymbolKind::Field && s.read) {
-            return (TokenClass::Keyword, None);
-        }
-        // `macro P = …`: the word before a macro's name.
-        if name == MACRO && self.declared_at.get(&(p + 1)).and_then(|&id| self.symbols.get(id)).is_some_and(|s| s.kind == SymbolKind::Macro) {
             return (TokenClass::Keyword, None);
         }
         // `native task …`: a task of Vela's library whose body is C.

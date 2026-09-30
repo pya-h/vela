@@ -221,7 +221,7 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             let ty = k.type_of_symbol(id).map_or(String::new(), |ty| format!(", of type {}", ty));
             let doc = format!("A macro: a value the compiler computes{}. Each use is that value, which never changes.", ty);
             let module = from_module(k, symbol);
-            (format!("{}macro {} {}", private, symbol.name, symbol.detail), if module.is_empty() { doc } else { format!("{} {}", doc, module) })
+            (format!("{}#{} {}", private, vela::ast::unqualified(&symbol.name), symbol.detail), if module.is_empty() { doc } else { format!("{} {}", doc, module) })
         }
         SymbolKind::Method => {
             let private = if symbol.private { "priv " } else { "" };

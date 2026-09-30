@@ -1,2 +1,2 @@
-; error: 2:22: the value is no number a float can hold, as dividing by zero gives
-macro INFINITE = 1.0 / 0.0
+; error: 2:17: the value is no number a float can hold, as dividing by zero gives
+#INFINITE = 1.0 / 0.0
