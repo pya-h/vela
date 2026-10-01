@@ -2442,39 +2442,46 @@ impl Generator {
         let mut values = Vec::new();
         for (i, operand) in operands.iter().enumerate() {
             let value = self.gen_expr(operand)?;
-            let constant = matches!(
-                operand.kind,
-                ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
-            );
             // A variable after the last prelude reads the same value whenever C reads it.
             let variable = matches!(operand.kind, ExprKind::Var(_));
             let in_order = last_prelude.is_some_and(|last| i < last || (i + 1 < operands.len() && !variable));
-            // A value-less operand (`xs.add(v)`, or a call of a task sending
-            // nothing, in a list of values) runs in order as a statement.
-            if in_order && *operand.ty()? == Type::Nothing {
-                if !value.is_empty() {
-                    self.w.line(&format!("{};", value));
-                }
-                values.push(String::new());
-            } else if in_order && !constant {
-                let tmp = self.fresh_temp("arg");
-                let ty = operand.ty()?;
-                match &operand.kind {
-                    // An address read (`&a == &b`), typed `^T`: only compared, so
-                    // kept as one, which a place that never changes gives too.
-                    ExprKind::Ref(place) if place.ty.as_ref().is_some_and(|place| *ty == Type::Ptr(Box::new(place.clone()), None)) => {
-                        self.w.line(&format!("const void* {} = {};", tmp, value));
-                    }
-                    // A place given to a `hold&` parameter is its address.
-                    ExprKind::Ref(_) => self.w.line(&format!("{}* {} = {};", c_type(operand.ty()?), tmp, value)),
-                    _ => self.w.line(&format!("{} {} = {};", c_type(operand.ty()?), tmp, value)),
-                }
-                values.push(tmp);
-            } else {
-                values.push(value);
-            }
+            values.push(self.operand_value(operand, value, in_order)?);
         }
         Ok(values)
+    }
+
+    /// What C reads of `operand`, whose C is `value`: kept in a variable of its
+    /// own when `in_order`, so it is worked out before a later operand's
+    /// prelude runs (see `gen_operands`).
+    fn operand_value(&mut self, operand: &Expr, value: String, in_order: bool) -> Result<String> {
+        let constant = matches!(
+            operand.kind,
+            ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
+        );
+        // A value-less operand (`xs.add(v)`, or a call of a task sending
+        // nothing, in a list of values) runs in order as a statement.
+        if in_order && *operand.ty()? == Type::Nothing {
+            if !value.is_empty() {
+                self.w.line(&format!("{};", value));
+            }
+            Ok(String::new())
+        } else if in_order && !constant {
+            let tmp = self.fresh_temp("arg");
+            let ty = operand.ty()?;
+            match &operand.kind {
+                // An address read (`&a == &b`), typed `^T`: only compared, so
+                // kept as one, which a place that never changes gives too.
+                ExprKind::Ref(place) if place.ty.as_ref().is_some_and(|place| *ty == Type::Ptr(Box::new(place.clone()), None)) => {
+                    self.w.line(&format!("const void* {} = {};", tmp, value));
+                }
+                // A place given to a `hold&` parameter is its address.
+                ExprKind::Ref(_) => self.w.line(&format!("{}* {} = {};", c_type(operand.ty()?), tmp, value)),
+                _ => self.w.line(&format!("{} {} = {};", c_type(operand.ty()?), tmp, value)),
+            }
+            Ok(tmp)
+        } else {
+            Ok(value)
+        }
     }
 
     /// The arguments of a call some of whose parameters are passed by a hidden
@@ -3298,36 +3305,54 @@ impl Generator {
 
     /// A binary operation without surrounding parentheses.
     fn gen_binary(&mut self, e: &Expr, op: BinaryOp, l: &Expr, r: &Expr) -> Result<String> {
+        // The code generator recurses through operands, so what each kind of
+        // operation writes is in a function of its own, keeping little on the
+        // stack here.
         if matches!(op, BinaryOp::And | BinaryOp::Or) && has_prelude(r) {
-            // The right side's prelude must only run when the left side
-            // doesn't decide the result.
-            let left = self.gen_expr(l)?;
-            let result = self.fresh_temp("cond");
-            self.w.line(&format!("bool {} = {};", result, left));
-            let test = if op == BinaryOp::And { result.clone() } else { format!("!{}", result) };
-            self.w.open(&format!("if ({})", test));
-            let right = self.gen_expr(r)?;
-            self.w.line(&format!("{} = {};", result, right));
-            self.w.close();
-            return Ok(result);
+            return self.gen_short_circuit(op, l, r);
         }
         let refs = [l, r].into_iter().any(|side| matches!(side.kind, ExprKind::Ref(_)));
-        let not = if matches!(op, BinaryOp::Ne | BinaryOp::NotSimilar) { "!" } else { "" };
-        // An array, a shape, a tuple, or a kind carrying one is compared by
-        // where it is: both sides are places (the checker made sure), read as
-        // their addresses rather than as values, which could be copies.
         if matches!(op, BinaryOp::Eq | BinaryOp::Ne) && !refs && self.by_place(l.ty()?) {
-            let left = self.gen_address(l)?;
-            let right = self.gen_address(r)?;
-            if self.is_kind(l.ty()?) {
-                return Ok(format!("{}{}({}, {})", not, copy_helper("same", l.ty()?), left, right));
-            }
-            let symbol = if op == BinaryOp::Eq { "==" } else { "!=" };
-            let (left, right) = (format!("(const void*)({})", left), format!("(const void*)({})", right));
-            return Ok(format!("({} {} {})", left, symbol, other_side(&left, right, "const void*")));
+            return self.gen_place_equality(op, l, r);
         }
         let [left, right] = <[String; 2]>::try_from(self.gen_operands(&[l, r])?)
             .map_err(|_| Error::internal_at(e.span, "a binary operation without two operands"))?;
+        self.binary_of(e, op, l, r, left, right)
+    }
+
+    /// `l and r` or `l or r`, where `r` has a prelude, which must only run
+    /// when `l` doesn't decide the result.
+    fn gen_short_circuit(&mut self, op: BinaryOp, l: &Expr, r: &Expr) -> Result<String> {
+        let left = self.gen_expr(l)?;
+        let result = self.fresh_temp("cond");
+        self.w.line(&format!("bool {} = {};", result, left));
+        let test = if op == BinaryOp::And { result.clone() } else { format!("!{}", result) };
+        self.w.open(&format!("if ({})", test));
+        let right = self.gen_expr(r)?;
+        self.w.line(&format!("{} = {};", result, right));
+        self.w.close();
+        Ok(result)
+    }
+
+    /// `l == r` or `l != r` of an array, a shape, a tuple, or a kind carrying
+    /// one, compared by where it is: both sides are places (the checker made
+    /// sure), read as their addresses rather than as values, which could be
+    /// copies.
+    fn gen_place_equality(&mut self, op: BinaryOp, l: &Expr, r: &Expr) -> Result<String> {
+        let not = if op == BinaryOp::Ne { "!" } else { "" };
+        let left = self.gen_address(l)?;
+        let right = self.gen_address(r)?;
+        if self.is_kind(l.ty()?) {
+            return Ok(format!("{}{}({}, {})", not, copy_helper("same", l.ty()?), left, right));
+        }
+        let symbol = if op == BinaryOp::Eq { "==" } else { "!=" };
+        let (left, right) = (format!("(const void*)({})", left), format!("(const void*)({})", right));
+        Ok(format!("({} {} {})", left, symbol, other_side(&left, right, "const void*")))
+    }
+
+    /// `l op r` in C, given `left` and `right`, the C of its operands.
+    fn binary_of(&mut self, e: &Expr, op: BinaryOp, l: &Expr, r: &Expr, left: String, right: String) -> Result<String> {
+        let not = if matches!(op, BinaryOp::Ne | BinaryOp::NotSimilar) { "!" } else { "" };
         if matches!(op, BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Similar | BinaryOp::NotSimilar) {
             // `m == none` tests a maybe.
             let maybe = match (l.ty()?, r.ty()?) {

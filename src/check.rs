@@ -613,7 +613,12 @@ impl Checker {
         }
         self.check_declarations(items);
         self.settle_wrappers(items);
-        for item in items.iter_mut() {
+        // A lambda is checked after the code it is written in, which notes
+        // the names around it (see `lambda_outer`): the parser adds lambdas
+        // last, each after the ones inside it, so they are checked from the
+        // last back.
+        let (lambdas, others): (Vec<&mut Item>, Vec<&mut Item>) = items.iter_mut().partition(|item| matches!(item, Item::Task(t) if is_lambda(&t.name)));
+        for item in others.into_iter().chain(lambdas.into_iter().rev()) {
             if let Item::Task(t) = item {
                 self.current_module = module_of(&t.name).to_string();
                 // A mistake in a body is the body's own: the task's header was
@@ -1059,6 +1064,7 @@ impl Checker {
                 let value = self.macro_value(name, through)?;
                 Constant::of(&value).ok_or_else(|| Error::internal_at(span, "a macro that is no constant"))
             }
+            ExprKind::Var(name) if is_lambda(name) => not_constant("a lambda, which is a task; write it where its value goes"),
             ExprKind::Var(name) => not_constant(&format!("'{}', which is no macro", unqualified(name))),
             ExprKind::Unary(op, operand) => {
                 let value = self.fold_constant(operand, through)?;
@@ -1854,6 +1860,13 @@ impl Checker {
                     return err(
                         at,
                         format!("{} lives in '@{}', the region of the value a method is called on, and a shared method has none; take a region, as in 'r: region', and name it", which, THIS_WORD),
+                    );
+                }
+                // A lambda takes no region, so only its parameters' types can name one.
+                if is_lambda(&t.name) {
+                    return err(
+                        at,
+                        format!("{1} lives in region '{0}', which none of the lambda's parameters names, and a lambda takes no region; name '{0}' in a parameter's type, as in '(s: text@{0}) -> text@{0}'", region, which),
                     );
                 }
                 return err(
@@ -4419,7 +4432,7 @@ impl Checker {
     /// innermost out, and writes its body: the call of its wrapper.
     fn settle_wrappers(&mut self, items: &mut [Item]) {
         let places: HashMap<String, usize> = items.iter().enumerate().filter(|(_, item)| matches!(item, Item::Task(_))).map(|(i, item)| (item.name().to_string(), i)).collect();
-        for (task, calls) in std::mem::take(&mut self.wrapped) {
+        for (task, calls) in self.wrappers_first() {
             self.current_module = module_of(&task).to_string();
             let settled = self.settle_wrapped(items, &places, &task, &calls);
             if !self.keep_going(settled) {
@@ -4431,6 +4444,39 @@ impl Checker {
             }
         }
         self.current_module.clear();
+    }
+
+    /// The tasks with wrappers (see `wrapped`), each after its wrappers that
+    /// have wrappers of their own: what a wrapper sends is settled before a
+    /// task it wraps reads it, wherever the two are written.
+    fn wrappers_first(&mut self) -> Vec<(String, Vec<Expr>)> {
+        let wrapped = std::mem::take(&mut self.wrapped);
+        let order: Vec<String> = wrapped.iter().map(|(task, _)| task.clone()).collect();
+        let mut pending: HashMap<String, Vec<Expr>> = wrapped.into_iter().collect();
+        let mut settled = Vec::new();
+        for task in order {
+            self.wrapper_first(&task, &mut pending, &mut settled);
+        }
+        settled
+    }
+
+    /// Adds `task`, if it is still `pending`, to `settled` after its wrappers.
+    fn wrapper_first(&self, task: &str, pending: &mut HashMap<String, Vec<Expr>>, settled: &mut Vec<(String, Vec<Expr>)>) {
+        // Taken out first, so a wrapper is never waited on twice.
+        let Some(calls) = pending.remove(task) else { return };
+        let module = module_of(task);
+        for call in &calls {
+            if let ExprKind::Call { name, .. } = &call.kind {
+                // `full_name`, for the module `task` is in.
+                let full = match self.modules.get(module).and_then(|scope| scope.imported(name)) {
+                    _ if name.contains(MODULE_SEPARATOR) => name.clone(),
+                    Some(imported) => imported.to_string(),
+                    None => qualify(module, name),
+                };
+                self.wrapper_first(&full, pending, settled);
+            }
+        }
+        settled.push((task.to_string(), calls));
     }
 
     fn settle_wrapped(&mut self, items: &mut [Item], places: &HashMap<String, usize>, task: &str, calls: &[Expr]) -> Result<()> {
@@ -4583,7 +4629,9 @@ impl Checker {
         let ExprKind::Call { name, args, .. } = &call.kind else { return Ok(()) };
         let Some(info) = self.tasks.get(&self.full_name(name)).filter(|info| info.types.is_empty() && info.owner.is_none()) else { return Ok(()) };
         let Some(ExprKind::Var(decorated)) = args.first().map(|arg| &arg.kind) else { return Ok(()) };
-        let written = unqualified(name);
+        // As it is written: a decorator of another module keeps its module's name.
+        let own = format!("{}{}", self.current_module, MODULE_SEPARATOR);
+        let written = name.strip_prefix(own.as_str()).unwrap_or(name);
         let first = match info.params.first() {
             Some((_, ty)) if is_task(ty) => ty,
             other => {
@@ -4710,22 +4758,8 @@ impl Checker {
         if matches!(expr.kind, ExprKind::Shortcut { .. }) {
             self.expand_shortcut(expr)?;
         }
-        // `m.keys`: a map's keys made into a slice in the block's default region.
-        // The base is checked once: a field of that name on anything else is
-        // read from the type found (checking it again would double the work
-        // at each `.values` of a chain of them).
-        if let ExprKind::Field(base, word) = &mut expr.kind
-            && let Some(op @ (MapOp::Keys | MapOp::Values)) = MapOp::from_word(word)
-            && (self.called_on_a_value() || !matches!(&base.kind, ExprKind::Var(name) if name == THIS))
-        {
-            let base_ty = self.check_expr(base)?;
-            if !matches!(base_ty, Type::Map(..)) {
-                return self.field_type(&base_ty, word, span);
-            }
-            let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
-            if let ExprKind::Field(map, _) = taken {
-                expr.kind = ExprKind::MapOp { map, op, key: None, region: None, region_span: span };
-            }
+        if let Some(ty) = self.resolve_map_field(expr)? {
+            return Ok(ty);
         }
         match &mut expr.kind {
             ExprKind::Spread(inner) => self.check_spread(inner, span),
@@ -4758,19 +4792,7 @@ impl Checker {
             ExprKind::Invoke { callee, args } => self.check_invoke(callee, args, span),
             // A macro whose value has a mistake, which is told once, where it is written.
             ExprKind::Var(name) if self.lookup(name).is_none() && self.sees(name) && self.macros.contains_key(name.as_str()) => Ok(Type::Unknown),
-            ExprKind::Var(name) => {
-                let ty = self.lookup_or_err(name, span)?.ty.clone();
-                if self.unset.contains(name.as_str()) {
-                    return err(span, format!("'{}' might not be set here", name));
-                }
-                // A group's values go on whole, and only to a task's call.
-                if let Type::Group(group) = &ty
-                    && !self.spreading
-                {
-                    return err(span, format!("'{0}' holds the values of the group '{1}...', which go on whole to a task that takes them, as in 'next({0}...)'", name, group));
-                }
-                Ok(ty)
-            }
+            ExprKind::Var(name) => self.check_var(name, span),
             ExprKind::Field(base, field) => {
                 // `.x` outside a method, named as it is written.
                 if !self.called_on_a_value() && matches!(&base.kind, ExprKind::Var(name) if name == THIS) {
@@ -4790,129 +4812,7 @@ impl Checker {
             ExprKind::Array(values) => self.check_array(values, span),
             ExprKind::Tuple(values) => self.check_tuple(values),
             ExprKind::Repeat { value, count } => self.check_repeat(value, count, span),
-            ExprKind::Call { name, types, args } => {
-                // `show`, `int(…)` and `float(…)` make no memory a program sees,
-                // so nothing names a region after them.
-                if let Some(at) = region_after(args)
-                    && (name == "show" || number_cast(name).is_some())
-                {
-                    let what = if name == "show" { "'show' writes each value in a region of its own".to_string() } else { format!("'{}(…)' makes a number, which holds no memory", name) };
-                    return err(at, format!("{}, so no region is named after it", what));
-                }
-                if name == "show" {
-                    // `show` takes any number of values, written one after
-                    // another with nothing between them; `show()` is a line of
-                    // its own.
-                    for arg in args.iter_mut() {
-                        self.check_shown(arg)?;
-                    }
-                    return Ok(Type::Nothing);
-                }
-                // `int(x)` and `float(x)`: a value turned into a number, as
-                // `text(x) at r` turns one into text.
-                if let Some(into) = number_cast(name) {
-                    return self.check_number_cast(&into, types, args, span);
-                }
-                let info = self.tasks.get(name.as_str()).filter(|_| self.sees(name))
-                    .ok_or_else(|| {
-                        // `send (x)` written the old way reads as a call.
-                        // `X.make(…)` naming no method of X (see `Resolver::shared_method`).
-                        if let Some((owner, method)) = method_parts(name) {
-                            if self.shapes.get(owner).is_some_and(|shape| shape.shared.iter().any(|member| member.field.name == method)) {
-                                return Error::at(span, format!("'{0}.{1}' is a shared field, not a method, so it is read as '{0}.{1}', without '(…)'", unqualified(owner), method));
-                            }
-                            let what = if self.kinds.contains_key(owner) { "kind" } else { "shape" };
-                            let or_variant = if what == "kind" { "variant or " } else { "" };
-                            return Error::at(span, format!("{} '{}' has no {}shared method '{}'", what, owner, or_variant, method));
-                        }
-                        // `area()` inside a method of the shape that has it.
-                        if let Some(of) = &self.current_type
-                            && let Some(method) = self.tasks.get(&method_name(of, name)).and_then(|info| info.owner.as_ref())
-                        {
-                            let how = match (method.shared, self.called_on_a_value()) {
-                                (true, _) => format!("'{}.{}(…)'", unqualified(of), name),
-                                (false, true) => format!("'.{}(…)', or 'x.{}(…)' on another value", name, name),
-                                (false, false) => format!("'x.{}(…)', on a value of it", name),
-                            };
-                            return Error::at(span, format!("'{}' is a method of '{}', so a call names what it is called on, as in {}", name, unqualified(of), how));
-                        }
-                        if !types.is_empty() && self.lookup(name).is_some() {
-                            return Error::at(span, misread_comparison(name));
-                        }
-                        let hint = match name.as_str() {
-                            "send" => "; a task sends its result with '<-'".to_string(),
-                            "free" => "; Vela has no 'free': memory in a region is freed when the block declaring the region closes".to_string(),
-                            _ if self.module_used(name).is_some() => format!("; '{0}' is a module, so name a task in it, as in '{0}.name(…)'", name),
-                            _ if self.macros.contains_key(name) => "; it is a macro, a value that never changes, so it is used without '()'".to_string(),
-                            // `(i < n, n > (m))`: a `<` after a name whose `>`
-                            // is followed by `(` gives types to a call.
-                            _ => self.elsewhere(name),
-                        };
-                        Error::at(span, format!("unknown task '{}'{}", name, hint))
-                    })?
-                    .clone();
-                // `X.m(…)`, a method named on its shape or kind: only a shared
-                // one is called that way, and a private one only in its file.
-                if let Some(owner) = info.owner.as_ref().filter(|_| !on_a_value)
-                    && let Some((of, _)) = method_parts(name)
-                {
-                    let written = format!("{}{}{}", unqualified(of), MODULE_SEPARATOR, owner.name);
-                    if !owner.shared {
-                        return err(
-                            span,
-                            format!("'{0}' is called on a value of '{1}', as in 'x.{2}(…)'; only a shared method, written 'shared {2}(…)', is called on '{1}' itself", written, unqualified(of), owner.name),
-                        );
-                    }
-                    if self.private.contains(name.as_str()) && module_of(of) != self.current_module {
-                        return err(span, format!("'{}' is a private method of '{}', which only its own file can use", owner.name, unqualified(of)));
-                    }
-                }
-                // A task whose header has a mistake takes and sends nothing
-                // known, so the call is only checked as far as its arguments
-                // are values of their own (see `broken`).
-                if self.broken.contains(name.as_str()) {
-                    self.check_each(args);
-                    return Ok(Type::Unknown);
-                }
-                // A shared method is named as it is written, `X.new`.
-                let callee = match method_parts(name).filter(|_| !on_a_value) {
-                    Some((of, method)) => format!("method '{}{}{}'", unqualified(of), MODULE_SEPARATOR, method),
-                    None => format!("task '{}'", name),
-                };
-                // A task taking a group takes, for this call, one type for each
-                // value the call gives it after the others.
-                let group = match info.params.last() {
-                    Some((_, Type::Group(group))) => Some((group.clone(), args.len() + 1 - info.params.len().min(args.len() + 1))),
-                    _ => None,
-                };
-                let info = match self.group_call_info(&info, args, types, span, &callee)? {
-                    Some(expanded) => expanded,
-                    None => info,
-                };
-                if let Some(spread) = args.iter().find(|arg| matches!(arg.kind, ExprKind::Spread(_))) {
-                    return err(spread.span, format!("a group's values go on whole to a task value taking the group, as in 'next(args...)'; giving them to {} is not built yet", callee));
-                }
-                self.settle_call_region(span, &callee, args, &info.params)?;
-                if args.len() != info.params.len() {
-                    // `f(a < b, c > (d))` reads as one argument, a call of `a`.
-                    if let Some((name, at)) = args.iter().find_map(|arg| match &arg.kind {
-                        ExprKind::Call { name, types, .. } if !types.is_empty() && self.lookup(name).is_some() && !self.tasks.contains_key(name.as_str()) => Some((name, arg.span)),
-                        _ => None,
-                    }) {
-                        return err(at, misread_comparison(name));
-                    }
-                    return err(span, format!("{} expects {}, got {}", callee, count(info.params.len(), "argument"), args.len()));
-                }
-                // The values a call gives a group decide how many types it holds.
-                self.check_call_args(span, name, types, args, &info).map_err(|mut error| {
-                    if let Some((group, given)) = &group
-                        && error.message.starts_with("expected type")
-                    {
-                        error.message.push_str(&format!("; this call gives the group '{}...' {}, so the group is {}", group, count(*given, "value"), count(*given, "type")));
-                    }
-                    error
-                })
-            }
+            ExprKind::Call { name, types, args } => self.check_task_call(span, on_a_value, name, types, args),
             ExprKind::Unary(op, e) => self.check_unary(*op, e, span),
             ExprKind::Construct { kind, tag, args } if self.broken.contains(kind.as_str()) => {
                 // A kind whose own variants have a mistake holds nothing known
@@ -4920,89 +4820,18 @@ impl Checker {
                 self.check_each(args);
                 Ok(Type::Unknown)
             }
-            ExprKind::Construct { kind, tag, args } => {
-                let variant = self.kinds.get(kind.as_str())
-                    .and_then(|k| k.variants.iter().find(|v| v.tag == *tag))
-                    .cloned()
-                    .ok_or_else(|| Error::internal_at(span, format!("unknown variant '{}'", tag)))?;
-                if let Some(at) = region_after(args) {
-                    return err(at, format!("variant '{}' makes a value, not memory, so no region is named after it", tag));
-                }
-                if args.len() != variant.payload.len() {
-                    return err(span, format!("variant '{}' expects {}, got {}", tag, count(variant.payload.len(), "argument"), args.len()));
-                }
-                let mut values: Vec<&mut Expr> = args.iter_mut().collect();
-                let region = self.check_fields_of_value(&mut values, &variant.payload, None)?;
-                Ok(Type::Named(kind.clone(), self.region_of_value(kind, region)))
-            }
-            ExprKind::New { ty, ty_span, value, region, region_span } => {
-                **ty = self.resolve_type(ty, *ty_span, TypePlace::New)?;
-                // `^int ~ E` means `(^int) ~ E`, so no written type could hold the pointer.
-                if matches!(**ty, Type::Or(..)) {
-                    return err(*ty_span, format!("'new' can't make a pointer to '{}'; extract the value first, or keep it in a shape's field", ty));
-                }
-                // The region written, or the block's default, which is kept on
-                // the node so the code generator sees the region either way.
-                let written = ty.to_string();
-                let allocates = self.region_or_default(region.as_ref(), *region_span, || {
-                    format!("'new' needs a region to allocate in, as in 'new {0}(…) at r' or 'new@r {0}(…)'", written)
-                })?;
-                *region = Some(allocates.clone());
-                self.visible_region(&allocates, *region_span, true)?;
-                // `new [K: V](…) at r` makes the map, its table in `r`.
-                if let Type::Map(key, value_ty, _) = &**ty {
-                    let key = self.in_region(key, &allocates);
-                    let value_ty = self.in_region(value_ty, &allocates);
-                    let map = Type::Map(Box::new(key.clone()), Box::new(value_ty.clone()), Some(allocates));
-                    self.check_map_source(value, &key, &value_ty, &map)?;
-                    return Ok(map);
-                }
-                // `new [T](…) at r` makes the slice itself, with its items in `r`.
-                if let Type::Slice(items, _) = &**ty {
-                    let items = self.in_region(items, &allocates);
-                    let slice = Type::Slice(Box::new(items.clone()), Some(allocates));
-                    self.check_slice_source(value, &items, &slice)?;
-                    return Ok(slice);
-                }
-                let pointee = self.in_region(ty, &allocates);
-                self.check_expr(value)?;
-                self.coerce(value, &pointee)?;
-                Ok(Type::Ptr(Box::new(pointee), Some(allocates)))
-            }
+            ExprKind::Construct { kind, tag, args } => self.check_construct(kind, tag, args, span),
+            ExprKind::New { ty, ty_span, value, region, region_span } => self.check_new(ty, *ty_span, value, region, *region_span),
             // `expand_shortcut` above made it the `New` it stands for.
             ExprKind::Shortcut { .. } | ExprKind::Pairs(_) => Err(Error::internal_at(span, "a shortcut that was not expanded")),
             ExprKind::MapOp { map, op, key, region, region_span } => {
                 let (op, region_span) = (*op, *region_span);
                 self.check_map_op(map, op, key.as_deref_mut(), region, region_span)
             }
-            ExprKind::Deref(e) => {
-                let ty = self.check_expr(e)?;
-                if ty.unknown() {
-                    return Ok(Type::Unknown);
-                }
-                if let Type::Maybe(inner) = &ty
-                    && inner.ptr_inner().is_some()
-                {
-                    return err(span, format!("this pointer is a {}, which may be none; extract it first, as in 'when p is {{q}}' or 'p {{ … }}'", ty));
-                }
-                if let Type::Or(value, _) = &ty
-                    && value.ptr_inner().is_some()
-                {
-                    return err(span, format!("this pointer is a {}, which may be an error; extract it first, as in 'p {{ … }}' or 'match'", ty));
-                }
-                let hint = if matches!(ty, Type::Slice(..)) { "; read an item of a slice with 'xs[i]'" } else { "" };
-                ty.ptr_inner().cloned()
-                    .ok_or_else(|| Error::at(span, format!("'^' reads the value a pointer points to, but this value is {}{}", ty, hint)))
-            }
+            ExprKind::Deref(e) => self.check_deref(e, span),
             ExprKind::StructInit { name, types, fields } => self.check_struct_init(span, name, types, fields),
             ExprKind::Range(..) => err(span, "a range can only be used in 'each' or to take part of an array or slice, as in 'xs[1..3]'"),
-            ExprKind::Fail(error) => {
-                let ty = self.check_expr(error)?;
-                if matches!(ty, Type::Nothing | Type::None | Type::Fail(_) | Type::Maybe(_) | Type::Or(..)) {
-                    return err(error.span, format!("'fail' needs an error value, got {}", ty));
-                }
-                Ok(Type::Fail(Box::new(ty)))
-            }
+            ExprKind::Fail(error) => self.check_fail(error),
             ExprKind::PlanB { value, error, body } => self.check_plan_b(span, value, error.as_ref(), body),
             // A `match` or a `when` used as a value: its branches give it, and
             // one whose branches had a mistake of their own gives an unknown
@@ -5025,6 +4854,265 @@ impl Checker {
             }
             ExprKind::MethodCall { name, .. } => Err(Error::internal_at(span, format!("the method call '{}' was not rewritten", name))),
         }
+    }
+
+    /// Checks `name(args)`, a call of a task or of a shared method;
+    /// `on_a_value` when it was written as a method call on a value. Kept
+    /// apart from `task_call_setup`, as `check_call_args` is from what it
+    /// calls: the checker recurses through calls, so the functions it goes
+    /// through keep little on the stack.
+    fn check_task_call(&mut self, span: Span, on_a_value: bool, name: &str, types: &mut Vec<TypeArg>, args: &mut Vec<Expr>) -> Result<Type> {
+        let (info, group) = match self.task_call_setup(span, on_a_value, name, types, args)? {
+            CallSetup::Checked(ty) => return Ok(ty),
+            CallSetup::Call(info, group) => (info, group),
+        };
+        // The values a call gives a group decide how many types it holds.
+        self.check_call_args(span, name, types, args, &info).map_err(|error| group_hint(error, group.as_ref()))
+    }
+
+    /// What a call of `name` needs before its arguments are checked against
+    /// the task's header (see `check_task_call`).
+    fn task_call_setup(&mut self, span: Span, on_a_value: bool, name: &str, types: &mut [TypeArg], args: &mut Vec<Expr>) -> Result<CallSetup> {
+        // `show`, `int(…)` and `float(…)` make no memory a program sees,
+        // so nothing names a region after them.
+        if let Some(at) = region_after(args)
+            && (name == "show" || number_cast(name).is_some())
+        {
+            let what = if name == "show" { "'show' writes each value in a region of its own".to_string() } else { format!("'{}(…)' makes a number, which holds no memory", name) };
+            return err(at, format!("{}, so no region is named after it", what));
+        }
+        if name == "show" {
+            // `show` takes any number of values, written one after
+            // another with nothing between them; `show()` is a line of
+            // its own.
+            for arg in args.iter_mut() {
+                self.check_shown(arg)?;
+            }
+            return Ok(CallSetup::Checked(Type::Nothing));
+        }
+        // `int(x)` and `float(x)`: a value turned into a number, as
+        // `text(x) at r` turns one into text.
+        if let Some(into) = number_cast(name) {
+            return self.check_number_cast(&into, types, args, span).map(CallSetup::Checked);
+        }
+        let info = self.tasks.get(name).filter(|_| self.sees(name))
+            .ok_or_else(|| self.unknown_task(name, types, span))?
+            .clone();
+        // `X.m(…)`, a method named on its shape or kind: only a shared
+        // one is called that way, and a private one only in its file.
+        if let Some(owner) = info.owner.as_ref().filter(|_| !on_a_value)
+            && let Some((of, _)) = method_parts(name)
+        {
+            let written = format!("{}{}{}", unqualified(of), MODULE_SEPARATOR, owner.name);
+            if !owner.shared {
+                return err(
+                    span,
+                    format!("'{0}' is called on a value of '{1}', as in 'x.{2}(…)'; only a shared method, written 'shared {2}(…)', is called on '{1}' itself", written, unqualified(of), owner.name),
+                );
+            }
+            if self.private.contains(name) && module_of(of) != self.current_module {
+                return err(span, format!("'{}' is a private method of '{}', which only its own file can use", owner.name, unqualified(of)));
+            }
+        }
+        // A task whose header has a mistake takes and sends nothing
+        // known, so the call is only checked as far as its arguments
+        // are values of their own (see `broken`).
+        if self.broken.contains(name) {
+            self.check_each(args);
+            return Ok(CallSetup::Checked(Type::Unknown));
+        }
+        // A shared method is named as it is written, `X.new`.
+        let callee = match method_parts(name).filter(|_| !on_a_value) {
+            Some((of, method)) => format!("method '{}{}{}'", unqualified(of), MODULE_SEPARATOR, method),
+            None => format!("task '{}'", name),
+        };
+        // A task taking a group takes, for this call, one type for each
+        // value the call gives it after the others.
+        let group = match info.params.last() {
+            Some((_, Type::Group(group))) => Some((group.clone(), args.len() + 1 - info.params.len().min(args.len() + 1))),
+            _ => None,
+        };
+        let info = match self.group_call_info(&info, args, types, span, &callee)? {
+            Some(expanded) => expanded,
+            None => info,
+        };
+        if let Some(spread) = args.iter().find(|arg| matches!(arg.kind, ExprKind::Spread(_))) {
+            return err(spread.span, format!("a group's values go on whole to a task value taking the group, as in 'next(args...)'; giving them to {} is not built yet", callee));
+        }
+        self.settle_call_region(span, &callee, args, &info.params)?;
+        if args.len() != info.params.len() {
+            // `f(a < b, c > (d))` reads as one argument, a call of `a`.
+            if let Some((name, at)) = args.iter().find_map(|arg| match &arg.kind {
+                ExprKind::Call { name, types, .. } if !types.is_empty() && self.lookup(name).is_some() && !self.tasks.contains_key(name.as_str()) => Some((name, arg.span)),
+                _ => None,
+            }) {
+                return err(at, misread_comparison(name));
+            }
+            return err(span, format!("{} expects {}, got {}", callee, count(info.params.len(), "argument"), args.len()));
+        }
+        Ok(CallSetup::Call(info, group))
+    }
+
+    /// The mistake in a call of `name`, which names no task this file sees.
+    fn unknown_task(&self, name: &str, types: &[TypeArg], span: Span) -> Error {
+        // `send (x)` written the old way reads as a call.
+        // `X.make(…)` naming no method of X (see `Resolver::shared_method`).
+        if let Some((owner, method)) = method_parts(name) {
+            if self.shapes.get(owner).is_some_and(|shape| shape.shared.iter().any(|member| member.field.name == method)) {
+                return Error::at(span, format!("'{0}.{1}' is a shared field, not a method, so it is read as '{0}.{1}', without '(…)'", unqualified(owner), method));
+            }
+            let what = if self.kinds.contains_key(owner) { "kind" } else { "shape" };
+            let or_variant = if what == "kind" { "variant or " } else { "" };
+            return Error::at(span, format!("{} '{}' has no {}shared method '{}'", what, owner, or_variant, method));
+        }
+        // `area()` inside a method of the shape that has it.
+        if let Some(of) = &self.current_type
+            && let Some(method) = self.tasks.get(&method_name(of, name)).and_then(|info| info.owner.as_ref())
+        {
+            let how = match (method.shared, self.called_on_a_value()) {
+                (true, _) => format!("'{}.{}(…)'", unqualified(of), name),
+                (false, true) => format!("'.{}(…)', or 'x.{}(…)' on another value", name, name),
+                (false, false) => format!("'x.{}(…)', on a value of it", name),
+            };
+            return Error::at(span, format!("'{}' is a method of '{}', so a call names what it is called on, as in {}", name, unqualified(of), how));
+        }
+        if !types.is_empty() && self.lookup(name).is_some() {
+            return Error::at(span, misread_comparison(name));
+        }
+        let hint = match name {
+            "send" => "; a task sends its result with '<-'".to_string(),
+            "free" => "; Vela has no 'free': memory in a region is freed when the block declaring the region closes".to_string(),
+            _ if self.module_used(name).is_some() => format!("; '{0}' is a module, so name a task in it, as in '{0}.name(…)'", name),
+            _ if self.macros.contains_key(name) => "; it is a macro, a value that never changes, so it is used without '()'".to_string(),
+            // `(i < n, n > (m))`: a `<` after a name whose `>`
+            // is followed by `(` gives types to a call.
+            _ => self.elsewhere(name),
+        };
+        Error::at(span, format!("unknown task '{}'{}", name, hint))
+
+    }
+
+    /// Checks a read of the variable `name`.
+    fn check_var(&mut self, name: &str, span: Span) -> Result<Type> {
+        let ty = self.lookup_or_err(name, span)?.ty.clone();
+        if self.unset.contains(name) {
+            return err(span, format!("'{}' might not be set here", name));
+        }
+        // A group's values go on whole, and only to a task's call.
+        if let Type::Group(group) = &ty
+            && !self.spreading
+        {
+            return err(span, format!("'{0}' holds the values of the group '{1}...', which go on whole to a task that takes them, as in 'next({0}...)'", name, group));
+        }
+        Ok(ty)
+    }
+
+    /// Checks `Kind.Tag(args)`, a variant made with its values.
+    fn check_construct(&mut self, kind: &str, tag: &str, args: &mut [Expr], span: Span) -> Result<Type> {
+        let variant = self.kinds.get(kind)
+            .and_then(|k| k.variants.iter().find(|v| v.tag == *tag))
+            .cloned()
+            .ok_or_else(|| Error::internal_at(span, format!("unknown variant '{}'", tag)))?;
+        if let Some(at) = region_after(args) {
+            return err(at, format!("variant '{}' makes a value, not memory, so no region is named after it", tag));
+        }
+        if args.len() != variant.payload.len() {
+            return err(span, format!("variant '{}' expects {}, got {}", tag, count(variant.payload.len(), "argument"), args.len()));
+        }
+        let mut values: Vec<&mut Expr> = args.iter_mut().collect();
+        let region = self.check_fields_of_value(&mut values, &variant.payload, None)?;
+        Ok(Type::Named(kind.to_string(), self.region_of_value(kind, region)))
+    }
+
+    /// Checks `new T(value) at r` (see `ExprKind::New`).
+    fn check_new(&mut self, ty: &mut Box<Type>, ty_span: Span, value: &mut Expr, region: &mut Option<String>, region_span: Span) -> Result<Type> {
+        **ty = self.resolve_type(ty, ty_span, TypePlace::New)?;
+        // `^int ~ E` means `(^int) ~ E`, so no written type could hold the pointer.
+        if matches!(**ty, Type::Or(..)) {
+            return err(ty_span, format!("'new' can't make a pointer to '{}'; extract the value first, or keep it in a shape's field", ty));
+        }
+        // The region written, or the block's default, which is kept on
+        // the node so the code generator sees the region either way.
+        let written = ty.to_string();
+        let allocates = self.region_or_default(region.as_ref(), region_span, || {
+            format!("'new' needs a region to allocate in, as in 'new {0}(…) at r' or 'new@r {0}(…)'", written)
+        })?;
+        *region = Some(allocates.clone());
+        self.visible_region(&allocates, region_span, true)?;
+        // `new [K: V](…) at r` makes the map, its table in `r`.
+        if let Type::Map(key, value_ty, _) = &**ty {
+            let key = self.in_region(key, &allocates);
+            let value_ty = self.in_region(value_ty, &allocates);
+            let map = Type::Map(Box::new(key.clone()), Box::new(value_ty.clone()), Some(allocates));
+            self.check_map_source(value, &key, &value_ty, &map)?;
+            return Ok(map);
+        }
+        // `new [T](…) at r` makes the slice itself, with its items in `r`.
+        if let Type::Slice(items, _) = &**ty {
+            let items = self.in_region(items, &allocates);
+            let slice = Type::Slice(Box::new(items.clone()), Some(allocates));
+            self.check_slice_source(value, &items, &slice)?;
+            return Ok(slice);
+        }
+        let pointee = self.in_region(ty, &allocates);
+        self.check_expr(value)?;
+        self.coerce(value, &pointee)?;
+        Ok(Type::Ptr(Box::new(pointee), Some(allocates)))
+    }
+
+    /// Checks `p^`, the value a pointer points to.
+    fn check_deref(&mut self, e: &mut Expr, span: Span) -> Result<Type> {
+        let ty = self.check_expr(e)?;
+        if ty.unknown() {
+            return Ok(Type::Unknown);
+        }
+        if let Type::Maybe(inner) = &ty
+            && inner.ptr_inner().is_some()
+        {
+            return err(span, format!("this pointer is a {}, which may be none; extract it first, as in 'when p is {{q}}' or 'p {{ … }}'", ty));
+        }
+        if let Type::Or(value, _) = &ty
+            && value.ptr_inner().is_some()
+        {
+            return err(span, format!("this pointer is a {}, which may be an error; extract it first, as in 'p {{ … }}' or 'match'", ty));
+        }
+        let hint = if matches!(ty, Type::Slice(..)) { "; read an item of a slice with 'xs[i]'" } else { "" };
+        ty.ptr_inner().cloned()
+            .ok_or_else(|| Error::at(span, format!("'^' reads the value a pointer points to, but this value is {}{}", ty, hint)))
+    }
+
+    /// Checks `fail error`.
+    fn check_fail(&mut self, error: &mut Expr) -> Result<Type> {
+        let ty = self.check_expr(error)?;
+        if matches!(ty, Type::Nothing | Type::None | Type::Fail(_) | Type::Maybe(_) | Type::Or(..)) {
+            return err(error.span, format!("'fail' needs an error value, got {}", ty));
+        }
+        Ok(Type::Fail(Box::new(ty)))
+    }
+
+    /// Makes `m.keys` or `m.values` the map operation it is (see `MapOp`).
+    /// Gives the field's type when `expr` is a field of another value, read
+    /// from its base, which is checked once here.
+    fn resolve_map_field(&mut self, expr: &mut Expr) -> Result<Option<Type>> {
+        let span = expr.span;
+        // `m.keys`: a map's keys made into a slice in the block's default region.
+        // The base is checked once: a field of that name on anything else is
+        // read from the type found (checking it again would double the work
+        // at each `.values` of a chain of them).
+        if let ExprKind::Field(base, word) = &mut expr.kind
+            && let Some(op @ (MapOp::Keys | MapOp::Values)) = MapOp::from_word(word)
+            && (self.called_on_a_value() || !matches!(&base.kind, ExprKind::Var(name) if name == THIS))
+        {
+            let base_ty = self.check_expr(base)?;
+            if !matches!(base_ty, Type::Map(..)) {
+                return self.field_type(&base_ty, word, span).map(Some);
+            }
+            let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+            if let ExprKind::Field(map, _) = taken {
+                expr.kind = ExprKind::MapOp { map, op, key: None, region: None, region_span: span };
+            }
+        }
+        Ok(None)
     }
 
     /// Checks a tuple literal, `(a, b)`, and returns its type: its items' types.
@@ -7256,43 +7344,63 @@ impl Checker {
     /// that the arguments' types show; one that no argument shows (as for
     /// `none`) becomes `ANY_REGION`.
     fn check_call_args(&mut self, span: Span, task: &str, written: &mut Vec<TypeArg>, args: &mut [Expr], info: &TaskInfo) -> Result<Type> {
-        let params = &info.params;
-        let ret = &info.ret;
         // The types the call gives: written after the name, or worked out from
         // the arguments below (and from the place the value goes, later).
-        let mut given = self.written_types(span, task, written, info)?;
-        // What the arguments show each type to be, kept apart from the types
-        // written at the call so one written without its region is reported as
-        // that, rather than as an argument of the wrong type.
-        let mut shown: HashMap<String, Type> = HashMap::new();
-        // Where each type the call gives is written: the call itself, for one
-        // worked out rather than written.
-        let places: Vec<Span> = info.types.iter().enumerate().map(|(i, _)| written.get(i).map_or(span, |(_, at)| *at)).collect();
-        let mut regions: HashMap<String, String> = HashMap::new();
+        let given = self.written_types(span, task, written, info)?;
+        let mut found = CallTypes { given, shown: HashMap::new(), regions: HashMap::new() };
+        // The arguments are checked in a function of their own, and what they
+        // show is settled in another: the checker recurses through calls'
+        // arguments, so this keeps little on the stack.
+        self.check_args_of(task, args, info, &mut found)?;
+        self.settle_call_args(span, task, written, args, info, found)
+    }
+
+    /// Checks the arguments of a call of `task`, and notes in `found` what
+    /// each shows the task's types and regions to be.
+    fn check_args_of(&mut self, task: &str, args: &mut [Expr], info: &TaskInfo, found: &mut CallTypes) -> Result<()> {
         let what = if info.owner.is_some() { "method" } else { "task" };
-        for ((arg, (param, ty)), passing) in args.iter_mut().zip(params).zip(&info.passing) {
+        for ((arg, (param, ty)), passing) in args.iter_mut().zip(&info.params).zip(&info.passing) {
             if *ty != Type::Region {
                 // A value of a shape made for its types is read as that shape
                 // given them, so a header naming `Box<T>` matches it (see
                 // `match_regions`).
                 let actual = self.check_argument(arg, *passing, &format!("{} '{}'", what, task), param)?;
-                self.match_regions(ty, &actual, &mut regions);
-                self.match_params(ty, &actual, &mut given);
-                self.match_params(ty, &actual, &mut shown);
+                self.match_regions(ty, &actual, &mut found.regions);
+                self.match_params(ty, &actual, &mut found.given);
+                self.match_params(ty, &actual, &mut found.shown);
                 continue;
             }
-            let ExprKind::Var(region) = &arg.kind else {
-                return err(arg.span, format!("task '{}' takes a region as '{}', such as a 'region r' declared before the call", task, param));
-            };
-            self.visible_region(region, arg.span, true)?;
-            if let Some(bound) = regions.get(param)
-                && bound != region
-            {
-                return err(arg.span, format!("expected region '{}', got '{}'", bound, region));
-            }
-            regions.insert(param.clone(), region.clone());
-            arg.ty = Some(Type::Region);
+            self.check_region_argument(task, arg, param, &mut found.regions)?;
         }
+        Ok(())
+    }
+
+    /// Checks `arg`, given to a call of `task` as its region parameter `param`.
+    fn check_region_argument(&mut self, task: &str, arg: &mut Expr, param: &str, regions: &mut HashMap<String, String>) -> Result<()> {
+        let ExprKind::Var(region) = &arg.kind else {
+            return err(arg.span, format!("task '{}' takes a region as '{}', such as a 'region r' declared before the call", task, param));
+        };
+        self.visible_region(region, arg.span, true)?;
+        if let Some(bound) = regions.get(param)
+            && bound != region
+        {
+            return err(arg.span, format!("expected region '{}', got '{}'", bound, region));
+        }
+        regions.insert(param.to_string(), region.clone());
+        arg.ty = Some(Type::Region);
+        Ok(())
+    }
+
+    /// Settles a call of `task` whose arguments are checked: the types it
+    /// gives, what each argument becomes, and the type of what it sends.
+    fn settle_call_args(&mut self, span: Span, task: &str, written: &mut Vec<TypeArg>, args: &mut [Expr], info: &TaskInfo, found: CallTypes) -> Result<Type> {
+        let CallTypes { mut given, shown, regions } = found;
+        let params = &info.params;
+        let ret = &info.ret;
+        // Where each type the call gives is written: the call itself, for one
+        // worked out rather than written.
+        let places: Vec<Span> = info.types.iter().enumerate().map(|(i, _)| written.get(i).map_or(span, |(_, at)| *at)).collect();
+        let what = if info.owner.is_some() { "method" } else { "task" };
         // A written type names its regions, as a written type does everywhere
         // else, so one that an argument shows to be of a region names it too.
         for ((param, at), (ty, _)) in info.types.iter().zip(&places).zip(written.iter()) {
@@ -7669,22 +7777,9 @@ impl Checker {
     /// value otherwise.
     fn check_argument(&mut self, arg: &mut Expr, passing: Passing, callee: &str, param: &str) -> Result<Type> {
         match (&mut arg.kind, passing) {
-            (ExprKind::Ref(place), Passing::HoldRef) => {
+            (ExprKind::Ref(place), Passing::HoldRef | Passing::BindRef) => {
                 let ty = self.check_expr(place)?;
-                self.given_place(place, &Taker::Param(param))?;
-                arg.ty = Some(ty.clone());
-                Ok(ty)
-            }
-            // A place only read: any place a `bind&` reference may name.
-            (ExprKind::Ref(place), Passing::BindRef) => {
-                let ty = self.check_expr(place)?;
-                if !self.is_place(place) {
-                    return err(
-                        place.span,
-                        format!("{} reads '{}' where the caller keeps it, so it takes a place: a variable, a field or an item of one, or what a pointer points to, and this is {}", callee, param, no_place(place)),
-                    );
-                }
-                self.read_place(place).map_err(|error| Error { message: error.message.replacen("a reference names a place for as long as its block lasts", &format!("'{}' is read where the caller keeps it while the task runs", param), 1), ..error })?;
+                self.check_given_place(place, passing, callee, param)?;
                 arg.ty = Some(ty.clone());
                 Ok(ty)
             }
@@ -7692,33 +7787,29 @@ impl Checker {
                 arg.span,
                 format!("{} takes a copy as '{1}', so leave out '&'; a parameter written 'hold& {1}: …' or 'bind& {1}: …' is given the place itself", callee, param),
             ),
-            (_, Passing::BindRef) => {
+            (_, Passing::BindRef | Passing::HoldRef) => {
                 self.check_expr(arg)?;
-                match place_path(arg) {
-                    Some(path) => err(
-                        arg.span,
-                        format!("{} reads '{}' where the caller keeps it, so the call marks that place with '&', as in '&{}'", callee, param, path_text(&path)),
-                    ),
-                    None => err(
-                        arg.span,
-                        format!("{} reads '{}' where the caller keeps it, so it takes a place marked with '&', as in '&a', and this is a value made here; a parameter written '{}: …' takes a copy", callee, param, param),
-                    ),
-                }
-            }
-            (_, Passing::HoldRef) => {
-                self.check_expr(arg)?;
-                match place_path(arg) {
-                    Some(path) => err(
-                        arg.span,
-                        format!("{} changes '{}', the place it is given, so the call marks that place with '&', as in '&{}'", callee, param, path_text(&path)),
-                    ),
-                    None => err(
-                        arg.span,
-                        format!("{} changes '{}', the place it is given, so it takes a place that can change, marked with '&', as in '&a', and this is a value made here", callee, param),
-                    ),
-                }
+                Err(unmarked_place(arg, passing, callee, param))
             }
             _ => self.check_expr(arg),
+        }
+    }
+
+    /// Checks `place`, checked already, given with `&` to the `hold&` or
+    /// `bind&` parameter `param` of `callee`.
+    fn check_given_place(&mut self, place: &Expr, passing: Passing, callee: &str, param: &str) -> Result<()> {
+        match passing {
+            Passing::HoldRef => self.given_place(place, &Taker::Param(param)),
+            // A place only read: any place a `bind&` reference may name.
+            _ => {
+                if !self.is_place(place) {
+                    return err(
+                        place.span,
+                        format!("{} reads '{}' where the caller keeps it, so it takes a place: a variable, a field or an item of one, or what a pointer points to, and this is {}", callee, param, no_place(place)),
+                    );
+                }
+                self.read_place(place).map_err(|error| Error { message: error.message.replacen("a reference names a place for as long as its block lasts", &format!("'{}' is read where the caller keeps it while the task runs", param), 1), ..error })
+            }
         }
     }
 
@@ -8372,6 +8463,55 @@ fn item_type_example(array: &Type) -> Type {
 fn gives_a_maybe(extracted: &Type, given: &Type) -> Option<Type> {
     let plain = !matches!(extracted, Type::Maybe(_) | Type::Nothing) && !extracted.unknown();
     (plain && matches!(given, Type::None | Type::Maybe(_))).then(|| Type::Maybe(Box::new(extracted.clone())))
+}
+
+/// What the arguments of a call show its task's types and regions to be (see
+/// `Checker::check_call_args`).
+struct CallTypes {
+    /// Each type the call gives: written after the task's name, or worked out
+    /// from the arguments.
+    given: HashMap<String, Type>,
+    /// What the arguments show each type to be, kept apart from the types
+    /// written at the call so one written without its region is reported as
+    /// that, rather than as an argument of the wrong type.
+    shown: HashMap<String, Type>,
+    /// The region each region the header names is.
+    regions: HashMap<String, String>,
+}
+
+/// The mistake in `arg`, given without `&` to the `hold&` or `bind&` parameter
+/// `param` of `callee`.
+fn unmarked_place(arg: &Expr, passing: Passing, callee: &str, param: &str) -> Error {
+    let message = match (place_path(arg), passing) {
+        (Some(path), Passing::BindRef) => format!("{} reads '{}' where the caller keeps it, so the call marks that place with '&', as in '&{}'", callee, param, path_text(&path)),
+        (None, Passing::BindRef) => {
+            format!("{} reads '{}' where the caller keeps it, so it takes a place marked with '&', as in '&a', and this is a value made here; a parameter written '{}: …' takes a copy", callee, param, param)
+        }
+        (Some(path), _) => format!("{} changes '{}', the place it is given, so the call marks that place with '&', as in '&{}'", callee, param, path_text(&path)),
+        (None, _) => format!("{} changes '{}', the place it is given, so it takes a place that can change, marked with '&', as in '&a', and this is a value made here", callee, param),
+    };
+    Error::at(arg.span, message)
+}
+
+/// What `Checker::task_call_setup` found for a call.
+enum CallSetup {
+    /// A call checked already, of this type: one of `show` or a number cast,
+    /// or of a task whose header has a mistake.
+    Checked(Type),
+    /// A call of a task, whose arguments are checked against its header, and
+    /// the group it takes, with how many values the call gives it.
+    Call(TaskInfo, Option<(String, usize)>),
+}
+
+/// `error`, in a call giving `group` its values, told how many types the
+/// group is for that call when the error is of a value's type.
+fn group_hint(mut error: Error, group: Option<&(String, usize)>) -> Error {
+    if let Some((group, given)) = group
+        && error.message.starts_with("expected type")
+    {
+        error.message.push_str(&format!("; this call gives the group '{}...' {}, so the group is {}", group, count(*given, "value"), count(*given, "type")));
+    }
+    error
 }
 
 /// The error for `(i < n, n > (m))`, which reads as a call of `i` given the

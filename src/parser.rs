@@ -672,8 +672,21 @@ impl Parser {
         }
         let name = self.expect_ident()?;
         let name = self.qualified(name)?;
+        self.no_member_decorator("a decorator", "'$register' or '$m.register'")?;
         let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
         Ok((name, args, span))
+    }
+
+    /// Refuses a dot after the name of `what`, a decorator, at the dot: a
+    /// shape's or kind's member, which can't be one yet.
+    fn no_member_decorator(&self, what: &str, example: &str) -> Result<()> {
+        if !self.check(Token::Dot) {
+            return Ok(());
+        }
+        Err(Error::at(
+            self.peek_span(),
+            format!("{} is a task, named alone or with its module, as in {}; a shared method or field of a shape or kind can't be one yet", what, example),
+        ))
     }
 
     /// `(w1, w2(values), …)` after a `$`: wrapper decorators, each kept as the
@@ -691,6 +704,7 @@ impl Parser {
             }
             let name = self.expect_ident()?;
             let name = self.qualified(name)?;
+            self.no_member_decorator("a wrapper", "'$(timed)' or '$(m.timed)'")?;
             let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
             wrappers.push(Expr::new(ExprKind::Call { name, types: Vec::new(), args }, span));
             if !self.match_token(Token::Comma) {
@@ -1450,11 +1464,19 @@ impl Parser {
     }
 
     fn parse_type_parts(&mut self) -> Result<Type> {
+        // The functions reading a type keep little on the stack, each part in
+        // one of its own: a type nests in another once per level.
         let value = self.parse_simple_type()?;
         self.no_or_in_type()?;
-        if !self.match_token(Token::Tilde) {
+        if !self.check(Token::Tilde) {
             return Ok(value);
         }
+        self.parse_error_side(value)
+    }
+
+    /// At the `~` after `value`, a type: the error type, and the whole type.
+    fn parse_error_side(&mut self, value: Type) -> Result<Type> {
+        self.advance(); // ~
         self.type_parts.push(("~".to_string(), self.peek_span()));
         let error = self.parse_simple_type()?;
         self.no_or_in_type()?;
@@ -1485,6 +1507,12 @@ impl Parser {
         if !self.match_token(Token::AtSign) {
             return Ok(ty);
         }
+        self.parse_type_region(span, ty)
+    }
+
+    /// After the `@` of `ty`, written at `span`: the region it lives in, and
+    /// the type in it.
+    fn parse_type_region(&mut self, span: Span, ty: Type) -> Result<Type> {
         let region_span = self.peek_span();
         let region = self.expect_ident()?;
         self.type_parts.push((format!("@{}", region), region_span));
@@ -1547,6 +1575,11 @@ impl Parser {
             self.leave(1);
             return Ok(if prefix == Token::Caret { Type::Ptr(inner, None) } else { Type::Maybe(inner) });
         }
+        self.parse_named_type(span)
+    }
+
+    /// A type named at `span` and the cursor, with the types a shape is given.
+    fn parse_named_type(&mut self, span: Span) -> Result<Type> {
         let name = self.expect_ident()?;
         let mut name = self.qualified(name)?;
         // `geometry.Point` for a module this file doesn't include: a dotted name
@@ -1644,9 +1677,6 @@ impl Parser {
         Ok(Type::Tuple(items))
     }
 
-    /// At the `->` after the parameters of a task's type, `(int, text) -> int`:
-    /// what the task sends, one type, `nothing` when it sends no value. The
-    /// arrow is always written, since `(int)` alone is `int` in parentheses.
     /// `ty` followed by `...`, at the `...`: the group of types `ty` names,
     /// where `allowed` says one may be written, and `where_` is where one is.
     fn group_type(&mut self, ty: Type, allowed: bool, where_: &str) -> Result<Type> {
@@ -1661,6 +1691,9 @@ impl Parser {
         Ok(Type::Group(name.clone()))
     }
 
+    /// At the `->` after the parameters of a task's type, `(int, text) -> int`:
+    /// what the task sends, one type, `nothing` when it sends no value. The
+    /// arrow is always written, since `(int)` alone is `int` in parentheses.
     fn parse_task_type(&mut self, params: Vec<Type>) -> Result<Type> {
         self.advance(); // ->
         if matches!(self.peek(), Token::Newline | Token::Eof | Token::RParen | Token::RBracket | Token::Comma | Token::Assign | Token::Fi) {
@@ -1689,6 +1722,11 @@ impl Parser {
             self.expect(Token::RBracket)?;
             return Ok(Type::Map(items, value, None));
         }
+        self.parse_array_count(items)
+    }
+
+    /// After the item type of an array, `items`: `#count]`.
+    fn parse_array_count(&mut self, items: Box<Type>) -> Result<Type> {
         if !self.match_token(Token::Hash) {
             let error = self.unexpected("'#' and a count, as in '[int#4]', ']' for a slice, as in '[int]@r', or ':' and a value type for a map, as in '[text: int]@r'");
             // `[int; 4]`: the `;` started a comment, which ended the line.
@@ -2296,8 +2334,7 @@ impl Parser {
             return Err(self.misplaced_send());
         }
         self.advance(); // <-
-        let ends = [Token::Newline, Token::Fi, Token::Else, Token::Case, Token::RBrace];
-        if ends.iter().any(|token| self.check(token.clone())) || self.is_at_end() {
+        if matches!(self.peek(), Token::Newline | Token::Fi | Token::Else | Token::Case | Token::RBrace) || self.is_at_end() {
             Ok(Stmt::new(StmtKind::Send(Vec::new()), span))
         } else {
             let values = self.parse_value_list()?;
@@ -2773,45 +2810,53 @@ impl Parser {
     }
 
     fn parse_primary(&mut self) -> Result<Expr> {
+        // Each kind of value is read by a function of its own: this one's
+        // frame is on the stack once per nesting level.
         let span = self.peek_span();
-        let kind = match self.peek() {
-            Token::Int(n) => { let v = *n; self.advance(); ExprKind::IntLit(v) }
-            Token::Float(n) => { let v = *n; self.advance(); ExprKind::FloatLit(v) }
-            Token::Char(c) => { let v = *c; self.advance(); ExprKind::CharLit(v) }
-            Token::Text(s) => { let v = s.clone(); self.advance(); ExprKind::TextLit(v) }
-            Token::Interpolated(_) => return self.parse_interpolated(span),
-            Token::True => { self.advance(); ExprKind::BoolLit(true) }
-            Token::False => { self.advance(); ExprKind::BoolLit(false) }
-            Token::None => { self.advance(); ExprKind::NoneLit }
-            Token::New => return self.parse_new(),
-            Token::LBracket => return self.parse_array(),
-            Token::LParen if self.at_lambda() => return self.parse_lambda(),
-            Token::LParen => return self.parse_parenthesized(),
-            // A `match` or a `when` where a value is expected: its branches give
-            // the value, each on the last line of its block.
-            Token::Match => {
-                self.enter()?;
-                let chosen = self.parse_match()?;
-                self.leave(1);
-                ExprKind::Choice(Box::new(chosen))
-            }
-            Token::When => {
-                self.enter()?;
-                let chosen = self.parse_when()?;
-                self.leave(1);
-                ExprKind::Choice(Box::new(chosen))
-            }
+        match self.peek() {
+            Token::Interpolated(_) => self.parse_interpolated(span),
+            Token::New => self.parse_new(),
+            Token::LBracket => self.parse_array(),
+            Token::LParen if self.at_lambda() => self.parse_lambda(),
+            Token::LParen => self.parse_parenthesized(),
+            Token::Match | Token::When => self.parse_choice(span),
             // `.this`, `.field`, or `.method(…)`: the value a method is called
             // on, and what it holds.
             Token::Dot if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::Type))
                 || (self.tokens.get(self.pos + 1) == Some(&Token::New) && self.tokens.get(self.pos + 2) == Some(&Token::LParen)) =>
             {
-                return self.parse_member_of_this(span);
+                self.parse_member_of_this(span)
             }
-            Token::Ident(_) => return self.parse_name_use(span),
+            Token::Ident(_) => self.parse_name_use(span),
+            _ => self.parse_literal(span),
+        }
+    }
+
+    /// A literal at `span` and the cursor: a number, a char, text, `true`,
+    /// `false`, or `none`.
+    fn parse_literal(&mut self, span: Span) -> Result<Expr> {
+        let kind = match self.peek() {
+            Token::Int(n) => ExprKind::IntLit(*n),
+            Token::Float(n) => ExprKind::FloatLit(*n),
+            Token::Char(c) => ExprKind::CharLit(*c),
+            Token::Text(s) => ExprKind::TextLit(s.clone()),
+            Token::True => ExprKind::BoolLit(true),
+            Token::False => ExprKind::BoolLit(false),
+            Token::None => ExprKind::NoneLit,
             _ => return Err(self.unexpected("an expression")),
         };
+        self.advance();
         Ok(Expr::new(kind, span))
+    }
+
+    /// A `match` or a `when` at `span` and the cursor, where a value is
+    /// expected: its branches give the value, each on the last line of its
+    /// block.
+    fn parse_choice(&mut self, span: Span) -> Result<Expr> {
+        self.enter()?;
+        let chosen = if self.check(Token::Match) { self.parse_match()? } else { self.parse_when()? };
+        self.leave(1);
+        Ok(Expr::new(ExprKind::Choice(Box::new(chosen)), span))
     }
 
     /// `.this`, `.field`, or `.method(…)` at `span`, with the cursor at the
@@ -2922,7 +2967,23 @@ impl Parser {
     /// task around it. It becomes a task of the file (see `ast::lambda_name`),
     /// and the value here names it.
     fn parse_lambda(&mut self) -> Result<Expr> {
+        // Its header and the task it becomes are read and made by functions
+        // of their own: this one's frame is on the stack once per lambda
+        // nested in another.
         let span = self.peek_span();
+        let (params, ret, results) = self.parse_lambda_header(span)?;
+        let body = if matches!(self.peek(), Token::Newline | Token::Eof) {
+            let body = self.parse_block()?;
+            self.expect_fi("lambda", span)?;
+            body
+        } else {
+            self.parse_lambda_line(span)?
+        };
+        Ok(self.add_lambda(span, params, ret, results, body))
+    }
+
+    /// The header of a lambda at `span` and the cursor, up to its body.
+    fn parse_lambda_header(&mut self, span: Span) -> Result<(Vec<Field>, Type, Vec<ResultDef>)> {
         if self.in_generic {
             return Err(Error::at(span, "a lambda can't be written in a task or method that takes types yet; write a task of its own and name it, as in 'apply(double, x)'"));
         }
@@ -2951,13 +3012,12 @@ impl Parser {
         if self.check(Token::LBrace) {
             return Err(Error::at(self.peek_span(), "a lambda's body follows its header, on its line or the lines after it, and closes with 'fi'"));
         }
-        let body = if matches!(self.peek(), Token::Newline | Token::Eof) {
-            let body = self.parse_block()?;
-            self.expect_fi("lambda", span)?;
-            body
-        } else {
-            self.parse_lambda_line(span)?
-        };
+        Ok((params, ret, results))
+    }
+
+    /// Makes the lambda at `span` a task of the file, and gives the value
+    /// naming it.
+    fn add_lambda(&mut self, span: Span, params: Vec<Field>, ret: Type, results: Vec<ResultDef>, body: Block) -> Expr {
         self.lambda_count += 1;
         let name = lambda_name(self.lambda_count);
         self.lambdas.push(Item::Task(TaskDef {
@@ -2975,7 +3035,7 @@ impl Parser {
             decorators: Vec::new(),
             wrappers: Vec::new(),
         }));
-        Ok(Expr::new(ExprKind::Var(name), span))
+        Expr::new(ExprKind::Var(name), span)
     }
 
     /// A lambda's body on the line of its header, opened at `opened`, and its
@@ -2989,13 +3049,7 @@ impl Parser {
                 break Ok(());
             }
             if matches!(self.peek(), Token::Newline | Token::Eof) {
-                break Err(Error::at(
-                    self.peek_span(),
-                    format!(
-                        "a lambda whose body starts on its header's line closes with 'fi' on that line, as in '(x: int) -> int <- x * 2 fi'; for a longer one, start the body on the next line (the lambda is at {}:{})",
-                        opened.line, opened.col
-                    ),
-                ));
+                break Err(self.unclosed_lambda_line(opened));
             }
             match self.parse_stmt() {
                 Ok(stmt) => body.push(stmt),
@@ -3004,6 +3058,18 @@ impl Parser {
         };
         self.send_after_header = outer;
         result.map(|()| body)
+    }
+
+    /// The mistake in a lambda opened at `opened` whose body starts on its
+    /// header's line and has no `fi` on it.
+    fn unclosed_lambda_line(&self, opened: Span) -> Error {
+        Error::at(
+            self.peek_span(),
+            format!(
+                "a lambda whose body starts on its header's line closes with 'fi' on that line, as in '(x: int) -> int <- x * 2 fi'; for a longer one, start the body on the next line (the lambda is at {}:{})",
+                opened.line, opened.col
+            ),
+        )
     }
 
     /// `(value)`, or a tuple, `(a, b, …)`, on one line.

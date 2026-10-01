@@ -1,0 +1,11 @@
+; error: 5:2: decorator 'notes.note' takes the task and nothing else, so it is written '$notes.note', got 1 value
+; A decorator of another module is named with its module, here as in the message.
+include modules/notes
+
+$notes.note(1)
+task one(x: int) -> int
+    <- x
+fi
+
+task main()
+fi

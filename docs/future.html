@@ -2010,6 +2010,84 @@ bind age = int("42")               ; text to a number can fail: int ~ ParseError
         <li><strong>Embedded targets:</strong> bare-metal output with no runtime</li>
       </ul>
 
+      <h3 id="global-region">A global region <span class="badge b-idea">Idea</span></h3>
+      <p>
+        Every region ends before the program does, so today nothing that lives in a region outlasts <code>main</code>'s
+        blocks: a shared field holds only values of no region, and a value worked out where the program starts (a
+        <a href="vela.html#decorators">decorator's</a>) can't be text built then, or a slice. A global region would be
+        one that lasts as long as the program, like an assembly program's data segment, declared once, with a size
+        the program can't go past:
+      </p>
+      <pre><code>region global(64)                 ; 64 bytes, for the whole program
+    bind greeting = "hello"       ; a constant, written into the program, taking no room
+    hold visits: int = 0          ; a variable that lasts as long as the program
+fi</code></pre>
+      <p>
+        <strong>As noted so far (the user's design):</strong> it is written in the main file only, not in a module, as a
+        block closed by <code>fi</code>; a <code>bind</code> in it is a constant, written into the program's code, and a
+        <code>hold</code> a variable; nothing in it ever grows, so it holds no slice, and a pointer in it points only at
+        a value of fixed size; it is never freed; a program that puts more in it than its size stops; and the
+        language would have a limit on how much a program allocates in all.
+      </p>
+      <p><strong>What it would make possible:</strong></p>
+      <ul>
+        <li>A wrapper's or a startup decorator's values worked out where the program starts, when they live in a
+          region: text joined then, a slice, a value holding a pointer (see
+          <a href="#start-values">Values worked out where the program starts</a>). Values that live in no region (a
+          number, a literal's text, a task) need no global region: they can be kept in hidden variables already.</li>
+        <li>What a decorator records, kept for the whole run: a web module's routes, say, in a slice of text and
+          tasks, rather than a fixed number of shared fields.</li>
+        <li>Shared fields holding region values, which the <a href="#static-region">static region</a> idea asked for;
+          the two are one idea, and this one is the more careful.</li>
+      </ul>
+      <p><strong>Refinements suggested:</strong></p>
+      <ul>
+        <li><strong>Check the size when compiling.</strong> The variables declared in the block have sizes the compiler
+          knows, so too many is an error when compiling, not a crash when running. Only what is allocated there while
+          running (below) needs a check then, one comparison per allocation, stopping the program with a message.</li>
+        <li><strong>Let it be allocated in.</strong> <code>new T(v) at global</code>, text joined <code>at global</code>,
+          and a slice there, each taking room until the size is used up and never freed. Without this, the global region
+          only holds what is declared in it, and text built at start (the case above) still has nowhere to go, since
+          its size is known only when the program runs.</li>
+        <li><strong>One direction for pointers.</strong> Today a value in region <code>r</code> points only into
+          <code>r</code>. Anything may safely point into the global region, since it outlives every other; the global
+          region may point only into itself, since every other region ends first. That is the rule the note's "a
+          pointer only at a value of fixed size" is after: what makes a pointer safe is where it points, not the size
+          of what it points at.</li>
+        <li><strong>A slice there is safe.</strong> Growing a slice takes new room and leaves the old where it was, and
+          nothing in the global region is freed, so no copy ever dangles; the size bounds how far it grows. Refusing
+          slices there isn't needed for safety, only for predictable memory, which the size already gives.</li>
+        <li><strong>A <code>bind</code> there is a macro.</strong> A constant written into the program is what
+          <code>#NAME = value</code> already is. A <code>bind</code> in the global region would add something only as a
+          value worked out once where the program starts (from a call, say), which no macro can be: a constant of the
+          run rather than of the source.</li>
+        <li><strong>Modules need it too.</strong> "Only in the main file" leaves a module that records things (a web
+          module's routes) with no place for them. Either a module declares its own global variables, counted against
+          the size the main file gives, or the main file's block gives the size and modules only use it.</li>
+        <li><strong>One concept for globals.</strong> Shared fields are already the program's global variables, each
+          named by its shape. Rather than two kinds of global, a shared field could hold values of the global region
+          (<code>shared hold routes: [text]@global</code>), and the block would only say how large the region is.</li>
+        <li><strong>A limit for the whole program</strong> fixed by the language would be wrong for some program
+          whatever it is; a size the program states, with a default, serves the same purpose.</li>
+      </ul>
+      <p><strong>Concerns to weigh:</strong></p>
+      <ul>
+        <li><strong>The order things start in.</strong> The global variables get their first values, then the shared
+          fields, then the values wrappers keep, then the startup decorators, then <code>main</code>. A first value
+          worked out from another global must read one already set, which the compiler can check when every first
+          value is a constant or reads only those above it.</li>
+        <li><strong>Shared changing state.</strong> With <a href="events.html">events</a> or tasks running at once later,
+          a <code>hold</code> in the global region is state every part of the program can change at the same time. It
+          would need one owner, or reads and writes that can't interleave, before Vela runs anything at once.</li>
+        <li><strong>Memory held for the whole run.</strong> Everything allocated there stays until the program ends,
+          which is the cost regions were made to avoid; the size keeps it bounded, and a growing slice wastes the room
+          its old items took.</li>
+        <li><strong>A file opened in it</strong> stays open to the end, which is right for a log and wrong for most
+          files.</li>
+        <li><strong>Performance</strong> is good: a global variable is read at a fixed address, and allocating there is
+          a bump of a pointer and one comparison.</li>
+      </ul>
+
       <h3 id="lower-priority">Lower priority <span class="badge b-low">Low</span></h3>
       <p>Ideas kept for later, each waiting for a decision on whether Vela wants it at all, and on its syntax.</p>
       <ul>
@@ -2023,7 +2101,8 @@ bind age = int("42")               ; text to a number can fail: int ~ ParseError
           <code>[1, 2]</code> where a slice is expected is an error, and the values are given again as a slice
           (<code>[1, 2, ...] at r</code>, see <a href="vela.html#slice-shortcut">Written by its values</a>) or copied,
           <code>new [int](xs) at r</code>. Ways that would help sometimes: a short word for the copy
-          (<code>xs.slice() at r</code>, or <code>xs...</code> at a call), a slice that views an array a pointer
+          (<code>xs.slice() at r</code>; <code>xs...</code> at a call is taken, since it gives a
+          <a href="vela.html#type-groups">group's</a> values), a slice that views an array a pointer
           already holds in a region without copying it (<code>p^[..]</code>, as <code>p^[0..n]</code> does now for a
           part), and letting a task that only reads its items take an array or a slice alike, as a read-only view
           (<code>xs: [int]@view</code>). The last is the most useful and the largest: a view that can't grow could
@@ -2039,7 +2118,8 @@ bind age = int("42")               ; text to a number can fail: int ~ ParseError
           whole run, which is the global-variable problem regions were meant to avoid. A narrower relative is a region
           a shape keeps for its own shared fields, <code>shared region pool</code>, which names where the memory goes and
           lets only that shape's methods allocate there. Not decided whether Vela wants either
-          (<a href="events.html#regions">events</a> would want the same thing for what an event keeps).</li>
+          (<a href="events.html#regions">events</a> would want the same thing for what an event keeps). The
+          <a href="#global-region">global region</a> is the more careful form of this idea, with a size.</li>
         <li id="shared-in-generic-shapes"><strong>Shared members of a shape that takes types:</strong> a shape that
           takes types, <code>Box&lt;T&gt;</code>, is made once for every set of types, so a shared field in it could be
           one per use (<code>Box&lt;int&gt;.made</code> apart from <code>Box&lt;text&gt;.made</code>) or one for all
@@ -2085,7 +2165,7 @@ fi, 5))</code></pre>
         see <a href="vela.html#lambdas">Lambdas</a>.
       </p>
 
-      <h3 id="lambdas">Lambdas that take values from around them <span class="badge b-idea">Idea</span></h3>
+      <h3 id="lambdas">Lambdas that take values from around them <span class="badge b-med">Planned, decisions first</span></h3>
       <p>
         A lambda that uses a variable of the task around it has to keep that value somewhere, for as long as the lambda
         can be called, which can be after the task has ended. Other languages keep it on a garbage-collected heap (Go,
@@ -2142,7 +2222,8 @@ task home(n: int) -&gt; text
 fi</code></pre>
       <ul>
         <li><strong>Startup decorators, <code>$d</code> or <code>$d(args)</code>,</strong> run once where the program
-          starts, in the order the tasks are written, as Python and FastAPI run theirs where a function is defined. The
+          starts, in the order the tasks are written (an included module's first, and of several on one task, the
+          nearest first), as Python and FastAPI run theirs where a function is defined. The
           task stays an ordinary task, called as usual. This is how a future web module could let a program declare its
           routes by writing <code>$get("/")</code> above each handler. Built: see
           <a href="vela.html#decorators">Decorators</a>.</li>
@@ -2151,18 +2232,36 @@ fi</code></pre>
           values, then the task's values, and decides when to call it, or whether to. The compiler writes each layer as a
           hidden task, so no lambda that captures is needed, and the C compiler can inline the whole chain. Built: see
           <a href="vela.html#decorators">Decorators</a>; a wrapper's own values are ones the compiler works out for now,
-          and a wrapper that works one out when the program starts (a call, say) could come later, kept in a hidden
-          shared field.</li>
+          and values worked out when the program starts (a call, say), kept in a hidden variable, are planned (see
+          <a href="#start-values">Values worked out where the program starts</a>).</li>
         <li><strong>Type groups, <code>P...</code>,</strong> let one wrapper fit a task of any parameters:
-          <pre><code>task timed&lt;P..., R&gt;(f: (P...) -&gt; R, args: P...) -&gt; R
-    bind start = clock()
-    bind result = f(args...)
-    show("took ", clock() - start)
+          <pre><code>task traced&lt;P..., R: shown&gt;(next: (P...) -&gt; R, args: P...) -&gt; R
+    show("calling")
+    bind result = next(args...)
+    show("sent ", result)
     &lt;- result
 fi</code></pre>
           The compiler fills a group in for each use, as it fills in a type, so it costs nothing when running. Built:
           see <a href="vela.html#type-groups">Type groups</a>.</li>
       </ul>
+
+      <h3 id="start-values">Values worked out where the program starts <span class="badge b-idea">Problem</span></h3>
+      <p>
+        A startup decorator's values, and (planned) a wrapper's, are worked out where the program starts, before
+        <code>main</code>, when no region exists yet. So they can't be anything that lives in one: text joined from other
+        text (<code>$route("/" + name)</code>), a slice, or a value holding a pointer. Values of no region (numbers,
+        literals' text, tasks, and shapes of them) work, and once a wrapper's values are worked out at start rather
+        than at each call, a call giving one of those works too, kept in a hidden variable for the whole run.
+      </p>
+      <p>
+        <strong>Ways to solve the rest.</strong> The <a href="#global-region">global region</a> solves it if it can be
+        allocated in (not only declared in): what is made at start goes there, within its size, and lasts the whole run,
+        which is what such values need. Without it, a hidden region could be opened before the first decorator and kept
+        to the end, the <a href="#static-region">static region</a> in another form, with no size to bound it. A third way
+        is for the decorator to copy what it is given into a region of its own registry, which needs a global region
+        anyway. So the global region, with allocation in it, is the answer to look for; declared variables alone
+        wouldn't help.
+      </p>
 
       <h3 id="task-value-ideas">What these make possible <span class="badge b-idea">Ideas</span></h3>
       <ul>
@@ -2187,14 +2286,26 @@ fi</code></pre>
           tasks, the compiler could write the table itself, one entry per use with its values, into the program's data,
           with no call at start at all. The count of uses is known when compiling, so the table is a fixed array, and a
           decorator's registry needs no region that lasts.</li>
-        <li><strong>Startup decorators that fail:</strong> a decorator sending <code>nothing ~ E</code>, whose failure
-          stops the program before <code>main</code> with its message, as a route declared twice should.</li>
-        <li><strong>Decorators on methods, and on shapes:</strong> a wrapper on a method works as on a task, with
-          <code>.this</code> among the values it passes on; a startup decorator on a shape could register the shape (for
-          a serializer, say) once shapes can be named as values.</li>
-        <li><strong>Type groups beyond wrappers:</strong> <code>show(args...)</code> to write every value of a group, a
-          group's count known when compiling, and a group made into a tuple, <code>(args...)</code>, where its values
-          allow it.</li>
+        <li><strong>Startup decorators that fail</strong> <span class="badge b-med">Planned</span>: a decorator sending
+          <code>nothing ~ E</code>, whose failure stops the program before <code>main</code> with its message, as a route
+          declared twice should; and a mark (its syntax to be chosen) saying a failure may be passed over, so the
+          program goes on to the next decorator and to <code>main</code>.</li>
+        <li><strong>Decorators on methods</strong> <span class="badge b-med">Planned</span>: startup decorators on shared
+          methods only, since a member method has no value to be called on where the program starts; wrappers on
+          member methods, given the value the method is called on first (as a place, for an <code>alters</code>
+          method); and a wrapper that is a method of the same shape itself, if its rules come out safe.</li>
+        <li><strong>Decorators on tasks taking places or regions</strong> <span class="badge b-med">Planned</span>: task
+          types taking <code>hold&amp;</code> and <code>bind&amp;</code> places and regions, and groups carrying them, so
+          a wrapper passes them on. Nothing can keep a place or a region past the call, so passing them through a chain
+          is as safe as passing them through calls.</li>
+        <li><strong>Decorators on shapes:</strong> a startup decorator on a shape could register the shape (for a
+          serializer, say) once shapes can be named as values.</li>
+        <li><strong>Type groups beyond wrappers</strong> <span class="badge b-med">Planned</span>:
+          <code>show(args...)</code> to write every value of a group (which needs a group to ask its types for
+          something, <code>P...: shown</code>), a group's count known when compiling, and a group made into a tuple,
+          <code>(args...)</code>, where its values allow it (a tuple holds two or more items that never change, so a
+          group of none or one, or one holding a slice, needs a rule). And a group's values given on to a named task,
+          <code>call(f, args...)</code>, the whole group to the whole group.</li>
         <li><strong>Events:</strong> the <a href="events.html">events</a> design names what runs when something happens;
           task values and lambdas are the pieces it would be built from.</li>
       </ul>

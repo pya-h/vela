@@ -96,3 +96,52 @@ fn a_task_type_parameter_is_no_lambda() {
     assert_eq!(Analysis::new(source).outline().len(), 1);
 }
 
+
+#[test]
+fn a_task_type_after_a_comma_or_a_parenthesis_is_no_lambda() {
+    // A result that is a task's type, and a tuple holding one: neither opens a
+    // block, so the methods and tasks after them are outlined.
+    let source = "\
+task one() -> int
+    <- 1
+fi
+
+shape Box
+    v: int
+
+    pair() -> int, () -> int
+        <- .v, one
+    fi
+
+    get() -> int
+        hold t: (() -> int, int) = (one, 1)
+        <- .v
+    fi
+
+    last() -> int
+        <- .v
+    fi
+fi
+
+task both() -> int, () -> int
+    <- 1, one
+fi
+
+task main()
+    bind b = Box { v: 2 }
+    show(b.get(), b.last())
+fi
+";
+    let analysis = Analysis::new(source);
+    assert_eq!(analysis.diagnostics(), Vec::new());
+    let outline = analysis.outline();
+    let names: Vec<&str> = outline.iter().map(|item| item.name.as_str()).collect();
+    assert_eq!(names, ["one", "Box", "both", "main"]);
+    let members: Vec<&str> = outline[1].children.iter().map(|item| item.name.as_str()).collect();
+    assert_eq!(members, ["v", "pair", "get", "last"]);
+    assert_eq!(hover(source, "get()"), "get() -> int");
+    // A lambda after a comma is still one.
+    let lambda = "task apply(n: int, f: () -> int) -> int\n    <- f()\nfi\n\ntask main()\n    show(apply(1, () -> int <- 2 fi))\nfi\n";
+    assert_eq!(Analysis::new(lambda).diagnostics(), Vec::new());
+    assert_eq!(Analysis::new(lambda).outline().len(), 2);
+}

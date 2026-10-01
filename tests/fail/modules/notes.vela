@@ -1,0 +1,4 @@
+; A decorator for tasks of other files.
+task note(f: (int) -> int)
+    show("noted ", f(1))
+fi

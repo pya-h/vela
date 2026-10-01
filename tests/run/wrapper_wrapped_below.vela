@@ -1,0 +1,20 @@
+; A wrapper with a wrapper of its own, which makes it send a bool, written
+; below the task it wraps: what it sends is settled first all the same.
+task over_five(next: ((int) -> int, int) -> int, f: (int) -> int, n: int) -> bool
+    <- next(f, n) > 5
+fi
+
+$(doubled)
+task plus_one(n: int) -> int
+    <- n + 1
+fi
+
+$(over_five)
+task doubled(next: (int) -> int, n: int) -> int
+    <- next(n) * 2
+fi
+
+task main()
+    show(plus_one(1))
+    show(plus_one(5))
+fi

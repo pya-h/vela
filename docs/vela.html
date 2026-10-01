@@ -2287,7 +2287,8 @@ fi</code></pre>
         shared field has its first value: the modules a program includes first, then each file's tasks in the order they
         are written. A decorator's values are worked out where the program starts, so they can be literals, macros,
         shared fields, and calls, but no variable or region, since none exists yet. A decorator may come from a module,
-        <code>$web.route("/")</code>. Only a task takes decorators, not a method, and only one that can be a value.
+        <code>$web.route("/")</code>, but not from a shape or kind (<code>$Registry.add</code>) yet. Only a task takes
+        decorators, not a method, and only one that can be a value.
       </p>
       <p>
         A wrapper decorator, <code>$(w)</code> or <code>$(w1, w2(values), …)</code>, runs at every call of the task

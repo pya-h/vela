@@ -486,6 +486,26 @@ impl<'a> Tokens<'a> {
         matches!(self.token(end), Some(Token::Newline | Token::Eof) | None)
     }
 
+    /// Whether the type starting at position `p` ends where a list of types
+    /// goes on or closes, as `() -> int` does in `(() -> int, int)`: a
+    /// lambda's result type is followed by its body, on its line or the next.
+    fn ends_in_a_list(&self, p: usize) -> bool {
+        let mut depth = 0usize;
+        let mut q = p;
+        loop {
+            match self.token(q) {
+                Some(Token::LParen | Token::LBracket | Token::Lt) => depth += 1,
+                Some(Token::RParen | Token::RBracket | Token::Gt) if depth > 0 => depth -= 1,
+                Some(Token::Ident(_) | Token::Dot | Token::Caret | Token::Maybe | Token::AtSign | Token::Tilde | Token::Hash | Token::Int(_) | Token::Ellipsis | Token::Arrow | Token::Region) => {}
+                Some(Token::Comma) if depth > 0 => {}
+                Some(Token::Comma | Token::RParen | Token::RBracket | Token::Gt | Token::Assign) => return true,
+                _ if depth > 0 => {}
+                _ => return false,
+            }
+            q += 1;
+        }
+    }
+
     /// Whether the `(` at position `p` starts a lambda, `(x: int) -> int … fi`:
     /// its parentheses close on their line and `->` follows them, as the
     /// parser reads it; and they name a parameter, or take none where no type
@@ -499,7 +519,8 @@ impl<'a> Tokens<'a> {
         // each read to their end.
         if self.token(p + 1) == Some(&Token::RParen) {
             return self.token(p + 2) == Some(&Token::Arrow)
-                && !matches!(self.before(p), Some(Token::Arrow | Token::Colon | Token::Maybe | Token::Caret | Token::LBracket | Token::Lt | Token::Tilde));
+                && !matches!(self.before(p), Some(Token::Arrow | Token::Colon | Token::Maybe | Token::Caret | Token::LBracket | Token::Lt | Token::Tilde))
+                && !self.ends_in_a_list(p + 3);
         }
         if !matches!(self.token(p + 1), Some(Token::Hold | Token::Bind)) && !(self.ident(p + 1).is_some() && self.token(p + 2) == Some(&Token::Colon)) {
             return false;
@@ -757,6 +778,8 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
     let mut method: Option<usize> = None;
     let mut methods_above = false;
     let mut parens = 0usize;
+    // Whether the line is a task's or a method's header, where no lambda is.
+    let mut header = false;
     // End of the last token that isn't a newline, where an unclosed item ends.
     let mut last_end = 0;
 
@@ -839,6 +862,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                     Token::Shape => (Block::Shape, SymbolKind::Shape),
                     _ => (Block::Kind, SymbolKind::Kind),
                 };
+                header = block == Block::Task;
                 blocks.push(block);
                 if tokens.ident(p + 1).is_some() {
                     // A shape's line holds the types it takes, if any; a
@@ -903,7 +927,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
             }
             Token::When | Token::Loop | Token::Each | Token::Block | Token::Match => blocks.push(Block::Inner),
             // A lambda is a block of its own, closed by its `fi`.
-            Token::LParen if tokens.starts_lambda(p) => {
+            Token::LParen if !header && tokens.starts_lambda(p) => {
                 blocks.push(Block::Inner);
                 parens += 1;
             }
@@ -921,7 +945,10 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
             }
             Token::LParen => parens += 1,
             Token::RParen => parens = parens.saturating_sub(1),
-            Token::Newline => parens = 0,
+            Token::Newline => {
+                parens = 0;
+                header = false;
+            }
             // `shared new(…)`: a method of the shape or kind itself, named by a
             // name or by `new`, a block of its own as any method is.
             Token::Shared
@@ -945,6 +972,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                 blocks.push(Block::Method);
                 method = Some(id);
                 methods_above = true;
+                header = true;
             }
             // A method, which a shape or a kind declares below its fields or
             // variants: a block of its own, closed by its `fi`.
@@ -962,6 +990,7 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
                 blocks.push(Block::Method);
                 method = Some(id);
                 methods_above = true;
+                header = true;
             }
             Token::Ident(_) => match (blocks.as_slice(), item) {
                 ([Block::Shape], Some(shape))

@@ -1,0 +1,7 @@
+; error: 3:10: a macro's value is computed when compiling, from literals, other macros, and operators on them, so it can't be a lambda, which is a task; write it where its value goes
+; A macro's value is worked out when compiling, and a lambda is a task.
+#TWICE = (x: int) -> int <- x * 2 fi
+
+task main()
+    show(TWICE)
+fi

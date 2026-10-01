@@ -1,0 +1,34 @@
+  1 | ; A wrapper with a wrapper of its own, which makes it send a bool, written
+    | comment:; A wrapper with a wrapper of its own, which makes it send a bool, written
+  2 | ; below the task it wraps: what it sends is settled first all the same.
+    | comment:; below the task it wraps: what it sends is settled first all the same.
+  3 | task over_five(next: ((int) -> int, int) -> int, f: (int) -> int, n: int) -> bool
+    | keyword:task  task:over_five  punctuation:(  parameter:next  punctuation::  punctuation:(  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
+  4 |     <- next(f, n) > 5
+    | keyword:<-  parameter:next  punctuation:(  parameter:f  punctuation:,  parameter:n  punctuation:)  operator:>  number:5
+  5 | fi
+    | keyword:fi
+  7 | $(doubled)
+    | keyword:$  punctuation:(  task:doubled  punctuation:)
+  8 | task plus_one(n: int) -> int
+    | keyword:task  task:plus_one  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  9 |     <- n + 1
+    | keyword:<-  parameter:n  operator:+  number:1
+ 10 | fi
+    | keyword:fi
+ 12 | $(over_five)
+    | keyword:$  punctuation:(  task:over_five  punctuation:)
+ 13 | task doubled(next: (int) -> int, n: int) -> int
+    | keyword:task  task:doubled  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 14 |     <- next(n) * 2
+    | keyword:<-  parameter:next  punctuation:(  parameter:n  punctuation:)  operator:*  number:2
+ 15 | fi
+    | keyword:fi
+ 17 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 18 |     show(plus_one(1))
+    | builtin-fn:show  punctuation:(  task:plus_one  punctuation:(  number:1  punctuation:)  punctuation:)
+ 19 |     show(plus_one(5))
+    | builtin-fn:show  punctuation:(  task:plus_one  punctuation:(  number:5  punctuation:)  punctuation:)
+ 20 | fi
+    | keyword:fi

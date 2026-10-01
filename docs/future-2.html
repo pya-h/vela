@@ -822,6 +822,13 @@ fi</pre>
           <p><code>#line</code> directives so C compiler errors and debuggers point at Vela source lines.</p>
         </div>
         <div class="card">
+          <h3>Decorators on generic tasks <span class="badge b-idea">Minor idea</span></h3>
+          <p>A startup decorator or a wrapper on a task that takes types, <code>$(timed) task first&lt;T&gt;(…)</code>,
+            which Vela refuses: such a task is no value until it is given its types, so a decorator would need one copy
+            per set of types the program uses, run where each copy is made. Kept aside on purpose, since it adds much
+            uncertainty for little gain; a wrapper on each use's own task does the same today.</p>
+        </div>
+        <div class="card">
           <h3>Compile-time benchmarks <span class="badge b-idea">Idea</span></h3>
           <p><code>comptime bench fib(35)</code> runs a benchmark during build and warns if it regresses.</p>
         </div>

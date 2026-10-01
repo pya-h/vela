@@ -1,0 +1,9 @@
+; error: 5:37: 'a' belongs to the code around this lambda, and a lambda takes nothing from it; give 'a' as a parameter, or call a task that takes it (lambdas that keep what they use are planned)
+; A lambda inside another takes nothing from it either.
+task main()
+    bind g = (a: int) -> int
+        bind h = (b: int) -> int <- a + b fi
+        <- h(a)
+    fi
+    show(g(1))
+fi
