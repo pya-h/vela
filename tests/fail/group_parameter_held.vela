@@ -1,0 +1,5 @@
+; error: 3:36: a group's values are given as values, so 'args' can't be 'hold'
+; A group's values are given as values.
+task f<P...>(g: (P...) -> nothing, hold args: P...)
+    g(args...)
+fi

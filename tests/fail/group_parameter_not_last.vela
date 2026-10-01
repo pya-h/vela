@@ -1,0 +1,5 @@
+; error: 3:36: 'args: P...' takes the values a call gives after all the others, so it is the task's last parameter
+; A group's values are a task's last parameter.
+task f<P...>(g: (P...) -> nothing, args: P..., n: int)
+    g(args...)
+fi

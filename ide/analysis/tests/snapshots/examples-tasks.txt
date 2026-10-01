@@ -8,111 +8,133 @@
     | comment:; nothing from the code around it. A startup decorator, `$d` above a task, runs
   5 | ; `d(task)` once, before `main`; a wrapper, `$(w)`, runs `w` at every call of
     | comment:; `d(task)` once, before `main`; a wrapper, `$(w)`, runs `w` at every call of
-  6 | ; the task, which is given the task to call.
-    | comment:; the task, which is given the task to call.
-  8 | shape Rule
+  6 | ; the task, which is given the task to call. A type group, `P...`, lets one
+    | comment:; the task, which is given the task to call. A type group, `P...`, lets one
+  7 | ; wrapper fit a task of any parameters.
+    | comment:; wrapper fit a task of any parameters.
+  9 | shape Rule
     | keyword:shape  type:Rule
-  9 |     name: text
+ 10 |     name: text
     | field:name  punctuation::  type-builtin:text
- 10 |     check: (int) -> bool
+ 11 |     check: (int) -> bool
     | field:check  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
- 11 | fi
+ 12 | fi
     | keyword:fi
- 13 | ; Says that a rule is ready, trying it on 4.
+ 14 | ; How many times a counted task has run.
+    | comment:; How many times a counted task has run.
+ 15 | shape Runs
+    | keyword:shape  type:Runs
+ 16 |     shared hold count: int = 0
+    | keyword:shared  keyword:hold  field:count  punctuation::  type-builtin:int  operator:=  number:0
+ 17 | fi
+    | keyword:fi
+ 19 | ; Counts each call of the task it wraps, whatever the task takes.
+    | comment:; Counts each call of the task it wraps, whatever the task takes.
+ 20 | task counted<P..., R>(next: (P...) -> R, args: P...) -> R
+    | keyword:task  task:counted  punctuation:<  type:P  keyword:...  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+ 21 |     Runs.count++
+    | type:Runs  punctuation:.  field:count  operator:++
+ 22 |     <- next(args...)
+    | keyword:<-  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+ 23 | fi
+    | keyword:fi
+ 25 | ; Says that a rule is ready, trying it on 4.
     | comment:; Says that a rule is ready, trying it on 4.
- 14 | task announce(rule: (int) -> bool)
+ 26 | task announce(rule: (int) -> bool)
     | keyword:task  task:announce  punctuation:(  parameter:rule  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  punctuation:)
- 15 |     show("rule ready: 4 passes it? ", rule(4))
+ 27 |     show("rule ready: 4 passes it? ", rule(4))
     | builtin-fn:show  punctuation:(  string:"rule ready: 4 passes it? "  punctuation:,  parameter:rule  punctuation:(  number:4  punctuation:)  punctuation:)
- 16 | fi
+ 28 | fi
     | keyword:fi
- 18 | ; Wraps a rule so that no negative number passes it.
+ 30 | ; Wraps a rule so that no negative number passes it.
     | comment:; Wraps a rule so that no negative number passes it.
- 19 | task never_negative(rule: (int) -> bool, n: int) -> bool
+ 31 | task never_negative(rule: (int) -> bool, n: int) -> bool
     | keyword:task  task:never_negative  punctuation:(  parameter:rule  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
- 20 |     <- n >= 0 and rule(n)
+ 32 |     <- n >= 0 and rule(n)
     | keyword:<-  parameter:n  operator:>=  number:0  keyword:and  parameter:rule  punctuation:(  parameter:n  punctuation:)
- 21 | fi
+ 33 | fi
     | keyword:fi
- 23 | $announce
+ 35 | $announce
     | keyword:$  task:announce
- 24 | $(never_negative)
-    | keyword:$  punctuation:(  task:never_negative  punctuation:)
- 25 | task is_even(n: int) -> bool
+ 36 | $(counted, never_negative)
+    | keyword:$  punctuation:(  task:counted  punctuation:,  task:never_negative  punctuation:)
+ 37 | task is_even(n: int) -> bool
     | keyword:task  task:is_even  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
- 26 |     <- n % 2 == 0
+ 38 |     <- n % 2 == 0
     | keyword:<-  parameter:n  operator:%  number:2  operator:==  number:0
- 27 | fi
+ 39 | fi
     | keyword:fi
- 29 | ; How many of the numbers pass a rule.
+ 41 | ; How many of the numbers pass a rule.
     | comment:; How many of the numbers pass a rule.
- 30 | task count(xs: [int]@r, keep: (int) -> bool) -> int
+ 42 | task count(xs: [int]@r, keep: (int) -> bool) -> int
     | keyword:task  task:count  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  parameter:keep  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  punctuation:)  operator:->  type-builtin:int
- 31 |     hold n = 0
+ 43 |     hold n = 0
     | keyword:hold  variable:n  operator:=  number:0
- 32 |     each x in xs
+ 44 |     each x in xs
     | keyword:each  variable:x  keyword:in  parameter:xs
- 33 |         when keep(x)
+ 45 |         when keep(x)
     | keyword:when  parameter:keep  punctuation:(  variable:x  punctuation:)
- 34 |             n++
+ 46 |             n++
     | variable:n  operator:++
- 35 |         fi
+ 47 |         fi
     | keyword:fi
- 36 |     fi
+ 48 |     fi
     | keyword:fi
- 37 |     <- n
+ 49 |     <- n
     | keyword:<-  variable:n
- 38 | fi
+ 50 | fi
     | keyword:fi
- 40 | ; Each number changed by a task, into a new slice.
+ 52 | ; Each number changed by a task, into a new slice.
     | comment:; Each number changed by a task, into a new slice.
- 41 | task mapped(xs: [int]@r, change: (int) -> int, out: region) -> [int]@out
+ 53 | task mapped(xs: [int]@r, change: (int) -> int, out: region) -> [int]@out
     | keyword:task  task:mapped  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  parameter:change  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  region:out  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:out
- 42 |     hold ys = new [int]() at out
+ 54 |     hold ys = new [int]() at out
     | keyword:hold  variable:ys  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:out
- 43 |     each x in xs
+ 55 |     each x in xs
     | keyword:each  variable:x  keyword:in  parameter:xs
- 44 |         ys.add(change(x))
+ 56 |         ys.add(change(x))
     | variable:ys  punctuation:.  field:add  punctuation:(  parameter:change  punctuation:(  variable:x  punctuation:)  punctuation:)
- 45 |     fi
+ 57 |     fi
     | keyword:fi
- 46 |     <- ys
+ 58 |     <- ys
     | keyword:<-  variable:ys
- 47 | fi
+ 59 | fi
     | keyword:fi
- 49 | task main()
+ 61 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 50 |     region r
+ 62 |     region r
     | keyword:region  region:r
- 51 |     bind xs = [3, 8, 15, 4, 23, 42, -6, ...] at r
+ 63 |     bind xs = [3, 8, 15, 4, 23, 42, -6, ...] at r
     | keyword:bind  variable:xs  operator:=  punctuation:[  number:3  punctuation:,  number:8  punctuation:,  number:15  punctuation:,  number:4  punctuation:,  number:23  punctuation:,  number:42  punctuation:,  operator:-  number:6  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
- 52 |     bind even = Rule { name: "even", check: is_even }
+ 64 |     bind even = Rule { name: "even", check: is_even }
     | keyword:bind  variable:even  operator:=  type:Rule  punctuation:{  field:name  punctuation::  string:"even"  punctuation:,  field:check  punctuation::  task:is_even  punctuation:}
- 53 |     bind big = Rule { name: "big", check: (n: int) -> bool <- n > 10 fi }
+ 65 |     bind big = Rule { name: "big", check: (n: int) -> bool <- n > 10 fi }
     | keyword:bind  variable:big  operator:=  type:Rule  punctuation:{  field:name  punctuation::  string:"big"  punctuation:,  field:check  punctuation::  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  keyword:<-  parameter:n  operator:>  number:10  keyword:fi  punctuation:}
- 54 |     bind odd = Rule { name: "odd", check: (n: int) -> bool <- not is_even(n) fi }
+ 66 |     bind odd = Rule { name: "odd", check: (n: int) -> bool <- not is_even(n) fi }
     | keyword:bind  variable:odd  operator:=  type:Rule  punctuation:{  field:name  punctuation::  string:"odd"  punctuation:,  field:check  punctuation::  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  keyword:<-  keyword:not  task:is_even  punctuation:(  parameter:n  punctuation:)  keyword:fi  punctuation:}
- 55 |     bind rules = [even, big, odd]
+ 67 |     bind rules = [even, big, odd]
     | keyword:bind  variable:rules  operator:=  punctuation:[  variable:even  punctuation:,  variable:big  punctuation:,  variable:odd  punctuation:]
- 56 |     each rule in rules
+ 68 |     each rule in rules
     | keyword:each  variable:rule  keyword:in  variable:rules
- 57 |         show(rule.name, ": ", count(xs, rule.check))
+ 69 |         show(rule.name, ": ", count(xs, rule.check))
     | builtin-fn:show  punctuation:(  variable:rule  punctuation:.  field:name  punctuation:,  string:": "  punctuation:,  task:count  punctuation:(  variable:xs  punctuation:,  variable:rule  punctuation:.  field:check  punctuation:)  punctuation:)
- 58 |     fi
+ 70 |     fi
     | keyword:fi
- 59 |     bind doubled = mapped(xs, (x: int) -> int <- x * 2 fi, r)
+ 71 |     bind doubled = mapped(xs, (x: int) -> int <- x * 2 fi, r)
     | keyword:bind  variable:doubled  operator:=  task:mapped  punctuation:(  variable:xs  punctuation:,  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:*  number:2  keyword:fi  punctuation:,  region:r  punctuation:)
- 60 |     show(doubled)
+ 72 |     show(doubled)
     | builtin-fn:show  punctuation:(  variable:doubled  punctuation:)
- 61 |     bind squared = mapped(xs, (x: int) -> int
+ 73 |     bind squared = mapped(xs, (x: int) -> int
     | keyword:bind  variable:squared  operator:=  task:mapped  punctuation:(  variable:xs  punctuation:,  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 62 |         bind y = x * x
+ 74 |         bind y = x * x
     | keyword:bind  variable:y  operator:=  parameter:x  operator:*  parameter:x
- 63 |         <- y
+ 75 |         <- y
     | keyword:<-  variable:y
- 64 |     fi, r)
+ 76 |     fi, r)
     | keyword:fi  punctuation:,  region:r  punctuation:)
- 65 |     show(squared)
+ 77 |     show(squared)
     | builtin-fn:show  punctuation:(  variable:squared  punctuation:)
- 66 | fi
+ 78 |     show("is_even ran ", Runs.count, " times")
+    | builtin-fn:show  punctuation:(  string:"is_even ran "  punctuation:,  type:Runs  punctuation:.  field:count  punctuation:,  string:" times"  punctuation:)
+ 79 | fi
     | keyword:fi

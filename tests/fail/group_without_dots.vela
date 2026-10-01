@@ -1,0 +1,4 @@
+; error: 3:39: 'P' is a group of types, so it is written 'P...': a parameter's whole type, as in 'args: P...', or all a task's type takes, as in '(P...) -> R'
+; A group of types is written with its dots.
+task f<P...>(g: (P...) -> nothing, x: P)
+fi

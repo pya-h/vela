@@ -107,6 +107,11 @@ pub enum Type {
     /// checked with the type itself in its place. Its regions are the given
     /// type's, so it holds no region of its own.
     Param(String),
+    /// `P...`: the group of types `P` a generic task takes (see
+    /// `TypeParam::group`), as the type of its last parameter, `args: P...`,
+    /// or as the whole of what a task's type takes, `(P...) -> R`. Each use
+    /// puts the types it gives in its place, as many as there are.
+    Group(String),
     /// No type: what the checker uses in place of a type it could not work out,
     /// after reporting why. It stands in wherever the mistake was, so that the
     /// checks that follow have something to go on and report their own mistakes
@@ -507,6 +512,7 @@ impl Type {
                 suffix(f, &applied.region)
             }
             Type::Param(name) => write!(f, "{}", name),
+            Type::Group(name) => write!(f, "{}...", name),
             // Its regions are its own, so none is left out for an outer one.
             Type::Task(task) => {
                 write!(f, "(")?;
@@ -627,7 +633,7 @@ impl Type {
             Type::Tuple(types) | Type::Results(types) => types.iter().any(Type::unknown),
             Type::Applied(applied) => applied.types.iter().any(Type::unknown),
             Type::Task(task) => task.params.iter().any(Type::unknown) || task.ret.unknown(),
-            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Unit | Type::Char | Type::Nothing | Type::None | Type::Region | Type::Named(..) | Type::Param(_) => false,
+            Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Unit | Type::Char | Type::Nothing | Type::None | Type::Region | Type::Named(..) | Type::Param(_) | Type::Group(_) => false,
         }
     }
 
@@ -768,6 +774,44 @@ impl Type {
         }
     }
 
+    /// The type with the types of each group in it put in its place, where
+    /// `f` knows them: `(P...) -> R` given `int, text` for `P` is
+    /// `(int, text) -> R`.
+    pub fn map_groups(&self, f: &mut dyn FnMut(&str) -> Option<Vec<Type>>) -> Type {
+        let boxed = |t: &Type, f: &mut dyn FnMut(&str) -> Option<Vec<Type>>| Box::new(t.map_groups(f));
+        match self {
+            Type::Task(task) => {
+                let mut params = Vec::new();
+                for param in &task.params {
+                    match param {
+                        Type::Group(name) => match f(name) {
+                            Some(types) => params.extend(types),
+                            None => params.push(param.clone()),
+                        },
+                        other => params.push(other.map_groups(&mut *f)),
+                    }
+                }
+                Type::Task(Box::new(TaskType { params, ret: task.ret.map_groups(f) }))
+            }
+            Type::Applied(applied) => Type::Applied(Box::new(Applied {
+                name: applied.name.clone(),
+                types: applied.types.iter().map(|ty| ty.map_groups(&mut *f)).collect(),
+                region: applied.region.clone(),
+            })),
+            Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.clone()),
+            Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
+            Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.clone()),
+            Type::Map(key, value, region) => Type::Map(boxed(key, f), boxed(value, f), region.clone()),
+            Type::Range(inner) => Type::Range(boxed(inner, f)),
+            Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
+            Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
+            Type::Fail(error) => Type::Fail(boxed(error, f)),
+            Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_groups(&mut *f)).collect()),
+            Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| ty.map_groups(&mut *f)).collect()),
+            other => other.clone(),
+        }
+    }
+
     /// The type with each task type in it given its regions' names anew (see
     /// `TaskType::normalized`), as a type made of others, whose regions it
     /// takes, needs once they are put in: `(T) -> T` given `text@a`.
@@ -806,7 +850,7 @@ impl Type {
 
     fn collect_params<'a>(&'a self, names: &mut Vec<&'a str>) {
         match self {
-            Type::Param(name) => names.push(name),
+            Type::Param(name) | Type::Group(name) => names.push(name),
             Type::Applied(applied) => applied.types.iter().for_each(|ty| ty.collect_params(names)),
             Type::Task(task) => {
                 task.params.iter().for_each(|ty| ty.collect_params(names));
@@ -960,6 +1004,9 @@ pub enum ExprKind {
     /// call after any value but a name, and the checker of a `Call` naming a
     /// variable.
     Invoke { callee: Box<Expr>, args: Vec<Expr> },
+    /// `args...`, the last value of a call: the values of a group parameter
+    /// (see `Type::Group`), given on whole, each as a value of its own.
+    Spread(Box<Expr>),
     Field(Box<Expr>, String),
     /// `xs[i]`, an item of an array or slice, or `xs[a..b]`, a slice of it.
     Index(Box<Expr>, Box<Expr>),
@@ -1757,6 +1804,7 @@ pub fn type_word(ty: &Type) -> String {
         Type::Region => "region".to_string(),
         Type::Named(name, _) => format!("n_{}", flat_name(name)),
         Type::Param(name) => format!("param__{}", name),
+        Type::Group(name) => format!("group__{}", name),
         Type::Applied(applied) => format!("n_{}", flat_name(&instance_name(&applied.name, &applied.types))),
         Type::Ptr(inner, _) => format!("ptr__{}", type_word(inner)),
         Type::Range(inner) => format!("range__{}", type_word(inner)),
@@ -1799,6 +1847,11 @@ pub struct TypeParam {
     /// written: `<T: same & shown>` asks for both. None lets any type fit, and
     /// its values can only be stored, passed, and sent.
     pub needs: Vec<(Need, Span)>,
+    /// `P...`: a group of types, any number and any mix, which a task takes
+    /// as its last parameter (`args: P...`) and names in a task's type
+    /// (`(P...) -> R`). Each use fills it in with the types of the values it
+    /// gives, as a type is filled in (see `Type::Group`).
+    pub group: bool,
 }
 
 /// What a generic declaration requires of a type given to it, written after the

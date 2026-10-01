@@ -1,0 +1,150 @@
+  1 | ; Type groups: `P...` among the types a task takes stands for a group of
+    | comment:; Type groups: `P...` among the types a task takes stands for a group of
+  2 | ; types, any number and any mix. `args: P...` takes the values a call gives
+    | comment:; types, any number and any mix. `args: P...` takes the values a call gives
+  3 | ; after the others, `(P...) -> R` is a task taking them, and `f(args...)` gives
+    | comment:; after the others, `(P...) -> R` is a task taking them, and `f(args...)` gives
+  4 | ; them on. Each use fills the group in with the types of its values, as it
+    | comment:; them on. Each use fills the group in with the types of its values, as it
+  5 | ; fills in a type, so one wrapper fits every task.
+    | comment:; fills in a type, so one wrapper fits every task.
+  7 | include type_groups/wrap
+    | keyword:include  module:type_groups  operator:/  module:wrap
+  9 | shape Big
+    | keyword:shape  type:Big
+ 10 |     a: int
+    | field:a  punctuation::  type-builtin:int
+ 11 |     b: int
+    | field:b  punctuation::  type-builtin:int
+ 12 |     c: int
+    | field:c  punctuation::  type-builtin:int
+ 13 |     d: int
+    | field:d  punctuation::  type-builtin:int
+ 14 |     e: int
+    | field:e  punctuation::  type-builtin:int
+ 15 |     f: int
+    | field:f  punctuation::  type-builtin:int
+ 16 |     g: int
+    | field:g  punctuation::  type-builtin:int
+ 17 |     h: int
+    | field:h  punctuation::  type-builtin:int
+ 18 |     i: int
+    | field:i  punctuation::  type-builtin:int
+ 19 | fi
+    | keyword:fi
+ 21 | ; Calls any task with the values given after it.
+    | comment:; Calls any task with the values given after it.
+ 22 | task call<P..., R>(f: (P...) -> R, args: P...) -> R
+    | keyword:task  task:call  punctuation:<  type:P  keyword:...  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:f  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+ 23 |     <- f(args...)
+    | keyword:<-  parameter:f  punctuation:(  parameter:args  keyword:...  punctuation:)
+ 24 | fi
+    | keyword:fi
+ 26 | ; Counts the calls of any task, in a shared field.
+    | comment:; Counts the calls of any task, in a shared field.
+ 27 | shape Calls
+    | keyword:shape  type:Calls
+ 28 |     shared hold count: int = 0
+    | keyword:shared  keyword:hold  field:count  punctuation::  type-builtin:int  operator:=  number:0
+ 29 | fi
+    | keyword:fi
+ 31 | task counted<P..., R>(next: (P...) -> R, args: P...) -> R
+    | keyword:task  task:counted  punctuation:<  type:P  keyword:...  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+ 32 |     Calls.count++
+    | type:Calls  punctuation:.  field:count  operator:++
+ 33 |     <- next(args...)
+    | keyword:<-  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+ 34 | fi
+    | keyword:fi
+ 36 | task add(a: int, b: int) -> int
+    | keyword:task  task:add  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 37 |     <- a + b
+    | keyword:<-  parameter:a  operator:+  parameter:b
+ 38 | fi
+    | keyword:fi
+ 40 | task seven() -> int
+    | keyword:task  task:seven  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 41 |     <- 7
+    | keyword:<-  number:7
+ 42 | fi
+    | keyword:fi
+ 44 | ; A large value, and a copy the task may change, given through a group.
+    | comment:; A large value, and a copy the task may change, given through a group.
+ 45 | task sum(x: Big, hold y: Big) -> int
+    | keyword:task  task:sum  punctuation:(  parameter:x  punctuation::  type:Big  punctuation:,  keyword:hold  parameter:y  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
+ 46 |     y.a = y.a + 10
+    | parameter:y  punctuation:.  field:a  operator:=  parameter:y  punctuation:.  field:a  operator:+  number:10
+ 47 |     <- x.a + y.a
+    | keyword:<-  parameter:x  punctuation:.  field:a  operator:+  parameter:y  punctuation:.  field:a
+ 48 | fi
+    | keyword:fi
+ 50 | ; A group in a task that takes a type of its own too.
+    | comment:; A group in a task that takes a type of its own too.
+ 51 | task twice<T>(f: (T) -> T, x: T) -> T
+    | keyword:task  task:twice  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:f  punctuation::  punctuation:(  type:T  punctuation:)  operator:->  type:T  punctuation:,  parameter:x  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 52 |     <- call(f, call(f, x))
+    | keyword:<-  task:call  punctuation:(  parameter:f  punctuation:,  task:call  punctuation:(  parameter:f  punctuation:,  parameter:x  punctuation:)  punctuation:)
+ 53 | fi
+    | keyword:fi
+ 55 | task inc(n: int) -> int
+    | keyword:task  task:inc  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 56 |     <- n + 1
+    | keyword:<-  parameter:n  operator:+  number:1
+ 57 | fi
+    | keyword:fi
+ 59 | $(counted, wrap.traced("area"))
+    | keyword:$  punctuation:(  task:counted  punctuation:,  module:wrap  punctuation:.  task:traced  punctuation:(  string:"area"  punctuation:)  punctuation:)
+ 60 | task area(w: int, h: int) -> int
+    | keyword:task  task:area  punctuation:(  parameter:w  punctuation::  type-builtin:int  punctuation:,  parameter:h  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 61 |     <- w * h
+    | keyword:<-  parameter:w  operator:*  parameter:h
+ 62 | fi
+    | keyword:fi
+ 64 | $(counted, wrap.traced("first"))
+    | keyword:$  punctuation:(  task:counted  punctuation:,  module:wrap  punctuation:.  task:traced  punctuation:(  string:"first"  punctuation:)  punctuation:)
+ 65 | task first(t: text@r) -> text@r
+    | keyword:task  task:first  punctuation:(  parameter:t  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 66 |     <- t[0..1]
+    | keyword:<-  parameter:t  punctuation:[  number:0  operator:..  number:1  punctuation:]
+ 67 | fi
+    | keyword:fi
+ 69 | $(counted)
+    | keyword:$  punctuation:(  task:counted  punctuation:)
+ 70 | task now() -> int
+    | keyword:task  task:now  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 71 |     <- 2026
+    | keyword:<-  number:2026
+ 72 | fi
+    | keyword:fi
+ 74 | $(wrap.framed)
+    | keyword:$  punctuation:(  module:wrap  punctuation:.  task:framed  punctuation:)
+ 75 | task say(what: text, n: int, ok: bool)
+    | keyword:task  task:say  punctuation:(  parameter:what  punctuation::  type-builtin:text  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:,  parameter:ok  punctuation::  type-builtin:bool  punctuation:)
+ 76 |     show(what, n, " ", ok)
+    | builtin-fn:show  punctuation:(  parameter:what  punctuation:,  parameter:n  punctuation:,  string:" "  punctuation:,  parameter:ok  punctuation:)
+ 77 | fi
+    | keyword:fi
+ 79 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 80 |     show(call(add, 2, 3))
+    | builtin-fn:show  punctuation:(  task:call  punctuation:(  task:add  punctuation:,  number:2  punctuation:,  number:3  punctuation:)  punctuation:)
+ 81 |     show(call(seven))
+    | builtin-fn:show  punctuation:(  task:call  punctuation:(  task:seven  punctuation:)  punctuation:)
+ 82 |     bind big = Big { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
+    | keyword:bind  variable:big  operator:=  type:Big  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:2  punctuation:,  field:c  punctuation::  number:3  punctuation:,  field:d  punctuation::  number:4  punctuation:,  field:e  punctuation::  number:5  punctuation:,  field:f  punctuation::  number:6  punctuation:,  field:g  punctuation::  number:7  punctuation:,  field:h  punctuation::  number:8  punctuation:,  field:i  punctuation::  number:9  punctuation:}
+ 83 |     show(call(sum, big, big))
+    | builtin-fn:show  punctuation:(  task:call  punctuation:(  task:sum  punctuation:,  variable:big  punctuation:,  variable:big  punctuation:)  punctuation:)
+ 84 |     show(twice(inc, 5))
+    | builtin-fn:show  punctuation:(  task:twice  punctuation:(  task:inc  punctuation:,  number:5  punctuation:)  punctuation:)
+ 85 |     show(area(3, 4))
+    | builtin-fn:show  punctuation:(  task:area  punctuation:(  number:3  punctuation:,  number:4  punctuation:)  punctuation:)
+ 86 |     show(first("Ada"))
+    | builtin-fn:show  punctuation:(  task:first  punctuation:(  string:"Ada"  punctuation:)  punctuation:)
+ 87 |     show(now())
+    | builtin-fn:show  punctuation:(  task:now  punctuation:(  punctuation:)  punctuation:)
+ 88 |     say("n=", 4, true)
+    | task:say  punctuation:(  string:"n="  punctuation:,  number:4  punctuation:,  keyword:true  punctuation:)
+ 89 |     show(Calls.count, " counted calls")
+    | builtin-fn:show  punctuation:(  type:Calls  punctuation:.  field:count  punctuation:,  string:" counted calls"  punctuation:)
+ 90 | fi
+    | keyword:fi

@@ -359,6 +359,7 @@ impl Checked {
                 }
                 self.expr(base, kinds);
             }
+            ExprKind::Spread(inner) => self.expr(inner, kinds),
             // `Point.made`: a member of the shape itself, at the member's name.
             ExprKind::Shared { shape, .. } => {
                 self.field_accesses.insert(pos(e.span), shape.clone());

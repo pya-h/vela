@@ -283,6 +283,9 @@ pub struct Checker {
     /// regions of the code around it, which it takes nothing from, for the
     /// message when its body names one.
     lambda_outer: HashMap<String, HashSet<String>>,
+    /// Whether the value being checked is given on whole as a group's values,
+    /// `args...`, the only way a group's values are read.
+    spreading: bool,
     /// Each task with wrappers, and its wrappers' calls as written, until
     /// `settle_wrappers` makes its layers' bodies (see `add_wrappers`).
     wrapped: Vec<(String, Vec<Expr>)>,
@@ -1794,6 +1797,16 @@ impl Checker {
         if t.name == "main" && !t.types.is_empty() {
             return err(t.span, "'main' is where the program starts, so it takes no types");
         }
+        // `args: P...`: the values a call gives after all the others, as values.
+        for (i, param) in t.params.iter().enumerate() {
+            let Type::Group(group) = &param.ty else { continue };
+            if i + 1 != t.params.len() {
+                return err(param.span, format!("'{}: {}...' takes the values a call gives after all the others, so it is the task's last parameter", param.name, group));
+            }
+            if param.passing != Passing::Copy {
+                return err(param.span, format!("a group's values are given as values, so '{}' can't be '{}'", param.name, param.passing.word()));
+            }
+        }
         let region_params: Vec<&str> = t.params.iter().filter(|p| p.ty == Type::Region).map(|p| p.name.as_str()).collect();
         let mut named: Vec<String> = region_params.iter().map(|name| name.to_string()).collect();
         let mut resolved = Vec::new();
@@ -2198,6 +2211,17 @@ impl Checker {
                     ret => self.check_type(ret, span),
                 }
             }
+            // `P...`: a group of types the task takes, which the parser lets
+            // only a parameter's whole type, and all a task's type takes, be.
+            Type::Group(name) => match self.type_param(name) {
+                Some(param) if param.group => Ok(()),
+                Some(_) => err(self.place(span, name), format!("'{0}' is one type, not a group; a task takes a group of types as '<{0}...>'", name)),
+                None => err(self.place(span, name), format!("unknown group of types '{0}'; a task takes one as '<{0}...>'", name)),
+            },
+            Type::Named(name, _) if self.type_param(name).is_some_and(|param| param.group) => err(
+                self.place(span, name),
+                format!("'{0}' is a group of types, so it is written '{0}...': a parameter's whole type, as in 'args: {0}...', or all a task's type takes, as in '({0}...) -> R'", name),
+            ),
             // `T`: the type each use of a generic declaration gives it.
             Type::Named(name, _) if self.type_param(name).is_some() => Ok(()),
             // `Box<int>`: what it is given is checked with it (see
@@ -4292,6 +4316,52 @@ impl Checker {
         }
     }
 
+    /// For a call of a task whose last parameter takes a group of types,
+    /// `args: P...`, the task as this call sees it: the group made into one type
+    /// for each value given after the others (`P#0`, `P#1`, …), worked out from
+    /// them as any type is, then kept together again (see `packed_groups`).
+    /// `None` for any other task.
+    fn group_call_info(&self, info: &TaskInfo, args: &[Expr], written: &[TypeArg], span: Span, callee: &str) -> Result<Option<TaskInfo>> {
+        let Some((value, Type::Group(group))) = info.params.last() else { return Ok(None) };
+        if !written.is_empty() {
+            return err(span, format!("{} takes a group of types, '{}...', which a call doesn't write yet; leave the types out, and the values say them", callee, group));
+        }
+        let fixed = info.params.len() - 1;
+        if args.len() < fixed {
+            return err(span, format!("{} expects {}, then any number of values for '{}', got {}", callee, count(fixed, "argument"), value, args.len()));
+        }
+        let names: Vec<String> = (0..args.len() - fixed).map(|i| format!("{}{}{}", group, GROUP_ITEM, i)).collect();
+        let items = |ty: &Type| ty.map_groups(&mut |name| (name == group).then(|| names.iter().map(|name| Type::Param(name.clone())).collect()));
+        let mut types = Vec::new();
+        for param in &info.types {
+            // A group given no values stays, given no types (see `check_call_args`).
+            if param.name == *group && names.is_empty() {
+                types.push(param.clone());
+            } else if param.name == *group {
+                types.extend(names.iter().map(|name| TypeParam { name: name.clone(), span: param.span, needs: Vec::new(), group: false }));
+            } else {
+                types.push(param.clone());
+            }
+        }
+        let mut params: Vec<(String, Type)> = info.params.iter().take(fixed).map(|(name, ty)| (name.clone(), items(ty))).collect();
+        params.extend(names.iter().enumerate().map(|(i, name)| (format!("{} {}", value, i + 1), Type::Param(name.clone()))));
+        let mut passing: Vec<Passing> = info.passing.iter().take(fixed).copied().collect();
+        passing.extend(names.iter().map(|_| Passing::Copy));
+        Ok(Some(TaskInfo { types, params, passing, ret: items(&info.ret), owner: info.owner.clone() }))
+    }
+
+    /// Checks `args...`, the values of a group parameter given on whole as the
+    /// last values of a call, and returns the group's type.
+    fn check_spread(&mut self, inner: &mut Expr, span: Span) -> Result<Type> {
+        let outer = std::mem::replace(&mut self.spreading, true);
+        let ty = self.check_expr(inner);
+        self.spreading = outer;
+        match ty? {
+            ty @ (Type::Group(_) | Type::Unknown) => Ok(ty),
+            ty => err(span, format!("'...' gives the values of a group on whole, as in 'next(args...)', and this is a value of type {}", ty)),
+        }
+    }
+
     /// Moves the body of each task with wrappers, `$(w1, w2(a))`, into a task of
     /// its own, the innermost layer, and makes a task for each other layer: the
     /// task itself calls `w1`, giving it the next layer, its own values, and the
@@ -4390,7 +4460,13 @@ impl Checker {
                     );
                 }
             }
-            let own = wrapper.params.len().checked_sub(1 + types.len());
+            // A wrapper taking a group takes all the task's values in it.
+            let grouped = matches!(wrapper.params.last(), Some((_, Type::Group(_))));
+            let own = if grouped { wrapper.params.len().checked_sub(2) } else { wrapper.params.len().checked_sub(1 + types.len()) };
+            if grouped && own != Some(args.len()) {
+                let own = own.unwrap_or_default();
+                return err(call.span, format!("wrapper '{}' takes the next task, {} of its own, then the task's values in its group; {} given", written, count(own, "value"), count(args.len(), "value")));
+            }
             if own != Some(args.len()) {
                 let message = match own {
                     None => format!(
@@ -4417,7 +4493,8 @@ impl Checker {
             // The wrapper's types and regions, from the next task and the task's
             // values, which are known here; its own values are the call's to say.
             let next = Type::Task(Box::new(TaskType { params: types.clone(), ret: sends.clone() }.normalized()));
-            let own = wrapper.params.len() - types.len();
+            let own = if grouped { wrapper.params.len() - 1 } else { wrapper.params.len() - types.len() };
+            let tail: &[Type] = if grouped { &[] } else { &types };
             // A wrapper that takes no types takes these as they are, which is
             // said as the wrapper's mistake rather than its call's.
             if wrapper.types.is_empty() && !sends.unknown() {
@@ -4433,7 +4510,7 @@ impl Checker {
                     }
                 }
             }
-            let pairs = wrapper.params.iter().map(|(_, ty)| ty).zip(std::iter::once(&next).chain(std::iter::repeat_n(&Type::Unknown, own - 1)).chain(&types));
+            let pairs = wrapper.params.iter().map(|(_, ty)| ty).zip(std::iter::once(&next).chain(std::iter::repeat_n(&Type::Unknown, own - 1)).chain(tail));
             let mut given = HashMap::new();
             let mut regions = HashMap::new();
             for (pattern, actual) in pairs.filter(|(_, actual)| !actual.unknown()) {
@@ -4651,6 +4728,7 @@ impl Checker {
             }
         }
         match &mut expr.kind {
+            ExprKind::Spread(inner) => self.check_spread(inner, span),
             ExprKind::IntLit(_) => Ok(Type::Int),
             ExprKind::FloatLit(_) => Ok(Type::Float),
             ExprKind::CharLit(_) => Ok(Type::Char),
@@ -4684,6 +4762,12 @@ impl Checker {
                 let ty = self.lookup_or_err(name, span)?.ty.clone();
                 if self.unset.contains(name.as_str()) {
                     return err(span, format!("'{}' might not be set here", name));
+                }
+                // A group's values go on whole, and only to a task's call.
+                if let Type::Group(group) = &ty
+                    && !self.spreading
+                {
+                    return err(span, format!("'{0}' holds the values of the group '{1}...', which go on whole to a task that takes them, as in 'next({0}...)'", name, group));
                 }
                 Ok(ty)
             }
@@ -4795,6 +4879,19 @@ impl Checker {
                     Some((of, method)) => format!("method '{}{}{}'", unqualified(of), MODULE_SEPARATOR, method),
                     None => format!("task '{}'", name),
                 };
+                // A task taking a group takes, for this call, one type for each
+                // value the call gives it after the others.
+                let group = match info.params.last() {
+                    Some((_, Type::Group(group))) => Some((group.clone(), args.len() + 1 - info.params.len().min(args.len() + 1))),
+                    _ => None,
+                };
+                let info = match self.group_call_info(&info, args, types, span, &callee)? {
+                    Some(expanded) => expanded,
+                    None => info,
+                };
+                if let Some(spread) = args.iter().find(|arg| matches!(arg.kind, ExprKind::Spread(_))) {
+                    return err(spread.span, format!("a group's values go on whole to a task value taking the group, as in 'next(args...)'; giving them to {} is not built yet", callee));
+                }
                 self.settle_call_region(span, &callee, args, &info.params)?;
                 if args.len() != info.params.len() {
                     // `f(a < b, c > (d))` reads as one argument, a call of `a`.
@@ -4806,7 +4903,15 @@ impl Checker {
                     }
                     return err(span, format!("{} expects {}, got {}", callee, count(info.params.len(), "argument"), args.len()));
                 }
-                self.check_call_args(span, name, types, args, &info)
+                // The values a call gives a group decide how many types it holds.
+                self.check_call_args(span, name, types, args, &info).map_err(|mut error| {
+                    if let Some((group, given)) = &group
+                        && error.message.starts_with("expected type")
+                    {
+                        error.message.push_str(&format!("; this call gives the group '{}...' {}, so the group is {}", group, count(*given, "value"), count(*given, "type")));
+                    }
+                    error
+                })
             }
             ExprKind::Unary(op, e) => self.check_unary(*op, e, span),
             ExprKind::Construct { kind, tag, args } if self.broken.contains(kind.as_str()) => {
@@ -7282,6 +7387,11 @@ impl Checker {
         let sent = self.settled_type(ret, &regions, &given, span)?;
         // A type no argument names is worked out from the place the value goes
         // (see `settle_types`), or written at the call.
+        // A group given no values, as a call of a task taking one sees it (see
+        // `group_call_info`), is given no types.
+        for param in info.types.iter().filter(|param| param.group) {
+            given.entry(param.name.clone()).or_insert_with(|| Type::Tuple(Vec::new()));
+        }
         let missing: Vec<&TypeParam> = info.types.iter().filter(|param| !given.contains_key(&param.name)).collect();
         let shown = sent.params();
         if let Some(param) = missing.iter().find(|param| !shown.contains(&param.name.as_str())) {
@@ -7290,12 +7400,13 @@ impl Checker {
         if let Some(param) = missing.first() {
             self.unsettled_types.push((span, task.to_string(), param.name.clone()));
         }
-        *written = info
-            .types
-            .iter()
-            .zip(&places)
-            .map(|(param, at)| (given.get(&param.name).cloned().unwrap_or_else(|| Type::Param(param.name.clone())), *at))
-            .collect();
+        *written = packed_groups(
+            info.types
+                .iter()
+                .zip(&places)
+                .map(|(param, at)| (param.name.as_str(), (given.get(&param.name).cloned().unwrap_or_else(|| Type::Param(param.name.clone())), *at)))
+                .collect(),
+        );
         self.note_instance(span, task, written);
         Ok(sent)
     }
@@ -7769,6 +7880,7 @@ impl Checker {
     /// given them (see `settle_applications`).
     fn settled_type(&mut self, ty: &Type, regions: &HashMap<String, String>, given: &HashMap<String, Type>, at: Span) -> Result<Type> {
         let ty = ty.map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| ANY_REGION.to_string())));
+        let ty = ty.map_groups(&mut |name| group_types(given, name));
         let mut ty = ty.map_params(&mut |name| given.get(name).cloned());
         self.settle_applications(&mut ty, at)?;
         // A task type given the caller's types names their regions its own way.
@@ -8592,6 +8704,16 @@ impl Checker {
     /// types given it changes nothing, and only fills `made`, which is how the
     /// checker reads a generic task's copies.
     fn substitute_task(&mut self, task: &mut TaskDef, given: &HashMap<String, Type>, made: &mut Made) -> Result<()> {
+        // `args: P...` becomes a parameter for each type given for the group,
+        // `args__1`, `args__2`, … (see `group_value`).
+        if let Some(Field { ty: Type::Group(group), .. }) = task.params.last()
+            && let Some(types) = group_types(given, group)
+            && let Some(param) = task.params.pop()
+        {
+            for (i, ty) in types.into_iter().enumerate() {
+                task.params.push(Field { name: group_value(&param.name, i), ty, ..param.clone() });
+            }
+        }
         let alters = task.owner.as_ref().is_some_and(|owner| owner.alters);
         for param in &mut task.params {
             // A parameter of a type the task doesn't take has warned already,
@@ -8612,7 +8734,7 @@ impl Checker {
     /// the names it takes, and the shape made for them in place of a shape given
     /// them.
     fn substitute_type(&mut self, ty: &mut Type, given: &HashMap<String, Type>, at: Span) -> Result<()> {
-        *ty = ty.map_params(&mut |name| given.get(name).cloned());
+        *ty = ty.map_groups(&mut |name| group_types(given, name)).map_params(&mut |name| given.get(name).cloned());
         self.settle_applications(ty, at)
     }
 
@@ -8717,10 +8839,11 @@ impl Checker {
         }
         let at = e.span;
         if let Some(ty) = &mut e.ty {
-            *ty = ty.map_params(&mut |name| given.get(name).cloned());
+            *ty = ty.map_groups(&mut |name| group_types(given, name)).map_params(&mut |name| given.get(name).cloned());
             self.settle_applications(ty, at)?;
         }
         match &mut e.kind {
+            ExprKind::Spread(inner) => self.substitute_expr(inner, given, made),
             ExprKind::Call { name, types, args } => {
                 for (ty, _) in types.iter_mut() {
                     self.substitute_type(ty, given, at)?;
@@ -8729,6 +8852,7 @@ impl Checker {
                     made.needed.push((name.clone(), types.iter().map(|(ty, _)| ty.clone()).collect(), at));
                 }
                 args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made))?;
+                spread_values(args, given);
                 // `show(v)`, with `v` of a type given now: the `str`s it calls.
                 if name == "show" {
                     for arg in args.iter() {
@@ -8772,7 +8896,9 @@ impl Checker {
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TaskValue(_) => Ok(()),
             ExprKind::Invoke { callee, args } => {
                 self.substitute_expr(callee, given, made)?;
-                args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made))
+                args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made))?;
+                spread_values(args, given);
+                Ok(())
             }
             ExprKind::Unary(_, inner)
             | ExprKind::Deref(inner)
@@ -8884,6 +9010,13 @@ fn unify_params(pattern: &Type, actual: &Type, given: &mut HashMap<String, Type>
         (Type::Or(pv, pe), Type::Or(av, ae)) => {
             unify_params(pv, av, given);
             unify_params(pe, ae, given);
+        }
+        // `(P...) -> R`: the group is all the task takes, whatever it is.
+        (Type::Task(p), Type::Task(a)) if matches!(p.params.as_slice(), [Type::Group(_)]) => {
+            if let [Type::Group(group)] = p.params.as_slice() {
+                given.entry(group.clone()).or_insert_with(|| Type::Tuple(a.params.clone()));
+            }
+            unify_params(&p.ret, &a.ret, given);
         }
         (Type::Task(p), Type::Task(a)) if p.params.len() == a.params.len() => {
             p.params.iter().zip(&a.params).for_each(|(p, a)| unify_params(p, a, given));
@@ -9900,6 +10033,68 @@ fn add_startups(items: &mut Vec<Item>) {
     }
     items.extend(startups.into_iter().map(Item::Task));
 }
+
+/// The types given for the group of types `name`, kept among the types given
+/// a call as a tuple of them (see `Checker::group_call_info`).
+fn group_types(given: &HashMap<String, Type>, name: &str) -> Option<Vec<Type>> {
+    match given.get(name) {
+        Some(Type::Tuple(types)) => Some(types.clone()),
+        _ => None,
+    }
+}
+
+/// The types a call gives, by the name of the type each is given for, with the
+/// types given for one group (`P#0`, `P#1`, …; see `Checker::group_call_info`)
+/// kept together as the one type given for the group, a tuple of them, in the
+/// group's place.
+fn packed_groups(types: Vec<(&str, TypeArg)>) -> Vec<TypeArg> {
+    let mut packed: Vec<TypeArg> = Vec::new();
+    let mut group: Option<&str> = None;
+    for (name, (ty, at)) in types {
+        match name.split_once(GROUP_ITEM) {
+            Some((of, _)) if group == Some(of) => {
+                if let Some((Type::Tuple(items), _)) = packed.last_mut() {
+                    items.push(ty);
+                }
+            }
+            Some((of, _)) => {
+                group = Some(of);
+                packed.push((Type::Tuple(vec![ty]), at));
+            }
+            None => {
+                group = None;
+                packed.push((ty, at));
+            }
+        }
+    }
+    packed
+}
+
+/// The name of the parameter holding the `i`th value of the group parameter
+/// `name` in a task made for its types: `args__1`. No Vela name holds `__`.
+fn group_value(name: &str, i: usize) -> String {
+    format!("{}__{}", name, i + 1)
+}
+
+/// The values of a call in a task made for a group's types: `args...` becomes
+/// the parameters the group parameter became, each a value of its own.
+fn spread_values(args: &mut Vec<Expr>, given: &HashMap<String, Type>) {
+    let Some(Expr { kind: ExprKind::Spread(inner), span, .. }) = args.last() else { return };
+    let (ExprKind::Var(name), Some(Type::Group(group))) = (&inner.kind, &inner.ty) else { return };
+    let Some(types) = group_types(given, group) else { return };
+    let (name, at) = (name.clone(), *span);
+    args.pop();
+    for (i, ty) in types.into_iter().enumerate() {
+        let mut value = Expr::new(ExprKind::Var(group_value(&name, i)), at);
+        value.ty = Some(ty);
+        args.push(value);
+    }
+}
+
+/// The marker between a group's name and the place of one of its types, in
+/// the names a call of a task taking a group gives them (`P#0`), which no Vela
+/// name holds.
+const GROUP_ITEM: char = '#';
 
 fn qualify(module: &str, name: &str) -> String {
     if module.is_empty() { name.to_string() } else { format!("{}{}{}", module, MODULE_SEPARATOR, name) }

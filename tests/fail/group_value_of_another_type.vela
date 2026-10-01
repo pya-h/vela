@@ -1,0 +1,13 @@
+; error: 12:20: expected type int, got text; this call gives the group 'P...' 2 values, so the group is 2 types
+; The group's values are of the types the task given takes.
+task call<P..., R>(f: (P...) -> R, args: P...) -> R
+    <- f(args...)
+fi
+
+task add(a: int, b: int) -> int
+    <- a + b
+fi
+
+task main()
+    show(call(add, "x", 2))
+fi

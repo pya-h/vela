@@ -321,6 +321,7 @@ block shared type</pre>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
         <tr><td><code>(int, text) -&gt; int</code>, <code>square</code>, <code>f(x)</code></td><td>a task's type; a task named as a value, without <code>()</code>; the call of the task a value holds (see <a href="#task-values">Tasks as values</a>)</td></tr>
         <tr><td><code>$d</code>, <code>$d(values)</code></td><td>a startup decorator, above a task: runs <code>d(task, values)</code> once, before <code>main</code> (see <a href="#decorators">Decorators</a>)</td></tr>
+        <tr><td><code>&lt;P...&gt;</code>, <code>args: P...</code>, <code>(P...) -&gt; R</code>, <code>f(args...)</code></td><td>a group of types a task takes; the values a call gives for it; a task taking them; the values given on, whole (see <a href="#type-groups">Type groups</a>)</td></tr>
         <tr><td><code>$(w1, w2(values))</code></td><td>wrapper decorators, above a task: each call of it runs <code>w1</code>, given the rest of the chain, its values, and the task's (see <a href="#decorators">Decorators</a>)</td></tr>
         <tr><td><code>(x: int) -&gt; int &lt;- x * 2 fi</code></td><td>a lambda: a task with no name, written where its value goes, its body on the header's line or the lines after it (see <a href="#lambdas">Lambdas</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v#n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
@@ -2325,9 +2326,61 @@ fi</code></pre>
       </p>
       <p>
         The compiler writes each layer of the chain as a task of its own, and the task's body as the last, so a wrapper
-        costs a call of a task, which the C compiler can inline; no value is kept for it. A wrapper takes as many of
-        the task's values as the task takes, of their types, so one wrapper fits the tasks of one list of parameters;
-        <a href="future.html#decorators">type groups</a>, next, let one fit any.
+        costs a call of a task, which the C compiler can inline; no value is kept for it. A wrapper written for one
+        list of parameters fits the tasks of that list; one taking a <a href="#type-groups">type group</a> fits any.
+      </p>
+
+      <h3 id="type-groups">Type groups</h3>
+      <p>
+        <code>P...</code> among the types a task takes stands for a group of types: any number of them, of any mix.
+        <code>args: P...</code>, the task's last parameter, takes the values a call gives after the others;
+        <code>(P...) -&gt; R</code> is a task taking those values; and <code>f(args...)</code> gives them on, whole, as
+        the last values of a call. So one task fits any task's values, which is what a wrapper needs:
+      </p>
+      <pre><code>task call&lt;P..., R&gt;(f: (P...) -&gt; R, args: P...) -&gt; R
+    &lt;- f(args...)
+fi
+
+task traced&lt;P..., R: shown&gt;(next: (P...) -&gt; R, label: text, args: P...) -&gt; R
+    show("&gt; ", label)
+    bind result = next(args...)
+    show("&lt; ", label, " ", result)
+    &lt;- result
+fi
+
+task add(a: int, b: int) -&gt; int
+    &lt;- a + b
+fi
+
+$(traced("area"))
+task area(w: int, h: int) -&gt; int
+    &lt;- w * h
+fi
+
+$(traced("first"))
+task first(t: text@r) -&gt; text@r
+    &lt;- t[0..1]
+fi
+
+task main()
+    show(call(add, 2, 3))                         ; 5
+    show(area(3, 4))                              ; &gt; area, &lt; area 12, then 12
+    show(first("Ada"))                            ; &gt; first, &lt; first A, then A
+fi</code></pre>
+      <p>
+        Each use fills the group in with the types of the values it gives, as a use fills in a
+        <a href="#generics">type a task takes</a>: <code>call(add, 2, 3)</code> makes <code>P</code> the group
+        <code>int, int</code>, and the task made for it takes two ints, so a group costs nothing when the program runs.
+        A group may hold no types (<code>call(seven)</code>), large values, and text of a region, whose region goes
+        through.
+      </p>
+      <p>
+        A group is only ever given on whole: its values are read nowhere but in <code>f(args...)</code>, given to a
+        task value whose type takes the group, so every value reaches a parameter of its own type. A task takes one
+        group, its values are its last parameter and are given as values (no <code>hold</code> or
+        <code>hold&amp;</code>), a task's type takes the group and nothing else, and a group asks nothing of its types.
+        Only a task takes one, not a shape, and a call doesn't write a group's types yet, nor gives a group's values to
+        a named task.
       </p>
 
       <h3 id="names">Names</h3>
@@ -3618,8 +3671,9 @@ show(area(square))             <span class="comment">; error: unknown task 'area
         <li>A lambda takes nothing from the code around it, and can't be written inside a task or method that takes
           types (see <a href="#lambdas">Lambdas</a>).</li>
         <li>Only a task takes decorators, not a method, nor a task that takes types; a startup decorator sends nothing;
-          a wrapper's own values are ones the compiler works out, and a wrapper fits the tasks of one list of parameters
-          (see <a href="#decorators">Decorators</a>).</li>
+          a wrapper's own values are ones the compiler works out (see <a href="#decorators">Decorators</a>).</li>
+        <li>A task takes one type group, as its last parameter; a group's values are only given on whole, to a task
+          value, and a call doesn't write a group's types (see <a href="#type-groups">Type groups</a>).</li>
         <li>A method takes no types of its own, can't allocate in the region its value lives in, and is written
           inside its shape or kind, never in another module (see <a href="#methods">Methods</a> and
           <a href="future.html#methods-later">the room left to grow</a>).</li>

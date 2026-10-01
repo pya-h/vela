@@ -1,0 +1,15 @@
+; error: 8:3: wrapper 'logged' takes the next task, 1 value of its own, then the task's values in its group; 0 values given
+; A wrapper taking a group is still given its own values.
+task logged<P..., R>(next: (P...) -> R, label: text, args: P...) -> R
+    show(label)
+    <- next(args...)
+fi
+
+$(logged)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

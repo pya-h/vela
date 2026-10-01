@@ -2638,6 +2638,9 @@ impl Generator {
                 self.gen_new(e, ty, value, region)
             }
             ExprKind::Deref(inner) => self.gen_expr(inner).map(|expr| format!("(*({}))", expr)),
+            // Each use of a task taking a group gives its values one by one
+            // (see `Checker::substitute_expr`).
+            ExprKind::Spread(_) => Err(Error::internal_at(e.span, "a group's values given on whole outside a task that takes a group")),
             ExprKind::StructInit { name, fields, .. } => self.gen_struct_init(name, fields),
             ExprKind::Range(_, _) => Err(Error::internal_at(e.span, "range outside 'each' reached code generation")),
             // The error value itself; `Wrap` makes it part of a `T ~ E`.
@@ -3714,6 +3717,7 @@ fn scan_helper(ty: &Type) -> String {
 /// so generating it writes a prelude.
 fn has_prelude(e: &Expr) -> bool {
     match &e.kind {
+        ExprKind::Spread(inner) => has_prelude(inner),
         ExprKind::PlanB { .. } | ExprKind::Choice(_) | ExprKind::Edit { .. } | ExprKind::Scan { .. } => true,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
         | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::TaskValue(_) => false,
@@ -4175,6 +4179,7 @@ impl UsedTypes {
         match &e.kind {
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
             | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => {}
+            ExprKind::Spread(inner) => self.expr(inner),
             ExprKind::TaskValue(name) => {
                 if !self.task_values.contains(name) {
                     self.task_values.push(name.clone());
@@ -4398,6 +4403,7 @@ fn place_reads(target: &Expr, name: &str) -> bool {
 
 fn expr_reads(e: &Expr, name: &str) -> bool {
     match &e.kind {
+        ExprKind::Spread(inner) => expr_reads(inner, name),
         ExprKind::Var(var) | ExprKind::RegionAfter(var) => var == name,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::TaskValue(_) => false,
         ExprKind::Invoke { callee, args } => expr_reads(callee, name) || args.iter().any(|arg| expr_reads(arg, name)),
@@ -4713,6 +4719,7 @@ fn c_type(ty: &Type) -> String {
         // the type it gives, so these would be compiler bugs (see `instances`
         // and `shape_instance`).
         Type::Param(name) => format!("/*type {}*/", name),
+        Type::Group(name) => format!("/*group {}*/", name),
         Type::Applied(applied) => format!("/*shape {}*/", applied.name),
         // Nor is a program with a type the checker couldn't work out, since that
         // program has an error (see `Type::Unknown`).

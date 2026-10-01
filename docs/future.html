@@ -2062,9 +2062,10 @@ bind age = int("42")               ; text to a number can fail: int ~ ParseError
         <strong>Where it stands.</strong> <span class="badge b-done">Done</span> — tasks are values
         (<a href="vela.html#task-values">Tasks as values</a>): a task's type is written <code>(int, text) -&gt; int</code>,
         a task named without <code>()</code> is its value, and a variable, field, item, or result holding one is called
-        like a task. In C a task value is a pointer to a function, so it costs nothing. <strong>Decided, not built
-        yet</strong> (in this order): lambdas that take nothing from the task around them, startup decorators, wrapper
-        decorators, and type groups. Lambdas that do take values from around them are planned <a href="#lambdas">below</a>.
+        like a task. In C a task value is a pointer to a function, so it costs nothing. Built since, in this order:
+        <a href="vela.html#lambdas">lambdas</a> that take nothing from the task around them,
+        <a href="vela.html#decorators">startup and wrapper decorators</a>, and <a href="vela.html#type-groups">type
+        groups</a>. Lambdas that do take values from around them are planned <a href="#lambdas">below</a>.
       </p>
 
       <h3 id="lambdas-now">Lambdas <span class="badge b-done">Done</span></h3>
@@ -2129,7 +2130,7 @@ fi</code></pre>
           captures pays nothing.</li>
       </ul>
 
-      <h3 id="decorators">Decorators <span class="badge b-med">Startup and wrappers done; type groups decided</span></h3>
+      <h3 id="decorators">Decorators <span class="badge b-done">Done</span></h3>
       <p>
         A decorator is a task whose first parameter is a task. It is called like any task, and it can also be written
         before another task's header, in one of two ways:
@@ -2159,7 +2160,8 @@ fi</code></pre>
     show("took ", clock() - start)
     &lt;- result
 fi</code></pre>
-          The compiler fills a group in for each use, as it fills in a type, so it costs nothing when running.</li>
+          The compiler fills a group in for each use, as it fills in a type, so it costs nothing when running. Built:
+          see <a href="vela.html#type-groups">Type groups</a>.</li>
       </ul>
 
       <h3 id="task-value-ideas">What these make possible <span class="badge b-idea">Ideas</span></h3>
@@ -2315,9 +2317,9 @@ fi
             <li><s>Pattern-match expressions</s> (done: <a href="vela.html#choices">a match or a when as a value</a>,
               with <code>else when</code> chains)</li>
             <li><s>Region-based allocation</s> (done: <a href="regions.html">regions</a>)</li>
-            <li><s>Tasks as values</s> and <s>lambdas</s> (done: <a href="vela.html#task-values">tasks as values</a>,
-              <a href="vela.html#lambdas">lambdas</a>), <s>startup and wrapper decorators</s> (done: <a href="vela.html#decorators">decorators</a>), then
-              <a href="#decorators">type groups</a></li>
+            <li><s>Tasks as values, lambdas, decorators, and type groups</s> (done: <a href="vela.html#task-values">tasks as values</a>,
+              <a href="vela.html#lambdas">lambdas</a>, <a href="vela.html#decorators">decorators</a>,
+              <a href="vela.html#type-groups">type groups</a>)</li>
             <li>Region brackets with inferred region arguments (<s>generated copies between regions</s>: done, <a href="vela.html#copy"><code>.copy()</code></a>)</li>
           </ul>
         </div>

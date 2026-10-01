@@ -1,0 +1,13 @@
+; error: 12:10: task 'call' takes a group of types, 'P...', which a call doesn't write yet; leave the types out, and the values say them
+; The types of a group are not written at a call yet.
+task call<P..., R>(f: (P...) -> R, args: P...) -> R
+    <- f(args...)
+fi
+
+task add(a: int, b: int) -> int
+    <- a + b
+fi
+
+task main()
+    show(call<int, int, int>(add, 1, 2))
+fi

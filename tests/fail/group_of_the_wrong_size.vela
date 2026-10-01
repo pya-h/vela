@@ -1,0 +1,13 @@
+; error: 12:15: expected type (int) -> R, got (int, int) -> int; this call gives the group 'P...' 1 value, so the group is 1 type
+; The values given decide how many types the group holds.
+task call<P..., R>(f: (P...) -> R, args: P...) -> R
+    <- f(args...)
+fi
+
+task add(a: int, b: int) -> int
+    <- a + b
+fi
+
+task main()
+    show(call(add, 1))
+fi

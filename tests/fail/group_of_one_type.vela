@@ -1,0 +1,4 @@
+; error: 3:17: 'T' is one type, not a group; a task takes a group of types as '<T...>'
+; Only a group of types takes dots.
+task f<T>(args: T...)
+fi

@@ -80,6 +80,11 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
         "$d, $d(values), or $(w1, w2(values))",
         "A decorator, on a line above a task. $d is a startup decorator: d(task, values) runs once where the program starts, before main, the nearest first; d takes the task first and sends nothing. $(w1, w2) wraps the task: each call of it runs w1, given the rest of the chain as a task of the task's type, its own values, and the task's values, and what w1 sends is what the call gives. A decorator's values hold no variable or region; a wrapper's are literals, macros, or tasks' names.",
     ),
+    (
+        "...",
+        "P..., args: P..., (P...) -> R, f(args...)",
+        "After a type a task takes, a group of types: any number, any mix. args: P... takes the values a call gives after the others, (P...) -> R is a task taking them, and f(args...) gives them on, whole. Each use fills the group in with the types of its values, as it fills in a type, so it costs nothing when the program runs. After the values of a slice, as in [1, 2, ...] at r, it makes a slice of them.",
+    ),
     ("fail", "fail error", "Makes a failure, for a task whose type has a ~ side: <- fail e sends one. A pattern names a failure with 'failure' instead."),
     ("failure", "failure e", "Names the failure a pattern matches: case failure e, when x is failure e, and a plan B's first line. 'fail' makes one."),
     ("_", "_", "Matches anything left, or drops a value without naming it."),

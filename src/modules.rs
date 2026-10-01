@@ -1296,6 +1296,7 @@ impl Resolver<'_> {
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::RegionAfter(_) => Ok(()),
             // Only the resolver makes one, above.
             ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::Macro { .. } | ExprKind::TaskValue(_) => Ok(()),
+            ExprKind::Spread(inner) => self.expr(inner),
             ExprKind::Invoke { callee, args } => {
                 self.expr(callee)?;
                 args.iter_mut().try_for_each(|e| self.expr(e))

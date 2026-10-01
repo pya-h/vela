@@ -1,0 +1,13 @@
+; error: 12:10: task 'call' expects 1 argument, then any number of values for 'args', got 0
+; A call gives the values before the group's.
+task call<P..., R>(f: (P...) -> R, args: P...) -> R
+    <- f(args...)
+fi
+
+task add(a: int, b: int) -> int
+    <- a + b
+fi
+
+task main()
+    show(call())
+fi

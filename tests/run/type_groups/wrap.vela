@@ -1,0 +1,16 @@
+; A module's wrappers that take a group of types, so each fits any task.
+
+; Writes the task's name before it runs, and what it sends after.
+task traced<P..., R: shown>(next: (P...) -> R, label: text, args: P...) -> R
+    show("> ", label)
+    bind result = next(args...)
+    show("< ", label, " ", result)
+    <- result
+fi
+
+; Runs a task that sends nothing, between two lines.
+task framed<P...>(next: (P...) -> nothing, args: P...)
+    show("[")
+    next(args...)
+    show("]")
+fi

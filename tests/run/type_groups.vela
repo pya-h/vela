@@ -1,0 +1,90 @@
+; Type groups: `P...` among the types a task takes stands for a group of
+; types, any number and any mix. `args: P...` takes the values a call gives
+; after the others, `(P...) -> R` is a task taking them, and `f(args...)` gives
+; them on. Each use fills the group in with the types of its values, as it
+; fills in a type, so one wrapper fits every task.
+
+include type_groups/wrap
+
+shape Big
+    a: int
+    b: int
+    c: int
+    d: int
+    e: int
+    f: int
+    g: int
+    h: int
+    i: int
+fi
+
+; Calls any task with the values given after it.
+task call<P..., R>(f: (P...) -> R, args: P...) -> R
+    <- f(args...)
+fi
+
+; Counts the calls of any task, in a shared field.
+shape Calls
+    shared hold count: int = 0
+fi
+
+task counted<P..., R>(next: (P...) -> R, args: P...) -> R
+    Calls.count++
+    <- next(args...)
+fi
+
+task add(a: int, b: int) -> int
+    <- a + b
+fi
+
+task seven() -> int
+    <- 7
+fi
+
+; A large value, and a copy the task may change, given through a group.
+task sum(x: Big, hold y: Big) -> int
+    y.a = y.a + 10
+    <- x.a + y.a
+fi
+
+; A group in a task that takes a type of its own too.
+task twice<T>(f: (T) -> T, x: T) -> T
+    <- call(f, call(f, x))
+fi
+
+task inc(n: int) -> int
+    <- n + 1
+fi
+
+$(counted, wrap.traced("area"))
+task area(w: int, h: int) -> int
+    <- w * h
+fi
+
+$(counted, wrap.traced("first"))
+task first(t: text@r) -> text@r
+    <- t[0..1]
+fi
+
+$(counted)
+task now() -> int
+    <- 2026
+fi
+
+$(wrap.framed)
+task say(what: text, n: int, ok: bool)
+    show(what, n, " ", ok)
+fi
+
+task main()
+    show(call(add, 2, 3))
+    show(call(seven))
+    bind big = Big { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
+    show(call(sum, big, big))
+    show(twice(inc, 5))
+    show(area(3, 4))
+    show(first("Ada"))
+    show(now())
+    say("n=", 4, true)
+    show(Calls.count, " counted calls")
+fi

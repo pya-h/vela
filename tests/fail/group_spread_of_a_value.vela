@@ -1,0 +1,5 @@
+; error: 4:8: '...' gives the values of a group on whole, as in 'next(args...)', and this is a value of type int
+; '...' gives on the values of a group, and nothing else.
+task f<P...>(g: (P...) -> nothing, n: int)
+    g(n...)
+fi

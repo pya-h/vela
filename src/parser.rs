@@ -722,7 +722,7 @@ impl Parser {
         self.advance(); // task
         let span = self.peek_span();
         let name = self.expect_ident()?;
-        let types = self.parse_type_params()?;
+        let types = self.parse_type_params(true)?;
         let params = self.parse_field_list(Slot::Param)?;
         let mut results = Vec::new();
         let ret = if self.match_token(Token::Arrow) {
@@ -761,7 +761,7 @@ impl Parser {
 
     /// `<T, U: ordered>` after a declaration's name: the types it takes, with
     /// what each one must allow. Empty for a declaration that takes none.
-    fn parse_type_params(&mut self) -> Result<Vec<TypeParam>> {
+    fn parse_type_params(&mut self, groups: bool) -> Result<Vec<TypeParam>> {
         // `<>` reads as one token, `not similar`, wherever values are.
         if self.check(Token::NotSimilar) {
             return Err(Error::at(self.peek_span(), "'< … >' names the types a declaration takes, as in '<T>'; leave it out when it takes none"));
@@ -787,8 +787,22 @@ impl Parser {
             if let Some(before) = params.iter().find(|param| param.name == name) {
                 return Err(Error::at(span, format!("'{}' is already taken at {}:{}", name, before.span.line, before.span.col)));
             }
+            // `P...`: a group of types, which only a task takes.
+            let group = self.check(Token::Ellipsis);
+            if group {
+                if !groups {
+                    return Err(Error::at(self.peek_span(), "only a task takes a group of types, 'P...'; a shape takes each type by name, as in '<T, U>'"));
+                }
+                if let Some(before) = params.iter().find(|param| param.group) {
+                    return Err(Error::at(span, format!("a task takes one group of types, and '{}...' is one already", before.name)));
+                }
+                self.advance(); // ...
+                if self.check(Token::Colon) {
+                    return Err(Error::at(self.peek_span(), format!("a group of types asks nothing of its types yet, so '{}...' takes no ':'", name)));
+                }
+            }
             let needs = if self.match_token(Token::Colon) { self.parse_needs()? } else { Vec::new() };
-            params.push(TypeParam { name, span, needs });
+            params.push(TypeParam { name, span, needs, group });
             if !self.match_token(Token::Comma) {
                 break;
             }
@@ -875,7 +889,7 @@ impl Parser {
         self.advance(); // shape
         let span = self.peek_span();
         let name = self.expect_ident()?;
-        let types = self.parse_type_params()?;
+        let types = self.parse_type_params(false)?;
         self.skip_newlines();
         let mut fields: Vec<Field> = Vec::new();
         let mut shared: Vec<SharedField> = Vec::new();
@@ -1279,7 +1293,11 @@ impl Parser {
         let name = self.expect_ident()?;
         self.expect(Token::Colon)?;
         let ty_span = self.peek_span();
-        let ty = self.parse_type()?;
+        let mut ty = self.parse_type()?;
+        // `args: P...`: the values of a group of types the task takes.
+        if self.check(Token::Ellipsis) {
+            ty = self.group_type(ty, slot == Slot::Param, "a parameter's type, as in 'args: P...'")?;
+        }
         let default_region = self.match_default(slot == Slot::Param)?;
         let default = self.match_field_default(slot)?;
         Ok(Field { name, ty, span, ty_span, private: false, read: false, default_region, passing, default })
@@ -1595,12 +1613,23 @@ impl Parser {
                     _ => Err(Error::at(self.peek_span(), TUPLE_TRAILING_COMMA)),
                 };
             }
-            items.push(self.parse_type_parts()?);
+            let item = self.parse_type_parts()?;
+            // `(P...) -> R`: a task's type taking a group of types, all it takes.
+            if self.check(Token::Ellipsis) {
+                let alone = items.is_empty() && self.tokens.get(self.pos + 1) == Some(&Token::RParen) && self.tokens.get(self.pos + 2) == Some(&Token::Arrow);
+                let group = self.group_type(item, alone, "the whole of what a task's type takes, as in '(P...) -> R'")?;
+                items.push(group);
+                break;
+            }
+            items.push(item);
             if !self.match_token(Token::Comma) {
                 break;
             }
         }
         if !self.match_token(Token::RParen) {
+            if matches!(items.last(), Some(Type::Group(_))) {
+                return Err(Error::at(self.peek_span(), "a group of types is the whole of what a task's type takes, as in '(P...) -> R'"));
+            }
             return Err(self.unexpected("',' and another item, or ')' to close the tuple"));
         }
         // `(int, text) -> int`: a task's type.
@@ -1618,6 +1647,20 @@ impl Parser {
     /// At the `->` after the parameters of a task's type, `(int, text) -> int`:
     /// what the task sends, one type, `nothing` when it sends no value. The
     /// arrow is always written, since `(int)` alone is `int` in parentheses.
+    /// `ty` followed by `...`, at the `...`: the group of types `ty` names,
+    /// where `allowed` says one may be written, and `where_` is where one is.
+    fn group_type(&mut self, ty: Type, allowed: bool, where_: &str) -> Result<Type> {
+        let at = self.peek_span();
+        let Type::Named(name, None) = &ty else {
+            return Err(Error::at(at, format!("'...' after a type marks a group of types the task takes, as in 'P...', and '{}' is no name of one", ty)));
+        };
+        if !allowed {
+            return Err(Error::at(at, format!("a group of types, '{}...', is only {}", name, where_)));
+        }
+        self.advance(); // ...
+        Ok(Type::Group(name.clone()))
+    }
+
     fn parse_task_type(&mut self, params: Vec<Type>) -> Result<Type> {
         self.advance(); // ->
         if matches!(self.peek(), Token::Newline | Token::Eof | Token::RParen | Token::RBracket | Token::Comma | Token::Assign | Token::Fi) {
@@ -3477,7 +3520,18 @@ impl Parser {
         let mut args = Vec::new();
         if !self.check(Token::RParen) {
             loop {
-                args.push(self.parse_expr()?);
+                let arg = self.parse_expr()?;
+                // `f(args...)`: a group's values, which come last.
+                if self.check(Token::Ellipsis) {
+                    let at = self.peek_span();
+                    self.advance(); // ...
+                    args.push(Expr::new(ExprKind::Spread(Box::new(arg)), at));
+                    if !self.check(Token::RParen) {
+                        return Err(Error::at(at, "a group's values come last in a call, as in 'next(args...)'"));
+                    }
+                    break;
+                }
+                args.push(arg);
                 if !self.match_token(Token::Comma) {
                     break;
                 }

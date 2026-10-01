@@ -1,0 +1,4 @@
+; error: 3:27: a group of types, 'P...', is only the whole of what a task's type takes, as in '(P...) -> R'
+; A group is all a task's type takes.
+task f<P..., R>(g: (int, P...) -> R)
+fi

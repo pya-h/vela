@@ -1,0 +1,4 @@
+; error: 3:14: a task takes one group of types, and 'P...' is one already
+; A task takes one group of types.
+task f<P..., Q...>(args: P...)
+fi

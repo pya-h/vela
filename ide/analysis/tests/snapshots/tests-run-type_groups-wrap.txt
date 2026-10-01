@@ -1,0 +1,28 @@
+  1 | ; A module's wrappers that take a group of types, so each fits any task.
+    | comment:; A module's wrappers that take a group of types, so each fits any task.
+  3 | ; Writes the task's name before it runs, and what it sends after.
+    | comment:; Writes the task's name before it runs, and what it sends after.
+  4 | task traced<P..., R: shown>(next: (P...) -> R, label: text, args: P...) -> R
+    | keyword:task  task:traced  punctuation:<  type:P  keyword:...  punctuation:,  type:R  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+  5 |     show("> ", label)
+    | builtin-fn:show  punctuation:(  string:"> "  punctuation:,  parameter:label  punctuation:)
+  6 |     bind result = next(args...)
+    | keyword:bind  variable:result  operator:=  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+  7 |     show("< ", label, " ", result)
+    | builtin-fn:show  punctuation:(  string:"< "  punctuation:,  parameter:label  punctuation:,  string:" "  punctuation:,  variable:result  punctuation:)
+  8 |     <- result
+    | keyword:<-  variable:result
+  9 | fi
+    | keyword:fi
+ 11 | ; Runs a task that sends nothing, between two lines.
+    | comment:; Runs a task that sends nothing, between two lines.
+ 12 | task framed<P...>(next: (P...) -> nothing, args: P...)
+    | keyword:task  task:framed  punctuation:<  type:P  keyword:...  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type-builtin:nothing  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 13 |     show("[")
+    | builtin-fn:show  punctuation:(  string:"["  punctuation:)
+ 14 |     next(args...)
+    | parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+ 15 |     show("]")
+    | builtin-fn:show  punctuation:(  string:"]"  punctuation:)
+ 16 | fi
+    | keyword:fi

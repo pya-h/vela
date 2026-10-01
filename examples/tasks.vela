@@ -3,11 +3,23 @@
 ; lambda is a task with no name, written where its value goes, which takes
 ; nothing from the code around it. A startup decorator, `$d` above a task, runs
 ; `d(task)` once, before `main`; a wrapper, `$(w)`, runs `w` at every call of
-; the task, which is given the task to call.
+; the task, which is given the task to call. A type group, `P...`, lets one
+; wrapper fit a task of any parameters.
 
 shape Rule
     name: text
     check: (int) -> bool
+fi
+
+; How many times a counted task has run.
+shape Runs
+    shared hold count: int = 0
+fi
+
+; Counts each call of the task it wraps, whatever the task takes.
+task counted<P..., R>(next: (P...) -> R, args: P...) -> R
+    Runs.count++
+    <- next(args...)
 fi
 
 ; Says that a rule is ready, trying it on 4.
@@ -21,7 +33,7 @@ task never_negative(rule: (int) -> bool, n: int) -> bool
 fi
 
 $announce
-$(never_negative)
+$(counted, never_negative)
 task is_even(n: int) -> bool
     <- n % 2 == 0
 fi
@@ -63,4 +75,5 @@ task main()
         <- y
     fi, r)
     show(squared)
+    show("is_even ran ", Runs.count, " times")
 fi
