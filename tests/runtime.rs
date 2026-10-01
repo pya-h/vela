@@ -240,6 +240,30 @@ fn check_sanitized(source: &Path, expected: &Path, name: &str, trap: Option<&str
 /// An allocation that can't be satisfied (one whose size overflows, one the
 /// system refuses, and a slice's items whose size in bytes overflows) stops the
 /// program with a message instead of returning memory that isn't there.
+/// Programs that compare addresses mean the same compiled by an optimizing
+/// clang, which may read a parameter given as a value where the caller keeps
+/// it: a copy of a task's own must still be a place of its own.
+#[test]
+fn addresses_mean_the_same_under_an_optimizing_clang() {
+    if Command::new("clang").arg("--version").output().is_err() {
+        eprintln!("skipped: no clang");
+        return;
+    }
+    let scratch = scratch_dir("clang-optimized");
+    for name in ["addresses", "bind_parameters", "chosen_parameters", "equality"] {
+        let source = root().join("tests/run").join(format!("{}.vela", name));
+        let c_path = scratch.join(format!("{}.c", name));
+        let emitted = Command::new(VELA).arg(&source).arg("--emit-c").arg("-o").arg(&c_path).output().unwrap();
+        assert!(emitted.status.success(), "{}: {}", name, String::from_utf8_lossy(&emitted.stderr));
+        let exe = scratch.join(name);
+        let built = Command::new("clang").args(["-std=c11", "-O2", "-I"]).arg(root().join("runtime")).arg(&c_path).arg("-o").arg(&exe).arg("-lm").output().unwrap();
+        assert!(built.status.success(), "{}: {}", name, String::from_utf8_lossy(&built.stderr));
+        let expected = fs::read_to_string(root().join("tests/run").join(format!("{}.out", name))).unwrap();
+        assert_eq!(String::from_utf8_lossy(&run(&exe).stdout), expected, "{} under clang -O2", name);
+    }
+    let _ = fs::remove_dir_all(&scratch);
+}
+
 #[test]
 fn an_impossible_allocation_stops_the_program() {
     let scratch = scratch_dir("runtime-out-of-memory");

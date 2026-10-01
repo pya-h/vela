@@ -84,105 +84,113 @@
     | keyword:<-  operator:&  parameter:a  operator:==  operator:&  parameter:b
  50 | fi
     | keyword:fi
- 52 | ; An array read where it is, never copied.
+ 52 | ; A `hold` is a copy of the task's own as well, even one it never changes.
+    | comment:; A `hold` is a copy of the task's own as well, even one it never changes.
+ 53 | task held(hold a: Wide, bind& b: Wide) -> bool
+    | keyword:task  task:held  punctuation:(  keyword:hold  parameter:a  punctuation::  type:Wide  punctuation:,  keyword:bind  keyword:&  parameter:b  punctuation::  type:Wide  punctuation:)  operator:->  type-builtin:bool
+ 54 |     <- &a == &b
+    | keyword:<-  operator:&  parameter:a  operator:==  operator:&  parameter:b
+ 55 | fi
+    | keyword:fi
+ 57 | ; An array read where it is, never copied.
     | comment:; An array read where it is, never copied.
- 53 | task sum(bind& xs: [int#3], bind start: int) -> int
+ 58 | task sum(bind& xs: [int#3], bind start: int) -> int
     | keyword:task  task:sum  punctuation:(  keyword:bind  keyword:&  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  punctuation:,  keyword:bind  parameter:start  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
- 54 |     hold total = start
+ 59 |     hold total = start
     | keyword:hold  variable:total  operator:=  parameter:start
- 55 |     each x in xs
+ 60 |     each x in xs
     | keyword:each  variable:x  keyword:in  parameter:xs
- 56 |         total = total + x
+ 61 |         total = total + x
     | variable:total  operator:=  variable:total  operator:+  variable:x
- 57 |     fi
+ 62 |     fi
     | keyword:fi
- 58 |     <- total
+ 63 |     <- total
     | keyword:<-  variable:total
- 59 | fi
-    | keyword:fi
- 61 | ; A `bind&` passes its place on to another.
-    | comment:; A `bind&` passes its place on to another.
- 62 | task onward(bind& p: Point) -> bool
-    | keyword:task  task:onward  punctuation:(  keyword:bind  keyword:&  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:bool
- 63 |     <- one(&p, &p)
-    | keyword:<-  task:one  punctuation:(  operator:&  parameter:p  punctuation:,  operator:&  parameter:p  punctuation:)
  64 | fi
     | keyword:fi
- 66 | task written(r: region, bind& p: Point) -> text@r
-    | keyword:task  task:written  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  keyword:bind  keyword:&  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
- 67 |     <- "{p.x},{p.y}" at r
-    | keyword:<-  string:"{  parameter:p  punctuation:.  field:x  string:},{  parameter:p  punctuation:.  field:y  string:}"  keyword:at  region:r
- 68 | fi
+ 66 | ; A `bind&` passes its place on to another.
+    | comment:; A `bind&` passes its place on to another.
+ 67 | task onward(bind& p: Point) -> bool
+    | keyword:task  task:onward  punctuation:(  keyword:bind  keyword:&  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:bool
+ 68 |     <- one(&p, &p)
+    | keyword:<-  task:one  punctuation:(  operator:&  parameter:p  punctuation:,  operator:&  parameter:p  punctuation:)
+ 69 | fi
     | keyword:fi
- 70 | ; In a task that takes types, any place of the type given.
-    | comment:; In a task that takes types, any place of the type given.
- 71 | task same_place<T: same>(bind& a: T, bind& b: T) -> bool
-    | keyword:task  task:same_place  punctuation:<  type:T  punctuation::  keyword:same  punctuation:>  punctuation:(  keyword:bind  keyword:&  parameter:a  punctuation::  type:T  punctuation:,  keyword:bind  keyword:&  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type-builtin:bool
- 72 |     <- a == b
-    | keyword:<-  parameter:a  operator:==  parameter:b
+ 71 | task written(r: region, bind& p: Point) -> text@r
+    | keyword:task  task:written  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  keyword:bind  keyword:&  parameter:p  punctuation::  type:Point  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 72 |     <- "{p.x},{p.y}" at r
+    | keyword:<-  string:"{  parameter:p  punctuation:.  field:x  string:},{  parameter:p  punctuation:.  field:y  string:}"  keyword:at  region:r
  73 | fi
     | keyword:fi
- 75 | ; A pointer only read: it stays, and what it points to is its own place, which
-    | comment:; A pointer only read: it stays, and what it points to is its own place, which
- 76 | ; the task may change through it.
-    | comment:; the task may change through it.
- 77 | task nudge(bind& spot: ^Point@r) -> int
-    | keyword:task  task:nudge  punctuation:(  keyword:bind  keyword:&  parameter:spot  punctuation::  operator:^  type:Point  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
- 78 |     spot^.x = spot^.x + 1
-    | parameter:spot  operator:^  punctuation:.  field:x  operator:=  parameter:spot  operator:^  punctuation:.  field:x  operator:+  number:1
- 79 |     <- spot^.x
-    | keyword:<-  parameter:spot  operator:^  punctuation:.  field:x
- 80 | fi
+ 75 | ; In a task that takes types, any place of the type given.
+    | comment:; In a task that takes types, any place of the type given.
+ 76 | task same_place<T: same>(bind& a: T, bind& b: T) -> bool
+    | keyword:task  task:same_place  punctuation:<  type:T  punctuation::  keyword:same  punctuation:>  punctuation:(  keyword:bind  keyword:&  parameter:a  punctuation::  type:T  punctuation:,  keyword:bind  keyword:&  parameter:b  punctuation::  type:T  punctuation:)  operator:->  type-builtin:bool
+ 77 |     <- a == b
+    | keyword:<-  parameter:a  operator:==  parameter:b
+ 78 | fi
     | keyword:fi
- 82 | task open(bind& m: maybe ^Point@r) -> int
-    | keyword:task  task:open  punctuation:(  keyword:bind  keyword:&  parameter:m  punctuation::  keyword:maybe  operator:^  type:Point  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
- 83 |     bind spot = m { <- 0 }
-    | keyword:bind  variable:spot  operator:=  parameter:m  punctuation:{  keyword:<-  number:0  punctuation:}
+ 80 | ; A pointer only read: it stays, and what it points to is its own place, which
+    | comment:; A pointer only read: it stays, and what it points to is its own place, which
+ 81 | ; the task may change through it.
+    | comment:; the task may change through it.
+ 82 | task nudge(bind& spot: ^Point@r) -> int
+    | keyword:task  task:nudge  punctuation:(  keyword:bind  keyword:&  parameter:spot  punctuation::  operator:^  type:Point  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 83 |     spot^.x = spot^.x + 1
+    | parameter:spot  operator:^  punctuation:.  field:x  operator:=  parameter:spot  operator:^  punctuation:.  field:x  operator:+  number:1
  84 |     <- spot^.x
-    | keyword:<-  variable:spot  operator:^  punctuation:.  field:x
+    | keyword:<-  parameter:spot  operator:^  punctuation:.  field:x
  85 | fi
     | keyword:fi
- 87 | task kept<T>(bind& a: T) -> T
-    | keyword:task  task:kept  punctuation:<  type:T  punctuation:>  punctuation:(  keyword:bind  keyword:&  parameter:a  punctuation::  type:T  punctuation:)  operator:->  type:T
- 88 |     <- a
-    | keyword:<-  parameter:a
- 89 | fi
+ 87 | task open(bind& m: maybe ^Point@r) -> int
+    | keyword:task  task:open  punctuation:(  keyword:bind  keyword:&  parameter:m  punctuation::  keyword:maybe  operator:^  type:Point  operator:@  region:r  punctuation:)  operator:->  type-builtin:int
+ 88 |     bind spot = m { <- 0 }
+    | keyword:bind  variable:spot  operator:=  parameter:m  punctuation:{  keyword:<-  number:0  punctuation:}
+ 89 |     <- spot^.x
+    | keyword:<-  variable:spot  operator:^  punctuation:.  field:x
+ 90 | fi
     | keyword:fi
- 91 | task main()
+ 92 | task kept<T>(bind& a: T) -> T
+    | keyword:task  task:kept  punctuation:<  type:T  punctuation:>  punctuation:(  keyword:bind  keyword:&  parameter:a  punctuation::  type:T  punctuation:)  operator:->  type:T
+ 93 |     <- a
+    | keyword:<-  parameter:a
+ 94 | fi
+    | keyword:fi
+ 96 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 92 |     region r
+ 97 |     region r
     | keyword:region  region:r
- 93 |     bind p = Point { x: 1, y: 2 }
+ 98 |     bind p = Point { x: 1, y: 2 }
     | keyword:bind  variable:p  operator:=  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}
- 94 |     hold q = p
+ 99 |     hold q = p
     | keyword:hold  variable:q  operator:=  variable:p
- 95 |     show(one(&p, &p), " ", one(&p, &q), " ", copies(p, p), " ", onward(&q), " ", written(r, &q))
+100 |     show(one(&p, &p), " ", one(&p, &q), " ", copies(p, p), " ", onward(&q), " ", written(r, &q))
     | builtin-fn:show  punctuation:(  task:one  punctuation:(  operator:&  variable:p  punctuation:,  operator:&  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  task:one  punctuation:(  operator:&  variable:p  punctuation:,  operator:&  variable:q  punctuation:)  punctuation:,  string:" "  punctuation:,  task:copies  punctuation:(  variable:p  punctuation:,  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  task:onward  punctuation:(  operator:&  variable:q  punctuation:)  punctuation:,  string:" "  punctuation:,  task:written  punctuation:(  region:r  punctuation:,  operator:&  variable:q  punctuation:)  punctuation:)
- 96 |     hold w = Wide { a: 1, b: 0, c: 0, d: 0, e: 0, f: 0, g: 0, h: 0, i: 0 }
+101 |     hold w = Wide { a: 1, b: 0, c: 0, d: 0, e: 0, f: 0, g: 0, h: 0, i: 0 }
     | keyword:hold  variable:w  operator:=  type:Wide  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:0  punctuation:,  field:c  punctuation::  number:0  punctuation:,  field:d  punctuation::  number:0  punctuation:,  field:e  punctuation::  number:0  punctuation:,  field:f  punctuation::  number:0  punctuation:,  field:g  punctuation::  number:0  punctuation:,  field:h  punctuation::  number:0  punctuation:,  field:i  punctuation::  number:0  punctuation:}
- 97 |     bind other = w
+102 |     bind other = w
     | keyword:bind  variable:other  operator:=  variable:w
- 98 |     show(copied(w, &w), " ", chosen(w, &w))
-    | builtin-fn:show  punctuation:(  task:copied  punctuation:(  variable:w  punctuation:,  operator:&  variable:w  punctuation:)  punctuation:,  string:" "  punctuation:,  task:chosen  punctuation:(  variable:w  punctuation:,  operator:&  variable:w  punctuation:)  punctuation:)
- 99 |     w.grow(&other)
+103 |     show(copied(w, &w), " ", chosen(w, &w), " ", held(w, &w))
+    | builtin-fn:show  punctuation:(  task:copied  punctuation:(  variable:w  punctuation:,  operator:&  variable:w  punctuation:)  punctuation:,  string:" "  punctuation:,  task:chosen  punctuation:(  variable:w  punctuation:,  operator:&  variable:w  punctuation:)  punctuation:,  string:" "  punctuation:,  task:held  punctuation:(  variable:w  punctuation:,  operator:&  variable:w  punctuation:)  punctuation:)
+104 |     w.grow(&other)
     | variable:w  punctuation:.  method:grow  punctuation:(  operator:&  variable:other  punctuation:)
-100 |     w.grow(&other)
+105 |     w.grow(&other)
     | variable:w  punctuation:.  method:grow  punctuation:(  operator:&  variable:other  punctuation:)
-101 |     show(w.a)
+106 |     show(w.a)
     | builtin-fn:show  punctuation:(  variable:w  punctuation:.  field:a  punctuation:)
-102 |     bind xs = [1, 2, 3]
+107 |     bind xs = [1, 2, 3]
     | keyword:bind  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]
-103 |     show(sum(&xs, 10))
+108 |     show(sum(&xs, 10))
     | builtin-fn:show  punctuation:(  task:sum  punctuation:(  operator:&  variable:xs  punctuation:,  number:10  punctuation:)  punctuation:)
-104 |     ; What a pointer points to, and a field, are places too.
+109 |     ; What a pointer points to, and a field, are places too.
     | comment:; What a pointer points to, and a field, are places too.
-105 |     bind ptr = new Point(p) at r
+110 |     bind ptr = new Point(p) at r
     | keyword:bind  variable:ptr  operator:=  keyword:new  type:Point  punctuation:(  variable:p  punctuation:)  keyword:at  region:r
-106 |     show(one(&ptr^, &ptr^), " ", one(&ptr^, &p), " ", same_place(&p.x, &p.x), " ", same_place(&xs, &xs), " ", same_place(&p, &q))
+111 |     show(one(&ptr^, &ptr^), " ", one(&ptr^, &p), " ", same_place(&p.x, &p.x), " ", same_place(&xs, &xs), " ", same_place(&p, &q))
     | builtin-fn:show  punctuation:(  task:one  punctuation:(  operator:&  variable:ptr  operator:^  punctuation:,  operator:&  variable:ptr  operator:^  punctuation:)  punctuation:,  string:" "  punctuation:,  task:one  punctuation:(  operator:&  variable:ptr  operator:^  punctuation:,  operator:&  variable:p  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same_place  punctuation:(  operator:&  variable:p  punctuation:.  field:x  punctuation:,  operator:&  variable:p  punctuation:.  field:x  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same_place  punctuation:(  operator:&  variable:xs  punctuation:,  operator:&  variable:xs  punctuation:)  punctuation:,  string:" "  punctuation:,  task:same_place  punctuation:(  operator:&  variable:p  punctuation:,  operator:&  variable:q  punctuation:)  punctuation:)
-107 |     hold held: maybe ^Point@r = ptr
+112 |     hold held: maybe ^Point@r = ptr
     | keyword:hold  variable:held  punctuation::  keyword:maybe  operator:^  type:Point  operator:@  region:r  operator:=  variable:ptr
-108 |     show(nudge(&ptr), " ", open(&held), " ", kept(&ptr)^.x)
+113 |     show(nudge(&ptr), " ", open(&held), " ", kept(&ptr)^.x)
     | builtin-fn:show  punctuation:(  task:nudge  punctuation:(  operator:&  variable:ptr  punctuation:)  punctuation:,  string:" "  punctuation:,  task:open  punctuation:(  operator:&  variable:held  punctuation:)  punctuation:,  string:" "  punctuation:,  task:kept  punctuation:(  operator:&  variable:ptr  punctuation:)  operator:^  punctuation:.  field:x  punctuation:)
-109 | fi
+114 | fi
     | keyword:fi

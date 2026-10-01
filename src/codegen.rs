@@ -1582,6 +1582,9 @@ impl Generator {
             self.w.close();
             return Ok(());
         }
+        for param in t.params.iter().filter(|param| owns_copy(t, param)) {
+            self.w.line(&format!("{} {} = {};", c_type(&param.ty), c_ident(&param.name), given_name(&param.name)));
+        }
         for param in &t.params {
             self.use_if_unread(&param.name, &t.body);
         }
@@ -4606,6 +4609,23 @@ fn is_pointer_param(p: &Field, alters: bool) -> bool {
     p.passing.is_ref() || (alters && p.name == THIS)
 }
 
+/// Whether parameter `p` of `t` is a copy of the task's own, `bind x` or
+/// `hold x`, which the task makes from the value it is given, under the name
+/// `given_name`. A parameter given as a value is a place of the task's own in C
+/// too, but an optimizing C compiler may read it where the caller keeps the
+/// value when the task never changes it, so its address, which a strict copy's
+/// `&x` and `==` read, could be the caller's. A local's never is. A native
+/// task's C is the runtime's, which takes its values as they are.
+fn owns_copy(t: &TaskDef, p: &Field) -> bool {
+    !t.native && matches!(p.passing, Passing::Bind | Passing::Hold) && p.ty != Type::Region
+}
+
+/// The C name of the value given for `name`, a copy the task makes its own
+/// (see `owns_copy`). No Vela name holds `__`, so it is no other name.
+fn given_name(name: &str) -> String {
+    format!("vela__given__{}", name)
+}
+
 /// The C declarator of a task, e.g. `int64_t vela_add(int64_t a, int64_t b)`.
 fn signature(t: &TaskDef, alters: bool, hidden: &[bool]) -> String {
     let params: Vec<String> = t
@@ -4629,6 +4649,9 @@ fn signature(t: &TaskDef, alters: bool, hidden: &[bool]) -> String {
             }
             if is_pointer_param(p, alters) {
                 return format!("{}* {}", c_type(&p.ty), c_ident(&p.name));
+            }
+            if owns_copy(t, p) {
+                return format!("{} {}", c_type(&p.ty), given_name(&p.name));
             }
             format!("{} {}", c_type(&p.ty), c_ident(&p.name))
         })
