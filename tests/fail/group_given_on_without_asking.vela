@@ -1,0 +1,13 @@
+; error: 8:5: task 'log' asks each value of its group 'P...' to be 'shown', and is given the group 'Q...', which asks nothing of its types here; require it, as in '<Q...: shown>'
+; A group given on to one that asks something of its types asks it too.
+task log<P...: shown>(args: P...)
+    show(args...)
+fi
+
+task traced<Q...>(args: Q...)
+    log(args...)
+fi
+
+task main()
+    traced(1)
+fi

@@ -4355,7 +4355,7 @@ impl Checker {
             if param.name == *group && names.is_empty() {
                 types.push(param.clone());
             } else if param.name == *group {
-                types.extend(names.iter().map(|name| TypeParam { name: name.clone(), span: param.span, needs: Vec::new(), group: false }));
+                types.extend(names.iter().map(|name| TypeParam { name: name.clone(), span: param.span, needs: param.needs.clone(), group: false }));
             } else {
                 types.push(param.clone());
             }
@@ -4399,6 +4399,26 @@ impl Checker {
             );
         }
         Ok(())
+    }
+
+    /// The group whose values `e` names, when it is a name of them, `args`.
+    fn group_of(&self, e: &Expr) -> Option<String> {
+        let ExprKind::Var(name) = &e.kind else { return None };
+        match &self.lookup(name)?.ty {
+            Type::Group(group) => Some(group.clone()),
+            _ => None,
+        }
+    }
+
+    /// Checks `args.len`, read from `base`, the values of a group: how many
+    /// there are, a number each copy of the task knows (see `substitute_expr`).
+    fn check_group_member(&mut self, base: &mut Expr, member: &str, span: Span) -> Result<Type> {
+        let Some(group) = self.group_of(base) else { return Err(Error::internal_at(span, "a group's member read from no group")) };
+        base.ty = Some(Type::Group(group.clone()));
+        match member {
+            "len" => Ok(Type::Int),
+            _ => err(span, format!("the values of the group '{}...' have 'len', how many they are, and nothing else to read with '.'; give them on whole, as in 'next(args...)'", group)),
+        }
     }
 
     /// Checks `args...`, the values of a group parameter given on whole as the
@@ -4831,6 +4851,7 @@ impl Checker {
             // A macro whose value has a mistake, which is told once, where it is written.
             ExprKind::Var(name) if self.lookup(name).is_none() && self.sees(name) && self.macros.contains_key(name.as_str()) => Ok(Type::Unknown),
             ExprKind::Var(name) => self.check_var(name, span),
+            ExprKind::Field(base, field) if self.group_of(base).is_some() => self.check_group_member(base, field, span),
             ExprKind::Field(base, field) => {
                 // `.x` outside a method, named as it is written.
                 if !self.called_on_a_value() && matches!(&base.kind, ExprKind::Var(name) if name == THIS) {
@@ -5040,7 +5061,7 @@ impl Checker {
         if let Type::Group(group) = &ty
             && !self.spreading
         {
-            return err(span, format!("'{0}' holds the values of the group '{1}...', which go on whole to a task that takes them, as in 'next({0}...)'", name, group));
+            return err(span, format!("'{0}' holds the values of the group '{1}...', which go on whole to a task that takes them, as in 'next({0}...)', or are counted, '{0}.len'", name, group));
         }
         Ok(ty)
     }
@@ -5799,6 +5820,16 @@ impl Checker {
         // `show(&x)`: the address of the place.
         if matches!(arg.kind, ExprKind::Ref(_)) {
             return self.check_address(arg).map(|_| ());
+        }
+        // `show(args...)`: each value of a group, which asks its types to be shown.
+        if matches!(arg.kind, ExprKind::Spread(_)) {
+            return match self.check_expr(arg)? {
+                Type::Group(group) if !self.allows(Need::Shown, &Type::Group(group.clone())) => err(
+                    arg.span,
+                    format!("show writes each value of the group '{0}...', so the group asks each of its types to be shown: '<{0}...: shown>'", group),
+                ),
+                _ => Ok(()),
+            };
         }
         let copies = self.unsettled_copies.len();
         let types = self.unsettled_types.len();
@@ -8065,6 +8096,15 @@ impl Checker {
     /// task's header asks of it.
     fn check_need(&self, what: &str, task: &str, param: &TypeParam, ty: &Type, at: Span) -> Result<()> {
         let Some(&(need, _)) = param.needs.iter().find(|(need, _)| !self.allows(*need, ty)) else { return Ok(()) };
+        // One of the types a call gives a group (see `group_call_info`), named
+        // as the group is written and by the value it is for.
+        if let Some((group, place)) = param.name.split_once(GROUP_ITEM) {
+            let given = match ty {
+                Type::Group(given) => format!("is given the group '{}...', which {}", given, self.why_not(need, ty)),
+                _ => format!("value {} is {}, which {}", place.parse::<usize>().map_or(0, |i| i + 1), ty, self.why_not(need, ty)),
+            };
+            return err(at, format!("{} '{}' asks each value of its group '{}...' to be '{}', and {}", what, unqualified(task), group, need.word(), given));
+        }
         err(
             at,
             format!(
@@ -8082,7 +8122,8 @@ impl Checker {
     /// Whether values of type `ty` allow what `need` asks: a type parameter
     /// allows it when its own word already does.
     fn allows(&self, need: Need, ty: &Type) -> bool {
-        if let Type::Param(name) = ty {
+        // A group allows what it asks of each of its types.
+        if let Type::Param(name) | Type::Group(name) = ty {
             return self.type_param(name).is_some_and(|param| param.needs.iter().any(|(own, _)| own.means(need)));
         }
         match need {
@@ -8209,16 +8250,21 @@ impl Checker {
 
     /// Why a type doesn't allow what `need` asks, for the end of a message.
     fn why_not(&self, need: Need, ty: &Type) -> String {
-        if let Type::Param(name) = ty {
-            let owned: Vec<Need> = self.type_param(name).map(|param| param.needs.iter().map(|(own, _)| *own).collect()).unwrap_or_default();
+        if let Type::Param(param) | Type::Group(param) = ty {
+            // A group's needs are written after its dots.
+            let name = if matches!(ty, Type::Group(_)) { format!("{}...", param) } else { param.clone() };
+            let owned: Vec<Need> = self.type_param(param).map(|param| param.needs.iter().map(|(own, _)| *own).collect()).unwrap_or_default();
             let own: Vec<&str> = owned.iter().map(|own| own.word()).collect();
             // The word asked for replaces any it already means, as `ordered`
             // does `same`, since writing both is an error.
             let mut wanted: Vec<&str> = owned.iter().filter(|own| !need.means(**own)).map(|own| own.word()).collect();
             wanted.push(need.word());
-            return match own.is_empty() {
-                false => format!("is only '{}' here; require it too, as in '<{}: {}>'", own.join(" & "), name, wanted.join(" & ")),
-                true => format!("is any type here; require it, as in '<{}: {}>'", name, need.word()),
+            let group = matches!(ty, Type::Group(_));
+            return match (own.is_empty(), group) {
+                (false, false) => format!("is only '{}' here; require it too, as in '<{}: {}>'", own.join(" & "), name, wanted.join(" & ")),
+                (true, false) => format!("is any type here; require it, as in '<{}: {}>'", name, need.word()),
+                (false, true) => format!("asks only '{}' of its types here; require it too, as in '<{}: {}>'", own.join(" & "), name, wanted.join(" & ")),
+                (true, true) => format!("asks nothing of its types here; require it, as in '<{}: {}>'", name, need.word()),
             };
         }
         match need {
@@ -9076,6 +9122,17 @@ impl Checker {
                 self.substitute_expr(callee, given, made)?;
                 args.iter_mut().try_for_each(|arg| self.substitute_expr(arg, given, made))?;
                 spread_values(args, given);
+                Ok(())
+            }
+            // `args.len`: how many values this copy's group holds.
+            ExprKind::Field(inner, member)
+                if member == "len" && matches!(&inner.ty, Some(Type::Group(group)) if group_types(given, group).is_some()) =>
+            {
+                let count = match &inner.ty {
+                    Some(Type::Group(group)) => group_types(given, group).map_or(0, |types| types.len()),
+                    _ => 0,
+                };
+                e.kind = ExprKind::IntLit(i64::try_from(count).unwrap_or(i64::MAX));
                 Ok(())
             }
             ExprKind::Unary(_, inner)

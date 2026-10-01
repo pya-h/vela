@@ -1,0 +1,9 @@
+; error: 4:13: the values of the group 'P...' have 'len', how many they are, and nothing else to read with '.'; give them on whole, as in 'next(args...)'
+; A group's values have 'len' and nothing else to read with '.'.
+task size<P...>(args: P...) -> int
+    <- args.size
+fi
+
+task main()
+    show(size(1))
+fi

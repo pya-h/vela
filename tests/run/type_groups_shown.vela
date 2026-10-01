@@ -1,0 +1,41 @@
+; A group that asks something of its types, `P...: shown`, has each value given
+; it checked for that, and `show(args...)` writes them all. `args.len` is how
+; many values there are, a number each use knows.
+
+task log<P...: shown>(label: text, args: P...)
+    show(label, " (", args.len, "): ", args...)
+fi
+
+; Asks its own types to be shown, so it can give them on to `log`.
+task traced<P...: shown, R: shown>(next: (P...) -> R, args: P...) -> R
+    log("calling", args...)
+    bind result = next(args...)
+    log("sent", result)
+    <- result
+fi
+
+task described<P...>(args: P...) -> text
+    when args.len == 0
+        <- "nothing"
+    else when args.len == 1
+        <- "one value"
+    fi
+    <- "several values"
+fi
+
+shape Point
+    x: int
+    y: int
+fi
+
+task add(a: int, b: int) -> int
+    <- a + b
+fi
+
+task main()
+    log("values", 1, " and ", 2.5, ' ', true)
+    log("nothing")
+    log("a point", Point { x: 1, y: 2 })
+    show(traced(add, 2, 3))
+    show(described(), ", ", described(1), ", ", described(1, "a"))
+fi

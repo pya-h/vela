@@ -1,0 +1,70 @@
+  1 | ; A group that asks something of its types, `P...: shown`, has each value given
+    | comment:; A group that asks something of its types, `P...: shown`, has each value given
+  2 | ; it checked for that, and `show(args...)` writes them all. `args.len` is how
+    | comment:; it checked for that, and `show(args...)` writes them all. `args.len` is how
+  3 | ; many values there are, a number each use knows.
+    | comment:; many values there are, a number each use knows.
+  5 | task log<P...: shown>(label: text, args: P...)
+    | keyword:task  task:log  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+  6 |     show(label, " (", args.len, "): ", args...)
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:,  string:" ("  punctuation:,  parameter:args  punctuation:.  field:len  punctuation:,  string:"): "  punctuation:,  parameter:args  keyword:...  punctuation:)
+  7 | fi
+    | keyword:fi
+  9 | ; Asks its own types to be shown, so it can give them on to `log`.
+    | comment:; Asks its own types to be shown, so it can give them on to `log`.
+ 10 | task traced<P...: shown, R: shown>(next: (P...) -> R, args: P...) -> R
+    | keyword:task  task:traced  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:,  type:R  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+ 11 |     log("calling", args...)
+    | task:log  punctuation:(  string:"calling"  punctuation:,  parameter:args  keyword:...  punctuation:)
+ 12 |     bind result = next(args...)
+    | keyword:bind  variable:result  operator:=  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+ 13 |     log("sent", result)
+    | task:log  punctuation:(  string:"sent"  punctuation:,  variable:result  punctuation:)
+ 14 |     <- result
+    | keyword:<-  variable:result
+ 15 | fi
+    | keyword:fi
+ 17 | task described<P...>(args: P...) -> text
+    | keyword:task  task:described  punctuation:<  type:P  keyword:...  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:text
+ 18 |     when args.len == 0
+    | keyword:when  parameter:args  punctuation:.  field:len  operator:==  number:0
+ 19 |         <- "nothing"
+    | keyword:<-  string:"nothing"
+ 20 |     else when args.len == 1
+    | keyword:else  keyword:when  parameter:args  punctuation:.  field:len  operator:==  number:1
+ 21 |         <- "one value"
+    | keyword:<-  string:"one value"
+ 22 |     fi
+    | keyword:fi
+ 23 |     <- "several values"
+    | keyword:<-  string:"several values"
+ 24 | fi
+    | keyword:fi
+ 26 | shape Point
+    | keyword:shape  type:Point
+ 27 |     x: int
+    | field:x  punctuation::  type-builtin:int
+ 28 |     y: int
+    | field:y  punctuation::  type-builtin:int
+ 29 | fi
+    | keyword:fi
+ 31 | task add(a: int, b: int) -> int
+    | keyword:task  task:add  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 32 |     <- a + b
+    | keyword:<-  parameter:a  operator:+  parameter:b
+ 33 | fi
+    | keyword:fi
+ 35 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 36 |     log("values", 1, " and ", 2.5, ' ', true)
+    | task:log  punctuation:(  string:"values"  punctuation:,  number:1  punctuation:,  string:" and "  punctuation:,  number:2.5  punctuation:,  string:' '  punctuation:,  keyword:true  punctuation:)
+ 37 |     log("nothing")
+    | task:log  punctuation:(  string:"nothing"  punctuation:)
+ 38 |     log("a point", Point { x: 1, y: 2 })
+    | task:log  punctuation:(  string:"a point"  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:,  field:y  punctuation::  number:2  punctuation:}  punctuation:)
+ 39 |     show(traced(add, 2, 3))
+    | builtin-fn:show  punctuation:(  task:traced  punctuation:(  task:add  punctuation:,  number:2  punctuation:,  number:3  punctuation:)  punctuation:)
+ 40 |     show(described(), ", ", described(1), ", ", described(1, "a"))
+    | builtin-fn:show  punctuation:(  task:described  punctuation:(  punctuation:)  punctuation:,  string:", "  punctuation:,  task:described  punctuation:(  number:1  punctuation:)  punctuation:,  string:", "  punctuation:,  task:described  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)  punctuation:)
+ 41 | fi
+    | keyword:fi

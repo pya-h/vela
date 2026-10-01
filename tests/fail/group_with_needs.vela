@@ -1,4 +1,0 @@
-; error: 3:12: a group of types asks nothing of its types yet, so 'P...' takes no ':'
-; A group of types asks nothing of its types yet.
-task f<P...: shown>(args: P...)
-fi

@@ -1,0 +1,14 @@
+; error: 7:3: task 'ordered_only' asks each value of its group 'P...' to be 'ordered', and value 2 is bool, which has no order, so '<' can't compare it
+; A wrapper whose group asks something of its types checks the task's values too.
+task ordered_only<P...: ordered, R>(next: (P...) -> R, args: P...) -> R
+    <- next(args...)
+fi
+
+$(ordered_only)
+task f(a: int, b: bool) -> int
+    <- a
+fi
+
+task main()
+    show(f(1, true))
+fi

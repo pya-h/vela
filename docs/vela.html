@@ -2376,8 +2376,8 @@ fi</code></pre>
         through.
       </p>
       <p>
-        A group is only ever given on whole: its values are read nowhere but in <code>f(args...)</code>, so every value
-        reaches a parameter of its own type. They go to a task value whose type takes the group, or to a named task
+        A group's values are given on whole, <code>f(args...)</code>, so every value reaches a parameter of its own
+        type, or counted, <code>args.len</code>, a number each use knows. They go to a task value whose type takes the group, or to a named task
         whose last parameter is a group, after that task's other values: <code>log("calling", args...)</code>. Values
         written just before them join that task's group, <code>log("x", 1, args...)</code>, except in a call of the
         task by itself, whose group would grow at each call; a task calling itself gives its group on whole. A task
@@ -2393,9 +2393,23 @@ task traced&lt;P..., R&gt;(next: (P...) -&gt; R, args: P...) -&gt; R
     &lt;- next(args...)
 fi</code></pre>
       <p>
+        A group can ask something of each of its types, as a <a href="#generics">type a task takes</a> can, written
+        after its dots: <code>P...: shown</code>, or several joined with <code>&amp;</code>. Each value a use gives
+        must allow it, and a group given on to one that asks something must ask it too. A group of shown types is
+        written by <code>show(args...)</code>, every value one after another, as <code>show(a, b)</code> writes them:
+      </p>
+      <pre><code>task log&lt;P...: shown&gt;(label: text, args: P...)
+    show(label, " (", args.len, "): ", args...)
+fi
+
+task main()
+    log("values", 1, " and ", 2.5)                ; values (3): 1 and 2.5
+    log("nothing")                               ; nothing (0): 
+fi</code></pre>
+      <p>
         A task takes one group, its values are its last parameter and are given as values (no <code>hold</code> or
-        <code>hold&amp;</code>), a task's type takes the group and nothing else, and a group asks nothing of its types.
-        Only a task takes one, not a shape, and a call doesn't write a group's types yet.
+        <code>hold&amp;</code>), and a task's type takes the group and nothing else. Only a task takes one, not a
+        shape, and a call doesn't write a group's types yet.
       </p>
 
       <h3 id="names">Names</h3>

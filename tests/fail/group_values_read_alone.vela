@@ -1,4 +1,4 @@
-; error: 4:10: 'args' holds the values of the group 'P...', which go on whole to a task that takes them, as in 'next(args...)'
+; error: 4:10: 'args' holds the values of the group 'P...', which go on whole to a task that takes them, as in 'next(args...)', or are counted, 'args.len'
 ; A group's values go on whole to a task that takes them.
 task f<P...>(g: (P...) -> nothing, args: P...)
     show(args)

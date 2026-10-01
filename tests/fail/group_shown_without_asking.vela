@@ -1,0 +1,9 @@
+; error: 4:14: show writes each value of the group 'P...', so the group asks each of its types to be shown: '<P...: shown>'
+; `show(args...)` writes each value, so the group asks its types to be shown.
+task log<P...>(args: P...)
+    show(args...)
+fi
+
+task main()
+    log(1)
+fi

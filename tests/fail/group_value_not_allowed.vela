@@ -1,0 +1,9 @@
+; error: 8:10: task 'largest' asks each value of its group 'P...' to be 'ordered', and value 2 is bool, which has no order, so '<' can't compare it
+; Each value given a group allows what the group asks of its types.
+task largest<P...: ordered>(args: P...) -> int
+    <- args.len
+fi
+
+task main()
+    show(largest(1, true))
+fi

@@ -811,9 +811,6 @@ impl Parser {
                     return Err(Error::at(span, format!("a task takes one group of types, and '{}...' is one already", before.name)));
                 }
                 self.advance(); // ...
-                if self.check(Token::Colon) {
-                    return Err(Error::at(self.peek_span(), format!("a group of types asks nothing of its types yet, so '{}...' takes no ':'", name)));
-                }
             }
             let needs = if self.match_token(Token::Colon) { self.parse_needs()? } else { Vec::new() };
             params.push(TypeParam { name, span, needs, group });
