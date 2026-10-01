@@ -1,0 +1,76 @@
+  1 | ; A group's values given on to a named task taking a group: `log("x", args...)`.
+    | comment:; A group's values given on to a named task taking a group: `log("x", args...)`.
+  2 | ; Values written before them join the called task's group, and a task calling
+    | comment:; Values written before them join the called task's group, and a task calling
+  3 | ; itself gives its group on whole.
+    | comment:; itself gives its group on whole.
+  5 | task call<P..., R>(f: (P...) -> R, args: P...) -> R
+    | keyword:task  task:call  punctuation:<  type:P  keyword:...  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:f  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+  6 |     <- f(args...)
+    | keyword:<-  parameter:f  punctuation:(  parameter:args  keyword:...  punctuation:)
+  7 | fi
+    | keyword:fi
+  9 | task log<P...>(label: text, args: P...)
+    | keyword:task  task:log  punctuation:<  type:P  keyword:...  punctuation:>  punctuation:(  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 10 |     show(label)
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:)
+ 11 | fi
+    | keyword:fi
+ 13 | ; Gives its values on twice: to a task value, through `call`, and to `log`, with
+    | comment:; Gives its values on twice: to a task value, through `call`, and to `log`, with
+ 14 | ; a value of its own in front of them.
+    | comment:; a value of its own in front of them.
+ 15 | task traced<P..., R>(next: (P...) -> R, args: P...) -> R
+    | keyword:task  task:traced  punctuation:<  type:P  keyword:...  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+ 16 |     log("calling", args...)
+    | task:log  punctuation:(  string:"calling"  punctuation:,  parameter:args  keyword:...  punctuation:)
+ 17 |     log("with one more", 1, args...)
+    | task:log  punctuation:(  string:"with one more"  punctuation:,  number:1  punctuation:,  parameter:args  keyword:...  punctuation:)
+ 18 |     <- call(next, args...)
+    | keyword:<-  task:call  punctuation:(  parameter:next  punctuation:,  parameter:args  keyword:...  punctuation:)
+ 19 | fi
+    | keyword:fi
+ 21 | task countdown<P...>(n: int, args: P...)
+    | keyword:task  task:countdown  punctuation:<  type:P  keyword:...  punctuation:>  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 22 |     when n > 0
+    | keyword:when  parameter:n  operator:>  number:0
+ 23 |         show(n)
+    | builtin-fn:show  punctuation:(  parameter:n  punctuation:)
+ 24 |         countdown(n - 1, args...)
+    | task:countdown  punctuation:(  parameter:n  operator:-  number:1  punctuation:,  parameter:args  keyword:...  punctuation:)
+ 25 |     fi
+    | keyword:fi
+ 26 | fi
+    | keyword:fi
+ 28 | task add(a: int, b: int) -> int
+    | keyword:task  task:add  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 29 |     <- a + b
+    | keyword:<-  parameter:a  operator:+  parameter:b
+ 30 | fi
+    | keyword:fi
+ 32 | task seven() -> int
+    | keyword:task  task:seven  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 33 |     <- 7
+    | keyword:<-  number:7
+ 34 | fi
+    | keyword:fi
+ 36 | task first(t: text@r) -> text@r
+    | keyword:task  task:first  punctuation:(  parameter:t  punctuation::  type-builtin:text  operator:@  region:r  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 37 |     <- t[0..1]
+    | keyword:<-  parameter:t  punctuation:[  number:0  operator:..  number:1  punctuation:]
+ 38 | fi
+    | keyword:fi
+ 40 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 41 |     region r
+    | keyword:region  region:r
+ 42 |     show(traced(add, 2, 3))
+    | builtin-fn:show  punctuation:(  task:traced  punctuation:(  task:add  punctuation:,  number:2  punctuation:,  number:3  punctuation:)  punctuation:)
+ 43 |     show(traced(seven))
+    | builtin-fn:show  punctuation:(  task:traced  punctuation:(  task:seven  punctuation:)  punctuation:)
+ 44 |     show(traced(first, "vela".copy()@r))
+    | builtin-fn:show  punctuation:(  task:traced  punctuation:(  task:first  punctuation:,  string:"vela"  punctuation:.  field:copy  punctuation:(  punctuation:)  operator:@  region:r  punctuation:)  punctuation:)
+ 45 |     countdown(2, "a", 1.5)
+    | task:countdown  punctuation:(  number:2  punctuation:,  string:"a"  punctuation:,  number:1.5  punctuation:)
+ 46 | fi
+    | keyword:fi

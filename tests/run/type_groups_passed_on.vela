@@ -1,0 +1,46 @@
+; A group's values given on to a named task taking a group: `log("x", args...)`.
+; Values written before them join the called task's group, and a task calling
+; itself gives its group on whole.
+
+task call<P..., R>(f: (P...) -> R, args: P...) -> R
+    <- f(args...)
+fi
+
+task log<P...>(label: text, args: P...)
+    show(label)
+fi
+
+; Gives its values on twice: to a task value, through `call`, and to `log`, with
+; a value of its own in front of them.
+task traced<P..., R>(next: (P...) -> R, args: P...) -> R
+    log("calling", args...)
+    log("with one more", 1, args...)
+    <- call(next, args...)
+fi
+
+task countdown<P...>(n: int, args: P...)
+    when n > 0
+        show(n)
+        countdown(n - 1, args...)
+    fi
+fi
+
+task add(a: int, b: int) -> int
+    <- a + b
+fi
+
+task seven() -> int
+    <- 7
+fi
+
+task first(t: text@r) -> text@r
+    <- t[0..1]
+fi
+
+task main()
+    region r
+    show(traced(add, 2, 3))
+    show(traced(seven))
+    show(traced(first, "vela".copy()@r))
+    countdown(2, "a", 1.5)
+fi

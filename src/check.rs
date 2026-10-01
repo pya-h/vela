@@ -279,6 +279,8 @@ pub struct Checker {
     /// The task a lambda became, while its body is checked (see
     /// `ast::lambda_name`).
     current_lambda: Option<String>,
+    /// The program's name for the task whose body is checked.
+    current_task: String,
     /// For each lambda, the names its value's place sees: the variables and
     /// regions of the code around it, which it takes nothing from, for the
     /// message when its body names one.
@@ -697,7 +699,7 @@ impl Checker {
                 continue;
             }
             if made.len() > MAX_INSTANCES {
-                return err(at, format!("'{}' is used with more than {} different types, which no program needs; a generic task whose call gives a type built from its own never stops", unqualified(&name), MAX_INSTANCES));
+                return err(at, format!("'{}' is used with more than {} different types, which no program needs; a generic task whose call gives a type built from its own, or a group with values added to it, never stops", unqualified(&name), MAX_INSTANCES));
             }
             let Some(source) = generic.get(&name) else {
                 return Err(Error::internal_at(at, format!("no generic task '{}' to make for {} types", name, types.len())));
@@ -2466,6 +2468,7 @@ impl Checker {
         }
         self.current_ret = Some(known(&task.ret));
         self.current_lambda = is_lambda(&task.name).then(|| task.name.clone());
+        self.current_task = task.name.clone();
         self.current_method = task.owner.clone();
         self.current_owner = task.owner.as_ref().filter(|owner| owner.alters).and(task.params.first()).and_then(|this| self.owner_of(&this.ty));
         self.current_type = task.owner_type().map(str::to_string);
@@ -2571,6 +2574,7 @@ impl Checker {
         }
         self.scopes.clear();
         self.current_lambda = None;
+        self.current_task.clear();
         self.current_ret = None;
         self.current_method = None;
         self.current_owner = None;
@@ -4363,6 +4367,40 @@ impl Checker {
         Ok(Some(TaskInfo { types, params, passing, ret: items(&info.ret), owner: info.owner.clone() }))
     }
 
+    /// Checks that a call of the task `name`, as `info` is for the call, can be
+    /// given the group's values `args[spread]`, `args...`: only as values for the
+    /// group the task takes last. Values written before them join that group,
+    /// but not in a call of the task by itself, whose group would be one value
+    /// longer at each call, and so would never be filled in.
+    fn check_spread_given(&self, name: &str, callee: &str, info: &TaskInfo, args: &[Expr], spread: usize) -> Result<()> {
+        let Some(at) = args.get(spread).map(|arg| arg.span) else { return Ok(()) };
+        let Some(group) = info.types.iter().find(|param| param.group || param.name.contains(GROUP_ITEM)) else {
+            return err(
+                at,
+                format!(
+                    "{} takes a fixed number of values, and how many a group holds is known only where it is filled in; give a group's values to a task taking a group, as in 'next(args...)', or name them one by one",
+                    callee
+                ),
+            );
+        };
+        let group = group.name.split(GROUP_ITEM).next().unwrap_or(&group.name);
+        let fixed = info.params.iter().take_while(|(_, ty)| !matches!(ty, Type::Param(param) if param.starts_with(&format!("{}{}", group, GROUP_ITEM)))).count();
+        if let Some((param, _)) = info.params.get(spread).filter(|_| spread < fixed) {
+            return err(at, format!("a group's values go to the group {} takes last, after its other values, and they would be given as '{}' here", callee, param));
+        }
+        if spread > fixed && self.full_name(name) == self.current_task {
+            return err(
+                at,
+                format!(
+                    "{} gives its own group {} more than it was given, so its group would grow at each call and never be filled in; give it 'args...' alone",
+                    callee,
+                    count(spread - fixed, "value")
+                ),
+            );
+        }
+        Ok(())
+    }
+
     /// Checks `args...`, the values of a group parameter given on whole as the
     /// last values of a call, and returns the group's type.
     fn check_spread(&mut self, inner: &mut Expr, span: Span) -> Result<Type> {
@@ -4936,8 +4974,8 @@ impl Checker {
             Some(expanded) => expanded,
             None => info,
         };
-        if let Some(spread) = args.iter().find(|arg| matches!(arg.kind, ExprKind::Spread(_))) {
-            return err(spread.span, format!("a group's values go on whole to a task value taking the group, as in 'next(args...)'; giving them to {} is not built yet", callee));
+        if let Some(spread) = args.iter().position(|arg| matches!(arg.kind, ExprKind::Spread(_))) {
+            self.check_spread_given(name, &callee, &info, args, spread)?;
         }
         self.settle_call_region(span, &callee, args, &info.params)?;
         if args.len() != info.params.len() {

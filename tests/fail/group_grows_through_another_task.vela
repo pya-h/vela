@@ -1,0 +1,16 @@
+; error: 11:5: 'there' is used with more than 500 different types, which no program needs; a generic task whose call gives a type built from its own, or a group with values added to it, never stops
+; The same through another task: its group grows at each turn, so the tasks
+; made for each length never stop.
+task there<P...>(n: int, args: P...)
+    when n > 0
+        back(n - 1, 0, args...)
+    fi
+fi
+
+task back<Q...>(n: int, args: Q...)
+    there(n, args...)
+fi
+
+task main()
+    there(3, "x")
+fi

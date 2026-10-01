@@ -1,0 +1,12 @@
+; error: 6:30: task 'deeper' gives its own group 1 value more than it was given, so its group would grow at each call and never be filled in; give it 'args...' alone
+; A task calling itself gives its group on whole: one value more at each call
+; would make a task for every length, without end.
+task deeper<P...>(n: int, args: P...)
+    when n > 0
+        deeper(n - 1, 0, args...)
+    fi
+fi
+
+task main()
+    deeper(3, "x")
+fi

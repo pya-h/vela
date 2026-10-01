@@ -807,7 +807,22 @@ impl Type {
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
             Type::Fail(error) => Type::Fail(boxed(error, f)),
             Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_groups(&mut *f)).collect()),
-            Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| ty.map_groups(&mut *f)).collect()),
+            // The types given a group in a call, kept as a tuple, end with the
+            // group of the task the call is in when it gives its values on
+            // (`f(1, args...)`), which becomes its types.
+            Type::Tuple(items) => {
+                let mut spliced = Vec::new();
+                for item in items {
+                    match item {
+                        Type::Group(name) => match f(name) {
+                            Some(types) => spliced.extend(types),
+                            None => spliced.push(item.clone()),
+                        },
+                        other => spliced.push(other.map_groups(&mut *f)),
+                    }
+                }
+                Type::Tuple(spliced)
+            }
             other => other.clone(),
         }
     }
