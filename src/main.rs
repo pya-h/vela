@@ -6,7 +6,7 @@ use std::process;
 
 use vela::driver;
 
-const USAGE: &str = "usage: vela <input.vela> [-o <output>] [--emit-c | --check] [--]\n       vela --help | --version";
+const USAGE: &str = "usage: vela <input.vela> [-o <output>] [--emit-c | --check | --quick] [--]\n       vela --help | --version";
 const VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
 
 /// What the command line asks for.
@@ -23,6 +23,8 @@ struct Options {
     emit_c: bool,
     /// Only parse and type-check; do not generate C or build.
     check: bool,
+    /// Build without optimizing the C: much faster to build, slower to run.
+    quick: bool,
 }
 
 fn main() {
@@ -54,6 +56,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
     let mut output = None;
     let mut emit_c = false;
     let mut check = false;
+    let mut quick = false;
     let mut version = false;
     let mut only_files = false;
     let mut args = args;
@@ -71,6 +74,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
             "--version" => version = true,
             "--emit-c" => emit_c = true,
             "--check" => check = true,
+            "--quick" => quick = true,
             "-o" => match args.next() {
                 Some(path) if output.is_none() => output = Some(path),
                 Some(_) => return Err("-o given more than once".to_string()),
@@ -89,8 +93,12 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
     if emit_c && check {
         return Err("--emit-c and --check can't be used together".to_string());
     }
+    if quick && (emit_c || check) {
+        let other = if emit_c { "--emit-c" } else { "--check" };
+        return Err(format!("--quick builds an executable faster, and {} builds none, so they can't be used together", other));
+    }
     let input = input.ok_or_else(|| "no input file".to_string())?;
-    Ok(Action::Run(Options { input, output, emit_c, check }))
+    Ok(Action::Run(Options { input, output, emit_c, check, quick }))
 }
 
 fn run(opts: &Options) -> Result<(), String> {
@@ -127,6 +135,8 @@ fn run(opts: &Options) -> Result<(), String> {
 
     let output = opts.output.as_deref().unwrap_or("a.out");
     let cc = driver::c_compiler_from_env();
+    // After every other argument, so it wins over an `-O` in `CC` too.
+    let cc = if opts.quick { format!("{} -O0", cc) } else { cc };
     let warnings = driver::build(&source, Path::new(&opts.input), Path::new(output), &cc).map_err(|e| e.render(&opts.input, &source))?;
     warn(&warnings, &opts.input);
     write_stdout(&format!("compiled: {}\n", output))

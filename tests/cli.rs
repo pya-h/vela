@@ -203,6 +203,41 @@ fn cc_may_include_arguments() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The arguments `vela` gives the C compiler, recorded by a `CC` that writes
+/// them down and then compiles, with `extra` after `vela`'s own arguments.
+#[cfg(unix)]
+fn c_compiler_arguments(test: &str, extra: &[&str], cc_args: &str) -> String {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = temp_dir(test);
+    let log = dir.join("args");
+    let script = dir.join("cc.sh");
+    let real = std::env::var("CC").ok().filter(|cc| !cc.trim().is_empty()).unwrap_or_else(|| "cc".to_string());
+    std::fs::write(&script, format!("#!/bin/sh\necho \"$@\" > '{}'\nexec {} \"$@\"\n", log.display(), real)).unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let exe = dir.join("hello");
+    let hello = example("hello");
+    let mut args = vec![hello.as_str(), "-o", exe.to_str().unwrap()];
+    args.extend(extra);
+    let out = Command::new(VELA).args(&args).env("CC", format!("{} {}", script.display(), cc_args)).output().unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(String::from_utf8_lossy(&out.stdout), format!("compiled: {}\n", exe.display()));
+    let written = std::fs::read_to_string(&log).unwrap();
+    let _ = std::fs::remove_dir_all(&dir);
+    written
+}
+
+#[test]
+#[cfg(unix)]
+fn quick_builds_without_optimizing_the_c() {
+    // An optimized build by default, and `-O0` last with `--quick`, even when
+    // `CC` names another level.
+    let optimized = c_compiler_arguments("quick-default", &[], "");
+    assert!(optimized.contains("-O2") && !optimized.contains("-O0"), "{}", optimized);
+    let quick = c_compiler_arguments("quick", &["--quick"], "-O3");
+    let levels: Vec<&str> = quick.split_whitespace().filter(|word| word.starts_with("-O")).collect();
+    assert_eq!(levels, ["-O2", "-O3", "-O0"], "{}", quick);
+}
+
 #[test]
 fn nul_character_is_reported() {
     let dir = temp_dir("nul");
@@ -288,6 +323,8 @@ fn version_is_an_option_like_the_others() {
 fn wrong_argument_combinations_are_rejected() {
     for (args, message) in [
         (vec![example("hello"), "--emit-c".to_string(), "--check".to_string()], "error: --emit-c and --check can't be used together"),
+        (vec![example("hello"), "--quick".to_string(), "--emit-c".to_string()], "error: --quick builds an executable faster, and --emit-c builds none"),
+        (vec![example("hello"), "--check".to_string(), "--quick".to_string()], "error: --quick builds an executable faster, and --check builds none"),
         (vec![example("hello"), "-o".to_string(), "a".to_string(), "-o".to_string(), "b".to_string()], "error: -o given more than once"),
         (vec![example("hello"), example("fib")], "error: only one input file is allowed"),
         (vec![example("hello"), "--".to_string(), example("fib")], "error: only one input file is allowed"),

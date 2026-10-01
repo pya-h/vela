@@ -290,10 +290,10 @@ impl Generator {
 
         if has_main {
             self.w.blank();
+            // Output is C's usual: line by line to a terminal, in blocks to a
+            // pipe or a file. `scan` flushes before it reads, and the runtime
+            // flushes before it stops a program.
             self.w.open("int main(void)");
-            // Line by line even into a pipe, so output isn't lost if the
-            // program then crashes.
-            self.w.line("setvbuf(stdout, NULL, _IOLBF, BUFSIZ);");
             for (name, member) in &shared {
                 let Some(value) = &member.field.default else {
                     return Err(Error::internal_at(member.field.span, "a shared field without its first value"));

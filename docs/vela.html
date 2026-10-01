@@ -1164,7 +1164,7 @@ b = b + <span class="number">1</span>                   <span class="comment">; 
 <span class="keyword">fi</span></pre>
       <p id="input">
         <code>scan(prompt) at r</code>, or <code>scan(prompt)@r</code>, reads input: it shows the prompt (as it is, with
-        no newline added; <code>""</code> shows nothing), then reads one line into region <code>r</code>, without its line
+        no newline added; <code>""</code> shows nothing), and everything shown before it, then reads one line into region <code>r</code>, without its line
         break (a Windows <code>\r\n</code> too). The line is new text, so it goes in a region, as <code>new</code>'s values
         do (see <a href="#text-in-regions">Text in a region</a>), and the task needs that region itself. It gives a
         <code>maybe text@r</code>: <code>none</code> once the input has ended (Ctrl-D, or the end of a file given as input),
@@ -3708,14 +3708,17 @@ show(area(square))             <span class="comment">; error: unknown task 'area
 ./target/debug/vela program.vela -o program
 CC=clang ./target/debug/vela program.vela -o program</pre>
       <p>
-        <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c | --check]</code>: <code>-o</code> names the executable
-        (<code>a.out</code> by default), <code>--emit-c</code> prints the generated C instead of compiling it (or,
+        <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c | --check | --quick]</code>: <code>-o</code> names the executable
+        (<code>a.out</code> by default), <code>--quick</code> builds it without optimizing the C (<code>-O0</code>
+        rather than <code>-O2</code>): often several times faster to build, and slower to run, <code>--emit-c</code> prints the generated C instead of compiling it (or,
         with <code>-o</code>, writes it to that file; a program without <code>main</code> is allowed here), <code>--check</code>
         only checks the program (everything a build checks before running the C compiler, including that it has a
         <code>main</code>), <code>-h</code>/<code>--help</code> prints the usage, and <code>--version</code> prints the
         compiler's version. The files the program includes are read from the disk, next to it (see
         <a href="#modules">Modules</a>). The output can't be the program's own file or a file it includes. A file name
-        starting with <code>-</code> goes after <code>--</code>. The exit status is 0 on
+        starting with <code>-</code> goes after <code>--</code>. A built program writes its output line by line to a
+        terminal, and in blocks to a pipe or a file, which is much faster; it writes out what it holds before
+        <code>scan</code> reads and when a runtime error stops it. The exit status is 0 on
         success, 1 when the program can't be read or doesn't compile (in Vela or in C), and 2 for wrong arguments.
       </p>
       <pre>./target/debug/vela program.vela --emit-c -o program.c
