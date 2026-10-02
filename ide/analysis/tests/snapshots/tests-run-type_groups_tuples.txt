@@ -1,0 +1,110 @@
+  1 | ; A group's values made into a tuple, `(args...)` or `args.tuple`: the tuple for
+    | comment:; A group's values made into a tuple, `(args...)` or `args.tuple`: the tuple for
+  2 | ; two or more values, and for one or none a failure holding the one value, or
+    | comment:; two or more values, and for one or none a failure holding the one value, or
+  3 | ; none, so every count is handled where the tuple is made. `t.k` past the
+    | comment:; none, so every count is handled where the tuple is made. `t.k` past the
+  4 | ; values a use gives is a mistake of that use, unless a `when` on `args.len`
+    | comment:; values a use gives is a mistake of that use, unless a `when` on `args.len`
+  5 | ; leaves it out there; `t.#k` reads an item in a maybe, none past the end.
+    | comment:; leaves it out there; `t.#k` reads an item in a maybe, none past the end.
+  6 | ; `each v in args` gives each value in turn, of its own type, `P`.
+    | comment:; `each v in args` gives each value in turn, of its own type, `P`.
+  8 | task described<P...: fixed & shown>(args: P...)
+    | keyword:task  task:described  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+  9 |     bind t = (args...) {
+    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{
+ 10 |         failure one
+    | keyword:failure  variable:one
+ 11 |         when one is {v}
+    | keyword:when  variable:one  keyword:is  punctuation:{  variable:v  punctuation:}
+ 12 |             show("one value: ", v)
+    | builtin-fn:show  punctuation:(  string:"one value: "  punctuation:,  variable:v  punctuation:)
+ 13 |         else
+    | keyword:else
+ 14 |             show("no values")
+    | builtin-fn:show  punctuation:(  string:"no values"  punctuation:)
+ 15 |         fi
+    | keyword:fi
+ 16 |         <-
+    | keyword:<-
+ 17 |     }
+    | punctuation:}
+ 18 |     show("first two: ", t.0, ", ", t.1, "; a third: ", t.#2)
+    | builtin-fn:show  punctuation:(  string:"first two: "  punctuation:,  variable:t  punctuation:.  field:0  punctuation:,  string:", "  punctuation:,  variable:t  punctuation:.  field:1  punctuation:,  string:"; a third: "  punctuation:,  variable:t  punctuation:.  punctuation:#  number:2  punctuation:)
+ 19 |     when args.len > 2
+    | keyword:when  parameter:args  punctuation:.  field:len  operator:>  number:2
+ 20 |         show("the third: ", t.2)
+    | builtin-fn:show  punctuation:(  string:"the third: "  punctuation:,  variable:t  punctuation:.  field:2  punctuation:)
+ 21 |     fi
+    | keyword:fi
+ 22 | fi
+    | keyword:fi
+ 24 | ; The same tuple through `args.tuple`, read with `match`.
+    | comment:; The same tuple through `args.tuple`, read with `match`.
+ 25 | task counted<P...: fixed>(args: P...) -> text
+    | keyword:task  task:counted  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:text
+ 26 |     match args.tuple
+    | keyword:match  parameter:args  punctuation:.  field:tuple
+ 27 |         case failure f
+    | keyword:case  keyword:failure  variable:f
+ 28 |             when f is {v}
+    | keyword:when  variable:f  keyword:is  punctuation:{  variable:v  punctuation:}
+ 29 |                 <- "one value"
+    | keyword:<-  string:"one value"
+ 30 |             fi
+    | keyword:fi
+ 31 |             <- "no values"
+    | keyword:<-  string:"no values"
+ 32 |         case _
+    | keyword:case  keyword:_
+ 33 |             <- "a tuple"
+    | keyword:<-  string:"a tuple"
+ 34 |     fi
+    | keyword:fi
+ 35 | fi
+    | keyword:fi
+ 37 | task listed<P...: shown>(args: P...)
+    | keyword:task  task:listed  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 38 |     hold n = 0
+    | keyword:hold  variable:n  operator:=  number:0
+ 39 |     each v in args
+    | keyword:each  variable:v  keyword:in  parameter:args
+ 40 |         n++
+    | variable:n  operator:++
+ 41 |         bind kept: P = v
+    | keyword:bind  variable:kept  punctuation::  type:P  operator:=  variable:v
+ 42 |         show(n, ". ", kept, " (", v.type, ")")
+    | builtin-fn:show  punctuation:(  variable:n  punctuation:,  string:". "  punctuation:,  variable:kept  punctuation:,  string:" ("  punctuation:,  variable:v  punctuation:.  keyword:type  punctuation:,  string:")"  punctuation:)
+ 43 |     fi
+    | keyword:fi
+ 44 | fi
+    | keyword:fi
+ 46 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 47 |     described(1, "two", 3.5)
+    | task:described  punctuation:(  number:1  punctuation:,  string:"two"  punctuation:,  number:3.5  punctuation:)
+ 48 |     described(1, "two")
+    | task:described  punctuation:(  number:1  punctuation:,  string:"two"  punctuation:)
+ 49 |     described(7)
+    | task:described  punctuation:(  number:7  punctuation:)
+ 50 |     described()
+    | task:described  punctuation:(  punctuation:)
+ 51 |     show(counted(1, 2), " ", counted('c'), " ", counted())
+    | builtin-fn:show  punctuation:(  task:counted  punctuation:(  number:1  punctuation:,  number:2  punctuation:)  punctuation:,  string:" "  punctuation:,  task:counted  punctuation:(  string:'c'  punctuation:)  punctuation:,  string:" "  punctuation:,  task:counted  punctuation:(  punctuation:)  punctuation:)
+ 52 |     listed(1, "two", 3.5, true)
+    | task:listed  punctuation:(  number:1  punctuation:,  string:"two"  punctuation:,  number:3.5  punctuation:,  keyword:true  punctuation:)
+ 53 |     listed()
+    | task:listed  punctuation:(  punctuation:)
+ 54 |     ; A tuple of known length read in a maybe: none past its end.
+    | comment:; A tuple of known length read in a maybe: none past its end.
+ 55 |     bind pair = (1, "a")
+    | keyword:bind  variable:pair  operator:=  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)
+ 56 |     show(pair.#0, " ", pair.#1)
+    | builtin-fn:show  punctuation:(  variable:pair  punctuation:.  punctuation:#  number:0  punctuation:,  string:" "  punctuation:,  variable:pair  punctuation:.  punctuation:#  number:1  punctuation:)
+ 57 |     bind past: maybe int = pair.#5
+    | keyword:bind  variable:past  punctuation::  keyword:maybe  type-builtin:int  operator:=  variable:pair  punctuation:.  punctuation:#  number:5
+ 58 |     show(past, " ", pair.#0 { 0 })
+    | builtin-fn:show  punctuation:(  variable:past  punctuation:,  string:" "  punctuation:,  variable:pair  punctuation:.  punctuation:#  number:0  punctuation:{  number:0  punctuation:}  punctuation:)
+ 59 | fi
+    | keyword:fi

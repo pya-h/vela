@@ -1853,7 +1853,9 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
       <p>
         A tuple holds two or more values together, each of its own type: <code>(text, int)</code>, written as a value
         <code>("Ada", 36)</code>. <code>t.0</code>, <code>t.1</code>, … read its items by position, from 0, each written as
-        a plain number (<code>t.01</code> is an error). A tuple is a
+        a plain number (<code>t.01</code> is an error). <code>t.#0</code> reads an item in a <code>maybe</code>, as
+        <code>xs[#i]</code> reads an array's, and past the tuple's end it is <code>none</code>, which takes its
+        <code>maybe</code> type from where it goes, as the literal does (<code>bind m: maybe int = t.#5</code>). A tuple is a
         value, like a shape, and its items never change: a <code>hold</code> tuple takes a whole new tuple, but no item can
         be assigned, or changed by a method that <a href="#methods"><code>alters</code></a> the value it is called on. Names take a tuple apart, as a list of names takes a task's several results.
       </p>
@@ -2405,6 +2407,42 @@ fi
 task main()
     log("values", 1, " and ", 2.5)                ; values (3): 1 and 2.5
     log("nothing")                               ; nothing (0): 
+fi</code></pre>
+      <p>
+        <code>each v in args</code> gives each value in turn, of its own type: the body is written once for each value,
+        and in it <code>P</code> alone is that value's type (<code>bind kept: P = v</code>). A group of none runs it
+        never.
+      </p>
+      <p>
+        <code>(args...)</code>, or <code>args.tuple</code>, makes the values a tuple, whose items never change, so the
+        group asks its types to be <code>fixed</code>. A tuple holds two or more items, so its type is
+        <code>(P...) ~ maybe P#0</code>: the tuple for two or more values, and for one or none a failure holding the one
+        value, or <code>none</code>, which a plan B, <code>match</code>, or <code>is</code> handles. Its items are
+        <code>t.0</code> and <code>t.1</code>, which every tuple has, and one past them, <code>t.2</code>, is a mistake of
+        any use giving fewer values, unless a <code>when</code> on <code>args.len</code> leaves it out there: each use
+        knows <code>args.len</code>, so it keeps only the branch it takes. <code>t.#2</code> reads it in a
+        <code>maybe</code> instead. Messages call the type of item <code>k</code> <code>P#k</code>.
+      </p>
+      <pre><code>task described&lt;P...: fixed &amp; shown&gt;(args: P...)
+    bind t = (args...) {
+        failure one
+        when one is {v}
+            show("one value: ", v)
+        else
+            show("no values")
+        fi
+        &lt;-
+    }
+    show("first two: ", t.0, ", ", t.1, "; a third: ", t.#2)
+    when args.len &gt; 2
+        show("the third: ", t.2)
+    fi
+fi
+
+task main()
+    described(1, "two", 3.5)      ; first two: 1, two; a third: { 3.5 }, then the third: 3.5
+    described(7)                  ; one value: 7
+    described()                   ; no values
 fi</code></pre>
       <p>
         A task takes one group, its values are its last parameter and are given as values (no <code>hold</code> or

@@ -1,0 +1,12 @@
+first two: 1, two; a third: { 3.5 }
+the third: 3.5
+first two: 1, two; a third: none
+one value: 7
+no values
+a tuple one value no values
+1. 1 (int)
+2. two (text)
+3. 3.5 (float)
+4. true (bool)
+{ 1 } { "a" }
+none 1

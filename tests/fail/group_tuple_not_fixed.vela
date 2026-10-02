@@ -1,0 +1,9 @@
+; error: 4:14: a tuple's items never change, so making one of the values of the group 'P...' asks each of its types to be fixed: '<P...: fixed>'
+; A tuple's items never change, so a group made into one asks its types to be fixed.
+task t<P...>(args: P...)
+    bind x = (args...) { <- }
+fi
+
+task main()
+    t(1, 2)
+fi

@@ -1,0 +1,9 @@
+; error: 4:22: a group's values make a tuple on their own, as in '(args...)'
+; A group's values make a tuple on their own.
+task t<P...: fixed>(args: P...)
+    bind x = (args..., 1) { <- }
+fi
+
+task main()
+    t(1, 2)
+fi

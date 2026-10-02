@@ -1,0 +1,10 @@
+; error: 4:13: 'each k, v' names a key and its value, which only a map gives; a group gives one value at a time, so name one
+; A group gives one value at a time, not a key and a value.
+task t<P...>(args: P...)
+    each k, v in args
+    fi
+fi
+
+task main()
+    t(1)
+fi

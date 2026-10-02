@@ -3229,11 +3229,17 @@ impl Generator {
         let ctype = c_type(target);
         match target {
             Type::Maybe(pointer) if is_pointer(pointer) => match inner.ty()? {
-                Type::None => Ok("NULL".to_string()),
+                Type::None => {
+                    self.work_out_none(inner)?;
+                    Ok("NULL".to_string())
+                }
                 _ => self.gen_expr(inner),
             },
             Type::Maybe(_) => match inner.ty()? {
-                Type::None => Ok(format!("(({}){{ .has = false }})", ctype)),
+                Type::None => {
+                    self.work_out_none(inner)?;
+                    Ok(format!("(({}){{ .has = false }})", ctype))
+                }
                 _ => Ok(format!("(({}){{ .has = true, .value = {} }})", ctype, self.gen_expr(inner)?)),
             },
             Type::Or(value, _) => {
@@ -3247,6 +3253,18 @@ impl Generator {
             }
             other => Err(Error::internal_at(e.span, format!("a value wrapped as {}", other))),
         }
+    }
+
+    /// Works out, for what it does, the tuple of `none` read past its end as
+    /// `t.#k` (see `Checker::check_safe_item`); `none` itself is nothing to.
+    fn work_out_none(&mut self, none: &Expr) -> Result<()> {
+        if let ExprKind::Field(tuple, _) = &none.kind
+            && !changes_nothing(tuple)
+        {
+            let value = self.gen_expr(tuple)?;
+            self.w.line(&format!("(void)({});", value));
+        }
+        Ok(())
     }
 
     /// A plan B, `value { body }`, the plan B `e`. Its prelude stores `value`,

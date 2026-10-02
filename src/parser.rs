@@ -2765,6 +2765,16 @@ impl Parser {
             Token::Dot => {
                 self.advance();
                 let span = self.peek_span();
+                // `t.#0`: an item of a tuple in a maybe, none past its end.
+                if self.check(Token::Hash) {
+                    self.advance();
+                    let Token::Int(n) = self.peek() else {
+                        return Err(Error::at(self.peek_span(), "'.#' reads a tuple's item in a maybe, by its place written as a number, as in 't.#0'"));
+                    };
+                    let item = format!("#{}", n);
+                    self.advance();
+                    return Ok(Expr::new(ExprKind::Field(Box::new(expr), item), span));
+                }
                 // `t.0`: an item of a tuple.
                 if let Token::Int(n) = self.peek() {
                     let item = n.to_string();
@@ -3074,6 +3084,15 @@ impl Parser {
         let span = self.peek_span();
         self.advance(); // (
         let first = self.parse_expr()?;
+        // `(args...)`: a group's values made into a tuple, as `args.tuple` is.
+        if self.check(Token::Ellipsis) {
+            self.advance(); // ...
+            if !self.check(Token::RParen) {
+                return Err(Error::at(self.peek_span(), "a group's values make a tuple on their own, as in '(args...)'"));
+            }
+            self.advance(); // )
+            return Ok(Expr::new(ExprKind::Field(Box::new(first), GROUP_TUPLE.to_string()), span));
+        }
         if !self.check(Token::Comma) {
             self.expect(Token::RParen)?;
             return Ok(first);

@@ -346,6 +346,10 @@ pub fn parse_error_kind() -> KindDef {
 /// How many items an array or slice holds, read after a dot as a field.
 pub const LEN: &str = "len";
 
+/// `args.tuple`, or `(args...)`: a group's values made into a tuple (see
+/// `Checker::check_group_member`).
+pub const GROUP_TUPLE: &str = "tuple";
+
 /// The word before a method that changes the value it is called on, written
 /// inside a shape or a kind (`alters step()`). Not a keyword: it marks a member
 /// and means nothing anywhere else, so a task or a variable may still use it.

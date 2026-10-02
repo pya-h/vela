@@ -281,6 +281,9 @@ pub struct Checker {
     current_lambda: Option<String>,
     /// The program's name for the task whose body is checked.
     current_task: String,
+    /// Whether a type is read inside a task, where a group's name alone, `P`,
+    /// is one value's type (see `check_type`).
+    one_of_group: bool,
     /// For each lambda, the names its value's place sees: the variables and
     /// regions of the code around it, which it takes nothing from, for the
     /// message when its body names one.
@@ -712,9 +715,31 @@ impl Checker {
             task.name = key;
             task.types = Vec::new();
             task.given = types.clone();
-            let given: HashMap<String, Type> = source.types.iter().map(|param| param.name.clone()).zip(types).collect();
+            let mut given: HashMap<String, Type> = source.types.iter().map(|param| param.name.clone()).zip(types).collect();
+            for param in source.types.iter().filter(|param| param.group) {
+                let types = group_types(&given, &param.name).unwrap_or_default();
+                for (place, ty) in types.iter().enumerate() {
+                    given.insert(group_item(&param.name, place), ty.clone());
+                }
+                given.insert(format!("{}{}", param.name, GROUP_MARK), Type::Tuple(types));
+            }
             let mut made = Made::default();
             self.substitute_task(&mut task, &given, &mut made)?;
+            if let Some((read, place, given_count)) = made.past_items.first() {
+                return err(
+                    at,
+                    format!(
+                        "this use gives '{}' {}, and its tuple of them is read at item {} at {}:{}; read it there as 't.#{}', a maybe, or inside 'when args.len > {}'",
+                        unqualified(&name),
+                        count(*given_count, "value"),
+                        place,
+                        read.line,
+                        read.col,
+                        place,
+                        place
+                    ),
+                );
+            }
             for (span, what, param) in &made.reads_chosen {
                 let Some((ty, declared)) = made.chosen.get(param) else { continue };
                 let types: Vec<String> = task.given.iter().map(|ty| ty.without_regions().to_string()).collect();
@@ -1914,6 +1939,8 @@ impl Checker {
 
     /// What the type parameter called `name` requires, if it is one here.
     fn type_param(&self, name: &str) -> Option<&TypeParam> {
+        // The type of one item of a group's tuple, `P#0`, asks what its group does.
+        let name = name.split(GROUP_ITEM).next().unwrap_or(name);
         self.type_params.iter().find(|param| param.name == name)
     }
 
@@ -1924,7 +1951,10 @@ impl Checker {
     /// - a shape or kind without pointers lives in no region, so `Point@r` is
     ///   an error, while the `Point` in `^Point@r` just has its region dropped.
     fn resolve_type(&mut self, ty: &Type, span: Span, place: TypePlace) -> Result<Type> {
-        self.check_type(ty, span)?;
+        self.one_of_group = matches!(place, TypePlace::Body);
+        let checked = self.check_type(ty, span);
+        self.one_of_group = false;
+        checked?;
         // The sizes of shapes and kinds are known inside tasks; fields and
         // headers are checked for size once they are (see `check_task`).
         if matches!(place, TypePlace::Body | TypePlace::New) {
@@ -2233,9 +2263,11 @@ impl Checker {
                 Some(_) => err(self.place(span, name), format!("'{0}' is one type, not a group; a task takes a group of types as '<{0}...>'", name)),
                 None => err(self.place(span, name), format!("unknown group of types '{0}'; a task takes one as '<{0}...>'", name)),
             },
+            // `P` alone, inside a task: one value's type, as `v` has in `each v in args`.
+            Type::Named(name, _) if self.one_of_group && self.type_param(name).is_some_and(|param| param.group) => Ok(()),
             Type::Named(name, _) if self.type_param(name).is_some_and(|param| param.group) => err(
                 self.place(span, name),
-                format!("'{0}' is a group of types, so it is written '{0}...': a parameter's whole type, as in 'args: {0}...', or all a task's type takes, as in '({0}...) -> R'", name),
+                format!("'{0}' is a group of types, so a header writes it '{0}...': a parameter's whole type, as in 'args: {0}...', or all a task's type takes, as in '({0}...) -> R'; '{0}' alone is one value's type, inside the task, as 'v' has in 'each v in args'", name),
             ),
             // `T`: the type each use of a generic declaration gives it.
             Type::Named(name, _) if self.type_param(name).is_some() => Ok(()),
@@ -2272,6 +2304,9 @@ impl Checker {
             // Only a type required to be `fixed` is known never to change.
             Type::Param(name) if !self.allows(Need::Fixed, ty) => {
                 Some(format!("'{}', which {}", name, self.why_not(Need::Fixed, ty)))
+            }
+            Type::Group(name) if !self.allows(Need::Fixed, ty) => {
+                Some(format!("'{}...', which {}", name, self.why_not(Need::Fixed, ty)))
             }
             Type::Ptr(..) => Some(format!("a pointer ({}), whose value can change", ty)),
             Type::Slice(..) => Some(format!("a slice ({}), whose items can change", ty)),
@@ -4401,6 +4436,38 @@ impl Checker {
         Ok(())
     }
 
+    /// Checks `t.#k`, the tuple `t`'s item `k` in a maybe, which is `none` past
+    /// the tuple's end: an item there becomes the item read as `t.k` and made
+    /// a maybe (see `ExprKind::Wrap`), and one past it stays, read as `none`,
+    /// which takes its maybe type from where it goes.
+    fn check_safe_item(&mut self, expr: &mut Expr) -> Result<Type> {
+        let span = expr.span;
+        let ExprKind::Field(base, item) = &mut expr.kind else { return Err(Error::internal_at(span, "a tuple's item read as no field")) };
+        let base_ty = self.check_expr(base)?;
+        let Ok(place) = item.trim_start_matches(SAFE_ITEM).parse::<usize>() else {
+            return Err(Error::internal_at(span, "a tuple's item read in a maybe without its place"));
+        };
+        let items = match &base_ty {
+            Type::Unknown => return Ok(Type::Unknown),
+            // A group's tuple: each copy of the task knows its length, so the
+            // read stays until then (see `substitute_expr`).
+            Type::Tuple(items) if group_in_tuple(items).is_some() => {
+                let group = group_in_tuple(items).unwrap_or_default();
+                return Ok(Type::Maybe(Box::new(Type::Param(group_item(&group, place)))));
+            }
+            Type::Tuple(items) => items.clone(),
+            other => return err(span, format!("'.#{}' reads an item of a tuple in a maybe, but this value is {}{}", place, other, extract_hint(&[other]))),
+        };
+        let Some(found) = items.get(place).cloned() else { return Ok(Type::None) };
+        let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
+        if let ExprKind::Field(base, _) = taken {
+            let mut read = Expr::new(ExprKind::Field(base, place.to_string()), span);
+            read.ty = Some(found.clone());
+            expr.kind = ExprKind::Wrap(Box::new(read));
+        }
+        Ok(Type::Maybe(Box::new(found)))
+    }
+
     /// The group whose values `e` names, when it is a name of them, `args`.
     fn group_of(&self, e: &Expr) -> Option<String> {
         let ExprKind::Var(name) = &e.kind else { return None };
@@ -4416,8 +4483,18 @@ impl Checker {
         let Some(group) = self.group_of(base) else { return Err(Error::internal_at(span, "a group's member read from no group")) };
         base.ty = Some(Type::Group(group.clone()));
         match member {
-            "len" => Ok(Type::Int),
-            _ => err(span, format!("the values of the group '{}...' have 'len', how many they are, and nothing else to read with '.'; give them on whole, as in 'next(args...)'", group)),
+            LEN => Ok(Type::Int),
+            // The tuple for two or more values; for one or none, a failure
+            // holding the one value, or none (see `group_tuple_type`).
+            GROUP_TUPLE if !self.allows(Need::Fixed, &Type::Group(group.clone())) => err(
+                span,
+                format!("a tuple's items never change, so making one of the values of the group '{0}...' asks each of its types to be fixed: '<{0}...: fixed>'", group),
+            ),
+            GROUP_TUPLE => Ok(group_tuple_type(&group)),
+            _ => err(
+                span,
+                format!("the values of the group '{}...' have 'len', how many they are, and 'tuple', and nothing else to read with '.'; give them on whole, as in 'next(args...)'", group),
+            ),
         }
     }
 
@@ -4818,6 +4895,9 @@ impl Checker {
         }
         if let Some(ty) = self.resolve_map_field(expr)? {
             return Ok(ty);
+        }
+        if matches!(&expr.kind, ExprKind::Field(_, item) if item.starts_with(SAFE_ITEM)) {
+            return self.check_safe_item(expr);
         }
         match &mut expr.kind {
             ExprKind::Spread(inner) => self.check_spread(inner, span),
@@ -5310,6 +5390,15 @@ impl Checker {
     /// each pass), a map's keys and values (`each k, v in m`), or one side of a
     /// map, `m.keys` or `m.values`, gone through without making a slice.
     fn check_each_source(&mut self, name: &str, second: Option<&(String, Span)>, range: &mut Expr) -> Result<(Type, Option<Type>)> {
+        // `each v in args`: each value of a group, of its own type, `P` (see
+        // `each_of_group`).
+        if let Some(group) = self.group_of(range) {
+            range.ty = Some(Type::Group(group.clone()));
+            if let Some((second, at)) = second {
+                return err(*at, format!("'each {}, {}' names a key and its value, which only a map gives; a group gives one value at a time, so name one", name, second));
+            }
+            return Ok((Type::Param(group), None));
+        }
         let one = |ty: Type| -> Result<(Type, Option<Type>)> {
             match second {
                 Some((second, at)) => err(
@@ -5905,7 +5994,7 @@ impl Checker {
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unwritable_in(inner, seen),
             Type::Map(key, value, _) => self.unwritable_in(key, seen).or_else(|| self.unwritable_in(value, seen)),
             Type::Tuple(items) => items.iter().find_map(|item| self.unwritable_in(item, seen)),
-            Type::Param(_) if self.allows(Need::Shown, ty) => None,
+            Type::Param(_) | Type::Group(_) if self.allows(Need::Shown, ty) => None,
             Type::Named(..) | Type::Applied(_) if self.has_own_str(ty) => None,
             // Without its own `str`, a shape is written as its fields that any
             // file reads, and a kind as its variant with the values it carries.
@@ -6751,6 +6840,12 @@ impl Checker {
                 }
                 err(span, format!("shape '{}' has no field '{}'", name, field))
             }
+            // A group's tuple has two or more items, and each copy of the task
+            // checks a read past those its call gives (see `substitute_expr`).
+            Type::Tuple(items) if group_in_tuple(items).is_some() => match field.parse::<usize>() {
+                Ok(n) => Ok(Type::Param(group_item(&group_in_tuple(items).unwrap_or_default(), n))),
+                Err(_) => err(span, format!("type {} has no field '{}'; a tuple's items are read by position, as in 't.0'", base, field)),
+            },
             Type::Tuple(items) => match field.parse::<usize>() {
                 Ok(n) => items.get(n).cloned().ok_or_else(|| {
                     Error::at(span, format!("this tuple has {} items, 't.0' to 't.{}', so it has no item {}", items.len(), items.len() - 1, n))
@@ -8146,7 +8241,7 @@ impl Checker {
             Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Slice(..) | Type::Map(..) | Type::Array(..) | Type::Tuple(_) | Type::Task(_) => true,
             Type::Named(name, _) if self.kinds.contains_key(name) => self.kind_comparable(name, &mut Vec::new()),
             Type::Named(..) | Type::Applied(_) => self.owner_of(ty).is_some_and(|owner| self.shapes.contains_key(&owner)),
-            Type::Param(_) => self.allows(Need::Same, ty),
+            Type::Param(_) | Type::Group(_) => self.allows(Need::Same, ty),
             _ => false,
         }
     }
@@ -8223,7 +8318,7 @@ impl Checker {
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unsimilar_in(inner, seen),
             Type::Map(key, value, _) => self.unsimilar_in(key, seen).or_else(|| self.unsimilar_in(value, seen)),
             Type::Tuple(items) => items.iter().find_map(|item| self.unsimilar_in(item, seen)),
-            Type::Param(_) if self.allows(Need::Similar, ty) => None,
+            Type::Param(_) | Type::Group(_) if self.allows(Need::Similar, ty) => None,
             // A shape given types this declaration takes: its fields with them.
             Type::Applied(applied) => {
                 let shape = self.shapes.get(&applied.name)?;
@@ -8918,6 +9013,9 @@ struct Made {
     /// parameter is: where the parameter is named, what reads it, and its
     /// name.
     reads_chosen: Vec<(Span, String, String)>,
+    /// Each read of a group's tuple item past the values the use gives: where,
+    /// the item, and how many values there are (see `substitute_expr`).
+    past_items: Vec<(Span, usize, usize)>,
 }
 
 impl Checker {
@@ -8958,7 +9056,7 @@ impl Checker {
     /// the names it takes, and the shape made for them in place of a shape given
     /// them.
     fn substitute_type(&mut self, ty: &mut Type, given: &HashMap<String, Type>, at: Span) -> Result<()> {
-        *ty = ty.map_groups(&mut |name| group_types(given, name)).map_params(&mut |name| given.get(name).cloned());
+        *ty = ty.map_groups(&mut |name| group_types(given, name)).map_params(&mut |name| copy_type(given, name));
         self.settle_applications(ty, at)
     }
 
@@ -8992,6 +9090,17 @@ impl Checker {
             }
             StmtKind::When(cond, then_block, else_block) => {
                 self.substitute_condition(cond, given, made)?;
+                // A condition this copy knows, as one on 'args.len' is: only the
+                // branch it takes is kept, so a read the other guards against
+                // is never checked or written.
+                if !given.is_empty()
+                    && let Some(taken) = known_condition(cond)
+                {
+                    let mut kept = if taken { std::mem::take(then_block) } else { else_block.take().unwrap_or_default() };
+                    self.substitute_block(&mut kept, given, made)?;
+                    stmt.kind = StmtKind::Block(kept);
+                    return Ok(());
+                }
                 self.substitute_block(then_block, given, made)?;
                 match else_block {
                     Some(else_block) => self.substitute_block(else_block, given, made),
@@ -9002,6 +9111,11 @@ impl Checker {
             StmtKind::Loop(cond, body) => {
                 self.substitute_condition(cond, given, made)?;
                 self.substitute_block(body, given, made)
+            }
+            StmtKind::Each(name, _, range, body) if matches!(&range.ty, Some(Type::Group(group)) if group_types(given, group).is_some()) => {
+                let (name, range, body) = (name.clone(), range.clone(), std::mem::take(body));
+                stmt.kind = self.each_of_group(&name, &range, body, given, made, at)?;
+                Ok(())
             }
             StmtKind::Each(_, _, range, body) => {
                 self.substitute_expr(range, given, made)?;
@@ -9014,9 +9128,110 @@ impl Checker {
         }
     }
 
+    /// In a copy of a task, makes `e` what this copy's group gives, when `e`
+    /// is the group's tuple, `(args...)`, or an item of one, `t.k` or `t.#k`,
+    /// and says whether it did. The tuple is the values for two or more of
+    /// them, and for one or none a failure holding the one value or none; an
+    /// item is the value, and one past the values given is a mistake of the use
+    /// (see `Made::past_items`), or `none` when read as `t.#k`.
+    fn substitute_group_tuple(&mut self, e: &mut Expr, given: &HashMap<String, Type>, made: &mut Made) -> Result<bool> {
+        let span = e.span;
+        let ExprKind::Field(inner, member) = &mut e.kind else { return Ok(false) };
+        let group = match &inner.ty {
+            Some(Type::Group(group)) if member == GROUP_TUPLE => group.clone(),
+            Some(Type::Tuple(items)) if group_in_tuple(items).is_some() => group_in_tuple(items).unwrap_or_default(),
+            _ => return Ok(false),
+        };
+        let Some(types) = group_types(given, &group) else { return Ok(false) };
+        let generic = e.ty.clone().unwrap_or(Type::Unknown);
+        let ty = in_copy(&generic, given);
+        if member == GROUP_TUPLE {
+            let ExprKind::Var(values) = &inner.kind else { return Err(Error::internal_at(span, "a group's tuple made of no group's values")) };
+            let value = |place: usize, ty: &Type| {
+                let mut value = Expr::new(ExprKind::Var(group_value(values, place)), span);
+                value.ty = Some(ty.clone());
+                value
+            };
+            let typed = |kind: ExprKind, ty: Type| {
+                let mut made = Expr::new(kind, span);
+                made.ty = Some(ty);
+                made
+            };
+            let made_value = match types.as_slice() {
+                [] | [_] => {
+                    let one = match types.first() {
+                        Some(first) => typed(ExprKind::Wrap(Box::new(value(0, first))), Type::Maybe(Box::new(first.clone()))),
+                        None => typed(ExprKind::Wrap(Box::new(typed(ExprKind::NoneLit, Type::None))), Type::Maybe(Box::new(placeholder_type()))),
+                    };
+                    let failed = one.ty.clone().unwrap_or(Type::Unknown);
+                    typed(ExprKind::Fail(Box::new(one)), Type::Fail(Box::new(failed)))
+                }
+                _ => {
+                    let values: Vec<Expr> = types.iter().enumerate().map(|(place, ty)| value(place, ty)).collect();
+                    typed(ExprKind::Tuple(values), Type::Tuple(types.clone()))
+                }
+            };
+            e.kind = ExprKind::Wrap(Box::new(made_value));
+            e.ty = Some(ty);
+            return Ok(true);
+        }
+        let safe = member.starts_with(SAFE_ITEM);
+        let Ok(place) = member.trim_start_matches(SAFE_ITEM).parse::<usize>() else { return Ok(false) };
+        let count = types.len();
+        self.substitute_expr(inner, given, made)?;
+        // The tuple is made only for two or more values, so in a copy for fewer
+        // its items are never read, and stand in as they are.
+        let there = place < count && count >= 2;
+        if !safe {
+            if place >= count.max(2) {
+                made.past_items.push((span, place, count));
+            }
+            e.ty = Some(ty);
+            return Ok(true);
+        }
+        let item = types.get(place).cloned().filter(|_| there);
+        let mut read = Expr::new(ExprKind::Field(inner.clone(), place.to_string()), span);
+        match item {
+            Some(item) => {
+                read.ty = Some(item);
+                e.kind = ExprKind::Wrap(Box::new(read));
+            }
+            None => {
+                read.kind = ExprKind::Field(inner.clone(), member.clone());
+                read.ty = Some(Type::None);
+                e.kind = ExprKind::Wrap(Box::new(read));
+            }
+        }
+        e.ty = Some(ty);
+        Ok(true)
+    }
+
+    /// `each v in args` in a copy of a task, for `range`, a group's values: the
+    /// body once for each value, in a block of its own giving `v` that value,
+    /// of its own type (`P` in the body).
+    fn each_of_group(&mut self, name: &str, range: &Expr, body: Block, given: &HashMap<String, Type>, made: &mut Made, at: Span) -> Result<StmtKind> {
+        let (Some(Type::Group(group)), ExprKind::Var(values)) = (&range.ty, &range.kind) else {
+            return Err(Error::internal_at(at, "a loop over a group's values that names none"));
+        };
+        let mut turns = Vec::new();
+        for (place, ty) in group_types(given, group).unwrap_or_default().into_iter().enumerate() {
+            let mut turn_given = given.clone();
+            turn_given.insert(format!("{}{}", group, GROUP_TURN), ty.clone());
+            let mut turn_body = body.clone();
+            self.substitute_block(&mut turn_body, &turn_given, made)?;
+            let bound = Bound { name: name.to_string(), span: at, ty: Some(ty.clone()), ty_span: None, parts: Vec::new() };
+            let mut value = Expr::new(ExprKind::Var(group_value(values, place)), at);
+            value.ty = Some(ty);
+            let mut turn = vec![Stmt::new(StmtKind::Binding { names: vec![bound], mutable: false, reference: false, init: vec![value] }, at)];
+            turn.extend(turn_body);
+            turns.push(Stmt::new(StmtKind::Block(turn), at));
+        }
+        Ok(StmtKind::Block(turns))
+    }
+
     fn substitute_bound(&mut self, bound: &mut Bound, given: &HashMap<String, Type>, at: Span) -> Result<()> {
         if let Some(ty) = &mut bound.ty {
-            *ty = ty.map_params(&mut |name| given.get(name).cloned());
+            *ty = in_copy(ty, given);
             self.settle_applications(ty, at)?;
         }
         bound.parts.iter_mut().try_for_each(|part| self.substitute_bound(part, given, at))
@@ -9062,15 +9277,26 @@ impl Checker {
             }
         }
         let at = e.span;
+        // A group's tuple, and its items, as this copy's values make them.
+        if self.substitute_group_tuple(e, given, made)? {
+            return Ok(());
+        }
         if let Some(ty) = &mut e.ty {
-            *ty = ty.map_groups(&mut |name| group_types(given, name)).map_params(&mut |name| given.get(name).cloned());
+            *ty = in_copy(ty, given);
             self.settle_applications(ty, at)?;
         }
         match &mut e.kind {
             ExprKind::Spread(inner) => self.substitute_expr(inner, given, made),
             ExprKind::Call { name, types, args } => {
-                for (ty, _) in types.iter_mut() {
+                // A group's types, kept as a tuple, are as many as the call gives
+                // it; any other tuple of a group's values is at least two items
+                // long, as this copy makes the values (see `in_copy`).
+                let groups: Vec<bool> = self.tasks.get(name.as_str()).map(|info| info.types.iter().map(|param| param.group).collect()).unwrap_or_default();
+                for (i, (ty, _)) in types.iter_mut().enumerate() {
                     self.substitute_type(ty, given, at)?;
+                    if !given.is_empty() && !groups.get(i).copied().unwrap_or(false) {
+                        *ty = padded_group_tuples(ty);
+                    }
                 }
                 if !types.is_empty() {
                     made.needed.push((name.clone(), types.iter().map(|(ty, _)| ty.clone()).collect(), at));
@@ -10037,6 +10263,17 @@ fn fits_int(value: i128, span: Span) -> Result<()> {
 /// Why a value of type `actual` doesn't fit where `expected` is required, or
 /// nothing when there is nothing useful to say.
 fn mismatch_hint(actual: &Type, expected: &Type) -> String {
+    // `P#0`: the type of one item of a group's tuple, which no code writes.
+    if let Some(item) = [actual, expected].into_iter().find_map(|ty| match ty {
+        Type::Param(name) if name.contains(GROUP_ITEM) => Some(name.clone()),
+        _ => None,
+    }) {
+        let (group, place) = item.split_once(GROUP_ITEM).unwrap_or((item.as_str(), "0"));
+        return format!(
+            "; {0} is the type of item {1} of the tuple of the group '{2}...', and '{2}' alone is the type of the value of a turn of 'each v in args', so they may be different types",
+            item, place, group
+        );
+    }
     match (actual, expected) {
         (Type::Array(items, _), Type::Slice(wanted, _)) if items.without_regions() == wanted.without_regions() => {
             "; an array never becomes a slice: write the values as a slice, as in '[1, 2, ...] at r', or copy them into one, as in 'new [int](xs) at r'".to_string()
@@ -10269,6 +10506,129 @@ fn add_startups(items: &mut Vec<Item>) {
     items.extend(startups.into_iter().map(Item::Task));
 }
 
+/// The type `name` is given in a copy of a task: the one `given` names, and
+/// for a group's `P` alone, the type of the value of the turn of an `each` over
+/// its values. Where no value has one (a group of none, or a tuple's item past
+/// the values given, both in code a copy never runs), a type stands in. A
+/// generic task read with nothing given changes nothing.
+fn copy_type(given: &HashMap<String, Type>, name: &str) -> Option<Type> {
+    if given.is_empty() {
+        return None;
+    }
+    if given.contains_key(&format!("{}{}", name, GROUP_MARK)) {
+        return Some(given.get(&format!("{}{}", name, GROUP_TURN)).cloned().unwrap_or_else(placeholder_type));
+    }
+    given.get(name).cloned().or_else(|| name.contains(GROUP_ITEM).then(placeholder_type))
+}
+
+/// `ty` in a copy of a task given `given`: the types given in place of the
+/// names it takes (see `copy_type`), with a group's tuple made at least two
+/// items long (see `padded_group_tuples`). A generic task read with nothing
+/// given keeps its types.
+fn in_copy(ty: &Type, given: &HashMap<String, Type>) -> Type {
+    if given.is_empty() {
+        return ty.clone();
+    }
+    padded_group_tuples(&ty.map_groups(&mut |name| group_types(given, name)).map_params(&mut |name| copy_type(given, name)))
+}
+
+/// The type standing in, in a copy of a task, for one no value has (see
+/// `copy_type`): never read, since the code holding it never runs.
+fn placeholder_type() -> Type {
+    Type::Int
+}
+
+/// `ty` with each tuple of fewer than two items, which only a group's tuple
+/// is in a copy given fewer than two values, made two items long: that tuple
+/// is never made there (see `substitute_group_tuple`), and C has no tuple of
+/// none.
+fn padded_group_tuples(ty: &Type) -> Type {
+    let boxed = |inner: &Type| Box::new(padded_group_tuples(inner));
+    match ty {
+        Type::Tuple(items) => {
+            let mut items: Vec<Type> = items.iter().map(padded_group_tuples).collect();
+            while items.len() < 2 {
+                items.push(placeholder_type());
+            }
+            Type::Tuple(items)
+        }
+        Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
+        Type::Maybe(inner) => Type::Maybe(boxed(inner)),
+        Type::Fail(inner) => Type::Fail(boxed(inner)),
+        Type::Ptr(inner, region) => Type::Ptr(boxed(inner), region.clone()),
+        Type::Array(inner, count) => Type::Array(boxed(inner), *count),
+        Type::Slice(inner, region) => Type::Slice(boxed(inner), region.clone()),
+        Type::Results(types) => Type::Results(types.iter().map(padded_group_tuples).collect()),
+        other => other.clone(),
+    }
+}
+
+/// Whether `cond`, in a copy of a task, is known true or false: a condition
+/// of numbers and bools written out, as `args.len` becomes (see
+/// `substitute_expr`).
+fn known_condition(cond: &Condition) -> Option<bool> {
+    let mut taken = true;
+    for part in cond.parts() {
+        if part.pattern.is_some() {
+            return None;
+        }
+        taken &= known_bool(&part.value)?;
+    }
+    Some(taken)
+}
+
+fn known_bool(e: &Expr) -> Option<bool> {
+    match &e.kind {
+        ExprKind::BoolLit(b) => Some(*b),
+        ExprKind::Unary(UnaryOp::Not, inner) => known_bool(inner).map(|b| !b),
+        ExprKind::Binary(BinaryOp::And, a, b) => Some(known_bool(a)? && known_bool(b)?),
+        ExprKind::Binary(BinaryOp::Or, a, b) => Some(known_bool(a)? || known_bool(b)?),
+        ExprKind::Binary(op, a, b) => {
+            let (a, b) = (known_int(a)?, known_int(b)?);
+            match op {
+                BinaryOp::Eq => Some(a == b),
+                BinaryOp::Ne => Some(a != b),
+                BinaryOp::Lt => Some(a < b),
+                BinaryOp::Gt => Some(a > b),
+                BinaryOp::Le => Some(a <= b),
+                BinaryOp::Ge => Some(a >= b),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn known_int(e: &Expr) -> Option<i64> {
+    match &e.kind {
+        ExprKind::IntLit(n) => Some(*n),
+        ExprKind::Binary(BinaryOp::Add, a, b) => known_int(a)?.checked_add(known_int(b)?),
+        ExprKind::Binary(BinaryOp::Sub, a, b) => known_int(a)?.checked_sub(known_int(b)?),
+        _ => None,
+    }
+}
+
+/// The type of `(args...)` for the group `group`, `(P...) ~ maybe P#0`: the
+/// tuple of its values when there are two or more, and when there is one or
+/// none, a failure holding that one value, or none.
+fn group_tuple_type(group: &str) -> Type {
+    Type::Or(Box::new(Type::Tuple(vec![Type::Group(group.to_string())])), Box::new(Type::Maybe(Box::new(Type::Param(group_item(group, 0))))))
+}
+
+/// The group a group's tuple holds, `(P...)`.
+fn group_in_tuple(items: &[Type]) -> Option<String> {
+    match items {
+        [Type::Group(group)] => Some(group.clone()),
+        _ => None,
+    }
+}
+
+/// The type of item `place` of the group `group`'s tuple, `P#0`: the type the
+/// call gives that value, in each copy of the task.
+fn group_item(group: &str, place: usize) -> String {
+    format!("{}{}{}", group, GROUP_ITEM, place)
+}
+
 /// The types given for the group of types `name`, kept among the types given
 /// a call as a tuple of them (see `Checker::group_call_info`).
 fn group_types(given: &HashMap<String, Type>, name: &str) -> Option<Vec<Type>> {
@@ -10325,6 +10685,19 @@ fn spread_values(args: &mut Vec<Expr>, given: &HashMap<String, Type>) {
         args.push(value);
     }
 }
+
+/// The mark before the place of a tuple's item read in a maybe, `t.#0`, kept
+/// in the field's name until the checker makes it the read it is (see
+/// `Checker::check_safe_item`).
+pub const SAFE_ITEM: char = '#';
+
+/// Added to a group's name, the key in the types a copy of a task is given
+/// that marks it a group, holding its types (see `copy_type`).
+const GROUP_MARK: &str = "...";
+
+/// Added to a group's name, the key holding the type of the value of the turn
+/// of an `each` over its values (see `Checker::each_of_group`).
+const GROUP_TURN: &str = "*";
 
 /// The marker between a group's name and the place of one of its types, in
 /// the names a call of a task taking a group gives them (`P#0`), which no Vela

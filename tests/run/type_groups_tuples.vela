@@ -1,0 +1,59 @@
+; A group's values made into a tuple, `(args...)` or `args.tuple`: the tuple for
+; two or more values, and for one or none a failure holding the one value, or
+; none, so every count is handled where the tuple is made. `t.k` past the
+; values a use gives is a mistake of that use, unless a `when` on `args.len`
+; leaves it out there; `t.#k` reads an item in a maybe, none past the end.
+; `each v in args` gives each value in turn, of its own type, `P`.
+
+task described<P...: fixed & shown>(args: P...)
+    bind t = (args...) {
+        failure one
+        when one is {v}
+            show("one value: ", v)
+        else
+            show("no values")
+        fi
+        <-
+    }
+    show("first two: ", t.0, ", ", t.1, "; a third: ", t.#2)
+    when args.len > 2
+        show("the third: ", t.2)
+    fi
+fi
+
+; The same tuple through `args.tuple`, read with `match`.
+task counted<P...: fixed>(args: P...) -> text
+    match args.tuple
+        case failure f
+            when f is {v}
+                <- "one value"
+            fi
+            <- "no values"
+        case _
+            <- "a tuple"
+    fi
+fi
+
+task listed<P...: shown>(args: P...)
+    hold n = 0
+    each v in args
+        n++
+        bind kept: P = v
+        show(n, ". ", kept, " (", v.type, ")")
+    fi
+fi
+
+task main()
+    described(1, "two", 3.5)
+    described(1, "two")
+    described(7)
+    described()
+    show(counted(1, 2), " ", counted('c'), " ", counted())
+    listed(1, "two", 3.5, true)
+    listed()
+    ; A tuple of known length read in a maybe: none past its end.
+    bind pair = (1, "a")
+    show(pair.#0, " ", pair.#1)
+    bind past: maybe int = pair.#5
+    show(past, " ", pair.#0 { 0 })
+fi
