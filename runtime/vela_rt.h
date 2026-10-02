@@ -123,6 +123,17 @@ static inline int vela__rt__text_order(vela__rt__text a, vela__rt__text b) {
  * comparisons elsewhere (or when VELA__RT__PORTABLE_ARITHMETIC is defined, which
  * the runtime tests use to test those). */
 
+/* A startup decorator `decorator` that failed on the task `task`, with
+ * `error` as text: the program stops, or, for one written `$d?`, standard
+ * error says so and it goes on. */
+static inline void vela__rt__decorator_failed(const char* decorator, const char* task, vela__rt__text error, bool stops) {
+    fflush(stdout);
+    fprintf(stderr, "vela: decorator '%s' failed on task '%s'%s: %.*s\n", decorator, task, stops ? "" : ", and the program goes on", (int)error.len, error.bytes);
+    if (stops) {
+        abort();
+    }
+}
+
 static inline _Noreturn void vela__rt__int_trap(const char* what, const char* at) {
     fflush(stdout);
     fprintf(stderr, "vela: %s at %s\n", what, at);

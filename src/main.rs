@@ -6,7 +6,7 @@ use std::process;
 
 use vela::driver;
 
-const USAGE: &str = "usage: vela <input.vela> [-o <output>] [--emit-c | --check | --quick] [--]\n       vela --help | --version";
+const USAGE: &str = "usage: vela <input.vela> [-o <output>] [--emit-c | --check | --quick] [--no-notices] [--]\n       vela --help | --version";
 const VERSION: &str = concat!(env!("CARGO_PKG_NAME"), " ", env!("CARGO_PKG_VERSION"));
 
 /// What the command line asks for.
@@ -25,6 +25,9 @@ struct Options {
     check: bool,
     /// Build without optimizing the C: much faster to build, slower to run.
     quick: bool,
+    /// The program writes no notices to standard error, as of a startup
+    /// decorator whose failure it passes over.
+    no_notices: bool,
 }
 
 fn main() {
@@ -57,6 +60,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
     let mut emit_c = false;
     let mut check = false;
     let mut quick = false;
+    let mut no_notices = false;
     let mut version = false;
     let mut only_files = false;
     let mut args = args;
@@ -75,6 +79,7 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
             "--emit-c" => emit_c = true,
             "--check" => check = true,
             "--quick" => quick = true,
+            "--no-notices" => no_notices = true,
             "-o" => match args.next() {
                 Some(path) if output.is_none() => output = Some(path),
                 Some(_) => return Err("-o given more than once".to_string()),
@@ -97,8 +102,11 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Action, String> {
         let other = if emit_c { "--emit-c" } else { "--check" };
         return Err(format!("--quick builds an executable faster, and {} builds none, so they can't be used together", other));
     }
+    if no_notices && check {
+        return Err("--no-notices changes the program built, and --check builds none, so they can't be used together".to_string());
+    }
     let input = input.ok_or_else(|| "no input file".to_string())?;
-    Ok(Action::Run(Options { input, output, emit_c, check, quick }))
+    Ok(Action::Run(Options { input, output, emit_c, check, quick, no_notices }))
 }
 
 fn run(opts: &Options) -> Result<(), String> {
@@ -120,13 +128,13 @@ fn run(opts: &Options) -> Result<(), String> {
     if opts.emit_c {
         return match &opts.output {
             Some(output) => {
-                let (c_code, warnings) = driver::generate_c_file(path, path, &source, Path::new(output), &mut driver::read_from_disk)
+                let (c_code, warnings) = driver::generate_c_file(path, path, &source, Path::new(output), &mut driver::read_from_disk, !opts.no_notices)
                     .map_err(|e| e.render(&opts.input, &source))?;
                 warn(&warnings, &opts.input);
                 fs::write(output, c_code).map_err(|e| format!("error: cannot write '{}': {}", output, e))
             }
             None => {
-                let (c_code, warnings) = driver::generate_c_program(path, &source, &mut driver::read_from_disk).map_err(|e| e.render(&opts.input))?;
+                let (c_code, warnings) = driver::generate_c_program(path, &source, &mut driver::read_from_disk, !opts.no_notices).map_err(|e| e.render(&opts.input))?;
                 warn(&warnings, &opts.input);
                 write_stdout(&c_code)
             }
@@ -137,7 +145,7 @@ fn run(opts: &Options) -> Result<(), String> {
     let cc = driver::c_compiler_from_env();
     // After every other argument, so it wins over an `-O` in `CC` too.
     let cc = if opts.quick { format!("{} -O0", cc) } else { cc };
-    let warnings = driver::build(&source, Path::new(&opts.input), Path::new(output), &cc).map_err(|e| e.render(&opts.input, &source))?;
+    let warnings = driver::build(&source, Path::new(&opts.input), Path::new(output), &cc, !opts.no_notices).map_err(|e| e.render(&opts.input, &source))?;
     warn(&warnings, &opts.input);
     write_stdout(&format!("compiled: {}\n", output))
 }

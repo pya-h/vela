@@ -2567,7 +2567,7 @@ impl Checker {
         }
         let before = self.errors.len();
         if is_startup(&task.name) {
-            self.check_startup(&mut task.body);
+            self.check_startup(&mut task.body, &task.passes);
         } else {
             self.check_block(&mut task.body)?;
         }
@@ -4338,12 +4338,15 @@ impl Checker {
     /// Checks the startup decorators in `body` (see `add_startups`), each a
     /// call `d(task, args)`: that `d` takes a task of the task's type first,
     /// and that it sends nothing, since what it sent would go nowhere.
-    fn check_startup(&mut self, body: &mut Block) {
+    fn check_startup(&mut self, body: &mut Block, passes: &[bool]) {
         for stmt in body.iter_mut() {
             let fits = self.decorator_fits(stmt);
             if self.keep_going(fits) {
+                // The call is checked as a value, since a failure it sends is
+                // handled where the program starts (see `startup_failure`).
+                let StmtKind::Expr(call) = &mut stmt.kind else { continue };
                 // No region exists where the program starts.
-                let checked = self.check_stmt(stmt).map_err(|mut error| {
+                let checked = self.check_expr(call).map(|_| ()).map_err(|mut error| {
                     const NO_REGION: &str = "a decorator's values are worked out where the program starts, before any region exists, so none of them can be made in one";
                     if error.message.starts_with("unknown region") {
                         error.message = NO_REGION.to_string();
@@ -4357,13 +4360,26 @@ impl Checker {
                 self.keep_going(checked);
             }
         }
-        for stmt in body.iter() {
-            if let StmtKind::Expr(call) = &stmt.kind
-                && let ExprKind::Call { name, .. } = &call.kind
-                && let Some(ty) = call.ty.as_ref().filter(|ty| !matches!(ty, Type::Nothing | Type::Unknown))
-            {
-                let message = format!("a startup decorator sends nothing, since it runs where the program starts and nothing takes what it sends; '{}' sends {}", unqualified(name), ty);
-                self.record(Error::at(call.span, message));
+        for (stmt, passes) in body.iter().zip(passes.iter().chain(std::iter::repeat(&false))) {
+            let StmtKind::Expr(call) = &stmt.kind else { continue };
+            let ExprKind::Call { name, .. } = &call.kind else { continue };
+            match call.ty.as_ref() {
+                // A decorator that can fail: its error is written out where the
+                // program starts, so its type must have a text form.
+                Some(Type::Or(value, error)) if **value == Type::Nothing => self.note_written_strs(&error.clone(), call.span),
+                Some(Type::Nothing) if *passes => self.warnings.push(Error::at(
+                    call.span,
+                    format!("'?' lets a failure of '{}' pass, but it sends nothing, so it never fails; leave the '?' out", unqualified(name)),
+                )),
+                Some(Type::Nothing | Type::Unknown) | None => {}
+                Some(ty) => {
+                    let message = format!(
+                        "a startup decorator sends nothing, or 'nothing ~ E' when it can fail, since it runs where the program starts and nothing takes what it sends; '{}' sends {}",
+                        unqualified(name),
+                        ty
+                    );
+                    self.record(Error::at(call.span, message));
+                }
             }
         }
     }
@@ -4541,11 +4557,13 @@ impl Checker {
             inner.name = layer_name(&task.name, count);
             inner.private = true;
             inner.decorators = Vec::new();
+            inner.passes = Vec::new();
             for k in 1..count {
                 let mut layer = task.clone();
                 layer.name = layer_name(&task.name, k);
                 layer.private = true;
                 layer.decorators = Vec::new();
+                layer.passes = Vec::new();
                 layer.body = Vec::new();
                 layer.results = unnamed(task);
                 layers.push(layer);
@@ -10480,12 +10498,16 @@ fn add_startups(items: &mut Vec<Item>) {
             continue;
         }
         let name = qualify(module_of(&task.name), STARTUP);
+        let passes: Vec<bool> = std::mem::take(&mut task.passes).into_iter().rev().collect();
         let calls = std::mem::take(&mut task.decorators).into_iter().rev().map(|call| {
             let span = call.span;
             Stmt::new(StmtKind::Expr(call), span)
         });
         match startups.iter_mut().find(|startup| startup.name == name) {
-            Some(startup) => startup.body.extend(calls),
+            Some(startup) => {
+                startup.body.extend(calls);
+                startup.passes.extend(passes);
+            }
             None => startups.push(TaskDef {
                 name,
                 types: Vec::new(),
@@ -10499,6 +10521,7 @@ fn add_startups(items: &mut Vec<Item>) {
                 native: false,
                 owner: None,
                 decorators: Vec::new(),
+                passes,
                 wrappers: Vec::new(),
             }),
         }

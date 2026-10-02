@@ -2287,10 +2287,11 @@ fi</code></pre>
           tasks, the compiler could write the table itself, one entry per use with its values, into the program's data,
           with no call at start at all. The count of uses is known when compiling, so the table is a fixed array, and a
           decorator's registry needs no region that lasts.</li>
-        <li><strong>Startup decorators that fail</strong> <span class="badge b-med">Planned</span>: a decorator sending
-          <code>nothing ~ E</code>, whose failure stops the program before <code>main</code> with its message, as a route
-          declared twice should; and a mark (its syntax to be chosen) saying a failure may be passed over, so the
-          program goes on to the next decorator and to <code>main</code>.</li>
+        <li><strong>Startup decorators that fail</strong> <span class="badge b-done">Done</span>: a decorator sending
+          <code>nothing ~ E</code>, whose failure stops the program before <code>main</code> with its message, and
+          <code>$d?</code>, whose failure is a notice on standard error while the program goes on;
+          <code>--no-notices</code> builds a program without such notices (see
+          <a href="vela.html#decorators">Decorators</a>).</li>
         <li><strong>Decorators on methods</strong> <span class="badge b-med">Planned</span>: startup decorators on shared
           methods only, since a member method has no value to be called on where the program starts; wrappers on
           member methods, given the value the method is called on first (as a place, for an <code>alters</code>

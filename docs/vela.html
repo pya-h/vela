@@ -2285,7 +2285,7 @@ task main()                                       ; before it: log home, route /
 fi</code></pre>
       <p>
         A decorator takes the task first, of the task's type (see <a href="#task-values">Tasks as values</a>), then the
-        values written after its name, and sends nothing. Several go on lines of their own or on one line,
+        values written after its name, and sends nothing, or <code>nothing ~ E</code> when it can fail. Several go on lines of their own or on one line,
         <code>$log $route("/")</code>, and the one nearest the task runs first, as in Python. They run after every
         shared field has its first value: the modules a program includes first, then each file's tasks in the order they
         are written. A decorator's values are worked out where the program starts, so they can be literals, macros,
@@ -2293,6 +2293,26 @@ fi</code></pre>
         <code>$web.route("/")</code>, but not from a shape or kind (<code>$Registry.add</code>) yet. Only a task takes
         decorators, not a method, and only one that can be a value.
       </p>
+      <p>
+        A decorator that fails stops the program before <code>main</code>: standard error says which decorator failed
+        on which task, and its error, as <code>vela: decorator 'route' failed on task 'home': …</code>. Written
+        <code>$d?</code> or <code>$d(values)?</code>, its failure lets the program go on, to the next decorator and to
+        <code>main</code>, and standard error says so; the task is still a task, but whatever the decorator would have
+        done for it, it didn't. A program built with <code>--no-notices</code> writes nothing for such a failure. A
+        <code>?</code> on a decorator that never fails is a warning.
+      </p>
+      <pre><code>task route(page: (text) -&gt; text, path: text) -&gt; nothing ~ text
+    when path == ""
+        &lt;- fail "an empty path"
+    fi
+    show("route ", path)
+fi
+
+$route("")?
+task draft(who: text) -&gt; text
+    &lt;- "draft"
+fi
+; vela: decorator 'route' failed on task 'draft', and the program goes on: an empty path</code></pre>
       <p>
         A wrapper decorator, <code>$(w)</code> or <code>$(w1, w2(values), …)</code>, runs at every call of the task
         instead of once. Calling the task calls the leftmost wrapper, giving it the rest of the chain as a task of the
@@ -3775,9 +3795,11 @@ show(area(square))             <span class="comment">; error: unknown task 'area
 ./target/debug/vela program.vela -o program
 CC=clang ./target/debug/vela program.vela -o program</pre>
       <p>
-        <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c | --check | --quick]</code>: <code>-o</code> names the executable
+        <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c | --check | --quick] [--no-notices]</code>: <code>-o</code> names the executable
         (<code>a.out</code> by default), <code>--quick</code> builds it without optimizing the C (<code>-O0</code>
-        rather than <code>-O2</code>): often several times faster to build, and slower to run, <code>--emit-c</code> prints the generated C instead of compiling it (or,
+        rather than <code>-O2</code>): often several times faster to build, and slower to run, <code>--no-notices</code>
+        builds a program that writes no notices to standard error, as of a <a href="#decorators">startup decorator</a>
+        whose failure it lets pass (not with <code>--check</code>, which builds none), <code>--emit-c</code> prints the generated C instead of compiling it (or,
         with <code>-o</code>, writes it to that file; a program without <code>main</code> is allowed here), <code>--check</code>
         only checks the program (everything a build checks before running the C compiler, including that it has a
         <code>main</code>), <code>-h</code>/<code>--help</code> prints the usage, and <code>--version</code> prints the

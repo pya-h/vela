@@ -219,21 +219,23 @@ pub fn generate_c(source: &str) -> Result<String> {
 }
 
 /// `generate_c` for a program whose main file is `source`, at `path`, loading
-/// its modules with `loader`.
-pub fn generate_c_program(path: &Path, source: &str, loader: &mut Loader) -> std::result::Result<(String, Warnings), ProgramError> {
+/// its modules with `loader`. `notices` is whether the program writes notices
+/// to standard error, as of a startup decorator whose failure it passes over
+/// (`--no-notices` turns them off).
+pub fn generate_c_program(path: &Path, source: &str, loader: &mut Loader, notices: bool) -> std::result::Result<(String, Warnings), ProgramError> {
     let (items, warnings) = check_program(path, source, loader)?;
-    let c_code = Generator::new().generate(&items).map_err(|error| ProgramError::one(error, Vec::new()))?;
+    let c_code = Generator::new().with_notices(notices).generate(&items).map_err(|error| ProgramError::one(error, Vec::new()))?;
     Ok((c_code, warnings))
 }
 
 /// `generate_c_program` for C to be written to the file `output`, which must
 /// not be a file of the program: the main file, at `input` on the disk, or a
 /// module it includes.
-pub fn generate_c_file(path: &Path, input: &Path, source: &str, output: &Path, loader: &mut Loader) -> std::result::Result<(String, Warnings), BuildError> {
+pub fn generate_c_file(path: &Path, input: &Path, source: &str, output: &Path, loader: &mut Loader, notices: bool) -> std::result::Result<(String, Warnings), BuildError> {
     let partial = front_end_program(path, source, loader);
     let modules = module_paths(&partial);
     let (items, warnings) = checked(partial)?;
-    let c_code = Generator::new().generate(&items)?;
+    let c_code = Generator::new().with_notices(notices).generate(&items)?;
     overwrites_source(input, &modules, output)?;
     Ok((c_code, warnings))
 }
@@ -332,20 +334,20 @@ pub fn has_main(items: &[Item]) -> bool {
 /// `c_compiler_from_env`). `input` names the generated C file and guards
 /// against overwriting the source. The modules the program includes are read
 /// from the disk, next to `input`.
-pub fn build(source: &str, input: &Path, output: &Path, cc: &str) -> std::result::Result<Warnings, BuildError> {
-    build_program(source, input, input, output, cc, &mut read_from_disk)
+pub fn build(source: &str, input: &Path, output: &Path, cc: &str, notices: bool) -> std::result::Result<Warnings, BuildError> {
+    build_program(source, input, input, output, cc, &mut read_from_disk, notices)
 }
 
 /// `build`, with the program's main file at `path` as `loader` knows it (for
 /// its modules' paths and for messages) and at `input` on the disk.
-pub fn build_program(source: &str, path: &Path, input: &Path, output: &Path, cc: &str, loader: &mut Loader) -> std::result::Result<Warnings, BuildError> {
+pub fn build_program(source: &str, path: &Path, input: &Path, output: &Path, cc: &str, loader: &mut Loader, notices: bool) -> std::result::Result<Warnings, BuildError> {
     let partial = front_end_program(path, source, loader);
     let modules = module_paths(&partial);
     let (items, warnings) = checked(partial)?;
     if !has_main(&items) {
         return Err(BuildError::NoMain);
     }
-    let c_code = Generator::new().generate(&items)?;
+    let c_code = Generator::new().with_notices(notices).generate(&items)?;
     overwrites_source(input, &modules, output)?;
     check_output(output)?;
     compile_c(&c_code, input, output, cc)?;

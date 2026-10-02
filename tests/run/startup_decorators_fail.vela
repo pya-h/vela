@@ -1,0 +1,49 @@
+; warning: 40:2: '?' lets a failure of 'note' pass, but it sends nothing, so it never fails; leave the '?' out
+; A startup decorator may send `nothing ~ E`. A failure stops the program before
+; `main`, unless the decorator is written `$d?`: then standard error says which
+; decorator failed on which task, and why, and the program goes on.
+
+kind RouteError
+    Empty
+    Taken(path: text)
+fi
+
+shape Routes
+    shared hold count: int = 0
+fi
+
+task route(f: (int) -> int, path: text) -> nothing ~ RouteError
+    when path == ""
+        <- fail RouteError.Empty
+    fi
+    when path == "/taken"
+        <- fail RouteError.Taken(path)
+    fi
+    Routes.count++
+    show("routed ", path, " to ", f(Routes.count))
+fi
+
+task note(f: (int) -> int)
+    show("noted")
+fi
+
+$route("/home")
+task home(n: int) -> int
+    <- n * 10
+fi
+
+$route("/taken")?
+task again(n: int) -> int
+    <- n
+fi
+
+$note?
+$route("")?
+task empty(n: int) -> int
+    <- n
+fi
+
+task main()
+    show("main, with ", Routes.count, " route")
+    show(again(2), " ", empty(3))
+fi

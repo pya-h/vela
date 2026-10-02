@@ -69,7 +69,7 @@ pub fn build(workspace: &Workspace, path: &str, cc: &str) -> Result<Result<Progr
             other => io::Error::other(format!("{:?}", other)),
         })
     };
-    match driver::build_program(&file.content, Path::new(path), &input, &executable, cc, &mut loader) {
+    match driver::build_program(&file.content, Path::new(path), &input, &executable, cc, &mut loader, true) {
         // The editor shows a program's warnings as it is typed, so a build
         // that succeeds says nothing more.
         Ok(_warnings) => Ok(Ok(Program { executable, folder, scratch })),

@@ -1,0 +1,13 @@
+; error: 7:9: '?' lets a startup decorator's failure pass, as in '$route("/")?'; a wrapper runs at each call, and its failure is the task's own, sent to its caller
+; '?' marks a startup decorator; a wrapper's failure is the task's own.
+task timed(next: (int) -> int, n: int) -> int
+    <- next(n)
+fi
+
+$(timed)?
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+fi

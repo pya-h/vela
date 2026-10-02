@@ -74,6 +74,9 @@ pub enum Token {
     /// `$`, which marks a decorator before a task: `$d`, `$d(args)`, or the
     /// wrappers `$(w1, w2(a))`.
     Dollar,
+    /// `?`, after a startup decorator whose failure doesn't stop the program:
+    /// `$route("/")?`.
+    Question,
     Comma,
     Dot,
     Arrow,
@@ -245,6 +248,7 @@ impl Token {
             Token::Colon => ":",
             Token::Hash => "#",
             Token::Dollar => "$",
+            Token::Question => "?",
             Token::Comma => ",",
             Token::Dot => ".",
             Token::Arrow => "->",
@@ -596,6 +600,7 @@ impl Lexer {
             ':' => Token::Colon,
             '#' => Token::Hash,
             '$' => Token::Dollar,
+            '?' => Token::Question,
             ',' => Token::Comma,
             '.' => {
                 if self.peek() == '.' {

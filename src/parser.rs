@@ -634,6 +634,12 @@ impl Parser {
             self.advance(); // $
             if self.check(Token::LParen) {
                 self.parse_wrappers(&mut wrappers)?;
+                if self.check(Token::Question) {
+                    return Err(Error::at(
+                        self.peek_span(),
+                        "'?' lets a startup decorator's failure pass, as in '$route(\"/\")?'; a wrapper runs at each call, and its failure is the task's own, sent to its caller",
+                    ));
+                }
             } else {
                 decorators.push(self.parse_startup_decorator()?);
             }
@@ -652,9 +658,10 @@ impl Parser {
         let mut item = self.parse_item()?;
         if let Item::Task(task) = &mut item {
             task.wrappers = wrappers;
+            task.passes = decorators.iter().map(|(_, _, _, passes)| *passes).collect();
             task.decorators = decorators
                 .into_iter()
-                .map(|(name, args, span)| {
+                .map(|(name, args, span, _)| {
                     let mut given = vec![Expr::new(ExprKind::Var(task.name.clone()), span)];
                     given.extend(args);
                     Expr::new(ExprKind::Call { name, types: Vec::new(), args: given }, span)
@@ -665,7 +672,7 @@ impl Parser {
     }
 
     /// `d` or `d(values)` after a `$`: a startup decorator's name and values.
-    fn parse_startup_decorator(&mut self) -> Result<(String, Vec<Expr>, Span)> {
+    fn parse_startup_decorator(&mut self) -> Result<(String, Vec<Expr>, Span, bool)> {
         let span = self.peek_span();
         if !matches!(self.peek(), Token::Ident(_)) {
             return Err(self.unexpected("the name of a task after '$', as in '$register' or '$route(\"/\")'"));
@@ -674,7 +681,9 @@ impl Parser {
         let name = self.qualified(name)?;
         self.no_member_decorator("a decorator", "'$register' or '$m.register'")?;
         let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
-        Ok((name, args, span))
+        // `$d?`: a failure of the decorator lets the program go on.
+        let passes = self.match_token(Token::Question);
+        Ok((name, args, span, passes))
     }
 
     /// Refuses a dot after the name of `what`, a decorator, at the dot: a
@@ -744,7 +753,7 @@ impl Parser {
         } else {
             Type::Nothing
         };
-        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None, decorators: Vec::new(), wrappers: Vec::new() })
+        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None, decorators: Vec::new(), passes: Vec::new(), wrappers: Vec::new() })
     }
 
     /// Whether the cursor is at `native task` (see `ast::NATIVE`).
@@ -1154,6 +1163,7 @@ impl Parser {
             native: false,
             owner: Some(Owner { name, alters: alters_span.is_some(), alters_span, shared: is_shared }),
             decorators: Vec::new(),
+            passes: Vec::new(),
             wrappers: Vec::new(),
         })
     }
@@ -3040,6 +3050,7 @@ impl Parser {
             native: false,
             owner: None,
             decorators: Vec::new(),
+            passes: Vec::new(),
             wrappers: Vec::new(),
         }));
         Expr::new(ExprKind::Var(name), span)

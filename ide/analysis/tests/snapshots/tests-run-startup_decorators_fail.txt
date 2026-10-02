@@ -1,0 +1,82 @@
+  1 | ; warning: 40:2: '?' lets a failure of 'note' pass, but it sends nothing, so it never fails; leave the '?' out
+    | comment:; warning: 40:2: '?' lets a failure of 'note' pass, but it sends nothing, so it never fails; leave the '?' out
+  2 | ; A startup decorator may send `nothing ~ E`. A failure stops the program before
+    | comment:; A startup decorator may send `nothing ~ E`. A failure stops the program before
+  3 | ; `main`, unless the decorator is written `$d?`: then standard error says which
+    | comment:; `main`, unless the decorator is written `$d?`: then standard error says which
+  4 | ; decorator failed on which task, and why, and the program goes on.
+    | comment:; decorator failed on which task, and why, and the program goes on.
+  6 | kind RouteError
+    | keyword:kind  type:RouteError
+  7 |     Empty
+    | variant:Empty
+  8 |     Taken(path: text)
+    | variant:Taken  punctuation:(  field:path  punctuation::  type-builtin:text  punctuation:)
+  9 | fi
+    | keyword:fi
+ 11 | shape Routes
+    | keyword:shape  type:Routes
+ 12 |     shared hold count: int = 0
+    | keyword:shared  keyword:hold  field:count  punctuation::  type-builtin:int  operator:=  number:0
+ 13 | fi
+    | keyword:fi
+ 15 | task route(f: (int) -> int, path: text) -> nothing ~ RouteError
+    | keyword:task  task:route  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:path  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:nothing  operator:~  type:RouteError
+ 16 |     when path == ""
+    | keyword:when  parameter:path  operator:==  string:""
+ 17 |         <- fail RouteError.Empty
+    | keyword:<-  keyword:fail  type:RouteError  punctuation:.  variant:Empty
+ 18 |     fi
+    | keyword:fi
+ 19 |     when path == "/taken"
+    | keyword:when  parameter:path  operator:==  string:"/taken"
+ 20 |         <- fail RouteError.Taken(path)
+    | keyword:<-  keyword:fail  type:RouteError  punctuation:.  variant:Taken  punctuation:(  parameter:path  punctuation:)
+ 21 |     fi
+    | keyword:fi
+ 22 |     Routes.count++
+    | type:Routes  punctuation:.  field:count  operator:++
+ 23 |     show("routed ", path, " to ", f(Routes.count))
+    | builtin-fn:show  punctuation:(  string:"routed "  punctuation:,  parameter:path  punctuation:,  string:" to "  punctuation:,  parameter:f  punctuation:(  type:Routes  punctuation:.  field:count  punctuation:)  punctuation:)
+ 24 | fi
+    | keyword:fi
+ 26 | task note(f: (int) -> int)
+    | keyword:task  task:note  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:)
+ 27 |     show("noted")
+    | builtin-fn:show  punctuation:(  string:"noted"  punctuation:)
+ 28 | fi
+    | keyword:fi
+ 30 | $route("/home")
+    | keyword:$  task:route  punctuation:(  string:"/home"  punctuation:)
+ 31 | task home(n: int) -> int
+    | keyword:task  task:home  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 32 |     <- n * 10
+    | keyword:<-  parameter:n  operator:*  number:10
+ 33 | fi
+    | keyword:fi
+ 35 | $route("/taken")?
+    | keyword:$  task:route  punctuation:(  string:"/taken"  punctuation:)  keyword:?
+ 36 | task again(n: int) -> int
+    | keyword:task  task:again  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 37 |     <- n
+    | keyword:<-  parameter:n
+ 38 | fi
+    | keyword:fi
+ 40 | $note?
+    | keyword:$  task:note  keyword:?
+ 41 | $route("")?
+    | keyword:$  task:route  punctuation:(  string:""  punctuation:)  keyword:?
+ 42 | task empty(n: int) -> int
+    | keyword:task  task:empty  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 43 |     <- n
+    | keyword:<-  parameter:n
+ 44 | fi
+    | keyword:fi
+ 46 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 47 |     show("main, with ", Routes.count, " route")
+    | builtin-fn:show  punctuation:(  string:"main, with "  punctuation:,  type:Routes  punctuation:.  field:count  punctuation:,  string:" route"  punctuation:)
+ 48 |     show(again(2), " ", empty(3))
+    | builtin-fn:show  punctuation:(  task:again  punctuation:(  number:2  punctuation:)  punctuation:,  string:" "  punctuation:,  task:empty  punctuation:(  number:3  punctuation:)  punctuation:)
+ 49 | fi
+    | keyword:fi

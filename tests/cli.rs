@@ -239,6 +239,31 @@ fn quick_builds_without_optimizing_the_c() {
 }
 
 #[test]
+fn a_passed_decorator_failure_is_a_notice_unless_built_without_them() {
+    // A startup decorator written `$d?` that fails: the program goes on, and
+    // says so on standard error unless it is built with `--no-notices`.
+    let dir = temp_dir("notices");
+    let source = dir.join("notices.vela");
+    std::fs::write(
+        &source,
+        "task route(f: (int) -> int, path: text) -> nothing ~ text\n    <- fail \"no path\"\nfi\n\n$route(\"\")?\ntask home(n: int) -> int\n    <- n\nfi\n\ntask main()\n    show(\"main\")\nfi\n",
+    )
+    .unwrap();
+    for (flags, notice) in [(vec![], "vela: decorator 'route' failed on task 'home', and the program goes on: no path\n"), (vec!["--no-notices"], "")] {
+        let exe = dir.join("notices");
+        let mut args = vec![source.to_str().unwrap(), "-o", exe.to_str().unwrap()];
+        args.extend(flags);
+        let out = vela(&args);
+        assert!(out.status.success(), "{}", stderr(&out));
+        let run = Command::new(&exe).output().unwrap();
+        assert!(run.status.success());
+        assert_eq!(String::from_utf8_lossy(&run.stdout), "main\n");
+        assert_eq!(String::from_utf8_lossy(&run.stderr), notice);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn nul_character_is_reported() {
     let dir = temp_dir("nul");
     let src = dir.join("nul.vela");
@@ -325,6 +350,7 @@ fn wrong_argument_combinations_are_rejected() {
         (vec![example("hello"), "--emit-c".to_string(), "--check".to_string()], "error: --emit-c and --check can't be used together"),
         (vec![example("hello"), "--quick".to_string(), "--emit-c".to_string()], "error: --quick builds an executable faster, and --emit-c builds none"),
         (vec![example("hello"), "--check".to_string(), "--quick".to_string()], "error: --quick builds an executable faster, and --check builds none"),
+        (vec![example("hello"), "--check".to_string(), "--no-notices".to_string()], "error: --no-notices changes the program built, and --check builds none"),
         (vec![example("hello"), "-o".to_string(), "a".to_string(), "-o".to_string(), "b".to_string()], "error: -o given more than once"),
         (vec![example("hello"), example("fib")], "error: only one input file is allowed"),
         (vec![example("hello"), "--".to_string(), example("fib")], "error: only one input file is allowed"),

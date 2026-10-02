@@ -49,7 +49,7 @@ fn builds_a_program_that_runs() {
     let dir = TempDir::new("hello");
     let input = dir.write("hello.vela", HELLO);
     let exe = dir.0.join("hello");
-    driver::build(HELLO, &input, &exe, &cc()).unwrap();
+    driver::build(HELLO, &input, &exe, &cc(), true).unwrap();
     let run = Command::new(&exe).output().unwrap();
     assert!(run.status.success());
     assert_eq!(String::from_utf8_lossy(&run.stdout), "Hello, Vela!\n");
@@ -58,7 +58,7 @@ fn builds_a_program_that_runs() {
 #[test]
 fn invalid_programs_report_the_vela_error() {
     let source = "task main()\n    show(missing)\nfi\n";
-    let err = driver::build(source, Path::new("bad.vela"), Path::new("unused-output"), &cc()).unwrap_err();
+    let err = driver::build(source, Path::new("bad.vela"), Path::new("unused-output"), &cc(), true).unwrap_err();
     let BuildError::Vela(program) = &err else { panic!("expected a Vela error, got {:?}", err) };
     let error = program.first();
     assert_eq!(error.span, Some(Span::new(2, 10)));
@@ -73,7 +73,7 @@ fn invalid_programs_report_the_vela_error() {
 #[test]
 fn a_program_without_main_is_not_an_executable() {
     let source = "task helper()\n    show(1)\nfi\n";
-    let err = driver::build(source, Path::new("lib.vela"), Path::new("unused-output"), &cc()).unwrap_err();
+    let err = driver::build(source, Path::new("lib.vela"), Path::new("unused-output"), &cc(), true).unwrap_err();
     assert!(matches!(err, BuildError::NoMain), "{:?}", err);
     assert_eq!(err.render("lib.vela", source), "lib.vela: error: program has no 'main' task");
     // Its C can still be generated.
@@ -85,14 +85,14 @@ fn the_output_cannot_be_the_input() {
     let dir = TempDir::new("overwrite");
     let input = dir.write("prog.vela", HELLO);
     let same = dir.0.join(".").join("prog.vela");
-    let err = driver::build(HELLO, &input, &same, &cc()).unwrap_err();
+    let err = driver::build(HELLO, &input, &same, &cc(), true).unwrap_err();
     assert!(matches!(err, BuildError::OutputIsInput(_)), "{:?}", err);
     assert_eq!(fs::read_to_string(&input).unwrap(), HELLO);
 }
 
 #[test]
 fn a_missing_c_compiler_is_reported() {
-    let err = driver::build(HELLO, Path::new("hello.vela"), Path::new("unused-output"), "vela-no-such-cc --flag").unwrap_err();
+    let err = driver::build(HELLO, Path::new("hello.vela"), Path::new("unused-output"), "vela-no-such-cc --flag", true).unwrap_err();
     let BuildError::CompilerNotStarted { cc, .. } = &err else { panic!("{:?}", err) };
     assert_eq!(cc, "vela-no-such-cc");
     assert!(err.render("hello.vela", HELLO).starts_with("error: failed to invoke C compiler 'vela-no-such-cc': "));
@@ -104,7 +104,7 @@ fn c_compiler_failures_keep_the_generated_c() {
     let input = dir.write("hello.vela", HELLO);
     // Makes the C compiler fail on otherwise valid generated C.
     let failing_cc = format!("{} -include vela-missing-header.h", cc());
-    let err = driver::build(HELLO, &input, &dir.0.join("hello"), &failing_cc).unwrap_err();
+    let err = driver::build(HELLO, &input, &dir.0.join("hello"), &failing_cc, true).unwrap_err();
     let BuildError::CFailed { messages, build_dir } = &err else { panic!("{:?}", err) };
     assert!(messages.contains("vela-missing-header.h"), "{}", messages);
     assert!(build_dir.join("hello.c").is_file() && build_dir.join("vela_rt.h").is_file());
@@ -311,7 +311,7 @@ fn a_program_loads_each_module_once_through_its_loader() {
         _ => None,
     }).collect();
     assert_eq!(names, ["text/labels.label", "text/labels.width", "shapes/geometry.area", "main"]);
-    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap().0;
+    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked), true).unwrap().0;
     assert!(c.contains("int64_t vela_shapes__1__geometry__0__area(int64_t side)"), "{}", c);
 }
 
@@ -339,7 +339,7 @@ fn the_library_comes_with_the_compiler_and_is_never_read_from_a_loader() {
         ("app/std/files.vela", "task exists() -> int\n    <- 1\nfi\n"),
     ];
     let asked = std::cell::RefCell::new(Vec::new());
-    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap().0;
+    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked), true).unwrap().0;
     assert_eq!(*asked.borrow(), ["app/tools.vela"]);
     // The library's native task is the runtime's function, and its File the library's.
     assert!(c.contains("return vela__rt__files_path_exists(path);"), "{}", c);
@@ -360,7 +360,7 @@ fn a_module_outside_the_main_folder_keeps_its_path_in_its_names() {
     }).collect();
     assert_eq!(names, ["../common/text.twice", "main"]);
     // In C, `..` is `__2__`, each `/` `__1__`, and the `.` before the name `__0__`.
-    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked)).unwrap().0;
+    let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked), true).unwrap().0;
     assert!(c.contains("int64_t vela___2____1__common__1__text__0__twice(int64_t n)"), "{}", c);
 }
 

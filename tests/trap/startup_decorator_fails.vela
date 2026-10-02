@@ -1,0 +1,23 @@
+; trap: decorator 'route' failed on task 'missing': an empty path
+; A startup decorator's failure stops the program before `main`, unless it is
+; written `$d?`; the decorators before it have run.
+task route(f: (int) -> int, path: text) -> nothing ~ text
+    when path == ""
+        <- fail "an empty path"
+    fi
+    show("routed ", path)
+fi
+
+$route("/")
+task home(n: int) -> int
+    <- n
+fi
+
+$route("")
+task missing(n: int) -> int
+    <- n
+fi
+
+task main()
+    show("never reached")
+fi

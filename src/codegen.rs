@@ -69,6 +69,9 @@ impl CWriter {
 /// declared when it closes, and a `<-` frees every region the task declared
 /// before it returns.
 pub struct Generator {
+    /// Whether the program writes no notices to standard error, as of a
+    /// startup decorator whose failure it passes over (`--no-notices`).
+    quiet: bool,
     w: CWriter,
     temp_counter: u64,
     /// An expression written as other C than its own while a value is made:
@@ -113,6 +116,7 @@ pub struct Generator {
 impl Default for Generator {
     fn default() -> Self {
         Generator {
+            quiet: false,
             w: CWriter::default(),
             temp_counter: 0,
             kinds: HashMap::new(),
@@ -136,6 +140,13 @@ impl Default for Generator {
 impl Generator {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The generator for a program that writes notices to standard error, or
+    /// none (see `quiet`).
+    pub fn with_notices(mut self, notices: bool) -> Self {
+        self.quiet = !notices;
+        self
     }
 
     pub fn generate(&mut self, items: &[Item]) -> Result<String> {
@@ -1596,7 +1607,11 @@ impl Generator {
                 self.w.line(&format!("{} {} = {{0}};", c_type(ty), c_ident(name)));
             }
         }
-        self.gen_block(&t.body)?;
+        if is_startup(&t.name) {
+            self.gen_startup(t)?;
+        } else {
+            self.gen_block(&t.body)?;
+        }
         match &t.ret {
             Type::Nothing => self.w.line("return;"),
             Type::Or(value, _) if **value == Type::Nothing => {
@@ -1611,6 +1626,49 @@ impl Generator {
         }
         self.w.close();
         self.results.clear();
+        Ok(())
+    }
+
+    /// The task running a file's startup decorators, `t`: each call in turn,
+    /// and one that can fail tested: a failure stops the program, or, for one
+    /// written `$d?` (see `TaskDef::passes`), is a notice and the program goes
+    /// on. Either way standard error says which decorator failed on which task,
+    /// and why, unless the program writes no notices and goes on.
+    fn gen_startup(&mut self, t: &TaskDef) -> Result<()> {
+        self.enter_block();
+        for (stmt, passes) in t.body.iter().zip(t.passes.iter().chain(std::iter::repeat(&false))) {
+            let StmtKind::Expr(call) = &stmt.kind else { return Err(Error::internal_at(stmt.span, "a startup decorator that is no call")) };
+            let (Some(Type::Or(_, error)), ExprKind::Call { name, args, .. }) = (&call.ty, &call.kind) else {
+                self.gen_stmt(stmt)?;
+                continue;
+            };
+            let result = self.gen_expr(call)?;
+            if *passes && self.quiet {
+                self.w.line(&format!("(void)({});", result));
+                continue;
+            }
+            let decorated = match args.first().map(|arg| &arg.kind) {
+                Some(ExprKind::Var(task) | ExprKind::TaskValue(task)) => unqualified(task).to_string(),
+                _ => String::new(),
+            };
+            let (failed, notice) = (self.fresh_temp("failed"), self.fresh_temp("notice"));
+            self.w.open("");
+            self.w.line(&format!("{} {} = {};", c_type(call.ty()?), failed, result));
+            self.w.open(&format!("if (!{}.ok)", failed));
+            self.w.line(&format!("vela__rt__region {}[1] = {{ VELA__RT__REGION_EMPTY }};", notice));
+            let why = format!("{}({}, {}.error)", text_function(error), notice, failed);
+            self.w.line(&format!(
+                "vela__rt__decorator_failed(\"{}\", \"{}\", {}, {});",
+                escape_c_string(written_decorator(&t.name, name)),
+                escape_c_string(&decorated),
+                why,
+                if *passes { "false" } else { "true" }
+            ));
+            self.w.line(&format!("vela__rt__region_free({});", notice));
+            self.w.close();
+            self.w.close();
+        }
+        self.leave_block(&t.body);
         Ok(())
     }
 
@@ -2698,15 +2756,7 @@ impl Generator {
     /// `value.str() at region`, the expression `e`, on a value with `str` built in.
     fn gen_to_text(&mut self, e: &Expr, value: &Expr, region: &str) -> Result<String> {
         let _ = e;
-        let helper = match value.ty()? {
-            Type::Int | Type::Unit => "vela__rt__int_str".to_string(),
-            Type::Char => "vela__rt__char_str".to_string(),
-            Type::Float => "vela__rt__float_str".to_string(),
-            Type::Bool => "vela__rt__bool_str".to_string(),
-            Type::Text(_) => "vela__rt__text_str".to_string(),
-            // A pointer is its address, written as a writer does.
-            other => text_helper(&other.without_regions()),
-        };
+        let helper = text_function(value.ty()?);
         let value = self.gen_expr(value)?;
         Ok(format!("{}({}, {})", helper, c_ident(region), value))
     }
@@ -3742,6 +3792,31 @@ fn written_c_type(ty: &Type) -> String {
     }
 }
 
+/// The startup decorator `name` as the file whose decorators `startup` runs
+/// names it: alone when it is the file's own, and after its module's name
+/// otherwise (`web.route`, for `lib/web`).
+fn written_decorator<'a>(startup: &str, name: &'a str) -> &'a str {
+    let own = format!("{}{}", module_of(startup), MODULE_SEPARATOR);
+    match name.strip_prefix(own.as_str()) {
+        Some(alone) if !module_of(startup).is_empty() => alone,
+        _ => name.rsplit_once('/').map_or(name, |(_, written)| written),
+    }
+}
+
+/// The C function making a value of type `ty` text in a region:
+/// `f(region, value)`.
+fn text_function(ty: &Type) -> String {
+    match ty {
+        Type::Int | Type::Unit => "vela__rt__int_str".to_string(),
+        Type::Char => "vela__rt__char_str".to_string(),
+        Type::Float => "vela__rt__float_str".to_string(),
+        Type::Bool => "vela__rt__bool_str".to_string(),
+        Type::Text(_) => "vela__rt__text_str".to_string(),
+        // A pointer is its address, written as a writer does.
+        other => text_helper(&other.without_regions()),
+    }
+}
+
 fn text_helper(ty: &Type) -> String {
     format!("vela__text__{}", type_word(ty))
 }
@@ -3910,6 +3985,19 @@ fn note(list: &mut TypeList, ty: &Type) {
 }
 
 impl UsedTypes {
+    /// Notes that values of type `ty` are made text in a region (see
+    /// `text_function`).
+    fn note_text(&mut self, ty: &Type) {
+        if matches!(ty, Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_)) {
+            return;
+        }
+        // A shape's or kind's own `str` needs no `write`.
+        if !matches!(ty, Type::Named(name, _) if !self.parts.contains_key(name)) {
+            self.note_write(ty);
+        }
+        note(&mut self.texts, ty);
+    }
+
     fn collect(items: &[Item]) -> UsedTypes {
         let mut used = UsedTypes {
             compounds: TypeList::default(),
@@ -3992,6 +4080,15 @@ impl UsedTypes {
                     t.params.iter().for_each(|p| used.add(&p.ty));
                     used.add(&t.ret);
                     used.block(&t.body);
+                    // A startup decorator's error is made text where it fails
+                    // (see `Generator::gen_startup`).
+                    if is_startup(&t.name) {
+                        for stmt in &t.body {
+                            if let StmtKind::Expr(Expr { ty: Some(Type::Or(_, error)), .. }) = &stmt.kind {
+                                used.note_text(error);
+                            }
+                        }
+                    }
                 }
                 Item::Task(_) | Item::Macro(_) => {}
             }
@@ -4351,14 +4448,8 @@ impl UsedTypes {
             }
             ExprKind::Join { parts, .. } => parts.iter().for_each(|part| self.expr(part)),
             ExprKind::ToText { value, .. } => {
-                if let Some(ty) = &value.ty
-                    && !matches!(ty, Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_))
-                {
-                    // A shape's or kind's own `str` needs no `write`.
-                    if !matches!(ty, Type::Named(name, _) if !self.parts.contains_key(name)) {
-                        self.note_write(ty);
-                    }
-                    note(&mut self.texts, ty);
+                if let Some(ty) = &value.ty {
+                    self.note_text(ty);
                 }
                 self.expr(value)
             }

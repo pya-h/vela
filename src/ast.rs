@@ -1753,6 +1753,10 @@ pub struct TaskDef {
     /// call `d(task, args)` that runs once where the program starts, in the
     /// order written (the nearest the task runs first; see `STARTUP`).
     pub decorators: Vec<Expr>,
+    /// For each of `decorators`, whether it is written `$d?`, whose failure
+    /// doesn't stop the program; for the task they are gathered into (see
+    /// `STARTUP`), the same for each statement of its body.
+    pub passes: Vec<bool>,
     /// `$(w1, w2(a))` before the task: its wrapper decorators, leftmost
     /// outermost, each the call `w(values)` as written, without the task that
     /// comes next or the task's values (see `Checker::add_wrappers`).
