@@ -1,0 +1,11 @@
+; error: 10:11: '(s...)' makes a tuple of a group's values, as '(args...)' does, and 's' is no group's values
+; `(x...)` makes a tuple of a group's values only, not of a value with a field
+; named `tuple`.
+shape S
+    tuple: int
+fi
+
+task main()
+    bind s = S { tuple: 42 }
+    show((s...))
+fi

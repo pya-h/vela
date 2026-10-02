@@ -350,6 +350,10 @@ pub const LEN: &str = "len";
 /// `Checker::check_group_member`).
 pub const GROUP_TUPLE: &str = "tuple";
 
+/// `(args...)`, read as a member no field can be named, so that only a group's
+/// values make it (the checker reads it as `GROUP_TUPLE` then).
+pub const GROUP_TUPLE_WRITTEN: &str = "...";
+
 /// The word before a method that changes the value it is called on, written
 /// inside a shape or a kind (`alters step()`). Not a keyword: it marks a member
 /// and means nothing anywhere else, so a task or a variable may still use it.

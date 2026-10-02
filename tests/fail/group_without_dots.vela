@@ -1,4 +1,4 @@
-; error: 3:39: 'P' is a group of types, so a header writes it 'P...': a parameter's whole type, as in 'args: P...', or all a task's type takes, as in '(P...) -> R'; 'P' alone is one value's type, inside the task, as 'v' has in 'each v in args'
+; error: 3:39: 'P' is a group of types, so a header writes it 'P...': a parameter's whole type, as in 'args: P...', or all a task's type takes, as in '(P...) -> R'; 'P' alone is one value's type, written only inside 'each v in args', as the type 'v' has
 ; A group of types is written with its dots.
 task f<P...>(g: (P...) -> nothing, x: P)
 fi

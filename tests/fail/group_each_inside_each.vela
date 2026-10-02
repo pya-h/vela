@@ -1,0 +1,14 @@
+; error: 6:19: this goes through the values of the group 'P...' inside a loop through them, where 'P' alone would be the type of two values at once; give the turn's value and the group on to a task of its own that goes through them, as in 'each_with(v, args...)'
+; A loop over a group's values inside a loop over them: `P` alone would be the
+; type of two values at once.
+task f<P...: shown>(args: P...)
+    each v in args
+        each w in args
+            show(v, w)
+        fi
+    fi
+fi
+
+task main()
+    f(1, "a")
+fi

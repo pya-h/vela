@@ -1968,7 +1968,7 @@ bind age = int("42")               ; text to a number can fail: int ~ ParseError
           (<code>Box&lt;Box&lt;int&gt;&gt;</code>), so the lexer has to tell a shift from the end of two type
           arguments. Vela writes <code>and</code> and <code>or</code> for logic, and these read differently, which is
           the point of choosing the C symbols.</li>
-        <li><strong>Which types.</strong> <code>int</code> is signed and 64-bit, and Vela has no unsigned type, so a
+        <li><strong>Which types.</strong> <code>int</code> is signed and 64-bit, and Vela's only unsigned type is the byte <code>unit</code>, so a
           shift's meaning at the sign bit, and a right shift of a negative number, must be defined rather than left to C
           (where some of it is undefined). A shift count that is negative or at least 64 is undefined in C, so Vela has
           to stop the program or define the result, as it does for overflow and division by zero.</li>
@@ -2306,8 +2306,7 @@ fi</code></pre>
           types for something, <code>show(args...)</code>, <code>args.len</code>, a group's tuple of type
           <code>(P...) ~ maybe P#0</code>, <code>each v in args</code>, and <code>t.#k</code> (see
           <a href="vela.html#type-groups">Type groups</a>). Still open: writing a group's tuple type,
-          <code>(P...)</code>, in a binding, and a <code>when</code> used as a value leaving out a branch on
-          <code>args.len</code>, as a <code>when</code> statement does. A group's values given on to a named task,
+          <code>(P...)</code>, in a binding, and a loop over a group inside a loop over the same group. A group's values given on to a named task,
           <code>call(f, args...)</code>, is built: see <a href="vela.html#type-groups">Type groups</a>.</li>
         <li><strong>Events:</strong> the <a href="events.html">events</a> design names what runs when something happens;
           task values and lambdas are the pieces it would be built from.</li>

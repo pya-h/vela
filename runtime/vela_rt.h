@@ -128,7 +128,10 @@ static inline int vela__rt__text_order(vela__rt__text a, vela__rt__text b) {
  * error says so and it goes on. */
 static inline void vela__rt__decorator_failed(const char* decorator, const char* task, vela__rt__text error, bool stops) {
     fflush(stdout);
-    fprintf(stderr, "vela: decorator '%s' failed on task '%s'%s: %.*s\n", decorator, task, stops ? "" : ", and the program goes on", (int)error.len, error.bytes);
+    fprintf(stderr, "vela: decorator '%s' failed on task '%s'%s: ", decorator, task, stops ? "" : ", and the program goes on");
+    /* All of the text, a `\0` in it too, as `show` writes it. */
+    fwrite(error.bytes, 1, (size_t)error.len, stderr);
+    fputc('\n', stderr);
     if (stops) {
         abort();
     }
@@ -1575,8 +1578,11 @@ static inline int64_t vela__rt__files_close(int64_t handle) {
 
 /* The slot of `handle`, ready to be read (`reading`) or written, or NULL with
  * the status saying why not. A file both read and written is sought in place
- * between the two, as C asks. */
+ * between the two, as C asks. What the program has shown goes out first: the
+ * file may be the terminal or standard output itself (`/dev/stdout`), and C
+ * can't tell. */
 static inline vela__rt__file_slot* vela__rt__files_ready(int64_t handle, bool reading) {
+    fflush(stdout);
     vela__rt__file_slot* slot = vela__rt__file_of(handle);
     if (slot == NULL) {
         vela__rt__files_done(VELA__RT__FILE_NOT_OPEN);
@@ -1688,6 +1694,7 @@ static inline int64_t vela__rt__files_write(int64_t handle, vela__rt__text text)
 /* `file.ended()`: whether nothing more can be read, which a file not open for
  * reading never has. */
 static inline bool vela__rt__files_ended(int64_t handle) {
+    fflush(stdout);
     vela__rt__file_slot* slot = vela__rt__file_of(handle);
     if (slot == NULL || (slot->mode != VELA__RT__MODE_READ && slot->mode != VELA__RT__MODE_READ_WRITE)) {
         return true;

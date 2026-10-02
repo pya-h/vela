@@ -2295,7 +2295,8 @@ fi</code></pre>
       </p>
       <p>
         A decorator that fails stops the program before <code>main</code>: standard error says which decorator failed
-        on which task, and its error, as <code>vela: decorator 'route' failed on task 'home': …</code>. Written
+        on which task, and its error, as <code>vela: decorator 'route' failed on task 'home': …</code>; a task of a module is named after the
+        module's name, <code>web.route</code>, however the file includes it. Written
         <code>$d?</code> or <code>$d(values)?</code>, its failure lets the program go on, to the next decorator and to
         <code>main</code>, and standard error says so; the task is still a task, but whatever the decorator would have
         done for it, it didn't. A program built with <code>--no-notices</code> writes nothing for such a failure. A
@@ -2431,8 +2432,10 @@ task main()
 fi</code></pre>
       <p>
         <code>each v in args</code> gives each value in turn, of its own type: the body is written once for each value,
-        and in it <code>P</code> alone is that value's type (<code>bind kept: P = v</code>). A group of none runs it
-        never.
+        and in it <code>P</code> alone is that value's type (<code>bind kept: P = v</code>,
+        <code>Box&lt;P&gt;</code>, <code>new [P]() at r</code>), written nowhere else. A group of none runs it never.
+        A loop over the same group inside it is an error, since <code>P</code> would name two types at once: give
+        the value and the group on to a task of its own, <code>with(v, args...)</code>, which goes through them.
       </p>
       <p>
         <code>(args...)</code>, or <code>args.tuple</code>, makes the values a tuple, whose items never change, so the
@@ -2441,8 +2444,9 @@ fi</code></pre>
         value, or <code>none</code>, which a plan B, <code>match</code>, or <code>is</code> handles. Its items are
         <code>t.0</code> and <code>t.1</code>, which every tuple has, and one past them, <code>t.2</code>, is a mistake of
         any use giving fewer values, unless a <code>when</code> on <code>args.len</code> leaves it out there: each use
-        knows <code>args.len</code>, so it keeps only the branch it takes. <code>t.#2</code> reads it in a
-        <code>maybe</code> instead. Messages call the type of item <code>k</code> <code>P#k</code>.
+        knows <code>args.len</code>, so it keeps only the branch it takes, a <code>when</code> used as a value too.
+        <code>t.#2</code> reads it in a <code>maybe</code> instead. Since each use gives its own number of items, the
+        tuple can't be unpacked into names. Messages call the type of item <code>k</code> <code>P#k</code>.
       </p>
       <pre><code>task described&lt;P...: fixed &amp; shown&gt;(args: P...)
     bind t = (args...) {
@@ -3758,10 +3762,11 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           method (see <a href="#task-values">Tasks as values</a>).</li>
         <li>A lambda takes nothing from the code around it, and can't be written inside a task or method that takes
           types (see <a href="#lambdas">Lambdas</a>).</li>
-        <li>Only a task takes decorators, not a method, nor a task that takes types; a startup decorator sends nothing;
-          a wrapper's own values are ones the compiler works out (see <a href="#decorators">Decorators</a>).</li>
-        <li>A task takes one type group, as its last parameter; a group's values are only given on whole, to a task
-          value, and a call doesn't write a group's types (see <a href="#type-groups">Type groups</a>).</li>
+        <li>Only a task takes decorators, not a method, nor a task that takes types; a startup decorator sends nothing, or
+          <code>nothing ~ E</code>; a wrapper's own values are ones the compiler works out (see <a href="#decorators">Decorators</a>).</li>
+        <li>A task takes one type group, as its last parameter; a call doesn't write a group's types, a type can't be
+          written <code>(P...)</code>, and a group is given on to a task that calls itself only as it came (see
+          <a href="#type-groups">Type groups</a>).</li>
         <li>A method takes no types of its own, can't allocate in the region its value lives in, and is written
           inside its shape or kind, never in another module (see <a href="#methods">Methods</a> and
           <a href="future.html#methods-later">the room left to grow</a>).</li>
@@ -3795,7 +3800,7 @@ show(area(square))             <span class="comment">; error: unknown task 'area
 ./target/debug/vela program.vela -o program
 CC=clang ./target/debug/vela program.vela -o program</pre>
       <p>
-        <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c | --check | --quick] [--no-notices]</code>: <code>-o</code> names the executable
+        <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c | --check | --quick] [--no-notices] [--]</code>: <code>-o</code> names the executable
         (<code>a.out</code> by default), <code>--quick</code> builds it without optimizing the C (<code>-O0</code>
         rather than <code>-O2</code>): often several times faster to build, and slower to run, <code>--no-notices</code>
         builds a program that writes no notices to standard error, as of a <a href="#decorators">startup decorator</a>
@@ -3807,7 +3812,8 @@ CC=clang ./target/debug/vela program.vela -o program</pre>
         <a href="#modules">Modules</a>). The output can't be the program's own file or a file it includes. A file name
         starting with <code>-</code> goes after <code>--</code>. A built program writes its output line by line to a
         terminal, and in blocks to a pipe or a file, which is much faster; it writes out what it holds before
-        <code>scan</code> reads and when a runtime error stops it. The exit status is 0 on
+        <code>scan</code> reads, before a file is read or written, and when a runtime error stops it. A program the system
+        stops (a recursion too deep for the stack, or Ctrl-C) loses what it held, as a C program does. The exit status is 0 on
         success, 1 when the program can't be read or doesn't compile (in Vela or in C), and 2 for wrong arguments.
       </p>
       <pre>./target/debug/vela program.vela --emit-c -o program.c

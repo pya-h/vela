@@ -1,0 +1,138 @@
+  1 | ; What each copy of a task taking a group makes of it: a `when` on `args.len`
+    | comment:; What each copy of a task taking a group makes of it: a `when` on `args.len`
+  2 | ; used as a value gives it from the branch that runs, `P` alone names the
+    | comment:; used as a value gives it from the branch that runs, `P` alone names the
+  3 | ; turn's type wherever a type goes inside `each`, and a group's tuple goes into
+    | comment:; turn's type wherever a type goes inside `each`, and a group's tuple goes into
+  4 | ; a shape or a map, even in the copies given fewer than two values.
+    | comment:; a shape or a map, even in the copies given fewer than two values.
+  5 | shape Box<T>
+    | keyword:shape  type:Box  punctuation:<  type:T  punctuation:>
+  6 |     v: T
+    | field:v  punctuation::  type:T
+  7 | fi
+    | keyword:fi
+  9 | task chosen<T>(x: T) -> int
+    | keyword:task  task:chosen  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:x  punctuation::  type:T  punctuation:)  operator:->  type-builtin:int
+ 10 |     <- when 1 > 2
+    | keyword:<-  keyword:when  number:1  operator:>  number:2
+ 11 |         1
+    | number:1
+ 12 |     else
+    | keyword:else
+ 13 |         2
+    | number:2
+ 14 |     fi
+    | keyword:fi
+ 15 | fi
+    | keyword:fi
+ 17 | task last<P...: fixed & shown>(args: P...)
+    | keyword:task  task:last  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 18 |     bind t = (args...) { <- }
+    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
+ 19 |     region r
+    | keyword:region  region:r
+ 20 |     bind s = when args.len > 2
+    | keyword:bind  variable:s  operator:=  keyword:when  parameter:args  punctuation:.  field:len  operator:>  number:2
+ 21 |         t.2.str() at r
+    | variable:t  punctuation:.  field:2  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r
+ 22 |     else when args.len == 2
+    | keyword:else  keyword:when  parameter:args  punctuation:.  field:len  operator:==  number:2
+ 23 |         t.1.str() at r
+    | variable:t  punctuation:.  field:1  punctuation:.  field:str  punctuation:(  punctuation:)  keyword:at  region:r
+ 24 |     else
+    | keyword:else
+ 25 |         "few"
+    | string:"few"
+ 26 |     fi
+    | keyword:fi
+ 27 |     show(s)
+    | builtin-fn:show  punctuation:(  variable:s  punctuation:)
+ 28 | fi
+    | keyword:fi
+ 30 | task boxes<P...: shown & fixed>(args: P...)
+    | keyword:task  task:boxes  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:&  keyword:fixed  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 31 |     region r
+    | keyword:region  region:r
+ 32 |     each v in args
+    | keyword:each  variable:v  keyword:in  parameter:args
+ 33 |         bind b = Box<P> { v: v }
+    | keyword:bind  variable:b  operator:=  type:Box  punctuation:<  type:P  punctuation:>  punctuation:{  field:v  punctuation::  variable:v  punctuation:}
+ 34 |         bind p = new P(v) at r
+    | keyword:bind  variable:p  operator:=  keyword:new  type:P  punctuation:(  variable:v  punctuation:)  keyword:at  region:r
+ 35 |         hold xs = new [P]() at r
+    | keyword:hold  variable:xs  operator:=  keyword:new  punctuation:[  type:P  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 36 |         xs.add(v)
+    | variable:xs  punctuation:.  field:add  punctuation:(  variable:v  punctuation:)
+ 37 |         show(b.v, " ", p^, " ", xs.len)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:.  field:v  punctuation:,  string:" "  punctuation:,  variable:p  operator:^  punctuation:,  string:" "  punctuation:,  variable:xs  punctuation:.  field:len  punctuation:)
+ 38 |     fi
+    | keyword:fi
+ 39 | fi
+    | keyword:fi
+ 41 | task kept<P...: fixed & shown>(args: P...)
+    | keyword:task  task:kept  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 42 |     bind t = (args...) {
+    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{
+ 43 |         show("fewer than two")
+    | builtin-fn:show  punctuation:(  string:"fewer than two"  punctuation:)
+ 44 |         <-
+    | keyword:<-
+ 45 |     }
+    | punctuation:}
+ 46 |     bind b = Box { v: t }
+    | keyword:bind  variable:b  operator:=  type:Box  punctuation:{  field:v  punctuation::  variable:t  punctuation:}
+ 47 |     region r
+    | keyword:region  region:r
+ 48 |     bind m = ["all": t] at r
+    | keyword:bind  variable:m  operator:=  punctuation:[  string:"all"  punctuation::  type:t  punctuation:]  keyword:at  region:r
+ 49 |     show(b.v, " ", m.len)
+    | builtin-fn:show  punctuation:(  variable:b  punctuation:.  field:v  punctuation:,  string:" "  punctuation:,  variable:m  punctuation:.  field:len  punctuation:)
+ 50 | fi
+    | keyword:fi
+ 52 | task with<T: shown, Q...: shown>(v: T, args: Q...)
+    | keyword:task  task:with  punctuation:<  type:T  punctuation::  keyword:shown  punctuation:,  type:Q  keyword:...  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:v  punctuation::  type:T  punctuation:,  parameter:args  punctuation::  type:Q  keyword:...  punctuation:)
+ 53 |     each w in args
+    | keyword:each  variable:w  keyword:in  parameter:args
+ 54 |         show(v, w)
+    | builtin-fn:show  punctuation:(  parameter:v  punctuation:,  variable:w  punctuation:)
+ 55 |     fi
+    | keyword:fi
+ 56 | fi
+    | keyword:fi
+ 58 | ; Each value with each: a loop inside a loop over one group goes in a task
+    | comment:; Each value with each: a loop inside a loop over one group goes in a task
+ 59 | ; of its own, whose group has a name of its own.
+    | comment:; of its own, whose group has a name of its own.
+ 60 | task pairs<P...: shown>(args: P...)
+    | keyword:task  task:pairs  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 61 |     each v in args
+    | keyword:each  variable:v  keyword:in  parameter:args
+ 62 |         with(v, args...)
+    | task:with  punctuation:(  variable:v  punctuation:,  parameter:args  keyword:...  punctuation:)
+ 63 |     fi
+    | keyword:fi
+ 64 | fi
+    | keyword:fi
+ 66 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 67 |     show(chosen(1))
+    | builtin-fn:show  punctuation:(  task:chosen  punctuation:(  number:1  punctuation:)  punctuation:)
+ 68 |     last(1, "b", 3.5)
+    | task:last  punctuation:(  number:1  punctuation:,  string:"b"  punctuation:,  number:3.5  punctuation:)
+ 69 |     last(1, "b")
+    | task:last  punctuation:(  number:1  punctuation:,  string:"b"  punctuation:)
+ 70 |     last(1)
+    | task:last  punctuation:(  number:1  punctuation:)
+ 71 |     boxes(1, "two")
+    | task:boxes  punctuation:(  number:1  punctuation:,  string:"two"  punctuation:)
+ 72 |     kept(1, 2)
+    | task:kept  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+ 73 |     kept(1)
+    | task:kept  punctuation:(  number:1  punctuation:)
+ 74 |     kept()
+    | task:kept  punctuation:(  punctuation:)
+ 75 |     pairs(1, "a")
+    | task:pairs  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:)
+ 76 | fi
+    | keyword:fi

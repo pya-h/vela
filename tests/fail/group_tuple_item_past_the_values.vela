@@ -1,4 +1,4 @@
-; error: 10:5: this use gives 'third' 2 values, and its tuple of them is read at item 2 at 5:12; read it there as 't.#2', a maybe, or inside 'when args.len > 2'
+; error: 10:5: this use gives 'third' 2 values, and its tuple of them is read at item 2 at 5:12; read it there with '.#2', a maybe, or inside 'when args.len > 2'
 ; A tuple of a group's values read past those a use gives, with no guard.
 task third<P...: fixed & shown>(args: P...)
     bind t = (args...) { <- }

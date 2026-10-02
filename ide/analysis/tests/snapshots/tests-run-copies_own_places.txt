@@ -1,0 +1,60 @@
+  1 | ; warning: 14:13: '&.this' is where the place is, and '.this' is the value the method is called on, given as the compiler chose: Mid takes 32 bytes, so '.this' is a copy, a place of its own, never the caller's
+    | comment:; warning: 14:13: '&.this' is where the place is, and '.this' is the value the method is called on, given as the compiler chose: Mid takes 32 bytes, so '.this' is a copy, a place of its own, never the caller's
+  2 | ; warning: 19:9: '&a' is where the place is, and 'a' is a parameter, given as the compiler chose: Mid takes 32 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: Mid' for the caller's place, or 'bind a: Mid' for a copy of its own
+    | comment:; warning: 19:9: '&a' is where the place is, and 'a' is a parameter, given as the compiler chose: Mid takes 32 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: Mid' for the caller's place, or 'bind a: Mid' for a copy of its own
+  3 | ; warning: 23:9: '&p' is where the place is, and 'p' is a parameter, given as the compiler chose: (int, int) takes 16 bytes, so 'p' is a copy, a place of its own, never the caller's; write 'bind& p: (int, int)' for the caller's place, or 'bind p: (int, int)' for a copy of its own
+    | comment:; warning: 23:9: '&p' is where the place is, and 'p' is a parameter, given as the compiler chose: (int, int) takes 16 bytes, so 'p' is a copy, a place of its own, never the caller's; write 'bind& p: (int, int)' for the caller's place, or 'bind p: (int, int)' for a copy of its own
+  4 | ; A value a task is given as a copy is a place of its own, never the caller's,
+    | comment:; A value a task is given as a copy is a place of its own, never the caller's,
+  5 | ; under an optimizing C compiler too: a plain parameter and `.this` of a method
+    | comment:; under an optimizing C compiler too: a plain parameter and `.this` of a method
+  6 | ; that changes nothing, compared with the caller's place itself.
+    | comment:; that changes nothing, compared with the caller's place itself.
+  7 | shape Mid
+    | keyword:shape  type:Mid
+  8 |     a: int
+    | field:a  punctuation::  type-builtin:int
+  9 |     b: int
+    | field:b  punctuation::  type-builtin:int
+ 10 |     c: int
+    | field:c  punctuation::  type-builtin:int
+ 11 |     d: int
+    | field:d  punctuation::  type-builtin:int
+ 13 |     same(bind& o: Mid) -> bool
+    | method:same  punctuation:(  keyword:bind  keyword:&  parameter:o  punctuation::  type:Mid  punctuation:)  operator:->  type-builtin:bool
+ 14 |         <- &.this == &o
+    | keyword:<-  operator:&  punctuation:.  keyword:this  operator:==  operator:&  parameter:o
+ 15 |     fi
+    | keyword:fi
+ 16 | fi
+    | keyword:fi
+ 18 | task plain(a: Mid, bind& b: Mid) -> bool
+    | keyword:task  task:plain  punctuation:(  parameter:a  punctuation::  type:Mid  punctuation:,  keyword:bind  keyword:&  parameter:b  punctuation::  type:Mid  punctuation:)  operator:->  type-builtin:bool
+ 19 |     <- &a == &b
+    | keyword:<-  operator:&  parameter:a  operator:==  operator:&  parameter:b
+ 20 | fi
+    | keyword:fi
+ 22 | task pair(p: (int, int), bind& q: (int, int)) -> bool
+    | keyword:task  task:pair  punctuation:(  parameter:p  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:,  keyword:bind  keyword:&  parameter:q  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:)  operator:->  type-builtin:bool
+ 23 |     <- &p == &q
+    | keyword:<-  operator:&  parameter:p  operator:==  operator:&  parameter:q
+ 24 | fi
+    | keyword:fi
+ 26 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 27 |     hold w = Mid { a: 1, b: 2, c: 3, d: 4 }
+    | keyword:hold  variable:w  operator:=  type:Mid  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:2  punctuation:,  field:c  punctuation::  number:3  punctuation:,  field:d  punctuation::  number:4  punctuation:}
+ 28 |     show(plain(w, &w))
+    | builtin-fn:show  punctuation:(  task:plain  punctuation:(  variable:w  punctuation:,  operator:&  variable:w  punctuation:)  punctuation:)
+ 29 |     show(w.same(&w))
+    | builtin-fn:show  punctuation:(  variable:w  punctuation:.  method:same  punctuation:(  operator:&  variable:w  punctuation:)  punctuation:)
+ 30 |     hold t = (1, 2)
+    | keyword:hold  variable:t  operator:=  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+ 31 |     show(pair(t, &t))
+    | builtin-fn:show  punctuation:(  task:pair  punctuation:(  variable:t  punctuation:,  operator:&  variable:t  punctuation:)  punctuation:)
+ 32 |     bind& v = &w
+    | keyword:bind  keyword:&  variable:v  operator:=  operator:&  variable:w
+ 33 |     show(&v == &w)
+    | builtin-fn:show  punctuation:(  operator:&  variable:v  operator:==  operator:&  variable:w  punctuation:)
+ 34 | fi
+    | keyword:fi

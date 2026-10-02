@@ -264,6 +264,42 @@ fn a_passed_decorator_failure_is_a_notice_unless_built_without_them() {
 }
 
 #[test]
+fn a_notice_names_tasks_by_their_modules_and_writes_all_of_the_error() {
+    // A task the program's own file has is named alone, and one of a module
+    // after the module's name, however the file includes it; the error is
+    // written whole, a `\0` in it too.
+    let dir = temp_dir("notice-names");
+    std::fs::create_dir_all(dir.join("lib")).unwrap();
+    std::fs::write(
+        dir.join("lib/web.vela"),
+        "task route(f: (int) -> int, path: text) -> nothing ~ text\n    <- fail \"no\\0path\"\nfi\n\n$route(\"\")?\ntask home(n: int) -> int\n    <- n\nfi\n",
+    )
+    .unwrap();
+    let source = dir.join("names.vela");
+    std::fs::write(
+        &source,
+        "include lib/web => w (route => rt)\n\n$rt(\"\")?\ntask home(n: int) -> int\n    <- n\nfi\n\ntask main()\n    show(\"main\")\nfi\n",
+    )
+    .unwrap();
+    let exe = dir.join("names");
+    let out = vela(&[source.to_str().unwrap(), "-o", exe.to_str().unwrap()]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    let run = Command::new(&exe).output().unwrap();
+    assert!(run.status.success());
+    let notices = String::from_utf8_lossy(&run.stderr).into_owned();
+    let mut lines: Vec<&str> = notices.lines().collect();
+    lines.sort_unstable();
+    assert_eq!(
+        lines,
+        [
+            "vela: decorator 'web.route' failed on task 'home', and the program goes on: no\0path",
+            "vela: decorator 'web.route' failed on task 'web.home', and the program goes on: no\0path",
+        ]
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn nul_character_is_reported() {
     let dir = temp_dir("nul");
     let src = dir.join("nul.vela");

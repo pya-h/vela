@@ -95,11 +95,11 @@ cargo build
 ./examples/hello
 ```
 
-`vela <input.vela> [-o <output>] [--emit-c | --check | --quick] [--no-notices]`: `-o` names the executable (`a.out` by default),
+`vela <input.vela> [-o <output>] [--emit-c | --check | --quick] [--no-notices] [--]`: `-o` names the executable (`a.out` by default),
 `--quick` builds it without optimizing the C (`-O0`, faster to build, slower to run), `--no-notices` builds a program that writes
 no notices to standard error (as of a startup decorator `$d?` whose failure it lets pass),
 `--emit-c` prints the generated C (or writes it to the `-o` file; neither may overwrite the program's files), `--check` only checks the program
-(including that it has a `main`), and `-h`/`--help` and `--version` print the usage and the version. The exit status is 0 on success, 1
+(including that it has a `main`), a file name starting with `-` goes after `--`, and `-h`/`--help` and `--version` print the usage and the version. The exit status is 0 on success, 1
 when the program can't be read or doesn't compile, and 2 for wrong arguments.
 
 ## Tests

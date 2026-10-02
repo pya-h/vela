@@ -3102,7 +3102,7 @@ impl Parser {
                 return Err(Error::at(self.peek_span(), "a group's values make a tuple on their own, as in '(args...)'"));
             }
             self.advance(); // )
-            return Ok(Expr::new(ExprKind::Field(Box::new(first), GROUP_TUPLE.to_string()), span));
+            return Ok(Expr::new(ExprKind::Field(Box::new(first), GROUP_TUPLE_WRITTEN.to_string()), span));
         }
         if !self.check(Token::Comma) {
             self.expect(Token::RParen)?;

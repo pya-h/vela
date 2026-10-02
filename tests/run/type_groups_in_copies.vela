@@ -1,0 +1,76 @@
+; What each copy of a task taking a group makes of it: a `when` on `args.len`
+; used as a value gives it from the branch that runs, `P` alone names the
+; turn's type wherever a type goes inside `each`, and a group's tuple goes into
+; a shape or a map, even in the copies given fewer than two values.
+shape Box<T>
+    v: T
+fi
+
+task chosen<T>(x: T) -> int
+    <- when 1 > 2
+        1
+    else
+        2
+    fi
+fi
+
+task last<P...: fixed & shown>(args: P...)
+    bind t = (args...) { <- }
+    region r
+    bind s = when args.len > 2
+        t.2.str() at r
+    else when args.len == 2
+        t.1.str() at r
+    else
+        "few"
+    fi
+    show(s)
+fi
+
+task boxes<P...: shown & fixed>(args: P...)
+    region r
+    each v in args
+        bind b = Box<P> { v: v }
+        bind p = new P(v) at r
+        hold xs = new [P]() at r
+        xs.add(v)
+        show(b.v, " ", p^, " ", xs.len)
+    fi
+fi
+
+task kept<P...: fixed & shown>(args: P...)
+    bind t = (args...) {
+        show("fewer than two")
+        <-
+    }
+    bind b = Box { v: t }
+    region r
+    bind m = ["all": t] at r
+    show(b.v, " ", m.len)
+fi
+
+task with<T: shown, Q...: shown>(v: T, args: Q...)
+    each w in args
+        show(v, w)
+    fi
+fi
+
+; Each value with each: a loop inside a loop over one group goes in a task
+; of its own, whose group has a name of its own.
+task pairs<P...: shown>(args: P...)
+    each v in args
+        with(v, args...)
+    fi
+fi
+
+task main()
+    show(chosen(1))
+    last(1, "b", 3.5)
+    last(1, "b")
+    last(1)
+    boxes(1, "two")
+    kept(1, 2)
+    kept(1)
+    kept()
+    pairs(1, "a")
+fi

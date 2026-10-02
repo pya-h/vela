@@ -1,0 +1,34 @@
+; warning: 14:13: '&.this' is where the place is, and '.this' is the value the method is called on, given as the compiler chose: Mid takes 32 bytes, so '.this' is a copy, a place of its own, never the caller's
+; warning: 19:9: '&a' is where the place is, and 'a' is a parameter, given as the compiler chose: Mid takes 32 bytes, so 'a' is a copy, a place of its own, never the caller's; write 'bind& a: Mid' for the caller's place, or 'bind a: Mid' for a copy of its own
+; warning: 23:9: '&p' is where the place is, and 'p' is a parameter, given as the compiler chose: (int, int) takes 16 bytes, so 'p' is a copy, a place of its own, never the caller's; write 'bind& p: (int, int)' for the caller's place, or 'bind p: (int, int)' for a copy of its own
+; A value a task is given as a copy is a place of its own, never the caller's,
+; under an optimizing C compiler too: a plain parameter and `.this` of a method
+; that changes nothing, compared with the caller's place itself.
+shape Mid
+    a: int
+    b: int
+    c: int
+    d: int
+
+    same(bind& o: Mid) -> bool
+        <- &.this == &o
+    fi
+fi
+
+task plain(a: Mid, bind& b: Mid) -> bool
+    <- &a == &b
+fi
+
+task pair(p: (int, int), bind& q: (int, int)) -> bool
+    <- &p == &q
+fi
+
+task main()
+    hold w = Mid { a: 1, b: 2, c: 3, d: 4 }
+    show(plain(w, &w))
+    show(w.same(&w))
+    hold t = (1, 2)
+    show(pair(t, &t))
+    bind& v = &w
+    show(&v == &w)
+fi

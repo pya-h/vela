@@ -1,0 +1,14 @@
+; error: 8:2: a startup decorator sends nothing, or 'nothing ~ E' when it can fail, since it runs where the program starts and nothing takes what it sends; 'd' sends int, int ~ text
+; A startup decorator that sends several values is told what a decorator
+; sends, once.
+task d(f: (int) -> int) -> int, int ~ text
+    <- 1, 2
+fi
+
+$d
+task a(n: int) -> int
+    <- n
+fi
+
+task main()
+fi

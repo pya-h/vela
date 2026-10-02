@@ -1,0 +1,6 @@
+; error: 5:13: a tuple's item is written as a plain number, as in '.#1', not '.#01'
+; `t.#k` takes a plain number, as `t.k` does.
+task main()
+    bind t = (1, 2)
+    show(t.#01)
+fi

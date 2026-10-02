@@ -312,7 +312,7 @@ fn a_program_loads_each_module_once_through_its_loader() {
     }).collect();
     assert_eq!(names, ["text/labels.label", "text/labels.width", "shapes/geometry.area", "main"]);
     let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked), true).unwrap().0;
-    assert!(c.contains("int64_t vela_shapes__1__geometry__0__area(int64_t side)"), "{}", c);
+    assert!(c.contains("int64_t vela_shapes__1__geometry__0__area(int64_t vela__given__side)"), "{}", c);
 }
 
 #[test]
@@ -361,7 +361,7 @@ fn a_module_outside_the_main_folder_keeps_its_path_in_its_names() {
     assert_eq!(names, ["../common/text.twice", "main"]);
     // In C, `..` is `__2__`, each `/` `__1__`, and the `.` before the name `__0__`.
     let c = driver::generate_c_program(Path::new("app/main.vela"), main, &mut memory_loader(&files, &asked), true).unwrap().0;
-    assert!(c.contains("int64_t vela___2____1__common__1__text__0__twice(int64_t n)"), "{}", c);
+    assert!(c.contains("int64_t vela___2____1__common__1__text__0__twice(int64_t vela__given__n)"), "{}", c);
 }
 
 #[test]

@@ -237,9 +237,6 @@ fn check_sanitized(source: &Path, expected: &Path, name: &str, trap: Option<&str
     None
 }
 
-/// An allocation that can't be satisfied (one whose size overflows, one the
-/// system refuses, and a slice's items whose size in bytes overflows) stops the
-/// program with a message instead of returning memory that isn't there.
 /// Programs that compare addresses mean the same compiled by an optimizing
 /// clang, which may read a parameter given as a value where the caller keeps
 /// it: a copy of a task's own must still be a place of its own.
@@ -250,7 +247,7 @@ fn addresses_mean_the_same_under_an_optimizing_clang() {
         return;
     }
     let scratch = scratch_dir("clang-optimized");
-    for name in ["addresses", "bind_parameters", "chosen_parameters", "equality"] {
+    for name in ["addresses", "bind_parameters", "chosen_parameters", "copies_own_places", "equality"] {
         let source = root().join("tests/run").join(format!("{}.vela", name));
         let c_path = scratch.join(format!("{}.c", name));
         let emitted = Command::new(VELA).arg(&source).arg("--emit-c").arg("-o").arg(&c_path).output().unwrap();
@@ -264,6 +261,9 @@ fn addresses_mean_the_same_under_an_optimizing_clang() {
     let _ = fs::remove_dir_all(&scratch);
 }
 
+/// An allocation that can't be satisfied (one whose size overflows, one the
+/// system refuses, and a slice's items whose size in bytes overflows) stops the
+/// program with a message instead of returning memory that isn't there.
 #[test]
 fn an_impossible_allocation_stops_the_program() {
     let scratch = scratch_dir("runtime-out-of-memory");

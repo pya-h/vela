@@ -787,7 +787,9 @@ impl Lexer {
         // A tuple's item right after a dot, as in `t.1.0`, is a whole number:
         // its own `.` starts the next item. (After `..`, a range's end may be a float.)
         let before = |back: usize| self.pos.checked_sub(back).and_then(|at| self.source.get(at)).copied();
-        let item = before(1) == Some('.') && before(2) != Some('.');
+        // So is one after `.#`, as in `t.#1`.
+        let safe = before(1) == Some('#') && before(2) == Some('.') && before(3) != Some('.');
+        let item = (before(1) == Some('.') && before(2) != Some('.')) || safe;
         if !item && self.peek() == '0' && self.peek2().is_ascii_alphabetic() && based(self.peek2().to_ascii_lowercase()).is_some() {
             return self.based_number(loc);
         }
@@ -797,7 +799,8 @@ impl Lexer {
             if raw != s || (s.len() > 1 && s.starts_with('0')) {
                 let plain = s.trim_start_matches('0');
                 let plain = if plain.is_empty() { "0" } else { plain };
-                return invalid(loc, format!("a tuple's item is written as a plain number, as in '.{}', not '.{}'", plain, raw));
+                let dot = if safe { ".#" } else { "." };
+                return invalid(loc, format!("a tuple's item is written as a plain number, as in '{0}{1}', not '{0}{2}'", dot, plain, raw));
             }
             return match s.parse::<i64>() {
                 Ok(val) => LexKind::Token(Token::Int(val)),
