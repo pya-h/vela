@@ -725,7 +725,9 @@ fi</pre>
         </ul>
         <p><strong>Limits and open questions.</strong></p>
         <ul>
-          <li><code>?</code> already marks a startup decorator whose failure may pass (<code>$d?</code>), and many
+          <li><code>?</code> after a tuple's item already asks for its type, <code>t.#2? is maybe int</code> (built
+            2026-10-03, see <a href="vela.html#tuples">Tuples</a>), which <code>match v?</code> would extend to any
+            value. <code>?</code> also marks a startup decorator whose failure may pass (<code>$d?</code>), and many
             languages use a <code>?</code> after a value to send its failure on. If Vela ever wants that, <code>v?</code>
             would mean two things. Other spellings to weigh: <code>match type v</code>, <code>match v.type</code> with
             type cases (<code>case int n</code>, told apart from text cases by having no quotes), or

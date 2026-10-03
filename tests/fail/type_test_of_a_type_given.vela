@@ -1,0 +1,11 @@
+; error: 4:18: a type test names a type the program knows, such as 'maybe int'; 'T' is given by each use
+; A type test names a type the program knows, not one each use gives.
+task g<T>(t: (T, T))
+    when t.#0 is maybe T {x}
+        show(1)
+    fi
+fi
+
+task main()
+    g((1, 2))
+fi

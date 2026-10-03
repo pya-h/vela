@@ -2179,6 +2179,27 @@ impl Parser {
                 self.advance();
                 PatternKind::None
             }
+            // `t.#5 is maybe int {x}`: a test of the type of a tuple's item.
+            Token::Maybe if keyword == "is" => {
+                let ty = self.parse_type()?;
+                let form = match self.peek() {
+                    Token::LBrace => {
+                        self.advance();
+                        let names = self.parse_pattern_names()?;
+                        self.expect(Token::RBrace)?;
+                        TypedForm::Value(names)
+                    }
+                    Token::Ident(_) | Token::Hold | Token::LParen | Token::Underscore => TypedForm::Named(self.parse_pattern_names()?),
+                    _ => TypedForm::Only,
+                };
+                PatternKind::Typed { ty, form, asks: false }
+            }
+            Token::Maybe => {
+                return Err(Error::at(
+                    span,
+                    format!("a type after '{}' can't be matched; a type is tested after 'is', on a tuple's item read with '.#', as in 'when t.#2 is maybe int {{x}}'", keyword),
+                ));
+            }
             Token::LBrace => {
                 self.advance();
                 let names = self.parse_pattern_names()?;
@@ -2230,6 +2251,10 @@ impl Parser {
                             keyword, tag
                         ),
                     ));
+                }
+                // `is int {x}`: a type test, which names a maybe.
+                if keyword == "is" && written.is_empty() && crate::check::BUILTIN_TYPE_WORDS.contains(&tag.as_str()) && self.check(Token::LBrace) {
+                    return Err(Error::at(span, format!("a tuple's item read with '.#' is a maybe, so a type test writes its type as one, as in 'is maybe {0} {{x}}'", tag)));
                 }
                 let kind = (!written.is_empty()).then(|| Box::new((written.join(&MODULE_SEPARATOR.to_string()), span)));
                 if self.check(Token::LParen) {
@@ -2383,6 +2408,12 @@ impl Parser {
             if self.check(Token::Assign) {
                 return Err(Error::at(self.peek_span(), "'=' assigns; to compare, write '=='"));
             }
+            // `t.#5? is maybe int`: the `?` asks for the item's type itself.
+            let asks_at = self.peek_span();
+            let asks = self.match_token(Token::Question);
+            if asks && !self.check(Token::Is) {
+                return Err(Error::at(asks_at, "'?' after a tuple's item read with '.#' asks for its type, which an 'is' then tests, as in 't.#5? is maybe int'"));
+            }
             let is_at = self.peek_span();
             let pattern = match self.match_token(Token::Is) {
                 true => {
@@ -2392,7 +2423,24 @@ impl Parser {
                             "an 'is' can't follow 'not': the names it binds would be bound only where it doesn't match; match the other outcome instead, as in 'm is none'",
                         ));
                     }
-                    Some(self.parse_pattern("is")?)
+                    let mut pattern = self.parse_pattern("is")?;
+                    match &mut pattern.kind {
+                        PatternKind::Typed { form: TypedForm::Only, asks: written, .. } if asks => *written = true,
+                        PatternKind::Typed { form: TypedForm::Only, ty, .. } => {
+                            return Err(Error::at(
+                                pattern.span,
+                                format!("a type alone after 'is' tests the type of a tuple's item, which a '?' asks for, as in 't.#5? is {0}'; or name the value, as in 'is {0} x' or 'is {0} {{x}}'", ty),
+                            ));
+                        }
+                        _ if asks => {
+                            return Err(Error::at(
+                                pattern.span,
+                                "'?' asks for the type of a tuple's item, so a type alone follows 'is', as in 't.#5? is maybe int'; to take the value, leave the '?' out",
+                            ));
+                        }
+                        _ => {}
+                    }
+                    Some(pattern)
                 }
                 false => None,
             };

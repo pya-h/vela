@@ -1,0 +1,87 @@
+; What a type test on a tuple's item read with `.#` finds, which the compiler
+; knows: `is none` past the end, `is maybe int {x}` for an int item, `is maybe
+; int x` for an int item or none, and `t.#k? is maybe int`, after which the
+; item's reads in its condition and block are of that type. Nothing is tested
+; when the program runs; in a task taking a group, each copy decides.
+task plain()
+    bind t = (1, "two")
+    when t.#5 is none
+        show("no 5")
+    fi
+    when t.#0 is none
+        show("wrong")
+    else
+        show("has 0")
+    fi
+    when t.#0 is maybe int {x}
+        show("0 is int ", x + 1)
+    fi
+    when t.#1 is maybe int {x}
+        show("wrong ", x)
+    else
+        show("1 is no int")
+    fi
+    when t.#1 is maybe text {s}
+        show("1 is text ", s)
+    fi
+    when t.#5 is maybe int {x}
+        show("wrong ", x)
+    else
+        show("5 missing")
+    fi
+    when t.#5 is maybe int m
+        show("5 int or missing: ", m)
+    fi
+    when t.#0 is maybe int m
+        show("0: ", m)
+    fi
+    when t.#1 is maybe int m
+        show("wrong ", m)
+    fi
+    when t.#5? is maybe int and t.#5 is {x}
+        show("wrong ", x)
+    else
+        show("long form: missing")
+    fi
+    when t.#0? is maybe int and t.#0 is {x}
+        show("long form ", x * 10)
+    fi
+    when t.#5? is maybe float
+        show("5 may be float: ", t.#5 { 2.5 })
+    fi
+fi
+
+task third<P...: fixed & shown>(args: P...)
+    bind t = (args...) {
+        show("fewer than two")
+        <-
+    }
+    when t.#2 is maybe int {n}
+        show("third is int, doubled ", n * 2)
+    else when t.#2 is maybe text {s}
+        show("third is text ", s)
+    else when t.#2 is none
+        show("no third")
+    else
+        show("third is something else")
+    fi
+    when t.#0? is maybe int and t.#0 is {first}
+        show("first plus one ", first + 1)
+    fi
+    when t.#2 is maybe float m
+        show("third float or none: ", m)
+    fi
+    hold k = 0
+    loop t.#1 is maybe int {v} and k < 2
+        k += v
+        show("k ", k)
+    fi
+fi
+task main()
+    plain()
+    third(1, 2, 3)
+    third(1, "b", "c")
+    third(1, 2)
+    third("a", 2, 4.5)
+    third(1)
+fi

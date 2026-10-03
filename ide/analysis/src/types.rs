@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::Path;
 
-use vela::ast::{Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, SHOWN, ShapeDef, Span, Stmt, StmtKind, THIS, Target, Type, method_parts};
+use vela::ast::{Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, SHOWN, TypedForm, ShapeDef, Span, Stmt, StmtKind, THIS, Target, Type, method_parts};
 use vela::check::{in_region, regional_types, textual_types};
 use vela::driver;
 use vela::error::Error;
@@ -300,6 +300,9 @@ impl Checked {
             (PatternKind::Fail(names), Type::Or(_, error)) => self.pattern_names(names, error),
             // `(x, y)`: the items of the tuple itself.
             (PatternKind::Tuple(names), _) => self.pattern_names(names, subject),
+            // `t.#2 is maybe int x` names the read, and `{x}` the item.
+            (PatternKind::Typed { ty, form: TypedForm::Named(names), .. }, _) => self.pattern_names(names, ty),
+            (PatternKind::Typed { ty: Type::Maybe(inner), form: TypedForm::Value(names), .. }, _) => self.pattern_names(names, inner),
             _ => {}
         }
     }

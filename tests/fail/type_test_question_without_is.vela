@@ -1,0 +1,9 @@
+; error: 6:14: '?' after a tuple's item read with '.#' asks for its type, which an 'is' then tests, as in 't.#5? is maybe int'
+; A `?` asks for a type, which an `is` tests.
+task main()
+    bind t = (1, 2)
+    bind n = 3
+    when t.#0? and true
+        show(1)
+    fi
+fi

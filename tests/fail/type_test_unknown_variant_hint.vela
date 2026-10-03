@@ -1,0 +1,9 @@
+; error: 6:18: unknown variant 'text'; a type is tested on a tuple's item read with '.#', which is a maybe, as in 'is maybe text {x}'
+; A builtin type alone reads as a variant; the message says how to test it.
+task main()
+    bind t = (1, 2)
+    bind n = 3
+    when t.#0 is text
+        show(1)
+    fi
+fi

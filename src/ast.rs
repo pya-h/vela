@@ -1445,6 +1445,22 @@ pub enum PatternKind {
     Tuple(Names),
     /// `_`: anything the earlier cases didn't match.
     Any,
+    /// `maybe int {x}`, `maybe int x`, or after `t.#k?` the type alone: a test
+    /// of the type of a tuple's item read with `.#`, which the compiler knows
+    /// (see `Checker::settle_type_tests`). `asks` is the `?` written.
+    Typed { ty: Type, form: TypedForm, asks: bool },
+}
+
+/// What a type test on a tuple's item names (see `PatternKind::Typed`).
+#[derive(Debug, Clone)]
+pub enum TypedForm {
+    /// `t.#k? is maybe int`: nothing; true for an `int` item or none.
+    Only,
+    /// `t.#k is maybe int x`: the read itself, a `maybe int`; true for an `int`
+    /// item or none.
+    Named(Names),
+    /// `t.#k is maybe int {x}`: the item; true only for an `int` item.
+    Value(Names),
 }
 
 /// What a pattern names: one name (or `_`), or `(a, b)`, the names of a
@@ -1487,6 +1503,7 @@ impl Pattern {
             PatternKind::Fail(_) => "failure …".to_string(),
             PatternKind::Tuple(_) => "( … )".to_string(),
             PatternKind::Any => DISCARD.to_string(),
+            PatternKind::Typed { ty, .. } => ty.to_string(),
         }
     }
 
@@ -1495,7 +1512,8 @@ impl Pattern {
         match &self.kind {
             PatternKind::Variant { binds, .. } => binds.iter().flat_map(Names::leaves).collect(),
             PatternKind::Value(names) | PatternKind::Fail(names) | PatternKind::Tuple(names) => names.leaves(),
-            PatternKind::None | PatternKind::Any => Vec::new(),
+            PatternKind::Typed { form: TypedForm::Named(names) | TypedForm::Value(names), .. } => names.leaves(),
+            PatternKind::None | PatternKind::Any | PatternKind::Typed { .. } => Vec::new(),
         }
     }
 }
@@ -1516,6 +1534,9 @@ impl fmt::Display for Pattern {
             PatternKind::Fail(names) => write!(f, "fail {}", names),
             PatternKind::Tuple(names) => write!(f, "{}", names),
             PatternKind::Any => write!(f, "_"),
+            PatternKind::Typed { ty, form: TypedForm::Only, .. } => write!(f, "{}", ty),
+            PatternKind::Typed { ty, form: TypedForm::Named(names), .. } => write!(f, "{} {}", ty, names),
+            PatternKind::Typed { ty, form: TypedForm::Value(names), .. } => write!(f, "{} {{{}}}", ty, names),
         }
     }
 }

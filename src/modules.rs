@@ -1047,6 +1047,11 @@ impl Resolver<'_> {
     /// A pattern's kind, as in `case Shape.Circle`, rewritten to its name in the
     /// program.
     fn pattern(&self, pattern: &mut Pattern) -> Result<()> {
+        // `maybe geometry.Point {p}`: the type a test names, as anywhere.
+        if let PatternKind::Typed { ty, .. } = &mut pattern.kind {
+            *ty = self.ty(ty, pattern.span)?;
+            return Ok(());
+        }
         if let PatternKind::Variant { kind: Some(kind), .. } = &mut pattern.kind {
             let (name, at) = &mut **kind;
             match self.kind(name, *at)? {

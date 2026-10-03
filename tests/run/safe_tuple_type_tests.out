@@ -1,0 +1,24 @@
+no 5
+has 0
+0 is int 2
+1 is no int
+1 is text two
+5 missing
+5 int or missing: none
+0: { 1 }
+long form: missing
+long form 10
+5 may be float: 2.5
+third is int, doubled 6
+first plus one 2
+k 2
+third is text c
+first plus one 2
+no third
+first plus one 2
+third float or none: none
+k 2
+third is something else
+third float or none: { 4.5 }
+k 2
+fewer than two

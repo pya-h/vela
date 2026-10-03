@@ -1,0 +1,11 @@
+; error: 8:17: a type after 'is' tests a tuple's item read with '.#' from a tuple with a name, as in 'when t.#2 is maybe int {x}'
+; A type test reads a tuple with a name.
+task pair() -> (int, int)
+    <- (1, 2)
+fi
+
+task main()
+    when pair().#0 is maybe int {x}
+        show(x)
+    fi
+fi

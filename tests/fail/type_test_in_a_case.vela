@@ -1,0 +1,8 @@
+; error: 5:14: a type after 'case' can't be matched; a type is tested after 'is', on a tuple's item read with '.#', as in 'when t.#2 is maybe int {x}'
+; A type is tested only after `is`, not in a case of a match.
+task main()
+    match 3
+        case maybe int x
+            show(1)
+    fi
+fi
