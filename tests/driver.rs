@@ -158,6 +158,24 @@ fn every_mistake_is_reported_once_in_source_order() {
 }
 
 #[test]
+fn an_else_when_chain_has_no_limit_on_its_arms() {
+    // One `fi` closes a whole chain, whose arms every pass goes through in a
+    // loop, on the small stacks of test threads too: plain conditions, ones
+    // with a pattern (whose C is flat, not nested), and as a value.
+    let arms = 5000;
+    let plain: String = (0..arms).map(|i| format!("    else when n == {}\n        show({})\n", i, i)).collect();
+    let source = format!("task main()\n    bind n = 3\n    when n < 0\n        show(-1)\n{}    else\n        show(0)\n    fi\nfi\n", plain);
+    driver::generate_c(&source).unwrap();
+    let matched: String = (0..arms).map(|i| format!("    else when m is {{v}} and v == {}\n        show(v)\n", i)).collect();
+    let source = format!("task main()\n    bind m: maybe int = 3\n    when m is none\n        show(-1)\n{}    fi\nfi\n", matched);
+    let c = driver::generate_c(&source).unwrap();
+    assert!(c.lines().map(|line| line.len() - line.trim_start().len()).max().unwrap_or(0) < 40, "the C of a chain stays flat");
+    let valued: String = (0..arms).map(|i| format!("    else when n == {}\n        {}\n", i, i)).collect();
+    let source = format!("task main()\n    bind n = 3\n    bind k = when n < 0\n        -1\n{}    else\n        0\n    fi\n    show(k)\nfi\n", valued);
+    driver::generate_c(&source).unwrap();
+}
+
+#[test]
 fn deep_nesting_is_an_error_not_a_crash() {
     // Test threads have small stacks (2 MiB), like the threads Vela Studio
     // compiles on, so a missing limit shows up here as a crash.
@@ -166,7 +184,6 @@ fn deep_nesting_is_an_error_not_a_crash() {
     let deep = limit + 10;
     let cases = [
         ("parentheses", program(format!("{}1{}", "(".repeat(deep), ")".repeat(deep)))),
-        ("an operator chain", program(vec!["1"; deep].join(" + "))),
         // Spaced, since `--` is a step.
         ("unary operators", program(format!("{}1", "- ".repeat(deep)))),
         ("calls", format!("task id(n: int) -> int\n    <- n\nfi\n{}", program(format!("{}1{}", "id(".repeat(deep), ")".repeat(deep))))),
@@ -180,8 +197,6 @@ fn deep_nesting_is_an_error_not_a_crash() {
         ("nested matches", format!("task main()\n{}fi\n", "match k\ncase _\n".repeat(deep) + &"fi\n".repeat(deep))),
         ("nested loops", format!("task main()\n{}fi\n", "loop true\neach i in 0..1\n".repeat(deep) + &"fi\nfi\n".repeat(deep))),
         ("nested is conditions", format!("task main()\n{}fi\n", "when m is {v}\n".repeat(deep) + &"fi\n".repeat(deep))),
-        // One `fi` closes a whole `else when` chain, which nests all the same.
-        ("else when chains", format!("task main()\nwhen true\n{}fi\nfi\n", "else when true\n".repeat(deep))),
         ("nested new", program(format!("{}1{}", "new int(".repeat(deep), ") at r".repeat(deep)))),
         ("nested shape literals", program(format!("{}1{}", "P { x: ".repeat(deep), " }".repeat(deep)))),
         ("region pointer types", format!("task f(p: {}int@r)\nfi\n", "^".repeat(deep))),
@@ -204,6 +219,9 @@ fn deep_nesting_is_an_error_not_a_crash() {
         let error = driver::generate_c(&source).expect_err(what);
         assert!(error.message.contains("nested too deeply"), "{}: {}", what, error.message);
     }
+    // A long chain of operators is told how to split.
+    let error = driver::generate_c(&program(vec!["1"; deep].join(" + "))).expect_err("an operator chain");
+    assert!(error.message.contains("this chain of operators has more than") && error.message.contains("bind part ="), "{}", error.message);
     // Just below the limit still compiles.
     let near = limit - 5;
     let ok = program(format!("{}1{}", "(".repeat(near), ")".repeat(near)));

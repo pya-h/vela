@@ -1255,9 +1255,11 @@ impl Resolver<'_> {
                 targets.iter_mut().try_for_each(|target| self.target(target))?;
                 values.iter_mut().try_for_each(|e| self.expr(e))
             }
-            StmtKind::When(cond, then_block, else_block) => {
-                self.condition(cond)?;
-                self.block(then_block)?;
+            StmtKind::When(arms, else_block) => {
+                for arm in arms.iter_mut() {
+                    self.condition(&mut arm.cond)?;
+                    self.block(&mut arm.body)?;
+                }
                 match else_block {
                     Some(block) => self.block(block),
                     None => Ok(()),

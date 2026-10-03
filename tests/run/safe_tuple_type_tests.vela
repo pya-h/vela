@@ -77,6 +77,18 @@ task third<P...: fixed & shown>(args: P...)
         show("k ", k)
     fi
 fi
+; A test in an arm after one each copy knows holds is still settled.
+task after_taken<P...: fixed & shown>(args: P...)
+    bind t = (args...) { <- }
+    when args.len == 2
+        show("two")
+    else when t.#2 is maybe int {x}
+        show("third int ", x)
+    else when t.#1 is maybe int y
+        show("second ", y)
+    fi
+fi
+
 task main()
     plain()
     third(1, 2, 3)
@@ -84,4 +96,8 @@ task main()
     third(1, 2)
     third("a", 2, 4.5)
     third(1)
+    after_taken(1, 2)
+    after_taken(1, 2, 3)
+    after_taken(1, 4, "c")
+    after_taken(1, "b", "c")
 fi

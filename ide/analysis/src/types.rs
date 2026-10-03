@@ -235,12 +235,16 @@ impl Checked {
                 }
                 values.iter().for_each(|value| self.expr(value, kinds));
             }
-            StmtKind::When(cond, then_block, else_block) => {
-                self.expr(&cond.value, kinds);
-                if let Some(pattern) = &cond.pattern {
-                    self.pattern(cond.value.ty.as_ref(), pattern, kinds);
+            StmtKind::When(arms, else_block) => {
+                for arm in arms {
+                    for part in arm.cond.parts() {
+                        self.expr(&part.value, kinds);
+                        if let Some(pattern) = &part.pattern {
+                            self.pattern(part.value.ty.as_ref(), pattern, kinds);
+                        }
+                    }
+                    self.block(&arm.body, kinds);
                 }
-                self.block(then_block, kinds);
                 if let Some(else_block) = else_block {
                     self.block(else_block, kinds);
                 }

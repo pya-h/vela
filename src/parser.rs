@@ -310,6 +310,23 @@ impl Parser {
         Ok(())
     }
 
+    /// `enter`, for an operator of a chain that already has `levels` of them:
+    /// a long chain is told how to split, since each operator deepens the tree.
+    fn enter_operator(&mut self, levels: usize) -> Result<()> {
+        let at = self.peek_span();
+        self.enter().map_err(|error| match levels > MAX_NESTING / 2 {
+            true => Error::at(
+                at,
+                format!(
+                    "this chain of operators has more than {} terms, and each operator counts as a level of nesting, at most {} in all; split it with a name for part of it, as in 'bind part = a + b + …' and then 'part + …'",
+                    levels + 1,
+                    MAX_NESTING
+                ),
+            ),
+            false => error,
+        })
+    }
+
     fn leave(&mut self, levels: usize) {
         self.depth = self.depth.saturating_sub(levels);
     }
@@ -2041,37 +2058,31 @@ impl Parser {
         Ok(when)
     }
 
-    /// A `when` after its keyword: the condition, the block, and an `else`, an
-    /// `else when …` chain, or neither. A chain is the `when` its `else` holds,
-    /// which is what a `when` written inside an `else` on its own lines is, so
-    /// nothing after the parser tells the two apart. The `fi` closing the chain
-    /// is the caller's to expect.
+    /// A `when` after its keyword: its condition and block, then the arms of
+    /// an `else when …` chain, in a loop, and an `else`, or neither. The `fi`
+    /// closing the chain is the caller's to expect.
     fn parse_when_rest(&mut self, span: Span) -> Result<Stmt> {
-        let cond = self.parse_condition()?;
-        self.skip_newlines();
-        let then_block = self.parse_block_until(&[Token::Else, Token::Fi])?;
-        let else_block = if self.match_token(Token::Else) {
+        let mut arms = Vec::new();
+        let mut at = span;
+        loop {
+            let cond = self.parse_condition()?;
+            self.skip_newlines();
+            let body = self.parse_block_until(&[Token::Else, Token::Fi])?;
+            arms.push(WhenArm { cond, body, span: at });
+            if !self.match_token(Token::Else) {
+                return Ok(Stmt::new(StmtKind::When(arms, None), span));
+            }
             if matches!(self.peek(), Token::Ident(name) if name == "if") {
                 return Err(Error::at(self.peek_span(), "Vela writes 'else when', not 'else if'"));
             }
-            if self.check(Token::When) {
-                let at = self.peek_span();
-                // A chain nests in the tree, however flat it looks, and every
-                // stage walks the tree recursively (see `MAX_NESTING`), so a
-                // chain too long to walk is refused at the `when` that broke it.
-                self.enter()?;
-                self.advance(); // when
-                let chained = self.parse_when_rest(at)?;
-                self.leave(1);
-                Some(vec![chained])
-            } else {
+            if !self.check(Token::When) {
                 self.skip_newlines();
-                Some(self.parse_block_until(&[Token::Fi])?)
+                let else_block = self.parse_block_until(&[Token::Fi])?;
+                return Ok(Stmt::new(StmtKind::When(arms, Some(else_block)), span));
             }
-        } else {
-            None
-        };
-        Ok(Stmt::new(StmtKind::When(cond, then_block, else_block), span))
+            at = self.peek_span();
+            self.advance(); // when
+        }
     }
 
     fn parse_loop(&mut self) -> Result<Stmt> {
@@ -2547,7 +2558,7 @@ impl Parser {
             }
             let span = self.peek_span();
             if self.check(Token::Range) && min <= Self::RANGE_PRECEDENCE && !ranged {
-                self.enter()?;
+                self.enter_operator(levels)?;
                 levels += 1;
                 self.advance();
                 let right = self.parse_binary(Self::RANGE_PRECEDENCE + 1)?;
@@ -2563,7 +2574,7 @@ impl Parser {
             if ranged && precedence > Self::RANGE_PRECEDENCE {
                 break;
             }
-            self.enter()?;
+            self.enter_operator(levels)?;
             levels += 1;
             self.advance();
             // `2 ** 3 ** 2` is `2 ** (3 ** 2)`.

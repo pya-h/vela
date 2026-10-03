@@ -1315,7 +1315,11 @@ pub enum StmtKind {
     /// `++` and `--`. `symbol` is the operator as written, and `at` where. The
     /// checker makes it the assignment it is (see `Checker::check_step`).
     Step { target: Expr, op: BinaryOp, value: Expr, symbol: &'static str, at: Span },
-    When(Condition, Block, Option<Block>),
+    /// `when c … else when d … else … fi`: the arms in order, each a condition
+    /// and the block it guards, then the `else` block. A chain of `else when`s
+    /// is one statement, so every pass goes through its arms in a loop, however
+    /// many there are, and a `when` written alone inside an `else` is nested.
+    When(Vec<WhenArm>, Option<Block>),
     Loop(Condition, Block),
     /// `block … fi`: statements in a block of their own, whose names, regions,
     /// and the files opened in them end at its `fi`.
@@ -1408,6 +1412,15 @@ impl Condition {
     pub fn single(&self) -> bool {
         self.and.is_none()
     }
+}
+
+/// One arm of a `when`: `when c` or `else when c`, and the block it guards.
+#[derive(Debug, Clone)]
+pub struct WhenArm {
+    pub cond: Condition,
+    pub body: Block,
+    /// Position of its `when`.
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]

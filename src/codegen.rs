@@ -1735,7 +1735,7 @@ impl Generator {
     /// each of its blocks giving the value into `into`.
     fn gen_branching_value(&mut self, stmt: &Stmt, into: Option<&str>) -> Result<()> {
         match &stmt.kind {
-            StmtKind::When(cond, then_b, else_b) => self.gen_when(cond, then_b, else_b.as_deref(), into),
+            StmtKind::When(arms, else_b) => self.gen_when(arms, else_b.as_deref(), into),
             StmtKind::Match(subject, cases) => self.gen_match(subject, cases, into),
             _ => Err(Error::internal_at(stmt.span, "a statement that is not a 'when' or a 'match' used as a value")),
         }
@@ -1939,7 +1939,7 @@ impl Generator {
                     self.gen_multi_assign(targets, values, stmt.span)?;
                 }
             }
-            StmtKind::When(cond, then_b, else_b) => self.gen_when(cond, then_b, else_b.as_deref(), None)?,
+            StmtKind::When(arms, else_b) => self.gen_when(arms, else_b.as_deref(), None)?,
             // A C block of its own: its regions are freed, and the files opened
             // in them closed, at its end (see `leave_block`).
             StmtKind::Block(body) => {
@@ -2319,12 +2319,56 @@ impl Generator {
         Ok(())
     }
 
-    /// Generates a `when`, and the `else when`s after it. A chain is an `else`
-    /// holding one `when` (see `Parser::parse_when_rest`), which becomes an
-    /// `else if` where C can take one: a condition that needs statements before
-    /// it, or that binds a pattern, goes inside the `else` instead, since that is
-    /// where those statements belong.
-    fn gen_when(&mut self, cond: &Condition, then_b: &[Stmt], else_b: Option<&[Stmt]>, into: Option<&str>) -> Result<()> {
+    /// Generates a `when`, and the `else when`s after it: as C's `else if`
+    /// where each arm after the first is one condition that needs nothing
+    /// before it, and otherwise each arm in turn, run only while none before it
+    /// ran, so the C stays flat however long the chain is.
+    fn gen_when(&mut self, arms: &[WhenArm], else_b: Option<&[Stmt]>, into: Option<&str>) -> Result<()> {
+        let Some((first, rest)) = arms.split_first() else { return Err(Error::internal("a 'when' without a condition")) };
+        let plain = |cond: &Condition| cond.pattern.is_none() && cond.single() && !has_prelude(&cond.value);
+        if rest.is_empty() {
+            return self.gen_one_when(&first.cond, &first.body, else_b, into);
+        }
+        if first.cond.pattern.is_none() && first.cond.single() && rest.iter().all(|arm| plain(&arm.cond)) {
+            let c = self.gen_condition(&first.cond.value)?;
+            self.w.open(&format!("if ({})", c));
+            self.gen_branch_block(&first.body, into)?;
+            for arm in rest {
+                let c = self.gen_condition(&arm.cond.value)?;
+                self.w.reopen(&format!("else if ({})", c));
+                self.gen_branch_block(&arm.body, into)?;
+            }
+            if let Some(else_b) = else_b {
+                self.w.reopen("else");
+                self.gen_branch_block(else_b, into)?;
+            }
+            self.w.close();
+            return Ok(());
+        }
+        let done = self.fresh_temp("done");
+        self.w.line(&format!("bool {} = false;", done));
+        for (i, arm) in arms.iter().enumerate() {
+            if i > 0 {
+                self.w.open(&format!("if (!{})", done));
+            }
+            self.gen_parts(&arm.cond, &arm.body, &mut |g| {
+                g.w.line(&format!("{} = true;", done));
+                g.gen_branch_block(&arm.body, into)
+            })?;
+            if i > 0 {
+                self.w.close();
+            }
+        }
+        if let Some(else_b) = else_b {
+            self.w.open(&format!("if (!{})", done));
+            self.gen_branch_block(else_b, into)?;
+            self.w.close();
+        }
+        Ok(())
+    }
+
+    /// A `when` of one arm, and its `else`.
+    fn gen_one_when(&mut self, cond: &Condition, then_b: &[Stmt], else_b: Option<&[Stmt]>, into: Option<&str>) -> Result<()> {
         if !cond.single() {
             // `when m is {x} and x > 0`: each part tested inside the one before
             // and the block inside them all, so what a part binds is seen after
@@ -2360,22 +2404,9 @@ impl Generator {
                 self.gen_branch_block(then_b, into)?;
             }
         }
-        let mut rest = else_b;
-        while let Some(block) = rest {
-            if let [Stmt { kind: StmtKind::When(next, body, after), .. }] = block
-                && next.pattern.is_none()
-                && next.single()
-                && !has_prelude(&next.value)
-            {
-                let c = self.gen_condition(&next.value)?;
-                self.w.reopen(&format!("else if ({})", c));
-                self.gen_branch_block(body, into)?;
-                rest = after.as_deref();
-                continue;
-            }
+        if let Some(else_b) = else_b {
             self.w.reopen("else");
-            self.gen_branch_block(block, into)?;
-            rest = None;
+            self.gen_branch_block(else_b, into)?;
         }
         self.w.close();
         Ok(())
@@ -4294,9 +4325,11 @@ impl UsedTypes {
                     values.iter().for_each(|value| self.expr(value));
                 }
                 StmtKind::Block(body) => self.block(body),
-                StmtKind::When(cond, then_b, else_b) => {
-                    cond.parts().for_each(|part| self.expr(&part.value));
-                    self.block(then_b);
+                StmtKind::When(arms, else_b) => {
+                    for arm in arms {
+                        arm.cond.parts().for_each(|part| self.expr(&part.value));
+                        self.block(&arm.body);
+                    }
                     if let Some(else_b) = else_b {
                         self.block(else_b);
                     }
@@ -4510,7 +4543,7 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
         StmtKind::Assign(targets, values) => {
             targets.iter().any(|target| target_reads(target, name)) || values.iter().any(expr)
         }
-        StmtKind::When(cond, then_b, else_b) => cond.parts().any(|part| expr(&part.value)) || body(then_b) || else_b.as_ref().is_some_and(body),
+        StmtKind::When(arms, else_b) => arms.iter().any(|arm| arm.cond.parts().any(|part| expr(&part.value)) || body(&arm.body)) || else_b.as_ref().is_some_and(body),
         StmtKind::Loop(cond, b) => cond.parts().any(|part| expr(&part.value)) || body(b),
         StmtKind::Block(b) => body(b),
         StmtKind::Each(_, _, range, b) => expr(range) || body(b),

@@ -3214,7 +3214,7 @@ impl Checker {
                 Ok(())
             }
             StmtKind::SetResults(names, values) => self.check_set_results(span, names, values),
-            StmtKind::When(cond, then_block, else_block) => self.check_when(span, cond, then_block, else_block, None).map(|_| ()),
+            StmtKind::When(arms, else_block) => self.check_when(span, arms, else_block, None).map(|_| ()),
             // Its statements run once, as the block around it does, so what they
             // set is set after it; what they declare ends at its `fi`.
             StmtKind::Block(body) => self.check_scoped_block(body),
@@ -3326,44 +3326,40 @@ impl Checker {
         }
     }
 
-    /// Checks a `when`, its `else`, and the `else when`s in between (a chain is
-    /// the `when` its `else` holds). In `gives`, every branch gives the whole a
-    /// value, which the branches settle between them; a chain gives it through
-    /// the `when` on the last line of its `else`, which `value_block_tail`
-    /// reads. A `when` that gives a value needs an `else`, since there is no
-    /// value without one.
-    fn check_when(
-        &mut self,
-        span: Span,
-        cond: &mut Condition,
-        then_block: &mut Block,
-        else_block: &mut Option<Block>,
-        gives: Option<Branches>,
-    ) -> Result<Option<Type>> {
-        // A tuple's items always match, so an `else` could never run.
-        if let (Some(pattern), Some(_)) = (&cond.pattern, else_block.as_ref())
-            && always_holds(cond)
-        {
-            return err(pattern.span, "a tuple's items always match, so this 'when' always holds and its 'else' would never run; take the tuple apart with 'bind' instead");
+    /// Checks a `when`: its arms, the `else when`s of a chain, one after
+    /// another, and its `else`. In `gives`, every branch gives the whole a
+    /// value, which the branches settle between them. A `when` that gives a
+    /// value needs an `else`, since there is no value without one.
+    fn check_when(&mut self, span: Span, arms: &mut [WhenArm], else_block: &mut Option<Block>, gives: Option<Branches>) -> Result<Option<Type>> {
+        // A tuple's items always match, so nothing after such an arm could run.
+        let last = arms.len().saturating_sub(1);
+        for (i, arm) in arms.iter().enumerate() {
+            if let Some(pattern) = &arm.cond.pattern
+                && always_holds(&arm.cond)
+                && (i < last || else_block.is_some())
+            {
+                let after = if i < last { "the arms after it" } else { "its 'else'" };
+                return err(pattern.span, format!("a tuple's items always match, so this 'when' always holds and {} would never run; take the tuple apart with 'bind' instead", after));
+            }
         }
         if gives.is_some() && else_block.is_none() {
             return err(span, "a 'when' used as a value needs an 'else': without one, nothing gives the value when the condition doesn't hold");
         }
         let entry = self.unset.clone();
         let mut given = Vec::new();
-        let then_value = match gives {
-            None => {
-                self.check_condition(cond, then_block, None)?;
-                None
-            }
-            Some(_) => {
-                let found = self.check_condition(cond, then_block, gives);
-                self.note_branch(found, span)
-            }
-        };
-        given.extend(then_value.map(|(ty, at)| (0usize, ty, at)));
-        let after_then = self.branch_state(then_block, &entry);
-        let after_else = match else_block {
+        let mut states = Vec::new();
+        for (i, arm) in arms.iter_mut().enumerate() {
+            let value = match gives {
+                None => self.check_condition(&mut arm.cond, &mut arm.body, None).map(|_| None)?,
+                Some(_) => {
+                    let found = self.check_condition(&mut arm.cond, &mut arm.body, gives);
+                    self.note_branch(found, arm.span)
+                }
+            };
+            given.extend(value.map(|(ty, at)| (i, ty, at)));
+            states.push(self.branch_state(&arm.body, &entry));
+        }
+        match else_block {
             Some(else_b) => {
                 let value = match gives {
                     Some(branches) => {
@@ -3372,23 +3368,23 @@ impl Checker {
                     }
                     None => self.check_scoped_block(else_b).map(|()| None)?,
                 };
-                given.extend(value.map(|(ty, at)| (1usize, ty, at)));
-                self.branch_state(else_b, &entry)
+                given.extend(value.map(|(ty, at)| (arms.len(), ty, at)));
+                states.push(self.branch_state(else_b, &entry));
             }
             // A condition that always holds leaves no other path.
-            None if always_holds(cond) => None,
-            // Without an `else`, not running the block is a path too.
-            None => Some(entry.clone()),
-        };
-        self.join_branches(entry, vec![after_then, after_else]);
+            None if arms.iter().any(|arm| always_holds(&arm.cond)) => {}
+            // Without an `else`, running no block is a path too.
+            None => states.push(Some(entry.clone())),
+        }
+        self.join_branches(entry, states);
         let Some(branches) = gives else { return Ok(None) };
         let settled = self.settle_branches(span, &given, branches)?;
         let Some(settled) = settled else { return Ok(None) };
         for (i, _, _) in given.iter().filter(|(_, ty, _)| !ty.unknown() && *ty != settled) {
-            match (i, else_block.as_mut()) {
-                (0, _) => self.settle_value(then_block, &settled)?,
-                (_, Some(else_b)) => self.settle_value(else_b, &settled)?,
-                (_, None) => {}
+            match (arms.get_mut(*i), else_block.as_mut()) {
+                (Some(arm), _) => self.settle_value(&mut arm.body, &settled)?,
+                (None, Some(else_b)) => self.settle_value(else_b, &settled)?,
+                (None, None) => {}
             }
         }
         self.escaping_region(span, &settled, branches)?;
@@ -3435,8 +3431,10 @@ impl Checker {
     /// `maybe` or the `T ~ E`, which is what the branch gives back.
     fn settle_branch_values(&mut self, stmt: &mut Stmt, settled: &Type) -> Result<()> {
         match &mut stmt.kind {
-            StmtKind::When(_, then_block, Some(else_block)) => {
-                self.settle_value(then_block, settled)?;
+            StmtKind::When(arms, Some(else_block)) => {
+                for arm in arms.iter_mut() {
+                    self.settle_value(&mut arm.body, settled)?;
+                }
                 self.settle_value(else_block, settled)
             }
             StmtKind::Match(_, cases) => cases.iter_mut().try_for_each(|case| self.settle_value(&mut case.body, settled)),
@@ -3582,7 +3580,7 @@ impl Checker {
     fn check_branching_value(&mut self, stmt: &mut Stmt) -> Result<Option<Type>> {
         let span = stmt.span;
         match &mut stmt.kind {
-            StmtKind::When(cond, then_block, else_block) => self.check_when(span, cond, then_block, else_block, Some(WHEN_BRANCHES)),
+            StmtKind::When(arms, else_block) => self.check_when(span, arms, else_block, Some(WHEN_BRANCHES)),
             StmtKind::Match(subject, cases) => self.check_match(span, subject, cases, Some(MATCH_BRANCHES)),
             _ => Err(Error::internal_at(span, "a statement that is not a 'when' or a 'match' used as a value")),
         }
@@ -9063,7 +9061,7 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
 /// every way through it gives one. A `when` without an `else` can't, so such a
 /// block must send on every path, which is what its message says.
 pub fn gives_value(stmt: &Stmt) -> bool {
-    matches!(&stmt.kind, StmtKind::Match(..) | StmtKind::When(_, _, Some(_)))
+    matches!(&stmt.kind, StmtKind::Match(..) | StmtKind::When(_, Some(_)))
 }
 
 /// Whether a value of type `from` goes where `to` is expected without being
@@ -9319,23 +9317,29 @@ impl Checker {
                 }
                 values.iter_mut().try_for_each(|value| self.substitute_expr(value, given, made))
             }
-            StmtKind::When(cond, then_block, else_block) => {
-                self.substitute_condition(cond, given, made)?;
-                self.settle_type_tests(cond, then_block);
-                // A condition this copy knows, as one on 'args.len' is: the
-                // branch it never takes is emptied, so a read it guards against
-                // is never checked or written. The `when` stays, so one used as
-                // a value still gives it, from the branch that runs.
-                if !given.is_empty()
-                    && let Some(taken) = known_condition(cond)
-                {
-                    match else_block {
-                        Some(dropped) if taken => dropped.clear(),
-                        _ if !taken => then_block.clear(),
-                        _ => {}
+            StmtKind::When(arms, else_block) => {
+                // A condition this copy knows, as one on 'args.len' is: a branch
+                // it never takes is emptied, so a read it guards against is never
+                // checked or written. The `when` stays, so one used as a value
+                // still gives it, from the branch that runs.
+                let mut taken = false;
+                for arm in arms.iter_mut() {
+                    self.substitute_condition(&mut arm.cond, given, made)?;
+                    self.settle_type_tests(&mut arm.cond, &mut arm.body);
+                    if taken {
+                        arm.body.clear();
+                        continue;
                     }
+                    match known_condition(&arm.cond).filter(|_| !given.is_empty()) {
+                        Some(false) => arm.body.clear(),
+                        Some(true) => taken = true,
+                        None => {}
+                    }
+                    self.substitute_block(&mut arm.body, given, made)?;
                 }
-                self.substitute_block(then_block, given, made)?;
+                if taken && let Some(dropped) = else_block {
+                    dropped.clear();
+                }
                 match else_block {
                     Some(else_block) => self.substitute_block(else_block, given, made),
                     None => Ok(()),
@@ -10070,8 +10074,19 @@ fn constructible(ty: &Type, can: &HashSet<&str>) -> bool {
 fn always_sends(block: &Block) -> bool {
     block.iter().any(|stmt| match &stmt.kind {
         StmtKind::Send(_) => true,
-        StmtKind::When(_, then_block, Some(else_block)) => always_sends(then_block) && always_sends(else_block),
-        StmtKind::When(cond, then_block, None) => always_holds(cond) && always_sends(then_block),
+        StmtKind::When(arms, Some(else_block)) => arms.iter().all(|arm| always_sends(&arm.body)) && always_sends(else_block),
+        // Without an `else`, the arms up to one that always holds must send.
+        StmtKind::When(arms, None) => {
+            for arm in arms {
+                if !always_sends(&arm.body) {
+                    return false;
+                }
+                if always_holds(&arm.cond) {
+                    return true;
+                }
+            }
+            false
+        }
         StmtKind::Match(_, cases) => cases.iter().all(|case| always_sends(&case.body)),
         StmtKind::Block(body) => always_sends(body),
         _ => false,

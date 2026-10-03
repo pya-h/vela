@@ -2577,9 +2577,9 @@ show(total)</pre>
       </p>
       <p>
         <code>else when</code> chains conditions: each is tried in turn, the first that holds runs its block, and one
-        <code>fi</code> closes the whole chain. A chain is the same statement as a <code>when</code> written inside the
-        <code>else</code> on its own lines, so it may end with an <code>else</code>, or with nothing when no condition
-        need hold. <code>else if</code> is an error that says so.
+        <code>fi</code> closes the whole chain. It does what a <code>when</code> written inside the <code>else</code>
+        on its own lines does, but stays one statement however many arms it has, with no limit on them. It may end with
+        an <code>else</code>, or with nothing when no condition need hold. <code>else if</code> is an error that says so.
       </p>
       <pre><span class="keyword">task</span> grade(score: int) -&gt; text
     <span class="keyword">when</span> score &gt;= <span class="number">90</span>
@@ -3809,6 +3809,8 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           accepted).</li>
         <li>Code may nest at most 100 levels deep (parentheses, operators in a row, blocks inside blocks; a
           <code>new</code>, an array literal, and a tuple count as two, and a plan B as three); deeper code is an error rather than a crash.
+          A chain of more than about 100 operators, <code>a + b + …</code>, is an error that says to name part of it
+          (<code>bind part = …</code>); the arms of an <code>else when</code> chain have no limit.
           Text holding values may hold text holding values at most 32 deep, and a chain of modules including each other at
           most 100 long.</li>
       </ul>

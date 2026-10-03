@@ -154,19 +154,49 @@
     | keyword:fi
  79 | fi
     | keyword:fi
- 80 | task main()
+ 80 | ; A test in an arm after one each copy knows holds is still settled.
+    | comment:; A test in an arm after one each copy knows holds is still settled.
+ 81 | task after_taken<P...: fixed & shown>(args: P...)
+    | keyword:task  task:after_taken  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 82 |     bind t = (args...) { <- }
+    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
+ 83 |     when args.len == 2
+    | keyword:when  parameter:args  punctuation:.  field:len  operator:==  number:2
+ 84 |         show("two")
+    | builtin-fn:show  punctuation:(  string:"two"  punctuation:)
+ 85 |     else when t.#2 is maybe int {x}
+    | keyword:else  keyword:when  variable:t  punctuation:.  punctuation:#  number:2  keyword:is  keyword:maybe  variable:int  punctuation:{  variable:x  punctuation:}
+ 86 |         show("third int ", x)
+    | builtin-fn:show  punctuation:(  string:"third int "  punctuation:,  variable:x  punctuation:)
+ 87 |     else when t.#1 is maybe int y
+    | keyword:else  keyword:when  variable:t  punctuation:.  punctuation:#  number:1  keyword:is  keyword:maybe  variable:int  variable:y
+ 88 |         show("second ", y)
+    | builtin-fn:show  punctuation:(  string:"second "  punctuation:,  variable:y  punctuation:)
+ 89 |     fi
+    | keyword:fi
+ 90 | fi
+    | keyword:fi
+ 92 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 81 |     plain()
+ 93 |     plain()
     | task:plain  punctuation:(  punctuation:)
- 82 |     third(1, 2, 3)
+ 94 |     third(1, 2, 3)
     | task:third  punctuation:(  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:)
- 83 |     third(1, "b", "c")
+ 95 |     third(1, "b", "c")
     | task:third  punctuation:(  number:1  punctuation:,  string:"b"  punctuation:,  string:"c"  punctuation:)
- 84 |     third(1, 2)
+ 96 |     third(1, 2)
     | task:third  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
- 85 |     third("a", 2, 4.5)
+ 97 |     third("a", 2, 4.5)
     | task:third  punctuation:(  string:"a"  punctuation:,  number:2  punctuation:,  number:4.5  punctuation:)
- 86 |     third(1)
+ 98 |     third(1)
     | task:third  punctuation:(  number:1  punctuation:)
- 87 | fi
+ 99 |     after_taken(1, 2)
+    | task:after_taken  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+100 |     after_taken(1, 2, 3)
+    | task:after_taken  punctuation:(  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:)
+101 |     after_taken(1, 4, "c")
+    | task:after_taken  punctuation:(  number:1  punctuation:,  number:4  punctuation:,  string:"c"  punctuation:)
+102 |     after_taken(1, "b", "c")
+    | task:after_taken  punctuation:(  number:1  punctuation:,  string:"b"  punctuation:,  string:"c"  punctuation:)
+103 | fi
     | keyword:fi
