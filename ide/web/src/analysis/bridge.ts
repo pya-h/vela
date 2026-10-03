@@ -40,8 +40,20 @@ export function wellFormed(text: string): string {
   return text.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "\uFFFD");
 }
 
+/** Whether two sets of module texts are the same, path for path. */
+function sameModules(a: Record<string, string>, b: Record<string, string>): boolean {
+  const paths = Object.keys(a);
+  return paths.length === Object.keys(b).length && paths.every((path) => Object.hasOwn(b, path) && a[path] === b[path]);
+}
+
 export class VelaAnalysis {
   private exports: Exports;
+  /**
+   * The modules the module was last sent, which it keeps: a request with the
+   * same ones says so instead of sending their text again. Null when it keeps
+   * none, as after a restart.
+   */
+  private sentModules: Record<string, string> | null = null;
 
   private constructor(private readonly module: WebAssembly.Module) {
     this.exports = instantiate(module);
@@ -62,9 +74,12 @@ export class VelaAnalysis {
    * a crash the module is restarted, so later calls work.
    */
   request<const Q extends readonly Query[]>(source: string, queries: Q, context?: ProgramContext): Results<Q> {
-    const modules = context && Object.fromEntries(Object.entries(context.modules).map(([path, text]) => [path, wellFormed(text)]));
-    const body = context ? { source: wellFormed(source), path: context.path, modules, queries } : { source: wellFormed(source), queries };
-    const response = this.call(JSON.stringify(body)) as { results?: unknown[]; error?: string };
+    let response = this.call(JSON.stringify(this.body(source, queries, context))) as { results?: unknown[]; error?: string; resend?: boolean };
+    // The module kept no modules after all: send them.
+    if (response.resend === true && context) {
+      this.sentModules = null;
+      response = this.call(JSON.stringify(this.body(source, queries, context))) as typeof response;
+    }
     if (typeof response.error === "string") {
       throw new AnalysisError(response.error);
     }
@@ -103,6 +118,17 @@ export class VelaAnalysis {
     return this.request("", [{ kind: "language" }] as const)[0];
   }
 
+  /** The request's JSON body, without the modules when the module keeps the same ones. */
+  private body(source: string, queries: readonly Query[], context?: ProgramContext): object {
+    if (!context) return { source: wellFormed(source), queries };
+    if (this.sentModules !== null && sameModules(this.sentModules, context.modules)) {
+      return { source: wellFormed(source), path: context.path, "same-modules": true, queries };
+    }
+    const modules = Object.fromEntries(Object.entries(context.modules).map(([path, text]) => [path, wellFormed(text)]));
+    this.sentModules = { ...context.modules };
+    return { source: wellFormed(source), path: context.path, modules, queries };
+  }
+
   private call(body: string): unknown {
     const bytes = encoder.encode(body);
     let json: string;
@@ -117,8 +143,10 @@ export class VelaAnalysis {
       vela_free_response(response);
     } catch (error) {
       if (error instanceof WebAssembly.RuntimeError) {
-        // A trap can leave the module's memory inconsistent: start a fresh instance.
+        // A trap can leave the module's memory inconsistent: start a fresh
+        // instance, which keeps no modules.
         this.exports = instantiate(this.module);
+        this.sentModules = null;
         throw new AnalysisError(`the analysis module crashed: ${error.message}`);
       }
       throw error;

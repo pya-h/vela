@@ -38,6 +38,34 @@ fn answers_each_query_in_order() {
 }
 
 #[test]
+fn modules_given_once_are_kept_for_the_requests_after() {
+    // Each test runs on a thread of its own, so this one starts with nothing kept.
+    let main = "include lib/a\n\ntask main()\n    a.hello()\nfi\n";
+    let asked = |extra: Value| {
+        let mut body = json!({ "source": main, "path": "main.vela", "queries": [{ "kind": "diagnostics" }, { "kind": "missing-modules" }] });
+        if let (Some(body), Some(extra)) = (body.as_object_mut(), extra.as_object()) {
+            body.extend(extra.clone());
+        }
+        request(body)
+    };
+    let response = asked(json!({ "same-modules": true }));
+    assert_eq!(response["resend"], json!(true), "{}", response);
+    assert!(response["error"].as_str().unwrap().contains("send them"));
+    let modules = json!({ "lib/a.vela": "task hello()\n    show(1)\nfi\n" });
+    assert_eq!(asked(json!({ "modules": modules })), json!({ "results": [[], []] }));
+    // The same modules, not sent again, and the same answers.
+    assert_eq!(asked(json!({ "same-modules": true })), json!({ "results": [[], []] }));
+    let hover = request(json!({ "source": main, "path": "main.vela", "same-modules": true, "queries": [{ "kind": "hover", "offset": 34 }] }));
+    assert_eq!(hover["results"][0]["code"], "task a.hello()", "{}", hover);
+    // A request without them has none; the kept ones stay for the next.
+    assert_eq!(asked(json!({}))["results"][1], json!(["lib/a.vela"]));
+    assert_eq!(asked(json!({ "same-modules": true })), json!({ "results": [[], []] }));
+    // New modules replace them.
+    let changed = json!({ "lib/a.vela": "task other()\nfi\n" });
+    assert_ne!(asked(json!({ "modules": changed }))["results"][0], json!([]));
+}
+
+#[test]
 fn missing_results_are_null() {
     let response = request(json!({ "source": SOURCE, "queries": [{ "kind": "hover", "offset": 0 }, { "kind": "definition", "offset": 0 }] }));
     assert_eq!(response, json!({ "results": [null, null] }));

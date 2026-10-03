@@ -16,9 +16,17 @@
 //! malformed. Offsets are UTF-16, like JavaScript string indices. A request
 //! may also give the file's `path` and `modules`, the text of other files of
 //! its program by path; the `missing-modules` query lists the ones an `include`
-//! needs that weren't given.
+//! needs that weren't given. Instead of `modules`, `"same-modules": true` uses
+//! the ones the last request gave; a module that has none kept (it was just
+//! started) answers `{"error": "…", "resend": true}`, and the request is sent
+//! again with them.
+//!
+//! The module keeps the last analysis, so queries about the same text, path,
+//! and modules (a hover, a completion, a definition) don't analyze it again.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -49,8 +57,24 @@ struct Request {
     path: String,
     /// The text of the program's other files, by path.
     #[serde(default)]
-    modules: HashMap<String, String>,
+    modules: Option<HashMap<String, String>>,
+    /// The modules are the ones the last request that gave them gave.
+    #[serde(default, rename = "same-modules")]
+    same_modules: bool,
     queries: Vec<Query>,
+}
+
+/// What the module keeps between requests (it runs on one thread).
+#[derive(Default)]
+struct Kept {
+    /// The modules the last request gave, if one did.
+    modules: Option<Arc<HashMap<String, String>>>,
+    /// The last analysis made.
+    analysis: Option<Analysis>,
+}
+
+thread_local! {
+    static KEPT: RefCell<Kept> = RefCell::new(Kept::default());
 }
 
 /// Answers a JSON request (see the crate documentation) with a JSON response.
@@ -59,9 +83,33 @@ pub fn handle(request: &str) -> String {
         Ok(request) => request,
         Err(error) => return json!({ "error": format!("invalid request: {}", error) }).to_string(),
     };
-    let analysis = Analysis::with_modules(&request.source, &request.path, &request.modules);
-    let results: Vec<Value> = request
-        .queries
+    let modules = match (request.modules, request.same_modules) {
+        (Some(modules), _) => {
+            let modules = Arc::new(modules);
+            KEPT.with_borrow_mut(|kept| kept.modules = Some(Arc::clone(&modules)));
+            modules
+        }
+        (None, true) => match KEPT.with_borrow(|kept| kept.modules.clone()) {
+            Some(modules) => modules,
+            None => return json!({ "error": "no modules kept; send them", "resend": true }).to_string(),
+        },
+        (None, false) => Arc::default(),
+    };
+    KEPT.with_borrow_mut(|kept| {
+        let fresh = !kept.analysis.as_ref().is_some_and(|analysis| analysis.is_of(&request.source, &request.path, &modules));
+        if fresh {
+            // The old one goes first, so two are never held at once.
+            kept.analysis = None;
+            kept.analysis = Some(Analysis::of_program(request.source, request.path, modules));
+        }
+        let Some(analysis) = &kept.analysis else { return json!({ "error": "no analysis" }).to_string() };
+        answer(analysis, &request.queries)
+    })
+}
+
+/// The results of `queries` about one analysis, as the response.
+fn answer(analysis: &Analysis, queries: &[Query]) -> String {
+    let results: Vec<Value> = queries
         .iter()
         .map(|query| {
             let result = match query {

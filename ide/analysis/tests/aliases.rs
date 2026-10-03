@@ -71,7 +71,7 @@ fn program(checks: bool, code: &str) -> String {
     MAIN.replace("CHECK", first).replace("    @@\n", &format!("    {}\n", code))
 }
 
-fn analysis(source: &str) -> Analysis<'_> {
+fn analysis(source: &str) -> Analysis {
     static SOURCES: std::sync::OnceLock<HashMap<String, String>> = std::sync::OnceLock::new();
     Analysis::with_modules(source, "app/main.vela", SOURCES.get_or_init(sources))
 }

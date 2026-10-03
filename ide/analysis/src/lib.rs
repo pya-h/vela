@@ -19,7 +19,7 @@ mod scan;
 mod types;
 
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::Arc;
 
 use serde::Serialize;
 use vela::error::Error;
@@ -90,34 +90,54 @@ pub struct Location {
     pub path: Option<String>,
 }
 
-/// No other files, for a file analyzed on its own.
-static NO_SOURCES: LazyLock<HashMap<String, String>> = LazyLock::new(HashMap::new);
-
 /// The analysis of one version of a source file. Create one per change and
-/// ask it anything.
-pub struct Analysis<'a> {
-    source: &'a str,
-    context: types::Context<'a>,
-    index: LineIndex<'a>,
+/// ask it anything; it keeps what it was made from, so an editor can keep the
+/// last one while the text is the same (see `Analysis::is_of`).
+pub struct Analysis {
+    /// The file's text, which `index` holds.
+    index: LineIndex<'static>,
+    path: String,
+    /// The program's other files, by path, which analyses of one program
+    /// share while they don't change.
+    sources: Arc<HashMap<String, String>>,
     scan: scan::Scan,
     /// What the compiler found: every mistake, and the checked types.
     checked: types::Checked,
 }
 
-impl<'a> Analysis<'a> {
+impl Analysis {
     /// The analysis of a file on its own: a module it includes can't be read.
-    pub fn new(source: &'a str) -> Self {
-        Analysis::with_modules(source, "", &NO_SOURCES)
+    pub fn new(source: &str) -> Self {
+        Analysis::of_program(source.to_string(), String::new(), Arc::default())
     }
 
     /// The analysis of the file at `path` (`/`-separated), whose program's
     /// other files are in `sources`, by path. A file it includes that isn't there is
     /// reported by `missing_modules`, for the editor to fetch.
-    pub fn with_modules(source: &'a str, path: &'a str, sources: &'a HashMap<String, String>) -> Self {
-        let context = types::Context { path, sources };
-        let checked = types::Checked::new(source, context);
-        let scan = scan::scan(source, &checked.field_accesses, context);
-        Analysis { source, context, index: LineIndex::new(source), scan, checked }
+    pub fn with_modules(source: &str, path: &str, sources: &HashMap<String, String>) -> Self {
+        Analysis::of_program(source.to_string(), path.to_string(), Arc::new(sources.clone()))
+    }
+
+    /// `with_modules`, sharing `sources` with other analyses of the program.
+    pub fn of_program(source: String, path: String, sources: Arc<HashMap<String, String>>) -> Self {
+        let context = types::Context { path: &path, sources: &sources };
+        let checked = types::Checked::new(&source, context);
+        let scan = scan::scan(&source, &checked.field_accesses, context);
+        Analysis { index: LineIndex::owned(source), path, sources, scan, checked }
+    }
+
+    /// Whether this is the analysis of `source` at `path`, among `sources`:
+    /// then it answers anything a new one would.
+    pub fn is_of(&self, source: &str, path: &str, sources: &Arc<HashMap<String, String>>) -> bool {
+        self.source() == source && self.path == path && Arc::ptr_eq(&self.sources, sources)
+    }
+
+    fn source(&self) -> &str {
+        self.index.source()
+    }
+
+    fn context(&self) -> types::Context<'_> {
+        types::Context { path: &self.path, sources: &self.sources }
     }
 
     /// The paths of the files the program includes, directly or through other
@@ -194,7 +214,7 @@ impl<'a> Analysis<'a> {
         let end = match token {
             Some(_) if path_end.flatten().is_some() => path_end.flatten().unwrap_or(start),
             Some(token) => token.range.end,
-            None => match self.source.get(start..).and_then(|rest| rest.chars().next()) {
+            None => match self.source().get(start..).and_then(|rest| rest.chars().next()) {
                 Some(c) if c != '\n' && c != '\r' => start + c.len_utf8(),
                 _ => start,
             },
@@ -249,7 +269,7 @@ impl<'a> Analysis<'a> {
     pub fn definition(&self, offset: usize) -> Option<Location> {
         let byte = self.index.byte_of_utf16(offset);
         let tokens = &self.scan.tokens;
-        let knowledge = infer::Knowledge::new(self.source, &self.scan, &self.checked);
+        let knowledge = infer::Knowledge::new(self.source(), &self.scan, &self.checked);
         let symbol = tokens
             .iter()
             .filter(|t| t.range.start <= byte && byte < t.range.end)
@@ -287,18 +307,18 @@ impl<'a> Analysis<'a> {
         // use gives are being written, though `<>` is read as one operator,
         // not similar. They are completed as if the two stood apart; nothing
         // offered reaches past the cursor, so the ranges stay the file's.
-        if byte > 0 && self.source.get(byte - 1..byte + 1) == Some("<>") {
-            let apart = format!("{} {}", self.source.get(..byte).unwrap_or_default(), self.source.get(byte..).unwrap_or_default());
-            return Analysis::with_modules(&apart, self.context.path, self.context.sources).complete(offset);
+        if byte > 0 && self.source().get(byte - 1..byte + 1) == Some("<>") {
+            let apart = format!("{} {}", self.source().get(..byte).unwrap_or_default(), self.source().get(byte..).unwrap_or_default());
+            return Analysis::of_program(apart, self.path.clone(), Arc::clone(&self.sources)).complete(offset);
         }
-        let (items, from, to) = complete::complete(self.source, &self.scan, &self.checked, self.context, byte);
+        let (items, from, to) = complete::complete(self.source(), &self.scan, &self.checked, self.context(), byte);
         Completions { from: self.index.utf16_of(from), to: self.index.utf16_of(to), items }
     }
 
     /// A description of the name at `offset`: its declaration, type, or
     /// signature.
     pub fn hover(&self, offset: usize) -> Option<Hover> {
-        let knowledge = infer::Knowledge::new(self.source, &self.scan, &self.checked);
+        let knowledge = infer::Knowledge::new(self.source(), &self.scan, &self.checked);
         let ((code, doc), range) = hover::hover(&knowledge, self.index.byte_of_utf16(offset))?;
         let range = self.index.utf16_range(&range);
         Some(Hover { from: range.start, to: range.end, code, doc })

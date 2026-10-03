@@ -12,9 +12,11 @@
 //! `each`, the names `case` and `is` patterns bind, the error a plan B names,
 //! and regions), which are only visible after their declaration.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::path::Path;
+use std::rc::Rc;
 
 use serde::Serialize;
 use vela::ast::{ALTERS, BUILTIN_TASKS, DEFAULT, MODULE_SEPARATOR, NATIVE, NEW_WORD, READ, Span, THIS_WORD, Type, unqualified};
@@ -231,6 +233,33 @@ fn spread_into(token: LexToken, out: &mut Vec<LexToken>) {
     out.push(text(start, token.end, from..token.range.end));
 }
 
+thread_local! {
+    /// The declarations of each module scanned, by path, with the text they
+    /// were scanned from: an editor analyzes the file again on every
+    /// keystroke, and the modules it includes rarely change in between.
+    static DECLARED: RefCell<HashMap<String, Declared>> = RefCell::new(HashMap::new());
+}
+
+/// A module's declarations, and the text they were scanned from.
+struct Declared {
+    text: String,
+    symbols: Rc<Vec<Symbol>>,
+}
+
+/// The declarations of the module at `path`, whose text is `source`: scanned
+/// once for each text it has.
+fn module_declarations(path: &str, source: &str) -> Rc<Vec<Symbol>> {
+    let kept = DECLARED.with_borrow(|declared| declared.get(path).filter(|kept| kept.text == source).map(|kept| Rc::clone(&kept.symbols)));
+    if let Some(symbols) = kept {
+        return symbols;
+    }
+    let lexed = spread(highlight(source));
+    let tokens = Tokens::new(source, &lexed);
+    let symbols = Rc::new(declarations(&tokens).0);
+    DECLARED.with_borrow_mut(|declared| declared.insert(path.to_string(), Declared { text: source.to_string(), symbols: Rc::clone(&symbols) }));
+    symbols
+}
+
 /// An `include` line found by the first pass.
 struct IncludeLine {
     /// The path as written: names and `..`.
@@ -300,9 +329,7 @@ fn included_modules(
         // Each declaration of the module by its own name.
         let mut declared: HashMap<String, usize> = HashMap::new();
         if let Some(source) = &source {
-            let lexed = spread(highlight(source));
-            let tokens = Tokens::new(source, &lexed);
-            let (theirs, _, _) = declarations(&tokens);
+            let theirs = module_declarations(&path, source);
             let listed = |written: &str| line.names.iter().find(|n| n.name == written);
             // How this file writes a name of the module: its alias, the name
             // alone when it is brought in, or through the module.

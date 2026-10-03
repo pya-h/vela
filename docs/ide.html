@@ -222,7 +222,8 @@
         It understands Vela because it <em>is</em> Vela: the compiler's own lexer, parser, and checker are compiled
         to WebAssembly and run inside the page on every keystroke, and programs are built by the same code as the
         <code>vela</code> command. Highlighting, errors, completion, and the compiler can't disagree about the
-        language.
+        language. A file is analyzed once for each change: hovering, completing, and going to a definition ask the
+        analysis it keeps, and the files it includes are sent to it, and scanned, only when they change.
       </p>
       <ul class="toc" aria-label="On this page">
         <li><a href="#install">Install</a></li>

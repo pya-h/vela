@@ -3,13 +3,14 @@
 //! (for slicing the source), and UTF-16 offsets (JavaScript string indices,
 //! which editors such as CodeMirror use).
 
+use std::borrow::Cow;
 use std::ops::Range;
 
 use vela::ast::Span;
 
 /// Line starts of one source text, for fast position conversion.
 pub struct LineIndex<'a> {
-    source: &'a str,
+    source: Cow<'a, str>,
     /// Byte offset of the start of each line.
     starts: Vec<usize>,
     /// UTF-16 offset of the start of each line.
@@ -21,6 +22,20 @@ pub struct LineIndex<'a> {
 
 impl<'a> LineIndex<'a> {
     pub fn new(source: &'a str) -> Self {
+        LineIndex::of(Cow::Borrowed(source))
+    }
+
+    /// The text it indexes.
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+
+    /// The index of a text it keeps itself.
+    pub fn owned(source: String) -> LineIndex<'static> {
+        LineIndex::of(Cow::Owned(source))
+    }
+
+    fn of(source: Cow<'a, str>) -> Self {
         let mut starts = vec![0];
         let mut starts_utf16 = vec![0];
         let mut ascii = vec![true];

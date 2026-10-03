@@ -6,6 +6,10 @@
 //! checked again with the half-typed text removed, so the compiler's types are
 //! used whenever the rest of the file allows it.
 
+use std::cell::RefCell;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::rc::Rc;
+
 use serde::Serialize;
 use vela::ast::{BUILTIN_TASKS, BUILTIN_TYPES, Need, Type, unqualified};
 use vela::lexer::{LexKind, Token};
@@ -995,10 +999,56 @@ fn plan_b_value_can_fail(k: &Knowledge, q: usize) -> bool {
     }
 }
 
+thread_local! {
+    /// The last texts `probe` checked, with the program they were checked in.
+    /// Completing a word removes the word typed so far, so each letter typed
+    /// probes the same text, which is checked once.
+    static PROBES: RefCell<Vec<Probe>> = const { RefCell::new(Vec::new()) };
+}
+
+/// A text `probe` checked: the text, the file's path, a hash of the program's
+/// other files (see `program_print`), and what the check found.
+struct Probe {
+    text: String,
+    path: String,
+    program: u64,
+    checked: Rc<Checked>,
+}
+
+/// How many probes are kept.
+const PROBES_KEPT: usize = 4;
+
 /// `source` with `from..to` removed, checked.
-fn probe(source: &str, context: Context, from: usize, to: usize) -> Checked {
+fn probe(source: &str, context: Context, from: usize, to: usize) -> Rc<Checked> {
     let text = format!("{}{}", source.get(..from).unwrap_or_default(), source.get(to..).unwrap_or_default());
-    Checked::new(&text, context)
+    let program = program_print(context);
+    let kept = PROBES.with_borrow(|probes| {
+        probes.iter().find(|probe| probe.text == text && probe.path == context.path && probe.program == program).map(|probe| Rc::clone(&probe.checked))
+    });
+    if let Some(checked) = kept {
+        return checked;
+    }
+    let checked = Rc::new(Checked::new(&text, context));
+    PROBES.with_borrow_mut(|probes| {
+        if probes.len() == PROBES_KEPT {
+            probes.remove(0);
+        }
+        probes.push(Probe { text, path: context.path.to_string(), program, checked: Rc::clone(&checked) });
+    });
+    checked
+}
+
+/// A hash of the texts of the program's other files, which a probe's check
+/// reads too.
+fn program_print(context: Context) -> u64 {
+    let mut paths: Vec<&String> = context.sources.keys().collect();
+    paths.sort_unstable();
+    let mut hasher = DefaultHasher::new();
+    for path in paths {
+        path.hash(&mut hasher);
+        context.sources.get(path).hash(&mut hasher);
+    }
+    hasher.finish()
 }
 
 /// Whether `byte` is inside a comment, a text literal, or a char, where
