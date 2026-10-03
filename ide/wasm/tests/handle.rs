@@ -5,7 +5,7 @@
 
 use serde_json::{Value, json};
 use vela_analysis::Analysis;
-use vela_analysis_wasm::{handle, vela_alloc, vela_free_response, vela_handle};
+use vela_analysis_wasm::{analyses_made, handle, vela_alloc, vela_free_response, vela_handle};
 
 const SOURCE: &str = "task main()\n    bind x = 1\n    show(x)\nfi\n";
 
@@ -60,6 +60,12 @@ fn modules_given_once_are_kept_for_the_requests_after() {
     // A request without them has none; the kept ones stay for the next.
     assert_eq!(asked(json!({}))["results"][1], json!(["lib/a.vela"]));
     assert_eq!(asked(json!({ "same-modules": true })), json!({ "results": [[], []] }));
+    // Text given alone, as a tooltip's code is, doesn't replace the file's
+    // analysis, which answers the next request about the file.
+    let made = analyses_made();
+    request(json!({ "source": "task tip()\nfi\n", "queries": [{ "kind": "tokens" }] }));
+    assert_eq!(asked(json!({ "same-modules": true })), json!({ "results": [[], []] }));
+    assert_eq!(analyses_made(), made + 1);
     // New modules replace them.
     let changed = json!({ "lib/a.vela": "task other()\nfi\n" });
     assert_ne!(asked(json!({ "modules": changed }))["results"][0], json!([]));

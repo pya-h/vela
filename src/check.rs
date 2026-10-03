@@ -3486,7 +3486,7 @@ impl Checker {
         }
         let found = self.check_expr(&mut cond.value);
         let ty = self.or_unknown(found);
-        let Some(pattern) = &cond.pattern else {
+        let Some(pattern) = &mut cond.pattern else {
             self.expect_type(&ty, &Type::Bool, cond.value.span)?;
             return match gives {
                 Some(branches) => self.check_value_block(Vec::new(), body, cond.value.span, branches),
@@ -3511,7 +3511,7 @@ impl Checker {
         while let Some(current) = part {
             let found = self.check_expr(&mut current.value);
             let ty = self.or_unknown(found);
-            match &current.pattern {
+            match &mut current.pattern {
                 None => self.expect_type(&ty, &Type::Bool, current.value.span)?,
                 Some(pattern) if matches!(pattern.kind, PatternKind::Any) => {
                     return err(pattern.span, "'_' matches anything, so this condition would always hold");
@@ -3641,9 +3641,13 @@ impl Checker {
     /// The names a part of a condition, `value is pattern`, binds: as any
     /// pattern does, except for a test of a tuple item's type, and `none`
     /// matched on a read past the tuple's end, which is always none.
-    fn part_bindings(&mut self, ty: &Type, value: &mut Expr, pattern: &Pattern) -> Result<Vec<Declared>> {
-        if let PatternKind::Typed { ty: written, form, .. } = &pattern.kind {
-            return self.type_test_bindings(value, written, form, pattern.span);
+    fn part_bindings(&mut self, ty: &Type, value: &mut Expr, pattern: &mut Pattern) -> Result<Vec<Declared>> {
+        let at = pattern.span;
+        if let PatternKind::Typed { ty: written, form, .. } = &mut pattern.kind {
+            // The type as resolved, which `settle_type_tests` compares.
+            let (resolved, bindings) = self.type_test_bindings(value, written, form, at)?;
+            *written = resolved;
+            return Ok(bindings);
         }
         if matches!(pattern.kind, PatternKind::None) && past_end(value) {
             value.ty = Some(Type::None);
@@ -3657,7 +3661,7 @@ impl Checker {
     /// and returns the names it binds: the item for `{x}`, the read itself, a
     /// `maybe`, for `x`. The reads of the item after it, in its condition and
     /// its block, give the type it names (see `check_safe_item`).
-    fn type_test_bindings(&mut self, value: &Expr, written: &Type, form: &TypedForm, at: Span) -> Result<Vec<Declared>> {
+    fn type_test_bindings(&mut self, value: &Expr, written: &Type, form: &TypedForm, at: Span) -> Result<(Type, Vec<Declared>)> {
         let Some((tuple, place)) = safe_read_of(value) else { return err(value.span, TYPE_TEST_ON_A_READ) };
         let Type::Maybe(wanted) = self.resolve_type(written, at, TypePlace::Body)? else {
             return err(at, format!("a tuple's item read with '.#' is a maybe, so its type is written as one, as in 'maybe {}'", written));
@@ -3666,20 +3670,24 @@ impl Checker {
             return err(at, format!("a type test names a type the program knows, such as 'maybe int'; '{}' is given by each use", wanted));
         }
         // The item's own type where it has the type tested, so a value of a
-        // region keeps it.
+        // region keeps it. Where the item's type is not known yet (a group's,
+        // or one holding a `T`), its regions are one the task can't name, so
+        // nothing taken from it outlives the call (see `UNNAMED_REGION`).
         let held = match item_state(value) {
             Some(Some(found)) if same_ignoring_regions(&found, &wanted) => found,
-            _ => (*wanted).clone(),
+            Some(_) => (*wanted).clone(),
+            None => self.in_region(&wanted, UNNAMED_REGION),
         };
-        self.narrowed.push((tuple, place, (*wanted).clone()));
-        match form {
-            TypedForm::Only => Ok(Vec::new()),
+        self.narrowed.push((tuple, place, held.clone()));
+        let bindings = match form {
+            TypedForm::Only => Vec::new(),
             TypedForm::Named(names) if !names.parts.is_empty() => {
-                err(names.span, "the read is a maybe, so one name takes it; to take the item apart, write it in braces, as in 'is maybe (int, text) {(a, b)}'")
+                return err(names.span, "the read is a maybe, so one name takes it; to take the item apart, write it in braces, as in 'is maybe (int, text) {(a, b)}'");
             }
-            TypedForm::Named(names) => Ok(vec![(names.name.clone(), names.span, Type::Maybe(Box::new(held)), names.mutable)]),
-            TypedForm::Value(names) => self.bound_names(names, &held, false),
-        }
+            TypedForm::Named(names) => vec![(names.name.clone(), names.span, Type::Maybe(Box::new(held)), names.mutable)],
+            TypedForm::Value(names) => self.bound_names(names, &held, false)?,
+        };
+        Ok(((Type::Maybe(wanted)), bindings))
     }
 
     /// Settles the tests of the types of tuple items in `cond`, guarding
@@ -4622,13 +4630,20 @@ impl Checker {
             self.coerce(expr, &told)?;
             return Ok(told);
         };
+        // An item of another type than the one tested is read where the test
+        // failed, in a block that is dropped, or one holding a `T`, which each
+        // copy settles: either way it reads as the type tested.
+        let read_as = match narrowed {
+            Some(narrowed) if !same_ignoring_regions(&found, &narrowed) => Type::Maybe(Box::new(narrowed)),
+            _ => Type::Maybe(Box::new(found.clone())),
+        };
         let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
         if let ExprKind::Field(base, _) = taken {
             let mut read = Expr::new(ExprKind::Field(base, place.to_string()), span);
-            read.ty = Some(found.clone());
+            read.ty = Some(found);
             expr.kind = ExprKind::Wrap(Box::new(read));
         }
-        Ok(Type::Maybe(Box::new(found)))
+        Ok(read_as)
     }
 
     /// The group whose values `e` names, when it is a name of them, `args`.
@@ -9321,21 +9336,26 @@ impl Checker {
                 // A condition this copy knows, as one on 'args.len' is: a branch
                 // it never takes is emptied, so a read it guards against is never
                 // checked or written. The `when` stays, so one used as a value
-                // still gives it, from the branch that runs.
-                let mut taken = false;
-                for arm in arms.iter_mut() {
+                // still gives it, from the branch that runs. The arms after one
+                // it knows holds are dropped before anything is done to them, as
+                // their conditions may read what only that arm guards against.
+                let (mut taken, mut cut) = (false, arms.len());
+                for (i, arm) in arms.iter_mut().enumerate() {
                     self.substitute_condition(&mut arm.cond, given, made)?;
                     self.settle_type_tests(&mut arm.cond, &mut arm.body);
-                    if taken {
-                        arm.body.clear();
-                        continue;
-                    }
                     match known_condition(&arm.cond).filter(|_| !given.is_empty()) {
                         Some(false) => arm.body.clear(),
                         Some(true) => taken = true,
                         None => {}
                     }
                     self.substitute_block(&mut arm.body, given, made)?;
+                    if taken {
+                        cut = i + 1;
+                        break;
+                    }
+                }
+                if taken {
+                    arms.truncate(cut);
                 }
                 if taken && let Some(dropped) = else_block {
                     dropped.clear();
@@ -10548,6 +10568,9 @@ fn mismatch_hint(actual: &Type, expected: &Type) -> String {
         (Type::Maybe(inner) | Type::Or(inner, _), _) if fits_regions(inner, expected) => {
             "; extract its value first, as in 'x { … }' or 'when x is {value}'".to_string()
         }
+        _ if actual.regions().contains(&UNNAMED_REGION) => {
+            format!("; a type test on an item whose type each use gives takes what may be in a region of the caller's, written '{}', which only this task sees; to keep it, copy it into a region of its own, as in 's.copy()@r'", UNNAMED_REGION)
+        }
         (Type::Text(Some(region)), Type::Text(None)) => {
             format!("; this text is in region '{}', and text here must last as long as the program, as a literal does", region)
         }
@@ -10766,18 +10789,24 @@ fn add_startups(items: &mut Vec<Item>) {
 /// test names after `maybe`.
 pub const BUILTIN_TYPE_WORDS: [&str; 6] = ["int", "float", "text", "bool", "char", "unit"];
 
+/// The region of what a type test takes from an item whose type is not known
+/// yet: no name in the task is it, so nothing taken lasts past the call, as
+/// the item may be in a region of the caller's.
+const UNNAMED_REGION: &str = "#item";
+
 /// Why a type can't be tested where it is written.
 const TYPE_TEST_ON_A_READ: &str = "a type after 'is' tests a tuple's item read with '.#' from a tuple with a name, as in 'when t.#2 is maybe int {x}'";
 
 /// What a read of a tuple's item, `t.#k`, is known to find: `Some(Some(type))`
 /// for an item, `Some(None)` past the tuple's end, and nothing where the type
-/// isn't known yet (a group's tuple, in the task taking it).
+/// isn't known yet (a group's tuple, or an item holding a `T`, in the task
+/// taking it).
 fn item_state(read: &Expr) -> Option<Option<Type>> {
     match &read.kind {
         ExprKind::Wrap(inner) if matches!(inner.kind, ExprKind::Field(..)) => match &inner.ty {
             Some(Type::None) => Some(None),
-            Some(found) => Some(Some(found.clone())),
-            None => None,
+            Some(found) if found.params().is_empty() => Some(Some(found.clone())),
+            _ => None,
         },
         ExprKind::Field(_, item) if item.starts_with(SAFE_ITEM) && read.ty == Some(Type::None) => Some(None),
         _ => None,

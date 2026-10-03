@@ -1873,7 +1873,10 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
         <code>maybe text {s}</code> takes a <code>text@r</code>, and <code>s</code> keeps its region. Each answer is
         known when compiling, so nothing is tested when the program runs and a branch that can't run is left out; this
         is what makes them useful on the tuple of a <a href="#type-groups">group's values</a>, whose item 2 has a
-        different type, or none, in each use. <code>t.#5 is {x}</code> past the end is still an error: it never
+        different type, or none, in each use, and on an item holding a <code>T</code>, which each copy of the task
+        settles. What such a test takes from an item whose type each use gives may be in a region of the caller's, so
+        it stays inside the task: <code>maybe text {s}</code> gives a <code>text</code> that can't be sent back or
+        kept outside, unless copied into a region, as in <code>s.copy()@r</code>. <code>t.#5 is {x}</code> past the end is still an error: it never
         matches, and <code>x</code> would have no type.
       </p>
       <pre><span class="keyword">task</span> third&lt;P...: fixed &amp; shown&gt;(args: P...)

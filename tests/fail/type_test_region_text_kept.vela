@@ -1,0 +1,19 @@
+; error: 7:12: expected type text, got text@#item; a type test on an item whose type each use gives takes what may be in a region of the caller's, written '#item', which only this task sees; to keep it, copy it into a region of its own, as in 's.copy()@r'
+; Text a type test takes from a group's item may be in a region of the
+; caller's, so it can't leave the task.
+task f<P...: fixed & shown>(args: P...) -> text
+    bind t = (args...) { <- "few" }
+    when t.#1 is maybe text {s}
+        <- s
+    fi
+    <- "no"
+fi
+
+task main()
+    hold keep = "init"
+    when true
+        region r
+        keep = f(1, "ab" + "cd" at r)
+    fi
+    show(keep)
+fi

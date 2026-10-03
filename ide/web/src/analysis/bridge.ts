@@ -74,11 +74,11 @@ export class VelaAnalysis {
    * a crash the module is restarted, so later calls work.
    */
   request<const Q extends readonly Query[]>(source: string, queries: Q, context?: ProgramContext): Results<Q> {
-    let response = this.call(JSON.stringify(this.body(source, queries, context))) as { results?: unknown[]; error?: string; resend?: boolean };
+    let response = this.send(source, queries, context);
     // The module kept no modules after all: send them.
     if (response.resend === true && context) {
       this.sentModules = null;
-      response = this.call(JSON.stringify(this.body(source, queries, context))) as typeof response;
+      response = this.send(source, queries, context);
     }
     if (typeof response.error === "string") {
       throw new AnalysisError(response.error);
@@ -118,15 +118,23 @@ export class VelaAnalysis {
     return this.request("", [{ kind: "language" }] as const)[0];
   }
 
-  /** The request's JSON body, without the modules when the module keeps the same ones. */
-  private body(source: string, queries: readonly Query[], context?: ProgramContext): object {
-    if (!context) return { source: wellFormed(source), queries };
+  /**
+   * Sends one request, without the modules when the module keeps the same
+   * ones. The modules sent count as kept only once the module answered without
+   * an error: one it refused may have left the old ones kept.
+   */
+  private send(source: string, queries: readonly Query[], context?: ProgramContext): { results?: unknown[]; error?: string; resend?: boolean } {
+    type Response = { results?: unknown[]; error?: string; resend?: boolean };
+    if (!context) return this.call(JSON.stringify({ source: wellFormed(source), queries })) as Response;
     if (this.sentModules !== null && sameModules(this.sentModules, context.modules)) {
-      return { source: wellFormed(source), path: context.path, "same-modules": true, queries };
+      return this.call(JSON.stringify({ source: wellFormed(source), path: context.path, "same-modules": true, queries })) as Response;
     }
-    const modules = Object.fromEntries(Object.entries(context.modules).map(([path, text]) => [path, wellFormed(text)]));
-    this.sentModules = { ...context.modules };
-    return { source: wellFormed(source), path: context.path, modules, queries };
+    const sent = { ...context.modules };
+    const modules = Object.fromEntries(Object.entries(sent).map(([path, text]) => [path, wellFormed(text)]));
+    this.sentModules = null;
+    const response = this.call(JSON.stringify({ source: wellFormed(source), path: context.path, modules, queries })) as Response;
+    if (typeof response.error !== "string") this.sentModules = sent;
+    return response;
   }
 
   private call(body: string): unknown {

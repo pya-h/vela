@@ -109,6 +109,9 @@ pub struct Parser {
     pos: usize,
     /// Current nesting level; see `MAX_NESTING`.
     depth: usize,
+    /// The operators open around the one being read, of every chain: `**`
+    /// chains and ones in parentheses go deeper by recursing, not by a loop.
+    operators: usize,
     /// The parts of the written types, for errors about them (see `TypePlaces`).
     type_places: TypePlaces,
     /// The parts of the type being parsed.
@@ -137,7 +140,7 @@ const IS_WITH_OR: &str = "an 'is' is joined with 'and', not 'or': with 'or', the
 impl Parser {
     /// `tokens` and `spans` are parallel, as produced by `Lexer::tokenize`.
     pub fn new(tokens: Vec<Token>, spans: Vec<Span>) -> Self {
-        Parser { tokens, spans, pos: 0, depth: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None }
+        Parser { tokens, spans, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None }
     }
 
     /// The `include` lines of the file parsed.
@@ -310,21 +313,29 @@ impl Parser {
         Ok(())
     }
 
-    /// `enter`, for an operator of a chain that already has `levels` of them:
-    /// a long chain is told how to split, since each operator deepens the tree.
-    fn enter_operator(&mut self, levels: usize) -> Result<()> {
+    /// `enter`, for one more operator: a long chain is told how to split,
+    /// since each operator deepens the tree. Pair with `leave_operators`.
+    fn enter_operator(&mut self) -> Result<()> {
         let at = self.peek_span();
-        self.enter().map_err(|error| match levels > MAX_NESTING / 2 {
+        let operators = self.operators;
+        self.enter().map_err(|error| match operators > MAX_NESTING / 2 {
             true => Error::at(
                 at,
                 format!(
                     "this chain of operators has more than {} terms, and each operator counts as a level of nesting, at most {} in all; split it with a name for part of it, as in 'bind part = a + b + …' and then 'part + …'",
-                    levels + 1,
+                    operators + 1,
                     MAX_NESTING
                 ),
             ),
             false => error,
-        })
+        })?;
+        self.operators += 1;
+        Ok(())
+    }
+
+    fn leave_operators(&mut self, levels: usize) {
+        self.leave(levels);
+        self.operators = self.operators.saturating_sub(levels);
     }
 
     fn leave(&mut self, levels: usize) {
@@ -2558,7 +2569,7 @@ impl Parser {
             }
             let span = self.peek_span();
             if self.check(Token::Range) && min <= Self::RANGE_PRECEDENCE && !ranged {
-                self.enter_operator(levels)?;
+                self.enter_operator()?;
                 levels += 1;
                 self.advance();
                 let right = self.parse_binary(Self::RANGE_PRECEDENCE + 1)?;
@@ -2574,7 +2585,7 @@ impl Parser {
             if ranged && precedence > Self::RANGE_PRECEDENCE {
                 break;
             }
-            self.enter_operator(levels)?;
+            self.enter_operator()?;
             levels += 1;
             self.advance();
             // `2 ** 3 ** 2` is `2 ** (3 ** 2)`.
@@ -2582,7 +2593,7 @@ impl Parser {
             let right = self.parse_binary(next)?;
             left = Expr::new(ExprKind::Binary(op, Box::new(left), Box::new(right)), span);
         }
-        self.leave(levels);
+        self.leave_operators(levels);
         Ok(left)
     }
 

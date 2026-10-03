@@ -1,5 +1,5 @@
-; `else when` chains: one `fi` closes the whole chain, and a chain is the same
-; statement as a `when` written inside an `else` on its own lines.
+; `else when` chains: one `fi` closes the whole chain, and a chain does what a
+; `when` written inside an `else` on its own lines does.
 
 kind Light
     Off
@@ -48,7 +48,7 @@ task main()
         show("off")
     fi
 
-    ; The same chain written as a `when` inside the `else`, which it is.
+    ; The same chain written as a `when` inside the `else`, which does the same.
     when 1 > 2
         show("never")
     else

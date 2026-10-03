@@ -49,6 +49,52 @@ task plain()
     when t.#5? is maybe float
         show("5 may be float: ", t.#5 { 2.5 })
     fi
+    ; The item is text, so the reads after the test, of an int, are in code
+    ; that never runs and is dropped.
+    when t.#1? is maybe int and t.#1 is {x}
+        show("wrong ", x + 1)
+    fi
+fi
+
+shape Box<T>
+    value: T
+fi
+
+; A shape given types is tested as written.
+task boxes()
+    bind t = (Box<int> { value: 3 }, 1)
+    when t.#0 is maybe Box<int> {b}
+        show("box of ", b.value)
+    fi
+    when t.#0? is maybe Box<text>
+        show("wrong")
+    else
+        show("no box of text")
+    fi
+fi
+
+; An item holding a `T` is tested in each copy.
+task held<T: shown & fixed>(x: T)
+    bind t = (x, 1)
+    when t.#0 is maybe int {y}
+        show("held int ", y + 1)
+    else when t.#0 is maybe int m
+        show("wrong ", m)
+    else
+        show("held no int")
+    fi
+fi
+
+; Text taken from a group's item may be in a region of the caller's, so it is
+; used inside the task.
+task measured<P...: fixed & shown>(args: P...) -> int
+    bind t = (args...) { <- 0 }
+    when t.#1 is maybe text {s}
+        bind same = s
+        show(same, " is ", s.len, " long")
+        <- s.len
+    fi
+    <- 0
 fi
 
 task third<P...: fixed & shown>(args: P...)
@@ -77,7 +123,7 @@ task third<P...: fixed & shown>(args: P...)
         show("k ", k)
     fi
 fi
-; A test in an arm after one each copy knows holds is still settled.
+; The arms after one each copy knows holds are dropped, tests and all.
 task after_taken<P...: fixed & shown>(args: P...)
     bind t = (args...) { <- }
     when args.len == 2
@@ -91,6 +137,13 @@ fi
 
 task main()
     plain()
+    boxes()
+    held(5)
+    held("s")
+    region r
+    bind made = "ab" + "cd" at r
+    show(measured(1, made))
+    show(measured(1, 2))
     third(1, 2, 3)
     third(1, "b", "c")
     third(1, 2)

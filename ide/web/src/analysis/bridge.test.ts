@@ -351,6 +351,26 @@ describe("VelaAnalysis", () => {
     expect(own.file(source, context)).toMatchObject({ diagnostics: [], missing: [] });
   });
 
+  it("sends the modules again after a request that carried them was refused", async () => {
+    const own = await VelaAnalysis.load(wasmBytes());
+    const internals = own as unknown as { call(body: string): unknown };
+    const sent: string[] = [];
+    const call = internals.call.bind(own);
+    internals.call = (body: string) => {
+      sent.push(body);
+      return call(body);
+    };
+    const source = "include lib/a\n\ntask main()\n    a.hello()\nfi\n";
+    const old = { path: "main.vela", modules: { "lib/a.vela": "task other()\nfi\n" } };
+    const context = { path: "main.vela", modules: { "lib/a.vela": "task hello()\nfi\n" } };
+    own.file(source, old);
+    const bogus = [{ kind: "explode" }] as unknown as [{ kind: "tokens" }];
+    expect(() => own.request(source, bogus, context)).toThrow(/invalid request/);
+    // The module still keeps the old ones, so the new ones go again.
+    expect(own.file(source, context).diagnostics).toEqual([]);
+    expect(sent.map((body) => "modules" in JSON.parse(body))).toEqual([true, true, true]);
+  });
+
   it("frees its memory after every request", () => {
     const source = readFileSync(join(examples, "todo.vela"), "utf8");
     const memory = (analysis as unknown as { exports: { memory: WebAssembly.Memory } }).exports.memory;

@@ -9,6 +9,13 @@ has 0
 long form: missing
 long form 10
 5 may be float: 2.5
+box of 3
+no box of text
+held int 6
+held no int
+abcd is 4 long
+4
+0
 third is int, doubled 6
 first plus one 2
 k 2

@@ -1,7 +1,7 @@
-  1 | ; `else when` chains: one `fi` closes the whole chain, and a chain is the same
-    | comment:; `else when` chains: one `fi` closes the whole chain, and a chain is the same
-  2 | ; statement as a `when` written inside an `else` on its own lines.
-    | comment:; statement as a `when` written inside an `else` on its own lines.
+  1 | ; `else when` chains: one `fi` closes the whole chain, and a chain does what a
+    | comment:; `else when` chains: one `fi` closes the whole chain, and a chain does what a
+  2 | ; `when` written inside an `else` on its own lines does.
+    | comment:; `when` written inside an `else` on its own lines does.
   4 | kind Light
     | keyword:kind  type:Light
   5 |     Off
@@ -86,8 +86,8 @@
     | builtin-fn:show  punctuation:(  string:"off"  punctuation:)
  49 |     fi
     | keyword:fi
- 51 |     ; The same chain written as a `when` inside the `else`, which it is.
-    | comment:; The same chain written as a `when` inside the `else`, which it is.
+ 51 |     ; The same chain written as a `when` inside the `else`, which does the same.
+    | comment:; The same chain written as a `when` inside the `else`, which does the same.
  52 |     when 1 > 2
     | keyword:when  number:1  operator:>  number:2
  53 |         show("never")

@@ -222,11 +222,15 @@ fn deep_nesting_is_an_error_not_a_crash() {
     // A long chain of operators is told how to split.
     let error = driver::generate_c(&program(vec!["1"; deep].join(" + "))).expect_err("an operator chain");
     assert!(error.message.contains("this chain of operators has more than") && error.message.contains("bind part ="), "{}", error.message);
+    // And so is one of `**`, which groups to the right.
+    let error = driver::generate_c(&program(vec!["1"; deep].join(" ** "))).expect_err("a power chain");
+    assert!(error.message.contains("this chain of operators has more than"), "{}", error.message);
     // Just below the limit still compiles.
     let near = limit - 5;
     let ok = program(format!("{}1{}", "(".repeat(near), ")".repeat(near)));
     driver::generate_c(&ok).unwrap();
     driver::generate_c(&program(vec!["1"; near].join(" + "))).unwrap();
+    driver::generate_c(&program(vec!["1"; near].join(" ** "))).unwrap();
     let calls = format!("task id(n: int) -> int\n    <- n\nfi\n{}", program(format!("{}1{}", "id(".repeat(near), ")".repeat(near))));
     driver::generate_c(&calls).unwrap();
     // Plan Bs nest three levels each (the postfix value, the block, and the

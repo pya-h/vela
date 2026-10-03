@@ -27,6 +27,20 @@ task last<P...: fixed & shown>(args: P...)
     show(s)
 fi
 
+; An arm this copy knows holds drops the arms after it, so they may read what
+; only that arm guards against.
+task guarded<P...: fixed & shown>(args: P...)
+    bind t = (args...) { <- }
+    region r
+    when args.len < 3
+        show("few")
+    else when t.2.str(r).len > 1
+        show("a long third")
+    else
+        show("a short third")
+    fi
+fi
+
 task boxes<P...: shown & fixed>(args: P...)
     region r
     each v in args
@@ -68,6 +82,9 @@ task main()
     last(1, "b", 3.5)
     last(1, "b")
     last(1)
+    guarded(1, 2)
+    guarded(1, 2, 3)
+    guarded(1, 2, "three")
     boxes(1, "two")
     kept(1, 2)
     kept(1)

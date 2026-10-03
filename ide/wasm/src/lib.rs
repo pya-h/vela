@@ -23,6 +23,8 @@
 //!
 //! The module keeps the last analysis, so queries about the same text, path,
 //! and modules (a hover, a completion, a definition) don't analyze it again.
+//! One of text given alone, with neither modules nor `same-modules`, is kept
+//! apart, so that analyzing a snippet doesn't replace the file's.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -69,8 +71,13 @@ struct Request {
 struct Kept {
     /// The modules the last request gave, if one did.
     modules: Option<Arc<HashMap<String, String>>>,
-    /// The last analysis made.
+    /// The last analysis made of a file of a program, given modules.
     analysis: Option<Analysis>,
+    /// The last one made of text alone, as the code in a hover's tooltip is,
+    /// apart so that it doesn't replace the file's.
+    bare: Option<Analysis>,
+    /// How many analyses were made, which the tests read.
+    made: usize,
 }
 
 thread_local! {
@@ -83,6 +90,7 @@ pub fn handle(request: &str) -> String {
         Ok(request) => request,
         Err(error) => return json!({ "error": format!("invalid request: {}", error) }).to_string(),
     };
+    let bare = request.modules.is_none() && !request.same_modules;
     let modules = match (request.modules, request.same_modules) {
         (Some(modules), _) => {
             let modules = Arc::new(modules);
@@ -96,15 +104,24 @@ pub fn handle(request: &str) -> String {
         (None, false) => Arc::default(),
     };
     KEPT.with_borrow_mut(|kept| {
-        let fresh = !kept.analysis.as_ref().is_some_and(|analysis| analysis.is_of(&request.source, &request.path, &modules));
+        let slot = if bare { &mut kept.bare } else { &mut kept.analysis };
+        let fresh = !slot.as_ref().is_some_and(|analysis| analysis.is_of(&request.source, &request.path, &modules));
         if fresh {
             // The old one goes first, so two are never held at once.
-            kept.analysis = None;
-            kept.analysis = Some(Analysis::of_program(request.source, request.path, modules));
+            *slot = None;
+            *slot = Some(Analysis::of_program(request.source, request.path, modules));
+            kept.made += 1;
         }
-        let Some(analysis) = &kept.analysis else { return json!({ "error": "no analysis" }).to_string() };
+        let Some(analysis) = slot.as_ref() else { return json!({ "error": "no analysis" }).to_string() };
         answer(analysis, &request.queries)
     })
+}
+
+/// How many analyses this thread's module made, for the tests to see which
+/// requests were answered from a kept one.
+#[doc(hidden)]
+pub fn analyses_made() -> usize {
+    KEPT.with_borrow(|kept| kept.made)
 }
 
 /// The results of `queries` about one analysis, as the response.
