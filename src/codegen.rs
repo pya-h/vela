@@ -4548,6 +4548,9 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::Invoke { callee, args } => expr_reads(callee, name) || args.iter().any(|arg| expr_reads(arg, name)),
         // `new` reads the region it allocates in.
         ExprKind::New { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
+        // `t.#5` past the tuple's end is none, and reads the tuple only for what
+        // working it out does (see `work_out_none`).
+        ExprKind::Field(inner, item) if item.starts_with(check::SAFE_ITEM) && e.ty == Some(Type::None) && changes_nothing(inner) => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner)
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => expr_reads(inner, name),
         ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {

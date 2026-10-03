@@ -1,0 +1,6 @@
+; error: 5:21: this tuple has no such item, so its plan B always runs, and gives the value: one of a type, not 'none'
+; Past the tuple's end, the plan B always runs, so it gives a value of a type.
+task main()
+    bind t = (1, 2)
+    bind n = t.#5 { none }
+fi

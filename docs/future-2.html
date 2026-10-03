@@ -632,6 +632,118 @@ fi</pre>
         </div>
       </div>
 
+      <div class="option" id="group-values">
+        <h3><span aria-hidden="true">🧷</span> Working With a Group's Values <span class="badge b-idea">Idea</span></h3>
+        <p>
+          A <a href="vela.html#type-groups">type group</a> gives its values one at a time with
+          <code>each v in args</code>, and <code>P</code> alone is the type of <code>v</code>. Two things are still
+          missing: a loop over the group inside a loop over it (refused since 2026-10-02, because <code>P</code> would
+          name two types at once), and a way to <em>do</em> something with a value of a type the body can't name, such as
+          adding it when it is an <code>int</code>. These ideas are the user's (2026-10-03), with notes on how they fit.
+        </p>
+
+        <h4>1. Loops inside loops over one group</h4>
+        <p>
+          Each loop gets a type of its own, so the inner loop's <code>P</code> and the outer loop's are told apart. A way
+          to write it: the loop names its turn's type, <code>each v: A in args</code>, and <code>A</code> is that value's
+          type inside it, as <code>P</code> is today; <code>each v in args</code> alone keeps meaning <code>P</code>.
+        </p>
+        <pre>task pairs&lt;P...: shown&gt;(args: P...)
+    each v: A in args
+        each w: B in args
+            show(v, " with ", w)       ; A and B are each copy's own types
+        fi
+    fi
+fi</pre>
+        <p>
+          It costs nothing when running: the body is written out once for each pair, as it is for each value now
+          (n values give n × n blocks, which a size limit should keep in check). Today's way around it, which works:
+          give the value and the group on to a task of its own, <code>with(v, args...)</code>.
+        </p>
+
+        <h4>2. Matching a value by its type</h4>
+        <p>
+          <code>v.type</code> gives the type as text, which each copy knows when compiling, but it doesn't help a
+          <code>match</code>: <code>case "int"</code> compares text, and inside the case <code>v</code> is still a
+          <code>P</code>, so <code>v + 1</code> is still refused. What is wanted is a match that <em>names</em> the type
+          and gives the value under that type. The user's syntax: <code>match v?</code>, where the <code>?</code> asks
+          for the type itself, not its text.
+        </p>
+        <pre>task total&lt;P...: shown&gt;(args: P...) -&gt; float
+    hold sum = 0.0
+    each v in args
+        match v?
+            case int n
+                sum += float(n)
+            case float x
+                sum += x
+            case [int] xs              ; an array of any count, or a slice
+                each n in xs
+                    sum += float(n)
+                fi
+            case (int, float) a, b     ; a tuple, taken apart
+                sum += float(a) + b
+            else
+                show("skipped ", v)
+        fi
+    fi
+    &lt;- sum
+fi
+
+; and as a condition:
+when v? is [int] xs
+    show(xs.len)
+fi</pre>
+        <p><strong>How it would work.</strong></p>
+        <ul>
+          <li>Each copy of the task knows the type of each value, so only the matching case is kept and the others are
+            left out, as a <code>when</code> on <code>args.len</code> is today. It costs nothing when running, and a case
+            that can't match is never checked against that value, so a case may use <code>n + 1</code> freely.</li>
+          <li>Since a group can hold any type, a type match needs an <code>else</code>, or each use whose value no case
+            takes is an error at that use, as a tuple item past a call's values is now.</li>
+          <li>Outside a task that takes types the type is known already, so <code>match v?</code> there is a warning:
+            only one case can ever match.</li>
+          <li>The same works on <code>P</code> of a plain generic task, <code>&lt;T&gt;</code>, not only groups.</li>
+        </ul>
+        <p><strong>Improvements on the idea.</strong></p>
+        <ul>
+          <li><strong><code>[int]</code> as a view, not an array.</strong> The idea asks that a slice be given in its
+            array form. An array's count is part of its type and known when compiling (<code>[int#4]</code>), and a
+            slice's is known only when running, so a slice can't become an array. Instead, <code>case [int] xs</code>
+            gives a read-only view of the items, of any count: an array <code>[int#4]</code>, or a slice
+            <code>[int]@r</code>. It can be gone through with <code>each</code>, read with <code>xs[#i]</code> and
+            <code>xs.len</code>, but not grown or changed, which answers the mutation concern without copying
+            anything (a pointer and a count). <code>case [int#4] xs</code> would match only that count, and give the
+            array itself.</li>
+          <li><strong>Taking a tuple apart</strong> could use the pattern Vela already has, <code>case (int, float) (a, b)</code>,
+            or the idea's <code>case (int, float) a, b</code>, which reads like <code>bind a, b = t</code>.</li>
+          <li><strong>Shapes and kinds by name:</strong> <code>case Point p</code>, and <code>case maybe int m</code>
+            for a <code>maybe</code>. A kind's variants are a value match, which <code>match</code> already does, so a
+            type case only names the kind: <code>case Shape s</code>.</li>
+          <li><strong>The type's needs come with it:</strong> in <code>case int n</code>, <code>n</code> is an
+            <code>int</code> with everything an <code>int</code> allows, whatever <code>P...</code> asked of its types.</li>
+        </ul>
+        <p><strong>Limits and open questions.</strong></p>
+        <ul>
+          <li><code>?</code> already marks a startup decorator whose failure may pass (<code>$d?</code>), and many
+            languages use a <code>?</code> after a value to send its failure on. If Vela ever wants that, <code>v?</code>
+            would mean two things. Other spellings to weigh: <code>match type v</code>, <code>match v.type</code> with
+            type cases (<code>case int n</code>, told apart from text cases by having no quotes), or
+            <code>when v is int n</code>.</li>
+          <li>Matching a type that takes types, <code>case Box&lt;T&gt; b</code> with <code>T</code> left open, would need
+            a type to be named by the case, which is a feature of its own; only whole types (<code>Box&lt;int&gt;</code>)
+            at first.</li>
+          <li>A case can't ask "any type that can be shown" (<code>case shown s</code>): needs are asked of a whole
+            group, not matched. A <code>show(v)</code> in <code>else</code> needs <code>P...: shown</code>, as now.</li>
+          <li>Regions: <code>case text t</code> matches <code>text@r</code> too, and <code>t</code> keeps the value's
+            region.</li>
+        </ul>
+        <div class="note">
+          <strong>Why it fits:</strong> it costs nothing when running, uses the per-copy pruning Vela already has, and
+          turns a group from something that can only be passed on and shown into something a task can compute with.
+        </div>
+      </div>
+
       <div class="option">
         <h3><span aria-hidden="true">🎭</span> Algebraic Effects</h3>
         <p>

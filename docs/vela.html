@@ -1856,7 +1856,8 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
         <code>("Ada", 36)</code>. <code>t.0</code>, <code>t.1</code>, … read its items by position, from 0, each written as
         a plain number (<code>t.01</code> is an error). <code>t.#0</code> reads an item in a <code>maybe</code>, as
         <code>xs[#i]</code> reads an array's, and past the tuple's end it is <code>none</code>, which takes its
-        <code>maybe</code> type from where it goes, as the literal does (<code>bind m: maybe int = t.#5</code>). A tuple is a
+        <code>maybe</code> type from where it goes: a binding's type (<code>bind m: maybe int = t.#5</code>), or a plan B's
+        value, which it always gives (<code>t.#5 { 0 }</code> is 0); <code>show(t.#5)</code> writes <code>none</code>. A tuple is a
         value, like a shape, and its items never change: a <code>hold</code> tuple takes a whole new tuple, but no item can
         be assigned, or changed by a method that <a href="#methods"><code>alters</code></a> the value it is called on. Names take a tuple apart, as a list of names takes a task's several results.
       </p>
@@ -2291,7 +2292,8 @@ fi</code></pre>
         are written. A decorator's values are worked out where the program starts, so they can be literals, macros,
         shared fields, and calls, but no variable or region, since none exists yet. A decorator may come from a module,
         <code>$web.route("/")</code>, but not from a shape or kind (<code>$Registry.add</code>) yet. Only a task takes
-        decorators, not a method, and only one that can be a value.
+        decorators, not a method, and only one that can be a value; <code>main</code> takes no startup decorator, since
+        they run before it.
       </p>
       <p>
         A decorator that fails stops the program before <code>main</code>: standard error says which decorator failed

@@ -4798,6 +4798,16 @@ impl Checker {
     fn decorator_fits(&self, stmt: &Stmt) -> Result<()> {
         let StmtKind::Expr(call) = &stmt.kind else { return Ok(()) };
         let ExprKind::Call { name, args, .. } = &call.kind else { return Ok(()) };
+        // `main` is where the program starts, after its startup decorators
+        // have run, so none of them can take it.
+        if let Some(ExprKind::Var(decorated)) = args.first().map(|arg| &arg.kind)
+            && self.full_name(decorated) == "main"
+        {
+            return err(
+                call.span,
+                "'main' takes no startup decorator: the decorators run before 'main', where the program starts, and nothing calls 'main' as a value; call what the decorator would do first thing in 'main' instead",
+            );
+        }
         let Some(info) = self.tasks.get(&self.full_name(name)).filter(|info| info.types.is_empty() && info.owner.is_none()) else { return Ok(()) };
         let Some(ExprKind::Var(decorated)) = args.first().map(|arg| &arg.kind) else { return Ok(()) };
         // As it is written: a decorator of another module keeps its module's name.
@@ -5976,6 +5986,10 @@ impl Checker {
         if ty.unknown() {
             return Ok(());
         }
+        // `t.#5` past the tuple's end: none, written as any maybe's is.
+        if past_end(arg) {
+            return self.coerce(arg, &Type::Maybe(Box::new(Type::Bool)));
+        }
         // A shape or kind says how its values are written with its own `str`,
         // which `show` calls in a region of its own. The value is checked again
         // as part of that call, as a method call checks it twice.
@@ -6383,6 +6397,9 @@ impl Checker {
     fn check_plan_b(&mut self, span: Span, value: &mut Expr, error: Option<&Binding>, body: &mut Block) -> Result<Type> {
         let found = self.check_expr(value);
         let value_ty = self.or_unknown(found);
+        if past_end(value) {
+            return self.past_end_plan_b(span, value, error, body);
+        }
         // Whether the value needs a plan B at all depends on the type the
         // checker couldn't work out, so the fallback is read for mistakes of
         // its own and nothing more (see `Type::Unknown`).
@@ -6436,6 +6453,33 @@ impl Checker {
             };
             self.settle_types(value, &told)?;
         }
+        Ok(settled)
+    }
+
+    /// A plan B on `t.#5` past the tuple's end, which is always `none`, so the
+    /// block always runs: the item's type is the one the block gives, as in
+    /// `t.#5 { 0 }`, a `maybe int`.
+    fn past_end_plan_b(&mut self, span: Span, value: &mut Expr, error: Option<&Binding>, body: &mut Block) -> Result<Type> {
+        if let Some((_, at)) = error {
+            return err(*at, "a maybe has no error to name; 'failure e' names the error of a 'T ~ E'");
+        }
+        let open = Type::Param(PAST_END.to_string());
+        let entry = self.unset.clone();
+        self.push_scope();
+        let result = self.check_plan_b_body(span, &open, body);
+        self.pop_scope();
+        self.unset = entry;
+        let (settled, at) = result?.unwrap_or((Type::Nothing, span));
+        if settled.params().contains(&PAST_END) {
+            return err(at, "this tuple has no such item, so its plan B always runs, and gives the value: one of a type, not 'none'");
+        }
+        // A block that only sends gives no value; the item is then any maybe.
+        let held = match &settled {
+            Type::Nothing => Type::Bool,
+            Type::Maybe(inner) => (**inner).clone(),
+            other => other.clone(),
+        };
+        self.coerce(value, &Type::Maybe(Box::new(held)))?;
         Ok(settled)
     }
 
@@ -10568,6 +10612,16 @@ fn add_startups(items: &mut Vec<Item>) {
         }
     }
     items.extend(startups.into_iter().map(Item::Task));
+}
+
+/// The type a plan B on `t.#5` past the tuple's end settles from its block (see
+/// `Checker::past_end_plan_b`); no type can be named so.
+const PAST_END: &str = "#past";
+
+/// Whether `e` is `t.#5` read past the tuple's end: always `none`, of a
+/// `maybe` the place it goes says.
+fn past_end(e: &Expr) -> bool {
+    matches!(&e.kind, ExprKind::Field(_, item) if item.starts_with(SAFE_ITEM)) && e.ty == Some(Type::None)
 }
 
 /// Why the tuple of a group's values can't be unpacked into names.

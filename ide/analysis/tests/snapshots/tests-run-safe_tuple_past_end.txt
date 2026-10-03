@@ -1,0 +1,50 @@
+  1 | ; `t.#k` past a tuple's end is none: a plan B on it always gives its block's
+    | comment:; `t.#k` past a tuple's end is none: a plan B on it always gives its block's
+  2 | ; value, whose type is the item's, and `show` writes it as none.
+    | comment:; value, whose type is the item's, and `show` writes it as none.
+  3 | task pair() -> (int, text)
+    | keyword:task  task:pair  punctuation:(  punctuation:)  operator:->  punctuation:(  type-builtin:int  punctuation:,  type-builtin:text  punctuation:)
+  4 |     show("made")
+    | builtin-fn:show  punctuation:(  string:"made"  punctuation:)
+  5 |     <- (1, "two")
+    | keyword:<-  punctuation:(  number:1  punctuation:,  string:"two"  punctuation:)
+  6 | fi
+    | keyword:fi
+  8 | task found(t: (int, int)) -> int
+    | keyword:task  task:found  punctuation:(  parameter:t  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  punctuation:)  operator:->  type-builtin:int
+  9 |     t.#5 {
+    | parameter:t  punctuation:.  punctuation:#  number:5  punctuation:{
+ 10 |         <- 9
+    | keyword:<-  number:9
+ 11 |     }
+    | punctuation:}
+ 12 |     <- 0
+    | keyword:<-  number:0
+ 13 | fi
+    | keyword:fi
+ 15 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 16 |     bind t = (1, "two")
+    | keyword:bind  variable:t  operator:=  punctuation:(  number:1  punctuation:,  string:"two"  punctuation:)
+ 17 |     bind n = t.#5 { 0 }
+    | keyword:bind  variable:n  operator:=  variable:t  punctuation:.  punctuation:#  number:5  punctuation:{  number:0  punctuation:}
+ 18 |     show(n + 1)
+    | builtin-fn:show  punctuation:(  variable:n  operator:+  number:1  punctuation:)
+ 19 |     show(t.#5)
+    | builtin-fn:show  punctuation:(  variable:t  punctuation:.  punctuation:#  number:5  punctuation:)
+ 20 |     show(t.#5 { "none here" })
+    | builtin-fn:show  punctuation:(  variable:t  punctuation:.  punctuation:#  number:5  punctuation:{  string:"none here"  punctuation:}  punctuation:)
+ 21 |     bind m: maybe int = t.#2
+    | keyword:bind  variable:m  punctuation::  keyword:maybe  type-builtin:int  operator:=  variable:t  punctuation:.  punctuation:#  number:2
+ 22 |     show(m)
+    | builtin-fn:show  punctuation:(  variable:m  punctuation:)
+ 23 |     ; The tuple is still worked out, for what it does.
+    | comment:; The tuple is still worked out, for what it does.
+ 24 |     show(pair().#3 { 7 })
+    | builtin-fn:show  punctuation:(  task:pair  punctuation:(  punctuation:)  punctuation:.  punctuation:#  number:3  punctuation:{  number:7  punctuation:}  punctuation:)
+ 25 |     show(found((1, 2)))
+    | builtin-fn:show  punctuation:(  task:found  punctuation:(  punctuation:(  number:1  punctuation:,  number:2  punctuation:)  punctuation:)  punctuation:)
+ 26 |     show(t.#1 { "never" })
+    | builtin-fn:show  punctuation:(  variable:t  punctuation:.  punctuation:#  number:1  punctuation:{  string:"never"  punctuation:}  punctuation:)
+ 27 | fi
+    | keyword:fi

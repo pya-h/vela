@@ -1,0 +1,10 @@
+; error: 7:2: 'main' takes no startup decorator: the decorators run before 'main', where the program starts, and nothing calls 'main' as a value; call what the decorator would do first thing in 'main' instead
+; The startup decorators run before `main`, so none takes it.
+task note(f: () -> nothing)
+    show("noted")
+fi
+
+$note
+task main()
+    show("main")
+fi

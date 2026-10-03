@@ -1,0 +1,27 @@
+; `t.#k` past a tuple's end is none: a plan B on it always gives its block's
+; value, whose type is the item's, and `show` writes it as none.
+task pair() -> (int, text)
+    show("made")
+    <- (1, "two")
+fi
+
+task found(t: (int, int)) -> int
+    t.#5 {
+        <- 9
+    }
+    <- 0
+fi
+
+task main()
+    bind t = (1, "two")
+    bind n = t.#5 { 0 }
+    show(n + 1)
+    show(t.#5)
+    show(t.#5 { "none here" })
+    bind m: maybe int = t.#2
+    show(m)
+    ; The tuple is still worked out, for what it does.
+    show(pair().#3 { 7 })
+    show(found((1, 2)))
+    show(t.#1 { "never" })
+fi

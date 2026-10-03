@@ -237,7 +237,7 @@
           <thead><tr><th>What</th><th>What we found</th></tr></thead>
           <tbody>
             <tr><td><code>cargo build</code></td><td>Clean, fast; the compiler crate has no dependencies.</td></tr>
-            <tr><td><code>cargo test</code></td><td>All groups pass in about 90 seconds: 33 CLI tests, the driver,
+            <tr><td><code>cargo test</code></td><td>All groups pass in about 90 seconds: 35 CLI tests, the driver,
               the lexer, internal errors, the runtime's C tests, and every program in <code>tests/run</code>,
               <code>tests/fail</code>, <code>tests/trap</code>, and <code>examples/</code>.</td></tr>
             <tr><td><code>cargo clippy --all-targets</code></td><td>Clean. The <code>Cargo.toml</code> lints deny
@@ -357,7 +357,7 @@
         <h3>The checker and the C writer have grown past one file <span class="badge b-warn">watch</span></h3>
         <p>
           <code>src/check.rs</code> is about eleven thousand lines and <code>src/codegen.rs</code> about five
-          thousand; the lexer, parser, and AST sit near two thousand each, which reads well. The pipeline
+          thousand; the parser is near four thousand, and the lexer and AST near one and two thousand, which reads well. The pipeline
           (lexer &rarr; parser &rarr; checker &rarr; C) is the right shape; the passes themselves could now be split
           the way the checker already splits its <em>work</em> (headers, statements, expressions, regions,
           generics, monomorphization), as private modules behind the same public functions. Nothing about the
@@ -505,12 +505,16 @@ vela__rt__add(a, <span class="number">2</span>, <span class="number">17</span>) 
       </div>
 
       <div class="entry">
-        <h3>Bitwise work as methods <span class="badge b-idea">idea</span> <span class="badge b-small">small</span></h3>
+        <h3>Bitwise work as methods <span class="badge b-on-table">on the table</span> <span class="badge b-small">small</span></h3>
         <p>
           A systems language with no way to and, or, xor, or shift a bit (we looked; there is none) leaves a gap
           between what it means to be &mdash; bytes, units, chars &mdash; and what it lets a program say. New
           symbols would fight the ones already earning their place (<code>&amp;</code> marks a place,
-          <code>~</code> is the error side, <code>^</code> points). Methods fit the language's own rule, that a
+          <code>~</code> is the error side, <code>^</code> points). <a href="future.html#bitwise">Future
+          Directions</a> has already chosen C's symbols, <code>&amp;</code>, <code>|</code>, <code>&lt;&lt;</code> and
+          <code>&gt;&gt;</code> (2026-09-23), for reading as C does, and lists what they must settle (the
+          <code>&gt;&gt;</code> that closes nested types, the <code>|</code> error message); this is the case for the
+          other way. Methods fit the language's own rule, that a
           member of a value is written after a dot:
         </p>
         <pre><span class="keyword">bind</span> flags = <span class="number">0b1010</span>
@@ -582,8 +586,9 @@ fi</pre>
       </div>
 
       <div class="entry">
-        <h3>A formatter: <code>vela fmt</code> <span class="badge b-idea">idea</span> <span class="badge b-medium">medium</span></h3>
+        <h3>A formatter: <code>vela fmt</code> <span class="badge b-on-table">on the table</span> <span class="badge b-medium">medium</span></h3>
         <p>
+          <a href="future.html">Future Directions</a> lists a formatter among its tools; this is how it could go.
           The language is nearly canonical already: one statement a line, blocks closed with <code>fi</code>,
           four-space steps, expressions on one line. Every example, test, and doc page agrees on one layout &mdash;
           by hand. A formatter would mostly be a checker: it can't break a line the grammar won't, so its
