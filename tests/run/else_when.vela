@@ -32,6 +32,15 @@ task counted(n: int) -> int
     <- seen
 fi
 
+task made() -> (int, int)
+    show("made")
+    <- (1, 2)
+fi
+
+task missing(m: maybe int) -> bool
+    <- m { -1 } == -1
+fi
+
 task main()
     each score in 0..4
         show(grade(score * 40 - 40))
@@ -71,5 +80,24 @@ task main()
             show("many")
         fi
         i = i + 1
+    fi
+
+    ; A read past a tuple's end works the tuple out, in the arm it is written
+    ; in, only when that arm is reached, and not after an 'and' that failed.
+    bind k = 3
+    when k > 5
+        show("never")
+    else when k > 4
+        show("never either")
+    else when missing(made().#5)
+        show("past the end")
+    fi
+    when k > 1
+        show("first")
+    else when missing(made().#5)
+        show("never")
+    fi
+    when k > 5 and missing(made().#5)
+        show("never")
     fi
 fi

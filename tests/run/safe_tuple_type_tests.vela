@@ -135,6 +135,44 @@ task after_taken<P...: fixed & shown>(args: P...)
     fi
 fi
 
+; A test the compiler settles decides which arms can run, so a task whose
+; every arm that can run sends needs nothing after them.
+task sent() -> int
+    bind t = (1, "a")
+    when t.#1? is maybe int
+        <- 1
+    else when t.#1 is maybe text {s}
+        <- s.len + 10
+    else
+        <- 0
+    fi
+fi
+
+; A test each copy knows holds, as `is none` past the end and `{x}` on an item
+; are, drops the arms after it; and after a part a copy knows doesn't hold,
+; the parts after it aren't made, so they may read what it guards against.
+task known_arms<P...: fixed & shown>(args: P...)
+    bind t = (args...) { <- }
+    region r
+    when t.#2 is none
+        show("two only")
+    else when t.2.str(r).len > 1
+        show("a long third")
+    else
+        show("a short third")
+    fi
+    when t.#2 is maybe int {x} and t.2.str(r).len > 0
+        show("third int ", x)
+    fi
+    when args.len > 2 and t.2.str(r).len > 2
+        show("a third longer than two")
+    fi
+    hold k = 1
+    when k > 0 and args.len > 2
+        show("a third after a check: ", t.2)
+    fi
+fi
+
 task main()
     plain()
     boxes()
@@ -153,4 +191,8 @@ task main()
     after_taken(1, 2, 3)
     after_taken(1, 4, "c")
     after_taken(1, "b", "c")
+    show(sent())
+    known_arms(1, 2)
+    known_arms(1, 2, 3)
+    known_arms(1, 2, "abcd")
 fi

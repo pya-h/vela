@@ -71,6 +71,9 @@ struct Request {
 struct Kept {
     /// The modules the last request gave, if one did.
     modules: Option<Arc<HashMap<String, String>>>,
+    /// No modules, shared by every request of text alone, so its kept
+    /// analysis answers the next one about the same text.
+    none: Arc<HashMap<String, String>>,
     /// The last analysis made of a file of a program, given modules.
     analysis: Option<Analysis>,
     /// The last one made of text alone, as the code in a hover's tooltip is,
@@ -101,7 +104,7 @@ pub fn handle(request: &str) -> String {
             Some(modules) => modules,
             None => return json!({ "error": "no modules kept; send them", "resend": true }).to_string(),
         },
-        (None, false) => Arc::default(),
+        (None, false) => KEPT.with_borrow(|kept| Arc::clone(&kept.none)),
     };
     KEPT.with_borrow_mut(|kept| {
         let slot = if bare { &mut kept.bare } else { &mut kept.analysis };

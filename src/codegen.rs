@@ -54,6 +54,10 @@ impl CWriter {
     }
 }
 
+/// The most arms a `when` of plain conditions is written as an `else if`
+/// chain in C, which a C compiler nests (see `Generator::gen_when`).
+const ELSE_IF_ARMS: usize = 64;
+
 /// Generates C from a program that has already been checked by
 /// `check::Checker`. Types come from the checker's annotations; the generator
 /// does no type inference of its own. A missing annotation or other broken
@@ -2340,15 +2344,16 @@ impl Generator {
 
     /// Generates a `when`, and the `else when`s after it: as C's `else if`
     /// where each arm after the first is one condition that needs nothing
-    /// before it, and otherwise each arm in turn, run only while none before it
-    /// ran, so the C stays flat however long the chain is.
+    /// before it and there are at most `ELSE_IF_ARMS`, and otherwise each arm
+    /// in turn, the one that runs going to the end past the rest, so the C
+    /// stays flat however long the chain is.
     fn gen_when(&mut self, arms: &[WhenArm], else_b: Option<&[Stmt]>, into: Option<&str>) -> Result<()> {
         let Some((first, rest)) = arms.split_first() else { return Err(Error::internal("a 'when' without a condition")) };
         let plain = |cond: &Condition| cond.pattern.is_none() && cond.single() && !has_prelude(&cond.value);
         if rest.is_empty() {
             return self.gen_one_when(&first.cond, &first.body, else_b, into);
         }
-        if first.cond.pattern.is_none() && first.cond.single() && rest.iter().all(|arm| plain(&arm.cond)) {
+        if arms.len() <= ELSE_IF_ARMS && first.cond.pattern.is_none() && first.cond.single() && rest.iter().all(|arm| plain(&arm.cond)) {
             let c = self.gen_condition(&first.cond.value)?;
             self.w.open(&format!("if ({})", c));
             self.gen_branch_block(&first.body, into)?;
@@ -2364,25 +2369,23 @@ impl Generator {
             self.w.close();
             return Ok(());
         }
-        let done = self.fresh_temp("done");
-        self.w.line(&format!("bool {} = false;", done));
-        for (i, arm) in arms.iter().enumerate() {
-            if i > 0 {
-                self.w.open(&format!("if (!{})", done));
-            }
+        // Each arm in turn at one depth, however many there are, and the arm
+        // that runs leaves for the end: a C compiler nests an `else if` chain,
+        // and a long one is more than it takes.
+        let end = self.fresh_temp("when_end");
+        for arm in arms {
             self.gen_parts(&arm.cond, &arm.body, &mut |g| {
-                g.w.line(&format!("{} = true;", done));
-                g.gen_branch_block(&arm.body, into)
+                g.gen_branch_block(&arm.body, into)?;
+                g.w.line(&format!("goto {};", end));
+                Ok(())
             })?;
-            if i > 0 {
-                self.w.close();
-            }
         }
         if let Some(else_b) = else_b {
-            self.w.open(&format!("if (!{})", done));
+            self.w.open("");
             self.gen_branch_block(else_b, into)?;
             self.w.close();
         }
+        self.w.line(&format!("{}: ;", end));
         Ok(())
     }
 
@@ -3901,6 +3904,9 @@ fn has_prelude(e: &Expr) -> bool {
             let all: Vec<&Expr> = std::iter::once(callee.as_ref()).chain(args).collect();
             all.iter().any(|e| has_prelude(e)) || ordered(&all)
         }
+        // `t.#5` past the end of a tuple that changes something to work out:
+        // a statement works it out (see `work_out_none`).
+        ExprKind::Field(inner, item) if item.starts_with(check::SAFE_ITEM) && e.ty == Some(Type::None) && !changes_nothing(inner) => true,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. }
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Copy { value: inner, .. } | ExprKind::Shortcut { value: inner, .. } | ExprKind::ToText { value: inner, .. } => {
             has_prelude(inner)

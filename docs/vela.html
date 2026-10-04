@@ -1871,12 +1871,15 @@ show(scores[#9], <span class="string">" "</span>, scores[#1])    <span class="co
         condition and its block are <code>maybe int</code>s, as in <code>t.#2? is maybe int and t.#2 is {x}</code>. The
         type is one the program names (not <code>T</code> of a task taking types), matched as it is, regions aside:
         <code>maybe text {s}</code> takes a <code>text@r</code>, and <code>s</code> keeps its region. Each answer is
-        known when compiling, so nothing is tested when the program runs and a branch that can't run is left out; this
+        known when compiling, so nothing is tested when the program runs, a branch that can't run is left out, and so
+        are the branches after one that always holds and the parts of a condition after one that never does, which may
+        read what it guards against; this
         is what makes them useful on the tuple of a <a href="#type-groups">group's values</a>, whose item 2 has a
         different type, or none, in each use, and on an item holding a <code>T</code>, which each copy of the task
         settles. What such a test takes from an item whose type each use gives may be in a region of the caller's, so
         it stays inside the task: <code>maybe text {s}</code> gives a <code>text</code> that can't be sent back or
-        kept outside, unless copied into a region, as in <code>s.copy()@r</code>. <code>t.#5 is {x}</code> past the end is still an error: it never
+        kept outside, even where the test names a region, as in <code>maybe text@r {s}</code>, unless copied into a
+        region, as in <code>s.copy()@r</code>. <code>t.#5 is {x}</code> past the end is still an error: it never
         matches, and <code>x</code> would have no type.
       </p>
       <pre><span class="keyword">task</span> third&lt;P...: fixed &amp; shown&gt;(args: P...)
@@ -2415,7 +2418,8 @@ fi</code></pre>
           making one counts as calling each of those; a task named only later, by <code>main</code> or a startup
           decorator, is not.</li>
         <li><strong>Read once.</strong> A <code>shared hold</code> field a value reads is read where the program
-          starts, so a later change to it, a startup decorator's too, is not seen by the wrapper.</li>
+          starts, so a later change to it, a startup decorator's too, is not seen by the wrapper. For the same reason a
+          value is no place, so a wrapper can't take one as <code>hold&amp;</code> or <code>bind&amp;</code>.</li>
         <li><strong>Failing and stopping.</strong> A value that can fail is read with a plan B, as anywhere
           (<code>int(t) { 1 }</code>), and a <code>&lt;-</code> in one is an error, since it is in no task to leave.
           One that stops the program stops it before <code>main</code>, with a message naming the wrapper and its task:
@@ -2537,7 +2541,9 @@ fi</code></pre>
         value, or <code>none</code>, which a plan B, <code>match</code>, or <code>is</code> handles. Its items are
         <code>t.0</code> and <code>t.1</code>, which every tuple has, and one past them, <code>t.2</code>, is a mistake of
         any use giving fewer values, unless a <code>when</code> on <code>args.len</code> leaves it out there: each use
-        knows <code>args.len</code>, so it keeps only the branch it takes, a <code>when</code> used as a value too.
+        knows <code>args.len</code>, so it keeps only the branch it takes, a <code>when</code> used as a value too,
+        and leaves out what follows a part it knows is false, as <code>t.2</code> in
+        <code>args.len &gt; 2 and t.2 &gt; 0</code>.
         <code>t.#2</code> reads it in a <code>maybe</code> instead. Since each use gives its own number of items, the
         tuple can't be unpacked into names. Messages call the type of item <code>k</code> <code>P#k</code>.
       </p>

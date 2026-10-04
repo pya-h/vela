@@ -58,79 +58,129 @@
     | keyword:<-  variable:seen
  33 | fi
     | keyword:fi
- 35 | task main()
+ 35 | task made() -> (int, int)
+    | keyword:task  task:made  punctuation:(  punctuation:)  operator:->  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)
+ 36 |     show("made")
+    | builtin-fn:show  punctuation:(  string:"made"  punctuation:)
+ 37 |     <- (1, 2)
+    | keyword:<-  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+ 38 | fi
+    | keyword:fi
+ 40 | task missing(m: maybe int) -> bool
+    | keyword:task  task:missing  punctuation:(  parameter:m  punctuation::  keyword:maybe  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
+ 41 |     <- m { -1 } == -1
+    | keyword:<-  parameter:m  punctuation:{  operator:-  number:1  punctuation:}  operator:==  operator:-  number:1
+ 42 | fi
+    | keyword:fi
+ 44 | task main()
     | keyword:task  task:main  punctuation:(  punctuation:)
- 36 |     each score in 0..4
+ 45 |     each score in 0..4
     | keyword:each  variable:score  keyword:in  number:0  operator:..  number:4
- 37 |         show(grade(score * 40 - 40))
+ 46 |         show(grade(score * 40 - 40))
     | builtin-fn:show  punctuation:(  task:grade  punctuation:(  variable:score  operator:*  number:40  operator:-  number:40  punctuation:)  punctuation:)
- 38 |     fi
+ 47 |     fi
     | keyword:fi
- 39 |     show(counted(20), " ", counted(7), " ", counted(3), " ", counted(0))
+ 48 |     show(counted(20), " ", counted(7), " ", counted(3), " ", counted(0))
     | builtin-fn:show  punctuation:(  task:counted  punctuation:(  number:20  punctuation:)  punctuation:,  string:" "  punctuation:,  task:counted  punctuation:(  number:7  punctuation:)  punctuation:,  string:" "  punctuation:,  task:counted  punctuation:(  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  task:counted  punctuation:(  number:0  punctuation:)  punctuation:)
- 41 |     ; A pattern in a chain: its names are visible only in its own block.
+ 50 |     ; A pattern in a chain: its names are visible only in its own block.
     | comment:; A pattern in a chain: its names are visible only in its own block.
- 42 |     hold light: Light = Dimmed(4)
+ 51 |     hold light: Light = Dimmed(4)
     | keyword:hold  variable:light  punctuation::  type:Light  operator:=  variant:Dimmed  punctuation:(  number:4  punctuation:)
- 43 |     when light is On
+ 52 |     when light is On
     | keyword:when  variable:light  keyword:is  variant:On
- 44 |         show("on")
+ 53 |         show("on")
     | builtin-fn:show  punctuation:(  string:"on"  punctuation:)
- 45 |     else when light is Dimmed level
+ 54 |     else when light is Dimmed level
     | keyword:else  keyword:when  variable:light  keyword:is  variant:Dimmed  variable:level
- 46 |         show("dimmed ", level)
+ 55 |         show("dimmed ", level)
     | builtin-fn:show  punctuation:(  string:"dimmed "  punctuation:,  variable:level  punctuation:)
- 47 |     else
+ 56 |     else
     | keyword:else
- 48 |         show("off")
+ 57 |         show("off")
     | builtin-fn:show  punctuation:(  string:"off"  punctuation:)
- 49 |     fi
+ 58 |     fi
     | keyword:fi
- 51 |     ; The same chain written as a `when` inside the `else`, which does the same.
+ 60 |     ; The same chain written as a `when` inside the `else`, which does the same.
     | comment:; The same chain written as a `when` inside the `else`, which does the same.
- 52 |     when 1 > 2
+ 61 |     when 1 > 2
     | keyword:when  number:1  operator:>  number:2
- 53 |         show("never")
+ 62 |         show("never")
     | builtin-fn:show  punctuation:(  string:"never"  punctuation:)
- 54 |     else
+ 63 |     else
     | keyword:else
- 55 |         when 2 > 1
+ 64 |         when 2 > 1
     | keyword:when  number:2  operator:>  number:1
- 56 |             show("nested")
+ 65 |             show("nested")
     | builtin-fn:show  punctuation:(  string:"nested"  punctuation:)
- 57 |         else
+ 66 |         else
     | keyword:else
- 58 |             show("never either")
+ 67 |             show("never either")
     | builtin-fn:show  punctuation:(  string:"never either"  punctuation:)
- 59 |         fi
+ 68 |         fi
     | keyword:fi
- 60 |     fi
+ 69 |     fi
     | keyword:fi
- 62 |     ; A chain inside a loop, with a region in one of its blocks.
+ 71 |     ; A chain inside a loop, with a region in one of its blocks.
     | comment:; A chain inside a loop, with a region in one of its blocks.
- 63 |     region kept default
+ 72 |     region kept default
     | keyword:region  region:kept  keyword:default
- 64 |     hold i = 0
+ 73 |     hold i = 0
     | keyword:hold  variable:i  operator:=  number:0
- 65 |     loop i < 3
+ 74 |     loop i < 3
     | keyword:loop  variable:i  operator:<  number:3
- 66 |         when i == 0
+ 75 |         when i == 0
     | keyword:when  variable:i  operator:==  number:0
- 67 |             show("zero")
+ 76 |             show("zero")
     | builtin-fn:show  punctuation:(  string:"zero"  punctuation:)
- 68 |         else when i == 1
+ 77 |         else when i == 1
     | keyword:else  keyword:when  variable:i  operator:==  number:1
- 69 |             show("one " + i.str())
+ 78 |             show("one " + i.str())
     | builtin-fn:show  punctuation:(  string:"one "  operator:+  variable:i  punctuation:.  field:str  punctuation:(  punctuation:)  punctuation:)
- 70 |         else
+ 79 |         else
     | keyword:else
- 71 |             show("many")
+ 80 |             show("many")
     | builtin-fn:show  punctuation:(  string:"many"  punctuation:)
- 72 |         fi
+ 81 |         fi
     | keyword:fi
- 73 |         i = i + 1
+ 82 |         i = i + 1
     | variable:i  operator:=  variable:i  operator:+  number:1
- 74 |     fi
+ 83 |     fi
     | keyword:fi
- 75 | fi
+ 85 |     ; A read past a tuple's end works the tuple out, in the arm it is written
+    | comment:; A read past a tuple's end works the tuple out, in the arm it is written
+ 86 |     ; in, only when that arm is reached, and not after an 'and' that failed.
+    | comment:; in, only when that arm is reached, and not after an 'and' that failed.
+ 87 |     bind k = 3
+    | keyword:bind  variable:k  operator:=  number:3
+ 88 |     when k > 5
+    | keyword:when  variable:k  operator:>  number:5
+ 89 |         show("never")
+    | builtin-fn:show  punctuation:(  string:"never"  punctuation:)
+ 90 |     else when k > 4
+    | keyword:else  keyword:when  variable:k  operator:>  number:4
+ 91 |         show("never either")
+    | builtin-fn:show  punctuation:(  string:"never either"  punctuation:)
+ 92 |     else when missing(made().#5)
+    | keyword:else  keyword:when  task:missing  punctuation:(  task:made  punctuation:(  punctuation:)  punctuation:.  punctuation:#  number:5  punctuation:)
+ 93 |         show("past the end")
+    | builtin-fn:show  punctuation:(  string:"past the end"  punctuation:)
+ 94 |     fi
+    | keyword:fi
+ 95 |     when k > 1
+    | keyword:when  variable:k  operator:>  number:1
+ 96 |         show("first")
+    | builtin-fn:show  punctuation:(  string:"first"  punctuation:)
+ 97 |     else when missing(made().#5)
+    | keyword:else  keyword:when  task:missing  punctuation:(  task:made  punctuation:(  punctuation:)  punctuation:.  punctuation:#  number:5  punctuation:)
+ 98 |         show("never")
+    | builtin-fn:show  punctuation:(  string:"never"  punctuation:)
+ 99 |     fi
+    | keyword:fi
+100 |     when k > 5 and missing(made().#5)
+    | keyword:when  variable:k  operator:>  number:5  keyword:and  task:missing  punctuation:(  task:made  punctuation:(  punctuation:)  punctuation:.  punctuation:#  number:5  punctuation:)
+101 |         show("never")
+    | builtin-fn:show  punctuation:(  string:"never"  punctuation:)
+102 |     fi
+    | keyword:fi
+103 | fi
     | keyword:fi

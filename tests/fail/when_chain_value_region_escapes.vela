@@ -1,0 +1,19 @@
+; error: 16:9: this value is in region 'inner', which is freed when the branch ends, so it can't be the when's value
+; The value of a later arm of a chain used as a value, in a region of that
+; arm's, is refused where it is written.
+shape Note
+    title: text
+fi
+
+task main()
+    bind n = 2
+    bind escaped = when n == 0
+        none
+    else when n == 1
+        none
+    else
+        region inner
+        new Note(Note { title: "x" }) at inner
+    fi
+    show(escaped)
+fi

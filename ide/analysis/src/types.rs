@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::Path;
 
-use vela::ast::{Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, SHOWN, TypedForm, ShapeDef, Span, Stmt, StmtKind, THIS, Target, Type, method_parts};
+use vela::ast::{Applied, Block, Expr, ExprKind, Item, KindDef, Pattern, PatternKind, SHOWN, START_VALUES, TypedForm, ShapeDef, Span, Stmt, StmtKind, THIS, Target, Type, method_parts};
 use vela::check::{in_region, regional_types, textual_types};
 use vela::driver;
 use vela::error::Error;
@@ -174,6 +174,17 @@ impl Checked {
                 }
                 checked.block(&task.body, &declarations);
             }
+            // A wrapper's own values worked out where the program starts, which
+            // the checker moved into a hidden shape that the calls read.
+            if let Item::Shape(values) = item
+                && values.name == START_VALUES
+            {
+                for member in values.shared.iter().filter(|member| member.field.span.file == 0) {
+                    if let Some(value) = &member.field.default {
+                        checked.expr(value, &declarations);
+                    }
+                }
+            }
         }
         // A shape the compiler made for the types it was given is written as
         // those types (`Box<int>`), the way the program writes it.
@@ -251,9 +262,11 @@ impl Checked {
             }
             StmtKind::Block(body) => self.block(body, kinds),
             StmtKind::Loop(cond, body) => {
-                self.expr(&cond.value, kinds);
-                if let Some(pattern) = &cond.pattern {
-                    self.pattern(cond.value.ty.as_ref(), pattern, kinds);
+                for part in cond.parts() {
+                    self.expr(&part.value, kinds);
+                    if let Some(pattern) = &part.pattern {
+                        self.pattern(part.value.ty.as_ref(), pattern, kinds);
+                    }
                 }
                 self.block(body, kinds);
             }
@@ -368,9 +381,12 @@ impl Checked {
             }
             ExprKind::Spread(inner) => self.expr(inner, kinds),
             // `Point.made`: a member of the shape itself, at the member's name.
-            ExprKind::Shared { shape, .. } => {
+            ExprKind::Shared { shape, .. } if shape != START_VALUES => {
                 self.field_accesses.insert(pos(e.span), shape.clone());
             }
+            // A wrapper's value read where its value is written, which is
+            // walked where it was moved to.
+            ExprKind::Shared { .. } => {}
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
             | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::TypeOf(_) | ExprKind::TaskValue(_) => {}
             ExprKind::Invoke { callee, args } => {

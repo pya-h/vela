@@ -1,0 +1,20 @@
+; error: 7:12: expected type text@into, got text@#item; a type test on an item whose type each use gives takes what may be in a region of the caller's, written '#item', which only this task sees; to keep it, copy it into a region of its own, as in 's.copy()@r'
+; A type test naming a region of the task's own still takes text that may be
+; in a region of the caller's, so it can't leave the task as that region's.
+task f<P...: fixed & shown>(into: region, args: P...) -> text@into
+    bind t = (args...) { <- "few" }
+    when t.#1 is maybe text@into {s}
+        <- s
+    fi
+    <- "no"
+fi
+
+task main()
+    region outer
+    hold keep = f(outer, 0, 0)
+    when true
+        region r
+        keep = f(outer, 1, "ab" + "cd" at r)
+    fi
+    show(keep)
+fi

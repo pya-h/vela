@@ -32,3 +32,11 @@ fewer than two
 two
 third int 3
 second { 4 }
+11
+two only
+a short third
+third int 3
+a third after a check: 3
+a long third
+a third longer than two
+a third after a check: abcd

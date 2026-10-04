@@ -1,4 +1,4 @@
-; error: 13:20: this value is in region 'inner', which is freed when the case ends, so it can't be the match's value
+; error: 16:9: this value is in region 'inner', which is freed when the case ends, so it can't be the match's value
 shape Note
     title: text
 fi

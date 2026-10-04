@@ -1415,6 +1415,15 @@ impl Condition {
         std::iter::successors(Some(self), |part| part.and.as_deref())
     }
 
+    /// The part `n` places after this one, to change.
+    pub fn part_mut(&mut self, n: usize) -> Option<&mut Condition> {
+        let mut part = self;
+        for _ in 0..n {
+            part = part.and.as_deref_mut()?;
+        }
+        Some(part)
+    }
+
     /// Whether this is one part: a `bool`, or one `is`.
     pub fn single(&self) -> bool {
         self.and.is_none()

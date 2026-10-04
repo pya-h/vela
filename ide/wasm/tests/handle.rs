@@ -63,8 +63,12 @@ fn modules_given_once_are_kept_for_the_requests_after() {
     // Text given alone, as a tooltip's code is, doesn't replace the file's
     // analysis, which answers the next request about the file.
     let made = analyses_made();
-    request(json!({ "source": "task tip()\nfi\n", "queries": [{ "kind": "tokens" }] }));
+    let tip = json!({ "source": "task tip()\nfi\n", "queries": [{ "kind": "tokens" }] });
+    request(tip.clone());
     assert_eq!(asked(json!({ "same-modules": true })), json!({ "results": [[], []] }));
+    assert_eq!(analyses_made(), made + 1);
+    // The same text alone again is answered from the one kept for it.
+    request(tip);
     assert_eq!(analyses_made(), made + 1);
     // New modules replace them.
     let changed = json!({ "lib/a.vela": "task other()\nfi\n" });

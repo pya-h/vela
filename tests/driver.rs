@@ -161,15 +161,16 @@ fn every_mistake_is_reported_once_in_source_order() {
 fn an_else_when_chain_has_no_limit_on_its_arms() {
     // One `fi` closes a whole chain, whose arms every pass goes through in a
     // loop, on the small stacks of test threads too: plain conditions, ones
-    // with a pattern (whose C is flat, not nested), and as a value.
+    // with a pattern, and as a value; and its C is flat, not nested.
     let arms = 5000;
     let plain: String = (0..arms).map(|i| format!("    else when n == {}\n        show({})\n", i, i)).collect();
     let source = format!("task main()\n    bind n = 3\n    when n < 0\n        show(-1)\n{}    else\n        show(0)\n    fi\nfi\n", plain);
-    driver::generate_c(&source).unwrap();
+    let flat = |c: String| c.lines().map(|line| line.len() - line.trim_start().len()).max().unwrap_or(0) < 40;
+    // A C compiler nests an `else if` chain, so a long one is flat too.
+    assert!(flat(driver::generate_c(&source).unwrap()), "the C of a long chain stays flat");
     let matched: String = (0..arms).map(|i| format!("    else when m is {{v}} and v == {}\n        show(v)\n", i)).collect();
     let source = format!("task main()\n    bind m: maybe int = 3\n    when m is none\n        show(-1)\n{}    fi\nfi\n", matched);
-    let c = driver::generate_c(&source).unwrap();
-    assert!(c.lines().map(|line| line.len() - line.trim_start().len()).max().unwrap_or(0) < 40, "the C of a chain stays flat");
+    assert!(flat(driver::generate_c(&source).unwrap()), "the C of a chain stays flat");
     let valued: String = (0..arms).map(|i| format!("    else when n == {}\n        {}\n", i, i)).collect();
     let source = format!("task main()\n    bind n = 3\n    bind k = when n < 0\n        -1\n{}    else\n        0\n    fi\n    show(k)\nfi\n", valued);
     driver::generate_c(&source).unwrap();

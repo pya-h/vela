@@ -86,3 +86,32 @@ fi
     let names: Vec<String> = Analysis::new(source).outline().into_iter().map(|item| item.name).collect();
     assert_eq!(names, ["worded", "sq", "main"]);
 }
+
+#[test]
+fn a_wrapper_value_worked_out_at_start_hovers_as_written() {
+    // The value is read where the program starts, from a hidden variable, and
+    // the editor still answers about what the file writes.
+    let source = "\
+shape Config
+    shared hold depth: int = 2
+fi
+
+task logged(next: (int) -> int, times: int, n: int) -> int
+    <- next(n)
+fi
+
+$(logged(Config.depth))
+task cube(n: int) -> int
+    <- n * n * n
+fi
+
+task main()
+    show(cube(3))
+fi
+";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_eq!(hover(source, "depth))"), "shared hold depth: int");
+    let at = LineIndex::new(source).utf16_of(source.find("depth))").unwrap());
+    let declared = LineIndex::new(source).utf16_of(source.find("depth:").unwrap());
+    assert_eq!(Analysis::new(source).definition(at).map(|found| found.from), Some(declared));
+}

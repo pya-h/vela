@@ -3397,7 +3397,9 @@ impl Checker {
                 }
             };
             given.extend(value.map(|(ty, at)| (i, ty, at)));
-            states.push(self.branch_state(&arm.body, &entry));
+            // An arm known never to hold is no path.
+            let state = self.branch_state(&arm.body, &entry);
+            states.push(state.filter(|_| known_condition(&arm.cond) != Some(false)));
         }
         match else_block {
             Some(else_b) => {
@@ -3412,7 +3414,7 @@ impl Checker {
                 states.push(self.branch_state(else_b, &entry));
             }
             // A condition that always holds leaves no other path.
-            None if arms.iter().any(|arm| always_holds(&arm.cond)) => {}
+            None if arms.iter().any(|arm| known_condition(&arm.cond) == Some(true)) => {}
             // Without an `else`, running no block is a path too.
             None => states.push(Some(entry.clone())),
         }
@@ -3427,7 +3429,7 @@ impl Checker {
                 (None, None) => {}
             }
         }
-        self.escaping_region(span, &settled, branches)?;
+        self.escaping_region(span, &given, &settled, branches)?;
         Ok(Some(settled))
     }
 
@@ -3484,12 +3486,13 @@ impl Checker {
 
     /// Refuses a value in a region that is freed before the `match` or `when`
     /// giving it ends: the region was declared inside a branch, so nothing
-    /// outside can name it.
-    fn escaping_region(&mut self, at: Span, settled: &Type, branches: Branches) -> Result<()> {
+    /// outside can name it. The error is at the value of the first branch
+    /// in it, of those `given`, or else at `at`.
+    fn escaping_region(&mut self, at: Span, given: &[(usize, Type, Span)], settled: &Type, branches: Branches) -> Result<()> {
         let escaping = settled.regions().into_iter().find(|region| *region != ANY_REGION && self.lookup(region).is_none());
         match escaping {
             Some(region) => err(
-                at,
+                given.iter().find(|(_, ty, _)| ty.regions().contains(&region)).map_or(at, |(_, _, span)| *span),
                 format!("this value is in region '{}', which is freed when the {} ends, so it can't be the {}'s value", region, branches.each, branches.of),
             ),
             None => Ok(()),
@@ -3704,7 +3707,15 @@ impl Checker {
     fn type_test_bindings(&mut self, value: &Expr, written: &Type, form: &TypedForm, at: Span) -> Result<(Type, Vec<Declared>)> {
         let Some((tuple, place)) = safe_read_of(value) else { return err(value.span, TYPE_TEST_ON_A_READ) };
         let Type::Maybe(wanted) = self.resolve_type(written, at, TypePlace::Body)? else {
-            return err(at, format!("a tuple's item read with '.#' is a maybe, so its type is written as one, as in 'maybe {}'", written));
+            // `maybe int ~ text` is an `int ~ text` whose value is a maybe.
+            let held = match written {
+                Type::Or(value, error) => match &**value {
+                    Type::Maybe(inner) => format!("({} ~ {})", inner, error),
+                    _ => format!("({})", written),
+                },
+                _ => written.to_string(),
+            };
+            return err(at, format!("a tuple's item read with '.#' is a maybe, so its type is written as one, as in 'maybe {}'", held));
         };
         if !wanted.params().is_empty() {
             return err(at, format!("a type test names a type the program knows, such as 'maybe int'; '{}' is given by each use", wanted));
@@ -3716,7 +3727,7 @@ impl Checker {
         let held = match item_state(value) {
             Some(Some(found)) if same_ignoring_regions(&found, &wanted) => found,
             Some(_) => (*wanted).clone(),
-            None => self.in_region(&wanted, UNNAMED_REGION),
+            None => self.in_region(&wanted.without_regions(), UNNAMED_REGION),
         };
         self.narrowed.push((tuple, place, held.clone()));
         let bindings = match form {
@@ -4151,7 +4162,7 @@ impl Checker {
                 self.settle_value(&mut case.body, &settled)?;
             }
         }
-        self.escaping_region(span, &settled, words)?;
+        self.escaping_region(span, &given, &settled, words)?;
         Ok(Some(settled))
     }
 
@@ -4973,8 +4984,23 @@ impl Checker {
                 let ExprKind::Call { name, args, .. } = &mut call.kind else { continue };
                 let wrapper = self.full_name(name);
                 let params: Vec<Type> = self.tasks.get(&wrapper).map(|info| info.params.iter().map(|(_, ty)| ty.clone()).collect()).unwrap_or_default();
+                let passing: Vec<Passing> = self.tasks.get(&wrapper).map(|info| info.passing.clone()).unwrap_or_default();
                 let own = args.len().saturating_sub(1 + takes);
                 for (i, arg) in args.iter_mut().enumerate().skip(1).take(own) {
+                    // A place the wrapper changes or reads where it is kept: no
+                    // value worked out once is one.
+                    if let Some(mark) = passing.get(i).filter(|passing| passing.is_ref()).map(|passing| if *passing == Passing::HoldRef { "hold&" } else { "bind&" }) {
+                        self.record(Error::at(
+                            arg.span,
+                            format!("wrapper '{}' takes this as a place, with '{}', but {} are worked out once, where the program starts, so none is a place; take it as a value, or name the place inside the wrapper", codegen::notice_name(&wrapper), mark, WRAPPER_VALUES),
+                        ));
+                        if !matches!(arg.kind, ExprKind::Ref(_)) {
+                            // Marked, so the wrapper's call says nothing more about it.
+                            let span = arg.span;
+                            *arg = Expr::new(ExprKind::Ref(Box::new(arg.clone())), span);
+                        }
+                        continue;
+                    }
                     // The type the wrapper takes it as, where that doesn't depend on
                     // the value itself; its regions are no region's, since none
                     // exists where the program starts.
@@ -8750,6 +8776,10 @@ impl Checker {
     /// Whether values of type `ty` allow what `need` asks: a type parameter
     /// allows it when its own word already does.
     fn allows(&self, need: Need, ty: &Type) -> bool {
+        // A value of no type had a mistake of its own, already reported.
+        if ty.unknown() {
+            return true;
+        }
         // A group allows what it asks of each of its types.
         if let Type::Param(name) | Type::Group(name) = ty {
             return self.type_param(name).is_some_and(|param| param.needs.iter().any(|(own, _)| own.means(need)));
@@ -9636,8 +9666,7 @@ impl Checker {
                 // their conditions may read what only that arm guards against.
                 let (mut taken, mut cut) = (false, arms.len());
                 for (i, arm) in arms.iter_mut().enumerate() {
-                    self.substitute_condition(&mut arm.cond, given, made)?;
-                    self.settle_type_tests(&mut arm.cond, &mut arm.body);
+                    self.substitute_condition(&mut arm.cond, &mut arm.body, given, made)?;
                     match known_condition(&arm.cond).filter(|_| !given.is_empty()) {
                         Some(false) => arm.body.clear(),
                         Some(true) => taken = true,
@@ -9662,8 +9691,7 @@ impl Checker {
             }
             StmtKind::Block(body) => self.substitute_block(body, given, made),
             StmtKind::Loop(cond, body) => {
-                self.substitute_condition(cond, given, made)?;
-                self.settle_type_tests(cond, body);
+                self.substitute_condition(cond, body, given, made)?;
                 self.substitute_block(body, given, made)
             }
             StmtKind::Each(name, _, range, body) if matches!(&range.ty, Some(Type::Group(group)) if group_types(given, group).is_some()) => {
@@ -9809,11 +9837,23 @@ impl Checker {
     }
 
     /// Each part of a condition joined with `and`.
-    fn substitute_condition(&mut self, cond: &mut Condition, given: &HashMap<String, Type>, made: &mut Made) -> Result<()> {
-        let mut part = Some(cond);
-        while let Some(current) = part {
+    /// Makes `cond`, guarding `body`, what this copy makes it, a part at a
+    /// time with its type tests settled: after a part the copy knows doesn't
+    /// hold, the parts after it, which may read what it guards against, are
+    /// never made, the condition is `false` and `body` is emptied.
+    fn substitute_condition(&mut self, cond: &mut Condition, body: &mut Block, given: &HashMap<String, Type>, made: &mut Made) -> Result<()> {
+        let mut done = 0;
+        while let Some(current) = cond.part_mut(done) {
             self.substitute_expr(&mut current.value, given, made)?;
-            part = current.and.as_deref_mut();
+            self.settle_type_tests(cond, body);
+            done += 1;
+            if !given.is_empty() && cond.parts().take(done).any(|part| known_part(part) == Some(false)) {
+                let mut never = Expr::new(ExprKind::BoolLit(false), cond.value.span);
+                never.ty = Some(Type::Bool);
+                *cond = Condition::new(never, None);
+                body.clear();
+                break;
+            }
         }
         Ok(())
     }
@@ -9838,6 +9878,19 @@ impl Checker {
         if let Some(ty) = &mut e.ty {
             *ty = in_copy(ty, given);
             self.settle_applications(ty, at)?;
+        }
+        // `a and b` where this copy knows `a` is false, or `a or b` where it
+        // knows it is true: `b` never runs, and may read what `a` guards
+        // against, so it isn't made.
+        if let ExprKind::Binary(op @ (BinaryOp::And | BinaryOp::Or), a, _) = &mut e.kind {
+            let decides = *op == BinaryOp::Or;
+            self.substitute_expr(a, given, made)?;
+            if !given.is_empty() && known_bool(a) == Some(decides) {
+                e.kind = ExprKind::BoolLit(decides);
+            } else if let ExprKind::Binary(_, _, b) = &mut e.kind {
+                self.substitute_expr(b, given, made)?;
+            }
+            return Ok(());
         }
         match &mut e.kind {
             ExprKind::Spread(inner) => self.substitute_expr(inner, given, made),
@@ -10389,18 +10442,23 @@ fn constructible(ty: &Type, can: &HashSet<&str>) -> bool {
 fn always_sends(block: &Block) -> bool {
     block.iter().any(|stmt| match &stmt.kind {
         StmtKind::Send(_) => true,
-        StmtKind::When(arms, Some(else_block)) => arms.iter().all(|arm| always_sends(&arm.body)) && always_sends(else_block),
-        // Without an `else`, the arms up to one that always holds must send.
-        StmtKind::When(arms, None) => {
+        // The arms that may run, up to one that always holds, must send, and
+        // the `else` too where none always holds. One known never to hold, as a
+        // type test that fails is (see `settle_type_tests`), never runs.
+        StmtKind::When(arms, else_block) => {
             for arm in arms {
+                let known = known_condition(&arm.cond);
+                if known == Some(false) {
+                    continue;
+                }
                 if !always_sends(&arm.body) {
                     return false;
                 }
-                if always_holds(&arm.cond) {
+                if known == Some(true) {
                     return true;
                 }
             }
-            false
+            else_block.as_ref().is_some_and(always_sends)
         }
         StmtKind::Match(_, cases) => cases.iter().all(|case| always_sends(&case.body)),
         StmtKind::Block(body) => always_sends(body),
@@ -11568,22 +11626,46 @@ fn padded_group_tuples(ty: &Type) -> Type {
 /// of numbers and bools written out, as `args.len` becomes (see
 /// `substitute_expr`).
 fn known_condition(cond: &Condition) -> Option<bool> {
-    let mut taken = true;
+    let mut taken = Some(true);
     for part in cond.parts() {
-        if part.pattern.is_some() {
-            return None;
+        match known_part(part) {
+            Some(false) => return Some(false),
+            Some(true) => {}
+            None => taken = None,
         }
-        taken &= known_bool(&part.value)?;
     }
-    Some(taken)
+    taken
+}
+
+/// Whether one part of a condition is known to hold: a `bool` the compiler
+/// works out, a tuple's items, which always match, and what a type test leaves
+/// where the item's type is known (see `settle_type_tests`): its value taken,
+/// which is always there, and `none` matched on a read, which holds past the
+/// tuple's end and nowhere else.
+fn known_part(part: &Condition) -> Option<bool> {
+    let item = item_state(&part.value);
+    match part.pattern.as_ref().map(|pattern| &pattern.kind) {
+        None => known_bool(&part.value),
+        Some(PatternKind::Tuple(_)) => Some(true),
+        Some(PatternKind::Value(_)) if matches!(item, Some(Some(_))) => Some(true),
+        Some(PatternKind::None) => item.map(|found| found.is_none()),
+        _ => None,
+    }
 }
 
 fn known_bool(e: &Expr) -> Option<bool> {
     match &e.kind {
         ExprKind::BoolLit(b) => Some(*b),
         ExprKind::Unary(UnaryOp::Not, inner) => known_bool(inner).map(|b| !b),
-        ExprKind::Binary(BinaryOp::And, a, b) => Some(known_bool(a)? && known_bool(b)?),
-        ExprKind::Binary(BinaryOp::Or, a, b) => Some(known_bool(a)? || known_bool(b)?),
+        // Either side decides it where it is the one that would.
+        ExprKind::Binary(op @ (BinaryOp::And | BinaryOp::Or), a, b) => {
+            let decides = *op == BinaryOp::Or;
+            match (known_bool(a), known_bool(b)) {
+                (Some(side), _) | (_, Some(side)) if side == decides => Some(decides),
+                (Some(_), Some(_)) => Some(!decides),
+                _ => None,
+            }
+        }
         ExprKind::Binary(op, a, b) => {
             let (a, b) = (known_int(a)?, known_int(b)?);
             match op {
