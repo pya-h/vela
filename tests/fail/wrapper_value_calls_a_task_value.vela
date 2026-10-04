@@ -1,0 +1,24 @@
+; error: 17:10: this value of wrapper 'logged' is worked out where the program starts, before task 'sq' can run, and it calls 'sq' through 'tag', then a task held as a value, whose wrappers read it; give a value that doesn't call it, or work it out inside the wrapper
+; A call of a task held as a value may reach any task named as a value where the program starts, a shared field's
+; first value among them, so this value may call its own task.
+shape Hooks
+    shared hold run: (int) -> int = sq
+fi
+
+task logged(next: (int) -> int, label: text, n: int) -> int
+    show(label)
+    <- next(n)
+fi
+
+task tag() -> text
+    <- when Hooks.run(2) > 1 "x" else "y" fi
+fi
+
+$(logged(tag()))
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

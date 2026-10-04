@@ -1,0 +1,19 @@
+; error: 12:11: unknown variable 'n'; a wrapper's own values are worked out where the program starts, where no variable exists yet
+; A wrapper's own values are worked out where the program starts, where the task's values don't exist.
+task logged(next: (int) -> int, label: text, n: int) -> int
+    show(label)
+    <- next(n)
+fi
+
+task counted(next: (int) -> int, times: int, n: int) -> int
+    <- next(n)
+fi
+
+$(counted(n))
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

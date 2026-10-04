@@ -311,6 +311,16 @@
                 <a href="vela.html#shared">Shared fields</a>.</td>
             </tr>
             <tr>
+              <td>A decorator's and a wrapper's values, worked out where the program starts, hold nothing in a region
+                and leave no task with <code>&lt;-</code>. A wrapper's are worked out after those of every task they may
+                call, a call of a task held as a value counting as a call of every task named as one in what can run there; a value that may
+                call its own task, and values whose tasks call each other in a circle, are refused.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>A wrapper reading its value before it is set, which for a task value would call through a null
+                pointer, and a decorator's value skipping the decorators after it. See
+                <a href="vela.html#decorators">Decorators</a>.</td>
+            </tr>
+            <tr>
               <td>Code nests at most 100 levels deep, and a type given to a generic is at most 24 types deep and
                 1000 parts.</td>
               <td class="when"><span class="badge b-checked">checked</span></td>

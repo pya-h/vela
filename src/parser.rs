@@ -1041,7 +1041,7 @@ impl Parser {
         }
         field.private = private;
         field.read = read;
-        Ok(SharedField { field, hold })
+        Ok(SharedField { field, hold, start: None })
     }
 
     /// Rejects a field written below a method: a shape's or a kind's block reads

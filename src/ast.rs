@@ -442,6 +442,13 @@ pub fn layer_name(name: &str, k: usize) -> String {
 /// What a wrapper layer's name holds after its task's (see `layer_name`).
 pub const LAYER: &str = "__layer__";
 
+/// The shape whose shared fields hold the values of wrappers worked out where
+/// the program starts (`$(logged(label("sq")))`), one each, which every call of
+/// the wrapped task reads: as a shared field's, each is given its value where
+/// the program starts, after the program's own shared fields and before the
+/// startup decorators. No Vela name holds `__`, so no program can name it.
+pub const START_VALUES: &str = "wrapper__values";
+
 /// Task `name` as a message names it: `task 'f'`, or `this lambda`.
 pub fn shown_task(name: &str) -> String {
     if is_lambda(name) { "this lambda".to_string() } else { format!("task '{}'", name) }
@@ -2026,6 +2033,10 @@ pub struct SharedField {
     /// `shared hold f`: any code that sees it may change it. A `read` one only
     /// the shape's own methods change, and one that is neither never changes.
     pub hold: bool,
+    /// For a value of a wrapper worked out where the program starts (a member
+    /// of `START_VALUES`), where it is, as a runtime message names it:
+    /// `wrapper 'logged' on task 'sq'`. `None` for a field a program declares.
+    pub start: Option<String>,
 }
 
 impl SharedField {

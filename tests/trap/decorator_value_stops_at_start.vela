@@ -1,0 +1,20 @@
+; trap: division by zero at 12:16 in decorator 'registered' on task 'sq'
+; A startup decorator's values are worked out where the program starts; a
+; message about one names the decorator and its task.
+task none_yet() -> int
+    <- 0
+fi
+
+task registered(f: (int) -> int, every: int)
+    show("registered every ", every)
+fi
+
+$registered(10 / none_yet())
+$registered(10)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show("never reached")
+fi

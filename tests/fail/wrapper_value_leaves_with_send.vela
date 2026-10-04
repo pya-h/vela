@@ -1,0 +1,19 @@
+; error: 12:22: '<-' leaves a task, and a wrapper's own values are worked out where the program starts, outside every task; give a value instead, as in 'int(t) { 0 }'
+; A wrapper's value is worked out outside every task, so a <- in it has nothing to leave.
+task logged(next: (int) -> int, label: text, n: int) -> int
+    show(label)
+    <- next(n)
+fi
+
+task counted(next: (int) -> int, times: int, n: int) -> int
+    <- next(n)
+fi
+
+$(counted(int("3") { <- }))
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

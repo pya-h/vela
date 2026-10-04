@@ -1,0 +1,25 @@
+; trap: division by zero at 18:15 in wrapper 'counted' on task 'sq'
+; A wrapper's value is worked out where the program starts; one that stops the
+; program stops it there, before main, and the message names the wrapper.
+task none_yet() -> int
+    show("working out the count")
+    <- 0
+fi
+
+task counted(next: (int) -> int, every: int, n: int) -> int
+    <- next(n)
+fi
+
+task announce(f: (int) -> int)
+    show("never announced")
+fi
+
+$announce
+$(counted(100 / none_yet()))
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show("never reached")
+fi

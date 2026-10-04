@@ -2232,8 +2232,10 @@ fi</code></pre>
           leftmost outermost: each is given the rest of the chain as a task of the decorated task's type, then its own
           values, then the task's values, and decides when to call it, or whether to. The compiler writes each layer as a
           hidden task, so no lambda that captures is needed, and the C compiler can inline the whole chain. Built: see
-          <a href="vela.html#decorators">Decorators</a>; a wrapper's own values are ones the compiler works out for now,
-          and values worked out when the program starts (a call, say), kept in a hidden variable, are planned (see
+          <a href="vela.html#decorators">Decorators</a>. A wrapper's own values are worked out once, where the program
+          starts (built 2026-10-04): one the compiler works out is written into each call, and any other (a call, a
+          shared field) is kept in a hidden variable each call reads, worked out after the values of every task it may
+          call; values that live in a region wait (see
           <a href="#start-values">Values worked out where the program starts</a>).</li>
         <li><strong>Type groups, <code>P...</code>,</strong> let one wrapper fit a task of any parameters:
           <pre><code>task traced&lt;P..., R: shown&gt;(next: (P...) -&gt; R, args: P...) -&gt; R
@@ -2248,11 +2250,11 @@ fi</code></pre>
 
       <h3 id="start-values">Values worked out where the program starts <span class="badge b-idea">Problem</span></h3>
       <p>
-        A startup decorator's values, and (planned) a wrapper's, are worked out where the program starts, before
+        A startup decorator's values, and a wrapper's, are worked out where the program starts, before
         <code>main</code>, when no region exists yet. So they can't be anything that lives in one: text joined from other
         text (<code>$route("/" + name)</code>), a slice, or a value holding a pointer. Values of no region (numbers,
-        literals' text, tasks, and shapes of them) work, and once a wrapper's values are worked out at start rather
-        than at each call, a call giving one of those works too, kept in a hidden variable for the whole run.
+        literals' text, tasks, and shapes of them) work, a call giving one of those too: a wrapper's is kept in a hidden
+        variable for the whole run (built 2026-10-04, see <a href="vela.html#decorators">Decorators</a>).
       </p>
       <p>
         <strong>Ways to solve the rest.</strong> The <a href="#global-region">global region</a> solves it if it can be

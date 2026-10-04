@@ -1,0 +1,32 @@
+; error: 20:10: these wrapper values are worked out where the program starts, and each needs another worked out first, in a circle: a value of wrapper 'logged' on task 'sq' calls 'other', and a value of wrapper 'logged' on task 'other' calls 'sq'; work one of them out inside its wrapper instead
+; Two tasks whose wrapper values call each other have no order to be worked out in.
+task logged(next: (int) -> int, label: text, n: int) -> int
+    show(label)
+    <- next(n)
+fi
+
+task counted(next: (int) -> int, times: int, n: int) -> int
+    <- next(n)
+fi
+
+task tag(n: int) -> text
+    <- when other(n) > 4 "big" else "small" fi
+fi
+
+task word() -> text
+    <- when sq(1) > 0 "x" else "y" fi
+fi
+
+$(logged(tag(3)))
+task sq(n: int) -> int
+    <- n * n
+fi
+
+$(logged(word()))
+task other(n: int) -> int
+    <- n
+fi
+
+task main()
+    show(sq(2))
+fi

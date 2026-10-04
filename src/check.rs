@@ -300,9 +300,39 @@ pub struct Checker {
     /// `settle_wrappers` makes its layers' bodies (see `add_wrappers`).
     wrapped: Vec<(String, Vec<Expr>)>,
     /// Each task whose body calls a wrapper, with how many values the task it
-    /// wraps takes, for `check_wrapper_values`.
+    /// wraps takes, for `check_start_values`.
     wrapper_layers: HashMap<String, usize>,
+    /// Each task with wrappers whose layers are settled, and the tasks that
+    /// call its wrappers, in order: the task itself, then `task__layer__1`, …
+    /// (see `settle_wrapped`).
+    wrapped_chains: Vec<(String, Vec<String>)>,
+    /// The values of wrappers worked out where the program starts, each a
+    /// shared field of `START_VALUES`, in the order they are written (see
+    /// `check_start_values`, and `order_start_values` for the order they are
+    /// worked out in).
+    start_values: Vec<StartValue>,
+    /// What the value being checked is, when it is worked out where the program
+    /// starts, outside any task: a decorator's or a wrapper's (see `AT_START`).
+    /// A `<-` there would leave the task it is worked out in.
+    at_start: Option<&'static str>,
 }
+
+/// A value of a wrapper worked out where the program starts (see
+/// `Checker::start_values`).
+struct StartValue {
+    /// The task whose wrapper takes it.
+    task: String,
+    /// The wrapper, as its call is written.
+    wrapper: String,
+    /// Its field of `START_VALUES`.
+    member: String,
+    span: Span,
+}
+
+/// What the values worked out where the program starts are, in messages (see
+/// `Checker::at_start`).
+const DECORATOR_VALUES: &str = "a decorator's values";
+const WRAPPER_VALUES: &str = "a wrapper's own values";
 
 /// What a call needs to know about a task: the types it takes, its parameters,
 /// what it sends, and what it is a method of, when it is one.
@@ -481,6 +511,11 @@ impl Checker {
         }
         if checker.errors.is_empty() {
             program.items.extend(std::mem::take(&mut checker.made_shapes));
+            // The values of wrappers worked out where the program starts, after
+            // every shared field of the program, which they may read.
+            if let Some(values) = checker.shapes.remove(START_VALUES) {
+                program.items.push(Item::Shape(values));
+            }
             // No file declares the kinds that reading a number sends, so
             // they join the program's own declarations here, after every
             // check that reads them, for the code generator to write their C.
@@ -623,6 +658,7 @@ impl Checker {
         }
         self.check_declarations(items);
         self.settle_wrappers(items);
+        self.check_start_values(items);
         // A lambda is checked after the code it is written in, which notes
         // the names around it (see `lambda_outer`): the parser adds lambdas
         // last, each after the ones inside it, so they are checked from the
@@ -639,6 +675,7 @@ impl Checker {
             }
         }
         self.current_module.clear();
+        self.order_start_values(items);
     }
 
     /// Checks the types one use gives a generic task against the copies its body
@@ -2573,9 +2610,6 @@ impl Checker {
         } else {
             self.check_block(&mut task.body)?;
         }
-        if let Some(&takes) = self.wrapper_layers.get(&task.name) {
-            self.check_wrapper_values(&task.body, takes);
-        }
         // Whether every path sends a value can only be told of a body that
         // checked: a line with a mistake may well be the one that sends, so a
         // task with a mistake anywhere is not told this as well (see `record`).
@@ -3268,6 +3302,12 @@ impl Checker {
             }
             StmtKind::Match(expr, cases) => self.check_match(span, expr, cases, None).map(|_| ()),
             StmtKind::Send(values) => {
+                if let Some(what) = self.at_start {
+                    return err(
+                        span,
+                        format!("'<-' leaves a task, and {} are worked out where the program starts, outside every task; give a value instead, as in 'int(t) {{ 0 }}'", what),
+                    );
+                }
                 let ret = self.current_ret.clone().unwrap_or(Type::Nothing);
                 let expected = ret.results();
                 if values.is_empty() {
@@ -4488,17 +4528,11 @@ impl Checker {
                 let StmtKind::Expr(call) = &mut stmt.kind else { continue };
                 // No region exists where the program starts. One sending several
                 // values is told what a decorator sends, below.
-                let checked = self.check_expr_multi(call).map(|_| ()).map_err(|mut error| {
-                    const NO_REGION: &str = "a decorator's values are worked out where the program starts, before any region exists, so none of them can be made in one";
-                    if error.message.starts_with("unknown region") {
-                        error.message = NO_REGION.to_string();
-                    } else if error.message.starts_with("unknown variable") {
-                        error.message.push_str("; a decorator's values are worked out where the program starts, where no variable exists yet");
-                    } else if error.message.contains("region") {
-                        error.message = format!("{}; but {}", error.message, NO_REGION);
-                    }
-                    error
-                });
+                let recorded = self.errors.len();
+                self.at_start = Some(DECORATOR_VALUES);
+                let checked = self.check_expr_multi(call).map(|_| ()).map_err(|error| at_start_error(error, DECORATOR_VALUES));
+                self.at_start = None;
+                self.said_at_start(recorded, DECORATOR_VALUES);
                 self.keep_going(checked);
             }
         }
@@ -4910,29 +4944,290 @@ impl Checker {
             self.wrapper_layers.insert(layer, types.len());
             sends = sent;
         }
+        let callers = (0..layers).map(|k| if k == 0 { task.to_string() } else { layer_name(task, k) }).collect();
+        self.wrapped_chains.push((task.to_string(), callers));
         Ok(())
     }
 
-    /// Records a mistake for each value of its own the wrapper called in
-    /// `body` is given that the compiler can't work out: a wrapper's values are
-    /// the same at every call, as a field's default is.
-    fn check_wrapper_values(&mut self, body: &Block, takes: usize) {
-        let Some(stmt) = body.first() else { return };
-        let call = match &stmt.kind {
-            StmtKind::Expr(call) => call,
-            StmtKind::Send(values) => match values.first() {
-                Some(call) => call,
-                None => return,
-            },
-            _ => return,
-        };
-        let ExprKind::Call { name, args, .. } = &call.kind else { return };
-        let own = args.len().saturating_sub(1 + takes);
-        for value in args.iter().skip(1).take(own) {
-            if !constant_value(value) {
-                let message = format!("a wrapper's values are the same at every call, so each is one the compiler works out: a literal, a macro, or a task's name, as a field's default is; '{}' is given something else", unqualified(name));
-                self.record(Error::at(value.span, message));
+    /// Checks the values of its own each wrapper is given in `$( … )`. Each is
+    /// worked out where the program starts, where no variable and no region
+    /// exist yet. One the compiler works out (a literal, a macro, a task's name)
+    /// stays written into every call, which costs nothing; any other (a call, a
+    /// shared field) becomes a shared field of `START_VALUES`, given its value
+    /// once where the program starts, which every call of the task reads. The
+    /// order they are worked out in is settled once every body is checked (see
+    /// `order_start_values`).
+    fn check_start_values(&mut self, items: &mut [Item]) {
+        let places: HashMap<String, usize> = items.iter().enumerate().filter(|(_, item)| matches!(item, Item::Task(_))).map(|(i, item)| (item.name().to_string(), i)).collect();
+        // In the order the program is written, its modules first, as its
+        // startup decorators run.
+        let mut chains = std::mem::take(&mut self.wrapped_chains);
+        chains.sort_by_key(|(task, _)| places.get(task).copied().unwrap_or(usize::MAX));
+        let mut members = Vec::new();
+        for (task, callers) in &chains {
+            self.current_module = module_of(task).to_string();
+            for caller in callers {
+                let Some(&takes) = self.wrapper_layers.get(caller) else { continue };
+                let Some(Item::Task(def)) = places.get(caller).and_then(|&i| items.get_mut(i)) else { continue };
+                let Some(call) = wrapper_call(&mut def.body) else { continue };
+                let ExprKind::Call { name, args, .. } = &mut call.kind else { continue };
+                let wrapper = self.full_name(name);
+                let params: Vec<Type> = self.tasks.get(&wrapper).map(|info| info.params.iter().map(|(_, ty)| ty.clone()).collect()).unwrap_or_default();
+                let own = args.len().saturating_sub(1 + takes);
+                for (i, arg) in args.iter_mut().enumerate().skip(1).take(own) {
+                    // The type the wrapper takes it as, where that doesn't depend on
+                    // the value itself; its regions are no region's, since none
+                    // exists where the program starts.
+                    let expected = params.get(i).filter(|ty| ty.params().is_empty() && !ty.unknown()).map(Type::without_regions);
+                    let mut value = arg.clone();
+                    let checked = self.check_start_value(&mut value, expected.as_ref());
+                    if checked.is_ok() && constant_value(&value) {
+                        // Written into every call as it was checked here, where no
+                        // variable is seen: a task's name stays the task's, even
+                        // where the task takes a parameter of that name.
+                        *arg = value;
+                        continue;
+                    }
+                    let span = arg.span;
+                    let ty = match checked {
+                        Ok(()) => value.ty.clone().unwrap_or(Type::Unknown),
+                        // The call reads a value of no type, so nothing complains
+                        // about it again (see `Type::unknown`).
+                        Err(error) => {
+                            self.record(error);
+                            Type::Unknown
+                        }
+                    };
+                    let member = format!("v{}", members.len() + 1);
+                    let place = format!("wrapper '{}' on task '{}'", codegen::notice_name(&wrapper), codegen::notice_name(task));
+                    let field = Field {
+                        name: member.clone(),
+                        ty,
+                        span,
+                        ty_span: span,
+                        private: false,
+                        read: false,
+                        default_region: false,
+                        passing: Passing::Copy,
+                        default: Some(value),
+                    };
+                    members.push(SharedField { field, hold: false, start: Some(place) });
+                    self.start_values.push(StartValue { task: task.clone(), wrapper: name.clone(), member: member.clone(), span });
+                    *arg = Expr::new(ExprKind::Shared { shape: START_VALUES.to_string(), field: member }, span);
+                }
             }
+        }
+        self.current_module.clear();
+        if !members.is_empty() {
+            let values = ShapeDef { name: START_VALUES.to_string(), types: Vec::new(), given: Vec::new(), fields: Vec::new(), shared: members, span: Span::default(), private: false };
+            self.shapes.insert(START_VALUES.to_string(), values);
+        }
+    }
+
+    /// Words the mistakes recorded since there were `recorded` of them, found in
+    /// a value worked out where the program starts, as such (see
+    /// `at_start_error`): a check that goes on after a mistake records it
+    /// rather than sending it back.
+    fn said_at_start(&mut self, recorded: usize, what: &str) {
+        for error in self.errors.iter_mut().skip(recorded) {
+            *error = at_start_error(error.clone(), what);
+        }
+    }
+
+    /// Checks `value`, a wrapper's own value, where the program starts: with no
+    /// variable and no region, as a startup decorator's values are checked, and
+    /// as the type `expected` the wrapper takes it as, where that is known. It
+    /// is kept for as long as the program runs, so it holds nothing in a region.
+    fn check_start_value(&mut self, value: &mut Expr, expected: Option<&Type>) -> Result<()> {
+        let copies = self.unsettled_copies.len();
+        let types = self.unsettled_types.len();
+        let recorded = self.errors.len();
+        self.scopes = vec![Scope::default()];
+        self.at_start = Some(WRAPPER_VALUES);
+        let checked = self.check_expr(value).and_then(|_| match expected {
+            Some(ty) => self.coerce(value, ty),
+            None => Ok(()),
+        });
+        self.at_start = None;
+        self.said_at_start(recorded, WRAPPER_VALUES);
+        self.scopes.clear();
+        let uncopied = self.unsettled_copies.get(copies).copied();
+        let untold = self.unsettled_types.get(types).cloned();
+        self.unsettled_copies.truncate(copies);
+        self.unsettled_types.truncate(types);
+        checked.map_err(|error| at_start_error(error, WRAPPER_VALUES))?;
+        if let Some(at) = uncopied {
+            return err(at, self.unsettled_copy());
+        }
+        if let Some((at, task, param)) = untold {
+            return err(at, self.untold_type(&task, &param));
+        }
+        let ty = value.ty.clone().unwrap_or(Type::Unknown);
+        if ty == Type::Nothing {
+            return err(value.span, "this sends nothing, so it is no value a wrapper can be given");
+        }
+        if unsettled(&ty) {
+            return err(value.span, format!("can't tell which type this value is: the wrapper takes it as whatever type the value says, and '{}' doesn't say all of it", ty));
+        }
+        if holds_pointers(&ty, &self.regional) || ty.regions().iter().any(|region| *region != ANY_REGION) || self.holds_file(&ty) {
+            return err(
+                value.span,
+                format!(
+                    "{} are worked out once, where the program starts, and kept as long as it runs, which no region lasts, so none can hold a pointer, a slice, text of a region, a 'File', or a value holding one; this one is {}",
+                    WRAPPER_VALUES,
+                    a_type(&ty)
+                ),
+            );
+        }
+        Ok(())
+    }
+
+    /// Works out the order the values of wrappers are given where the program
+    /// starts (see `check_start_values`): a task's after those of every task
+    /// they may call, so that none reads a value not worked out yet, and in the
+    /// order the program is written otherwise. A value that may call its own
+    /// task, or values that may call each other's, have no such order and are
+    /// refused. It reads the calls every body makes, so it runs once they are
+    /// all checked, and only on a program without other mistakes.
+    fn order_start_values(&mut self, items: &[Item]) {
+        if self.start_values.is_empty() || !self.errors.is_empty() {
+            return;
+        }
+        let mut graph = CallGraph::of(items, self);
+        let Some(def) = self.shapes.get(START_VALUES) else { return };
+        let values: HashMap<&str, &Expr> = def.shared.iter().filter_map(|member| member.field.default.as_ref().map(|value| (member.field.name.as_str(), value))).collect();
+        // What a call of a task held as a value may reach where the program
+        // starts, from what every value worked out there may run.
+        let mut all = Calls::default();
+        let mut named = Vec::new();
+        for value in values.values() {
+            walk_expr(value, &mut |e| {
+                self.note_calls(e, &mut all);
+                note_value(e, &mut named);
+            });
+        }
+        graph.settle_values(&all, named);
+        let mut units: Vec<&str> = Vec::new();
+        for start in &self.start_values {
+            if !units.contains(&start.task.as_str()) {
+                units.push(&start.task);
+            }
+        }
+        // For each task, the tasks whose values its values need first, each with
+        // the value that needs it.
+        let mut needs: HashMap<&str, Vec<(&str, &StartValue)>> = HashMap::new();
+        let mut mistakes = Vec::new();
+        for start in &self.start_values {
+            let Some(value) = values.get(start.member.as_str()) else { continue };
+            let mut roots = Calls::default();
+            walk_expr(value, &mut |e| self.note_calls(e, &mut roots));
+            let reached = graph.reach(&roots);
+            if reached.contains_key(&start.task) {
+                let through = graph.path(&reached, &start.task);
+                mistakes.push(Error::at(
+                    start.span,
+                    format!(
+                        "this value of wrapper '{0}' is worked out where the program starts, before task '{1}' can run, and it calls '{1}'{2}, whose wrappers read it; give a value that doesn't call it, or work it out inside the wrapper",
+                        unqualified(&start.wrapper),
+                        start.task,
+                        through
+                    ),
+                ));
+                continue;
+            }
+            for unit in units.iter().filter(|unit| **unit != start.task && reached.contains_key(**unit)) {
+                needs.entry(start.task.as_str()).or_default().push((unit, start));
+            }
+        }
+        if mistakes.is_empty() {
+            match start_order(&units, &needs) {
+                Ok(order) => {
+                    let rank: HashMap<&str, usize> = order.iter().enumerate().map(|(i, unit)| (*unit, i)).collect();
+                    let mut ranked: Vec<(usize, usize, String)> = self.start_values.iter().enumerate().map(|(i, start)| (rank.get(start.task.as_str()).copied().unwrap_or(usize::MAX), i, start.member.clone())).collect();
+                    ranked.sort();
+                    let position: HashMap<String, usize> = ranked.into_iter().enumerate().map(|(at, (_, _, member))| (member, at)).collect();
+                    if let Some(def) = self.shapes.get_mut(START_VALUES) {
+                        def.shared.sort_by_key(|member| position.get(&member.field.name).copied().unwrap_or(usize::MAX));
+                    }
+                }
+                Err(circle) => {
+                    let parts: Vec<String> = circle.iter().map(|(start, called)| format!("a value of wrapper '{}' on task '{}' calls '{}'", unqualified(&start.wrapper), start.task, called)).collect();
+                    let at = circle.first().map_or(Span::default(), |(start, _)| start.span);
+                    mistakes.push(Error::at(
+                        at,
+                        format!(
+                            "these wrapper values are worked out where the program starts, and each needs another worked out first, in a circle: {}; work one of them out inside its wrapper instead",
+                            parts.join(", and ")
+                        ),
+                    ));
+                }
+            }
+        }
+        for mistake in mistakes {
+            self.record(mistake);
+        }
+    }
+
+    /// Notes what `e` calls, without what is inside it (see `walk_expr`): a
+    /// task called or named as a value, a call of a task held as a value, and
+    /// the `str` of each value written as text. A generic task's body writes
+    /// values of the types it is given, so a call of one writes them too.
+    fn note_calls(&self, e: &Expr, calls: &mut Calls) {
+        let wrote = |ty: &Type, calls: &mut Calls| {
+            let mut found = Vec::new();
+            self.str_methods(ty, &mut Vec::new(), &mut found);
+            calls.tasks.extend(found);
+        };
+        match &e.kind {
+            ExprKind::Call { name, types, args } => {
+                if self.tasks.contains_key(name) {
+                    calls.tasks.push(name.clone());
+                }
+                for (ty, _) in types {
+                    wrote(ty, calls);
+                }
+                if name == "show" {
+                    for arg in args {
+                        if let Some(ty) = &arg.ty {
+                            wrote(ty, calls);
+                        }
+                    }
+                }
+            }
+            ExprKind::TaskValue(name) => calls.tasks.push(name.clone()),
+            ExprKind::Invoke { .. } => calls.invokes = true,
+            ExprKind::ToText { value, .. } => {
+                if let Some(ty) = &value.ty {
+                    wrote(ty, calls);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The `str` methods writing a value of type `ty` as text may call: those of
+    /// the shapes and kinds with one of their own, wherever they are in it.
+    fn str_methods(&self, ty: &Type, seen: &mut Vec<String>, found: &mut Vec<String>) {
+        match ty {
+            Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.str_methods(inner, seen, found),
+            Type::Map(key, value, _) => {
+                self.str_methods(key, seen, found);
+                self.str_methods(value, seen, found);
+            }
+            Type::Tuple(items) => items.iter().for_each(|item| self.str_methods(item, seen, found)),
+            Type::Named(name, _) if !seen.contains(name) => {
+                seen.push(name.clone());
+                let own = self.made_of.get(name).map_or(name.as_str(), |made| made.name.as_str());
+                let method = method_name(own, STR);
+                if self.tasks.contains_key(&method) {
+                    found.push(method);
+                } else {
+                    for part in self.written_parts(ty).unwrap_or_default() {
+                        self.str_methods(&part, seen, found);
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
@@ -10746,6 +11041,363 @@ fn count(n: usize, noun: &str) -> String {
 /// where the program starts: the modules in the program's order, their tasks in
 /// the order written, and a task's decorators the nearest first, as Python runs
 /// them. Its body is checked as any task's, with no variable or region yet.
+/// `error`, found in a value worked out where the program starts (`what`: a
+/// decorator's or a wrapper's), said as such: no variable and no region exist
+/// there yet.
+fn at_start_error(mut error: Error, what: &str) -> Error {
+    let no_region = format!("{} are worked out where the program starts, before any region exists, so none of them can be made in one", what);
+    if error.message.starts_with("unknown region") {
+        error.message = no_region;
+    } else if error.message.starts_with("unknown variable") {
+        error.message.push_str(&format!("; {} are worked out where the program starts, where no variable exists yet", what));
+    } else if error.message.contains("region") {
+        error.message = format!("{}; but {}", error.message, no_region);
+    }
+    error
+}
+
+/// The call of its wrapper in the body of a task or layer with wrappers (see
+/// `Checker::settle_wrapped`): the body's one statement, or the value it sends.
+fn wrapper_call(body: &mut Block) -> Option<&mut Expr> {
+    match &mut body.first_mut()?.kind {
+        StmtKind::Expr(call) => Some(call),
+        StmtKind::Send(values) => values.first_mut(),
+        _ => None,
+    }
+}
+
+/// What some code may call (see `Checker::note_calls`).
+#[derive(Default)]
+struct Calls {
+    /// The tasks it calls or names as values, and the `str` methods of the
+    /// values it writes.
+    tasks: Vec<String>,
+    /// Whether it calls a task held as a value, which may be any task named as
+    /// one somewhere.
+    invokes: bool,
+}
+
+/// What each task's body may call, for the order the values of wrappers are
+/// worked out in where the program starts (see `Checker::order_start_values`).
+struct CallGraph {
+    calls: HashMap<String, Calls>,
+    /// The tasks each task names as values, but the next layer a wrapper's
+    /// layer gives its wrapper: a layer is reached only through the task it
+    /// belongs to, which names it (see `Checker::add_wrappers`).
+    named: HashMap<String, Vec<String>>,
+    /// The tasks a call of a task held as a value may reach where the program
+    /// starts: every task named as a value in what can run or be read there (a
+    /// shared field's first value, a value worked out there, and the bodies they
+    /// may reach), but none named only where the program runs later, such as a
+    /// startup decorator's (see `settle_values`).
+    values: Vec<String>,
+}
+
+/// How a task is reached from a value (see `CallGraph::reach`): from the value
+/// itself, called by another task, or through a task held as a value.
+#[derive(Clone)]
+enum Reached {
+    Start,
+    From(String),
+    ThroughValue(String),
+}
+
+impl CallGraph {
+    fn of(items: &[Item], checker: &Checker) -> CallGraph {
+        let mut calls = HashMap::new();
+        let mut named = HashMap::new();
+        let mut values = Vec::new();
+        for item in items {
+            match item {
+                Item::Task(task) => {
+                    let mut found = Calls::default();
+                    let mut names = Vec::new();
+                    walk_block(&task.body, &mut |e| {
+                        checker.note_calls(e, &mut found);
+                        note_value(e, &mut names);
+                    });
+                    calls.insert(task.name.clone(), found);
+                    named.insert(task.name.clone(), names);
+                }
+                // What a shared field holds where the program starts.
+                Item::Shape(shape) => {
+                    for value in shape.shared.iter().filter_map(|member| member.field.default.as_ref()) {
+                        walk_expr(value, &mut |e| note_value(e, &mut values));
+                    }
+                }
+                Item::Kind(_) | Item::Macro(_) => {}
+            }
+        }
+        CallGraph { calls, named, values }
+    }
+
+    /// Adds to `values` every task named as a value in the bodies the code
+    /// making `roots` may reach, until they reach no more.
+    fn settle_values(&mut self, roots: &Calls, values: Vec<String>) {
+        for name in values {
+            if !self.values.contains(&name) {
+                self.values.push(name);
+            }
+        }
+        loop {
+            let before = self.values.len();
+            let reached: Vec<String> = self.reach(roots).into_keys().collect();
+            for task in reached {
+                for name in self.named.get(&task).cloned().unwrap_or_default() {
+                    if !self.values.contains(&name) {
+                        self.values.push(name);
+                    }
+                }
+            }
+            if self.values.len() == before {
+                return;
+            }
+        }
+    }
+
+    /// Every task the code that makes `roots` may reach, each with how.
+    fn reach(&self, roots: &Calls) -> HashMap<String, Reached> {
+        let mut reached: HashMap<String, Reached> = HashMap::new();
+        let mut next: Vec<String> = Vec::new();
+        let visit = |name: &String, how: Reached, reached: &mut HashMap<String, Reached>, next: &mut Vec<String>| {
+            if !reached.contains_key(name) {
+                reached.insert(name.clone(), how);
+                next.push(name.clone());
+            }
+        };
+        for name in &roots.tasks {
+            visit(name, Reached::Start, &mut reached, &mut next);
+        }
+        if roots.invokes {
+            for name in &self.values {
+                visit(name, Reached::ThroughValue(String::new()), &mut reached, &mut next);
+            }
+        }
+        while let Some(task) = next.pop() {
+            let Some(calls) = self.calls.get(&task) else { continue };
+            for name in &calls.tasks {
+                visit(name, Reached::From(task.clone()), &mut reached, &mut next);
+            }
+            if calls.invokes {
+                for name in &self.values {
+                    visit(name, Reached::ThroughValue(task.clone()), &mut reached, &mut next);
+                }
+            }
+        }
+        reached
+    }
+
+    /// The tasks `target` is reached through, from the value, as a message
+    /// ends: ` through 'describe'`, or nothing for a value calling it itself.
+    fn path(&self, reached: &HashMap<String, Reached>, target: &str) -> String {
+        let mut steps: Vec<String> = Vec::new();
+        let mut by_value = false;
+        let mut at = target.to_string();
+        // Each task is reached once, so the path back ends.
+        for _ in 0..reached.len() {
+            match reached.get(&at) {
+                Some(Reached::From(from)) => at = from.clone(),
+                Some(Reached::ThroughValue(from)) => {
+                    by_value = true;
+                    if from.is_empty() {
+                        break;
+                    }
+                    at = from.clone();
+                }
+                Some(Reached::Start) | None => break,
+            }
+            let shown = called_name(&at);
+            if steps.last() != Some(&shown) && at != target {
+                steps.push(shown);
+            }
+        }
+        steps.reverse();
+        let mut through: Vec<String> = steps.iter().map(|step| format!("'{}'", step)).collect();
+        if by_value {
+            through.push("a task held as a value".to_string());
+        }
+        match through.len() {
+            0 => String::new(),
+            _ => format!(" through {}", through.join(", then ")),
+        }
+    }
+}
+
+/// Notes the task `e` names as a value, if it does, but a wrapper's layer
+/// (see `CallGraph::named`).
+fn note_value(e: &Expr, names: &mut Vec<String>) {
+    if let ExprKind::TaskValue(name) = &e.kind
+        && !name.contains(LAYER)
+        && !names.contains(name)
+    {
+        names.push(name.clone());
+    }
+}
+
+/// A task as a message about what calls it names it: a wrapper's layer as its
+/// task, a method through its shape or kind, and a lambda as one.
+fn called_name(name: &str) -> String {
+    let name = name.split(LAYER).next().unwrap_or(name);
+    if is_lambda(name) {
+        return "a lambda".to_string();
+    }
+    match method_parts(name) {
+        Some((owner, method)) => format!("{}{}{}", owner, MODULE_SEPARATOR, method),
+        None => name.to_string(),
+    }
+}
+
+/// The order of the tasks in `units` whose wrapper values are worked out where
+/// the program starts: each after the tasks its values `needs`, and in the
+/// order of `units` otherwise. A circle of them has no order, and is given
+/// back: each value in it, with the task it calls.
+fn start_order<'a>(units: &[&'a str], needs: &HashMap<&'a str, Vec<(&'a str, &'a StartValue)>>) -> std::result::Result<Vec<&'a str>, Vec<(&'a StartValue, String)>> {
+    // Visiting, then done; the walk keeps its own stack, so a long line of
+    // values can't overflow the compiler's.
+    let mut state: HashMap<&str, bool> = HashMap::new();
+    let mut order = Vec::new();
+    for &unit in units {
+        if state.contains_key(unit) {
+            continue;
+        }
+        state.insert(unit, false);
+        let mut stack: Vec<(&str, usize)> = vec![(unit, 0)];
+        while let Some((task, i)) = stack.last_mut() {
+            let task: &str = task;
+            let wanted = needs.get(task).and_then(|wanted| wanted.get(*i)).copied();
+            *i += 1;
+            match wanted {
+                Some((other, _)) => match state.get(other) {
+                    None => {
+                        state.insert(other, false);
+                        stack.push((other, 0));
+                    }
+                    Some(false) => {
+                        // A circle: from `other` along the stack to here, and back.
+                        let from = stack.iter().position(|(on, _)| *on == other).unwrap_or(0);
+                        let tasks: Vec<&str> = stack.get(from..).unwrap_or_default().iter().map(|(on, _)| *on).collect();
+                        let circle = tasks
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(k, &on)| {
+                                let then = tasks.get(k + 1).copied().unwrap_or(other);
+                                needs.get(on)?.iter().find(|(called, _)| *called == then).map(|(_, start)| (*start, then.to_string()))
+                            })
+                            .collect();
+                        return Err(circle);
+                    }
+                    Some(true) => {}
+                },
+                None => {
+                    state.insert(task, true);
+                    order.push(task);
+                    stack.pop();
+                }
+            }
+        }
+    }
+    Ok(order)
+}
+
+/// Calls `f` on every expression in `block`, through the blocks inside it.
+fn walk_block(block: &[Stmt], f: &mut dyn FnMut(&Expr)) {
+    for stmt in block {
+        walk_stmt(stmt, f);
+    }
+}
+
+fn walk_stmt(stmt: &Stmt, f: &mut dyn FnMut(&Expr)) {
+    match &stmt.kind {
+        StmtKind::Expr(e) => walk_expr(e, f),
+        StmtKind::Step { target, value, .. } => {
+            walk_expr(target, f);
+            walk_expr(value, f);
+        }
+        StmtKind::Send(values) | StmtKind::SetResults(_, values) | StmtKind::Binding { init: values, .. } => values.iter().for_each(|e| walk_expr(e, f)),
+        StmtKind::Assign(targets, values) => {
+            targets.iter().for_each(|target| walk_target(target, f));
+            values.iter().for_each(|e| walk_expr(e, f));
+        }
+        StmtKind::When(arms, else_block) => {
+            for arm in arms {
+                arm.cond.parts().for_each(|part| walk_expr(&part.value, f));
+                walk_block(&arm.body, f);
+            }
+            if let Some(block) = else_block {
+                walk_block(block, f);
+            }
+        }
+        StmtKind::Loop(cond, block) => {
+            cond.parts().for_each(|part| walk_expr(&part.value, f));
+            walk_block(block, f);
+        }
+        StmtKind::Block(block) => walk_block(block, f),
+        StmtKind::Each(_, _, source, block) => {
+            walk_expr(source, f);
+            walk_block(block, f);
+        }
+        StmtKind::Match(subject, cases) => {
+            walk_expr(subject, f);
+            cases.iter().for_each(|case| walk_block(&case.body, f));
+        }
+        StmtKind::Region { .. } => {}
+    }
+}
+
+fn walk_target(target: &Target, f: &mut dyn FnMut(&Expr)) {
+    match target {
+        Target::Discard(_) => {}
+        Target::Place(place) => walk_expr(place, f),
+        Target::Tuple(parts, _) => parts.iter().for_each(|part| walk_target(part, f)),
+    }
+}
+
+/// Calls `f` on `e` and every expression inside it, through the blocks of its
+/// plan Bs and of the `match`es and `when`s it holds as values.
+fn walk_expr(e: &Expr, f: &mut dyn FnMut(&Expr)) {
+    f(e);
+    let each = |values: &[Expr], f: &mut dyn FnMut(&Expr)| values.iter().for_each(|value| walk_expr(value, f));
+    match &e.kind {
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::TaskValue(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => {}
+        ExprKind::Spread(inner) | ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => walk_expr(inner, f),
+        ExprKind::New { value, .. } | ExprKind::Copy { value, .. } | ExprKind::Shortcut { value, .. } | ExprKind::ToText { value, .. } => walk_expr(value, f),
+        ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
+            walk_expr(a, f);
+            walk_expr(b, f);
+        }
+        ExprKind::Invoke { callee, args } => {
+            walk_expr(callee, f);
+            each(args, f);
+        }
+        ExprKind::Call { args, .. } | ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) | ExprKind::Scan { args, .. } => each(args, f),
+        ExprKind::Join { parts, .. } => each(parts, f),
+        ExprKind::MethodCall { value, args, .. } => {
+            walk_expr(value, f);
+            each(args, f);
+        }
+        ExprKind::Edit { items, args, .. } => {
+            walk_expr(items, f);
+            each(args, f);
+        }
+        ExprKind::StructInit { fields, .. } => fields.iter().for_each(|field| walk_expr(&field.value, f)),
+        ExprKind::Pairs(pairs) => pairs.iter().for_each(|(key, value)| {
+            walk_expr(key, f);
+            walk_expr(value, f);
+        }),
+        ExprKind::MapOp { map, key, .. } => {
+            walk_expr(map, f);
+            if let Some(key) = key {
+                walk_expr(key, f);
+            }
+        }
+        ExprKind::PlanB { value, body, .. } => {
+            walk_expr(value, f);
+            walk_block(body, f);
+        }
+        ExprKind::Choice(stmt) => walk_stmt(stmt, f),
+    }
+}
+
 fn add_startups(items: &mut Vec<Item>) {
     let mut startups: Vec<TaskDef> = Vec::new();
     for item in items.iter_mut() {

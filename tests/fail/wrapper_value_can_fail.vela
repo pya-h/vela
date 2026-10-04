@@ -1,0 +1,19 @@
+; error: 12:11: expected type int, got int ~ ParseError; extract its value first, as in 'x { … }' or 'when x is {value}'
+; A value that can fail is handled with a plan B, as anywhere an int is wanted.
+task logged(next: (int) -> int, label: text, n: int) -> int
+    show(label)
+    <- next(n)
+fi
+
+task counted(next: (int) -> int, times: int, n: int) -> int
+    <- next(n)
+fi
+
+$(counted(int("3")))
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

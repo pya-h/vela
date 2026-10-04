@@ -1,0 +1,23 @@
+; error: 16:19: joining text makes new text, which goes in a region; name it after the last part, as in 'a + b at r', or after parentheses, as in '(a + b)@r'; but a wrapper's own values are worked out where the program starts, before any region exists, so none of them can be made in one
+; No region exists where the program starts, so a wrapper's value can't be made in one.
+task logged(next: (int) -> int, label: text, n: int) -> int
+    show(label)
+    <- next(n)
+fi
+
+task counted(next: (int) -> int, times: int, n: int) -> int
+    <- next(n)
+fi
+
+task word(w: text) -> text
+    <- w
+fi
+
+$(logged(word("s" + "q")))
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

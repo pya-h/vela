@@ -1,0 +1,15 @@
+; A module whose wrapper values are worked out before the main file's.
+task said(word: text) -> text
+    show("labels works out ", word)
+    <- word
+fi
+
+task logged(next: (int) -> int, name: text, n: int) -> int
+    show("> ", name, " ", n)
+    <- next(n)
+fi
+
+$(logged(said("inc")))
+task inc(n: int) -> int
+    <- n + 1
+fi

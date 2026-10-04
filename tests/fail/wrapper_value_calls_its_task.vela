@@ -1,0 +1,23 @@
+; error: 16:10: this value of wrapper 'logged' is worked out where the program starts, before task 'sq' can run, and it calls 'sq' through 'describe', whose wrappers read it; give a value that doesn't call it, or work it out inside the wrapper
+; A value worked out before the task can run can't call the task, whose wrappers read it.
+task logged(next: (int) -> int, label: text, n: int) -> int
+    show(label)
+    <- next(n)
+fi
+
+task counted(next: (int) -> int, times: int, n: int) -> int
+    <- next(n)
+fi
+
+task describe(n: int) -> text
+    <- when sq(n) > 4 "big" else "small" fi
+fi
+
+$(logged(describe(3)))
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

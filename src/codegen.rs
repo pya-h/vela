@@ -111,6 +111,10 @@ pub struct Generator {
     /// The tasks named as values whose C takes its values otherwise than
     /// their type does, each given a function that does (see `gen_adapter`).
     adapted: HashSet<String>,
+    /// Where the code being generated is, for a runtime message, when it is
+    /// no task's own: a value worked out where the program starts, as
+    /// `decorator 'route' on task 'home'` (see `location`).
+    place: Option<String>,
 }
 
 impl Default for Generator {
@@ -133,6 +137,7 @@ impl Default for Generator {
             hidden_params: HashMap::new(),
             shown: Vec::new(),
             adapted: HashSet::new(),
+            place: None,
         }
     }
 }
@@ -309,7 +314,10 @@ impl Generator {
                 let Some(value) = &member.field.default else {
                     return Err(Error::internal_at(member.field.span, "a shared field without its first value"));
                 };
+                // A wrapper's value worked out here names where it is written.
+                self.place = member.start.clone();
                 let value = self.gen_expr(value)?;
+                self.place = None;
                 self.w.line(&format!("{} = {};", name, value));
             }
             // The startup decorators, after the shared fields they may fill.
@@ -1641,11 +1649,22 @@ impl Generator {
         self.enter_block();
         for (stmt, passes) in t.body.iter().zip(t.passes.iter().chain(std::iter::repeat(&false))) {
             let StmtKind::Expr(call) = &stmt.kind else { return Err(Error::internal_at(stmt.span, "a startup decorator that is no call")) };
+            // A runtime error in its values names the decorator and its task,
+            // not the task the decorators are gathered into.
+            if let ExprKind::Call { name, args, .. } = &call.kind {
+                let decorated = match args.first().map(|arg| &arg.kind) {
+                    Some(ExprKind::Var(task) | ExprKind::TaskValue(task)) => notice_name(task),
+                    _ => String::new(),
+                };
+                self.place = Some(format!("decorator '{}' on task '{}'", notice_name(name), decorated));
+            }
             let (Some(Type::Or(_, error)), ExprKind::Call { name, args, .. }) = (&call.ty, &call.kind) else {
                 self.gen_stmt(stmt)?;
+                self.place = None;
                 continue;
             };
             let result = self.gen_expr(call)?;
+            self.place = None;
             if *passes && self.quiet {
                 self.w.line(&format!("(void)({});", result));
                 continue;
@@ -3591,7 +3610,10 @@ impl Generator {
     /// Where an operation is, for a runtime message: a C string literal
     /// `"LINE:COL in task 'NAME'"`.
     fn location(&self, span: Span) -> String {
-        format!("\"{}:{} in task '{}'\"", span.line, span.col, escape_c_string(&self.task))
+        match &self.place {
+            Some(place) => format!("\"{}:{} in {}\"", span.line, span.col, escape_c_string(place)),
+            None => format!("\"{}:{} in task '{}'\"", span.line, span.col, escape_c_string(&self.task)),
+        }
     }
 
     fn gen_range(&mut self, e: &Expr) -> Result<(String, String)> {
@@ -3829,7 +3851,7 @@ fn written_c_type(ty: &Type) -> String {
 /// A task as a notice names it: alone when the program's own file has it, and
 /// after its module's name otherwise (`web.route`, for `lib/web`), so the same
 /// task name in two modules can be told apart, however a file includes them.
-fn notice_name(name: &str) -> String {
+pub(crate) fn notice_name(name: &str) -> String {
     match name.rsplit_once(MODULE_SEPARATOR) {
         Some((module, alone)) => format!("{}{}{}", module.rsplit_once('/').map_or(module, |(_, last)| last), MODULE_SEPARATOR, alone),
         None => name.to_string(),
@@ -4625,6 +4647,9 @@ fn type_name(item: &Item) -> Option<&str> {
     match item {
         // A shape that takes types is not a C type: see `generate`.
         Item::Shape(s) if !s.types.is_empty() => None,
+        // The values of wrappers worked out where the program starts are
+        // shared fields of a shape no value of which is ever made.
+        Item::Shape(s) if s.name == START_VALUES => None,
         Item::Shape(s) => Some(&s.name),
         Item::Kind(k) => Some(&k.name),
         Item::Task(_) | Item::Macro(_) => None,

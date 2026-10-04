@@ -1,0 +1,110 @@
+; A wrapper's own values worked out where the program starts: a call, a shared
+; field, or an expression of them is worked out once, before the startup
+; decorators and main, and every call of the task reads it. Values the compiler
+; works out (a literal, a macro, a task's name) are written into each call.
+; The included module's values come first, then this file's in written order,
+; but for a value calling a task with values of its own, worked out first.
+
+include wrapper_start_values/labels (logged)
+
+shape Config
+    shared hold depth: int = 2
+fi
+
+#TIMES = 3
+
+task count_to(n: int) -> int
+    show("works out count_to(", n, ")")
+    <- n
+fi
+
+task repeated(next: (int) -> int, times: int, n: int) -> int
+    hold result = n
+    each turn in 0..times
+        result = next(result)
+    fi
+    <- result
+fi
+
+task capped(next: (int) -> int, most: maybe int, n: int) -> int
+    bind got = next(n)
+    when most is {top} and got > top
+        <- top
+    fi
+    <- got
+fi
+
+task applied(next: (int) -> int, f: (int) -> int, n: int) -> int
+    <- f(next(n))
+fi
+
+task noted<L: shown>(next: (int) -> int, note: L, n: int) -> int
+    show("note ", note)
+    <- next(n)
+fi
+
+task label(n: int) -> int
+    <- n + 100
+fi
+
+task pair() -> (int, text)
+    show("works out pair()")
+    <- (7, "seven")
+fi
+
+task announce(f: (int) -> int)
+    show("announced: ", f(1))
+fi
+
+; Its value calls dbl, so it is worked out after dbl's, though written first.
+$(repeated(count_to(dbl(1) / 20)))
+task inc_twice(n: int) -> int
+    <- labels.inc(n)
+fi
+
+; A call and a shared field read where the program starts (Config.depth is 2
+; there, whatever main makes it later), a value that can fail with its plan B,
+; and a macro written into each call.
+$announce
+$(logged(labels.said("dbl")), repeated(Config.depth), capped(int("40") { 0 }), repeated(TIMES))
+task dbl(n: int) -> int
+    <- n * 2
+fi
+
+; A task's name is the task, even beside a parameter of that name; and a
+; wrapper taking a type gets it from the value.
+$(applied(label), noted(pair()))
+task twice(label: int) -> int
+    <- label * 2
+fi
+
+; Called through a task value where the program starts: the shared field holds
+; `third` then, whatever main makes it later, so `plus_five`'s value is 2 and
+; doesn't reach `plus_five`, though main and its startup decorator name it.
+shape Hooks
+    shared hold pick: (int) -> int = third
+fi
+
+task third(n: int) -> int
+    <- n / 3
+fi
+
+task picked() -> int
+    <- Hooks.pick(6)
+fi
+
+$announce
+$(repeated(picked()))
+task plus_five(n: int) -> int
+    <- n + 5
+fi
+
+task main()
+    show("main starts")
+    Hooks.pick = plus_five
+    show(plus_five(100))
+    Config.depth = 10
+    show(dbl(1))
+    show(inc_twice(5))
+    show(twice(1))
+fi

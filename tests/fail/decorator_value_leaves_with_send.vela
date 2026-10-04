@@ -1,0 +1,14 @@
+; error: 7:24: '<-' leaves a task, and a decorator's values are worked out where the program starts, outside every task; give a value instead, as in 'int(t) { 0 }'
+; A decorator's values are worked out outside every task, so a <- in one would skip the decorators after it.
+task registered(f: (int) -> int, times: int)
+    show("registered ", times)
+fi
+
+$registered(int("2") { <- })
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

@@ -1,0 +1,182 @@
+  1 | ; A wrapper's own values worked out where the program starts: a call, a shared
+    | comment:; A wrapper's own values worked out where the program starts: a call, a shared
+  2 | ; field, or an expression of them is worked out once, before the startup
+    | comment:; field, or an expression of them is worked out once, before the startup
+  3 | ; decorators and main, and every call of the task reads it. Values the compiler
+    | comment:; decorators and main, and every call of the task reads it. Values the compiler
+  4 | ; works out (a literal, a macro, a task's name) are written into each call.
+    | comment:; works out (a literal, a macro, a task's name) are written into each call.
+  5 | ; The included module's values come first, then this file's in written order,
+    | comment:; The included module's values come first, then this file's in written order,
+  6 | ; but for a value calling a task with values of its own, worked out first.
+    | comment:; but for a value calling a task with values of its own, worked out first.
+  8 | include wrapper_start_values/labels (logged)
+    | keyword:include  module:wrapper_start_values  operator:/  module:labels  punctuation:(  task:logged  punctuation:)
+ 10 | shape Config
+    | keyword:shape  type:Config
+ 11 |     shared hold depth: int = 2
+    | keyword:shared  keyword:hold  field:depth  punctuation::  type-builtin:int  operator:=  number:2
+ 12 | fi
+    | keyword:fi
+ 14 | #TIMES = 3
+    | keyword:#  variant:TIMES  operator:=  number:3
+ 16 | task count_to(n: int) -> int
+    | keyword:task  task:count_to  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 17 |     show("works out count_to(", n, ")")
+    | builtin-fn:show  punctuation:(  string:"works out count_to("  punctuation:,  parameter:n  punctuation:,  string:")"  punctuation:)
+ 18 |     <- n
+    | keyword:<-  parameter:n
+ 19 | fi
+    | keyword:fi
+ 21 | task repeated(next: (int) -> int, times: int, n: int) -> int
+    | keyword:task  task:repeated  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:times  punctuation::  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 22 |     hold result = n
+    | keyword:hold  variable:result  operator:=  parameter:n
+ 23 |     each turn in 0..times
+    | keyword:each  variable:turn  keyword:in  number:0  operator:..  parameter:times
+ 24 |         result = next(result)
+    | variable:result  operator:=  parameter:next  punctuation:(  variable:result  punctuation:)
+ 25 |     fi
+    | keyword:fi
+ 26 |     <- result
+    | keyword:<-  variable:result
+ 27 | fi
+    | keyword:fi
+ 29 | task capped(next: (int) -> int, most: maybe int, n: int) -> int
+    | keyword:task  task:capped  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:most  punctuation::  keyword:maybe  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 30 |     bind got = next(n)
+    | keyword:bind  variable:got  operator:=  parameter:next  punctuation:(  parameter:n  punctuation:)
+ 31 |     when most is {top} and got > top
+    | keyword:when  parameter:most  keyword:is  punctuation:{  variable:top  punctuation:}  keyword:and  variable:got  operator:>  variable:top
+ 32 |         <- top
+    | keyword:<-  variable:top
+ 33 |     fi
+    | keyword:fi
+ 34 |     <- got
+    | keyword:<-  variable:got
+ 35 | fi
+    | keyword:fi
+ 37 | task applied(next: (int) -> int, f: (int) -> int, n: int) -> int
+    | keyword:task  task:applied  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 38 |     <- f(next(n))
+    | keyword:<-  parameter:f  punctuation:(  parameter:next  punctuation:(  parameter:n  punctuation:)  punctuation:)
+ 39 | fi
+    | keyword:fi
+ 41 | task noted<L: shown>(next: (int) -> int, note: L, n: int) -> int
+    | keyword:task  task:noted  punctuation:<  type:L  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:note  punctuation::  type:L  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 42 |     show("note ", note)
+    | builtin-fn:show  punctuation:(  string:"note "  punctuation:,  parameter:note  punctuation:)
+ 43 |     <- next(n)
+    | keyword:<-  parameter:next  punctuation:(  parameter:n  punctuation:)
+ 44 | fi
+    | keyword:fi
+ 46 | task label(n: int) -> int
+    | keyword:task  task:label  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 47 |     <- n + 100
+    | keyword:<-  parameter:n  operator:+  number:100
+ 48 | fi
+    | keyword:fi
+ 50 | task pair() -> (int, text)
+    | keyword:task  task:pair  punctuation:(  punctuation:)  operator:->  punctuation:(  type-builtin:int  punctuation:,  type-builtin:text  punctuation:)
+ 51 |     show("works out pair()")
+    | builtin-fn:show  punctuation:(  string:"works out pair()"  punctuation:)
+ 52 |     <- (7, "seven")
+    | keyword:<-  punctuation:(  number:7  punctuation:,  string:"seven"  punctuation:)
+ 53 | fi
+    | keyword:fi
+ 55 | task announce(f: (int) -> int)
+    | keyword:task  task:announce  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:)
+ 56 |     show("announced: ", f(1))
+    | builtin-fn:show  punctuation:(  string:"announced: "  punctuation:,  parameter:f  punctuation:(  number:1  punctuation:)  punctuation:)
+ 57 | fi
+    | keyword:fi
+ 59 | ; Its value calls dbl, so it is worked out after dbl's, though written first.
+    | comment:; Its value calls dbl, so it is worked out after dbl's, though written first.
+ 60 | $(repeated(count_to(dbl(1) / 20)))
+    | keyword:$  punctuation:(  task:repeated  punctuation:(  task:count_to  punctuation:(  task:dbl  punctuation:(  number:1  punctuation:)  operator:/  number:20  punctuation:)  punctuation:)  punctuation:)
+ 61 | task inc_twice(n: int) -> int
+    | keyword:task  task:inc_twice  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 62 |     <- labels.inc(n)
+    | keyword:<-  module:labels  punctuation:.  task:inc  punctuation:(  parameter:n  punctuation:)
+ 63 | fi
+    | keyword:fi
+ 65 | ; A call and a shared field read where the program starts (Config.depth is 2
+    | comment:; A call and a shared field read where the program starts (Config.depth is 2
+ 66 | ; there, whatever main makes it later), a value that can fail with its plan B,
+    | comment:; there, whatever main makes it later), a value that can fail with its plan B,
+ 67 | ; and a macro written into each call.
+    | comment:; and a macro written into each call.
+ 68 | $announce
+    | keyword:$  task:announce
+ 69 | $(logged(labels.said("dbl")), repeated(Config.depth), capped(int("40") { 0 }), repeated(TIMES))
+    | keyword:$  punctuation:(  task:logged  punctuation:(  module:labels  punctuation:.  task:said  punctuation:(  string:"dbl"  punctuation:)  punctuation:)  punctuation:,  task:repeated  punctuation:(  type:Config  punctuation:.  field:depth  punctuation:)  punctuation:,  task:capped  punctuation:(  type-builtin:int  punctuation:(  string:"40"  punctuation:)  punctuation:{  number:0  punctuation:}  punctuation:)  punctuation:,  task:repeated  punctuation:(  variant:TIMES  punctuation:)  punctuation:)
+ 70 | task dbl(n: int) -> int
+    | keyword:task  task:dbl  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 71 |     <- n * 2
+    | keyword:<-  parameter:n  operator:*  number:2
+ 72 | fi
+    | keyword:fi
+ 74 | ; A task's name is the task, even beside a parameter of that name; and a
+    | comment:; A task's name is the task, even beside a parameter of that name; and a
+ 75 | ; wrapper taking a type gets it from the value.
+    | comment:; wrapper taking a type gets it from the value.
+ 76 | $(applied(label), noted(pair()))
+    | keyword:$  punctuation:(  task:applied  punctuation:(  task:label  punctuation:)  punctuation:,  task:noted  punctuation:(  task:pair  punctuation:(  punctuation:)  punctuation:)  punctuation:)
+ 77 | task twice(label: int) -> int
+    | keyword:task  task:twice  punctuation:(  parameter:label  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 78 |     <- label * 2
+    | keyword:<-  parameter:label  operator:*  number:2
+ 79 | fi
+    | keyword:fi
+ 81 | ; Called through a task value where the program starts: the shared field holds
+    | comment:; Called through a task value where the program starts: the shared field holds
+ 82 | ; `third` then, whatever main makes it later, so `plus_five`'s value is 2 and
+    | comment:; `third` then, whatever main makes it later, so `plus_five`'s value is 2 and
+ 83 | ; doesn't reach `plus_five`, though main and its startup decorator name it.
+    | comment:; doesn't reach `plus_five`, though main and its startup decorator name it.
+ 84 | shape Hooks
+    | keyword:shape  type:Hooks
+ 85 |     shared hold pick: (int) -> int = third
+    | keyword:shared  keyword:hold  field:pick  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  task:third
+ 86 | fi
+    | keyword:fi
+ 88 | task third(n: int) -> int
+    | keyword:task  task:third  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 89 |     <- n / 3
+    | keyword:<-  parameter:n  operator:/  number:3
+ 90 | fi
+    | keyword:fi
+ 92 | task picked() -> int
+    | keyword:task  task:picked  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 93 |     <- Hooks.pick(6)
+    | keyword:<-  type:Hooks  punctuation:.  method:pick  punctuation:(  number:6  punctuation:)
+ 94 | fi
+    | keyword:fi
+ 96 | $announce
+    | keyword:$  task:announce
+ 97 | $(repeated(picked()))
+    | keyword:$  punctuation:(  task:repeated  punctuation:(  task:picked  punctuation:(  punctuation:)  punctuation:)  punctuation:)
+ 98 | task plus_five(n: int) -> int
+    | keyword:task  task:plus_five  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 99 |     <- n + 5
+    | keyword:<-  parameter:n  operator:+  number:5
+100 | fi
+    | keyword:fi
+102 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+103 |     show("main starts")
+    | builtin-fn:show  punctuation:(  string:"main starts"  punctuation:)
+104 |     Hooks.pick = plus_five
+    | type:Hooks  punctuation:.  field:pick  operator:=  task:plus_five
+105 |     show(plus_five(100))
+    | builtin-fn:show  punctuation:(  task:plus_five  punctuation:(  number:100  punctuation:)  punctuation:)
+106 |     Config.depth = 10
+    | type:Config  punctuation:.  field:depth  operator:=  number:10
+107 |     show(dbl(1))
+    | builtin-fn:show  punctuation:(  task:dbl  punctuation:(  number:1  punctuation:)  punctuation:)
+108 |     show(inc_twice(5))
+    | builtin-fn:show  punctuation:(  task:inc_twice  punctuation:(  number:5  punctuation:)  punctuation:)
+109 |     show(twice(1))
+    | builtin-fn:show  punctuation:(  task:twice  punctuation:(  number:1  punctuation:)  punctuation:)
+110 | fi
+    | keyword:fi

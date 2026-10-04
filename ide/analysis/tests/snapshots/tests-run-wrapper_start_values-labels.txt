@@ -1,0 +1,26 @@
+  1 | ; A module whose wrapper values are worked out before the main file's.
+    | comment:; A module whose wrapper values are worked out before the main file's.
+  2 | task said(word: text) -> text
+    | keyword:task  task:said  punctuation:(  parameter:word  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text
+  3 |     show("labels works out ", word)
+    | builtin-fn:show  punctuation:(  string:"labels works out "  punctuation:,  parameter:word  punctuation:)
+  4 |     <- word
+    | keyword:<-  parameter:word
+  5 | fi
+    | keyword:fi
+  7 | task logged(next: (int) -> int, name: text, n: int) -> int
+    | keyword:task  task:logged  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:name  punctuation::  type-builtin:text  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  8 |     show("> ", name, " ", n)
+    | builtin-fn:show  punctuation:(  string:"> "  punctuation:,  parameter:name  punctuation:,  string:" "  punctuation:,  parameter:n  punctuation:)
+  9 |     <- next(n)
+    | keyword:<-  parameter:next  punctuation:(  parameter:n  punctuation:)
+ 10 | fi
+    | keyword:fi
+ 12 | $(logged(said("inc")))
+    | keyword:$  punctuation:(  task:logged  punctuation:(  task:said  punctuation:(  string:"inc"  punctuation:)  punctuation:)  punctuation:)
+ 13 | task inc(n: int) -> int
+    | keyword:task  task:inc  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 14 |     <- n + 1
+    | keyword:<-  parameter:n  operator:+  number:1
+ 15 | fi
+    | keyword:fi

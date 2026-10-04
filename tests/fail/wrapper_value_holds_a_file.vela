@@ -1,0 +1,20 @@
+; error: 13:10: a wrapper's own values are worked out once, where the program starts, and kept as long as it runs, which no region lasts, so none can hold a pointer, a slice, text of a region, a 'File', or a value holding one; this one is a File
+include std/files {File}
+
+; A wrapper value is kept as long as the program runs, which the region a File is opened in never is.
+task notes() -> File
+    <- File { path: "notes.txt" }
+fi
+
+task opened(next: (int) -> int, file: File, n: int) -> int
+    <- next(n)
+fi
+
+$(opened(notes()))
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+    show(sq(2))
+fi

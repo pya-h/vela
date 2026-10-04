@@ -1,0 +1,17 @@
+labels works out inc
+labels works out dbl
+> dbl 1
+works out count_to(2)
+works out pair()
+announced: > dbl 1
+40
+announced: 11
+main starts
+110
+> dbl 1
+40
+> inc 5
+> inc 6
+7
+note (7, "seven")
+102

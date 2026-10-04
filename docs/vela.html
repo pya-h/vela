@@ -2314,8 +2314,8 @@ fi</code></pre>
         A decorator takes the task first, of the task's type (see <a href="#task-values">Tasks as values</a>), then the
         values written after its name, and sends nothing, or <code>nothing ~ E</code> when it can fail. Several go on lines of their own or on one line,
         <code>$log $route("/")</code>, and the one nearest the task runs first, as in Python. They run after every
-        shared field has its first value: the modules a program includes first, then each file's tasks in the order they
-        are written. A decorator's values are worked out where the program starts, so they can be literals, macros,
+        shared field has its first value, and after the wrappers' values worked out there (below): the modules a program
+        includes first, then each file's tasks in the order they are written. A decorator's values are worked out where the program starts, so they can be literals, macros,
         shared fields, and calls, but no variable or region, since none exists yet. A decorator may come from a module,
         <code>$web.route("/")</code>, but not from a shape or kind (<code>$Registry.add</code>) yet. Only a task takes
         decorators, not a method, and only one that can be a value; <code>main</code> takes no startup decorator, since
@@ -2373,13 +2373,78 @@ fi</code></pre>
         startup decorator's, and the task calling itself. A wrapper may send another type than the task does, and the
         task then sends that to its callers; the one before it takes a task sending it. A wrapper that takes types fits
         any task its types allow, <code>task noted&lt;R&gt;(next: (int) -&gt; R, n: int) -&gt; R</code>, and one of a
-        region's text, <code>(text@r) -&gt; text@r</code>, passes the region through. A wrapper's own values are the same
-        at every call, so each is one the compiler works out: a literal, a <a href="#macros">macro</a>, or a task's
-        name, as a <a href="#field-defaults">field's default</a> is.
+        region's text, <code>(text@r) -&gt; text@r</code>, passes the region through.
       </p>
       <p>
+        A wrapper's own values are worked out where the program starts, as a startup decorator's are, so they hold no
+        variable and no region, and each is worked out once for every call of the task. One the compiler works out, a
+        literal, a <a href="#macros">macro</a>, or a task's name, is written into each call and costs nothing; any other,
+        such as a call or a shared field, is worked out once and kept, and each call reads it. They are worked out after
+        every shared field has its first value and before the startup decorators, which may call the task: the modules a
+        program includes first, then each file's tasks in the order they are written.
+      </p>
+      <pre><code>shape Config
+    shared hold depth: int = 2
+fi
+
+task label(word: text) -&gt; text
+    show("label ", word)
+    &lt;- word
+fi
+
+task logged(next: (int) -&gt; int, name: text, times: int, n: int) -&gt; int
+    show("&gt; ", name, " x", times)
+    &lt;- next(n)
+fi
+
+$(logged(label("sq"), Config.depth + 1))
+task sq(n: int) -&gt; int
+    &lt;- n * n
+fi
+
+task main()                                       ; before it: label sq
+    Config.depth = 10
+    show(sq(3))                                   ; &gt; sq x3, then 9: the depth read where the program started
+fi</code></pre>
+      <ul>
+        <li><strong>The order.</strong> A value may call a task with wrapper values of its own, and those are worked out
+          first, so none is read before it is set. A value that calls its own task, itself or through others, would
+          read what isn't set yet, and values whose tasks call each other have no order to be worked out in: both are
+          errors that name the calls. A call of a task held as a value may reach any task named as a value in what can
+          run where the program starts (a shared field's first value, these values, and the tasks they call), so a value
+          making one counts as calling each of those; a task named only later, by <code>main</code> or a startup
+          decorator, is not.</li>
+        <li><strong>Read once.</strong> A <code>shared hold</code> field a value reads is read where the program
+          starts, so a later change to it, a startup decorator's too, is not seen by the wrapper.</li>
+        <li><strong>Failing and stopping.</strong> A value that can fail is read with a plan B, as anywhere
+          (<code>int(t) { 1 }</code>), and a <code>&lt;-</code> in one is an error, since it is in no task to leave.
+          One that stops the program stops it before <code>main</code>, with a message naming the wrapper and its task:
+          <code>vela: division by zero at 9:14 in wrapper 'counted' on task 'sq'</code> (a decorator's values are named
+          the same way, <code>in decorator 'route' on task 'home'</code>).</li>
+        <li><strong>No region.</strong> A value living in a region (joined text, a slice, a pointer, or a value holding
+          one) waits for a region that lasts as long as the program (see
+          <a href="future.html#start-values">Future Directions</a>).</li>
+      </ul>
+      <pre><code>task describe(n: int) -&gt; text
+    &lt;- when sq(n) &gt; 4 "big" else "small" fi
+fi
+
+task logged(next: (int) -&gt; int, name: text, n: int) -&gt; int
+    &lt;- next(n)
+fi
+
+$(logged(describe(3)))       ; error: this value of wrapper 'logged' is worked out where the program starts, before task 'sq' can run, and it calls 'sq' through 'describe', …
+task sq(n: int) -&gt; int
+    &lt;- n * n
+fi
+
+task main()
+    show(sq(3))
+fi</code></pre>
+      <p>
         The compiler writes each layer of the chain as a task of its own, and the task's body as the last, so a wrapper
-        costs a call of a task, which the C compiler can inline; no value is kept for it. A wrapper written for one
+        costs a call of a task, which the C compiler can inline; nothing is kept for it but the values worked out
+        where the program starts, one variable each. A wrapper written for one
         list of parameters fits the tasks of that list; one taking a <a href="#type-groups">type group</a> fits any.
       </p>
 
@@ -3791,7 +3856,7 @@ show(area(square))             <span class="comment">; error: unknown task 'area
         <li>A lambda takes nothing from the code around it, and can't be written inside a task or method that takes
           types (see <a href="#lambdas">Lambdas</a>).</li>
         <li>Only a task takes decorators, not a method, nor a task that takes types; a startup decorator sends nothing, or
-          <code>nothing ~ E</code>; a wrapper's own values are ones the compiler works out (see <a href="#decorators">Decorators</a>).</li>
+          <code>nothing ~ E</code>; a decorator's and a wrapper's values, worked out where the program starts, hold nothing in a region (see <a href="#decorators">Decorators</a>).</li>
         <li>A task takes one type group, as its last parameter; a call doesn't write a group's types, a type can't be
           written <code>(P...)</code>, and a group is given on to a task that calls itself only as it came (see
           <a href="#type-groups">Type groups</a>).</li>
