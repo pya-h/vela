@@ -1,0 +1,80 @@
+  1 | ; Handlers kept as values: each takes the running total as a place it may
+    | comment:; Handlers kept as values: each takes the running total as a place it may
+  2 | ; change, so a table of them can be run in turn, and one that builds text is
+    | comment:; change, so a table of them can be run in turn, and one that builds text is
+  3 | ; given the region to build it in. A task type says how each parameter is
+    | comment:; given the region to build it in. A task type says how each parameter is
+  4 | ; given: 'hold& int' for a place the task changes, '@r' for a region.
+    | comment:; given: 'hold& int' for a place the task changes, '@r' for a region.
+  6 | task add_ten(hold& total: int)
+    | keyword:task  task:add_ten  punctuation:(  keyword:hold  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)
+  7 |     total = total + 10
+    | parameter:total  operator:=  parameter:total  operator:+  number:10
+  8 | fi
+    | keyword:fi
+ 10 | task halve(hold& total: int)
+    | keyword:task  task:halve  punctuation:(  keyword:hold  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)
+ 11 |     total = total / 2
+    | parameter:total  operator:=  parameter:total  operator:/  number:2
+ 12 | fi
+    | keyword:fi
+ 14 | task square(hold& total: int)
+    | keyword:task  task:square  punctuation:(  keyword:hold  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)
+ 15 |     total = total * total
+    | parameter:total  operator:=  parameter:total  operator:*  parameter:total
+ 16 | fi
+    | keyword:fi
+ 18 | ; Builds its report in the region it is given, so the report lives there.
+    | comment:; Builds its report in the region it is given, so the report lives there.
+ 19 | task report(r: region, total: int) -> text@r
+    | keyword:task  task:report  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:total  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 20 |     <- "total is " + total.str()@r at r
+    | keyword:<-  string:"total is "  operator:+  parameter:total  punctuation:.  field:str  punctuation:(  punctuation:)  operator:@  region:r  keyword:at  region:r
+ 21 | fi
+    | keyword:fi
+ 23 | ; Logs each step: a wrapper gives the place on to the step it wraps.
+    | comment:; Logs each step: a wrapper gives the place on to the step it wraps.
+ 24 | task logged(next: (hold& int) -> nothing, hold& total: int)
+    | keyword:task  task:logged  punctuation:(  parameter:next  punctuation::  punctuation:(  keyword:hold  keyword:&  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  punctuation:,  keyword:hold  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)
+ 25 |     bind before = total
+    | keyword:bind  variable:before  operator:=  parameter:total
+ 26 |     next(&total)
+    | parameter:next  punctuation:(  operator:&  parameter:total  punctuation:)
+ 27 |     show(before, " -> ", total)
+    | builtin-fn:show  punctuation:(  variable:before  punctuation:,  string:" -> "  punctuation:,  parameter:total  punctuation:)
+ 28 | fi
+    | keyword:fi
+ 30 | $(logged)
+    | keyword:$  punctuation:(  task:logged  punctuation:)
+ 31 | task double(hold& total: int)
+    | keyword:task  task:double  punctuation:(  keyword:hold  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)
+ 32 |     total = total * 2
+    | parameter:total  operator:=  parameter:total  operator:*  number:2
+ 33 | fi
+    | keyword:fi
+ 35 | task run_all(steps: [(hold& int) -> nothing]@s, hold& total: int)
+    | keyword:task  task:run_all  punctuation:(  parameter:steps  punctuation::  punctuation:[  punctuation:(  keyword:hold  keyword:&  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  punctuation:]  operator:@  region:s  punctuation:,  keyword:hold  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)
+ 36 |     each step in steps
+    | keyword:each  variable:step  keyword:in  parameter:steps
+ 37 |         step(&total)
+    | variable:step  punctuation:(  operator:&  parameter:total  punctuation:)
+ 38 |     fi
+    | keyword:fi
+ 39 | fi
+    | keyword:fi
+ 41 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 42 |     region r
+    | keyword:region  region:r
+ 43 |     bind steps = [add_ten, double, halve, square, ...] at r
+    | keyword:bind  variable:steps  operator:=  punctuation:[  task:add_ten  punctuation:,  task:double  punctuation:,  task:halve  punctuation:,  task:square  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 44 |     hold total = 1
+    | keyword:hold  variable:total  operator:=  number:1
+ 45 |     run_all(steps, &total)
+    | task:run_all  punctuation:(  variable:steps  punctuation:,  operator:&  variable:total  punctuation:)
+ 46 |     bind describe: (@s, int) -> text@s = report
+    | keyword:bind  variable:describe  punctuation::  punctuation:(  operator:@  region:s  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:text  operator:@  region:s  operator:=  task:report
+ 47 |     show(describe(r, total))
+    | builtin-fn:show  punctuation:(  variable:describe  punctuation:(  region:r  punctuation:,  variable:total  punctuation:)  punctuation:)
+ 48 | fi
+    | keyword:fi

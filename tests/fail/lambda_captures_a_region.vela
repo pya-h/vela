@@ -1,5 +1,5 @@
-; error: 6:32: region 'r' belongs to the code around this lambda, and a lambda takes nothing from it; declare a region of its own inside it, or call a task that takes 'r: region'
-; A lambda allocates in no region of the task around it.
+; error: 6:32: region 'r' belongs to the code around this lambda, and a lambda takes nothing from it; declare a region of its own inside it, or take one as a parameter, 'r: region'
+; A lambda allocates in no region of the task around it; it takes one as a parameter.
 task main()
     region r
     bind f = (x: int) -> nothing

@@ -2284,8 +2284,9 @@ fi</code></pre>
           its type, parameters without types: <code>apply((x) = x * 2, 3)</code>.</li>
         <li><strong>More tasks as values:</strong> a generic task given its types, <code>first&lt;int&gt;</code>; a method
           of every value named on its shape, <code>Point.area</code>, a <code>(Point) -&gt; float</code> (a shared one,
-          <code>Point.new</code>, is a value since 2026-10-04); and task types taking places,
-          <code>(hold&amp; int) -&gt; nothing</code>, or sending several values. Each is refused today with a reason.</li>
+          <code>Point.new</code>, is a value since 2026-10-04); and task types sending several values. Each is refused
+          today with a reason. (Task types taking places and regions, <code>(hold&amp; int) -&gt; nothing</code> and
+          <code>(@r, int) -&gt; [int]@r</code>, are built since 2026-10-05.)</li>
         <li><strong>A table of startup decorators made when compiling:</strong> for a decorator that only records its
           tasks, the compiler could write the table itself, one entry per use with its values, into the program's data,
           with no call at start at all. The count of uses is known when compiling, so the table is a fixed array, and a
@@ -2303,10 +2304,16 @@ fi</code></pre>
         <li><strong>Wrappers on member methods</strong> <span class="badge b-med">Planned</span>: given the value the
           method is called on first (as a place, for an <code>alters</code> method); and a wrapper that is a method of the
           same shape itself, if its rules come out safe.</li>
-        <li><strong>Decorators on tasks taking places or regions</strong> <span class="badge b-med">Planned</span>: task
-          types taking <code>hold&amp;</code> and <code>bind&amp;</code> places and regions, and groups carrying them, so
-          a wrapper passes them on. Nothing can keep a place or a region past the call, so passing them through a chain
-          is as safe as passing them through calls.</li>
+        <li><strong>Decorators on tasks taking places or regions</strong> <span class="badge b-done">Done</span>
+          (2026-10-05): task types taking <code>hold&amp; T</code> and <code>bind&amp; T</code> places and <code>@r</code>
+          regions, task values, lambdas, wrappers and startup decorators of such tasks (see
+          <a href="vela.html#task-types-places">Places and regions</a>). Nothing can keep a place or a region past the
+          call, so passing them through a chain is as safe as passing them through calls.</li>
+        <li><strong>Type groups carrying places and regions</strong> <span class="badge b-med">Planned, decisions
+          first</span>: so one wrapper taking a group, <code>traced&lt;P..., R&gt;</code>, fits a task taking a place or a
+          region too. A group's values are read by <code>show(args...)</code>, <code>(args...)</code>, <code>each</code>
+          and <code>t.#k</code>, which a region has no text or tuple form for, and what the wrapper sends may live in a
+          region that is one of them.</li>
         <li><strong>Decorators on shapes:</strong> a startup decorator on a shape could register the shape (for a
           serializer, say) once shapes can be named as values.</li>
         <li><strong>Type groups beyond wrappers</strong> <span class="badge b-done">Done</span>: groups asking their

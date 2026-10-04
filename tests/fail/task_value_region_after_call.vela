@@ -1,5 +1,5 @@
-; error: 10:18: a task value takes values only, so no region is named after its call
-; A task value takes no region after its call.
+; error: 10:18: a call of a task value names every region it gives in its parentheses, as in 'g(r, 3)'; a region after a call gives a named task the region it takes last
+; A call of a task value names its regions in its parentheses, never after them.
 task sq(n: int) -> int
     <- n * n
 fi

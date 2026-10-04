@@ -256,10 +256,13 @@
             <tr>
               <td>A task value always holds a task (a missing one is a <code>maybe</code>), is called with the
                 values its type takes, and its type says the regions of what it takes and sends, as a header does, so
-                it holds nothing in any region and can go anywhere.</td>
+                it holds nothing in any region and can go anywhere. A place or a region it takes is given at each call
+                and checked there as at a named call: marked, given once where it changes, never an item of a slice,
+                and a region the caller allocates in, where what it sends then lives.</td>
               <td class="when"><span class="badge b-checked">checked</span></td>
-              <td>Calling through a null or stray function pointer, or with the wrong values. See
-                <a href="vela.html#task-values">Tasks as values</a>.</td>
+              <td>Calling through a null or stray function pointer, or with the wrong values; a place changed through
+                one parameter while read through another; a value sent in a region that ends first. See
+                <a href="vela.html#task-types-places">Places and regions</a>.</td>
             </tr>
             <tr>
               <td>A lambda takes nothing from the code around it, so it never reads a variable or a region after the

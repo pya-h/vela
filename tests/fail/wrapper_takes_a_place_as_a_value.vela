@@ -1,0 +1,25 @@
+; error: 19:3: task 'put' takes 'hold& n: int', and wrapper 'logged' takes 'n: int' in its place
+; A wrapper takes the task's values as the task does, a place as a place.
+task bump(hold& n: int)
+    n = n + 1
+fi
+
+task both(hold& a: int, bind& b: int)
+    a = b
+fi
+
+task squares(r: region, n: int) -> [int]@r
+    <- new [int]() at r
+fi
+
+task logged(next: (hold& int) -> int, n: int) -> int
+    <- 0
+fi
+
+$(logged)
+task put(hold& n: int) -> int
+    <- n
+fi
+
+task main()
+fi

@@ -1,0 +1,24 @@
+; error: 21:16: expected type [int]@outer, got [int]@inner; a value can't move to another region: a pointer into one region is never stored in another
+; What a task value sends lives in the region it is given, which ends where that region does.
+task bump(hold& n: int)
+    n = n + 1
+fi
+
+task both(hold& a: int, bind& b: int)
+    a = b
+fi
+
+task squares(r: region, n: int) -> [int]@r
+    <- new [int]() at r
+fi
+
+task main()
+    bind g = squares
+    region outer
+    hold keep = [0, ...] at outer
+    when true
+        region inner
+        keep = g(inner, 3)
+    fi
+    show(keep)
+fi

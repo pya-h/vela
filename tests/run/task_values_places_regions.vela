@@ -1,0 +1,119 @@
+; Task values of tasks taking places and regions: a task type says how each
+; parameter is given, 'hold& T' and 'bind& T' for the caller's place, and '@r'
+; for a region, named so that what the task sends can live there. A call
+; through a value marks places and names regions as a named call does, and
+; lambdas, wrappers and startup decorators take such tasks too.
+
+shape Point
+    x: int
+    y: int
+fi
+
+task bump(hold& n: int)
+    n = n + 1
+fi
+
+task total(bind& p: Point) -> int
+    <- p.x + p.y
+fi
+
+task squares(r: region, n: int) -> [int]@r
+    hold made = new [int]() at r
+    each i in 1..n + 1
+        made.add(i * i)
+    fi
+    <- made
+fi
+
+; Its region last: '(int, @r) -> text@r'.
+task label(n: int, r: region) -> text@r
+    <- "#" + n.str()@r at r
+fi
+
+task twice(f: (hold& int) -> nothing, hold& v: int)
+    f(&v)
+    f(&v)
+fi
+
+; A field holding a task that takes a place.
+shape Counter
+    count: int
+    step: (hold& int) -> nothing
+fi
+
+; A wrapper of a task taking a place gives it on as one, and a wrapper of a
+; task taking a region gives that on.
+task logged(next: (hold& int) -> int, hold& n: int) -> int
+    show("> put ", n)
+    <- next(&n)
+fi
+
+task timed(next: (@r, int) -> [int]@r, r: region, n: int) -> [int]@r
+    show("> squares ", n)
+    <- next(r, n)
+fi
+
+$(logged)
+task put(hold& n: int) -> int
+    n = n * 10
+    <- n
+fi
+
+$(timed)
+task cubes(r: region, n: int) -> [int]@r
+    hold made = new [int]() at r
+    each i in 1..n + 1
+        made.add(i * i * i)
+    fi
+    <- made
+fi
+
+; A startup decorator given a task that takes a place.
+task tried(f: (hold& int) -> nothing)
+    hold v = 40
+    f(&v)
+    show("tried: ", v)
+fi
+
+$tried
+task step(hold& n: int)
+    n = n + 2
+fi
+
+task main()
+    hold count = 1
+    bind f = bump
+    f(&count)
+    show(count, " ", f)
+    twice(bump, &count)
+    show(count)
+    bind p = Point { x: 2, y: 3 }
+    bind t = total
+    show(t(&p), " ", t)
+    region kept
+    bind g = squares
+    show(g(kept, 4), " ", g)
+    bind l = label
+    show(l(7, kept), " ", l)
+    hold c = Counter { count: 0, step: step }
+    c.step(&c.count)
+    show(c.count)
+    ; Lambdas take places and regions too.
+    bind doubled = (hold& v: int) -> nothing
+        v = v * 2
+    fi
+    doubled(&count)
+    show(count)
+    bind single = (r: region default, n: int) -> [int]@r
+        hold xs = new [int]()
+        xs.add(n)
+        <- xs
+    fi
+    show(single(kept, 9))
+    hold k = 3
+    show(put(&k), " ", k)
+    bind q = put
+    show(q(&k), " ", k)
+    bind h = cubes
+    show(h(kept, 3))
+fi

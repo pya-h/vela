@@ -8,7 +8,7 @@ use std::cell::OnceCell;
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
-use vela::ast::{ANY_REGION, MODULE_SEPARATOR, Span, Type, unqualified};
+use vela::ast::{ANY_REGION, MODULE_SEPARATOR, Passing, Span, Taken, Type, unqualified};
 use vela::lexer::{LexKind, LexToken, Token};
 
 use crate::TokenClass;
@@ -1368,12 +1368,27 @@ fn parse_task_type(text: &str, depth: usize) -> Option<Type> {
     let close = closing_paren(text)?;
     let ret = text.get(close + 1..)?.trim_start().strip_prefix("->")?;
     let inside = text.get(1..close)?;
-    let params: Vec<Type> = match inside.trim() {
-        "" => Vec::new(),
-        _ => split_list(inside).into_iter().map(|param| parse_type_within(param, depth + 1)).collect::<Option<_>>()?,
-    };
+    let mut params = Vec::new();
+    let mut taken = Vec::new();
+    if !inside.trim().is_empty() {
+        for param in split_list(inside) {
+            let param = param.trim();
+            // `@r`, a region it takes, and `hold& int`, a place (see `Taken`).
+            let (how, ty) = if let Some(region) = param.strip_prefix('@') {
+                (Taken::Region(region.trim().to_string()), Type::Region)
+            } else if let Some(ty) = param.strip_prefix("hold&") {
+                (Taken::Place(Passing::HoldRef), parse_type_within(ty, depth + 1)?)
+            } else if let Some(ty) = param.strip_prefix("bind&") {
+                (Taken::Place(Passing::BindRef), parse_type_within(ty, depth + 1)?)
+            } else {
+                (Taken::Value, parse_type_within(param, depth + 1)?)
+            };
+            params.push(ty);
+            taken.push(how);
+        }
+    }
     let ret = parse_type_within(ret, depth + 1)?;
-    let mut ty = Type::Task(Box::new(vela::ast::TaskType { params, ret }.normalized()));
+    let mut ty = Type::Task(Box::new(vela::ast::TaskType { params, taken, ret }.normalized()));
     for pointer in prefixes.into_iter().rev() {
         ty = if pointer { Type::Ptr(Box::new(ty), None) } else { Type::Maybe(Box::new(ty)) };
     }
@@ -1401,8 +1416,21 @@ fn closing_paren(text: &str) -> Option<usize> {
 /// The type of a task whose detail is `detail`, `(n: int) -> int`, as a value:
 /// `(int) -> int`.
 pub(crate) fn task_value_type(detail: &str) -> Option<Type> {
-    let params: Vec<Type> = parameters(detail).into_iter().map(|(_, ty)| ty).collect::<Option<_>>()?;
-    Some(Type::Task(Box::new(vela::ast::TaskType { params, ret: return_type(detail) }.normalized())))
+    let mut params = Vec::new();
+    let mut taken = Vec::new();
+    for (name, ty) in parameters(detail) {
+        let ty = ty?;
+        // The name carries how it is given, `hold& n`, which a type keeps for
+        // a place; a region is named as its parameter is.
+        taken.push(match (&ty, name.split_whitespace().collect::<Vec<_>>().as_slice()) {
+            (Type::Region, [.., region]) => Taken::Region(region.to_string()),
+            (_, ["hold&", ..]) => Taken::Place(Passing::HoldRef),
+            (_, ["bind&", ..]) => Taken::Place(Passing::BindRef),
+            _ => Taken::Value,
+        });
+        params.push(ty);
+    }
+    Some(Type::Task(Box::new(vela::ast::TaskType { params, taken, ret: return_type(detail) }.normalized())))
 }
 
 /// The bytes where `needle` starts in `text` outside brackets and parentheses.

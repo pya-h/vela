@@ -89,3 +89,40 @@ fn a_parameter_after_one_of_a_task_type_is_a_parameter() {
     let token = Analysis::new(source).tokens().into_iter().find(|t| t.from == ret).unwrap();
     assert_eq!(token.class, TokenClass::TypeBuiltin);
 }
+
+#[test]
+fn a_task_value_taking_a_place_or_a_region_hovers_with_how_it_takes_them() {
+    let program = "\
+task bump(hold& n: int)
+    n = n + 1
+fi
+
+task total(bind& p: int) -> int
+    <- p
+fi
+
+task squares(r: region, n: int) -> [int]@r
+    <- new [int]() at r
+fi
+
+task main()
+    CHECK
+    bind bumped = bump
+    bind totalled = total
+    bind squared = squares
+    hold kept: maybe (@s, int) -> [int]@s = none
+    show(bumped, totalled, squared, kept)
+fi
+";
+    for when in WHEN {
+        let source = program.replace("CHECK", if when == "checked" { "show(0)" } else { "show(unknown)" });
+        let source = if when == "unparsed" { source + "task g(\n" } else { source };
+        if when == "checked" {
+            assert_eq!(Analysis::new(&source).diagnostics(), Vec::new());
+        }
+        assert_eq!(hover(&source, "bumped ="), "bind bumped: (hold& int) -> nothing", "{}", when);
+        assert_eq!(hover(&source, "totalled ="), "bind totalled: (bind& int) -> int", "{}", when);
+        assert_eq!(hover(&source, "squared ="), "bind squared: (@r, int) -> [int]@r", "{}", when);
+        assert_eq!(hover(&source, "kept:"), "hold kept: maybe (@r, int) -> [int]@r", "{}", when);
+    }
+}

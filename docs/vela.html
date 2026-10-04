@@ -320,7 +320,7 @@ block shared type</pre>
         <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task or shape takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
-        <tr><td><code>(int, text) -&gt; int</code>, <code>square</code>, <code>f(x)</code></td><td>a task's type; a task named as a value, without <code>()</code>; the call of the task a value holds (see <a href="#task-values">Tasks as values</a>)</td></tr>
+        <tr><td><code>(int, text) -&gt; int</code>, <code>(hold&amp; int, @r) -&gt; text@r</code>, <code>square</code>, <code>f(x)</code></td><td>a task's type; a task named as a value, without <code>()</code>; the call of the task a value holds (see <a href="#task-values">Tasks as values</a>)</td></tr>
         <tr><td><code>$d</code>, <code>$d(values)</code></td><td>a startup decorator, above a task or a shared method: runs <code>d(task, values)</code> once, before <code>main</code> (see <a href="#decorators">Decorators</a>)</td></tr>
         <tr><td><code>&lt;P...&gt;</code>, <code>args: P...</code>, <code>(P...) -&gt; R</code>, <code>f(args...)</code></td><td>a group of types a task takes; the values a call gives for it; a task taking them; the values given on, whole (see <a href="#type-groups">Type groups</a>)</td></tr>
         <tr><td><code>$(w1, w2(values))</code></td><td>wrapper decorators, above a task or a shared method: each call of it runs <code>w1</code>, given the rest of the chain, its values, and the task's (see <a href="#decorators">Decorators</a>)</td></tr>
@@ -2239,14 +2239,58 @@ fi</code></pre>
         <code>task head(t: text@r) -&gt; text@r</code> is a <code>(text@r) -&gt; text@r</code> whatever the names, and
         not a <code>(text) -&gt; text</code>. What a task sends lives in regions its parameters name, as in a header.
       </p>
+      <p id="task-types-places">
+        <strong>Places and regions.</strong> A task's type says how each parameter is given, as its header does: a value
+        as its type alone, the caller's place as <code>hold&amp; T</code> or <code>bind&amp; T</code>, and a region as
+        <code>@r</code>, named so that what the task sends can live there. So <code>task bump(hold&amp; n: int)</code> is a
+        <code>(hold&amp; int) -&gt; nothing</code>, <code>task squares(r: region, n: int) -&gt; [int]@r</code> a
+        <code>(@r, int) -&gt; [int]@r</code>, and <code>task label(n: int, r: region) -&gt; text@r</code>, which takes its
+        region last, a <code>(int, @r) -&gt; text@r</code>. A copy, <code>hold n: int</code> or <code>bind n: int</code>, is
+        a value to the caller, so its type writes <code>int</code>.
+      </p>
+      <pre><code>task bump(hold&amp; n: int)
+    n = n + 1
+fi
+
+task squares(r: region, n: int) -&gt; [int]@r
+    hold made = new [int]() at r
+    each i in 1..n + 1
+        made.add(i * i)
+    fi
+    &lt;- made
+fi
+
+task twice(f: (hold&amp; int) -&gt; nothing, hold&amp; v: int)
+    f(&amp;v)
+    f(&amp;v)
+fi
+
+task main()
+    hold count = 1
+    twice(bump, &amp;count)
+    show(count)                     ; 3
+    region kept
+    bind g = squares                ; g: (@r, int) -&gt; [int]@r
+    show(g(kept, 3))                ; [1, 4, 9]
+fi</code></pre>
       <p>
-        A task is a value when its caller gives it values: its parameters are plain, <code>hold</code>, or
-        <code>bind</code>, and it sends one value or nothing. A task that takes types, a region, or a place
-        (<code>hold&amp;</code>, <code>bind&amp;</code>), or that sends several values, can't be a value yet, and neither
-        can a method of every value (<code>Point.area</code>) or a builtin (<code>show</code>, <code>scan</code>); a shared
-        method follows a task's rules. In C a task value is a pointer to the task's
-        function; a task whose C takes a large value otherwise than its type does (a <code>hold</code> copy, or a task of
-        the <a href="std.html">standard library</a>) is given a small function that takes it the type's way.
+        A call through a value is checked as a named call is: it marks each place it gives with <code>&amp;</code>, gives a
+        place the call changes only once, never an item of a slice or a value made on the spot, and gives a region the
+        caller can allocate in, in which what the task sends then lives. The regions are named in the parentheses,
+        <code>g(kept, 3)</code>; <code>g(3) at kept</code> is an error, since a region after a call is the region of what a
+        named task sends, and a task value's type is the only thing that says where that is. A task value holds no place
+        and no region: it is given them at each call, as a named task is, so it goes anywhere a task value goes. Two
+        types that differ only in how a parameter is given are different types, <code>(hold&amp; int) -&gt; nothing</code>
+        is not <code>(int) -&gt; nothing</code>, and a region's name is the type's own, as any of its regions' is:
+        <code>(@r, int) -&gt; [int]@r</code> and <code>(@s, int) -&gt; [int]@s</code> are one type.
+      </p>
+      <p>
+        A task is a value when it sends one value or nothing. A task that takes types or sends several values can't be a
+        value yet, and neither can a method of every value (<code>Point.area</code>) or a builtin (<code>show</code>,
+        <code>scan</code>); a shared method follows a task's rules. In C a task value is a pointer to the task's function,
+        taking a place as a pointer (to a <code>const</code> place for <code>bind&amp;</code>) and a region as the region; a
+        task whose C takes a large value otherwise than its type does (a <code>hold</code> copy, or a task of the
+        <a href="std.html">standard library</a>) is given a small function that takes it the type's way.
       </p>
 
       <h3 id="lambdas">Lambdas</h3>
@@ -2281,8 +2325,11 @@ fi</code></pre>
         task does: in C it is a function of the file, and its value a pointer to it.
       </p>
       <p>
-        Its parameters are plain, <code>hold</code>, or <code>bind</code>, as a task value's are, and it sends one value or
-        nothing; the regions in its header are its own, as a header's are, so
+        Its parameters are those of a header: plain, <code>hold</code>, <code>bind</code>, the caller's place
+        (<code>hold&amp;</code>, <code>bind&amp;</code>), and regions it takes (<code>r: region</code>, or
+        <code>r: region default</code>), so <code>(hold&amp; v: int) -&gt; nothing v = v * 2 fi</code> is a
+        <code>(hold&amp; int) -&gt; nothing</code> (see <a href="#task-types-places">Places and regions</a>). It sends one value
+        or nothing; the regions in its header are its own, as a header's are, so
         <code>(t: text@r) -&gt; text@r &lt;- t[0..1] fi</code> takes text of any region. A lambda can't be written inside a
         task or method that takes types yet.
       </p>
@@ -2381,7 +2428,11 @@ fi</code></pre>
         startup decorator's, and the task calling itself. A wrapper may send another type than the task does, and the
         task then sends that to its callers; the one before it takes a task sending it. A wrapper that takes types fits
         any task its types allow, <code>task noted&lt;R&gt;(next: (int) -&gt; R, n: int) -&gt; R</code>, and one of a
-        region's text, <code>(text@r) -&gt; text@r</code>, passes the region through.
+        region's text, <code>(text@r) -&gt; text@r</code>, passes the region through. A task taking a place or a region
+        takes wrappers too: the wrapper takes the task's values as the task does, <code>hold&amp; n: int</code> or
+        <code>r: region</code>, the rest of the chain is of the task's type, <code>(hold&amp; int) -&gt; int</code> or
+        <code>(@r, int) -&gt; [int]@r</code>, and it gives them on as any call does, <code>next(&amp;n)</code> or
+        <code>next(r, n)</code>. What the task sends in its region, the chain sends there too.
       </p>
       <p>
         A wrapper's own values are worked out where the program starts, as a startup decorator's are, so they hold no
@@ -2636,7 +2687,8 @@ task main()
 fi</code></pre>
       <p>
         A task takes one group, its values are its last parameter and are given as values (no <code>hold</code> or
-        <code>hold&amp;</code>), and a task's type takes the group and nothing else. Only a task takes one, not a
+        <code>hold&amp;</code>, so a wrapper taking a group fits no task taking a place or a region yet), and a task's
+        type takes the group and nothing else. Only a task takes one, not a
         shape, and a call doesn't write a group's types yet.
       </p>
 
@@ -3923,7 +3975,7 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           (see <a href="#tuples">Tuples</a>).</li>
         <li>Tasks and shapes take types; a kind can't yet, and no word asks a type for arithmetic (see
           <a href="#generics">Types a declaration takes</a>).</li>
-        <li>A task that takes types, a region, or a place, or that sends several values, can't be a value yet, nor can a
+        <li>A task that takes types, or that sends several values, can't be a value yet, nor can a
           method of every value (see <a href="#task-values">Tasks as values</a>).</li>
         <li>A lambda takes nothing from the code around it, and can't be written inside a task or method that takes
           types (see <a href="#lambdas">Lambdas</a>).</li>

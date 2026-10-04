@@ -1,5 +1,0 @@
-; error: 4:15: a lambda takes values, so 'x' can't be 'hold&', the caller's place; write 'hold x' for a copy it may change
-; A lambda takes values, not the caller's places.
-task main()
-    bind f = (hold& x: int) -> nothing x = 1 fi
-fi

@@ -1663,7 +1663,7 @@ impl Checker {
             Type::Or(value, error) => Type::Or(boxed(value), boxed(error)),
             Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| self.unmade(ty)).collect()),
             Type::Results(types) => Type::Results(types.iter().map(|ty| self.unmade(ty)).collect()),
-            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| self.unmade(ty)).collect(), ret: self.unmade(&task.ret) })),
+            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| self.unmade(ty)).collect(), taken: task.taken.clone(), ret: self.unmade(&task.ret) })),
             other => other.clone(),
         }
     }
@@ -1931,12 +1931,8 @@ impl Checker {
                         format!("{} lives in '@{}', the region of the value a method is called on, and a shared method has none; take a region, as in 'r: region', and name it", which, THIS_WORD),
                     );
                 }
-                // A lambda takes no region, so only its parameters' types can name one.
                 if is_lambda(&t.name) {
-                    return err(
-                        at,
-                        format!("{1} lives in region '{0}', which none of the lambda's parameters names, and a lambda takes no region; name '{0}' in a parameter's type, as in '(s: text@{0}) -> text@{0}'", region, which),
-                    );
+                    return err(at, format!("{1} lives in region '{0}', which the lambda isn't given; take it as a parameter, as in '({0}: region) -> …'", region, which));
                 }
                 return err(
                     at,
@@ -2157,14 +2153,22 @@ impl Checker {
             Type::Task(task) => {
                 let params = task.params.iter().map(|param| self.resolve_regions(param, span, TypePlace::Header, None)).collect::<Result<Vec<_>>>()?;
                 let ret = self.resolve_regions(&task.ret, span, TypePlace::Header, None)?;
-                let named: Vec<&str> = params.iter().flat_map(Type::regions).collect();
+                let mut regions: Vec<&str> = Vec::new();
+                for (i, _) in task.params.iter().enumerate() {
+                    let Some(region) = task.region(i) else { continue };
+                    if regions.contains(&region) {
+                        return err(self.place(span, &format!("@{}", region)), format!("this task's type takes region '{}' twice; each region it takes has a name of its own", region));
+                    }
+                    regions.push(region);
+                }
+                let named: Vec<&str> = params.iter().flat_map(Type::regions).chain(regions.iter().copied()).collect();
                 if let Some(region) = ret.regions().into_iter().find(|region| !named.contains(region)) {
                     return err(
                         self.place(span, &format!("@{}", region)),
                         format!("what this task sends lives in region '{}', which none of its parameters names, so no call could say which region that is", region),
                     );
                 }
-                Ok(Type::Task(Box::new(TaskType { params, ret }.normalized())))
+                Ok(Type::Task(Box::new(TaskType { params, taken: task.taken.clone(), ret }.normalized())))
             }
             Type::Maybe(inner) => Ok(Type::Maybe(Box::new(self.resolve_regions(inner, span, place, inside)?))),
             Type::Tuple(items) => Ok(Type::Tuple(items.iter().map(|item| self.resolve_regions(item, span, place, inside)).collect::<Result<_>>()?)),
@@ -2186,10 +2190,7 @@ impl Checker {
                         return err(span, self.cannot_allocate_in_this("allocate where the value is kept, and give the method what you made"));
                     }
                     if self.current_lambda.is_some() {
-                        return err(
-                            span,
-                            format!("this lambda can't allocate in '{0}', which it only names in its types, and a lambda takes no region; allocate in a region of its own, or write a task that takes '{0}: region'", name),
-                        );
+                        return err(span, format!("this lambda can't allocate in '{0}', which it only names in its types; take it as a parameter, '{0}: region'", name));
                     }
                     return err(
                         span,
@@ -2201,7 +2202,7 @@ impl Checker {
             Some(_) => err(span, format!("'{}' is a variable, not a region", name)),
             None if self.current_lambda.as_ref().and_then(|lambda| self.lambda_outer.get(lambda)).is_some_and(|outer| outer.contains(name)) => err(
                 span,
-                format!("region '{0}' belongs to the code around this lambda, and a lambda takes nothing from it; declare a region of its own inside it, or call a task that takes '{0}: region'", name),
+                format!("region '{0}' belongs to the code around this lambda, and a lambda takes nothing from it; declare a region of its own inside it, or take one as a parameter, '{0}: region'", name),
             ),
             None => err(span, format!("unknown region '{0}'; declare it with 'region {0}'", name)),
         }
@@ -2278,13 +2279,16 @@ impl Checker {
                 }
                 Ok(())
             }
-            // `(int) -> int`: its parameters are values, and it sends one value
-            // or nothing, as a header does.
+            // `(int) -> int`: its parameters are values, places, and regions
+            // written `@r`, and it sends one value or nothing, as a header does.
             Type::Task(task) => {
-                for param in &task.params {
+                for (i, param) in task.params.iter().enumerate() {
                     match param {
+                        _ if task.region(i).is_some() => {}
                         Type::Nothing => return err(self.place(span, "nothing"), "a task takes no 'nothing', which has no value; '()' takes no values, as in '() -> int'"),
-                        Type::Region => return err(self.place(span, "region"), "a task that takes a region can't be a value yet; its type takes values only"),
+                        Type::Region => {
+                            return err(self.place(span, "region"), "a task's type writes a region it takes as '@r', named so that what it sends can live there, as in '(@r, int) -> [int]@r'");
+                        }
                         _ => self.check_type(param, span)?,
                     }
                 }
@@ -4848,6 +4852,8 @@ impl Checker {
         let Some(info) = self.tasks.get(task) else { return Ok(()) };
         let params: Vec<(String, Type)> = info.params.clone();
         let types: Vec<Type> = params.iter().map(|(_, ty)| ty.clone()).collect();
+        // How the task takes each value, which the rest of the chain takes too.
+        let taken: Vec<Taken> = params.iter().zip(info.passing.iter().chain(std::iter::repeat(&Passing::Copy))).map(|((param, ty), passing)| taken_by(param, ty, *passing)).collect();
         let layers = calls.len();
         let mut sends = self.tasks.get(&layer_name(task, layers)).map_or(Type::Unknown, |inner| inner.ret.clone());
         let written_task = unqualified(task);
@@ -4879,6 +4885,12 @@ impl Checker {
             }
             // A wrapper taking a group takes all the task's values in it.
             let grouped = matches!(wrapper.params.last(), Some((_, Type::Group(_))));
+            if grouped && let Some((param, _)) = params.iter().zip(&taken).find(|(_, how)| **how != Taken::Value) {
+                return err(
+                    call.span,
+                    format!("wrapper '{}' takes the task's values in a group, and a group's values are given as values, so it can't take '{}', which task '{}' takes as a place or a region; a wrapper written for the task's own parameters can", written, param.0, written_task),
+                );
+            }
             let own = if grouped { wrapper.params.len().checked_sub(2) } else { wrapper.params.len().checked_sub(1 + types.len()) };
             if grouped && own != Some(args.len()) {
                 let own = own.unwrap_or_default();
@@ -4909,7 +4921,7 @@ impl Checker {
             }
             // The wrapper's types and regions, from the next task and the task's
             // values, which are known here; its own values are the call's to say.
-            let next = Type::Task(Box::new(TaskType { params: types.clone(), ret: sends.clone() }.normalized()));
+            let next = Type::Task(Box::new(TaskType { params: types.clone(), taken: taken.clone(), ret: sends.clone() }.normalized()));
             let own = if grouped { wrapper.params.len() - 1 } else { wrapper.params.len() - types.len() };
             let tail: &[Type] = if grouped { &[] } else { &types };
             // A wrapper that takes no types takes these as they are, which is
@@ -4921,9 +4933,16 @@ impl Checker {
                     let chain = if k + 1 == layers { format!("task '{}'", written_task) } else { format!("what comes after wrapper '{}'", written) };
                     return err(call.span, format!("{} is a {}, and wrapper '{}' takes a {} first", chain, next, written, first));
                 }
-                for ((param, ty), (value, given)) in wrapper.params.iter().skip(own).zip(&params) {
-                    if !ty.unknown() && !given.unknown() && strip_all_regions(ty) != strip_all_regions(given) {
-                        return err(call.span, format!("task '{}' takes '{}: {}', and wrapper '{}' takes '{}: {}' in its place", written_task, value, given, written, param, ty));
+                let wrapper_passing = wrapper.passing.iter().skip(own).chain(std::iter::repeat(&Passing::Copy));
+                for ((((param, ty), passing), (value, given)), how) in wrapper.params.iter().skip(own).zip(wrapper_passing).zip(&params).zip(&taken) {
+                    let same_way = match (taken_by(param, ty, *passing), how) {
+                        (Taken::Region(_), Taken::Region(_)) => true,
+                        (mine, theirs) => mine == *theirs,
+                    };
+                    if !ty.unknown() && !given.unknown() && (strip_all_regions(ty) != strip_all_regions(given) || !same_way) {
+                        let task_param = shown_param(value, given, task_passing(how));
+                        let wrapper_param = shown_param(param, ty, *passing);
+                        return err(call.span, format!("task '{}' takes '{}', and wrapper '{}' takes '{}' in its place", written_task, task_param, written, wrapper_param));
                     }
                 }
             }
@@ -4933,6 +4952,13 @@ impl Checker {
             for (pattern, actual) in pairs.filter(|(_, actual)| !actual.unknown()) {
                 unify_params(pattern, actual, &mut given);
                 unify_regions(pattern, actual, &mut regions);
+            }
+            // A region the task takes is the one the wrapper takes in its place,
+            // which only their names tell.
+            for ((param, ty), (given_name, given_ty)) in wrapper.params.iter().skip(own).zip(&params) {
+                if *ty == Type::Region && *given_ty == Type::Region {
+                    regions.insert(param.clone(), given_name.clone());
+                }
             }
             let sent = self.settled_type(&wrapper.ret, &regions, &given, call.span)?;
             if let Some(param) = sent.params().first() {
@@ -4949,7 +4975,14 @@ impl Checker {
             // the task's.
             let mut given_args = vec![Expr::new(ExprKind::Var(layer_name(task, k + 1)), call.span)];
             given_args.extend(args.iter().cloned());
-            given_args.extend(params.iter().map(|(param, _)| Expr::new(ExprKind::Var(param.clone()), call.span)));
+            // A place the task is given, it gives on as one.
+            given_args.extend(params.iter().zip(&taken).map(|((param, _), how)| {
+                let value = Expr::new(ExprKind::Var(param.clone()), call.span);
+                match how {
+                    Taken::Place(_) => Expr::new(ExprKind::Ref(Box::new(value)), call.span),
+                    _ => value,
+                }
+            }));
             let wrapped = Expr::new(ExprKind::Call { name: name.clone(), types: Vec::new(), args: given_args }, call.span);
             let body = match sent {
                 Type::Nothing => Stmt::new(StmtKind::Expr(wrapped), call.span),
@@ -5315,9 +5348,9 @@ impl Checker {
     }
 
     /// The type of `square`, task `name` named as a value (see
-    /// `ExprKind::TaskValue`): its header, without names. Only a task whose
-    /// caller gives it values is one: none that takes types, a region, or a
-    /// place, or that sends several values.
+    /// `ExprKind::TaskValue`): its header, without names, but a region's, and
+    /// with how each parameter is given (see `Taken`). A task that takes types
+    /// or sends several values is none.
     fn task_value_type(&self, name: &str, span: Span) -> Result<Type> {
         if self.broken.contains(name) {
             return Ok(Type::Unknown);
@@ -5327,22 +5360,12 @@ impl Checker {
         if !info.types.is_empty() {
             return err(span, format!("task '{}' takes types, so it can't be a value yet; only a task that takes none can", written));
         }
-        for ((param, ty), passing) in info.params.iter().zip(&info.passing) {
-            if *ty == Type::Region {
-                return err(span, format!("task '{}' takes a region, '{}', so it can't be a value yet; a task value takes values only", written, param));
-            }
-            if passing.is_ref() {
-                return err(
-                    span,
-                    format!("task '{}' takes '{}' as '{}', the caller's place, so it can't be a value yet; a task value's parameters take values", written, param, passing.word()),
-                );
-            }
-        }
         if matches!(info.ret, Type::Results(_)) {
             return err(span, format!("task '{}' sends several values, so it can't be a value yet; a task value sends one value or nothing", written));
         }
         let params = info.params.iter().map(|(_, ty)| ty.clone()).collect();
-        Ok(Type::Task(Box::new(TaskType { params, ret: info.ret.clone() }.normalized())))
+        let taken = info.params.iter().zip(info.passing.iter().chain(std::iter::repeat(&Passing::Copy))).map(|((param, ty), passing)| taken_by(param, ty, *passing)).collect();
+        Ok(Type::Task(Box::new(TaskType { params, taken, ret: info.ret.clone() }.normalized())))
     }
 
     /// Checks `f(x)`, the call of the task value `callee` holds, and returns
@@ -5366,16 +5389,19 @@ impl Checker {
             }
             _ => return err(callee.span, format!("{} is of type {}, not a task, so it can't be called", named, ty)),
         };
+        // `at r` after a call is the region of what a named task sends.
         if let Some(at) = region_after(args) {
-            return err(at, "a task value takes values only, so no region is named after its call");
+            return err(at, "a call of a task value names every region it gives in its parentheses, as in 'g(r, 3)'; a region after a call gives a named task the region it takes last");
         }
         if args.len() != task.params.len() {
             return err(span, format!("{} is a task of type {}, which takes {}, got {}", named, ty, count(task.params.len(), "argument"), args.len()));
         }
+        // A region it takes is named as its type names it, which what it sends
+        // names too; a place is given as a named task's is.
         let info = TaskInfo {
             types: Vec::new(),
-            params: task.params.iter().enumerate().map(|(i, ty)| (format!("value {}", i + 1), ty.clone())).collect(),
-            passing: vec![Passing::Copy; task.params.len()],
+            params: task.params.iter().enumerate().map(|(i, ty)| (task.region(i).map_or_else(|| format!("value {}", i + 1), str::to_string), ty.clone())).collect(),
+            passing: (0..task.params.len()).map(|i| task.passing(i)).collect(),
             ret: task.ret.clone(),
             owner: None,
         };
@@ -10209,7 +10235,7 @@ fn holds_changeable(ty: &Type, changeable: &HashSet<String>) -> bool {
 /// `ty` with no region anywhere in it, a task type's own regions too.
 fn strip_all_regions(ty: &Type) -> Type {
     match ty {
-        Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(strip_all_regions).collect(), ret: strip_all_regions(&task.ret) })),
+        Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(strip_all_regions).collect(), taken: task.taken.clone(), ret: strip_all_regions(&task.ret) })),
         other => other.without_regions(),
     }
 }
@@ -10498,6 +10524,33 @@ fn always_sends(block: &Block) -> bool {
         StmtKind::Block(body) => always_sends(body),
         _ => false,
     })
+}
+
+/// The passing a header writes for a parameter a task's type takes `how`.
+fn task_passing(how: &Taken) -> Passing {
+    match how {
+        Taken::Place(passing) => *passing,
+        _ => Passing::Copy,
+    }
+}
+
+/// Parameter `name` of type `ty`, taken as `passing`, as a header writes it.
+fn shown_param(name: &str, ty: &Type, passing: Passing) -> String {
+    match passing {
+        Passing::Copy => format!("{}: {}", name, ty),
+        passing => format!("{} {}: {}", passing.word(), name, ty),
+    }
+}
+
+/// How a task's type takes parameter `name` of type `ty`, which its header
+/// takes as `passing` (see `Taken`): a region by its name, a place as one, and
+/// anything else, a copy too, as a value.
+fn taken_by(name: &str, ty: &Type, passing: Passing) -> Taken {
+    match (ty, passing) {
+        (Type::Region, _) => Taken::Region(name.to_string()),
+        (_, passing) if passing.is_ref() => Taken::Place(passing),
+        _ => Taken::Value,
+    }
 }
 
 /// Whether a condition always holds: `is (x, y)`, whose items always match.
@@ -11651,7 +11704,7 @@ fn padded_group_tuples(ty: &Type) -> Type {
             types: applied.types.iter().map(padded_group_tuples).collect(),
             region: applied.region.clone(),
         })),
-        Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(padded_group_tuples).collect(), ret: padded_group_tuples(&task.ret) })),
+        Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(padded_group_tuples).collect(), taken: task.taken.clone(), ret: padded_group_tuples(&task.ret) })),
         other => other.clone(),
     }
 }

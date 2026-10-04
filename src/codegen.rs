@@ -343,7 +343,7 @@ impl Generator {
     /// Which parameters a task of type `task` takes by a hidden pointer: each
     /// that is larger than `HIDDEN_ABOVE`, as a task's plain parameter is.
     fn hidden_of_type(&self, task: &TaskType) -> Vec<bool> {
-        task.params.iter().map(|param| self.c_layout(param).0 > HIDDEN_ABOVE).collect()
+        task.params.iter().zip(&task.taken).map(|(param, how)| *how == Taken::Value && self.c_layout(param).0 > HIDDEN_ABOVE).collect()
     }
 
     /// The C type of task type `ty`: a pointer to a function taking its values
@@ -351,12 +351,7 @@ impl Generator {
     fn gen_task_type(&mut self, ty: &Type) {
         let Type::Task(task) = ty else { return };
         let hidden = self.hidden_of_type(task);
-        let params: Vec<String> = task
-            .params
-            .iter()
-            .zip(&hidden)
-            .map(|(param, hidden)| if *hidden { format!("const {}*", c_type(param)) } else { c_type(param) })
-            .collect();
+        let params: Vec<String> = task.params.iter().zip(&task.taken).zip(&hidden).map(|((param, how), hidden)| task_param_c(param, how, *hidden)).collect();
         let params = if params.is_empty() { "void".to_string() } else { params.join(", ") };
         self.w.line(&format!("typedef {} (*{})({});", c_type(&task.ret), c_type(ty), params));
     }
@@ -373,18 +368,20 @@ impl Generator {
         }) else {
             return;
         };
-        let task = TaskType { params: t.params.iter().map(|param| param.ty.clone()).collect(), ret: t.ret.clone() };
+        let taken = t.params.iter().map(|param| if param.ty == Type::Region { Taken::Region(param.name.clone()) } else if param.passing.is_ref() { Taken::Place(param.passing) } else { Taken::Value }).collect();
+        let task = TaskType { params: t.params.iter().map(|param| param.ty.clone()).collect(), taken, ret: t.ret.clone() };
         let wanted = self.hidden_of_type(&task);
         let own = self.hidden_of(name).to_vec();
         if wanted == own {
             return;
         }
-        let params: Vec<String> = t
+        let params: Vec<String> = task
             .params
             .iter()
+            .zip(&task.taken)
             .zip(&wanted)
             .enumerate()
-            .map(|(i, (param, hidden))| if *hidden { format!("const {}* v{}", c_type(&param.ty), i) } else { format!("{} v{}", c_type(&param.ty), i) })
+            .map(|(i, ((param, how), hidden))| format!("{} v{}", task_param_c(param, how, *hidden), i))
             .collect();
         let args: Vec<String> = wanted
             .iter()
@@ -3854,6 +3851,19 @@ pub(crate) fn notice_name(name: &str) -> String {
     match name.rsplit_once(MODULE_SEPARATOR) {
         Some((module, alone)) => format!("{}{}{}", module.rsplit_once('/').map_or(module, |(_, last)| last), MODULE_SEPARATOR, alone),
         None => name,
+    }
+}
+
+/// The C type a task value's function takes parameter `ty` as, given `how`
+/// (see `Taken`): a place as a pointer, one only read to a `const` place, a
+/// region as the region, and a value as itself, or a pointer to it where it is
+/// `hidden`.
+fn task_param_c(ty: &Type, how: &Taken, hidden: bool) -> String {
+    match how {
+        Taken::Place(Passing::HoldRef) => format!("{}*", c_type(ty)),
+        Taken::Place(_) => format!("{} const*", c_type(ty)),
+        _ if hidden => format!("const {}*", c_type(ty)),
+        _ => c_type(ty),
     }
 }
 

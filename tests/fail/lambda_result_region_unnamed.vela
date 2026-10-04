@@ -1,5 +1,5 @@
-; error: 4:31: the result lives in region 'q', which none of the lambda's parameters names, and a lambda takes no region; name 'q' in a parameter's type, as in '(s: text@q) -> text@q'
-; A lambda takes no region, so its result's region is named by a parameter's type.
+; error: 4:31: the result lives in region 'q', which the lambda isn't given; take it as a parameter, as in '(q: region) -> …'
+; A lambda result lives in a region it is given or one its parameters name.
 task main()
     bind g = (n: int) -> text@q
         region z

@@ -1,5 +1,5 @@
-; error: 8:3: task 'put' takes 'n' as 'hold&', the caller's place, so it can't be a value yet; a task value's parameters take values
-; A task taking a place can't be a value, so no wrapper takes it.
+; error: 8:3: task 'put' is a (hold& int) -> int, and wrapper 'logged' takes a (int) -> int first
+; A wrapper takes the rest of the chain as the task takes its values: a place as a place.
 task logged(next: (int) -> int, label: text, n: int) -> int
     show(label)
     <- next(n)

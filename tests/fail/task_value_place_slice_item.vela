@@ -1,0 +1,20 @@
+; error: 19:10: 'value 1' is given the place itself, to change, so it can't be an item of a slice, which moves when the slice grows; give the slice and the item's index, or copy the item into a 'hold' variable, change it, and put it back
+; A call of a task value gives no item of a slice as a place, as a named call doesn't.
+task bump(hold& n: int)
+    n = n + 1
+fi
+
+task both(hold& a: int, bind& b: int)
+    a = b
+fi
+
+task squares(r: region, n: int) -> [int]@r
+    <- new [int]() at r
+fi
+
+task main()
+    region r
+    hold xs = [1, 2, ...] at r
+    bind f = bump
+    f(&xs[0])
+fi

@@ -1436,7 +1436,12 @@ impl<'a> Classifier<'a> {
                 // The name after `hold&` or `bind&` is still being declared.
                 Token::Amp if matches!(tokens.before(p), Some(Token::Hold | Token::Bind)) => {
                     self.push(range, TokenClass::Keyword, None);
-                    declaring = declaring_now;
+                    // `(hold& int) -> nothing`: in a task's type, a type follows.
+                    if was_type {
+                        in_type = true;
+                    } else {
+                        declaring = declaring_now;
+                    }
                 }
                 Token::Amp => self.push(range, TokenClass::Operator, None),
                 Token::Comma => {
@@ -1503,6 +1508,8 @@ impl<'a> Classifier<'a> {
                         // `(hold n: int`: a parameter the task changes, which
                         // the header declares below, not a variable.
                         // (and `bind`, `hold&`, `bind&`).
+                        // `(hold& int) -> nothing`: how a task's type takes a place.
+                        Token::Hold | Token::Bind if was_type => in_type = true,
                         Token::Hold | Token::Bind if in_task_header && matches!(tokens.before(p), Some(Token::LParen | Token::Comma)) => {}
                         Token::Bind | Token::Hold => {
                             // `hold& y = &x` and `bind& y = &x`: references.

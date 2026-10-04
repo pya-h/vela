@@ -147,7 +147,24 @@ impl Applied {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TaskType {
     pub params: Vec<Type>,
+    /// How each of `params` is given, in its order.
+    pub taken: Vec<Taken>,
     pub ret: Type,
+}
+
+/// How a parameter of a task type is given at a call: as a value, as the
+/// caller's place, or as a region, which the type names so that what the task
+/// sends can live there: `(hold& int) -> nothing`, `(@r, int) -> [int]@r`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Taken {
+    /// A value: `int`, which the task takes as `n: int`, `hold n: int`, or
+    /// `bind n: int`, all one to its caller.
+    Value,
+    /// The caller's place, `hold& int` or `bind& int` (`Passing::HoldRef` or
+    /// `Passing::BindRef`), which the call marks with `&`.
+    Place(Passing),
+    /// A region, `@r`, whose type in `params` is `Type::Region`.
+    Region(String),
 }
 
 /// The names a task type's regions are given, in the order they first appear
@@ -155,6 +172,28 @@ pub struct TaskType {
 const TASK_REGIONS: [&str; 6] = ["r", "s", "t", "u", "v", "w"];
 
 impl TaskType {
+    /// The type of a task taking `params` as values and sending `ret`.
+    pub fn new(params: Vec<Type>, ret: Type) -> TaskType {
+        let taken = vec![Taken::Value; params.len()];
+        TaskType { params, taken, ret }
+    }
+
+    /// How parameter `i` is given, as a header says it (a region as a value).
+    pub fn passing(&self, i: usize) -> Passing {
+        match self.taken.get(i) {
+            Some(Taken::Place(passing)) => *passing,
+            _ => Passing::Copy,
+        }
+    }
+
+    /// The name of parameter `i` when it is a region, `@r`.
+    pub fn region(&self, i: usize) -> Option<&str> {
+        match self.taken.get(i) {
+            Some(Taken::Region(name)) => Some(name),
+            _ => None,
+        }
+    }
+
     /// The same type with its regions named in the order they first appear,
     /// `r`, then `s`, and so on, so that `(text@a) -> text@a` and
     /// `(text@b) -> text@b`, which say the same, are equal.
@@ -173,9 +212,17 @@ impl TaskType {
             };
             Some(TASK_REGIONS.get(at).map_or_else(|| format!("r{}", at + 1), |name| name.to_string()))
         };
-        let params = self.params.iter().map(|ty| ty.map_regions(&mut rename)).collect();
+        let mut params = Vec::new();
+        let mut taken = Vec::new();
+        for (ty, how) in self.params.iter().zip(&self.taken) {
+            taken.push(match how {
+                Taken::Region(name) => Taken::Region(rename(name).unwrap_or_else(|| name.clone())),
+                other => other.clone(),
+            });
+            params.push(ty.map_regions(&mut rename));
+        }
         let ret = self.ret.map_regions(&mut rename);
-        TaskType { params, ret }
+        TaskType { params, taken, ret }
     }
 }
 
@@ -535,6 +582,14 @@ impl Type {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
+                    match task.taken.get(i) {
+                        Some(Taken::Region(name)) => {
+                            write!(f, "@{}", name)?;
+                            continue;
+                        }
+                        Some(Taken::Place(passing)) => write!(f, "{} ", passing.word())?,
+                        _ => {}
+                    }
                     ty.write(f, None)?;
                 }
                 write!(f, ") -> ")?;
@@ -704,7 +759,7 @@ impl Type {
                 types: applied.types.iter().map(|ty| ty.map_names(f)).collect(),
                 region: applied.region.clone(),
             })),
-            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_names(f)).collect(), ret: task.ret.map_names(f) })),
+            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_names(f)).collect(), taken: task.taken.clone(), ret: task.ret.map_names(f) })),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner), region.clone()),
@@ -774,7 +829,7 @@ impl Type {
                 types: applied.types.iter().map(|ty| ty.map_params(&mut *f)).collect(),
                 region: applied.region.clone(),
             })),
-            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_params(&mut *f)).collect(), ret: task.ret.map_params(f) })),
+            Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_params(&mut *f)).collect(), taken: task.taken.clone(), ret: task.ret.map_params(f) })),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.clone()),
@@ -797,16 +852,27 @@ impl Type {
         match self {
             Type::Task(task) => {
                 let mut params = Vec::new();
-                for param in &task.params {
+                let mut taken = Vec::new();
+                for (param, how) in task.params.iter().zip(&task.taken) {
                     match param {
+                        // A group's values are given as values.
                         Type::Group(name) => match f(name) {
-                            Some(types) => params.extend(types),
-                            None => params.push(param.clone()),
+                            Some(types) => {
+                                taken.extend(std::iter::repeat_n(Taken::Value, types.len()));
+                                params.extend(types);
+                            }
+                            None => {
+                                params.push(param.clone());
+                                taken.push(how.clone());
+                            }
                         },
-                        other => params.push(other.map_groups(&mut *f)),
+                        other => {
+                            params.push(other.map_groups(&mut *f));
+                            taken.push(how.clone());
+                        }
                     }
                 }
-                Type::Task(Box::new(TaskType { params, ret: task.ret.map_groups(f) }))
+                Type::Task(Box::new(TaskType { params, taken, ret: task.ret.map_groups(f) }))
             }
             Type::Applied(applied) => Type::Applied(Box::new(Applied {
                 name: applied.name.clone(),
@@ -849,7 +915,7 @@ impl Type {
         let boxed = |t: &Type| Box::new(t.normalized_tasks());
         match self {
             Type::Task(task) => {
-                let task = TaskType { params: task.params.iter().map(Type::normalized_tasks).collect(), ret: task.ret.normalized_tasks() };
+                let task = TaskType { params: task.params.iter().map(Type::normalized_tasks).collect(), taken: task.taken.clone(), ret: task.ret.normalized_tasks() };
                 Type::Task(Box::new(task.normalized()))
             }
             Type::Applied(applied) => Type::Applied(Box::new(Applied {
@@ -1626,7 +1692,7 @@ pub struct Field {
 }
 
 /// How a task's parameter takes the value it is given (see `Field::passing`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Passing {
     /// `x: T`: a value that never changes in the task.
     #[default]
@@ -1896,7 +1962,20 @@ pub fn type_word(ty: &Type) -> String {
         Type::Map(key, value, _) => format!("map__{}__{}", type_word(key), type_word(value)),
         Type::Results(types) => format!("results__{}__{}", types.len(), types.iter().map(type_word).collect::<Vec<_>>().join("__")),
         Type::Tuple(items) => format!("tuple__{}__{}", items.len(), items.iter().map(type_word).collect::<Vec<_>>().join("__")),
-        Type::Task(task) => format!("task__{}__{}__{}", task.params.len(), task.params.iter().map(type_word).collect::<Vec<_>>().join("__"), type_word(&task.ret)),
+        Type::Task(task) => {
+            // A place is given as a pointer, which C tells apart from a value.
+            let params: Vec<String> = task
+                .params
+                .iter()
+                .zip(&task.taken)
+                .map(|(ty, how)| match how {
+                    Taken::Place(Passing::HoldRef) => format!("holdref__{}", type_word(ty)),
+                    Taken::Place(_) => format!("bindref__{}", type_word(ty)),
+                    _ => type_word(ty),
+                })
+                .collect();
+            format!("task__{}__{}__{}", task.params.len(), params.join("__"), type_word(&task.ret))
+        }
     }
 }
 

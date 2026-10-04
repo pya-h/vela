@@ -1,0 +1,19 @@
+; error: 18:11: 'c' is given as 'value 1' too, and the call changes it through 'value 1' while it reads it through 'value 2'; a place the call changes is given once, so keep a copy of it in a variable first, and give that as the other
+; A call of a task value gives a place it changes once, as a named call does.
+task bump(hold& n: int)
+    n = n + 1
+fi
+
+task both(hold& a: int, bind& b: int)
+    a = b
+fi
+
+task squares(r: region, n: int) -> [int]@r
+    <- new [int]() at r
+fi
+
+task main()
+    hold c = 1
+    bind f = both
+    f(&c, &c)
+fi

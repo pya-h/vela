@@ -1,0 +1,17 @@
+; error: 16:38: expected type (bind& int) -> nothing, got (hold& int) -> nothing
+; A task type says how each parameter is given, and a place changed is not a place read.
+task bump(hold& n: int)
+    n = n + 1
+fi
+
+task both(hold& a: int, bind& b: int)
+    a = b
+fi
+
+task squares(r: region, n: int) -> [int]@r
+    <- new [int]() at r
+fi
+
+task main()
+    bind f: (bind& int) -> nothing = bump
+fi

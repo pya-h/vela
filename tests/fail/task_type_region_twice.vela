@@ -1,0 +1,17 @@
+; error: 16:13: this task's type takes region 'r' twice; each region it takes has a name of its own
+; Each region a task type takes has a name of its own.
+task bump(hold& n: int)
+    n = n + 1
+fi
+
+task both(hold& a: int, bind& b: int)
+    a = b
+fi
+
+task squares(r: region, n: int) -> [int]@r
+    <- new [int]() at r
+fi
+
+task main()
+    bind f: (@r, @r) -> int = squares
+fi

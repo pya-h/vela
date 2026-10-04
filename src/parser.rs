@@ -1691,10 +1691,14 @@ impl Parser {
     /// `maybe (int ~ text)`, since `maybe int ~ text` reads as `(maybe int) ~ text`.
     fn parse_tuple_type(&mut self, opened: Span) -> Result<Type> {
         let mut items = Vec::new();
+        // How each item is given, which only a task's type says (see `Taken`),
+        // with where the first that isn't a value is written.
+        let mut taken = Vec::new();
+        let mut marked: Option<(Span, String)> = None;
         // `() -> int`: a task that takes nothing.
         if self.check(Token::RParen) && self.tokens.get(self.pos + 1) == Some(&Token::Arrow) {
             self.advance(); // )
-            return self.parse_task_type(items);
+            return self.parse_task_type(items, taken);
         }
         loop {
             // `()` and `(int,)`: a missing item, rather than a missing name;
@@ -1705,7 +1709,19 @@ impl Parser {
                     _ => Err(Error::at(self.peek_span(), TUPLE_TRAILING_COMMA)),
                 };
             }
-            let item = self.parse_type_parts()?;
+            let at = self.peek_span();
+            let how = self.parse_taken()?;
+            if how != Taken::Value && marked.is_none() {
+                let written = match &how {
+                    Taken::Region(name) => format!("@{}", name),
+                    Taken::Place(passing) => passing.word().to_string(),
+                    Taken::Value => String::new(),
+                };
+                marked = Some((at, written));
+            }
+            // `@r`: a region, whose name is all there is of it.
+            let item = if matches!(how, Taken::Region(_)) { Type::Region } else { self.parse_type_parts()? };
+            taken.push(how);
             // `(P...) -> R`: a task's type taking a group of types, all it takes.
             if self.check(Token::Ellipsis) {
                 let alone = items.is_empty() && self.tokens.get(self.pos + 1) == Some(&Token::RParen) && self.tokens.get(self.pos + 2) == Some(&Token::Arrow);
@@ -1726,7 +1742,10 @@ impl Parser {
         }
         // `(int, text) -> int`: a task's type.
         if self.check(Token::Arrow) {
-            return self.parse_task_type(items);
+            return self.parse_task_type(items, taken);
+        }
+        if let Some((at, written)) = marked {
+            return Err(Error::at(at, format!("'{}' says how a task's type takes a parameter, as in '(hold& int) -> nothing' or '(@r, int) -> [int]@r', and these parentheses hold no task's type: a '->' follows a task's", written)));
         }
         // One item, with no comma after it (which the loop reports above): the
         // parentheses group that type rather than making a tuple of it.
@@ -1753,13 +1772,48 @@ impl Parser {
     /// At the `->` after the parameters of a task's type, `(int, text) -> int`:
     /// what the task sends, one type, `nothing` when it sends no value. The
     /// arrow is always written, since `(int)` alone is `int` in parentheses.
-    fn parse_task_type(&mut self, params: Vec<Type>) -> Result<Type> {
+    fn parse_task_type(&mut self, params: Vec<Type>, taken: Vec<Taken>) -> Result<Type> {
         self.advance(); // ->
         if matches!(self.peek(), Token::Newline | Token::Eof | Token::RParen | Token::RBracket | Token::Comma | Token::Assign | Token::Fi) {
             return Err(Error::at(self.peek_span(), "a task's type names what the task sends after '->', or 'nothing' when it sends no value, as in '(int) -> nothing'"));
         }
         let ret = self.parse_type_parts()?;
-        Ok(Type::Task(Box::new(TaskType { params, ret })))
+        // A group, `(P...) -> R`, is all a task's type takes, and as values.
+        let taken = if taken.len() == params.len() { taken } else { vec![Taken::Value; params.len()] };
+        Ok(Type::Task(Box::new(TaskType { params, taken, ret })))
+    }
+
+    /// How a parameter of a task's type is given, written before its type:
+    /// `hold&` or `bind&` for the caller's place, `@r` for a region (whose type
+    /// is then all of it), or nothing for a value.
+    fn parse_taken(&mut self) -> Result<Taken> {
+        if self.match_token(Token::AtSign) {
+            if !matches!(self.peek(), Token::Ident(_)) {
+                return Err(self.unexpected("the name of a region after '@', as in '(@r, int) -> [int]@r'"));
+            }
+            return Ok(Taken::Region(self.expect_ident()?));
+        }
+        let hold = match self.peek() {
+            Token::Hold => true,
+            Token::Bind => false,
+            _ => return Ok(Taken::Value),
+        };
+        let at = self.peek_span();
+        let word = if hold { "hold" } else { "bind" };
+        self.advance();
+        let amp = self.peek_span();
+        // `hold&` is one word, as in a header.
+        if !self.check(Token::Amp) || amp.line != at.line || amp.col != at.col + word.len() {
+            return Err(Error::at(
+                at,
+                format!("a task's type takes a value as its type alone, '(int) -> nothing', whether the task copies it or not; '{0}&', with '&' against '{0}', is the caller's place", word),
+            ));
+        }
+        self.advance(); // &
+        if self.check(Token::AtSign) {
+            return Err(Error::at(at, "a region is given as it is, so a task's type writes it '@r' alone, never as a place"));
+        }
+        Ok(Taken::Place(if hold { Passing::HoldRef } else { Passing::BindRef }))
     }
 
     /// After a type's `[`: `T#count]`, an array, `T]`, a slice, or `K: V]`, a
@@ -3099,17 +3153,6 @@ impl Parser {
             return Err(Error::at(span, "a lambda can't be written in a task or method that takes types yet; write a task of its own and name it, as in 'apply(double, x)'"));
         }
         let params = self.parse_field_list(Slot::Param)?;
-        for param in &params {
-            if param.ty == Type::Region {
-                return Err(Error::at(param.span, format!("a lambda takes values only, so '{}' can't be a region; a task value takes none", param.name)));
-            }
-            if param.passing.is_ref() {
-                return Err(Error::at(
-                    param.span,
-                    format!("a lambda takes values, so '{}' can't be '{}', the caller's place; write 'hold {}' for a copy it may change", param.name, param.passing.word(), param.name),
-                ));
-            }
-        }
         let arrow = self.peek_span();
         self.expect(Token::Arrow)?;
         if matches!(self.peek(), Token::Newline | Token::Fi | Token::Eof) {

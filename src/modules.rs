@@ -1243,6 +1243,7 @@ impl Resolver<'_> {
             Type::Map(key, value, region) => Type::Map(Box::new(self.ty(key, span)?), Box::new(self.ty(value, span)?), region.clone()),
             Type::Task(task) => Type::Task(Box::new(TaskType {
                 params: task.params.iter().map(|t| self.ty(t, span)).collect::<Result<_>>()?,
+                taken: task.taken.clone(),
                 ret: self.ty(&task.ret, span)?,
             })),
             other => other.clone(),
