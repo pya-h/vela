@@ -1,0 +1,22 @@
+; trap: division by zero at 15:15 in task 'Math.half'
+; A runtime stop in the body of a wrapped shared method names the method as it
+; is written, not the hidden layer its body is in.
+task zero() -> int
+    <- 0
+fi
+
+task plus_one(next: (int) -> int, n: int) -> int
+    <- next(n) + 1
+fi
+
+shape Math
+    $(plus_one)
+    shared half(n: int) -> int
+        <- 10 / n
+    fi
+fi
+
+task main()
+    show(Math.half(5))
+    show(Math.half(zero()))
+fi

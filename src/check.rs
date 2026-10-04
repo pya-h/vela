@@ -4494,7 +4494,9 @@ impl Checker {
         match &mut expr.kind {
             ExprKind::Var(name) if self.lookup(name).is_none() => {
                 let full = self.full_name(name);
-                if self.tasks.get(&full).is_some_and(|info| info.owner.is_none()) {
+                // A shared method is named so only by its decorators (see
+                // `Parser::decorate`); a program names it `X.m`.
+                if self.tasks.get(&full).is_some_and(|info| info.owner.as_ref().is_none_or(|owner| owner.shared)) {
                     expr.kind = ExprKind::TaskValue(full);
                 }
             }
@@ -4853,9 +4855,18 @@ impl Checker {
             let ExprKind::Call { name, args, .. } = &call.kind else { return Err(Error::internal_at(call.span, "a wrapper that is no call")) };
             let written = unqualified(name);
             let full = self.full_name(name);
-            let Some(wrapper) = self.tasks.get(&full).filter(|wrapper| wrapper.owner.is_none()).cloned() else {
+            let Some(wrapper) = self.tasks.get(&full).cloned() else {
+                // `X.m`, naming no method of `X`.
+                if method_parts(&full).is_some() {
+                    return Err(self.unknown_task(&full, &[], call.span));
+                }
                 return err(call.span, format!("unknown task '{}'; a wrapper is a task that takes the task it wraps first", name));
             };
+            // A shared method is a task of its type's; one of every value has
+            // a value to be called on, which no layer gives it.
+            if wrapper.owner.as_ref().is_some_and(|owner| !owner.shared) {
+                return err(call.span, format!("'{}' is a method of every value, called on one, so it can't be a wrapper; a shared method can", name));
+            }
             match wrapper.params.first() {
                 Some((_, ty)) if is_task(ty) => {}
                 other => {
@@ -5273,7 +5284,10 @@ impl Checker {
                 "'main' takes no startup decorator: the decorators run before 'main', where the program starts, and nothing calls 'main' as a value; call what the decorator would do first thing in 'main' instead",
             );
         }
-        let Some(info) = self.tasks.get(&self.full_name(name)).filter(|info| info.types.is_empty() && info.owner.is_none()) else { return Ok(()) };
+        if self.tasks.get(&self.full_name(name)).and_then(|info| info.owner.as_ref()).is_some_and(|owner| !owner.shared) {
+            return err(call.span, format!("'{}' is a method of every value, called on one, so it can't be a decorator; a shared method can", name));
+        }
+        let Some(info) = self.tasks.get(&self.full_name(name)).filter(|info| info.types.is_empty() && info.owner.as_ref().is_none_or(|owner| owner.shared)) else { return Ok(()) };
         let Some(ExprKind::Var(decorated)) = args.first().map(|arg| &arg.kind) else { return Ok(()) };
         // As it is written: a decorator of another module keeps its module's name.
         let own = format!("{}{}", self.current_module, MODULE_SEPARATOR);
@@ -7887,16 +7901,30 @@ impl Checker {
         if self.broken.contains(&shape) {
             return Ok(Type::Unknown);
         }
+        // `Point.new`, a shared method named without '(…)': its task, as a value.
+        let task = method_name(&shape, &field);
+        if let Some(owner) = self.tasks.get(&task).and_then(|info| info.owner.clone()) {
+            let written = unqualified(&shape);
+            if !owner.shared {
+                let value = if self.kinds.contains_key(&shape) { "k" } else { "p" };
+                return err(span, format!("'{0}' is a method of every value of '{1}', so it is called on a value, as in '{2}.{0}(…)'; only a shared method is a value, named on its type", field, written, value));
+            }
+            if self.private.contains(&task) && module_of(&shape) != self.current_module {
+                return err(span, format!("'{}' is a private method of '{}', which only its own file can use", field, written));
+            }
+            expr.kind = ExprKind::TaskValue(task);
+            return self.infer_expr(expr);
+        }
+        if self.kinds.contains_key(&shape) {
+            if field == TYPE_WORD {
+                return err(span, format!("'type' is read on a value, as in 'k.type', and '{}' is a kind, whose type is its name", unqualified(&shape)));
+            }
+            return err(span, format!("kind '{}' has no variant or shared method '{}'", unqualified(&shape), field));
+        }
         let Some(def) = self.shapes.get(&shape) else { return Err(Error::internal_at(span, format!("shared field of unknown shape '{}'", shape))) };
         let Some(index) = def.shared.iter().position(|member| member.field.name == field) else {
             if def.fields.iter().any(|declared| declared.name == field) {
                 return err(span, format!("'{0}' is a field of every value of '{1}', not a shared one, so it is read on a value, as in 'p.{0}'", field, shape));
-            }
-            if let Some(method) = self.tasks.get(&method_name(&shape, &field)).and_then(|info| info.owner.as_ref()) {
-                return err(span, match method.shared {
-                    true => format!("'{0}.{1}' is a shared method, so it is called, as in '{0}.{1}(…)'", unqualified(&shape), field),
-                    false => format!("'{0}' is a method of every value of '{1}', so it is called on a value, as in 'p.{0}(…)'", field, shape),
-                });
             }
             if field == TYPE_WORD {
                 return err(span, format!("'type' is read on a value, as in 'p.type', and '{}' is a shape, whose type is its name", unqualified(&shape)));
@@ -7905,7 +7933,7 @@ impl Checker {
             if self.variants.values().any(|info| info.variant.tag == field) {
                 return err(span, format!("'{}' is a shape, not a kind, so it has no variant '{}'", shape, field));
             }
-            return err(span, format!("shape '{}' has no shared field '{}'", shape, field));
+            return err(span, format!("shape '{}' has no shared field or shared method '{}'", shape, field));
         };
         let Some(member) = def.shared.get(index).cloned() else { return Ok(Type::Unknown) };
         if member.field.private && module_of(&shape) != self.current_module {
@@ -7942,7 +7970,13 @@ impl Checker {
     /// outside the methods of its shape. `lead` starts the message, for a
     /// change that is a call's.
     fn changeable_shared(&self, shape: &str, field: &str, span: Span, lead: &str) -> Result<()> {
-        let Some(member) = self.shapes.get(shape).and_then(|def| def.shared.iter().find(|member| member.field.name == field)) else { return Ok(()) };
+        let Some(member) = self.shapes.get(shape).and_then(|def| def.shared.iter().find(|member| member.field.name == field)) else {
+            // `Point.new`, a shared method, named as a value: no place.
+            if self.tasks.get(&method_name(shape, field)).is_some_and(|info| info.owner.is_some()) {
+                return err(span, format!("{}'{}.{}' is a method, whose value is the task itself, so it never changes", lead, unqualified(shape), field));
+            }
+            return Ok(());
+        };
         let written = shared_key(shape, field);
         if !member.changes() {
             return err(

@@ -1,0 +1,17 @@
+; error: 10:6: task 'P.make' takes a region, 'r', so it can't be a value yet; a task value takes values only
+; A shared method taking a region is no task value yet, so no decorator
+; can be given it.
+task reg(f: () -> int)
+fi
+
+shape P
+    x: int
+
+    $reg
+    shared make(r: region) -> int
+        <- 1
+    fi
+fi
+
+task main()
+fi

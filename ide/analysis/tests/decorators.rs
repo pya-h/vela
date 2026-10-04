@@ -115,3 +115,48 @@ fi
     let declared = LineIndex::new(source).utf16_of(source.find("depth:").unwrap());
     assert_eq!(Analysis::new(source).definition(at).map(|found| found.from), Some(declared));
 }
+
+#[test]
+fn decorators_on_and_of_shared_methods_hover_as_written() {
+    let source = "\
+shape Registry
+    shared read count: int = 0
+
+    shared enroll(f: (int) -> int)
+        Registry.count = Registry.count + 1
+    fi
+fi
+
+shape Timer
+    shared timed(next: (int) -> int, n: int) -> int
+        <- next(n)
+    fi
+fi
+
+shape Math
+    $Registry.enroll
+    $(Timer.timed)
+    shared cube(n: int) -> int
+        <- n * n * n
+    fi
+fi
+
+task main()
+    bind f = Math.cube
+    show(f(2))
+fi
+";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_eq!(hover(source, "$Registry"), "$d, $d(values), or $(w1, w2(values))");
+    assert_eq!(hover(source, "enroll\n    $"), "shared enroll(f: (int) -> int)");
+    assert_eq!(hover(source, "timed)"), "shared timed(next: (int) -> int, n: int) -> int");
+    assert_eq!(hover(source, "cube\n    show"), "shared cube(n: int) -> int");
+    assert_eq!(hover(source, "f = "), "bind f: (int) -> int");
+    let at = LineIndex::new(source).utf16_of(source.find("enroll\n    $").unwrap());
+    let declared = LineIndex::new(source).utf16_of(source.find("enroll(f").unwrap());
+    assert_eq!(Analysis::new(source).definition(at).map(|found| found.from), Some(declared));
+    // Where the program has a mistake, the names still say what they are.
+    let broken = source.replace("show(f(2))", "show(unknown)");
+    assert_eq!(hover(&broken, "enroll\n    $"), "shared enroll(f: (int) -> int)");
+    assert_eq!(hover(&broken, "cube\n    show"), "shared cube(n: int) -> int");
+}

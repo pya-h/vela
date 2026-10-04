@@ -1,0 +1,18 @@
+; error: 12:2: 'P.enlist' is a method of every value, called on one, so it can't be a decorator; a shared method can
+; A method of every value is called on one, so it can't be a decorator; a
+; shared method can.
+shape P
+    x: int
+
+    enlist(f: (int) -> int)
+        show(f(1))
+    fi
+fi
+
+$P.enlist
+task one(x: int) -> int
+    <- x
+fi
+
+task main()
+fi

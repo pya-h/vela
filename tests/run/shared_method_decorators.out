@@ -1,0 +1,20 @@
+label new
+1. Step.up gives 4
+2. first gives 3
+> new
+made Point { x: 0, y: 0 }
+3. Point.double gives 6
+main starts
+> new
+Point { x: 1, y: 2 } 5
+picking 1
+6 Green 1
+2 3 2
+> new
+Point { x: 3, y: 4 }
+> new
+Point { x: 5, y: 6 }
+> new
+Point { x: 7, y: 8 }
+picking 0
+10 Red 1

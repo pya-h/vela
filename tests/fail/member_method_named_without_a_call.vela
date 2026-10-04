@@ -1,0 +1,14 @@
+; error: 13:16: 'area' is a method of every value of 'C', so it is called on a value, as in 'p.area(…)'; only a shared method is a value, named on its type
+; A shape's method of every value is called on a value; only a shared method
+; is a value, named on its shape.
+shape C
+    n: int
+
+    area() -> int
+        <- .n
+    fi
+fi
+
+task main()
+    bind f = C.area
+fi

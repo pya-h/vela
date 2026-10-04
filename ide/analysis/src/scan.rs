@@ -1260,10 +1260,9 @@ impl<'a> Classifier<'a> {
                     needs_word = false;
                     self.push(range, TokenClass::Keyword, None);
                 }
-                // `shared new(…)` and `X.new(…)`: the keyword naming a shared
-                // method, read as the name it is there.
-                Token::New
-                    if self.declared_at.contains_key(&p) || (tokens.before(p) == Some(&Token::Dot) && tokens.token(p + 1) == Some(&Token::LParen)) =>
+                // `shared new(…)`, `X.new(…)`, and `X.new` as a value: the
+                // keyword naming a shared method, read as the name it is there.
+                Token::New if self.declared_at.contains_key(&p) || tokens.before(p) == Some(&Token::Dot) =>
                 {
                     if self.declared_at.contains_key(&p) {
                         self.open(ScopeKind::Item);
@@ -1733,8 +1732,16 @@ impl<'a> Classifier<'a> {
         // `p.x` and `p.m()`: a field or a method of the value's shape or kind.
         if before == Some(&Token::Dot) {
             let start = tokens.get(p).map(|t| (t.start.line, t.start.col));
-            let owner = start.and_then(|at| self.field_accesses.get(&at)).cloned();
-            let kinds: &[SymbolKind] = if after == Some(&Token::LParen) { &[SymbolKind::Method] } else { &[SymbolKind::Field] };
+            // Named on a shape or a kind itself, as in `Point.new` or a
+            // decorator's `$Registry.enroll`: a shared member of it, a method
+            // named as a value too.
+            let typed = self.type_before().and_then(|id| self.symbols.get(id)).map(|s| s.name.clone());
+            let owner = start.and_then(|at| self.field_accesses.get(&at)).cloned().or_else(|| typed.clone());
+            let kinds: &[SymbolKind] = match (after == Some(&Token::LParen), typed.is_some()) {
+                (true, _) => &[SymbolKind::Method],
+                (false, true) => &[SymbolKind::Field, SymbolKind::Method],
+                (false, false) => &[SymbolKind::Field],
+            };
             return match self.member(owner.as_deref(), name, kinds) {
                 Some(id) => (self.symbols.get(id).map_or(TokenClass::Field, |s| s.kind.class()), Some(id)),
                 None => (TokenClass::Field, None),

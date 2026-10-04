@@ -1,0 +1,10 @@
+; Shared methods of a module, one private to it.
+shape Timer
+    shared timed(next: (int) -> int, n: int) -> int
+        <- next(n)
+    fi
+
+    priv shared quiet(next: (int) -> int, n: int) -> int
+        <- next(n)
+    fi
+fi

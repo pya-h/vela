@@ -1,4 +1,4 @@
-; error: 8:5: expected an expression, got '$'; '$' marks a decorator, written on the lines above a task (not a method), as in '$register' or '$route("/")'
+; error: 8:5: expected an expression, got '$'; '$' marks a decorator, written on the lines above a task or a shared method, as in '$register' or '$route("/")'
 ; A decorator goes outside every task.
 task reg(f: (int) -> int)
     show(f(1))

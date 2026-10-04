@@ -1,0 +1,50 @@
+  1 | ; A registry whose table only its own methods change, and a wrapper, both
+    | comment:; A registry whose table only its own methods change, and a wrapper, both
+  2 | ; shared methods; and a kind's shared method with a decorator of its own.
+    | comment:; shared methods; and a kind's shared method with a decorator of its own.
+  3 | shape Routes
+    | keyword:shape  type:Routes
+  4 |     shared read count: int = 0
+    | keyword:shared  keyword:read  field:count  punctuation::  type-builtin:int  operator:=  number:0
+  6 |     shared enroll(f: (int) -> int, name: text)
+    | keyword:shared  method:enroll  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:name  punctuation::  type-builtin:text  punctuation:)
+  7 |         Routes.count = Routes.count + 1
+    | type:Routes  punctuation:.  field:count  operator:=  type:Routes  punctuation:.  field:count  operator:+  number:1
+  8 |         bind gives = f(3)
+    | keyword:bind  variable:gives  operator:=  parameter:f  punctuation:(  number:3  punctuation:)
+  9 |         show(Routes.count, ". ", name, " gives ", gives)
+    | builtin-fn:show  punctuation:(  type:Routes  punctuation:.  field:count  punctuation:,  string:". "  punctuation:,  parameter:name  punctuation:,  string:" gives "  punctuation:,  variable:gives  punctuation:)
+ 10 |     fi
+    | keyword:fi
+ 11 | fi
+    | keyword:fi
+ 13 | shape Meter
+    | keyword:shape  type:Meter
+ 14 |     shared hold calls: int = 0
+    | keyword:shared  keyword:hold  field:calls  punctuation::  type-builtin:int  operator:=  number:0
+ 16 |     shared counted(next: (int) -> int, n: int) -> int
+    | keyword:shared  method:counted  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 17 |         Meter.calls = Meter.calls + 1
+    | type:Meter  punctuation:.  field:calls  operator:=  type:Meter  punctuation:.  field:calls  operator:+  number:1
+ 18 |         <- next(n)
+    | keyword:<-  parameter:next  punctuation:(  parameter:n  punctuation:)
+ 19 |     fi
+    | keyword:fi
+ 20 | fi
+    | keyword:fi
+ 22 | kind Step
+    | keyword:kind  type:Step
+ 23 |     Up
+    | variant:Up
+ 24 |     Down
+    | variant:Down
+ 26 |     $Routes.enroll("Step.up")
+    | keyword:$  type:Routes  punctuation:.  method:enroll  punctuation:(  string:"Step.up"  punctuation:)
+ 27 |     shared up(n: int) -> int
+    | keyword:shared  method:up  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 28 |         <- n + 1
+    | keyword:<-  parameter:n  operator:+  number:1
+ 29 |     fi
+    | keyword:fi
+ 30 | fi
+    | keyword:fi

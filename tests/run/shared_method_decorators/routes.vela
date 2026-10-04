@@ -1,0 +1,30 @@
+; A registry whose table only its own methods change, and a wrapper, both
+; shared methods; and a kind's shared method with a decorator of its own.
+shape Routes
+    shared read count: int = 0
+
+    shared enroll(f: (int) -> int, name: text)
+        Routes.count = Routes.count + 1
+        bind gives = f(3)
+        show(Routes.count, ". ", name, " gives ", gives)
+    fi
+fi
+
+shape Meter
+    shared hold calls: int = 0
+
+    shared counted(next: (int) -> int, n: int) -> int
+        Meter.calls = Meter.calls + 1
+        <- next(n)
+    fi
+fi
+
+kind Step
+    Up
+    Down
+
+    $Routes.enroll("Step.up")
+    shared up(n: int) -> int
+        <- n + 1
+    fi
+fi

@@ -1,0 +1,14 @@
+; error: 8:2: 'K.A' is a variant, which makes a value, so it can't be a decorator; a decorator is a task or a shared method
+; A variant makes a value, so it is no decorator.
+kind K
+    A
+    B
+fi
+
+$K.A
+task one(x: int) -> int
+    <- x
+fi
+
+task main()
+fi

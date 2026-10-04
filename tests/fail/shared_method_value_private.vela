@@ -1,0 +1,7 @@
+; error: 6:27: 'quiet' is a private method of 'Timer', which only its own file can use
+; A private shared method of another module is no value there.
+include modules/timers
+
+task main()
+    bind f = timers.Timer.quiet
+fi

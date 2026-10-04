@@ -387,6 +387,10 @@ impl Checked {
             // A wrapper's value read where its value is written, which is
             // walked where it was moved to.
             ExprKind::Shared { .. } => {}
+            // `Point.new`, a shared method named as a value, at the method's name.
+            ExprKind::TaskValue(name) if let Some((owner, _)) = method_parts(name) => {
+                self.field_accesses.insert(pos(e.span), owner.to_string());
+            }
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
             | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::TypeOf(_) | ExprKind::TaskValue(_) => {}
             ExprKind::Invoke { callee, args } => {

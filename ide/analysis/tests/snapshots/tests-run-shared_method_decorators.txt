@@ -1,0 +1,174 @@
+  1 | ; Decorators on shared methods, of shapes and of kinds, as on tasks; shared
+    | comment:; Decorators on shared methods, of shapes and of kinds, as on tasks; shared
+  2 | ; methods that are decorators and wrappers themselves, named on their type,
+    | comment:; methods that are decorators and wrappers themselves, named on their type,
+  3 | ; through a module too; and a shared method named as a value, 'Point.new'.
+    | comment:; through a module too; and a shared method named as a value, 'Point.new'.
+  4 | ; Startup decorators run in the order the program is written, the module's
+    | comment:; Startup decorators run in the order the program is written, the module's
+  5 | ; first, a shared method at its place among the tasks.
+    | comment:; first, a shared method at its place among the tasks.
+  7 | include shared_method_decorators/routes
+    | keyword:include  module:shared_method_decorators  operator:/  module:routes
+  9 | task label(word: text) -> text
+    | keyword:task  task:label  punctuation:(  parameter:word  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text
+ 10 |     show("label ", word)
+    | builtin-fn:show  punctuation:(  string:"label "  punctuation:,  parameter:word  punctuation:)
+ 11 |     <- word
+    | keyword:<-  parameter:word
+ 12 | fi
+    | keyword:fi
+ 14 | task logged(next: (int, int) -> Point, name: text, x: int, y: int) -> Point
+    | keyword:task  task:logged  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type:Point  punctuation:,  parameter:name  punctuation::  type-builtin:text  punctuation:,  parameter:x  punctuation::  type-builtin:int  punctuation:,  parameter:y  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Point
+ 15 |     show("> ", name)
+    | builtin-fn:show  punctuation:(  string:"> "  punctuation:,  parameter:name  punctuation:)
+ 16 |     <- next(x, y)
+    | keyword:<-  parameter:next  punctuation:(  parameter:x  punctuation:,  parameter:y  punctuation:)
+ 17 | fi
+    | keyword:fi
+ 19 | task made(f: (int, int) -> Point)
+    | keyword:task  task:made  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type:Point  punctuation:)
+ 20 |     bind point = f(0, 0)
+    | keyword:bind  variable:point  operator:=  parameter:f  punctuation:(  number:0  punctuation:,  number:0  punctuation:)
+ 21 |     show("made ", point)
+    | builtin-fn:show  punctuation:(  string:"made "  punctuation:,  variable:point  punctuation:)
+ 22 | fi
+    | keyword:fi
+ 24 | $routes.Routes.enroll("first")
+    | keyword:$  module:routes  punctuation:.  type:Routes  punctuation:.  method:enroll  punctuation:(  string:"first"  punctuation:)
+ 25 | task first(n: int) -> int
+    | keyword:task  task:first  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 26 |     <- n
+    | keyword:<-  parameter:n
+ 27 | fi
+    | keyword:fi
+ 29 | shape Point
+    | keyword:shape  type:Point
+ 30 |     x: int
+    | field:x  punctuation::  type-builtin:int
+ 31 |     y: int
+    | field:y  punctuation::  type-builtin:int
+ 33 |     ; A startup decorator and wrappers, one a shared method of a module,
+    | comment:; A startup decorator and wrappers, one a shared method of a module,
+ 34 |     ; one with a value worked out where the program starts.
+    | comment:; one with a value worked out where the program starts.
+ 35 |     $made
+    | keyword:$  task:made
+ 36 |     $(logged(label("new")))
+    | keyword:$  punctuation:(  task:logged  punctuation:(  task:label  punctuation:(  string:"new"  punctuation:)  punctuation:)  punctuation:)
+ 37 |     shared new(x: int, y: int) -> Point
+    | keyword:shared  method:new  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:,  parameter:y  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Point
+ 38 |         <- Point { x: x, y: y }
+    | keyword:<-  type:Point  punctuation:{  field:x  punctuation::  parameter:x  punctuation:,  field:y  punctuation::  parameter:y  punctuation:}
+ 39 |     fi
+    | keyword:fi
+ 41 |     $routes.Routes.enroll("Point.double")
+    | keyword:$  module:routes  punctuation:.  type:Routes  punctuation:.  method:enroll  punctuation:(  string:"Point.double"  punctuation:)
+ 42 |     $(routes.Meter.counted)
+    | keyword:$  punctuation:(  module:routes  punctuation:.  type:Meter  punctuation:.  method:counted  punctuation:)
+ 43 |     priv shared double(n: int) -> int
+    | keyword:priv  keyword:shared  method:double  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 44 |         <- n * 2
+    | keyword:<-  parameter:n  operator:*  number:2
+ 45 |     fi
+    | keyword:fi
+ 47 |     sum() -> int
+    | method:sum  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 48 |         <- .x + .y + Point.double(1)
+    | keyword:<-  punctuation:.  field:x  operator:+  punctuation:.  field:y  operator:+  type:Point  punctuation:.  method:double  punctuation:(  number:1  punctuation:)
+ 49 |     fi
+    | keyword:fi
+ 50 | fi
+    | keyword:fi
+ 52 | shape Local
+    | keyword:shape  type:Local
+ 53 |     shared hold seen: int = 0
+    | keyword:shared  keyword:hold  field:seen  punctuation::  type-builtin:int  operator:=  number:0
+ 55 |     shared tally(next: (int) -> int, n: int) -> int
+    | keyword:shared  method:tally  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 56 |         Local.seen = Local.seen + 1
+    | type:Local  punctuation:.  field:seen  operator:=  type:Local  punctuation:.  field:seen  operator:+  number:1
+ 57 |         <- next(n)
+    | keyword:<-  parameter:next  punctuation:(  parameter:n  punctuation:)
+ 58 |     fi
+    | keyword:fi
+ 59 | fi
+    | keyword:fi
+ 61 | task noted(next: (int) -> Light, n: int) -> Light
+    | keyword:task  task:noted  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type:Light  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Light
+ 62 |     show("picking ", n)
+    | builtin-fn:show  punctuation:(  string:"picking "  punctuation:,  parameter:n  punctuation:)
+ 63 |     <- next(n)
+    | keyword:<-  parameter:next  punctuation:(  parameter:n  punctuation:)
+ 64 | fi
+    | keyword:fi
+ 66 | kind Light
+    | keyword:kind  type:Light
+ 67 |     Red
+    | variant:Red
+ 68 |     Green
+    | variant:Green
+ 70 |     $(noted)
+    | keyword:$  punctuation:(  task:noted  punctuation:)
+ 71 |     shared pick(n: int) -> Light
+    | keyword:shared  method:pick  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Light
+ 72 |         <- when n == 0 Light.Red else Light.Green fi
+    | keyword:<-  keyword:when  parameter:n  operator:==  number:0  type:Light  punctuation:.  variant:Red  keyword:else  type:Light  punctuation:.  variant:Green  keyword:fi
+ 73 |     fi
+    | keyword:fi
+ 74 | fi
+    | keyword:fi
+ 76 | $(Local.tally)
+    | keyword:$  punctuation:(  type:Local  punctuation:.  method:tally  punctuation:)
+ 77 | task tripled(n: int) -> int
+    | keyword:task  task:tripled  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 78 |     <- n * 3
+    | keyword:<-  parameter:n  operator:*  number:3
+ 79 | fi
+    | keyword:fi
+ 81 | shape Hooks
+    | keyword:shape  type:Hooks
+ 82 |     shared hold making: (int, int) -> Point = Point.new
+    | keyword:shared  keyword:hold  field:making  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type:Point  operator:=  type:Point  punctuation:.  method:new
+ 83 | fi
+    | keyword:fi
+ 85 | task apply(f: (int, int) -> Point) -> Point
+    | keyword:task  task:apply  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:,  type-builtin:int  punctuation:)  operator:->  type:Point  punctuation:)  operator:->  type:Point
+ 86 |     <- f(5, 6)
+    | keyword:<-  parameter:f  punctuation:(  number:5  punctuation:,  number:6  punctuation:)
+ 87 | fi
+    | keyword:fi
+ 89 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 90 |     show("main starts")
+    | builtin-fn:show  punctuation:(  string:"main starts"  punctuation:)
+ 91 |     bind p = Point.new(1, 2)
+    | keyword:bind  variable:p  operator:=  type:Point  punctuation:.  method:new  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+ 92 |     show(p, " ", p.sum())
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:,  string:" "  punctuation:,  variable:p  punctuation:.  method:sum  punctuation:(  punctuation:)  punctuation:)
+ 93 |     bind light = Light.pick(1)
+    | keyword:bind  variable:light  operator:=  type:Light  punctuation:.  method:pick  punctuation:(  number:1  punctuation:)
+ 94 |     show(tripled(2), " ", light, " ", Local.seen)
+    | builtin-fn:show  punctuation:(  task:tripled  punctuation:(  number:2  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:light  punctuation:,  string:" "  punctuation:,  type:Local  punctuation:.  field:seen  punctuation:)
+ 95 |     show(routes.Step.up(1), " ", routes.Routes.count, " ", routes.Meter.calls)
+    | builtin-fn:show  punctuation:(  module:routes  punctuation:.  type:Step  punctuation:.  method:up  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  module:routes  punctuation:.  type:Routes  punctuation:.  field:count  punctuation:,  string:" "  punctuation:,  module:routes  punctuation:.  type:Meter  punctuation:.  field:calls  punctuation:)
+ 96 |     ; A shared method as a value goes through its wrappers as a call does.
+    | comment:; A shared method as a value goes through its wrappers as a call does.
+ 97 |     bind make = Point.new
+    | keyword:bind  variable:make  operator:=  type:Point  punctuation:.  method:new
+ 98 |     show(make(3, 4))
+    | builtin-fn:show  punctuation:(  variable:make  punctuation:(  number:3  punctuation:,  number:4  punctuation:)  punctuation:)
+ 99 |     show(apply(Point.new))
+    | builtin-fn:show  punctuation:(  task:apply  punctuation:(  type:Point  punctuation:.  method:new  punctuation:)  punctuation:)
+100 |     show(Hooks.making(7, 8))
+    | builtin-fn:show  punctuation:(  type:Hooks  punctuation:.  method:making  punctuation:(  number:7  punctuation:,  number:8  punctuation:)  punctuation:)
+101 |     bind up = routes.Step.up
+    | keyword:bind  variable:up  operator:=  module:routes  punctuation:.  type:Step  punctuation:.  variant:up
+102 |     bind pick = Light.pick
+    | keyword:bind  variable:pick  operator:=  type:Light  punctuation:.  variant:pick
+103 |     bind picked = pick(0)
+    | keyword:bind  variable:picked  operator:=  variable:pick  punctuation:(  number:0  punctuation:)
+104 |     show(up(9), " ", picked, " ", Local.seen)
+    | builtin-fn:show  punctuation:(  variable:up  punctuation:(  number:9  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:picked  punctuation:,  string:" "  punctuation:,  type:Local  punctuation:.  field:seen  punctuation:)
+105 | fi
+    | keyword:fi

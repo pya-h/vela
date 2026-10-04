@@ -1,0 +1,66 @@
+; A registry of commands, filled where the program starts: each command
+; enrolls itself with a decorator that is a shared method of the registry,
+; whose table only the registry's own methods can change. A shared method
+; takes decorators as a task does, and is a value, named on its shape.
+
+shape Commands
+    shared read count: int = 0
+    shared read names: [text#4] = ["", "", "", ""]
+    shared read runs: [(int) -> int#4] = [Commands.same, Commands.same, Commands.same, Commands.same]
+
+    ; Decorates a command: keeps it, with its name, to be run later.
+    shared enroll(command: (int) -> int, name: text)
+        Commands.names[Commands.count] = name
+        Commands.runs[Commands.count] = command
+        Commands.count = Commands.count + 1
+    fi
+
+    shared same(n: int) -> int
+        <- n
+    fi
+
+    shared run_all(n: int)
+        each i in 0..Commands.count
+            bind run = Commands.runs[i]
+            show(Commands.names[i], "(", n, ") = ", run(n))
+        fi
+    fi
+fi
+
+shape Stats
+    shared hold calls: int = 0
+
+    ; Wraps a command: counts its calls.
+    shared counted(next: (int) -> int, n: int) -> int
+        Stats.calls = Stats.calls + 1
+        <- next(n)
+    fi
+fi
+
+$Commands.enroll("square")
+$(Stats.counted)
+task square(n: int) -> int
+    <- n * n
+fi
+
+shape Temperature
+    celsius: int
+
+    ; A shared method takes decorators too.
+    $Commands.enroll("fahrenheit")
+    $(Stats.counted)
+    shared fahrenheit(celsius: int) -> int
+        <- celsius * 9 / 5 + 32
+    fi
+fi
+
+task twice(f: (int) -> int, n: int) -> int
+    <- f(f(n))
+fi
+
+task main()
+    Commands.run_all(10)
+    ; A shared method named as a value, as a task is.
+    show("twice: ", twice(Temperature.fahrenheit, 0))
+    show(Commands.count, " commands, ", Stats.calls, " counted calls")
+fi

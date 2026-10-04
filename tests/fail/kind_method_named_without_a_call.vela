@@ -1,13 +1,15 @@
-; error: 12:16: 'K.first' is a method of kind 'K', so it is called, as in 'K.first(…)' when it is shared, or 'k.first(…)' on a value
+; error: 14:16: 'name' is a method of every value of 'K', so it is called on a value, as in 'k.name(…)'; only a shared method is a value, named on its type
+; A kind's method of every value is called on a value; only a shared method
+; is a value, named on its kind.
 kind K
     A
     B
 
-    shared first() -> K
-        <- A
+    name() -> text
+        <- "k"
     fi
 fi
 
 task main()
-    bind f = K.first
+    bind f = K.name
 fi

@@ -1,0 +1,110 @@
+  1 | ; A registry of commands, filled where the program starts: each command
+    | comment:; A registry of commands, filled where the program starts: each command
+  2 | ; enrolls itself with a decorator that is a shared method of the registry,
+    | comment:; enrolls itself with a decorator that is a shared method of the registry,
+  3 | ; whose table only the registry's own methods can change. A shared method
+    | comment:; whose table only the registry's own methods can change. A shared method
+  4 | ; takes decorators as a task does, and is a value, named on its shape.
+    | comment:; takes decorators as a task does, and is a value, named on its shape.
+  6 | shape Commands
+    | keyword:shape  type:Commands
+  7 |     shared read count: int = 0
+    | keyword:shared  keyword:read  field:count  punctuation::  type-builtin:int  operator:=  number:0
+  8 |     shared read names: [text#4] = ["", "", "", ""]
+    | keyword:shared  keyword:read  field:names  punctuation::  punctuation:[  type-builtin:text  punctuation:#  number:4  punctuation:]  operator:=  punctuation:[  string:""  punctuation:,  string:""  punctuation:,  string:""  punctuation:,  string:""  punctuation:]
+  9 |     shared read runs: [(int) -> int#4] = [Commands.same, Commands.same, Commands.same, Commands.same]
+    | keyword:shared  keyword:read  field:runs  punctuation::  punctuation:[  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:#  number:4  punctuation:]  operator:=  punctuation:[  type:Commands  punctuation:.  method:same  punctuation:,  type:Commands  punctuation:.  method:same  punctuation:,  type:Commands  punctuation:.  method:same  punctuation:,  type:Commands  punctuation:.  method:same  punctuation:]
+ 11 |     ; Decorates a command: keeps it, with its name, to be run later.
+    | comment:; Decorates a command: keeps it, with its name, to be run later.
+ 12 |     shared enroll(command: (int) -> int, name: text)
+    | keyword:shared  method:enroll  punctuation:(  parameter:command  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:name  punctuation::  type-builtin:text  punctuation:)
+ 13 |         Commands.names[Commands.count] = name
+    | type:Commands  punctuation:.  field:names  punctuation:[  type:Commands  punctuation:.  field:count  punctuation:]  operator:=  parameter:name
+ 14 |         Commands.runs[Commands.count] = command
+    | type:Commands  punctuation:.  field:runs  punctuation:[  type:Commands  punctuation:.  field:count  punctuation:]  operator:=  parameter:command
+ 15 |         Commands.count = Commands.count + 1
+    | type:Commands  punctuation:.  field:count  operator:=  type:Commands  punctuation:.  field:count  operator:+  number:1
+ 16 |     fi
+    | keyword:fi
+ 18 |     shared same(n: int) -> int
+    | keyword:shared  method:same  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 19 |         <- n
+    | keyword:<-  parameter:n
+ 20 |     fi
+    | keyword:fi
+ 22 |     shared run_all(n: int)
+    | keyword:shared  method:run_all  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)
+ 23 |         each i in 0..Commands.count
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  type:Commands  punctuation:.  field:count
+ 24 |             bind run = Commands.runs[i]
+    | keyword:bind  variable:run  operator:=  type:Commands  punctuation:.  field:runs  punctuation:[  variable:i  punctuation:]
+ 25 |             show(Commands.names[i], "(", n, ") = ", run(n))
+    | builtin-fn:show  punctuation:(  type:Commands  punctuation:.  field:names  punctuation:[  variable:i  punctuation:]  punctuation:,  string:"("  punctuation:,  parameter:n  punctuation:,  string:") = "  punctuation:,  variable:run  punctuation:(  parameter:n  punctuation:)  punctuation:)
+ 26 |         fi
+    | keyword:fi
+ 27 |     fi
+    | keyword:fi
+ 28 | fi
+    | keyword:fi
+ 30 | shape Stats
+    | keyword:shape  type:Stats
+ 31 |     shared hold calls: int = 0
+    | keyword:shared  keyword:hold  field:calls  punctuation::  type-builtin:int  operator:=  number:0
+ 33 |     ; Wraps a command: counts its calls.
+    | comment:; Wraps a command: counts its calls.
+ 34 |     shared counted(next: (int) -> int, n: int) -> int
+    | keyword:shared  method:counted  punctuation:(  parameter:next  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 35 |         Stats.calls = Stats.calls + 1
+    | type:Stats  punctuation:.  field:calls  operator:=  type:Stats  punctuation:.  field:calls  operator:+  number:1
+ 36 |         <- next(n)
+    | keyword:<-  parameter:next  punctuation:(  parameter:n  punctuation:)
+ 37 |     fi
+    | keyword:fi
+ 38 | fi
+    | keyword:fi
+ 40 | $Commands.enroll("square")
+    | keyword:$  type:Commands  punctuation:.  method:enroll  punctuation:(  string:"square"  punctuation:)
+ 41 | $(Stats.counted)
+    | keyword:$  punctuation:(  type:Stats  punctuation:.  method:counted  punctuation:)
+ 42 | task square(n: int) -> int
+    | keyword:task  task:square  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 43 |     <- n * n
+    | keyword:<-  parameter:n  operator:*  parameter:n
+ 44 | fi
+    | keyword:fi
+ 46 | shape Temperature
+    | keyword:shape  type:Temperature
+ 47 |     celsius: int
+    | field:celsius  punctuation::  type-builtin:int
+ 49 |     ; A shared method takes decorators too.
+    | comment:; A shared method takes decorators too.
+ 50 |     $Commands.enroll("fahrenheit")
+    | keyword:$  type:Commands  punctuation:.  method:enroll  punctuation:(  string:"fahrenheit"  punctuation:)
+ 51 |     $(Stats.counted)
+    | keyword:$  punctuation:(  type:Stats  punctuation:.  method:counted  punctuation:)
+ 52 |     shared fahrenheit(celsius: int) -> int
+    | keyword:shared  method:fahrenheit  punctuation:(  parameter:celsius  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 53 |         <- celsius * 9 / 5 + 32
+    | keyword:<-  parameter:celsius  operator:*  number:9  operator:/  number:5  operator:+  number:32
+ 54 |     fi
+    | keyword:fi
+ 55 | fi
+    | keyword:fi
+ 57 | task twice(f: (int) -> int, n: int) -> int
+    | keyword:task  task:twice  punctuation:(  parameter:f  punctuation::  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 58 |     <- f(f(n))
+    | keyword:<-  parameter:f  punctuation:(  parameter:f  punctuation:(  parameter:n  punctuation:)  punctuation:)
+ 59 | fi
+    | keyword:fi
+ 61 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 62 |     Commands.run_all(10)
+    | type:Commands  punctuation:.  method:run_all  punctuation:(  number:10  punctuation:)
+ 63 |     ; A shared method named as a value, as a task is.
+    | comment:; A shared method named as a value, as a task is.
+ 64 |     show("twice: ", twice(Temperature.fahrenheit, 0))
+    | builtin-fn:show  punctuation:(  string:"twice: "  punctuation:,  task:twice  punctuation:(  type:Temperature  punctuation:.  method:fahrenheit  punctuation:,  number:0  punctuation:)  punctuation:)
+ 65 |     show(Commands.count, " commands, ", Stats.calls, " counted calls")
+    | builtin-fn:show  punctuation:(  type:Commands  punctuation:.  field:count  punctuation:,  string:" commands, "  punctuation:,  type:Stats  punctuation:.  field:calls  punctuation:,  string:" counted calls"  punctuation:)
+ 66 | fi
+    | keyword:fi

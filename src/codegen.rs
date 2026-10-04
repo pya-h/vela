@@ -1588,12 +1588,7 @@ impl Generator {
         self.pointers.extend(self.hidden.iter().cloned());
         self.regions.clear();
         self.results = t.result_names().map(|(name, _)| name.clone()).collect();
-        // A method is named in a runtime message as the program writes it,
-        // through the shape or kind it belongs to.
-        self.task = match method_parts(&t.name) {
-            Some((owner, method)) if t.owner.is_some() => format!("{}{}{}", owner, MODULE_SEPARATOR, method),
-            _ => t.name.clone(),
-        };
+        self.task = shown_name(&t.name);
         self.w.open(&signature(t, alters, &hidden));
         // A native task's body is the runtime function it stands for, given
         // its parameters as they are (see `ast::NATIVE`).
@@ -3855,8 +3850,20 @@ fn written_c_type(ty: &Type) -> String {
 /// after its module's name otherwise (`web.route`, for `lib/web`), so the same
 /// task name in two modules can be told apart, however a file includes them.
 pub(crate) fn notice_name(name: &str) -> String {
+    let name = shown_name(name);
     match name.rsplit_once(MODULE_SEPARATOR) {
         Some((module, alone)) => format!("{}{}{}", module.rsplit_once('/').map_or(module, |(_, last)| last), MODULE_SEPARATOR, alone),
+        None => name,
+    }
+}
+
+/// A task named in a runtime message as the program writes it: a method
+/// through the shape or kind it belongs to, and a wrapper's layer as the task
+/// it wraps (see `ast::layer_name`).
+fn shown_name(name: &str) -> String {
+    let name = name.split(LAYER).next().unwrap_or(name);
+    match method_parts(name) {
+        Some((owner, method)) => format!("{}{}{}", owner, MODULE_SEPARATOR, method),
         None => name.to_string(),
     }
 }

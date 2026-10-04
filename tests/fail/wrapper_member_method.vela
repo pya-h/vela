@@ -1,0 +1,18 @@
+; error: 12:3: 'P.timed' is a method of every value, called on one, so it can't be a wrapper; a shared method can
+; A method of every value is called on one, which no layer gives it, so it
+; can't be a wrapper; a shared method can.
+shape P
+    x: int
+
+    timed(next: (int) -> int, n: int) -> int
+        <- next(n)
+    fi
+fi
+
+$(P.timed)
+task one(x: int) -> int
+    <- x
+fi
+
+task main()
+fi

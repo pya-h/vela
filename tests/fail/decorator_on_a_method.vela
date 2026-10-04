@@ -1,5 +1,6 @@
-; error: 10:5: expected a name, got '$'; '$' marks a decorator, written on the lines above a task (not a method), as in '$register' or '$route("/")'
-; A method takes no decorator yet.
+; error: 11:5: a decorator in a shape goes on the lines above a shared method, as in '$register' above 'shared new(…)'; this is a method of every value, which has no value to be called on where the program starts
+; A method of every value takes no decorator: it has no value to be called on
+; where the program starts.
 task reg(f: (int) -> int)
     show(f(1))
 fi

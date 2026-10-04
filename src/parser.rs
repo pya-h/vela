@@ -396,7 +396,7 @@ impl Parser {
             (Token::Hash, _, _) => "; '#' marks an array's count, as in '[int#4]', and a comment starts with ';'".to_string(),
             // `&` joins the words after a type's `:`, and marks a place given at
             // a call, which starts a value.
-            (Token::Dollar, _, _) => "; '$' marks a decorator, written on the lines above a task (not a method), as in '$register' or '$route(\"/\")'".to_string(),
+            (Token::Dollar, _, _) => "; '$' marks a decorator, written on the lines above a task or a shared method, as in '$register' or '$route(\"/\")'".to_string(),
             (Token::Amp, _, _) => "; Vela writes 'and' for both at once ('&' gives a place to a 'hold&' or 'bind&' parameter, as in 'f(&a)', and joins the words a generic type must allow)".to_string(),
             _ => String::new(),
         };
@@ -656,6 +656,23 @@ impl Parser {
     /// own, and the task they are written before, at the first `$`.
     fn parse_decorated(&mut self) -> Result<Item> {
         let first = self.peek_span();
+        let (decorators, wrappers) = self.parse_decorator_lines()?;
+        let decorated = matches!(self.peek(), Token::Task) || self.at_native() || (self.check(Token::Priv) && !self.at_macro_after(1) && matches!(self.tokens.get(self.pos + 1), Some(Token::Task)));
+        let decorated = decorated || (self.check(Token::Priv) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(word)) if word == NATIVE));
+        if !decorated {
+            return Err(Error::at(first, format!("a decorator goes on the lines above a task, and {} follows it", self.peek().describe())));
+        }
+        let mut item = self.parse_item()?;
+        if let Item::Task(task) = &mut item {
+            decorate(task, decorators, wrappers);
+        }
+        Ok(item)
+    }
+
+    /// The decorators on the lines above a task or a shared method, at the first
+    /// `$`: the startup decorators, and the wrappers, each the call of its name
+    /// with its own values.
+    fn parse_decorator_lines(&mut self) -> Result<(Vec<Decorator>, Vec<Expr>)> {
         let mut decorators = Vec::new();
         let mut wrappers = Vec::new();
         while self.check(Token::Dollar) {
@@ -678,52 +695,34 @@ impl Parser {
                 self.skip_newlines();
             }
         }
-        let decorated = matches!(self.peek(), Token::Task) || self.at_native() || (self.check(Token::Priv) && !self.at_macro_after(1) && matches!(self.tokens.get(self.pos + 1), Some(Token::Task)));
-        let decorated = decorated || (self.check(Token::Priv) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(word)) if word == NATIVE));
-        if !decorated {
-            return Err(Error::at(first, format!("a decorator goes on the lines above a task, and {} follows it", self.peek().describe())));
-        }
-        let mut item = self.parse_item()?;
-        if let Item::Task(task) = &mut item {
-            task.wrappers = wrappers;
-            task.passes = decorators.iter().map(|(_, _, _, passes)| *passes).collect();
-            task.decorators = decorators
-                .into_iter()
-                .map(|(name, args, span, _)| {
-                    let mut given = vec![Expr::new(ExprKind::Var(task.name.clone()), span)];
-                    given.extend(args);
-                    Expr::new(ExprKind::Call { name, types: Vec::new(), args: given }, span)
-                })
-                .collect();
-        }
-        Ok(item)
+        Ok((decorators, wrappers))
     }
 
     /// `d` or `d(values)` after a `$`: a startup decorator's name and values.
-    fn parse_startup_decorator(&mut self) -> Result<(String, Vec<Expr>, Span, bool)> {
+    fn parse_startup_decorator(&mut self) -> Result<Decorator> {
         let span = self.peek_span();
         if !matches!(self.peek(), Token::Ident(_)) {
             return Err(self.unexpected("the name of a task after '$', as in '$register' or '$route(\"/\")'"));
         }
-        let name = self.expect_ident()?;
-        let name = self.qualified(name)?;
-        self.no_member_decorator("a decorator", "'$register' or '$m.register'")?;
+        let name = self.decorator_name()?;
         let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
         // `$d?`: a failure of the decorator lets the program go on.
         let passes = self.match_token(Token::Question);
         Ok((name, args, span, passes))
     }
 
-    /// Refuses a dot after the name of `what`, a decorator, at the dot: a
-    /// shape's or kind's member, which can't be one yet.
-    fn no_member_decorator(&self, what: &str, example: &str) -> Result<()> {
-        if !self.check(Token::Dot) {
-            return Ok(());
+    /// The name of a decorator, a task: `d`, `m.d`, or a shared method, `X.m`
+    /// or `m.X.m`, which the resolver tells apart from a module's task.
+    fn decorator_name(&mut self) -> Result<String> {
+        let name = self.expect_ident()?;
+        let mut name = self.qualified(name)?;
+        // Any more is the resolver's to tell apart, and to refuse.
+        while self.match_token(Token::Dot) {
+            // `X.new`: the one keyword a member may be named, a shared method.
+            let member = if self.match_token(Token::New) { NEW_WORD.to_string() } else { self.expect_ident()? };
+            name = format!("{}{}{}", name, MODULE_SEPARATOR, member);
         }
-        Err(Error::at(
-            self.peek_span(),
-            format!("{} is a task, named alone or with its module, as in {}; a shared method or field of a shape or kind can't be one yet", what, example),
-        ))
+        Ok(name)
     }
 
     /// `(w1, w2(values), …)` after a `$`: wrapper decorators, each kept as the
@@ -739,9 +738,7 @@ impl Parser {
             if !matches!(self.peek(), Token::Ident(_)) {
                 return Err(self.unexpected("the name of a wrapper, as in '$(timed)' or '$(logged(\"sq\"))'"));
             }
-            let name = self.expect_ident()?;
-            let name = self.qualified(name)?;
-            self.no_member_decorator("a wrapper", "'$(timed)' or '$(m.timed)'")?;
+            let name = self.decorator_name()?;
             let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
             wrappers.push(Expr::new(ExprKind::Call { name, types: Vec::new(), args }, span));
             if !self.match_token(Token::Comma) {
@@ -946,12 +943,14 @@ impl Parser {
             self.skip_newlines();
             if self.check(Token::Fi) || self.at_item_start() { break; }
             self.reject_stray_end()?;
+            let (decorators, wrappers) = self.parse_member_decorators("shape")?;
             let private = self.match_token(Token::Priv);
             self.reject_misplaced_method_words()?;
             // `shared new(…) -> X`: a method of the shape itself.
             if self.check(Token::Shared) && self.at_method_from(self.pos + 1) {
                 self.advance(); // shared
-                let method = self.parse_method(&name, "shape", &types, private, true, Above { fields: &fields, shared: &shared, methods: &methods })?;
+                let mut method = self.parse_method(&name, "shape", &types, private, true, Above { fields: &fields, shared: &shared, methods: &methods })?;
+                decorate(&mut method, decorators, wrappers);
                 methods.push(method);
                 self.skip_newlines();
                 continue;
@@ -1075,6 +1074,29 @@ impl Parser {
             pos += 1;
         }
         matches!(self.tokens.get(pos), Some(Token::Ident(_) | Token::New)) && matches!(self.tokens.get(pos + 1), Some(Token::LParen | Token::Lt))
+    }
+
+    /// The decorators on the lines above a member of a shape or a kind (`what`),
+    /// which must be a shared method: one called on its type, which the
+    /// program can give a decorator where it starts, and a wrapper at each
+    /// call. None where no `$` starts the member.
+    fn parse_member_decorators(&mut self, what: &str) -> Result<(Vec<Decorator>, Vec<Expr>)> {
+        if !self.check(Token::Dollar) {
+            return Ok((Vec::new(), Vec::new()));
+        }
+        let first = self.peek_span();
+        let lines = self.parse_decorator_lines()?;
+        let at = self.pos + usize::from(self.check(Token::Priv));
+        if self.tokens.get(at) == Some(&Token::Shared) && self.at_method_from(at + 1) {
+            return Ok(lines);
+        }
+        // In a kind, a variant carrying values looks like a method here.
+        let follows = if what == "shape" && self.at_method_from(at) {
+            "; this is a method of every value, which has no value to be called on where the program starts".to_string()
+        } else {
+            format!(", and {} follows it", self.tokens.get(at).unwrap_or(&Token::Eof).describe())
+        };
+        Err(Error::at(first, format!("a decorator in a {} goes on the lines above a shared method, as in '$register' above 'shared new(…)'{}", what, follows)))
     }
 
     /// Refuses `alters shared f(…)`, which a shared method never is, with the
@@ -1218,6 +1240,7 @@ impl Parser {
             if self.end_closes_item() {
                 self.reject_stray_end()?;
             }
+            let (decorators, wrappers) = self.parse_member_decorators("kind")?;
             let variant_span = self.peek_span();
             // `priv` goes before a method, whose name is what the checks below read.
             let private = self.match_token(Token::Priv);
@@ -1225,7 +1248,8 @@ impl Parser {
             // `shared make(…) -> K`: a method of the kind itself.
             if self.check(Token::Shared) && self.at_method_from(self.pos + 1) {
                 self.advance(); // shared
-                let method = self.parse_method(&name, "kind", &[], private, true, Above { fields: &[], shared: &[], methods: &methods })?;
+                let mut method = self.parse_method(&name, "kind", &[], private, true, Above { fields: &[], shared: &[], methods: &methods })?;
+                decorate(&mut method, decorators, wrappers);
                 methods.push(method);
                 self.skip_newlines();
                 continue;
@@ -3705,13 +3729,14 @@ impl Parser {
     }
 
     /// The name after a dot: a name, `type`, the one reserved word read there
-    /// (`x.type`), or `new` and `at` before a `(`.
+    /// (`x.type`), `new` (a shared method), or `at` before a `(`.
     fn expect_member(&mut self) -> Result<String> {
         if self.match_token(Token::Type) {
             return Ok(TYPE_WORD.to_string());
         }
-        // `X.new(…)`: the one keyword a member may be named, a shared method.
-        if self.check(Token::New) && self.tokens.get(self.pos + 1) == Some(&Token::LParen) {
+        // `X.new(…)`: the one keyword a member may be named, a shared method,
+        // which `X.new` names as a value.
+        if self.check(Token::New) {
             self.advance();
             return Ok(NEW_WORD.to_string());
         }
@@ -3821,8 +3846,25 @@ fn new_only_shared(owner: &str) -> String {
 /// The message for `alters` on a shared method.
 const SHARED_NEVER_ALTERS: &str = "a shared method is called on its shape or kind, with no value it could change, so it is never 'alters'";
 
-/// Refuses a member named `this`, which is the whole value inside a method, so
-/// nothing written after a dot could reach it.
+/// A startup decorator as written: its name, its values, where it is, and
+/// whether a failure of it passes (`$d?`).
+type Decorator = (String, Vec<Expr>, Span, bool);
+
+/// Gives `task` the decorators written above it: each startup decorator a call
+/// taking the task first, then its values, and the wrappers as they are.
+fn decorate(task: &mut TaskDef, decorators: Vec<Decorator>, wrappers: Vec<Expr>) {
+    task.wrappers = wrappers;
+    task.passes = decorators.iter().map(|(_, _, _, passes)| *passes).collect();
+    task.decorators = decorators
+        .into_iter()
+        .map(|(name, args, span, _)| {
+            let mut given = vec![Expr::new(ExprKind::Var(task.name.clone()), span)];
+            given.extend(args);
+            Expr::new(ExprKind::Call { name, types: Vec::new(), args: given }, span)
+        })
+        .collect();
+}
+
 /// What a shape or a kind declares above a method, whose names the method's
 /// can't take (see `Parser::parse_method`).
 #[derive(Clone, Copy)]
@@ -3842,6 +3884,8 @@ fn reject_same_name(field: &Field, fields: &[Field], shared: &[SharedField]) -> 
     }
 }
 
+/// Refuses a member named `this`, which is the whole value inside a method, so
+/// nothing written after a dot could reach it.
 fn reject_member_named_this(name: &str, span: Span, what: &str) -> Result<()> {
     if name != THIS_WORD {
         return Ok(());

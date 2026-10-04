@@ -2283,7 +2283,8 @@ fi</code></pre>
           value with <code>=</code>, for the many lambdas that are one expression; and, where the place a lambda goes says
           its type, parameters without types: <code>apply((x) = x * 2, 3)</code>.</li>
         <li><strong>More tasks as values:</strong> a generic task given its types, <code>first&lt;int&gt;</code>; a method
-          named on its shape, <code>Point.area</code>, a <code>(Point) -&gt; float</code>; and task types taking places,
+          of every value named on its shape, <code>Point.area</code>, a <code>(Point) -&gt; float</code> (a shared one,
+          <code>Point.new</code>, is a value since 2026-10-04); and task types taking places,
           <code>(hold&amp; int) -&gt; nothing</code>, or sending several values. Each is refused today with a reason.</li>
         <li><strong>A table of startup decorators made when compiling:</strong> for a decorator that only records its
           tasks, the compiler could write the table itself, one entry per use with its values, into the program's data,
@@ -2294,10 +2295,14 @@ fi</code></pre>
           <code>$d?</code>, whose failure is a notice on standard error while the program goes on;
           <code>--no-notices</code> builds a program without such notices (see
           <a href="vela.html#decorators">Decorators</a>).</li>
-        <li><strong>Decorators on methods</strong> <span class="badge b-med">Planned</span>: startup decorators on shared
-          methods only, since a member method has no value to be called on where the program starts; wrappers on
-          member methods, given the value the method is called on first (as a place, for an <code>alters</code>
-          method); and a wrapper that is a method of the same shape itself, if its rules come out safe.</li>
+        <li><strong>Decorators on shared methods</strong> <span class="badge b-done">Done</span> (2026-10-04): startup
+          decorators and wrappers on shared methods, the only methods that take startup decorators, since a member method
+          has no value to be called on where the program starts; a shared method named as a value,
+          <code>Point.new</code>; and a shared method that is a decorator or a wrapper itself, <code>$Registry.enroll</code>
+          (see <a href="vela.html#decorators-on-shared-methods">Decorators</a>).</li>
+        <li><strong>Wrappers on member methods</strong> <span class="badge b-med">Planned</span>: given the value the
+          method is called on first (as a place, for an <code>alters</code> method); and a wrapper that is a method of the
+          same shape itself, if its rules come out safe.</li>
         <li><strong>Decorators on tasks taking places or regions</strong> <span class="badge b-med">Planned</span>: task
           types taking <code>hold&amp;</code> and <code>bind&amp;</code> places and regions, and groups carrying them, so
           a wrapper passes them on. Nothing can keep a place or a region past the call, so passing them through a chain

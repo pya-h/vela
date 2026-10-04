@@ -1,0 +1,13 @@
+; error: 7:3: shape 'P' has no shared method 'timed'
+; A decorator named on a shape is one of its shared methods.
+shape P
+    x: int
+fi
+
+$(P.timed)
+task one(x: int) -> int
+    <- x
+fi
+
+task main()
+fi

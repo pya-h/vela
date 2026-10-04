@@ -321,9 +321,9 @@ block shared type</pre>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
         <tr><td><code>(int, text) -&gt; int</code>, <code>square</code>, <code>f(x)</code></td><td>a task's type; a task named as a value, without <code>()</code>; the call of the task a value holds (see <a href="#task-values">Tasks as values</a>)</td></tr>
-        <tr><td><code>$d</code>, <code>$d(values)</code></td><td>a startup decorator, above a task: runs <code>d(task, values)</code> once, before <code>main</code> (see <a href="#decorators">Decorators</a>)</td></tr>
+        <tr><td><code>$d</code>, <code>$d(values)</code></td><td>a startup decorator, above a task or a shared method: runs <code>d(task, values)</code> once, before <code>main</code> (see <a href="#decorators">Decorators</a>)</td></tr>
         <tr><td><code>&lt;P...&gt;</code>, <code>args: P...</code>, <code>(P...) -&gt; R</code>, <code>f(args...)</code></td><td>a group of types a task takes; the values a call gives for it; a task taking them; the values given on, whole (see <a href="#type-groups">Type groups</a>)</td></tr>
-        <tr><td><code>$(w1, w2(values))</code></td><td>wrapper decorators, above a task: each call of it runs <code>w1</code>, given the rest of the chain, its values, and the task's (see <a href="#decorators">Decorators</a>)</td></tr>
+        <tr><td><code>$(w1, w2(values))</code></td><td>wrapper decorators, above a task or a shared method: each call of it runs <code>w1</code>, given the rest of the chain, its values, and the task's (see <a href="#decorators">Decorators</a>)</td></tr>
         <tr><td><code>(x: int) -&gt; int &lt;- x * 2 fi</code></td><td>a lambda: a task with no name, written where its value goes, its body on the header's line or the lines after it (see <a href="#lambdas">Lambdas</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v#n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>[K: V]@r</code>, <code>[:V]@r</code>, <code>["a": 1] at r</code></td><td>a map type; one whose keys are text; a map written by its pairs, as <code>new [text: int](["a": 1]) at r</code> (see <a href="#maps">Maps</a>)</td></tr>
@@ -343,7 +343,7 @@ block shared type</pre>
         <tr><td><code>#NAME = value</code></td><td>a macro: a name for a value the compiler computes, at the start of a line outside every task (see <a href="#macros">Macros</a>)</td></tr>
         <tr><td><code>m.name</code>, <code>a/b</code></td><td>a task, shape, kind, variant, or macro of module <code>m</code>; a folder in an <code>include</code> path (see <a href="#modules">Modules</a>)</td></tr>
         <tr><td><code>Kind.Variant</code></td><td>a variant, named through its kind (see <a href="#kinds">Kinds</a>)</td></tr>
-        <tr><td><code>Shape.f</code>, <code>Shape.m(…)</code>, <code>Kind.m(…)</code></td><td>a shared field of a shape, and a shared method of a shape or kind, named through it (see <a href="#shared">Shared fields</a> and <a href="#shared-methods">shared methods</a>)</td></tr>
+        <tr><td><code>Shape.f</code>, <code>Shape.m(…)</code>, <code>Kind.m(…)</code>, <code>Shape.m</code></td><td>a shared field of a shape, and a shared method of a shape or kind, named through it, called or as a value (see <a href="#shared">Shared fields</a> and <a href="#shared-methods">shared methods</a>)</td></tr>
         <tr><td><code>x.type</code></td><td>the type of <code>x</code>, as text (see <a href="#type-of">The type of a value</a>)</td></tr>
         <tr><td><code>name =&gt; other</code></td><td>on an <code>include</code> line: the name a module or a name brought in is written with in this file</td></tr>
         <tr><td><code>Name { x: 1 }</code></td><td>a shape literal</td></tr>
@@ -1532,7 +1532,9 @@ Ticket { number: 1, limit: 3 }   <span class="comment">; error: 'limit' is a sha
         from another file), never on a value, and has no value it is called on, so no <code>.this</code>, no
         <code>.x</code>, and no <code>@this</code>. It takes parameters, regions among them, and sends what it makes
         as a task does. Its usual job is making a value, so <code>new</code>, a keyword elsewhere, is the one keyword
-        a method may be named, and only a shared one.
+        a method may be named, and only a shared one. Named without <code>(…)</code>, <code>Point.new</code> is the
+        method as a value, a <code>(int, int) -&gt; Point</code> (see <a href="#task-values">Tasks as values</a>), and it
+        takes <a href="#decorators">decorators</a> as a task does, and can be one.
       </p>
       <ul>
         <li>It is never <code>alters</code>, which is about the value a method is called on. It changes a
@@ -2218,8 +2220,10 @@ fi</code></pre>
         one a field holds, where the value has no method of that name; <code>xs[0](x)</code>, <code>adder()(x, y)</code>,
         and <code>(f)(x)</code> call the task any value holds, and <code>Shape.f(x)</code> the one a
         <a href="#shared">shared field</a> holds. The call is checked as a named task's is, against the type. A module's
-        task is a value too, <code>m.square</code>. No variable holding a task may be named like a task, since
-        <code>name(…)</code> would call that task instead.
+        task is a value too, <code>m.square</code>, and so is a <a href="#shared-methods">shared method</a>, named on its
+        shape or kind without <code>(…)</code>: <code>bind make = Point.new</code> holds a
+        <code>(int, int) -&gt; Point</code>, and <code>geometry.Point.new</code> names one of another module. No variable
+        holding a task may be named like a task, since <code>name(…)</code> would call that task instead.
       </p>
       <p>
         Two task values are <code>==</code> when they hold the same task, and <code>~=</code> means the same. A task value
@@ -2239,7 +2243,8 @@ fi</code></pre>
         A task is a value when its caller gives it values: its parameters are plain, <code>hold</code>, or
         <code>bind</code>, and it sends one value or nothing. A task that takes types, a region, or a place
         (<code>hold&amp;</code>, <code>bind&amp;</code>), or that sends several values, can't be a value yet, and neither
-        can a method or a builtin (<code>show</code>, <code>scan</code>). In C a task value is a pointer to the task's
+        can a method of every value (<code>Point.area</code>) or a builtin (<code>show</code>, <code>scan</code>); a shared
+        method follows a task's rules. In C a task value is a pointer to the task's
         function; a task whose C takes a large value otherwise than its type does (a <code>hold</code> copy, or a task of
         the <a href="std.html">standard library</a>) is given a small function that takes it the type's way.
       </p>
@@ -2320,9 +2325,9 @@ fi</code></pre>
         shared field has its first value, and after the wrappers' values worked out there (below): the modules a program
         includes first, then each file's tasks in the order they are written. A decorator's values are worked out where the program starts, so they can be literals, macros,
         shared fields, and calls, but no variable or region, since none exists yet. A decorator may come from a module,
-        <code>$web.route("/")</code>, but not from a shape or kind (<code>$Registry.add</code>) yet. Only a task takes
-        decorators, not a method, and only one that can be a value; <code>main</code> takes no startup decorator, since
-        they run before it.
+        <code>$web.route("/")</code>, and may be a shared method, <code>$Registry.enroll</code> (see
+        <a href="#decorators-on-shared-methods">below</a>). A task takes decorators, and so does a shared method, if it
+        can be a value; <code>main</code> takes no startup decorator, since they run before it.
       </p>
       <p>
         A decorator that fails stops the program before <code>main</code>: standard error says which decorator failed
@@ -2451,6 +2456,67 @@ fi</code></pre>
         where the program starts, one variable each. A wrapper written for one
         list of parameters fits the tasks of that list; one taking a <a href="#type-groups">type group</a> fits any.
       </p>
+      <p id="decorators-on-shared-methods">
+        <strong>Shared methods.</strong> A <a href="#shared-methods">shared method</a> is a task of its shape or kind,
+        called on the type rather than on a value, so it takes decorators as a task does, on the lines above
+        <code>shared m(…)</code> inside its type, and it can be a decorator or a wrapper itself, named on its type:
+        <code>$Registry.enroll</code>, <code>$(Timer.counted)</code>, or <code>$m.Registry.enroll</code> from another
+        module. Being one of its shape's methods, such a decorator may change the shape's
+        <code>shared read</code> fields, so a registry keeps its table where only it can change it:
+      </p>
+      <pre><code>shape Registry
+    shared read count: int = 0
+
+    shared enroll(f: (int) -&gt; int, name: text)
+        Registry.count = Registry.count + 1
+        show("enrolled ", name)
+    fi
+fi
+
+shape Timer
+    shared hold calls: int = 0
+
+    shared counted(next: (int) -&gt; int, n: int) -&gt; int
+        Timer.calls = Timer.calls + 1
+        &lt;- next(n)
+    fi
+fi
+
+$Registry.enroll("sq")
+$(Timer.counted)
+task sq(n: int) -&gt; int
+    &lt;- n * n
+fi
+
+shape Temperature
+    celsius: int
+
+    $Registry.enroll("fahrenheit")
+    $(Timer.counted)
+    shared fahrenheit(celsius: int) -&gt; int
+        &lt;- celsius * 9 / 5 + 32
+    fi
+fi
+
+task main()                                       ; before it: enrolled sq, enrolled fahrenheit
+    show(sq(3), " ", Temperature.fahrenheit(100))  ; 9 212
+    show(Registry.count, " ", Timer.calls)        ; 2 2
+fi</code></pre>
+      <ul>
+        <li><strong>Where they go.</strong> Above <code>shared m(…)</code> or <code>priv shared m(…)</code>, as above a
+          task. A method of every value takes none: it has no value to be called on where the program starts, and
+          wrappers given the value are planned (see <a href="future.html#decorators">Future Directions</a>). A
+          shared method of a shape that takes types doesn't exist yet, so neither do its decorators.</li>
+        <li><strong>The order.</strong> A shared method's startup decorators run at its place in the file, among the
+          tasks, in the order the program is written.</li>
+        <li><strong>Its rules are a task's.</strong> A shared method that is a decorator takes the task first, and one
+          that is a wrapper the rest of the chain; one decorated takes a decorator of its type, and one taking a region or
+          a place can't be a value, so it takes none yet. A <code>priv shared</code> one is named only in its own file. A
+          wrapper on a shared method is no method of its shape, so it changes none of the shape's
+          <code>shared read</code> fields; the method itself, called as the rest of the chain, does.</li>
+        <li><strong>Messages</strong> name it as it is written: <code>vela: decorator 'checked' failed on task
+          'Math.half': …</code>, and a runtime stop in it <code>in task 'Math.half'</code>.</li>
+      </ul>
 
       <h3 id="type-groups">Type groups</h3>
       <p>
@@ -3858,10 +3924,10 @@ show(area(square))             <span class="comment">; error: unknown task 'area
         <li>Tasks and shapes take types; a kind can't yet, and no word asks a type for arithmetic (see
           <a href="#generics">Types a declaration takes</a>).</li>
         <li>A task that takes types, a region, or a place, or that sends several values, can't be a value yet, nor can a
-          method (see <a href="#task-values">Tasks as values</a>).</li>
+          method of every value (see <a href="#task-values">Tasks as values</a>).</li>
         <li>A lambda takes nothing from the code around it, and can't be written inside a task or method that takes
           types (see <a href="#lambdas">Lambdas</a>).</li>
-        <li>Only a task takes decorators, not a method, nor a task that takes types; a startup decorator sends nothing, or
+        <li>Only a task or a shared method takes decorators, not a method of every value, nor a task that takes types; a startup decorator sends nothing, or
           <code>nothing ~ E</code>; a decorator's and a wrapper's values, worked out where the program starts, hold nothing in a region (see <a href="#decorators">Decorators</a>).</li>
         <li>A task takes one type group, as its last parameter; a call doesn't write a group's types, a type can't be
           written <code>(P...)</code>, and a group is given on to a task that calls itself only as it came (see

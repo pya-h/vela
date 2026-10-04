@@ -1,0 +1,105 @@
+; Decorators on shared methods, of shapes and of kinds, as on tasks; shared
+; methods that are decorators and wrappers themselves, named on their type,
+; through a module too; and a shared method named as a value, 'Point.new'.
+; Startup decorators run in the order the program is written, the module's
+; first, a shared method at its place among the tasks.
+
+include shared_method_decorators/routes
+
+task label(word: text) -> text
+    show("label ", word)
+    <- word
+fi
+
+task logged(next: (int, int) -> Point, name: text, x: int, y: int) -> Point
+    show("> ", name)
+    <- next(x, y)
+fi
+
+task made(f: (int, int) -> Point)
+    bind point = f(0, 0)
+    show("made ", point)
+fi
+
+$routes.Routes.enroll("first")
+task first(n: int) -> int
+    <- n
+fi
+
+shape Point
+    x: int
+    y: int
+
+    ; A startup decorator and wrappers, one a shared method of a module,
+    ; one with a value worked out where the program starts.
+    $made
+    $(logged(label("new")))
+    shared new(x: int, y: int) -> Point
+        <- Point { x: x, y: y }
+    fi
+
+    $routes.Routes.enroll("Point.double")
+    $(routes.Meter.counted)
+    priv shared double(n: int) -> int
+        <- n * 2
+    fi
+
+    sum() -> int
+        <- .x + .y + Point.double(1)
+    fi
+fi
+
+shape Local
+    shared hold seen: int = 0
+
+    shared tally(next: (int) -> int, n: int) -> int
+        Local.seen = Local.seen + 1
+        <- next(n)
+    fi
+fi
+
+task noted(next: (int) -> Light, n: int) -> Light
+    show("picking ", n)
+    <- next(n)
+fi
+
+kind Light
+    Red
+    Green
+
+    $(noted)
+    shared pick(n: int) -> Light
+        <- when n == 0 Light.Red else Light.Green fi
+    fi
+fi
+
+$(Local.tally)
+task tripled(n: int) -> int
+    <- n * 3
+fi
+
+shape Hooks
+    shared hold making: (int, int) -> Point = Point.new
+fi
+
+task apply(f: (int, int) -> Point) -> Point
+    <- f(5, 6)
+fi
+
+task main()
+    show("main starts")
+    bind p = Point.new(1, 2)
+    show(p, " ", p.sum())
+    bind light = Light.pick(1)
+    show(tripled(2), " ", light, " ", Local.seen)
+    show(routes.Step.up(1), " ", routes.Routes.count, " ", routes.Meter.calls)
+    ; A shared method as a value goes through its wrappers as a call does.
+    bind make = Point.new
+    show(make(3, 4))
+    show(apply(Point.new))
+    show(Hooks.making(7, 8))
+    bind up = routes.Step.up
+    bind pick = Light.pick
+    bind picked = pick(0)
+    show(up(9), " ", picked, " ", Local.seen)
+fi

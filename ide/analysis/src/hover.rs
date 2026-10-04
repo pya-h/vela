@@ -78,7 +78,7 @@ const KEYWORD_DOCS: &[(&str, &str, &str)] = &[
     (
         "$",
         "$d, $d(values), or $(w1, w2(values))",
-        "A decorator, on a line above a task. $d is a startup decorator: d(task, values) runs once where the program starts, before main, the nearest first; d takes the task first and sends nothing. $(w1, w2) wraps the task: each call of it runs w1, given the rest of the chain as a task of the task's type, its own values, and the task's values, and what w1 sends is what the call gives. Both kinds of values are worked out where the program starts, so they hold no variable or region; a wrapper's are worked out once, before the startup decorators, and every call reads them.",
+        "A decorator, on a line above a task or a shared method, and itself a task or a shared method ($Registry.enroll). $d is a startup decorator: d(task, values) runs once where the program starts, before main, the nearest first; d takes the task first and sends nothing. $(w1, w2) wraps the task: each call of it runs w1, given the rest of the chain as a task of the task's type, its own values, and the task's values, and what w1 sends is what the call gives. Both kinds of values are worked out where the program starts, so they hold no variable or region; a wrapper's are worked out once, before the startup decorators, and every call reads them.",
     ),
     (
         "...",

@@ -1,0 +1,13 @@
+; error: 12:7: 'P.make' is a method, whose value is the task itself, so it never changes
+; A shared method named as a value is the task itself, which never changes.
+shape P
+    x: int
+
+    shared make() -> P
+        <- P { x: 1 }
+    fi
+fi
+
+task main()
+    P.make = P.make
+fi

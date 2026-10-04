@@ -833,7 +833,7 @@ impl Resolver<'_> {
                     other => self.ty(other, spans.first().copied().unwrap_or(t.span))?,
                 };
                 // A decorator's call names the program's things as the body does.
-                let result = t.decorators.iter_mut().chain(t.wrappers.iter_mut()).try_for_each(|call| self.expr(call)).and_then(|()| self.block(&mut t.body));
+                let result = t.decorators.iter_mut().chain(t.wrappers.iter_mut()).try_for_each(|call| self.decorator(call)).and_then(|()| self.block(&mut t.body));
                 self.params.clear();
                 result
             }
@@ -1067,6 +1067,26 @@ impl Resolver<'_> {
         Ok(())
     }
 
+    /// A decorator's call, `d(…)`, whose name may be a shared method's,
+    /// `X.m` or `m.X.m`, as a call of one is written.
+    fn decorator(&self, call: &mut Expr) -> Result<()> {
+        if let ExprKind::Call { name, args, .. } = &mut call.kind
+            && name.contains(MODULE_SEPARATOR)
+            && let Some(method) = self.shared_method(&name.split(MODULE_SEPARATOR).collect::<Vec<_>>(), call.span)?
+        {
+            *name = method;
+            return args.iter_mut().try_for_each(|arg| self.expr(arg));
+        }
+        // `Kind.Tag`, a variant, makes a value; a decorator is a task.
+        if let ExprKind::Call { name, .. } = &call.kind
+            && name.contains(MODULE_SEPARATOR)
+            && self.lookup(name, call.span, true)?.is_some_and(|entry| entry.what == What::Variant)
+        {
+            return err(call.span, format!("'{}' is a variant, which makes a value, so it can't be a decorator; a decorator is a task or a shared method", name));
+        }
+        self.expr(call)
+    }
+
     /// `Light.Red(…)` or `m.f(…)`, a variant or a module's task read as a method
     /// called on a value, rewritten to the call it is; whether `expr` was one. A
     /// name before the dot is a module this file includes or a kind, and
@@ -1144,6 +1164,16 @@ impl Resolver<'_> {
             }
         }
         if let Some(kind) = self.kind(name, base.span)? {
+            // `Kind.m`, a shared method named as a value, which the checker
+            // knows from a method of every value (see `Checker::check_shared_use`).
+            let method = method_name(&kind.full, tag);
+            let tables = std::iter::once(&self.own).chain(self.modules.values().map(|module| module.names));
+            if !self.variants.get(&kind.full).is_some_and(|tags| tags.contains_key(tag.as_str()))
+                && tables.flat_map(|names| names.values()).any(|entry| entry.full == method)
+            {
+                expr.kind = ExprKind::Shared { shape: kind.full, field: tag.clone() };
+                return Ok(true);
+            }
             let variant = self.variant(&kind, name, tag, expr.span)?;
             // Where the kind is written, as for `Kind.Variant(…)`.
             expr.span = base.span;

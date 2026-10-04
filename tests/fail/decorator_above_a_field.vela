@@ -1,0 +1,12 @@
+; error: 7:5: a decorator in a shape goes on the lines above a shared method, as in '$register' above 'shared new(…)', and identifier 'x' follows it
+; Inside a shape, a decorator goes above a shared method only.
+task reg(f: (int) -> int)
+fi
+
+shape P
+    $reg
+    x: int
+fi
+
+task main()
+fi

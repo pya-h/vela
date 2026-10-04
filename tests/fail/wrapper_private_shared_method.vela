@@ -1,0 +1,12 @@
+; error: 6:3: 'quiet' is a private method of 'Timer', which only its own file can use
+; A private shared method of another module can't be named there, as a
+; wrapper either.
+include modules/timers
+
+$(timers.Timer.quiet)
+task one(x: int) -> int
+    <- x
+fi
+
+task main()
+fi
