@@ -1,0 +1,7 @@
+; error: 3:23: a group never holds a region, so '@r' can't come before '...'; name the region on its own beside the group, as in '(@r, P...) -> R'
+; A group never holds a region; a region is named beside it.
+task use<P..., R>(f: (@r...) -> R) -> R
+    <- f()
+fi
+task main()
+fi

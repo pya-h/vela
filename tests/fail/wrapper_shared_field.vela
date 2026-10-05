@@ -1,0 +1,15 @@
+; error: 9:3: 'X.hook' is a shared field, not a method, so it can't be a wrapper: a wrapper is a task or a shared method
+; A shared field holding a task is no wrapper; a wrapper is a task or a shared method.
+task around(next: (int) -> int, n: int) -> int
+    <- next(n)
+fi
+shape X
+    shared hold hook: ((int) -> int, int) -> int = around
+fi
+$(X.hook)
+task one(n: int) -> int
+    <- n
+fi
+task main()
+    show(one(1))
+fi

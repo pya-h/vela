@@ -1,0 +1,17 @@
+; error: 10:7: method 'bumping' alters the value it is called on, and method 'value' doesn't, so 'value' may be called on a value that never changes, which 'bumping' would change; a method wrapping 'value' doesn't alter it
+; A method wrapping one that only reads the value doesn't alter it.
+shape Counter
+    read n: int
+
+    alters bumping(next: (Counter) -> int) -> int
+        <- next(.this)
+    fi
+
+    $(.bumping)
+    value() -> int
+        <- .n
+    fi
+fi
+
+task main()
+fi

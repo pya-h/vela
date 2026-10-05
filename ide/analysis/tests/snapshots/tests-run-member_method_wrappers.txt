@@ -1,0 +1,216 @@
+  1 | ; Wrappers on methods of every value. A wrapper is given the value the method
+    | comment:; Wrappers on methods of every value. A wrapper is given the value the method
+  2 | ; is called on first, as a place where the method alters it, so a group wrapper
+    | comment:; is called on first, as a place where the method alters it, so a group wrapper
+  3 | ; fits any method. A method of the same type wraps another as '$(.checked)':
+    | comment:; fits any method. A method of the same type wraps another as '$(.checked)':
+  4 | ; it is called on the same value, reads its private fields, and gives the value
+    | comment:; it is called on the same value, reads its private fields, and gives the value
+  5 | ; on to the rest of the chain; one wrapping a method that alters the value
+    | comment:; on to the rest of the chain; one wrapping a method that alters the value
+  6 | ; alters it too. Account holds text, so a wrapper names the region its value
+    | comment:; alters it too. Account holds text, so a wrapper names the region its value
+  7 | ; may be in, 'Account@a'.
+    | comment:; may be in, 'Account@a'.
+  8 | task audited<P...: shown, R>(next: (P...) -> R, args: P...) -> R
+    | keyword:task  task:audited  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+  9 |     show("audit: ", args.len, " values")
+    | builtin-fn:show  punctuation:(  string:"audit: "  punctuation:,  parameter:args  punctuation:.  field:len  punctuation:,  string:" values"  punctuation:)
+ 10 |     <- next(args...)
+    | keyword:<-  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+ 11 | fi
+    | keyword:fi
+ 13 | task logged(next: (Account@s) -> int, a: Account@s) -> int
+    | keyword:task  task:logged  punctuation:(  parameter:next  punctuation::  punctuation:(  type:Account  operator:@  region:s  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:a  punctuation::  type:Account  operator:@  region:s  punctuation:)  operator:->  type-builtin:int
+ 14 |     show("total asked")
+    | builtin-fn:show  punctuation:(  string:"total asked"  punctuation:)
+ 15 |     <- next(a)
+    | keyword:<-  parameter:next  punctuation:(  parameter:a  punctuation:)
+ 16 | fi
+    | keyword:fi
+ 18 | task doubled<P...>(next: (P...) -> int, args: P...) -> float
+    | keyword:task  task:doubled  punctuation:<  type:P  keyword:...  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:float
+ 19 |     <- float(next(args...)) * 2.0
+    | keyword:<-  type-builtin:float  punctuation:(  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:)  operator:*  number:2.0
+ 20 | fi
+    | keyword:fi
+ 22 | task named<P..., T>(next: (Pad, @a, P...) -> [T]@a, p: Pad, r: region, args: P...) -> [T]@r
+    | keyword:task  task:named  punctuation:<  type:P  keyword:...  punctuation:,  type:T  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:Pad  punctuation:,  operator:@  region:a  punctuation:,  type:P  keyword:...  punctuation:)  operator:->  punctuation:[  type:T  punctuation:]  operator:@  region:a  punctuation:,  parameter:p  punctuation::  type:Pad  punctuation:,  region:r  punctuation::  keyword:region  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  punctuation:[  type:T  punctuation:]  operator:@  region:r
+ 23 |     show("in a region")
+    | builtin-fn:show  punctuation:(  string:"in a region"  punctuation:)
+ 24 |     <- next(p, r, args...)
+    | keyword:<-  parameter:next  punctuation:(  parameter:p  punctuation:,  region:r  punctuation:,  parameter:args  keyword:...  punctuation:)
+ 25 | fi
+    | keyword:fi
+ 27 | shape Account
+    | keyword:shape  type:Account
+ 28 |     owner: text
+    | field:owner  punctuation::  type-builtin:text
+ 29 |     read balance: int
+    | keyword:read  field:balance  punctuation::  type-builtin:int
+ 30 |     priv limit: int = 100
+    | keyword:priv  field:limit  punctuation::  type-builtin:int  operator:=  number:100
+ 32 |     alters checked(next: (hold& Account@a, int) -> bool, amount: int) -> bool
+    | keyword:alters  method:checked  punctuation:(  parameter:next  punctuation::  punctuation:(  keyword:hold  keyword:&  type:Account  operator:@  region:a  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  punctuation:,  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
+ 33 |         when amount > .balance or amount > .limit
+    | keyword:when  parameter:amount  operator:>  punctuation:.  field:balance  keyword:or  parameter:amount  operator:>  punctuation:.  field:limit
+ 34 |             show("refused ", amount, " for ", .owner)
+    | builtin-fn:show  punctuation:(  string:"refused "  punctuation:,  parameter:amount  punctuation:,  string:" for "  punctuation:,  punctuation:.  field:owner  punctuation:)
+ 35 |             <- false
+    | keyword:<-  keyword:false
+ 36 |         fi
+    | keyword:fi
+ 37 |         <- next(&.this, amount)
+    | keyword:<-  parameter:next  punctuation:(  operator:&  punctuation:.  keyword:this  punctuation:,  parameter:amount  punctuation:)
+ 38 |     fi
+    | keyword:fi
+ 40 |     noted(next: (Account@a) -> int) -> int
+    | method:noted  punctuation:(  parameter:next  punctuation::  punctuation:(  type:Account  operator:@  region:a  punctuation:)  operator:->  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 41 |         show("reading ", .owner)
+    | builtin-fn:show  punctuation:(  string:"reading "  punctuation:,  punctuation:.  field:owner  punctuation:)
+ 42 |         <- next(.this)
+    | keyword:<-  parameter:next  punctuation:(  punctuation:.  keyword:this  punctuation:)
+ 43 |     fi
+    | keyword:fi
+ 45 |     $(audited)
+    | keyword:$  punctuation:(  task:audited  punctuation:)
+ 46 |     alters deposit(amount: int)
+    | keyword:alters  method:deposit  punctuation:(  parameter:amount  punctuation::  type-builtin:int  punctuation:)
+ 47 |         .balance += amount
+    | punctuation:.  field:balance  operator:+=  parameter:amount
+ 48 |     fi
+    | keyword:fi
+ 50 |     $(.checked)
+    | keyword:$  punctuation:(  punctuation:.  method:checked  punctuation:)
+ 51 |     alters withdraw(amount: int) -> bool
+    | keyword:alters  method:withdraw  punctuation:(  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
+ 52 |         .balance -= amount
+    | punctuation:.  field:balance  operator:-=  parameter:amount
+ 53 |         <- true
+    | keyword:<-  keyword:true
+ 54 |     fi
+    | keyword:fi
+ 56 |     $(.noted, logged)
+    | keyword:$  punctuation:(  punctuation:.  method:noted  punctuation:,  task:logged  punctuation:)
+ 57 |     total() -> int
+    | method:total  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 58 |         <- .balance
+    | keyword:<-  punctuation:.  field:balance
+ 59 |     fi
+    | keyword:fi
+ 60 | fi
+    | keyword:fi
+ 62 | shape Pad
+    | keyword:shape  type:Pad
+ 63 |     size: int
+    | field:size  punctuation::  type-builtin:int
+ 65 |     ; Written before the wrapper it names, which has a wrapper of its own.
+    | comment:; Written before the wrapper it names, which has a wrapper of its own.
+ 66 |     $(.checked)
+    | keyword:$  punctuation:(  punctuation:.  method:checked  punctuation:)
+ 67 |     area() -> int
+    | method:area  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 68 |         <- .size * .size
+    | keyword:<-  punctuation:.  field:size  operator:*  punctuation:.  field:size
+ 69 |     fi
+    | keyword:fi
+ 71 |     $(doubled)
+    | keyword:$  punctuation:(  task:doubled  punctuation:)
+ 72 |     checked(next: (Pad) -> int) -> int
+    | method:checked  punctuation:(  parameter:next  punctuation::  punctuation:(  type:Pad  punctuation:)  operator:->  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 73 |         show("checked ", .size)
+    | builtin-fn:show  punctuation:(  string:"checked "  punctuation:,  punctuation:.  field:size  punctuation:)
+ 74 |         <- next(.this)
+    | keyword:<-  parameter:next  punctuation:(  punctuation:.  keyword:this  punctuation:)
+ 75 |     fi
+    | keyword:fi
+ 77 |     both() -> float
+    | method:both  punctuation:(  punctuation:)  operator:->  type-builtin:float
+ 78 |         <- .area() + 1.0
+    | keyword:<-  punctuation:.  method:area  punctuation:(  punctuation:)  operator:+  number:1.0
+ 79 |     fi
+    | keyword:fi
+ 81 |     $(named)
+    | keyword:$  punctuation:(  task:named  punctuation:)
+ 82 |     rows(r: region, n: int) -> [int]@r
+    | method:rows  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
+ 83 |         hold made = new [int]() at r
+    | keyword:hold  variable:made  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 84 |         each i in 0..n
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:n
+ 85 |             made.add(i * .size)
+    | variable:made  punctuation:.  field:add  punctuation:(  variable:i  operator:*  punctuation:.  field:size  punctuation:)
+ 86 |         fi
+    | keyword:fi
+ 87 |         <- made
+    | keyword:<-  variable:made
+ 88 |     fi
+    | keyword:fi
+ 89 | fi
+    | keyword:fi
+ 91 | kind Light
+    | keyword:kind  type:Light
+ 92 |     Red
+    | variant:Red
+ 93 |     Green
+    | variant:Green
+ 95 |     turned(next: (Light) -> Light) -> Light
+    | method:turned  punctuation:(  parameter:next  punctuation::  punctuation:(  type:Light  punctuation:)  operator:->  type:Light  punctuation:)  operator:->  type:Light
+ 96 |         show("turning from ", .this)
+    | builtin-fn:show  punctuation:(  string:"turning from "  punctuation:,  punctuation:.  keyword:this  punctuation:)
+ 97 |         <- next(.this)
+    | keyword:<-  parameter:next  punctuation:(  punctuation:.  keyword:this  punctuation:)
+ 98 |     fi
+    | keyword:fi
+100 |     $(.turned)
+    | keyword:$  punctuation:(  punctuation:.  method:turned  punctuation:)
+101 |     next_one() -> Light
+    | method:next_one  punctuation:(  punctuation:)  operator:->  type:Light
+102 |         bind turned = match .this
+    | keyword:bind  variable:turned  operator:=  keyword:match  punctuation:.  keyword:this
+103 |             case Light.Red = Light.Green
+    | keyword:case  type:Light  punctuation:.  variant:Red  operator:=  type:Light  punctuation:.  variant:Green
+104 |             case Light.Green = Light.Red
+    | keyword:case  type:Light  punctuation:.  variant:Green  operator:=  type:Light  punctuation:.  variant:Red
+105 |         fi
+    | keyword:fi
+106 |         <- turned
+    | keyword:<-  variable:turned
+107 |     fi
+    | keyword:fi
+109 |     $(audited)
+    | keyword:$  punctuation:(  task:audited  punctuation:)
+110 |     twice() -> Light
+    | method:twice  punctuation:(  punctuation:)  operator:->  type:Light
+111 |         <- .next_one().next_one()
+    | keyword:<-  punctuation:.  method:next_one  punctuation:(  punctuation:)  punctuation:.  method:next_one  punctuation:(  punctuation:)
+112 |     fi
+    | keyword:fi
+113 | fi
+    | keyword:fi
+115 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+116 |     hold a = Account { owner: "Ada", balance: 5 }
+    | keyword:hold  variable:a  operator:=  type:Account  punctuation:{  field:owner  punctuation::  string:"Ada"  punctuation:,  field:balance  punctuation::  number:5  punctuation:}
+117 |     a.deposit(10)
+    | variable:a  punctuation:.  method:deposit  punctuation:(  number:10  punctuation:)
+118 |     show(a.withdraw(3))
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:.  method:withdraw  punctuation:(  number:3  punctuation:)  punctuation:)
+119 |     show(a.withdraw(90))
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:.  method:withdraw  punctuation:(  number:90  punctuation:)  punctuation:)
+120 |     show(a.total())
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:.  method:total  punctuation:(  punctuation:)  punctuation:)
+121 |     bind p = Pad { size: 3 }
+    | keyword:bind  variable:p  operator:=  type:Pad  punctuation:{  field:size  punctuation::  number:3  punctuation:}
+122 |     show(p.area())
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  method:area  punctuation:(  punctuation:)  punctuation:)
+123 |     show(p.both())
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  method:both  punctuation:(  punctuation:)  punctuation:)
+124 |     region kept
+    | keyword:region  region:kept
+125 |     show(p.rows(kept, 3))
+    | builtin-fn:show  punctuation:(  variable:p  punctuation:.  method:rows  punctuation:(  region:kept  punctuation:,  number:3  punctuation:)  punctuation:)
+126 |     show(Light.Red.twice())
+    | builtin-fn:show  punctuation:(  type:Light  punctuation:.  variant:Red  punctuation:.  method:twice  punctuation:(  punctuation:)  punctuation:)
+127 | fi
+    | keyword:fi

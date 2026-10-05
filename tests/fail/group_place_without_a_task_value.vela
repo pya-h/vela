@@ -1,0 +1,9 @@
+; error: 8:13: 'args 1' is a value of a group, which holds a place only where the call gives it to a task value taking one there, as in 'next: (P...) -> R' given a task taking 'hold& n: int'; give the value itself
+; A group holds a place only for a task value taking one there.
+task log_all<P...: shown>(args: P...)
+    show(args...)
+fi
+task main()
+    hold k = 1
+    log_all(&k)
+fi

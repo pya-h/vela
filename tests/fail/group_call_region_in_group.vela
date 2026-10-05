@@ -1,0 +1,12 @@
+; error: 11:23: task 'use' gives a task value its group's values, and that task value takes a region there, '@r', which a group never holds; 'use' takes the region as a parameter of its own and names it in the task value's type, as in 'next: (@a, P...) -> R, a: region, args: P...'
+; A task value given a group's values takes no region among them.
+task use<P..., R>(f: (P...) -> R, args: P...) -> R
+    <- f(args...)
+fi
+task squares(r: region, n: int) -> [int]@r
+    <- new [int]() at r
+fi
+task main()
+    region kept
+    show(use(squares, kept, 3))
+fi

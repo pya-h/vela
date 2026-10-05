@@ -105,13 +105,20 @@ task squares(r: region, n: int) -> [int]@r
     <- new [int]() at r
 fi
 
+task defaulted(r: region default, n: int) -> [int]@r
+    <- new [int]()
+fi
+
 task main()
     CHECK
     bind bumped = bump
     bind totalled = total
     bind squared = squares
+    bind kinder = defaulted
     hold kept: maybe (@s, int) -> [int]@s = none
-    show(bumped, totalled, squared, kept)
+    region q
+    bind made = squared(q, 3)
+    show(bumped, totalled, squared, kinder, kept, made)
 fi
 ";
     for when in WHEN {
@@ -124,5 +131,9 @@ fi
         assert_eq!(hover(&source, "totalled ="), "bind totalled: (bind& int) -> int", "{}", when);
         assert_eq!(hover(&source, "squared ="), "bind squared: (@r, int) -> [int]@r", "{}", when);
         assert_eq!(hover(&source, "kept:"), "hold kept: maybe (@r, int) -> [int]@r", "{}", when);
+        // A region taken by default is a region still, and what a call through
+        // the value sends is in the region the call gives.
+        assert_eq!(hover(&source, "kinder ="), "bind kinder: (@r, int) -> [int]@r", "{}", when);
+        assert_eq!(hover(&source, "made ="), "bind made: [int]@q", "{}", when);
     }
 }

@@ -1,0 +1,17 @@
+; error: 3:23: a group's values are taken as the task given for it takes them, so 'hold&' can't come before the group: '(P...) -> R' fits 'put(hold& n: int)' too
+; A group is never marked: its values are taken as the task given for it takes them.
+task use<P..., R>(f: (hold& P...) -> R, args: P...) -> R
+    <- f(args...)
+fi
+task sq(n: int) -> int
+    <- n * n
+fi
+task bump(hold& n: int) -> int
+    n = n + 1
+    <- n
+fi
+task main()
+    hold a = 3
+    show(use(sq, 3))
+    show(a)
+fi

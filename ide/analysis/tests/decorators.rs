@@ -160,3 +160,60 @@ fi
     assert_eq!(hover(&broken, "enroll\n    $"), "shared enroll(f: (int) -> int)");
     assert_eq!(hover(&broken, "cube\n    show"), "shared cube(n: int) -> int");
 }
+
+const ON_METHODS: &str = "\
+task audited<P..., R>(next: (P...) -> R, args: P...) -> R
+    <- next(args...)
+fi
+
+shape Account
+    read balance: int
+
+    alters guarded(next: (hold& Account, int) -> bool, amount: int) -> bool
+        when amount > .balance
+            <- false
+        fi
+        <- next(&.this, amount)
+    fi
+
+    $(audited)
+    alters deposit(amount: int)
+        .balance += amount
+    fi
+
+    $(.guarded)
+    alters withdraw(amount: int) -> bool
+        .balance -= amount
+        <- true
+    fi
+fi
+
+task main()
+    CHECK
+    hold a = Account { balance: 0 }
+    a.deposit(5)
+    show(a.withdraw(3))
+fi
+";
+
+fn class_at(source: &str, needle: &str) -> Option<TokenClass> {
+    let at = LineIndex::new(source).utf16_of(source.find(needle).unwrap());
+    Analysis::new(source).tokens().into_iter().find(|t| t.from == at).map(|t| t.class)
+}
+
+#[test]
+fn a_method_of_every_value_takes_wrappers_and_a_method_of_its_type_wraps_it() {
+    for checked in [true, false] {
+        let source = ON_METHODS.replace("CHECK", if checked { "show(0)" } else { "show(unknown)" });
+        if checked {
+            assert_eq!(Analysis::new(&source).diagnostics(), Vec::new());
+        }
+        assert_eq!(class_at(&source, "audited)"), Some(TokenClass::Task));
+        assert_eq!(class_at(&source, "guarded)"), Some(TokenClass::Method));
+        assert!(hover(&source, "guarded)").starts_with("alters guarded(next: (hold& Account, int) -> bool"), "{}", hover(&source, "guarded)"));
+    }
+    // One that only reads the value can't wrap one that alters it.
+    let source = ON_METHODS.replace("CHECK", "show(0)").replace("alters guarded(", "guarded(").replace("<- next(&.this, amount)", "<- false");
+    let diagnostics = Analysis::new(&source).diagnostics();
+    assert!(diagnostics.iter().any(|d| d.message.starts_with("method 'withdraw' alters the value")), "{:?}", diagnostics);
+}

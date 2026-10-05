@@ -1,0 +1,10 @@
+; error: 5:5: a startup decorator in a kind goes on the lines above a shared method, as in '$register' above 'shared new(…)'; this is a method of every value, which has no value to be called on where the program starts, though it takes wrappers, '$(w)', which run at each call
+; A method that alters the value is a method of every value, in a kind too, and takes no decorator.
+kind K
+    A
+    $reg
+    alters m()
+    fi
+fi
+task main()
+fi

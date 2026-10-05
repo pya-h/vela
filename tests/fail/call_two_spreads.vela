@@ -1,0 +1,8 @@
+; error: 4:20: a call gives one group's values, as in 'next(r, args...)'; give the values of another one by one
+; A call gives one group's values.
+task f<P...>(g: (P...) -> nothing, args: P...)
+    g(args..., args...)
+fi
+
+task main()
+fi

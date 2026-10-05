@@ -1,0 +1,21 @@
+; error: 17:20: 'args 1' is given the place itself, to change, so it needs a place that can change, and 'k' never does (declared at 16:10); a value declared with 'hold' can
+; error: 19:19: task 'use' changes 'args 1', the place it is given, so the call marks that place with '&', as in '&j'
+; error: 20:24: 'j' is given as 'args 1' too, and the call changes it through 'args 1' while it reads it through 'args 2'; a place the call changes is given once, so keep a copy of it in a variable first, and give that as the other
+; A place given to a group is checked as at a named call: it can change, it is marked, and it is given once.
+task use<P..., R>(f: (P...) -> R, args: P...) -> R
+    <- f(args...)
+fi
+task put(hold& n: int) -> int
+    n = n + 1
+    <- n
+fi
+task both(hold& a: int, bind& b: int) -> int
+    <- a + b
+fi
+task main()
+    bind k = 1
+    show(use(put, &k))
+    hold j = 1
+    show(use(put, j))
+    show(use(both, &j, &j))
+fi

@@ -1,0 +1,8 @@
+audit: 2 values
+true
+  refused: Ada holds only 380
+false
+  refused: more than the limit of 300
+false
+report asked
+Ada: 380

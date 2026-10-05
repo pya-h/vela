@@ -322,7 +322,8 @@ block shared type</pre>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
         <tr><td><code>(int, text) -&gt; int</code>, <code>(hold&amp; int, @r) -&gt; text@r</code>, <code>square</code>, <code>f(x)</code></td><td>a task's type; a task named as a value, without <code>()</code>; the call of the task a value holds (see <a href="#task-values">Tasks as values</a>)</td></tr>
         <tr><td><code>$d</code>, <code>$d(values)</code></td><td>a startup decorator, above a task or a shared method: runs <code>d(task, values)</code> once, before <code>main</code> (see <a href="#decorators">Decorators</a>)</td></tr>
-        <tr><td><code>&lt;P...&gt;</code>, <code>args: P...</code>, <code>(P...) -&gt; R</code>, <code>f(args...)</code></td><td>a group of types a task takes; the values a call gives for it; a task taking them; the values given on, whole (see <a href="#type-groups">Type groups</a>)</td></tr>
+        <tr><td><code>$(.checked)</code></td><td>above a method of every value: a method of the same type wrapping it, called on the same value (see <a href="#wrappers-on-methods">Wrappers on methods</a>)</td></tr>
+        <tr><td><code>&lt;P...&gt;</code>, <code>args: P...</code>, <code>(P...) -&gt; R</code>, <code>(@a, P...) -&gt; R</code>, <code>f(args...)</code></td><td>a group of types a task takes; the values a call gives for it; a task taking them; one taking a region, then them; the values given on, whole (see <a href="#type-groups">Type groups</a>)</td></tr>
         <tr><td><code>$(w1, w2(values))</code></td><td>wrapper decorators, above a task or a shared method: each call of it runs <code>w1</code>, given the rest of the chain, its values, and the task's (see <a href="#decorators">Decorators</a>)</td></tr>
         <tr><td><code>(x: int) -&gt; int &lt;- x * 2 fi</code></td><td>a lambda: a task with no name, written where its value goes, its body on the header's line or the lines after it (see <a href="#lambdas">Lambdas</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v#n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
@@ -2285,6 +2286,15 @@ fi</code></pre>
         <code>(@r, int) -&gt; [int]@r</code> and <code>(@s, int) -&gt; [int]@s</code> are one type.
       </p>
       <p>
+        So a task taking types can't find one of them in a region a task type takes, or names in what it takes. In
+        <code>task logged&lt;R&gt;(next: (@a, int) -&gt; R, a: region, n: int) -&gt; R</code>, given
+        <code>squares</code>, <code>R</code> would be <code>[int]</code> in the region the body of <code>logged</code>
+        gives <code>next</code>, which no call says (the <code>a</code> in <code>(@a, int)</code> is the type's own, not
+        the parameter <code>a</code>), so the use is an error that says to write the type out:
+        <code>task logged(next: (@a, int) -&gt; [int]@a, a: region, n: int) -&gt; [int]@a</code>, whose body is then
+        checked to send what it says.
+      </p>
+      <p>
         A task is a value when it sends one value or nothing. A task that takes types or sends several values can't be a
         value yet, and neither can a method of every value (<code>Point.area</code>) or a builtin (<code>show</code>,
         <code>scan</code>); a shared method follows a task's rules. In C a task value is a pointer to the task's function,
@@ -2432,7 +2442,10 @@ fi</code></pre>
         takes wrappers too: the wrapper takes the task's values as the task does, <code>hold&amp; n: int</code> or
         <code>r: region</code>, the rest of the chain is of the task's type, <code>(hold&amp; int) -&gt; int</code> or
         <code>(@r, int) -&gt; [int]@r</code>, and it gives them on as any call does, <code>next(&amp;n)</code> or
-        <code>next(r, n)</code>. What the task sends in its region, the chain sends there too.
+        <code>next(r, n)</code>. What the task sends in its region, the chain sends there too. A wrapper taking types
+        can't find one of them in a region the rest of the chain takes (see <a href="#task-types-places">places and
+        regions</a>), so a wrapper of a task sending into a region it takes is written for the task's types,
+        <code>task logged(next: (@a, int) -&gt; [int]@a, a: region, n: int) -&gt; [int]@a</code>.
       </p>
       <p>
         A wrapper's own values are worked out where the program starts, as a startup decorator's are, so they hold no
@@ -2505,7 +2518,9 @@ fi</code></pre>
         The compiler writes each layer of the chain as a task of its own, and the task's body as the last, so a wrapper
         costs a call of a task, which the C compiler can inline; nothing is kept for it but the values worked out
         where the program starts, one variable each. A wrapper written for one
-        list of parameters fits the tasks of that list; one taking a <a href="#type-groups">type group</a> fits any.
+        list of parameters fits the tasks of that list; one taking a <a href="#type-groups">type group</a> fits any,
+        with a region the task takes named beside the group (see <a href="#group-places">places and regions in a
+        group</a>).
       </p>
       <p id="decorators-on-shared-methods">
         <strong>Shared methods.</strong> A <a href="#shared-methods">shared method</a> is a task of its shape or kind,
@@ -2555,26 +2570,84 @@ task main()                                       ; before it: enrolled sq, enro
 fi</code></pre>
       <ul>
         <li><strong>Where they go.</strong> Above <code>shared m(…)</code> or <code>priv shared m(…)</code>, as above a
-          task. A method of every value takes none: it has no value to be called on where the program starts, and
-          wrappers given the value are planned (see <a href="future.html#decorators">Future Directions</a>). A
+          task. A method of every value takes no startup decorator, since it has no value to be called on where the
+          program starts, but it takes wrappers (see <a href="#wrappers-on-methods">wrappers on methods</a>). A
           shared method of a shape that takes types doesn't exist yet, so neither do its decorators.</li>
         <li><strong>The order.</strong> A shared method's startup decorators run at its place in the file, among the
           tasks, in the order the program is written.</li>
         <li><strong>Its rules are a task's.</strong> A shared method that is a decorator takes the task first, and one
-          that is a wrapper the rest of the chain; one decorated takes a decorator of its type, and one taking a region or
-          a place can't be a value, so it takes none yet. A <code>priv shared</code> one is named only in its own file. A
+          that is a wrapper the rest of the chain; one decorated takes a decorator of its type, as one taking a place or
+          a region does (see <a href="#task-types-places">places and regions</a>). A <code>priv shared</code> one is named only in its own file. A
           wrapper on a shared method is no method of its shape, so it changes none of the shape's
           <code>shared read</code> fields; the method itself, called as the rest of the chain, does.</li>
         <li><strong>Messages</strong> name it as it is written: <code>vela: decorator 'checked' failed on task
           'Math.half': …</code>, and a runtime stop in it <code>in task 'Math.half'</code>.</li>
       </ul>
+      <p id="wrappers-on-methods">
+        <strong>Wrappers on methods of every value.</strong> <code>$( … )</code> goes above a method of a shape or a kind
+        too, and runs at each call, <code>a.withdraw(3)</code> or <code>.withdraw(3)</code> inside another method. A
+        method is a task taking the value it is called on first, so a wrapper is given that value first: as a place,
+        <code>hold&amp; a: Account@s</code>, where the method <code>alters</code> it, and the rest of the chain takes it so
+        too. A wrapper taking a group fits any method. A value of a type holding text or pointers may be in any region,
+        and so may the value a method is called on, so a wrapper written for one method names that region,
+        <code>Account@s</code>, as the message for a missing one says.
+      </p>
+      <p>
+        A method of the same type wraps another as <code>$(.checked)</code>: it is called on the same value, so it reads
+        its private fields and calls its other methods, and it takes the rest of the chain first, a task taking the
+        value first, which it gives on: <code>next(&amp;.this, amount)</code>. A method wrapping one that alters the
+        value alters it too, and only such a one does: one that only read the value would see it change under it,
+        and one that altered it would change a value the wrapped method may be called on as one that never changes.
+      </p>
+      <pre><code>task audited&lt;P...: shown, R&gt;(next: (P...) -&gt; R, args: P...) -&gt; R
+    show("audit: ", args.len, " values")
+    &lt;- next(args...)
+fi
+
+shape Account
+    owner: text
+    read balance: int
+
+    alters checked(next: (hold&amp; Account@a, int) -&gt; bool, amount: int) -&gt; bool
+        when amount &gt; .balance
+            show("refused ", amount, " for ", .owner)
+            &lt;- false
+        fi
+        &lt;- next(&amp;.this, amount)
+    fi
+
+    $(audited)
+    alters deposit(amount: int)
+        .balance += amount
+    fi
+
+    $(.checked)
+    alters withdraw(amount: int) -&gt; bool
+        .balance -= amount
+        &lt;- true
+    fi
+fi
+
+task main()
+    hold a = Account { owner: "Ada", balance: 0 }
+    a.deposit(5)                    ; audit: 2 values
+    show(a.withdraw(3))             ; true
+    show(a.withdraw(9))             ; refused 9 for Ada, then false
+fi</code></pre>
+      <p>
+        A plain task wrapping a method reads only what any task reads of the value: no private field of another file,
+        and no <code>read</code> field it could change. A method takes no startup decorator, and a method of a shape
+        that takes types takes no wrappers yet, as a task taking types doesn't (see
+        <a href="future.html#decorators">Future Directions</a>).
+      </p>
 
       <h3 id="type-groups">Type groups</h3>
       <p>
         <code>P...</code> among the types a task takes stands for a group of types: any number of them, of any mix.
-        <code>args: P...</code>, the task's last parameter, takes the values a call gives after the others;
-        <code>(P...) -&gt; R</code> is a task taking those values; and <code>f(args...)</code> gives them on, whole, as
-        the last values of a call. So one task fits any task's values, which is what a wrapper needs:
+        <code>args: P...</code> takes the values a call gives between the ones the task names before it and after it,
+        usually all of them, as its last parameter; <code>(P...) -&gt; R</code> is a task taking those values; and
+        <code>f(args...)</code> gives them on, whole, where the group goes. So one task fits any task's values, which is
+        what a wrapper needs:
       </p>
       <pre><code>task call&lt;P..., R&gt;(f: (P...) -&gt; R, args: P...) -&gt; R
     &lt;- f(args...)
@@ -2616,7 +2689,7 @@ fi</code></pre>
       <p>
         A group's values are given on whole, <code>f(args...)</code>, so every value reaches a parameter of its own
         type, or counted, <code>args.len</code>, a number each use knows. They go to a task value whose type takes the group, or to a named task
-        whose last parameter is a group, after that task's other values: <code>log("calling", args...)</code>. Values
+        taking a group, between the values it names: <code>log("calling", args...)</code>. Values
         written just before them join that task's group, <code>log("x", 1, args...)</code>, except in a call of the
         task by itself, whose group would grow at each call; a task calling itself gives its group on whole. A task
         taking a fixed number of values is never given a group's, whose number is known only where the group is
@@ -2685,11 +2758,58 @@ task main()
     described(7)                  ; one value: 7
     described()                   ; no values
 fi</code></pre>
+      <p id="group-places">
+        <strong>Places and regions.</strong> A task names values one by one before and after its group, and a task's
+        type does too: <code>task framed&lt;P...&gt;(open: text, args: P..., close: text)</code> is called
+        <code>framed("(", 1, 2, ")")</code>, and <code>(@a, P...) -&gt; R</code> takes a region, then the group. A group
+        holds the values of a task taking <a href="#task-types-places">places</a>: a wrapper reads them as copies,
+        through <code>show(args...)</code>, <code>(args...)</code>, <code>each</code> and <code>t.#k</code>, and gives
+        them on as places with <code>next(args...)</code>, so the task still changes the caller's variables. Nothing
+        writes through a group's value, and the call that gives the places checks them, as any call does: each marked,
+        one that changes given once. A call gives a group a place only where it also gives a task value taking one
+        there, <code>use(put, &amp;k)</code>, since only that says how it is taken.
+      </p>
       <p>
-        A task takes one group, its values are its last parameter and are given as values (no <code>hold</code> or
-        <code>hold&amp;</code>, so a wrapper taking a group fits no task taking a place or a region yet), and a task's
-        type takes the group and nothing else. Only a task takes one, not a
-        shape, and a call doesn't write a group's types yet.
+        A group never holds a region: a region is always named, beside the group, so a wrapper of a task taking one
+        names it as the task's type does, and can send in it. The values a wrapper names around its group are the
+        task's, as many as its next task's type names there; its own values come before them.
+      </p>
+      <pre><code>task traced&lt;P...: shown, T&gt;(next: (@a, P...) -&gt; [T]@a, r: region, args: P...) -&gt; [T]@r
+    show("calling with ", args...)
+    &lt;- next(r, args...)
+fi
+
+task counted&lt;P..., R&gt;(next: (P...) -&gt; R, args: P...) -&gt; R
+    show("values: ", args.len)
+    &lt;- next(args...)
+fi
+
+$(traced)
+task squares(r: region, n: int) -&gt; [int]@r
+    hold made = new [int]() at r
+    each i in 1..n + 1
+        made.add(i * i)
+    fi
+    &lt;- made
+fi
+
+$(counted)
+task put(hold&amp; n: int)
+    n = n * 10
+fi
+
+task main()
+    region kept
+    show(squares(kept, 3))          ; calling with 3, then [1, 4, 9]
+    hold k = 3
+    put(&amp;k)                         ; values: 1
+    show(k)                         ; 30
+fi</code></pre>
+      <p>
+        A task takes one group, anywhere among its parameters, and a task's type one group, with the values it takes
+        alone around it. The group itself is never marked (<code>hold&amp; args: P...</code>,
+        <code>(hold&amp; P...) -&gt; R</code>): its values are taken as the task given for it takes them. Only a task
+        takes one, not a shape, and a call doesn't write a group's types yet.
       </p>
 
       <h3 id="names">Names</h3>
@@ -3981,12 +4101,14 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           types (see <a href="#lambdas">Lambdas</a>).</li>
         <li>Only a task or a shared method takes decorators, not a method of every value, nor a task that takes types; a startup decorator sends nothing, or
           <code>nothing ~ E</code>; a decorator's and a wrapper's values, worked out where the program starts, hold nothing in a region (see <a href="#decorators">Decorators</a>).</li>
-        <li>A task takes one type group, as its last parameter; a call doesn't write a group's types, a type can't be
-          written <code>(P...)</code>, and a group is given on to a task that calls itself only as it came (see
-          <a href="#type-groups">Type groups</a>).</li>
+        <li>A task takes one type group; a group never holds a region, which is named beside it; a call doesn't write a
+          group's types, a type can't be written <code>(P...)</code>, and a group is given on to a task that calls
+          itself only as it came (see <a href="#type-groups">Type groups</a>).</li>
         <li>A method takes no types of its own, can't allocate in the region its value lives in, and is written
           inside its shape or kind, never in another module (see <a href="#methods">Methods</a> and
-          <a href="future.html#methods-later">the room left to grow</a>).</li>
+          <a href="future.html#methods-later">the room left to grow</a>). A method of a shape that takes types takes
+          no wrappers, and a method of every value no startup decorators (see
+          <a href="#wrappers-on-methods">Wrappers on methods</a>).</li>
         <li>There are no packages to share modules between programs (see <a href="#modules">Modules</a>).</li>
         <li><code>show</code> prints floats with 6 significant digits, and a value that can fail
           (<code>T ~ E</code>) has to be read first, alone or inside another value.</li>

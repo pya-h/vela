@@ -1,0 +1,24 @@
+; error: 16:16: task 'logged' takes 'R' from a task value, where it is [int]@?, in a region that task value takes; which region that is only the body of 'logged' says, when it gives the task value one, so 'R' can't be in it; write that type out in the header of 'logged', with the region it takes, as in '(next: (@a, int) -> [int]@a, a: region, n: int) -> [int]@a'
+; A caller region named as the task type names its own region is not that region: what 'logged' sends is in the region its body gives 'next'.
+task logged<R>(next: (@a, @b, int) -> R, a: region, b: region, n: int) -> R
+    <- next(a, b, n)
+fi
+task cubes(s: region, r: region, n: int) -> [int]@s
+    hold made = new [int]() at s
+    made.add(n)
+    <- made
+fi
+task main()
+    region r
+    hold keep = new [int]() at r
+    block
+        region inner
+        keep = logged(cubes, inner, r, 3)
+    fi
+    region other
+    hold junk = new [int]() at other
+    each i in 0..1000
+        junk.add(i)
+    fi
+    show(keep)
+fi

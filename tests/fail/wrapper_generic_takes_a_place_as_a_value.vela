@@ -1,0 +1,14 @@
+; error: 6:3: task 'put' takes 'hold& n: int', and wrapper 'logged' takes 'n: T' in its place
+; A wrapper that takes types still takes the task's values as the task does.
+task logged<T, R>(next: (T) -> R, n: T) -> R
+    <- next(n)
+fi
+$(logged)
+task put(hold& n: int) -> int
+    n = n * 10
+    <- n
+fi
+task main()
+    hold k = 3
+    show(put(&k), " ", k)
+fi

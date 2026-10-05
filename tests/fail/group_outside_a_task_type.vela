@@ -1,0 +1,7 @@
+; error: 3:17: a group of types, 'P...', is only part of what a task's type takes, as in '(P...) -> R' or '(int, P...) -> R'
+; A group of types is part of a task's type, and of nothing else.
+task f<P...>(t: (int, P...), args: P...)
+fi
+
+task main()
+fi

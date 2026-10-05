@@ -1,0 +1,17 @@
+; error: 10:7: 'tick' is a shared method of 'Counter', called on no value, so it is named on its type, as in '$(Counter.tick)'
+; A shared method wrapping a method is named on its type.
+shape Counter
+    n: int
+
+    shared tick(next: (Counter) -> int, c: Counter) -> int
+        <- next(c)
+    fi
+
+    $(.tick)
+    thrice() -> int
+        <- .n * 3
+    fi
+fi
+
+task main()
+fi

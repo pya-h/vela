@@ -1,0 +1,100 @@
+  1 | ; A ledger whose every change is audited by one wrapper. 'audited' takes the
+    | comment:; A ledger whose every change is audited by one wrapper. 'audited' takes the
+  2 | ; values of any task in a group, so it fits a task changing the balance in
+    | comment:; values of any task in a group, so it fits a task changing the balance in
+  3 | ; place as well as one taking plain values: it shows them, and gives them on
+    | comment:; place as well as one taking plain values: it shows them, and gives them on
+  4 | ; as the task takes them. A region is never in a group, so 'reported' names the
+    | comment:; as the task takes them. A region is never in a group, so 'reported' names the
+  5 | ; region the task builds its text in, before the group, and sends that text.
+    | comment:; region the task builds its text in, before the group, and sends that text.
+  7 | task audited<P...: shown, R>(next: (P...) -> R, args: P...) -> R
+    | keyword:task  task:audited  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+  8 |     show("audit, given ", args.len, ":")
+    | builtin-fn:show  punctuation:(  string:"audit, given "  punctuation:,  parameter:args  punctuation:.  field:len  punctuation:,  string:":"  punctuation:)
+  9 |     each v in args
+    | keyword:each  variable:v  keyword:in  parameter:args
+ 10 |         show("  ", v)
+    | builtin-fn:show  punctuation:(  string:"  "  punctuation:,  variable:v  punctuation:)
+ 11 |     fi
+    | keyword:fi
+ 12 |     <- next(args...)
+    | keyword:<-  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+ 13 | fi
+    | keyword:fi
+ 15 | task reported<P...: shown>(next: (@a, P...) -> text@a, r: region, args: P...) -> text@r
+    | keyword:task  task:reported  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  operator:@  region:a  punctuation:,  type:P  keyword:...  punctuation:)  operator:->  type-builtin:text  operator:@  region:a  punctuation:,  region:r  punctuation::  keyword:region  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 16 |     show("report:")
+    | builtin-fn:show  punctuation:(  string:"report:"  punctuation:)
+ 17 |     each v in args
+    | keyword:each  variable:v  keyword:in  parameter:args
+ 18 |         show("  ", v)
+    | builtin-fn:show  punctuation:(  string:"  "  punctuation:,  variable:v  punctuation:)
+ 19 |     fi
+    | keyword:fi
+ 20 |     <- next(r, args...)
+    | keyword:<-  parameter:next  punctuation:(  region:r  punctuation:,  parameter:args  keyword:...  punctuation:)
+ 21 | fi
+    | keyword:fi
+ 23 | $(audited)
+    | keyword:$  punctuation:(  task:audited  punctuation:)
+ 24 | task deposit(hold& balance: int, amount: int)
+    | keyword:task  task:deposit  punctuation:(  keyword:hold  keyword:&  parameter:balance  punctuation::  type-builtin:int  punctuation:,  parameter:amount  punctuation::  type-builtin:int  punctuation:)
+ 25 |     balance += amount
+    | parameter:balance  operator:+=  parameter:amount
+ 26 | fi
+    | keyword:fi
+ 28 | $(audited)
+    | keyword:$  punctuation:(  task:audited  punctuation:)
+ 29 | task withdraw(hold& balance: int, amount: int) -> bool
+    | keyword:task  task:withdraw  punctuation:(  keyword:hold  keyword:&  parameter:balance  punctuation::  type-builtin:int  punctuation:,  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
+ 30 |     when amount > balance
+    | keyword:when  parameter:amount  operator:>  parameter:balance
+ 31 |         <- false
+    | keyword:<-  keyword:false
+ 32 |     fi
+    | keyword:fi
+ 33 |     balance -= amount
+    | parameter:balance  operator:-=  parameter:amount
+ 34 |     <- true
+    | keyword:<-  keyword:true
+ 35 | fi
+    | keyword:fi
+ 37 | $(audited)
+    | keyword:$  punctuation:(  task:audited  punctuation:)
+ 38 | task fee(amount: int) -> int
+    | keyword:task  task:fee  punctuation:(  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 39 |     <- amount / 100 + 1
+    | keyword:<-  parameter:amount  operator:/  number:100  operator:+  number:1
+ 40 | fi
+    | keyword:fi
+ 42 | $(reported)
+    | keyword:$  punctuation:(  task:reported  punctuation:)
+ 43 | task statement(r: region, owner: text, balance: int) -> text@r
+    | keyword:task  task:statement  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:owner  punctuation::  type-builtin:text  punctuation:,  parameter:balance  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 44 |     <- "{owner} holds {balance}" at r
+    | keyword:<-  string:"{  parameter:owner  string:} holds {  parameter:balance  string:}"  keyword:at  region:r
+ 45 | fi
+    | keyword:fi
+ 47 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 48 |     hold balance = 0
+    | keyword:hold  variable:balance  operator:=  number:0
+ 49 |     deposit(&balance, 500)
+    | task:deposit  punctuation:(  operator:&  variable:balance  punctuation:,  number:500  punctuation:)
+ 50 |     when not withdraw(&balance, 900)
+    | keyword:when  keyword:not  task:withdraw  punctuation:(  operator:&  variable:balance  punctuation:,  number:900  punctuation:)
+ 51 |         show("refused: only ", balance)
+    | builtin-fn:show  punctuation:(  string:"refused: only "  punctuation:,  variable:balance  punctuation:)
+ 52 |     fi
+    | keyword:fi
+ 53 |     bind cost = fee(250)
+    | keyword:bind  variable:cost  operator:=  task:fee  punctuation:(  number:250  punctuation:)
+ 54 |     deposit(&balance, 0 - cost)
+    | task:deposit  punctuation:(  operator:&  variable:balance  punctuation:,  number:0  operator:-  variable:cost  punctuation:)
+ 55 |     region page
+    | keyword:region  region:page
+ 56 |     show(statement(page, "Ada", balance))
+    | builtin-fn:show  punctuation:(  task:statement  punctuation:(  region:page  punctuation:,  string:"Ada"  punctuation:,  variable:balance  punctuation:)  punctuation:)
+ 57 | fi
+    | keyword:fi

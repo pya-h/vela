@@ -1,0 +1,50 @@
+  1 | ; A wrapper written for a task taking two regions sends in the one it names, and
+    | comment:; A wrapper written for a task taking two regions sends in the one it names, and
+  2 | ; the task, wrapped, sends there too.
+    | comment:; the task, wrapped, sends there too.
+  3 | task logged(next: (@a, @b, int) -> [int]@a, a: region, b: region, n: int) -> [int]@a
+    | keyword:task  task:logged  punctuation:(  parameter:next  punctuation::  punctuation:(  operator:@  region:a  punctuation:,  operator:@  region:b  punctuation:,  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:a  punctuation:,  region:a  punctuation::  keyword:region  punctuation:,  region:b  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:a
+  4 |     <- next(a, b, n)
+    | keyword:<-  parameter:next  punctuation:(  region:a  punctuation:,  region:b  punctuation:,  parameter:n  punctuation:)
+  5 | fi
+    | keyword:fi
+  6 | $(logged)
+    | keyword:$  punctuation:(  task:logged  punctuation:)
+  7 | task cubes(s: region, r: region, n: int) -> [int]@s
+    | keyword:task  task:cubes  punctuation:(  region:s  punctuation::  keyword:region  punctuation:,  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:s
+  8 |     hold made = new [int]() at s
+    | keyword:hold  variable:made  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:s
+  9 |     made.add(n)
+    | variable:made  punctuation:.  field:add  punctuation:(  parameter:n  punctuation:)
+ 10 |     <- made
+    | keyword:<-  variable:made
+ 11 | fi
+    | keyword:fi
+ 12 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 13 |     region outer
+    | keyword:region  region:outer
+ 14 |     hold keep = new [int]() at outer
+    | keyword:hold  variable:keep  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:outer
+ 15 |     block
+    | keyword:block
+ 16 |         region inner
+    | keyword:region  region:inner
+ 17 |         keep = cubes(outer, inner, 3)
+    | variable:keep  operator:=  task:cubes  punctuation:(  region:outer  punctuation:,  region:inner  punctuation:,  number:3  punctuation:)
+ 18 |     fi
+    | keyword:fi
+ 19 |     region other
+    | keyword:region  region:other
+ 20 |     hold junk = new [int]() at other
+    | keyword:hold  variable:junk  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:other
+ 21 |     each i in 0..1000
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:1000
+ 22 |         junk.add(i)
+    | variable:junk  punctuation:.  field:add  punctuation:(  variable:i  punctuation:)
+ 23 |     fi
+    | keyword:fi
+ 24 |     show(keep)
+    | builtin-fn:show  punctuation:(  variable:keep  punctuation:)
+ 25 | fi
+    | keyword:fi

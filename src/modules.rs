@@ -916,12 +916,13 @@ impl Resolver<'_> {
                 Some(module) => self.member(first, module, member, at).map(Some),
                 None => match self.lookup(first, at, calls)? {
                     Some(kind) if kind.what == What::Kind => self.variant(&kind, first, member, at).map(Some),
-                    _ => {
+                    found => {
                         let hint = match self.kind_hint(first) {
                             hint if hint.is_empty() => self.unnamed_hint(written, first, calls),
                             hint => hint,
                         };
-                        err(at, format!("'{}' names nothing: '{}' is neither a module this file includes nor a kind{}", written, first, hint))
+                        let nor = if found.is_none() { "a shape or a kind this file sees" } else { "a kind" };
+                        err(at, format!("'{}' names nothing: '{}' is neither a module this file includes nor {}{}", written, first, nor, hint))
                     }
                 },
             },
@@ -1070,6 +1071,13 @@ impl Resolver<'_> {
     /// A decorator's call, `d(…)`, whose name may be a shared method's,
     /// `X.m` or `m.X.m`, as a call of one is written.
     fn decorator(&self, call: &mut Expr) -> Result<()> {
+        // `$(.checked)`: a method of the value, which the checker finds on the
+        // wrapped method's type.
+        if let ExprKind::Call { name, args, .. } = &mut call.kind
+            && name.starts_with(MEMBER_WRAPPER)
+        {
+            return args.iter_mut().try_for_each(|arg| self.expr(arg));
+        }
         if let ExprKind::Call { name, args, .. } = &mut call.kind
             && name.contains(MODULE_SEPARATOR)
             && let Some(method) = self.shared_method(&name.split(MODULE_SEPARATOR).collect::<Vec<_>>(), call.span)?

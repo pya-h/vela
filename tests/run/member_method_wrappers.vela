@@ -1,0 +1,127 @@
+; Wrappers on methods of every value. A wrapper is given the value the method
+; is called on first, as a place where the method alters it, so a group wrapper
+; fits any method. A method of the same type wraps another as '$(.checked)':
+; it is called on the same value, reads its private fields, and gives the value
+; on to the rest of the chain; one wrapping a method that alters the value
+; alters it too. Account holds text, so a wrapper names the region its value
+; may be in, 'Account@a'.
+task audited<P...: shown, R>(next: (P...) -> R, args: P...) -> R
+    show("audit: ", args.len, " values")
+    <- next(args...)
+fi
+
+task logged(next: (Account@s) -> int, a: Account@s) -> int
+    show("total asked")
+    <- next(a)
+fi
+
+task doubled<P...>(next: (P...) -> int, args: P...) -> float
+    <- float(next(args...)) * 2.0
+fi
+
+task named<P..., T>(next: (Pad, @a, P...) -> [T]@a, p: Pad, r: region, args: P...) -> [T]@r
+    show("in a region")
+    <- next(p, r, args...)
+fi
+
+shape Account
+    owner: text
+    read balance: int
+    priv limit: int = 100
+
+    alters checked(next: (hold& Account@a, int) -> bool, amount: int) -> bool
+        when amount > .balance or amount > .limit
+            show("refused ", amount, " for ", .owner)
+            <- false
+        fi
+        <- next(&.this, amount)
+    fi
+
+    noted(next: (Account@a) -> int) -> int
+        show("reading ", .owner)
+        <- next(.this)
+    fi
+
+    $(audited)
+    alters deposit(amount: int)
+        .balance += amount
+    fi
+
+    $(.checked)
+    alters withdraw(amount: int) -> bool
+        .balance -= amount
+        <- true
+    fi
+
+    $(.noted, logged)
+    total() -> int
+        <- .balance
+    fi
+fi
+
+shape Pad
+    size: int
+
+    ; Written before the wrapper it names, which has a wrapper of its own.
+    $(.checked)
+    area() -> int
+        <- .size * .size
+    fi
+
+    $(doubled)
+    checked(next: (Pad) -> int) -> int
+        show("checked ", .size)
+        <- next(.this)
+    fi
+
+    both() -> float
+        <- .area() + 1.0
+    fi
+
+    $(named)
+    rows(r: region, n: int) -> [int]@r
+        hold made = new [int]() at r
+        each i in 0..n
+            made.add(i * .size)
+        fi
+        <- made
+    fi
+fi
+
+kind Light
+    Red
+    Green
+
+    turned(next: (Light) -> Light) -> Light
+        show("turning from ", .this)
+        <- next(.this)
+    fi
+
+    $(.turned)
+    next_one() -> Light
+        bind turned = match .this
+            case Light.Red = Light.Green
+            case Light.Green = Light.Red
+        fi
+        <- turned
+    fi
+
+    $(audited)
+    twice() -> Light
+        <- .next_one().next_one()
+    fi
+fi
+
+task main()
+    hold a = Account { owner: "Ada", balance: 5 }
+    a.deposit(10)
+    show(a.withdraw(3))
+    show(a.withdraw(90))
+    show(a.total())
+    bind p = Pad { size: 3 }
+    show(p.area())
+    show(p.both())
+    region kept
+    show(p.rows(kept, 3))
+    show(Light.Red.twice())
+fi

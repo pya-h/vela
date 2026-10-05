@@ -760,7 +760,7 @@ impl<'a> Knowledge<'a> {
                 if let Some(before) = open.checked_sub(1).filter(|&p| matches!(self.token(p), Some(Token::RParen | Token::RBracket)))
                     && let Some(Type::Task(task)) = self.expression_type(before, depth + 1)
                 {
-                    return exact(open).or(Some(task.ret));
+                    return exact(open).or_else(|| Some(self.task_value_call_type(&task, open, q, depth)));
                 }
                 let Some(callee) = open.checked_sub(1).and_then(|p| self.ident(p).map(|name| (p, name))) else {
                     // A tuple, `(a, b)`, or a parenthesized expression.
@@ -838,7 +838,7 @@ impl<'a> Knowledge<'a> {
                 if let Some(id) = self.symbol_at(p).filter(|&id| self.symbol(id).is_some_and(|s| matches!(s.kind, SymbolKind::Parameter | SymbolKind::Variable)))
                     && let Some(Type::Task(task)) = self.symbol_type(id, depth + 1)
                 {
-                    return exact(p).or(Some(task.ret));
+                    return exact(p).or_else(|| Some(self.task_value_call_type(&task, open, q, depth)));
                 }
                 // A module's task or variant is recorded at the module's name.
                 let (name, p) = self.qualified_at(p)?;
@@ -1042,8 +1042,34 @@ impl<'a> Knowledge<'a> {
     /// parentheses are at positions `open` and `close`. As the checker does, the
     /// task's regions become the caller's: a region parameter's argument, or the
     /// region an argument's type shows, and `_` for one no argument shows.
-    fn call_type(&self, detail: &str, open: usize, close: usize, depth: usize) -> Type {
-        // Each argument's first and last position.
+    /// What a call through a value of type `task` sends, between `open` and
+    /// `close`, in the regions its arguments are in: a task type names its
+    /// regions its own way.
+    fn task_value_call_type(&self, task: &vela::ast::TaskType, open: usize, close: usize, depth: usize) -> Type {
+        let mut regions = HashMap::new();
+        for (i, ((first, last), ty)) in self.call_args(open, close).into_iter().zip(&task.params).enumerate() {
+            if first > last {
+                continue;
+            }
+            match task.region(i) {
+                Some(name) => {
+                    if let (true, Some(region)) = (first == last, self.ident(first)) {
+                        regions.insert(name.to_string(), region.to_string());
+                    }
+                }
+                None => {
+                    if let Some(actual) = self.span_type(first, last, depth + 1) {
+                        vela::check::unify_regions(ty, &actual, &mut regions);
+                    }
+                }
+            }
+        }
+        task.ret.map_regions(&mut |region| Some(regions.get(region).cloned().unwrap_or_else(|| ANY_REGION.to_string())))
+    }
+
+    /// Each argument's first and last position in the call between `open`
+    /// and `close`.
+    fn call_args(&self, open: usize, close: usize) -> Vec<(usize, usize)> {
         let mut args = Vec::new();
         let mut first = open + 1;
         let mut brackets = 0usize;
@@ -1059,6 +1085,11 @@ impl<'a> Knowledge<'a> {
             }
         }
         args.push((first, close - 1));
+        args
+    }
+
+    fn call_type(&self, detail: &str, open: usize, close: usize, depth: usize) -> Type {
+        let args = self.call_args(open, close);
         let params = parameters(detail);
         let mut regions = HashMap::new();
         for ((first, last), (name, ty)) in args.into_iter().zip(params.iter().cloned()) {
@@ -1579,7 +1610,8 @@ pub(crate) fn parameters(detail: &str) -> Vec<(String, Option<Type>)> {
     let inside = close.filter(|_| detail.starts_with('(')).and_then(|(at, _)| detail.get(1..at)).unwrap_or("");
     split_list(inside)
         .into_iter()
-        .filter_map(|param| param.split_once(':').map(|(name, ty)| (name.trim().to_string(), parse_type(ty))))
+        // `r: region default` is a region, which the call may leave out.
+        .filter_map(|param| param.split_once(':').map(|(name, ty)| (name.trim().to_string(), parse_type(ty.trim().strip_suffix(" default").unwrap_or(ty)))))
         .filter(|(name, _)| !name.is_empty())
         .collect()
 }

@@ -1,0 +1,14 @@
+; error: 8:5: a wrapper in a kind goes on the lines above a method, as in '$(timed)' above 'area() -> int', and what follows it is identifier 'Red', a variant, which makes a value rather than running
+; A wrapper in a kind goes above a method, not a variant.
+task plain<P..., R>(next: (P...) -> R, args: P...) -> R
+    <- next(args...)
+fi
+
+kind Light
+    $(plain)
+    Red
+    Green
+fi
+
+task main()
+fi

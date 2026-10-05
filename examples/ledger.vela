@@ -1,0 +1,57 @@
+; A ledger whose every change is audited by one wrapper. 'audited' takes the
+; values of any task in a group, so it fits a task changing the balance in
+; place as well as one taking plain values: it shows them, and gives them on
+; as the task takes them. A region is never in a group, so 'reported' names the
+; region the task builds its text in, before the group, and sends that text.
+
+task audited<P...: shown, R>(next: (P...) -> R, args: P...) -> R
+    show("audit, given ", args.len, ":")
+    each v in args
+        show("  ", v)
+    fi
+    <- next(args...)
+fi
+
+task reported<P...: shown>(next: (@a, P...) -> text@a, r: region, args: P...) -> text@r
+    show("report:")
+    each v in args
+        show("  ", v)
+    fi
+    <- next(r, args...)
+fi
+
+$(audited)
+task deposit(hold& balance: int, amount: int)
+    balance += amount
+fi
+
+$(audited)
+task withdraw(hold& balance: int, amount: int) -> bool
+    when amount > balance
+        <- false
+    fi
+    balance -= amount
+    <- true
+fi
+
+$(audited)
+task fee(amount: int) -> int
+    <- amount / 100 + 1
+fi
+
+$(reported)
+task statement(r: region, owner: text, balance: int) -> text@r
+    <- "{owner} holds {balance}" at r
+fi
+
+task main()
+    hold balance = 0
+    deposit(&balance, 500)
+    when not withdraw(&balance, 900)
+        show("refused: only ", balance)
+    fi
+    bind cost = fee(250)
+    deposit(&balance, 0 - cost)
+    region page
+    show(statement(page, "Ada", balance))
+fi

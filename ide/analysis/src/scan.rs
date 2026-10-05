@@ -1658,6 +1658,12 @@ impl<'a> Classifier<'a> {
             && let Some(kind) = self.kind_before()
         {
             let variant = self.symbols.iter().position(|s| s.kind == SymbolKind::Variant && s.parent == Some(kind) && unqualified(&s.name) == name);
+            // `Mode.pick` with no `(`: a shared method as a value, a decorator or a wrapper.
+            if variant.is_none()
+                && let Some(method) = self.symbols.iter().position(|s| s.kind == SymbolKind::Method && s.shared && s.parent == Some(kind) && s.name == name)
+            {
+                return (TokenClass::Method, Some(method));
+            }
             return (TokenClass::Variant, variant);
         }
         // In a pattern, a name after `.` is a variant even when its kind isn't
@@ -1819,6 +1825,11 @@ impl<'a> Classifier<'a> {
     /// header, a name no parameter declares is a region the task only names in
     /// its types, declared where it first appears.
     fn region(&mut self, p: usize, name: &str, in_task_header: bool) -> Option<usize> {
+        // A task type's regions are its own, `(@a, int) -> [int]@a`, and name
+        // nothing around it.
+        if self.in_task_type(p) {
+            return None;
+        }
         if !in_task_header {
             return self.local(name, self.tokens.range(p).start);
         }
@@ -1843,6 +1854,36 @@ impl<'a> Classifier<'a> {
             return Some(id);
         }
         Some(self.declare_local(p, SymbolKind::Region, Some("@"), String::new()))
+    }
+
+    /// Whether the region named at `p` is one a task type takes or sends in:
+    /// inside its parentheses, or after its `->`, in a written type.
+    fn in_task_type(&self, p: usize) -> bool {
+        let tokens = self.tokens;
+        // The arrows between the region and the start of its item, where a
+        // comma cuts the list it is in.
+        let (mut depth, mut arrows, mut cut) = (0usize, 0usize, None);
+        for q in (0..p).rev() {
+            match tokens.token(q) {
+                Some(Token::RParen | Token::RBracket) => depth += 1,
+                // A header's parentheses before it: it is in what the task
+                // sends, after the task's own arrow.
+                Some(Token::LParen) if depth == 1 && cut.is_none() && header_paren(tokens, q) => return arrows > 1,
+                Some(Token::LParen | Token::LBracket) if depth > 0 => depth -= 1,
+                // The parentheses around it: a header's or a task type's.
+                Some(Token::LParen) => return !header_paren(tokens, q) || cut.unwrap_or(arrows) > 0,
+                Some(Token::LBracket) => return cut.unwrap_or(arrows) > 0,
+                Some(Token::Comma) if depth == 0 && cut.is_none() => cut = Some(arrows),
+                Some(Token::Arrow) if depth == 0 && cut.is_none() => arrows += 1,
+                // A variable's type, or what a task sends, after its own arrow.
+                Some(Token::Newline | Token::Colon | Token::Assign) | None if depth == 0 => {
+                    let own = usize::from(!matches!(tokens.token(q), Some(Token::Colon | Token::Assign)));
+                    return cut.unwrap_or(arrows) > own;
+                }
+                _ => {}
+            }
+        }
+        cut.unwrap_or(arrows) > 1
     }
 
     fn open(&mut self, kind: ScopeKind) {
@@ -2046,4 +2087,10 @@ impl<'a> Classifier<'a> {
         }
         self.push(piece..range.end, TokenClass::String, None);
     }
+}
+
+/// Whether the `(` at `q` opens a header's parameters: a name comes before
+/// it, or the `>` closing the types a task takes.
+fn header_paren(tokens: &Tokens<'_>, q: usize) -> bool {
+    tokens.ident(q.wrapping_sub(1)).is_some() || tokens.before(q) == Some(&Token::Gt)
 }

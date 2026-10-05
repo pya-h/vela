@@ -1,0 +1,11 @@
+; error: 6:3: task 'squares' takes the region 'r', which would be in the group of wrapper 'traced', and a group never holds a region; 'traced' names it as a parameter of its own, and 'next' names it in its type, as in 'next: (@a, P...) -> R, r: region, args: P...'
+; A group never holds a region, so a wrapper taking one names a region the task takes.
+task traced<P..., R>(next: (P...) -> R, args: P...) -> R
+    <- next(args...)
+fi
+$(traced)
+task squares(r: region, n: int) -> [int]@r
+    <- new [int]() at r
+fi
+task main()
+fi

@@ -1,0 +1,28 @@
+; Text a type test takes from an item may be what a when gives, inside the branch
+; that took it.
+task f<P...: fixed & shown>(args: P...)
+    bind t = (args...) { <- }
+    when t.#1 is maybe text {s}
+        bind shown = when s.len > 2
+            s
+        else
+            "short"
+        fi
+        show(shown)
+    else
+        show("no text")
+    fi
+    bind first = when t.#1 is maybe text {s}
+        s
+    else
+        "none"
+    fi
+    show(first)
+fi
+
+task main()
+    region r
+    f(1, "ab" + "cd" at r)
+    f(1, "x")
+    f(1, 2)
+fi

@@ -1,4 +1,4 @@
-; error: 11:5: a decorator in a shape goes on the lines above a shared method, as in '$register' above 'shared new(…)'; this is a method of every value, which has no value to be called on where the program starts
+; error: 11:5: a startup decorator in a shape goes on the lines above a shared method, as in '$register' above 'shared new(…)'; this is a method of every value, which has no value to be called on where the program starts, though it takes wrappers, '$(w)', which run at each call
 ; A method of every value takes no decorator: it has no value to be called on
 ; where the program starts.
 task reg(f: (int) -> int)

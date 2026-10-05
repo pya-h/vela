@@ -1,0 +1,17 @@
+; error: 10:7: method 'four' takes nothing after its value, so it can't be a wrapper: a method wrapping another takes the rest of the chain first, a task taking the value first, as in 'four(next: (hold& T@a, int) -> int, n: int) -> int'
+; A member wrapper takes the rest of the chain after its value.
+shape Counter
+    n: int
+
+    four() -> int
+        <- .n * 4
+    fi
+
+    $(.four)
+    five() -> int
+        <- .n * 5
+    fi
+fi
+
+task main()
+fi

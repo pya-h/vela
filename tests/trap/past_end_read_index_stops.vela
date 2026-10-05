@@ -1,0 +1,11 @@
+; trap: index 7 is out of range 0..2 at 8:12 in task 'main'
+; A read past the end of a tuple is none, but the tuple is worked out first, and
+; an index out of range there stops the program.
+task main()
+    bind ts = [(1, 2), (3, 4)]
+    hold i = 7
+    show("before")
+    when ts[i].#5 is none
+        show("never shown")
+    fi
+fi

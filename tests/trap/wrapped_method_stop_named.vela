@@ -1,0 +1,17 @@
+; trap: division by zero at 10:18 in task 'Pad.per'
+; A stop in a wrapped method of every value names the method as it is written.
+task traced<P..., R>(next: (P...) -> R, args: P...) -> R
+    <- next(args...)
+fi
+shape Pad
+    size: int
+    $(traced)
+    per(n: int) -> int
+        <- .size / n
+    fi
+fi
+task main()
+    bind p = Pad { size: 3 }
+    show(p.per(1))
+    show(p.per(0))
+fi

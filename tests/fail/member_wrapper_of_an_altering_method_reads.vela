@@ -1,0 +1,17 @@
+; error: 10:7: method 'add_to' alters the value it is called on, so a method wrapping it alters it too, 'alters peek(…)': with a value that never changes, it would see the value change under it
+; A method wrapping one that alters the value alters it too.
+shape Counter
+    read n: int
+
+    peek(next: (hold& Counter, int) -> nothing, by: int)
+        show(by)
+    fi
+
+    $(.peek)
+    alters add_to(by: int)
+        .n += by
+    fi
+fi
+
+task main()
+fi

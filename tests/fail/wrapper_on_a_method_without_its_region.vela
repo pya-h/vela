@@ -1,0 +1,17 @@
+; error: 10:7: task 'Account.size' is a (Account@r) -> int, and wrapper 'logged' takes a (Account) -> int first; they differ in their regions only: a value of a type holding text or pointers, as the value a method is called on, may be in any region the caller gives, so the wrapper names one, as in 'Account@a'
+; A method may be called on a value in any region, which a wrapper of it names.
+task logged(next: (Account) -> int, a: Account) -> int
+    <- next(a)
+fi
+
+shape Account
+    owner: text
+
+    $(logged)
+    size() -> int
+        <- .owner.len
+    fi
+fi
+
+task main()
+fi

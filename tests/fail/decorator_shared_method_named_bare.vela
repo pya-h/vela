@@ -1,0 +1,21 @@
+; error: 11:6: unknown task 'reg'; 'reg' is a shared method of 'P', named on it everywhere, so it is written '$P.reg'
+; error: 15:7: unknown task 'wr'; 'wr' is a shared method of 'P', named on it everywhere, so it is written '$(P.wr)'
+; A shared method of the same shape is named on its shape as a decorator, as everywhere.
+shape P
+    shared reg(f: (int) -> int)
+        show("reg")
+    fi
+    shared wr(next: (int) -> int, n: int) -> int
+        <- next(n)
+    fi
+    $reg
+    shared one(n: int) -> int
+        <- n
+    fi
+    $(wr)
+    shared two(n: int) -> int
+        <- n
+    fi
+fi
+task main()
+fi

@@ -1,0 +1,17 @@
+; error: 10:7: unknown task 'peek'; 'peek' is a method of every value of 'Counter', called on the value the wrapped method is, so it is written '$(.peek)'
+; A method of every value wrapping another is written with a dot.
+shape Counter
+    n: int
+
+    peek(next: (Counter) -> int) -> int
+        <- next(.this)
+    fi
+
+    $(peek)
+    four() -> int
+        <- .n * 4
+    fi
+fi
+
+task main()
+fi

@@ -1,0 +1,9 @@
+; error: 5:5: a startup decorator in a shape goes on the lines above a shared method, as in '$register' above 'shared new(…)', and a shared field follows it, which takes none
+; A shared field takes no decorator.
+shape S
+    x: int
+    $reg
+    shared hold n: int = 0
+fi
+task main()
+fi

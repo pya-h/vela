@@ -163,9 +163,9 @@
 100 |     show(Hooks.making(7, 8))
     | builtin-fn:show  punctuation:(  type:Hooks  punctuation:.  method:making  punctuation:(  number:7  punctuation:,  number:8  punctuation:)  punctuation:)
 101 |     bind up = routes.Step.up
-    | keyword:bind  variable:up  operator:=  module:routes  punctuation:.  type:Step  punctuation:.  variant:up
+    | keyword:bind  variable:up  operator:=  module:routes  punctuation:.  type:Step  punctuation:.  method:up
 102 |     bind pick = Light.pick
-    | keyword:bind  variable:pick  operator:=  type:Light  punctuation:.  variant:pick
+    | keyword:bind  variable:pick  operator:=  type:Light  punctuation:.  method:pick
 103 |     bind picked = pick(0)
     | keyword:bind  variable:picked  operator:=  variable:pick  punctuation:(  number:0  punctuation:)
 104 |     show(up(9), " ", picked, " ", Local.seen)

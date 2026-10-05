@@ -746,6 +746,36 @@ fi</pre>
         </div>
       </div>
 
+      <div class="option" id="group-regions">
+        <h3><span aria-hidden="true">🧭</span> Regions in a Group <span class="badge b-idea">Idea</span></h3>
+        <p>
+          Since 2026-10-05 a <a href="vela.html#group-places">group holds places</a> but never a region: a region is
+          always named beside the group, <code>next: (@a, P...) -&gt; [T]@a, r: region, args: P...</code>, which is the
+          user's rule for now. The harder way, kept here in case it is wanted later, lets a group hold a task's region
+          too, so <code>traced&lt;P..., R&gt;(next: (P...) -&gt; R, args: P...)</code> alone fits
+          <code>squares(r: region, n: int) -&gt; [int]@r</code>.
+        </p>
+        <p><strong>What it would take.</strong></p>
+        <ul>
+          <li><strong>Reading the values.</strong> A region has no text and no place in a tuple, so
+            <code>show(args...)</code>, <code>(args...)</code>, <code>each v in args</code> and <code>t.#k</code> would be
+            refused for the uses that give a region. A wrapper that compiles for one task would then fail on another,
+            with the error at the <code>$( … )</code> line rather than in the wrapper. Each read would need a rule:
+            skip a region, or refuse it with a message naming the task that gives it.</li>
+          <li><strong>What the wrapper sends.</strong> With <code>R</code> alone, what <code>squares</code> sends is in
+            the region the wrapper's body gives <code>next</code>, which no type says (the reason a generic task never
+            finds a type in a task type's own region, see <a href="vela.html#task-types-places">places and
+            regions</a>). Either the group's region is tied to <code>R</code> by its place (the k-th value of the group
+            is the region <code>R</code> lives in, checked in each copy), or a wrapper of such a task still writes
+            <code>-&gt; [T]@a</code> and names the region, which is what naming it beside the group already does.</li>
+          <li><strong>Cost.</strong> Nothing when running, as for any group: each use is a copy of its own.</li>
+        </ul>
+        <div class="note">
+          <strong>Why it waits:</strong> naming a region beside the group covers what a wrapper of such a task needs,
+          sends in that region included, with no per-use rules about which reads a group allows.
+        </div>
+      </div>
+
       <div class="option">
         <h3><span aria-hidden="true">🎭</span> Algebraic Effects</h3>
         <p>

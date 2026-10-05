@@ -1,0 +1,54 @@
+  1 | ; Text a type test takes from an item may be what a when gives, inside the branch
+    | comment:; Text a type test takes from an item may be what a when gives, inside the branch
+  2 | ; that took it.
+    | comment:; that took it.
+  3 | task f<P...: fixed & shown>(args: P...)
+    | keyword:task  task:f  punctuation:<  type:P  keyword:...  punctuation::  keyword:fixed  punctuation:&  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+  4 |     bind t = (args...) { <- }
+    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  punctuation:}
+  5 |     when t.#1 is maybe text {s}
+    | keyword:when  variable:t  punctuation:.  punctuation:#  number:1  keyword:is  keyword:maybe  variable:text  punctuation:{  variable:s  punctuation:}
+  6 |         bind shown = when s.len > 2
+    | keyword:bind  variable:shown  operator:=  keyword:when  variable:s  punctuation:.  field:len  operator:>  number:2
+  7 |             s
+    | variable:s
+  8 |         else
+    | keyword:else
+  9 |             "short"
+    | string:"short"
+ 10 |         fi
+    | keyword:fi
+ 11 |         show(shown)
+    | builtin-fn:show  punctuation:(  variable:shown  punctuation:)
+ 12 |     else
+    | keyword:else
+ 13 |         show("no text")
+    | builtin-fn:show  punctuation:(  string:"no text"  punctuation:)
+ 14 |     fi
+    | keyword:fi
+ 15 |     bind first = when t.#1 is maybe text {s}
+    | keyword:bind  variable:first  operator:=  keyword:when  variable:t  punctuation:.  punctuation:#  number:1  keyword:is  keyword:maybe  variable:text  punctuation:{  variable:s  punctuation:}
+ 16 |         s
+    | variable:s
+ 17 |     else
+    | keyword:else
+ 18 |         "none"
+    | string:"none"
+ 19 |     fi
+    | keyword:fi
+ 20 |     show(first)
+    | builtin-fn:show  punctuation:(  variable:first  punctuation:)
+ 21 | fi
+    | keyword:fi
+ 23 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 24 |     region r
+    | keyword:region  region:r
+ 25 |     f(1, "ab" + "cd" at r)
+    | task:f  punctuation:(  number:1  punctuation:,  string:"ab"  operator:+  string:"cd"  keyword:at  region:r  punctuation:)
+ 26 |     f(1, "x")
+    | task:f  punctuation:(  number:1  punctuation:,  string:"x"  punctuation:)
+ 27 |     f(1, 2)
+    | task:f  punctuation:(  number:1  punctuation:,  number:2  punctuation:)
+ 28 | fi
+    | keyword:fi

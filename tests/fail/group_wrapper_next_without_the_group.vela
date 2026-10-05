@@ -1,0 +1,13 @@
+; error: 7:3: wrapper 'traced' takes the task's values in its group 'P...', so 'next' takes that group too, as in 'next: (P...) -> R'
+; A wrapper taking the task's values in a group gives its next task that group.
+task traced<P..., R>(next: (int) -> R, args: P...) -> R
+    <- next(1)
+fi
+
+$(traced)
+task sq(n: int) -> int
+    <- n * n
+fi
+
+task main()
+fi

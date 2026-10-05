@@ -152,6 +152,10 @@ pub struct TaskType {
     pub ret: Type,
 }
 
+/// The types a use gives a group, each with how a task takes it (see
+/// `Type::map_group_items`).
+pub type GroupItems = (Vec<Type>, Vec<Taken>);
+
 /// How a parameter of a task type is given at a call: as a value, as the
 /// caller's place, or as a region, which the type names so that what the task
 /// sends can live there: `(hold& int) -> nothing`, `(@r, int) -> [int]@r`.
@@ -441,6 +445,10 @@ pub const THIS_WORD: &str = "this";
 /// it reads as the program writes it.
 pub const THIS: &str = ".this";
 
+/// The start of a wrapper's name written `$(.checked)`: a method of the value
+/// the wrapped method is called on, which no other name starts with.
+pub const MEMBER_WRAPPER: &str = ".";
+
 /// The name of the region a `show` makes for the values it writes with their own
 /// `str`, freed once the line ends (see `codegen::gen_show`). As `.this` is, it
 /// holds a `.`, which no Vela name does, so no program can name it or shadow it.
@@ -504,6 +512,21 @@ pub fn shown_task(name: &str) -> String {
 /// The shape or kind, and the method, in the name of the task a method becomes.
 pub fn method_parts(name: &str) -> Option<(&str, &str)> {
     name.split_once("__on__")
+}
+
+/// Whether working out `e` does nothing a program could see, a stop included:
+/// names, literals, fields, and comparisons of them. A call, an index, a
+/// lookup, or arithmetic, which may stop on a mistake or an overflow, does.
+pub fn without_effects(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::Shared { .. } | ExprKind::TaskValue(_) => true,
+        ExprKind::Field(inner, _) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Wrap(inner) | ExprKind::Unary(UnaryOp::Not, inner) => without_effects(inner),
+        ExprKind::Binary(BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Similar | BinaryOp::NotSimilar | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge | BinaryOp::And | BinaryOp::Or, a, b) | ExprKind::Range(a, b) => {
+            without_effects(a) && without_effects(b)
+        }
+        ExprKind::Array(items) | ExprKind::Tuple(items) => items.iter().all(without_effects),
+        _ => false,
+    }
 }
 
 /// Whether `word`, written after a dot and followed by `(`, is one of the
@@ -848,17 +871,26 @@ impl Type {
     /// `f` knows them: `(P...) -> R` given `int, text` for `P` is
     /// `(int, text) -> R`.
     pub fn map_groups(&self, f: &mut dyn FnMut(&str) -> Option<Vec<Type>>) -> Type {
-        let boxed = |t: &Type, f: &mut dyn FnMut(&str) -> Option<Vec<Type>>| Box::new(t.map_groups(f));
+        self.map_group_items(&mut |name| f(name).map(|types| {
+            let taken = vec![Taken::Value; types.len()];
+            (types, taken)
+        }))
+    }
+
+    /// `map_groups`, where `f` also says how a task takes each type it gives a
+    /// group: a group's values may be places, which a task type taking the
+    /// group takes as places.
+    pub fn map_group_items(&self, f: &mut dyn FnMut(&str) -> Option<GroupItems>) -> Type {
+        let boxed = |t: &Type, f: &mut dyn FnMut(&str) -> Option<GroupItems>| Box::new(t.map_group_items(f));
         match self {
             Type::Task(task) => {
                 let mut params = Vec::new();
                 let mut taken = Vec::new();
                 for (param, how) in task.params.iter().zip(&task.taken) {
                     match param {
-                        // A group's values are given as values.
                         Type::Group(name) => match f(name) {
-                            Some(types) => {
-                                taken.extend(std::iter::repeat_n(Taken::Value, types.len()));
+                            Some((types, how)) => {
+                                taken.extend(how.into_iter().chain(std::iter::repeat(Taken::Value)).take(types.len()));
                                 params.extend(types);
                             }
                             None => {
@@ -867,16 +899,16 @@ impl Type {
                             }
                         },
                         other => {
-                            params.push(other.map_groups(&mut *f));
+                            params.push(other.map_group_items(&mut *f));
                             taken.push(how.clone());
                         }
                     }
                 }
-                Type::Task(Box::new(TaskType { params, taken, ret: task.ret.map_groups(f) }))
+                Type::Task(Box::new(TaskType { params, taken, ret: task.ret.map_group_items(f) }))
             }
             Type::Applied(applied) => Type::Applied(Box::new(Applied {
                 name: applied.name.clone(),
-                types: applied.types.iter().map(|ty| ty.map_groups(&mut *f)).collect(),
+                types: applied.types.iter().map(|ty| ty.map_group_items(&mut *f)).collect(),
                 region: applied.region.clone(),
             })),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.clone()),
@@ -887,7 +919,7 @@ impl Type {
             Type::Maybe(inner) => Type::Maybe(boxed(inner, f)),
             Type::Or(value, error) => Type::Or(boxed(value, f), boxed(error, f)),
             Type::Fail(error) => Type::Fail(boxed(error, f)),
-            Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_groups(&mut *f)).collect()),
+            Type::Results(types) => Type::Results(types.iter().map(|ty| ty.map_group_items(&mut *f)).collect()),
             // The types given a group in a call, kept as a tuple, end with the
             // group of the task the call is in when it gives its values on
             // (`f(1, args...)`), which becomes its types.
@@ -896,10 +928,10 @@ impl Type {
                 for item in items {
                     match item {
                         Type::Group(name) => match f(name) {
-                            Some(types) => spliced.extend(types),
+                            Some((types, _)) => spliced.extend(types),
                             None => spliced.push(item.clone()),
                         },
-                        other => spliced.push(other.map_groups(&mut *f)),
+                        other => spliced.push(other.map_group_items(&mut *f)),
                     }
                 }
                 Type::Tuple(spliced)

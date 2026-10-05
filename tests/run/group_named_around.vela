@@ -1,0 +1,48 @@
+; A task names values one by one before and after its group, and a task type
+; does so too: a region is always named, never in a group, so a wrapper of a
+; task taking one names it, and sends in it. A call gives the group's values
+; between the named ones.
+task traced<P...: shown, T>(next: (@a, P...) -> [T]@a, r: region, args: P...) -> [T]@r
+    show("calling with ", args...)
+    <- next(r, args...)
+fi
+
+task labelled<P...: shown>(next: (P..., @a) -> text@a, args: P..., r: region) -> text@r
+    show("labelling ", args...)
+    <- next(args..., r)
+fi
+
+task framed<P...: shown>(open: text, args: P..., close: text)
+    show(open, args..., close)
+fi
+
+task outer<P...: shown>(args: P...)
+    framed("[", args..., "]")
+    framed("<", 0, args..., ">")
+fi
+
+$(traced)
+task squares(r: region, n: int) -> [int]@r
+    hold made = new [int]() at r
+    each i in 1..n + 1
+        made.add(i * i)
+    fi
+    <- made
+fi
+
+$(labelled)
+task label(n: int, hold& count: int, r: region) -> text@r
+    count++
+    <- "n is {n}" at r
+fi
+
+task main()
+    region kept
+    show(squares(kept, 3))
+    hold c = 0
+    show(label(5, &c, kept))
+    show(label(6, &c) at kept, " ", c)
+    framed("(", 1, 2, 3, ")")
+    framed("|", "|")
+    outer(7, 8)
+fi

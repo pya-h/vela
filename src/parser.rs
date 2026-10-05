@@ -735,10 +735,15 @@ impl Parser {
         }
         loop {
             let span = self.peek_span();
+            // `$(.checked)`: a method of the value the wrapped method is called on.
+            let member = self.check(Token::Dot) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_)));
+            if member {
+                self.advance(); // .
+            }
             if !matches!(self.peek(), Token::Ident(_)) {
                 return Err(self.unexpected("the name of a wrapper, as in '$(timed)' or '$(logged(\"sq\"))'"));
             }
-            let name = self.decorator_name()?;
+            let name = if member { format!("{}{}", MEMBER_WRAPPER, self.expect_ident()?) } else { self.decorator_name()? };
             let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
             wrappers.push(Expr::new(ExprKind::Call { name, types: Vec::new(), args }, span));
             if !self.match_token(Token::Comma) {
@@ -966,7 +971,8 @@ impl Parser {
                 return Err(Error::at(self.peek_span(), new_only_shared(&name)));
             }
             if self.at_method() {
-                let method = self.parse_method(&name, "shape", &types, private, false, Above { fields: &fields, shared: &shared, methods: &methods })?;
+                let mut method = self.parse_method(&name, "shape", &types, private, false, Above { fields: &fields, shared: &shared, methods: &methods })?;
+                decorate(&mut method, decorators, wrappers);
                 methods.push(method);
                 self.skip_newlines();
                 continue;
@@ -1090,13 +1096,34 @@ impl Parser {
         if self.tokens.get(at) == Some(&Token::Shared) && self.at_method_from(at + 1) {
             return Ok(lines);
         }
-        // In a kind, a variant carrying values looks like a method here.
-        let follows = if what == "shape" && self.at_method_from(at) {
-            "; this is a method of every value, which has no value to be called on where the program starts".to_string()
+        // In a kind, a variant carrying values looks like a method here, unless
+        // `alters` says it is one; the kind tells them apart after.
+        let alters = matches!(self.tokens.get(at), Some(Token::Ident(word)) if word == ALTERS);
+        let method = self.at_method_from(at) || alters;
+        // A method of every value takes wrappers, which run at each call.
+        if method && lines.0.is_empty() {
+            return Ok(lines);
+        }
+        let follows = self.tokens.get(at).unwrap_or(&Token::Eof).describe();
+        // Only wrappers: what follows takes none.
+        if lines.0.is_empty() {
+            let what_follows = match self.tokens.get(at) {
+                Some(Token::Shared) => "a shared field, which holds a value rather than running".to_string(),
+                Some(Token::Ident(_)) if what == "kind" => format!("{}, a variant, which makes a value rather than running", follows),
+                _ => follows,
+            };
+            return Err(Error::at(first, format!("a wrapper in a {} goes on the lines above a method, as in '$(timed)' above 'area() -> int', and what follows it is {}", what, what_follows)));
+        }
+        let follows = if (what == "shape" && method) || alters {
+            "; this is a method of every value, which has no value to be called on where the program starts, though it takes wrappers, '$(w)', which run at each call".to_string()
+        } else if self.tokens.get(at) == Some(&Token::Shared) {
+            ", and a shared field follows it, which takes none".to_string()
+        } else if what == "kind" && matches!(self.tokens.get(at), Some(Token::Ident(_))) {
+            format!(", and {} follows it, a variant or a method of every value, which take no startup decorator", follows)
         } else {
-            format!(", and {} follows it", self.tokens.get(at).unwrap_or(&Token::Eof).describe())
+            format!(", and {} follows it", follows)
         };
-        Err(Error::at(first, format!("a decorator in a {} goes on the lines above a shared method, as in '$register' above 'shared new(…)'{}", what, follows)))
+        Err(Error::at(first, format!("a startup decorator in a {} goes on the lines above a shared method, as in '$register' above 'shared new(…)'{}", what, follows)))
     }
 
     /// Refuses `alters shared f(…)`, which a shared method never is, with the
@@ -1266,10 +1293,14 @@ impl Parser {
             // A variant carries its values in parentheses, as a method takes its
             // parameters, so `alters` or a `->` after them tells them apart.
             if self.at_method() && !self.at_variant_payload(&methods) {
-                let method = self.parse_method(&name, "kind", &[], private, false, Above { fields: &[], shared: &[], methods: &methods })?;
+                let mut method = self.parse_method(&name, "kind", &[], private, false, Above { fields: &[], shared: &[], methods: &methods })?;
+                decorate(&mut method, decorators, wrappers);
                 methods.push(method);
                 self.skip_newlines();
                 continue;
+            }
+            if let Some(wrapper) = wrappers.first() {
+                return Err(Error::at(wrapper.span, "a wrapper in a kind goes on the lines above a method, and a variant follows it here, which makes a value rather than running"));
             }
             if private {
                 return Err(Error::at(variant_span, "a variant can't be 'priv': every variant is as visible as its kind"));
@@ -1724,25 +1755,44 @@ impl Parser {
             taken.push(how);
             // `(P...) -> R`: a task's type taking a group of types, all it takes.
             if self.check(Token::Ellipsis) {
-                let alone = items.is_empty() && self.tokens.get(self.pos + 1) == Some(&Token::RParen) && self.tokens.get(self.pos + 2) == Some(&Token::Arrow);
-                let group = self.group_type(item, alone, "the whole of what a task's type takes, as in '(P...) -> R'")?;
+                let written = match taken.last() {
+                    Some(Taken::Region(name)) => Some(format!("@{}", name)),
+                    Some(Taken::Place(passing)) => Some(passing.word().to_string()),
+                    _ => None,
+                };
+                match written {
+                    Some(written) if written.starts_with('@') => {
+                        return Err(Error::at(at, format!("a group never holds a region, so '{}' can't come before '...'; name the region on its own beside the group, as in '({}, P...) -> R'", written, written)));
+                    }
+                    Some(written) => {
+                        return Err(Error::at(at, format!("a group's values are taken as the task given for it takes them, so '{}' can't come before the group: '(P...) -> R' fits 'put(hold& n: int)' too", written)));
+                    }
+                    None => {}
+                }
+                // One group, with any values the task takes alone around it,
+                // `(@a, P...) -> R`.
+                let first = !items.iter().any(|item| matches!(item, Type::Group(_)));
+                if !first {
+                    return Err(Error::at(self.peek_span(), "a task's type takes one group of types, as in '(int, P...) -> R'; the values around it are named one by one"));
+                }
+                let group = self.group_type(item, true, "")?;
                 items.push(group);
-                break;
+            } else {
+                items.push(item);
             }
-            items.push(item);
             if !self.match_token(Token::Comma) {
                 break;
             }
         }
         if !self.match_token(Token::RParen) {
-            if matches!(items.last(), Some(Type::Group(_))) {
-                return Err(Error::at(self.peek_span(), "a group of types is the whole of what a task's type takes, as in '(P...) -> R'"));
-            }
             return Err(self.unexpected("',' and another item, or ')' to close the tuple"));
         }
         // `(int, text) -> int`: a task's type.
         if self.check(Token::Arrow) {
             return self.parse_task_type(items, taken);
+        }
+        if let Some(Type::Group(group)) = items.iter().find(|item| matches!(item, Type::Group(_))) {
+            return Err(Error::at(opened, format!("a group of types, '{}...', is only part of what a task's type takes, as in '({}...) -> R' or '(int, {}...) -> R'", group, group, group)));
         }
         if let Some((at, written)) = marked {
             return Err(Error::at(at, format!("'{}' says how a task's type takes a parameter, as in '(hold& int) -> nothing' or '(@r, int) -> [int]@r', and these parentheses hold no task's type: a '->' follows a task's", written)));
@@ -3751,17 +3801,17 @@ impl Parser {
         if !self.check(Token::RParen) {
             loop {
                 let arg = self.parse_expr()?;
-                // `f(args...)`: a group's values, which come last.
+                // `f(args...)` or `f(r, args..., s)`: a group's values, once.
                 if self.check(Token::Ellipsis) {
                     let at = self.peek_span();
                     self.advance(); // ...
-                    args.push(Expr::new(ExprKind::Spread(Box::new(arg)), at));
-                    if !self.check(Token::RParen) {
-                        return Err(Error::at(at, "a group's values come last in a call, as in 'next(args...)'"));
+                    if args.iter().any(|arg: &Expr| matches!(arg.kind, ExprKind::Spread(_))) {
+                        return Err(Error::at(at, "a call gives one group's values, as in 'next(r, args...)'; give the values of another one by one"));
                     }
-                    break;
+                    args.push(Expr::new(ExprKind::Spread(Box::new(arg)), at));
+                } else {
+                    args.push(arg);
                 }
-                args.push(arg);
                 if !self.match_token(Token::Comma) {
                     break;
                 }

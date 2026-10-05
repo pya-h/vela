@@ -1,0 +1,14 @@
+; error: 5:8: 'next' is a task of type (@r, P...) -> R, which takes 1 value named one by one and a group's values where its type writes the group, as in 'next(args...)', got 0 values and a group's values
+; error: 8:3: wrapper 'traced' names 0 values before its group and 0 values after it, and the type of 'next' names 1 value before the group and 0 values after it: the values named around the group are the task's, named as the next task's type names them, after the wrapper's own values
+; A wrapper names around its group the values its next task's type names there.
+task traced<P..., R>(next: (@a, P...) -> R, args: P...) -> R
+    <- next(args...)
+fi
+
+$(traced)
+task squares(r: region, n: int) -> [int]@r
+    <- new [int]() at r
+fi
+
+task main()
+fi

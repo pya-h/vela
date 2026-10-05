@@ -1,0 +1,7 @@
+; error: 3:28: a task's type takes one group of types, as in '(int, P...) -> R'; the values around it are named one by one
+; A task's type takes one group of types.
+task f<P..., R>(g: (P..., P...) -> R)
+fi
+
+task main()
+fi

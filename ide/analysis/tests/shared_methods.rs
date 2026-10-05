@@ -142,3 +142,18 @@ fn a_shared_method_leads_to_its_declaration() {
     let declared = index.utf16_of(source.find("new(x").unwrap());
     assert_eq!(analysis.definition(called).map(|l| l.from), Some(declared));
 }
+
+#[test]
+fn a_kind_shared_method_named_without_a_call_is_a_method_not_a_variant() {
+    for checks in [true, false] {
+        let source = program(checks, "bind made = Light.start\n    bind red = Light.Red");
+        assert_eq!(class_at(&source, "start\n"), TokenClass::Method);
+        assert_eq!(class_at(&source, "Red\nfi"), TokenClass::Variant);
+        assert_eq!(hover(&source, "start\n").0, "shared start() -> Light");
+        let analysis = Analysis::new(&source);
+        let index = LineIndex::new(&source);
+        let named = index.utf16_of(source.find("start\n").unwrap());
+        let declared = index.utf16_of(source.find("start() -> Light").unwrap());
+        assert_eq!(analysis.definition(named).map(|l| l.from), Some(declared));
+    }
+}

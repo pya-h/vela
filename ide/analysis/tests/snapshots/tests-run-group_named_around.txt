@@ -1,0 +1,84 @@
+  1 | ; A task names values one by one before and after its group, and a task type
+    | comment:; A task names values one by one before and after its group, and a task type
+  2 | ; does so too: a region is always named, never in a group, so a wrapper of a
+    | comment:; does so too: a region is always named, never in a group, so a wrapper of a
+  3 | ; task taking one names it, and sends in it. A call gives the group's values
+    | comment:; task taking one names it, and sends in it. A call gives the group's values
+  4 | ; between the named ones.
+    | comment:; between the named ones.
+  5 | task traced<P...: shown, T>(next: (@a, P...) -> [T]@a, r: region, args: P...) -> [T]@r
+    | keyword:task  task:traced  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:,  type:T  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  operator:@  region:a  punctuation:,  type:P  keyword:...  punctuation:)  operator:->  punctuation:[  type:T  punctuation:]  operator:@  region:a  punctuation:,  region:r  punctuation::  keyword:region  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  punctuation:[  type:T  punctuation:]  operator:@  region:r
+  6 |     show("calling with ", args...)
+    | builtin-fn:show  punctuation:(  string:"calling with "  punctuation:,  parameter:args  keyword:...  punctuation:)
+  7 |     <- next(r, args...)
+    | keyword:<-  parameter:next  punctuation:(  region:r  punctuation:,  parameter:args  keyword:...  punctuation:)
+  8 | fi
+    | keyword:fi
+ 10 | task labelled<P...: shown>(next: (P..., @a) -> text@a, args: P..., r: region) -> text@r
+    | keyword:task  task:labelled  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:,  operator:@  region:a  punctuation:)  operator:->  type-builtin:text  operator:@  region:a  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 11 |     show("labelling ", args...)
+    | builtin-fn:show  punctuation:(  string:"labelling "  punctuation:,  parameter:args  keyword:...  punctuation:)
+ 12 |     <- next(args..., r)
+    | keyword:<-  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:,  region:r  punctuation:)
+ 13 | fi
+    | keyword:fi
+ 15 | task framed<P...: shown>(open: text, args: P..., close: text)
+    | keyword:task  task:framed  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:open  punctuation::  type-builtin:text  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:,  parameter:close  punctuation::  type-builtin:text  punctuation:)
+ 16 |     show(open, args..., close)
+    | builtin-fn:show  punctuation:(  parameter:open  punctuation:,  parameter:args  keyword:...  punctuation:,  parameter:close  punctuation:)
+ 17 | fi
+    | keyword:fi
+ 19 | task outer<P...: shown>(args: P...)
+    | keyword:task  task:outer  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 20 |     framed("[", args..., "]")
+    | task:framed  punctuation:(  string:"["  punctuation:,  parameter:args  keyword:...  punctuation:,  string:"]"  punctuation:)
+ 21 |     framed("<", 0, args..., ">")
+    | task:framed  punctuation:(  string:"<"  punctuation:,  number:0  punctuation:,  parameter:args  keyword:...  punctuation:,  string:">"  punctuation:)
+ 22 | fi
+    | keyword:fi
+ 24 | $(traced)
+    | keyword:$  punctuation:(  task:traced  punctuation:)
+ 25 | task squares(r: region, n: int) -> [int]@r
+    | keyword:task  task:squares  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r
+ 26 |     hold made = new [int]() at r
+    | keyword:hold  variable:made  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 27 |     each i in 1..n + 1
+    | keyword:each  variable:i  keyword:in  number:1  operator:..  parameter:n  operator:+  number:1
+ 28 |         made.add(i * i)
+    | variable:made  punctuation:.  field:add  punctuation:(  variable:i  operator:*  variable:i  punctuation:)
+ 29 |     fi
+    | keyword:fi
+ 30 |     <- made
+    | keyword:<-  variable:made
+ 31 | fi
+    | keyword:fi
+ 33 | $(labelled)
+    | keyword:$  punctuation:(  task:labelled  punctuation:)
+ 34 | task label(n: int, hold& count: int, r: region) -> text@r
+    | keyword:task  task:label  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:,  keyword:hold  keyword:&  parameter:count  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 35 |     count++
+    | parameter:count  operator:++
+ 36 |     <- "n is {n}" at r
+    | keyword:<-  string:"n is {  parameter:n  string:}"  keyword:at  region:r
+ 37 | fi
+    | keyword:fi
+ 39 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 40 |     region kept
+    | keyword:region  region:kept
+ 41 |     show(squares(kept, 3))
+    | builtin-fn:show  punctuation:(  task:squares  punctuation:(  region:kept  punctuation:,  number:3  punctuation:)  punctuation:)
+ 42 |     hold c = 0
+    | keyword:hold  variable:c  operator:=  number:0
+ 43 |     show(label(5, &c, kept))
+    | builtin-fn:show  punctuation:(  task:label  punctuation:(  number:5  punctuation:,  operator:&  variable:c  punctuation:,  region:kept  punctuation:)  punctuation:)
+ 44 |     show(label(6, &c) at kept, " ", c)
+    | builtin-fn:show  punctuation:(  task:label  punctuation:(  number:6  punctuation:,  operator:&  variable:c  punctuation:)  keyword:at  region:kept  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:)
+ 45 |     framed("(", 1, 2, 3, ")")
+    | task:framed  punctuation:(  string:"("  punctuation:,  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  string:")"  punctuation:)
+ 46 |     framed("|", "|")
+    | task:framed  punctuation:(  string:"|"  punctuation:,  string:"|"  punctuation:)
+ 47 |     outer(7, 8)
+    | task:outer  punctuation:(  number:7  punctuation:,  number:8  punctuation:)
+ 48 | fi
+    | keyword:fi

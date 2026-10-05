@@ -1,0 +1,61 @@
+; Accounts whose methods are wrapped. 'audited' is a plain task taking a
+; group, so it fits any method: it is given the account first, as a place where
+; the method alters it. 'guarded' is a method of Account itself, written
+; '$(.guarded)': it is called on the same account, reads its private limit,
+; and gives the account on to the rest of the chain, or refuses. 'told' names
+; the region a report is written in beside its group.
+
+task audited<P...: shown, R>(next: (P...) -> R, args: P...) -> R
+    show("audit: ", args.len, " values")
+    <- next(args...)
+fi
+
+; A region is never in a group: a wrapper of a method taking one names it.
+task told<P...>(next: (P..., @a) -> text@a, args: P..., r: region) -> text@r
+    show("report asked")
+    <- next(args..., r)
+fi
+
+shape Account
+    owner: text
+    read balance: int
+    priv limit: int = 300
+
+    alters guarded(next: (hold& Account@a, int) -> bool, amount: int) -> bool
+        when amount > .balance
+            show("  refused: ", .owner, " holds only ", .balance)
+            <- false
+        fi
+        when amount > .limit
+            show("  refused: more than the limit of ", .limit)
+            <- false
+        fi
+        <- next(&.this, amount)
+    fi
+
+    $(audited)
+    alters deposit(amount: int)
+        .balance += amount
+    fi
+
+    $(.guarded)
+    alters withdraw(amount: int) -> bool
+        .balance -= amount
+        <- true
+    fi
+
+    $(told)
+    report(r: region) -> text@r
+        <- "{.owner}: {.balance}" at r
+    fi
+fi
+
+task main()
+    hold ada = Account { owner: "Ada", balance: 0 }
+    ada.deposit(500)
+    show(ada.withdraw(120))
+    show(ada.withdraw(400))
+    show(ada.withdraw(350))
+    region page
+    show(ada.report(page))
+fi

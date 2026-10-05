@@ -1,0 +1,16 @@
+audit, given 2:
+  0
+  500
+audit, given 2:
+  500
+  900
+refused: only 500
+audit, given 1:
+  250
+audit, given 2:
+  500
+  -3
+report:
+  Ada
+  497
+Ada holds 497

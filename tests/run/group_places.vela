@@ -1,0 +1,54 @@
+; A group holds the values of a task taking places: a wrapper reads them as
+; copies and gives them on as places, so the task still changes the caller's
+; variables. A call giving a task value taking places gives the group places.
+task log_all<P...: shown>(args: P...)
+    show("log: ", args...)
+fi
+
+task traced<P...: shown & fixed, R>(next: (P...) -> R, args: P...) -> R
+    log_all(args...)
+    bind t = (args...) { <- next(args...) }
+    show("first is ", t.0, ", second ", t.#1, ", third ", t.#2)
+    each v in args
+        show("value ", v)
+    fi
+    show("count ", args.len)
+    <- next(args...)
+fi
+
+task counted<P..., R>(next: (P...) -> R, args: P...) -> R
+    show("values: ", args.len)
+    <- next(args...)
+fi
+
+task use<P..., R>(f: (P...) -> R, args: P...) -> R
+    <- f(args...)
+fi
+
+task register<P..., R>(f: (P...) -> R)
+    show("registered a task of ", f.type)
+fi
+
+$(traced)
+task both(hold& a: int, bind& b: int) -> int
+    a = a + b
+    <- a
+fi
+
+$register
+$(counted)
+task put(hold& n: int)
+    n = n * 10
+fi
+
+task main()
+    hold x = 1
+    hold y = 2
+    show(both(&x, &y), " ", x, " ", y)
+    hold k = 3
+    put(&k)
+    show(k)
+    show(use(both, &k, &y), " ", k)
+    use(put, &k)
+    show(k)
+fi

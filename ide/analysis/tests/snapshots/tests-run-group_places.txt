@@ -1,0 +1,94 @@
+  1 | ; A group holds the values of a task taking places: a wrapper reads them as
+    | comment:; A group holds the values of a task taking places: a wrapper reads them as
+  2 | ; copies and gives them on as places, so the task still changes the caller's
+    | comment:; copies and gives them on as places, so the task still changes the caller's
+  3 | ; variables. A call giving a task value taking places gives the group places.
+    | comment:; variables. A call giving a task value taking places gives the group places.
+  4 | task log_all<P...: shown>(args: P...)
+    | keyword:task  task:log_all  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+  5 |     show("log: ", args...)
+    | builtin-fn:show  punctuation:(  string:"log: "  punctuation:,  parameter:args  keyword:...  punctuation:)
+  6 | fi
+    | keyword:fi
+  8 | task traced<P...: shown & fixed, R>(next: (P...) -> R, args: P...) -> R
+    | keyword:task  task:traced  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:&  keyword:fixed  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+  9 |     log_all(args...)
+    | task:log_all  punctuation:(  parameter:args  keyword:...  punctuation:)
+ 10 |     bind t = (args...) { <- next(args...) }
+    | keyword:bind  variable:t  operator:=  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:{  keyword:<-  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)  punctuation:}
+ 11 |     show("first is ", t.0, ", second ", t.#1, ", third ", t.#2)
+    | builtin-fn:show  punctuation:(  string:"first is "  punctuation:,  variable:t  punctuation:.  field:0  punctuation:,  string:", second "  punctuation:,  variable:t  punctuation:.  punctuation:#  number:1  punctuation:,  string:", third "  punctuation:,  variable:t  punctuation:.  punctuation:#  number:2  punctuation:)
+ 12 |     each v in args
+    | keyword:each  variable:v  keyword:in  parameter:args
+ 13 |         show("value ", v)
+    | builtin-fn:show  punctuation:(  string:"value "  punctuation:,  variable:v  punctuation:)
+ 14 |     fi
+    | keyword:fi
+ 15 |     show("count ", args.len)
+    | builtin-fn:show  punctuation:(  string:"count "  punctuation:,  parameter:args  punctuation:.  field:len  punctuation:)
+ 16 |     <- next(args...)
+    | keyword:<-  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+ 17 | fi
+    | keyword:fi
+ 19 | task counted<P..., R>(next: (P...) -> R, args: P...) -> R
+    | keyword:task  task:counted  punctuation:<  type:P  keyword:...  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+ 20 |     show("values: ", args.len)
+    | builtin-fn:show  punctuation:(  string:"values: "  punctuation:,  parameter:args  punctuation:.  field:len  punctuation:)
+ 21 |     <- next(args...)
+    | keyword:<-  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+ 22 | fi
+    | keyword:fi
+ 24 | task use<P..., R>(f: (P...) -> R, args: P...) -> R
+    | keyword:task  task:use  punctuation:<  type:P  keyword:...  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:f  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+ 25 |     <- f(args...)
+    | keyword:<-  parameter:f  punctuation:(  parameter:args  keyword:...  punctuation:)
+ 26 | fi
+    | keyword:fi
+ 28 | task register<P..., R>(f: (P...) -> R)
+    | keyword:task  task:register  punctuation:<  type:P  keyword:...  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:f  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:)
+ 29 |     show("registered a task of ", f.type)
+    | builtin-fn:show  punctuation:(  string:"registered a task of "  punctuation:,  parameter:f  punctuation:.  keyword:type  punctuation:)
+ 30 | fi
+    | keyword:fi
+ 32 | $(traced)
+    | keyword:$  punctuation:(  task:traced  punctuation:)
+ 33 | task both(hold& a: int, bind& b: int) -> int
+    | keyword:task  task:both  punctuation:(  keyword:hold  keyword:&  parameter:a  punctuation::  type-builtin:int  punctuation:,  keyword:bind  keyword:&  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 34 |     a = a + b
+    | parameter:a  operator:=  parameter:a  operator:+  parameter:b
+ 35 |     <- a
+    | keyword:<-  parameter:a
+ 36 | fi
+    | keyword:fi
+ 38 | $register
+    | keyword:$  task:register
+ 39 | $(counted)
+    | keyword:$  punctuation:(  task:counted  punctuation:)
+ 40 | task put(hold& n: int)
+    | keyword:task  task:put  punctuation:(  keyword:hold  keyword:&  parameter:n  punctuation::  type-builtin:int  punctuation:)
+ 41 |     n = n * 10
+    | parameter:n  operator:=  parameter:n  operator:*  number:10
+ 42 | fi
+    | keyword:fi
+ 44 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 45 |     hold x = 1
+    | keyword:hold  variable:x  operator:=  number:1
+ 46 |     hold y = 2
+    | keyword:hold  variable:y  operator:=  number:2
+ 47 |     show(both(&x, &y), " ", x, " ", y)
+    | builtin-fn:show  punctuation:(  task:both  punctuation:(  operator:&  variable:x  punctuation:,  operator:&  variable:y  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:x  punctuation:,  string:" "  punctuation:,  variable:y  punctuation:)
+ 48 |     hold k = 3
+    | keyword:hold  variable:k  operator:=  number:3
+ 49 |     put(&k)
+    | task:put  punctuation:(  operator:&  variable:k  punctuation:)
+ 50 |     show(k)
+    | builtin-fn:show  punctuation:(  variable:k  punctuation:)
+ 51 |     show(use(both, &k, &y), " ", k)
+    | builtin-fn:show  punctuation:(  task:use  punctuation:(  task:both  punctuation:,  operator:&  variable:k  punctuation:,  operator:&  variable:y  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:k  punctuation:)
+ 52 |     use(put, &k)
+    | task:use  punctuation:(  task:put  punctuation:,  operator:&  variable:k  punctuation:)
+ 53 |     show(k)
+    | builtin-fn:show  punctuation:(  variable:k  punctuation:)
+ 54 | fi
+    | keyword:fi

@@ -1,0 +1,25 @@
+; A wrapper written for a task taking two regions sends in the one it names, and
+; the task, wrapped, sends there too.
+task logged(next: (@a, @b, int) -> [int]@a, a: region, b: region, n: int) -> [int]@a
+    <- next(a, b, n)
+fi
+$(logged)
+task cubes(s: region, r: region, n: int) -> [int]@s
+    hold made = new [int]() at s
+    made.add(n)
+    <- made
+fi
+task main()
+    region outer
+    hold keep = new [int]() at outer
+    block
+        region inner
+        keep = cubes(outer, inner, 3)
+    fi
+    region other
+    hold junk = new [int]() at other
+    each i in 0..1000
+        junk.add(i)
+    fi
+    show(keep)
+fi

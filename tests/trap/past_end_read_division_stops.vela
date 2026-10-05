@@ -1,0 +1,12 @@
+; trap: division by zero at 11:19 in task 'main'
+; A read past the end of a tuple works the tuple out, and a division by zero in
+; it stops the program.
+task gone(m: maybe int) -> bool
+    <- m == none
+fi
+
+task main()
+    hold z = 0
+    show("before")
+    show(gone((10 / z, 1).#5))
+fi

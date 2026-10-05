@@ -1,0 +1,14 @@
+; trap: division by zero at 6:15 in task 'Box.get'
+; A stop in a method of a shape given types names the method as it is written.
+shape Box<T>
+    v: T
+    get(n: int) -> int
+        <- 10 / n
+    fi
+fi
+
+task main()
+    bind b = Box<int> { v: 1 }
+    show(b.get(5))
+    show(b.get(0))
+fi

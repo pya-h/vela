@@ -1,0 +1,17 @@
+registered a task of (hold& int) -> nothing
+log: 12
+first is 1, second { 2 }, third none
+value 1
+value 2
+count 2
+3 3 2
+values: 1
+30
+log: 302
+first is 30, second { 2 }, third none
+value 30
+value 2
+count 2
+32 32
+values: 1
+320

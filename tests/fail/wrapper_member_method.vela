@@ -1,4 +1,4 @@
-; error: 12:3: 'P.timed' is a method of every value, called on one, so it can't be a wrapper; a shared method can
+; error: 12:3: 'P.timed' is a method of every value, called on one, so it can't be a wrapper of a task; it wraps a method of its own type, written '$(.timed)' above it
 ; A method of every value is called on one, which no layer gives it, so it
 ; can't be a wrapper; a shared method can.
 shape P

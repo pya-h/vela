@@ -54,3 +54,45 @@ fn a_group_misused_is_reported_where_it_is_written() {
     assert_eq!((diagnostics[0].line, diagnostics[0].col), (Some(2), Some(10)));
     assert!(diagnostics[0].message.starts_with("'args' holds the values of the group 'P...'"), "{}", diagnostics[0].message);
 }
+
+const AROUND: &str = "\
+task traced<P..., T>(next: (@a, P...) -> [T]@a, r: region, args: P...) -> [T]@r
+    <- next(r, args...)
+fi
+
+task labelled<P...>(next: (P..., @a) -> text@a, args: P..., r: region) -> text@r
+    <- next(args..., r)
+fi
+
+$(traced)
+task squares(r: region, hold& n: int) -> [int]@r
+    n = n + 1
+    <- new [int]() at r
+fi
+
+$(labelled)
+task label(n: int, r: region) -> text@r
+    <- \"n\" + \"!\" at r
+fi
+
+task main()
+    region kept
+    hold k = 3
+    bind made = squares(kept, &k)
+    show(made, label(1, kept))
+fi
+";
+
+#[test]
+fn values_named_around_a_group_read_as_declared() {
+    assert_eq!(Analysis::new(AROUND).diagnostics(), Vec::new());
+    assert_eq!(hover(AROUND, "next: (@"), "next: (@r, P...) -> [T]@r");
+    assert_eq!(hover(AROUND, "next: (P"), "next: (P..., @r) -> text@r");
+    assert_eq!(hover(AROUND, "r: region, args"), "r: region");
+    assert_eq!(class(AROUND, "args..., r)"), Some(TokenClass::Parameter));
+    // A task type's region is its own, and no region of the task's.
+    assert_eq!(class(AROUND, "a, P...) -> [T]"), Some(TokenClass::Region));
+    let source = AROUND.replace("<- next(r, args...)", "<- next(a, args...)");
+    let diagnostics = Analysis::new(&source).diagnostics();
+    assert!(diagnostics.iter().any(|d| d.message.contains("'a'")), "{:?}", diagnostics);
+}

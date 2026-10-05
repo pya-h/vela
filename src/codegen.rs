@@ -2088,6 +2088,16 @@ impl Generator {
             }
             StmtKind::Send(values) => {
                 let expr = self.gen_sent_value(values, stmt.span)?;
+                // `<- next(n)` in a copy whose `R` is `nothing`: the call runs,
+                // and the task sends nothing.
+                if self.ret == Type::Nothing {
+                    if !expr.is_empty() {
+                        self.w.line(&format!("{};", expr));
+                    }
+                    self.free_all_regions();
+                    self.w.line("return;");
+                    return Ok(());
+                }
                 if self.regions.iter().all(Vec::is_empty) {
                     self.w.line(&format!("return {};", expr));
                 } else {
@@ -3354,10 +3364,11 @@ impl Generator {
     }
 
     /// Works out, for what it does, the tuple of `none` read past its end as
-    /// `t.#k` (see `Checker::check_safe_item`); `none` itself is nothing to.
+    /// `t.#k` (see `Checker::check_safe_item`), a stop included; `none` itself
+    /// is nothing to.
     fn work_out_none(&mut self, none: &Expr) -> Result<()> {
         if let ExprKind::Field(tuple, _) = &none.kind
-            && !changes_nothing(tuple)
+            && !without_effects(tuple)
         {
             let value = self.gen_expr(tuple)?;
             self.w.line(&format!("(void)({});", value));
@@ -3872,6 +3883,8 @@ fn task_param_c(ty: &Type, how: &Taken, hidden: bool) -> String {
 /// it wraps (see `ast::layer_name`).
 fn shown_name(name: &str) -> String {
     let name = name.split(LAYER).next().unwrap_or(name);
+    // A copy made for the types a use gives is named as the task it copies.
+    let name = name.split("__of__").next().unwrap_or(name);
     match method_parts(name) {
         Some((owner, method)) => format!("{}{}{}", owner, MODULE_SEPARATOR, method),
         None => name.to_string(),
@@ -3923,7 +3936,7 @@ fn has_prelude(e: &Expr) -> bool {
         }
         // `t.#5` past the end of a tuple that changes something to work out:
         // a statement works it out (see `work_out_none`).
-        ExprKind::Field(inner, item) if item.starts_with(check::SAFE_ITEM) && e.ty == Some(Type::None) && !changes_nothing(inner) => true,
+        ExprKind::Field(inner, item) if item.starts_with(check::SAFE_ITEM) && e.ty == Some(Type::None) && !without_effects(inner) => true,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::New { value: inner, .. }
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) | ExprKind::Copy { value: inner, .. } | ExprKind::Shortcut { value: inner, .. } | ExprKind::ToText { value: inner, .. } => {
             has_prelude(inner)
@@ -4628,7 +4641,7 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::New { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
         // `t.#5` past the tuple's end is none, and reads the tuple only for what
         // working it out does (see `work_out_none`).
-        ExprKind::Field(inner, item) if item.starts_with(check::SAFE_ITEM) && e.ty == Some(Type::None) && changes_nothing(inner) => false,
+        ExprKind::Field(inner, item) if item.starts_with(check::SAFE_ITEM) && e.ty == Some(Type::None) && without_effects(inner) => false,
         ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner)
         | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => expr_reads(inner, name),
         ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {

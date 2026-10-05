@@ -1,0 +1,7 @@
+; error: 3:23: a task takes one group of values, and 'b: P...' is a second; name the others one by one
+; A task takes one group of values.
+task f<P...>(a: P..., b: P...)
+fi
+
+task main()
+fi

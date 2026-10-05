@@ -1,0 +1,16 @@
+; error: 9:5: a startup decorator in a shape goes on the lines above a shared method, as in '$register' above 'shared new(…)'; this is a method of every value, which has no value to be called on where the program starts, though it takes wrappers, '$(w)', which run at each call
+; A method of every value takes wrappers, never startup decorators.
+task register(f: (Counter) -> int)
+fi
+
+shape Counter
+    n: int
+
+    $register
+    value() -> int
+        <- .n
+    fi
+fi
+
+task main()
+fi

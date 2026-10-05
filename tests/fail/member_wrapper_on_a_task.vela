@@ -1,0 +1,9 @@
+; error: 3:3: '.peek' names a method of the value the wrapped method is called on, and 'free' is no method; name a task, as in '$(peek)'
+; A member wrapper wraps a method of every value of its type, and nothing else.
+$(.peek)
+task free(n: int) -> int
+    <- n
+fi
+
+task main()
+fi

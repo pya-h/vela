@@ -1,0 +1,106 @@
+  1 | ; Accounts whose methods are wrapped. 'audited' is a plain task taking a
+    | comment:; Accounts whose methods are wrapped. 'audited' is a plain task taking a
+  2 | ; group, so it fits any method: it is given the account first, as a place where
+    | comment:; group, so it fits any method: it is given the account first, as a place where
+  3 | ; the method alters it. 'guarded' is a method of Account itself, written
+    | comment:; the method alters it. 'guarded' is a method of Account itself, written
+  4 | ; '$(.guarded)': it is called on the same account, reads its private limit,
+    | comment:; '$(.guarded)': it is called on the same account, reads its private limit,
+  5 | ; and gives the account on to the rest of the chain, or refuses. 'told' names
+    | comment:; and gives the account on to the rest of the chain, or refuses. 'told' names
+  6 | ; the region a report is written in beside its group.
+    | comment:; the region a report is written in beside its group.
+  8 | task audited<P...: shown, R>(next: (P...) -> R, args: P...) -> R
+    | keyword:task  task:audited  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:,  type:R  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:)  operator:->  type:R  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type:R
+  9 |     show("audit: ", args.len, " values")
+    | builtin-fn:show  punctuation:(  string:"audit: "  punctuation:,  parameter:args  punctuation:.  field:len  punctuation:,  string:" values"  punctuation:)
+ 10 |     <- next(args...)
+    | keyword:<-  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:)
+ 11 | fi
+    | keyword:fi
+ 13 | ; A region is never in a group: a wrapper of a method taking one names it.
+    | comment:; A region is never in a group: a wrapper of a method taking one names it.
+ 14 | task told<P...>(next: (P..., @a) -> text@a, args: P..., r: region) -> text@r
+    | keyword:task  task:told  punctuation:<  type:P  keyword:...  punctuation:>  punctuation:(  parameter:next  punctuation::  punctuation:(  type:P  keyword:...  punctuation:,  operator:@  region:a  punctuation:)  operator:->  type-builtin:text  operator:@  region:a  punctuation:,  parameter:args  punctuation::  type:P  keyword:...  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 15 |     show("report asked")
+    | builtin-fn:show  punctuation:(  string:"report asked"  punctuation:)
+ 16 |     <- next(args..., r)
+    | keyword:<-  parameter:next  punctuation:(  parameter:args  keyword:...  punctuation:,  region:r  punctuation:)
+ 17 | fi
+    | keyword:fi
+ 19 | shape Account
+    | keyword:shape  type:Account
+ 20 |     owner: text
+    | field:owner  punctuation::  type-builtin:text
+ 21 |     read balance: int
+    | keyword:read  field:balance  punctuation::  type-builtin:int
+ 22 |     priv limit: int = 300
+    | keyword:priv  field:limit  punctuation::  type-builtin:int  operator:=  number:300
+ 24 |     alters guarded(next: (hold& Account@a, int) -> bool, amount: int) -> bool
+    | keyword:alters  method:guarded  punctuation:(  parameter:next  punctuation::  punctuation:(  keyword:hold  keyword:&  type:Account  operator:@  region:a  punctuation:,  type-builtin:int  punctuation:)  operator:->  type-builtin:bool  punctuation:,  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
+ 25 |         when amount > .balance
+    | keyword:when  parameter:amount  operator:>  punctuation:.  field:balance
+ 26 |             show("  refused: ", .owner, " holds only ", .balance)
+    | builtin-fn:show  punctuation:(  string:"  refused: "  punctuation:,  punctuation:.  field:owner  punctuation:,  string:" holds only "  punctuation:,  punctuation:.  field:balance  punctuation:)
+ 27 |             <- false
+    | keyword:<-  keyword:false
+ 28 |         fi
+    | keyword:fi
+ 29 |         when amount > .limit
+    | keyword:when  parameter:amount  operator:>  punctuation:.  field:limit
+ 30 |             show("  refused: more than the limit of ", .limit)
+    | builtin-fn:show  punctuation:(  string:"  refused: more than the limit of "  punctuation:,  punctuation:.  field:limit  punctuation:)
+ 31 |             <- false
+    | keyword:<-  keyword:false
+ 32 |         fi
+    | keyword:fi
+ 33 |         <- next(&.this, amount)
+    | keyword:<-  parameter:next  punctuation:(  operator:&  punctuation:.  keyword:this  punctuation:,  parameter:amount  punctuation:)
+ 34 |     fi
+    | keyword:fi
+ 36 |     $(audited)
+    | keyword:$  punctuation:(  task:audited  punctuation:)
+ 37 |     alters deposit(amount: int)
+    | keyword:alters  method:deposit  punctuation:(  parameter:amount  punctuation::  type-builtin:int  punctuation:)
+ 38 |         .balance += amount
+    | punctuation:.  field:balance  operator:+=  parameter:amount
+ 39 |     fi
+    | keyword:fi
+ 41 |     $(.guarded)
+    | keyword:$  punctuation:(  punctuation:.  method:guarded  punctuation:)
+ 42 |     alters withdraw(amount: int) -> bool
+    | keyword:alters  method:withdraw  punctuation:(  parameter:amount  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:bool
+ 43 |         .balance -= amount
+    | punctuation:.  field:balance  operator:-=  parameter:amount
+ 44 |         <- true
+    | keyword:<-  keyword:true
+ 45 |     fi
+    | keyword:fi
+ 47 |     $(told)
+    | keyword:$  punctuation:(  task:told  punctuation:)
+ 48 |     report(r: region) -> text@r
+    | method:report  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+ 49 |         <- "{.owner}: {.balance}" at r
+    | keyword:<-  string:"{  punctuation:.  field:owner  string:}: {  punctuation:.  field:balance  string:}"  keyword:at  region:r
+ 50 |     fi
+    | keyword:fi
+ 51 | fi
+    | keyword:fi
+ 53 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 54 |     hold ada = Account { owner: "Ada", balance: 0 }
+    | keyword:hold  variable:ada  operator:=  type:Account  punctuation:{  field:owner  punctuation::  string:"Ada"  punctuation:,  field:balance  punctuation::  number:0  punctuation:}
+ 55 |     ada.deposit(500)
+    | variable:ada  punctuation:.  method:deposit  punctuation:(  number:500  punctuation:)
+ 56 |     show(ada.withdraw(120))
+    | builtin-fn:show  punctuation:(  variable:ada  punctuation:.  method:withdraw  punctuation:(  number:120  punctuation:)  punctuation:)
+ 57 |     show(ada.withdraw(400))
+    | builtin-fn:show  punctuation:(  variable:ada  punctuation:.  method:withdraw  punctuation:(  number:400  punctuation:)  punctuation:)
+ 58 |     show(ada.withdraw(350))
+    | builtin-fn:show  punctuation:(  variable:ada  punctuation:.  method:withdraw  punctuation:(  number:350  punctuation:)  punctuation:)
+ 59 |     region page
+    | keyword:region  region:page
+ 60 |     show(ada.report(page))
+    | builtin-fn:show  punctuation:(  variable:ada  punctuation:.  method:report  punctuation:(  region:page  punctuation:)  punctuation:)
+ 61 | fi
+    | keyword:fi

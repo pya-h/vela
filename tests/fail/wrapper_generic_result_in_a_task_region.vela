@@ -1,0 +1,25 @@
+; error: 6:3: wrapper 'logged' takes 'R' from a task value, where it is [int]@?, in a region that task value takes; which region that is only the body of 'logged' says, when it gives the task value one, so 'R' can't be in it; write that type out in the header of 'logged', with the region it takes, as in '(next: (@a, int) -> [int]@a, a: region, n: int) -> [int]@a'
+; A generic wrapper can't find what it sends in a region the task value takes: which one its body gives is not known at the use.
+task logged<R>(next: (@a, @b, int) -> R, a: region, b: region, n: int) -> R
+    <- next(a, b, n)
+fi
+$(logged)
+task cubes(s: region, r: region, n: int) -> [int]@s
+    hold made = new [int]() at s
+    made.add(n)
+    <- made
+fi
+task main()
+    region outer
+    hold keep = new [int]() at outer
+    block
+        region inner
+        keep = cubes(inner, outer, 3)
+    fi
+    region other
+    hold junk = new [int]() at other
+    each i in 0..1000
+        junk.add(i)
+    fi
+    show(keep)
+fi

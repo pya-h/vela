@@ -1,4 +1,4 @@
-; error: 8:13: a group's values go to the group task 'log' takes last, after its other values, and they would be given as 'label' here
+; error: 8:13: a group's values go to the group task 'log' takes, between the values it names one by one, and they would be given as 'label' here
 ; A group's values go to the group a task takes last, not to its other values.
 task log<P...>(label: text, args: P...)
     show(label)

@@ -258,7 +258,11 @@
                 values its type takes, and its type says the regions of what it takes and sends, as a header does, so
                 it holds nothing in any region and can go anywhere. A place or a region it takes is given at each call
                 and checked there as at a named call: marked, given once where it changes, never an item of a slice,
-                and a region the caller allocates in, where what it sends then lives.</td>
+                and a region the caller allocates in, where what it sends then lives. A task taking types never
+                finds one of them in a region a task type takes, whose name is the type's own and says nothing of
+                the caller's regions. A type group holding places gives them on as places, checked where the call giving them
+                is, and never holds a region, which is named beside it. A method wrapping a method of every value alters the
+                value exactly when the wrapped method does, so neither sees a value that never changes change under it.</td>
               <td class="when"><span class="badge b-checked">checked</span></td>
               <td>Calling through a null or stray function pointer, or with the wrong values; a place changed through
                 one parameter while read through another; a value sent in a region that ends first. See

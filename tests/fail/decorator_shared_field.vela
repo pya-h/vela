@@ -1,0 +1,16 @@
+; error: 10:2: 'X.hook' is a shared field, not a method, so it can't be a decorator: a decorator is a task or a shared method
+; A shared field holding a task is no decorator, even one of the right type.
+task gives(f: (int) -> int) -> int
+    show("gives ran")
+    <- 5
+fi
+shape X
+    shared hold hook: ((int) -> int) -> int = gives
+fi
+$X.hook
+task one(n: int) -> int
+    <- n
+fi
+task main()
+    show("main")
+fi

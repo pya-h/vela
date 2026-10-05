@@ -1,0 +1,5 @@
+; error: 4:5: 'g' is a task of type (P...) -> nothing, which takes 0 values named one by one and a group's values where its type writes the group, as in 'next(args...)', got 1 value and a group's values
+; A task value taking only a group is given only its values.
+task f<P...>(g: (P...) -> nothing, args: P...)
+    g(args..., 1)
+fi
