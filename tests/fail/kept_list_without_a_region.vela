@@ -1,0 +1,6 @@
+; error: 5:14: a lambda keeps what it uses in a region, which its list names, as in '[hold& count, @r]'
+; A lambda's list names the region it keeps what it uses in.
+task main()
+    hold n = 1
+    bind f = [hold& n]() -> nothing n = 2 fi
+fi

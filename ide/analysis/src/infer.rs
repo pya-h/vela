@@ -912,7 +912,7 @@ impl<'a> Knowledge<'a> {
         }
         // `[@r](x: int) -> int …`: a lambda that keeps what it uses in `r`.
         if self.token(first) == Some(&Token::LBracket)
-            && let Some(open) = (first + 1..=last.min(first + 4)).find(|&q| self.token(q) == Some(&Token::RBracket)).map(|q| q + 1)
+            && let Some(open) = (first + 1..=last).find(|&q| self.token(q) == Some(&Token::RBracket)).map(|q| q + 1)
             && let Some((region, hold, _)) = kept_prefix(self.source.get(self.range(first).start..self.range(open.saturating_sub(1)).end)?)
             && self.token(open) == Some(&Token::LParen)
             && let Some(close) = self.matching_close(open, last)
@@ -1504,11 +1504,18 @@ fn task_value_type_beside(detail: &str, kept: Option<&str>) -> Option<Type> {
 fn kept_prefix(text: &str) -> Option<(String, bool, &str)> {
     let inner = text.strip_prefix('[')?;
     let close = inner.find(']')?;
-    let list = inner.get(..close)?.trim();
-    let (hold, region) = match list.strip_prefix("hold") {
-        Some(rest) if rest.trim_start().starts_with('@') => (true, rest.trim_start()),
-        _ => (false, list),
-    };
+    // The region among the places it keeps, `[hold& count, @r]`.
+    let mut region = None;
+    for item in inner.get(..close)?.split(',').map(str::trim) {
+        if item.starts_with("hold&") || item.starts_with("bind&") {
+            continue;
+        }
+        region = Some(match item.strip_prefix("hold") {
+            Some(rest) if rest.trim_start().starts_with('@') => (true, rest.trim_start()),
+            _ => (false, item),
+        });
+    }
+    let (hold, region) = region?;
     let region = region.strip_prefix('@')?.trim();
     if region.is_empty() || !region.chars().all(|c| c.is_alphanumeric() || c == '_') {
         return None;

@@ -124,6 +124,8 @@ struct KeptLambda {
     within: Option<String>,
     /// The variables it uses, which it keeps, in the order first used.
     uses: Vec<String>,
+    /// The variables it keeps as places, `[hold& count, @r]`.
+    places: Vec<KeptPlace>,
 }
 
 /// What a place an assignment writes to takes: nothing (`_`), a value of a
@@ -2684,6 +2686,10 @@ impl Checker {
             }
             if param.ty == Type::Region {
                 self.define_region(&param.name, param.span, true)?;
+                // Given to the task, so it outlives the task's variables.
+                if let Some(info) = self.scopes.last_mut().and_then(|scope| scope.names.get_mut(&param.name)) {
+                    info.param = true;
+                }
             } else {
                 // Only the value a method marked `alters` is called on changes,
                 // and a parameter the task holds a copy of (`hold x: T`) or the
@@ -2735,6 +2741,9 @@ impl Checker {
             // What a lambda that keeps what it uses keeps: what it used.
             let used = std::mem::take(&mut *self.kept_used.borrow_mut());
             if let Some(kept) = self.kept_lambdas.get_mut(&task.name) {
+                for place in kept.places.iter().filter(|place| !used.contains(&place.name)) {
+                    self.warnings.push(Error::at(place.span, format!("this lambda keeps '{0}' as a place, '{1} {0}', and never uses it; leave it out of the list", place.name, place.passing.word())));
+                }
                 kept.uses = used;
             }
             checked?;
@@ -5767,7 +5776,7 @@ impl Checker {
     /// `[@r](x: int) -> int … fi` at `span`: the value of a lambda that keeps
     /// what it uses of the code around it in region `region`, a copy of each
     /// variable it uses, made here (see `kept_scope`).
-    fn check_closure(&mut self, lambda: &str, region: &str, hold: bool, span: Span) -> Result<Type> {
+    fn check_closure(&mut self, lambda: &str, region: &str, hold: bool, places: &[KeptPlace], span: Span) -> Result<Type> {
         let written = if hold { format!("[hold @{}]", region) } else { format!("[@{}]", region) };
         match self.lookup(region) {
             Some(info) if info.ty == Type::Region => {}
@@ -5775,12 +5784,22 @@ impl Checker {
             None => return err(span, format!("'{}' keeps what the lambda uses in region '{}', which isn't one here; declare it with 'region {}', or take it as a parameter", written, region, region)),
         }
         self.visible_region(region, span, true)?;
-        // What the lambda may keep: every variable here, and the one region.
+        for place in places {
+            self.check_kept_place(place, region)?;
+        }
+        // What the lambda may keep: every variable here, and the one region,
+        // with those its places are in, which outlive them.
+        let mut seen_regions: Vec<String> = vec![region.to_string()];
+        for place in places {
+            if let Some(info) = self.scopes.iter().rev().find_map(|scope| scope.names.get(&place.name)) {
+                seen_regions.extend(info.ty.regions().into_iter().filter(|name| !unnamed_region(name)).map(str::to_string));
+            }
+        }
         let mut outer: Vec<(String, VarInfo)> = Vec::new();
         for scope in &self.scopes {
             for (name, info) in &scope.names {
                 // `.this` stays the method's: a lambda in one takes it as a parameter.
-                if info.result || (info.ty == Type::Region && name != region) || name == SHOWN || name == THIS {
+                if info.result || (info.ty == Type::Region && !seen_regions.contains(name)) || name == SHOWN || name == THIS {
                     continue;
                 }
                 outer.retain(|(seen, _)| seen != name);
@@ -5791,7 +5810,7 @@ impl Checker {
         let names = self.scopes.iter().flat_map(|scope| scope.names.keys().cloned()).collect();
         self.lambda_outer.insert(lambda.to_string(), names);
         let within = self.current_lambda.clone().filter(|current| self.kept_lambdas.contains_key(current));
-        self.kept_lambdas.insert(lambda.to_string(), KeptLambda { region: region.to_string(), hold, span, outer, within, uses: Vec::new() });
+        self.kept_lambdas.insert(lambda.to_string(), KeptLambda { region: region.to_string(), hold, span, outer, within, uses: Vec::new(), places: places.to_vec() });
         self.kept_order.retain(|name| name != lambda);
         self.kept_order.push(lambda.to_string());
         if self.broken.contains(lambda) {
@@ -5801,6 +5820,53 @@ impl Checker {
         let (params, taken) = self.task_params_taken(info);
         let task = TaskType { params, taken, ret: info.ret.clone() };
         Ok(Type::Closure(Box::new(ClosureType { task, region: region.to_string(), hold }.normalized())))
+    }
+
+    /// Checks `place`, a variable a lambda kept in `region` keeps as a place:
+    /// one that changes where it changes it, and that outlives the lambda,
+    /// which ends with `region`, so `region` is declared after it, in its
+    /// block or a block inside it.
+    fn check_kept_place(&self, place: &KeptPlace, region: &str) -> Result<()> {
+        let name = &place.name;
+        let word = place.passing.word();
+        // A use, which a lambda around this one keeps (see `lookup`).
+        let _ = self.lookup(name);
+        let at = |name: &str| self.scopes.iter().enumerate().rev().find_map(|(i, scope)| scope.names.get(name).map(|info| (i, info)));
+        let Some((depth, info)) = at(name) else {
+            return err(place.span, format!("unknown variable '{}'; a lambda keeps as a place a variable of the code around it", name));
+        };
+        if info.ty == Type::Region {
+            return err(place.span, format!("'{}' is a region, which a lambda names alone, as in '[@{}]', and keeps nothing of as a place", name, name));
+        }
+        if info.result {
+            return err(place.span, format!("'{}' is a result of this task, which only '<-' sets, so a lambda doesn't keep it as a place", name));
+        }
+        if place.passing == Passing::HoldRef {
+            let mut var = Expr::new(ExprKind::Var(name.clone()), place.span);
+            var.ty = Some(info.ty.clone());
+            self.given_place(&var, &Taker::Kept(name)).map_err(|error| Error { span: Some(place.span), ..error })?;
+        }
+        let Some((region_depth, region_info)) = at(region) else { return Ok(()) };
+        let refuse = |why: String| {
+            err(
+                place.span,
+                format!(
+                    "this lambda keeps '{0}' as a place, '{1} {0}', so it ends before '{0}' does, and it ends with region '{2}', which {3}; declare a region after '{0}', in its block, and keep the lambda there",
+                    name, word, region, why
+                ),
+            )
+        };
+        if region_info.param {
+            return refuse("is given to the task, so it outlives the task's variables".to_string());
+        }
+        if region_info.kept {
+            return refuse("the lambda around this one keeps what it uses in, so it outlives what is declared inside that lambda".to_string());
+        }
+        let after = region_depth > depth || (region_depth == depth && (region_info.span.line, region_info.span.col) > (info.span.line, info.span.col));
+        if !after {
+            return refuse(format!("is declared before it, at {}:{}", region_info.span.line, region_info.span.col));
+        }
+        Ok(())
     }
 
     /// The scope a lambda that keeps what it uses sees under its own: a copy of
@@ -5818,6 +5884,10 @@ impl Checker {
             info.refers = None;
             if info.ty == Type::Region {
                 info.allocates = true;
+            } else if let Some(place) = kept.places.iter().find(|place| place.name == *name) {
+                // A place: the variable itself, changed only through `hold&`.
+                info.passing = place.passing;
+                info.mutable = place.passing == Passing::HoldRef;
             } else {
                 info.mutable = kept.hold;
             }
@@ -5831,7 +5901,8 @@ impl Checker {
     /// region it keeps them in, or of none.
     fn check_kept_use(&self, name: &str, ty: &Type, span: Span) -> Result<()> {
         let Some(kept) = self.current_lambda.as_ref().and_then(|lambda| self.kept_lambdas.get(lambda)) else { return Ok(()) };
-        if *ty == Type::Region {
+        // A place is the variable itself, which outlives the lambda.
+        if *ty == Type::Region || kept.places.iter().any(|place| place.name == name) {
             return Ok(());
         }
         if let Some(other) = ty.regions().into_iter().find(|region| *region != kept.region && !unnamed_region(region)) {
@@ -5869,8 +5940,8 @@ impl Checker {
         for lambda in &self.kept_order {
             let Some(kept) = self.kept_lambdas.get(lambda) else { continue };
             // The region first, which the lambda allocates in where it says so.
-            let mut fields = vec![Field {
-                name: kept.region.clone(),
+            let region_field = |name: &str| Field {
+                name: name.to_string(),
                 ty: Type::Region,
                 span: kept.span,
                 ty_span: kept.span,
@@ -5879,20 +5950,32 @@ impl Checker {
                 default_region: false,
                 passing: Passing::Copy,
                 default: None,
-            }];
+            };
+            let mut fields = vec![region_field(&kept.region)];
+            // The regions its places are in, which it may allocate in through them.
+            for (name, info) in &kept.outer {
+                if info.ty == Type::Region && *name != kept.region {
+                    fields.push(region_field(name));
+                }
+            }
             for (name, info) in &kept.outer {
                 if !kept.uses.contains(name) || info.ty == Type::Region {
                     continue;
                 }
+                // A place is kept as a pointer to the variable (see `Generator::gen_closure`).
+                let place = kept.places.iter().find(|place| place.name == *name).map(|place| place.passing);
                 fields.push(Field {
                     name: name.clone(),
-                    ty: info.ty.clone(),
+                    ty: match place {
+                        Some(_) => Type::Ptr(Box::new(info.ty.clone()), None),
+                        None => info.ty.clone(),
+                    },
+                    passing: place.unwrap_or(Passing::Copy),
                     span: kept.span,
                     ty_span: kept.span,
                     private: false,
                     read: false,
                     default_region: false,
-                    passing: Passing::Copy,
                     default: None,
                 });
             }
@@ -6024,9 +6107,9 @@ impl Checker {
             // Checked again, as a method call's value is: it is text.
             ExprKind::TypeOf(_) => Ok(Type::Text(None)),
             ExprKind::Macro { value, .. } => Ok(value.ty.clone().unwrap_or(Type::Unknown)),
-            ExprKind::Closure { lambda, region, hold } => {
-                let (lambda, region, hold) = (lambda.clone(), region.clone(), *hold);
-                self.check_closure(&lambda, &region, hold, span)
+            ExprKind::Closure { lambda, region, hold, places } => {
+                let (lambda, region, hold, places) = (lambda.clone(), region.clone(), *hold, places.clone());
+                self.check_closure(&lambda, &region, hold, &places, span)
             }
             // Only `coerce` makes one, of a value it checked.
             ExprKind::Kept { value, .. } => Ok(value.ty.clone().unwrap_or(Type::Unknown)),
@@ -6285,7 +6368,7 @@ impl Checker {
     fn check_var(&mut self, name: &str, span: Span) -> Result<Type> {
         let calling = std::mem::take(&mut self.calling);
         let info = self.lookup_or_err(name, span)?;
-        let (ty, kept) = (info.ty.clone(), info.kept);
+        let (ty, kept, mutable) = (info.ty.clone(), info.kept, info.mutable);
         if kept {
             self.check_kept_use(name, &ty, span)?;
         }
@@ -6296,6 +6379,11 @@ impl Checker {
                 span,
                 format!("'{0}' is a '[hold @r]' lambda, which changes what it keeps, so it is never copied: call it, '{0}(…)', or give it as a place, '&{0}', to a 'hold& f: {1}' parameter", name, ty),
             );
+        }
+        // Calling it changes what it keeps, so it is called through a place
+        // that changes.
+        if held_lambda(&ty) && !mutable {
+            return err(span, format!("'{0}' is a '[hold @r]' lambda, and calling it changes what it keeps, so it is called through a place that changes, a 'hold' variable or a 'hold&', which '{0}' isn't", name));
         }
         if self.unset.contains(name) {
             return err(span, format!("'{}' might not be set here", name));
@@ -6906,7 +6994,7 @@ impl Checker {
                 }
                 // The lambda's copy of a slice of the code around it shares its
                 // items, not its length.
-                if info.kept && info.mutable && matches!(info.ty, Type::Slice(..)) {
+                if info.kept && info.passing == Passing::Copy && info.mutable && matches!(info.ty, Type::Slice(..)) {
                     return err(
                         items.span,
                         format!("'{0}' changes '{1}', the copy this lambda keeps of a slice of the code around it, whose length only the slice itself changes; make the slice inside the lambda, or take it as a parameter, 'hold& {1}'", word, name),
@@ -12997,6 +13085,9 @@ fn chosen_message(what: &str, name: &str, ty: &Type, declared: &Type, size: usiz
 /// The end of the message for changing a parameter that never changes: how to
 /// write one the task may change. Empty for anything else.
 fn param_hint(name: &str, info: &VarInfo) -> String {
+    if info.kept && info.passing == Passing::BindRef {
+        return format!("; this lambda keeps '{0}' as 'bind& {0}', which only reads it, and one that changes it keeps it as 'hold& {0}'", name);
+    }
     if info.kept {
         return format!("; '{0}' is the copy this lambda keeps of a variable of the code around it, which a '[@r]' lambda never changes; one that changes its copies is written '[hold @r](…)', and the variable itself never changes through it", name);
     }
@@ -13164,6 +13255,8 @@ fn path_text(path: &[Step]) -> String {
 enum Taker<'a> {
     Param(&'a str),
     Reference(&'a str),
+    /// A lambda keeping the variable as a place, `[hold& count, @r]`.
+    Kept(&'a str),
 }
 
 impl Taker<'_> {
@@ -13172,6 +13265,7 @@ impl Taker<'_> {
         match self {
             Taker::Param(name) => format!("'{}' is given the place itself, to change", name),
             Taker::Reference(name) => format!("'hold& {}' names a place to change it", name),
+            Taker::Kept(name) => format!("this lambda keeps '{0}' as 'hold& {0}', to change it", name),
         }
     }
 
@@ -13180,6 +13274,7 @@ impl Taker<'_> {
         match self {
             Taker::Param(name) => format!("giving '{}' to '{}'", place, name),
             Taker::Reference(name) => format!("naming '{}' with 'hold& {}'", place, name),
+            Taker::Kept(name) => format!("keeping '{}' as 'hold& {}'", place, name),
         }
     }
 }

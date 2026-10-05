@@ -1,0 +1,12 @@
+; error: 7:25: this lambda keeps 'n' as a place, 'hold& n', so it ends before 'n' does, and it ends with region 'r', which the lambda around this one keeps what it uses in, so it outlives what is declared inside that lambda; declare a region after 'n', in its block, and keep the lambda there
+; A region a lambda around this one keeps what it uses in outlives what is declared inside it.
+task main()
+    region r
+    bind f = [@r]() -> int
+        hold n = 1
+        bind g = [hold& n, @r]() -> nothing n = 2 fi
+        g()
+        <- n
+    fi
+    show(f())
+fi

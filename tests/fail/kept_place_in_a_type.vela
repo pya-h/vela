@@ -1,0 +1,7 @@
+; error: 6:20: the type of a lambda names only the region it keeps what it uses in, '[@r]'; the places it keeps are its own, so its type doesn't name 'n'
+; The type of a lambda names only its region.
+task main()
+    region r
+    hold n = 0
+    bind f: [hold& n, @r]() -> nothing = [@r]() -> nothing show(1) fi
+fi

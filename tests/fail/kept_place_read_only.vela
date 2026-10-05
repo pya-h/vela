@@ -1,0 +1,8 @@
+; error: 6:41: cannot assign to immutable variable 'n'; this lambda keeps 'n' as 'bind& n', which only reads it, and one that changes it keeps it as 'hold& n'
+; A place kept as 'bind&' is only read.
+task main()
+    hold n = 1
+    region r
+    bind f = [bind& n, @r]() -> nothing n = 2 fi
+    f()
+fi

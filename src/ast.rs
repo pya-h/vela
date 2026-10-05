@@ -1240,7 +1240,7 @@ pub enum ExprKind {
     /// code around it in region `region`, `hold` for `[hold @r]`, which changes
     /// its copies. `lambda` names the task it is (see `ast::lambda_name`), and
     /// the checker gives the shape of what it keeps (see `kept_name`).
-    Closure { lambda: String, region: String, hold: bool },
+    Closure { lambda: String, region: String, hold: bool, places: Vec<KeptPlace> },
     /// A plain task value given where a lambda that keeps what it uses is
     /// expected, `[@r](int) -> int`: it keeps only the task, in `region`, or
     /// for a task named here, `None`, where the program keeps it.
@@ -2031,12 +2031,24 @@ pub struct TaskDef {
     pub kept: Option<Kept>,
 }
 
+/// A variable a lambda keeps as a place, named in its list beside the region:
+/// `hold& count`, which it changes, or `bind& big`, which it reads where it is.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KeptPlace {
+    pub name: String,
+    /// `Passing::HoldRef` or `Passing::BindRef`.
+    pub passing: Passing,
+    pub span: Span,
+}
+
 /// What a lambda written `[@r](…)` keeps (see `TaskDef::kept`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Kept {
     pub region: String,
     /// `[hold @r]`: it changes its copies.
     pub hold: bool,
+    /// `[hold& count, @r]`: the variables it keeps as places.
+    pub places: Vec<KeptPlace>,
 }
 
 /// What makes a task a method: it is written inside a shape or a kind, and its

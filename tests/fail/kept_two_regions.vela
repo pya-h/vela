@@ -1,0 +1,7 @@
+; error: 6:19: a lambda keeps what it uses in one region, so its list names one, as in '[hold& count, @r]'
+; A lambda keeps what it uses in one region.
+task main()
+    region r
+    region s
+    bind f = [@r, @s]() -> nothing show(1) fi
+fi

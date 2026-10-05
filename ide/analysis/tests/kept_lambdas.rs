@@ -80,3 +80,24 @@ fn its_parameters_and_what_it_keeps_name_what_they_are() {
         assert_eq!(class(&source, "hold @r]() -> int\n        n"), TokenClass::Keyword, "{}", when);
     }
 }
+
+#[test]
+fn a_place_it_keeps_names_the_variable_around_it() {
+    let source = "\
+task main()
+    hold count = 0
+    bind big = [1, 2, 3]
+    region r
+    bind add = [hold& count, bind& big, @r](n: int) -> nothing count = count + n + big[0] fi
+    add(2)
+    show(count)
+fi
+";
+    for when in ["checked", "unparsed"] {
+        let source = if when == "unparsed" { format!("{}task g(\n", source) } else { source.to_string() };
+        assert_eq!(hover(&source, "count, bind"), "hold count: int", "{}", when);
+        assert_eq!(hover(&source, "big, @r"), "bind big: [int#3]", "{}", when);
+        assert_eq!(hover(&source, "n: int"), "n: int", "{}", when);
+        assert_eq!(hover(&source, "add ="), "bind add: [@r](int) -> nothing", "{}", when);
+    }
+}

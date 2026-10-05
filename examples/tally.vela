@@ -1,5 +1,6 @@
 ; Lambdas that keep what they use: a scorer made for each rule, kept in the
-; region of the game, and a counter of turns that changes its own copy.
+; region of the game, a counter of turns that changes its own copy, and a
+; lambda keeping the best score as a place, which changes the variable itself.
 shape Rule
     name: text
     points: int
@@ -33,10 +34,20 @@ task main()
     fi
     hold next_turn = turns(game)
     hold total = 0
-    each hits in [2, 0, 4]
-        total = total + play(&next_turn, scorers[0], hits)
+    hold best = 0
+    ; Declared after 'best', so the lambda keeping it ends first.
+    region round
+    bind note = [hold& best, @round](score: int) -> nothing
+        when score > best
+            best = score
+        fi
     fi
-    show("goals: ", total)
+    each hits in [2, 0, 4]
+        bind score = play(&next_turn, scorers[0], hits)
+        note(score)
+        total = total + score
+    fi
+    show("goals: ", total, ", best turn: ", best)
     bind bonus = 10
     bind assists = [@game](hits: int) -> int <- scorers[1](hits) + bonus fi
     bind assisted = play(&next_turn, assists, 5)

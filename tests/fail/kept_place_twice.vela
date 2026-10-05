@@ -1,0 +1,7 @@
+; error: 6:30: 'n' is kept as a place once
+; A variable is kept as a place once.
+task main()
+    hold n = 1
+    region r
+    bind f = [hold& n, hold& n, @r]() -> nothing n = 2 fi
+fi

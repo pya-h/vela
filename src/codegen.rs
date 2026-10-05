@@ -452,8 +452,13 @@ impl Generator {
         let fields: Vec<Field> = self.shapes.get(&kept).map(|shape| shape.fields.clone()).ok_or_else(|| Error::internal_at(e.span, format!("no block for what lambda '{}' keeps", lambda)))?;
         let mut values = Vec::new();
         for field in &fields {
-            let value = if field.name == region {
-                c_ident(region)
+            let value = if field.ty == Type::Region {
+                c_ident(&field.name)
+            } else if field.passing.is_ref() {
+                // A place: the variable's address, as a `hold&` parameter is given.
+                let mut var = Expr::new(ExprKind::Var(field.name.clone()), e.span);
+                var.ty = field.ty.ptr_inner().cloned();
+                format!("({})({})", c_type(&field.ty), self.gen_address(&var)?)
             } else {
                 let mut var = Expr::new(ExprKind::Var(field.name.clone()), e.span);
                 var.ty = Some(field.ty.clone());
@@ -1681,6 +1686,11 @@ impl Generator {
                 if field.ty == Type::Region {
                     self.w.line(&format!("vela__rt__region* {0} = vela__block->{0};", c_ident(&field.name)));
                     self.w.line(&format!("(void){};", c_ident(&field.name)));
+                } else if field.passing.is_ref() {
+                    // A place the lambda keeps: the variable itself.
+                    self.w.line(&format!("{0} {1} = vela__block->{1};", c_type(&field.ty), c_ident(&field.name)));
+                    self.w.line(&format!("(void){};", c_ident(&field.name)));
+                    self.pointers.insert(field.name.clone());
                 } else {
                     self.w.line(&format!("{0}* {1} = &vela__block->{1};", c_type(&field.ty), c_ident(&field.name)));
                     self.w.line(&format!("(void){};", c_ident(&field.name)));

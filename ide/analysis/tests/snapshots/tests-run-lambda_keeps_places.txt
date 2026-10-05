@@ -1,0 +1,106 @@
+  1 | ; warning: 53:30: this lambda keeps 'm' as a place, 'hold& m', and never uses it; leave it out of the list
+    | comment:; warning: 53:30: this lambda keeps 'm' as a place, 'hold& m', and never uses it; leave it out of the list
+  2 | ; Lambdas that keep variables as places, named in their list beside the region:
+    | comment:; Lambdas that keep variables as places, named in their list beside the region:
+  3 | ; hold& changes the variable itself, bind& reads it where it is with no copy.
+    | comment:; hold& changes the variable itself, bind& reads it where it is with no copy.
+  4 | ; The region is declared after the variable, so the lambda ends first.
+    | comment:; The region is declared after the variable, so the lambda ends first.
+  5 | task each_of(xs: [int#3], f: [@r](int) -> nothing)
+    | keyword:task  task:each_of  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  punctuation:,  parameter:f  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  variable:int  punctuation:)  operator:->  type-builtin:nothing  punctuation:)
+  6 |     each x in xs
+    | keyword:each  variable:x  keyword:in  parameter:xs
+  7 |         f(x)
+    | parameter:f  punctuation:(  variable:x  punctuation:)
+  8 |     fi
+    | keyword:fi
+  9 | fi
+    | keyword:fi
+ 11 | task total_into(hold& sum: int, xs: [int#3])
+    | keyword:task  task:total_into  punctuation:(  keyword:hold  keyword:&  parameter:sum  punctuation::  type-builtin:int  punctuation:,  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  punctuation:)
+ 12 |     region r
+    | keyword:region  region:r
+ 13 |     each_of(xs, [hold& sum, @r](x: int) -> nothing sum = sum + x fi)
+    | task:each_of  punctuation:(  parameter:xs  punctuation:,  punctuation:[  keyword:hold  keyword:&  parameter:sum  punctuation:,  operator:@  region:r  punctuation:]  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  parameter:sum  operator:=  parameter:sum  operator:+  parameter:x  keyword:fi  punctuation:)
+ 14 | fi
+    | keyword:fi
+ 16 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 17 |     hold count = 0
+    | keyword:hold  variable:count  operator:=  number:0
+ 18 |     bind big = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    | keyword:bind  variable:big  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:,  number:5  punctuation:,  number:6  punctuation:,  number:7  punctuation:,  number:8  punctuation:,  number:9  punctuation:,  number:10  punctuation:]
+ 19 |     region r
+    | keyword:region  region:r
+ 20 |     bind add = [hold& count, @r](n: int) -> nothing
+    | keyword:bind  variable:add  operator:=  punctuation:[  keyword:hold  keyword:&  variable:count  punctuation:,  operator:@  region:r  punctuation:]  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing
+ 21 |         count = count + n
+    | variable:count  operator:=  variable:count  operator:+  parameter:n
+ 22 |     fi
+    | keyword:fi
+ 23 |     bind look = [bind& big, @r](k: int) -> int <- big[k] fi
+    | keyword:bind  variable:look  operator:=  punctuation:[  keyword:bind  keyword:&  variable:big  punctuation:,  operator:@  region:r  punctuation:]  punctuation:(  parameter:k  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  variable:big  punctuation:[  parameter:k  punctuation:]  keyword:fi
+ 24 |     add(5)
+    | variable:add  punctuation:(  number:5  punctuation:)
+ 25 |     add(look(9))
+    | variable:add  punctuation:(  variable:look  punctuation:(  number:9  punctuation:)  punctuation:)
+ 26 |     show(count)
+    | builtin-fn:show  punctuation:(  variable:count  punctuation:)
+ 27 |     hold total = 0
+    | keyword:hold  variable:total  operator:=  number:0
+ 28 |     total_into(&total, [1, 2, 3])
+    | task:total_into  punctuation:(  operator:&  variable:total  punctuation:,  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:]  punctuation:)
+ 29 |     show(total)
+    | builtin-fn:show  punctuation:(  variable:total  punctuation:)
+ 30 |     hold items = new [int]() at r
+    | keyword:hold  variable:items  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 31 |     hold steps = 0
+    | keyword:hold  variable:steps  operator:=  number:0
+ 32 |     region s
+    | keyword:region  region:s
+ 33 |     ; A slice kept as a place grows itself, in its own region.
+    | comment:; A slice kept as a place grows itself, in its own region.
+ 34 |     bind push = [hold& items, @s](v: int) -> nothing items.add(v) fi
+    | keyword:bind  variable:push  operator:=  punctuation:[  keyword:hold  keyword:&  variable:items  punctuation:,  operator:@  region:s  punctuation:]  punctuation:(  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  variable:items  punctuation:.  field:add  punctuation:(  parameter:v  punctuation:)  keyword:fi
+ 35 |     push(4)
+    | variable:push  punctuation:(  number:4  punctuation:)
+ 36 |     push(5)
+    | variable:push  punctuation:(  number:5  punctuation:)
+ 37 |     show(items)
+    | builtin-fn:show  punctuation:(  variable:items  punctuation:)
+ 38 |     bind outer = [hold& steps, @s]() -> int
+    | keyword:bind  variable:outer  operator:=  punctuation:[  keyword:hold  keyword:&  variable:steps  punctuation:,  operator:@  region:s  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 39 |         region q
+    | keyword:region  region:q
+ 40 |         bind inner = [hold& steps, @q]() -> nothing steps = steps + 10 fi
+    | keyword:bind  variable:inner  operator:=  punctuation:[  keyword:hold  keyword:&  variable:steps  punctuation:,  operator:@  region:q  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:nothing  variable:steps  operator:=  variable:steps  operator:+  number:10  keyword:fi
+ 41 |         inner()
+    | task:inner  punctuation:(  punctuation:)
+ 42 |         steps = steps + 1
+    | variable:steps  operator:=  variable:steps  operator:+  number:1
+ 43 |         <- steps
+    | keyword:<-  variable:steps
+ 44 |     fi
+    | keyword:fi
+ 45 |     show(outer(), " ", steps)
+    | builtin-fn:show  punctuation:(  task:outer  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:steps  punctuation:)
+ 46 |     spare()
+    | task:spare  punctuation:(  punctuation:)
+ 47 | fi
+    | keyword:fi
+ 49 | task spare()
+    | keyword:task  task:spare  punctuation:(  punctuation:)
+ 50 |     hold n = 1
+    | keyword:hold  variable:n  operator:=  number:1
+ 51 |     hold m = 2
+    | keyword:hold  variable:m  operator:=  number:2
+ 52 |     region r
+    | keyword:region  region:r
+ 53 |     bind f = [hold& n, hold& m, @r]() -> nothing n = 2 fi
+    | keyword:bind  variable:f  operator:=  punctuation:[  keyword:hold  keyword:&  variable:n  punctuation:,  keyword:hold  keyword:&  variable:m  punctuation:,  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:nothing  variable:n  operator:=  number:2  keyword:fi
+ 54 |     f()
+    | task:f  punctuation:(  punctuation:)
+ 55 |     show(n, " ", m)
+    | builtin-fn:show  punctuation:(  variable:n  punctuation:,  string:" "  punctuation:,  variable:m  punctuation:)
+ 56 | fi
+    | keyword:fi

@@ -2206,14 +2206,16 @@ fi</code></pre>
           <a href="vela.html#kept-lambdas">Lambdas that keep what they use</a>.</li>
       </ul>
       <p>
-        <strong>Planned next.</strong> <span class="badge b-med">Planned</span> A variable kept as a place, named in the
-        list beside the region: <code>[&amp;big, @r]</code> reads it where it is, with no copy, for a large value, and
-        <code>[hold&amp; count, @r]</code> changes the variable itself. It is safe only where the lambda can't outlive the
-        variable, so only where <code>r</code> is declared inside the variable's block, after it, and ends first; a
-        region given as a parameter, or one declared before the variable, is refused.
+        <strong>Places kept by name.</strong> <span class="badge b-done">Done</span> A variable named in the list beside
+        the region is kept as the variable itself: <code>[hold&amp; count, @r]</code> changes it, and
+        <code>[bind&amp; big, @r]</code> reads a large value where it is, with no copy. It is safe only where the lambda
+        can't outlive the variable, so only where <code>r</code> is declared after the variable, in its block or one inside
+        it, and ends first; a region given as a parameter, or one declared before the variable, is refused. Built: see
+        <a href="vela.html#kept-lambdas">Lambdas that keep what they use</a>.
       </p>
       <p>
-        <strong>Later, maybe.</strong> A lambda that keeps what it uses held in a field of a shape or kind; compared, or
+        <strong>Later, maybe.</strong> Fields and array items of a variable kept as places, <code>[hold&amp; p.x, @r]</code>;
+        a lambda that keeps what it uses held in a field of a shape or kind; compared, or
         copied into another region with what it keeps; a rule for <code>add</code> and <code>del</code> on a slice the
         lambda keeps, which today it refuses, since its copy shares the items and not the length; and data of another
         region used in place where Vela can see that the region outlives <code>r</code>. Weighed and dropped: marks for

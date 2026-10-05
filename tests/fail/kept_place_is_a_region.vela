@@ -1,0 +1,8 @@
+; error: 6:21: 'q' is a region, which a lambda names alone, as in '[@q]', and keeps nothing of as a place
+; A region is named alone in a lambda's list.
+task main()
+    region q
+    region r
+    bind f = [hold& q, @r]() -> nothing show(1) fi
+    f()
+fi

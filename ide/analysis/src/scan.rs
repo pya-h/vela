@@ -533,18 +533,30 @@ impl<'a> Tokens<'a> {
         }
     }
 
-    /// Whether what is before position `p` is what a lambda keeps, `[@r]` or
-    /// `[hold @r]`.
+    /// Whether what is before position `p` is what a lambda keeps, `[@r]`,
+    /// `[hold @r]`, or `[hold& count, @r]`.
     fn after_kept(&self, p: usize) -> bool {
-        let Some(close) = p.checked_sub(1) else { return false };
-        if self.token(close) != Some(&Token::RBracket) || self.ident(close.wrapping_sub(1)).is_none() || self.token(close.wrapping_sub(2)) != Some(&Token::AtSign) {
-            return false;
-        }
-        match self.token(close.wrapping_sub(3)) {
-            Some(Token::LBracket) => true,
-            Some(Token::Hold) => self.token(close.wrapping_sub(4)) == Some(&Token::LBracket),
-            _ => false,
-        }
+        let Some(close) = p.checked_sub(1).filter(|&close| self.token(close) == Some(&Token::RBracket)) else { return false };
+        (0..close).rev().find(|&q| !self.kept_part(q)).is_some_and(|open| self.token(open) == Some(&Token::LBracket) && self.kept_list(open) == Some(close))
+    }
+
+    /// Whether the token at `q` may be part of what a lambda keeps: a name,
+    /// `@`, `hold`, `bind`, `&`, or a comma.
+    fn kept_part(&self, q: usize) -> bool {
+        matches!(self.token(q), Some(Token::Ident(_) | Token::AtSign | Token::Hold | Token::Bind | Token::Amp | Token::Comma))
+    }
+
+    /// The `]` closing what a lambda keeps, when the `[` at `open` starts
+    /// one: its region, `@r` or `hold @r`, and the places it keeps.
+    fn kept_list(&self, open: usize) -> Option<usize> {
+        let close = (open + 1..).find(|&q| !self.kept_part(q))?;
+        let region = (open + 1..close).any(|q| self.token(q) == Some(&Token::AtSign));
+        (self.token(close) == Some(&Token::RBracket) && region && close > open + 1).then_some(close)
+    }
+
+    /// Whether position `p` is inside what a lambda keeps, `[hold& count, @r]`.
+    pub(crate) fn in_kept_list(&self, p: usize) -> bool {
+        (0..p).rev().find(|&q| !self.kept_part(q)).is_some_and(|open| self.token(open) == Some(&Token::LBracket) && self.kept_list(open).is_some_and(|close| close > p))
     }
 
     /// Whether the `(` at position `p` starts a lambda, `(x: int) -> int … fi`:
@@ -1524,6 +1536,9 @@ impl<'a> Classifier<'a> {
                         // the header declares below, not a variable.
                         // (and `bind`, `hold&`, `bind&`).
                         // `(hold& int) -> nothing`: how a task's type takes a place.
+                        // `[hold& count, @r]`: what a lambda keeps names
+                        // variables of the code around it, and declares none.
+                        Token::Hold | Token::Bind if tokens.in_kept_list(p) => {}
                         Token::Hold | Token::Bind if was_type => in_type = true,
                         Token::Hold | Token::Bind if in_task_header && matches!(tokens.before(p), Some(Token::LParen | Token::Comma)) => {}
                         Token::Bind | Token::Hold => {

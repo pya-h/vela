@@ -328,6 +328,7 @@ block shared type</pre>
         <tr><td><code>(x: int) -&gt; int &lt;- x * 2 fi</code></td><td>a lambda: a task with no name, written where its value goes, its body on the header's line or the lines after it (see <a href="#lambdas">Lambdas</a>)</td></tr>
         <tr><td><code>[@r](x: int) -&gt; int … fi</code>, <code>[@r](int) -&gt; int</code></td><td>a lambda that keeps a copy of what it uses of the code around it in region <code>r</code>, and its type (see <a href="#kept-lambdas">Lambdas that keep what they use</a>)</td></tr>
         <tr><td><code>[hold @r](…) … fi</code></td><td>such a lambda that changes its copies, held in a <code>hold</code> variable and never copied</td></tr>
+        <tr><td><code>[hold&amp; count, bind&amp; big, @r](…) … fi</code></td><td>such a lambda keeping variables themselves, to change or to read in place, with <code>r</code> declared after them (see <a href="#kept-lambdas">Lambdas that keep what they use</a>)</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v#n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>[K: V]@r</code>, <code>[:V]@r</code>, <code>["a": 1] at r</code></td><td>a map type; one whose keys are text; a map written by its pairs, as <code>new [text: int](["a": 1]) at r</code> (see <a href="#maps">Maps</a>)</td></tr>
         <tr><td><code>m[k]</code>, <code>m[#k]</code>, <code>m[k] = v</code>, <code>each k, v in m</code></td><td>a key's value, which stops the program without the key; the same as a <code>maybe</code>; the key added or given a new value; the keys and values in the order the keys were added</td></tr>
@@ -2411,10 +2412,36 @@ fi</code></pre>
         or given as a wrapper's own value yet. A stop inside any lambda says where it is, <code>at 6:39 in a lambda</code>.
       </p>
       <p>
+        <strong>Keeping a variable as a place.</strong> A variable named in the list beside the region is kept as the
+        variable itself, not a copy: <code>hold&amp; count</code> changes it, and <code>bind&amp; big</code> reads it
+        where it is, with no copy of a large value, the words a parameter and a reference use. The lambda keeps a pointer
+        to the variable, so it must end first: the region it is kept in is declared after the variable, in its block or a
+        block inside it, and so ends first, and the lambda with it. A region given to the task, one declared before the
+        variable or in a block around it, or one a lambda around this one keeps what it uses in, is refused, so such a
+        lambda never leaves its task. A variable may be a <code>hold&amp;</code> or <code>bind&amp;</code> parameter or a
+        reference, whose place outlives the body; fields and items aren't kept so. The lambda sees the regions a place
+        it keeps is in, which outlive it, so a slice kept with <code>hold&amp;</code> grows itself, and the code around
+        it keeps using the variable as usual. A <code>hold&amp;</code> place changes the variable without
+        <code>[hold @r]</code>, which only says the lambda changes its copies. A listed place the body never uses is
+        a warning.
+      </p>
+      <pre><code>task total(xs: [int#3]) -&gt; int
+    hold sum = 0
+    region r                                      ; after sum, so it ends first
+    bind add = [hold&amp; sum, @r](x: int) -&gt; nothing sum = sum + x fi
+    each x in xs
+        add(x)
+    fi
+    &lt;- sum
+fi
+
+task main()
+    show(total([1, 2, 3]))                        ; 6
+fi</code></pre>
+      <p>
         <strong>What it costs.</strong> A value of it is two words, its function and its block; a call passes the block as
-        a hidden first value, and making one allocates the block in <code>r</code>, a bump. A plain task value stays one
-        word and costs nothing more. Keeping a variable as a place, <code>[hold&amp; count, @r]</code>, so that the lambda
-        changes the variable itself, is planned (see <a href="future.html#lambdas">Future Directions</a>).
+        a hidden first value, and making one allocates the block in <code>r</code>, a bump. A place it keeps is one
+        pointer in the block. A plain task value stays one word and costs nothing more.
       </p>
 
       <h3 id="decorators">Decorators</h3>
@@ -4175,8 +4202,8 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           method of every value (see <a href="#task-values">Tasks as values</a>).</li>
         <li>A plain lambda takes nothing from the code around it, and no lambda can be written inside a task or method
           that takes types (see <a href="#lambdas">Lambdas</a>). One that keeps what it uses, <code>[@r]</code>, keeps
-          copies in one region, never keeps a variable as a place yet, and isn't compared, copied, held in a field, or
-          given as a wrapper's value (see <a href="#kept-lambdas">Lambdas that keep what they use</a>).</li>
+          copies in one region, keeps a variable as a place only where that region is declared after it (never a field
+          or an item), and isn't compared, copied, held in a field, or given as a wrapper's value (see <a href="#kept-lambdas">Lambdas that keep what they use</a>).</li>
         <li>Only a task or a shared method takes startup decorators; a method of every value takes only wrappers, and a task that takes types neither; a startup decorator sends nothing, or
           <code>nothing ~ E</code>; a decorator's and a wrapper's values, worked out where the program starts, hold nothing in a region (see <a href="#decorators">Decorators</a>).</li>
         <li>A task takes one type group; a group never holds a region, which is named beside it; a call doesn't write a

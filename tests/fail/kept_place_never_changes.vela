@@ -1,0 +1,8 @@
+; error: 6:21: this lambda keeps 'n' as 'hold& n', to change it, so it needs a place that can change, and 'n' never does (declared at 4:10); a value declared with 'hold' can
+; A lambda keeps as 'hold&' only a place that can change.
+task main()
+    bind n = 1
+    region r
+    bind f = [hold& n, @r]() -> nothing n = 2 fi
+    f()
+fi

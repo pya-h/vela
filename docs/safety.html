@@ -272,7 +272,9 @@
               <td>A plain lambda takes nothing from the code around it, and one that keeps what it uses,
                 <code>[@r]</code>, keeps copies in a block of <code>r</code>, which its type names, so neither reads a
                 variable after the task that wrote it has ended, nor what it keeps after <code>r</code> is freed. It keeps
-                nothing of another region, and its copy of a slice never changes the slice's length.</td>
+                nothing of another region, and its copy of a slice never changes the slice's length. A variable it keeps
+                as a place, <code>[hold&amp; count, @r]</code>, is one declared before <code>r</code>, in its block or one
+                around it, so the lambda ends first.</td>
               <td class="when"><span class="badge b-checked">checked</span></td>
               <td>A closure reading a dead stack frame, or memory its region freed. See <a href="vela.html#lambdas">Lambdas</a>
                 and <a href="vela.html#kept-lambdas">Lambdas that keep what they use</a>.</td>
