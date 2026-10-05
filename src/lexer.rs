@@ -26,6 +26,11 @@ pub enum Token {
     Else,
     Loop,
     Each,
+    /// `break`: stops the loop around it, or the one it names, `break outer`.
+    Break,
+    /// `continue`: ends this pass of the loop around it, or of the one it
+    /// names, `continue outer`, and goes on with the next.
+    Continue,
     /// `block`: a block of its own, which ends at its `fi` with its names and
     /// regions.
     Block,
@@ -81,7 +86,7 @@ pub enum Token {
     Dot,
     Arrow,
     /// `=>`, which gives an included module or name another name:
-    /// `include shop/cart => basket`.
+    /// `include shop/cart => basket`, and names a loop: `outer => each x in xs`.
     FatArrow,
     Range,
     /// `...`: after the last value in brackets, `[1, 2, ...]`, it makes a slice
@@ -145,6 +150,8 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("else", Token::Else),
     ("loop", Token::Loop),
     ("each", Token::Each),
+    ("break", Token::Break),
+    ("continue", Token::Continue),
     ("block", Token::Block),
     ("in", Token::In),
     ("at", Token::At),
@@ -757,9 +764,9 @@ impl Lexer {
         if s.contains("__") {
             return invalid(loc, format!("'{}': names cannot contain '__'", s));
         }
-        // Every keyword is two to seven lowercase letters, so most names are
+        // Every keyword is two to eight lowercase letters, so most names are
         // told apart without comparing them to each.
-        let could_be_keyword = (2..=7).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_lowercase());
+        let could_be_keyword = (2..=8).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_lowercase());
         let token = KEYWORDS
             .iter()
             .filter(|_| could_be_keyword)

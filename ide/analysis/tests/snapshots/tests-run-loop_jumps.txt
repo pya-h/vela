@@ -1,0 +1,362 @@
+  1 | ; `break` stops a loop, and `continue` ends its pass and goes on with the
+    | comment:; `break` stops a loop, and `continue` ends its pass and goes on with the
+  2 | ; next; a loop named `outer => …` is stopped or gone on with from a loop inside
+    | comment:; next; a loop named `outer => …` is stopped or gone on with from a loop inside
+  3 | ; it, `break outer`. Regions declared inside the loop are freed on the way out.
+    | comment:; it, `break outer`. Regions declared inside the loop are freed on the way out.
+  5 | kind Step
+    | keyword:kind  type:Step
+  6 |     Go(n: int)
+    | variant:Go  punctuation:(  field:n  punctuation::  type-builtin:int  punctuation:)
+  7 |     Skip
+    | variant:Skip
+  8 |     Halt
+    | variant:Halt
+  9 | fi
+    | keyword:fi
+ 11 | shape Point
+    | keyword:shape  type:Point
+ 12 |     x: int
+    | field:x  punctuation::  type-builtin:int
+ 13 | fi
+    | keyword:fi
+ 15 | ; In a loop through a group's values, written out for each use.
+    | comment:; In a loop through a group's values, written out for each use.
+ 16 | task some<P...: shown>(args: P...) -> int
+    | keyword:task  task:some  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)  operator:->  type-builtin:int
+ 17 |     hold seen = 0
+    | keyword:hold  variable:seen  operator:=  number:0
+ 18 |     each v in args
+    | keyword:each  variable:v  keyword:in  parameter:args
+ 19 |         seen++
+    | variable:seen  operator:++
+ 20 |         when seen == 2
+    | keyword:when  variable:seen  operator:==  number:2
+ 21 |             continue
+    | keyword:continue
+ 22 |         fi
+    | keyword:fi
+ 23 |         when seen == 4
+    | keyword:when  variable:seen  operator:==  number:4
+ 24 |             break
+    | keyword:break
+ 25 |         fi
+    | keyword:fi
+ 26 |         show(v)
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:)
+ 27 |     fi
+    | keyword:fi
+ 28 |     <- seen
+    | keyword:<-  variable:seen
+ 29 | fi
+    | keyword:fi
+ 31 | task firsts<P...: shown>(args: P...)
+    | keyword:task  task:firsts  punctuation:<  type:P  keyword:...  punctuation::  keyword:shown  punctuation:>  punctuation:(  parameter:args  punctuation::  type:P  keyword:...  punctuation:)
+ 32 |     outer => each v in args
+    | variable:outer  operator:=>  keyword:each  variable:v  keyword:in  parameter:args
+ 33 |         each i in 0..3
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:3
+ 34 |             when i == 1
+    | keyword:when  variable:i  operator:==  number:1
+ 35 |                 continue outer
+    | keyword:continue  variable:outer
+ 36 |             fi
+    | keyword:fi
+ 37 |             show(v, " ", i)
+    | builtin-fn:show  punctuation:(  variable:v  punctuation:,  string:" "  punctuation:,  variable:i  punctuation:)
+ 38 |         fi
+    | keyword:fi
+ 39 |     fi
+    | keyword:fi
+ 40 | fi
+    | keyword:fi
+ 42 | task find<T: same>(xs: [T#3], want: T) -> maybe int
+    | keyword:task  task:find  punctuation:<  type:T  punctuation::  keyword:same  punctuation:>  punctuation:(  parameter:xs  punctuation::  punctuation:[  type:T  punctuation:#  number:3  punctuation:]  punctuation:,  parameter:want  punctuation::  type:T  punctuation:)  operator:->  keyword:maybe  type-builtin:int
+ 43 |     hold found: maybe int = none
+    | keyword:hold  variable:found  punctuation::  keyword:maybe  type-builtin:int  operator:=  keyword:none
+ 44 |     hold i = 0
+    | keyword:hold  variable:i  operator:=  number:0
+ 45 |     each x in xs
+    | keyword:each  variable:x  keyword:in  parameter:xs
+ 46 |         when x == want
+    | keyword:when  variable:x  operator:==  parameter:want
+ 47 |             found = i
+    | variable:found  operator:=  variable:i
+ 48 |             break
+    | keyword:break
+ 49 |         fi
+    | keyword:fi
+ 50 |         i++
+    | variable:i  operator:++
+ 51 |     fi
+    | keyword:fi
+ 52 |     <- found
+    | keyword:<-  variable:found
+ 53 | fi
+    | keyword:fi
+ 55 | ; A case may stop the loop or go on with it.
+    | comment:; A case may stop the loop or go on with it.
+ 56 | task total(steps: [Step#5]) -> sum: int
+    | keyword:task  task:total  punctuation:(  parameter:steps  punctuation::  punctuation:[  type:Step  punctuation:#  number:5  punctuation:]  punctuation:)  operator:->  variable:sum  punctuation::  type-builtin:int
+ 57 |     sum <- 0
+    | variable:sum  keyword:<-  number:0
+ 58 |     each s in steps
+    | keyword:each  variable:s  keyword:in  parameter:steps
+ 59 |         match s
+    | keyword:match  variable:s
+ 60 |         case Go n
+    | keyword:case  variant:Go  variable:n
+ 61 |             sum <- sum + n
+    | variable:sum  keyword:<-  variable:sum  operator:+  variable:n
+ 62 |         case Skip
+    | keyword:case  variant:Skip
+ 63 |             continue
+    | keyword:continue
+ 64 |         case Halt
+    | keyword:case  variant:Halt
+ 65 |             break
+    | keyword:break
+ 66 |         fi
+    | keyword:fi
+ 67 |         show("after ", sum)
+    | builtin-fn:show  punctuation:(  string:"after "  punctuation:,  variable:sum  punctuation:)
+ 68 |     fi
+    | keyword:fi
+ 69 | fi
+    | keyword:fi
+ 71 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 72 |     hold i = 0
+    | keyword:hold  variable:i  operator:=  number:0
+ 73 |     loop i < 10
+    | keyword:loop  variable:i  operator:<  number:10
+ 74 |         i++
+    | variable:i  operator:++
+ 75 |         when i == 3
+    | keyword:when  variable:i  operator:==  number:3
+ 76 |             continue
+    | keyword:continue
+ 77 |         fi
+    | keyword:fi
+ 78 |         when i == 7
+    | keyword:when  variable:i  operator:==  number:7
+ 79 |             break
+    | keyword:break
+ 80 |         fi
+    | keyword:fi
+ 81 |         show(i)
+    | builtin-fn:show  punctuation:(  variable:i  punctuation:)
+ 82 |     fi
+    | keyword:fi
+ 83 |     show("after ", i)
+    | builtin-fn:show  punctuation:(  string:"after "  punctuation:,  variable:i  punctuation:)
+ 85 |     ; Named loops.
+    | comment:; Named loops.
+ 86 |     outer => each a in 0..4
+    | variable:outer  operator:=>  keyword:each  variable:a  keyword:in  number:0  operator:..  number:4
+ 87 |         each b in 0..4
+    | keyword:each  variable:b  keyword:in  number:0  operator:..  number:4
+ 88 |             when b > a
+    | keyword:when  variable:b  operator:>  variable:a
+ 89 |                 continue outer
+    | keyword:continue  variable:outer
+ 90 |             fi
+    | keyword:fi
+ 91 |             when a == 3
+    | keyword:when  variable:a  operator:==  number:3
+ 92 |                 break outer
+    | keyword:break  variable:outer
+ 93 |             fi
+    | keyword:fi
+ 94 |             show(a, b)
+    | builtin-fn:show  punctuation:(  variable:a  punctuation:,  variable:b  punctuation:)
+ 95 |         fi
+    | keyword:fi
+ 96 |     fi
+    | keyword:fi
+ 98 |     show(some(1, "two", 3.5, 'c', 5))
+    | builtin-fn:show  punctuation:(  task:some  punctuation:(  number:1  punctuation:,  string:"two"  punctuation:,  number:3.5  punctuation:,  string:'c'  punctuation:,  number:5  punctuation:)  punctuation:)
+ 99 |     firsts(1, "a", 2.5)
+    | task:firsts  punctuation:(  number:1  punctuation:,  string:"a"  punctuation:,  number:2.5  punctuation:)
+100 |     show(find([3, 4, 5], 4), " ", find(["a", "b", "c"], "z"))
+    | builtin-fn:show  punctuation:(  task:find  punctuation:(  punctuation:[  number:3  punctuation:,  number:4  punctuation:,  number:5  punctuation:]  punctuation:,  number:4  punctuation:)  punctuation:,  string:" "  punctuation:,  task:find  punctuation:(  punctuation:[  string:"a"  punctuation:,  string:"b"  punctuation:,  string:"c"  punctuation:]  punctuation:,  string:"z"  punctuation:)  punctuation:)
+101 |     show(total([Step.Go(1), Step.Skip, Step.Go(2), Step.Halt, Step.Go(100)]))
+    | builtin-fn:show  punctuation:(  task:total  punctuation:(  punctuation:[  type:Step  punctuation:.  variant:Go  punctuation:(  number:1  punctuation:)  punctuation:,  type:Step  punctuation:.  variant:Skip  punctuation:,  type:Step  punctuation:.  variant:Go  punctuation:(  number:2  punctuation:)  punctuation:,  type:Step  punctuation:.  variant:Halt  punctuation:,  type:Step  punctuation:.  variant:Go  punctuation:(  number:100  punctuation:)  punctuation:]  punctuation:)  punctuation:)
+103 |     ; A plan B may stop the loop, and a region of the pass is freed first.
+    | comment:; A plan B may stop the loop, and a region of the pass is freed first.
+104 |     region r
+    | keyword:region  region:r
+105 |     hold xs = new [int]() at r
+    | keyword:hold  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+106 |     xs.add(1)
+    | variable:xs  punctuation:.  field:add  punctuation:(  number:1  punctuation:)
+107 |     xs.add(2)
+    | variable:xs  punctuation:.  field:add  punctuation:(  number:2  punctuation:)
+108 |     xs.add(3)
+    | variable:xs  punctuation:.  field:add  punctuation:(  number:3  punctuation:)
+109 |     each x in xs
+    | keyword:each  variable:x  keyword:in  variable:xs
+110 |         region s
+    | keyword:region  region:s
+111 |         hold t = new [int]() at s
+    | keyword:hold  variable:t  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:s
+112 |         t.add(x)
+    | variable:t  punctuation:.  field:add  punctuation:(  variable:x  punctuation:)
+113 |         when x == 2
+    | keyword:when  variable:x  operator:==  number:2
+114 |             continue
+    | keyword:continue
+115 |         fi
+    | keyword:fi
+116 |         bind y = xs[#x] { break }
+    | keyword:bind  variable:y  operator:=  variable:xs  punctuation:[  punctuation:#  variable:x  punctuation:]  punctuation:{  keyword:break  punctuation:}
+117 |         show("x ", x, " ", y, " ", t[0])
+    | builtin-fn:show  punctuation:(  string:"x "  punctuation:,  variable:x  punctuation:,  string:" "  punctuation:,  variable:y  punctuation:,  string:" "  punctuation:,  variable:t  punctuation:[  number:0  punctuation:]  punctuation:)
+118 |     fi
+    | keyword:fi
+120 |     ; Regions of blocks inside the pass are freed too.
+    | comment:; Regions of blocks inside the pass are freed too.
+121 |     hold k = 0
+    | keyword:hold  variable:k  operator:=  number:0
+122 |     loop k < 5
+    | keyword:loop  variable:k  operator:<  number:5
+123 |         k++
+    | variable:k  operator:++
+124 |         block
+    | keyword:block
+125 |             region q
+    | keyword:region  region:q
+126 |             bind z = new [int]() at q
+    | keyword:bind  variable:z  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:q
+127 |             when k == 2
+    | keyword:when  variable:k  operator:==  number:2
+128 |                 continue
+    | keyword:continue
+129 |             fi
+    | keyword:fi
+130 |             when k == 4
+    | keyword:when  variable:k  operator:==  number:4
+131 |                 break
+    | keyword:break
+132 |             fi
+    | keyword:fi
+133 |             show("k ", k, " ", z.len)
+    | builtin-fn:show  punctuation:(  string:"k "  punctuation:,  variable:k  punctuation:,  string:" "  punctuation:,  variable:z  punctuation:.  field:len  punctuation:)
+134 |         fi
+    | keyword:fi
+135 |     fi
+    | keyword:fi
+137 |     ; A map, and a place as it is at each pass.
+    | comment:; A map, and a place as it is at each pass.
+138 |     hold m = new [text: int]() at r
+    | keyword:hold  variable:m  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+139 |     m["a"] = 1
+    | variable:m  punctuation:[  string:"a"  punctuation:]  operator:=  number:1
+140 |     m["b"] = 2
+    | variable:m  punctuation:[  string:"b"  punctuation:]  operator:=  number:2
+141 |     m["c"] = 3
+    | variable:m  punctuation:[  string:"c"  punctuation:]  operator:=  number:3
+142 |     each key, v in m
+    | keyword:each  variable:key  punctuation:,  variable:v  keyword:in  variable:m
+143 |         when v == 2
+    | keyword:when  variable:v  operator:==  number:2
+144 |             continue
+    | keyword:continue
+145 |         fi
+    | keyword:fi
+146 |         show(key, v)
+    | builtin-fn:show  punctuation:(  variable:key  punctuation:,  variable:v  punctuation:)
+147 |     fi
+    | keyword:fi
+148 |     hold ys = [5, 6, 7, 8]
+    | keyword:hold  variable:ys  operator:=  punctuation:[  number:5  punctuation:,  number:6  punctuation:,  number:7  punctuation:,  number:8  punctuation:]
+149 |     each y in &ys
+    | keyword:each  variable:y  keyword:in  operator:&  variable:ys
+150 |         when y == 7
+    | keyword:when  variable:y  operator:==  number:7
+151 |             break
+    | keyword:break
+152 |         fi
+    | keyword:fi
+153 |         show(y)
+    | builtin-fn:show  punctuation:(  variable:y  punctuation:)
+154 |     fi
+    | keyword:fi
+156 |     ; In a loop's condition, it stops that loop.
+    | comment:; In a loop's condition, it stops that loop.
+157 |     hold j = 0
+    | keyword:hold  variable:j  operator:=  number:0
+158 |     loop ys[#j] { break } > 0
+    | keyword:loop  variable:ys  punctuation:[  punctuation:#  variable:j  punctuation:]  punctuation:{  keyword:break  punctuation:}  operator:>  number:0
+159 |         j++
+    | variable:j  operator:++
+160 |     fi
+    | keyword:fi
+161 |     show("j ", j)
+    | builtin-fn:show  punctuation:(  string:"j "  punctuation:,  variable:j  punctuation:)
+163 |     ; A loop over a pattern, joined with 'and'.
+    | comment:; A loop over a pattern, joined with 'and'.
+164 |     hold n = 0
+    | keyword:hold  variable:n  operator:=  number:0
+165 |     hold mm: maybe int = 3
+    | keyword:hold  variable:mm  punctuation::  keyword:maybe  type-builtin:int  operator:=  number:3
+166 |     loop mm is {v} and v < 10
+    | keyword:loop  variable:mm  keyword:is  punctuation:{  variable:v  punctuation:}  keyword:and  variable:v  operator:<  number:10
+167 |         n++
+    | variable:n  operator:++
+168 |         mm = v + 1
+    | variable:mm  operator:=  variable:v  operator:+  number:1
+169 |         when v == 5
+    | keyword:when  variable:v  operator:==  number:5
+170 |             continue
+    | keyword:continue
+171 |         fi
+    | keyword:fi
+172 |         when v == 7
+    | keyword:when  variable:v  operator:==  number:7
+173 |             break
+    | keyword:break
+174 |         fi
+    | keyword:fi
+175 |     fi
+    | keyword:fi
+176 |     show("n ", n, " ", mm)
+    | builtin-fn:show  punctuation:(  string:"n "  punctuation:,  variable:n  punctuation:,  string:" "  punctuation:,  variable:mm  punctuation:)
+178 |     ; A branch of a value may stop the loop instead of giving one.
+    | comment:; A branch of a value may stop the loop instead of giving one.
+179 |     bind ps = [Point { x: 1 }, Point { x: 2 }]
+    | keyword:bind  variable:ps  operator:=  punctuation:[  type:Point  punctuation:{  field:x  punctuation::  number:1  punctuation:}  punctuation:,  type:Point  punctuation:{  field:x  punctuation::  number:2  punctuation:}  punctuation:]
+180 |     each p in 0..5
+    | keyword:each  variable:p  keyword:in  number:0  operator:..  number:5
+181 |         show(ps[#p] { break })
+    | builtin-fn:show  punctuation:(  variable:ps  punctuation:[  punctuation:#  variable:p  punctuation:]  punctuation:{  keyword:break  punctuation:}  punctuation:)
+182 |     fi
+    | keyword:fi
+183 |     each p in 0..5
+    | keyword:each  variable:p  keyword:in  number:0  operator:..  number:5
+184 |         show(when p > 1 break else p * 10 fi)
+    | builtin-fn:show  punctuation:(  keyword:when  variable:p  operator:>  number:1  keyword:break  keyword:else  variable:p  operator:*  number:10  keyword:fi  punctuation:)
+185 |     fi
+    | keyword:fi
+186 |     each st in [Step.Go(1), Step.Skip, Step.Go(3), Step.Halt, Step.Go(9)]
+    | keyword:each  variable:st  keyword:in  punctuation:[  type:Step  punctuation:.  variant:Go  punctuation:(  number:1  punctuation:)  punctuation:,  type:Step  punctuation:.  variant:Skip  punctuation:,  type:Step  punctuation:.  variant:Go  punctuation:(  number:3  punctuation:)  punctuation:,  type:Step  punctuation:.  variant:Halt  punctuation:,  type:Step  punctuation:.  variant:Go  punctuation:(  number:9  punctuation:)  punctuation:]
+187 |         bind w = match st
+    | keyword:bind  variable:w  operator:=  keyword:match  variable:st
+188 |         case Go g = g * 2
+    | keyword:case  variant:Go  variable:g  operator:=  variable:g  operator:*  number:2
+189 |         case Skip
+    | keyword:case  variant:Skip
+190 |             continue
+    | keyword:continue
+191 |         case Halt
+    | keyword:case  variant:Halt
+192 |             break
+    | keyword:break
+193 |         fi
+    | keyword:fi
+194 |         show(w)
+    | builtin-fn:show  punctuation:(  variable:w  punctuation:)
+195 |     fi
+    | keyword:fi
+196 | fi
+    | keyword:fi

@@ -15,7 +15,7 @@ use vela::ast::{BUILTIN_TASKS, BUILTIN_TYPES, Need, Type, unqualified};
 use vela::lexer::{LexKind, Token};
 
 use crate::infer::{Knowledge, parameter_names, parameters};
-use crate::scan::{Scan, Symbol, SymbolKind};
+use crate::scan::{LOOP_NAME, Scan, Symbol, SymbolKind};
 use crate::types::{Checked, Context};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -450,6 +450,10 @@ pub(crate) fn complete(source: &str, scan: &Scan, checked: &Checked, context: Co
     // `block` takes nothing on its line.
     if prev_token == Some(&Token::Block) {
         return (Vec::new(), word_start, byte);
+    }
+    // `break outer` and `continue outer`: the names of the loops around it.
+    if matches!(prev_token, Some(Token::Break | Token::Continue)) {
+        return (loop_name_items(&k, byte), word_start, byte);
     }
     // `hold& name` and `bind& name`: the `&` is part of the word.
     if prev_token == Some(&Token::Amp) && matches!(prev.and_then(|q| q.checked_sub(1)).and_then(|q| k.token(q)), Some(Token::Hold | Token::Bind)) {
@@ -1085,6 +1089,8 @@ enum Block {
     Method,
     When,
     Match,
+    /// A `loop` or an `each`, which `break` and `continue` stop or go on with.
+    Loop,
     Other,
     /// A plan B's block, opened by a `{` ending its line.
     PlanB,
@@ -1174,7 +1180,8 @@ fn open_blocks(k: &Knowledge, byte: usize) -> Vec<Block> {
             Some(Token::Ident(_)) if k.declares_method(q) => blocks.push(Block::Method),
             Some(Token::When) => blocks.push(Block::When),
             Some(Token::Match) => blocks.push(Block::Match),
-            Some(Token::Loop | Token::Each | Token::Block) => blocks.push(Block::Other),
+            Some(Token::Loop | Token::Each) => blocks.push(Block::Loop),
+            Some(Token::Block) => blocks.push(Block::Other),
             Some(Token::Fi) => {
                 blocks.pop();
             }
@@ -1929,6 +1936,9 @@ fn statement_items(k: &Knowledge, blocks: &[Block], byte: usize, names_error: bo
         return vec![keyword("case")];
     }
     let mut items: Vec<CompletionItem> = STATEMENT_KEYWORDS.iter().map(|word| keyword(word)).collect();
+    if blocks.contains(&Block::Loop) {
+        items.extend([keyword("break"), keyword("continue")]);
+    }
     // Inside a plan B, `}` closes the block, not `fi`.
     match blocks.last() {
         Some(Block::PlanB) => {}
@@ -2091,11 +2101,30 @@ fn visible_locals<'k>(k: &'k Knowledge, byte: usize) -> impl Iterator<Item = (us
     })
 }
 
+/// The names of the loops around `byte`, which `break` and `continue` take
+/// (`outer => each …`), innermost first.
+fn loop_name_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
+    let names: Vec<_> = visible_locals(k, byte).filter(|(_, s)| s.intro == Some(LOOP_NAME)).collect();
+    names
+        .into_iter()
+        .rev()
+        .map(|(_, symbol)| CompletionItem {
+            label: symbol.name.clone(),
+            kind: CompletionKind::Variable,
+            detail: "loop".to_string(),
+            apply: None,
+            snippet: None,
+            boost: LOCAL,
+        })
+        .collect()
+}
+
 fn local_items(k: &Knowledge, byte: usize) -> Vec<CompletionItem> {
     let mut seen: Vec<&str> = Vec::new();
     let mut items = Vec::new();
     // Innermost first, so a name appears once even if the scan saw it twice.
-    let locals: Vec<_> = visible_locals(k, byte).collect();
+    // A loop's name is no value (see `loop_name_items`).
+    let locals: Vec<_> = visible_locals(k, byte).filter(|(_, s)| s.intro != Some(LOOP_NAME)).collect();
     for (id, symbol) in locals.into_iter().rev() {
         if seen.contains(&symbol.name.as_str()) {
             continue;

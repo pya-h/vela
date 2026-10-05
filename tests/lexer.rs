@@ -400,9 +400,9 @@ fn values_nested_too_deeply_are_an_error_not_a_crash() {
 }
 
 #[test]
-fn every_keyword_is_two_to_seven_lowercase_letters() {
+fn every_keyword_is_two_to_eight_lowercase_letters() {
     // The lexer looks a name up among the keywords only when it has this form.
     for (word, _) in KEYWORDS {
-        assert!((2..=7).contains(&word.len()) && word.bytes().all(|b| b.is_ascii_lowercase()), "{:?}", word);
+        assert!((2..=8).contains(&word.len()) && word.bytes().all(|b| b.is_ascii_lowercase()), "{:?}", word);
     }
 }

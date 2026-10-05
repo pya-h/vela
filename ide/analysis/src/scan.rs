@@ -24,6 +24,10 @@ use vela::lexer::{ESCAPES, LexKind, LexToken, Piece, Token, highlight};
 
 use crate::types::{Context, slashed};
 
+/// The `intro` of a loop's name, `outer => each …`, which `break` and
+/// `continue` take, and which is no value.
+pub(crate) const LOOP_NAME: &str = "=>";
+
 /// What a highlighted piece of source is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -117,7 +121,8 @@ pub(crate) struct Symbol {
     /// visible everywhere.
     pub visible: Range<usize>,
     /// The keyword that declared a variable: `bind`, `hold`, `each`, `case`,
-    /// `is`, or `fail` (the error a plan B names); for a region, `region` (a
+    /// `is`, or `fail` (the error a plan B names), or `=>` for a loop's name
+    /// (`LOOP_NAME`); for a region, `region` (a
     /// region statement) or `@` (a region a task header only names); for a
     /// method, `alters` when it changes the value it is called on.
     pub intro: Option<&'static str>,
@@ -1183,6 +1188,9 @@ impl<'a> Classifier<'a> {
         let mut in_type = false;
         // The keyword declaring the next name as a variable.
         let mut declaring: Option<&'static str> = None;
+        // `outer => loop …`: the name's position, and where its token went in
+        // `out`, until the loop it names opens the scope it is seen in.
+        let mut loop_name: Option<(usize, usize)> = None;
         let mut in_task_header = false;
         // In a `case` or `is` pattern, whose names are declared.
         let mut in_pattern = false;
@@ -1317,6 +1325,11 @@ impl<'a> Classifier<'a> {
                 // `t.at(i)`: the keyword naming the method text has.
                 Token::At if tokens.before(p) == Some(&Token::Dot) && tokens.token(p + 1) == Some(&Token::LParen) => {
                     self.push(range, TokenClass::Method, None);
+                }
+                // `outer => loop …`: a loop's name, declared in the loop's scope.
+                Token::Ident(_) if !in_include && tokens.token(p + 1) == Some(&Token::FatArrow) && matches!(tokens.token(p + 2), Some(Token::Loop | Token::Each)) => {
+                    loop_name = Some((p, self.out.len()));
+                    self.push(range, TokenClass::Variable, None);
                 }
                 Token::Ident(name) => {
                     if let Some(type_follows) = region_now {
@@ -1545,10 +1558,18 @@ impl<'a> Classifier<'a> {
                         // an `else` is a statement inside it, which does.
                         Token::When if tokens.before(p) == Some(&Token::Else) => {}
                         Token::When => self.open(ScopeKind::When),
-                        Token::Loop | Token::Block => self.open(ScopeKind::Other),
-                        Token::Each => {
+                        Token::Block => self.open(ScopeKind::Other),
+                        Token::Loop | Token::Each => {
                             self.open(ScopeKind::Other);
-                            declaring = Some("each");
+                            if let Some((q, at)) = loop_name.take() {
+                                let id = self.declare_local(q, SymbolKind::Variable, Some(LOOP_NAME), String::new());
+                                if let Some(named) = self.out.get_mut(at) {
+                                    named.symbol = Some(id);
+                                }
+                            }
+                            if *token == Token::Each {
+                                declaring = Some("each");
+                            }
                         }
                         Token::Match => self.open(ScopeKind::Match),
                         // `(hold n: int`: a parameter the task changes, which

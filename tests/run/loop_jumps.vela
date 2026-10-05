@@ -1,0 +1,196 @@
+; `break` stops a loop, and `continue` ends its pass and goes on with the
+; next; a loop named `outer => …` is stopped or gone on with from a loop inside
+; it, `break outer`. Regions declared inside the loop are freed on the way out.
+
+kind Step
+    Go(n: int)
+    Skip
+    Halt
+fi
+
+shape Point
+    x: int
+fi
+
+; In a loop through a group's values, written out for each use.
+task some<P...: shown>(args: P...) -> int
+    hold seen = 0
+    each v in args
+        seen++
+        when seen == 2
+            continue
+        fi
+        when seen == 4
+            break
+        fi
+        show(v)
+    fi
+    <- seen
+fi
+
+task firsts<P...: shown>(args: P...)
+    outer => each v in args
+        each i in 0..3
+            when i == 1
+                continue outer
+            fi
+            show(v, " ", i)
+        fi
+    fi
+fi
+
+task find<T: same>(xs: [T#3], want: T) -> maybe int
+    hold found: maybe int = none
+    hold i = 0
+    each x in xs
+        when x == want
+            found = i
+            break
+        fi
+        i++
+    fi
+    <- found
+fi
+
+; A case may stop the loop or go on with it.
+task total(steps: [Step#5]) -> sum: int
+    sum <- 0
+    each s in steps
+        match s
+        case Go n
+            sum <- sum + n
+        case Skip
+            continue
+        case Halt
+            break
+        fi
+        show("after ", sum)
+    fi
+fi
+
+task main()
+    hold i = 0
+    loop i < 10
+        i++
+        when i == 3
+            continue
+        fi
+        when i == 7
+            break
+        fi
+        show(i)
+    fi
+    show("after ", i)
+
+    ; Named loops.
+    outer => each a in 0..4
+        each b in 0..4
+            when b > a
+                continue outer
+            fi
+            when a == 3
+                break outer
+            fi
+            show(a, b)
+        fi
+    fi
+
+    show(some(1, "two", 3.5, 'c', 5))
+    firsts(1, "a", 2.5)
+    show(find([3, 4, 5], 4), " ", find(["a", "b", "c"], "z"))
+    show(total([Step.Go(1), Step.Skip, Step.Go(2), Step.Halt, Step.Go(100)]))
+
+    ; A plan B may stop the loop, and a region of the pass is freed first.
+    region r
+    hold xs = new [int]() at r
+    xs.add(1)
+    xs.add(2)
+    xs.add(3)
+    each x in xs
+        region s
+        hold t = new [int]() at s
+        t.add(x)
+        when x == 2
+            continue
+        fi
+        bind y = xs[#x] { break }
+        show("x ", x, " ", y, " ", t[0])
+    fi
+
+    ; Regions of blocks inside the pass are freed too.
+    hold k = 0
+    loop k < 5
+        k++
+        block
+            region q
+            bind z = new [int]() at q
+            when k == 2
+                continue
+            fi
+            when k == 4
+                break
+            fi
+            show("k ", k, " ", z.len)
+        fi
+    fi
+
+    ; A map, and a place as it is at each pass.
+    hold m = new [text: int]() at r
+    m["a"] = 1
+    m["b"] = 2
+    m["c"] = 3
+    each key, v in m
+        when v == 2
+            continue
+        fi
+        show(key, v)
+    fi
+    hold ys = [5, 6, 7, 8]
+    each y in &ys
+        when y == 7
+            break
+        fi
+        show(y)
+    fi
+
+    ; In a loop's condition, it stops that loop.
+    hold j = 0
+    loop ys[#j] { break } > 0
+        j++
+    fi
+    show("j ", j)
+
+    ; A loop over a pattern, joined with 'and'.
+    hold n = 0
+    hold mm: maybe int = 3
+    loop mm is {v} and v < 10
+        n++
+        mm = v + 1
+        when v == 5
+            continue
+        fi
+        when v == 7
+            break
+        fi
+    fi
+    show("n ", n, " ", mm)
+
+    ; A branch of a value may stop the loop instead of giving one.
+    bind ps = [Point { x: 1 }, Point { x: 2 }]
+    each p in 0..5
+        show(ps[#p] { break })
+    fi
+    each p in 0..5
+        show(when p > 1 break else p * 10 fi)
+    fi
+    each st in [Step.Go(1), Step.Skip, Step.Go(3), Step.Halt, Step.Go(9)]
+        bind w = match st
+        case Go g = g * 2
+        case Skip
+            continue
+        case Halt
+            break
+        fi
+        show(w)
+    fi
+fi

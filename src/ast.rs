@@ -1564,6 +1564,21 @@ pub enum StmtKind {
     /// `each v in xs`, and `each k, v in m` for a map: the second name, with
     /// where it is written, is the value that goes with the key.
     Each(String, Option<(String, Span)>, Expr, Block),
+    /// `outer => loop …` or `outer => each …`: a loop, and the name a `break`
+    /// or a `continue` inside it may give to stop it or go on with it. The
+    /// statement's span is where the name is written.
+    Named(String, Box<Stmt>),
+    /// `break`, or `break outer`: stops the loop around it, or the one named,
+    /// with where the name is written.
+    Break(Option<(String, Span)>),
+    /// `continue`, or `continue outer`: ends this pass of the loop around it,
+    /// or of the one named, which goes on with its next.
+    Continue(Option<(String, Span)>),
+    /// In a copy of a task, `each v in args` written out for the values the
+    /// copy is given: one block per value, each giving `v` first. It is still a
+    /// loop, which a `break` stops and a `continue` takes to the next block (see
+    /// `check::Checker::each_of_group`).
+    Turns(Vec<Block>),
     Match(Expr, Vec<Case>),
     /// `<-`, `<- value`, or `<- a, b`: one value per result.
     Send(Vec<Expr>),

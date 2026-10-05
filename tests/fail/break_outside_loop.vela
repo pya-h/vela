@@ -1,0 +1,15 @@
+; error: 7:5: 'break' stops a loop, and there is none around it here
+; error: 8:5: 'continue' goes on with a loop's next pass, and there is none around it here
+; error: 11:13: 'continue' goes on with a loop's next pass, and there is none around it in this lambda; a lambda's body is a task of its own, so it can't go on with a loop around the lambda
+; A 'break' or a 'continue' is inside a loop of its own task: a lambda's body
+; is a task of its own, so a loop around the lambda isn't one it can stop.
+task main()
+    break
+    continue
+    each i in 0..3
+        bind f = () -> int
+            continue
+            <- 1
+        fi
+    fi
+fi

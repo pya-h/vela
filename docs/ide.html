@@ -387,7 +387,9 @@ Press Ctrl+C to stop.</pre>
             <code>Box&lt;int&gt; { … }</code>), and nothing for an array type's count;
             the types a task or shape takes are offered as types inside it (<code>T</code>), and after a
             type's <code>:</code> or <code>&amp;</code> the words it can be asked to allow (<code>fixed</code>,
-            <code>same</code>, <code>shown</code>, <code>ordered</code>); variables declared above the cursor; fields and
+            <code>same</code>, <code>shown</code>, <code>ordered</code>); variables declared above the cursor;
+            <code>break</code> and <code>continue</code> inside a loop, and after either the names of the loops around it
+            (<code>outer =&gt; each …</code>, which hover as loops and are offered nowhere else); fields and
             methods after <code>.</code> (a method with its parameters to fill in, and a pointer's through
             <code>^.</code>), and inside a method, after a <code>.</code> starting a value, <code>this</code> and the fields and
             methods of the value it is called on; a tuple's items by position after its <code>.</code> (<code>0</code>, <code>1</code>, each with its type), and <code>len</code> after an array's, slice's, or text's (and <code>add</code> and <code>del</code> after a slice's),

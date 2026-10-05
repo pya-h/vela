@@ -1,0 +1,100 @@
+  1 | ; Seats in a small hall, row by row: '.' is free, 'x' taken, and '#' a row
+    | comment:; Seats in a small hall, row by row: '.' is free, 'x' taken, and '#' a row
+  2 | ; closed for repairs. A party is seated in the first row with enough free
+    | comment:; closed for repairs. A party is seated in the first row with enough free
+  3 | ; seats side by side. `continue` skips a closed row, `break` stops a search
+    | comment:; seats side by side. `continue` skips a closed row, `break` stops a search
+  4 | ; once it is done, and a loop named `rows` is stopped from the loop inside it.
+    | comment:; once it is done, and a loop named `rows` is stopped from the loop inside it.
+  6 | #WIDTH = 6
+    | keyword:#  variant:WIDTH  operator:=  number:6
+  8 | task free_run(row: text, from: int) -> int
+    | keyword:task  task:free_run  punctuation:(  parameter:row  punctuation::  type-builtin:text  punctuation:,  parameter:from  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  9 |     hold run = 0
+    | keyword:hold  variable:run  operator:=  number:0
+ 10 |     each at_seat in from..WIDTH
+    | keyword:each  variable:at_seat  keyword:in  parameter:from  operator:..  variant:WIDTH
+ 11 |         when row[at_seat] != '.'
+    | keyword:when  parameter:row  punctuation:[  variable:at_seat  punctuation:]  operator:!=  string:'.'
+ 12 |             break
+    | keyword:break
+ 13 |         fi
+    | keyword:fi
+ 14 |         run++
+    | variable:run  operator:++
+ 15 |     fi
+    | keyword:fi
+ 16 |     <- run
+    | keyword:<-  variable:run
+ 17 | fi
+    | keyword:fi
+ 19 | task seat(hall: [text#4], party: int)
+    | keyword:task  task:seat  punctuation:(  parameter:hall  punctuation::  punctuation:[  type-builtin:text  punctuation:#  number:4  punctuation:]  punctuation:,  parameter:party  punctuation::  type-builtin:int  punctuation:)
+ 20 |     hold placed = false
+    | keyword:hold  variable:placed  operator:=  keyword:false
+ 21 |     rows => each r in 0..4
+    | variable:rows  operator:=>  keyword:each  variable:r  keyword:in  number:0  operator:..  number:4
+ 22 |         bind row = hall[r]
+    | keyword:bind  variable:row  operator:=  parameter:hall  punctuation:[  variable:r  punctuation:]
+ 23 |         when row[0] == '#'
+    | keyword:when  variable:row  punctuation:[  number:0  punctuation:]  operator:==  string:'#'
+ 24 |             show("row ", r, " is closed")
+    | builtin-fn:show  punctuation:(  string:"row "  punctuation:,  variable:r  punctuation:,  string:" is closed"  punctuation:)
+ 25 |             continue
+    | keyword:continue
+ 26 |         fi
+    | keyword:fi
+ 27 |         each start in 0..WIDTH
+    | keyword:each  variable:start  keyword:in  number:0  operator:..  variant:WIDTH
+ 28 |             when free_run(row, start) >= party
+    | keyword:when  task:free_run  punctuation:(  variable:row  punctuation:,  variable:start  punctuation:)  operator:>=  parameter:party
+ 29 |                 show("a party of ", party, ": row ", r, ", seats ", start, " to ", start + party - 1)
+    | builtin-fn:show  punctuation:(  string:"a party of "  punctuation:,  parameter:party  punctuation:,  string:": row "  punctuation:,  variable:r  punctuation:,  string:", seats "  punctuation:,  variable:start  punctuation:,  string:" to "  punctuation:,  variable:start  operator:+  parameter:party  operator:-  number:1  punctuation:)
+ 30 |                 placed = true
+    | variable:placed  operator:=  keyword:true
+ 31 |                 break rows
+    | keyword:break  variable:rows
+ 32 |             fi
+    | keyword:fi
+ 33 |         fi
+    | keyword:fi
+ 34 |     fi
+    | keyword:fi
+ 35 |     when not placed
+    | keyword:when  keyword:not  variable:placed
+ 36 |         show("a party of ", party, ": no room")
+    | builtin-fn:show  punctuation:(  string:"a party of "  punctuation:,  parameter:party  punctuation:,  string:": no room"  punctuation:)
+ 37 |     fi
+    | keyword:fi
+ 38 | fi
+    | keyword:fi
+ 40 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 41 |     bind hall = ["x..x.x", "######", "xx...x", "......"]
+    | keyword:bind  variable:hall  operator:=  punctuation:[  string:"x..x.x"  punctuation:,  string:"######"  punctuation:,  string:"xx...x"  punctuation:,  string:"......"  punctuation:]
+ 42 |     seat(hall, 2)
+    | task:seat  punctuation:(  variable:hall  punctuation:,  number:2  punctuation:)
+ 43 |     seat(hall, 3)
+    | task:seat  punctuation:(  variable:hall  punctuation:,  number:3  punctuation:)
+ 44 |     seat(hall, 5)
+    | task:seat  punctuation:(  variable:hall  punctuation:,  number:5  punctuation:)
+ 45 |     seat(hall, 7)
+    | task:seat  punctuation:(  variable:hall  punctuation:,  number:7  punctuation:)
+ 47 |     ; The free seats at the start of the last row: its bytes are read as
+    | comment:; The free seats at the start of the last row: its bytes are read as
+ 48 |     ; maybes, and the loop stops at the first taken one, or past the end,
+    | comment:; maybes, and the loop stops at the first taken one, or past the end,
+ 49 |     ; where its plan B stops it.
+    | comment:; where its plan B stops it.
+ 50 |     hold count = 0
+    | keyword:hold  variable:count  operator:=  number:0
+ 51 |     loop hall[3].at(count) { break } == '.'
+    | keyword:loop  variable:hall  punctuation:[  number:3  punctuation:]  punctuation:.  method:at  punctuation:(  variable:count  punctuation:)  punctuation:{  keyword:break  punctuation:}  operator:==  string:'.'
+ 52 |         count++
+    | variable:count  operator:++
+ 53 |     fi
+    | keyword:fi
+ 54 |     show("the last row starts with ", count, " free seats")
+    | builtin-fn:show  punctuation:(  string:"the last row starts with "  punctuation:,  variable:count  punctuation:,  string:" free seats"  punctuation:)
+ 55 | fi
+    | keyword:fi

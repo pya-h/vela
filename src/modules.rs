@@ -1305,6 +1305,8 @@ impl Resolver<'_> {
                 }
             }
             StmtKind::Block(body) => self.block(body),
+            StmtKind::Turns(turns) => turns.iter_mut().try_for_each(|turn| self.block(turn)),
+            StmtKind::Named(_, inner) => self.stmt(inner),
             StmtKind::Loop(cond, body) => {
                 self.condition(cond)?;
                 self.block(body)
@@ -1319,7 +1321,7 @@ impl Resolver<'_> {
                 cases.iter_mut().try_for_each(|case| self.block(&mut case.body))
             }
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter_mut().try_for_each(|e| self.expr(e)),
-            StmtKind::Region { .. } => Ok(()),
+            StmtKind::Region { .. } | StmtKind::Break(_) | StmtKind::Continue(_) => Ok(()),
         }
     }
 

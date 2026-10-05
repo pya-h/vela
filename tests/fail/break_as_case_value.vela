@@ -1,0 +1,15 @@
+; error: 11:18: expected an expression, got 'break'; 'break' is a statement, not a value, so it goes in a block, as on the line after a 'case', or in a plan B: '{ break }'
+kind K
+    A
+    B
+fi
+
+task main()
+    each k in [K.A, K.B]
+        bind w = match k
+        case A = 1
+        case B = break
+        fi
+        show(w)
+    fi
+fi

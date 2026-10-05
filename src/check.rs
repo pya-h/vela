@@ -310,6 +310,11 @@ pub struct Checker {
     /// where a group's name alone, `P`, is the type of the turn's value (see
     /// `check_type`).
     group_turns: Vec<String>,
+    /// The loops around the statements checked, innermost last: the name each
+    /// is given, `outer => loop …`, with where it is written, if any.
+    loops: Vec<Option<(String, Span)>>,
+    /// The name given to the loop about to be checked, `outer =>`.
+    loop_name: Option<(String, Span)>,
     /// For each lambda, the names its value's place sees: the variables and
     /// regions of the code around it, which it takes nothing from, for the
     /// message when its body names one.
@@ -2665,6 +2670,9 @@ impl Checker {
         };
         // Parameters and the task body share one scope, as in C.
         self.scopes = vec![Scope::default()];
+        // A lambda's body is a task of its own, inside no loop of the code around it.
+        self.loops.clear();
+        self.loop_name = None;
         // A lambda that keeps what it uses sees the variables of the code
         // around it, and the region it keeps them in, under its own (see
         // `kept_scope`); one whose value was never checked has none to see.
@@ -2810,11 +2818,11 @@ impl Checker {
     }
 
     /// Checks `block` as a path of its own, and returns the results it leaves
-    /// unset, or `None` when every path through it leaves the task, so nothing
-    /// after it runs on this path. `entry` is the state the block starts from.
+    /// unset, or `None` when every path through it leaves it (sending, or with
+    /// `break` or `continue`), so nothing after it runs on this path. `entry` is the state the block starts from.
     fn branch_state(&mut self, block: &Block, entry: &HashSet<String>) -> Option<HashSet<String>> {
         let after = std::mem::replace(&mut self.unset, entry.clone());
-        (!always_sends(block)).then_some(after)
+        (!always_leaves(block)).then_some(after)
     }
 
     /// The state after branches that each start from `entry`: a result is set
@@ -2834,6 +2842,39 @@ impl Checker {
 
     fn pop_scope(&mut self) {
         self.scopes.pop();
+    }
+
+    /// Starts a loop, with the name `outer =>` gave it, if any.
+    fn enter_loop(&mut self) {
+        let name = self.loop_name.take();
+        self.loops.push(name);
+    }
+
+    /// `break` or `continue` (`word`), given the name of the loop it stops or
+    /// goes on with, or none for the innermost: there must be such a loop
+    /// around it, in this task.
+    fn check_jump(&mut self, word: &str, name: Option<&(String, Span)>, span: Span) -> Result<()> {
+        let (what, verb) = if word == "break" { ("stops a loop", "stop") } else { ("goes on with a loop's next pass", "go on with") };
+        if self.loops.is_empty() {
+            if self.current_lambda.is_some() {
+                return err(span, format!("'{}' {}, and there is none around it in this lambda; a lambda's body is a task of its own, so it can't {} a loop around the lambda", word, what, verb));
+            }
+            return err(span, format!("'{}' {}, and there is none around it here", word, what));
+        }
+        let Some((name, at)) = name else { return Ok(()) };
+        if self.loops.iter().flatten().any(|(given, _)| given == name) {
+            return Ok(());
+        }
+        if self.lookup(name).is_some() {
+            return err(*at, format!("'{}' is a variable, not the name of a loop around this; a loop is named before its word, as in 'outer => each x in xs'", name));
+        }
+        let named: Vec<String> = self.loops.iter().flatten().map(|(given, _)| format!("'{}'", given)).collect();
+        let around = match named.as_slice() {
+            [] => format!("none of the loops around it has a name; a loop is named before its word, as in '{} => each x in xs'", name),
+            [one] => format!("the one named loop around it is {}", one),
+            many => format!("the named loops around it are {}", many.join(", ")),
+        };
+        err(*at, format!("no loop around this '{}' is named '{}': {}", word, name, around))
     }
 
     /// Checks `block` in a new nested scope.
@@ -2901,6 +2942,10 @@ impl Checker {
             && self.lambda_outer.get(lambda).is_some_and(|outer| outer.contains(name))
         {
             return err(span, format!("'{}' is already a name in the code around this lambda, and a lambda that keeps what it uses reuses none of those names, even ones it doesn't keep; name this one otherwise", name));
+        }
+        // Nor like a loop around it, which `break` and `continue` name.
+        if let Some((_, at)) = self.loops.iter().flatten().find(|(given, _)| given == name) {
+            return err(span, format!("'{}' is already the name of a loop around this, at {}:{}", name, at.line, at.col));
         }
         if let Some(existing) = self.lookup(name) {
             let at = existing.span;
@@ -3422,12 +3467,42 @@ impl Checker {
                     return err(pattern.span, "a tuple's items always match, so this loop would never end; take the tuple apart with 'bind' instead");
                 }
                 // A loop's body might not run, so it sets nothing for certain.
+                // Its condition is tested inside it, so a plan B there may stop it.
                 let entry = self.unset.clone();
-                self.check_condition(cond, body, None)?;
+                self.enter_loop();
+                let result = self.check_condition(cond, body, None);
+                self.loops.pop();
                 self.unset = entry;
-                Ok(())
+                result.map(|_| ())
             }
+            StmtKind::Named(name, inner) => {
+                // The name is one in scope as any other: it may match no name
+                // declared where it is seen, and nothing inside it may take it.
+                self.push_scope();
+                let free = self.define(name, Type::Unknown, false, span);
+                self.pop_scope();
+                // The loop is still checked, as named, for mistakes of its own.
+                if let Err(error) = free {
+                    self.record(error);
+                }
+                self.loop_name = Some((name.clone(), span));
+                let result = self.check_stmt(inner);
+                self.loop_name = None;
+                result
+            }
+            StmtKind::Break(name) => {
+                let name = name.clone();
+                self.check_jump("break", name.as_ref(), span)
+            }
+            StmtKind::Continue(name) => {
+                let name = name.clone();
+                self.check_jump("continue", name.as_ref(), span)
+            }
+            StmtKind::Turns(_) => Err(Error::internal_at(span, "a loop written out for a group's values, checked")),
             StmtKind::Each(name, second, range, body) => {
+                // What it goes through is found before it starts, outside it,
+                // so a loop in a plan B there takes neither its name nor a `break`.
+                let named = self.loop_name.take();
                 let (item, value) = self.check_each_source(name, second.as_ref(), range)?;
                 if name == DISCARD && value.is_none() {
                     return err(span, "'_' drops a map's key or value, as in 'each _, v in m'; a loop over this gives one item each pass, so name it");
@@ -3448,6 +3523,7 @@ impl Checker {
                 }
                 // The loop variables and the body share one scope; `_` names none.
                 let entry = self.unset.clone();
+                self.loops.push(named);
                 self.push_scope();
                 let mut result = if name == DISCARD { Ok(()) } else { self.define(name, item, false, span) };
                 if let (Ok(()), Some((second, at)), Some(value)) = (&result, second.as_ref(), value)
@@ -3457,6 +3533,7 @@ impl Checker {
                 }
                 let result = result.and_then(|()| self.check_block(body));
                 self.pop_scope();
+                self.loops.pop();
                 self.unset = entry;
                 if turn.is_some() {
                     self.group_turns.pop();
@@ -3773,7 +3850,7 @@ impl Checker {
             return Ok(Some((ty, e.span)));
         }
         self.check_stmt(last)?;
-        if !always_sends(body) {
+        if !always_leaves(body) {
             return err(at, branches.needs_value());
         }
         Ok(None)
@@ -7802,8 +7879,9 @@ impl Checker {
             return self.settle_value(body, extracted).map(|()| None);
         }
         self.check_stmt(last)?;
-        if !always_sends(body) {
-            return err(span, format!("a plan B must end with a value of type {}, or send with '<-' on every path", extracted));
+        if !always_leaves(body) {
+            let or_loop = if self.loops.is_empty() { "" } else { ", or leave with 'break' or 'continue'" };
+            return err(span, format!("a plan B must end with a value of type {}, or send with '<-' on every path{}", extracted, or_loop));
         }
         Ok(None)
     }
@@ -10655,7 +10733,9 @@ impl Checker {
             StmtKind::Send(values) | StmtKind::SetResults(_, values) => {
                 values.iter_mut().try_for_each(|value| self.substitute_expr(value, given, made))
             }
-            StmtKind::Region { .. } => Ok(()),
+            StmtKind::Region { .. } | StmtKind::Break(_) | StmtKind::Continue(_) => Ok(()),
+            StmtKind::Named(_, inner) => self.substitute_stmt(inner, given, made),
+            StmtKind::Turns(turns) => turns.iter_mut().try_for_each(|turn| self.substitute_block(turn, given, made)),
             StmtKind::Binding { names, init, .. } => {
                 for bound in names.iter_mut() {
                     self.substitute_bound(bound, given, at)?;
@@ -10801,7 +10881,8 @@ impl Checker {
 
     /// `each v in args` in a copy of a task, for `range`, a group's values: the
     /// body once for each value, in a block of its own giving `v` that value,
-    /// of its own type (`P` in the body).
+    /// of its own type (`P` in the body). The blocks are still one loop, which
+    /// a `break` in them stops (see `StmtKind::Turns`).
     fn each_of_group(&mut self, name: &str, range: &Expr, body: Block, given: &HashMap<String, Type>, made: &mut Made, at: Span) -> Result<StmtKind> {
         let (Some(Type::Group(group)), ExprKind::Var(values)) = (&range.ty, &range.kind) else {
             return Err(Error::internal_at(at, "a loop over a group's values that names none"));
@@ -10817,9 +10898,9 @@ impl Checker {
             value.ty = Some(ty);
             let mut turn = vec![Stmt::new(StmtKind::Binding { names: vec![bound], mutable: false, reference: false, init: vec![value] }, at)];
             turn.extend(turn_body);
-            turns.push(Stmt::new(StmtKind::Block(turn), at));
+            turns.push(turn);
         }
-        Ok(StmtKind::Block(turns))
+        Ok(StmtKind::Turns(turns))
     }
 
     fn substitute_bound(&mut self, bound: &mut Bound, given: &HashMap<String, Type>, at: Span) -> Result<()> {
@@ -11608,6 +11689,34 @@ fn always_sends(block: &Block) -> bool {
         }
         StmtKind::Match(_, cases) => cases.iter().all(|case| always_sends(&case.body)),
         StmtKind::Block(body) => always_sends(body),
+        _ => false,
+    })
+}
+
+/// Whether running `block` always leaves it before its end: it always sends
+/// (see `always_sends`), or stops or goes on with a loop around it, with
+/// `break` or `continue`, on every path. A loop inside it doesn't count, as a
+/// `break` inside one stops that loop only.
+fn always_leaves(block: &Block) -> bool {
+    block.iter().any(|stmt| match &stmt.kind {
+        StmtKind::Send(_) | StmtKind::Break(_) | StmtKind::Continue(_) => true,
+        StmtKind::When(arms, else_block) => {
+            for arm in arms {
+                let known = known_condition(&arm.cond);
+                if known == Some(false) {
+                    continue;
+                }
+                if !always_leaves(&arm.body) {
+                    return false;
+                }
+                if known == Some(true) {
+                    return true;
+                }
+            }
+            else_block.as_ref().is_some_and(always_leaves)
+        }
+        StmtKind::Match(_, cases) => cases.iter().all(|case| always_leaves(&case.body)),
+        StmtKind::Block(body) => always_leaves(body),
         _ => false,
     })
 }
@@ -12570,6 +12679,8 @@ fn walk_stmt(stmt: &Stmt, f: &mut dyn FnMut(&Expr)) {
             walk_block(block, f);
         }
         StmtKind::Block(block) => walk_block(block, f),
+        StmtKind::Turns(turns) => turns.iter().for_each(|turn| walk_block(turn, f)),
+        StmtKind::Named(_, inner) => walk_stmt(inner, f),
         StmtKind::Each(_, _, source, block) => {
             walk_expr(source, f);
             walk_block(block, f);
@@ -12578,7 +12689,7 @@ fn walk_stmt(stmt: &Stmt, f: &mut dyn FnMut(&Expr)) {
             walk_expr(subject, f);
             cases.iter().for_each(|case| walk_block(&case.body, f));
         }
-        StmtKind::Region { .. } => {}
+        StmtKind::Region { .. } | StmtKind::Break(_) | StmtKind::Continue(_) => {}
     }
 }
 

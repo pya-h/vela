@@ -60,7 +60,9 @@ with `==` only with `none`, and with `~=` with a plain value too, which an empty
 compares where a place is, `x.type` is its type as text, and whole numbers may be written in hex, octal, or
 binary (`0xff`, `0o17`, `0b101`). A plan B giving `none` makes the whole a `maybe`, and a condition may join an
 `is` with `and`, as in `when found is {v} and v > 0`. `each v in xs` goes through a slice as it was when the loop
-started, and `each v in &xs` as it is at each pass. `block … fi` runs statements in a block of their own.
+started, and `each v in &xs` as it is at each pass; `break` stops a loop and `continue` goes on with its next
+pass, and a loop named `outer => each …` is stopped from one inside it with `break outer`. `block … fi` runs
+statements in a block of their own.
 
 ```
 task fib(n: int) -> int

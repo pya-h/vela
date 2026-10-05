@@ -12,7 +12,7 @@ use vela::ast::{ANY_REGION, MODULE_SEPARATOR, Passing, Span, Taken, Type, unqual
 use vela::lexer::{LexKind, LexToken, Token};
 
 use crate::TokenClass;
-use crate::scan::{Classified, Scan, Symbol, SymbolKind};
+use crate::scan::{Classified, LOOP_NAME, Scan, Symbol, SymbolKind};
 use crate::types::Checked;
 
 /// Guards against initializers that refer to each other.
@@ -196,6 +196,8 @@ impl<'a> Knowledge<'a> {
         match (symbol.kind, symbol.intro) {
             (SymbolKind::Region, _) => Some(Type::Region),
             (SymbolKind::Parameter, _) | (SymbolKind::Field, _) => parse_type(&symbol.detail),
+            // A loop's name is no value.
+            (SymbolKind::Variable, Some(LOOP_NAME)) => None,
             (SymbolKind::Variable, Some("each")) => self.each_type(id, depth + 1),
             (SymbolKind::Variable, Some("case" | "is")) => self.case_binding_type(id, depth + 1),
             (SymbolKind::Variable, Some("failure")) => self.plan_b_error_type(id, depth + 1),

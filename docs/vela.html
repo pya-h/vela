@@ -208,7 +208,8 @@
         no number), <code>generics.vela</code> (tasks that take types, and the words that say what a type allows),
         <code>tuples.vela</code> (tuples made, read, and taken apart), <code>maps.vela</code> (words counted in a map), <code>primes.vela</code> (a slice filled by index
         and one grown with <code>add</code>, emptied with <code>del</code>, and <a href="#arrays">a loop through a
-        slice as it is at each pass</a>), <code>journal.vela</code> (notes read from input into a region per line,
+        slice as it is at each pass</a>), <code>seats.vela</code> (a party seated in a hall, with
+        <a href="#break-continue"><code>break</code>, <code>continue</code>, and a named loop</a>), <code>journal.vela</code> (notes read from input into a region per line,
         with a <a href="#default-region">default region</a> and <code>copy()</code>), and <code>demo.vela</code>
         (tasks, shapes, pointers, control flow, and text).
       </p>
@@ -317,6 +318,7 @@ block shared type</pre>
         <tr><td><code>hold&amp; y = &amp;x</code>, <code>bind&amp; y = &amp;x</code></td><td>another name for the place <code>x</code>, which changes it or only reads it (see <a href="#references">References</a>)</td></tr>
         <tr><td><code>show(&amp;x)</code>, <code>&amp;a == &amp;b</code></td><td>where the place <code>x</code> is, as an address; whether two places are one (see <a href="#addresses">Addresses</a>)</td></tr>
         <tr><td><code>each v in &amp;xs</code></td><td>the items of the place <code>xs</code> as they are at each pass (see <a href="#arrays">Arrays</a>)</td></tr>
+        <tr><td><code>break</code>, <code>continue</code>, <code>outer =&gt; each …</code>, <code>break outer</code></td><td>stop a loop, or end its pass and go on with the next; a loop named so, which a loop inside it stops or goes on with (see <a href="#break-continue">Stopping a loop</a>)</td></tr>
         <tr><td><code>&lt;T&gt;</code>, <code>&lt;T: shown&gt;</code></td><td>the types a task or shape takes, and what one must allow; <code>&amp;</code> joins two words (see <a href="#generics">Types a declaration takes</a>)</td></tr>
         <tr><td><code>first&lt;int&gt;(xs)</code>, <code>Box&lt;int&gt;</code>, <code>Box&lt;int&gt; { … }</code></td><td>the types a use gives: a call, a written type, a shape literal</td></tr>
         <tr><td><code>(T, U)</code>, <code>(a, b)</code>, <code>t.0</code></td><td>a tuple type; a tuple of the values; its first item (see <a href="#tuples">Tuples</a>). One type or value in parentheses is only grouped: <code>(int)</code> is <code>int</code></td></tr>
@@ -2964,10 +2966,10 @@ fi</code></pre>
         each pass, <code>each score in &amp;scores</code> (see <a href="#arrays">Arrays</a>).
       </p>
       <p>
-        <code>loop</code> repeats while its condition holds. There is no <code>break</code> or
-        <code>continue</code>: end a loop through its condition, or leave the task with <code>&lt;-</code>. The
-        condition follows <code>loop</code> directly: <code>loop when count &lt; 10</code> says
-        <code>a 'loop' takes its condition directly, without 'when'</code>.
+        <code>loop</code> repeats while its condition holds. The condition follows <code>loop</code> directly:
+        <code>loop when count &lt; 10</code> says <code>a 'loop' takes its condition directly, without 'when'</code>.
+        A loop also stops early with <code>break</code>, ends a pass early with <code>continue</code>, or leaves the
+        task with <code>&lt;-</code> (see <a href="#break-continue">Stopping a loop: break and continue</a>).
       </p>
       <p>
         A <code>when</code> or a <code>match</code> can be a value as well as a statement, giving one from each branch
@@ -3066,6 +3068,74 @@ show(total)</pre>
     show(n)
     show(w)
 <span class="keyword">fi</span></pre>
+
+      <h3 id="break-continue">Stopping a loop: break and continue</h3>
+      <p>
+        <code>break</code> stops the loop around it there, and the code after the loop goes on. <code>continue</code>
+        ends this pass of the loop, which goes on with its next: a <code>loop</code> tests its condition again, and
+        an <code>each</code> takes its next item. Either may stand anywhere in the loop's body, inside a
+        <code>when</code>, a <code>match</code>, a <code>block</code>, or a plan B, and is a statement of its own,
+        which nothing follows on its line.
+      </p>
+      <pre class="program" data-file="jumps.vela"><span class="keyword">task</span> main()
+    <span class="keyword">bind</span> scores = [<span class="number">7</span>, -<span class="number">1</span>, <span class="number">12</span>, <span class="number">0</span>, <span class="number">30</span>]
+    <span class="keyword">hold</span> total = <span class="number">0</span>
+    <span class="keyword">each</span> s <span class="keyword">in</span> scores
+        <span class="keyword">when</span> s &lt; <span class="number">0</span>
+            <span class="keyword">continue</span>                 <span class="comment">; skips this score</span>
+        <span class="keyword">fi</span>
+        <span class="keyword">when</span> s == <span class="number">0</span>
+            <span class="keyword">break</span>                    <span class="comment">; stops at the first 0</span>
+        <span class="keyword">fi</span>
+        total = total + s
+    <span class="keyword">fi</span>
+    show(total)                      <span class="comment">; 19</span>
+
+    <span class="comment">; A name before a loop's word lets a loop inside it stop it.</span>
+    outer =&gt; <span class="keyword">each</span> row <span class="keyword">in</span> <span class="number">0</span>..<span class="number">3</span>
+        <span class="keyword">each</span> col <span class="keyword">in</span> <span class="number">0</span>..<span class="number">3</span>
+            <span class="keyword">when</span> col &gt; row
+                <span class="keyword">continue</span> outer       <span class="comment">; on with the next row</span>
+            <span class="keyword">fi</span>
+            <span class="keyword">when</span> row == <span class="number">2</span>
+                <span class="keyword">break</span> outer          <span class="comment">; stops both loops</span>
+            <span class="keyword">fi</span>
+            show(row, col)           <span class="comment">; 00, 10, 11</span>
+        <span class="keyword">fi</span>
+    <span class="keyword">fi</span>
+
+    <span class="comment">; A plan B may stop the loop instead of giving a value.</span>
+    <span class="keyword">bind</span> words = [<span class="string">"one"</span>, <span class="string">"two"</span>, <span class="string">"three"</span>]
+    <span class="keyword">hold</span> i = <span class="number">0</span>
+    <span class="keyword">loop</span> <span class="keyword">true</span>
+        show(words[#i] { <span class="keyword">break</span> })    <span class="comment">; one, two, three, then it stops</span>
+        i++
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+      <ul>
+        <li><strong>Without a name, the innermost loop.</strong> <code>break outer</code> stops the loop named
+          <code>outer</code>, which a loop inside it can't do otherwise. A loop is named with <code>=&gt;</code> before
+          its word, <code>outer =&gt; loop …</code> or <code>outer =&gt; each …</code>, and only loops are named so.
+          The name follows the rule of every name: it matches none in scope where it is given, nothing inside the
+          loop may take it, and loops side by side may each use the same one. A name that is no loop's around it is
+          an error that lists the named loops there.</li>
+        <li><strong>A loop's own tests.</strong> A <code>loop</code> tests its condition inside itself, so a
+          <code>break</code> in a plan B there stops that loop, as in <code>loop xs[#i] { break } &gt; 0</code>. What
+          an <code>each</code> goes through is found before it starts, so a <code>break</code> there stops the loop
+          around it.</li>
+        <li><strong>Regions are freed on the way out.</strong> The regions declared inside the loop so far, in its body
+          or in a block inside it, are freed before the jump, as at the end of a pass, the way <code>&lt;-</code>
+          frees the task's.</li>
+        <li><strong>Instead of a value.</strong> A plan B, or a branch of a <code>when</code> or a <code>match</code>
+          used as a value, may stop the loop or go on with it instead of giving the value, as it may send with
+          <code>&lt;-</code> (see <a href="#choices">A match or a when as a value</a>). <code>break</code> is a
+          statement, so such a case is written as a block: <code>case Halt = break</code> is refused.</li>
+        <li><strong>In its own task.</strong> A lambda's body is a task of its own, so a <code>break</code> in it
+          can't stop a loop around the lambda. In a task taking a <a href="#type-groups">group of types</a>,
+          <code>each v in args</code> is written out once per value, and is still one loop.</li>
+        <li><strong>No value.</strong> A loop gives none, so <code>break</code> takes only a name:
+          <code>break = v</code> is refused.</li>
+      </ul>
 
       <h3 id="choices">A match or a when as a value</h3>
       <p>

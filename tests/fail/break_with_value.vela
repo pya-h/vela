@@ -1,0 +1,6 @@
+; error: 4:15: a 'break' takes only the name of the loop it stops, when that is not the innermost, as in 'break outer'; a loop gives no value
+task main()
+    each i in 0..3
+        break = i
+    fi
+fi

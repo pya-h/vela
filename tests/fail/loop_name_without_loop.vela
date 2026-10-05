@@ -1,0 +1,6 @@
+; error: 3:14: 'named =>' names a loop, so 'loop' or 'each' follows it on its line, as in 'named => each x in xs'
+task main()
+    named => block
+        show(1)
+    fi
+fi

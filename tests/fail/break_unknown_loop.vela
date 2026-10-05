@@ -1,0 +1,14 @@
+; error: 6:15: no loop around this 'break' is named 'nowhere': none of the loops around it has a name; a loop is named before its word, as in 'nowhere => each x in xs'
+; error: 12:15: no loop around this 'break' is named 'inner': the one named loop around it is 'outer'
+; A 'break' names a loop around it.
+task main()
+    each i in 0..3
+        break nowhere
+    fi
+    outer => each j in 0..2
+        inner => each k in 0..2
+            continue inner
+        fi
+        break inner
+    fi
+fi

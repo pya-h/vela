@@ -1,0 +1,55 @@
+; Seats in a small hall, row by row: '.' is free, 'x' taken, and '#' a row
+; closed for repairs. A party is seated in the first row with enough free
+; seats side by side. `continue` skips a closed row, `break` stops a search
+; once it is done, and a loop named `rows` is stopped from the loop inside it.
+
+#WIDTH = 6
+
+task free_run(row: text, from: int) -> int
+    hold run = 0
+    each at_seat in from..WIDTH
+        when row[at_seat] != '.'
+            break
+        fi
+        run++
+    fi
+    <- run
+fi
+
+task seat(hall: [text#4], party: int)
+    hold placed = false
+    rows => each r in 0..4
+        bind row = hall[r]
+        when row[0] == '#'
+            show("row ", r, " is closed")
+            continue
+        fi
+        each start in 0..WIDTH
+            when free_run(row, start) >= party
+                show("a party of ", party, ": row ", r, ", seats ", start, " to ", start + party - 1)
+                placed = true
+                break rows
+            fi
+        fi
+    fi
+    when not placed
+        show("a party of ", party, ": no room")
+    fi
+fi
+
+task main()
+    bind hall = ["x..x.x", "######", "xx...x", "......"]
+    seat(hall, 2)
+    seat(hall, 3)
+    seat(hall, 5)
+    seat(hall, 7)
+
+    ; The free seats at the start of the last row: its bytes are read as
+    ; maybes, and the loop stops at the first taken one, or past the end,
+    ; where its plan B stops it.
+    hold count = 0
+    loop hall[3].at(count) { break } == '.'
+        count++
+    fi
+    show("the last row starts with ", count, " free seats")
+fi

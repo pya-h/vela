@@ -261,6 +261,9 @@ impl Checked {
                 }
             }
             StmtKind::Block(body) => self.block(body, kinds),
+            StmtKind::Turns(turns) => turns.iter().for_each(|turn| self.block(turn, kinds)),
+            StmtKind::Named(_, inner) => self.statement(inner, kinds),
+            StmtKind::Break(_) | StmtKind::Continue(_) => {}
             StmtKind::Loop(cond, body) => {
                 for part in cond.parts() {
                     self.expr(&part.value, kinds);

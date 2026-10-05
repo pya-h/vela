@@ -369,6 +369,10 @@ impl Parser {
             (Token::Assign, Some(Token::Eq), _) => "; to compare, write '=='".to_string(),
             (Token::Assign, Some(Token::Range), _) => "; Vela has no '..=': a range leaves its end out, so '0..4' goes from 0 to 3".to_string(),
             (Token::Assign, _, _) if expected == "an expression" => "; '=' assigns, as a statement of its own".to_string(),
+            // `case Skip = break`: a jump is a statement, which a block holds.
+            (Token::Break | Token::Continue, _, _) if expected == "an expression" => {
+                format!("; {} is a statement, not a value, so it goes in a block, as on the line after a 'case', or in a plan B: '{{ {} }}'", self.peek().describe(), self.peek().describe().trim_matches('\''))
+            }
             // `0...3` and `0..=3`: a range has two dots and leaves its end out.
             (Token::Ellipsis, _, _) => "; a range is written with two dots, as in '0..3', which leaves 3 out, and '...' ends the values of a slice, as in '[1, 2, ...] at r'".to_string(),
             // `.05`: the digits after the dot lost their leading zeros as a number.
@@ -637,7 +641,20 @@ impl Parser {
             token if !matches!(token, Token::Send) || self.at_line_start() => {
                 let statement = matches!(
                     token,
-                    Token::Ident(_) | Token::Bind | Token::Hold | Token::When | Token::Loop | Token::Each | Token::Block | Token::Match | Token::Send | Token::Region | Token::Else | Token::Case
+                    Token::Ident(_)
+                        | Token::Bind
+                        | Token::Hold
+                        | Token::When
+                        | Token::Loop
+                        | Token::Each
+                        | Token::Block
+                        | Token::Match
+                        | Token::Send
+                        | Token::Region
+                        | Token::Else
+                        | Token::Case
+                        | Token::Break
+                        | Token::Continue
                 );
                 let error = self.unexpected("'task', 'shape', or 'kind'");
                 if statement {
@@ -2039,6 +2056,8 @@ impl Parser {
             Token::Loop => self.parse_loop(),
             Token::Block => self.parse_plain_block(),
             Token::Each => self.parse_each(),
+            Token::Break | Token::Continue => self.parse_jump(),
+            Token::Ident(_) if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow)) => self.parse_named_loop(),
             Token::Match => self.parse_match(),
             Token::Send => self.parse_send(),
             Token::Ident(name) if name == "send" => {
@@ -2332,6 +2351,50 @@ impl Parser {
         let body = self.parse_block()?;
         self.expect_fi("loop", span)?;
         Ok(Stmt::new(StmtKind::Loop(cond, body), span))
+    }
+
+    /// `break` or `continue`, and the name of the loop it stops or goes on
+    /// with, when it is not the innermost one: `break outer`.
+    fn parse_jump(&mut self) -> Result<Stmt> {
+        let span = self.peek_span();
+        let stop = self.check(Token::Break);
+        self.advance(); // break or continue
+        let word = if stop { "break" } else { "continue" };
+        let name = match self.peek().clone() {
+            Token::Ident(name) => {
+                let at = self.peek_span();
+                self.advance();
+                Some((name, at))
+            }
+            _ => None,
+        };
+        // Nothing else follows on its line: a loop gives no value to take.
+        if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::RBrace) {
+            let what = if stop { "stops" } else { "goes on with" };
+            let name = name.as_ref().map_or("outer", |(name, _)| name.as_str());
+            return Err(Error::at(self.peek_span(), format!("a '{0}' takes only the name of the loop it {1}, when that is not the innermost, as in '{0} {2}'; a loop gives no value", word, what, name)));
+        }
+        Ok(Stmt::new(if stop { StmtKind::Break(name) } else { StmtKind::Continue(name) }, span))
+    }
+
+    /// `outer => loop …` or `outer => each …`: a loop and its name, which a
+    /// `break` or a `continue` in a loop inside it gives to stop it or go on
+    /// with it.
+    fn parse_named_loop(&mut self) -> Result<Stmt> {
+        let span = self.peek_span();
+        let name = self.expect_ident()?;
+        self.advance(); // =>
+        let inner = match self.peek() {
+            Token::Loop => self.parse_loop()?,
+            Token::Each => self.parse_each()?,
+            _ => {
+                return Err(Error::at(
+                    self.peek_span(),
+                    format!("'{} =>' names a loop, so 'loop' or 'each' follows it on its line, as in '{} => each x in xs'", name, name),
+                ));
+            }
+        };
+        Ok(Stmt::new(StmtKind::Named(name, Box::new(inner)), span))
     }
 
     /// `block`, then its statements from the next line, closed by `fi`.

@@ -5,7 +5,7 @@ use serde::Serialize;
 
 use crate::TokenClass;
 use crate::infer::Knowledge;
-use crate::scan::{Symbol, SymbolKind};
+use crate::scan::{LOOP_NAME, Symbol, SymbolKind};
 
 /// What to show for a name.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -376,6 +376,7 @@ fn describe(k: &Knowledge, id: usize) -> Option<(String, String)> {
             }
         }
         SymbolKind::Variable => match symbol.intro {
+            Some(LOOP_NAME) => (format!("{} => loop", symbol.name), "The name of a loop, which 'break' and 'continue' in a loop inside it give to stop it or go on with it.".to_string()),
             Some("case") => {
                 let name = k.at_byte(symbol.name_range.start)?;
                 let case = (k.line_start(name)..name).find(|&q| k.token(q) == Some(&vela::lexer::Token::Case));
