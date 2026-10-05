@@ -533,13 +533,28 @@ impl<'a> Tokens<'a> {
         }
     }
 
+    /// Whether what is before position `p` is what a lambda keeps, `[@r]` or
+    /// `[hold @r]`.
+    fn after_kept(&self, p: usize) -> bool {
+        let Some(close) = p.checked_sub(1) else { return false };
+        if self.token(close) != Some(&Token::RBracket) || self.ident(close.wrapping_sub(1)).is_none() || self.token(close.wrapping_sub(2)) != Some(&Token::AtSign) {
+            return false;
+        }
+        match self.token(close.wrapping_sub(3)) {
+            Some(Token::LBracket) => true,
+            Some(Token::Hold) => self.token(close.wrapping_sub(4)) == Some(&Token::LBracket),
+            _ => false,
+        }
+    }
+
     /// Whether the `(` at position `p` starts a lambda, `(x: int) -> int … fi`:
     /// its parentheses close on their line and `->` follows them, as the
     /// parser reads it; and they name a parameter, or take none where no type
     /// is written, since `() -> int` is also the type of a task that takes none.
     fn starts_lambda(&self, p: usize) -> bool {
-        // A header's parameters, and a call's values, follow a name.
-        if self.token(p) != Some(&Token::LParen) || self.before(p).is_some_and(|before| ends_value(before) || matches!(before, Token::Gt | Token::New)) {
+        // A header's parameters, and a call's values, follow a name; a
+        // lambda's follow what it keeps, `[@r]` or `[hold @r]`.
+        if self.token(p) != Some(&Token::LParen) || (!self.after_kept(p) && self.before(p).is_some_and(|before| ends_value(before) || matches!(before, Token::Gt | Token::New))) {
             return false;
         }
         // What follows the `(` tells first, so that nested parentheses aren't

@@ -392,7 +392,8 @@ impl Checked {
                 self.field_accesses.insert(pos(e.span), owner.to_string());
             }
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
-            | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::TypeOf(_) | ExprKind::TaskValue(_) => {}
+            | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::TypeOf(_) | ExprKind::TaskValue(_) | ExprKind::Closure { .. } => {}
+            ExprKind::Kept { value, .. } => self.expr(value, kinds),
             ExprKind::Invoke { callee, args } => {
                 self.expr(callee, kinds);
                 for arg in args {

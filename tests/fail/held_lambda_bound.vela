@@ -1,0 +1,11 @@
+; error: 6:10: 'f' is a '[hold @r]' lambda, which changes what it keeps, so it is held in a 'hold' variable: 'hold f = …'
+; A [hold @r] lambda is held in a hold variable.
+task main()
+    region r
+    hold n = 0
+    bind f = [hold @r]() -> int
+        n = n + 1
+        <- n
+    fi
+    show(f())
+fi

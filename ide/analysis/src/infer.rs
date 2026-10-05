@@ -758,9 +758,9 @@ impl<'a> Knowledge<'a> {
                 }
                 // `pick()(x)` or `ops[0](x)`: the call of the task a value holds.
                 if let Some(before) = open.checked_sub(1).filter(|&p| matches!(self.token(p), Some(Token::RParen | Token::RBracket)))
-                    && let Some(Type::Task(task)) = self.expression_type(before, depth + 1)
+                    && let Some((task, kept)) = self.expression_type(before, depth + 1).and_then(called_task)
                 {
-                    return exact(open).or_else(|| Some(self.task_value_call_type(&task, open, q, depth)));
+                    return exact(open).or_else(|| Some(self.task_value_call_type(&task, kept.as_deref(), open, q, depth)));
                 }
                 let Some(callee) = open.checked_sub(1).and_then(|p| self.ident(p).map(|name| (p, name))) else {
                     // A tuple, `(a, b)`, or a parenthesized expression.
@@ -836,9 +836,9 @@ impl<'a> Knowledge<'a> {
                 }
                 // `f(x)`, where `f` holds a task: what that task sends.
                 if let Some(id) = self.symbol_at(p).filter(|&id| self.symbol(id).is_some_and(|s| matches!(s.kind, SymbolKind::Parameter | SymbolKind::Variable)))
-                    && let Some(Type::Task(task)) = self.symbol_type(id, depth + 1)
+                    && let Some((task, kept)) = self.symbol_type(id, depth + 1).and_then(called_task)
                 {
-                    return exact(p).or_else(|| Some(self.task_value_call_type(&task, open, q, depth)));
+                    return exact(p).or_else(|| Some(self.task_value_call_type(&task, kept.as_deref(), open, q, depth)));
                 }
                 // A module's task or variant is recorded at the module's name.
                 let (name, p) = self.qualified_at(p)?;
@@ -909,6 +909,18 @@ impl<'a> Knowledge<'a> {
     fn span_type(&self, first: usize, last: usize, depth: usize) -> Option<Type> {
         if first > last || depth > MAX_DEPTH {
             return None;
+        }
+        // `[@r](x: int) -> int …`: a lambda that keeps what it uses in `r`.
+        if self.token(first) == Some(&Token::LBracket)
+            && let Some(open) = (first + 1..=last.min(first + 4)).find(|&q| self.token(q) == Some(&Token::RBracket)).map(|q| q + 1)
+            && let Some((region, hold, _)) = kept_prefix(self.source.get(self.range(first).start..self.range(open.saturating_sub(1)).end)?)
+            && self.token(open) == Some(&Token::LParen)
+            && let Some(close) = self.matching_close(open, last)
+            && self.token(close + 1) == Some(&Token::Arrow)
+        {
+            let end = (close + 2..=last).find(|&q| matches!(self.token(q), Some(Token::Send | Token::Fi))).map_or(last, |q| q.saturating_sub(1));
+            let task = task_value_type_beside(self.source.get(self.range(open).start..self.range(end).end)?, Some(&region))?;
+            return closure_of(task, region, hold);
         }
         // `(x: int) -> int …`: a lambda, whose header, up to its body, gives
         // its type.
@@ -1041,8 +1053,9 @@ impl<'a> Knowledge<'a> {
     /// What a call through a value of type `task` sends, between `open` and
     /// `close`, in the regions its arguments are in: a task type names its
     /// regions its own way.
-    fn task_value_call_type(&self, task: &vela::ast::TaskType, open: usize, close: usize, depth: usize) -> Type {
-        let mut regions = HashMap::new();
+    fn task_value_call_type(&self, task: &vela::ast::TaskType, kept: Option<&str>, open: usize, close: usize, depth: usize) -> Type {
+        // The region a lambda keeps what it uses in is the caller's, as it is.
+        let mut regions: HashMap<String, String> = kept.map(|region| (region.to_string(), region.to_string())).into_iter().collect();
         for (i, ((first, last), ty)) in self.call_args(open, close).into_iter().zip(&task.params).enumerate() {
             if first > last {
                 continue;
@@ -1403,6 +1416,11 @@ fn parse_task_type(text: &str, depth: usize) -> Option<Type> {
             return None;
         }
     }
+    // `[@r](int) -> int`: a lambda's that keeps what it uses in `r`.
+    let kept = kept_prefix(text);
+    if let Some((_, _, rest)) = &kept {
+        text = rest.trim_start();
+    }
     let close = closing_paren(text)?;
     let ret = text.get(close + 1..)?.trim_start().strip_prefix("->")?;
     let inside = text.get(1..close)?;
@@ -1426,7 +1444,11 @@ fn parse_task_type(text: &str, depth: usize) -> Option<Type> {
         }
     }
     let ret = parse_type_within(ret, depth + 1)?;
-    let mut ty = Type::Task(Box::new(vela::ast::TaskType { params, taken, ret }.normalized()));
+    let task = vela::ast::TaskType { params, taken, ret };
+    let mut ty = match kept {
+        Some((region, hold, _)) => Type::Closure(Box::new(vela::ast::ClosureType { task, region, hold }.normalized())),
+        None => Type::Task(Box::new(task.normalized())),
+    };
     for pointer in prefixes.into_iter().rev() {
         ty = if pointer { Type::Ptr(Box::new(ty), None) } else { Type::Maybe(Box::new(ty)) };
     }
@@ -1454,6 +1476,12 @@ fn closing_paren(text: &str) -> Option<usize> {
 /// The type of a task whose detail is `detail`, `(n: int) -> int`, as a value:
 /// `(int) -> int`.
 pub(crate) fn task_value_type(detail: &str) -> Option<Type> {
+    task_value_type_beside(detail, None)
+}
+
+/// `task_value_type`, for a lambda that keeps what it uses in `kept`, which its
+/// types may name as it is (see `TaskType::normalized_beside`).
+fn task_value_type_beside(detail: &str, kept: Option<&str>) -> Option<Type> {
     let mut params = Vec::new();
     let mut taken = Vec::new();
     for (name, ty) in parameters(detail) {
@@ -1468,7 +1496,40 @@ pub(crate) fn task_value_type(detail: &str) -> Option<Type> {
         });
         params.push(ty);
     }
-    Some(Type::Task(Box::new(vela::ast::TaskType { params, taken, ret: return_type(detail) }.normalized())))
+    Some(Type::Task(Box::new(vela::ast::TaskType { params, taken, ret: return_type(detail) }.normalized_beside(kept))))
+}
+
+/// `[@r]` or `[hold @r]` at the start of `text`, what a lambda keeps: the
+/// region, whether it changes what it keeps, and the text after it.
+fn kept_prefix(text: &str) -> Option<(String, bool, &str)> {
+    let inner = text.strip_prefix('[')?;
+    let close = inner.find(']')?;
+    let list = inner.get(..close)?.trim();
+    let (hold, region) = match list.strip_prefix("hold") {
+        Some(rest) if rest.trim_start().starts_with('@') => (true, rest.trim_start()),
+        _ => (false, list),
+    };
+    let region = region.strip_prefix('@')?.trim();
+    if region.is_empty() || !region.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        return None;
+    }
+    Some((region.to_string(), hold, inner.get(close + 1..)?))
+}
+
+/// The task's type a value of type `ty` is called as, with the region it keeps
+/// what it uses in, for a lambda that keeps them.
+fn called_task(ty: Type) -> Option<(vela::ast::TaskType, Option<String>)> {
+    match ty {
+        Type::Task(task) => Some((*task, None)),
+        Type::Closure(closure) => Some((closure.task, Some(closure.region))),
+        _ => None,
+    }
+}
+
+/// The type of a lambda that keeps what it uses, of a task's type `task`.
+fn closure_of(task: Type, region: String, hold: bool) -> Option<Type> {
+    let Type::Task(task) = task else { return None };
+    Some(Type::Closure(Box::new(vela::ast::ClosureType { task: *task, region, hold }.normalized())))
 }
 
 /// The bytes where `needle` starts in `text` outside brackets and parentheses.

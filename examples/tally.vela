@@ -1,0 +1,44 @@
+; Lambdas that keep what they use: a scorer made for each rule, kept in the
+; region of the game, and a counter of turns that changes its own copy.
+shape Rule
+    name: text
+    points: int
+fi
+
+task scorer(r: region, rule: Rule) -> [@r](int) -> int
+    ; It keeps a copy of 'rule', made here, in 'r'.
+    <- [@r](hits: int) -> int <- hits * rule.points fi
+fi
+
+task turns(r: region) -> [hold @r]() -> int
+    hold played = 0
+    <- [hold @r]() -> int
+        played = played + 1
+        <- played
+    fi
+fi
+
+task play(hold& next_turn: [hold @r]() -> int, score: [@r](int) -> int, hits: int) -> int
+    bind turn = next_turn()
+    show("turn ", turn, ": ", hits, " hits")
+    <- score(hits)
+fi
+
+task main()
+    region game
+    bind rules = [Rule { name: "goal", points: 3 }, Rule { name: "assist", points: 1 }]
+    hold scorers = new [[@game](int) -> int]() at game
+    each rule in rules
+        scorers.add(scorer(game, rule))
+    fi
+    hold next_turn = turns(game)
+    hold total = 0
+    each hits in [2, 0, 4]
+        total = total + play(&next_turn, scorers[0], hits)
+    fi
+    show("goals: ", total)
+    bind bonus = 10
+    bind assists = [@game](hits: int) -> int <- scorers[1](hits) + bonus fi
+    bind assisted = play(&next_turn, assists, 5)
+    show("assists: ", assisted)
+fi

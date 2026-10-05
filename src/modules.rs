@@ -1343,6 +1343,9 @@ impl Resolver<'_> {
             // Only the resolver makes one, above.
             ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::Macro { .. } | ExprKind::TaskValue(_) => Ok(()),
             ExprKind::Spread(inner) => self.expr(inner),
+            // The lambda is a task of the file, named as its variable would be.
+            ExprKind::Closure { lambda, .. } => self.rename(lambda, span, &[What::Variant, What::Macro]),
+            ExprKind::Kept { value, .. } => self.expr(value),
             ExprKind::Invoke { callee, args } => {
                 self.expr(callee)?;
                 args.iter_mut().try_for_each(|e| self.expr(e))

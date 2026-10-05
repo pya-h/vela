@@ -1,0 +1,7 @@
+; error: 5:14: '[@r]' starts a lambda that keeps what it uses, so a lambda's header follows it, as in '[@r](x: int) -> int'
+; [@r] starts a lambda, whose header follows it.
+task main()
+    region r
+    bind f = [@r] 3
+    show(1)
+fi

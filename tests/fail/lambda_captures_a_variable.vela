@@ -1,5 +1,5 @@
-; error: 5:37: 'n' belongs to the code around this lambda, and a lambda takes nothing from it; give 'n' as a parameter, or call a task that takes it (lambdas that keep what they use are planned)
-; A lambda takes nothing from the task around it.
+; error: 5:37: 'n' belongs to the code around this lambda, and a lambda takes nothing from it; give 'n' as a parameter, or call a task that takes it; a lambda that keeps what it uses names the region it keeps its copies in, as in '[@r](…)'
+; A plain lambda takes nothing from the task around it.
 task main()
     bind n = 3
     bind f = (x: int) -> int <- x + n fi

@@ -1,0 +1,9 @@
+; error: 4:14: a field can't hold a lambda that keeps what it uses yet, '[@r]() -> int'; keep it in a variable, or hold a task value, '() -> int'
+; A variant holds no lambda that keeps what it uses yet.
+kind K
+    Has(f: [@r]() -> int)
+    No
+fi
+task main()
+    show(1)
+fi

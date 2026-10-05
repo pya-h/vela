@@ -1,0 +1,8 @@
+; error: 4:10: a field can't hold a lambda that keeps what it uses yet, '[@r](int) -> int'; keep it in a variable, or hold a task value, '(int) -> int'
+; A field holds no lambda that keeps what it uses yet.
+shape S
+    f: [@r](int) -> int
+fi
+task main()
+    show(1)
+fi

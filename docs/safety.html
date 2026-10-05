@@ -269,10 +269,20 @@
                 <a href="vela.html#task-types-places">Places and regions</a>.</td>
             </tr>
             <tr>
-              <td>A lambda takes nothing from the code around it, so it never reads a variable or a region after the
-                task that wrote it has ended.</td>
+              <td>A plain lambda takes nothing from the code around it, and one that keeps what it uses,
+                <code>[@r]</code>, keeps copies in a block of <code>r</code>, which its type names, so neither reads a
+                variable after the task that wrote it has ended, nor what it keeps after <code>r</code> is freed. It keeps
+                nothing of another region, and its copy of a slice never changes the slice's length.</td>
               <td class="when"><span class="badge b-checked">checked</span></td>
-              <td>A closure reading a dead stack frame. See <a href="vela.html#lambdas">Lambdas</a>.</td>
+              <td>A closure reading a dead stack frame, or memory its region freed. See <a href="vela.html#lambdas">Lambdas</a>
+                and <a href="vela.html#kept-lambdas">Lambdas that keep what they use</a>.</td>
+            </tr>
+            <tr>
+              <td>A <code>[hold @r]</code> lambda, which changes what it keeps, is never copied: held in a
+                <code>hold</code> variable, given as a place, or named by a reference.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>Two copies changing one hidden block, each seeing the other's changes as its own (a shared mutable
+                closure). See <a href="vela.html#kept-lambdas">Lambdas that keep what they use</a>.</td>
             </tr>
             <tr>
               <td>A tuple's items never change, neither assigned nor changed by a method that <code>alters</code>

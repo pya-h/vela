@@ -1,0 +1,11 @@
+; error: 7:9: cannot assign to immutable variable 'n'; 'n' is the copy this lambda keeps of a variable of the code around it, which a '[@r]' lambda never changes; one that changes its copies is written '[hold @r](…)', and the variable itself never changes through it
+; A [@r] lambda never changes the copies it keeps.
+task main()
+    region r
+    hold n = 1
+    bind f = [@r]() -> int
+        n = n + 1
+        <- n
+    fi
+    show(f())
+fi

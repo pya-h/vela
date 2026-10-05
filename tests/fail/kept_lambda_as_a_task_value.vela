@@ -1,0 +1,10 @@
+; error: 9:16: expected type (int) -> int, got [@r](int) -> int; a lambda that keeps what it uses goes only where a type naming its region is expected, as '[@r](…)', since a task's type names none and the lambda could outlive 'r'
+; A lambda that keeps what it uses never goes where a task type is expected.
+task apply(f: (int) -> int) -> int
+    <- f(1)
+fi
+task main()
+    region r
+    bind k = 2
+    show(apply([@r](x: int) -> int <- x * k fi))
+fi

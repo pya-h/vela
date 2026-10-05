@@ -1,0 +1,6 @@
+; error: 4:14: '[@q]' keeps what the lambda uses in region 'q', which isn't one here; declare it with 'region q', or take it as a parameter
+; The region a lambda keeps what it uses in is one the code around it has.
+task main()
+    bind f = [@q]() -> int <- 1 fi
+    show(f())
+fi

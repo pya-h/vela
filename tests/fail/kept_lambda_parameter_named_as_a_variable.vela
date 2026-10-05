@@ -1,0 +1,8 @@
+; error: 6:19: 'n' is already a variable of the code around this lambda, which the lambda may keep, declared at 5:10
+; A lambda that keeps what it uses names its own variables otherwise.
+task main()
+    region r
+    bind n = 3
+    bind f = [@r](n: int) -> int <- n fi
+    show(f(1))
+fi

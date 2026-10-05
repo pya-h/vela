@@ -326,6 +326,8 @@ block shared type</pre>
         <tr><td><code>&lt;P...&gt;</code>, <code>args: P...</code>, <code>(P...) -&gt; R</code>, <code>(@a, P...) -&gt; R</code>, <code>f(args...)</code></td><td>a group of types a task takes; the values a call gives for it; a task taking them; one taking a region, then them; the values given on, whole (see <a href="#type-groups">Type groups</a>)</td></tr>
         <tr><td><code>$(w1, w2(values))</code></td><td>wrapper decorators, above a task, a shared method, or a method of every value: each call of it runs <code>w1</code>, given the rest of the chain, its values, and the task's (see <a href="#decorators">Decorators</a>)</td></tr>
         <tr><td><code>(x: int) -&gt; int &lt;- x * 2 fi</code></td><td>a lambda: a task with no name, written where its value goes, its body on the header's line or the lines after it (see <a href="#lambdas">Lambdas</a>)</td></tr>
+        <tr><td><code>[@r](x: int) -&gt; int … fi</code>, <code>[@r](int) -&gt; int</code></td><td>a lambda that keeps a copy of what it uses of the code around it in region <code>r</code>, and its type (see <a href="#kept-lambdas">Lambdas that keep what they use</a>)</td></tr>
+        <tr><td><code>[hold @r](…) … fi</code></td><td>such a lambda that changes its copies, held in a <code>hold</code> variable and never copied</td></tr>
         <tr><td><code>[a, b]</code>, <code>[v#n]</code></td><td>an array of the values; an array of <code>n</code> copies of <code>v</code></td></tr>
         <tr><td><code>[K: V]@r</code>, <code>[:V]@r</code>, <code>["a": 1] at r</code></td><td>a map type; one whose keys are text; a map written by its pairs, as <code>new [text: int](["a": 1]) at r</code> (see <a href="#maps">Maps</a>)</td></tr>
         <tr><td><code>m[k]</code>, <code>m[#k]</code>, <code>m[k] = v</code>, <code>each k, v in m</code></td><td>a key's value, which stops the program without the key; the same as a <code>maybe</code>; the key added or given a new value; the keys and values in the order the keys were added</td></tr>
@@ -2327,12 +2329,12 @@ task main()
     show(((n: int) -&gt; int &lt;- n - 1 fi)(10))       ; 9: called where it is written
 fi</code></pre>
       <p>
-        A lambda takes nothing from the code around it: its body sees its parameters, its own variables, and what the
+        A plain lambda takes nothing from the code around it: its body sees its parameters, its own variables, and what the
         file declares (tasks, shapes, kinds, macros, shared fields), but no variable or region of the task it is written
-        in, and in a method no <code>.this</code>. Give what it needs as a parameter; naming a variable of the code around it
-        is an error that says so. (Lambdas that keep what they use are planned: see
-        <a href="future.html#lambdas">Future Directions</a>.) So a lambda holds nothing in a region and costs what a named
-        task does: in C it is a function of the file, and its value a pointer to it.
+        in, and in a method no <code>.this</code>. Give what it needs as a parameter, or write a lambda that keeps it
+        (<a href="#kept-lambdas">below</a>); naming a variable of the code around a plain lambda is an error that says so.
+        So a plain lambda holds nothing in a region and costs what a named task does: in C it is a function of the file,
+        and its value a pointer to it.
       </p>
       <p>
         Its parameters are those of a header: plain, <code>hold</code>, <code>bind</code>, the caller's place
@@ -2342,6 +2344,77 @@ fi</code></pre>
         or nothing; the regions in its header are its own, as a header's are, so
         <code>(t: text@r) -&gt; text@r &lt;- t[0..1] fi</code> takes text of any region. A lambda can't be written inside a
         task or method that takes types yet.
+      </p>
+
+      <h3 id="kept-lambdas">Lambdas that keep what they use</h3>
+      <p>
+        A lambda written after <code>[@r]</code> keeps what it uses of the code around it in region <code>r</code>. When it
+        is made, it copies each variable of the code around it that its body uses into a block of <code>r</code>, and reads
+        those copies where they are kept for as long as it lives. Its type says where, <code>[@r](int) -&gt; int</code>, so
+        it can't outlive <code>r</code>, as a <code>^T@r</code> can't. Only the region is written, never what the lambda
+        uses, so a task asking for a <code>[@r](int) -&gt; int</code> takes any lambda kept in <code>r</code>.
+      </p>
+      <pre><code>task counter(r: region, start: int) -&gt; [hold @r]() -&gt; int
+    hold n = start
+    &lt;- [hold @r]() -&gt; int
+        n = n + 1                                 ; its own copy of n, kept in r
+        &lt;- n
+    fi
+fi
+
+task apply(f: [@r](int) -&gt; int, x: int) -&gt; int
+    &lt;- f(x)
+fi
+
+task double(x: int) -&gt; int
+    &lt;- x * 2
+fi
+
+task main()
+    region r
+    hold next = counter(r, 10)
+    show(next(), " ", next())                     ; 11 12
+    bind step = 3
+    bind plus = [@r](x: int) -&gt; int &lt;- x + step fi
+    show(apply(plus, 1), " ", apply(double, 4))   ; 4 8
+fi</code></pre>
+      <p>
+        <strong>What it keeps.</strong> A copy of each variable it uses: numbers, shapes, arrays, task values, and the
+        handles of slices, maps, pointers and text. The variables themselves never change through the lambda. What lives
+        in <code>r</code> (a slice's items, what a pointer points to, text in <code>r</code>) is used where it is, so writing
+        an item changes the one the code around it sees, as writing through any pointer does. The copy of a slice shares
+        its items but not its length, so a lambda doesn't <code>add</code> to or <code>del</code> from a slice it keeps:
+        it makes one of its own, or takes one as a <code>hold&amp;</code> parameter. A value in another region is refused,
+        since nothing in <code>r</code> points into another region (the rule a <code>Person@r</code> follows): copy it into
+        <code>r</code> first, <code>bind mine = xs.copy() at r</code>, and use that. The lambda sees <code>r</code> itself, so
+        it may allocate there, and its types may name it, <code>[@r](int) -&gt; [int]@r</code>; it sees no other region of
+        the code around it, and in a method no <code>.this</code> or <code>.x</code>, so it keeps a variable of a member
+        instead, <code>bind k = .n</code>. What it uses is all it keeps, and its own names are never those of the variables
+        around it.
+      </p>
+      <p>
+        <strong>Changing its copies.</strong> A <code>[@r]</code> lambda only reads its copies; <code>[hold @r]</code>
+        changes them, as <code>n = n + 1</code> does above, and a <code>[@r]</code> lambda that tries is told so. Every copy
+        of a <code>[hold @r]</code> value would share its one block, so it is never copied: it is held in a
+        <code>hold</code> variable, called, given as a place to a <code>hold&amp; f: [hold @r]() -&gt; int</code> parameter,
+        or named by a reference, <code>hold&amp; g = &amp;next</code>, and never bound with <code>bind</code>, given as a
+        value, kept by another lambda, or held inside a tuple, a slice or a <code>maybe</code>. A <code>[@r]</code> lambda
+        goes where a <code>[hold @r]</code> is expected, never the other way.
+      </p>
+      <p>
+        <strong>Plain tasks and these.</strong> A task, a task value, or a plain lambda goes where a
+        <code>[@r](…)</code> is expected, through a small function the compiler writes: a task named there is kept where
+        the program keeps it, and a task value in a block of <code>r</code>, so a call that names <code>r</code> by no other
+        value can't keep one (keep it first, <code>bind kept: [@r](int) -&gt; int = plain</code>). A lambda that keeps what
+        it uses never goes where a plain task's type is expected: that type names no region, so the value could outlive
+        <code>r</code>. Such a lambda isn't compared, copied with <code>copy</code>, held in a field of a shape or kind,
+        or given as a wrapper's own value yet. A stop inside any lambda says where it is, <code>at 6:39 in a lambda</code>.
+      </p>
+      <p>
+        <strong>What it costs.</strong> A value of it is two words, its function and its block; a call passes the block as
+        a hidden first value, and making one allocates the block in <code>r</code>, a bump. A plain task value stays one
+        word and costs nothing more. Keeping a variable as a place, <code>[hold&amp; count, @r]</code>, so that the lambda
+        changes the variable itself, is planned (see <a href="future.html#lambdas">Future Directions</a>).
       </p>
 
       <h3 id="decorators">Decorators</h3>
@@ -4100,8 +4173,10 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           <a href="#generics">Types a declaration takes</a>).</li>
         <li>A task that takes types, or that sends several values, can't be a value yet, nor can a
           method of every value (see <a href="#task-values">Tasks as values</a>).</li>
-        <li>A lambda takes nothing from the code around it, and can't be written inside a task or method that takes
-          types (see <a href="#lambdas">Lambdas</a>).</li>
+        <li>A plain lambda takes nothing from the code around it, and no lambda can be written inside a task or method
+          that takes types (see <a href="#lambdas">Lambdas</a>). One that keeps what it uses, <code>[@r]</code>, keeps
+          copies in one region, never keeps a variable as a place yet, and isn't compared, copied, held in a field, or
+          given as a wrapper's value (see <a href="#kept-lambdas">Lambdas that keep what they use</a>).</li>
         <li>Only a task or a shared method takes startup decorators; a method of every value takes only wrappers, and a task that takes types neither; a startup decorator sends nothing, or
           <code>nothing ~ E</code>; a decorator's and a wrapper's values, worked out where the program starts, hold nothing in a region (see <a href="#decorators">Decorators</a>).</li>
         <li>A task takes one type group; a group never holds a region, which is named beside it; a call doesn't write a

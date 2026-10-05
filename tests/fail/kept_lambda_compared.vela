@@ -1,0 +1,7 @@
+; error: 6:12: '==' can't compare values of type [@r](int) -> int
+; Lambdas that keep what they use aren't compared.
+task main()
+    region r
+    bind a = [@r](x: int) -> int <- x fi
+    show(a == a)
+fi

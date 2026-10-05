@@ -1,0 +1,9 @@
+; error: 7:31: 'xs' is in region 'q', and this lambda keeps what it uses in 'r', where nothing points into 'q'; copy it into 'r' first, as in 'bind mine = xs.copy() at r', and use that
+; A lambda keeps in its region only what lives there, or in no region.
+task main()
+    region r
+    region q
+    bind xs = new [int]() at q
+    bind f = [@r]() -> int <- xs.len fi
+    show(f())
+fi

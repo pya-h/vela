@@ -102,6 +102,11 @@ pub enum Type {
     /// `(int, text) -> int`: a task as a value, which a variable, a field, or a
     /// parameter holds and a call runs (see `TaskType`). Boxed, as `Applied` is.
     Task(Box<TaskType>),
+    /// `[@r](int) -> int`: a lambda that keeps what it uses from the code around
+    /// it in region `r`, which its type names, so it can't outlive it (see
+    /// `ClosureType`). A plain task value goes where one is expected, never the
+    /// other way.
+    Closure(Box<ClosureType>),
     /// `T`: a type a generic declaration takes, standing for the type given at
     /// each use. It appears only inside the declaration that names it; a use is
     /// checked with the type itself in its place. Its regions are the given
@@ -150,6 +155,34 @@ pub struct TaskType {
     /// How each of `params` is given, in its order.
     pub taken: Vec<Taken>,
     pub ret: Type,
+}
+
+/// The type of a lambda that keeps what it uses, `[@r](int) -> int` or
+/// `[hold @r](int) -> int` (see `Type::Closure`): the task's type it is called
+/// as, the region it keeps its copies in, and whether it changes them. Its
+/// task's type may name `region`, the one kept, beside regions of its own.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ClosureType {
+    pub task: TaskType,
+    pub region: String,
+    /// `[hold @r]`: it changes its copies, so a value of it is never copied.
+    pub hold: bool,
+}
+
+impl ClosureType {
+    /// The same type with the task's own regions named in the order they
+    /// first appear, the kept one as it is (see `TaskType::normalized`).
+    pub fn normalized(&self) -> ClosureType {
+        ClosureType { task: self.task.normalized_beside(Some(&self.region)), region: self.region.clone(), hold: self.hold }
+    }
+
+    /// The type with its task's type remade by `f`, as a task type.
+    fn with_task(&self, f: impl FnOnce(&Type) -> Type) -> Type {
+        match f(&Type::Task(Box::new(self.task.clone()))) {
+            Type::Task(task) => Type::Closure(Box::new(ClosureType { task: *task, region: self.region.clone(), hold: self.hold })),
+            other => other,
+        }
+    }
 }
 
 /// The types a use gives a group, each with how a task takes it (see
@@ -207,9 +240,29 @@ impl TaskType {
     /// `r`, then `s`, and so on, so that `(text@a) -> text@a` and
     /// `(text@b) -> text@b`, which say the same, are equal.
     pub fn normalized(&self) -> TaskType {
+        self.normalized_beside(None)
+    }
+
+    /// The type with each region it names, its own ones included, replaced by
+    /// what `f` gives for it.
+    pub fn map_regions(&self, f: &mut dyn FnMut(&str) -> Option<String>) -> TaskType {
+        let taken = self
+            .taken
+            .iter()
+            .map(|how| match how {
+                Taken::Region(name) => Taken::Region(f(name).unwrap_or_else(|| name.clone())),
+                other => other.clone(),
+            })
+            .collect();
+        TaskType { params: self.params.iter().map(|ty| ty.map_regions(&mut *f)).collect(), taken, ret: self.ret.map_regions(f) }
+    }
+
+    /// `normalized`, leaving `kept` as it is: the region a lambda's type keeps
+    /// its copies in (see `ClosureType`), which no region of its own is named.
+    pub fn normalized_beside(&self, kept: Option<&str>) -> TaskType {
         let mut names: Vec<String> = Vec::new();
         let mut rename = |region: &str| -> Option<String> {
-            if region == ANY_REGION {
+            if region == ANY_REGION || Some(region) == kept {
                 return Some(region.to_string());
             }
             let at = match names.iter().position(|name| name == region) {
@@ -219,7 +272,8 @@ impl TaskType {
                     names.len() - 1
                 }
             };
-            Some(TASK_REGIONS.get(at).map_or_else(|| format!("r{}", at + 1), |name| name.to_string()))
+            let named = TASK_REGIONS.iter().map(|name| name.to_string()).chain((TASK_REGIONS.len() + 1..).map(|k| format!("r{}", k)));
+            named.filter(|name| Some(name.as_str()) != kept).nth(at)
         };
         let mut params = Vec::new();
         let mut taken = Vec::new();
@@ -477,6 +531,12 @@ pub fn lambda_name(n: usize) -> String {
 /// What the name of every task a lambda becomes starts with (see `lambda_name`).
 pub const LAMBDA_PREFIX: &str = "lambda__";
 
+/// The name of the hidden shape of what lambda `lambda` keeps, `[@r](…)`:
+/// a field for each value of the code around it the lambda uses.
+pub fn kept_name(lambda: &str) -> String {
+    format!("{}__kept", lambda)
+}
+
 /// Whether `name`, with its module or without, is the task a lambda became.
 pub fn is_lambda(name: &str) -> bool {
     unqualified(name).starts_with(LAMBDA_PREFIX)
@@ -627,6 +687,10 @@ impl Type {
                 write!(f, ") -> ")?;
                 task.ret.write(f, None)
             }
+            Type::Closure(closure) => {
+                write!(f, "[{}@{}]", if closure.hold { "hold " } else { "" }, closure.region)?;
+                Type::Task(Box::new(closure.task.clone())).write(f, None)
+            }
             Type::Array(inner, count) => {
                 write!(f, "[")?;
                 inner.write(f, outer)?;
@@ -660,12 +724,12 @@ impl Type {
                 // a task, whose result would take the `~`.
                 match &**value {
                     Type::Or(..) => grouped(f, value, outer)?,
-                    Type::Task(_) => {
+                    Type::Task(_) | Type::Closure(_) => {
                         write!(f, "(")?;
                         value.write(f, outer)?;
                         write!(f, ")")?;
                     }
-                    Type::Maybe(inner) if matches!(**inner, Type::Task(_)) => {
+                    Type::Maybe(inner) if matches!(**inner, Type::Task(_) | Type::Closure(_)) => {
                         write!(f, "(")?;
                         value.write(f, outer)?;
                         write!(f, ")")?;
@@ -735,6 +799,7 @@ impl Type {
             Type::Tuple(types) | Type::Results(types) => types.iter().any(Type::unknown),
             Type::Applied(applied) => applied.types.iter().any(Type::unknown),
             Type::Task(task) => task.params.iter().any(Type::unknown) || task.ret.unknown(),
+            Type::Closure(closure) => closure.task.params.iter().any(Type::unknown) || closure.task.ret.unknown(),
             Type::Int | Type::Float | Type::Bool | Type::Text(_) | Type::Unit | Type::Char | Type::Nothing | Type::None | Type::Region | Type::Named(..) | Type::Param(_) | Type::Group(_) => false,
         }
     }
@@ -782,6 +847,15 @@ impl Type {
             Type::Task(task) if task.ret == GROUP_SENDS => {
                 Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_regions(&mut *f)).collect(), taken: task.taken.clone(), ret: GROUP_SENDS }))
             }
+            // The region it keeps, wherever its task's type names it too; the
+            // task's own regions are its own.
+            Type::Closure(closure) => {
+                let kept = closure.region.clone();
+                let Some(region) = f(&kept) else { return self.clone() };
+                let mut own = |name: &str| Some(if name == kept { region.clone() } else { name.to_string() });
+                let task = closure.task.map_regions(&mut own);
+                Type::Closure(Box::new(ClosureType { task, region, hold: closure.hold }))
+            }
             other => other.clone(),
         }
     }
@@ -797,6 +871,7 @@ impl Type {
                 region: applied.region.clone(),
             })),
             Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_names(f)).collect(), taken: task.taken.clone(), ret: task.ret.map_names(f) })),
+            Type::Closure(closure) => closure.with_task(|task| task.map_names(f)),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner), region.clone()),
@@ -867,6 +942,7 @@ impl Type {
                 region: applied.region.clone(),
             })),
             Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| ty.map_params(&mut *f)).collect(), taken: task.taken.clone(), ret: task.ret.map_params(f) })),
+            Type::Closure(closure) => closure.with_task(|task| task.map_params(f)),
             Type::Ptr(inner, region) => Type::Ptr(boxed(inner, f), region.clone()),
             Type::Array(inner, count) => Type::Array(boxed(inner, f), *count),
             Type::Slice(inner, region) => Type::Slice(boxed(inner, f), region.clone()),
@@ -920,6 +996,7 @@ impl Type {
                 }
                 Type::Task(Box::new(TaskType { params, taken, ret: task.ret.map_group_items(f) }))
             }
+            Type::Closure(closure) => closure.with_task(|task| task.map_group_items(f)),
             Type::Applied(applied) => Type::Applied(Box::new(Applied {
                 name: applied.name.clone(),
                 types: applied.types.iter().map(|ty| ty.map_group_items(&mut *f)).collect(),
@@ -964,6 +1041,10 @@ impl Type {
                 let task = TaskType { params: task.params.iter().map(Type::normalized_tasks).collect(), taken: task.taken.clone(), ret: task.ret.normalized_tasks() };
                 Type::Task(Box::new(task.normalized()))
             }
+            Type::Closure(closure) => {
+                let task = TaskType { params: closure.task.params.iter().map(Type::normalized_tasks).collect(), taken: closure.task.taken.clone(), ret: closure.task.ret.normalized_tasks() };
+                Type::Closure(Box::new(ClosureType { task, region: closure.region.clone(), hold: closure.hold }.normalized()))
+            }
             Type::Applied(applied) => Type::Applied(Box::new(Applied {
                 name: applied.name.clone(),
                 types: applied.types.iter().map(Type::normalized_tasks).collect(),
@@ -997,6 +1078,10 @@ impl Type {
             Type::Task(task) => {
                 task.params.iter().for_each(|ty| ty.collect_params(names));
                 task.ret.collect_params(names);
+            }
+            Type::Closure(closure) => {
+                closure.task.params.iter().for_each(|ty| ty.collect_params(names));
+                closure.task.ret.collect_params(names);
             }
             Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) | Type::Array(inner, _) => {
                 inner.collect_params(names)
@@ -1046,6 +1131,8 @@ impl Type {
             // The types given a group holding a place, whose regions are the
             // caller's.
             Type::Task(task) if task.ret == GROUP_SENDS => task.params.iter().for_each(|ty| ty.collect_regions(regions)),
+            // The region it keeps its copies in; its task's own are its own.
+            Type::Closure(closure) => regions.push(&closure.region),
             _ => {}
         }
     }
@@ -1149,6 +1236,15 @@ pub enum ExprKind {
     /// call after any value but a name, and the checker of a `Call` naming a
     /// variable.
     Invoke { callee: Box<Expr>, args: Vec<Expr> },
+    /// `[@r](x: int) -> int … fi`: a lambda that keeps what it uses from the
+    /// code around it in region `region`, `hold` for `[hold @r]`, which changes
+    /// its copies. `lambda` names the task it is (see `ast::lambda_name`), and
+    /// the checker gives the shape of what it keeps (see `kept_name`).
+    Closure { lambda: String, region: String, hold: bool },
+    /// A plain task value given where a lambda that keeps what it uses is
+    /// expected, `[@r](int) -> int`: it keeps only the task, in `region`, or
+    /// for a task named here, `None`, where the program keeps it.
+    Kept { value: Box<Expr>, region: Option<String> },
     /// `args...`, the last value of a call: the values of a group parameter
     /// (see `Type::Group`), given on whole, each as a value of its own.
     Spread(Box<Expr>),
@@ -1930,6 +2026,17 @@ pub struct TaskDef {
     /// outermost, each the call `w(values)` as written, without the task that
     /// comes next or the task's values (see `Checker::add_wrappers`).
     pub wrappers: Vec<Expr>,
+    /// For a lambda that keeps what it uses, `[@r](…)` or `[hold @r](…)`: the
+    /// region it keeps its copies in, and whether it changes them.
+    pub kept: Option<Kept>,
+}
+
+/// What a lambda written `[@r](…)` keeps (see `TaskDef::kept`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Kept {
+    pub region: String,
+    /// `[hold @r]`: it changes its copies.
+    pub hold: bool,
 }
 
 /// What makes a task a method: it is written inside a shape or a kind, and its
@@ -2025,6 +2132,8 @@ pub fn type_word(ty: &Type) -> String {
                 .collect();
             format!("task__{}__{}__{}", task.params.len(), params.join("__"), type_word(&task.ret))
         }
+        // `[hold @r]` and `[@r]` are one C type: a call and what it keeps.
+        Type::Closure(closure) => format!("closure__{}", type_word(&Type::Task(Box::new(closure.task.clone())))),
     }
 }
 

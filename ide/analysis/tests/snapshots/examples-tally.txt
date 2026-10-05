@@ -1,0 +1,80 @@
+  1 | ; Lambdas that keep what they use: a scorer made for each rule, kept in the
+    | comment:; Lambdas that keep what they use: a scorer made for each rule, kept in the
+  2 | ; region of the game, and a counter of turns that changes its own copy.
+    | comment:; region of the game, and a counter of turns that changes its own copy.
+  3 | shape Rule
+    | keyword:shape  type:Rule
+  4 |     name: text
+    | field:name  punctuation::  type-builtin:text
+  5 |     points: int
+    | field:points  punctuation::  type-builtin:int
+  6 | fi
+    | keyword:fi
+  8 | task scorer(r: region, rule: Rule) -> [@r](int) -> int
+    | keyword:task  task:scorer  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:rule  punctuation::  type:Rule  punctuation:)  operator:->  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  variable:int  punctuation:)  operator:->  type-builtin:int
+  9 |     ; It keeps a copy of 'rule', made here, in 'r'.
+    | comment:; It keeps a copy of 'rule', made here, in 'r'.
+ 10 |     <- [@r](hits: int) -> int <- hits * rule.points fi
+    | keyword:<-  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:hits  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:hits  operator:*  parameter:rule  punctuation:.  field:points  keyword:fi
+ 11 | fi
+    | keyword:fi
+ 13 | task turns(r: region) -> [hold @r]() -> int
+    | keyword:task  task:turns  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 14 |     hold played = 0
+    | keyword:hold  variable:played  operator:=  number:0
+ 15 |     <- [hold @r]() -> int
+    | keyword:<-  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 16 |         played = played + 1
+    | variable:played  operator:=  variable:played  operator:+  number:1
+ 17 |         <- played
+    | keyword:<-  variable:played
+ 18 |     fi
+    | keyword:fi
+ 19 | fi
+    | keyword:fi
+ 21 | task play(hold& next_turn: [hold @r]() -> int, score: [@r](int) -> int, hits: int) -> int
+    | keyword:task  task:play  punctuation:(  keyword:hold  keyword:&  parameter:next_turn  punctuation::  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  punctuation:,  variable:score  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  variable:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  variable:hits  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 22 |     bind turn = next_turn()
+    | keyword:bind  variable:turn  operator:=  parameter:next_turn  punctuation:(  punctuation:)
+ 23 |     show("turn ", turn, ": ", hits, " hits")
+    | builtin-fn:show  punctuation:(  string:"turn "  punctuation:,  variable:turn  punctuation:,  string:": "  punctuation:,  variable:hits  punctuation:,  string:" hits"  punctuation:)
+ 24 |     <- score(hits)
+    | keyword:<-  variable:score  punctuation:(  variable:hits  punctuation:)
+ 25 | fi
+    | keyword:fi
+ 27 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 28 |     region game
+    | keyword:region  region:game
+ 29 |     bind rules = [Rule { name: "goal", points: 3 }, Rule { name: "assist", points: 1 }]
+    | keyword:bind  variable:rules  operator:=  punctuation:[  type:Rule  punctuation:{  field:name  punctuation::  string:"goal"  punctuation:,  field:points  punctuation::  number:3  punctuation:}  punctuation:,  type:Rule  punctuation:{  field:name  punctuation::  string:"assist"  punctuation:,  field:points  punctuation::  number:1  punctuation:}  punctuation:]
+ 30 |     hold scorers = new [[@game](int) -> int]() at game
+    | keyword:hold  variable:scorers  operator:=  keyword:new  punctuation:[  punctuation:[  operator:@  region:game  punctuation:]  punctuation:(  variable:int  punctuation:)  operator:->  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:game
+ 31 |     each rule in rules
+    | keyword:each  variable:rule  keyword:in  variable:rules
+ 32 |         scorers.add(scorer(game, rule))
+    | variable:scorers  punctuation:.  field:add  punctuation:(  task:scorer  punctuation:(  region:game  punctuation:,  variable:rule  punctuation:)  punctuation:)
+ 33 |     fi
+    | keyword:fi
+ 34 |     hold next_turn = turns(game)
+    | keyword:hold  variable:next_turn  operator:=  task:turns  punctuation:(  region:game  punctuation:)
+ 35 |     hold total = 0
+    | keyword:hold  variable:total  operator:=  number:0
+ 36 |     each hits in [2, 0, 4]
+    | keyword:each  variable:hits  keyword:in  punctuation:[  number:2  punctuation:,  number:0  punctuation:,  number:4  punctuation:]
+ 37 |         total = total + play(&next_turn, scorers[0], hits)
+    | variable:total  operator:=  variable:total  operator:+  task:play  punctuation:(  operator:&  variable:next_turn  punctuation:,  variable:scorers  punctuation:[  number:0  punctuation:]  punctuation:,  variable:hits  punctuation:)
+ 38 |     fi
+    | keyword:fi
+ 39 |     show("goals: ", total)
+    | builtin-fn:show  punctuation:(  string:"goals: "  punctuation:,  variable:total  punctuation:)
+ 40 |     bind bonus = 10
+    | keyword:bind  variable:bonus  operator:=  number:10
+ 41 |     bind assists = [@game](hits: int) -> int <- scorers[1](hits) + bonus fi
+    | keyword:bind  variable:assists  operator:=  punctuation:[  operator:@  region:game  punctuation:]  punctuation:(  parameter:hits  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  variable:scorers  punctuation:[  number:1  punctuation:]  punctuation:(  parameter:hits  punctuation:)  operator:+  variable:bonus  keyword:fi
+ 42 |     bind assisted = play(&next_turn, assists, 5)
+    | keyword:bind  variable:assisted  operator:=  task:play  punctuation:(  operator:&  variable:next_turn  punctuation:,  variable:assists  punctuation:,  number:5  punctuation:)
+ 43 |     show("assists: ", assisted)
+    | builtin-fn:show  punctuation:(  string:"assists: "  punctuation:,  variable:assisted  punctuation:)
+ 44 | fi
+    | keyword:fi

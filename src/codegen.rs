@@ -259,6 +259,7 @@ impl Generator {
         self.gen_map_helpers(&used);
         self.gen_compares(&used)?;
         self.gen_copies(&used.copied.list);
+        self.gen_closure_helpers(&used);
         self.w.blank();
 
         // Shared fields: one variable each for the whole program, given its
@@ -292,6 +293,9 @@ impl Generator {
         self.adapted.clear();
         for name in &used.task_values {
             self.gen_adapter(items, name);
+        }
+        for (name, ty) in &used.kept_tasks {
+            self.w.line(&format!("static {} {} = {};", ty, kept_task_name(name), self.task_value(name)));
         }
         self.gen_writers(&used)?;
 
@@ -349,11 +353,44 @@ impl Generator {
     /// The C type of task type `ty`: a pointer to a function taking its values
     /// as a task takes them, `typedef int64_t (*vela__task__1__int__int)(int64_t);`.
     fn gen_task_type(&mut self, ty: &Type) {
+        // `[@r](int) -> int`: the function, which takes what the lambda keeps
+        // first, and what it keeps, a block of its region.
+        if let Type::Closure(closure) = ty {
+            let task = &closure.task;
+            let hidden = self.hidden_of_type(task);
+            let params: Vec<String> = std::iter::once("void*".to_string()).chain(task.params.iter().zip(&task.taken).zip(&hidden).map(|((param, how), hidden)| task_param_c(param, how, *hidden))).collect();
+            self.w.line(&format!("typedef struct {{ {} (*call)({}); void* kept; }} {};", c_type(&task.ret), params.join(", "), c_type(ty)));
+            return;
+        }
         let Type::Task(task) = ty else { return };
         let hidden = self.hidden_of_type(task);
         let params: Vec<String> = task.params.iter().zip(&task.taken).zip(&hidden).map(|((param, how), hidden)| task_param_c(param, how, *hidden)).collect();
         let params = if params.is_empty() { "void".to_string() } else { params.join(", ") };
         self.w.line(&format!("typedef {} (*{})({});", c_type(&task.ret), c_type(ty), params));
+    }
+
+    /// For each type of a lambda that keeps what it uses, once every type is
+    /// complete: the call of a value of it, `vela__call__closure__…(f, …)`,
+    /// which reads the value once, and the function a plain task value given
+    /// where one is expected runs as, given the task where it keeps its
+    /// copies (see `ExprKind::Kept`).
+    fn gen_closure_helpers(&mut self, used: &UsedTypes) {
+        for ty in &used.tasks {
+            let Type::Closure(closure) = ty else { continue };
+            let task = &closure.task;
+            let hidden = self.hidden_of_type(task);
+            let params: Vec<String> = task.params.iter().zip(&task.taken).zip(&hidden).enumerate().map(|(i, ((param, how), hidden))| format!("{} v{}", task_param_c(param, how, *hidden), i)).collect();
+            let args: Vec<String> = (0..task.params.len()).map(|i| format!("v{}", i)).collect();
+            let send = if task.ret == Type::Nothing { "" } else { "return " };
+            let ret = c_type(&task.ret);
+            let word = type_word(ty);
+            let given = std::iter::once(format!("{} f", c_type(ty))).chain(params.iter().cloned()).collect::<Vec<_>>().join(", ");
+            let passed = std::iter::once("f.kept".to_string()).chain(args.iter().cloned()).collect::<Vec<_>>().join(", ");
+            self.w.line(&format!("static inline {} vela__call__{}({}) {{ {}f.call({}); }}", ret, word, given, send, passed));
+            let plain = c_type(&Type::Task(Box::new(task.clone())));
+            let kept = std::iter::once("void* kept".to_string()).chain(params).collect::<Vec<_>>().join(", ");
+            self.w.line(&format!("static inline {} vela__plain__{}({}) {{ {}(*({}*)kept)({}); }}", ret, word, kept, send, plain, args.join(", ")));
+        }
     }
 
     /// For task `name`, named as a value, a function taking its values as its
@@ -407,16 +444,53 @@ impl Generator {
         if self.adapted.contains(name) { adapter_name(name) } else { mangle(name) }
     }
 
+    /// `[@r](…) … fi`, the value of lambda `lambda`, which keeps what it uses:
+    /// its function, and a block of region `region` holding the region and a
+    /// copy of each variable it uses (see `check::kept_name`).
+    fn gen_closure(&mut self, e: &Expr, lambda: &str, region: &str) -> Result<String> {
+        let kept = kept_name(lambda);
+        let fields: Vec<Field> = self.shapes.get(&kept).map(|shape| shape.fields.clone()).ok_or_else(|| Error::internal_at(e.span, format!("no block for what lambda '{}' keeps", lambda)))?;
+        let mut values = Vec::new();
+        for field in &fields {
+            let value = if field.name == region {
+                c_ident(region)
+            } else {
+                let mut var = Expr::new(ExprKind::Var(field.name.clone()), e.span);
+                var.ty = Some(field.ty.clone());
+                self.gen_expr(&var)?
+            };
+            values.push(format!(".{} = {}", c_ident(&field.name), value));
+        }
+        Ok(format!(
+            "(({0}){{ {1}, vela__rt__new({2}, &({3}){{ {4} }}, sizeof({3}), _Alignof({3})) }})",
+            c_type(e.ty()?),
+            self.task_value(lambda),
+            c_ident(region),
+            mangle(&kept),
+            values.join(", ")
+        ))
+    }
+
     /// `f(x)`, the call of the task value `callee` holds: the value is read
     /// first, then the arguments, left to right, each given as the task's type
     /// takes it.
     fn gen_invoke(&mut self, e: &Expr, callee: &Expr, args: &[Expr]) -> Result<String> {
-        let Type::Task(task) = callee.ty()? else { return Err(Error::internal_at(e.span, "a call of a value that holds no task")) };
+        // A lambda that keeps what it uses is called with what it keeps.
+        let (task, call) = match callee.ty()? {
+            Type::Task(task) => (task.as_ref(), None),
+            Type::Closure(closure) => (&closure.task, Some(format!("vela__call__{}", type_word(callee.ty()?)))),
+            _ => return Err(Error::internal_at(e.span, "a call of a value that holds no task")),
+        };
+        let task = &task.clone();
         let mut hidden = vec![false];
         hidden.extend(self.hidden_of_type(task));
         let operands: Vec<&Expr> = std::iter::once(callee).chain(args).collect();
         let values = if hidden.contains(&true) { self.gen_hidden_operands(&operands, &hidden, true)? } else { self.gen_operands(&operands)? };
         let Some((function, values)) = values.split_first() else { return Err(Error::internal_at(e.span, "a call without the value it calls")) };
+        if let Some(call) = call {
+            let given: Vec<String> = std::iter::once(function.clone()).chain(values.iter().cloned()).collect();
+            return Ok(format!("{}({})", call, given.join(", ")));
+        }
         Ok(format!("({})({})", function, values.join(", ")))
     }
 
@@ -1413,7 +1487,7 @@ impl Generator {
                     self.w.line("vela__rt__writer w = VELA__RT__BUILDER;");
                     match ty {
                         Type::Ptr(..) => self.w.line("vela__rt__put_address(&w, v);"),
-                        Type::Task(_) => self.w.line(&format!("(void)v; VELA__RT__PUT(&w, \"{}\");", task_text(ty))),
+                        Type::Task(_) | Type::Closure(_) => self.w.line(&format!("(void)v; VELA__RT__PUT(&w, \"{}\");", task_text(ty))),
                         _ => self.w.line(&format!("{}(&w, v);", write_helper(ty))),
                     }
                     self.w.line("return vela__rt__built(&w, r);");
@@ -1596,6 +1670,23 @@ impl Generator {
             self.w.line(&if t.ret == Type::Nothing { format!("{};", call) } else { format!("return {};", call) });
             self.w.close();
             return Ok(());
+        }
+        // What a lambda keeps: its region, and a pointer to each copy, which
+        // it reads and changes where it is kept.
+        if t.kept.is_some() {
+            let kept = kept_name(&t.name);
+            let fields: Vec<Field> = self.shapes.get(&kept).map(|shape| shape.fields.clone()).unwrap_or_default();
+            self.w.line(&format!("{0}* vela__block = {1};", mangle(&kept), KEPT_PARAM));
+            for field in &fields {
+                if field.ty == Type::Region {
+                    self.w.line(&format!("vela__rt__region* {0} = vela__block->{0};", c_ident(&field.name)));
+                    self.w.line(&format!("(void){};", c_ident(&field.name)));
+                } else {
+                    self.w.line(&format!("{0}* {1} = &vela__block->{1};", c_type(&field.ty), c_ident(&field.name)));
+                    self.w.line(&format!("(void){};", c_ident(&field.name)));
+                    self.pointers.insert(field.name.clone());
+                }
+            }
         }
         for (param, hidden) in t.params.iter().zip(hidden.iter().copied().chain(std::iter::repeat(false))) {
             if !owns_copy(t, param, alters, hidden) {
@@ -2698,6 +2789,21 @@ impl Generator {
             ExprKind::NoneLit => Ok("NULL".to_string()),
             ExprKind::Macro { name, .. } => Ok(macro_name(name)),
             ExprKind::TaskValue(name) => Ok(self.task_value(name)),
+            ExprKind::Closure { lambda, region, .. } => self.gen_closure(e, lambda, region),
+            ExprKind::Kept { value, region } => {
+                let Some(Type::Closure(closure)) = &e.ty else { return Err(Error::internal_at(e.span, "a task value kept as no lambda")) };
+                let plain = c_type(&Type::Task(Box::new(closure.task.clone())));
+                let kept = match (region, &value.kind) {
+                    // A task named here: where the program keeps it.
+                    (None, ExprKind::TaskValue(name)) => format!("(void*)&{}", kept_task_name(name)),
+                    (Some(region), _) => {
+                        let value = self.gen_expr(value)?;
+                        format!("vela__rt__new({0}, &({1}){{ {2} }}, sizeof({1}), _Alignof({1}))", c_ident(region), plain, value)
+                    }
+                    _ => return Err(Error::internal_at(e.span, "a task value kept in no region")),
+                };
+                Ok(format!("(({}){{ vela__plain__{}, {} }})", c_type(e.ty()?), type_word(e.ty()?), kept))
+            }
             ExprKind::Invoke { callee, args } => self.gen_invoke(e, callee, args),
             // The checker makes every one the `New` it stands for.
             ExprKind::Shortcut { .. } => Err(Error::internal_at(e.span, "a shortcut the checker left as it was")),
@@ -3618,6 +3724,8 @@ impl Generator {
     fn location(&self, span: Span) -> String {
         match &self.place {
             Some(place) => format!("\"{}:{} in {}\"", span.line, span.col, escape_c_string(place)),
+            // A lambda has no name a program writes; its place says which.
+            None if is_lambda(&self.task) => format!("\"{}:{} in a lambda\"", span.line, span.col),
             None => format!("\"{}:{} in task '{}'\"", span.line, span.col, escape_c_string(&self.task)),
         }
     }
@@ -3719,7 +3827,7 @@ fn shown(e: &Expr, ty: &Type, value: &str, ends: bool) -> Result<String> {
     let written = match ty {
         Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) => return Ok(format!("{}({});", written_helper(ty, ends), value)),
         Type::Ptr(..) => format!("vela__rt__put_address(&VELA__RT__OUTPUT, (const void*){});", value),
-        Type::Task(_) => format!("(void)({}); VELA__RT__PUT(&VELA__RT__OUTPUT, \"{}\");", value, task_text(ty)),
+        Type::Task(_) | Type::Closure(_) => format!("(void)({}); VELA__RT__PUT(&VELA__RT__OUTPUT, \"{}\");", value, task_text(ty)),
         Type::Array(..) | Type::Slice(..) | Type::Map(..) | Type::Tuple(_) | Type::Maybe(_) | Type::Named(..) => {
             format!("{}(&VELA__RT__OUTPUT, {});", write_helper(&ty.without_regions()), value)
         }
@@ -3745,7 +3853,7 @@ fn put_item(ty: &Type, value: &str) -> String {
         Type::Bool => format!("vela__rt__put_bool(w, {});", value),
         Type::Text(_) => format!("vela__rt__put_quoted(w, {});", value),
         Type::Ptr(..) => format!("vela__rt__put_address(w, (const void*){});", value),
-        Type::Task(_) => format!("(void)({}); VELA__RT__PUT(w, \"{}\");", value, task_text(ty)),
+        Type::Task(_) | Type::Closure(_) => format!("(void)({}); VELA__RT__PUT(w, \"{}\");", value, task_text(ty)),
         _ => format!("{}(w, {});", write_helper(&ty.without_regions()), value),
     }
 }
@@ -3778,6 +3886,8 @@ impl Layout<'_> {
     pub fn of(&self, ty: &Type) -> (usize, usize) {
         match ty {
             Type::Int | Type::Float | Type::Ptr(..) | Type::None | Type::Region | Type::Task(_) => (8, 8),
+            // Its function and what it keeps.
+            Type::Closure(_) => (16, 8),
             Type::Maybe(inner) if is_pointer(inner) => (8, 8),
             Type::Bool | Type::Unit | Type::Char => (1, 1),
             Type::Nothing => (0, 1),
@@ -3929,7 +4039,8 @@ fn has_prelude(e: &Expr) -> bool {
         ExprKind::Spread(inner) => has_prelude(inner),
         ExprKind::PlanB { .. } | ExprKind::Choice(_) | ExprKind::Edit { .. } | ExprKind::Scan { .. } => true,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
-        | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::TaskValue(_) => false,
+        | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::TaskValue(_) | ExprKind::Closure { .. } => false,
+        ExprKind::Kept { value, .. } => has_prelude(value),
         ExprKind::Invoke { callee, args } => {
             let all: Vec<&Expr> = std::iter::once(callee.as_ref()).chain(args).collect();
             all.iter().any(|e| has_prelude(e)) || ordered(&all)
@@ -4029,6 +4140,9 @@ struct UsedTypes {
     task_words: HashSet<String>,
     /// The tasks named as values, in the order first named.
     task_values: Vec<String>,
+    /// The tasks named where a lambda that keeps what it uses is expected,
+    /// each with the C type of its value (see `ExprKind::Kept`).
+    kept_tasks: Vec<(String, String)>,
 }
 
 /// Types in the order they were first noted, with a set beside them so that
@@ -4117,6 +4231,7 @@ impl UsedTypes {
             tasks: Vec::new(),
             task_words: HashSet::new(),
             task_values: Vec::new(),
+            kept_tasks: Vec::new(),
         };
         let tasks: HashSet<&str> = items
             .iter()
@@ -4205,6 +4320,17 @@ impl UsedTypes {
                 }
                 task.params.iter().for_each(|param| self.add(param));
                 self.add(&task.ret);
+                if self.task_words.insert(type_word(ty)) {
+                    self.tasks.push(ty.clone());
+                }
+            }
+            // Its function's type too, which a plain task value it is made of
+            // is (see `gen_closure_helpers`).
+            Type::Closure(closure) => {
+                if self.task_words.contains(&type_word(ty)) {
+                    return;
+                }
+                self.add(&Type::Task(Box::new(closure.task.clone())));
                 if self.task_words.insert(type_word(ty)) {
                     self.tasks.push(ty.clone());
                 }
@@ -4416,10 +4542,18 @@ impl UsedTypes {
             ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. }
             | ExprKind::Var(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => {}
             ExprKind::Spread(inner) => self.expr(inner),
-            ExprKind::TaskValue(name) => {
+            ExprKind::TaskValue(name) | ExprKind::Closure { lambda: name, .. } => {
                 if !self.task_values.contains(name) {
                     self.task_values.push(name.clone());
                 }
+            }
+            ExprKind::Kept { value, region } => {
+                if let (None, ExprKind::TaskValue(name), Some(ty)) = (region, &value.kind, &value.ty)
+                    && !self.kept_tasks.iter().any(|(kept, _)| kept == name)
+                {
+                    self.kept_tasks.push((name.clone(), c_type(ty)));
+                }
+                self.expr(value)
             }
             ExprKind::Invoke { callee, args } => {
                 self.expr(callee);
@@ -4636,6 +4770,12 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::Spread(inner) => expr_reads(inner, name),
         ExprKind::Var(var) | ExprKind::RegionAfter(var) => var == name,
         ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::TaskValue(_) => false,
+        // It reads the variables it keeps too, each of which a `(void)` marks
+        // read where it is declared (see `use_if_unread`).
+        ExprKind::Closure { region, .. } if region == name => true,
+        ExprKind::Kept { region: Some(region), .. } if region == name => true,
+        ExprKind::Closure { .. } => false,
+        ExprKind::Kept { value, .. } => expr_reads(value, name),
         ExprKind::Invoke { callee, args } => expr_reads(callee, name) || args.iter().any(|arg| expr_reads(arg, name)),
         // `new` reads the region it allocates in.
         ExprKind::New { value, region, .. } => region.as_deref() == Some(name) || expr_reads(value, name),
@@ -4837,6 +4977,16 @@ fn given_name(name: &str) -> String {
     format!("vela__given__{}", name.trim_start_matches('.'))
 }
 
+/// The C variable holding task `name`, kept where a lambda that keeps what it
+/// uses is expected (see `ExprKind::Kept`).
+fn kept_task_name(name: &str) -> String {
+    format!("vela__kept_task__{}", mangle(name))
+}
+
+/// The C name of what a lambda that keeps what it uses is given first: the
+/// block of its region holding what it keeps (see `Generator::gen_closure`).
+const KEPT_PARAM: &str = "vela__kept";
+
 /// The C declarator of a task, e.g. `int64_t vela_add(int64_t a, int64_t b)`.
 fn signature(t: &TaskDef, alters: bool, hidden: &[bool]) -> String {
     let params: Vec<String> = t
@@ -4867,6 +5017,8 @@ fn signature(t: &TaskDef, alters: bool, hidden: &[bool]) -> String {
             format!("{} {}", c_type(&p.ty), c_ident(&p.name))
         })
         .collect();
+    // A lambda that keeps what it uses is given what it keeps first.
+    let params: Vec<String> = t.kept.as_ref().map(|_| format!("void* {}", KEPT_PARAM)).into_iter().chain(params).collect();
     // `()` in C declares a function with unspecified parameters; `(void)` means none.
     let params = if params.is_empty() { "void".to_string() } else { params.join(", ") };
     format!("{} {}({})", c_type(&t.ret), mangle(&t.name), params)
@@ -5002,8 +5154,9 @@ fn c_type(ty: &Type) -> String {
         Type::Results(_) | Type::Tuple(_) | Type::Array(..) | Type::Slice(..) => format!("vela__{}", type_word(ty)),
         // A map is a pointer to its table's header, in its region.
         Type::Map(..) => format!("vela__{}*", type_word(ty)),
-        // A task is a pointer to its function (see `Generator::gen_task_type`).
-        Type::Task(_) => format!("vela__{}", type_word(ty)),
+        // A task is a pointer to its function (see `Generator::gen_task_type`),
+        // and a lambda that keeps what it uses that and what it keeps.
+        Type::Task(_) | Type::Closure(_) => format!("vela__{}", type_word(ty)),
     }
 }
 

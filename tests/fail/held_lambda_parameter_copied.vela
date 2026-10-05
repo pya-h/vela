@@ -1,0 +1,8 @@
+; error: 3:10: 'f' is a '[hold @r]' lambda, which changes what it keeps and is never copied, so it is given as a place, 'hold& f: [hold @r]() -> int'
+; A [hold @r] lambda is given as a place, never as a copy.
+task run(f: [hold @r]() -> int) -> int
+    <- f()
+fi
+task main()
+    show(1)
+fi

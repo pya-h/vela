@@ -2146,7 +2146,7 @@ fi</code></pre>
         like a task. In C a task value is a pointer to a function, so it costs nothing. Built since, in this order:
         <a href="vela.html#lambdas">lambdas</a> that take nothing from the task around them,
         <a href="vela.html#decorators">startup and wrapper decorators</a>, and <a href="vela.html#type-groups">type
-        groups</a>. Lambdas that do take values from around them are planned <a href="#lambdas">below</a>.
+        groups</a>, then lambdas that keep what they use (<a href="#lambdas">below</a>).
       </p>
 
       <h3 id="lambdas-now">Lambdas <span class="badge b-done">Done</span></h3>
@@ -2160,56 +2160,67 @@ show(apply((n: int) -&gt; int
     &lt;- n + 1
 fi, 5))</code></pre>
       <p>
-        The first version takes nothing from the task around it: its body sees its own parameters, the program's tasks,
-        macros, and shared fields, and no variable of the task it is written in (naming one is an error that points
-        here). The compiler makes each one a task of its own, so a lambda is exactly as cheap as a named task. Built:
+        A plain lambda takes nothing from the task around it: its body sees its own parameters, the program's tasks,
+        macros, and shared fields, and no variable of the task it is written in (naming one is an error that says how
+        to keep it). The compiler makes each one a task of its own, so a lambda is exactly as cheap as a named task. Built:
         see <a href="vela.html#lambdas">Lambdas</a>.
       </p>
 
-      <h3 id="lambdas">Lambdas that take values from around them <span class="badge b-med">Planned, decisions first</span></h3>
+      <h3 id="lambdas">Lambdas that take values from around them <span class="badge b-done">Done</span></h3>
       <p>
         A lambda that uses a variable of the task around it has to keep that value somewhere, for as long as the lambda
         can be called, which can be after the task has ended. Other languages keep it on a garbage-collected heap (Go,
         Python, JavaScript) or let the programmer choose between moving and borrowing (Rust's <code>move</code>). Vela
-        has regions, and a region already answers "how long does this memory live". So a lambda that captures names the
-        regions it takes values from, and keeps what it captured in one of them:
+        has regions, and a region already answers "how long does this memory live". So a lambda that keeps what it uses
+        names the one region it keeps it in, and its type names it too:
       </p>
-      <pre><code>task counter(r: region, start: int) -&gt; [r]() -&gt; int
+      <pre><code>task counter(r: region, start: int) -&gt; [hold @r]() -&gt; int
     hold n = start
-    &lt;- [r]() -&gt; int
-        n++                         ; its own copy of n, kept in r
+    &lt;- [hold @r]() -&gt; int
+        n = n + 1                   ; its own copy of n, kept in r
         &lt;- n
     fi
 fi
 
 task main()
     region r
-    bind next = counter(r, 10)
+    hold next = counter(r, 10)
     show(next(), " ", next())       ; 11 12
 fi</code></pre>
       <ul>
-        <li><strong>The capture list, <code>[r1, r2]</code></strong>, names the regions whose values the lambda may take:
-          a pointer, a slice, or text of one of them, and any value that lives in no region (a number, a bool, text that
-          lasts, a task). A value of a region the list doesn't name is an error, as a value escaping its region is today.</li>
-        <li><strong>Where the captured values live.</strong> Everything the lambda keeps goes in one block of memory, its
-          environment, allocated in a region the list names, and the lambda's type says so, <code>[r]() -&gt; int</code>,
-          so it can't outlive that region: the same rule as a pointer's <code>^T@r</code>. A lambda of a type with no
-          <code>[…]</code> is one that captures nothing, which goes anywhere, as task values do now.</li>
-        <li><strong>By copy.</strong> A captured value is copied into the environment when the lambda is made, as a
-          <code>hold</code> parameter is. A <code>hold</code> variable captured may be changed by the lambda, and the
-          change stays in its own copy (the counter above). A captured place (<code>hold&amp;</code>) is not allowed: it
-          would be a reference that outlives its block.</li>
-        <li><strong>An open question.</strong> A value in a region holds pointers into that region only
-          (<a href="vela.html#regions">Memory and Regions</a>). An environment in <code>r</code> holding a pointer into
-          <code>r2</code> breaks that rule, so either a capture list names one region, or environments get a rule of their
-          own: kept in the region that ends first, which the others must outlive. The first is simpler; the second is
-          what <code>[r1, r2]</code> suggests.</li>
-        <li><strong>What it costs.</strong> A capturing lambda is two words, the function and its environment, and a call
-          passes the environment as a hidden argument; making one allocates the environment in its region (a bump, the
-          cheapest allocation there is). A task value that captures nothing stays one word with no hidden argument, and
-          goes where a capturing type is expected through a small function the compiler writes, so code that never
-          captures pays nothing.</li>
+        <li><strong>One region, written alone.</strong> <code>[@r]</code> names where the lambda keeps its copies, and its
+          type, <code>[@r](int) -&gt; int</code>, says no more, so a task asking for one takes any lambda kept in
+          <code>r</code>, and the lambda can't outlive <code>r</code>, as a <code>^T@r</code> can't.</li>
+        <li><strong>By copy, used implicitly.</strong> Each variable of the code around it the body uses is copied into a
+          block of <code>r</code> when the lambda is made: numbers, shapes, arrays, and the handles of slices, pointers and
+          text. What lives in <code>r</code> is used where it is, through the copied handles, and a value of another
+          region is copied into <code>r</code> first, <code>xs.copy() at r</code>, the rule a <code>Person@r</code>
+          follows.</li>
+        <li><strong><code>[hold @r]</code> changes its copies</strong>, as Rust's <code>FnMut</code> does, and so is never
+          copied: held in a <code>hold</code> variable and given as a place, <code>hold&amp; f</code>.</li>
+        <li><strong>Plain and keeping values mix one way.</strong> A plain task value goes where a <code>[@r]</code> type
+          is expected, through a small function the compiler writes; a keeping one never goes where a plain type is
+          expected, since that type names no region.</li>
+        <li><strong>What it costs.</strong> Two words, the function and its block; a call passes the block as a hidden
+          argument, and making one is a bump in its region. Code that never keeps anything pays nothing. Built: see
+          <a href="vela.html#kept-lambdas">Lambdas that keep what they use</a>.</li>
       </ul>
+      <p>
+        <strong>Planned next.</strong> <span class="badge b-med">Planned</span> A variable kept as a place, named in the
+        list beside the region: <code>[&amp;big, @r]</code> reads it where it is, with no copy, for a large value, and
+        <code>[hold&amp; count, @r]</code> changes the variable itself. It is safe only where the lambda can't outlive the
+        variable, so only where <code>r</code> is declared inside the variable's block, after it, and ends first; a
+        region given as a parameter, or one declared before the variable, is refused.
+      </p>
+      <p>
+        <strong>Later, maybe.</strong> A lambda that keeps what it uses held in a field of a shape or kind; compared, or
+        copied into another region with what it keeps; a rule for <code>add</code> and <code>del</code> on a slice the
+        lambda keeps, which today it refuses, since its copy shares the items and not the length; and data of another
+        region used in place where Vela can see that the region outlives <code>r</code>. Weighed and dropped: marks for
+        each region a lambda takes from (variables live on the stack, and a region holds only what they point to), and
+        a region kept alive for as long as a lambda in another lives (it frees memory early when the kept region ends
+        first, and needs counting while the program runs).
+      </p>
 
       <h3 id="decorators">Decorators <span class="badge b-done">Done</span></h3>
       <p>

@@ -1,0 +1,8 @@
+; error: 6:22: everything a value in region 'r' holds is in 'r', what a lambda keeps too; write '@r' for '@q'
+; Everything a slice holds is in its region, what its lambdas keep too.
+task main()
+    region r
+    region q
+    hold fs = new [[@q]() -> int]() at r
+    show(fs.len)
+fi

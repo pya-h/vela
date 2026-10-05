@@ -1,0 +1,11 @@
+; error: 7:34: region 'q' belongs to the code around this lambda, which keeps what it uses in 'r' and sees no other region of it; use 'r', declare a region of its own inside it, or take one as a parameter, 'q: region'
+; A lambda that keeps what it uses sees only the region it keeps them in.
+task main()
+    region r
+    region q
+    bind f = [@r](x: int) -> int
+        bind ys = new [int]() at q
+        <- x
+    fi
+    show(f(1))
+fi

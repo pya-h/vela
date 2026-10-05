@@ -783,7 +783,7 @@ impl Parser {
         } else {
             Type::Nothing
         };
-        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None, decorators: Vec::new(), passes: Vec::new(), wrappers: Vec::new() })
+        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None, decorators: Vec::new(), passes: Vec::new(), wrappers: Vec::new(), kept: None })
     }
 
     /// Whether the cursor is at `native task` (see `ast::NATIVE`).
@@ -1243,6 +1243,7 @@ impl Parser {
             decorators: Vec::new(),
             passes: Vec::new(),
             wrappers: Vec::new(),
+            kept: None,
         })
     }
 
@@ -1640,6 +1641,12 @@ impl Parser {
             self.type_parts.push(("region".to_string(), span));
             return Ok(Type::Region);
         }
+        if self.check(Token::LBracket) && self.at_kept() {
+            self.enter()?;
+            let closure = self.parse_closure_type(span);
+            self.leave(1);
+            return closure;
+        }
         if self.match_token(Token::LBracket) {
             self.enter()?;
             let items = self.parse_bracketed_type();
@@ -1667,6 +1674,53 @@ impl Parser {
             return Ok(if prefix == Token::Caret { Type::Ptr(inner, None) } else { Type::Maybe(inner) });
         }
         self.parse_named_type(span)
+    }
+
+    /// Whether the cursor, at `[`, starts what a lambda keeps: `[@r]` or
+    /// `[hold @r]`, before a lambda or its type.
+    fn at_kept(&self) -> bool {
+        match self.tokens.get(self.pos + 1) {
+            Some(Token::AtSign) => true,
+            Some(Token::Hold) => self.tokens.get(self.pos + 2) == Some(&Token::AtSign),
+            _ => false,
+        }
+    }
+
+    /// At `[`, what a lambda keeps: `[@r]` or `[hold @r]`, as the region and
+    /// whether it changes its copies.
+    fn parse_kept(&mut self) -> Result<(String, bool, Span)> {
+        self.advance(); // [
+        let hold = self.match_token(Token::Hold);
+        self.expect(Token::AtSign)?;
+        let at = self.peek_span();
+        let region = self.expect_ident()?;
+        if !self.match_token(Token::RBracket) {
+            return Err(Error::at(
+                self.peek_span(),
+                format!("a lambda names one region it keeps what it uses in, as in '[@{0}]' or '[hold @{0}]', and ']' closes it", region),
+            ));
+        }
+        Ok((region, hold, at))
+    }
+
+    /// `[@r](int) -> int`, at `[` written at `span`: the type of a lambda that
+    /// keeps what it uses in `r` (see `Type::Closure`).
+    fn parse_closure_type(&mut self, span: Span) -> Result<Type> {
+        let (region, hold, at) = self.parse_kept()?;
+        self.type_parts.push((format!("@{}", region), at));
+        let written = if hold { format!("[hold @{}]", region) } else { format!("[@{}]", region) };
+        let opened = self.peek_span();
+        let task = match self.match_token(Token::LParen) {
+            true => self.parse_tuple_type(opened)?,
+            false => Type::Unknown,
+        };
+        let Type::Task(task) = task else {
+            return Err(Error::at(span, format!("the type of a lambda that keeps what it uses is a task's type after '{0}', as in '{0}(int) -> int'", written)));
+        };
+        if task.taken.iter().any(|how| *how == Taken::Region(region.clone())) {
+            return Err(Error::at(at, format!("'{}' keeps what the lambda uses in '{}', so a region the lambda takes is named otherwise, as in '@a'", written, region)));
+        }
+        Ok(Type::Closure(Box::new(ClosureType { task: *task, region, hold })))
     }
 
     /// A type named at `span` and the cursor, with the types a shape is given.
@@ -3032,6 +3086,7 @@ impl Parser {
         match self.peek() {
             Token::Interpolated(_) => self.parse_interpolated(span),
             Token::New => self.parse_new(),
+            Token::LBracket if self.at_kept() => self.parse_closure_lambda(),
             Token::LBracket => self.parse_array(),
             Token::LParen if self.at_lambda() => self.parse_lambda(),
             Token::LParen => self.parse_parenthesized(),
@@ -3195,7 +3250,33 @@ impl Parser {
         } else {
             self.parse_lambda_line(span)?
         };
-        Ok(self.add_lambda(span, params, ret, results, body))
+        Ok(self.add_lambda(span, params, ret, results, body, None))
+    }
+
+    /// `[@r](params) -> type`, its body, and `fi`, at `[`: a lambda that keeps
+    /// what it uses from the code around it in region `r`, and with
+    /// `[hold @r]` changes its copies (see `ExprKind::Closure`).
+    fn parse_closure_lambda(&mut self) -> Result<Expr> {
+        let span = self.peek_span();
+        let (region, hold, _) = self.parse_kept()?;
+        if !(self.check(Token::LParen) && self.at_lambda()) {
+            let written = if hold { format!("[hold @{}]", region) } else { format!("[@{}]", region) };
+            return Err(Error::at(span, format!("'{0}' starts a lambda that keeps what it uses, so a lambda's header follows it, as in '{0}(x: int) -> int'", written)));
+        }
+        let header = self.peek_span();
+        let (params, ret, results) = self.parse_lambda_header(header)?;
+        let body = if matches!(self.peek(), Token::Newline | Token::Eof) {
+            let body = self.parse_block()?;
+            self.expect_fi("lambda", span)?;
+            body
+        } else {
+            self.parse_lambda_line(span)?
+        };
+        let kept = Kept { region: region.clone(), hold };
+        let ExprKind::Var(lambda) = self.add_lambda(span, params, ret, results, body, Some(kept)).kind else {
+            return Err(Error::internal_at(span, "a lambda named by no variable"));
+        };
+        Ok(Expr::new(ExprKind::Closure { lambda, region, hold }, span))
     }
 
     /// The header of a lambda at `span` and the cursor, up to its body.
@@ -3222,7 +3303,7 @@ impl Parser {
 
     /// Makes the lambda at `span` a task of the file, and gives the value
     /// naming it.
-    fn add_lambda(&mut self, span: Span, params: Vec<Field>, ret: Type, results: Vec<ResultDef>, body: Block) -> Expr {
+    fn add_lambda(&mut self, span: Span, params: Vec<Field>, ret: Type, results: Vec<ResultDef>, body: Block, kept: Option<Kept>) -> Expr {
         self.lambda_count += 1;
         let name = lambda_name(self.lambda_count);
         self.lambdas.push(Item::Task(TaskDef {
@@ -3240,6 +3321,7 @@ impl Parser {
             decorators: Vec::new(),
             passes: Vec::new(),
             wrappers: Vec::new(),
+            kept,
         }));
         Expr::new(ExprKind::Var(name), span)
     }

@@ -1,0 +1,11 @@
+; error: 6:30: '.n' names a member of the value a method is called on, which a lambda doesn't keep; keep a variable of it in the method first, as in 'bind n = .n', and use that
+; A lambda keeps variables, not the members of the value a method is called on.
+shape Box
+    n: int
+    make(r: region) -> [@r]() -> int
+        <- [@r]() -> int <- .n fi
+    fi
+fi
+task main()
+    show(1)
+fi

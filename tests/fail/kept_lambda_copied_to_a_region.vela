@@ -1,0 +1,9 @@
+; error: 7:16: 'copy' can't copy [@r](int) -> int: what a lambda that keeps what it uses keeps stays in its region, which its type names; make the lambda again in the other region
+; What a lambda keeps stays in its region, so it isn't copied.
+task main()
+    region r
+    region q
+    bind f = [@r](x: int) -> int <- x fi
+    bind g = f.copy() at q
+    show(g(1))
+fi

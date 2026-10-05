@@ -1,0 +1,92 @@
+; Lambdas that keep what they use, [@r](…): a copy of each variable of the code
+; around them they use, kept in r when they are made, read where it is kept;
+; [hold @r] changes its copies, and the variables never change through them.
+task counter(r: region, start: int) -> [hold @r]() -> int
+    hold n = start
+    <- [hold @r]() -> int
+        n = n + 1
+        <- n
+    fi
+fi
+
+task adder(r: region, hold& total: int) -> [@r](int) -> int
+    <- [@r](n: int) -> int <- n + total fi
+fi
+
+task greeter(r: region, name: text) -> [@r](text) -> text@r
+    <- [@r](greeting: text) -> text@r <- greeting + ", " + name at r fi
+fi
+
+task apply(f: [@r](int) -> int, x: int) -> int
+    <- f(x)
+fi
+
+task twice<T>(f: [@r](T) -> T, x: T) -> T
+    <- f(f(x))
+fi
+
+task double(x: int) -> int
+    <- x * 2
+fi
+
+shape Box
+    n: int
+    maker(r: region) -> [@r]() -> int
+        bind k = .n
+        <- [@r]() -> int <- k fi
+    fi
+fi
+
+task main()
+    region r
+    hold next = counter(r, 10)
+    show(next(), " ", next(), " ", next())
+    hold total = 5
+    bind add = adder(r, &total)
+    total = 100
+    show(add(1), " ", total)
+    bind hi = greeter(r, "Ada")
+    show(hi("hello"))
+    bind step = 3
+    bind plus = [@r](x: int) -> int <- x + step fi
+    show(plus(1), " ", apply(plus, 5), " ", twice(plus, 1))
+    ; A task, or a task value, goes where a lambda that keeps is expected.
+    bind plain = (x: int) -> int <- x - 1 fi
+    bind kept: [@r](int) -> int = plain
+    show(apply(double, 4), " ", kept(1), " ", apply(kept, 10))
+    ; What lives in r is used where it is: a change to an item is seen.
+    hold xs = new [int]() at r
+    xs.add(1)
+    xs.add(2)
+    hold scale = [hold @r]() -> int
+        xs[0] = xs[0] * 10
+        <- xs[0]
+    fi
+    show(scale(), " ", scale(), " ", xs[0], " ", xs.len)
+    hold fs = new [[@r]() -> int]() at r
+    each i in 0..3
+        fs.add([@r]() -> int <- i * step fi)
+    fi
+    each f in fs
+        show(f())
+    fi
+    hold later: maybe [@r]() -> int = none
+    later = [@r]() -> int <- step + 1 fi
+    when later is {f}
+        show(f())
+    fi
+    bind outer = [@r](n: int) -> int
+        bind inner = [@r](m: int) -> int <- m + n + step fi
+        <- inner(1)
+    fi
+    show(outer(10))
+    bind made = [@r](n: int) -> [int]@r
+        hold ys = new [int]() at r
+        ys.add(n)
+        ys.add(xs.len)
+        <- ys
+    fi
+    show(made(7))
+    show(Box { n: 42 }.maker(r)())
+    show(plus)
+fi

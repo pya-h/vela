@@ -105,6 +105,25 @@ struct VarInfo {
     /// For a reference, `hold& y = &x` or `bind& y = &x`: the place it names,
     /// from a variable that isn't a reference itself (see `resolved_path`).
     refers: Option<Vec<Step>>,
+    /// Whether this is a variable of the code around a lambda that keeps what
+    /// it uses, `[@r](…)`, which the lambda keeps a copy of if it uses it.
+    kept: bool,
+}
+
+/// A lambda that keeps what it uses, `[@r](…)` (see `Checker::kept_lambdas`).
+struct KeptLambda {
+    region: String,
+    hold: bool,
+    /// Where it is written.
+    span: Span,
+    /// The variables and region of the code around it where it is written,
+    /// which it may keep: the region it keeps them in, and no other.
+    outer: Vec<(String, VarInfo)>,
+    /// The lambda that keeps what it uses it is written in, if any, which
+    /// keeps what this one keeps of the code around both.
+    within: Option<String>,
+    /// The variables it uses, which it keeps, in the order first used.
+    uses: Vec<String>,
 }
 
 /// What a place an assignment writes to takes: nothing (`_`), a value of a
@@ -293,6 +312,21 @@ pub struct Checker {
     /// regions of the code around it, which it takes nothing from, for the
     /// message when its body names one.
     lambda_outer: HashMap<String, HashSet<String>>,
+    /// For each lambda that keeps what it uses (see `ExprKind::Closure`): what
+    /// it may keep and what it does.
+    kept_lambdas: HashMap<String, KeptLambda>,
+    /// The order the lambdas that keep what they use were written in, inner
+    /// ones after the ones around them.
+    kept_order: Vec<String>,
+    /// The variables of the code around it that the lambda being checked
+    /// uses, which it keeps (see `lookup`).
+    kept_used: std::cell::RefCell<Vec<String>>,
+    /// Whether the variable being checked is read to be called or given as a
+    /// place, the only ways a `[hold @r]` lambda's value is read.
+    calling: bool,
+    /// The region the lambda called through a value keeps what it uses in,
+    /// which the call's types name as it is (see `check_invoke`).
+    kept_call: Option<String>,
     /// Whether the value being checked is given on whole as a group's values,
     /// `args...`, the only way a group's values are read.
     spreading: bool,
@@ -680,6 +714,7 @@ impl Checker {
             }
         }
         self.current_module.clear();
+        self.finish_kept();
         self.order_start_values(items);
     }
 
@@ -1669,6 +1704,10 @@ impl Checker {
             Type::Tuple(items) => Type::Tuple(items.iter().map(|ty| self.unmade(ty)).collect()),
             Type::Results(types) => Type::Results(types.iter().map(|ty| self.unmade(ty)).collect()),
             Type::Task(task) => Type::Task(Box::new(TaskType { params: task.params.iter().map(|ty| self.unmade(ty)).collect(), taken: task.taken.clone(), ret: self.unmade(&task.ret) })),
+            Type::Closure(closure) => {
+                let task = TaskType { params: closure.task.params.iter().map(|ty| self.unmade(ty)).collect(), taken: closure.task.taken.clone(), ret: self.unmade(&closure.task.ret) };
+                Type::Closure(Box::new(ClosureType { task, region: closure.region.clone(), hold: closure.hold }))
+            }
             other => other.clone(),
         }
     }
@@ -1726,6 +1765,10 @@ impl Checker {
             Type::Task(task) => {
                 task.params.iter_mut().try_for_each(|ty| self.settle_applications(ty, at))?;
                 self.settle_applications(&mut task.ret, at)
+            }
+            Type::Closure(closure) => {
+                closure.task.params.iter_mut().try_for_each(|ty| self.settle_applications(ty, at))?;
+                self.settle_applications(&mut closure.task.ret, at)
             }
             _ => Ok(()),
         }
@@ -1891,6 +1934,14 @@ impl Checker {
         }
         let region_params: Vec<&str> = t.params.iter().filter(|p| p.ty == Type::Region).map(|p| p.name.as_str()).collect();
         let mut named: Vec<String> = region_params.iter().map(|name| name.to_string()).collect();
+        // A lambda that keeps what it uses in `r` may name `r` in its types,
+        // where what it keeps lives.
+        if let Some(kept) = &t.kept {
+            if let Some(param) = t.params.iter().find(|param| param.name == kept.region) {
+                return err(param.span, format!("'{0}' is the region this lambda keeps what it uses in, '[@{0}]', so a parameter of its own is named otherwise", kept.region));
+            }
+            named.push(kept.region.clone());
+        }
         let mut resolved = Vec::new();
         for param in &t.params {
             if param.ty == Type::Region {
@@ -1898,6 +1949,13 @@ impl Checker {
                 continue;
             }
             let ty = self.resolve_type(&param.ty, param.ty_span, TypePlace::Header)?;
+            // A `[hold @r]` lambda changes what it keeps, so it is never copied.
+            if held_lambda(&ty) && param.passing != Passing::HoldRef {
+                return err(
+                    param.span,
+                    format!("'{0}' is a '[hold @r]' lambda, which changes what it keeps and is never copied, so it is given as a place, 'hold& {0}: {1}'", param.name, ty),
+                );
+            }
             for region in ty.regions() {
                 if let Some(other) = t.params.iter().find(|p| p.name == region && p.ty != Type::Region) {
                     return err(self.place(param.ty_span, &format!("@{}", region)), format!("'{}' is a parameter, not a region", other.name));
@@ -2006,6 +2064,30 @@ impl Checker {
     }
 
     /// `resolve_type` for `ty` inside a pointer of region `inside`.
+    /// A task's type written at `span`, its regions resolved as a header's
+    /// are, its own; `kept` is one it may also name, the region a lambda
+    /// keeps what it uses in (see `ClosureType`).
+    fn resolve_task_type(&mut self, task: &TaskType, span: Span, kept: Option<&str>) -> Result<TaskType> {
+        let params = task.params.iter().map(|param| self.resolve_regions(param, span, TypePlace::Header, None)).collect::<Result<Vec<_>>>()?;
+        let ret = self.resolve_regions(&task.ret, span, TypePlace::Header, None)?;
+        let mut regions: Vec<&str> = Vec::new();
+        for (i, _) in task.params.iter().enumerate() {
+            let Some(region) = task.region(i) else { continue };
+            if regions.contains(&region) {
+                return err(self.place(span, &format!("@{}", region)), format!("this task's type takes region '{}' twice; each region it takes has a name of its own", region));
+            }
+            regions.push(region);
+        }
+        let named: Vec<&str> = params.iter().flat_map(Type::regions).chain(regions.iter().copied()).chain(kept).collect();
+        if let Some(region) = ret.regions().into_iter().find(|region| !named.contains(region)) {
+            return err(
+                self.place(span, &format!("@{}", region)),
+                format!("what this task sends lives in region '{}', which none of its parameters names, so no call could say which region that is", region),
+            );
+        }
+        Ok(TaskType { params, taken: task.taken.clone(), ret })
+    }
+
     fn resolve_regions(&mut self, ty: &Type, span: Span, place: TypePlace, inside: Option<&str>) -> Result<Type> {
         let given = |region: &Option<String>| -> Result<()> {
             match (place, region) {
@@ -2157,25 +2239,29 @@ impl Checker {
             }
             // Its regions are its own, as a header's are, so it names them as a
             // header does, and what it sends is in regions its parameters name.
-            Type::Task(task) => {
-                let params = task.params.iter().map(|param| self.resolve_regions(param, span, TypePlace::Header, None)).collect::<Result<Vec<_>>>()?;
-                let ret = self.resolve_regions(&task.ret, span, TypePlace::Header, None)?;
-                let mut regions: Vec<&str> = Vec::new();
-                for (i, _) in task.params.iter().enumerate() {
-                    let Some(region) = task.region(i) else { continue };
-                    if regions.contains(&region) {
-                        return err(self.place(span, &format!("@{}", region)), format!("this task's type takes region '{}' twice; each region it takes has a name of its own", region));
-                    }
-                    regions.push(region);
-                }
-                let named: Vec<&str> = params.iter().flat_map(Type::regions).chain(regions.iter().copied()).collect();
-                if let Some(region) = ret.regions().into_iter().find(|region| !named.contains(region)) {
+            Type::Task(task) => Ok(Type::Task(Box::new(self.resolve_task_type(task, span, None)?.normalized()))),
+            // `[@r](int) -> int`: a lambda keeping what it uses in `r`, which
+            // its task's type may name too.
+            Type::Closure(closure) => {
+                if matches!(place, TypePlace::Field | TypePlace::Shared) {
                     return err(
-                        self.place(span, &format!("@{}", region)),
-                        format!("what this task sends lives in region '{}', which none of its parameters names, so no call could say which region that is", region),
+                        self.place(span, &format!("@{}", closure.region)),
+                        format!("a field can't hold a lambda that keeps what it uses yet, '{}'; keep it in a variable, or hold a task value, '{}'", ty, Type::Task(Box::new(closure.task.clone()))),
                     );
                 }
-                Ok(Type::Task(Box::new(TaskType { params, taken: task.taken.clone(), ret }.normalized())))
+                // After `new`, its region is the one `new` allocates in, which
+                // `check_new` sees.
+                if place != TypePlace::New {
+                    given(&Some(closure.region.clone()))?;
+                }
+                if let Some(inside) = inside.filter(|inside| *inside != closure.region) {
+                    return err(
+                        self.place(span, &format!("@{}", closure.region)),
+                        format!("everything a value in region '{0}' holds is in '{0}', what a lambda keeps too; write '@{0}' for '@{1}'", inside, closure.region),
+                    );
+                }
+                let task = self.resolve_task_type(&closure.task, span, Some(&closure.region))?;
+                Ok(Type::Closure(Box::new(ClosureType { task, region: closure.region.clone(), hold: closure.hold }.normalized())))
             }
             Type::Maybe(inner) => Ok(Type::Maybe(Box::new(self.resolve_regions(inner, span, place, inside)?))),
             Type::Tuple(items) => Ok(Type::Tuple(items.iter().map(|item| self.resolve_regions(item, span, place, inside)).collect::<Result<_>>()?)),
@@ -2207,10 +2293,18 @@ impl Checker {
                 Ok(())
             }
             Some(_) => err(span, format!("'{}' is a variable, not a region", name)),
-            None if self.current_lambda.as_ref().and_then(|lambda| self.lambda_outer.get(lambda)).is_some_and(|outer| outer.contains(name)) => err(
-                span,
-                format!("region '{0}' belongs to the code around this lambda, and a lambda takes nothing from it; declare a region of its own inside it, or take one as a parameter, '{0}: region'", name),
-            ),
+            None if self.current_lambda.as_ref().and_then(|lambda| self.lambda_outer.get(lambda)).is_some_and(|outer| outer.contains(name)) => {
+                if let Some(kept) = self.current_lambda.as_ref().and_then(|lambda| self.kept_lambdas.get(lambda)) {
+                    return err(
+                        span,
+                        format!("region '{0}' belongs to the code around this lambda, which keeps what it uses in '{1}' and sees no other region of it; use '{1}', declare a region of its own inside it, or take one as a parameter, '{0}: region'", name, kept.region),
+                    );
+                }
+                err(
+                    span,
+                    format!("region '{0}' belongs to the code around this lambda, and a lambda takes nothing from it; declare a region of its own inside it, or take one as a parameter, '{0}: region'; a lambda that keeps what it uses names the region it keeps it in, '[@{0}](…)'", name),
+                )
+            }
             None => err(span, format!("unknown region '{0}'; declare it with 'region {0}'", name)),
         }
     }
@@ -2226,8 +2320,12 @@ impl Checker {
     /// `nothing` is only valid as a return type, which is checked separately, and
     /// as the value side of `nothing ~ E`.
     fn check_type(&self, ty: &Type, span: Span) -> Result<()> {
+        if holds_held_lambda(ty) {
+            return err(span, format!("{} holds a '[hold @r]' lambda, which changes what it keeps and is never copied, so it is held alone, in a 'hold' variable", ty));
+        }
         match ty {
             Type::Nothing => err(self.place(span, "nothing"), "'nothing' is only allowed as a return type"),
+            Type::Closure(closure) => self.check_type(&Type::Task(Box::new(closure.task.clone())), span),
             Type::Region => err(self.place(span, "region"), "'region' is only the type of a task's parameter, as in 'task build(r: region)'"),
             // Only a task's header lists several types, and `check_header`
             // checks each of them on its own.
@@ -2565,6 +2663,20 @@ impl Checker {
         };
         // Parameters and the task body share one scope, as in C.
         self.scopes = vec![Scope::default()];
+        // A lambda that keeps what it uses sees the variables of the code
+        // around it, and the region it keeps them in, under its own (see
+        // `kept_scope`); one whose value was never checked has none to see.
+        if task.kept.is_some() {
+            // A header with a mistake, told already, leaves nothing to keep.
+            match self.kept_scope(&task.name).filter(|_| !unsettled) {
+                Some(around) => self.scopes.insert(0, around),
+                None => {
+                    self.scopes.clear();
+                    self.current_ret = None;
+                    return Ok(());
+                }
+            }
+        }
         for param in &task.params {
             if param.ty == Type::Region && param.passing != Passing::Copy {
                 let why = if param.passing.changes() { "never changes" } else { "is given as it is" };
@@ -2619,7 +2731,13 @@ impl Checker {
         if is_startup(&task.name) {
             self.check_startup(&mut task.body, &task.passes);
         } else {
-            self.check_block(&mut task.body)?;
+            let checked = self.check_block(&mut task.body);
+            // What a lambda that keeps what it uses keeps: what it used.
+            let used = std::mem::take(&mut *self.kept_used.borrow_mut());
+            if let Some(kept) = self.kept_lambdas.get_mut(&task.name) {
+                kept.uses = used;
+            }
+            checked?;
         }
         // Whether every path sends a value can only be told of a body that
         // checked: a line with a mistake may well be the one that sends, so a
@@ -2760,7 +2878,7 @@ impl Checker {
             return err(span, format!("'{0}' is the name of a shape, so '{0}.x' would name its shared field; choose another name", name));
         }
         // Nor may a task value take a task's name, which `name(…)` would call.
-        if (is_task(&ty) || matches!(&ty, Type::Maybe(inner) if is_task(inner))) && self.tasks.contains_key(&full) {
+        if (is_task(&ty) || matches!(ty, Type::Closure(_)) || matches!(&ty, Type::Maybe(inner) if is_task(inner))) && self.tasks.contains_key(&full) {
             return err(span, format!("'{0}' is the name of a task, so '{0}(…)' would call it rather than this task value; choose another name", name));
         }
         // Nor may it take a module's name, which `name.x` would read as.
@@ -2770,6 +2888,7 @@ impl Checker {
         if let Some(existing) = self.lookup(name) {
             let at = existing.span;
             let what = match existing {
+                _ if existing.kept => "a variable of the code around this lambda, which the lambda may keep, declared",
                 _ if existing.ty == Type::Region => "the name of a region",
                 _ if existing.result => "a result of this task, declared",
                 _ => "defined",
@@ -2780,7 +2899,7 @@ impl Checker {
             return Err(Error::internal(format!("'{}' defined outside of a task", name)));
         };
         let allocates = ty == Type::Region;
-        scope.names.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false, param: false, passing: Passing::Copy, refers: None });
+        scope.names.insert(name.to_string(), VarInfo { ty, mutable, span, allocates, result: false, param: false, passing: Passing::Copy, refers: None, kept: false });
         Ok(())
     }
 
@@ -2824,6 +2943,10 @@ impl Checker {
     fn lookup(&self, name: &str) -> Option<&VarInfo> {
         for scope in self.scopes.iter().rev() {
             if let Some(info) = scope.names.get(name) {
+                // A variable of the code around a lambda, which it keeps.
+                if info.kept && !self.kept_used.borrow().iter().any(|used| used == name) {
+                    self.kept_used.borrow_mut().push(name.to_string());
+                }
                 return Some(info);
             }
         }
@@ -2982,7 +3105,12 @@ impl Checker {
                 if let Some(outer) = self.current_lambda.as_ref().and_then(|lambda| self.lambda_outer.get(lambda))
                     && outer.contains(name)
                 {
-                    return Error::at(span, format!("'{0}' belongs to the code around this lambda, and a lambda takes nothing from it; give '{0}' as a parameter, or call a task that takes it (lambdas that keep what they use are planned)", name));
+                    // A lambda that keeps what it uses keeps variables, not the
+                    // results of the task around it, which only `<-` sets.
+                    if self.current_lambda.as_ref().is_some_and(|lambda| self.kept_lambdas.contains_key(lambda)) {
+                        return Error::at(span, format!("'{0}' is a result of the task around this lambda, which a lambda doesn't keep; keep a variable of it first, as in 'bind kept = {0}', and use that", name));
+                    }
+                    return Error::at(span, format!("'{0}' belongs to the code around this lambda, and a lambda takes nothing from it; give '{0}' as a parameter, or call a task that takes it; a lambda that keeps what it uses names the region it keeps its copies in, as in '[@r](…)'", name));
                 }
                 Error::at(span, format!("unknown variable '{}'{}", name, hint))
             }
@@ -3195,6 +3323,13 @@ impl Checker {
                     declared.push((name, at, ty));
                 }
                 for (name, at, ty) in declared {
+                    // A `[hold @r]` lambda changes what it keeps.
+                    if held_lambda(&ty) && !*mutable {
+                        return err(at, format!("'{}' is a '[hold @r]' lambda, which changes what it keeps, so it is held in a 'hold' variable: 'hold {} = …'", name, name));
+                    }
+                    if holds_held_lambda(&ty) {
+                        return err(at, format!("'{}' would hold a '[hold @r]' lambda inside a value, which is copied with it; a '[hold @r]' lambda is held alone, in a 'hold' variable", name));
+                    }
                     if name != DISCARD {
                         self.define(&name, ty, *mutable, at)?;
                     }
@@ -5486,7 +5621,7 @@ impl Checker {
                     }
                 }
             }
-            ExprKind::TaskValue(name) => calls.tasks.push(name.clone()),
+            ExprKind::TaskValue(name) | ExprKind::Closure { lambda: name, .. } => calls.tasks.push(name.clone()),
             ExprKind::Invoke { .. } => calls.invokes = true,
             ExprKind::ToText { value, .. } => {
                 if let Some(ty) = &value.ty {
@@ -5629,8 +5764,148 @@ impl Checker {
     /// what it sends: its arguments are checked as a named task's are, against
     /// the task's type, whose regions stand for the caller's regions its values
     /// show.
+    /// `[@r](x: int) -> int … fi` at `span`: the value of a lambda that keeps
+    /// what it uses of the code around it in region `region`, a copy of each
+    /// variable it uses, made here (see `kept_scope`).
+    fn check_closure(&mut self, lambda: &str, region: &str, hold: bool, span: Span) -> Result<Type> {
+        let written = if hold { format!("[hold @{}]", region) } else { format!("[@{}]", region) };
+        match self.lookup(region) {
+            Some(info) if info.ty == Type::Region => {}
+            Some(_) => return err(span, format!("'{}' keeps what the lambda uses in a region, and '{}' is a variable", written, region)),
+            None => return err(span, format!("'{}' keeps what the lambda uses in region '{}', which isn't one here; declare it with 'region {}', or take it as a parameter", written, region, region)),
+        }
+        self.visible_region(region, span, true)?;
+        // What the lambda may keep: every variable here, and the one region.
+        let mut outer: Vec<(String, VarInfo)> = Vec::new();
+        for scope in &self.scopes {
+            for (name, info) in &scope.names {
+                // `.this` stays the method's: a lambda in one takes it as a parameter.
+                if info.result || (info.ty == Type::Region && name != region) || name == SHOWN || name == THIS {
+                    continue;
+                }
+                outer.retain(|(seen, _)| seen != name);
+                outer.push((name.clone(), info.clone()));
+            }
+        }
+        outer.sort_by_key(|(_, info)| (info.span.line, info.span.col));
+        let names = self.scopes.iter().flat_map(|scope| scope.names.keys().cloned()).collect();
+        self.lambda_outer.insert(lambda.to_string(), names);
+        let within = self.current_lambda.clone().filter(|current| self.kept_lambdas.contains_key(current));
+        self.kept_lambdas.insert(lambda.to_string(), KeptLambda { region: region.to_string(), hold, span, outer, within, uses: Vec::new() });
+        self.kept_order.retain(|name| name != lambda);
+        self.kept_order.push(lambda.to_string());
+        if self.broken.contains(lambda) {
+            return Ok(Type::Unknown);
+        }
+        let Some(info) = self.tasks.get(lambda) else { return Err(Error::internal_at(span, format!("no lambda '{}'", lambda))) };
+        let (params, taken) = self.task_params_taken(info);
+        let task = TaskType { params, taken, ret: info.ret.clone() };
+        Ok(Type::Closure(Box::new(ClosureType { task, region: region.to_string(), hold }.normalized())))
+    }
+
+    /// The scope a lambda that keeps what it uses sees under its own: a copy of
+    /// each variable of the code around it, which changes only in a
+    /// `[hold @r]` lambda, and the region it keeps them in. `None` for one whose
+    /// value was never checked.
+    fn kept_scope(&self, lambda: &str) -> Option<Scope> {
+        let kept = self.kept_lambdas.get(lambda)?;
+        let mut around = Scope::default();
+        for (name, info) in &kept.outer {
+            let mut info = info.clone();
+            info.kept = true;
+            info.param = false;
+            info.passing = Passing::Copy;
+            info.refers = None;
+            if info.ty == Type::Region {
+                info.allocates = true;
+            } else {
+                info.mutable = kept.hold;
+            }
+            around.names.insert(name.clone(), info);
+        }
+        Some(around)
+    }
+
+    /// Checks a read of `name`, a variable of the code around the lambda being
+    /// checked, which keeps a copy of it, at `span`: a copy of a value of the
+    /// region it keeps them in, or of none.
+    fn check_kept_use(&self, name: &str, ty: &Type, span: Span) -> Result<()> {
+        let Some(kept) = self.current_lambda.as_ref().and_then(|lambda| self.kept_lambdas.get(lambda)) else { return Ok(()) };
+        if *ty == Type::Region {
+            return Ok(());
+        }
+        if let Some(other) = ty.regions().into_iter().find(|region| *region != kept.region && !unnamed_region(region)) {
+            return err(
+                span,
+                format!(
+                    "'{0}' is in region '{1}', and this lambda keeps what it uses in '{2}', where nothing points into '{1}'; copy it into '{2}' first, as in 'bind mine = {0}.copy() at {2}', and use that",
+                    name, other, kept.region
+                ),
+            );
+        }
+        if held_lambda(ty) {
+            return err(span, format!("'{}' is a '[hold @r]' lambda, which is never copied, so a lambda can't keep it; give it as a parameter, 'hold& {}'", name, name));
+        }
+        Ok(())
+    }
+
+    /// Once every body is checked: what each lambda that keeps what it uses
+    /// keeps, with what the lambdas written in it keep of the code around
+    /// both, as the shape of a block of its region (see `kept_name`).
+    fn finish_kept(&mut self) {
+        // The inner ones first, so the ones around them keep what they keep.
+        for lambda in self.kept_order.clone().iter().rev() {
+            let Some(kept) = self.kept_lambdas.get(lambda) else { continue };
+            let Some(within) = kept.within.clone() else { continue };
+            let passed: Vec<String> = kept.uses.iter().filter(|name| kept.outer.iter().any(|(outer, info)| outer == *name && info.kept)).cloned().collect();
+            if let Some(around) = self.kept_lambdas.get_mut(&within) {
+                for name in passed {
+                    if !around.uses.contains(&name) {
+                        around.uses.push(name);
+                    }
+                }
+            }
+        }
+        for lambda in &self.kept_order {
+            let Some(kept) = self.kept_lambdas.get(lambda) else { continue };
+            // The region first, which the lambda allocates in where it says so.
+            let mut fields = vec![Field {
+                name: kept.region.clone(),
+                ty: Type::Region,
+                span: kept.span,
+                ty_span: kept.span,
+                private: false,
+                read: false,
+                default_region: false,
+                passing: Passing::Copy,
+                default: None,
+            }];
+            for (name, info) in &kept.outer {
+                if !kept.uses.contains(name) || info.ty == Type::Region {
+                    continue;
+                }
+                fields.push(Field {
+                    name: name.clone(),
+                    ty: info.ty.clone(),
+                    span: kept.span,
+                    ty_span: kept.span,
+                    private: false,
+                    read: false,
+                    default_region: false,
+                    passing: Passing::Copy,
+                    default: None,
+                });
+            }
+            let shape = ShapeDef { name: kept_name(lambda), types: Vec::new(), given: Vec::new(), fields, shared: Vec::new(), span: kept.span, private: true };
+            self.made_shapes.push(Item::Shape(shape));
+        }
+    }
+
     fn check_invoke(&mut self, callee: &mut Expr, args: &mut [Expr], span: Span) -> Result<Type> {
-        let ty = self.check_expr(callee)?;
+        self.calling = matches!(callee.kind, ExprKind::Var(_));
+        let ty = self.check_expr(callee);
+        self.calling = false;
+        let ty = ty?;
         if ty.unknown() {
             self.check_each(args);
             return Ok(Type::Unknown);
@@ -5639,8 +5914,15 @@ impl Checker {
             ExprKind::Var(name) => format!("'{}'", name),
             _ => "this value".to_string(),
         };
+        // A lambda that keeps what it uses names the region it keeps them in,
+        // which its task's type may name too: the call gives it as it is.
+        let kept = match &ty {
+            Type::Closure(closure) => Some(closure.region.clone()),
+            _ => None,
+        };
         let task = match &ty {
             Type::Task(task) => task.clone(),
+            Type::Closure(closure) => Box::new(closure.task.clone()),
             Type::Maybe(inner) if is_task(inner) => {
                 return err(callee.span, format!("{} is a {}, which may be none; extract the task first, as in 'when f is {{g}}' or 'f {{ … }}'", named, ty));
             }
@@ -5677,7 +5959,10 @@ impl Checker {
             ret: task.ret.clone(),
             owner: None,
         };
-        self.check_call_args(span, &callee_text(callee), &mut Vec::new(), args, &info)
+        self.kept_call = kept;
+        let sent = self.check_call_args(span, &callee_text(callee), &mut Vec::new(), args, &info);
+        self.kept_call = None;
+        sent
     }
 
     /// Rewrites `name {}` into an empty plan B when `name` is a variable rather
@@ -5739,6 +6024,12 @@ impl Checker {
             // Checked again, as a method call's value is: it is text.
             ExprKind::TypeOf(_) => Ok(Type::Text(None)),
             ExprKind::Macro { value, .. } => Ok(value.ty.clone().unwrap_or(Type::Unknown)),
+            ExprKind::Closure { lambda, region, hold } => {
+                let (lambda, region, hold) = (lambda.clone(), region.clone(), *hold);
+                self.check_closure(&lambda, &region, hold, span)
+            }
+            // Only `coerce` makes one, of a value it checked.
+            ExprKind::Kept { value, .. } => Ok(value.ty.clone().unwrap_or(Type::Unknown)),
             ExprKind::TaskValue(name) => {
                 if is_lambda(name) {
                     let seen = self.scopes.iter().flat_map(|scope| scope.names.keys().cloned()).collect();
@@ -5992,7 +6283,20 @@ impl Checker {
 
     /// Checks a read of the variable `name`.
     fn check_var(&mut self, name: &str, span: Span) -> Result<Type> {
-        let ty = self.lookup_or_err(name, span)?.ty.clone();
+        let calling = std::mem::take(&mut self.calling);
+        let info = self.lookup_or_err(name, span)?;
+        let (ty, kept) = (info.ty.clone(), info.kept);
+        if kept {
+            self.check_kept_use(name, &ty, span)?;
+        }
+        // A `[hold @r]` lambda changes what it keeps, so its value is never
+        // copied: it is called, or given as a place.
+        if held_lambda(&ty) && !calling {
+            return err(
+                span,
+                format!("'{0}' is a '[hold @r]' lambda, which changes what it keeps, so it is never copied: call it, '{0}(…)', or give it as a place, '&{0}', to a 'hold& f: {1}' parameter", name, ty),
+            );
+        }
         if self.unset.contains(name) {
             return err(span, format!("'{}' might not be set here", name));
         }
@@ -6037,6 +6341,14 @@ impl Checker {
         })?;
         *region = Some(allocates.clone());
         self.visible_region(&allocates, region_span, true)?;
+        // What a lambda that keeps what it uses keeps is in its region, which
+        // everything a value in `allocates` holds is in.
+        if let Some(other) = ty.regions().into_iter().find(|kept| *kept != allocates) {
+            return err(
+                self.place(ty_span, &format!("@{}", other)),
+                format!("everything a value in region '{0}' holds is in '{0}', what a lambda keeps too; write '@{0}' for '@{1}'", allocates, other),
+            );
+        }
         // `new [K: V](…) at r` makes the map, its table in `r`.
         if let Type::Map(key, value_ty, _) = &**ty {
             let key = self.in_region(key, &allocates);
@@ -6592,6 +6904,14 @@ impl Checker {
                 if info.result {
                     return err(items.span, format!("'{0}' is a result; set it with '{0} <- …'", name));
                 }
+                // The lambda's copy of a slice of the code around it shares its
+                // items, not its length.
+                if info.kept && info.mutable && matches!(info.ty, Type::Slice(..)) {
+                    return err(
+                        items.span,
+                        format!("'{0}' changes '{1}', the copy this lambda keeps of a slice of the code around it, whose length only the slice itself changes; make the slice inside the lambda, or take it as a parameter, 'hold& {1}'", word, name),
+                    );
+                }
                 if !info.mutable && matches!(info.ty, Type::Slice(..) | Type::Map(..)) {
                     if info.param && info.passing == Passing::BindRef {
                         return err(
@@ -6853,7 +7173,7 @@ impl Checker {
     /// written as far as its values go, so it is no reason to refuse.
     fn unwritable_in(&self, ty: &Type, seen: &mut Vec<String>) -> Option<Type> {
         match ty {
-            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) => None,
+            Type::Int | Type::Unit | Type::Char | Type::Float | Type::Bool | Type::Text(_) | Type::Ptr(..) | Type::Task(_) | Type::Closure(_) => None,
             Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => self.unwritable_in(inner, seen),
             Type::Map(key, value, _) => self.unwritable_in(key, seen).or_else(|| self.unwritable_in(value, seen)),
             Type::Tuple(items) => items.iter().find_map(|item| self.unwritable_in(item, seen)),
@@ -7082,6 +7402,10 @@ impl Checker {
         }
         if unsettled(&ty) {
             return err(value.span, format!("cannot tell the type of this value from none or 'fail …', so it can't be copied; give it a type first, as in 'x: {}'", settled_example(&ty)));
+        }
+        // What a lambda keeps stays in its region, which its type names.
+        if has_closure(&ty) {
+            return err(span, format!("'copy' can't copy {}: what a lambda that keeps what it uses keeps stays in its region, which its type names; make the lambda again in the other region", ty));
         }
         if !holds_pointers(&ty, &self.regional) && !holds_text(&ty, &self.takes_region) && ty.params().is_empty() {
             let what = match ty {
@@ -8406,6 +8730,11 @@ impl Checker {
             return format!("'{}' reads the value a method is called on, and the value field '{}' falls back on is worked out before there is one, so it reads no other field", written, field);
         }
         let names = if written == THIS { "is the value a method is called on" } else { "names a member of the value a method is called on" };
+        if self.current_lambda.as_ref().is_some_and(|lambda| self.kept_lambdas.contains_key(lambda)) {
+            let field = written.trim_start_matches('.');
+            let example = if written == THIS { "bind value = .this".to_string() } else { format!("bind {0} = .{0}", field) };
+            return format!("'{}' {}, which a lambda doesn't keep; keep a variable of it in the method first, as in '{}', and use that", written, names, example);
+        }
         if self.current_lambda.is_some() {
             return format!("'{}' {}, and a lambda takes nothing from the method around it; give the value as a parameter", written, names);
         }
@@ -8424,7 +8753,10 @@ impl Checker {
         // The types the call gives: written after the name, or worked out from
         // the arguments below (and from the place the value goes, later).
         let given = self.written_types(span, task, written, info)?;
-        let mut found = CallTypes { given, shown: HashMap::new(), regions: HashMap::new(), taken: HashMap::new(), untold: false };
+        // The region a lambda that keeps what it uses keeps it in, which its
+        // type names as the caller does (see `check_invoke`).
+        let regions = self.kept_call.take().map(|region| (region.clone(), region)).into_iter().collect();
+        let mut found = CallTypes { given, shown: HashMap::new(), regions, taken: HashMap::new(), untold: false };
         // The arguments are checked in a function of their own, and what they
         // show is settled in another: the checker recurses through calls'
         // arguments, so this keeps little on the stack.
@@ -8731,7 +9063,11 @@ impl Checker {
             let example = place_path(value).map_or_else(|| "x".to_string(), |path| path_text(&path));
             return err(value.span, format!("'{} {}' is another name for a place, marked with '&', as in '&{}'", word, name, example));
         };
-        let ty = self.check_expr(place)?;
+        // A `[hold @r]` lambda may be named by a reference, never copied.
+        self.calling = matches!(place.kind, ExprKind::Var(_));
+        let ty = self.check_expr(place);
+        self.calling = false;
+        let ty = ty?;
         if mutable {
             if let Err(error) = self.given_place(place, &Taker::Reference(&name)) {
                 // A place that only can't change may still be read through one.
@@ -8973,7 +9309,11 @@ impl Checker {
     fn check_argument(&mut self, arg: &mut Expr, passing: Passing, callee: &str, param: &str) -> Result<Type> {
         match (&mut arg.kind, passing) {
             (ExprKind::Ref(place), Passing::HoldRef | Passing::BindRef) => {
-                let ty = self.check_expr(place)?;
+                // A `[hold @r]` lambda is given as a place, never copied.
+                self.calling = matches!(place.kind, ExprKind::Var(_));
+                let ty = self.check_expr(place);
+                self.calling = false;
+                let ty = ty?;
                 self.check_given_place(place, passing, callee, param)?;
                 arg.ty = Some(ty.clone());
                 Ok(ty)
@@ -9496,6 +9836,35 @@ impl Checker {
             expr.ty = Some(expected.clone());
             return self.settle_copies(expr, expected);
         }
+        // A plain task value where a lambda that keeps what it uses is
+        // expected: it keeps only the task, in the region the type names.
+        if let (Type::Task(task), Type::Closure(closure)) = (&actual, expected)
+            && task.normalized_beside(Some(&closure.region)) == closure.task
+        {
+            // A task named here is kept where the program keeps it; a task
+            // value, in the region.
+            let region = match &expr.kind {
+                ExprKind::TaskValue(_) => None,
+                _ if closure.region == ANY_REGION => {
+                    let shown = expected.map_regions(&mut |_| Some("r".to_string()));
+                    return err(
+                        expr.span,
+                        format!(
+                            "this task value goes where a lambda that keeps what it uses is expected, {0}, and keeps itself in a region, which no other value of this call names; give a task by its name, or keep this one first, as in 'bind kept: {0} = …'",
+                            shown
+                        ),
+                    );
+                }
+                _ => {
+                    self.visible_region(&closure.region, expr.span, true)?;
+                    Some(closure.region.clone())
+                }
+            };
+            let value = std::mem::replace(expr, Expr::new(ExprKind::NoneLit, expr.span));
+            *expr = Expr::new(ExprKind::Kept { value: Box::new(value), region }, expr.span);
+            expr.ty = Some(expected.clone());
+            return Ok(());
+        }
         // A `match` or a `when` used as a value becomes what is expected in each
         // of its branches, since that is where its values are made: a branch
         // giving `none` beside one giving an `int` becomes part of the `maybe`
@@ -9891,6 +10260,9 @@ fn fits_regions(actual: &Type, expected: &Type) -> bool {
         (Type::Range(a), Type::Range(e)) | (Type::Maybe(a), Type::Maybe(e)) | (Type::Fail(a), Type::Fail(e)) => fits_regions(a, e),
         (Type::Or(av, ae), Type::Or(ev, ee)) => fits_regions(av, ev) && fits_regions(ae, ee),
         (Type::Tuple(a), Type::Tuple(e)) => a.len() == e.len() && a.iter().zip(e).all(|(a, e)| fits_regions(a, e)),
+        // A lambda that only reads what it keeps goes where one that changes
+        // it is expected, never the other way.
+        (Type::Closure(a), Type::Closure(e)) => a.region == e.region && a.task == e.task && (!a.hold || e.hold),
         _ => actual == expected,
     }
 }
@@ -9997,6 +10369,10 @@ fn type_size(ty: &Type) -> usize {
                 pending.extend(&task.params);
                 pending.push(&task.ret);
             }
+            Type::Closure(closure) => {
+                pending.extend(&closure.task.params);
+                pending.push(&closure.task.ret);
+            }
             _ => {}
         }
     }
@@ -10012,6 +10388,7 @@ fn type_depth(ty: &Type) -> usize {
         Type::Applied(applied) => applied.types.iter().map(type_depth).max().unwrap_or(0),
         Type::Tuple(types) | Type::Results(types) => types.iter().map(type_depth).max().unwrap_or(0),
         Type::Task(task) => task.params.iter().chain([&task.ret]).map(type_depth).max().unwrap_or(0),
+        Type::Closure(closure) => closure.task.params.iter().chain([&closure.task.ret]).map(type_depth).max().unwrap_or(0),
         _ => 0,
     };
     inner + 1
@@ -10407,7 +10784,9 @@ impl Checker {
             return Ok(());
         }
         match &mut e.kind {
-            ExprKind::Spread(inner) => self.substitute_expr(inner, given, made),
+            ExprKind::Spread(inner) | ExprKind::Kept { value: inner, .. } => self.substitute_expr(inner, given, made),
+            // No lambda is written in a task that takes types.
+            ExprKind::Closure { .. } => Ok(()),
             ExprKind::Call { name, types, args } => {
                 // A group's types, kept as a tuple, are as many as the call gives
                 // it; any other tuple of a group's values is at least two items
@@ -10596,6 +10975,7 @@ fn unify_params(pattern: &Type, actual: &Type, given: &mut HashMap<String, Type>
         }
         // `(int, P...) -> R`: the group is what the task takes between the
         // values named around it, with how it takes each.
+        (Type::Closure(p), Type::Closure(a)) => unify_params(&Type::Task(Box::new(p.task.clone())), &Type::Task(Box::new(a.task.clone())), given),
         (Type::Task(p), Type::Task(a)) => {
             let Some((pairs, group)) = task_pairs(p, a) else { return };
             let a = regions_named_as(p, a);
@@ -10724,6 +11104,7 @@ pub fn unify_regions(pattern: &Type, actual: &Type, regions: &mut HashMap<String
             p.types.iter().zip(&a.types).for_each(|(p, a)| unify_regions(p, a, regions));
         }
         (Type::Text(pr), Type::Text(ar)) => record(pr, ar),
+        (Type::Closure(p), Type::Closure(a)) => record(&Some(p.region.clone()), &Some(a.region.clone())),
         (Type::Maybe(p), Type::Maybe(a)) | (Type::Range(p), Type::Range(a)) | (Type::Fail(p), Type::Fail(a)) => unify_regions(p, a, regions),
         (Type::Or(pv, pe), Type::Or(av, ae)) => {
             unify_regions(pv, av, regions);
@@ -10783,6 +11164,36 @@ fn strip_all_regions(ty: &Type) -> Type {
 /// Whether `ty` is a task's type, `(int) -> int`.
 fn is_task(ty: &Type) -> bool {
     matches!(ty, Type::Task(_))
+}
+
+/// Whether `ty` is the type of a `[hold @r]` lambda, which changes what it
+/// keeps, so a value of it is never copied.
+fn held_lambda(ty: &Type) -> bool {
+    matches!(ty, Type::Closure(closure) if closure.hold)
+}
+
+/// Whether `ty` is or holds a lambda that keeps what it uses, `[@r](…)`.
+fn has_closure(ty: &Type) -> bool {
+    match ty {
+        Type::Closure(_) => true,
+        Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Array(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => has_closure(inner),
+        Type::Map(key, value, _) | Type::Or(key, value) => has_closure(key) || has_closure(value),
+        Type::Tuple(items) | Type::Results(items) => items.iter().any(has_closure),
+        Type::Applied(applied) => applied.types.iter().any(has_closure),
+        _ => false,
+    }
+}
+
+/// Whether `ty` holds a `[hold @r]` lambda inside it, which is held alone.
+fn holds_held_lambda(ty: &Type) -> bool {
+    match ty {
+        Type::Closure(_) => false,
+        Type::Ptr(inner, _) | Type::Slice(inner, _) | Type::Array(inner, _) | Type::Range(inner) | Type::Maybe(inner) | Type::Fail(inner) => held_lambda(inner) || holds_held_lambda(inner),
+        Type::Map(key, value, _) | Type::Or(key, value) => [key, value].into_iter().any(|ty| held_lambda(ty) || holds_held_lambda(ty)),
+        Type::Tuple(items) => items.iter().any(|ty| held_lambda(ty) || holds_held_lambda(ty)),
+        Type::Applied(applied) => applied.types.iter().any(|ty| held_lambda(ty) || holds_held_lambda(ty)),
+        _ => false,
+    }
 }
 
 fn region_after(args: &[Expr]) -> Option<Span> {
@@ -11016,6 +11427,7 @@ fn named_types(ty: &Type) -> Vec<&str> {
             names
         }
         Type::Task(task) => task.params.iter().chain([&task.ret]).flat_map(named_types).collect(),
+        Type::Closure(closure) => closure.task.params.iter().chain([&closure.task.ret]).flat_map(named_types).collect(),
         _ => Vec::new(),
     }
 }
@@ -11514,6 +11926,13 @@ fn fits_int(value: i128, span: Span) -> Result<()> {
 /// Why a value of type `actual` doesn't fit where `expected` is required, or
 /// nothing when there is nothing useful to say.
 fn mismatch_hint(actual: &Type, expected: &Type) -> String {
+    // A lambda that keeps what it uses goes only where its own type does.
+    if let (Type::Closure(closure), Type::Task(_)) = (actual, expected) {
+        return format!(
+            "; a lambda that keeps what it uses goes only where a type naming its region is expected, as '[@{0}](…)', since a task's type names none and the lambda could outlive '{0}'",
+            closure.region
+        );
+    }
     // `P#0`: the type of one item of a group's tuple, which no code writes.
     if let Some(item) = [actual, expected].into_iter().find_map(|ty| match ty {
         Type::Param(name) if name.contains(GROUP_ITEM) => Some(name.clone()),
@@ -12043,8 +12462,8 @@ fn walk_expr(e: &Expr, f: &mut dyn FnMut(&Expr)) {
     f(e);
     let each = |values: &[Expr], f: &mut dyn FnMut(&Expr)| values.iter().for_each(|value| walk_expr(value, f));
     match &e.kind {
-        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::TaskValue(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) => {}
-        ExprKind::Spread(inner) | ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => walk_expr(inner, f),
+        ExprKind::IntLit(_) | ExprKind::FloatLit(_) | ExprKind::CharLit(_) | ExprKind::BoolLit(_) | ExprKind::TextLit(_) | ExprKind::NoneLit | ExprKind::Macro { .. } | ExprKind::Var(_) | ExprKind::TaskValue(_) | ExprKind::RegionAfter(_) | ExprKind::Shared { .. } | ExprKind::TypeOf(_) | ExprKind::Closure { .. } => {}
+        ExprKind::Kept { value: inner, .. } | ExprKind::Spread(inner) | ExprKind::Field(inner, _) | ExprKind::Unary(_, inner) | ExprKind::Deref(inner) | ExprKind::Ref(inner) | ExprKind::Fail(inner) | ExprKind::Wrap(inner) => walk_expr(inner, f),
         ExprKind::New { value, .. } | ExprKind::Copy { value, .. } | ExprKind::Shortcut { value, .. } | ExprKind::ToText { value, .. } => walk_expr(value, f),
         ExprKind::Index(a, b) | ExprKind::Lookup(a, b) | ExprKind::Binary(_, a, b) | ExprKind::Range(a, b) | ExprKind::Repeat { value: a, count: b } => {
             walk_expr(a, f);
@@ -12116,6 +12535,7 @@ fn add_startups(items: &mut Vec<Item>) {
                 decorators: Vec::new(),
                 passes,
                 wrappers: Vec::new(),
+                kept: None,
             }),
         }
     }
@@ -12577,6 +12997,9 @@ fn chosen_message(what: &str, name: &str, ty: &Type, declared: &Type, size: usiz
 /// The end of the message for changing a parameter that never changes: how to
 /// write one the task may change. Empty for anything else.
 fn param_hint(name: &str, info: &VarInfo) -> String {
+    if info.kept {
+        return format!("; '{0}' is the copy this lambda keeps of a variable of the code around it, which a '[@r]' lambda never changes; one that changes its copies is written '[hold @r](…)', and the variable itself never changes through it", name);
+    }
     if info.refers.is_some() {
         return format!("; '{0}' only reads the place it names, and a reference that changes it is written 'hold& {0} = &…'", name);
     }
