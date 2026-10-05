@@ -1,4 +1,4 @@
-; error: 7:25: this lambda keeps 'n' as a place, 'hold& n', so it ends before 'n' does, and it ends with region 'r', which is declared before it, at 4:12; declare a region after 'n', in its block, and keep the lambda there
+; error: 7:25: this lambda keeps 'n' as a place, 'hold& n', so it ends before 'n' does, and it ends with region 'r', which is declared before 'n', at 4:12; declare a region after 'n', in its block, and keep the lambda there
 ; The region a lambda keeping a place ends with is declared after the variable.
 task main()
     region r

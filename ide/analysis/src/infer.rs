@@ -1507,7 +1507,9 @@ fn kept_prefix(text: &str) -> Option<(String, bool, &str)> {
     // The region among the places it keeps, `[hold& count, @r]`.
     let mut region = None;
     for item in inner.get(..close)?.split(',').map(str::trim) {
-        if item.starts_with("hold&") || item.starts_with("bind&") {
+        // `hold& count`, written `hold & count` too.
+        let word = item.trim_start_matches("hold").trim_start_matches("bind");
+        if word.len() < item.len() && word.trim_start().starts_with('&') {
             continue;
         }
         region = Some(match item.strip_prefix("hold") {

@@ -1,0 +1,28 @@
+  1 | ; A lambda that keeps what it uses, written in an included module, is the
+    | comment:; A lambda that keeps what it uses, written in an included module, is the
+  2 | ; module's own, beside one of the main file.
+    | comment:; module's own, beside one of the main file.
+  3 | include lambda_keeps_in_a_module/lib
+    | keyword:include  module:lambda_keeps_in_a_module  operator:/  module:lib
+  5 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  6 |     region r
+    | keyword:region  region:r
+  7 |     hold c = lib.counter(r, 5)
+    | keyword:hold  variable:c  operator:=  module:lib  punctuation:.  task:counter  punctuation:(  region:r  punctuation:,  number:5  punctuation:)
+  8 |     show(c(), " ", c())
+    | builtin-fn:show  punctuation:(  variable:c  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:c  punctuation:(  punctuation:)  punctuation:)
+  9 |     bind msg = "main's lambda"
+    | keyword:bind  variable:msg  operator:=  string:"main's lambda"
+ 10 |     hold g = [hold @r]() -> int
+    | keyword:hold  variable:g  operator:=  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+ 11 |         show(msg)
+    | builtin-fn:show  punctuation:(  variable:msg  punctuation:)
+ 12 |         <- 0
+    | keyword:<-  number:0
+ 13 |     fi
+    | keyword:fi
+ 14 |     show(g())
+    | builtin-fn:show  punctuation:(  variable:g  punctuation:(  punctuation:)  punctuation:)
+ 15 | fi
+    | keyword:fi

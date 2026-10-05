@@ -1703,8 +1703,12 @@ impl Parser {
             if (hold || bind) && self.match_token(Token::Amp) {
                 let span = self.peek_span();
                 let name = self.expect_ident()?;
+                if matches!(self.peek(), Token::Dot | Token::LBracket) {
+                    let word = if hold { "hold&" } else { "bind&" };
+                    return Err(Error::at(span, format!("a lambda keeps a variable as a place, not a field or an item of one; keep the variable, '{} {}'", word, name)));
+                }
                 if places.iter().any(|place| place.name == name) {
-                    return Err(Error::at(span, format!("'{}' is kept as a place once", name)));
+                    return Err(Error::at(span, format!("'{}' is already in this lambda's list; each place is kept once", name)));
                 }
                 places.push(KeptPlace { name, passing: if hold { Passing::HoldRef } else { Passing::BindRef }, span });
             } else if !bind && self.match_token(Token::AtSign) {

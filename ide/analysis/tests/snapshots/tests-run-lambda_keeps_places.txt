@@ -7,7 +7,7 @@
   4 | ; The region is declared after the variable, so the lambda ends first.
     | comment:; The region is declared after the variable, so the lambda ends first.
   5 | task each_of(xs: [int#3], f: [@r](int) -> nothing)
-    | keyword:task  task:each_of  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  punctuation:,  parameter:f  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  variable:int  punctuation:)  operator:->  type-builtin:nothing  punctuation:)
+    | keyword:task  task:each_of  punctuation:(  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:#  number:3  punctuation:]  punctuation:,  parameter:f  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:nothing  punctuation:)
   6 |     each x in xs
     | keyword:each  variable:x  keyword:in  parameter:xs
   7 |         f(x)

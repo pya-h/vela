@@ -1,0 +1,7 @@
+task counter(r: region, start: int) -> [hold @r]() -> int
+    hold n = start
+    <- [hold @r]() -> int
+        n = n + 1
+        <- n
+    fi
+fi

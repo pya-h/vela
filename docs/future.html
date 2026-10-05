@@ -2217,7 +2217,7 @@ fi</code></pre>
         <strong>Later, maybe.</strong> Fields and array items of a variable kept as places, <code>[hold&amp; p.x, @r]</code>;
         a lambda that keeps what it uses held in a field of a shape or kind; compared, or
         copied into another region with what it keeps; a rule for <code>add</code> and <code>del</code> on a slice the
-        lambda keeps, which today it refuses, since its copy shares the items and not the length; and data of another
+        lambda keeps a copy of, which today it refuses (a slice kept as a place grows), since its copy shares the items and not the length; and data of another
         region used in place where Vela can see that the region outlives <code>r</code>. Weighed and dropped: marks for
         each region a lambda takes from (variables live on the stack, and a region holds only what they point to), and
         a region kept alive for as long as a lambda in another lives (it frees memory early when the kept region ends

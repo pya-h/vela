@@ -1,0 +1,15 @@
+; A lambda that keeps what it uses, written in an included module, is the
+; module's own, beside one of the main file.
+include lambda_keeps_in_a_module/lib
+
+task main()
+    region r
+    hold c = lib.counter(r, 5)
+    show(c(), " ", c())
+    bind msg = "main's lambda"
+    hold g = [hold @r]() -> int
+        show(msg)
+        <- 0
+    fi
+    show(g())
+fi

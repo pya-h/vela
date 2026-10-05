@@ -272,7 +272,7 @@
               <td>A plain lambda takes nothing from the code around it, and one that keeps what it uses,
                 <code>[@r]</code>, keeps copies in a block of <code>r</code>, which its type names, so neither reads a
                 variable after the task that wrote it has ended, nor what it keeps after <code>r</code> is freed. It keeps
-                nothing of another region, and its copy of a slice never changes the slice's length. A variable it keeps
+                no copy of a value of another region, and its copy of a slice never changes the slice's length. A variable it keeps
                 as a place, <code>[hold&amp; count, @r]</code>, is one declared before <code>r</code>, in its block or one
                 around it, so the lambda ends first.</td>
               <td class="when"><span class="badge b-checked">checked</span></td>
@@ -509,6 +509,33 @@ show(y)                            <span class="comment">; 2</span></code></pre>
           What the word promises is that the reader doesn't change the place, not that nothing does. A reader who
           needs the value to stay as it was keeps a copy: <code>bind v = y</code>, or a
           <a href="vela.html#bind-parameters"><code>bind x</code></a> parameter.
+        </p>
+      </div>
+
+      <div class="entry" id="kept-places">
+        <h3>A place a lambda keeps, given beside it <span class="badge b-open">open</span></h3>
+        <p>
+          A call never gives one place twice where one of them changes it (see
+          <a href="vela.html#task-types-places">Places and regions</a>). A lambda that keeps a variable as a place,
+          <code>[hold&amp; count, @s]</code>, is a second name for it that the call doesn't see, so it can be given
+          beside the place itself:
+        </p>
+        <pre><code><span class="keyword">task</span> f(<span class="keyword">hold&amp;</span> x: int, g: [@s]() -&gt; nothing)
+    g()                            <span class="comment">; changes x, through count</span>
+    show(x)                        <span class="comment">; 5</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">hold</span> count = 1
+    <span class="keyword">region</span> s
+    <span class="keyword">bind</span> g = [<span class="keyword">hold&amp;</span> count, @s]() -&gt; nothing count = 5 <span class="keyword">fi</span>
+    f(&amp;count, g)
+<span class="keyword">fi</span></code></pre>
+        <p>
+          No memory is misused: the variable outlives the lambda, and no reference names an item of a slice that could
+          move. But <code>x</code> changes under <code>f</code> while <code>f</code> holds it, as a reference's place may
+          (<a href="#references-read-now">above</a>). A call could refuse a lambda that keeps a place it is also given,
+          where the compiler sees which places a lambda keeps; one handed on through a variable or a parameter hides it.
         </p>
       </div>
 

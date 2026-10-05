@@ -1,0 +1,20 @@
+; error: 18:14: task 'dup' takes 'T' as a type, and is given a '[hold @r]' lambda for it, which changes what it keeps and is never copied, as its body may copy a value of that type; give it a '[@r]' lambda, or a task taking the lambda as 'hold& f: [hold @r]() -> int'
+; A task taking types is given no [hold @r] lambda, which its body might copy.
+task dup<T>(hold& x: T) -> T
+    <- x
+fi
+
+task counter(r: region) -> [hold @r]() -> int
+    hold n = 0
+    <- [hold @r]() -> int
+        n = n + 1
+        <- n
+    fi
+fi
+
+task main()
+    region r
+    hold g = counter(r)
+    hold h = dup(&g)
+    show(g(), " ", h(), " ", g())
+fi

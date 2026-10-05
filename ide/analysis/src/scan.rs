@@ -536,8 +536,14 @@ impl<'a> Tokens<'a> {
     /// Whether what is before position `p` is what a lambda keeps, `[@r]`,
     /// `[hold @r]`, or `[hold& count, @r]`.
     fn after_kept(&self, p: usize) -> bool {
-        let Some(close) = p.checked_sub(1).filter(|&close| self.token(close) == Some(&Token::RBracket)) else { return false };
-        (0..close).rev().find(|&q| !self.kept_part(q)).is_some_and(|open| self.token(open) == Some(&Token::LBracket) && self.kept_list(open) == Some(close))
+        self.kept_open(p).is_some()
+    }
+
+    /// The `[` opening what a lambda keeps, when it closes right before
+    /// position `p`.
+    fn kept_open(&self, p: usize) -> Option<usize> {
+        let close = p.checked_sub(1).filter(|&close| self.token(close) == Some(&Token::RBracket))?;
+        (0..close).rev().find(|&q| !self.kept_part(q)).filter(|&open| self.token(open) == Some(&Token::LBracket) && self.kept_list(open) == Some(close))
     }
 
     /// Whether the token at `q` may be part of what a lambda keeps: a name,
@@ -565,8 +571,13 @@ impl<'a> Tokens<'a> {
     /// is written, since `() -> int` is also the type of a task that takes none.
     fn starts_lambda(&self, p: usize) -> bool {
         // A header's parameters, and a call's values, follow a name; a
-        // lambda's follow what it keeps, `[@r]` or `[hold @r]`.
-        if self.token(p) != Some(&Token::LParen) || (!self.after_kept(p) && self.before(p).is_some_and(|before| ends_value(before) || matches!(before, Token::Gt | Token::New))) {
+        // lambda's follow what it keeps, `[@r]` or `[hold @r]`, which is a
+        // lambda's type where a type is written.
+        let kept = self.kept_open(p);
+        if kept.and_then(|open| self.before(open)).is_some_and(|before| matches!(before, Token::Colon | Token::Arrow | Token::Maybe | Token::Caret | Token::LBracket | Token::Lt | Token::Tilde)) {
+            return false;
+        }
+        if self.token(p) != Some(&Token::LParen) || (kept.is_none() && self.before(p).is_some_and(|before| ends_value(before) || matches!(before, Token::Gt | Token::New))) {
             return false;
         }
         // What follows the `(` tells first, so that nested parentheses aren't
@@ -576,7 +587,10 @@ impl<'a> Tokens<'a> {
                 && !matches!(self.before(p), Some(Token::Arrow | Token::Colon | Token::Maybe | Token::Caret | Token::LBracket | Token::Lt | Token::Tilde))
                 && !self.ends_in_a_list(p + 3);
         }
-        if !matches!(self.token(p + 1), Some(Token::Hold | Token::Bind)) && !(self.ident(p + 1).is_some() && self.token(p + 2) == Some(&Token::Colon)) {
+        // `(hold& n: int` names a parameter; a type's `(hold& int)` names none.
+        let named = |q: usize| self.ident(q).is_some() && self.token(q + 1) == Some(&Token::Colon);
+        let after_word = if self.token(p + 2) == Some(&Token::Amp) { p + 3 } else { p + 2 };
+        if !(matches!(self.token(p + 1), Some(Token::Hold | Token::Bind)) && named(after_word)) && !named(p + 1) {
             return false;
         }
         let mut depth = 0usize;
@@ -1401,8 +1415,13 @@ impl<'a> Classifier<'a> {
                 Token::RBracket if type_brackets > 0 => {
                     self.push(range, TokenClass::Punctuation, None);
                     type_brackets -= 1;
-                    // `@r` or `or E` may follow the type.
-                    after_type = true;
+                    // `[@r](int) -> int`: a lambda's type goes on with its task's.
+                    if tokens.after_kept(p + 1) {
+                        in_type = true;
+                    } else {
+                        // `@r` or `or E` may follow the type.
+                        after_type = true;
+                    }
                 }
                 // `(x: int) -> int … fi`: a lambda, whose header declares its
                 // parameters, which its body sees, as a task's does.

@@ -1,0 +1,14 @@
+  1 | task counter(r: region, start: int) -> [hold @r]() -> int
+    | keyword:task  task:counter  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:start  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+  2 |     hold n = start
+    | keyword:hold  variable:n  operator:=  parameter:start
+  3 |     <- [hold @r]() -> int
+    | keyword:<-  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int
+  4 |         n = n + 1
+    | variable:n  operator:=  variable:n  operator:+  number:1
+  5 |         <- n
+    | keyword:<-  variable:n
+  6 |     fi
+    | keyword:fi
+  7 | fi
+    | keyword:fi

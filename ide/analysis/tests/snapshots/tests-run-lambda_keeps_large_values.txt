@@ -1,0 +1,82 @@
+  1 | ; A kept lambda taking a large value as 'hold' or 'bind', which its type
+    | comment:; A kept lambda taking a large value as 'hold' or 'bind', which its type
+  2 | ; takes where the caller keeps it, and region parameters in closure types.
+    | comment:; takes where the caller keeps it, and region parameters in closure types.
+  3 | shape Big
+    | keyword:shape  type:Big
+  4 |     a: int
+    | field:a  punctuation::  type-builtin:int
+  5 |     b: int
+    | field:b  punctuation::  type-builtin:int
+  6 |     c: int
+    | field:c  punctuation::  type-builtin:int
+  7 |     d: int
+    | field:d  punctuation::  type-builtin:int
+  8 |     e: int
+    | field:e  punctuation::  type-builtin:int
+  9 |     f: int
+    | field:f  punctuation::  type-builtin:int
+ 10 |     g: int
+    | field:g  punctuation::  type-builtin:int
+ 11 |     h: int
+    | field:h  punctuation::  type-builtin:int
+ 12 |     i: int
+    | field:i  punctuation::  type-builtin:int
+ 13 | fi
+    | keyword:fi
+ 15 | task use(f: [@r](Big) -> int, b: Big) -> int
+    | keyword:task  task:use  punctuation:(  parameter:f  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type:Big  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:b  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
+ 16 |     <- f(b)
+    | keyword:<-  parameter:f  punctuation:(  parameter:b  punctuation:)
+ 17 | fi
+    | keyword:fi
+ 19 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 20 |     region r
+    | keyword:region  region:r
+ 21 |     bind k = 100
+    | keyword:bind  variable:k  operator:=  number:100
+ 22 |     bind f = [@r](b: Big) -> int <- b.a + b.i + k fi
+    | keyword:bind  variable:f  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:b  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:b  punctuation:.  field:a  operator:+  parameter:b  punctuation:.  field:i  operator:+  variable:k  keyword:fi
+ 23 |     bind b = Big { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
+    | keyword:bind  variable:b  operator:=  type:Big  punctuation:{  field:a  punctuation::  number:1  punctuation:,  field:b  punctuation::  number:2  punctuation:,  field:c  punctuation::  number:3  punctuation:,  field:d  punctuation::  number:4  punctuation:,  field:e  punctuation::  number:5  punctuation:,  field:f  punctuation::  number:6  punctuation:,  field:g  punctuation::  number:7  punctuation:,  field:h  punctuation::  number:8  punctuation:,  field:i  punctuation::  number:9  punctuation:}
+ 24 |     show(f(b))
+    | builtin-fn:show  punctuation:(  variable:f  punctuation:(  variable:b  punctuation:)  punctuation:)
+ 25 |     show(use(f, b))
+    | builtin-fn:show  punctuation:(  task:use  punctuation:(  variable:f  punctuation:,  variable:b  punctuation:)  punctuation:)
+ 26 |     hold g = [hold @r](hold q: Big) -> int
+    | keyword:hold  variable:g  operator:=  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  keyword:hold  parameter:q  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int
+ 27 |         q.a = q.a + k
+    | parameter:q  punctuation:.  field:a  operator:=  parameter:q  punctuation:.  field:a  operator:+  variable:k
+ 28 |         <- q.a
+    | keyword:<-  parameter:q  punctuation:.  field:a
+ 29 |     fi
+    | keyword:fi
+ 30 |     show(g(b), " ", b.a)
+    | builtin-fn:show  punctuation:(  variable:g  punctuation:(  variable:b  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:b  punctuation:.  field:a  punctuation:)
+ 31 |     bind h = [@r](bind q: Big) -> int <- q.i + k fi
+    | keyword:bind  variable:h  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  keyword:bind  parameter:q  punctuation::  type:Big  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:q  punctuation:.  field:i  operator:+  variable:k  keyword:fi
+ 32 |     show(h(b))
+    | builtin-fn:show  punctuation:(  variable:h  punctuation:(  variable:b  punctuation:)  punctuation:)
+ 33 |     region s
+    | keyword:region  region:s
+ 34 |     bind rows = [@r](z: region, n: int) -> [int]@z
+    | keyword:bind  variable:rows  operator:=  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  region:z  punctuation::  keyword:region  punctuation:,  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:z
+ 35 |         hold ys = new [int]() at z
+    | keyword:hold  variable:ys  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:z
+ 36 |         ys.add(n + k)
+    | variable:ys  punctuation:.  field:add  punctuation:(  parameter:n  operator:+  variable:k  punctuation:)
+ 37 |         <- ys
+    | keyword:<-  variable:ys
+ 38 |     fi
+    | keyword:fi
+ 39 |     show(rows(s, 1), " ", into(rows, s))
+    | builtin-fn:show  punctuation:(  variable:rows  punctuation:(  region:s  punctuation:,  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  task:into  punctuation:(  variable:rows  punctuation:,  region:s  punctuation:)  punctuation:)
+ 40 | fi
+    | keyword:fi
+ 42 | task into(f: [@q](@x, int) -> [int]@x, a: region) -> [int]@a
+    | keyword:task  task:into  punctuation:(  parameter:f  punctuation::  punctuation:[  operator:@  region:q  punctuation:]  punctuation:(  operator:@  region:x  punctuation:,  type-builtin:int  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:x  punctuation:,  region:a  punctuation::  keyword:region  punctuation:)  operator:->  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:a
+ 43 |     <- f(a, 3)
+    | keyword:<-  parameter:f  punctuation:(  region:a  punctuation:,  number:3  punctuation:)
+ 44 | fi
+    | keyword:fi

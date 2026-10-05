@@ -38,5 +38,13 @@
     | keyword:hold  variable:held  punctuation::  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:=  variable:four
  21 |     show(twice(&held))
     | builtin-fn:show  punctuation:(  task:twice  punctuation:(  operator:&  variable:held  punctuation:)  punctuation:)
- 22 | fi
+ 22 |     ; Another lambda may keep it as a place, which it calls where it is.
+    | comment:; Another lambda may keep it as a place, which it calls where it is.
+ 23 |     region s
+    | keyword:region  region:s
+ 24 |     bind more = [hold& tick, @s]() -> int <- tick() + tick() fi
+    | keyword:bind  variable:more  operator:=  punctuation:[  keyword:hold  keyword:&  variable:tick  punctuation:,  operator:@  region:s  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  keyword:<-  variable:tick  punctuation:(  punctuation:)  operator:+  variable:tick  punctuation:(  punctuation:)  keyword:fi
+ 25 |     show(more(), " ", tick())
+    | builtin-fn:show  punctuation:(  variable:more  punctuation:(  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:tick  punctuation:(  punctuation:)  punctuation:)
+ 26 | fi
     | keyword:fi

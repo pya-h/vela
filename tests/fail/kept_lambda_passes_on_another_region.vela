@@ -1,0 +1,24 @@
+; error: 12:33: 'ys' is in region 'q', and this lambda keeps what it uses in 'p', where nothing points into 'q'; copy it into 'p' first, as in 'bind mine = ys.copy() at p', and use that, or keep 'ys' as a place, '[bind& ys, @p]', with 'p' declared after it
+; What a lambda inside another uses, the one around it keeps, by its own rules.
+task main()
+    region keep
+    hold out: maybe [@keep]() -> int = none
+    block
+        region q
+        hold ys = new [int]() at q
+        ys.add(41)
+        region s
+        bind mk = [@s](p: region) -> [@p]() -> int
+            <- [@p]() -> int <- ys[0] fi
+        fi
+        out = mk(keep)
+    fi
+    region other
+    hold zs = new [int]() at other
+    each i in 0..100
+        zs.add(-1)
+    fi
+    when out is {f}
+        show(f())
+    fi
+fi

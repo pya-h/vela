@@ -19,27 +19,27 @@
  10 | fi
     | keyword:fi
  12 | task adder(r: region, hold& total: int) -> [@r](int) -> int
-    | keyword:task  task:adder  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  keyword:hold  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  variable:int  punctuation:)  operator:->  type-builtin:int
+    | keyword:task  task:adder  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  keyword:hold  keyword:&  parameter:total  punctuation::  type-builtin:int  punctuation:)  operator:->  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  13 |     <- [@r](n: int) -> int <- n + total fi
     | keyword:<-  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:n  operator:+  parameter:total  keyword:fi
  14 | fi
     | keyword:fi
  16 | task greeter(r: region, name: text) -> [@r](text) -> text@r
-    | keyword:task  task:greeter  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:name  punctuation::  type-builtin:text  punctuation:)  operator:->  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  variable:text  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+    | keyword:task  task:greeter  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:name  punctuation::  type-builtin:text  punctuation:)  operator:->  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:text  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
  17 |     <- [@r](greeting: text) -> text@r <- greeting + ", " + name at r fi
     | keyword:<-  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  parameter:greeting  punctuation::  type-builtin:text  punctuation:)  operator:->  type-builtin:text  operator:@  region:r  keyword:<-  parameter:greeting  operator:+  string:", "  operator:+  parameter:name  keyword:at  region:r  keyword:fi
  18 | fi
     | keyword:fi
  20 | task apply(f: [@r](int) -> int, x: int) -> int
-    | keyword:task  task:apply  punctuation:(  parameter:f  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  variable:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  variable:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+    | keyword:task  task:apply  punctuation:(  parameter:f  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  21 |     <- f(x)
-    | keyword:<-  parameter:f  punctuation:(  variable:x  punctuation:)
+    | keyword:<-  parameter:f  punctuation:(  parameter:x  punctuation:)
  22 | fi
     | keyword:fi
  24 | task twice<T>(f: [@r](T) -> T, x: T) -> T
-    | keyword:task  task:twice  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:f  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  variable:T  punctuation:)  operator:->  type:T  punctuation:,  variable:x  punctuation::  type:T  punctuation:)  operator:->  type:T
+    | keyword:task  task:twice  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:f  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type:T  punctuation:)  operator:->  type:T  punctuation:,  parameter:x  punctuation::  type:T  punctuation:)  operator:->  type:T
  25 |     <- f(f(x))
-    | keyword:<-  parameter:f  punctuation:(  parameter:f  punctuation:(  variable:x  punctuation:)  punctuation:)
+    | keyword:<-  parameter:f  punctuation:(  parameter:f  punctuation:(  parameter:x  punctuation:)  punctuation:)
  26 | fi
     | keyword:fi
  28 | task double(x: int) -> int
@@ -93,9 +93,9 @@
  54 |     bind plain = (x: int) -> int <- x - 1 fi
     | keyword:bind  variable:plain  operator:=  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:-  number:1  keyword:fi
  55 |     bind kept: [@r](int) -> int = plain
-    | keyword:bind  variable:kept  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  variable:int  punctuation:)  operator:->  type-builtin:int  operator:=  variable:plain
- 56 |     show(apply(double, 4), " ", kept(1), " ", apply(kept, 10))
-    | builtin-fn:show  punctuation:(  task:apply  punctuation:(  task:double  punctuation:,  number:4  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:kept  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  task:apply  punctuation:(  variable:kept  punctuation:,  number:10  punctuation:)  punctuation:)
+    | keyword:bind  variable:kept  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:=  variable:plain
+ 56 |     show(apply(double, 4), " ", kept(1), " ", apply(kept, 10), " ", apply((x: int) -> int <- x * 3 fi, 2))
+    | builtin-fn:show  punctuation:(  task:apply  punctuation:(  task:double  punctuation:,  number:4  punctuation:)  punctuation:,  string:" "  punctuation:,  variable:kept  punctuation:(  number:1  punctuation:)  punctuation:,  string:" "  punctuation:,  task:apply  punctuation:(  variable:kept  punctuation:,  number:10  punctuation:)  punctuation:,  string:" "  punctuation:,  task:apply  punctuation:(  punctuation:(  parameter:x  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  keyword:<-  parameter:x  operator:*  number:3  keyword:fi  punctuation:,  number:2  punctuation:)  punctuation:)
  57 |     ; What lives in r is used where it is: a change to an item is seen.
     | comment:; What lives in r is used where it is: a change to an item is seen.
  58 |     hold xs = new [int]() at r

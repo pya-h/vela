@@ -13,7 +13,7 @@
   7 | fi
     | keyword:fi
   9 | task scorer(r: region, rule: Rule) -> [@r](int) -> int
-    | keyword:task  task:scorer  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:rule  punctuation::  type:Rule  punctuation:)  operator:->  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  variable:int  punctuation:)  operator:->  type-builtin:int
+    | keyword:task  task:scorer  punctuation:(  region:r  punctuation::  keyword:region  punctuation:,  parameter:rule  punctuation::  type:Rule  punctuation:)  operator:->  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  10 |     ; It keeps a copy of 'rule', made here, in 'r'.
     | comment:; It keeps a copy of 'rule', made here, in 'r'.
  11 |     <- [@r](hits: int) -> int <- hits * rule.points fi
@@ -35,13 +35,13 @@
  20 | fi
     | keyword:fi
  22 | task play(hold& next_turn: [hold @r]() -> int, score: [@r](int) -> int, hits: int) -> int
-    | keyword:task  task:play  punctuation:(  keyword:hold  keyword:&  parameter:next_turn  punctuation::  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  punctuation:,  variable:score  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  variable:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  variable:hits  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+    | keyword:task  task:play  punctuation:(  keyword:hold  keyword:&  parameter:next_turn  punctuation::  punctuation:[  keyword:hold  operator:@  region:r  punctuation:]  punctuation:(  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:score  punctuation::  punctuation:[  operator:@  region:r  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:,  parameter:hits  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
  23 |     bind turn = next_turn()
     | keyword:bind  variable:turn  operator:=  parameter:next_turn  punctuation:(  punctuation:)
  24 |     show("turn ", turn, ": ", hits, " hits")
-    | builtin-fn:show  punctuation:(  string:"turn "  punctuation:,  variable:turn  punctuation:,  string:": "  punctuation:,  variable:hits  punctuation:,  string:" hits"  punctuation:)
+    | builtin-fn:show  punctuation:(  string:"turn "  punctuation:,  variable:turn  punctuation:,  string:": "  punctuation:,  parameter:hits  punctuation:,  string:" hits"  punctuation:)
  25 |     <- score(hits)
-    | keyword:<-  variable:score  punctuation:(  variable:hits  punctuation:)
+    | keyword:<-  parameter:score  punctuation:(  parameter:hits  punctuation:)
  26 | fi
     | keyword:fi
  28 | task main()
@@ -51,7 +51,7 @@
  30 |     bind rules = [Rule { name: "goal", points: 3 }, Rule { name: "assist", points: 1 }]
     | keyword:bind  variable:rules  operator:=  punctuation:[  type:Rule  punctuation:{  field:name  punctuation::  string:"goal"  punctuation:,  field:points  punctuation::  number:3  punctuation:}  punctuation:,  type:Rule  punctuation:{  field:name  punctuation::  string:"assist"  punctuation:,  field:points  punctuation::  number:1  punctuation:}  punctuation:]
  31 |     hold scorers = new [[@game](int) -> int]() at game
-    | keyword:hold  variable:scorers  operator:=  keyword:new  punctuation:[  punctuation:[  operator:@  region:game  punctuation:]  punctuation:(  variable:int  punctuation:)  operator:->  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:game
+    | keyword:hold  variable:scorers  operator:=  keyword:new  punctuation:[  punctuation:[  operator:@  region:game  punctuation:]  punctuation:(  type-builtin:int  punctuation:)  operator:->  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:game
  32 |     each rule in rules
     | keyword:each  variable:rule  keyword:in  variable:rules
  33 |         scorers.add(scorer(game, rule))

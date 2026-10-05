@@ -209,6 +209,10 @@ pub enum Taken {
     Region(String),
 }
 
+/// What marks a region of a task type's own while it is named again (see
+/// `TaskType::normalized_avoiding`), which no region a program writes holds.
+const OWN_MARK: &str = "~own";
+
 /// The names a task type's regions are given, in the order they first appear
 /// (see `TaskType::normalized`); a type with more names the rest `r7`, `r8`, ….
 const TASK_REGIONS: [&str; 6] = ["r", "s", "t", "u", "v", "w"];
@@ -255,6 +259,13 @@ impl TaskType {
             })
             .collect();
         TaskType { params: self.params.iter().map(|ty| ty.map_regions(&mut *f)).collect(), taken, ret: self.ret.map_regions(f) }
+    }
+
+    /// The type of a plain task, whose regions are all its own, as the task's
+    /// type of a lambda keeping what it uses in `kept` names them (see
+    /// `ClosureType`): none of them named `kept`.
+    pub fn normalized_avoiding(&self, kept: &str) -> TaskType {
+        self.map_regions(&mut |name| Some(if name == ANY_REGION { name.to_string() } else { format!("{}{}", name, OWN_MARK) })).normalized_beside(Some(kept))
     }
 
     /// `normalized`, leaving `kept` as it is: the region a lambda's type keeps
@@ -852,9 +863,17 @@ impl Type {
             Type::Closure(closure) => {
                 let kept = closure.region.clone();
                 let Some(region) = f(&kept) else { return self.clone() };
-                let mut own = |name: &str| Some(if name == kept { region.clone() } else { name.to_string() });
+                // A region of its own named as the new one is named otherwise
+                // first, and all are named in order again after.
+                let mut own = |name: &str| {
+                    Some(match name {
+                        _ if name == kept => region.clone(),
+                        _ if name == region => format!("{}{}", name, OWN_MARK),
+                        _ => name.to_string(),
+                    })
+                };
                 let task = closure.task.map_regions(&mut own);
-                Type::Closure(Box::new(ClosureType { task, region, hold: closure.hold }))
+                Type::Closure(Box::new(ClosureType { task, region, hold: closure.hold }.normalized()))
             }
             other => other.clone(),
         }

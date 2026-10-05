@@ -1,4 +1,4 @@
-; error: 6:5: '[@r]' keeps what the lambda uses in region 'r', which isn't one here; declare it with 'region r', or take it as a parameter; but a wrapper's own values are worked out where the program starts, before any region exists, so none of them can be made in one
+; error: 6:5: '[@r]' keeps what the lambda uses in a region; give a task by its name, or a plain lambda; but a wrapper's own values are worked out where the program starts, before any region exists, so none of them can be made in one
 ; A wrapper's values are worked out before any region exists.
 task w(next: (int) -> int, f: [@r](int) -> int, n: int) -> int
     <- next(n)

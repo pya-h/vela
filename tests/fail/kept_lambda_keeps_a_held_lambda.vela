@@ -1,4 +1,4 @@
-; error: 10:31: 'f' is a '[hold @r]' lambda, which is never copied, so a lambda can't keep it; give it as a parameter, 'hold& f'
+; error: 10:31: 'f' is a '[hold @r]' lambda, which is never copied, so a lambda can't keep a copy of it; give it as a parameter, 'hold& f', or keep it as a place, '[hold& f, @s]', in a region declared after it
 ; A lambda never keeps a [hold @r] lambda, which is never copied.
 task main()
     region r

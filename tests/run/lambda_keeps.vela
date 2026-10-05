@@ -53,7 +53,7 @@ task main()
     ; A task, or a task value, goes where a lambda that keeps is expected.
     bind plain = (x: int) -> int <- x - 1 fi
     bind kept: [@r](int) -> int = plain
-    show(apply(double, 4), " ", kept(1), " ", apply(kept, 10))
+    show(apply(double, 4), " ", kept(1), " ", apply(kept, 10), " ", apply((x: int) -> int <- x * 3 fi, 2))
     ; What lives in r is used where it is: a change to an item is seen.
     hold xs = new [int]() at r
     xs.add(1)

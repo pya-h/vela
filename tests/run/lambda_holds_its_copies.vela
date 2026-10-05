@@ -19,4 +19,8 @@ task main()
     bind four = [@r]() -> int <- 4 fi
     hold held: [hold @r]() -> int = four
     show(twice(&held))
+    ; Another lambda may keep it as a place, which it calls where it is.
+    region s
+    bind more = [hold& tick, @s]() -> int <- tick() + tick() fi
+    show(more(), " ", tick())
 fi

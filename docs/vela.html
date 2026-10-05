@@ -2350,8 +2350,8 @@ fi</code></pre>
       <h3 id="kept-lambdas">Lambdas that keep what they use</h3>
       <p>
         A lambda written after <code>[@r]</code> keeps what it uses of the code around it in region <code>r</code>. When it
-        is made, it copies each variable of the code around it that its body uses into a block of <code>r</code>, and reads
-        those copies where they are kept for as long as it lives. Its type says where, <code>[@r](int) -&gt; int</code>, so
+        is made, it copies each variable of the code around it that its body uses into a block of <code>r</code> (unless it
+        keeps it as a place, below), and reads those copies where they are kept for as long as it lives. Its type says where, <code>[@r](int) -&gt; int</code>, so
         it can't outlive <code>r</code>, as a <code>^T@r</code> can't. Only the region is written, never what the lambda
         uses, so a task asking for a <code>[@r](int) -&gt; int</code> takes any lambda kept in <code>r</code>.
       </p>
@@ -2381,32 +2381,36 @@ task main()
 fi</code></pre>
       <p>
         <strong>What it keeps.</strong> A copy of each variable it uses: numbers, shapes, arrays, task values, and the
-        handles of slices, maps, pointers and text. The variables themselves never change through the lambda. What lives
+        handles of slices, maps, pointers and text. The variables themselves never change through the lambda, unless it
+        keeps one as a place (below). What lives
         in <code>r</code> (a slice's items, what a pointer points to, text in <code>r</code>) is used where it is, so writing
         an item changes the one the code around it sees, as writing through any pointer does. The copy of a slice shares
-        its items but not its length, so a lambda doesn't <code>add</code> to or <code>del</code> from a slice it keeps:
-        it makes one of its own, or takes one as a <code>hold&amp;</code> parameter. A value in another region is refused,
+        its items but not its length, so a lambda doesn't <code>add</code> to or <code>del</code> from a slice it keeps a copy
+        of: it makes one of its own, takes one as a <code>hold&amp;</code> parameter, or keeps the slice as a place,
+        <code>[hold&amp; xs, @s]</code>. A value in another region is refused,
         since nothing in <code>r</code> points into another region (the rule a <code>Person@r</code> follows): copy it into
         <code>r</code> first, <code>bind mine = xs.copy() at r</code>, and use that. The lambda sees <code>r</code> itself, so
         it may allocate there, and its types may name it, <code>[@r](int) -&gt; [int]@r</code>; it sees no other region of
-        the code around it, and in a method no <code>.this</code> or <code>.x</code>, so it keeps a variable of a member
-        instead, <code>bind k = .n</code>. What it uses is all it keeps, and its own names are never those of the variables
-        around it.
+        the code around it but those a place it keeps is in, and in a method no <code>.this</code> or <code>.x</code>, so it keeps a variable of a member
+        instead, <code>bind k = .n</code>. What it uses is all it keeps, and its own names, its regions' too, are never those of
+        the code around it.
       </p>
       <p>
         <strong>Changing its copies.</strong> A <code>[@r]</code> lambda only reads its copies; <code>[hold @r]</code>
         changes them, as <code>n = n + 1</code> does above, and a <code>[@r]</code> lambda that tries is told so. Every copy
         of a <code>[hold @r]</code> value would share its one block, so it is never copied: it is held in a
         <code>hold</code> variable, called, given as a place to a <code>hold&amp; f: [hold @r]() -&gt; int</code> parameter,
-        or named by a reference, <code>hold&amp; g = &amp;next</code>, and never bound with <code>bind</code>, given as a
-        value, kept by another lambda, or held inside a tuple, a slice or a <code>maybe</code>. A <code>[@r]</code> lambda
+        named by a reference, <code>hold&amp; g = &amp;next</code>, or kept as a place by another lambda,
+        <code>[hold&amp; next, @s]</code>; it is never bound with <code>bind</code>, given as a value or for a type a task
+        takes, kept as a copy by another lambda, or held inside a tuple, a slice or a <code>maybe</code>, and it is called
+        only through a place that changes, never through a <code>bind&amp;</code>. A <code>[@r]</code> lambda
         goes where a <code>[hold @r]</code> is expected, never the other way.
       </p>
       <p>
         <strong>Plain tasks and these.</strong> A task, a task value, or a plain lambda goes where a
-        <code>[@r](…)</code> is expected, through a small function the compiler writes: a task named there is kept where
-        the program keeps it, and a task value in a block of <code>r</code>, so a call that names <code>r</code> by no other
-        value can't keep one (keep it first, <code>bind kept: [@r](int) -&gt; int = plain</code>). A lambda that keeps what
+        <code>[@r](…)</code> is expected, through a small function the compiler writes: a task or a plain lambda written
+        there is kept where the program keeps it, and a task value held in a variable in a block of <code>r</code>, so a
+        call that names <code>r</code> by no other value can't keep one (keep it first, <code>bind kept: [@r](int) -&gt; int = plain</code>). A lambda that keeps what
         it uses never goes where a plain task's type is expected: that type names no region, so the value could outlive
         <code>r</code>. Such a lambda isn't compared, copied with <code>copy</code>, held in a field of a shape or kind,
         or given as a wrapper's own value yet. A stop inside any lambda says where it is, <code>at 6:39 in a lambda</code>.

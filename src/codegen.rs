@@ -430,6 +430,11 @@ impl Generator {
                 _ => format!("v{}", i),
             })
             .collect();
+        // A lambda that keeps what it uses is given what it keeps first.
+        let (params, args): (Vec<String>, Vec<String>) = match t.kept {
+            Some(_) => (std::iter::once(format!("void* {}", KEPT_PARAM)).chain(params).collect(), std::iter::once(KEPT_PARAM.to_string()).chain(args).collect()),
+            None => (params, args),
+        };
         let params = if params.is_empty() { "void".to_string() } else { params.join(", ") };
         let call = format!("{}({})", mangle(name), args.join(", "));
         self.w.open(&format!("static {} {}({})", c_type(&t.ret), adapter_name(name), params));

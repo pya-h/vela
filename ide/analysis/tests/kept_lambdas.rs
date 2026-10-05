@@ -101,3 +101,27 @@ fi
         assert_eq!(hover(&source, "add ="), "bind add: [@r](int) -> nothing", "{}", when);
     }
 }
+
+#[test]
+fn a_lambda_s_type_in_a_header_or_a_variable_is_a_type() {
+    let source = "\
+task poke(f: [@r](int) -> int, hold& n: int)
+    n = f(n)
+fi
+
+task main()
+    region r
+    hold k = 1
+    bind g: [@r](hold& int) -> nothing = [@r](hold& j: int) -> nothing j = j + 1 fi
+    g(&k)
+    poke([@r](x: int) -> int <- x * 2 fi, &k)
+    show(k)
+fi
+";
+    assert_eq!(Analysis::new(source).diagnostics(), Vec::new());
+    assert_eq!(hover(source, "n: int)"), "hold& n: int");
+    assert_eq!(hover(source, "n = f"), "hold& n: int");
+    assert_eq!(hover(source, "j: int"), "hold& j: int");
+    assert_eq!(hover(source, "j + 1"), "hold& j: int");
+    assert_eq!(class(source, "int) -> int, hold"), TokenClass::TypeBuiltin);
+}

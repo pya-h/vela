@@ -1,0 +1,24 @@
+; error: 11:24: 'q' is already a name in the code around this lambda, and a lambda that keeps what it uses reuses none of those names, even ones it doesn't keep; name this one otherwise
+; A lambda that keeps what it uses names no region of its own as one of the code around it.
+task main()
+    region keep
+    hold out: maybe [@keep]() -> int = none
+    block
+        region q
+        hold ys = new [int]() at q
+        ys.add(41)
+        region s
+        bind mk = [@s](q: region) -> [@q]() -> int
+            <- [@q]() -> int <- ys[0] fi
+        fi
+        out = mk(keep)
+    fi
+    region other
+    hold zs = new [int]() at other
+    each i in 0..100
+        zs.add(-1)
+    fi
+    when out is {f}
+        show(f())
+    fi
+fi

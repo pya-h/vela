@@ -1,0 +1,44 @@
+; A kept lambda taking a large value as 'hold' or 'bind', which its type
+; takes where the caller keeps it, and region parameters in closure types.
+shape Big
+    a: int
+    b: int
+    c: int
+    d: int
+    e: int
+    f: int
+    g: int
+    h: int
+    i: int
+fi
+
+task use(f: [@r](Big) -> int, b: Big) -> int
+    <- f(b)
+fi
+
+task main()
+    region r
+    bind k = 100
+    bind f = [@r](b: Big) -> int <- b.a + b.i + k fi
+    bind b = Big { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, g: 7, h: 8, i: 9 }
+    show(f(b))
+    show(use(f, b))
+    hold g = [hold @r](hold q: Big) -> int
+        q.a = q.a + k
+        <- q.a
+    fi
+    show(g(b), " ", b.a)
+    bind h = [@r](bind q: Big) -> int <- q.i + k fi
+    show(h(b))
+    region s
+    bind rows = [@r](z: region, n: int) -> [int]@z
+        hold ys = new [int]() at z
+        ys.add(n + k)
+        <- ys
+    fi
+    show(rows(s, 1), " ", into(rows, s))
+fi
+
+task into(f: [@q](@x, int) -> [int]@x, a: region) -> [int]@a
+    <- f(a, 3)
+fi

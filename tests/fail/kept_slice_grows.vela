@@ -1,4 +1,4 @@
-; error: 7:9: 'add' changes 'xs', the copy this lambda keeps of a slice of the code around it, whose length only the slice itself changes; make the slice inside the lambda, or take it as a parameter, 'hold& xs'
+; error: 7:9: 'add' changes 'xs', the copy this lambda keeps of a slice of the code around it, whose length only the slice itself changes; make the slice inside the lambda, take it as a parameter, 'hold& xs', or keep the slice as a place, '[hold& xs, @s]', in a region declared after it
 ; The copy a lambda keeps of a slice shares its items, not its length.
 task main()
     region r
